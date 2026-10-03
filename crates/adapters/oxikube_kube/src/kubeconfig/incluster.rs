@@ -17,7 +17,8 @@
 //!
 //! Building a client from a `Kubeconfig` (`Config::from_custom_kubeconfig`) differs from
 //! `Config::incluster()` in two ways, which [`apply_in_cluster_fixups`] closes. The client pool
-//! (E03-S03) must call it on the `kube::Config` it builds for [`IN_CLUSTER_CONTEXT`]:
+//! (E03-S03) must call it on every `kube::Config` it builds (it only acts on the synthetic
+//! context, decided by provenance, never by the name `in-cluster`):
 //!
 //! * `root_cert_file` is set only by `incluster()`. It makes kube watch the CA file and reload
 //!   it when the cluster CA rotates; from a kubeconfig it is `None`.
@@ -39,6 +40,7 @@ use kube::config::{
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::{OxiError, OxiResult};
 
+use super::LoadedKubeconfig;
 use super::env::Env;
 
 /// Name of the synthetic context (and of its cluster and user entries).
@@ -88,13 +90,30 @@ pub fn in_cluster_server_url(host: &str, port: &str) -> Option<String> {
 
 /// Make a client config built for the in-cluster context behave like `Config::incluster()`.
 ///
-/// Does nothing for any other context. For [`IN_CLUSTER_CONTEXT`] it sets `root_cert_file` to
-/// the mounted CA (so kube reloads a rotated CA) and clears `proxy_url`. See the module docs.
-pub fn apply_in_cluster_fixups(context: &ContextName, config: &mut kube::Config) {
-    if context.as_str() == IN_CLUSTER_CONTEXT {
-        config.root_cert_file = Some(PathBuf::from(SERVICE_ACCOUNT_CA_FILE));
-        config.proxy_url = None;
+/// Unconditional: sets `root_cert_file` to the mounted CA (so kube reloads a rotated CA) and
+/// clears `proxy_url`. Call it only for the synthetic context; prefer [`apply_in_cluster_fixups`],
+/// which checks provenance. See the module docs.
+pub fn in_cluster_config_fixups(config: &mut kube::Config) {
+    config.root_cert_file = Some(PathBuf::from(SERVICE_ACCOUNT_CA_FILE));
+    config.proxy_url = None;
+}
+
+/// Apply [`in_cluster_config_fixups`] to `config` when `context` is the synthetic in-cluster
+/// context of `loaded`, and do nothing otherwise.
+///
+/// The check is by provenance ([`LoadedKubeconfig::is_in_cluster`]), not by name: a user's own
+/// kubeconfig may define a context called `in-cluster` (Argo CD's built-in cluster does), and it
+/// must keep its own CA and proxy. Returns whether the fix-ups were applied.
+pub fn apply_in_cluster_fixups(
+    loaded: &LoadedKubeconfig,
+    context: &ContextName,
+    config: &mut kube::Config,
+) -> bool {
+    let synthetic = loaded.is_in_cluster(context);
+    if synthetic {
+        in_cluster_config_fixups(config);
     }
+    synthetic
 }
 
 /// Build the synthetic in-cluster kubeconfig from `env` (pure; no I/O).
@@ -180,14 +199,40 @@ mod tests {
         kube::Config::new("https://10.0.0.1".parse().unwrap())
     }
 
+    /// A loaded set with the synthetic context, and one whose `in-cluster` context comes from
+    /// a file (as Argo CD's does).
+    fn loaded_pair() -> (LoadedKubeconfig, LoadedKubeconfig, tempfile::TempDir) {
+        use crate::kubeconfig::{Strictness, load_kubeconfig_from_paths_blocking};
+        let dir = tempfile::TempDir::new().unwrap();
+        let file = dir.path().join("argo");
+        std::fs::write(
+            &file,
+            "clusters:\n- name: in-cluster\n  cluster:\n    server: https://kubernetes.default.svc\n\
+             contexts:\n- name: in-cluster\n  context:\n    cluster: in-cluster\n",
+        )
+        .unwrap();
+        let from_file = load_kubeconfig_from_paths_blocking(&[file], Strictness::Tolerant).unwrap();
+        let mut synthetic = load_kubeconfig_from_paths_blocking(&[], Strictness::Tolerant).unwrap();
+        let env = Env {
+            kubernetes_service_host: Some("10.0.0.1".into()),
+            kubernetes_service_port: Some("443".into()),
+            service_account_mounted: true,
+            ..Env::default()
+        };
+        crate::kubeconfig::apply_in_cluster_fallback(&mut synthetic, &env).unwrap();
+        (synthetic, from_file, dir)
+    }
+
     #[test]
-    fn fixups_restore_ca_reload_and_drop_the_proxy_for_in_cluster() {
+    fn fixups_restore_ca_reload_and_drop_the_proxy_for_the_synthetic_context() {
+        let (synthetic, _, _dir) = loaded_pair();
         let mut config = client_config();
         config.proxy_url = Some("http://proxy.example:3128".parse().unwrap());
         assert!(config.root_cert_file.is_none());
 
-        apply_in_cluster_fixups(&in_cluster_context_name(), &mut config);
+        let applied = apply_in_cluster_fixups(&synthetic, &in_cluster_context_name(), &mut config);
 
+        assert!(applied);
         assert_eq!(
             config.root_cert_file.as_deref(),
             Some(std::path::Path::new(SERVICE_ACCOUNT_CA_FILE))
@@ -196,14 +241,31 @@ mod tests {
     }
 
     #[test]
-    fn fixups_leave_other_contexts_alone() {
+    fn a_file_sourced_context_named_in_cluster_is_left_alone() {
+        let (_, from_file, _dir) = loaded_pair();
+        let name = in_cluster_context_name();
+        assert!(!from_file.is_in_cluster(&name));
         let mut config = client_config();
         config.proxy_url = Some("http://proxy.example:3128".parse().unwrap());
 
-        apply_in_cluster_fixups(&"prod".into(), &mut config);
+        let applied = apply_in_cluster_fixups(&from_file, &name, &mut config);
 
+        assert!(!applied);
         assert!(config.root_cert_file.is_none());
         assert!(config.proxy_url.is_some());
+    }
+
+    #[test]
+    fn other_contexts_and_unknown_names_are_left_alone() {
+        let (synthetic, _, _dir) = loaded_pair();
+        let mut config = client_config();
+
+        assert!(!apply_in_cluster_fixups(
+            &synthetic,
+            &"prod".into(),
+            &mut config
+        ));
+        assert!(config.root_cert_file.is_none());
     }
 
     #[test]

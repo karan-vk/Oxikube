@@ -70,7 +70,8 @@ pub use env::{
 };
 pub use incluster::{
     IN_CLUSTER_CONTEXT, IN_CLUSTER_SOURCE_LABEL, IN_CLUSTER_SOURCE_PATH, apply_in_cluster_fixups,
-    in_cluster_cluster_id, in_cluster_context_name, in_cluster_kubeconfig, in_cluster_server_url,
+    in_cluster_cluster_id, in_cluster_config_fixups, in_cluster_context_name,
+    in_cluster_kubeconfig, in_cluster_server_url,
 };
 pub use load::{
     is_blank_kubeconfig, load_kubeconfig_from_paths, load_kubeconfig_from_paths_blocking,
@@ -114,6 +115,15 @@ impl LoadedKubeconfig {
     /// The file whose definition of `context` is used.
     pub fn origin(&self, context: &ContextName) -> Option<&Path> {
         self.origins.get(context).map(PathBuf::as_path)
+    }
+
+    /// True when `context` is the synthetic in-cluster context added by the in-cluster fallback,
+    /// decided by its origin ([`IN_CLUSTER_SOURCE_PATH`]), not by its name: a kubeconfig file may
+    /// define a context that is also called `in-cluster`.
+    pub fn is_in_cluster(&self, context: &ContextName) -> bool {
+        self.origins
+            .get(context)
+            .is_some_and(|origin| origin == Path::new(IN_CLUSTER_SOURCE_PATH))
     }
 
     /// The catalog id of `context`: a hash of its origin file's canonical path and its name.
