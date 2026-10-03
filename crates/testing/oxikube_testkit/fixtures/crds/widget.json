@@ -1,0 +1,23 @@
+{
+  "apiVersion": "test.oxikube.dev/v1",
+  "kind": "Widget",
+  "metadata": {
+    "name": "widget-large",
+    "namespace": "demo",
+    "uid": "a7ccc194-604b-592f-821c-b06586a989d9",
+    "resourceVersion": "1210",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "tier": "gold"
+    },
+    "generation": 1
+  },
+  "spec": {
+    "size": "large",
+    "replicas": 3,
+    "owner": "team-a"
+  },
+  "status": {
+    "phase": "Ready"
+  }
+}

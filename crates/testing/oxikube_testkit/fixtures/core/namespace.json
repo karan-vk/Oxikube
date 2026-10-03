@@ -1,0 +1,21 @@
+{
+  "apiVersion": "v1",
+  "kind": "Namespace",
+  "metadata": {
+    "name": "demo",
+    "uid": "b165aadf-54c9-5dd9-84bb-7803854a89a0",
+    "resourceVersion": "1245",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "kubernetes.io/metadata.name": "demo"
+    }
+  },
+  "spec": {
+    "finalizers": [
+      "kubernetes"
+    ]
+  },
+  "status": {
+    "phase": "Active"
+  }
+}

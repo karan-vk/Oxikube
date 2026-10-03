@@ -1,0 +1,31 @@
+{
+  "apiVersion": "v1",
+  "kind": "Event",
+  "metadata": {
+    "name": "web-crashloop.18a2b3c4d5e6f701",
+    "namespace": "demo",
+    "uid": "baceea7a-bb86-5cdb-b1b8-1d090fb12742",
+    "resourceVersion": "1217",
+    "creationTimestamp": "2026-01-01T00:00:00Z"
+  },
+  "involvedObject": {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "name": "web-crashloop",
+    "namespace": "demo",
+    "uid": "9ca70808-5584-5663-b1b5-d4907a57446d",
+    "fieldPath": "spec.containers{app}"
+  },
+  "type": "Warning",
+  "reason": "BackOff",
+  "message": "Back-off restarting failed container app in pod web-crashloop_demo",
+  "source": {
+    "component": "kubelet",
+    "host": "worker-1"
+  },
+  "count": 42,
+  "firstTimestamp": "2026-01-01T00:00:05Z",
+  "lastTimestamp": "2026-01-01T01:00:00Z",
+  "reportingComponent": "kubelet",
+  "reportingInstance": "worker-1"
+}

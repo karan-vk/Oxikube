@@ -1,0 +1,50 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "CronJob",
+  "metadata": {
+    "name": "nightly-backup",
+    "namespace": "demo",
+    "uid": "ca507899-b74a-5934-8520-16518ff862f7",
+    "resourceVersion": "1161",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "app": "backup"
+    }
+  },
+  "spec": {
+    "schedule": "0 3 * * *",
+    "timeZone": "Etc/UTC",
+    "suspend": false,
+    "concurrencyPolicy": "Forbid",
+    "successfulJobsHistoryLimit": 3,
+    "failedJobsHistoryLimit": 1,
+    "jobTemplate": {
+      "spec": {
+        "template": {
+          "spec": {
+            "restartPolicy": "OnFailure",
+            "containers": [
+              {
+                "name": "backup",
+                "image": "registry.example/app:1.0"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "status": {
+    "active": [
+      {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "name": "nightly-backup-29000000",
+        "namespace": "demo",
+        "uid": "a874a2a0-2ee4-5c72-9d1e-36effbe7d97e"
+      }
+    ],
+    "lastScheduleTime": "2026-01-01T03:00:00Z",
+    "lastSuccessfulTime": "2025-12-31T03:04:10Z"
+  }
+}

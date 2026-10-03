@@ -5578,9 +5578,18 @@ name = "oxikube_testkit"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "flate2",
+ "futures",
  "gpui-pre",
  "gpui-pre-platform",
  "image",
+ "jiff",
+ "oxikube_domain",
+ "oxikube_ports",
+ "parking_lot",
+ "serde_json",
  "tempfile",
  "uuid",
 ]

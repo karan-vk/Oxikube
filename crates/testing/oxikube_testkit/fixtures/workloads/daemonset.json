@@ -1,0 +1,58 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "DaemonSet",
+  "metadata": {
+    "name": "agent",
+    "namespace": "demo",
+    "uid": "9cdc857b-0260-5f55-ac6d-31a3816e1dc8",
+    "resourceVersion": "1140",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "app": "agent"
+    }
+  },
+  "spec": {
+    "selector": {
+      "matchLabels": {
+        "app": "agent"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "agent"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "app",
+            "image": "registry.example/app:1.0",
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "updateStrategy": {
+      "type": "RollingUpdate",
+      "rollingUpdate": {
+        "maxUnavailable": 1
+      }
+    }
+  },
+  "status": {
+    "observedGeneration": 1,
+    "desiredNumberScheduled": 2,
+    "currentNumberScheduled": 2,
+    "numberMisscheduled": 0,
+    "updatedNumberScheduled": 2,
+    "numberReady": 1,
+    "numberAvailable": 1,
+    "numberUnavailable": 1
+  }
+}

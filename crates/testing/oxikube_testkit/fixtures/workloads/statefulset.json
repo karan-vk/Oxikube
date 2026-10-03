@@ -1,0 +1,78 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "db",
+    "namespace": "demo",
+    "uid": "63442662-2873-5c6b-b2a4-18f919ed28c1",
+    "resourceVersion": "1133",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "app": "db"
+    }
+  },
+  "spec": {
+    "replicas": 3,
+    "serviceName": "db",
+    "selector": {
+      "matchLabels": {
+        "app": "db"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "db"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "app",
+            "image": "registry.example/app:1.0",
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "podManagementPolicy": "OrderedReady",
+    "updateStrategy": {
+      "type": "RollingUpdate",
+      "rollingUpdate": {
+        "partition": 1
+      }
+    },
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "resources": {
+            "requests": {
+              "storage": "1Gi"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "status": {
+    "observedGeneration": 1,
+    "replicas": 3,
+    "currentReplicas": 3,
+    "updatedReplicas": 3,
+    "readyReplicas": 3,
+    "availableReplicas": 3,
+    "currentRevision": "db-6c9f8d7b5",
+    "updateRevision": "db-6c9f8d7b5"
+  }
+}

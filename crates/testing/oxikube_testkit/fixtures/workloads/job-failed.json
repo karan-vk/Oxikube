@@ -1,0 +1,47 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "migrate-failed",
+    "namespace": "demo",
+    "uid": "17654a71-6f8d-5f9e-b9ef-df32bc17a2a0",
+    "resourceVersion": "1154",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "app": "migrate"
+    }
+  },
+  "spec": {
+    "completions": 1,
+    "parallelism": 1,
+    "backoffLimit": 6,
+    "template": {
+      "spec": {
+        "restartPolicy": "Never",
+        "containers": [
+          {
+            "name": "app",
+            "image": "registry.example/app:1.0"
+          }
+        ]
+      }
+    }
+  },
+  "status": {
+    "startTime": "2026-01-01T00:00:05Z",
+    "failed": 6,
+    "conditions": [
+      {
+        "type": "FailureTarget",
+        "status": "True",
+        "reason": "BackoffLimitExceeded"
+      },
+      {
+        "type": "Failed",
+        "status": "True",
+        "reason": "BackoffLimitExceeded",
+        "message": "Job has reached the specified backoff limit"
+      }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "migrate",
+    "namespace": "demo",
+    "uid": "bb0d9058-9a77-5c75-a9b9-031316fddabd",
+    "resourceVersion": "1147",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "app": "migrate"
+    }
+  },
+  "spec": {
+    "completions": 3,
+    "parallelism": 1,
+    "backoffLimit": 6,
+    "template": {
+      "spec": {
+        "restartPolicy": "Never",
+        "containers": [
+          {
+            "name": "app",
+            "image": "registry.example/app:1.0"
+          }
+        ]
+      }
+    }
+  },
+  "status": {
+    "startTime": "2026-01-01T00:00:05Z",
+    "succeeded": 3,
+    "completionTime": "2026-01-01T01:00:00Z",
+    "conditions": [
+      {
+        "type": "SuccessCriteriaMet",
+        "status": "True",
+        "reason": "CompletionsReached"
+      },
+      {
+        "type": "Complete",
+        "status": "True",
+        "reason": "CompletionsReached"
+      }
+    ]
+  }
+}

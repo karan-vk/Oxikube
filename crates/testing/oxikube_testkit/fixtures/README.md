@@ -1,4 +1,14 @@
-# Cluster fixtures
+# Fixtures
+
+Two independent sets live here:
+
+- **JSON manifests** (`pods/`, `workloads/`, `nodes/`, `crds/`, `events/`, `helm/`, `core/`):
+  embedded by `oxikube_testkit::fixtures` and loaded as domain `Resource`s in unit tests. They
+  never reach a cluster. Every file must be listed in `src/fixtures.rs` (a test checks this);
+  prefer the builders for variations instead of new files. Secret data is dummy only.
+- **Cluster fixtures** (`cluster/`, `metrics-server/`), described below.
+
+## Cluster fixtures
 
 Applied to the kind cluster (`oxikube`, context `kind-oxikube`) by `cargo xtask kind-up`
 (E01-S09). The command is idempotent, only ever uses `--context kind-<name>`, and applies

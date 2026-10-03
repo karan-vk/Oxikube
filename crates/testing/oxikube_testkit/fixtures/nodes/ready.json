@@ -1,0 +1,94 @@
+{
+  "apiVersion": "v1",
+  "kind": "Node",
+  "metadata": {
+    "name": "worker-1",
+    "uid": "36bfcc7c-b8de-52cb-81da-673a3e7b2a59",
+    "resourceVersion": "1168",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "kubernetes.io/hostname": "worker-1",
+      "kubernetes.io/os": "linux"
+    },
+    "annotations": {
+      "node.alpha.kubernetes.io/ttl": "0",
+      "volumes.kubernetes.io/controller-managed-attach-detach": "true"
+    }
+  },
+  "spec": {
+    "podCIDR": "10.244.1.0/24",
+    "providerID": "kind://docker/oxikube/worker-1"
+  },
+  "status": {
+    "addresses": [
+      {
+        "type": "InternalIP",
+        "address": "172.18.0.3"
+      },
+      {
+        "type": "Hostname",
+        "address": "worker-1"
+      }
+    ],
+    "allocatable": {
+      "cpu": "4",
+      "memory": "16Gi",
+      "pods": "110",
+      "ephemeral-storage": "100Gi"
+    },
+    "capacity": {
+      "cpu": "4",
+      "memory": "16Gi",
+      "pods": "110",
+      "ephemeral-storage": "100Gi"
+    },
+    "conditions": [
+      {
+        "type": "MemoryPressure",
+        "status": "False",
+        "reason": "KubeletHasNoMemoryPressure",
+        "lastHeartbeatTime": "2026-01-01T00:00:05Z",
+        "lastTransitionTime": "2026-01-01T00:00:00Z"
+      },
+      {
+        "type": "DiskPressure",
+        "status": "False",
+        "reason": "KubeletHasNoDiskPressure",
+        "lastHeartbeatTime": "2026-01-01T00:00:05Z",
+        "lastTransitionTime": "2026-01-01T00:00:00Z"
+      },
+      {
+        "type": "PIDPressure",
+        "status": "False",
+        "reason": "KubeletHasNoPIDPressure",
+        "lastHeartbeatTime": "2026-01-01T00:00:05Z",
+        "lastTransitionTime": "2026-01-01T00:00:00Z"
+      },
+      {
+        "type": "Ready",
+        "status": "True",
+        "reason": "KubeletReady",
+        "message": "kubelet is posting ready status",
+        "lastHeartbeatTime": "2026-01-01T00:00:05Z",
+        "lastTransitionTime": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "daemonEndpoints": {
+      "kubeletEndpoint": {
+        "Port": 10250
+      }
+    },
+    "nodeInfo": {
+      "architecture": "amd64",
+      "bootID": "877ff437-fe8a-5cbd-88c4-e7ca74bc8064",
+      "containerRuntimeVersion": "containerd://2.1.1",
+      "kernelVersion": "6.8.0",
+      "kubeProxyVersion": "",
+      "kubeletVersion": "v1.33.1",
+      "machineID": "f247ca4ad871527fa3737884bf9d085f",
+      "operatingSystem": "linux",
+      "osImage": "Debian GNU/Linux 12 (bookworm)",
+      "systemUUID": "0163ceaf-66fb-505f-93c5-ae8d2da74e8d"
+    }
+  }
+}
