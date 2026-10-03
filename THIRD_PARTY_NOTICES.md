@@ -66,6 +66,12 @@ Semantics only, no code copied: quantity grammar and canonical formatting from
 (`HumanDuration`), reimplemented in `oxikube_domain::quantity` and `oxikube_domain::age`. The test
 vectors are written for Oxikube and are not copied from apimachinery's tests.
 
+## Kubernetes printers (Apache-2.0) — https://github.com/kubernetes/kubernetes
+Semantics only, no code copied: the `kubectl get` column rules of `printPod`, `printNode`
+(`findNodeRoles`), `printJob`, `printCronJob` and the apps workload printers in
+`pkg/printers/internalversion/printers.go`, reimplemented over raw JSON in
+`oxikube_domain::view`. The test cases are written for Oxikube.
+
 ## gpui-kit / gpui-component (Apache-2.0) — https://github.com/longbridge/gpui-kit
 Used as a dependency through `oxikube_ui`. Bundled Lucide icons (ISC) via `gpui-kit-assets`.
 
