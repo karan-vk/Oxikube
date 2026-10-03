@@ -24,8 +24,20 @@ pub fn up(name: &str) -> Result<()> {
     let patch = r#"[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]"#;
     cmd!(sh, "kubectl --context {ctx} -n kube-system patch deployment metrics-server --type=json -p {patch}").run()?;
     let fixtures = "crates/testing/oxikube_testkit/fixtures/cluster";
-    if std::path::Path::new(fixtures).exists() {
+    let has_manifests = std::fs::read_dir(fixtures)
+        .map(|d| {
+            d.flatten().any(|e| {
+                matches!(
+                    e.path().extension().and_then(|x| x.to_str()),
+                    Some("yaml" | "yml" | "json")
+                )
+            })
+        })
+        .unwrap_or(false);
+    if has_manifests {
         cmd!(sh, "kubectl --context {ctx} apply -R -f {fixtures}").run()?;
+    } else {
+        println!("no fixture manifests in {fixtures} yet (E01-S09)");
     }
     println!("kind cluster `{name}` ready (context {ctx})");
     Ok(())

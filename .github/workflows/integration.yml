@@ -28,7 +28,7 @@ jobs:
       - name: Cluster fixtures
         run: cargo run -q -p xtask -- kind-up --name oxikube
       - name: Integration tests
-        run: cargo test --workspace --features integration -- --nocapture
+        run: cargo test -p oxikube_kube -p oxikube_app -p oxikube_testkit --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration -- --nocapture
         env:
           OXIKUBE_TEST_CONTEXT: kind-oxikube
       - name: Teardown

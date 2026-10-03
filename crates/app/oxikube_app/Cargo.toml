@@ -13,5 +13,10 @@ doctest = false
 
 [dependencies]
 
+[features]
+default = []
+# Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
+integration = []
+
 [lints]
 workspace = true
