@@ -5484,6 +5484,7 @@ dependencies = [
  "insta",
  "jiff",
  "proptest",
+ "regex",
  "serde",
  "serde-saphyr 1.3.0",
  "serde_json",
@@ -5561,6 +5562,11 @@ dependencies = [
 [[package]]
 name = "oxikube_logging"
 version = "0.0.1"
+dependencies = [
+ "oxikube_domain",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "oxikube_logs_ui"

@@ -12,6 +12,9 @@ path = "src/oxikube_logging.rs"
 doctest = false
 
 [dependencies]
+oxikube_domain.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [lints]
 workspace = true
