@@ -1,26 +1,53 @@
 name: nightly
 
-# Full matrix, release builds, docs and screenshots (E01-S13 completes this).
+# Full matrix the PR gate skips: release builds, both OSes, rustdoc and the GPU screenshot tests
+# (E01-S13). Failures open (or append to) one tracking issue labelled `nightly-failure`.
+#
+# Adding a job (E01-S14 perf gate, later epics): add it under `jobs:`, append its id to
+# `report-failure.needs`, and the failure report picks it up automatically (it lists every failed
+# job in the run, not just the matrix legs).
 on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
 
+# Read-only by default; only `report-failure` gets more (see below).
+permissions:
+  contents: read
+
+# One nightly at a time: a manual dispatch queues behind the scheduled run instead of racing it.
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 
 jobs:
   matrix:
+    name: ${{ matrix.os }} / ${{ matrix.profile }}
+    runs-on: ${{ matrix.os }}
+    # Cold release legs build all of GPUI; fail loudly rather than burn the 6 h default.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         profile: [dev, release]
-    runs-on: ${{ matrix.os }}
+    env:
+      # Cargo profile for tests, docs and screenshots on this leg (`--profile dev` is identical to
+      # cargo's default, so one flag works for every leg). Release legs use `release-fast`; the
+      # shipping profile gets its own build step below.
+      CARGO_PROFILE: ${{ matrix.profile == 'release' && 'release-fast' || 'dev' }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Distinct per profile so the dev and release legs never evict each other.
+          key: ${{ matrix.profile }}
+          cache-on-failure: true
       - name: Linux system dependencies (GPUI)
         if: runner.os == 'Linux'
         run: |
@@ -29,23 +56,108 @@ jobs:
             libasound2-dev libfontconfig-dev libfreetype-dev libglib2.0-dev libssl-dev \
             libvulkan1 libvulkan-dev libwayland-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev \
             libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config xvfb mesa-vulkan-drivers
-      - run: cargo test --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
-      - run: cargo doc --workspace --no-deps
+
+      # Steps below use `!cancelled()` so one broken step does not hide the others: a leg reports
+      # every failing area (tests, docs, screenshots) in a single run.
+      - name: Tests
+        run: cargo test --workspace --profile "$CARGO_PROFILE"
+      - name: Docs (warnings are errors)
+        if: ${{ !cancelled() }}
+        run: cargo doc --workspace --no-deps --profile "$CARGO_PROFILE"
         env:
           RUSTDOCFLAGS: "-D warnings"
       - name: Screenshot tests (render_to_image)
+        if: ${{ !cancelled() }}
         # Headless render needs a GPU device: Metal on macOS runners, Mesa lavapipe (software
         # Vulkan, from mesa-vulkan-drivers) on Linux. xvfb gives Linux a display for windowing init.
         run: |
-          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube --features screenshot ${{ matrix.profile == 'release' && '--release' || '' }}
-          cargo test -p oxikube_testkit --features screenshot
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube --features screenshot --profile "$CARGO_PROFILE"
+          cargo test -p oxikube_testkit --features screenshot --profile "$CARGO_PROFILE"
       - name: Capture screenshot
+        id: capture
+        if: ${{ !cancelled() }}
         env:
           OXIKUBE_SCREENSHOT: ${{ github.workspace }}/screenshots/oxikube-${{ runner.os }}-${{ matrix.profile }}.png
-        run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo run -p oxikube --features screenshot ${{ matrix.profile == 'release' && '--release' || '' }}
+        run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo run -p oxikube --features screenshot --profile "$CARGO_PROFILE"
       - name: Upload screenshot
+        if: ${{ !cancelled() && steps.capture.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: screenshot-${{ runner.os }}-${{ matrix.profile }}
           path: screenshots/*.png
           if-no-files-found: error
+      - name: Upload golden-compare failures
+        # testkit writes `*.actual.png` / `*.diff.png` next to the golden when a comparison fails.
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-diffs-${{ runner.os }}-${{ matrix.profile }}
+          path: |
+            **/tests/goldens/**/*.actual.png
+            **/tests/goldens/**/*.diff.png
+          if-no-files-found: ignore
+
+      # Release legs test with `release-fast` (opt-level 3, no LTO, 16 codegen units): it still
+      # catches optimiser-only failures at a fraction of the cost. The shipping profile
+      # (`release`: thin LTO, 1 codegen unit) is built here to keep it compiling and linking.
+      - name: Build shipping release profile
+        if: ${{ !cancelled() && matrix.profile == 'release' }}
+        run: cargo build --workspace --release
+
+  report-failure:
+    name: report failure
+    needs: [matrix]
+    # Only real failures (a leg timing out counts as a failure). A cancelled run is a person
+    # stopping it, which is not a regression to report. Green runs skip this job entirely.
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The only job that can write to the tracker; `actions: read` is for listing the run's jobs.
+    permissions:
+      actions: read
+      issues: write
+    # Two overlapping runs must not both decide "no open issue" and create duplicates.
+    concurrency:
+      group: nightly-failure-report
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RUN_ID: ${{ github.run_id }}
+      RUN_ATTEMPT: ${{ github.run_attempt }}
+      LABEL: nightly-failure
+    steps:
+      - name: Open or append to the nightly-failure issue
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Every job in this run that did not succeed (this job is still running, so it is not
+          # listed as failed). Each line: "<job name> (<failed step>)".
+          failed=$(gh api --paginate "repos/${GH_REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs" \
+            --jq '.jobs[]
+              | select(.conclusion == "failure" or .conclusion == "timed_out")
+              | "- `\(.name)`: " + (([.steps[]? | select(.conclusion == "failure") | .name] | first) // "job failed or timed out")')
+          if [ -z "${failed}" ]; then
+            failed="- (could not determine failing legs; see the run)"
+          fi
+
+          body=$(printf 'Nightly run failed: %s\n\nFailing legs:\n%s\n' "${RUN_URL}" "${failed}")
+
+          # Label may not exist yet (fresh repo, or someone deleted it).
+          if ! gh api "repos/${GH_REPO}/labels/${LABEL}" --silent 2>/dev/null; then
+            gh label create "${LABEL}" --color B60205 \
+              --description "Tracks failing nightly runs. Close it once fixed; the next failure opens a new one."
+          fi
+
+          existing=$(gh issue list --label "${LABEL}" --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "${existing}" ]; then
+            gh issue comment "${existing}" --body "${body}"
+            echo "Commented on #${existing}"
+          else
+            title="Nightly failure: $(date -u +%Y-%m-%d)"
+            url=$(gh issue create --title "${title}" --label "${LABEL}" \
+              --body "${body}"$'\n\nLater failing nightlies are added to this issue as comments. Close it once the cause is fixed.')
+            echo "Created ${url}"
+          fi
