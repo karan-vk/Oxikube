@@ -5,7 +5,11 @@
 //! Init order will follow Zed's `main.rs` pattern: logging → settings → keymap →
 //! theme → AppState → each crate's `init(cx)` → workspace restore.
 
+#[cfg(feature = "screenshot")]
+mod screenshot;
+
 use gpui::{App, Context, Window, WindowOptions, div, prelude::*, rgb};
+use std::process::ExitCode;
 
 struct Placeholder;
 
@@ -23,10 +27,18 @@ impl Render for Placeholder {
     }
 }
 
-fn main() {
+fn main() -> ExitCode {
+    // Headless screenshot mode (dev/CI only; the feature is never in default or release builds).
+    // Without the env var, or without the feature, behaviour is the normal window below.
+    #[cfg(feature = "screenshot")]
+    if let Some(path) = std::env::var_os(screenshot::ENV_VAR) {
+        return screenshot::run(path.as_ref());
+    }
+
     gpui_platform::application().run(|cx: &mut App| {
         cx.open_window(WindowOptions::default(), |_, cx| cx.new(|_| Placeholder))
             .expect("open main window");
         cx.activate(true);
     });
+    ExitCode::SUCCESS
 }

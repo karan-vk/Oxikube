@@ -149,6 +149,9 @@ agent-client-protocol = { version = "=2.2.0" }
 rmcp = { version = "3", features = ["server", "transport-io"] }
 
 # --- testing ---
+# PNG only: used by oxikube_testkit's screenshot module (must resolve to the same `image`
+# gpui-pre returns `RgbaImage` from).
+image = { version = "0.25", default-features = false, features = ["png"] }
 proptest = "1"
 insta = { version = "1", features = ["json", "yaml"] }
 tempfile = "3"
