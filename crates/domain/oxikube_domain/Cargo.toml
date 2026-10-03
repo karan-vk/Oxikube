@@ -12,6 +12,7 @@ path = "src/oxikube_domain.rs"
 doctest = false
 
 [dependencies]
+bitflags.workspace = true
 hex.workspace = true
 jiff.workspace = true
 indexmap.workspace = true

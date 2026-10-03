@@ -5431,6 +5431,7 @@ version = "0.0.1"
 name = "oxikube_domain"
 version = "0.0.1"
 dependencies = [
+ "bitflags 2.13.2",
  "hex",
  "indexmap",
  "insta",
