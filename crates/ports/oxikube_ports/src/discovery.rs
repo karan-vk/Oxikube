@@ -1,8 +1,9 @@
 //! API discovery: which kinds a cluster serves.
 //!
-//! Implemented by `oxikube_kube::discovery` (E03-S06) over kube's
-//! `Discovery::run_aggregated()` with a fallback to `run()`, and the raw
-//! `Client::apiserver_version`. The result is the domain [`ResourceKind`]
+//! Implemented by `oxikube_kube::discovery` (E03-S06) over aggregated discovery (two
+//! requests) with a fallback to the legacy per-group endpoints, and the raw
+//! `Client::apiserver_version`. The adapter reads the raw documents because kube's
+//! `ApiResource` / `ApiCapabilities` drop short names and categories. The result is the domain [`ResourceKind`]
 //! registry record, so nothing above the adapter sees kube's `ApiResource` or
 //! `ApiCapabilities`.
 
@@ -59,8 +60,9 @@ impl ServerVersion {
 #[async_trait]
 pub trait DiscoveryPort: Send + Sync {
     /// Runs discovery and returns every served kind, one record per served
-    /// group version, with [`ResourceKind::preferred`] set on the group's
-    /// preferred version. Subresources (`pods/log`, ...) are not listed.
+    /// group version, with [`ResourceKind::preferred`] set on each kind's
+    /// preferred served version (the group's preferred version unless the kind
+    /// is only served in another). Subresources (`pods/log`, ...) are not listed.
     async fn discover(&self) -> OxiResult<Vec<ResourceKind>>;
 
     /// Looks up one kind, from the adapter's cache when it has one. `None`

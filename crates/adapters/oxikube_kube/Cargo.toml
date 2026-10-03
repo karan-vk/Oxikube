@@ -12,17 +12,27 @@ path = "src/oxikube_kube.rs"
 doctest = false
 
 [dependencies]
-kube.workspace = true
 oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+k8s-openapi.workspace = true
+kube.workspace = true
+parking_lot.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 oxikube_testkit.workspace = true
+http.workspace = true
 proptest.workspace = true
-tempfile.workspace = true
-k8s-openapi.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
+tower.workspace = true
+uuid.workspace = true
+# `test-util`: paused clock for the CRD-watch debounce tests.
+tokio = { workspace = true, features = ["test-util"] }
 
 [features]
 default = []

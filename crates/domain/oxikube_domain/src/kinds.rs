@@ -164,7 +164,8 @@ impl<'de> Deserialize<'de> for VerbSet {
 pub struct ResourceKind {
     /// The type described, including the served version.
     pub gvk: Gvk,
-    /// Whether `gvk.version` is the group's preferred version.
+    /// Whether `gvk.version` is the preferred served version of this kind: the group's
+    /// preferred version, or the highest-priority version for a kind the preferred one lacks.
     pub preferred: bool,
     /// Plural resource name used in REST paths, for example `deployments`.
     pub plural: String,
