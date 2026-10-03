@@ -5484,15 +5484,23 @@ version = "0.0.1"
 name = "oxikube_kube"
 version = "0.0.1"
 dependencies = [
+ "async-trait",
+ "futures",
+ "http",
  "k8s-openapi",
  "kube",
  "oxikube_domain",
+ "oxikube_ports",
  "oxikube_testkit",
+ "parking_lot",
  "proptest",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
+ "tower",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

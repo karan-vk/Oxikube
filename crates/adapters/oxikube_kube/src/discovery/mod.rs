@@ -19,7 +19,6 @@
 
 mod convert;
 mod crd_watch;
-mod error;
 mod fetch;
 mod registry;
 #[cfg(test)]
@@ -40,6 +39,8 @@ use parking_lot::RwLock;
 use tokio::sync::{Mutex, broadcast};
 use tokio::time::Instant;
 use tracing::debug;
+
+use crate::auth::classify;
 
 pub use crd_watch::{CrdWatch, CrdWatchConfig};
 pub use registry::{KindChange, Registry, RegistryDiff};
@@ -210,7 +211,7 @@ impl DiscoveryPort for KubeDiscovery {
             .client
             .apiserver_version()
             .await
-            .map_err(|e| error::from_kube(e, "server version"))?;
+            .map_err(|e| classify(&e))?;
         Ok(ServerVersion {
             major: info.major,
             minor: info.minor,

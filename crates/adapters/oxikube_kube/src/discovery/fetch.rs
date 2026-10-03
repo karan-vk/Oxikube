@@ -8,11 +8,11 @@
 use futures::{StreamExt, stream};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::APIResourceList;
 use kube::Client;
-use oxikube_domain::OxiResult;
+use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 use tracing::{debug, warn};
 
 use super::convert::{self, Discovered, LegacyList};
-use super::error::{from_kube, legacy_may_help};
+use crate::auth::classify;
 
 /// Concurrent requests in the legacy (`N + 2`) shape.
 const LEGACY_CONCURRENCY: usize = 8;
@@ -42,7 +42,7 @@ pub(super) async fn fetch(client: &Client, try_aggregated: bool) -> OxiResult<Fe
         }
         Ok(None) => debug!("discovery: server ignored aggregated Accept header, using legacy"),
         Err(err) => {
-            let err = from_kube(err, "aggregated discovery");
+            let err = classify(&err);
             if !legacy_may_help(&err) {
                 return Err(err);
             }
@@ -53,9 +53,7 @@ pub(super) async fn fetch(client: &Client, try_aggregated: bool) -> OxiResult<Fe
 }
 
 async fn fetch_legacy(client: &Client) -> OxiResult<Fetched> {
-    let (kinds, failed) = legacy(client)
-        .await
-        .map_err(|e| from_kube(e, "API discovery"))?;
+    let (kinds, failed) = legacy(client).await.map_err(|e| classify(&e))?;
     Ok(Fetched {
         kinds,
         aggregated: false,
@@ -146,4 +144,13 @@ async fn list_resources(client: &Client, job: &Job) -> Result<APIResourceList, k
     } else {
         client.list_api_group_resources(&job.group_version).await
     }
+}
+
+/// Whether the legacy per-group endpoints could succeed where aggregated discovery failed. False
+/// for failures that would repeat identically (bad credentials, no permission, no connection).
+fn legacy_may_help(err: &OxiError) -> bool {
+    !matches!(
+        err.kind(),
+        ErrorKind::Auth | ErrorKind::Forbidden | ErrorKind::Network | ErrorKind::Timeout
+    )
 }
