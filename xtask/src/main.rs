@@ -11,6 +11,7 @@
 mod check_gpui_pin;
 mod kind;
 mod lint_deps;
+mod load_pods;
 mod setup;
 
 use clap::{Parser, Subcommand};
@@ -41,20 +42,7 @@ enum Cmd {
         name: String,
     },
     /// Create N pause pods across namespaces; `--churn` keeps deleting/recreating them.
-    LoadPods {
-        #[arg(long, default_value_t = 1000)]
-        count: usize,
-        #[arg(long)]
-        churn: bool,
-        #[arg(long, default_value = "oxikube-load")]
-        namespace: String,
-        /// kubectl context to target. Required, and must be a kind context (`kind-*`) unless
-        /// `--allow-non-kind` is passed, so this never runs against a real cluster by accident.
-        #[arg(long)]
-        context: String,
-        #[arg(long)]
-        allow_non_kind: bool,
-    },
+    LoadPods(load_pods::Args),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -64,12 +52,6 @@ fn main() -> anyhow::Result<()> {
         Cmd::CheckGpuiPin => check_gpui_pin::run(),
         Cmd::KindUp { name } => kind::up(&name),
         Cmd::KindDown { name } => kind::down(&name),
-        Cmd::LoadPods {
-            count,
-            churn,
-            namespace,
-            context,
-            allow_non_kind,
-        } => kind::load_pods(count, churn, &namespace, &context, allow_non_kind),
+        Cmd::LoadPods(args) => load_pods::run(&args),
     }
 }

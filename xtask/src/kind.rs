@@ -4,7 +4,7 @@
 //! kubelet TLS for kind), waits for it, and applies the fixtures under
 //! `crates/testing/oxikube_testkit/fixtures/` (sample CRD with printer columns, workloads in
 //! several states). It is idempotent and every kubectl call carries `--context kind-<name>`
-//! so it can never touch another cluster. `load-pods` seeds pause pods for E07 perf work.
+//! so it can never touch another cluster. (`load-pods` lives in `load_pods.rs`.)
 //! Requires `kind` and `kubectl` on PATH.
 
 use anyhow::{Context, Result};
@@ -92,71 +92,6 @@ pub fn up(name: &str) -> Result<()> {
 pub fn down(name: &str) -> Result<()> {
     let sh = Shell::new()?;
     cmd!(sh, "kind delete cluster --name {name}").run()?;
-    Ok(())
-}
-
-pub fn load_pods(
-    count: usize,
-    churn: bool,
-    namespace: &str,
-    context: &str,
-    allow_non_kind: bool,
-) -> Result<()> {
-    if !context.starts_with("kind-") && !allow_non_kind {
-        anyhow::bail!(
-            "refusing to load pods into non-kind context `{context}`; pass --allow-non-kind if you really mean it"
-        );
-    }
-    let sh = Shell::new()?;
-    let _ = cmd!(
-        sh,
-        "kubectl --context {context} create namespace {namespace}"
-    )
-    .ignore_status()
-    .run();
-    let manifest = (0..count)
-        .map(|i| {
-            format!(
-                "apiVersion: v1\nkind: Pod\nmetadata:\n  name: load-{i}\n  namespace: {namespace}\n  labels:\n    app: oxikube-load\nspec:\n  containers:\n  - name: pause\n    image: registry.k8s.io/pause:3.10\n    resources:\n      requests: {{cpu: 1m, memory: 1Mi}}\n---\n"
-            )
-        })
-        .collect::<String>();
-    cmd!(sh, "kubectl --context {context} apply -f -")
-        .stdin(&manifest)
-        .run()?;
-    println!("created {count} pods in {namespace}");
-    if churn {
-        println!("churning: deleting/recreating 1% every 5s (ctrl-c to stop)");
-        let step = (count / 100).max(1);
-        let mut i = 0usize;
-        loop {
-            for j in 0..step {
-                let n = (i + j) % count;
-                let pod = format!("load-{n}");
-                let _ = cmd!(
-                    sh,
-                    "kubectl --context {context} -n {namespace} delete pod {pod} --wait=false"
-                )
-                .ignore_status()
-                .quiet()
-                .run();
-            }
-            std::thread::sleep(std::time::Duration::from_secs(5));
-            let chunk = (0..step)
-                .map(|j| {
-                    let n = (i + j) % count;
-                    format!(
-                        "apiVersion: v1\nkind: Pod\nmetadata:\n  name: load-{n}\n  namespace: {namespace}\n  labels:\n    app: oxikube-load\nspec:\n  containers:\n  - name: pause\n    image: registry.k8s.io/pause:3.10\n---\n"
-                    )
-                })
-                .collect::<String>();
-            let _ = cmd!(sh, "kubectl --context {context} apply -f -")
-                .stdin(&chunk)
-                .quiet()
-                .run();
-            i = (i + step) % count;
-        }
-    }
     Ok(())
 }
 
