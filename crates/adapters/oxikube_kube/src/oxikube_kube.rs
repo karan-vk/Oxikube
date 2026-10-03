@@ -4,3 +4,11 @@
 //!
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
+//!
+//! # Module map
+//!
+//! | Module | Story | Role |
+//! |---|---|---|
+//! | [`kubeconfig`] | E03-S01 | tolerant `KUBECONFIG` splitting, loading and merging with per-context origins and diagnostics |
+
+pub mod kubeconfig;
