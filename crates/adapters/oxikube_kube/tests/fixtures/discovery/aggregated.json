@@ -1,0 +1,587 @@
+{
+  "api": {
+    "kind": "APIGroupDiscoveryList",
+    "apiVersion": "apidiscovery.k8s.io/v2",
+    "metadata": {},
+    "items": [
+      {
+        "metadata": {},
+        "versions": [
+          {
+            "version": "v1",
+            "resources": [
+              {
+                "resource": "pods",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "Pod"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "pod",
+                "shortNames": [
+                  "po"
+                ],
+                "categories": [
+                  "all"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "log",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": "Pod"
+                    },
+                    "verbs": [
+                      "get"
+                    ]
+                  },
+                  {
+                    "subresource": "exec",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": "PodExecOptions"
+                    },
+                    "verbs": [
+                      "create",
+                      "get"
+                    ]
+                  },
+                  {
+                    "subresource": "status",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": "Pod"
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  }
+                ]
+              },
+              {
+                "resource": "namespaces",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "Namespace"
+                },
+                "scope": "Cluster",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "namespace",
+                "shortNames": [
+                  "ns"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "status",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": "Namespace"
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  }
+                ]
+              },
+              {
+                "resource": "nodes",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "Node"
+                },
+                "scope": "Cluster",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "node",
+                "shortNames": [
+                  "no"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "proxy",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": "NodeProxyOptions"
+                    },
+                    "verbs": [
+                      "create",
+                      "get"
+                    ]
+                  }
+                ]
+              },
+              {
+                "resource": "events",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "Event"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "event",
+                "shortNames": [
+                  "ev"
+                ]
+              },
+              {
+                "resource": "bindings",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "Binding"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create"
+                ]
+              },
+              {
+                "resource": "componentstatuses",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "ComponentStatus"
+                },
+                "scope": "Cluster",
+                "verbs": [
+                  "get",
+                  "list"
+                ],
+                "shortNames": [
+                  "cs"
+                ]
+              }
+            ],
+            "freshness": "Current"
+          }
+        ]
+      }
+    ]
+  },
+  "apis": {
+    "kind": "APIGroupDiscoveryList",
+    "apiVersion": "apidiscovery.k8s.io/v2",
+    "metadata": {},
+    "items": [
+      {
+        "metadata": {
+          "name": "apps"
+        },
+        "versions": [
+          {
+            "version": "v1",
+            "resources": [
+              {
+                "resource": "deployments",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "Deployment"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "deployment",
+                "shortNames": [
+                  "deploy"
+                ],
+                "categories": [
+                  "all"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "scale",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": "Scale"
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  },
+                  {
+                    "subresource": "status",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": null
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  }
+                ]
+              },
+              {
+                "resource": "daemonsets",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "DaemonSet"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "daemonset",
+                "shortNames": [
+                  "ds"
+                ],
+                "categories": [
+                  "all"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "status",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": null
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  }
+                ]
+              },
+              {
+                "resource": "statefulsets",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "StatefulSet"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "statefulset",
+                "shortNames": [
+                  "sts"
+                ],
+                "categories": [
+                  "all"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "status",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": null
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  }
+                ]
+              },
+              {
+                "resource": "replicasets",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "ReplicaSet"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "replicaset",
+                "shortNames": [
+                  "rs"
+                ],
+                "categories": [
+                  "all"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "status",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": null
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "freshness": "Current"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "autoscaling"
+        },
+        "versions": [
+          {
+            "version": "v2",
+            "resources": [
+              {
+                "resource": "horizontalpodautoscalers",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "HorizontalPodAutoscaler"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "horizontalpodautoscaler",
+                "shortNames": [
+                  "hpa"
+                ],
+                "categories": [
+                  "all"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "status",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": null
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "freshness": "Current"
+          },
+          {
+            "version": "v1",
+            "resources": [
+              {
+                "resource": "horizontalpodautoscalers",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "HorizontalPodAutoscaler"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "horizontalpodautoscaler",
+                "shortNames": [
+                  "hpa"
+                ],
+                "categories": [
+                  "all"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "status",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": null
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "freshness": "Current"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "authentication.k8s.io"
+        },
+        "versions": [
+          {
+            "version": "v1",
+            "resources": [
+              {
+                "resource": "tokenreviews",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "TokenReview"
+                },
+                "scope": "Cluster",
+                "verbs": [
+                  "create"
+                ]
+              }
+            ],
+            "freshness": "Current"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "test.oxikube.dev"
+        },
+        "versions": [
+          {
+            "version": "v1",
+            "resources": [
+              {
+                "resource": "widgets",
+                "responseKind": {
+                  "group": "",
+                  "version": "",
+                  "kind": "Widget"
+                },
+                "scope": "Namespaced",
+                "verbs": [
+                  "create",
+                  "delete",
+                  "deletecollection",
+                  "get",
+                  "list",
+                  "patch",
+                  "update",
+                  "watch"
+                ],
+                "singularResource": "widget",
+                "shortNames": [
+                  "wd"
+                ],
+                "categories": [
+                  "all"
+                ],
+                "subresources": [
+                  {
+                    "subresource": "status",
+                    "responseKind": {
+                      "group": "",
+                      "version": "",
+                      "kind": null
+                    },
+                    "verbs": [
+                      "get",
+                      "patch",
+                      "update"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "freshness": "Current"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -80,6 +80,8 @@ kopium = "0.24"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util", "net", "fs", "signal"] }
 tokio-util = { version = "0.7", features = ["io", "codec"] }
 futures = "0.3"
+http = "1"
+tower = "0.5"
 async-trait = "0.1"
 backon = "1"
 

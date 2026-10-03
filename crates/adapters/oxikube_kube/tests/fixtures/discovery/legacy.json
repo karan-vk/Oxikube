@@ -1,0 +1,515 @@
+{
+  "/api": {
+    "kind": "APIVersions",
+    "versions": [
+      "v1"
+    ],
+    "serverAddressByClientCIDRs": [
+      {
+        "clientCIDR": "0.0.0.0/0",
+        "serverAddress": "10.0.0.1:6443"
+      }
+    ]
+  },
+  "/apis": {
+    "kind": "APIGroupList",
+    "apiVersion": "v1",
+    "groups": [
+      {
+        "name": "apps",
+        "versions": [
+          {
+            "groupVersion": "apps/v1",
+            "version": "v1"
+          }
+        ],
+        "preferredVersion": {
+          "groupVersion": "apps/v1",
+          "version": "v1"
+        }
+      },
+      {
+        "name": "autoscaling",
+        "versions": [
+          {
+            "groupVersion": "autoscaling/v2",
+            "version": "v2"
+          },
+          {
+            "groupVersion": "autoscaling/v1",
+            "version": "v1"
+          }
+        ],
+        "preferredVersion": {
+          "groupVersion": "autoscaling/v2",
+          "version": "v2"
+        }
+      },
+      {
+        "name": "authentication.k8s.io",
+        "versions": [
+          {
+            "groupVersion": "authentication.k8s.io/v1",
+            "version": "v1"
+          }
+        ],
+        "preferredVersion": {
+          "groupVersion": "authentication.k8s.io/v1",
+          "version": "v1"
+        }
+      },
+      {
+        "name": "test.oxikube.dev",
+        "versions": [
+          {
+            "groupVersion": "test.oxikube.dev/v1",
+            "version": "v1"
+          }
+        ],
+        "preferredVersion": {
+          "groupVersion": "test.oxikube.dev/v1",
+          "version": "v1"
+        }
+      }
+    ]
+  },
+  "/api/v1": {
+    "kind": "APIResourceList",
+    "groupVersion": "v1",
+    "resources": [
+      {
+        "name": "pods",
+        "singularName": "pod",
+        "namespaced": true,
+        "kind": "Pod",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "po"
+        ],
+        "categories": [
+          "all"
+        ]
+      },
+      {
+        "name": "pods/log",
+        "singularName": "",
+        "namespaced": true,
+        "kind": "Pod",
+        "verbs": [
+          "get"
+        ]
+      },
+      {
+        "name": "pods/exec",
+        "singularName": "",
+        "namespaced": true,
+        "kind": "PodExecOptions",
+        "verbs": [
+          "create",
+          "get"
+        ]
+      },
+      {
+        "name": "pods/status",
+        "singularName": "",
+        "namespaced": true,
+        "kind": "Pod",
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      },
+      {
+        "name": "namespaces",
+        "singularName": "namespace",
+        "namespaced": false,
+        "kind": "Namespace",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "ns"
+        ]
+      },
+      {
+        "name": "namespaces/status",
+        "singularName": "",
+        "namespaced": false,
+        "kind": "Namespace",
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      },
+      {
+        "name": "nodes",
+        "singularName": "node",
+        "namespaced": false,
+        "kind": "Node",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "no"
+        ]
+      },
+      {
+        "name": "nodes/proxy",
+        "singularName": "",
+        "namespaced": false,
+        "kind": "NodeProxyOptions",
+        "verbs": [
+          "create",
+          "get"
+        ]
+      },
+      {
+        "name": "events",
+        "singularName": "event",
+        "namespaced": true,
+        "kind": "Event",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "ev"
+        ]
+      },
+      {
+        "name": "bindings",
+        "singularName": "",
+        "namespaced": true,
+        "kind": "Binding",
+        "verbs": [
+          "create"
+        ]
+      },
+      {
+        "name": "componentstatuses",
+        "singularName": "",
+        "namespaced": false,
+        "kind": "ComponentStatus",
+        "verbs": [
+          "get",
+          "list"
+        ],
+        "shortNames": [
+          "cs"
+        ]
+      }
+    ]
+  },
+  "/apis/apps/v1": {
+    "kind": "APIResourceList",
+    "groupVersion": "apps/v1",
+    "resources": [
+      {
+        "name": "deployments",
+        "singularName": "deployment",
+        "namespaced": true,
+        "kind": "Deployment",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "deploy"
+        ],
+        "categories": [
+          "all"
+        ]
+      },
+      {
+        "name": "deployments/scale",
+        "singularName": "",
+        "namespaced": true,
+        "kind": "Scale",
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      },
+      {
+        "name": "deployments/status",
+        "singularName": "",
+        "namespaced": true,
+        "kind": null,
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      },
+      {
+        "name": "daemonsets",
+        "singularName": "daemonset",
+        "namespaced": true,
+        "kind": "DaemonSet",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "ds"
+        ],
+        "categories": [
+          "all"
+        ]
+      },
+      {
+        "name": "daemonsets/status",
+        "singularName": "",
+        "namespaced": true,
+        "kind": null,
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      },
+      {
+        "name": "statefulsets",
+        "singularName": "statefulset",
+        "namespaced": true,
+        "kind": "StatefulSet",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "sts"
+        ],
+        "categories": [
+          "all"
+        ]
+      },
+      {
+        "name": "statefulsets/status",
+        "singularName": "",
+        "namespaced": true,
+        "kind": null,
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      },
+      {
+        "name": "replicasets",
+        "singularName": "replicaset",
+        "namespaced": true,
+        "kind": "ReplicaSet",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "rs"
+        ],
+        "categories": [
+          "all"
+        ]
+      },
+      {
+        "name": "replicasets/status",
+        "singularName": "",
+        "namespaced": true,
+        "kind": null,
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      }
+    ]
+  },
+  "/apis/autoscaling/v2": {
+    "kind": "APIResourceList",
+    "groupVersion": "autoscaling/v2",
+    "resources": [
+      {
+        "name": "horizontalpodautoscalers",
+        "singularName": "horizontalpodautoscaler",
+        "namespaced": true,
+        "kind": "HorizontalPodAutoscaler",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "hpa"
+        ],
+        "categories": [
+          "all"
+        ]
+      },
+      {
+        "name": "horizontalpodautoscalers/status",
+        "singularName": "",
+        "namespaced": true,
+        "kind": null,
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      }
+    ]
+  },
+  "/apis/autoscaling/v1": {
+    "kind": "APIResourceList",
+    "groupVersion": "autoscaling/v1",
+    "resources": [
+      {
+        "name": "horizontalpodautoscalers",
+        "singularName": "horizontalpodautoscaler",
+        "namespaced": true,
+        "kind": "HorizontalPodAutoscaler",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "hpa"
+        ],
+        "categories": [
+          "all"
+        ]
+      },
+      {
+        "name": "horizontalpodautoscalers/status",
+        "singularName": "",
+        "namespaced": true,
+        "kind": null,
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      }
+    ]
+  },
+  "/apis/authentication.k8s.io/v1": {
+    "kind": "APIResourceList",
+    "groupVersion": "authentication.k8s.io/v1",
+    "resources": [
+      {
+        "name": "tokenreviews",
+        "singularName": "",
+        "namespaced": false,
+        "kind": "TokenReview",
+        "verbs": [
+          "create"
+        ]
+      }
+    ]
+  },
+  "/apis/test.oxikube.dev/v1": {
+    "kind": "APIResourceList",
+    "groupVersion": "test.oxikube.dev/v1",
+    "resources": [
+      {
+        "name": "widgets",
+        "singularName": "widget",
+        "namespaced": true,
+        "kind": "Widget",
+        "verbs": [
+          "create",
+          "delete",
+          "deletecollection",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ],
+        "shortNames": [
+          "wd"
+        ],
+        "categories": [
+          "all"
+        ]
+      },
+      {
+        "name": "widgets/status",
+        "singularName": "",
+        "namespaced": true,
+        "kind": null,
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      }
+    ]
+  }
+}
