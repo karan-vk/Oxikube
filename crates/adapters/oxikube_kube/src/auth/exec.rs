@@ -14,13 +14,16 @@
 //! `AuthRequired` with an explanation instead of failing later in an opaque way.
 //!
 //! Building a client runs the plugin synchronously (`Client::try_from` calls it), so
-//! callers must do that on the blocking pool, never on the UI thread.
+//! [`build_client`] does that on the blocking pool under a deadline, never on the UI thread.
 
 use std::path::Path;
+use std::time::Duration;
 
-use kube::Config;
 use kube::config::{ExecConfig, ExecInteractiveMode};
+use kube::{Client, Config};
 use oxikube_domain::{OxiError, OxiResult};
+
+use super::classify::{CredentialRefresh, classify_with};
 
 /// How interactive an exec credential plugin is allowed to be.
 ///
@@ -84,6 +87,49 @@ impl ExecInteractivePolicy {
             Some(exec) => self.apply_to_exec(exec),
             None => Ok(()),
         }
+    }
+}
+
+/// Applies `policy`, then builds a [`Client`] without blocking the caller or waiting forever.
+///
+/// kube runs exec credential plugins synchronously inside `Client::try_from` with no timeout
+/// of its own, so the build runs on the blocking pool under `deadline`. A plugin that does
+/// not finish in time (a device-code poll, a browser login, a read on `/dev/tty`) gives a
+/// retryable `Timeout` error and the session can move on.
+///
+/// Limits: on timeout the blocking thread, and the plugin child process, may keep running
+/// after this returns (Rust cannot cancel either). A plugin that hangs later, when kube
+/// refreshes an expiring token inside a live client, is not covered by this deadline.
+///
+/// # Errors
+///
+/// The policy's `Auth` error, the classified build failure, or `Timeout`.
+pub async fn build_client(
+    mut config: Config,
+    policy: ExecInteractivePolicy,
+    deadline: Duration,
+) -> OxiResult<Client> {
+    policy.apply_to_config(&mut config)?;
+    let refresh = CredentialRefresh::of(&config.auth_info);
+    let build = tokio::task::spawn_blocking(move || Client::try_from(config));
+    match tokio::time::timeout(deadline, build).await {
+        Ok(Ok(Ok(client))) => Ok(client),
+        Ok(Ok(Err(err))) => Err(classify_with(&err, refresh)),
+        Ok(Err(join)) => Err(OxiError::internal(format!(
+            "building the client failed unexpectedly: {join}"
+        ))),
+        Err(_elapsed) => Err(OxiError::timeout(format!(
+            "exec credential plugin did not finish within {}",
+            describe(deadline)
+        ))),
+    }
+}
+
+fn describe(d: Duration) -> String {
+    if d.as_secs() >= 1 {
+        format!("{}s", d.as_secs())
+    } else {
+        format!("{}ms", d.as_millis())
     }
 }
 

@@ -110,27 +110,7 @@ fn classify_oidc(err: &kube::client::oidc_errors::Error) -> OxiError {
 /// message; stdout (which may hold a credential) is never read.
 fn exec_run_failed(status: &str, stderr: &[u8]) -> OxiError {
     let stderr = String::from_utf8_lossy(stderr);
-    let lower = stderr.to_ascii_lowercase();
-    let needs_input = [
-        "interactive",
-        "tty",
-        "terminal",
-        "stdin",
-        "prompt",
-        "mfa",
-        "otp",
-        "one-time",
-        "device code",
-        "verification code",
-        "enter code",
-        "press enter",
-        "sign in",
-        "sign-in",
-        "login",
-        "log in",
-    ]
-    .iter()
-    .any(|needle| lower.contains(needle));
+    let needs_input = needs_human_input(&stderr);
     let tail = scrub_tail(&stderr, 3);
     let detail = if tail.is_empty() {
         String::new()
@@ -149,5 +129,82 @@ fn exec_run_failed(status: &str, stderr: &[u8]) -> OxiError {
             format!("the exec credential plugin failed ({status}){detail}"),
             true,
         )
+    }
+}
+
+/// Whole-word / whole-phrase markers (matched on alphanumeric words, so `login.microsoftonline.com`,
+/// `pretty` and `footprint` do not count) that a plugin is waiting for a person.
+const INPUT_WORDS: &[&str] = &["mfa", "2fa", "otp", "tty", "stdin", "interactive"];
+const INPUT_PHRASES: &[&str] = &[
+    "one time password",
+    "one time code",
+    "device code",
+    "verification code",
+    "enter code",
+    "enter the code",
+    "enter your code",
+    "press enter",
+    "not a terminal",
+    "no terminal",
+    "for prompt",
+    "cannot prompt",
+    "unable to prompt",
+    "please log in",
+    "please login",
+    "please sign in",
+    "login required",
+    "sign in required",
+    "log in again",
+    "sign in again",
+    "az login",
+    "sso login",
+    "auth login",
+];
+
+/// True when plugin stderr says it needs a person (MFA code, device-code sign-in, a tty).
+fn needs_human_input(stderr: &str) -> bool {
+    let lower = stderr.to_ascii_lowercase();
+    let words: Vec<&str> = lower
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect();
+    if words.iter().any(|w| INPUT_WORDS.contains(w)) {
+        return true;
+    }
+    let padded = format!(" {} ", words.join(" "));
+    INPUT_PHRASES
+        .iter()
+        .any(|p| padded.contains(&format!(" {p} ")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::needs_human_input;
+
+    #[test]
+    fn prompts_and_sign_in_requests_need_a_person() {
+        for s in [
+            "Enter MFA code for arn:aws:iam::0:mfa/dummy:",
+            "error: no terminal available for prompt",
+            "stdin is not a terminal",
+            "Please log in: az login",
+            "To sign in, use a web browser and enter the device code ABCD",
+            "error: SSO session expired, run aws sso login",
+            "open /dev/tty: no such device (no tty)",
+        ] {
+            assert!(needs_human_input(s), "{s}");
+        }
+    }
+
+    #[test]
+    fn network_failures_and_lookalike_words_do_not() {
+        for s in [
+            "Post https://login.microsoftonline.com/tenant/oauth2/token: dial tcp: i/o timeout",
+            "a pretty kitty with a footprint",
+            "error: credentials service unavailable",
+            "failed to get token: terminal error from server",
+        ] {
+            assert!(!needs_human_input(s), "{s}");
+        }
     }
 }

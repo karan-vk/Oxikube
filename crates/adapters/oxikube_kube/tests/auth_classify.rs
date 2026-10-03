@@ -178,6 +178,17 @@ fn exec_non_zero_exit_is_retryable_and_never_leaks() {
 }
 
 #[test]
+fn plugin_network_failure_mentioning_login_is_still_retryable() {
+    let err = classify(&exec_run_error(fixture!("exec_network_timeout.json")));
+    assert_class(&err, ErrorKind::Auth, true);
+    assert!(
+        !err.message().contains("sign in or answer"),
+        "{}",
+        err.message()
+    );
+}
+
+#[test]
 fn exec_waiting_for_a_prompt_is_not_retryable_and_says_why() {
     let err = classify(&exec_run_error(fixture!("exec_mfa_prompt.json")));
     assert_class(&err, ErrorKind::Auth, false);
