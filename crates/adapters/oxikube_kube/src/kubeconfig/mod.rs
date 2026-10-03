@@ -65,8 +65,8 @@ use oxikube_domain::ids::{ClusterId, ContextName};
 
 pub use diagnostics::{Diagnostic, InClusterSkip, Severity, SourceInfo, SourceStatus, SourceTier};
 pub use env::{
-    Env, Selection, load_kubeconfig_for_env, load_kubeconfig_for_env_blocking,
-    load_kubeconfig_for_process, select_sources,
+    Env, Selection, apply_in_cluster_fallback, load_kubeconfig_for_env,
+    load_kubeconfig_for_env_blocking, load_kubeconfig_for_process, select_sources,
 };
 pub use incluster::{
     IN_CLUSTER_CONTEXT, IN_CLUSTER_SOURCE_LABEL, IN_CLUSTER_SOURCE_PATH, apply_in_cluster_fixups,

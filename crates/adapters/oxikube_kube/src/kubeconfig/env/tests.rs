@@ -7,7 +7,7 @@ use super::*;
 use crate::kubeconfig::incluster::{
     IN_CLUSTER_CONTEXT, SERVICE_ACCOUNT_CA_FILE, SERVICE_ACCOUNT_TOKEN_FILE,
 };
-use crate::kubeconfig::{Severity, in_cluster_cluster_id};
+use crate::kubeconfig::{Severity, in_cluster_cluster_id, in_cluster_context_name};
 
 fn config_yaml(name: &str) -> String {
     format!(
@@ -587,5 +587,81 @@ fn existing_file_only_api_is_unchanged_and_never_falls_back() {
     let loaded =
         crate::kubeconfig::load_kubeconfig_from_paths_blocking(&[], Strictness::Tolerant).unwrap();
     assert!(loaded.merged.contexts.is_empty());
+    assert!(loaded.diagnostics.is_empty());
+}
+
+// --- the exported fallback step ----------------------------------------------------------------
+
+fn files_only(paths: &[PathBuf]) -> LoadedKubeconfig {
+    crate::kubeconfig::load_kubeconfig_from_paths_blocking(paths, Strictness::Tolerant).unwrap()
+}
+
+#[test]
+fn fallback_step_adds_the_context_after_a_caller_loaded_its_own_files() {
+    let dir = TempDir::new().unwrap();
+    let blank = write(&dir, "blank", "");
+    let mut loaded = files_only(&[blank, dir.path().join("missing")]);
+
+    apply_in_cluster_fallback(&mut loaded, &pod_env()).unwrap();
+
+    assert_eq!(names(&loaded), [IN_CLUSTER_CONTEXT]);
+    assert_eq!(loaded.diagnostics.last(), Some(&Diagnostic::InClusterUsed));
+    let source = loaded.sources.last().unwrap();
+    assert!(source.is_in_cluster());
+    assert_eq!(
+        source.path,
+        PathBuf::from(crate::kubeconfig::IN_CLUSTER_SOURCE_PATH)
+    );
+    assert_eq!(
+        loaded.cluster_id(&in_cluster_context_name()),
+        Some(in_cluster_cluster_id())
+    );
+    // Calling it again changes nothing.
+    let before = (loaded.sources.len(), loaded.diagnostics.len());
+    apply_in_cluster_fallback(&mut loaded, &pod_env()).unwrap();
+    assert_eq!((loaded.sources.len(), loaded.diagnostics.len()), before);
+}
+
+#[test]
+fn fallback_step_refuses_over_a_broken_file_and_records_why() {
+    let dir = TempDir::new().unwrap();
+    let corrupt = write(&dir, "corrupt", "users: [\n");
+    let mut loaded = files_only(&[corrupt]);
+
+    apply_in_cluster_fallback(&mut loaded, &pod_env()).unwrap();
+
+    assert!(names(&loaded).is_empty());
+    assert_eq!(
+        loaded.diagnostics.last(),
+        Some(&Diagnostic::InClusterSkipped {
+            reason: InClusterSkip::BrokenKubeconfig
+        })
+    );
+}
+
+#[test]
+fn fallback_step_outside_a_pod_records_not_in_cluster() {
+    let mut loaded = files_only(&[]);
+
+    apply_in_cluster_fallback(&mut loaded, &Env::default()).unwrap();
+
+    assert!(names(&loaded).is_empty());
+    assert_eq!(
+        loaded.diagnostics.last(),
+        Some(&Diagnostic::InClusterSkipped {
+            reason: InClusterSkip::NotInCluster
+        })
+    );
+}
+
+#[test]
+fn fallback_step_is_a_no_op_when_a_context_exists() {
+    let dir = TempDir::new().unwrap();
+    let good = write(&dir, "good", &config_yaml("prod"));
+    let mut loaded = files_only(&[good]);
+
+    apply_in_cluster_fallback(&mut loaded, &pod_env()).unwrap();
+
+    assert_eq!(names(&loaded), ["prod"]);
     assert!(loaded.diagnostics.is_empty());
 }

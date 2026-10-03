@@ -176,6 +176,37 @@ fn apply_in_cluster(loaded: &mut LoadedKubeconfig, env: &Env) -> OxiResult<()> {
     Ok(())
 }
 
+/// The in-cluster fallback step, for callers that loaded their own file list.
+///
+/// Does nothing when `loaded` already has a context. Otherwise, when no listed file was
+/// unreadable, unparsable or merge-incompatible and `env` looks like a pod
+/// ([`Env::in_cluster_detected`]), it adds the synthetic `in-cluster` context (merged config,
+/// [`SourceInfo`] with `path` [`IN_CLUSTER_SOURCE_PATH`], origin) and records
+/// [`Diagnostic::InClusterUsed`]. In the other cases it records
+/// [`Diagnostic::InClusterSkipped`] with the reason, and changes nothing else. Never falls back
+/// over a broken kubeconfig. Safe to call twice.
+///
+/// Errors only if the synthetic context cannot be merged (an internal error).
+pub fn apply_in_cluster_fallback(loaded: &mut LoadedKubeconfig, env: &Env) -> OxiResult<()> {
+    if !loaded.merged.contexts.is_empty() {
+        return Ok(());
+    }
+    let diagnostic = if has_broken_source(loaded) {
+        Diagnostic::InClusterSkipped {
+            reason: InClusterSkip::BrokenKubeconfig,
+        }
+    } else if env.in_cluster_detected() {
+        apply_in_cluster(loaded, env)?;
+        Diagnostic::InClusterUsed
+    } else {
+        Diagnostic::InClusterSkipped {
+            reason: InClusterSkip::NotInCluster,
+        }
+    };
+    loaded.diagnostics.push(diagnostic);
+    Ok(())
+}
+
 /// Load the kubeconfig for `env` by the module's precedence rules (blocking).
 ///
 /// Loads the selected tier tolerantly, then applies the in-cluster fallback when no context was
@@ -193,20 +224,7 @@ pub fn load_kubeconfig_for_env_blocking(
     let selection = select_sources(explicit, env);
     let mut loaded = load_kubeconfig_from_paths_blocking(&selection.paths, Strictness::Tolerant)?;
 
-    let fallback = if !loaded.merged.contexts.is_empty() {
-        None
-    } else if has_broken_source(&loaded) {
-        Some(Diagnostic::InClusterSkipped {
-            reason: InClusterSkip::BrokenKubeconfig,
-        })
-    } else if env.in_cluster_detected() {
-        apply_in_cluster(&mut loaded, env)?;
-        Some(Diagnostic::InClusterUsed)
-    } else {
-        Some(Diagnostic::InClusterSkipped {
-            reason: InClusterSkip::NotInCluster,
-        })
-    };
+    apply_in_cluster_fallback(&mut loaded, env)?;
 
     if strictness == Strictness::RequireUsable && !loaded.has_usable_source() {
         let err = unusable_error(&loaded);
@@ -225,7 +243,6 @@ pub fn load_kubeconfig_for_env_blocking(
         None => Diagnostic::NoKubeconfigSource,
     };
     loaded.diagnostics.insert(0, selected);
-    loaded.diagnostics.extend(fallback);
     Ok(loaded)
 }
 

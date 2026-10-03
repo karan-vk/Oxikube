@@ -226,6 +226,16 @@ pub(super) fn unusable_error(loaded: &LoadedKubeconfig) -> OxiError {
     let detail = loaded
         .diagnostics
         .iter()
+        .filter(|d| {
+            matches!(
+                d,
+                Diagnostic::MissingFile { .. }
+                    | Diagnostic::BlankFile { .. }
+                    | Diagnostic::Unreadable { .. }
+                    | Diagnostic::Unparsable { .. }
+                    | Diagnostic::Incompatible { .. }
+            )
+        })
         .map(|d| d.to_string())
         .collect::<Vec<_>>()
         .join("; ");
