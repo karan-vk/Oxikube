@@ -39,10 +39,15 @@ in milliseconds.
 See `docs/PLAN.md` ("Workspace layout") for the one-line responsibility of every crate, and each
 crate's `README.md` for its allowed dependencies. Highlights:
 
-- `oxikube_domain` — ids, the thin `Resource { meta, json }` model, view-models, `Command` /
-  `Capability` vocabulary, `Quantity`, `Age`, error taxonomy, safety types, redaction.
+- `oxikube_domain` — ids, `ResourceKind`, the thin `Resource { meta, json }` model, view-models,
+  `Quantity`, `Age`, session state and `NamespaceSelection`, `Command` / `Capability` vocabulary,
+  safety types (`Risk`, `ConfirmTier`, `Initiator`), `AuditRecord`, telemetry-free records
+  (`LogLine`, `Event`, `MetricsSample`, `ContextBlock`) and the error taxonomy. Redaction is
+  planned (E19-S10). Terms are defined in `docs/CONTEXT.md`.
 - `oxikube_ports` — every async, object-safe trait (`ResourcePort`, `LogPort`, `ExecPort`,
-  `StatePort`, `IntegrationPort`, `ToolPort`, `AgentPort`, …).
+  `StatePort`, `IntegrationPort`, `ToolPort`, `AgentPort`, …) with the transport types they
+  exchange (`Delta`, `Table`, `ToolDef`, …). One module per port; each names its adapter.
+- `oxikube_testkit` — a `Fake*` for every port, fixtures and builders.
 - `oxikube_app` — services: `ClusterSessionManager`, `ResourceStore`, `CommandBus`,
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
   `ContextRegistry`, `AgentSessionManager`. No gpui, no kube.
