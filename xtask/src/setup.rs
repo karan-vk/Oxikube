@@ -20,10 +20,18 @@ pub fn run() -> Result<()> {
         bail!("pre-commit is not installed or not in PATH");
     }
 
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest_dir
-        .parent()
-        .context("failed to determine repository root from CARGO_MANIFEST_DIR")?;
+    // Resolve the repo from the cwd (like the other xtask subcommands), not from the
+    // compile-time manifest path, so a binary reused across checkouts targets the right repo.
+    let root = cmd!(sh, "git rev-parse --show-toplevel")
+        .read()
+        .context("`cargo xtask setup` must run inside the Oxikube git checkout")?;
+    let root = Path::new(root.trim());
+    if !root.join(".pre-commit-config.yaml").exists() {
+        bail!(
+            "{} has no .pre-commit-config.yaml; run `cargo xtask setup` from the Oxikube checkout",
+            root.display()
+        );
+    }
 
     sh.change_dir(root);
 
