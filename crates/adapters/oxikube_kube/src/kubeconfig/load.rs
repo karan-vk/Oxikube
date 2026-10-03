@@ -68,7 +68,11 @@ enum Skip {
 
 /// Read one kubeconfig file (blocking), classifying the ways it can be unusable.
 fn load_kubeconfig_path(path: &Path) -> Result<Kubeconfig, Skip> {
-    match Kubeconfig::read_from(path) {
+    // kube resolves relative credential paths as `<file's parent>/<rel>`, which stays relative
+    // to the working directory when the listed path is itself relative (`KUBECONFIG=sub/config`).
+    // kubectl absolutises the file's directory first; do the same by absolutising the path.
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    match Kubeconfig::read_from(&absolute) {
         Ok(config) if is_blank_kubeconfig(&config) => Err(Skip::Blank),
         Ok(config) => Ok(config),
         Err(KubeconfigError::ReadConfig(err, _)) if err.kind() == IoErrorKind::NotFound => {

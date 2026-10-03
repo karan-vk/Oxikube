@@ -339,6 +339,29 @@ fn relative_cert_paths_resolve_against_each_files_directory() {
 }
 
 #[test]
+fn relative_listed_path_still_yields_absolute_cert_paths() {
+    // Build the relative path from the real cwd rather than changing it.
+    let cwd = std::env::current_dir().unwrap();
+    let dir = TempDir::new_in(&cwd).unwrap();
+    fs::write(dir.path().join("ca.pem"), "pem").unwrap();
+    let text = "clusters:\n- name: a\n  cluster:\n    server: https://a\n    certificate-authority: ca.pem\n\
+                contexts:\n- name: a\n  context:\n    cluster: a\n";
+    fs::write(dir.path().join("config"), text).unwrap();
+    let relative = dir.path().strip_prefix(&cwd).unwrap().join("config");
+    assert!(relative.is_relative());
+
+    let loaded = load(std::slice::from_ref(&relative));
+
+    let cluster = loaded.merged.clusters[0].cluster.as_ref().unwrap();
+    let ca = PathBuf::from(cluster.certificate_authority.clone().unwrap());
+    assert!(ca.is_absolute(), "{ca:?}");
+    assert!(ca.exists(), "{ca:?}");
+    // The listed path is kept for sources and origins.
+    assert_eq!(loaded.sources[0].path, relative);
+    assert_eq!(loaded.origin(&"a".into()), Some(relative.as_path()));
+}
+
+#[test]
 fn absolute_cert_paths_are_left_alone() {
     let dir = TempDir::new().unwrap();
     let ca = dir.path().join("elsewhere-ca.pem");
