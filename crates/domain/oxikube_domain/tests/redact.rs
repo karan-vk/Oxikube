@@ -56,6 +56,39 @@ fn authorization_with_other_schemes_and_array_forms() {
 }
 
 #[test]
+fn authorization_with_quoted_parameters() {
+    let out = assert_scrubbed(
+        r#"Authorization: Digest username="bob", realm="r", nonce="abc123", response="deadbeefcafe" next"#,
+        &["abc123", "deadbeefcafe", "bob"],
+    );
+    assert!(out.ends_with(" next"), "{out}");
+    assert_scrubbed(
+        r#"Authorization: OAuth oauth_consumer_key="k", oauth_signature="sig sig,}x""#,
+        &["sig sig", "x\""],
+    );
+    let out = assert_scrubbed(r#"Authorization: Basic a, b=c"d tail"#, &["\"d"]);
+    assert!(out.ends_with(" tail"), "{out}");
+    // JSON-escaped, including a twice-escaped quote inside the value.
+    assert_scrubbed(
+        r#"{"message":"Authorization: Digest nonce=\"abc123\", response=\"dead\\\"beef\""}"#,
+        &["abc123", "dead", "beef"],
+    );
+    assert_scrubbed("Authorization: Bearer [redacted], nonce=\"zzz\"", &["zzz"]);
+}
+
+#[test]
+fn braces_and_quotes_inside_data_values() {
+    assert_scrubbed(
+        r#"data: {"k": "a}b-secret", "j": "other"}"#,
+        &["a}b", "b-secret", "other"],
+    );
+    assert_scrubbed(
+        r#"{"data":"{\"k\": \"x\\\"y-secret\", \"j\": \"z-secret\"}"}"#,
+        &["y-secret", "z-secret"],
+    );
+}
+
+#[test]
 fn quotes_inside_a_bare_secret_do_not_break_or_leak() {
     let out = assert_scrubbed(r#"password: a"b tail"#, &["a\"b", "\"b"]);
     assert_eq!(out, "password: [redacted] tail");

@@ -24,7 +24,37 @@ pub struct Pattern {
 /// quote) is left alone.
 macro_rules! value {
     () => {
-        r#"(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+)"#
+        concat!(
+            r#"(?:\[redacted\]|"#,
+            esc_quoted!(),
+            r#"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+)"#
+        )
+    };
+}
+
+/// A quoted string inside a JSON string (`\"abc\"`). Content may hold an escaped backslash
+/// pair or a twice-escaped quote (`\\\"`) without ending the string.
+macro_rules! esc_quoted {
+    () => {
+        r#"\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\""#
+    };
+}
+
+/// One Authorization parameter. A quoted string (plain or JSON-escaped) is atomic when it opens
+/// the parameter or follows `=` (`nonce="a, b"`), so spaces, commas and braces inside it stay
+/// inside. Anywhere else a quote is part of the value only when more value follows it: a
+/// trailing quote is a JSON string's closing quote and must survive.
+macro_rules! atom {
+    () => {
+        concat!(
+            r#"(?:(?:"#,
+            esc_quoted!(),
+            r#"|"(?:[^"\\]|\\.)*")(?:=(?:"#,
+            esc_quoted!(),
+            r#"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])*|(?:=(?:"#,
+            esc_quoted!(),
+            r#"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])+)"#
+        )
     };
 }
 
@@ -43,9 +73,13 @@ pub(super) const PEM_SRC: &str =
 pub(super) const AUTHORIZATION_SRC: &str = concat!(
     r"(?i)(?P<key>\bauthorization)(?P<sep>",
     sep!(),
-    r")(?P<val>\[[^\]]*\]|(?:[A-Za-z][\w-]*[ \t]+)?",
+    r")(?P<val>\[[^\]]*\]|[A-Za-z][\w-]*[ \t]+(?:\[redacted\]|",
+    atom!(),
+    r")(?:,[ \t]*",
+    atom!(),
+    r")*|",
     value!(),
-    r#"(?:,[ \t]*[^\s,"'}\])]+)*)"#
+    r")"
 );
 
 pub(super) const SECRET_FIELD_SRC: &str = concat!(
@@ -66,7 +100,9 @@ pub(super) const JWT_SRC: &str = r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Z
 pub(super) const DATA_FLOW_SRC: &str = concat!(
     r"(?i)(?P<key>\b(?:string)?data)(?P<sep>",
     sep!(),
-    r#")(?P<open>(?:\\?["'])?\{)(?P<body>[^{}]*)\}"#
+    r#")(?P<open>(?:\\?["'])?\{)(?P<body>(?:"#,
+    esc_quoted!(),
+    r#"|"(?:[^"\\]|\\.)*"|[^{}])*)\}"#
 );
 
 /// One `key: value` entry inside a `data` map (flow body or a single block line).

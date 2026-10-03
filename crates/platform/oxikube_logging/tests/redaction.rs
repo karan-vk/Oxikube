@@ -210,9 +210,20 @@ fn json_layer_scrubs_secret_data_with_non_secret_looking_keys() {
         tracing::info!(data = ?map, "fetched secret");
         let headers: BTreeMap<&str, &str> = [("Authorization", "ApiKey abc123xyz")].into();
         tracing::info!(?headers, "sent");
+        tracing::warn!(
+            "Authorization: Digest username=\"bob\", nonce=\"abc123\", response=\"deadbeefcafe\""
+        );
+        tracing::warn!("Authorization: OAuth oauth_consumer_key=\"k\", oauth_signature=\"sigsig\"");
     });
     let out = capture.text();
-    for secret in ["YWRtaW4=", "ZmFrZWtleQ==", "abc123xyz"] {
+    for secret in [
+        "YWRtaW4=",
+        "ZmFrZWtleQ==",
+        "abc123xyz",
+        "abc123",
+        "deadbeefcafe",
+        "sigsig",
+    ] {
         assert!(!out.contains(secret), "{secret:?} leaked:\n{out}");
     }
     for line in out.lines() {
