@@ -5402,6 +5402,7 @@ name = "oxikube_domain"
 version = "0.0.1"
 dependencies = [
  "hex",
+ "indexmap",
  "jiff",
  "proptest",
  "serde",

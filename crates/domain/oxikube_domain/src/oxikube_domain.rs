@@ -10,6 +10,7 @@ pub mod error;
 pub mod ids;
 pub mod kinds;
 pub mod quantity;
+pub mod session;
 
 pub use age::{Age, AgeStyle};
 pub use error::{ErrorKind, OxiError, OxiResult};
