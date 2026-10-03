@@ -11,10 +11,10 @@
 //! - `screenshot`: PNG save and golden-image comparison (module `screenshot`); pure image code.
 //! - `gpui-screenshot`: headless GPUI rendering to an image (module `headless`); implies `screenshot`.
 
+#[cfg(feature = "gpui-screenshot")]
+pub mod headless;
 /// kind-backed integration test helpers (`OXIKUBE_TEST_CONTEXT`, `oxi-test-<rand>` namespaces).
 #[cfg(feature = "integration")]
 pub mod integration;
-#[cfg(feature = "gpui-screenshot")]
-pub mod headless;
 #[cfg(feature = "screenshot")]
 pub mod screenshot;
