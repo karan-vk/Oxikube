@@ -9,7 +9,7 @@
 //! [`Never`](ExecInteractivePolicy::Never).
 //!
 //! Under `IfAvailable` and `Always` kube lets the plugin inherit stderr, so a failed run
-//! carries no stderr text and the prompt detection in [`classify`](super::classify) has
+//! carries no stderr text and the prompt detection in the `classify` module has
 //! nothing to read: such failures are reported as a generic, retryable plugin failure. Only
 //! `Never` (the default) captures stderr and can explain why a plugin needs a person.
 //!

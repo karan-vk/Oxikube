@@ -3,7 +3,7 @@
 //! Free functions, because the orphan rule forbids `From<kube::Error> for OxiError`
 //! in this crate. Messages are user-readable and never carry credential material: no
 //! exec-plugin command line, no plugin stdout, no request headers. Free text that is
-//! included (an API `Status` message, plugin stderr) goes through [`scrub`](super::scrub).
+//! included (an API `Status` message, plugin stderr) goes through the private `scrub` module.
 
 use std::error::Error as StdError;
 use std::io;

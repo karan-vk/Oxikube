@@ -11,10 +11,10 @@
 //!
 //! # Modules
 //!
-//! * [`classify`]: `kube::Error` -> [`OxiError`](oxikube_domain::OxiError) ([`classify()`], [`classify_with`]).
-//! * [`exec`]: [`ExecInteractivePolicy`], the cap on exec-plugin interactivity, and
+//! * `classify`: `kube::Error` -> [`OxiError`](oxikube_domain::OxiError) ([`classify()`], [`classify_with`]).
+//! * `exec`: [`ExecInteractivePolicy`], the cap on exec-plugin interactivity, and
 //!   [`build_client`], which applies it and builds a client under a deadline.
-//! * [`retry_once`]: invalidate-and-retry-once for auth failures.
+//! * `retry`: [`retry_once`], invalidate-and-retry-once for auth failures.
 //!
 //! # The `retryable` rule for `Auth`
 //!
