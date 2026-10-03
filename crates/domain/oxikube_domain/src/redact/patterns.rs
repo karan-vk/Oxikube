@@ -18,10 +18,13 @@ pub struct Pattern {
 }
 
 /// A value: the marker itself (keeps redaction idempotent), a JSON-escaped quoted string, a
-/// double- or single-quoted string, a `Debug`-printed byte array, or a bare word.
+/// double- or single-quoted string, a `Debug`-printed byte array, or a bare word. A bare word
+/// may contain escape pairs and quotes that are followed by more value (`a"b`, `a\"b`) so a
+/// secret with a quote in it is consumed whole, but a trailing quote (a JSON string's closing
+/// quote) is left alone.
 macro_rules! value {
     () => {
-        r#"(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|[^\s,;}\])"']+)"#
+        r#"(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+)"#
     };
 }
 
@@ -40,9 +43,9 @@ pub(super) const PEM_SRC: &str =
 pub(super) const AUTHORIZATION_SRC: &str = concat!(
     r"(?i)(?P<key>\bauthorization)(?P<sep>",
     sep!(),
-    r")(?P<val>(?:(?:bearer|basic|token|negotiate|digest)[ \t]+)?",
+    r")(?P<val>\[[^\]]*\]|(?:[A-Za-z][\w-]*[ \t]+)?",
     value!(),
-    r")"
+    r#"(?:,[ \t]*[^\s,"'}\])]+)*)"#
 );
 
 pub(super) const SECRET_FIELD_SRC: &str = concat!(
@@ -53,6 +56,9 @@ pub(super) const SECRET_FIELD_SRC: &str = concat!(
     r")"
 );
 
+pub(super) const URL_USERINFO_SRC: &str =
+    r#"(?P<pre>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@"'\\]*:)(?P<pw>[^\s/"'\\]+)@"#;
+
 pub(super) const BEARER_SRC: &str = r"(?i)\bbearer[ \t]+(?P<tok>[A-Za-z0-9._~+/=-]{8,})";
 
 pub(super) const JWT_SRC: &str = r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*";
@@ -60,7 +66,7 @@ pub(super) const JWT_SRC: &str = r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Z
 pub(super) const DATA_FLOW_SRC: &str = concat!(
     r"(?i)(?P<key>\b(?:string)?data)(?P<sep>",
     sep!(),
-    r")\{(?P<body>[^{}]*)\}"
+    r#")(?P<open>(?:\\?["'])?\{)(?P<body>[^{}]*)\}"#
 );
 
 /// One `key: value` entry inside a `data` map (flow body or a single block line).
@@ -83,13 +89,18 @@ pub const PATTERNS: &[Pattern] = &[
     },
     Pattern {
         name: "authorization-header",
-        description: "Authorization / Proxy-Authorization values, scheme included",
+        description: "Authorization / Proxy-Authorization values: any scheme, quoted, bracketed or comma-separated parameter forms",
         source: AUTHORIZATION_SRC,
     },
     Pattern {
         name: "secret-field",
         description: "*token, *password, *passwd, client-key-data, client-certificate-data, client-secret values",
         source: SECRET_FIELD_SRC,
+    },
+    Pattern {
+        name: "url-userinfo",
+        description: "the password in scheme://user:password@host URLs (proxy URLs)",
+        source: URL_USERINFO_SRC,
     },
     Pattern {
         name: "bearer-token",

@@ -5564,6 +5564,7 @@ name = "oxikube_logging"
 version = "0.0.1"
 dependencies = [
  "oxikube_domain",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
 ]

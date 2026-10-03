@@ -37,6 +37,64 @@ fn authorization_header_forms() {
 }
 
 #[test]
+fn authorization_with_other_schemes_and_array_forms() {
+    assert_scrubbed("Authorization: ApiKey abc123xyz", &["abc123xyz"]);
+    assert_scrubbed(
+        r#"{"Authorization": ["Basic dXNlcjpwYXNz"]}"#,
+        &["dXNlcjpwYXNz"],
+    );
+    assert_scrubbed("authorization: [Bearer tok123]", &["tok123"]);
+    assert_scrubbed(r#"{"authorization": ["ApiKey abc123xyz"]}"#, &["abc123xyz"]);
+    assert_scrubbed(
+        "Authorization: AWS4-HMAC-SHA256 Credential=AKIDFAKE/20260101/s3, SignedHeaders=host, Signature=deadbeefcafe",
+        &["AKIDFAKE", "deadbeefcafe"],
+    );
+    assert_scrubbed(
+        r#"headers: {\"authorization\": \"ApiKey abc123xyz\"}"#,
+        &["abc123xyz"],
+    );
+}
+
+#[test]
+fn quotes_inside_a_bare_secret_do_not_break_or_leak() {
+    let out = assert_scrubbed(r#"password: a"b tail"#, &["a\"b", "\"b"]);
+    assert_eq!(out, "password: [redacted] tail");
+    let out = assert_scrubbed(r#"login failed password: a\"b tail"#, &["b tail", "a\\\"b"]);
+    assert!(out.ends_with("[redacted] tail"), "{out}");
+    // A trailing quote (a JSON string's closing quote) is not part of the value.
+    let out = assert_scrubbed(
+        r#"{"message":"retry token=abcdef123456"}"#,
+        &["abcdef123456"],
+    );
+    assert_eq!(out, r#"{"message":"retry token=[redacted]"}"#);
+}
+
+#[test]
+fn url_userinfo_password() {
+    let out = assert_scrubbed(
+        "HTTPS_PROXY=http://proxy-user:pr0xy-pass@proxy.corp:3128 set",
+        &["pr0xy-pass"],
+    );
+    assert_eq!(
+        out,
+        "HTTPS_PROXY=http://proxy-user:[redacted]@proxy.corp:3128 set"
+    );
+    assert_scrubbed(
+        "proxy-url: https://u:p@ss:w0rd@10.0.0.1:8080/x",
+        &["p@ss:w0rd", "ss:w0rd"],
+    );
+    for text in [
+        "ssh://git@github.com/org/repo",
+        "https://example.com:8443/path@v2",
+        "https://10.0.0.1:6443",
+        "mailto:alice@example.com",
+        "see http://host:8080 and mail bob@example.com",
+    ] {
+        assert_eq!(redact(text), text);
+    }
+}
+
+#[test]
 fn bearer_token_anywhere() {
     let out = assert_scrubbed(
         "retrying with Bearer sk.live_0123456789abcdef after 401",
@@ -297,6 +355,11 @@ fn fragment() -> impl Strategy<Value = String> {
         Just("-----END PRIVATE KEY-----".to_owned()),
         Just("[redacted]".to_owned()),
         Just("Some(".to_owned()),
+        Just("http://u:p@h".to_owned()),
+        Just("://".to_owned()),
+        Just("@".to_owned()),
+        Just("ApiKey ".to_owned()),
+        Just("a\"b".to_owned()),
         Just("ByteString([1, 2])".to_owned()),
         prop::sample::select(vec![
             ": ", "=", " ", "\n", "\r\n", "\"", "'", "\\\"", "{", "}", "[", "]", "(", ")", ",",

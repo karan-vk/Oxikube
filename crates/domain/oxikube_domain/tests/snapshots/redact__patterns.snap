@@ -7,12 +7,16 @@ pem-private-key
   (?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\z)
 
 authorization-header
-  Authorization / Proxy-Authorization values, scheme included
-  (?i)(?P<key>\bauthorization)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<val>(?:(?:bearer|basic|token|negotiate|digest)[ \t]+)?(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|[^\s,;}\])"']+))
+  Authorization / Proxy-Authorization values: any scheme, quoted, bracketed or comma-separated parameter forms
+  (?i)(?P<key>\bauthorization)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<val>\[[^\]]*\]|(?:[A-Za-z][\w-]*[ \t]+)?(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+)(?:,[ \t]*[^\s,"'}\])]+)*)
 
 secret-field
   *token, *password, *passwd, client-key-data, client-certificate-data, client-secret values
-  (?i)(?P<key>\b[\w-]*(?:token|password|passwd)\b|\bclient[-_](?:key|certificate)[-_]data\b|\bclient[-_]secret\b)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|[^\s,;}\])"']+))
+  (?i)(?P<key>\b[\w-]*(?:token|password|passwd)\b|\bclient[-_](?:key|certificate)[-_]data\b|\bclient[-_]secret\b)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+))
+
+url-userinfo
+  the password in scheme://user:password@host URLs (proxy URLs)
+  (?P<pre>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@"'\\]*:)(?P<pw>[^\s/"'\\]+)@
 
 bearer-token
   `Bearer <token>` anywhere in text (plain alphabetic words under 20 chars are kept)
@@ -24,11 +28,11 @@ jwt
 
 secret-data-flow
   values inside an inline data / stringData map; each entry matched by secret-data-pair
-  (?i)(?P<key>\b(?:string)?data)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)\{(?P<body>[^{}]*)\}
+  (?i)(?P<key>\b(?:string)?data)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<open>(?:\\?["'])?\{)(?P<body>[^{}]*)\}
 
 secret-data-pair
   one key/value entry of a data map
-  (?P<k>\\?"[^"\\]*\\?"|[\w.-]+)(?P<s>[ \t]*[:=][ \t]*)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|[^\s,;}\])"']+))
+  (?P<k>\\?"[^"\\]*\\?"|[\w.-]+)(?P<s>[ \t]*[:=][ \t]*)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+))
 
 secret-data-block
   entries indented under a multi-line data / stringData header line (hand-written scanner; header regex shown, entries use secret-data-pair)

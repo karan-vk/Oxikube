@@ -18,8 +18,9 @@
 //! | Pattern | Matches |
 //! |---|---|
 //! | `pem-private-key` | `-----BEGIN ... PRIVATE KEY-----` blocks (to the END line, or to the end of the text when truncated) |
-//! | `authorization-header` | the value of `Authorization` / `Proxy-Authorization` (`Bearer`, `Basic`, ... scheme included) in header, YAML, JSON and `key=value` forms |
+//! | `authorization-header` | the value of `Authorization` / `Proxy-Authorization` (any scheme, `["Basic ..."]` arrays, comma-separated parameter lists such as SigV4) in header, YAML, JSON and `key=value` forms |
 //! | `secret-field` | values of keys ending in `token` (`token`, `id-token`, `refresh_token`, ...), keys ending in `password` / `passwd`, `client-key-data`, `client-certificate-data`, `client-secret` |
+//! | `url-userinfo` | the password in `scheme://user:password@host` URLs (proxy URLs); the user and host stay |
 //! | `bearer-token` | `Bearer <token>` anywhere in text (a plain word such as "bearer authentication" is left alone) |
 //! | `jwt` | JWT-shaped strings: `eyJ…` header, payload and signature, base64url separated by dots |
 //! | `secret-data-flow` | every value inside a `data` / `stringData` map written inline (`data: {a: b}`, `"data":{"a":"b"}`, Rust `Debug` maps) |

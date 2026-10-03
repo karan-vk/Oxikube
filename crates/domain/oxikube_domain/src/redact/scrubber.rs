@@ -2,7 +2,7 @@
 
 use super::patterns::{
     AUTHORIZATION_SRC, BEARER_SRC, DATA_FLOW_SRC, DATA_HEADER_SRC, DATA_PAIR_SRC, JWT_SRC, MARKER,
-    PEM_SRC, SECRET_FIELD_SRC,
+    PEM_SRC, SECRET_FIELD_SRC, URL_USERINFO_SRC,
 };
 use regex::{Captures, Regex};
 use std::borrow::Cow;
@@ -20,6 +20,7 @@ macro_rules! lazy_regex {
 lazy_regex!(PEM, PEM_SRC);
 lazy_regex!(AUTHORIZATION, AUTHORIZATION_SRC);
 lazy_regex!(SECRET_FIELD, SECRET_FIELD_SRC);
+lazy_regex!(URL_USERINFO, URL_USERINFO_SRC);
 lazy_regex!(BEARER, BEARER_SRC);
 lazy_regex!(JWT, JWT_SRC);
 lazy_regex!(DATA_FLOW, DATA_FLOW_SRC);
@@ -33,7 +34,8 @@ const F_FIELD: u8 = 1 << 2;
 const F_BEARER: u8 = 1 << 3;
 const F_JWT: u8 = 1 << 4;
 const F_DATA: u8 = 1 << 5;
-const F_ALL: u8 = F_PEM | F_AUTH | F_FIELD | F_BEARER | F_JWT | F_DATA;
+const F_URL: u8 = 1 << 6;
+const F_ALL: u8 = F_PEM | F_AUTH | F_FIELD | F_BEARER | F_JWT | F_DATA | F_URL;
 
 /// Replaces secret-bearing substrings of `input` with [`MARKER`].
 ///
@@ -47,6 +49,9 @@ pub fn redact(input: &str) -> Cow<'_, str> {
     let mut out = Cow::Borrowed(input);
     if flags & F_PEM != 0 {
         out = step(out, |s| PEM.replace_all(s, MARKER));
+    }
+    if flags & F_URL != 0 {
+        out = step(out, |s| URL_USERINFO.replace_all(s, replace_url_userinfo));
     }
     if flags & F_AUTH != 0 {
         out = step(out, |s| AUTHORIZATION.replace_all(s, replace_assignment));
@@ -78,6 +83,7 @@ fn step<'a>(current: Cow<'a, str>, stage: impl FnOnce(&str) -> Cow<'_, str>) -> 
 /// Single pass over the bytes: which stages could match?
 fn candidates(s: &[u8]) -> u8 {
     let mut flags = 0;
+    let (mut scheme_sep, mut at_sign) = (false, false);
     for i in 0..s.len() {
         let rest = &s[i..];
         match rest[0].to_ascii_lowercase() {
@@ -98,7 +104,12 @@ fn candidates(s: &[u8]) -> u8 {
             b'-' if starts_ci(rest, b"-----begin") => flags |= F_PEM,
             b'e' if rest.starts_with(b"eyJ") => flags |= F_JWT,
             b'd' if data_key(rest) => flags |= F_DATA,
+            b':' if rest.starts_with(b"://") => scheme_sep = true,
+            b'@' => at_sign = true,
             _ => {}
+        }
+        if scheme_sep && at_sign {
+            flags |= F_URL;
         }
         if flags == F_ALL {
             break;
@@ -144,6 +155,11 @@ fn replace_assignment(caps: &Captures<'_>) -> String {
     }
 }
 
+/// `scheme://user:password@host`: keep everything but the password.
+fn replace_url_userinfo(caps: &Captures<'_>) -> String {
+    format!("{}{MARKER}@", &caps["pre"])
+}
+
 /// `Bearer <token>`: keep the scheme word, unless the "token" is a plain word.
 fn replace_bearer(caps: &Captures<'_>) -> String {
     let tok = &caps["tok"];
@@ -161,7 +177,7 @@ fn replace_bearer(caps: &Captures<'_>) -> String {
 /// An inline `data` map: redact every entry's value.
 fn replace_data_flow(caps: &Captures<'_>) -> String {
     let body = DATA_PAIR.replace_all(&caps["body"], replace_pair);
-    format!("{}{}{{{body}}}", &caps["key"], &caps["sep"])
+    format!("{}{}{}{body}}}", &caps["key"], &caps["sep"], &caps["open"])
 }
 
 fn replace_pair(caps: &Captures<'_>) -> String {

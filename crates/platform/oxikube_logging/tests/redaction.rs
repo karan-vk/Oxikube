@@ -192,9 +192,32 @@ fn json_layer_output_contains_no_secrets() {
     tracing::subscriber::with_default(subscriber, log_secrets);
     let out = capture.text();
     assert_no_secrets(&out);
-    // Still one JSON object per line.
+    // Still one valid JSON object per line.
     for line in out.lines() {
-        assert!(line.starts_with('{') && line.ends_with('}'), "{line}");
+        assert!(
+            serde_json::from_str::<serde_json::Value>(line).is_ok(),
+            "invalid JSON: {line}"
+        );
+    }
+}
+
+#[test]
+fn json_layer_scrubs_secret_data_with_non_secret_looking_keys() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_json_layer(capture.clone()));
+    let map: BTreeMap<&str, &str> = [("user", "YWRtaW4="), ("tls.key", "ZmFrZWtleQ==")].into();
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(data = ?map, "fetched secret");
+        let headers: BTreeMap<&str, &str> = [("Authorization", "ApiKey abc123xyz")].into();
+        tracing::info!(?headers, "sent");
+    });
+    let out = capture.text();
+    for secret in ["YWRtaW4=", "ZmFrZWtleQ==", "abc123xyz"] {
+        assert!(!out.contains(secret), "{secret:?} leaked:\n{out}");
+    }
+    for line in out.lines() {
+        let parsed: Result<serde_json::Value, _> = serde_json::from_str(line);
+        assert!(parsed.is_ok(), "invalid JSON after scrubbing: {line}");
     }
 }
 
