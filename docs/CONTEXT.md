@@ -23,7 +23,7 @@ How to read the **Lives in** column:
 | **ResourceKind** | Discovery record for one served kind: `Gvk`, plural/singular names, short names, categories, `VerbSet` of supported `Verb`s, namespaced flag, preferred version. Filled by API discovery, read by tables, palette and sidebar. | `oxikube_domain::kinds` |
 | **Resource** | Thin model: `ObjectMeta` (with `OwnerRef`s) + raw `serde_json::Value`. The domain never depends on k8s-openapi. | `oxikube_domain::resource` |
 | **View-model** | Typed projection built from `Resource` JSON for a core kind (`PodSummary` with `ContainerSummary`, `NodeSummary`, `WorkloadSummary`, `JobSummary`, `CronJobSummary`). | `oxikube_domain::view` |
-| **Quantity** | A Kubernetes resource quantity (`500m`, `128Mi`) parsed into an exact integer, with canonical formatting. | `oxikube_domain::quantity` |
+| **Quantity** | A Kubernetes resource quantity (`500m`, `128Mi`) parsed into an exact decimal (`i128` mantissa × 10^exponent, nano precision), printed like apimachinery `Quantity.String()`. | `oxikube_domain::quantity` |
 | **Age** | A non-negative span since a resource was created, formatted `kubectl`-style (`AgeStyle::Kubectl`) or kdash-style (`AgeStyle::Detailed`). | `oxikube_domain::age` |
 | **LogLine** | One line of container output with its kubelet timestamp; over-long lines are cut and flagged. | `oxikube_domain::log` |
 | **Event** | A Kubernetes Event (`EventType` Normal/Warning, reason, message, the `regarding` object). | `oxikube_domain::event` |
