@@ -145,6 +145,20 @@ below any budget in the table above. A scenario or metric with no baseline is re
 The nightly `perf` job (ubuntu + macOS) runs `cargo xtask perf --all --check --samples 7`, uploads
 `perf-report-<OS>` and, on failure, feeds the `nightly-failure` tracking issue.
 
+Committed numbers (`startup`, median of 7 samples, ms; seeded from nightly run 37118815637 on the
+story branch), with a local M-series laptop run for reference (not gated):
+
+| Metric | `linux` (ubuntu-latest) p50 / p99 | `macos` (macos-latest) p50 / p99 | local M5 Max (5 samples) p50 / p99 |
+|---|---|---|---|
+| `launch_to_first_frame_ms` | 110.4 / 110.4 | 78.2 / 78.2 | 103.0 / 103.0 |
+| `first_frame_ms` | 108.1 / 108.1 | 66.9 / 66.9 | 95.7 / 95.7 |
+| `frame_ms` (idle redraw, hook) | 0.349 / 0.406 | 0.010 / 0.076 | 0.008 / 0.016 |
+| `draw_ms` (idle redraw, outside) | 0.350 / 0.410 | 0.011 / 0.084 | 0.008 / 0.017 |
+
+The placeholder window is trivial, so these mostly measure platform, text-system and renderer
+start-up. The startup budget (≤ 400 ms to the first *interactive* frame with real catalog data) is
+E05-S13's job, built on this harness.
+
 Rules for updating the baseline:
 
 1. A PR that adds a scenario (or a metric) seeds it: dispatch the nightly on the branch

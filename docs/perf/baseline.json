@@ -1,5 +1,66 @@
 {
   "schema": 1,
   "note": "Headless perf baseline for `cargo xtask perf --check` (docs/PERFORMANCE.md, Perf harness). Keyed by OS (`std::env::consts::OS`) then scenario then metric; p50/p95/p99 in ms are medians across samples. Numbers come from the nightly's own runners (ubuntu-latest, macos-latest): refresh with `cargo xtask perf --from-report <perf-report artifact> --update-baseline`, never by hand.",
-  "os": {}
+  "os": {
+    "linux": {
+      "source": "github-actions ubuntu-latest nightly run 37118815637",
+      "updated": "2026-10-03",
+      "profile": "release-fast",
+      "samples_per_scenario": 7,
+      "scenarios": {
+        "startup": {
+          "draw_ms": {
+            "p50": 0.35,
+            "p95": 0.372,
+            "p99": 0.41
+          },
+          "first_frame_ms": {
+            "p50": 108.145,
+            "p95": 108.145,
+            "p99": 108.145
+          },
+          "frame_ms": {
+            "p50": 0.349,
+            "p95": 0.371,
+            "p99": 0.406
+          },
+          "launch_to_first_frame_ms": {
+            "p50": 110.351,
+            "p95": 110.351,
+            "p99": 110.351
+          }
+        }
+      }
+    },
+    "macos": {
+      "source": "github-actions macos-latest nightly run 37118815637",
+      "updated": "2026-10-03",
+      "profile": "release-fast",
+      "samples_per_scenario": 7,
+      "scenarios": {
+        "startup": {
+          "draw_ms": {
+            "p50": 0.011,
+            "p95": 0.031,
+            "p99": 0.084
+          },
+          "first_frame_ms": {
+            "p50": 66.924,
+            "p95": 66.924,
+            "p99": 66.924
+          },
+          "frame_ms": {
+            "p50": 0.01,
+            "p95": 0.029,
+            "p99": 0.076
+          },
+          "launch_to_first_frame_ms": {
+            "p50": 78.152,
+            "p95": 78.152,
+            "p99": 78.152
+          }
+        }
+      }
+    }
+  }
 }
