@@ -5,8 +5,12 @@
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
+pub mod age;
 pub mod error;
 pub mod ids;
 pub mod kinds;
+pub mod quantity;
 
+pub use age::{Age, AgeStyle};
 pub use error::{ErrorKind, OxiError, OxiResult};
+pub use quantity::{Quantity, QuantityError, QuantityFormat};
