@@ -16,6 +16,7 @@ It is the working agreement; reviewers enforce it.
 8. Vendored code carries its licence header (GPL for Zed, MIT for kdash) and a `THIRD_PARTY_NOTICES.md` entry.
 9. Story = branch (`story/E07-S03-slug`) = PR; conventional commits; `/code-review high` on Sonnet (`/model sonnet`) before opening the PR and again by the reviewer on the PR, every confirmed finding resolved; CI green + reviewer-agent approval; squash merge; no out-of-scope changes.
 10. Tests ship with the story: testkit fakes for app/domain, kind integration for adapters, `#[gpui::test]` (+ screenshots) for UI.
+11. Smooth as Zed: budgets in `docs/PERFORMANCE.md` (ADR 0013) — p95 frame ≤ 8 ms under 10k-pod churn, input ≤ 1 frame, cold start ≤ 400 ms, nothing blocking on the UI thread, virtualised lists, coalesced notify; hot-path PRs include `--perf` numbers.
 
 ## Commands
 ```

@@ -61,7 +61,7 @@ replaced (kube-rs churns, Argo has three backends), and UI churn (gpui-pre snaps
 weekly) never leaks past `oxikube_ui`. Full crate map, naming and lint details:
 `references/architecture-rules.md`.
 
-## 3. The ten non-negotiables
+## 3. The eleven non-negotiables
 
 Reviewers reject PRs that break any of these. Each one exists because a real failure
 mode was observed in the reference projects we studied.
@@ -100,6 +100,12 @@ mode was observed in the reference projects we studied.
     and domain code; kind integration tests (`--features integration`) for adapters;
     `#[gpui::test]` tests (and a screenshot where visual) for UI. A story without tests
     is not done.
+
+11. **It must feel as smooth as Zed.** Budgets in `docs/PERFORMANCE.md` (ADR 0013): p95
+    frame ≤ 8 ms under 10 k-pod churn, input-to-pixel ≤ 1 frame, cold start ≤ 400 ms, zero
+    blocking work on the UI thread, everything that scrolls is virtualised, `cx.notify()`
+    coalesced. Hot-path PRs (tables, feeds, logs, editor, terminal, agent thread) report
+    `--perf` numbers before/after. Reviewers reject correct-but-janky code.
 
 ## 4. Definition of done
 

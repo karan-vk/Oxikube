@@ -66,6 +66,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
    records and crash reports are redacted.
 5. **GPUI pins move together.** `gpui-pre-*` and `gpui-component`/`gpui-base`/`gpui-kit-assets`
    are exact-pinned and bumped in one PR; `cargo xtask check-gpui-pin` enforces alignment.
+7. **It must feel as smooth as Zed.** `docs/PERFORMANCE.md` holds the numeric budgets
+   (frame p95 ≤ 8 ms under churn, input ≤ 1 frame, cold start ≤ 400 ms, idle CPU < 1 %) and the
+   rules that keep us inside them; ADR 0013 makes them release-gating.
 6. **Zed code is copied, never depended on.** Zed's app crates are GPL-3.0-or-later like us, so
    selected modules (settings store, keymap, theme loader, picker, terminal element) may be
    vendored with a GPL header and an entry in `THIRD_PARTY_NOTICES.md`.

@@ -54,6 +54,10 @@ fails CI on any other edge and on banned crates per layer.
     kind integration tests (`--features integration`) for adapters, `#[gpui::test]` for UI
     (screenshots where the story says so). Tests must be deterministic: no OS threads,
     no sleeps.
+11. The app must feel as smooth as Zed. Budgets are in `docs/PERFORMANCE.md` (ADR 0013):
+    p95 frame ≤ 8 ms under 10 k-pod churn, input-to-pixel ≤ 1 frame, cold start ≤ 400 ms,
+    zero blocking work on the UI thread, every scrolling view virtualised, notifications
+    coalesced. PRs touching hot paths report `--perf` numbers; janky code is rejected.
 
 ## Workflow
 1. Pick a story whose dependencies are Done; read its epic and acceptance criteria.

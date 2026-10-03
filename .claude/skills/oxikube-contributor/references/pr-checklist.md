@@ -38,6 +38,11 @@
 - [ ] Vendored code has licence headers + THIRD_PARTY_NOTICES entry.
 - [ ] Project `Status` is `In Review`.
 
+## Performance (ADR 0013, docs/PERFORMANCE.md)
+- [ ] No I/O, process spawn or heavy lock on the UI thread; work goes through `spawn_kube`.
+- [ ] Scrolling views are virtualised; notifications coalesced; no per-event full re-sort.
+- [ ] Hot-path change: `--perf` p95/p99 before/after numbers in the PR; within budget.
+
 ## Code review (mandatory)
 - [ ] Author ran `/code-review high` on Sonnet before opening; summary + model in the PR.
 - [ ] Every CONFIRMED finding fixed; PLAUSIBLE ones fixed or justified in one line.

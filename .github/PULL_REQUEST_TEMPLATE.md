@@ -23,6 +23,9 @@ Closes #<issue>  —  `E__-S__` <title>
 - Integration (kind): ...
 - GPUI / screenshot: ...
 
+## Performance
+<!-- hot path touched? paste `--perf` p50/p95/p99 before/after and memory; else "not a hot path" -->
+
 ## Vendored code
 <!-- source, licence, header added, THIRD_PARTY_NOTICES updated — or "none" -->
 
