@@ -10,8 +10,10 @@ pub mod error;
 pub mod ids;
 pub mod kinds;
 pub mod quantity;
+pub mod resource;
 pub mod session;
 
 pub use age::{Age, AgeStyle};
 pub use error::{ErrorKind, OxiError, OxiResult};
 pub use quantity::{Quantity, QuantityError, QuantityFormat};
+pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError};

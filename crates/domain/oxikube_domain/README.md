@@ -6,7 +6,7 @@ Core with no internal dependencies and no I/O: ids (ClusterId, ContextName, Gvk/
 
 ## Allowed external dependencies
 
-Pure data crates only: `serde`, `serde_json`, `thiserror`, `jiff`, `sha2`, `hex`, `bitflags`, `indexmap`, `smallvec`, `semver`, `url`, `regex` (and `proptest`/`insta` as dev-dependencies). Anything that does I/O, spawns tasks or talks to a cluster is banned (`cargo xtask lint-deps` enforces the ban list).
+Pure data crates only: `serde`, `serde_json`, `serde-saphyr`, `thiserror`, `jiff`, `sha2`, `hex`, `bitflags`, `indexmap`, `smallvec`, `semver`, `url`, `regex` (and `proptest`/`insta` as dev-dependencies). Anything that does I/O, spawns tasks or talks to a cluster is banned (`cargo xtask lint-deps` enforces the ban list).
 
 ## Allowed internal dependencies
 

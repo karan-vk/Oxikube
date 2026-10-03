@@ -1,0 +1,19 @@
+{
+  "apiVersion": "stable.example.com/v1beta1",
+  "kind": "CronTab",
+  "metadata": {
+    "name": "nightly",
+    "namespace": "batch",
+    "uid": "99999999-aaaa-bbbb-cccc-dddddddddddd",
+    "resourceVersion": "7",
+    "creationTimestamp": "2026-10-01T00:00:00Z",
+    "managedFields": []
+  },
+  "spec": {
+    "cronSpec": "* * * * */5",
+    "image": "my-awesome-cron-image",
+    "replicas": 2,
+    "suspend": false,
+    "mode": "no"
+  }
+}
