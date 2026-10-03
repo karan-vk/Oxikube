@@ -348,7 +348,8 @@ impl fmt::Display for ClusterSessionState {
 /// * A set is never empty and never holds an empty name: an empty or
 ///   all-blank input normalises to `All`, blank names are dropped, surrounding
 ///   whitespace is trimmed. This holds for every constructor, mutator and for
-///   deserialisation, so the invariant cannot be bypassed.
+///   deserialisation. Building the public `Set` variant directly skips the
+///   normalisation, so build selections through the constructors.
 /// * Names are deduplicated and kept in sorted order (`BTreeSet`).
 /// * Removing the last namespace of a set yields `All`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
