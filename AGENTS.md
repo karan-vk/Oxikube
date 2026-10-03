@@ -17,7 +17,8 @@ crates/ui/oxikube_*              GPUI views; gpui-component ONLY via oxikube_ui
 crates/testing/oxikube_testkit   fakes for every port, fixtures, gpui test helpers
 bins/oxikube                     wires everything; init order
 xtask                            lint-deps, check-gpui-pin, kind-up/down, load-pods, screenshots
-docs/                            ARCHITECTURE.md, CONTEXT.md, adr/, research/, PLAN.md
+docs/                            ARCHITECTURE.md, CONTEXT.md, PERFORMANCE.md, adr/, research/,
+                                 PLAN.md, DEPENDENCIES.md (matrix, waves, critical path)
 ```
 Dependency direction: `domain <- ports <- app <- ui/bins`; adapters implement ports and
 never depend on app or ui; platform depends on domain/ports. `cargo xtask lint-deps`
@@ -60,7 +61,8 @@ fails CI on any other edge and on banned crates per layer.
     coalesced. PRs touching hot paths report `--perf` numbers; janky code is rejected.
 
 ## Workflow
-1. Pick a story whose dependencies are Done; read its epic and acceptance criteria.
+1. Pick the lowest-`Wave` `Ready` story in your area (Project field; see `docs/DEPENDENCIES.md`) whose
+   "Blocked by" issues are Done; read its epic and acceptance criteria.
 2. Set Project Status to `In Progress`; branch from `main`.
 3. Implement + tests; run the gate below; run `/code-review medium` (Sonnet) and fix
    findings; open a PR with the template filled (incl. the Code review section); set
