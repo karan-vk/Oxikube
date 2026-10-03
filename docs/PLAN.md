@@ -78,7 +78,7 @@ Rules: `oxikube_domain` has no internal deps and no I/O crates; `oxikube_ports` 
 ### Workspace layout (every crate created empty in this turn, with README.md stating its responsibility and allowed deps)
 ```
 Oxikube/
-├── Cargo.toml                 workspace: resolver 2, edition 2024, [workspace.dependencies], [workspace.lints] (Zed-style: todo/dbg deny), profiles (dev opt-level=3 for proc-macros, tree-sitter, taffy, resvg, wasmtime; release lto=thin)
+├── Cargo.toml                 workspace: resolver 3 (ADR 0014), edition 2024, [workspace.dependencies], [workspace.lints] (Zed-style: todo/dbg deny), profiles (dev opt-level=3 for proc-macros, tree-sitter, taffy, resvg, wasmtime; release lto=thin)
 ├── rust-toolchain.toml  deny.toml  .cargo/config.toml  LICENSE-GPL  THIRD_PARTY_NOTICES.md  CODEOWNERS
 ├── xtask/                     lint-deps, check-gpui-pin, gen-settings-schema, gen-wit-bindings, kind-up/down, load-pods (churn), screenshot
 ├── bins/oxikube/              binary; init order like Zed main.rs; AppState global; panic/crash handler
