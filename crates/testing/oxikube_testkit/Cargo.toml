@@ -12,11 +12,12 @@ path = "src/oxikube_testkit.rs"
 doctest = false
 
 [dependencies]
+uuid = { workspace = true, optional = true }
 
 [features]
 default = []
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
-integration = []
+integration = ["dep:uuid"]
 
 [lints]
 workspace = true

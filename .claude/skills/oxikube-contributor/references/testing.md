@@ -26,6 +26,13 @@ cargo xtask kind-up            # creates cluster `oxikube` (context `kind-oxikub
 cargo test -p oxikube_kube --features integration
 cargo xtask kind-down
 ```
+`kind-up` is idempotent and only uses `--context kind-oxikube`. Fixtures live in
+`oxikube_testkit/fixtures/` (see its README); metrics-server is pinned there.
+In tests, `oxikube_testkit::integration` (feature `integration`) reads `OXIKUBE_TEST_CONTEXT`
+(`test_context()` returns `None` when unset, so the test returns early) and
+`TestNamespace::create(&ctx)` makes an `oxi-test-<rand>` namespace that is deleted on drop.
+`cargo it` runs the integration tests of kube, app and testkit with the feature on.
+
 Integration tests must create their own namespace (`oxi-test-<rand>`) and delete it. They
 run in CI only for PRs touching `crates/adapters/**`, `crates/ports/**`, `xtask/**`, plus
 nightly for everything.
