@@ -22,6 +22,9 @@ pub(super) struct Fetched {
     pub(super) kinds: Vec<Discovered>,
     /// Whether the aggregated endpoints answered (false: the legacy fallback ran).
     pub(super) aggregated: bool,
+    /// `apiVersion`s (`apps/v1`) the legacy path listed but could not read. Their kinds are
+    /// missing from `kinds`; the caller carries over what it knew.
+    pub(super) failed: Vec<String>,
 }
 
 /// Runs discovery against the server; `try_aggregated: false` skips straight to the legacy shape.
@@ -34,6 +37,7 @@ pub(super) async fn fetch(client: &Client, try_aggregated: bool) -> OxiResult<Fe
             return Ok(Fetched {
                 kinds,
                 aggregated: true,
+                failed: Vec::new(),
             });
         }
         Ok(None) => debug!("discovery: server ignored aggregated Accept header, using legacy"),
@@ -49,12 +53,13 @@ pub(super) async fn fetch(client: &Client, try_aggregated: bool) -> OxiResult<Fe
 }
 
 async fn fetch_legacy(client: &Client) -> OxiResult<Fetched> {
-    let kinds = legacy(client)
+    let (kinds, failed) = legacy(client)
         .await
         .map_err(|e| from_kube(e, "API discovery"))?;
     Ok(Fetched {
         kinds,
         aggregated: false,
+        failed,
     })
 }
 
@@ -80,7 +85,7 @@ struct Job {
     preferred: bool,
 }
 
-async fn legacy(client: &Client) -> Result<Vec<Discovered>, kube::Error> {
+async fn legacy(client: &Client) -> Result<(Vec<Discovered>, Vec<String>), kube::Error> {
     let (groups, core) =
         futures::try_join!(client.list_api_groups(), client.list_core_api_versions())?;
     let mut jobs = Vec::new();
@@ -114,6 +119,7 @@ async fn legacy(client: &Client) -> Result<Vec<Discovered>, kube::Error> {
     // A group version that fails (an unavailable aggregated API such as metrics.k8s.io) is
     // skipped, like kubectl does; only a total failure is an error.
     let mut lists = Vec::with_capacity(total);
+    let mut failed = Vec::new();
     let mut first_error = None;
     for (job, result) in results {
         match result {
@@ -123,13 +129,14 @@ async fn legacy(client: &Client) -> Result<Vec<Discovered>, kube::Error> {
             }),
             Err(err) => {
                 warn!(group_version = %job.group_version, error = %err, "discovery: group version unavailable");
+                failed.push(job.group_version);
                 first_error.get_or_insert(err);
             }
         }
     }
     match first_error {
         Some(err) if lists.is_empty() => Err(err),
-        _ => Ok(convert::from_legacy(&lists)),
+        _ => Ok((convert::from_legacy(&lists), failed)),
     }
 }
 

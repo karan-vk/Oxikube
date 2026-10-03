@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use kube::core::ApiResource;
+use kube::core::{ApiResource, Version};
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::ResourceKind;
 
@@ -40,9 +40,14 @@ impl Registry {
 
     /// Builds a snapshot. Entries are sorted by [`Gvk`]; if discovery lists the same
     /// `(group, version, kind)` twice the first listing wins.
+    ///
+    /// `ResourceKind::preferred` is the preferred served version *of the kind*: the group's
+    /// preferred version when the kind is served there, otherwise (a kind only in
+    /// `v1alpha2` while the group prefers `v1`) its highest-priority version.
     pub(crate) fn from_discovered(mut entries: Vec<Discovered>) -> Self {
         entries.sort_by(|a, b| a.kind.gvk.cmp(&b.kind.gvk));
         entries.dedup_by(|later, earlier| later.kind.gvk == earlier.kind.gvk);
+        promote_unpreferred_kinds(&mut entries);
         let mut by_gvk = HashMap::with_capacity(entries.len());
         let mut preferred = HashMap::new();
         for (index, entry) in entries.iter().enumerate() {
@@ -85,6 +90,13 @@ impl Registry {
     /// kube types never cross a port.
     pub fn api_resource(&self, gvk: &Gvk) -> Option<&ApiResource> {
         self.entry(gvk).map(|e| &e.api_resource)
+    }
+
+    /// The records served at the given `apiVersion`s (`v1`, `apps/v1`), for carrying them over
+    /// when a refresh could not read those group versions.
+    pub(crate) fn entries_for(&self, api_versions: &[String]) -> Vec<Discovered> {
+        let served = |e: &&Discovered| api_versions.contains(&e.api_resource.api_version);
+        self.inner.entries.iter().filter(served).cloned().collect()
     }
 
     /// Whether two handles share the same snapshot.
@@ -132,6 +144,30 @@ impl Registry {
             }
         }
         diff
+    }
+}
+
+/// Marks the highest-priority version preferred for every `(group, kind)` that has none.
+fn promote_unpreferred_kinds(entries: &mut [Discovered]) {
+    type Best = (bool, usize, Version);
+    let mut best: HashMap<(Arc<str>, Arc<str>), Best> = HashMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let gvk = &entry.kind.gvk;
+        let candidate = Version::parse(&gvk.version);
+        best.entry((gvk.group.clone(), gvk.kind.clone()))
+            .and_modify(|(has_preferred, best_index, version)| {
+                *has_preferred |= entry.kind.preferred;
+                if candidate.priority() > version.priority() {
+                    *best_index = index;
+                    *version = candidate.clone();
+                }
+            })
+            .or_insert((entry.kind.preferred, index, candidate));
+    }
+    for (has_preferred, index, _) in best.into_values() {
+        if !has_preferred {
+            entries[index].kind.preferred = true;
+        }
     }
 }
 

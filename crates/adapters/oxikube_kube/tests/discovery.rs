@@ -174,7 +174,14 @@ async fn aggregated_and_legacy_discovery_agree_on_a_real_cluster() {
         from_aggregated.len()
     );
 
-    assert_eq!(from_aggregated, from_legacy);
+    // Sibling tests create and delete `rt-*` CRDs concurrently; compare only what is stable.
+    let stable = |kinds: Vec<oxikube_domain::kinds::ResourceKind>| {
+        kinds
+            .into_iter()
+            .filter(|k| !k.gvk.group.starts_with("rt-"))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(stable(from_aggregated), stable(from_legacy));
 }
 
 #[tokio::test]

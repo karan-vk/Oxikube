@@ -140,3 +140,41 @@ fn a_new_preferred_version_is_a_change() {
     assert!(diff.added.is_empty() && diff.removed.is_empty());
     assert_eq!(diff.changed.len(), 2);
 }
+
+#[test]
+fn a_kind_only_in_a_non_preferred_version_gets_its_best_version_preferred() {
+    // Gateway API shape: the group prefers v1, TCPRoute exists only in v1alpha2 and v1alpha1.
+    let reg = registry(vec![
+        discovered("gw.dev", "v1", "Gateway", true),
+        discovered("gw.dev", "v1alpha2", "TCPRoute", false),
+        discovered("gw.dev", "v1alpha1", "TCPRoute", false),
+    ]);
+    let tcp = |version: &str| {
+        reg.get(&Gvk::new("gw.dev", version, "TCPRoute"))
+            .map(|k| k.preferred)
+    };
+    assert_eq!(tcp("v1alpha2"), Some(true));
+    assert_eq!(tcp("v1alpha1"), Some(false));
+    let resolved = reg
+        .get(&Gvk::new("gw.dev", "", "TCPRoute"))
+        .expect("resolves without a version");
+    assert_eq!(&*resolved.gvk.version, "v1alpha2");
+    assert_eq!(
+        reg.get(&Gvk::new("gw.dev", "v1", "Gateway"))
+            .map(|k| k.preferred),
+        Some(true)
+    );
+}
+
+#[test]
+fn an_existing_preferred_entry_is_never_overridden() {
+    let reg = registry(vec![
+        discovered("x.dev", "v1beta1", "X", true),
+        discovered("x.dev", "v2", "X", false),
+    ]);
+    assert_eq!(
+        reg.get(&Gvk::new("x.dev", "", "X"))
+            .map(|k| k.gvk.version.to_string()),
+        Some("v1beta1".into())
+    );
+}

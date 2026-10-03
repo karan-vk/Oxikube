@@ -161,3 +161,24 @@ async fn aggregated_can_be_turned_off() {
         discover(&FakeApiServer::new(Behaviour::Aggregated)).await
     );
 }
+
+#[tokio::test]
+async fn a_group_version_that_blinks_keeps_its_kinds_and_is_not_reported_removed() {
+    let server = FakeApiServer::new(Behaviour::IgnoreAccept);
+    let discovery = server.discovery();
+    discovery.refresh().await.expect("first refresh");
+    let hpa_v1 = Gvk::new("autoscaling", "v1", "HorizontalPodAutoscaler");
+    assert!(discovery.registry().get(&hpa_v1).is_some());
+    let mut changes = discovery.subscribe();
+
+    server.fail_path("/apis/autoscaling/v1", 503);
+    discovery
+        .refresh()
+        .await
+        .expect("refresh with one failing group version");
+    assert!(
+        discovery.registry().get(&hpa_v1).is_some(),
+        "carried over from the last registry"
+    );
+    assert!(changes.try_recv().is_err(), "nothing was added or removed");
+}

@@ -4,7 +4,8 @@
 //! [`Registry`] snapshot and answers [`DiscoveryPort`] calls from it:
 //!
 //! - **Discovery** reads aggregated discovery (two requests, Kubernetes 1.26+) and falls back to
-//!   the legacy per-group endpoints when the server does not serve it. See [`convert`] for how
+//!   the legacy per-group endpoints when the server does not serve it (a legacy group version
+//!   that fails to list keeps its previous kinds). See [`convert`] for how
 //!   short names and categories are obtained (kube's `ApiResource` drops them).
 //! - **`resolve`** is a cache lookup. A miss triggers one re-discovery (concurrent misses share
 //!   it; a cooldown stops unknown kinds from hammering the server) before answering `None`.
@@ -137,7 +138,13 @@ impl KubeDiscovery {
     /// The refresh itself; callers hold the `refresh` lock.
     async fn refresh_locked(&self) -> OxiResult<Registry> {
         let started = Instant::now();
-        let fetched = fetch::fetch(&self.client, self.shared.config.aggregated).await?;
+        let mut fetched = fetch::fetch(&self.client, self.shared.config.aggregated).await?;
+        if !fetched.failed.is_empty() {
+            // A group version that failed to list (an aggregated API blinking) keeps its last
+            // known kinds instead of being reported removed and then added again.
+            let known = self.registry().entries_for(&fetched.failed);
+            fetched.kinds.extend(known);
+        }
         let next = Registry::from_discovered(fetched.kinds);
         let previous = std::mem::replace(&mut *self.shared.registry.write(), next.clone());
         self.shared.generation.fetch_add(1, Ordering::AcqRel);
