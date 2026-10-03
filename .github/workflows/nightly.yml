@@ -35,15 +35,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         profile: [dev, release]
-        include:
-          # `cargo_profile` is the profile used for tests, screenshots and doc on that leg.
-          - profile: dev
-            cargo_profile: dev
-          - profile: release
-            cargo_profile: release-fast
     env:
-      # `--profile dev` is identical to cargo's default, so one flag works for every leg.
-      CARGO_PROFILE: ${{ matrix.cargo_profile }}
+      # Cargo profile for tests, docs and screenshots on this leg (`--profile dev` is identical to
+      # cargo's default, so one flag works for every leg). Release legs use `release-fast`; the
+      # shipping profile gets its own build step below.
+      CARGO_PROFILE: ${{ matrix.profile == 'release' && 'release-fast' || 'dev' }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
