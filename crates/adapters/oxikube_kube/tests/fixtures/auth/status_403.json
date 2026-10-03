@@ -1,0 +1,1 @@
+{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"pods is forbidden: User \"system:serviceaccount:demo:viewer\" cannot list resource \"pods\" in API group \"\" in the namespace \"demo\"","reason":"Forbidden","details":{"kind":"pods"},"code":403}

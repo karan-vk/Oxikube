@@ -1,0 +1,1 @@
+{"exit_code":2,"stderr":"Enter MFA code for arn:aws:iam::000000000000:mfa/dummy:\nerror: no terminal available for prompt\n"}
