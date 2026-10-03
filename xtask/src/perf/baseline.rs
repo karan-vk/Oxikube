@@ -92,6 +92,8 @@ impl Baseline {
 pub enum Outcome {
     /// Within tolerance.
     Pass,
+    /// Over the relative tolerance but by less than the absolute noise floor: not a regression.
+    WithinNoiseFloor,
     /// Slower than baseline by more than the tolerance and the noise floor.
     Regressed,
     /// Nothing to compare against; reported, not fatal (seed it with `--update-baseline`).
@@ -143,21 +145,27 @@ impl Row {
 impl fmt::Display for Row {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match &self.outcome {
-            Outcome::Pass => "PASS",
+            Outcome::Pass | Outcome::WithinNoiseFloor => "PASS",
             Outcome::Regressed => "FAIL",
             Outcome::MissingBaseline(_) => "MISSING",
             Outcome::MissingInRun(_) => "FAIL",
             Outcome::Skipped(_) => "SKIPPED",
         };
         match (&self.outcome, self.baseline, self.current) {
-            (Outcome::Pass | Outcome::Regressed, Some(b), Some(c)) => write!(
-                f,
-                "{label:<8} {:<12} {:<26} {:<4} base {b:>10.3} ms  now {c:>10.3} ms  {:>+7.1} %",
-                self.scenario,
-                self.metric,
-                self.stat,
-                self.change_pct().unwrap_or(0.0)
-            ),
+            (Outcome::Pass | Outcome::WithinNoiseFloor | Outcome::Regressed, Some(b), Some(c)) => {
+                write!(
+                    f,
+                    "{label:<8} {:<12} {:<26} {:<4} base {b:>10.3} ms  now {c:>10.3} ms  {:>+7.1} %",
+                    self.scenario,
+                    self.metric,
+                    self.stat,
+                    self.change_pct().unwrap_or(0.0)
+                )?;
+                if self.outcome == Outcome::WithinNoiseFloor {
+                    write!(f, "  (under the noise floor)")?;
+                }
+                Ok(())
+            }
             (Outcome::MissingBaseline(why), ..)
             | (Outcome::MissingInRun(why), ..)
             | (Outcome::Skipped(why), ..) => {
@@ -270,6 +278,8 @@ pub fn compare(
                             current: Some(cv),
                             outcome: if regressed(bv, cv, tolerance, noise_floor_ms) {
                                 Outcome::Regressed
+                            } else if regressed(bv, cv, tolerance, 0.0) {
+                                Outcome::WithinNoiseFloor
                             } else {
                                 Outcome::Pass
                             },
@@ -397,6 +407,27 @@ mod tests {
     fn exactly_plus_20_percent_passes_and_faster_passes() {
         assert!(!regressed(100.0, 120.0, TOL, FLOOR));
         assert!(!regressed(100.0, 50.0, TOL, FLOOR));
+    }
+
+    #[test]
+    fn sub_floor_slowdown_passes_but_says_so() {
+        let c = compare(
+            &report(&[("startup", Some(0.10))]),
+            &baseline(&[("startup", 0.05)]),
+            TOL,
+            FLOOR,
+        );
+        assert!(!c.failed());
+        assert!(
+            c.rows
+                .iter()
+                .all(|r| r.outcome == Outcome::WithinNoiseFloor)
+        );
+        let line = c.rows[0].to_string();
+        assert!(
+            line.starts_with("PASS") && line.ends_with("(under the noise floor)"),
+            "{line}"
+        );
     }
 
     #[test]
