@@ -1,0 +1,32 @@
+---
+source: crates/domain/oxikube_domain/tests/resource.rs
+expression: yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: c
+data:
+  k0: "y"
+  k1: "Y"
+  k2: "n"
+  k3: "N"
+  k4: "no"
+  k5: "No"
+  k6: "yes"
+  k7: "on"
+  k8: "off"
+  k9: "true"
+  k10: "false"
+  k11: "null"
+  k12: "~"
+  k13: "1e3"
+  k14: "1.0"
+  k15: "007"
+  k16: "0x1f"
+  k17: "0o17"
+  k18: "+1"
+  k19: ".inf"
+  k20: "NaN"
+  k21: "12:30"
+  k22: ""

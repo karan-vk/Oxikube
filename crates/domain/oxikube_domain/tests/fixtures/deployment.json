@@ -1,0 +1,25 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "web",
+    "namespace": "default",
+    "uid": "11111111-2222-3333-4444-555555555555",
+    "resourceVersion": "48000",
+    "generation": 3,
+    "creationTimestamp": "2026-08-15T10:00:00Z",
+    "labels": {"app": "web"},
+    "managedFields": [
+      {"manager": "kubectl-client-side-apply", "operation": "Update", "apiVersion": "apps/v1"}
+    ]
+  },
+  "spec": {
+    "replicas": 3,
+    "selector": {"matchLabels": {"app": "web"}},
+    "template": {
+      "metadata": {"labels": {"app": "web"}},
+      "spec": {"containers": [{"name": "web", "image": "nginx:1.27"}]}
+    }
+  },
+  "status": {"replicas": 3, "readyReplicas": 2, "availableReplicas": 2}
+}

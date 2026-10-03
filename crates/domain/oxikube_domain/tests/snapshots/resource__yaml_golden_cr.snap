@@ -1,0 +1,18 @@
+---
+source: crates/domain/oxikube_domain/tests/resource.rs
+expression: r.to_yaml().unwrap()
+---
+apiVersion: stable.example.com/v1beta1
+kind: CronTab
+metadata:
+  name: nightly
+  namespace: batch
+  uid: 99999999-aaaa-bbbb-cccc-dddddddddddd
+  resourceVersion: "7"
+  creationTimestamp: "2026-10-01T00:00:00Z"
+spec:
+  cronSpec: "* * * * */5"
+  image: my-awesome-cron-image
+  replicas: 2
+  suspend: false
+  mode: "no"

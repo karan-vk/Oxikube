@@ -1,0 +1,11 @@
+{
+  "apiVersion": "cert-manager.io/v1",
+  "kind": "ClusterIssuer",
+  "metadata": {
+    "name": "letsencrypt",
+    "uid": "cccccccc-0000-1111-2222-333333333333",
+    "resourceVersion": "12",
+    "creationTimestamp": "2026-07-04T09:15:30.123Z"
+  },
+  "spec": {"acme": {"server": "https://acme-v02.api.letsencrypt.org/directory"}}
+}
