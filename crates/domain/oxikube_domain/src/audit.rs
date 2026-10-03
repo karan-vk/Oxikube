@@ -16,9 +16,9 @@
 //! Creating and writing records belongs to the `MutationGuard` pipeline, not
 //! to this module.
 //!
-//! [`Initiator`] is declared here for now and re-exported by `domain::safety`
-//! once the safety vocabulary lands (E02-S06); the path `oxikube_domain::audit::Initiator`
-//! keeps working.
+//! [`Initiator`] is defined in [`crate::safety`] and re-exported here, so the
+//! path `oxikube_domain::audit::Initiator` names the same type as
+//! `oxikube_domain::safety::Initiator`.
 
 use std::sync::Arc;
 
@@ -27,23 +27,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::bounds::char_boundary_prefix;
 use crate::ids::{ClusterId, ResourceRef};
+pub use crate::safety::Initiator;
 
 /// Longest `who` or `cmd` string kept, in bytes. Longer values are cut on a char boundary.
 pub const MAX_AUDIT_FIELD_BYTES: usize = 256;
-
-/// Who asked for a mutation: the door it came through.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Initiator {
-    /// A direct UI gesture (button, context menu).
-    Ui,
-    /// A command from the palette, a keybinding or the command bus.
-    Command,
-    /// An agent tool call (ACP or MCP).
-    Agent,
-    /// An extension (plugin).
-    Plugin,
-}
 
 /// How a guarded mutation ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
