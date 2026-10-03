@@ -210,7 +210,7 @@ pub fn check(meta: &Metadata) -> Vec<String> {
                 // gpui-component is only allowed inside oxikube_ui (the wrapper crate).
                 let gpui_component = dep_name == "gpui-component"
                     || dep_name == "gpui-base"
-                    || dep_name == "gpui-kit";
+                    || dep_name == "gpui-kit-assets";
                 if gpui_component && name != "oxikube_ui" && layer != Layer::Bins {
                     errors.push(format!(
                         "{name}: gpui-component may only be imported by oxikube_ui (views use the oxikube_ui wrapper)"
@@ -460,7 +460,7 @@ mod tests {
     fn gpui_component_is_confined_to_oxikube_ui() {
         // oxikube_ui itself and the bin (placeholder window) may use it: the clean fixture has both.
         assert!(check(&parse(CLEAN)).is_empty());
-        for dep in ["gpui-component", "gpui-base", "gpui-kit"] {
+        for dep in ["gpui-component", "gpui-base", "gpui-kit-assets"] {
             let errors = check_edited(|m| add_dep(m, "oxikube_logs_ui", dep, None));
             assert_one(&errors, "gpui-component may only be imported by oxikube_ui");
         }
