@@ -5,7 +5,7 @@
 //!
 //! - **Discovery** reads aggregated discovery (two requests, Kubernetes 1.26+) and falls back to
 //!   the legacy per-group endpoints when the server does not serve it (a legacy group version
-//!   that fails to list keeps its previous kinds). See [`convert`] for how
+//!   that fails to list keeps its previous kinds). See `convert` for how
 //!   short names and categories are obtained (kube's `ApiResource` drops them).
 //! - **`resolve`** is a cache lookup. A miss triggers one re-discovery (concurrent misses share
 //!   it; a cooldown stops unknown kinds from hammering the server) before answering `None`.
