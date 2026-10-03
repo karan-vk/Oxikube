@@ -100,7 +100,7 @@ scenario's `draw_ms` with and without the hook (`--perf-no-probe`) differs by un
 ```
 cargo xtask perf startup               # one scenario, 5 samples
 cargo xtask perf --all --check         # every scenario, compare with the baseline
-cargo xtask perf --all --update-baseline
+cargo xtask perf --all --update-baseline   # cannot be combined with --check
 cargo xtask perf --from-report perf-report-Linux/report-Linux.json --update-baseline
 ```
 
@@ -139,7 +139,8 @@ laptop are not comparable with a CI VM.
 `--check` fails when any p50/p95/p99 of a baselined metric is more than **+20 %** slower **and** more
 than **0.25 ms** slower (`--tolerance`, `--noise-floor-ms`). The absolute floor stops microsecond
 jitter on sub-millisecond metrics (an idle redraw is about 0.01 ms) from failing the job; it is far
-below any budget in the table above. A scenario or metric with no baseline is reported as
+below any budget in the table above. While the app is a placeholder this means only `first_frame_ms`
+and `launch_to_first_frame_ms` effectively gate; the floor is to be re-tuned once real views land (https://github.com/karan-vk/Oxikube/issues/411). A scenario or metric with no baseline is reported as
 `MISSING` and does not fail; a scenario that has a baseline but no longer runs does fail.
 
 The nightly `perf` job (ubuntu + macOS) runs `cargo xtask perf --all --check --samples 7`, uploads

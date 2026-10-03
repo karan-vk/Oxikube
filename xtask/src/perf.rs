@@ -63,8 +63,9 @@ pub struct Args {
     /// Compare with the baseline and fail on a regression.
     #[arg(long)]
     pub check: bool,
-    /// Write this run's numbers into the baseline for this OS.
-    #[arg(long)]
+    /// Write this run's numbers into the baseline for this OS. Cannot be combined with `--check`
+    /// (the check would compare the run with the numbers just written and always pass).
+    #[arg(long, conflicts_with = "check")]
     pub update_baseline: bool,
     /// Baseline file.
     #[arg(long, default_value = "docs/perf/baseline.json")]
@@ -369,4 +370,26 @@ fn default_source() -> String {
 
 fn today() -> String {
     jiff::Timestamp::now().strftime("%Y-%m-%d").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct Cli {
+        #[command(flatten)]
+        args: Args,
+    }
+
+    #[test]
+    fn update_baseline_and_check_are_mutually_exclusive() {
+        let err = Cli::try_parse_from(["perf", "--all", "--update-baseline", "--check"])
+            .err()
+            .expect("combination must be rejected");
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+        assert!(Cli::try_parse_from(["perf", "--all", "--check"]).is_ok());
+        assert!(Cli::try_parse_from(["perf", "--all", "--update-baseline"]).is_ok());
+    }
 }
