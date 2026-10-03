@@ -12,6 +12,11 @@ path = "src/oxikube_ports.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
+futures.workspace = true
+jiff.workspace = true
+oxikube_domain.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true
