@@ -5521,6 +5521,13 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_ports"
 version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "futures",
+ "jiff",
+ "oxikube_domain",
+ "serde_json",
+]
 
 [[package]]
 name = "oxikube_prometheus"
