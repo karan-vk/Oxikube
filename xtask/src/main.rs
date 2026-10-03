@@ -1,6 +1,7 @@
 //! `cargo xtask` — repository automation.
 //!
 //! Subcommands:
+//! - `setup`          install git pre-commit and pre-push hooks (E01-S12)
 //! - `lint-deps`      enforce the hexagonal dependency direction (see docs/ARCHITECTURE.md)
 //! - `check-gpui-pin` verify gpui-pre / gpui-component pins are exact and aligned
 //! - `kind-up` / `kind-down`  local kind cluster for integration tests (E01-S09)
@@ -10,6 +11,7 @@
 mod check_gpui_pin;
 mod kind;
 mod lint_deps;
+mod setup;
 
 use clap::{Parser, Subcommand};
 
@@ -22,6 +24,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Install git pre-commit and pre-push hooks via pre-commit.
+    Setup,
     /// Enforce the hexagonal dependency direction across workspace crates.
     LintDeps,
     /// Verify gpui-pre* and gpui-component pins are exact and mutually aligned.
@@ -55,6 +59,7 @@ enum Cmd {
 
 fn main() -> anyhow::Result<()> {
     match Cli::parse().cmd {
+        Cmd::Setup => setup::run(),
         Cmd::LintDeps => lint_deps::run(),
         Cmd::CheckGpuiPin => check_gpui_pin::run(),
         Cmd::KindUp { name } => kind::up(&name),

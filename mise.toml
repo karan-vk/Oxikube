@@ -1,0 +1,10 @@
+# Tooling versions for Oxikube local development (E01-S12).
+#
+# NOTE: Rust is intentionally NOT pinned in mise.toml.
+# rust-toolchain.toml (pinned to 1.99.0) is the single source of truth for the
+# Rust compiler toolchain and rustup applies it automatically.
+
+[tools]
+kind = "0.33.0"
+kubectl = "1.37.1"
+pre-commit = "4.6.2"

@@ -21,6 +21,12 @@
 8. **Close**: `Status` -> `Done` (auto when the issue closes). Note follow-ups as new
    issues labelled `story` + the epic's phase label, linked to the epic.
 
+## Local hooks
+
+Run `cargo xtask setup` once to install repository git hooks via `pre-commit`.
+Hooks run fast checks (`cargo fmt`, `cargo xtask lint-deps`, `cargo xtask check-gpui-pin`) on `pre-commit`,
+and slower checks (`cargo clippy`, `cargo deny check`) on `pre-push`. CI remains the final authority.
+
 ## Commits
 
 Conventional commits: `type(scope): summary` where type is `feat|fix|refactor|test|docs|
