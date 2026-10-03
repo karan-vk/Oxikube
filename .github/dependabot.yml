@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # GPUI pins are bumped manually, all together (docs/adr/0003-gpui-dependency.md).
+      - dependency-name: "gpui-pre*"
+      - dependency-name: "gpui-component"
+      - dependency-name: "gpui-base"
+      - dependency-name: "gpui-kit-assets"
+      - dependency-name: "agent-client-protocol"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

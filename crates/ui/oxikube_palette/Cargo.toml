@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_palette"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Command palette, ':' jump bar, pickers (vendored Zed PickerDelegate design), help overlay."
+
+[lib]
+path = "src/oxikube_palette.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

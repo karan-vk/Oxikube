@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_argocd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Argo CD integration adapters: CRD-direct backend (kopium types), argocd-server REST backend (SSE/NDJSON streams, cookie-auth terminal WS, token/CLI-config/SSO PKCE auth), core helper (argocd admin dashboard), Argo Rollouts CRD actions."
+
+[lib]
+path = "src/oxikube_argocd.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

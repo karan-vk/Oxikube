@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_catalog_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Cluster catalog home, hotbar, kubeconfig sources management, cloud discovery UI, connect lifecycle, namespace selector."
+
+[lib]
+path = "src/oxikube_catalog_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,37 @@
+name: nightly
+
+# Full matrix, release builds, docs and screenshots (E01-S11/S13 complete this).
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        profile: [dev, release]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux system dependencies (GPUI)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libfontconfig-dev libfreetype-dev libglib2.0-dev libssl-dev \
+            libvulkan1 libvulkan-dev libwayland-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config xvfb
+      - run: cargo test --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
+      - run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+      - name: Screenshot (placeholder until E01-S11)
+        run: echo "screenshot harness lands in E01-S11"

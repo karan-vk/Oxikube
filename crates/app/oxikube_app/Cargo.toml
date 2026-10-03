@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Use-cases and services (no gpui, no kube): ClusterSessionManager, ResourceStore, CommandBus, MutationGuard + AuditService, LogService, ExecService, PortForwardManager, EventService, NotificationService, MetricsService, HelmService, DescribeService, SearchService, IntegrationRegistry, ToolRegistry, ContextRegistry, AgentSessionManager, ApplyService."
+
+[lib]
+path = "src/oxikube_app.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

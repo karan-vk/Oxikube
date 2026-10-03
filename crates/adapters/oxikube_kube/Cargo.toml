@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_kube"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "kube-rs adapter: tolerant kubeconfig loading, ClientPool per context with exec/OIDC auth, aggregated discovery, typed + dynamic APIs, reflector feeds, hand-rolled Table API feed, SSA/dry-run/patch/delete, subresources, kubectl-equivalent algorithms (trigger cronjob, rollout undo, drain), logs with reconnect, exec/attach/port-forward over ws, metrics (k8s-metrics), events."
+
+[lib]
+path = "src/oxikube_kube.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

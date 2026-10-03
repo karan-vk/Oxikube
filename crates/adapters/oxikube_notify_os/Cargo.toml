@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_notify_os"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "NotifierPort adapter for OS desktop notifications."
+
+[lib]
+path = "src/oxikube_notify_os.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

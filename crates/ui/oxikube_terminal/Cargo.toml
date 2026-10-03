@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_terminal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "alacritty_terminal grid + custom GPUI Element + TerminalBackend (local PTY, kube exec/attach, display-only)."
+
+[lib]
+path = "src/oxikube_terminal.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

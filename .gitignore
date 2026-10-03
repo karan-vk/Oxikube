@@ -1,0 +1,11 @@
+/target
+**/*.rs.bk
+*.pdb
+.DS_Store
+.idea/
+.vscode/
+*.swp
+/dist/
+/screenshots/
+.env
+.claude/settings.local.json

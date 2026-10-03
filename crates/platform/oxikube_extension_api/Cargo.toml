@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_extension_api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Extension SDK for plugin authors: WIT worlds (since_vX), register_extension! macro, host-call wrappers. Builds for wasm32-wasip2."
+
+[lib]
+path = "src/oxikube_extension_api.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

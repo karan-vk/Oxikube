@@ -1,0 +1,28 @@
+[package]
+name = "oxikube"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Oxikube — native Kubernetes desktop client built with GPUI."
+default-run = "oxikube"
+
+[[bin]]
+name = "oxikube"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+gpui.workspace = true
+gpui_platform.workspace = true
+# Declared now so the full GPUI stack resolves and builds from day one;
+# feature crates will wire these through oxikube_ui (E05).
+gpui-component.workspace = true
+
+[features]
+default = []
+screenshot = []
+
+[lints]
+workspace = true

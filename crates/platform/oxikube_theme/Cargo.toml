@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_theme"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Zed theme-family JSON (schema v0.2.0) importer -> ThemeTokens, oxikube status-colour block, ThemeRegistry, system appearance, icon themes."
+
+[lib]
+path = "src/oxikube_theme.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

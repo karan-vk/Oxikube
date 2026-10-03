@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_argocd_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Argo CD + Rollouts views (apps, detail, sync, diff, appsets, projects, settings)."
+
+[lib]
+path = "src/oxikube_argocd_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

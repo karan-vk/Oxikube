@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_extension_host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "wasmtime component-model host: manifest parsing, capability grants, epoch interruption, compile cache, install from path/git, registry wiring."
+
+[lib]
+path = "src/oxikube_extension_host.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

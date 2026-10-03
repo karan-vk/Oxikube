@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_helm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "HelmPort adapters: native release Secret/ConfigMap decoder (read-only) and the helm CLI runner for repos/charts/install/upgrade/rollback/uninstall."
+
+[lib]
+path = "src/oxikube_helm.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

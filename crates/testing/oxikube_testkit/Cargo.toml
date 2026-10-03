@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Port fakes, fixtures, builders, kind helpers, gpui test helpers."
+
+[lib]
+path = "src/oxikube_testkit.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

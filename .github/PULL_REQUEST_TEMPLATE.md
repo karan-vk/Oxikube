@@ -1,0 +1,36 @@
+## Story
+Closes #<issue>  —  `E__-S__` <title>
+
+## Summary
+<!-- what changed and why, 2-5 lines -->
+
+## Acceptance criteria
+<!-- copy each criterion from the story and say how it is met / where the test is -->
+- [ ] ...
+
+## Safety
+- Mutations introduced: <none | list> — guard tier: <none | simple | type-the-name>, dry-run: <yes/no>, audit: <yes/no>
+- Read-only mode test: <path>
+
+## Commands / tools / settings / keymap
+- Commands added: ...
+- Tool stubs added: ...
+- Settings added (default + schema + hot reload): ...
+- Keymap contexts/bindings: ...
+
+## Tests
+- Unit (fakes): ...
+- Integration (kind): ...
+- GPUI / screenshot: ...
+
+## Vendored code
+<!-- source, licence, header added, THIRD_PARTY_NOTICES updated — or "none" -->
+
+## Follow-ups filed
+- #...
+
+## Checklist
+- [ ] `cargo fmt --check`, `clippy -D warnings`, `cargo test --workspace`
+- [ ] `cargo xtask lint-deps`, `cargo xtask check-gpui-pin`, `cargo deny check`
+- [ ] PR title is `type(scope): E__-S__ title`; single story; no out-of-scope changes
+- [ ] Project Status set to In Review

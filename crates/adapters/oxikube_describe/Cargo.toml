@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_describe"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "DescribePort adapters: deskribe (native kubectl-describe port) with a kubectl-describe CLI fallback."
+
+[lib]
+path = "src/oxikube_describe.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

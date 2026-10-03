@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_settings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "SettingsStore: default.json -> user settings.json (JSONC) -> per-cluster overrides, Settings trait + inventory registration, comment-preserving edits, schemars schema, notify hot reload (vendored Zed design)."
+
+[lib]
+path = "src/oxikube_settings.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_rbac_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "RBAC views (SA, roles, bindings), subject-centric matrices, can-i, SA kubeconfig generation."
+
+[lib]
+path = "src/oxikube_rbac_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,68 @@
+# cargo-deny configuration — https://embarkstudios.github.io/cargo-deny/
+[graph]
+all-features = false
+targets = [
+  { triple = "aarch64-apple-darwin" },
+  { triple = "x86_64-apple-darwin" },
+  { triple = "x86_64-unknown-linux-gnu" },
+  { triple = "aarch64-unknown-linux-gnu" },
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+  # Unmaintained crates pulled in by the GPUI / gpui-component tree. Re-check on every GPUI bump
+  # (docs/adr/0003-gpui-dependency.md); none are reachable from Oxikube code directly.
+  { id = "RUSTSEC-2024-0384", reason = "instant: transitive via gpui-pre; unmaintained, not a vulnerability" },
+  { id = "RUSTSEC-2024-0436", reason = "paste: transitive via gpui tree; unmaintained proc-macro, not a vulnerability" },
+  { id = "RUSTSEC-2026-0206", reason = "rustybuzz: transitive via resvg/usvg in gpui-pre; unmaintained, not a vulnerability" },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser: transitive via gpui text stack; unmaintained, not a vulnerability" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+  "GPL-3.0",
+  "GPL-3.0-or-later",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "MIT-0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MPL-2.0",
+  "CC0-1.0",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Zlib",
+  "BSL-1.0",
+  "OpenSSL",
+  "CDLA-Permissive-2.0",
+  "0BSD",
+  "bzip2-1.0.6",
+  "OFL-1.1",
+  "CC-BY-4.0",
+]
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+deny = [
+  # RUSTSEC-2025-0068: unsound and unmaintained
+  { name = "serde_yml" },
+  # deprecated; use serde-saphyr
+  { name = "serde_yaml" },
+  # chrono is banned in Oxikube crates by `cargo xtask lint-deps` (jiff everywhere); the GPUI tree still pulls it transitively.
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = []

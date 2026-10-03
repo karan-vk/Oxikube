@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_events_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Cluster-wide events view and per-resource events tab."
+
+[lib]
+path = "src/oxikube_events_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

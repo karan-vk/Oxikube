@@ -1,0 +1,15 @@
+# oxikube_ports
+
+**Layer:** `ports`
+
+Async, object-safe port traits the app depends on and adapters implement: ClusterSourcePort, CloudDiscoveryPort, ResourcePort, TableFeedPort, DiscoveryPort, LogPort, ExecPort, PortForwardPort, MetricsPort, PromqlPort, DescribePort, HelmPort, StatePort, SecretStorePort, NotifierPort, UpdaterPort, CrashReporterPort, IntegrationPort, ToolPort, ContextProviderPort, AgentPort, FsPort, ClockPort, SchemaPort.
+
+## Allowed internal dependencies
+
+- `oxikube_domain`
+
+See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps` fails CI when this crate depends on anything outside its layer rules.
+
+## Owning epics
+
+See `docs/ROADMAP.md` and the GitHub Project for the epics and stories that build this crate.

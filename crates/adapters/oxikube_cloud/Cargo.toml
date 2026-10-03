@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_cloud"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "CloudDiscoveryPort adapters that shell out to installed aws/gcloud/az CLIs to list EKS/GKE/AKS clusters and build exec-auth kubeconfig entries."
+
+[lib]
+path = "src/oxikube_cloud.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

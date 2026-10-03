@@ -1,0 +1,9 @@
+[alias]
+x = "run --quiet --package xtask --"
+it = "test --workspace --features integration --"
+
+[build]
+# Keep incremental builds fast on Apple silicon; CI overrides as needed.
+
+[env]
+RUST_BACKTRACE = "1"

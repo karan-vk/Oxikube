@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_resources_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Generic resource table + detail drawer, per-kind panels and actions, create/bulk ops, CRD browsing, apply UI, file browser, audit viewer."
+
+[lib]
+path = "src/oxikube_resources_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_logging"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "tracing setup, rolling file logs, secret redaction layer, crash log hook."
+
+[lib]
+path = "src/oxikube_logging.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

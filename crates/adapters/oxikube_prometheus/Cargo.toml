@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_prometheus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "PromqlPort adapter: HTTP client, provider auto-detection (kube-prometheus, Lens stack, VictoriaMetrics, Mimir, OpenShift) and per-provider query catalogues."
+
+[lib]
+path = "src/oxikube_prometheus.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

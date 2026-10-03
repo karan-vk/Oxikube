@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_agent_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "ACP agent panel: threads, tool calls, permissions, diffs, terminals, @-mentions."
+
+[lib]
+path = "src/oxikube_agent_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,14 @@
+name: release
+
+# cargo-dist pipeline (E24 completes this). Tag `vX.Y.Z` to trigger.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "cargo-dist configuration lands in E24-S01; this workflow is a placeholder so tags do not fail silently."

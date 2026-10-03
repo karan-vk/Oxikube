@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_workspace"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Window shell: Item/Panel/Pane/Dock model, tabs, status bar, modal/toast layers, layout persistence, cluster tabs, sidebar, notifications panel."
+
+[lib]
+path = "src/oxikube_workspace.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_keychain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "SecretStorePort adapter on the keyring crate (macOS Keychain, Linux Secret Service, Windows Credential Manager)."
+
+[lib]
+path = "src/oxikube_keychain.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

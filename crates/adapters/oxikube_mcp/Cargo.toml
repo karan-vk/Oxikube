@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "MCP server (rmcp) exposing the ToolRegistry to hosted agents over stdio and loopback streamable-HTTP."
+
+[lib]
+path = "src/oxikube_mcp.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

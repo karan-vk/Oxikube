@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_updater"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "UpdaterPort adapter: GitHub Releases check, signed download, replace + relaunch."
+
+[lib]
+path = "src/oxikube_updater.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

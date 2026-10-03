@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_portforward_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Port-forward manager panel and start dialog."
+
+[lib]
+path = "src/oxikube_portforward_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

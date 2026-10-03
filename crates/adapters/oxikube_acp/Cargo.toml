@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_acp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "AgentPort adapter on agent-client-protocol (=2.2.0): ACP client, registry fetch, launchers (npx/uvx/binary), presets, fs/terminal virtualisation hooks."
+
+[lib]
+path = "src/oxikube_acp.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_settings_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "GUI settings page, keymap editor, theme picker."
+
+[lib]
+path = "src/oxikube_settings_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

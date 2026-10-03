@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_helm_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Helm releases, charts catalog, install/upgrade/rollback UI, repos."
+
+[lib]
+path = "src/oxikube_helm_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

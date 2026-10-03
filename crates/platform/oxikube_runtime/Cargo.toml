@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "tokio <-> GPUI bridge (gpui_tokio), spawn_kube with abort-on-drop, frame-coalesced notify helpers, channels."
+
+[lib]
+path = "src/oxikube_runtime.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

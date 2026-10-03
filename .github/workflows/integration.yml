@@ -1,0 +1,36 @@
+name: integration
+
+# kind-backed integration tests for adapters (E01-S09 completes this).
+on:
+  pull_request:
+    paths:
+      - "crates/adapters/**"
+      - "crates/app/**"
+      - "crates/testing/**"
+      - "xtask/**"
+      - ".github/workflows/integration.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  kind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: oxikube
+          wait: 120s
+      - name: Cluster fixtures
+        run: cargo run -q -p xtask -- kind-up --name oxikube
+      - name: Integration tests
+        run: cargo test --workspace --features integration -- --nocapture
+        env:
+          OXIKUBE_TEST_CONTEXT: kind-oxikube
+      - name: Teardown
+        if: always()
+        run: cargo run -q -p xtask -- kind-down --name oxikube || true

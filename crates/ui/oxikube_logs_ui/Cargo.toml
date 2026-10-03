@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_logs_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Log viewer (single/aggregate/JSON), search, export, send-to-agent."
+
+[lib]
+path = "src/oxikube_logs_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

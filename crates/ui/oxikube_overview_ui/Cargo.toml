@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_overview_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Cluster overview dashboard, charts, pulses."
+
+[lib]
+path = "src/oxikube_overview_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

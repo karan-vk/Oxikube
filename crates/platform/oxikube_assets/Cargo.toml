@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_assets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Embedded assets: Lucide icons, fonts, bundled themes, default settings/keymaps."
+
+[lib]
+path = "src/oxikube_assets.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

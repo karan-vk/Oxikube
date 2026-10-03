@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_crash"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "CrashReporterPort adapter (Sentry-style, opt-in, redacted)."
+
+[lib]
+path = "src/oxikube_crash.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

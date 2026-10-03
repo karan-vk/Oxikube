@@ -1,0 +1,267 @@
+[workspace]
+resolver = "2"
+members = [
+    "bins/oxikube",
+    "xtask",
+    "crates/domain/oxikube_domain",
+    "crates/ports/oxikube_ports",
+    "crates/app/oxikube_app",
+    "crates/adapters/oxikube_kube",
+    "crates/adapters/oxikube_describe",
+    "crates/adapters/oxikube_helm",
+    "crates/adapters/oxikube_prometheus",
+    "crates/adapters/oxikube_cloud",
+    "crates/adapters/oxikube_argocd",
+    "crates/adapters/oxikube_state_sqlite",
+    "crates/adapters/oxikube_keychain",
+    "crates/adapters/oxikube_notify_os",
+    "crates/adapters/oxikube_updater",
+    "crates/adapters/oxikube_crash",
+    "crates/adapters/oxikube_acp",
+    "crates/adapters/oxikube_mcp",
+    "crates/platform/oxikube_runtime",
+    "crates/platform/oxikube_settings",
+    "crates/platform/oxikube_keymap",
+    "crates/platform/oxikube_theme",
+    "crates/platform/oxikube_assets",
+    "crates/platform/oxikube_extension_api",
+    "crates/platform/oxikube_extension_host",
+    "crates/platform/oxikube_logging",
+    "crates/ui/oxikube_ui",
+    "crates/ui/oxikube_workspace",
+    "crates/ui/oxikube_palette",
+    "crates/ui/oxikube_catalog_ui",
+    "crates/ui/oxikube_resources_ui",
+    "crates/ui/oxikube_overview_ui",
+    "crates/ui/oxikube_logs_ui",
+    "crates/ui/oxikube_terminal",
+    "crates/ui/oxikube_editor",
+    "crates/ui/oxikube_portforward_ui",
+    "crates/ui/oxikube_events_ui",
+    "crates/ui/oxikube_helm_ui",
+    "crates/ui/oxikube_rbac_ui",
+    "crates/ui/oxikube_settings_ui",
+    "crates/ui/oxikube_extensions_ui",
+    "crates/ui/oxikube_argocd_ui",
+    "crates/ui/oxikube_agent_ui",
+    "crates/testing/oxikube_testkit",
+]
+default-members = ["bins/oxikube"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/karan-vk/Oxikube"
+publish = false
+
+# ---------------------------------------------------------------------------
+# Dependency pins. Every crate takes dependencies from here (`foo.workspace = true`).
+# GPUI: `gpui-pre` snapshots MUST stay exactly aligned with gpui-component
+# (`cargo xtask check-gpui-pin` enforces). See docs/adr/0003-gpui-dependency.md.
+# ---------------------------------------------------------------------------
+[workspace.dependencies]
+# --- GPUI (snapshot of zed@1a28cff) + gpui-kit family ---
+gpui = { package = "gpui-pre", version = "=0.3.7" }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.7", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
+gpui_macros = { package = "gpui-pre-macros", version = "=0.3.7" }
+gpui-component = { version = "=0.7.0" }
+gpui-base = { version = "=0.7.0" }
+gpui-kit-assets = { version = "=0.7.0" }
+
+# --- Kubernetes ---
+kube = { version = "4.2", default-features = false, features = ["client", "config", "runtime", "derive", "ws", "oauth", "oidc", "gzip", "http-proxy", "socks5", "rustls-tls", "ring"] }
+k8s-openapi = { version = "0.28", features = ["latest"] }
+k8s-metrics = "0.28"
+deskribe = "0.1"
+kopium = "0.24"
+
+# --- async / runtime ---
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util", "net", "fs", "signal"] }
+tokio-util = { version = "0.7", features = ["io", "codec"] }
+futures = "0.3"
+async-trait = "0.1"
+backon = "1"
+
+# --- serde / formats ---
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde-saphyr = "1"
+serde_json_lenient = "0.2"
+schemars = "1"
+toml = "1"
+json-patch = "4"
+similar = "3"
+granit-parser = "1"
+
+# --- time / text / misc ---
+jiff = { version = "0.2", features = ["serde"] }
+humantime = "2"
+regex = "1"
+nucleo-matcher = "0.3"
+thiserror = "2"
+anyhow = "1"
+bitflags = "2"
+indexmap = { version = "2", features = ["serde"] }
+smallvec = "1"
+parking_lot = "0.12"
+uuid = { version = "1", features = ["v4", "serde"] }
+secrecy = "0.10"
+inventory = "0.3"
+rust-embed = "8"
+notify = "8"
+dirs = "7"
+url = "2"
+base64 = "0.22"
+flate2 = "1"
+sha2 = "0.10"
+hex = "0.4"
+semver = "1"
+
+# --- tracing / logging ---
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+
+# --- persistence / secrets / os ---
+rusqlite = { version = "0.40", features = ["bundled"] }
+keyring = { version = "4", features = ["apple-native", "linux-native", "windows-native"] }
+notify-rust = "4"
+
+# --- network / http ---
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json", "stream", "gzip", "socks"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
+openidconnect = "4"
+
+# --- terminal / editor ---
+alacritty_terminal = "0.26"
+portable-pty = "0.9"
+tree-sitter = "0.27"
+ropey = "2.0.0-beta.1"
+
+# --- plugins ---
+wasmtime = { version = "49", default-features = false, features = ["cranelift", "component-model", "async", "cache", "parallel-compilation", "runtime"] }
+wasmtime-wasi = "49"
+wit-bindgen = "0.62"
+
+# --- agents ---
+agent-client-protocol = { version = "=2.2.0" }
+rmcp = { version = "3", features = ["server", "transport-io"] }
+
+# --- testing ---
+proptest = "1"
+insta = { version = "1", features = ["json", "yaml"] }
+tempfile = "3"
+wiremock = "0.6"
+
+# --- xtask ---
+cargo_metadata = "0.23"
+clap = { version = "4", features = ["derive"] }
+xshell = "0.2"
+
+# --- internal crates ---
+oxikube_domain = { path = "crates/domain/oxikube_domain" }
+oxikube_ports = { path = "crates/ports/oxikube_ports" }
+oxikube_app = { path = "crates/app/oxikube_app" }
+oxikube_kube = { path = "crates/adapters/oxikube_kube" }
+oxikube_describe = { path = "crates/adapters/oxikube_describe" }
+oxikube_helm = { path = "crates/adapters/oxikube_helm" }
+oxikube_prometheus = { path = "crates/adapters/oxikube_prometheus" }
+oxikube_cloud = { path = "crates/adapters/oxikube_cloud" }
+oxikube_argocd = { path = "crates/adapters/oxikube_argocd" }
+oxikube_state_sqlite = { path = "crates/adapters/oxikube_state_sqlite" }
+oxikube_keychain = { path = "crates/adapters/oxikube_keychain" }
+oxikube_notify_os = { path = "crates/adapters/oxikube_notify_os" }
+oxikube_updater = { path = "crates/adapters/oxikube_updater" }
+oxikube_crash = { path = "crates/adapters/oxikube_crash" }
+oxikube_acp = { path = "crates/adapters/oxikube_acp" }
+oxikube_mcp = { path = "crates/adapters/oxikube_mcp" }
+oxikube_runtime = { path = "crates/platform/oxikube_runtime" }
+oxikube_settings = { path = "crates/platform/oxikube_settings" }
+oxikube_keymap = { path = "crates/platform/oxikube_keymap" }
+oxikube_theme = { path = "crates/platform/oxikube_theme" }
+oxikube_assets = { path = "crates/platform/oxikube_assets" }
+oxikube_extension_api = { path = "crates/platform/oxikube_extension_api" }
+oxikube_extension_host = { path = "crates/platform/oxikube_extension_host" }
+oxikube_logging = { path = "crates/platform/oxikube_logging" }
+oxikube_ui = { path = "crates/ui/oxikube_ui" }
+oxikube_workspace = { path = "crates/ui/oxikube_workspace" }
+oxikube_palette = { path = "crates/ui/oxikube_palette" }
+oxikube_catalog_ui = { path = "crates/ui/oxikube_catalog_ui" }
+oxikube_resources_ui = { path = "crates/ui/oxikube_resources_ui" }
+oxikube_overview_ui = { path = "crates/ui/oxikube_overview_ui" }
+oxikube_logs_ui = { path = "crates/ui/oxikube_logs_ui" }
+oxikube_terminal = { path = "crates/ui/oxikube_terminal" }
+oxikube_editor = { path = "crates/ui/oxikube_editor" }
+oxikube_portforward_ui = { path = "crates/ui/oxikube_portforward_ui" }
+oxikube_events_ui = { path = "crates/ui/oxikube_events_ui" }
+oxikube_helm_ui = { path = "crates/ui/oxikube_helm_ui" }
+oxikube_rbac_ui = { path = "crates/ui/oxikube_rbac_ui" }
+oxikube_settings_ui = { path = "crates/ui/oxikube_settings_ui" }
+oxikube_extensions_ui = { path = "crates/ui/oxikube_extensions_ui" }
+oxikube_argocd_ui = { path = "crates/ui/oxikube_argocd_ui" }
+oxikube_agent_ui = { path = "crates/ui/oxikube_agent_ui" }
+oxikube_testkit = { path = "crates/testing/oxikube_testkit" }
+
+# ---------------------------------------------------------------------------
+# Lints (Zed-style). Every crate opts in with `[lints] workspace = true`.
+# ---------------------------------------------------------------------------
+[workspace.lints.rust]
+unexpected_cfgs = { level = "allow" }
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+print_stdout = "warn"
+declare_interior_mutable_const = "deny"
+redundant_clone = "deny"
+style = { level = "allow", priority = -1 }
+type_complexity = "allow"
+too_many_arguments = "allow"
+large_enum_variant = "allow"
+let_underscore_future = "allow"
+single_range_in_vec_init = "allow"
+
+# ---------------------------------------------------------------------------
+# Profiles (Zed pattern: optimise proc-macros and heavy leaf crates in dev).
+# ---------------------------------------------------------------------------
+[profile.dev]
+split-debuginfo = "unpacked"
+debug = "limited"
+codegen-units = 16
+incremental = true
+
+[profile.dev.build-override]
+opt-level = 1
+codegen-units = 16
+
+[profile.dev.package]
+gpui-pre-macros = { opt-level = 3 }
+syn = { opt-level = 3 }
+quote = { opt-level = 3 }
+proc-macro2 = { opt-level = 3 }
+taffy = { opt-level = 3 }
+resvg = { opt-level = 3 }
+usvg = { opt-level = 3 }
+tree-sitter = { opt-level = 3 }
+serde_json = { opt-level = 3 }
+wasmtime = { opt-level = 3 }
+cranelift-codegen = { opt-level = 3 }
+wasmtime-environ = { opt-level = 3 }
+alacritty_terminal = { opt-level = 3 }
+
+[profile.dbg]
+inherits = "dev"
+debug = "full"
+
+[profile.release]
+debug = "limited"
+lto = "thin"
+codegen-units = 1
+
+[profile.release-fast]
+inherits = "release"
+debug = "limited"
+lto = false
+codegen-units = 16

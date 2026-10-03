@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Thin wrapper over gpui-component: tokens, curated components (Table, DockArea, Dialog, Menu, Input, Tabs, Sidebar, Charts, Markdown, Editor glue), icons, zoom-safe sizes. The ONLY crate allowed to import gpui_component."
+
+[lib]
+path = "src/oxikube_ui.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true

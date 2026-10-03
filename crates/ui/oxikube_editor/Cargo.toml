@@ -1,0 +1,17 @@
+[package]
+name = "oxikube_editor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Manifest editor: YAML/JSON on gpui-component editor, spanned YAML (granit-parser), OpenAPI schema validation, hover/completion, diff vs live, dry-run + SSA apply, templates."
+
+[lib]
+path = "src/oxikube_editor.rs"
+doctest = false
+
+[dependencies]
+
+[lints]
+workspace = true
