@@ -34,6 +34,20 @@ pub struct CrashReport {
 }
 
 /// Stores crash reports and submits them on request.
+///
+/// # Effects
+///
+/// Mutates only the local crash directory ([`record`](Self::record),
+/// [`discard`](Self::discard)) and, after explicit consent, sends one report
+/// ([`submit`](Self::submit)). Not a cluster mutation.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) when `submit` names an unknown
+/// [`CrashId`], [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) when submission fails,
+/// [`Internal`](oxikube_domain::ErrorKind::Internal) for local I/O failures.
 #[async_trait]
 pub trait CrashReporterPort: Send + Sync {
     /// Stores `report` locally. Does not send it.

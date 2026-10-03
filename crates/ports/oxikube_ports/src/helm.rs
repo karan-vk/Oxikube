@@ -78,6 +78,21 @@ pub struct HelmRelease {
 }
 
 /// Helm access for a cluster.
+///
+/// # Effects
+///
+/// Read-only except [`rollback`](Self::rollback) and [`uninstall`](Self::uninstall), which are
+/// **mutating** (see the module docs).
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for an unknown release or revision,
+/// [`Auth`](oxikube_domain::ErrorKind::Auth) /
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when RBAC denies reading release
+/// Secrets, [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) when the `helm` CLI is
+/// needed and missing, [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for connection failures.
 #[async_trait]
 pub trait HelmPort: Send + Sync {
     /// The latest revision of every release in the selected namespaces.

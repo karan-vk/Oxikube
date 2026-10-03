@@ -410,6 +410,20 @@ impl ToolOutput {
 
 /// One callable tool. Implemented per tool (or per group) in `oxikube_app` and
 /// by integrations.
+///
+/// # Effects
+///
+/// Read-only unless [`ToolDef::is_mutating`] says otherwise, in which case the registry routes
+/// the call through `MutationGuard`.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// `Err` is for a failure of the call itself:
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) for arguments that pass the schema but
+/// are unusable, [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when the session forbids
+/// the tool, [`Internal`](oxikube_domain::ErrorKind::Internal) for bugs. A tool that ran and
+/// failed returns `Ok(ToolOutput::error(..))`.
 #[async_trait]
 pub trait ToolPort: Send + Sync {
     /// The tool's static description.

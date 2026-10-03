@@ -146,6 +146,20 @@ impl SidebarModel {
 /// Everything except [`detect`](Self::detect) is static data: it does not
 /// depend on the cluster, so the app can register commands and tools once and
 /// let the capabilities from `detect` decide what is visible.
+///
+/// # Effects
+///
+/// Read-only: every method describes the integration or probes the cluster. The commands and
+/// tools it returns are what mutate, and they do so through `MutationGuard`.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// Only [`detect`](Self::detect) is fallible: [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for a failed probe,
+/// [`Auth`](oxikube_domain::ErrorKind::Auth) /
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when the probe is not permitted. A
+/// cluster that simply lacks the integration is an empty [`Capabilities`], not an error.
 #[async_trait]
 pub trait IntegrationPort: Send + Sync {
     /// Stable id, lowercase `[a-z][a-z0-9_]*` (for example `"argocd"`). Used as

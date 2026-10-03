@@ -289,6 +289,21 @@ pub enum StopReason {
 /// while [`cancel`](Self::cancel) and permission answers arrive concurrently.
 /// Dropping a returned future abandons that call but does not cancel the turn;
 /// call [`cancel`](Self::cancel).
+///
+/// # Effects
+///
+/// Not a cluster mutation: the cluster-touching calls an agent makes come back through
+/// [`AgentClient`] and `MutationGuard`.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) when the agent process or its
+/// transport dies, [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) for a feature the
+/// agent did not advertise in [`AgentCapabilities`],
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for an unknown [`AgentSessionId`],
+/// [`Internal`](oxikube_domain::ErrorKind::Internal) for a protocol violation.
 #[async_trait]
 pub trait AgentPort: Send + Sync {
     /// Handshake: sends `client_info` and the capabilities of `client`, and

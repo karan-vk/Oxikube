@@ -48,6 +48,19 @@ pub struct DiscoveredCluster {
 }
 
 /// Discovers clusters from cloud CLIs.
+///
+/// # Effects
+///
+/// Read-only. Spawns the provider CLI, so run it off the UI thread.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Auth`](oxikube_domain::ErrorKind::Auth) when the CLI is not logged in,
+/// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) when the CLI is missing,
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) when the provider API is
+/// unreachable.
 #[async_trait]
 pub trait CloudDiscoveryPort: Send + Sync {
     /// Whether `provider`'s CLI is installed and logged in.

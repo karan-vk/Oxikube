@@ -2,7 +2,7 @@
 
 **Layer:** `ports`
 
-Async, object-safe port traits the app depends on and adapters implement: ClusterSourcePort, CloudDiscoveryPort, ResourcePort, TableFeedPort, DiscoveryPort, LogPort, ExecPort, PortForwardPort, MetricsPort, PromqlPort, DescribePort, HelmPort, StatePort, SecretStorePort, NotifierPort, UpdaterPort, CrashReporterPort, IntegrationPort, ToolPort, ContextProviderPort, AgentPort, FsPort, ClockPort, SchemaPort.
+Async, object-safe port traits the app depends on and adapters implement: ClusterSourcePort, CloudDiscoveryPort, ResourcePort, TableFeedPort, DiscoveryPort, LogPort, ExecPort, PortForwardPort, MetricsPort, PromqlPort, DescribePort, HelmPort, StatePort, SecretStorePort, NotifierPort, UpdaterPort, CrashReporterPort, IntegrationPort, ToolPort, ContextProviderPort, AgentPort, FsPort, ClockPort. `#![deny(missing_docs)]` is on; every port's module docs name the adapter expected to implement it.
 
 ## Allowed internal dependencies
 

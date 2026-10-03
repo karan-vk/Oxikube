@@ -121,7 +121,7 @@ pub struct PodSummary {
     pub namespace: Option<Arc<str>>,
     /// `status.phase`.
     pub phase: PodPhase,
-    /// The `STATUS` column, per the kubectl pod printer (see the [module docs](self)). A pod
+    /// The `STATUS` column, per the kubectl pod printer (rules are listed at the top of this file). A pod
     /// with neither `status.phase` nor `status.reason` shows `Unknown`.
     pub status: Arc<str>,
     /// Ready containers (regular containers plus started sidecars), the left of `READY`.

@@ -102,6 +102,17 @@ impl SourcesChanged {
 }
 
 /// Provides the cluster catalog.
+///
+/// # Effects
+///
+/// Read-only: it reads kubeconfig sources and never writes them.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for a missing source path,
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) for a kubeconfig that does not parse,
+/// [`Internal`](oxikube_domain::ErrorKind::Internal) for other I/O failures.
 #[async_trait]
 pub trait ClusterSourcePort: Send + Sync {
     /// The configured sources.

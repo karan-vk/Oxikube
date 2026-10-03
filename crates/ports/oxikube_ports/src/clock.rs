@@ -15,6 +15,14 @@ use async_trait::async_trait;
 use jiff::Timestamp;
 
 /// Source of the current time and of timers.
+///
+/// # Effects
+///
+/// Read-only and side-effect free.
+///
+/// # Errors
+///
+/// No method returns an error.
 #[async_trait]
 pub trait ClockPort: Send + Sync {
     /// The current wall-clock time. Cheap and non-blocking.

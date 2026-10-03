@@ -58,6 +58,19 @@ pub struct FsEvent {
 }
 
 /// Filesystem access by path.
+///
+/// # Effects
+///
+/// Mutating on the local filesystem only ([`write`](Self::write)); never a cluster mutation.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for a missing path,
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) for a permission failure,
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) for a path of the wrong kind (a file
+/// where a directory is expected), [`Internal`](oxikube_domain::ErrorKind::Internal) for other
+/// I/O failures.
 #[async_trait]
 pub trait FsPort: Send + Sync {
     /// The whole content of the file at `path`. `NotFound` when absent.

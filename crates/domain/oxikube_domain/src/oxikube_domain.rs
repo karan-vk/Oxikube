@@ -1,9 +1,30 @@
 //! `oxikube_domain` — layer: `domain`.
 //!
-//! Core with no internal dependencies and no I/O: ids (ClusterId, ContextName, Gvk/Gvr, ResourceRef), the thin Resource model (metadata + raw JSON), typed view-models, NamespaceSelection, Command/Capability vocabulary, LogLine/Event/MetricsSample/AuditRecord/ContextBlock, Quantity + Age, error taxonomy, safety (Risk, MutationIntent), redaction.
+//! Core with no internal dependencies and no I/O. Vocabulary is documented in
+//! `docs/CONTEXT.md`; the modules are:
+//!
+//! | Module | Holds |
+//! |---|---|
+//! | [`ids`] | [`ClusterId`](ids::ClusterId), [`ContextName`](ids::ContextName), [`Gvk`](ids::Gvk) / [`Gvr`](ids::Gvr), [`Scope`](ids::Scope), [`ResourceRef`](ids::ResourceRef) |
+//! | [`kinds`] | [`ResourceKind`](kinds::ResourceKind), [`Verb`](kinds::Verb), [`VerbSet`](kinds::VerbSet) |
+//! | [`resource`] | the thin [`Resource`] model: [`ObjectMeta`] + raw JSON |
+//! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
+//! | [`quantity`], [`age`] | [`Quantity`] parsing/formatting and [`Age`] formatting |
+//! | [`session`] | the cluster session state machine, `NamespaceSelection`, `WatchScope` |
+//! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
+//! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
+//! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
+//! | [`agent`] | [`ContextBlock`](agent::ContextBlock), the bounded context handed to agents |
+//! | [`error`] | [`OxiError`], [`ErrorKind`], [`OxiResult`] |
+//!
+//! There is no redaction module yet: adapters redact before building records and
+//! errors, and a shared `redact` module is planned (E19-S10). The domain never
+//! redacts and never does I/O.
 //!
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
+
+#![deny(missing_docs)]
 
 pub mod age;
 pub mod agent;

@@ -40,6 +40,16 @@ pub struct Notification {
 }
 
 /// Shows and clears desktop notifications.
+///
+/// # Effects
+///
+/// Shows or clears desktop notifications; not a cluster mutation.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Internal`](oxikube_domain::ErrorKind::Internal) when the platform notification service
+/// fails. A notification the OS suppresses is `Ok`.
 #[async_trait]
 pub trait NotifierPort: Send + Sync {
     /// Shows `notification`. A notification the OS suppresses (permission denied,
