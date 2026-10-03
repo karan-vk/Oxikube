@@ -407,6 +407,29 @@ async fn referenced_client_is_never_evicted() {
 }
 
 #[tokio::test]
+async fn idle_time_counts_from_release_not_from_the_last_get() {
+    let clock = FakeClock::new();
+    let pool = pool_with(
+        idle_policy(Duration::from_secs(60)),
+        CountingFactory::new(),
+        clock.clone(),
+    );
+    let held = pool.get(&ctx("a")).await.expect("a");
+
+    // Held for 20 minutes, with the periodic sweep seeing it in use.
+    clock.advance(Duration::from_secs(20 * 60));
+    assert!(pool.evict_idle().is_empty());
+    drop(held);
+
+    // Released: not evicted at once, only after a full `max_idle` of idleness.
+    assert!(pool.evict_idle().is_empty());
+    clock.advance(Duration::from_secs(59));
+    assert!(pool.evict_idle().is_empty());
+    clock.advance(Duration::from_secs(1));
+    assert_eq!(pool.evict_idle(), vec![ctx("a")]);
+}
+
+#[tokio::test]
 async fn pinned_context_is_never_evicted_until_unpinned() {
     let clock = FakeClock::new();
     let pool = pool_with(
@@ -420,6 +443,9 @@ async fn pinned_context_is_never_evicted_until_unpinned() {
     clock.advance(Duration::from_secs(3600));
     assert!(pool.evict_idle().is_empty());
     pool.set_pinned(&ctx("a"), false);
+    // Unpinning starts the idle clock; the client goes after a full `max_idle`.
+    assert!(pool.evict_idle().is_empty());
+    clock.advance(Duration::from_secs(60));
     assert_eq!(pool.evict_idle(), vec![ctx("a")]);
 }
 

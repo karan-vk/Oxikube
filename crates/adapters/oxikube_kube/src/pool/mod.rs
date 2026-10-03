@@ -38,6 +38,9 @@
 //! pool sweeps on every `get`; call [`ClientPool::evict_idle`] from a periodic task
 //! to sweep while nothing calls `get`. In-use entries are never evicted: a held
 //! client, a running build, or a context pinned with [`ClientPool::set_pinned`].
+//! Idle time counts from the last sweep that saw the entry in use, so a client
+//! released after long use gets the full `max_idle`; sweep at least every
+//! `max_idle` to keep that accurate.
 //!
 //! # Secrets
 //!
@@ -180,7 +183,9 @@ impl ClientPool {
 
     /// Pins or unpins `context`. A pinned context's client is never evicted (it is
     /// still dropped by invalidation). The pin outlives the entry, so it applies to
-    /// clients built later too. The session layer decides what to pin.
+    /// clients built later too, and it survives `replace_kubeconfig` removing the
+    /// context (a transient kubeconfig edit keeps the session's pin). The session
+    /// layer decides what to pin and unpins when the session closes.
     pub fn set_pinned(&self, context: &ContextName, pinned: bool) {
         let mut state = self.state.lock();
         if pinned {
@@ -263,16 +268,28 @@ impl ClientPool {
     }
 
     fn sweep(&self, state: &mut State) -> Vec<ContextName> {
-        let candidates: Vec<Candidate<'_>> = state
-            .entries
+        let now = self.clock.now();
+        // Idle time starts when an entry stops being in use, not at its last `get`:
+        // a client held for an hour and then dropped must get the full `max_idle`.
+        // Refreshing in-use entries here makes the idle clock start at the last
+        // sweep that saw it in use, so the error is bounded by the sweep cadence.
+        let State {
+            entries, pinned, ..
+        } = state;
+        for (name, entry) in entries.iter_mut() {
+            if pinned.contains(name) || entry.is_referenced() {
+                entry.last_used = now;
+            }
+        }
+        let candidates: Vec<Candidate<'_>> = entries
             .iter()
             .map(|(name, entry)| Candidate {
                 context: name,
                 last_used: entry.last_used,
-                in_use: state.pinned.contains(name) || entry.is_referenced(),
+                in_use: pinned.contains(name) || entry.is_referenced(),
             })
             .collect();
-        let evicted = eviction::select(&self.config.eviction, self.clock.now(), &candidates);
+        let evicted = eviction::select(&self.config.eviction, now, &candidates);
         for name in &evicted {
             state.entries.remove(name);
         }
