@@ -10,5 +10,7 @@
 //! | Module | Story | Role |
 //! |---|---|---|
 //! | [`kubeconfig`] | E03-S01 | tolerant `KUBECONFIG` splitting, loading and merging with per-context origins and diagnostics |
+//! | [`auth`] | E03-S04 | `kube::Error` classification, exec-plugin interactivity policy, deadline-bounded client build, retry-once helper |
 
+pub mod auth;
 pub mod kubeconfig;

@@ -20,9 +20,9 @@ tokio.workspace = true
 oxikube_testkit.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
-kube.workspace = true
 k8s-openapi.workspace = true
-tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [features]
 default = []
