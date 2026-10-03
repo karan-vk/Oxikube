@@ -544,6 +544,22 @@ fn invalid_proxy_is_a_validation_error_that_hides_the_url() {
     assert!(!format!("{err:?}").contains("pa ss"));
 }
 
+#[test]
+fn malformed_kubeconfig_proxy_url_is_an_invalid_proxy_error_without_the_url() {
+    // kube parses the cluster `proxy-url` itself (the same path an unparseable process
+    // `HTTPS_PROXY` takes), so this exercises the `ParseProxyUrl` mapping.
+    let err =
+        proxy_of("    proxy-url: \"http://user:pa ss@bad host\"", None).expect_err("invalid proxy");
+    assert_eq!(err.kind(), ErrorKind::Validation);
+    assert!(err.message().contains("proxy URL"), "{err}");
+    assert!(err.message().contains("HTTPS_PROXY"), "{err}");
+    let text = format!("{err:?}");
+    assert!(
+        !text.contains("pa ss") && !text.contains("bad host"),
+        "{text}"
+    );
+}
+
 // --- secrets ------------------------------------------------------------------------
 
 fn assert_no_secrets(text: &str) {
@@ -595,4 +611,68 @@ fn definition_slices_only_the_context_its_cluster_and_user() {
     assert_eq!(kc.clusters[0].name, "cluster-c");
     assert_eq!(kc.auth_infos[0].name, "user-c");
     assert_eq!(def.server_host().as_deref(), Some("127.0.0.2"));
+}
+
+/// A user with certificate data and malformed key data. `!` is not base64, so the
+/// decode error would quote it (and its offset) if the source were attached.
+fn malformed_key_kubeconfig() -> Kubeconfig {
+    parse(
+        r#"
+apiVersion: v1
+kind: Config
+clusters:
+- name: k
+  cluster: {server: "https://127.0.0.1:1", insecure-skip-tls-verify: true}
+users:
+- name: k
+  user:
+    client-certificate-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t
+    client-key-data: "c2VjcmV0!S0VZ"
+contexts:
+- name: k
+  context: {cluster: k, user: k}
+"#,
+    )
+}
+
+#[tokio::test]
+async fn malformed_client_key_error_carries_no_key_bytes() {
+    let pool = ClientPool::with_parts(
+        malformed_key_kubeconfig(),
+        PoolConfig::default(),
+        Arc::new(KubeClientFactory::new(ProxyEnv::default())),
+        Arc::new(SystemClock),
+    );
+    let err = get_err(&pool, "k").await;
+    assert_eq!(err.kind(), ErrorKind::Validation, "{err:?}");
+    assert!(err.message().contains("client key"), "{err}");
+    assert!(std::error::Error::source(&err).is_none());
+    let text = format!("{err} {err:?}");
+    for leak in ["c2VjcmV0", "S0VZ", "Invalid symbol", "offset"] {
+        assert!(!text.contains(leak), "leaked {leak:?} in {text}");
+    }
+}
+
+#[test]
+fn malformed_certificate_authority_error_has_no_source() {
+    let yaml = kubeconfig_yaml(
+        "https://127.0.0.1:1",
+        TOKEN_A,
+        "    certificate-authority-data: \"bm90!YmFzZTY0\"",
+    );
+    let def = ContextDefinition::from_kubeconfig(&parse(&yaml), &ctx("a")).expect("a");
+    let err =
+        build_config(&def, &PoolConfig::default(), &ProxyEnv::default()).expect_err("bad CA data");
+    assert_eq!(err.kind(), ErrorKind::Validation);
+    assert!(err.message().contains("certificate authority"), "{err}");
+    assert!(std::error::Error::source(&err).is_none());
+}
+
+#[test]
+fn safe_kubeconfig_errors_keep_their_source() {
+    let def = definition("orphan");
+    let err = build_config(&def, &PoolConfig::default(), &ProxyEnv::default())
+        .expect_err("missing cluster");
+    assert_eq!(err.kind(), ErrorKind::Validation);
+    assert!(std::error::Error::source(&err).is_some());
 }
