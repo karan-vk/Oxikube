@@ -10,7 +10,7 @@ pub const USAGE: &str = "\
 Usage: oxikube [OPTIONS]
 
 Options:
-  --perf                  Record frame times, feed throughput and notify counts to
+  --perf                  Record frame times, feed throughput, notify counts and RSS to
                           <data dir>/oxikube/perf/*.jsonl and print p50/p95/p99 on exit
                           (data dir: ~/.local/share on Linux, ~/Library/Application Support on macOS)
   --perf-dir <DIR>        Write the --perf JSONL under DIR instead (implies --perf)

@@ -14,7 +14,7 @@ startup budget (`docs/PERFORMANCE.md`).
 ## Flags
 
 `oxikube --help` lists them. `--perf` (with `--perf-duration`, `--perf-dir`) records frame times,
-feed throughput and notify counts to `<data dir>/oxikube/perf/*.jsonl` and prints p50/p95/p99 on
+feed throughput, notify counts and resident memory (RSS) to `<data dir>/oxikube/perf/*.jsonl` and prints p50/p95/p99 on
 exit. `--perf-scenario <name>` (feature `perf-scenarios`, never in default or release builds) runs
 one headless perf sample; `cargo xtask perf` drives it. See docs/PERFORMANCE.md ("Perf harness").
 

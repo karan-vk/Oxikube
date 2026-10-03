@@ -12,6 +12,8 @@
 //! - [`install`] / [`record_notify`] / [`record_feed_deltas`]: a process-wide recorder for code
 //!   far from the window (feeds, `notify_coalesced`). When `--perf` is off nothing is installed
 //!   and each call is one atomic load and a branch.
+//! - [`memory`]: the process's resident memory (RSS and peak) per OS. The flush thread reads it
+//!   once per tick; the scripted driver reads it between frames. Never inside a frame.
 //! - `harness` (feature `perf-harness`): drives a window frame by frame for scripted headless
 //!   scenarios and builds a [`ScenarioSample`].
 //!
