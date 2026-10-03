@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "note": "Headless perf baseline for `cargo xtask perf --check` (docs/PERFORMANCE.md, Perf harness). Keyed by OS (`std::env::consts::OS`) then scenario then metric; p50/p95/p99 in ms are medians across samples. Numbers come from the nightly's own runners (ubuntu-latest, macos-latest): refresh with `cargo xtask perf --from-report <perf-report artifact> --update-baseline`, never by hand.",
+  "note": "Headless perf baseline for `cargo xtask perf --check` (docs/PERFORMANCE.md, Perf harness). Keyed by OS (`std::env::consts::OS`) then scenario then metric; *_ms metrics (p50/p95/p99) are in milliseconds and *_mib metrics (rss_mib, peak_rss_mib) are in MiB; all are medians across samples. Numbers come from the nightly's own runners (ubuntu-latest, macos-latest): refresh with `cargo xtask perf --from-report <perf-report artifact> --update-baseline`, never by hand.",
   "os": {
     "linux": {
       "source": "github-actions ubuntu-latest nightly run 37124550799",
