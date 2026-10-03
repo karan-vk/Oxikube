@@ -11,11 +11,12 @@
 5. **Verify**: run the full local gate (see SKILL.md section 6).
 6. **Self-review**: run `/code-review medium` on the branch using Sonnet (`/model sonnet`
    first). Fix every confirmed finding; record the summary for the PR (see
-   `code-review.md`).
+   `code-review.md`; from a subagent use the inline recipe there).
 7. **PR**: title `feat(resources_ui): E07-S03 generic resource table` (type(scope): ID
    title). Fill the template including the **Code review** section. Link the issue with
    `Closes #<n>`. Set `Status` -> `In Review`.
-8. **Review**: a reviewer agent (Sonnet) runs `/code-review medium <PR#> --comment`, then
+8. **Review**: a reviewer agent (Sonnet) runs `/code-review medium <PR#> --comment` (or the inline recipe in
+   `code-review.md` when it is a subagent), then
    reviews against `pr-checklist.md`. Address every comment or explain why not. Squash
    merge when CI is green, findings are resolved and approval is given. `main` only accepts
    squash merges through a PR with the three required checks green (exact names in

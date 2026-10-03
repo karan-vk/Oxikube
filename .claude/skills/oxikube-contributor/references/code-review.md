@@ -33,6 +33,26 @@ run on every PR without anyone skipping it, which matters more than marginal dep
 3. Walk `references/pr-checklist.md`. Approve only when every confirmed finding is
    resolved and every checklist box is checked or justified.
 
+## Running the review from a subagent
+
+`/code-review` called from a subagent (agent teams, Workflow agents) forks into a background
+agent whose result goes to the top-level session, not the caller: the subagent never sees
+findings and nothing is posted. The requirement is unchanged (twice, `medium`, Sonnet); pick
+one way to run it:
+
+1. **Top-level session.** The top-level Claude Code session, on Sonnet, runs
+   `/code-review medium` (author pass) or `/code-review medium <PR#> --comment` (reviewer
+   pass) itself.
+2. **Inline recipe.** A subagent spawned with `model: sonnet` runs the medium recipe inline:
+   read the full diff, the touched files, the story's acceptance criteria and the contributor
+   rules; report only verified, high-confidence findings. Author pass: put findings in the PR
+   body. Reviewer pass: post them as inline PR review comments (`gh api
+   repos/<owner>/<repo>/pulls/<n>/reviews` with `event=COMMENT` and `comments[]`), or a
+   "no findings" review when clean.
+
+Either way, state in the PR's **Code review** section which way it ran (top-level `/code-review`
+or inline recipe), plus the model.
+
 ## What counts as resolved
 
 - A code change in the PR, or

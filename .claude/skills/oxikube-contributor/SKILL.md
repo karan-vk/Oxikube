@@ -133,7 +133,7 @@ A story is done when all of the following hold:
 | `references/architecture-rules.md` | adding a crate or module, unsure which crate owns something, lint-deps fails, naming a port/service |
 | `references/story-workflow.md` | starting or finishing a story, writing commits/PRs, splitting a story, writing an ADR |
 | `references/pr-checklist.md` | opening or reviewing a PR |
-| `references/code-review.md` | running the mandatory `/code-review` pass (author and reviewer), which model, what to do with findings |
+| `references/code-review.md` | running the mandatory `/code-review` pass (author and reviewer), which model, what to do with findings, running it from a subagent |
 | `references/testing.md` | writing any test, using kind, writing a gpui test, adding a screenshot test |
 | `references/gpui-gotchas.md` | writing GPUI or gpui-component code, a UI test is flaky, bumping GPUI |
 | `references/zed-vendoring.md` | copying anything from Zed or another project |
