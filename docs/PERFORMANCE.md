@@ -33,8 +33,11 @@ measured on a mid-range x86 laptop with an integrated GPU.
   (E01-S14).
 - macOS: Instruments (Time Profiler, Metal System Trace) for stalls; Linux: `perf` + `tracy`
   via the `tracy` feature on `oxikube_runtime`.
-- Memory: RSS sampling (`cargo xtask perf memory`) is a follow-up to E01-S14 and does not exist
-  yet; leaks are checked with the GPUI `leak-detection` feature in tests.
+- Memory: `oxikube --perf` writes the process's resident memory (RSS, MiB) into every JSONL tick
+  and the exit summary, and `cargo xtask perf` reports and gates `rss_mib` / `peak_rss_mib` per
+  scenario (E01-S14b); see [Memory (RSS)](#memory-rss). Only the `--perf` windowed run says
+  anything about the budget above; leaks are checked with the GPUI `leak-detection` feature in
+  tests.
 
 ## Perf harness: `oxikube --perf` and `cargo xtask perf`
 
@@ -77,13 +80,13 @@ second and appends JSONL; the UI thread never touches the file. Lines:
 | `kind` | Fields |
 |---|---|
 | `start` | `schema`, `app_version`, `os`, `arch`, `pid`, `started_unix_ms`, `flush_interval_ms`, `measures` |
-| `tick` (every second) | `t_ms`, `interval_ms`, `frames_us` (every frame in the interval), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s` |
-| `summary` (on exit) | `duration_ms`, `frame_count`, `frames` {`count`, `p50`, `p95`, `p99`, `max`} (ms), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s` |
+| `tick` (every second) | `t_ms`, `interval_ms`, `frames_us` (every frame in the interval), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `rss_mib`, `peak_rss_mib` (MiB, `null` where the OS has no reader) |
+| `summary` (on exit) | `duration_ms`, `frame_count`, `frames` {`count`, `p50`, `p95`, `p99`, `max`} (ms), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `rss_mib` {`count`, `p50`, `p95`, `p99`, `max`} (MiB, over the per-tick readings), `peak_rss_mib` |
 
 On exit (window closed, `--perf-duration` elapsed, or Ctrl-C) it prints to stderr, for example:
 
 ```
-oxikube --perf: 2 frames in 3.4 s: p50 0.593 ms, p95 8.385 ms, p99 8.385 ms, max 8.385 ms; dropped 0; feed 0 deltas (0.0/s); notify 0 (0.0/s)
+oxikube --perf: 2 frames in 4.5 s: p50 0.651 ms, p95 6.343 ms, p99 6.343 ms, max 6.343 ms; dropped 0; feed 0 deltas (0.0/s); notify 0 (0.0/s); rss p50 95.3 MiB, p95 95.3 MiB, max 95.3 MiB, peak 95.3 MiB
 ```
 
 Percentiles are nearest-rank (p99 of fewer than 100 frames is the maximum). Until feeds and
@@ -94,6 +97,45 @@ perf_overhead`): a frame push is about 3 ns and the hook's timing pair about 45 
 notify call costs about 0.4 ns with `--perf` off and 2.5 ns with it on. End to end, the startup
 scenario's `draw_ms` with and without the hook (`--perf-no-probe`) differs by under 1 µs per frame
 (p50 0.009 vs 0.008 ms, median of 15 runs).
+
+### Memory (RSS)
+
+Added in E01-S14b; code in `oxikube_runtime::perf::memory`. The metric is the resident set size
+(RSS) of the `oxikube` process in **MiB** (1 MiB = 1 048 576 bytes; metric names end in `_mib` the
+way timings end in `_ms`), plus the OS's peak (high-water mark):
+
+| OS | Current RSS | Peak RSS |
+|---|---|---|
+| Linux | `VmRSS` in `/proc/self/status` (kB) | `VmHWM` in the same file |
+| macOS | `task_info(MACH_TASK_BASIC_INFO).resident_size` (bytes) | `getrusage(RUSAGE_SELF).ru_maxrss` (**bytes** on macOS, KiB on Linux: converted in one place, `ru_maxrss_bytes`) |
+| other | none: `null` in JSONL, metric absent from scenario samples | none |
+
+`/proc/self/status` is read instead of `/proc/self/statm` because it needs no page-size lookup and
+carries the peak. macOS needs two `unsafe` FFI calls through the `libc` crate (macOS target only,
+SAFETY-commented); there is no sampler crate.
+
+- **`oxikube --perf`**: the `oxikube-perf` flush thread takes one reading each time it drains the
+  recorder (every second, plus the final drain on exit) and writes `rss_mib` and `peak_rss_mib` into
+  the `tick` line; the summary has `rss_mib` {p50/p95/p99/max over those readings} and the session
+  `peak_rss_mib`. The UI thread never reads memory. A tick is one syscall or one small `/proc` read,
+  so the flush interval is also the sampling interval: a spike shorter than a second shows only in
+  the peak.
+- **Scenarios** (`cargo xtask perf`): there is no separate `memory` scenario. Every scenario that
+  runs frames reports `rss_mib` (a reading after each scripted frame, taken between frames outside
+  the timed update, so it never lands in `frame_ms` / `draw_ms`; p50/p95/p99 across those readings)
+  and `peak_rss_mib` (high-water mark at the end of the run, one observation). As for timings, the
+  report takes the median across the fresh-process samples of each statistic, and
+  [`docs/perf/baseline.json`](perf/baseline.json) gates it like every other metric.
+- **Headless RSS is not the windowed app's RSS.** The scenario runs on GPUI's test platform: no swap
+  chain, no GPU surfaces, no windowing-system state. For the same placeholder window, a headless
+  scenario sits at about 31 MiB on an M-series Mac while `oxikube --perf` in a real window reads
+  about 95 MiB. Use the scenario figure only to see change against the same-runner baseline, and
+  use `oxikube --perf` (window open, real clusters) for the budget in the table above (idle < 150
+  MB with two clusters, 10 k pods < 400 MB). The 10 k-pod and two-cluster numbers need E04/E07; the
+  placeholder app measures only the process and renderer floor today.
+- **RSS is not heap.** It includes shared libraries and memory-mapped files the process touched,
+  and the OS may trim it (macOS compressor, Linux reclaim) without the app freeing anything; it is
+  the number users see in Activity Monitor and `top`, which is why the budget is written in it.
 
 ### `cargo xtask perf`
 
@@ -117,7 +159,7 @@ same-runner baseline, never with the absolute budgets above.
 
 | Scenario | Status | Metrics |
 |---|---|---|
-| `startup` | measured | `first_frame_ms` (first line of `main` to the end of the update that drew the first frame: headless app context, text system, GPU renderer, window, first draw); `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask); `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) |
+| `startup` | measured | `rss_mib` / `peak_rss_mib` (headless resident memory after the 120 redraws, MiB; see [Memory (RSS)](#memory-rss)); `first_frame_ms` (first line of `main` to the end of the update that drew the first frame: headless app context, text system, GPU renderer, window, first draw); `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask); `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) |
 | `scroll-10k` | not available: needs E05-S11 #93, E07-S01 #107, E07-S03 #109 | frame time scrolling the 10 k-pod table under churn |
 | `palette` | not available: needs E05-S11 #93, E11-S03 #158 | open time, filter of 2 000 entries |
 | `logs-stream` | not available: needs E05-S11 #93, E08-S02 #120 | frame time at 5 000 lines/s |
@@ -136,25 +178,41 @@ through the same driver (`oxikube_runtime::perf::harness`).
 (`ubuntu-latest`, `macos-latest`), because the gate compares a runner with itself; numbers from a
 laptop are not comparable with a CI VM.
 
-`--check` fails when any p50/p95/p99 of a baselined metric is more than **+20 %** slower **and** more
-than **0.25 ms** slower (`--tolerance`, `--noise-floor-ms`). The absolute floor stops microsecond
-jitter on sub-millisecond metrics (an idle redraw is about 0.01 ms) from failing the job; it is far
-below any budget in the table above. While the app is a placeholder this means only `first_frame_ms`
-and `launch_to_first_frame_ms` effectively gate; the floor is to be re-tuned once real views land (https://github.com/karan-vk/Oxikube/issues/411). A scenario or metric with no baseline is reported as
+`--check` fails when any p50/p95/p99 of a baselined metric is more than **+20 %** higher
+(`--tolerance`) **and** higher by more than an absolute noise floor in the metric's own unit:
+
+- `*_ms` metrics: **0.25 ms** (`--noise-floor-ms`). It stops microsecond jitter on sub-millisecond
+  metrics (an idle redraw is about 0.01 ms) from failing the job; it is far below any budget in
+  the table above.
+- `*_mib` metrics: **8 MiB** (`--noise-floor-mib`). Memory has its own floor because the ms floor
+  does not apply to it (0.25 MiB would fail on allocator noise) and +20 % of a small RSS is only a
+  few MiB. The run-to-run spread of the headless startup scenario is about 0.1 to 0.3 MiB on macOS,
+  so 8 MiB sits well above jitter and below 6 % of the 150 MB idle budget.
+
+While the app is a placeholder this means only `first_frame_ms`,
+`launch_to_first_frame_ms` and the memory metrics effectively gate; the floors are to be re-tuned once real views land (https://github.com/karan-vk/Oxikube/issues/411). A scenario or metric with no baseline is reported as
 `MISSING` and does not fail; a scenario that has a baseline but no longer runs does fail.
 
 The nightly `perf` job (ubuntu + macOS) runs `cargo xtask perf --all --check --samples 7`, uploads
 `perf-report-<OS>` and, on failure, feeds the `nightly-failure` tracking issue.
 
-Committed numbers (`startup`, median of 7 samples, ms; seeded from nightly run 37118815637 on the
-story branch), with a local M-series laptop run for reference (not gated):
+Committed numbers (`startup`, median of 7 samples; ms for timings, MiB for memory; seeded from
+nightly run 37124550799 on the story branch E01-S14b), with a local M-series laptop run for
+reference (not gated):
 
-| Metric | `linux` (ubuntu-latest) p50 / p99 | `macos` (macos-latest) p50 / p99 | local M5 Max (5 samples) p50 / p99 |
+| Metric | `linux` (ubuntu-latest) p50 / p99 | `macos` (macos-latest) p50 / p99 | local M5 Max (9 samples) p50 / p99 |
 |---|---|---|---|
-| `launch_to_first_frame_ms` | 110.4 / 110.4 | 78.2 / 78.2 | 103.0 / 103.0 |
-| `first_frame_ms` | 108.1 / 108.1 | 66.9 / 66.9 | 95.7 / 95.7 |
-| `frame_ms` (idle redraw, hook) | 0.349 / 0.406 | 0.010 / 0.076 | 0.008 / 0.016 |
-| `draw_ms` (idle redraw, outside) | 0.350 / 0.410 | 0.011 / 0.084 | 0.008 / 0.017 |
+| `launch_to_first_frame_ms` | 97.9 / 97.9 | 65.2 / 65.2 | 74.0 / 74.0 |
+| `first_frame_ms` | 95.7 / 95.7 | 56.2 / 56.2 | 68.3 / 68.3 |
+| `frame_ms` (idle redraw, hook) | 0.249 / 0.284 | 0.010 / 0.052 | 0.006 / 0.011 |
+| `draw_ms` (idle redraw, outside) | 0.250 / 0.287 | 0.011 / 0.058 | 0.006 / 0.011 |
+| `rss_mib` (headless, after the redraws) | 110.1 / 110.2 | 27.6 / 27.6 | 31.3 / 31.3 |
+| `peak_rss_mib` (headless) | 110.2 / 110.2 | 27.6 / 27.6 | 31.3 / 31.3 |
+
+For scale: `oxikube --perf` with a real window on the same laptop reads about 95 MiB RSS, three times
+the headless figure, which is why the headless number is only a regression signal. The Linux
+runner's headless figure is about four times the macOS runner's (different renderer and system
+libraries; not investigated further), another reason baselines are per OS.
 
 The placeholder window is trivial, so these mostly measure platform, text-system and renderer
 start-up. The startup budget (≤ 400 ms to the first *interactive* frame with real catalog data) is

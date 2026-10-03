@@ -5,7 +5,7 @@
 //! Init order will follow Zed's `main.rs` pattern: logging → settings → keymap →
 //! theme → AppState → each crate's `init(cx)` → workspace restore.
 //!
-//! Flags (`oxikube --help`): `--perf` records frame times, feed throughput and notify counts
+//! Flags (`oxikube --help`): `--perf` records frame times, feed throughput, notify counts and RSS
 //! (docs/PERFORMANCE.md); `--perf-scenario` runs one headless perf sample (feature
 //! `perf-scenarios`, driven by `cargo xtask perf`).
 

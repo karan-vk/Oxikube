@@ -13,7 +13,10 @@
 //!   (this is what the hook's overhead is judged against).
 //!
 //! Nothing here sleeps or starts threads, so it is deterministic under GPUI's test scheduler.
+//! Resident memory ([`metric::RSS_MIB`]) is read between frames, outside the timed update: there
+//! is no flush thread in a headless run, and a reading never lands inside `frame_ms` or `draw_ms`.
 
+use super::memory::{self, MIB};
 use super::recorder::{Recorder, RecorderReader};
 use super::report::{Counters, ScenarioSample};
 use super::stats::Summary;
@@ -32,6 +35,11 @@ pub mod metric {
     pub const DRAW_MS: &str = "draw_ms";
     /// Spawn of the process to its first-frame marker on stdout (added by `cargo xtask perf`).
     pub const LAUNCH_TO_FIRST_FRAME_MS: &str = "launch_to_first_frame_ms";
+    /// Resident memory after each scripted frame, MiB. Headless process RSS: no swap chain,
+    /// no GPU surfaces, no windowing-system state, so below the windowed app's.
+    pub const RSS_MIB: &str = "rss_mib";
+    /// OS high-water mark of resident memory at the end of the run, MiB.
+    pub const PEAK_RSS_MIB: &str = "peak_rss_mib";
 }
 
 /// Applies `step` to `window`, marks it for refresh and lets the end-of-update flush draw it
@@ -58,6 +66,10 @@ pub struct FrameRun {
     pub frame_ns: Vec<u64>,
     /// Counters accumulated over the run.
     pub counters: Counters,
+    /// Resident memory after each scripted frame, bytes (empty where the OS has no reader).
+    pub rss_bytes: Vec<u64>,
+    /// OS high-water mark of resident memory at the end of the run, bytes.
+    pub peak_rss_bytes: Option<u64>,
 }
 
 impl FrameRun {
@@ -73,6 +85,15 @@ impl FrameRun {
         }
         if let Some(s) = Summary::from_nanos(&mut self.frame_ns) {
             metrics.insert(metric::FRAME_MS.into(), s);
+        }
+        if let Some(s) = Summary::from_scaled(&mut self.rss_bytes, MIB) {
+            metrics.insert(metric::RSS_MIB.into(), s);
+        }
+        if let Some(peak) = self.peak_rss_bytes {
+            metrics.insert(
+                metric::PEAK_RSS_MIB.into(),
+                Summary::single(peak as f64 / MIB),
+            );
         }
         ScenarioSample::ok(scenario, metrics, self.counters)
     }
@@ -98,6 +119,10 @@ pub fn run_frames<C: AppContext>(
         run.draw_ns
             .push(u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX));
         park(cx);
+        if let Some(reading) = memory::read() {
+            run.rss_bytes.push(reading.rss_bytes);
+            run.peak_rss_bytes = reading.peak_rss_bytes.or(run.peak_rss_bytes);
+        }
     }
     let tick = reader.drain(recorder);
     run.counters = Counters {
@@ -230,6 +255,14 @@ mod tests {
         assert_eq!(sample.status, ScenarioStatus::Ok);
         assert_eq!(sample.metrics[metric::FRAME_MS].count, FRAMES as u64);
         assert_eq!(sample.metrics[metric::DRAW_MS].count, FRAMES as u64);
+        if cfg!(any(target_os = "linux", target_os = "macos")) {
+            let rss = sample.metrics[metric::RSS_MIB];
+            assert_eq!(rss.count, FRAMES as u64);
+            assert!(rss.p50 > 1.0 && rss.p50 <= rss.p99, "{rss:?}");
+            assert!(sample.metrics[metric::PEAK_RSS_MIB].p50 >= rss.p50);
+        } else {
+            assert!(!sample.metrics.contains_key(metric::RSS_MIB));
+        }
 
         // Schema: the same keys, at every level, as the committed example `cargo xtask perf` reads.
         let produced = serde_json::to_value(&sample).unwrap();

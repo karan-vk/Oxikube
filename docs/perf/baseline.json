@@ -1,39 +1,49 @@
 {
   "schema": 1,
-  "note": "Headless perf baseline for `cargo xtask perf --check` (docs/PERFORMANCE.md, Perf harness). Keyed by OS (`std::env::consts::OS`) then scenario then metric; p50/p95/p99 in ms are medians across samples. Numbers come from the nightly's own runners (ubuntu-latest, macos-latest): refresh with `cargo xtask perf --from-report <perf-report artifact> --update-baseline`, never by hand.",
+  "note": "Headless perf baseline for `cargo xtask perf --check` (docs/PERFORMANCE.md, Perf harness). Keyed by OS (`std::env::consts::OS`) then scenario then metric; *_ms metrics (p50/p95/p99) are in milliseconds and *_mib metrics (rss_mib, peak_rss_mib) are in MiB; all are medians across samples. Numbers come from the nightly's own runners (ubuntu-latest, macos-latest): refresh with `cargo xtask perf --from-report <perf-report artifact> --update-baseline`, never by hand.",
   "os": {
     "linux": {
-      "source": "github-actions ubuntu-latest nightly run 37118815637",
+      "source": "github-actions ubuntu-latest nightly run 37124550799",
       "updated": "2026-10-03",
       "profile": "release-fast",
       "samples_per_scenario": 7,
       "scenarios": {
         "startup": {
           "draw_ms": {
-            "p50": 0.35,
-            "p95": 0.372,
-            "p99": 0.41
+            "p50": 0.25,
+            "p95": 0.272,
+            "p99": 0.287
           },
           "first_frame_ms": {
-            "p50": 108.145,
-            "p95": 108.145,
-            "p99": 108.145
+            "p50": 95.689,
+            "p95": 95.689,
+            "p99": 95.689
           },
           "frame_ms": {
-            "p50": 0.349,
-            "p95": 0.371,
-            "p99": 0.406
+            "p50": 0.249,
+            "p95": 0.271,
+            "p99": 0.284
           },
           "launch_to_first_frame_ms": {
-            "p50": 110.351,
-            "p95": 110.351,
-            "p99": 110.351
+            "p50": 97.851,
+            "p95": 97.851,
+            "p99": 97.851
+          },
+          "peak_rss_mib": {
+            "p50": 110.152,
+            "p95": 110.152,
+            "p99": 110.152
+          },
+          "rss_mib": {
+            "p50": 110.148,
+            "p95": 110.152,
+            "p99": 110.152
           }
         }
       }
     },
     "macos": {
-      "source": "github-actions macos-latest nightly run 37118815637",
+      "source": "github-actions macos-latest nightly run 37124550799",
       "updated": "2026-10-03",
       "profile": "release-fast",
       "samples_per_scenario": 7,
@@ -41,23 +51,33 @@
         "startup": {
           "draw_ms": {
             "p50": 0.011,
-            "p95": 0.031,
-            "p99": 0.084
+            "p95": 0.017,
+            "p99": 0.058
           },
           "first_frame_ms": {
-            "p50": 66.924,
-            "p95": 66.924,
-            "p99": 66.924
+            "p50": 56.217,
+            "p95": 56.217,
+            "p99": 56.217
           },
           "frame_ms": {
             "p50": 0.01,
-            "p95": 0.029,
-            "p99": 0.076
+            "p95": 0.016,
+            "p99": 0.052
           },
           "launch_to_first_frame_ms": {
-            "p50": 78.152,
-            "p95": 78.152,
-            "p99": 78.152
+            "p50": 65.226,
+            "p95": 65.226,
+            "p99": 65.226
+          },
+          "peak_rss_mib": {
+            "p50": 27.578,
+            "p95": 27.578,
+            "p99": 27.578
+          },
+          "rss_mib": {
+            "p50": 27.578,
+            "p95": 27.578,
+            "p99": 27.578
           }
         }
       }

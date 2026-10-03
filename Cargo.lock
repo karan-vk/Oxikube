@@ -5498,6 +5498,7 @@ dependencies = [
  "anyhow",
  "dirs 7.0.0",
  "gpui-pre",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",
