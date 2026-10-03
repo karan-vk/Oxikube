@@ -8,6 +8,11 @@
 //! connection. [`ExecInteractivePolicy`] is the ceiling the host allows; the default is
 //! [`Never`](ExecInteractivePolicy::Never).
 //!
+//! Under `IfAvailable` and `Always` kube lets the plugin inherit stderr, so a failed run
+//! carries no stderr text and the prompt detection in [`classify`](super::classify) has
+//! nothing to read: such failures are reported as a generic, retryable plugin failure. Only
+//! `Never` (the default) captures stderr and can explain why a plugin needs a person.
+//!
 //! Applying the policy never loosens a plugin's own setting. A plugin that *requires*
 //! interaction (`Always`) under a stricter policy is rejected up front with
 //! [`ErrorKind::Auth`](oxikube_domain::ErrorKind::Auth) so the session moves to
