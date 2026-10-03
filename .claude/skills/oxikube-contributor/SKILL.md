@@ -120,9 +120,9 @@ A story is done when all of the following hold:
 - Settings you added have defaults in `default.json`, a schema entry, and hot reload.
 - Commands you added appear in the palette with a keybinding (if sensible) and a tool
   stub; mutating ones state their guard tier in the PR.
-- `/code-review high` was run on the branch (model: Sonnet 5.5) and every confirmed
+- `/code-review medium` was run on the branch (model: Sonnet 5.5) and every confirmed
   finding is fixed or justified in the PR's "Code review" section; the reviewer re-runs
-  `/code-review high <PR#> --comment` before approving (see `references/code-review.md`).
+  `/code-review medium <PR#> --comment` before approving (see `references/code-review.md`).
 - The PR checklist (`references/pr-checklist.md`) is filled, the Project `Status` is
   `In Review`, and after merge `Done`.
 

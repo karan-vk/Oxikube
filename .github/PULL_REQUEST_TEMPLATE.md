@@ -30,8 +30,8 @@ Closes #<issue>  —  `E__-S__` <title>
 <!-- source, licence, header added, THIRD_PARTY_NOTICES updated — or "none" -->
 
 ## Code review (mandatory, Sonnet)
-- Author pass: `/code-review high` on `claude-sonnet-5-5` — findings: <none | summary + how each was resolved>
-- Reviewer pass: `/code-review high <PR#> --comment` — <pending | done, no open confirmed findings>
+- Author pass (local Claude Code): `/code-review medium` on Sonnet — findings: <none | summary + how each was resolved>
+- Reviewer pass (local Claude Code): `/code-review medium <PR#> --comment` — <pending | done, no open confirmed findings>
 
 ## Follow-ups filed
 - #...
@@ -40,5 +40,5 @@ Closes #<issue>  —  `E__-S__` <title>
 - [ ] `cargo fmt --check`, `clippy -D warnings`, `cargo test --workspace`
 - [ ] `cargo xtask lint-deps`, `cargo xtask check-gpui-pin`, `cargo deny check`
 - [ ] PR title is `type(scope): E__-S__ title`; single story; no out-of-scope changes
-- [ ] `/code-review high` run on Sonnet before opening; confirmed findings resolved
+- [ ] `/code-review medium` run on Sonnet before opening; confirmed findings resolved
 - [ ] Project Status set to In Review

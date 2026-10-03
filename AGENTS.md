@@ -44,11 +44,11 @@ fails CI on any other edge and on banned crates per layer.
    its MIT notice. Prefer copying Zed's design over its code.
 9. One story = one branch (`story/E07-S03-short-slug`) = one PR. Conventional commits
    (`type(scope): summary`, no co-author trailers). Every PR is reviewed with Claude
-   Code's `/code-review high` on Sonnet 5.5 (`claude-sonnet-5-5`): the author runs it
+   Code's `/code-review medium` on Sonnet 5.5 (`claude-sonnet-5-5`): the author runs it
    before opening the PR and resolves every confirmed finding; the reviewer runs
-   `/code-review high <PR#> --comment` on the PR. If your harness cannot run that skill,
-   leave the PR in draft and request the review from a Claude Code teammate; CI also runs
-   it via `.github/workflows/pr-review.yml`. CI green + one reviewer approval,
+   `/code-review medium <PR#> --comment` on the PR. Both run locally in Claude Code (no
+   API key or CI job involved). If your harness cannot run that skill, leave the PR in
+   draft and request the review from a Claude Code teammate. CI green + one reviewer approval,
    squash merge. No changes outside the story's scope; file follow-up issues.
 10. Tests ship with the story: unit tests with `oxikube_testkit` fakes for app/domain,
     kind integration tests (`--features integration`) for adapters, `#[gpui::test]` for UI
@@ -62,7 +62,7 @@ fails CI on any other edge and on banned crates per layer.
 ## Workflow
 1. Pick a story whose dependencies are Done; read its epic and acceptance criteria.
 2. Set Project Status to `In Progress`; branch from `main`.
-3. Implement + tests; run the gate below; run `/code-review high` (Sonnet) and fix
+3. Implement + tests; run the gate below; run `/code-review medium` (Sonnet) and fix
    findings; open a PR with the template filled (incl. the Code review section); set
    Status `In Review`.
 4. Address review; squash merge; Status `Done`.

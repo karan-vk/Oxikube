@@ -44,9 +44,9 @@
 - [ ] Hot-path change: `--perf` p95/p99 before/after numbers in the PR; within budget.
 
 ## Code review (mandatory)
-- [ ] Author ran `/code-review high` on Sonnet before opening; summary + model in the PR.
+- [ ] Author ran `/code-review medium` on Sonnet before opening; summary + model in the PR.
 - [ ] Every CONFIRMED finding fixed; PLAUSIBLE ones fixed or justified in one line.
-- [ ] Reviewer ran `/code-review high <PR#> --comment` on Sonnet; no open confirmed findings.
+- [ ] Reviewer ran `/code-review medium <PR#> --comment` on Sonnet; no open confirmed findings.
 
 ## Reviewer verdict
 Approve only when every box is either checked or has a written justification in the PR.
