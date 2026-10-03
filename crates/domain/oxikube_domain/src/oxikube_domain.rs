@@ -6,10 +6,16 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod age;
+pub mod agent;
+pub mod audit;
+mod bounds;
 pub mod command;
 pub mod error;
+pub mod event;
 pub mod ids;
 pub mod kinds;
+pub mod log;
+pub mod metrics;
 pub mod quantity;
 pub mod resource;
 pub mod safety;
