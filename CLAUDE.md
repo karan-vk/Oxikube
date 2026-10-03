@@ -5,7 +5,7 @@ GitHub Project of epics and stories. Before doing anything in this repo, load th
 skill: `.claude/skills/oxikube-contributor/SKILL.md` (its `references/` hold the detail).
 It is the working agreement; reviewers enforce it.
 
-## Ten non-negotiables (short form)
+## Eleven non-negotiables (short form)
 1. Hexagonal layers: `domain <- ports <- app <- ui/bins`; adapters implement ports; platform -> domain/ports. `cargo xtask lint-deps` must pass.
 2. No `gpui` / `kube` / `gpui_component` outside their allowed layers; views use gpui-component only via `oxikube_ui`.
 3. Every mutation goes through `MutationGuard` (read-only, confirmation tier, dry-run, audit); UI never calls mutating ports directly.

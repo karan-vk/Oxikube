@@ -49,11 +49,25 @@ pub fn down(name: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn load_pods(count: usize, churn: bool, namespace: &str) -> Result<()> {
+pub fn load_pods(
+    count: usize,
+    churn: bool,
+    namespace: &str,
+    context: &str,
+    allow_non_kind: bool,
+) -> Result<()> {
+    if !context.starts_with("kind-") && !allow_non_kind {
+        anyhow::bail!(
+            "refusing to load pods into non-kind context `{context}`; pass --allow-non-kind if you really mean it"
+        );
+    }
     let sh = Shell::new()?;
-    let _ = cmd!(sh, "kubectl create namespace {namespace}")
-        .ignore_status()
-        .run();
+    let _ = cmd!(
+        sh,
+        "kubectl --context {context} create namespace {namespace}"
+    )
+    .ignore_status()
+    .run();
     let manifest = (0..count)
         .map(|i| {
             format!(
@@ -61,7 +75,9 @@ pub fn load_pods(count: usize, churn: bool, namespace: &str) -> Result<()> {
             )
         })
         .collect::<String>();
-    cmd!(sh, "kubectl apply -f -").stdin(&manifest).run()?;
+    cmd!(sh, "kubectl --context {context} apply -f -")
+        .stdin(&manifest)
+        .run()?;
     println!("created {count} pods in {namespace}");
     if churn {
         println!("churning: deleting/recreating 1% every 5s (ctrl-c to stop)");
@@ -71,10 +87,13 @@ pub fn load_pods(count: usize, churn: bool, namespace: &str) -> Result<()> {
             for j in 0..step {
                 let n = (i + j) % count;
                 let pod = format!("load-{n}");
-                let _ = cmd!(sh, "kubectl -n {namespace} delete pod {pod} --wait=false")
-                    .ignore_status()
-                    .quiet()
-                    .run();
+                let _ = cmd!(
+                    sh,
+                    "kubectl --context {context} -n {namespace} delete pod {pod} --wait=false"
+                )
+                .ignore_status()
+                .quiet()
+                .run();
             }
             std::thread::sleep(std::time::Duration::from_secs(5));
             let chunk = (0..step)
@@ -85,7 +104,10 @@ pub fn load_pods(count: usize, churn: bool, namespace: &str) -> Result<()> {
                     )
                 })
                 .collect::<String>();
-            let _ = cmd!(sh, "kubectl apply -f -").stdin(&chunk).quiet().run();
+            let _ = cmd!(sh, "kubectl --context {context} apply -f -")
+                .stdin(&chunk)
+                .quiet()
+                .run();
             i = (i + step) % count;
         }
     }

@@ -154,5 +154,5 @@ cargo xtask lint-deps                        # layer rules
 cargo xtask check-gpui-pin                   # GPUI pins aligned
 cargo deny check                             # licences + advisories
 cargo xtask kind-up && cargo test -p oxikube_kube --features integration
-cargo xtask load-pods --count 10000 --churn  # perf fixture
+cargo xtask load-pods --context kind-oxikube --count 10000 --churn  # perf fixture
 ```

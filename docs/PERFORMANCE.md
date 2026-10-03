@@ -24,7 +24,7 @@ measured on a mid-range x86 laptop with an integrated GPU.
 
 - `oxikube --perf` logs per-frame times, feed throughput and `notify` counts to
   `~/.local/share/oxikube/perf/*.jsonl` and prints p50/p95/p99 on exit (E01-S14).
-- `cargo xtask load-pods --count 10000 --churn` seeds the churn scenario on kind (E01-S10).
+- `cargo xtask load-pods --context kind-oxikube --count 10000 --churn` seeds the churn scenario on kind (E01-S10).
 - `cargo xtask perf <scenario>` runs scripted scenarios headless and writes a report; nightly
   CI compares against `docs/perf/baseline.json` and fails on > 20 % regression (E01-S14).
 - macOS: Instruments (Time Profiler, Metal System Trace) for stalls; Linux: `perf` + `tracy`

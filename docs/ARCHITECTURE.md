@@ -52,6 +52,25 @@ crate's `README.md` for its allowed dependencies. Highlights:
   components to every view.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence.
 
+## Cross-layer wiring (ports + injection)
+
+Adapters never depend on other adapters, on `oxikube_app` or on UI crates. Platform crates never
+depend on each other's consumers. When a component needs a capability that lives in another
+layer, **define a narrow port in `oxikube_ports` and inject the implementation from
+`bins/oxikube`**. Examples that the plan relies on:
+
+| Needs | Port (in `oxikube_ports`) | Implemented by | Consumed by |
+|---|---|---|---|
+| MCP server exposing app tools | `ToolPort` (registry handle) | `oxikube_app::ToolRegistry` | `oxikube_mcp` |
+| ACP `terminal/*` passthrough | `TerminalHostPort` | `oxikube_terminal` | `oxikube_acp` |
+| Argo backends reading the cluster | `ResourcePort`, `PortForwardPort`, `ExecPort` | `oxikube_kube` | `oxikube_argocd` |
+| Extensions contributing themes/commands/MCP servers | `ThemeSinkPort`, `CommandSinkPort`, `ContextServerSinkPort` | `oxikube_theme`, `oxikube_app`, `oxikube_mcp` | `oxikube_extension_host` |
+| App reading user settings (aliases, budgets) | plain values pushed in at init / on change | `oxikube_settings` (via bins) | `oxikube_app` |
+| Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`) | `oxikube_terminal`, `oxikube_kube`, `oxikube_argocd` | `oxikube_terminal` element |
+
+If a story's crate list implies a forbidden edge, follow this table and say so in the PR; do not
+weaken `cargo xtask lint-deps`.
+
 ## Key runtime rules
 
 1. **No network or blocking work on the UI thread.** Kubernetes work runs on the shared Tokio

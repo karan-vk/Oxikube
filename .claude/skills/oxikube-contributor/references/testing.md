@@ -22,7 +22,7 @@
 ## kind integration
 
 ```
-cargo xtask kind-up            # creates cluster `oxikube-test` with metrics-server + sample CRD + fixtures
+cargo xtask kind-up            # creates cluster `oxikube` (context `kind-oxikube`) with metrics-server + sample CRD + fixtures
 cargo test -p oxikube_kube --features integration
 cargo xtask kind-down
 ```
@@ -45,5 +45,5 @@ nightly for everything.
 
 ## Performance checks
 
-- `cargo xtask load-pods --count 10000 --churn` + `oxikube --perf` logs frame times and
+- `cargo xtask load-pods --context kind-oxikube --count 10000 --churn` + `oxikube --perf` logs frame times and
   feed throughput; record numbers in the PR for stories that touch tables or feeds.

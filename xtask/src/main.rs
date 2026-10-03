@@ -44,6 +44,12 @@ enum Cmd {
         churn: bool,
         #[arg(long, default_value = "oxikube-load")]
         namespace: String,
+        /// kubectl context to target. Required, and must be a kind context (`kind-*`) unless
+        /// `--allow-non-kind` is passed, so this never runs against a real cluster by accident.
+        #[arg(long)]
+        context: String,
+        #[arg(long)]
+        allow_non_kind: bool,
     },
 }
 
@@ -57,6 +63,8 @@ fn main() -> anyhow::Result<()> {
             count,
             churn,
             namespace,
-        } => kind::load_pods(count, churn, &namespace),
+            context,
+            allow_non_kind,
+        } => kind::load_pods(count, churn, &namespace, &context, allow_non_kind),
     }
 }
