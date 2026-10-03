@@ -67,8 +67,12 @@ use oxikube_domain::ids::ContextName;
 use parking_lot::Mutex;
 use tokio::sync::OnceCell;
 
+use crate::kubeconfig::LoadedKubeconfig;
+
 pub use build::{ClientFactory, KubeClientFactory, ProxyEnv, build_client, build_config};
-pub use config::{DEFAULT_CONNECT_TIMEOUT, DEFAULT_WRITE_TIMEOUT, PoolConfig, RetryMode};
+pub use config::{
+    DEFAULT_CONNECT_TIMEOUT, DEFAULT_EXEC_DEADLINE, DEFAULT_WRITE_TIMEOUT, PoolConfig, RetryMode,
+};
 pub use entry::ContextDefinition;
 pub use eviction::{Clock, DEFAULT_MAX_ENTRIES, DEFAULT_MAX_IDLE, EvictionPolicy, SystemClock};
 
@@ -103,6 +107,12 @@ impl ClientPool {
             Arc::new(KubeClientFactory::from_process_env()),
             Arc::new(SystemClock),
         )
+    }
+
+    /// A pool over the merged kubeconfig from E03-S01's loader. The pool keeps only
+    /// `merged`; origins and diagnostics stay with the caller.
+    pub fn from_loaded(loaded: &LoadedKubeconfig, config: PoolConfig) -> Self {
+        Self::new(loaded.merged.clone(), config)
     }
 
     /// A pool with an explicit client factory and clock (tests, custom wiring).
@@ -253,9 +263,19 @@ impl ClientPool {
     async fn build(&self, definition: Arc<ContextDefinition>) -> Result<Arc<Client>, OxiError> {
         let factory = self.factory.clone();
         let config = self.config.clone();
+        let deadline = self.config.exec_deadline;
         let context = definition.context().clone();
-        tokio::task::spawn_blocking(move || factory.build(&definition, &config))
-            .await
+        let build = tokio::task::spawn_blocking(move || factory.build(&definition, &config));
+        // On timeout the blocking thread keeps running (a plugin process cannot be
+        // cancelled from here); its result is dropped and the next `get` rebuilds.
+        let joined = tokio::time::timeout(deadline, build).await.map_err(|_| {
+            OxiError::timeout(format!(
+                "context `{context}`: building the client (exec credential plugin) did not \
+                 finish within {}s",
+                deadline.as_secs_f32()
+            ))
+        })?;
+        joined
             .map_err(|join| {
                 let what = if join.is_panic() {
                     "panicked"

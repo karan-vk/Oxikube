@@ -3,13 +3,14 @@
 //! The path is split so later stories slot in without a rewrite:
 //! [`build_config`] turns a [`ContextDefinition`] and a [`PoolConfig`] into a kube
 //! [`Config`] (TLS flags and SOCKS5 handling from E03-S07 hook in here), and
-//! [`build_client`] turns that into a [`Client`] (exec-plugin policy from E03-S04
-//! hooks in here). [`ClientFactory`] is the seam the pool calls, so tests can count
-//! or fail builds.
+//! [`build_client`] turns that into a [`Client`] under E03-S04's
+//! [`ExecInteractivePolicy`] and error classification. [`ClientFactory`] is the
+//! seam the pool calls, so tests can count, slow down or fail builds.
 //!
 //! Both steps block: `build_config` reads certificate files and `build_client` runs
 //! exec credential plugins synchronously (kube 4.2 `Auth::try_from`). The pool
-//! calls the factory on `tokio::task::spawn_blocking`.
+//! calls the factory on `tokio::task::spawn_blocking` under
+//! [`PoolConfig::exec_deadline`], which is why the factory itself is synchronous.
 
 use kube::config::{KubeConfigOptions, KubeconfigError};
 use kube::{Client, Config};
@@ -17,6 +18,7 @@ use oxikube_domain::OxiError;
 
 use super::config::PoolConfig;
 use super::entry::ContextDefinition;
+use crate::auth::{CredentialRefresh, ExecInteractivePolicy, classify_with};
 
 /// Builds clients for the pool. Called on a blocking thread inside a Tokio runtime.
 pub trait ClientFactory: Send + Sync + 'static {
@@ -53,7 +55,7 @@ impl ClientFactory for KubeClientFactory {
         config: &PoolConfig,
     ) -> Result<Client, OxiError> {
         let kube_config = build_config(definition, config, &self.proxy_env)?;
-        build_client(kube_config, definition)
+        build_client(kube_config, definition, config.exec_policy)
     }
 }
 
@@ -144,28 +146,25 @@ pub fn build_config(
     Ok(config)
 }
 
-/// Builds the client. Runs exec credential plugins, so it blocks.
+/// Builds the client under `policy`. Runs exec credential plugins, so it blocks.
 ///
-/// kube's errors here can quote exec-plugin output or a proxy URL with
-/// credentials, so the source is not attached and the message is fixed. Client
-/// certificate and key loading errors go through the same mapping as
-/// [`build_config`]'s kubeconfig errors. E03-S04
-/// classifies auth failures in detail; E03-S08 adds redaction, after which a
-/// redacted source can be attached.
-pub fn build_client(config: Config, definition: &ContextDefinition) -> Result<Client, OxiError> {
-    let context = definition.context();
+/// The policy is E03-S04's [`ExecInteractivePolicy`]: a plugin that requires
+/// interaction beyond it is rejected before it runs. Failures are classified by
+/// [`classify_with`](crate::auth::classify_with) (scrubbed, credential-free
+/// messages) with one exception: client certificate and key loading errors
+/// (`kube::Error::InferKubeconfig`) go through the same mapping as
+/// [`build_config`]'s kubeconfig errors, which never quotes kube's text, because
+/// a base64 decode error names an offending byte of `client-key-data`.
+pub fn build_client(
+    mut config: Config,
+    definition: &ContextDefinition,
+    policy: ExecInteractivePolicy,
+) -> Result<Client, OxiError> {
+    policy.apply_to_config(&mut config)?;
+    let refresh = CredentialRefresh::of(&config.auth_info);
     Client::try_from(config).map_err(|err| match err {
-        // Client certificate / key loading happens here, not in `build_config`.
-        kube::Error::InferKubeconfig(err) => kubeconfig_error(context.as_str(), err),
-        kube::Error::Auth(_) => OxiError::auth(
-            format!("context `{context}`: could not obtain credentials"),
-            true,
-        ),
-        kube::Error::ProxyProtocolUnsupported { .. }
-        | kube::Error::ProxyProtocolDisabled { .. } => {
-            OxiError::unsupported(format!("context `{context}`: unsupported proxy scheme"))
-        }
-        _ => OxiError::internal(format!("context `{context}`: could not create the client")),
+        kube::Error::InferKubeconfig(err) => kubeconfig_error(definition.context().as_str(), err),
+        err => classify_with(&err, refresh),
     })
 }
 

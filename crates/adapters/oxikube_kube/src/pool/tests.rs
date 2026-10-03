@@ -12,6 +12,8 @@ use oxikube_domain::{ErrorKind, OxiError};
 use parking_lot::Mutex;
 
 use super::*;
+use crate::auth::ExecInteractivePolicy;
+use crate::kubeconfig::LoadedKubeconfig;
 
 const TOKEN_A: &str = "tok-AAAA-secret-value";
 const TOKEN_B: &str = "tok-BBBB-secret-value";
@@ -283,6 +285,72 @@ async fn failing_exec_plugin_is_an_auth_error_without_plugin_details() {
     assert!(!text.contains("credential-helper"), "{text}");
 }
 
+#[tokio::test]
+async fn build_over_the_exec_deadline_times_out_and_is_not_cached() {
+    let factory = CountingFactory::with(Duration::from_millis(300), 0);
+    let config = PoolConfig {
+        exec_deadline: Duration::from_millis(50),
+        ..PoolConfig::default()
+    };
+    let pool = pool_with(config, factory.clone(), FakeClock::new());
+    let err = get_err(&pool, "a").await;
+    assert_eq!(err.kind(), ErrorKind::Timeout);
+    assert!(err.is_retryable());
+    assert!(err.message().contains("context `a`"), "{err}");
+    // The entry stays empty, so the next `get` builds again.
+    assert_eq!(factory.builds(), 1);
+    let _ = get_err(&pool, "a").await;
+    assert_eq!(factory.builds(), 2);
+}
+
+#[tokio::test]
+async fn plugin_requiring_interaction_is_rejected_by_the_default_policy() {
+    let yaml = r#"
+apiVersion: v1
+kind: Config
+clusters:
+- name: k
+  cluster: {server: "https://127.0.0.1:1", insecure-skip-tls-verify: true}
+users:
+- name: k
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1
+      command: /nonexistent/sso-login
+      args: ["--secret-exec-arg"]
+      interactiveMode: Always
+contexts:
+- name: k
+  context: {cluster: k, user: k}
+"#;
+    let pool = ClientPool::with_parts(
+        parse(yaml),
+        PoolConfig::default(),
+        Arc::new(KubeClientFactory::new(ProxyEnv::default())),
+        Arc::new(SystemClock),
+    );
+    let err = get_err(&pool, "k").await;
+    assert_eq!(err.kind(), ErrorKind::Auth);
+    assert!(!err.is_retryable(), "a person has to sign in");
+    assert!(err.message().contains("interactive"), "{err}");
+    assert!(!format!("{err:?}").contains(EXEC_ARG));
+}
+
+#[tokio::test]
+async fn from_loaded_uses_the_merged_kubeconfig() {
+    let loaded = LoadedKubeconfig {
+        merged: parse(&base_yaml()),
+        sources: Vec::new(),
+        origins: Default::default(),
+        diagnostics: Vec::new(),
+    };
+    let pool = ClientPool::from_loaded(&loaded, PoolConfig::default());
+    pool.get(&ctx("b"))
+        .await
+        .expect("b from the merged kubeconfig");
+    assert_eq!(get_err(&pool, "nope").await.kind(), ErrorKind::NotFound);
+}
+
 // --- invalidation -----------------------------------------------------------------
 
 #[tokio::test]
@@ -504,6 +572,8 @@ fn custom_pool_config_is_applied() {
         read_timeout: Some(Duration::from_secs(3600)),
         write_timeout: None,
         retry: RetryMode::Disabled,
+        exec_policy: ExecInteractivePolicy::IfAvailable,
+        exec_deadline: Duration::from_secs(5),
         eviction: EvictionPolicy::NEVER,
     };
     let config =
