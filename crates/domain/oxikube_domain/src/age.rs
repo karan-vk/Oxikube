@@ -1,8 +1,27 @@
-// Portions of the test corpus (`kdash_corpus`) derive from kdash
-// (https://github.com/kdash-rs/kdash, `src/app/utils.rs`), Copyright (c) 2021 Deepu K Sasidharan,
-// MIT licence. The full notice is in THIRD_PARTY_NOTICES.md and next to the copied test data
-// below. The kubectl cut-offs follow Kubernetes apimachinery `duration.HumanDuration`
+// Portions of the test corpus (`kdash_corpus`) and the `AgeStyle::Detailed` algorithm derive from
+// kdash (https://github.com/kdash-rs/kdash, `src/app/utils.rs`), MIT licence. The full licence
+// text follows. The kubectl cut-offs follow Kubernetes apimachinery `duration.HumanDuration`
 // (Apache-2.0, semantics only). Modifications (c) Oxikube contributors.
+//
+// Copyright (c) 2021 Deepu K Sasidharan
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 //! Resource age: how long ago something was created, formatted the way tables show it.
 //!
@@ -309,19 +328,9 @@ mod tests {
         assert_eq!(age.to_detailed_string(false), "5d3h");
     }
 
-    /// Test data below is derived from kdash `src/app/utils.rs` (`test_to_age`,
-    /// `test_to_age_secs`), MIT licence.
-    ///
-    /// Copyright (c) 2021 Deepu K Sasidharan
-    ///
-    /// Permission is hereby granted, free of charge, to any person obtaining a copy of this
-    /// software and associated documentation files (the "Software"), to deal in the Software
-    /// without restriction, including without limitation the rights to use, copy, modify, merge,
-    /// publish, distribute, sublicense, and/or sell copies of the Software, and to permit
-    /// persons to whom the Software is furnished to do so, subject to the following conditions:
-    /// The above copyright notice and this permission notice shall be included in all copies or
-    /// substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY
-    /// OF ANY KIND, EXPRESS OR IMPLIED.
+    // Test data below is derived from kdash `src/app/utils.rs` (`test_to_age`,
+    // `test_to_age_secs`), MIT licence, Copyright (c) 2021 Deepu K Sasidharan. The full licence
+    // text is in the header of this file and in THIRD_PARTY_NOTICES.md.
     mod kdash_corpus {
         use super::*;
 

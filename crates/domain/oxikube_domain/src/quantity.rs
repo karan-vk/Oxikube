@@ -229,15 +229,15 @@ impl Quantity {
         self.nanos
     }
 
-    /// The value in whole units, rounded up like apimachinery `Value()` (`1500m` is `2`).
+    /// The value in whole units, rounded away from zero like apimachinery `Value()` (`1500m` is `2`, `-1500m` is `-2`).
     pub fn value(&self) -> i128 {
-        div_ceil_i128(self.nanos, NANO)
+        div_away_from_zero(self.nanos, NANO)
     }
 
-    /// The value in milli-units, rounded up like apimachinery `MilliValue()`
-    /// (`1500u` is `2`, `1Gi` is `1073741824000`).
+    /// The value in milli-units, rounded away from zero like apimachinery `MilliValue()`
+    /// (`1500u` is `2`, `-1500u` is `-2`, `1Gi` is `1073741824000`).
     pub fn milli_value(&self) -> i128 {
-        div_ceil_i128(self.nanos, 1_000_000)
+        div_away_from_zero(self.nanos, 1_000_000)
     }
 
     /// Whether the value is exactly zero.
@@ -321,7 +321,7 @@ impl Quantity {
     }
 
     /// Formats a CPU quantity for a table cell the way `kubectl top` does: whole millicores
-    /// (`250m`, `1500m`, `0`). Sub-millicore values round up.
+    /// (`250m`, `1500m`, `0`). Sub-millicore values round away from zero.
     pub fn human_cpu(&self) -> String {
         match self.milli_value() {
             0 => "0".to_owned(),
@@ -395,13 +395,16 @@ fn parse_suffix(suffix: &str) -> Option<(QuantityFormat, u32, i32)> {
     Some((QuantityFormat::DecimalExponent, 0, exp as i32))
 }
 
-/// Division rounding toward positive infinity (`i128::div_ceil` is not stable).
-fn div_ceil_i128(a: i128, b: i128) -> i128 {
+/// Division rounding away from zero, as apimachinery does for `Value()` and `MilliValue()`
+/// (`1500m` is `2`, `-1500m` is `-2`).
+fn div_away_from_zero(a: i128, b: i128) -> i128 {
     let q = a / b;
-    if a % b != 0 && (a > 0) == (b > 0) {
+    if a % b == 0 {
+        q
+    } else if (a > 0) == (b > 0) {
         q + 1
     } else {
-        q
+        q - 1
     }
 }
 
@@ -664,9 +667,12 @@ mod tests {
     }
 
     #[test]
-    fn value_helpers_round_up() {
+    fn value_helpers_round_away_from_zero() {
         assert_eq!(q("1500m").value(), 2);
-        assert_eq!(q("-1500m").value(), -1);
+        assert_eq!(q("-1500m").value(), -2);
+        assert_eq!(q("-1500u").milli_value(), -2);
+        assert_eq!(q("-1n").value(), -1);
+        assert_eq!(q("-250m").human_cpu(), "-250m");
         assert_eq!(q("1500u").milli_value(), 2);
         assert_eq!(q("1Gi").milli_value(), 1_073_741_824_000);
         assert_eq!(q("9Ei").value(), 9 << 60);
