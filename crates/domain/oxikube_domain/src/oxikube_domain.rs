@@ -20,6 +20,7 @@ pub mod quantity;
 pub mod resource;
 pub mod safety;
 pub mod session;
+pub mod view;
 
 pub use age::{Age, AgeStyle};
 pub use command::{
@@ -29,3 +30,7 @@ pub use error::{ErrorKind, OxiError, OxiResult};
 pub use quantity::{Quantity, QuantityError, QuantityFormat};
 pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError};
 pub use safety::{ConfirmTier, Initiator, Risk};
+pub use view::{
+    ContainerSummary, CronJobSummary, JobSummary, NodeSummary, PodSummary, ViewError,
+    WorkloadSummary,
+};
