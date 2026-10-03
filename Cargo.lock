@@ -5489,6 +5489,8 @@ dependencies = [
  "oxikube_domain",
  "oxikube_testkit",
  "proptest",
+ "serde",
+ "serde_json",
  "tempfile",
  "tokio",
 ]
