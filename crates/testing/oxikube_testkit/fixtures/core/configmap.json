@@ -1,0 +1,18 @@
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "web-config",
+    "namespace": "demo",
+    "uid": "0ef04f1b-73bd-5e43-a4e9-cf54578e22b6",
+    "resourceVersion": "1259",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "app": "web"
+    }
+  },
+  "data": {
+    "LOG_LEVEL": "info",
+    "config.yaml": "server:\n  port: 8080\n"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "ReplicaSet",
+  "metadata": {
+    "name": "web-5d8c7b9f4",
+    "namespace": "demo",
+    "uid": "e3d861a8-604d-5871-83d1-837cb5d3569c",
+    "resourceVersion": "1126",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "app": "web",
+      "pod-template-hash": "5d8c7b9f4"
+    },
+    "annotations": {
+      "deployment.kubernetes.io/desired-replicas": "3",
+      "deployment.kubernetes.io/revision": "2"
+    },
+    "ownerReferences": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "web",
+        "uid": "fa473b17-1fb3-5e18-ad23-35d94fad15d4",
+        "controller": true,
+        "blockOwnerDeletion": true
+      }
+    ]
+  },
+  "spec": {
+    "replicas": 3,
+    "selector": {
+      "matchLabels": {
+        "app": "web",
+        "pod-template-hash": "5d8c7b9f4"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "web"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "app",
+            "image": "registry.example/app:1.0",
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "status": {
+    "observedGeneration": 1,
+    "replicas": 3,
+    "fullyLabeledReplicas": 3,
+    "readyReplicas": 3,
+    "availableReplicas": 3
+  }
+}

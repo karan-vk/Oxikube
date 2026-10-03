@@ -1,0 +1,36 @@
+{
+  "apiVersion": "events.k8s.io/v1",
+  "kind": "Event",
+  "metadata": {
+    "name": "web.18a2b3c4d5e6f703",
+    "namespace": "demo",
+    "uid": "6a92ce08-ad0e-5bd3-b955-f4c441a1a5f6",
+    "resourceVersion": "1231",
+    "creationTimestamp": "2026-01-01T00:00:00Z"
+  },
+  "regarding": {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "name": "web",
+    "namespace": "demo",
+    "uid": "fa473b17-1fb3-5e18-ad23-35d94fad15d4"
+  },
+  "related": {
+    "apiVersion": "apps/v1",
+    "kind": "ReplicaSet",
+    "name": "web-5d8c7b9f4",
+    "namespace": "demo",
+    "uid": "e3d861a8-604d-5871-83d1-837cb5d3569c"
+  },
+  "type": "Normal",
+  "reason": "ScalingReplicaSet",
+  "action": "Scale",
+  "note": "Scaled up replica set web-5d8c7b9f4 from 2 to 3",
+  "eventTime": "2026-01-01T00:00:01.000000Z",
+  "reportingController": "deployment-controller",
+  "reportingInstance": "deployment-controller-oxikube-control-plane",
+  "series": {
+    "count": 2,
+    "lastObservedTime": "2026-01-01T00:10:00.000000Z"
+  }
+}

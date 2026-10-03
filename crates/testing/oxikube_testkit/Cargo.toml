@@ -12,6 +12,13 @@ path = "src/oxikube_testkit.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
+futures.workspace = true
+jiff.workspace = true
+oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+parking_lot.workspace = true
+serde_json.workspace = true
 uuid = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 gpui = { workspace = true, optional = true }
@@ -19,6 +26,8 @@ gpui_platform = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 
 [dev-dependencies]
+base64.workspace = true
+flate2.workspace = true
 tempfile.workspace = true
 
 [features]

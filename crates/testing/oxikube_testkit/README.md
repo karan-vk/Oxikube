@@ -4,6 +4,42 @@
 
 Port fakes, fixtures, builders, kind helpers, gpui test helpers.
 
+## Fakes (always on)
+
+- `oxikube_testkit::Fake*`: one fake per port trait in `oxikube_ports` (`FakeResourcePort`,
+  `FakeDiscoveryPort`, `FakeTableFeedPort`, `FakeLogPort`, `FakeExecPort`, `FakePortForwardPort`,
+  `FakeClusterSourcePort`, `FakeCloudDiscoveryPort`, `FakeMetricsPort`, `FakePromqlPort`,
+  `FakeDescribePort`, `FakeHelmPort`, `FakeStatePort`, `FakeSecretStorePort`, `FakeNotifierPort`,
+  `FakeUpdaterPort`, `FakeCrashReporterPort`, `FakeFsPort`, `FakeClockPort`, `FakeIntegrationPort`,
+  `FakeToolPort`, `FakeContextProviderPort`, `FakeAgentPort`, `FakeAgentClient`).
+- Script responses per method, then assert on calls:
+
+  ```rust
+  let fake = FakeResourcePort::new().with_objects([pod().name("web").build()]);
+  fake.script().get.push_err(OxiError::forbidden("rbac"));
+  // ... exercise the app ...
+  assert!(fake.mutating_calls().is_empty());
+  ```
+
+  With an empty queue a fake falls back to its configured state (an in-memory store) or
+  returns an `Internal` "no scripted response" error; each fake's rustdoc lists its fallbacks.
+- Streams (`watch`, `table_feed`, `stream_logs`, agent `updates`) are scripted as a `Timeline`
+  (items at offsets) replayed on a `FakeClockPort`; the test advances the clock
+  (`clock.advance(..)`), so nothing sleeps. Fakes never start OS threads or need tokio, and work
+  under GPUI's test scheduler.
+- `tests/port_coverage.rs` fails when a port trait appears in `oxikube_ports` without a fake.
+  Add a port method, add it to the fake in the same PR.
+
+## Fixtures and builders (always on)
+
+- `fixtures/{pods,workloads,nodes,crds,events,helm,core}/*.json`: realistic manifests, loaded
+  lazily with `fixtures::load("pods/crashloop.json")` or `fixtures::pod_crashloop()` as a domain
+  `Resource`. Secret and Helm fixtures hold dummy data only.
+- Builders for variations: `pod().running().restarts(3)`, `pod().crash_loop()`,
+  `deployment().replicas(3).ready(2)`, `node().cordoned()`, `job().complete()`,
+  `resource("test.oxikube.dev/v1", "Widget")`. They share the fixtures' defaults, and
+  `tests/fixtures.rs` checks that they match the corresponding fixtures field by field.
+
 ## Headless GPUI
 
 - Feature `gpui-headless`: `oxikube_testkit::headless::headless_context()` returns a

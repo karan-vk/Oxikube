@@ -1,0 +1,41 @@
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "web",
+    "namespace": "demo",
+    "uid": "fa473b17-1fb3-5e18-ad23-35d94fad15d4",
+    "resourceVersion": "1252",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "app": "web"
+    }
+  },
+  "spec": {
+    "type": "ClusterIP",
+    "clusterIP": "10.96.12.34",
+    "clusterIPs": [
+      "10.96.12.34"
+    ],
+    "selector": {
+      "app": "web"
+    },
+    "ports": [
+      {
+        "name": "http",
+        "port": 80,
+        "protocol": "TCP",
+        "targetPort": "http"
+      }
+    ],
+    "sessionAffinity": "None",
+    "ipFamilies": [
+      "IPv4"
+    ],
+    "ipFamilyPolicy": "SingleStack",
+    "internalTrafficPolicy": "Cluster"
+  },
+  "status": {
+    "loadBalancer": {}
+  }
+}

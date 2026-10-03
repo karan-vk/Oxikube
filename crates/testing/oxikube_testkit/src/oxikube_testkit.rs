@@ -5,6 +5,19 @@
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 //!
+//! # Always on
+//!
+//! - [`fakes`]: a `Fake*` for every port trait in `oxikube_ports`, with scripted
+//!   responses (`fake.script().<method>.push_ok(..)`) and recorded calls
+//!   (`fake.recorded_calls()`). Streams replay on a virtual [`FakeClockPort`]; nothing
+//!   sleeps for real, starts an OS thread or needs tokio. All fakes are re-exported here.
+//! - [`fixtures`]: 30+ realistic JSON manifests loaded lazily as domain `Resource`s
+//!   (`fixtures::load("pods/crashloop.json")`, `fixtures::pod_crashloop()`).
+//! - [`builders`]: `pod().running().restarts(3).build()`, `deployment().replicas(3).ready(2)`,
+//!   `node().cordoned()`, ... producing the same `Resource` shape as the fixtures. The entry
+//!   points are re-exported here.
+//! - [`script`]: the [`Script`] / [`CallLog`] / [`Timeline`] helpers the fakes share.
+//!
 //! # Features
 //!
 //! - `integration`: tests that need a live kind cluster.
@@ -14,6 +27,9 @@
 //! - `gpui-screenshot`: headless GPUI rendering to an image (`headless::capture_view`); implies
 //!   `screenshot` and `gpui-headless`.
 
+pub mod builders;
+pub mod fakes;
+pub mod fixtures;
 #[cfg(feature = "gpui-headless")]
 pub mod headless;
 /// kind-backed integration test helpers (`OXIKUBE_TEST_CONTEXT`, `oxi-test-<rand>` namespaces).
@@ -21,3 +37,8 @@ pub mod headless;
 pub mod integration;
 #[cfg(feature = "screenshot")]
 pub mod screenshot;
+pub mod script;
+
+pub use builders::{daemonset, deployment, job, node, pod, replicaset, resource, statefulset};
+pub use fakes::*;
+pub use script::{CallLog, Script, Timeline, unscripted};
