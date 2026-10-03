@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fixtures-web
+  namespace: oxikube-fixtures
+  labels:
+    app: fixtures-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fixtures-web
+  template:
+    metadata:
+      labels:
+        app: fixtures-web
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: 1m
+              memory: 1Mi

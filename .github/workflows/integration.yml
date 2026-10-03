@@ -1,10 +1,12 @@
 name: integration
 
-# kind-backed integration tests for adapters (E01-S09 completes this).
+# kind-backed integration tests (`--features integration`) on PRs touching adapters and
+# the layers/tooling they depend on. Docs-only PRs do not trigger it.
 on:
   pull_request:
     paths:
       - "crates/adapters/**"
+      - "crates/ports/**"
       - "crates/app/**"
       - "crates/testing/**"
       - "xtask/**"
@@ -17,6 +19,7 @@ env:
 jobs:
   kind:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -25,6 +28,7 @@ jobs:
         with:
           cluster_name: oxikube
           wait: 120s
+      # Idempotent: the cluster already exists, so this only installs metrics-server + fixtures.
       - name: Cluster fixtures
         run: cargo run -q -p xtask -- kind-up --name oxikube
       - name: Integration tests

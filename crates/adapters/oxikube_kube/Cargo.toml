@@ -13,6 +13,12 @@ doctest = false
 
 [dependencies]
 
+[dev-dependencies]
+oxikube_testkit.workspace = true
+kube.workspace = true
+k8s-openapi.workspace = true
+tokio.workspace = true
+
 [features]
 default = []
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).

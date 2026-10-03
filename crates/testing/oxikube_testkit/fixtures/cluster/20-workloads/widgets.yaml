@@ -1,0 +1,29 @@
+apiVersion: test.oxikube.dev/v1
+kind: Widget
+metadata:
+  name: small
+  namespace: oxikube-fixtures
+spec:
+  size: small
+  replicas: 1
+  owner: team-a
+---
+apiVersion: test.oxikube.dev/v1
+kind: Widget
+metadata:
+  name: medium
+  namespace: oxikube-fixtures
+spec:
+  size: medium
+  replicas: 3
+  owner: team-b
+---
+apiVersion: test.oxikube.dev/v1
+kind: Widget
+metadata:
+  name: large
+  namespace: oxikube-fixtures
+spec:
+  size: large
+  replicas: 10
+  owner: team-a
