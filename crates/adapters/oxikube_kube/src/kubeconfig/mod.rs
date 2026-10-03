@@ -8,6 +8,7 @@
 //! |---|---|
 //! | `split` | pure, platform-aware `KUBECONFIG` splitting and default-path resolution |
 //! | `env` | the injected [`Env`], source precedence and the in-cluster decision (E03-S10) |
+//! | `home` | the home-directory choice (client-go `homedir.HomeDir`), pure over an injected probe |
 //! | `incluster` | the service account as a synthetic `in-cluster` context (E03-S10) |
 //! | `load` | the loader (a port of kdash's, MIT; see `THIRD_PARTY_NOTICES.md`) |
 //! | `diagnostics` | [`Diagnostic`], [`SourceInfo`], [`SourceStatus`] |
@@ -50,6 +51,7 @@
 
 mod diagnostics;
 mod env;
+mod home;
 mod incluster;
 mod load;
 mod split;
@@ -67,8 +69,8 @@ pub use env::{
     load_kubeconfig_for_process, select_sources,
 };
 pub use incluster::{
-    IN_CLUSTER_CONTEXT, IN_CLUSTER_SOURCE_LABEL, IN_CLUSTER_SOURCE_PATH, in_cluster_cluster_id,
-    in_cluster_context_name, in_cluster_kubeconfig, in_cluster_server_url,
+    IN_CLUSTER_CONTEXT, IN_CLUSTER_SOURCE_LABEL, IN_CLUSTER_SOURCE_PATH, apply_in_cluster_fixups,
+    in_cluster_cluster_id, in_cluster_context_name, in_cluster_kubeconfig, in_cluster_server_url,
 };
 pub use load::{
     is_blank_kubeconfig, load_kubeconfig_from_paths, load_kubeconfig_from_paths_blocking,

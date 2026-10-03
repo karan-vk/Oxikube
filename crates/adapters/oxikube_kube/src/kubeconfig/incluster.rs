@@ -13,10 +13,25 @@
 //! [`ClusterId`], and the source path [`IN_CLUSTER_SOURCE_PATH`], which is not a real file (it
 //! must not be watched).
 //!
+//! # Gaps against `kube::Config::incluster()`, and the fix-up
+//!
+//! Building a client from a `Kubeconfig` (`Config::from_custom_kubeconfig`) differs from
+//! `Config::incluster()` in two ways, which [`apply_in_cluster_fixups`] closes. The client pool
+//! (E03-S03) must call it on the `kube::Config` it builds for [`IN_CLUSTER_CONTEXT`]:
+//!
+//! * `root_cert_file` is set only by `incluster()`. It makes kube watch the CA file and reload
+//!   it when the cluster CA rotates; from a kubeconfig it is `None`.
+//! * `proxy_url` is read from the cluster entry or `HTTPS_PROXY` / `https_proxy` for
+//!   kubeconfigs, while `incluster()` never uses a proxy. The fix-up clears it, a deliberate
+//!   match with `incluster()`: the pod's own API server is reached directly.
+//!
+//! Token refresh needs no fix-up: the `token-file` credential is re-read like `incluster()`'s.
+//!
 //! Manual check (cannot run without a cluster): in a pod, load with [`Env::from_process`] and
 //! build a client from the `in-cluster` context.
 
 use std::net::{IpAddr, SocketAddr};
+use std::path::PathBuf;
 
 use kube::config::{
     AuthInfo, Cluster, Context, Kubeconfig, NamedAuthInfo, NamedCluster, NamedContext,
@@ -69,6 +84,17 @@ pub fn in_cluster_server_url(host: &str, port: &str) -> Option<String> {
         Err(_) if port == 443 => format!("https://{host}"),
         Err(_) => format!("https://{host}:{port}"),
     })
+}
+
+/// Make a client config built for the in-cluster context behave like `Config::incluster()`.
+///
+/// Does nothing for any other context. For [`IN_CLUSTER_CONTEXT`] it sets `root_cert_file` to
+/// the mounted CA (so kube reloads a rotated CA) and clears `proxy_url`. See the module docs.
+pub fn apply_in_cluster_fixups(context: &ContextName, config: &mut kube::Config) {
+    if context.as_str() == IN_CLUSTER_CONTEXT {
+        config.root_cert_file = Some(PathBuf::from(SERVICE_ACCOUNT_CA_FILE));
+        config.proxy_url = None;
+    }
 }
 
 /// Build the synthetic in-cluster kubeconfig from `env` (pure; no I/O).
@@ -148,6 +174,36 @@ mod tests {
                 "{host}:{port}"
             );
         }
+    }
+
+    fn client_config() -> kube::Config {
+        kube::Config::new("https://10.0.0.1".parse().unwrap())
+    }
+
+    #[test]
+    fn fixups_restore_ca_reload_and_drop_the_proxy_for_in_cluster() {
+        let mut config = client_config();
+        config.proxy_url = Some("http://proxy.example:3128".parse().unwrap());
+        assert!(config.root_cert_file.is_none());
+
+        apply_in_cluster_fixups(&in_cluster_context_name(), &mut config);
+
+        assert_eq!(
+            config.root_cert_file.as_deref(),
+            Some(std::path::Path::new(SERVICE_ACCOUNT_CA_FILE))
+        );
+        assert!(config.proxy_url.is_none());
+    }
+
+    #[test]
+    fn fixups_leave_other_contexts_alone() {
+        let mut config = client_config();
+        config.proxy_url = Some("http://proxy.example:3128".parse().unwrap());
+
+        apply_in_cluster_fixups(&"prod".into(), &mut config);
+
+        assert!(config.root_cert_file.is_none());
+        assert!(config.proxy_url.is_some());
     }
 
     #[test]

@@ -3,8 +3,9 @@
 //! # Precedence
 //!
 //! 1. **Explicit sources** (settings, a flag): if any are given, only they are loaded.
-//! 2. **`KUBECONFIG`**: split with [`split_kubeconfig`](super::split_kubeconfig); if it yields
-//!    any path, only those are loaded. An unset or empty value skips this tier.
+//! 2. **`KUBECONFIG`**: split with [`split_kubeconfig`](super::split_kubeconfig); if it is set
+//!    and non-empty, only its paths are loaded, even when it splits to none (`":"`), as in
+//!    kubectl. An unset or empty value skips this tier.
 //! 3. **The default path** `<home>/.kube/config`.
 //! 4. **In-cluster**: the pod's service account, as the synthetic `in-cluster` context
 //!    ([`super::incluster`]).
@@ -26,6 +27,7 @@ use std::path::PathBuf;
 use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 
 use super::diagnostics::{Diagnostic, InClusterSkip, SourceInfo, SourceStatus, SourceTier};
+use super::home::{FsProbe, HomeVars, pick_home};
 use super::incluster::{
     IN_CLUSTER_SOURCE_LABEL, IN_CLUSTER_SOURCE_PATH, SERVICE_ACCOUNT_CA_FILE,
     SERVICE_ACCOUNT_NAMESPACE_FILE, SERVICE_ACCOUNT_TOKEN_FILE, in_cluster_context_name,
@@ -44,7 +46,8 @@ pub struct Env {
     pub platform: Platform,
     /// The value of `KUBECONFIG`, if set.
     pub kubeconfig: Option<OsString>,
-    /// The user's home directory, if known.
+    /// The user's home directory, if known; chosen as client-go's `homedir.HomeDir` does (see
+    /// [`Env::from_process`]).
     pub home: Option<PathBuf>,
     /// `KUBERNETES_SERVICE_HOST`, if set.
     pub kubernetes_service_host: Option<String>,
@@ -59,8 +62,18 @@ pub struct Env {
 impl Env {
     /// Read the real process environment and check the service account files (blocking, tiny
     /// file checks; call it from a blocking context).
+    ///
+    /// The home directory follows client-go: `HOME` on Unix; on Windows the first of `HOME`,
+    /// `HOMEDRIVE`+`HOMEPATH`, `USERPROFILE` that holds `.kube\\config`, else the first existing
+    /// writable directory among `HOME`, `USERPROFILE`, `HOMEDRIVE`+`HOMEPATH`, and so on.
     pub fn from_process() -> Self {
         let var = |key: &str| std::env::var_os(key).filter(|v| !v.is_empty());
+        let home_vars = HomeVars {
+            home: var("HOME").map(PathBuf::from),
+            home_drive: var("HOMEDRIVE").map(PathBuf::from),
+            home_path: var("HOMEPATH").map(PathBuf::from),
+            user_profile: var("USERPROFILE").map(PathBuf::from),
+        };
         let text = |key: &str| var(key).and_then(|v| v.into_string().ok());
         let mounted = std::path::Path::new(SERVICE_ACCOUNT_TOKEN_FILE).is_file()
             && std::path::Path::new(SERVICE_ACCOUNT_CA_FILE).is_file();
@@ -72,9 +85,7 @@ impl Env {
         Self {
             platform: Platform::host(),
             kubeconfig: var("KUBECONFIG"),
-            home: var("HOME")
-                .or_else(|| var("USERPROFILE"))
-                .map(PathBuf::from),
+            home: pick_home(Platform::host(), &home_vars, &FsProbe),
             kubernetes_service_host: text("KUBERNETES_SERVICE_HOST"),
             kubernetes_service_port: text("KUBERNETES_SERVICE_PORT"),
             service_account_mounted: mounted,
@@ -117,15 +128,10 @@ pub fn select_sources(explicit: &[PathBuf], env: &Env) -> Selection {
             paths: explicit,
         };
     }
-    let from_env = env
-        .kubeconfig
-        .as_deref()
-        .map(|value| split_kubeconfig_os(value, env.platform))
-        .unwrap_or_default();
-    if !from_env.is_empty() {
+    if let Some(value) = env.kubeconfig.as_deref().filter(|value| !value.is_empty()) {
         return Selection {
             tier: Some(SourceTier::KubeconfigEnv),
-            paths: from_env,
+            paths: split_kubeconfig_os(value, env.platform),
         };
     }
     match &env.home {

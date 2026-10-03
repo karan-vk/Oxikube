@@ -105,6 +105,38 @@ fn empty_inputs_fall_through_each_tier() {
 }
 
 #[test]
+fn separators_only_kubeconfig_selects_the_env_tier_with_no_paths() {
+    // kubectl only uses the home file when KUBECONFIG is empty; ":" is not empty.
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    let home = TempDir::new().unwrap();
+    fs::create_dir(home.path().join(".kube")).unwrap();
+    fs::write(
+        home.path().join(".kube").join("config"),
+        config_yaml("default"),
+    )
+    .unwrap();
+    let env = Env {
+        kubeconfig: Some(OsString::from(format!("{sep}{sep}"))),
+        home: Some(home.path().to_path_buf()),
+        ..Env::default()
+    };
+
+    let selection = select_sources(&[], &env);
+    assert_eq!(selection.tier, Some(SourceTier::KubeconfigEnv));
+    assert!(selection.paths.is_empty());
+
+    let loaded = load(&[], &env);
+    assert!(names(&loaded).is_empty(), "default file must not be loaded");
+    assert!(matches!(
+        loaded.diagnostics[0],
+        Diagnostic::SourceSelected {
+            tier: SourceTier::KubeconfigEnv,
+            paths: 0
+        }
+    ));
+}
+
+#[test]
 fn nothing_to_select() {
     let selection = select_sources(&[], &Env::default());
     assert_eq!(

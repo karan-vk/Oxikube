@@ -132,20 +132,17 @@ pub fn split_kubeconfig_paths(value: &OsStr) -> Vec<PathBuf> {
 
 /// Resolve the kubeconfig paths to load from an explicit `KUBECONFIG` value and the default path.
 ///
-/// An unset or empty (all-separators) `KUBECONFIG` falls back to `default_path`
-/// (`~/.kube/config`), as kubectl does. `default_path` is `None` when the home directory is
-/// unknown, which yields no paths.
+/// An unset or empty `KUBECONFIG` falls back to `default_path` (`~/.kube/config`), as kubectl
+/// does. A non-empty value is used on its own even when it splits to nothing (`":"`): client-go
+/// only uses the home file when the variable is empty, so kubectl loads nothing there too.
+/// `default_path` is `None` when the home directory is unknown, which yields no paths.
 pub fn resolve_kubeconfig_paths(
     kubeconfig_env: Option<&OsStr>,
     default_path: Option<&Path>,
 ) -> Vec<PathBuf> {
-    let from_env = kubeconfig_env
-        .map(split_kubeconfig_paths)
-        .unwrap_or_default();
-    if from_env.is_empty() {
-        default_path.map(Path::to_path_buf).into_iter().collect()
-    } else {
-        from_env
+    match kubeconfig_env.filter(|value| !value.is_empty()) {
+        Some(value) => split_kubeconfig_paths(value),
+        None => default_path.map(Path::to_path_buf).into_iter().collect(),
     }
 }
 
@@ -210,12 +207,20 @@ mod tests {
 
     #[test]
     fn empty_env_uses_default() {
+        let default = Path::new("/home/u/.kube/config");
+        assert_eq!(
+            resolve_kubeconfig_paths(Some(OsStr::new("")), Some(default)),
+            [default.to_path_buf()]
+        );
+    }
+
+    #[test]
+    fn separators_only_env_loads_nothing_like_kubectl() {
         let sep = if cfg!(windows) { ";" } else { ":" };
         let default = Path::new("/home/u/.kube/config");
-        for value in ["", sep, &format!("{sep}{sep}")] {
-            assert_eq!(
-                resolve_kubeconfig_paths(Some(OsStr::new(value)), Some(default)),
-                [default.to_path_buf()],
+        for value in [sep.to_owned(), format!("{sep}{sep}")] {
+            assert!(
+                resolve_kubeconfig_paths(Some(OsStr::new(&value)), Some(default)).is_empty(),
                 "value {value:?}"
             );
         }
