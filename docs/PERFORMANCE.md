@@ -51,14 +51,15 @@ cargo xtask load-pods --cleanup                              # delete the oxikub
 | `--namespaces N` | 4 | spread round-robin over `<prefix>-0 .. <prefix>-(N-1)` |
 | `--namespace PREFIX` | `oxikube-load` | namespace name prefix |
 | `--churn` | off | every 5 s delete and recreate about 1 % of the pods (min 1), cycling through all namespaces, until Ctrl-C |
-| `--cleanup` | | delete the load namespaces (`<prefix>` and `<prefix>-<digits>` only) and exit |
+| `--cleanup` | | delete the load namespaces (only those labelled `app=oxikube-load` and named `<prefix>-<digits>`) and exit |
 | `--context C` | `kind-oxikube` | kubectl context; anything not starting with `kind-` is refused |
 | `--allow-non-kind` | off | override the guard (you almost certainly do not want this) |
 
 Every kubectl call carries `--context`, so the tool never follows your current context. Pods are
 applied in chunks of 500 with progress output (about 120 pods/s on a laptop, so 10 000 pods take
 roughly 90 s). Ctrl-C stops the churn loop after the current tick, recreates whatever that tick
-deleted so the fleet is whole, and exits 0; a second Ctrl-C aborts at once. The tool is idempotent:
+deleted so the fleet is whole, and exits 0 (kubectl children run in their own process group, so the
+terminal's SIGINT does not kill an in-flight call); a second Ctrl-C aborts at once. The tool is idempotent:
 re-running it with the same flags re-applies the same pods.
 
 ### What kind can actually hold

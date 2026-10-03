@@ -12,10 +12,11 @@
 //! a cluster; the kubectl plumbing is exercised against kind by hand (see docs/PERFORMANCE.md).
 
 use anyhow::{Context, Result, bail};
+use std::io::Write;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use xshell::{Shell, cmd};
 
 /// Label carried by every namespace and pod this tool creates.
 pub const LABEL_APP: &str = "oxikube-load";
@@ -81,15 +82,13 @@ pub fn pod_name(i: usize) -> String {
     format!("load-{i}")
 }
 
-/// True for `<prefix>` or `<prefix>-<digits>`, the only namespaces `--cleanup` may delete.
+/// True for `<prefix>-<digits>`, the only namespaces `--cleanup` may delete. A bare `<prefix>` is
+/// never matched: this tool never creates it, so it could only be a namespace someone else owns
+/// (`--namespace kube-system` must not delete kube-system).
 pub fn is_load_namespace(prefix: &str, name: &str) -> bool {
-    match name.strip_prefix(prefix) {
-        Some("") => true,
-        Some(rest) => rest
-            .strip_prefix('-')
-            .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit())),
-        None => false,
-    }
+    name.strip_prefix(prefix)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// YAML for one namespace document (starts with `---`).
@@ -135,6 +134,9 @@ pub fn churn_step(count: usize) -> usize {
 // ---------------------------------------------------------------------------
 
 /// Flag flipped by the first Ctrl-C; a second Ctrl-C exits immediately with status 130.
+///
+/// The SIGINT listener is registered before this returns (inside `block_on`, so it is in the
+/// runtime's context), so a Ctrl-C right after start cannot hit the default handler.
 fn install_ctrlc() -> Result<Arc<AtomicBool>> {
     let stop = Arc::new(AtomicBool::new(false));
     let flag = stop.clone();
@@ -142,14 +144,19 @@ fn install_ctrlc() -> Result<Arc<AtomicBool>> {
         .enable_all()
         .build()
         .context("build signal runtime")?;
+    let mut sigint = rt
+        .block_on(async {
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+        })
+        .context("register SIGINT handler")?;
     std::thread::Builder::new()
         .name("ctrlc".into())
         .spawn(move || {
             rt.block_on(async move {
-                if tokio::signal::ctrl_c().await.is_ok() {
+                if sigint.recv().await.is_some() {
                     flag.store(true, Ordering::SeqCst);
                     eprintln!("\nstopping (press Ctrl-C again to abort immediately)");
-                    if tokio::signal::ctrl_c().await.is_ok() {
+                    if sigint.recv().await.is_some() {
                         std::process::exit(130);
                     }
                 }
@@ -175,11 +182,49 @@ fn interruptible_sleep(total: Duration, stop: &AtomicBool) {
 // kubectl plumbing
 // ---------------------------------------------------------------------------
 
-fn apply(sh: &Shell, context: &str, manifest: &str) -> Result<()> {
-    cmd!(sh, "kubectl --context {context} apply -f -")
-        .stdin(manifest)
-        .quiet()
-        .read()
+/// Run `kubectl --context <context> <args...>`, optionally feeding `stdin`, and return stdout.
+///
+/// The child runs in its own process group. Ctrl-C in a terminal signals the whole foreground
+/// group, so without this an in-flight kubectl would die with the tool and a churn tick could
+/// leave deleted pods unrecreated; this way the tool decides when to stop between kubectl calls.
+fn kubectl(context: &str, args: &[&str], stdin: Option<&str>) -> Result<String> {
+    let mut cmd = Command::new("kubectl");
+    cmd.arg("--context")
+        .arg(context)
+        .args(args)
+        .stdin(if stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    let mut child = cmd.spawn().context("spawn kubectl (is it on PATH?)")?;
+    // Feed stdin from a thread so a large manifest cannot deadlock against full output pipes.
+    let writer = stdin.map(|input| {
+        let mut pipe = child.stdin.take().expect("stdin was piped");
+        let input = input.to_owned();
+        std::thread::spawn(move || pipe.write_all(input.as_bytes()))
+    });
+    let out = child.wait_with_output().context("wait for kubectl")?;
+    if let Some(w) = writer {
+        let _ = w.join();
+    }
+    if !out.status.success() {
+        bail!(
+            "kubectl {} failed ({}): {}",
+            args.first().copied().unwrap_or(""),
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+fn apply(context: &str, manifest: &str) -> Result<()> {
+    kubectl(context, &["apply", "-f", "-"], Some(manifest))
         .map(|_| ())
         .context("kubectl apply")
 }
@@ -189,9 +234,8 @@ pub fn run(args: &Args) -> Result<()> {
     if args.namespaces == 0 || args.namespaces > MAX_NAMESPACES {
         bail!("--namespaces must be between 1 and {MAX_NAMESPACES}");
     }
-    let sh = Shell::new()?;
     if args.cleanup {
-        return cleanup(&sh, &args.context, &args.namespace);
+        return cleanup(&args.context, &args.namespace);
     }
     if args.count == 0 {
         bail!("--count must be at least 1");
@@ -205,7 +249,7 @@ pub fn run(args: &Args) -> Result<()> {
         ..
     } = args;
 
-    apply(&sh, context, &namespaces_manifest(prefix, *namespaces)).context("create namespaces")?;
+    apply(context, &namespaces_manifest(prefix, *namespaces)).context("create namespaces")?;
     println!(
         "context {context}: creating {count} pods over {namespaces} namespaces ({})",
         namespace_name(prefix, 0) + ", ..."
@@ -218,7 +262,7 @@ pub fn run(args: &Args) -> Result<()> {
             return Ok(());
         }
         let end = (done + APPLY_CHUNK).min(*count);
-        apply(&sh, context, &pods_manifest(done..end, prefix, *namespaces))
+        apply(context, &pods_manifest(done..end, prefix, *namespaces))
             .with_context(|| format!("apply pods {done}..{end}"))?;
         done = end;
         println!(
@@ -230,14 +274,13 @@ pub fn run(args: &Args) -> Result<()> {
     println!("created {count} pods in {namespaces} namespaces");
 
     if args.churn {
-        churn(&sh, context, prefix, *namespaces, *count, &stop)?;
+        churn(context, prefix, *namespaces, *count, &stop)?;
     }
     Ok(())
 }
 
 /// Delete ~1 % of the pods and recreate them, every 5 s, until `stop`.
 fn churn(
-    sh: &Shell,
     context: &str,
     prefix: &str,
     namespaces: usize,
@@ -265,12 +308,10 @@ fn churn(
             let ns = namespace_name(prefix, ns_idx);
             // Wait for the old object to disappear, otherwise the re-apply below would patch the
             // terminating pod instead of creating a fresh one. Errors are not fatal for a load tool.
-            let _ = cmd!(
-                sh,
-                "kubectl --context {context} -n {ns} delete pod {names...} --ignore-not-found --timeout=30s"
-            )
-            .quiet()
-            .read();
+            let mut args = vec!["-n", ns.as_str(), "delete", "pod"];
+            args.extend(names.iter().map(String::as_str));
+            args.extend(["--ignore-not-found", "--timeout=30s"]);
+            let _ = kubectl(context, &args, None);
         }
         // Always recreate what was just deleted, even if Ctrl-C arrived meanwhile, so the fleet
         // is whole when we exit.
@@ -279,7 +320,7 @@ fn churn(
             .iter()
             .map(|&i| pod_doc(i, prefix, namespaces))
             .collect();
-        if let Err(e) = apply(sh, context, &docs) {
+        if let Err(e) = apply(context, &docs) {
             eprintln!("churn: recreate failed: {e:#}");
         }
         tick += 1;
@@ -290,11 +331,15 @@ fn churn(
     Ok(())
 }
 
-fn cleanup(sh: &Shell, context: &str, prefix: &str) -> Result<()> {
-    let listing = cmd!(sh, "kubectl --context {context} get namespaces -o name")
-        .quiet()
-        .read()
-        .context("list namespaces")?;
+fn cleanup(context: &str, prefix: &str) -> Result<()> {
+    // Select by label first, then by name pattern: both must match before anything is deleted.
+    let selector = format!("app={LABEL_APP}");
+    let listing = kubectl(
+        context,
+        &["get", "namespaces", "-l", selector.as_str(), "-o", "name"],
+        None,
+    )
+    .context("list namespaces")?;
     let targets: Vec<String> = listing
         .lines()
         .filter_map(|l| l.trim().strip_prefix("namespace/"))
@@ -302,18 +347,17 @@ fn cleanup(sh: &Shell, context: &str, prefix: &str) -> Result<()> {
         .map(str::to_owned)
         .collect();
     if targets.is_empty() {
-        println!("no `{prefix}*` namespaces in {context}; nothing to clean up");
+        println!(
+            "no `{prefix}-<n>` namespaces labelled app={LABEL_APP} in {context}; nothing to clean up"
+        );
         return Ok(());
     }
     let n = targets.len();
     println!("deleting namespaces in {context}: {}", targets.join(", "));
-    cmd!(
-        sh,
-        "kubectl --context {context} delete namespace {targets...} --wait=true"
-    )
-    .quiet()
-    .read()
-    .context("delete namespaces")?;
+    let mut args = vec!["delete", "namespace"];
+    args.extend(targets.iter().map(String::as_str));
+    args.push("--wait=true");
+    kubectl(context, &args, None).context("delete namespaces")?;
     println!("cleaned up {n} namespace(s)");
     Ok(())
 }
@@ -405,7 +449,15 @@ spec:
 
     #[test]
     fn cleanup_only_matches_load_namespaces() {
-        assert!(is_load_namespace("oxikube-load", "oxikube-load"));
+        assert!(
+            !is_load_namespace("oxikube-load", "oxikube-load"),
+            "bare prefix is never created by this tool"
+        );
+        assert!(
+            !is_load_namespace("kube-system", "kube-system"),
+            "--namespace kube-system must not make kube-system deletable"
+        );
+        assert!(!is_load_namespace("oxikube-fixtures", "oxikube-fixtures"));
         assert!(is_load_namespace("oxikube-load", "oxikube-load-0"));
         assert!(is_load_namespace("oxikube-load", "oxikube-load-12"));
         assert!(!is_load_namespace("oxikube-load", "oxikube-load-"));
