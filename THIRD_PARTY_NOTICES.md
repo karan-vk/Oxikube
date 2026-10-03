@@ -57,14 +57,21 @@ if any code is vendored.
 Quantity parsing semantics referenced for `oxikube_domain::quantity` (no attribution required; noted for provenance).
 `crates/domain/oxikube_domain/src/quantity.rs` follows the shape of `src/qty.rs` (`Qty` with a
 scale table `Pi..n`, `FromStr`, `Display`, `Add`/`Sub`, percentage) and keeps an attribution
-header. The value representation is rewritten as an exact `i128` nano-unit integer instead of
-`f64`.
+header. The value representation is rewritten as an exact decimal (`i128` mantissa, `i32`
+exponent) instead of `f64`.
 
 ## Kubernetes apimachinery (Apache-2.0) — https://github.com/kubernetes/apimachinery
 Semantics only, no code copied: quantity grammar and canonical formatting from
 `pkg/api/resource/quantity.go`, and the `kubectl get` age cut-offs from `pkg/util/duration`
-(`HumanDuration`), reimplemented in `oxikube_domain::quantity` and `oxikube_domain::age`. The test
-vectors are written for Oxikube and are not copied from apimachinery's tests.
+(`HumanDuration`), reimplemented in `oxikube_domain::quantity` and `oxikube_domain::age`.
+
+Test data ported (Copyright 2014 The Kubernetes Authors, Apache-2.0):
+- `crates/domain/oxikube_domain/tests/quantity_corpus/apimachinery.rs`: the input tables of
+  `pkg/api/resource/quantity_test.go` @ v0.37.0 (`TestQuantityParse` with its `-`/`+` loops and
+  invalid list, `TestQuantityParseEmit`, `TestQuantityString`, `TestParseQuantityString`,
+  `TestParseQuantity`), with expected values, formats and `String()` text generated once by
+  running apimachinery v0.37.0. The file carries the Apache-2.0 header; the licence text is at
+  http://www.apache.org/licenses/LICENSE-2.0.
 
 ## Kubernetes printers (Apache-2.0) — https://github.com/kubernetes/kubernetes
 Semantics only, no code copied: the `kubectl get` column rules of `printPod`, `printNode`
