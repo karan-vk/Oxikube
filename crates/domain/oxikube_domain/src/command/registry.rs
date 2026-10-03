@@ -64,7 +64,7 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
-    CommandMeta::read(
+    CommandMeta::privileged(
         CommandId::CLUSTER_TOGGLE_READ_ONLY,
         "Toggle Read-Only Mode",
         CommandScope::Cluster,
@@ -201,7 +201,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::safety::ConfirmTier;
+    use crate::safety::{ConfirmTier, Initiator};
 
     /// Mutating commands that deliberately run without a confirmation. Empty on
     /// purpose: adding an entry here is a reviewed decision that a mutation is
@@ -252,6 +252,7 @@ mod tests {
                     "{} mutates but does not need MUTATE",
                     meta.id
                 );
+                assert!(!meta.privileged, "{} is mutating and privileged", meta.id);
                 let risk = meta.risk.expect("mutating command declares a risk");
                 assert_eq!(meta.confirm, risk.confirm_tier(), "{}", meta.id);
                 if meta.confirm == ConfirmTier::None {
@@ -271,6 +272,21 @@ mod tests {
             let meta = lookup_str(id).expect("allow-list entry is a registered id");
             assert!(meta.mutating, "{id} is on the allow list but not mutating");
         }
+    }
+
+    #[test]
+    fn read_only_toggle_is_privileged_and_refused_for_agents() {
+        let meta = lookup(CommandId::CLUSTER_TOGGLE_READ_ONLY).unwrap();
+        assert!(meta.privileged);
+        assert!(!meta.mutating, "must stay runnable on a read-only cluster");
+        assert!(meta.allows(Initiator::Ui));
+        assert!(meta.allows(Initiator::Command));
+        assert!(!meta.allows(Initiator::Agent));
+        assert!(!meta.allows(Initiator::Plugin));
+        let privileged: Vec<_> = COMMANDS.iter().filter(|m| m.privileged).collect();
+        assert_eq!(privileged.len(), 1, "privileged is a reviewed allow-list");
+        let delete = lookup(CommandId::POD_DELETE).unwrap();
+        assert!(delete.allows(Initiator::Agent));
     }
 
     #[test]

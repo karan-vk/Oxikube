@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use super::capability::Capabilities;
 use super::id::CommandId;
-use crate::safety::{ConfirmTier, Risk};
+use crate::safety::{ConfirmTier, Initiator, Risk};
 
 /// What a command acts on. Drives where the palette offers it and which
 /// context it needs before it can run.
@@ -46,6 +46,10 @@ pub struct CommandMeta {
     pub needs: Capabilities,
     /// Blast radius; `Some` exactly when `mutating`.
     pub risk: Option<Risk>,
+    /// Changes the safety posture itself (for example lifting read-only mode).
+    /// Such a command is not `mutating` (it must stay runnable on a read-only
+    /// cluster) but only a human may run it: see [`CommandMeta::allows`].
+    pub privileged: bool,
 }
 
 impl CommandMeta {
@@ -64,7 +68,30 @@ impl CommandMeta {
             confirm: ConfirmTier::None,
             needs,
             risk: None,
+            privileged: false,
         }
+    }
+
+    /// A non-mutating command that changes the safety posture (read-only
+    /// mode). It is `privileged`: the guard refuses it for agents and plugins
+    /// (ADR 0012: agents cannot bypass the UI's safety).
+    pub const fn privileged(
+        id: CommandId,
+        title: &'static str,
+        scope: CommandScope,
+        needs: Capabilities,
+    ) -> Self {
+        Self {
+            privileged: true,
+            ..Self::read(id, title, scope, needs)
+        }
+    }
+
+    /// Whether `initiator` may run this command at all. Privileged commands
+    /// are limited to the UI and the command bus; everything else is open
+    /// (mutations are still gated by the guard's own checks).
+    pub const fn allows(&self, initiator: Initiator) -> bool {
+        !self.privileged || matches!(initiator, Initiator::Ui | Initiator::Command)
     }
 
     /// A mutating command. The confirmation tier follows `risk`
@@ -84,6 +111,7 @@ impl CommandMeta {
             confirm: risk.confirm_tier(),
             needs: needs.union(Capabilities::MUTATE),
             risk: Some(risk),
+            privileged: false,
         }
     }
 }
