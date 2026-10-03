@@ -22,6 +22,11 @@ Copyright (c) 2021 Deepu K Sasidharan. Ported functions (tolerant kubeconfig loa
 trigger, merge-patch builders, log stream reconnect/dedup logic) keep the MIT notice in-file.
 
 Entries:
+- `crates/adapters/oxikube_kube/src/kubeconfig/load.rs`: ports `is_blank_kubeconfig`,
+  `load_kubeconfig_path`, `load_kubeconfig_from_paths` and `load_local_kubeconfig` from
+  `src/network/mod.rs` @ c303673 (v2.1.1). Reworked to return per-file sources, context origins
+  and diagnostics, and to take explicit inputs instead of reading the environment. The MIT
+  notice and permission text are the file header (same text as below).
 - `crates/domain/oxikube_domain/src/age.rs` (test module `kdash_corpus`): test inputs and expected
   strings from `src/app/utils.rs` (`test_to_age`, `test_to_age_secs`), and the `duration_to_age`
   algorithm reimplemented as `AgeStyle::Detailed`. The full MIT licence text

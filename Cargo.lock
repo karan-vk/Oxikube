@@ -5486,7 +5486,10 @@ version = "0.0.1"
 dependencies = [
  "k8s-openapi",
  "kube",
+ "oxikube_domain",
  "oxikube_testkit",
+ "proptest",
+ "tempfile",
  "tokio",
 ]
 

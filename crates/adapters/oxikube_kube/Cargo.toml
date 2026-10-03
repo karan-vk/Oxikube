@@ -12,9 +12,14 @@ path = "src/oxikube_kube.rs"
 doctest = false
 
 [dependencies]
+kube.workspace = true
+oxikube_domain.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 oxikube_testkit.workspace = true
+proptest.workspace = true
+tempfile.workspace = true
 kube.workspace = true
 k8s-openapi.workspace = true
 tokio.workspace = true
