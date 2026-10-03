@@ -5401,7 +5401,11 @@ version = "0.0.1"
 name = "oxikube_domain"
 version = "0.0.1"
 dependencies = [
+ "hex",
  "proptest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "thiserror 2.0.21",
 ]
 
