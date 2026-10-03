@@ -12,6 +12,10 @@ path = "src/oxikube_domain.rs"
 doctest = false
 
 [dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
 
 [lints]
 workspace = true

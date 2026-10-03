@@ -92,6 +92,38 @@ weaken `cargo xtask lint-deps`.
    selected modules (settings store, keymap, theme loader, picker, terminal element) may be
    vendored with a GPL header and an entry in `THIRD_PARTY_NOTICES.md`.
 
+## Error taxonomy and mapping guidelines
+
+Every port returns `oxikube_domain::OxiError` (alias `OxiResult<T>`): a struct
+`{ kind: ErrorKind, message, source, retryable }`, not an enum of variants. Branch with
+`err.kind()` and `err.is_retryable()`; build errors with constructors such as
+`OxiError::auth(msg, retryable)` or `OxiError::not_found(msg)`. `retryable` is explicit data
+(an `Auth` error is retryable after an exec-plugin refresh, not after a revoked token);
+`Network` and `Timeout` default to retryable, every other kind to not retryable, and
+`with_retryable` overrides. `Display` is `"<kind>: <message>"`; the source is reachable via
+`std::error::Error::source`. Errors are not `Clone`; share them with `Arc<OxiError>`.
+
+The domain never redacts and has no I/O dependencies, so **adapters redact tokens and Secret
+data before building an error** and map their native errors with these rules:
+
+| Condition | `ErrorKind` | `retryable` |
+|---|---|---|
+| HTTP 401, expired or rejected credentials | `Auth` | true only if a credential refresh (exec plugin, OIDC) can fix it |
+| HTTP 403 | `Forbidden` | false |
+| HTTP 404 | `NotFound` | false |
+| HTTP 409 (conflict, stale `resourceVersion`, already exists) | `Conflict` | false (re-read first) |
+| HTTP 400, 422, failed client-side validation | `Validation` | false |
+| HTTP 429, 503, 504, connection reset or refused, TLS handshake failure | `Network` | true (the default retry policy covers 429, 503, 504) |
+| Client or request deadline elapsed | `Timeout` | true |
+| Missing API group or version, aggregated API that ignores a feature | `Unsupported` | false |
+| Panics turned into errors, invariant violations, other bugs | `Internal` | false |
+
+`From` helpers are reserved for adapters, but by the orphan rule an adapter crate cannot
+implement `From<kube::Error> for OxiError` (both types are foreign to it). Adapters instead
+expose a free function or an extension trait, for example
+`fn oxi_from_kube(e: kube::Error) -> OxiError` in `oxikube_kube`, matching on kube-rs
+`Error::Api(ErrorResponse { code, .. })` for the HTTP status.
+
 ## Data flow for a resource table
 
 ```
