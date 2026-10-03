@@ -54,12 +54,27 @@
 //! | [`LogPort`] | [`log`] |
 //! | [`ExecPort`] | [`exec`] |
 //! | [`PortForwardPort`] | [`portforward`] |
+//!
+//! # Integration and agent ports (E02-S10)
+//!
+//! Shaped after MCP tool semantics and the ACP client duties, without
+//! depending on `rmcp` or `agent-client-protocol` (see each module for the
+//! field-by-field mapping).
+//!
+//! | Port | Module |
+//! |---|---|
+//! | [`IntegrationPort`] | [`integration`] |
+//! | [`ToolPort`], [`ToolDef`] | [`tool`] |
+//! | [`ContextProviderPort`], [`Mention`], [`ContentPart`] | [`context`] |
+//! | [`AgentPort`], [`AgentClient`] | [`agent`] |
 
 #![deny(missing_docs)]
 
+pub mod agent;
 pub mod clock;
 pub mod cloud;
 pub mod cluster_source;
+pub mod context;
 pub mod crash;
 pub mod describe;
 pub mod discovery;
@@ -67,6 +82,7 @@ pub mod exec;
 pub mod feed;
 pub mod fs;
 pub mod helm;
+pub mod integration;
 pub mod log;
 pub mod metrics;
 pub mod notifier;
@@ -76,13 +92,24 @@ pub mod resource;
 pub mod secrets;
 pub mod state;
 pub mod table;
+pub mod tool;
 pub mod updater;
 
+pub use agent::{
+    AgentCapabilities, AgentClient, AgentInfo, AgentPort, AgentSessionId, AgentUpdateBatch,
+    AgentUpdateStream, AuthMethod, AuthMethodId, ClientCapabilities, ClientInfo, CreateTerminal,
+    ElicitationMode, ElicitationRequest, ElicitationResponse, McpServerConfig, MessageChunk,
+    NewSessionRequest, PermissionOption, PermissionOptionId, PermissionOptionKind,
+    PermissionOutcome, PermissionRequest, Plan, PlanEntry, PlanPriority, PlanStatus, ReadTextFile,
+    SessionUpdate, StopReason, TerminalExit, TerminalId, TerminalOutput, ToolCallContent,
+    ToolCallId, ToolCallInfo, ToolCallPatch, ToolCallStatus, ToolKind, WriteTextFile,
+};
 pub use clock::ClockPort;
 pub use cloud::{CloudDiscoveryPort, CloudProvider, CloudToolStatus, DiscoveredCluster};
 pub use cluster_source::{
     ClusterContext, ClusterSource, ClusterSourcePort, SourceId, SourceKind, SourcesChanged,
 };
+pub use context::{ContentPart, ContextProviderPort, ContextScope, Mention, MentionPrefix};
 pub use crash::{CrashId, CrashReport, CrashReporterPort};
 pub use describe::{DescribeOutput, DescribePort, DescribeSource};
 pub use discovery::{DiscoveryPort, ServerVersion};
@@ -90,6 +117,9 @@ pub use exec::{ExecOptions, ExecPort, ExecSession, ExitStatus, TerminalSize};
 pub use feed::{Delta, DeltaBatch, WatchFeed};
 pub use fs::{DirEntry, EntryKind, FsEvent, FsEventKind, FsPort};
 pub use helm::{HelmPort, HelmRelease, HelmReleaseRef, HelmReleaseStatus};
+pub use integration::{
+    IntegrationPort, IntegrationSession, SidebarItem, SidebarModel, SidebarSection,
+};
 pub use log::{LogOptions, LogPort, LogSince, LogStream};
 pub use metrics::{MetricsOutcome, MetricsPort};
 pub use notifier::{Notification, NotificationLevel, NotifierPort};
@@ -105,6 +135,7 @@ pub use state::{AuditQuery, StateKey, StatePort, StatePortExt, StateTable};
 pub use table::{
     IncludeObject, Table, TableBatch, TableColumn, TableFeed, TableFeedPort, TableOptions, TableRow,
 };
+pub use tool::{ToolAnnotations, ToolContext, ToolDef, ToolName, ToolOutput, ToolPort};
 pub use updater::{DownloadedUpdate, UpdateChannel, UpdateInfo, UpdaterPort};
 
 #[cfg(test)]

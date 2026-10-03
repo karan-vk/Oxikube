@@ -5526,6 +5526,7 @@ dependencies = [
  "futures",
  "jiff",
  "oxikube_domain",
+ "proptest",
  "secrecy",
  "serde",
  "serde_json",
