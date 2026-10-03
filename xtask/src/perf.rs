@@ -1,0 +1,372 @@
+//! `cargo xtask perf`: scripted headless perf scenarios, a JSON report, and the regression gate
+//! against `docs/perf/baseline.json` (E01-S14, ADR 0013, docs/PERFORMANCE.md).
+//!
+//! 1. Builds `oxikube` with `--features perf-scenarios` (profile `release-fast` by default).
+//! 2. Per scenario: one warm-up process (discarded), then `--samples` fresh processes of
+//!    `oxikube --perf-scenario <name> --perf-report <file>`. Each process is a cold start, and
+//!    launch-to-first-frame is timed from here by waiting for its stdout marker.
+//! 3. Aggregates: per metric, the median across samples of each statistic (p50/p95/p99/max), so a
+//!    single noisy sample cannot fail the gate.
+//! 4. Writes the report (`--out`, default `<target>/perf/report-<os>.json`) and prints a table.
+//! 5. `--check`: compares with the baseline for this OS; fails when any p50/p95/p99 is more than
+//!    `--tolerance` (20 %) AND more than `--noise-floor-ms` (0.25 ms) slower. Missing baselines
+//!    are reported, not fatal; a baselined scenario that stops running is fatal.
+//! 6. `--update-baseline`: writes this run's numbers into the baseline for this OS.
+//!
+//! `--from-report <file>` skips 1-4 and applies `--check` / `--update-baseline` to a saved report
+//! (a nightly `perf-report-<OS>` artifact): that is how the CI-runner baselines are seeded.
+
+mod baseline;
+mod report;
+
+use anyhow::{Context, Result, bail};
+use baseline::{Baseline, compare};
+use report::{
+    HEADLESS_NOTE, REPORT_SCHEMA, Report, SAMPLE_SCHEMA, Sample, SampleStats, ScenarioResult,
+    Status, aggregate,
+};
+use std::collections::BTreeMap;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::Instant;
+
+/// Every scenario `oxikube --perf-scenario` knows, in report order.
+pub const SCENARIOS: [&str; 5] = [
+    "startup",
+    "scroll-10k",
+    "palette",
+    "logs-stream",
+    "editor-5mb",
+];
+
+/// Must match `FIRST_FRAME_MARKER` in `bins/oxikube/src/perf_scenario.rs`.
+const FIRST_FRAME_MARKER: &str = "OXIKUBE_PERF_FIRST_FRAME";
+/// Metric added from outside the process.
+const LAUNCH_METRIC: &str = "launch_to_first_frame_ms";
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct Args {
+    /// Scenario to run: startup, scroll-10k, palette, logs-stream, editor-5mb.
+    #[arg(required_unless_present_any = ["all", "from_report"], conflicts_with_all = ["all", "from_report"])]
+    pub scenario: Option<String>,
+    /// Run every scenario.
+    #[arg(long, conflicts_with = "from_report")]
+    pub all: bool,
+    /// Do not run anything: load this report (e.g. a nightly `perf-report-<OS>` artifact) and
+    /// apply `--check` / `--update-baseline` to it. This is how CI-runner baselines are seeded.
+    #[arg(long)]
+    pub from_report: Option<PathBuf>,
+    /// Measured samples (fresh processes) per scenario, after one warm-up run.
+    #[arg(long, default_value_t = 5)]
+    pub samples: usize,
+    /// Compare with the baseline and fail on a regression.
+    #[arg(long)]
+    pub check: bool,
+    /// Write this run's numbers into the baseline for this OS.
+    #[arg(long)]
+    pub update_baseline: bool,
+    /// Baseline file.
+    #[arg(long, default_value = "docs/perf/baseline.json")]
+    pub baseline: PathBuf,
+    /// Report file (default `<target>/perf/report-<os>.json`).
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+    /// Allowed slowdown before `--check` fails (0.20 = +20 %).
+    #[arg(long, default_value_t = 0.20)]
+    pub tolerance: f64,
+    /// Absolute slowdown (ms) a metric must also exceed to fail; absorbs jitter on sub-ms metrics.
+    #[arg(long, default_value_t = 0.25)]
+    pub noise_floor_ms: f64,
+    /// Cargo profile for the scenario binary.
+    #[arg(long, default_value = "release-fast")]
+    pub profile: String,
+    /// Use this prebuilt `oxikube` (built with `--features perf-scenarios`) instead of building.
+    #[arg(long)]
+    pub bin: Option<PathBuf>,
+    /// Text recorded as the baseline's `source` with `--update-baseline` (default: CI run or
+    /// `local <os>/<arch>`).
+    #[arg(long)]
+    pub source: Option<String>,
+}
+
+pub fn run(args: &Args) -> Result<()> {
+    if args.samples == 0 {
+        bail!("--samples must be at least 1");
+    }
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .no_deps()
+        .exec()
+        .context("cargo metadata")?;
+    let root = metadata.workspace_root.as_std_path().to_owned();
+    let target = metadata.target_directory.as_std_path().to_owned();
+
+    let report = match &args.from_report {
+        Some(path) => {
+            let text = std::fs::read_to_string(path)
+                .with_context(|| format!("reading report {}", path.display()))?;
+            let report: Report = serde_json::from_str(&text)
+                .with_context(|| format!("parsing report {}", path.display()))?;
+            if report.schema != REPORT_SCHEMA {
+                bail!("report schema {} is not {REPORT_SCHEMA}", report.schema);
+            }
+            print_report(&report);
+            report
+        }
+        None => run_and_write(args, &root, &target)?,
+    };
+
+    let baseline_path = if args.baseline.is_absolute() {
+        args.baseline.clone()
+    } else {
+        root.join(&args.baseline)
+    };
+    if args.update_baseline {
+        let mut baseline = Baseline::load_or_default(&baseline_path)?;
+        let source = args
+            .source
+            .clone()
+            .unwrap_or_else(|| match &args.from_report {
+                Some(path) => format!("report {}", path.display()),
+                None => default_source(),
+            });
+        baseline.update_from(&report, &source, &today());
+        baseline.save(&baseline_path)?;
+        println!(
+            "baseline updated for `{}`: {}",
+            report.os,
+            baseline_path.display()
+        );
+    }
+    if args.check {
+        let baseline = Baseline::load(&baseline_path)?;
+        let comparison = compare(&report, &baseline, args.tolerance, args.noise_floor_ms);
+        println!(
+            "\ncheck against {} (os `{}`, fail above +{:.0} % and +{} ms):",
+            baseline_path.display(),
+            report.os,
+            args.tolerance * 100.0,
+            args.noise_floor_ms
+        );
+        for row in &comparison.rows {
+            println!("  {row}");
+        }
+        if comparison.failed() {
+            bail!(
+                "perf check failed: see FAIL rows above (headless numbers; same-runner baseline)"
+            );
+        }
+        println!("perf check passed");
+    }
+    Ok(())
+}
+
+/// Runs the requested scenarios and writes the report.
+fn run_and_write(args: &Args, root: &Path, target: &Path) -> Result<Report> {
+    let scenarios: Vec<&str> = match (&args.scenario, args.all) {
+        (_, true) => SCENARIOS.to_vec(),
+        (Some(s), false) => {
+            let Some(known) = SCENARIOS.iter().find(|k| **k == s) else {
+                bail!("unknown scenario `{s}`; known: {}", SCENARIOS.join(", "));
+            };
+            vec![*known]
+        }
+        (None, false) => bail!("give a scenario, --all or --from-report"),
+    };
+    let bin = match &args.bin {
+        Some(bin) => bin.clone(),
+        None => build(root, target, &args.profile)?,
+    };
+    let samples_dir = target.join("perf").join("samples");
+    std::fs::create_dir_all(&samples_dir)?;
+
+    let mut report = Report {
+        schema: REPORT_SCHEMA,
+        os: std::env::consts::OS.into(),
+        arch: std::env::consts::ARCH.into(),
+        profile: args.profile.clone(),
+        samples_per_scenario: args.samples,
+        note: HEADLESS_NOTE.into(),
+        scenarios: BTreeMap::new(),
+    };
+    for scenario in &scenarios {
+        let result = run_scenario(&bin, scenario, args.samples, &samples_dir)?;
+        report.scenarios.insert((*scenario).to_owned(), result);
+    }
+
+    let out = args.out.clone().unwrap_or_else(|| {
+        target
+            .join("perf")
+            .join(format!("report-{}.json", report.os))
+    });
+    if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(&out, serde_json::to_string_pretty(&report)? + "\n")
+        .with_context(|| format!("writing {}", out.display()))?;
+    print_report(&report);
+    println!("\nreport: {}", out.display());
+    Ok(report)
+}
+
+/// Builds the scenario binary and returns its path.
+fn build(root: &Path, target: &Path, profile: &str) -> Result<PathBuf> {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    println!("building oxikube --features perf-scenarios --profile {profile} ...");
+    let status = Command::new(cargo)
+        .current_dir(root)
+        .args([
+            "build",
+            "-p",
+            "oxikube",
+            "--features",
+            "perf-scenarios",
+            "--profile",
+            profile,
+        ])
+        .status()
+        .context("running cargo build")?;
+    if !status.success() {
+        bail!("cargo build failed ({status})");
+    }
+    let dir = if profile == "dev" { "debug" } else { profile };
+    let bin = target
+        .join(dir)
+        .join(format!("oxikube{}", std::env::consts::EXE_SUFFIX));
+    if !bin.exists() {
+        bail!("built binary not found at {}", bin.display());
+    }
+    Ok(bin)
+}
+
+/// Warm-up plus `samples` measured runs of one scenario.
+fn run_scenario(bin: &Path, scenario: &str, samples: usize, dir: &Path) -> Result<ScenarioResult> {
+    print!("{scenario}: warm-up");
+    let warm = run_sample(bin, scenario, &dir.join(format!("{scenario}-warmup.json")))?;
+    if warm.status == "not_available" {
+        println!(" -> not available");
+        return Ok(ScenarioResult {
+            status: Status::NotAvailable,
+            reason: warm.reason,
+            enabled_by: warm.enabled_by,
+            samples: 0,
+            metrics: BTreeMap::new(),
+            counters: warm.counters,
+        });
+    }
+    let mut measured = Vec::with_capacity(samples);
+    for i in 0..samples {
+        print!(" {}", i + 1);
+        measured.push(run_sample(
+            bin,
+            scenario,
+            &dir.join(format!("{scenario}-{i}.json")),
+        )?);
+    }
+    println!();
+    Ok(aggregate(&measured))
+}
+
+/// One fresh `oxikube --perf-scenario` process.
+fn run_sample(bin: &Path, scenario: &str, report: &Path) -> Result<Sample> {
+    use std::io::Write as _;
+    let _ = std::io::stdout().flush();
+    let _ = std::fs::remove_file(report);
+    let spawned = Instant::now();
+    let mut child = Command::new(bin)
+        .args(["--perf-scenario", scenario, "--perf-report"])
+        .arg(report)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .with_context(|| format!("spawning {}", bin.display()))?;
+    let mut launch_to_first_frame = None;
+    if let Some(stdout) = child.stdout.take() {
+        for line in BufReader::new(stdout).lines() {
+            let line = line?;
+            if launch_to_first_frame.is_none() && line.trim() == FIRST_FRAME_MARKER {
+                launch_to_first_frame = Some(spawned.elapsed());
+            }
+        }
+    }
+    let status = child.wait()?;
+    if !status.success() {
+        bail!("`oxikube --perf-scenario {scenario}` exited with {status}");
+    }
+    let text = std::fs::read_to_string(report)
+        .with_context(|| format!("reading sample {}", report.display()))?;
+    let mut sample: Sample =
+        serde_json::from_str(&text).with_context(|| format!("parsing {}", report.display()))?;
+    if sample.schema != SAMPLE_SCHEMA {
+        bail!(
+            "sample schema {} from oxikube, xtask understands {SAMPLE_SCHEMA}; update both together",
+            sample.schema
+        );
+    }
+    if let Some(elapsed) = launch_to_first_frame {
+        let ms = (elapsed.as_secs_f64() * 1_000_000.0).round() / 1000.0;
+        sample.metrics.insert(
+            LAUNCH_METRIC.into(),
+            SampleStats {
+                count: 1,
+                p50: ms,
+                p95: ms,
+                p99: ms,
+                max: ms,
+            },
+        );
+    }
+    Ok(sample)
+}
+
+fn print_report(report: &Report) {
+    println!(
+        "\n{} {} ({}), median of {} samples per scenario. {}",
+        report.os, report.arch, report.profile, report.samples_per_scenario, report.note
+    );
+    println!(
+        "{:<12} {:<26} {:>10} {:>10} {:>10} {:>10}",
+        "scenario", "metric (ms)", "p50", "p95", "p99", "max"
+    );
+    for (name, result) in &report.scenarios {
+        match result.status {
+            Status::NotAvailable => println!(
+                "{name:<12} SKIPPED: not available yet ({}); enabled by {}",
+                result.reason.as_deref().unwrap_or("-"),
+                result.enabled_by.join(", ")
+            ),
+            Status::Ok => {
+                for (metric, p) in &result.metrics {
+                    println!(
+                        "{name:<12} {metric:<26} {:>10.3} {:>10.3} {:>10.3} {:>10}",
+                        p.p50,
+                        p.p95,
+                        p.p99,
+                        p.max.map(|m| format!("{m:.3}")).unwrap_or_default()
+                    );
+                }
+                let c = result.counters;
+                println!(
+                    "{name:<12} counters: {} frames, {} dropped, {} feed deltas, {} notifies",
+                    c.frames, c.dropped_frames, c.feed_deltas, c.notifies
+                );
+            }
+        }
+    }
+}
+
+fn default_source() -> String {
+    match (
+        std::env::var("GITHUB_ACTIONS").ok(),
+        std::env::var("RUNNER_OS").ok(),
+        std::env::var("GITHUB_RUN_ID").ok(),
+    ) {
+        (Some(_), Some(runner), Some(run)) => format!("github-actions {runner} run {run}"),
+        _ => format!("local {}/{}", std::env::consts::OS, std::env::consts::ARCH),
+    }
+}
+
+fn today() -> String {
+    jiff::Timestamp::now().strftime("%Y-%m-%d").to_string()
+}

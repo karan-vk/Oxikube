@@ -9,9 +9,12 @@
 //!
 //! - `integration`: tests that need a live kind cluster.
 //! - `screenshot`: PNG save and golden-image comparison (module `screenshot`); pure image code.
-//! - `gpui-screenshot`: headless GPUI rendering to an image (module `headless`); implies `screenshot`.
+//! - `gpui-headless`: a headless GPUI app context with the real text system (module `headless`);
+//!   minimal scaffolding for the perf scenarios until E05-S11's `TestApp` lands.
+//! - `gpui-screenshot`: headless GPUI rendering to an image (`headless::capture_view`); implies
+//!   `screenshot` and `gpui-headless`.
 
-#[cfg(feature = "gpui-screenshot")]
+#[cfg(feature = "gpui-headless")]
 pub mod headless;
 /// kind-backed integration test helpers (`OXIKUBE_TEST_CONTEXT`, `oxi-test-<rand>` namespaces).
 #[cfg(feature = "integration")]

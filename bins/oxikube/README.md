@@ -11,6 +11,13 @@ Today it opens a placeholder window that proves the GPUI stack (`gpui-pre` + `gp
 builds and renders. E05 replaces this with the real shell, and E05-S13 holds it to the 400 ms
 startup budget (`docs/PERFORMANCE.md`).
 
+## Flags
+
+`oxikube --help` lists them. `--perf` (with `--perf-duration`, `--perf-dir`) records frame times,
+feed throughput and notify counts to `<data dir>/oxikube/perf/*.jsonl` and prints p50/p95/p99 on
+exit. `--perf-scenario <name>` (feature `perf-scenarios`, never in default or release builds) runs
+one headless perf sample; `cargo xtask perf` drives it. See docs/PERFORMANCE.md ("Perf harness").
+
 ## Allowed internal dependencies
 
 - everything (domain, ports, app, adapters, platform, ui, testing)

@@ -25,9 +25,13 @@ tempfile.workspace = true
 default = []
 # PNG save + golden-image comparison (pure image code, no window, no gpui).
 screenshot = ["dep:image", "dep:anyhow"]
-# Headless GPUI rendering to an RgbaImage (`capture_view`); needs a GPU/Vulkan/Metal device.
-# Forwards `test-support` to gpui + gpui_platform, which gate `Window::render_to_image`.
-gpui-screenshot = ["screenshot", "dep:gpui", "dep:gpui_platform", "gpui/test-support", "gpui_platform/test-support"]
+# Headless GPUI app context with the host's real text system and headless renderer
+# (`headless::headless_context`); used by the perf scenarios (`oxikube --perf-scenario`).
+# Forwards `test-support` to gpui + gpui_platform, which gate `HeadlessAppContext`.
+gpui-headless = ["dep:gpui", "dep:gpui_platform", "gpui/test-support", "gpui_platform/test-support"]
+# Headless GPUI rendering to an RgbaImage (`capture_view`); needs a GPU/Vulkan/Metal device
+# (`Window::render_to_image`).
+gpui-screenshot = ["screenshot", "gpui-headless"]
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
 integration = ["dep:uuid"]
 
