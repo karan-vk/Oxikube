@@ -201,6 +201,19 @@ impl Default for ContextScope {
 /// Implemented per feature (`oxikube_app` for resource, logs and events
 /// providers; integrations for their own) and registered in
 /// `oxikube_app::ContextRegistry`.
+///
+/// # Effects
+///
+/// Read-only. A provider never mutates the cluster or any store.
+///
+/// # Errors
+///
+/// [`resolve`](Self::resolve) returns [`NotFound`](oxikube_domain::ErrorKind::NotFound)
+/// for a missing target, [`Validation`](oxikube_domain::ErrorKind::Validation) for a
+/// malformed mention path, and [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when
+/// RBAC denies the underlying read. Connection failures surface as
+/// [`Network`](oxikube_domain::ErrorKind::Network) or
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable).
 #[async_trait]
 pub trait ContextProviderPort: Send + Sync {
     /// The prefix this provider owns, for example `"pod"` or `"logs"`. Must

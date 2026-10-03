@@ -795,6 +795,22 @@ fn unsupported(method: &str) -> OxiError {
 /// Implementations must never persist or log file contents, terminal output or
 /// form answers (non-negotiable 5), and must run anything that touches the
 /// cluster through `MutationGuard` with `Initiator::Agent`.
+///
+/// # Effects
+///
+/// Callbacks that write files, run terminals or touch the cluster are
+/// mutations: the implementation routes them through `MutationGuard` (read-only
+/// mode, confirmation tier, dry-run, audit). `request_permission` and the read
+/// callbacks have no side effects beyond prompting the user.
+///
+/// # Errors
+///
+/// A callback the client does not implement returns
+/// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) (the default). A path or
+/// argument outside what the user allowed is
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) or
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden); a user decline is reported
+/// through the callback's outcome type, not as an error.
 #[async_trait]
 pub trait AgentClient: Send + Sync {
     /// Which optional callbacks this client implements. Defaults to none.
