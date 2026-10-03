@@ -22,7 +22,8 @@ tokio.workspace = true
 [features]
 default = []
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
-integration = []
+# Forwards to the testkit helpers (a dev-dependency) that the integration tests import.
+integration = ["oxikube_testkit/integration"]
 
 [lints]
 workspace = true
