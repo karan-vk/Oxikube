@@ -1,0 +1,1 @@
+{"exit_code":1,"stderr":"error: credentials service unavailable\nrequest failed: Authorization: Bearer FAKE.LEAK.TOKEN-0123456789\n"}

@@ -1,0 +1,1 @@
+{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Deployment.apps \"web\" is invalid: spec.replicas: Invalid value: -1: must be greater than or equal to 0","reason":"Invalid","details":{"name":"web","group":"apps","kind":"Deployment"},"code":422}

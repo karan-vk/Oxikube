@@ -1,0 +1,1 @@
+{"exit_code":1,"stderr":"Post https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000/oauth2/v2.0/token: dial tcp 192.0.2.1:443: i/o timeout\n"}
