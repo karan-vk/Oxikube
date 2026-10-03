@@ -5400,6 +5400,10 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_domain"
 version = "0.0.1"
+dependencies = [
+ "proptest",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "oxikube_editor"
