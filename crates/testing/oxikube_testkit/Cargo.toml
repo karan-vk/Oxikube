@@ -13,9 +13,21 @@ doctest = false
 
 [dependencies]
 uuid = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+gpui = { workspace = true, optional = true }
+gpui_platform = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [features]
 default = []
+# PNG save + golden-image comparison (pure image code, no window, no gpui).
+screenshot = ["dep:image", "dep:anyhow"]
+# Headless GPUI rendering to an RgbaImage (`capture_view`); needs a GPU/Vulkan/Metal device.
+# Forwards `test-support` to gpui + gpui_platform, which gate `Window::render_to_image`.
+gpui-screenshot = ["screenshot", "dep:gpui", "dep:gpui_platform", "gpui/test-support", "gpui_platform/test-support"]
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
 integration = ["dep:uuid"]
 

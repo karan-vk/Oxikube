@@ -19,10 +19,22 @@ gpui_platform.workspace = true
 # Declared now so the full GPUI stack resolves and builds from day one;
 # feature crates will wire these through oxikube_ui (E05).
 gpui-component.workspace = true
+# Screenshot support (feature `screenshot`): headless render + PNG helpers.
+oxikube_testkit = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [features]
 default = []
-screenshot = []
+# `OXIKUBE_SCREENSHOT=out.png cargo run -p oxikube --features screenshot` renders the main view
+# headlessly via `Window::render_to_image` and exits. Never part of default or release builds.
+screenshot = [
+    "dep:oxikube_testkit",
+    "oxikube_testkit/gpui-screenshot",
+    "gpui/test-support",
+    "gpui_platform/test-support",
+]
 
 [lints]
 workspace = true

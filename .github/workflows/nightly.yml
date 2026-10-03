@@ -1,6 +1,6 @@
 name: nightly
 
-# Full matrix, release builds, docs and screenshots (E01-S11/S13 complete this).
+# Full matrix, release builds, docs and screenshots (E01-S13 completes this).
 on:
   schedule:
     - cron: "17 3 * * *"
@@ -28,10 +28,24 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libasound2-dev libfontconfig-dev libfreetype-dev libglib2.0-dev libssl-dev \
             libvulkan1 libvulkan-dev libwayland-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev \
-            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config xvfb
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config xvfb mesa-vulkan-drivers
       - run: cargo test --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
       - run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: "-D warnings"
-      - name: Screenshot (placeholder until E01-S11)
-        run: echo "screenshot harness lands in E01-S11"
+      - name: Screenshot tests (render_to_image)
+        # Headless render needs a GPU device: Metal on macOS runners, Mesa lavapipe (software
+        # Vulkan, from mesa-vulkan-drivers) on Linux. xvfb gives Linux a display for windowing init.
+        run: |
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube --features screenshot ${{ matrix.profile == 'release' && '--release' || '' }}
+          cargo test -p oxikube_testkit --features screenshot
+      - name: Capture screenshot
+        env:
+          OXIKUBE_SCREENSHOT: ${{ github.workspace }}/screenshots/oxikube-${{ runner.os }}-${{ matrix.profile }}.png
+        run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo run -p oxikube --features screenshot ${{ matrix.profile == 'release' && '--release' || '' }}
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-${{ runner.os }}-${{ matrix.profile }}
+          path: screenshots/*.png
+          if-no-files-found: error
