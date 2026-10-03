@@ -6,8 +6,7 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod error;
-
-pub use error::{ErrorKind, OxiError, OxiResult};
-
 pub mod ids;
 pub mod kinds;
+
+pub use error::{ErrorKind, OxiError, OxiResult};
