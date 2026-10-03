@@ -8,8 +8,8 @@
 //! # Features
 //!
 //! - `integration`: tests that need a live kind cluster.
-//! - `screenshot`: PNG save and golden-image comparison ([`screenshot`]); pure image code.
-//! - `gpui-screenshot`: headless GPUI rendering to an image ([`headless`]); implies `screenshot`.
+//! - `screenshot`: PNG save and golden-image comparison (module `screenshot`); pure image code.
+//! - `gpui-screenshot`: headless GPUI rendering to an image (module `headless`); implies `screenshot`.
 
 /// kind-backed integration test helpers (`OXIKUBE_TEST_CONTEXT`, `oxi-test-<rand>` namespaces).
 #[cfg(feature = "integration")]
