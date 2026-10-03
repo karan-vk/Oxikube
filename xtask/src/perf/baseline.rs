@@ -1,6 +1,6 @@
 //! `docs/perf/baseline.json`: per-OS, per-scenario p50/p95/p99, and the regression check.
 
-use super::report::{Percentiles, Report, Status};
+use super::report::{Percentiles, Report, Status, metric_unit};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -87,6 +87,24 @@ impl Baseline {
     }
 }
 
+/// Absolute slowdown (or growth) a metric must also exceed to fail, per unit: milliseconds for
+/// `*_ms` metrics, MiB for `*_mib` metrics.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NoiseFloors {
+    pub ms: f64,
+    pub mib: f64,
+}
+
+impl NoiseFloors {
+    /// The floor that applies to `metric`.
+    pub fn for_metric(&self, metric: &str) -> f64 {
+        match metric_unit(metric) {
+            "MiB" => self.mib,
+            _ => self.ms,
+        }
+    }
+}
+
 /// Outcome of one comparison row.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
@@ -153,9 +171,10 @@ impl fmt::Display for Row {
         };
         match (&self.outcome, self.baseline, self.current) {
             (Outcome::Pass | Outcome::WithinNoiseFloor | Outcome::Regressed, Some(b), Some(c)) => {
+                let unit = metric_unit(&self.metric);
                 write!(
                     f,
-                    "{label:<8} {:<12} {:<26} {:<4} base {b:>10.3} ms  now {c:>10.3} ms  {:>+7.1} %",
+                    "{label:<8} {:<12} {:<26} {:<4} base {b:>10.3} {unit:<3}  now {c:>10.3} {unit:<3}  {:>+7.1} %",
                     self.scenario,
                     self.metric,
                     self.stat,
@@ -192,16 +211,18 @@ impl Comparison {
     }
 }
 
-/// Whether `current` regressed against `base`: more than `tolerance` (0.20 = +20 %) slower AND
-/// more than `noise_floor_ms` slower in absolute terms (sub-floor jitter on microsecond-scale
-/// metrics is noise, not a regression).
-pub fn regressed(base: f64, current: f64, tolerance: f64, noise_floor_ms: f64) -> bool {
-    current > base * (1.0 + tolerance) && current - base > noise_floor_ms
+/// Whether `current` regressed against `base`: more than `tolerance` (0.20 = +20 %) higher AND
+/// more than `noise_floor` higher in absolute terms, in the metric's unit (sub-floor jitter, such
+/// as microseconds on an idle redraw or a few pages of allocator slack in RSS, is noise, not a
+/// regression).
+pub fn regressed(base: f64, current: f64, tolerance: f64, noise_floor: f64) -> bool {
+    current > base * (1.0 + tolerance) && current - base > noise_floor
 }
 
 /// Compares every scenario in `report` with the baseline for `report.os`.
 ///
-/// - measured scenario/metric/stat: PASS or FAIL (see [`regressed`]);
+/// - measured scenario/metric/stat: PASS or FAIL (see [`regressed`]; the absolute floor is the
+///   one for the metric's unit, see [`NoiseFloors`]);
 /// - no baseline for this OS, scenario or metric: MISSING (not fatal; seed with
 ///   `--update-baseline`);
 /// - baseline has a scenario or metric the run did not measure: FAIL;
@@ -212,7 +233,7 @@ pub fn compare(
     report: &Report,
     baseline: &Baseline,
     tolerance: f64,
-    noise_floor_ms: f64,
+    floors: NoiseFloors,
 ) -> Comparison {
     let mut rows = Vec::new();
     let os = baseline.os.get(&report.os);
@@ -276,7 +297,7 @@ pub fn compare(
                             stat: stat.into(),
                             baseline: Some(bv),
                             current: Some(cv),
-                            outcome: if regressed(bv, cv, tolerance, noise_floor_ms) {
+                            outcome: if regressed(bv, cv, tolerance, floors.for_metric(metric)) {
                                 Outcome::Regressed
                             } else if regressed(bv, cv, tolerance, 0.0) {
                                 Outcome::WithinNoiseFloor
@@ -308,6 +329,10 @@ mod tests {
 
     const TOL: f64 = 0.20;
     const FLOOR: f64 = 0.25;
+    const FLOORS: NoiseFloors = NoiseFloors {
+        ms: FLOOR,
+        mib: 8.0,
+    };
 
     fn pct(v: f64) -> Percentiles {
         Percentiles {
@@ -382,7 +407,7 @@ mod tests {
             &report(&[("startup", Some(119.0))]),
             &baseline(&[("startup", 100.0)]),
             TOL,
-            FLOOR,
+            FLOORS,
         );
         assert!(!c.failed(), "{:#?}", c.rows);
         assert_eq!(c.rows.len(), 3, "p50, p95, p99");
@@ -396,7 +421,7 @@ mod tests {
             &report(&[("startup", Some(121.0))]),
             &baseline(&[("startup", 100.0)]),
             TOL,
-            FLOOR,
+            FLOORS,
         );
         assert!(c.failed());
         assert!(c.rows.iter().all(|r| r.outcome == Outcome::Regressed));
@@ -415,7 +440,7 @@ mod tests {
             &report(&[("startup", Some(0.10))]),
             &baseline(&[("startup", 0.05)]),
             TOL,
-            FLOOR,
+            FLOORS,
         );
         assert!(!c.failed());
         assert!(
@@ -439,13 +464,108 @@ mod tests {
         assert!(regressed(0.05, 0.0606, TOL, 0.0));
     }
 
+    fn memory_report(rss: f64) -> Report {
+        let mut r = report(&[("startup", Some(10.0))]);
+        r.scenarios
+            .get_mut("startup")
+            .unwrap()
+            .metrics
+            .insert("rss_mib".into(), pct(rss));
+        r
+    }
+
+    fn memory_baseline(rss: f64) -> Baseline {
+        let mut b = baseline(&[("startup", 10.0)]);
+        b.os.get_mut("linux")
+            .unwrap()
+            .scenarios
+            .get_mut("startup")
+            .unwrap()
+            .insert("rss_mib".into(), pct(rss));
+        b
+    }
+
+    fn memory_rows(c: &Comparison) -> Vec<&Row> {
+        c.rows.iter().filter(|r| r.metric == "rss_mib").collect()
+    }
+
+    /// 100 MiB baseline: +20 % is 20 MiB, far over the 8 MiB floor, so +21 % fails (the 0.25 ms
+    /// floor would have made every memory change "regress" and +7 MiB of jitter on a small number
+    /// fail).
+    #[test]
+    fn memory_metric_is_gated_by_percent_and_the_mib_floor() {
+        let c = compare(&memory_report(121.0), &memory_baseline(100.0), TOL, FLOORS);
+        assert!(c.failed());
+        let row = memory_rows(&c)[0].to_string();
+        assert!(
+            row.starts_with("FAIL") && row.contains("100.000 MiB") && row.contains("121.000 MiB"),
+            "{row}"
+        );
+
+        let c = compare(&memory_report(119.0), &memory_baseline(100.0), TOL, FLOORS);
+        assert!(!c.failed(), "{:#?}", c.rows);
+    }
+
+    #[test]
+    fn memory_growth_under_the_mib_floor_is_noise_even_when_relatively_large() {
+        // 20 -> 27 MiB is +35 % but only 7 MiB.
+        let c = compare(&memory_report(27.0), &memory_baseline(20.0), TOL, FLOORS);
+        assert!(!c.failed());
+        assert!(
+            memory_rows(&c)
+                .iter()
+                .all(|r| r.outcome == Outcome::WithinNoiseFloor)
+        );
+        // 20 -> 29 MiB crosses it.
+        assert!(compare(&memory_report(29.0), &memory_baseline(20.0), TOL, FLOORS).failed());
+    }
+
+    #[test]
+    fn floors_apply_per_unit() {
+        assert_eq!(FLOORS.for_metric("rss_mib"), 8.0);
+        assert_eq!(FLOORS.for_metric("peak_rss_mib"), 8.0);
+        assert_eq!(FLOORS.for_metric("frame_ms"), 0.25);
+        // A 5 MiB jump passes; a 0.5 ms jump on a ms metric does not use the MiB floor.
+        assert!(!regressed(20.0, 25.0, TOL, FLOORS.for_metric("rss_mib")));
+        assert!(regressed(
+            1.0,
+            1.5,
+            TOL,
+            FLOORS.for_metric("first_frame_ms")
+        ));
+    }
+
+    #[test]
+    fn baselined_memory_the_run_did_not_measure_fails_and_unbaselined_is_missing() {
+        // Baseline has rss_mib, run does not (reader lost): FAIL.
+        let c = compare(
+            &report(&[("startup", Some(10.0))]),
+            &memory_baseline(100.0),
+            TOL,
+            FLOORS,
+        );
+        assert!(c.failed());
+        // Run has rss_mib, baseline does not yet (before the nightly seeds it): reported, not fatal.
+        let c = compare(
+            &memory_report(100.0),
+            &baseline(&[("startup", 10.0)]),
+            TOL,
+            FLOORS,
+        );
+        assert!(!c.failed());
+        assert!(matches!(
+            memory_rows(&c)[0].outcome,
+            Outcome::MissingBaseline(_)
+        ));
+    }
+
     #[test]
     fn scenario_missing_from_baseline_is_reported_not_fatal() {
         let c = compare(
             &report(&[("startup", Some(10.0)), ("scroll-10k", Some(5.0))]),
             &baseline(&[("startup", 10.0)]),
             TOL,
-            FLOOR,
+            FLOORS,
         );
         assert!(!c.failed());
         let row = c.rows.iter().find(|r| r.scenario == "scroll-10k").unwrap();
@@ -463,7 +583,7 @@ mod tests {
     fn os_missing_from_baseline_says_how_to_seed() {
         let mut b = baseline(&[("startup", 10.0)]);
         b.os.clear();
-        let c = compare(&report(&[("startup", Some(10.0))]), &b, TOL, FLOOR);
+        let c = compare(&report(&[("startup", Some(10.0))]), &b, TOL, FLOORS);
         assert!(!c.failed());
         let Outcome::MissingBaseline(msg) = &c.rows[0].outcome else {
             panic!()
@@ -477,7 +597,7 @@ mod tests {
             &report(&[("palette", None)]),
             &baseline(&[("palette", 3.0)]),
             TOL,
-            FLOOR,
+            FLOORS,
         );
         assert!(c.failed());
         let Outcome::MissingInRun(msg) = &c.rows[0].outcome else {
@@ -488,7 +608,7 @@ mod tests {
 
     #[test]
     fn unavailable_scenario_without_baseline_is_skipped() {
-        let c = compare(&report(&[("palette", None)]), &baseline(&[]), TOL, FLOOR);
+        let c = compare(&report(&[("palette", None)]), &baseline(&[]), TOL, FLOORS);
         assert!(!c.failed());
         let row = &c.rows[0];
         assert!(matches!(row.outcome, Outcome::Skipped(_)));
@@ -501,7 +621,7 @@ mod tests {
             &report(&[("startup", Some(10.0))]),
             &baseline(&[("startup", 10.0), ("palette", 3.0)]),
             TOL,
-            FLOOR,
+            FLOORS,
         );
         assert!(!c.failed());
         assert!(c.rows.iter().all(|r| r.scenario == "startup"));

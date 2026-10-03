@@ -16,36 +16,44 @@ pub fn percentile_sorted(sorted: &[u64], q: f64) -> Option<u64> {
     Some(sorted[rank.clamp(1, sorted.len()) - 1])
 }
 
-/// Distribution summary in milliseconds (three decimals).
+/// Distribution summary (three decimals) in the unit of the metric it belongs to: milliseconds
+/// for `*_ms` metrics, MiB for `*_mib` metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Summary {
     /// Number of observations.
     pub count: u64,
-    /// Median, ms.
+    /// Median.
     pub p50: f64,
-    /// 95th percentile, ms.
+    /// 95th percentile.
     pub p95: f64,
-    /// 99th percentile, ms.
+    /// 99th percentile.
     pub p99: f64,
-    /// Largest observation, ms.
+    /// Largest observation.
     pub max: f64,
 }
 
 impl Summary {
     /// Summarises nanosecond samples (sorts `samples` in place). `None` when empty.
     pub fn from_nanos(samples: &mut [u64]) -> Option<Self> {
+        Self::from_scaled(samples, 1_000_000.0)
+    }
+
+    /// Summarises raw integer samples divided by `unit` (`1e6` ns per ms, `1_048_576` bytes per
+    /// MiB), sorting `samples` in place. `None` when empty.
+    pub fn from_scaled(samples: &mut [u64], unit: f64) -> Option<Self> {
         samples.sort_unstable();
-        let ms = |q| percentile_sorted(samples, q).map(nanos_to_ms);
+        let scaled = |raw: u64| round_ms(raw as f64 / unit);
+        let at = |q| percentile_sorted(samples, q).map(scaled);
         Some(Self {
             count: samples.len() as u64,
-            p50: ms(50.0)?,
-            p95: ms(95.0)?,
-            p99: ms(99.0)?,
-            max: nanos_to_ms(*samples.last()?),
+            p50: at(50.0)?,
+            p95: at(95.0)?,
+            p99: at(99.0)?,
+            max: scaled(*samples.last()?),
         })
     }
 
-    /// A summary of one observation (all percentiles equal it).
+    /// A summary of one observation (all percentiles equal it), rounded to three decimals.
     pub fn single(ms: f64) -> Self {
         let ms = round_ms(ms);
         Self {
@@ -111,6 +119,15 @@ mod tests {
         assert_eq!(s.p95, 40.0);
         assert_eq!(s.p99, 40.0);
         assert_eq!(s.max, 40.0);
+    }
+
+    #[test]
+    fn scaled_summary_for_bytes() {
+        let mib = 1_048_576;
+        let mut bytes: Vec<u64> = [100, 102, 101, 150].iter().map(|m| m * mib).collect();
+        let s = Summary::from_scaled(&mut bytes, mib as f64).unwrap();
+        assert_eq!((s.count, s.p50, s.p95, s.max), (4, 101.0, 150.0, 150.0));
+        assert_eq!(Summary::from_scaled(&mut [], 1.0), None);
     }
 
     #[test]

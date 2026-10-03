@@ -5,12 +5,16 @@
 //! `~/Library/Application Support/oxikube/perf` on macOS). One JSON object per line:
 //!
 //! - `{"kind":"start", "schema", "app_version", "os", "arch", "pid", "started_unix_ms", "flush_interval_ms", "measures"}`
-//! - `{"kind":"tick", "t_ms", "interval_ms", "frames_us":[..], "dropped_frames", "feed_deltas", "feed_deltas_per_s", "notifies", "notifies_per_s"}`
+//! - `{"kind":"tick", "t_ms", "interval_ms", "frames_us":[..], "dropped_frames", "feed_deltas", "feed_deltas_per_s", "notifies", "notifies_per_s", "rss_mib", "peak_rss_mib"}`
 //!   every flush interval (one per second by default), `frames_us` holding every frame drawn in it;
+//!   `rss_mib` / `peak_rss_mib` are the process's resident memory (MiB) read on the flush thread
+//!   when the tick is written (`null` where the OS has no reader, see [`memory`]);
 //! - `{"kind":"summary", ...SessionSummary}` once, from [`PerfSession::finish`].
 //!
-//! The UI thread never touches the file: it only records into the lock-free [`Recorder`].
+//! The UI thread never touches the file or reads memory: it only records into the lock-free
+//! [`Recorder`].
 
+use super::memory::{self, MemoryReading, bytes_to_mib};
 use super::recorder::{Recorder, Tick};
 use super::stats::{Summary, round_ms};
 use serde::Serialize;
@@ -58,6 +62,10 @@ pub struct SessionSummary {
     pub notifies: u64,
     /// Notify rate over the session.
     pub notifies_per_s: f64,
+    /// Resident memory over the per-tick readings, MiB; `None` when the OS has no reader.
+    pub rss_mib: Option<Summary>,
+    /// Peak resident memory of the process (OS high-water mark), MiB.
+    pub peak_rss_mib: Option<f64>,
 }
 
 impl fmt::Display for SessionSummary {
@@ -79,7 +87,18 @@ impl fmt::Display for SessionSummary {
             self.feed_deltas_per_s,
             self.notifies,
             self.notifies_per_s
-        )
+        )?;
+        if let Some(rss) = &self.rss_mib {
+            write!(
+                f,
+                "; rss p50 {:.1} MiB, p95 {:.1} MiB, max {:.1} MiB",
+                rss.p50, rss.p95, rss.max
+            )?;
+        }
+        if let Some(peak) = self.peak_rss_mib {
+            write!(f, ", peak {peak:.1} MiB")?;
+        }
+        Ok(())
     }
 }
 
@@ -90,6 +109,8 @@ struct Accumulator {
     dropped: u64,
     feed: u64,
     notify: u64,
+    rss_bytes: Vec<u64>,
+    peak_rss_bytes: Option<u64>,
 }
 
 impl Accumulator {
@@ -98,6 +119,13 @@ impl Accumulator {
         self.dropped += tick.dropped_frames;
         self.feed += tick.feed_deltas;
         self.notify += tick.notifies;
+    }
+
+    fn add_memory(&mut self, reading: Option<MemoryReading>) {
+        let Some(reading) = reading else { return };
+        self.rss_bytes.push(reading.rss_bytes);
+        let peak = reading.peak_rss_bytes.unwrap_or(reading.rss_bytes);
+        self.peak_rss_bytes = Some(self.peak_rss_bytes.map_or(peak, |p| p.max(peak)));
     }
 
     fn summary(&mut self, elapsed: Duration) -> SessionSummary {
@@ -111,6 +139,8 @@ impl Accumulator {
             feed_deltas_per_s: per_second(self.feed, secs),
             notifies: self.notify,
             notifies_per_s: per_second(self.notify, secs),
+            rss_mib: Summary::from_scaled(&mut self.rss_bytes, memory::MIB),
+            peak_rss_mib: self.peak_rss_bytes.map(bytes_to_mib),
         }
     }
 }
@@ -137,7 +167,11 @@ fn start_line(app_version: &str, interval: Duration) -> serde_json::Value {
     })
 }
 
-fn tick_line(tick: &Tick, since_start: Duration) -> serde_json::Value {
+fn tick_line(
+    tick: &Tick,
+    since_start: Duration,
+    memory: Option<MemoryReading>,
+) -> serde_json::Value {
     let secs = tick.interval.as_secs_f64().max(f64::EPSILON);
     let frames_us: Vec<u64> = tick.frames_ns.iter().map(|ns| ns / 1000).collect();
     json!({
@@ -150,6 +184,8 @@ fn tick_line(tick: &Tick, since_start: Duration) -> serde_json::Value {
         "feed_deltas_per_s": per_second(tick.feed_deltas, secs),
         "notifies": tick.notifies,
         "notifies_per_s": per_second(tick.notifies, secs),
+        "rss_mib": memory.map(|m| bytes_to_mib(m.rss_bytes)),
+        "peak_rss_mib": memory.and_then(|m| m.peak_rss_bytes).map(bytes_to_mib),
     })
 }
 
@@ -212,7 +248,7 @@ impl PerfSession {
         let (stop, stopped) = mpsc::channel();
         let thread = std::thread::Builder::new()
             .name("oxikube-perf".into())
-            .spawn(move || flush_loop(&recorder, out, interval, &stopped))?;
+            .spawn(move || flush_loop(&recorder, out, interval, &stopped, memory::read))?;
         Ok(Self { path, stop, thread })
     }
 
@@ -245,6 +281,7 @@ fn flush_loop(
     mut out: impl Write,
     interval: Duration,
     stopped: &mpsc::Receiver<()>,
+    sample_memory: impl Fn() -> Option<MemoryReading>,
 ) -> (SessionSummary, Option<io::Error>) {
     let started = Instant::now();
     let mut reader = recorder.reader();
@@ -257,8 +294,11 @@ fn flush_loop(
         );
         let tick = reader.drain(recorder);
         acc.add(&tick);
+        // Read on this thread, once per tick: a syscall or a /proc read has no place in a frame.
+        let memory = sample_memory();
+        acc.add_memory(memory);
         if error.is_none() {
-            error = write_line(&mut out, &tick_line(&tick, started.elapsed())).err();
+            error = write_line(&mut out, &tick_line(&tick, started.elapsed(), memory)).err();
         }
         if stop {
             break;
@@ -291,7 +331,11 @@ mod tests {
             notifies: 60,
             interval: Duration::from_millis(500),
         };
-        let line = tick_line(&tick, Duration::from_millis(1500));
+        let memory = MemoryReading {
+            rss_bytes: 120 * 1024 * 1024,
+            peak_rss_bytes: Some(130 * 1024 * 1024 + 524_288),
+        };
+        let line = tick_line(&tick, Duration::from_millis(1500), Some(memory));
         assert_eq!(
             keys(&line),
             [
@@ -303,9 +347,15 @@ mod tests {
                 "kind",
                 "notifies",
                 "notifies_per_s",
+                "peak_rss_mib",
+                "rss_mib",
                 "t_ms"
             ]
         );
+        assert_eq!(line["rss_mib"], json!(120.0));
+        assert_eq!(line["peak_rss_mib"], json!(130.5));
+        let none = tick_line(&tick, Duration::ZERO, None);
+        assert!(none["rss_mib"].is_null() && none["peak_rss_mib"].is_null());
         assert_eq!(line["frames_us"], json!([1000, 2500]));
         assert_eq!(line["feed_deltas_per_s"], json!(1000.0));
         assert_eq!(line["notifies_per_s"], json!(120.0));
@@ -347,6 +397,11 @@ mod tests {
         assert_eq!(lines[0]["schema"], json!(JSONL_SCHEMA));
         assert_eq!(lines[1]["frames_us"], json!([2000, 4000, 6000, 8000]));
         assert_eq!(lines[2]["frame_count"], json!(4));
+        // Real reader: present on Linux and macOS, `null` elsewhere.
+        assert_eq!(
+            lines[1]["rss_mib"].is_f64(),
+            cfg!(any(target_os = "linux", target_os = "macos"))
+        );
         assert_eq!(lines[2]["frames"]["p95"], json!(8.0));
         assert!(
             path.file_name()
@@ -359,6 +414,94 @@ mod tests {
             s.to_string()
                 .contains("p50 4.000 ms, p95 8.000 ms, p99 8.000 ms")
         );
+    }
+
+    /// Memory is read on the thread running `flush_loop` (the `oxikube-perf` thread in a real
+    /// session), once per drain, and lands in the tick and in the summary.
+    #[test]
+    fn memory_is_sampled_on_the_flush_thread() {
+        use std::sync::Mutex;
+        const MIB: u64 = 1024 * 1024;
+        let sampled_on = Arc::new(Mutex::new(Vec::new()));
+        let seen = sampled_on.clone();
+        let recorder = Recorder::new();
+        let (tx, rx) = mpsc::channel();
+        tx.send(()).unwrap(); // already stopped: exactly one drain, one reading, then the summary
+        let thread = std::thread::Builder::new()
+            .name("oxikube-perf".into())
+            .spawn(move || {
+                let mut out = Vec::new();
+                flush_loop(&recorder, &mut out, Duration::from_secs(3600), &rx, || {
+                    seen.lock()
+                        .unwrap()
+                        .push(std::thread::current().name().map(str::to_owned));
+                    Some(MemoryReading {
+                        rss_bytes: 100 * MIB,
+                        peak_rss_bytes: Some(150 * MIB),
+                    })
+                });
+                out
+            })
+            .unwrap();
+        let out = thread.join().unwrap();
+        assert_eq!(
+            *sampled_on.lock().unwrap(),
+            [Some("oxikube-perf".to_owned())]
+        );
+        let lines: Vec<Value> = String::from_utf8(out)
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        assert_eq!(lines[0]["kind"], "tick");
+        assert_eq!(lines[0]["rss_mib"], json!(100.0));
+        assert_eq!(lines[0]["peak_rss_mib"], json!(150.0));
+        assert_eq!(lines[1]["kind"], "summary");
+        assert_eq!(lines[1]["rss_mib"]["count"], json!(1));
+        assert_eq!(lines[1]["peak_rss_mib"], json!(150.0));
+    }
+
+    /// An OS without a reader writes `null`, never a fake zero.
+    #[test]
+    fn missing_memory_reader_writes_null() {
+        let recorder = Recorder::new();
+        let (tx, rx) = mpsc::channel();
+        tx.send(()).unwrap();
+        let mut out = Vec::new();
+        let (summary, error) =
+            flush_loop(&recorder, &mut out, Duration::from_secs(1), &rx, || None);
+        assert!(error.is_none());
+        assert_eq!((summary.rss_mib, summary.peak_rss_mib), (None, None));
+        let text = String::from_utf8(out).unwrap();
+        let tick: Value = serde_json::from_str(text.lines().next().unwrap()).unwrap();
+        assert!(tick["rss_mib"].is_null() && tick["peak_rss_mib"].is_null());
+    }
+
+    #[test]
+    fn accumulator_memory_summary_and_display() {
+        const MIB: u64 = 1024 * 1024;
+        let mut acc = Accumulator::default();
+        for (rss, peak) in [(100, 120), (110, 120), (130, 140), (120, 140)] {
+            acc.add_memory(Some(MemoryReading {
+                rss_bytes: rss * MIB,
+                peak_rss_bytes: Some(peak * MIB),
+            }));
+        }
+        acc.add_memory(None);
+        let s = acc.summary(Duration::from_secs(4));
+        let rss = s.rss_mib.unwrap();
+        assert_eq!(
+            (rss.count, rss.p50, rss.p95, rss.max),
+            (4, 110.0, 130.0, 130.0)
+        );
+        assert_eq!(s.peak_rss_mib, Some(140.0));
+        assert!(
+            s.to_string()
+                .ends_with("; rss p50 110.0 MiB, p95 130.0 MiB, max 130.0 MiB, peak 140.0 MiB")
+        );
+        let v = summary_line(&s);
+        assert_eq!(v["rss_mib"]["p50"], json!(110.0));
+        assert_eq!(v["peak_rss_mib"], json!(140.0));
     }
 
     #[test]

@@ -15,9 +15,21 @@ pub const REPORT_SCHEMA: u32 = 1;
 /// What headless numbers are; written into every report.
 pub const HEADLESS_NOTE: &str = "Headless (GPUI test platform, real text system): CPU, layout and \
 paint-preparation time only, no present and no GPU time. Compare against a same-runner baseline, \
-not against the absolute frame budget.";
+not against the absolute frame budget. Memory (`*_mib`) is the headless process's resident set, in \
+MiB: no swap chain, GPU surfaces or windowing-system state, so lower than the windowed app's RSS; \
+compare it against the same-runner baseline too, never against the memory budget.";
 
-/// Distribution of one metric in one sample, ms.
+/// Unit of a metric, from its name suffix: `*_mib` is MiB of resident memory, everything else
+/// (`*_ms`) is milliseconds.
+pub fn metric_unit(metric: &str) -> &'static str {
+    if metric.ends_with("_mib") {
+        "MiB"
+    } else {
+        "ms"
+    }
+}
+
+/// Distribution of one metric in one sample, in the metric's unit (see [`metric_unit`]).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SampleStats {
     pub count: u64,
@@ -55,7 +67,7 @@ pub struct Sample {
     pub counters: Counters,
 }
 
-/// p50/p95/p99 (+max) of one metric after taking the median across samples, ms.
+/// p50/p95/p99 (+max) of one metric after taking the median across samples, in the metric's unit.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Percentiles {
     pub p50: f64,
@@ -204,6 +216,24 @@ mod tests {
         assert_eq!(s.status, "ok");
         assert!(s.metrics.contains_key("first_frame_ms"));
         assert!(s.metrics.contains_key("frame_ms"));
+    }
+
+    #[test]
+    fn units_follow_the_metric_name() {
+        assert_eq!(metric_unit("rss_mib"), "MiB");
+        assert_eq!(metric_unit("peak_rss_mib"), "MiB");
+        assert_eq!(metric_unit("first_frame_ms"), "ms");
+        assert_eq!(metric_unit("launch_to_first_frame_ms"), "ms");
+    }
+
+    #[test]
+    fn example_sample_carries_memory() {
+        let s: Sample = serde_json::from_str(include_str!(
+            "../../../docs/perf/scenario-sample.example.json"
+        ))
+        .unwrap();
+        assert_eq!(s.metrics["rss_mib"].count, 120);
+        assert_eq!(s.metrics["peak_rss_mib"].count, 1);
     }
 
     #[test]

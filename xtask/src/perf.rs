@@ -9,8 +9,9 @@
 //!    single noisy sample cannot fail the gate.
 //! 4. Writes the report (`--out`, default `<target>/perf/report-<os>.json`) and prints a table.
 //! 5. `--check`: compares with the baseline for this OS; fails when any p50/p95/p99 is more than
-//!    `--tolerance` (20 %) AND more than `--noise-floor-ms` (0.25 ms) slower. Missing baselines
-//!    are reported, not fatal; a baselined scenario that stops running is fatal.
+//!    `--tolerance` (20 %) AND more than the absolute noise floor slower: `--noise-floor-ms`
+//!    (0.25 ms) for `*_ms` metrics, `--noise-floor-mib` (8 MiB) for `*_mib` memory metrics.
+//!    Missing baselines are reported, not fatal; a baselined scenario that stops running is fatal.
 //! 6. `--update-baseline`: writes this run's numbers into the baseline for this OS.
 //!
 //! `--from-report <file>` skips 1-4 and applies `--check` / `--update-baseline` to a saved report
@@ -20,7 +21,7 @@ mod baseline;
 mod report;
 
 use anyhow::{Context, Result, bail};
-use baseline::{Baseline, compare};
+use baseline::{Baseline, NoiseFloors, compare};
 use report::{
     HEADLESS_NOTE, REPORT_SCHEMA, Report, SAMPLE_SCHEMA, Sample, SampleStats, ScenarioResult,
     Status, aggregate,
@@ -76,9 +77,14 @@ pub struct Args {
     /// Allowed slowdown before `--check` fails (0.20 = +20 %).
     #[arg(long, default_value_t = 0.20)]
     pub tolerance: f64,
-    /// Absolute slowdown (ms) a metric must also exceed to fail; absorbs jitter on sub-ms metrics.
+    /// Absolute slowdown (ms) a `*_ms` metric must also exceed to fail; absorbs jitter on sub-ms
+    /// metrics.
     #[arg(long, default_value_t = 0.25)]
     pub noise_floor_ms: f64,
+    /// Absolute growth (MiB) a `*_mib` memory metric must also exceed to fail; absorbs allocator
+    /// and loader jitter between runs (a few MiB), which +20 % of a small number would not.
+    #[arg(long, default_value_t = 8.0)]
+    pub noise_floor_mib: f64,
     /// Cargo profile for the scenario binary.
     #[arg(long, default_value = "release-fast")]
     pub profile: String,
@@ -141,13 +147,18 @@ pub fn run(args: &Args) -> Result<()> {
     }
     if args.check {
         let baseline = Baseline::load(&baseline_path)?;
-        let comparison = compare(&report, &baseline, args.tolerance, args.noise_floor_ms);
+        let floors = NoiseFloors {
+            ms: args.noise_floor_ms,
+            mib: args.noise_floor_mib,
+        };
+        let comparison = compare(&report, &baseline, args.tolerance, floors);
         println!(
-            "\ncheck against {} (os `{}`, fail above +{:.0} % and +{} ms):",
+            "\ncheck against {} (os `{}`, fail above +{:.0} % and +{} ms / +{} MiB):",
             baseline_path.display(),
             report.os,
             args.tolerance * 100.0,
-            args.noise_floor_ms
+            floors.ms,
+            floors.mib
         );
         for row in &comparison.rows {
             println!("  {row}");
@@ -328,7 +339,7 @@ fn print_report(report: &Report) {
     );
     println!(
         "{:<12} {:<26} {:>10} {:>10} {:>10} {:>10}",
-        "scenario", "metric (ms)", "p50", "p95", "p99", "max"
+        "scenario", "metric (unit)", "p50", "p95", "p99", "max"
     );
     for (name, result) in &report.scenarios {
         match result.status {
@@ -340,7 +351,8 @@ fn print_report(report: &Report) {
             Status::Ok => {
                 for (metric, p) in &result.metrics {
                     println!(
-                        "{name:<12} {metric:<26} {:>10.3} {:>10.3} {:>10.3} {:>10}",
+                        "{name:<12} {:<26} {:>10.3} {:>10.3} {:>10.3} {:>10}",
+                        format!("{metric} [{}]", report::metric_unit(metric)),
                         p.p50,
                         p.p95,
                         p.p99,

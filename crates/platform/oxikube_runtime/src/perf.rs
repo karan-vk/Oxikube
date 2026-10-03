@@ -35,6 +35,7 @@
 mod frame;
 #[cfg(any(test, feature = "perf-harness"))]
 pub mod harness;
+pub mod memory;
 mod recorder;
 mod report;
 mod ring;
