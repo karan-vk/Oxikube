@@ -429,7 +429,10 @@ pub enum ToolCallStatus {
 #[non_exhaustive]
 pub enum ToolCallContent {
     /// Ordinary content.
-    Content(ContentPart),
+    Content {
+        /// The content part.
+        content: ContentPart,
+    },
     /// A proposed or applied file change.
     Diff {
         /// The path (a virtual `oxikube://` path for cluster objects).
@@ -440,7 +443,10 @@ pub enum ToolCallContent {
         new_text: String,
     },
     /// A live terminal created through [`AgentClient::create_terminal`].
-    Terminal(TerminalId),
+    Terminal {
+        /// The terminal's id.
+        terminal_id: TerminalId,
+    },
 }
 
 /// A tool call as first announced.
@@ -881,7 +887,9 @@ mod tests {
 
         call.apply(&ToolCallPatch {
             title: Some("Scaled web".into()),
-            content: Some(vec![ToolCallContent::Content(ContentPart::text("ok"))]),
+            content: Some(vec![ToolCallContent::Content {
+                content: ContentPart::text("ok"),
+            }]),
             raw_output: Some(json!({"replicas": 3})),
             ..ToolCallPatch::new(ToolCallId::from("c1"))
         });
@@ -889,6 +897,46 @@ mod tests {
         assert_eq!(call.content.len(), 1);
         assert_eq!(call.raw_output, Some(json!({"replicas": 3})));
         assert_eq!(call.kind, ToolKind::Edit);
+    }
+
+    #[test]
+    fn tool_call_content_round_trips_every_variant() {
+        let variants = vec![
+            ToolCallContent::Content {
+                content: ContentPart::text("x"),
+            },
+            ToolCallContent::Diff {
+                path: PathBuf::from("oxikube://deploy/web"),
+                old_text: Some("a".into()),
+                new_text: "b".into(),
+            },
+            ToolCallContent::Terminal {
+                terminal_id: TerminalId::from("t1"),
+            },
+        ];
+        for variant in variants {
+            let v = serde_json::to_value(&variant).unwrap();
+            assert!(v["type"].is_string(), "{v}");
+            assert_eq!(
+                serde_json::from_value::<ToolCallContent>(v.clone()).unwrap(),
+                variant,
+                "{v}"
+            );
+        }
+        let v = serde_json::to_value(ToolCallContent::Content {
+            content: ContentPart::text("x"),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "content");
+        assert_eq!(v["content"]["type"], "text");
+
+        let mut call = ToolCallInfo::new(ToolCallId::from("c1"), "t", ToolKind::Edit);
+        call.content.push(ToolCallContent::Terminal {
+            terminal_id: TerminalId::from("t1"),
+        });
+        let update = SessionUpdate::ToolCall(call);
+        let v = serde_json::to_value(&update).unwrap();
+        assert_eq!(serde_json::from_value::<SessionUpdate>(v).unwrap(), update);
     }
 
     #[test]
