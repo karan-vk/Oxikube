@@ -61,6 +61,19 @@ impl fmt::Display for SecretKey {
 }
 
 /// Secure storage for secret strings, addressed by [`SecretKey`].
+///
+/// # Effects
+///
+/// Mutating on the OS keychain only ([`set`](Self::set), [`delete`](Self::delete)); never a
+/// cluster mutation. Values never reach logs or disk outside the keychain.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when the user denies keychain access,
+/// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) when no keychain service is
+/// available, [`Internal`](oxikube_domain::ErrorKind::Internal) for other platform failures. A
+/// missing secret is `Ok(None)` or `Ok(false)`.
 #[async_trait]
 pub trait SecretStorePort: Send + Sync {
     /// The secret stored under `key`, or `None` when there is none.

@@ -31,6 +31,21 @@ pub struct DescribeOutput {
 }
 
 /// Describes objects.
+///
+/// # Effects
+///
+/// Read-only.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) when the object does not exist,
+/// [`Auth`](oxikube_domain::ErrorKind::Auth) /
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when the user may not read it or its
+/// events, [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) when neither the native
+/// renderer nor the `kubectl` fallback can describe the kind,
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for connection failures.
 #[async_trait]
 pub trait DescribePort: Send + Sync {
     /// Describes `target`, including its events. Errors with `NotFound` when the

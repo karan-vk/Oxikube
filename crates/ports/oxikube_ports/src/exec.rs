@@ -152,6 +152,21 @@ impl std::fmt::Debug for ExecSession {
 /// Not a `MutationGuard` operation, but a privileged one: callers gate it on
 /// the session's exec capability. The byte streams may carry secrets; never
 /// log or persist them (non-negotiable 5).
+///
+/// # Effects
+///
+/// Privileged but not a `MutationGuard` operation (see above).
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for an unknown pod or container,
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when RBAC denies `pods/exec`,
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) for an empty command,
+/// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) when the cluster refuses the stream
+/// protocol, [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for connection failures. A
+/// command that runs and fails is an [`ExitStatus`], not an error.
 #[async_trait]
 pub trait ExecPort: Send + Sync {
     /// Runs `command` (argv, no shell) in a container of `pod`.

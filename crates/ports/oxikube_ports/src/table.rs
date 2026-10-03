@@ -137,6 +137,20 @@ pub type TableFeed = Pin<Box<dyn Stream<Item = OxiResult<TableBatch>> + Send>>;
 /// When the server ignores the Table `Accept` header (some aggregated APIs),
 /// the adapter falls back to plain JSON and still returns a [`Table`]; how it
 /// derives columns then is adapter behaviour (E04-S04).
+///
+/// # Effects
+///
+/// Read-only.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Auth`](oxikube_domain::ErrorKind::Auth) /
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) for rejected credentials,
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for an unknown kind,
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for connection failures. A feed
+/// that breaks after it opened ends with an `Err` item.
 #[async_trait]
 pub trait TableFeedPort: Send + Sync {
     /// Lists one page as a Table.

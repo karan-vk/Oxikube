@@ -47,6 +47,19 @@ pub struct PromqlSeries {
 }
 
 /// PromQL access for one cluster.
+///
+/// # Effects
+///
+/// Read-only.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) for a query Prometheus rejects,
+/// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) when no Prometheus is reachable (use
+/// [`is_available`](Self::is_available) to probe first),
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for connection failures.
 #[async_trait]
 pub trait PromqlPort: Send + Sync {
     /// Whether a Prometheus endpoint is reachable for `cluster`. `Ok(false)` is the

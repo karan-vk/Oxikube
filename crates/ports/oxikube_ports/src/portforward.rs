@@ -45,6 +45,19 @@ impl std::fmt::Debug for PortForwardConnection {
 ///
 /// Not a `MutationGuard` operation; callers gate it on the session's
 /// port-forward capability.
+///
+/// # Effects
+///
+/// Not a `MutationGuard` operation (see above).
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for an unknown pod,
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when RBAC denies `pods/portforward`,
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) for a port the pod does not expose,
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for connection failures.
 #[async_trait]
 pub trait PortForwardPort: Send + Sync {
     /// Opens a connection to `port` on `pod` in `namespace`.

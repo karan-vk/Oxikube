@@ -42,6 +42,20 @@ impl ServerVersion {
 }
 
 /// Discovers the kinds a cluster serves. Read-only.
+///
+/// # Effects
+///
+/// Read-only.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Auth`](oxikube_domain::ErrorKind::Auth) /
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) for rejected credentials,
+/// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) for an API server without discovery
+/// endpoints, [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for connection failures. A kind
+/// the server does not serve is `Ok(None)` from [`resolve`](Self::resolve), not an error.
 #[async_trait]
 pub trait DiscoveryPort: Send + Sync {
     /// Runs discovery and returns every served kind, one record per served

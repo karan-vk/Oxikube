@@ -2,7 +2,7 @@
 
 **Layer:** `domain`
 
-Core with no internal dependencies and no I/O: ids (ClusterId, ContextName, Gvk/Gvr, ResourceRef), the thin Resource model (metadata + raw JSON), typed view-models, NamespaceSelection, Command/Capability vocabulary, LogLine/Event/MetricsSample/AuditRecord/ContextBlock, Quantity + Age, error taxonomy, safety (Risk, MutationIntent), redaction.
+Core with no internal dependencies and no I/O. Modules: `ids` (ClusterId, ContextName, Gvk/Gvr, Scope, ResourceRef), `kinds` (ResourceKind, Verb), `resource` (thin Resource: metadata + raw JSON), `view` (typed view-models), `quantity` + `age`, `session` (state machine, NamespaceSelection, WatchScope), `command` (Command, CommandId, CommandMeta, Capability), `safety` (Risk, ConfirmTier, Initiator), `audit` (AuditRecord), `log` / `event` / `metrics` (LogLine, Event, MetricsSample), `agent` (ContextBlock), `error` (OxiError, ErrorKind). Redaction has no module yet (planned: E19-S10). The glossary is `docs/CONTEXT.md`; `#![deny(missing_docs)]` is on.
 
 ## Allowed external dependencies
 

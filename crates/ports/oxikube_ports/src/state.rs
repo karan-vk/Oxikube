@@ -123,6 +123,19 @@ impl Default for AuditQuery {
 }
 
 /// Durable local state.
+///
+/// # Effects
+///
+/// Mutating on the local SQLite database only (`*_set`, `*_put`, `*_delete`,
+/// [`append_audit`](Self::append_audit)); never a cluster mutation.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) for an unknown table or malformed key,
+/// [`Conflict`](oxikube_domain::ErrorKind::Conflict) for a failed migration or a concurrent
+/// writer, [`Internal`](oxikube_domain::ErrorKind::Internal) for database I/O failures. A
+/// missing key is `Ok(None)` or `Ok(false)`.
 #[async_trait]
 pub trait StatePort: Send + Sync {
     /// The value under `key`, or `None`.
@@ -162,6 +175,16 @@ pub trait StatePort: Send + Sync {
 
 /// Typed helpers over [`StatePort`]'s JSON values. Implemented for every
 /// `StatePort`, including `dyn StatePort`. Never store secrets, even typed ones.
+///
+/// # Effects
+///
+/// Same effects as the [`StatePort`] methods it wraps.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// Those of [`StatePort`], plus [`Validation`](oxikube_domain::ErrorKind::Validation) when a
+/// stored value does not match the requested type.
 #[async_trait]
 pub trait StatePortExt: StatePort {
     /// Reads and deserialises the kv value under `key`. A value of the wrong shape

@@ -289,6 +289,21 @@ pub enum StopReason {
 /// while [`cancel`](Self::cancel) and permission answers arrive concurrently.
 /// Dropping a returned future abandons that call but does not cancel the turn;
 /// call [`cancel`](Self::cancel).
+///
+/// # Effects
+///
+/// Not a cluster mutation: the cluster-touching calls an agent makes come back through
+/// [`AgentClient`] and `MutationGuard`.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) when the agent process or its
+/// transport dies, [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) for a feature the
+/// agent did not advertise in [`AgentCapabilities`],
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for an unknown [`AgentSessionId`],
+/// [`Internal`](oxikube_domain::ErrorKind::Internal) for a protocol violation.
 #[async_trait]
 pub trait AgentPort: Send + Sync {
     /// Handshake: sends `client_info` and the capabilities of `client`, and
@@ -780,6 +795,22 @@ fn unsupported(method: &str) -> OxiError {
 /// Implementations must never persist or log file contents, terminal output or
 /// form answers (non-negotiable 5), and must run anything that touches the
 /// cluster through `MutationGuard` with `Initiator::Agent`.
+///
+/// # Effects
+///
+/// Callbacks that write files, run terminals or touch the cluster are
+/// mutations: the implementation routes them through `MutationGuard` (read-only
+/// mode, confirmation tier, dry-run, audit). `request_permission` and the read
+/// callbacks have no side effects beyond prompting the user.
+///
+/// # Errors
+///
+/// A callback the client does not implement returns
+/// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) (the default). A path or
+/// argument outside what the user allowed is
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) or
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden); a user decline is reported
+/// through the callback's outcome type, not as an error.
 #[async_trait]
 pub trait AgentClient: Send + Sync {
     /// Which optional callbacks this client implements. Defaults to none.

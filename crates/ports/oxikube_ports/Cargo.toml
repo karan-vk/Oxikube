@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-description = "Async, object-safe port traits the app depends on and adapters implement: ClusterSourcePort, CloudDiscoveryPort, ResourcePort, TableFeedPort, DiscoveryPort, LogPort, ExecPort, PortForwardPort, MetricsPort, PromqlPort, DescribePort, HelmPort, StatePort, SecretStorePort, NotifierPort, UpdaterPort, CrashReporterPort, IntegrationPort, ToolPort, ContextProviderPort, AgentPort, FsPort, ClockPort, SchemaPort."
+description = "Async, object-safe port traits the app depends on and adapters implement: ClusterSourcePort, CloudDiscoveryPort, ResourcePort, TableFeedPort, DiscoveryPort, LogPort, ExecPort, PortForwardPort, MetricsPort, PromqlPort, DescribePort, HelmPort, StatePort, SecretStorePort, NotifierPort, UpdaterPort, CrashReporterPort, IntegrationPort, ToolPort, ContextProviderPort, AgentPort, AgentClient, FsPort, ClockPort."
 
 [lib]
 path = "src/oxikube_ports.rs"

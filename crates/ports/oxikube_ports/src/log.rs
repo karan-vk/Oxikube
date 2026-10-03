@@ -100,6 +100,21 @@ pub type LogStream = Pin<Box<dyn Stream<Item = OxiResult<LogLine>> + Send>>;
 
 /// Reads container logs. Read-only; the lines may contain secrets, so they go
 /// through redaction before any persistence (non-negotiable 5).
+///
+/// # Effects
+///
+/// Read-only.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for an unknown pod or container,
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when RBAC denies `pods/log`,
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) for a container that has not started
+/// (previous logs asked of a container with none),
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for connection failures. A
+/// stream that breaks after the first line ends with an `Err` item.
 #[async_trait]
 pub trait LogPort: Send + Sync {
     /// Streams the log of one container of `pod`.

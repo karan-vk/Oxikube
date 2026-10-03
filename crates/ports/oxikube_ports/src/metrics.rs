@@ -49,6 +49,19 @@ impl MetricsOutcome {
 }
 
 /// Read-only access to `metrics.k8s.io`.
+///
+/// # Effects
+///
+/// Read-only.
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Auth`](oxikube_domain::ErrorKind::Auth) /
+/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) and
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for failures of the call itself.
+/// A cluster without metrics-server is [`MetricsOutcome::Unavailable`], not an error.
 #[async_trait]
 pub trait MetricsPort: Send + Sync {
     /// One sample per node of `cluster`.

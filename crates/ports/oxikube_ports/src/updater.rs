@@ -56,6 +56,20 @@ pub struct DownloadedUpdate {
 }
 
 /// Application self-update.
+///
+/// # Effects
+///
+/// [`check`](Self::check) and [`download`](Self::download) change nothing installed;
+/// [`install`](Self::install) is **mutating** (see the module docs).
+///
+/// # Errors
+///
+/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
+/// [`Network`](oxikube_domain::ErrorKind::Network) /
+/// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for an unreachable release feed,
+/// [`Validation`](oxikube_domain::ErrorKind::Validation) for an artefact whose signature or
+/// checksum does not verify, [`Internal`](oxikube_domain::ErrorKind::Internal) for local I/O
+/// failures.
 #[async_trait]
 pub trait UpdaterPort: Send + Sync {
     /// The newest update on `channel` newer than `current_version`, or `None` when

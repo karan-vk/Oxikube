@@ -662,6 +662,11 @@ pub trait ResourceWriter: Send + Sync {
 /// implement the two halves; the app stores `Arc<dyn ResourcePort>` and hands
 /// out `Arc<dyn ResourceReader>` (trait upcasting) to everything except
 /// `MutationGuard`.
+///
+/// # Effects
+///
+/// Mutating through its [`ResourceWriter`] half only; see [`ResourceReader`] and
+/// [`ResourceWriter`] for the error kinds.
 pub trait ResourcePort: ResourceReader + ResourceWriter {}
 
 impl<T: ResourceReader + ResourceWriter + ?Sized> ResourcePort for T {}
