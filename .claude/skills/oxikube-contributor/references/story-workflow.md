@@ -17,7 +17,9 @@
    `Closes #<n>`. Set `Status` -> `In Review`.
 8. **Review**: a reviewer agent (Sonnet) runs `/code-review medium <PR#> --comment`, then
    reviews against `pr-checklist.md`. Address every comment or explain why not. Squash
-   merge when CI is green, findings are resolved and approval is given.
+   merge when CI is green, findings are resolved and approval is given. `main` only accepts
+   squash merges through a PR with the three required checks green (exact names in
+   `github-project.md`, "Repository settings and branch protection").
 8. **Close**: `Status` -> `Done` (auto when the issue closes). Note follow-ups as new
    issues labelled `story` + the epic's phase label, linked to the epic.
 
