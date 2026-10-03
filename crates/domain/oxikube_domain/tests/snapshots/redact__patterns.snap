@@ -1,0 +1,38 @@
+---
+source: crates/domain/oxikube_domain/tests/redact.rs
+expression: listing
+---
+pem-private-key
+  PEM private key blocks
+  (?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\z)
+
+authorization-header
+  Authorization / Proxy-Authorization values, scheme included
+  (?i)(?P<key>\bauthorization)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<val>(?:(?:bearer|basic|token|negotiate|digest)[ \t]+)?(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|[^\s,;}\])"']+))
+
+secret-field
+  *token, *password, *passwd, client-key-data, client-certificate-data, client-secret values
+  (?i)(?P<key>\b[\w-]*(?:token|password|passwd)\b|\bclient[-_](?:key|certificate)[-_]data\b|\bclient[-_]secret\b)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|[^\s,;}\])"']+))
+
+bearer-token
+  `Bearer <token>` anywhere in text (plain alphabetic words under 20 chars are kept)
+  (?i)\bbearer[ \t]+(?P<tok>[A-Za-z0-9._~+/=-]{8,})
+
+jwt
+  JWT-shaped strings: eyJ header, payload, signature
+  eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*
+
+secret-data-flow
+  values inside an inline data / stringData map; each entry matched by secret-data-pair
+  (?i)(?P<key>\b(?:string)?data)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)\{(?P<body>[^{}]*)\}
+
+secret-data-pair
+  one key/value entry of a data map
+  (?P<k>\\?"[^"\\]*\\?"|[\w.-]+)(?P<s>[ \t]*[:=][ \t]*)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|[^\s,;}\])"']+))
+
+secret-data-block
+  entries indented under a multi-line data / stringData header line (hand-written scanner; header regex shown, entries use secret-data-pair)
+  (?i)^[ \t]*"?(?:string)?data"?[ \t]*:[ \t]*\{?[ \t]*\r?$
+
+sensitive field names: ["client-key-data", "client_key_data", "client-certificate-data", "client_certificate_data", "client-secret", "client_secret", "secret-data", "secret_data", "string-data", "string_data", "stringdata"]
+sensitive field suffixes: ["token", "password", "passwd", "authorization"]

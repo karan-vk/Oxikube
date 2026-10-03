@@ -16,10 +16,12 @@
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
 //! | [`agent`] | [`ContextBlock`](agent::ContextBlock), the bounded context handed to agents |
 //! | [`error`] | [`OxiError`], [`ErrorKind`], [`OxiResult`] |
+//! | [`redact`] | secret redaction: [`redact::redact`], [`redact::Redacted`], the pattern catalogue |
 //!
-//! There is no redaction module yet: adapters redact before building records and
-//! errors, and a shared `redact` module is planned (E19-S10). The domain never
-//! redacts and never does I/O.
+//! [`redact`] holds the pure secret scrubber (`redact(&str) -> Cow<str>`, `Redacted<T>`). The
+//! domain does not call it on its own records: adapters redact before building records and
+//! errors, `oxikube_logging` wraps it around every formatted log line, and audit and crash
+//! reporting reuse it. The domain never does I/O.
 //!
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
@@ -38,6 +40,7 @@ pub mod kinds;
 pub mod log;
 pub mod metrics;
 pub mod quantity;
+pub mod redact;
 pub mod resource;
 pub mod safety;
 pub mod session;

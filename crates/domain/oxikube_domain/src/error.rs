@@ -12,7 +12,7 @@
 //!   an extension trait instead (the orphan rule forbids `From` there). See the
 //!   mapping table in `docs/ARCHITECTURE.md`.
 //! * This type never redacts. Adapters must strip tokens and Secret data
-//!   *before* building an error.
+//!   *before* building an error, e.g. with [`redact::redact`](crate::redact::redact).
 //! * Errors are not `Clone` (the boxed source is not). Wrap in `Arc` where
 //!   sharing is needed.
 //!
