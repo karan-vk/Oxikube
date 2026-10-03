@@ -6,12 +6,14 @@
 //! - `check-gpui-pin` verify gpui-pre / gpui-component pins are exact and aligned
 //! - `kind-up` / `kind-down`  local kind cluster for integration tests (E01-S09)
 //! - `load-pods`      create N pause pods (+ optional churn) for perf work (E01-S10)
+//! - `perf`           headless perf scenarios, report, baseline check (E01-S14)
 #![allow(clippy::print_stdout)]
 
 mod check_gpui_pin;
 mod kind;
 mod lint_deps;
 mod load_pods;
+mod perf;
 mod setup;
 
 use clap::{Parser, Subcommand};
@@ -43,6 +45,8 @@ enum Cmd {
     },
     /// Create N pause pods across namespaces; `--churn` keeps deleting/recreating them.
     LoadPods(load_pods::Args),
+    /// Run headless perf scenarios; `--check` gates on docs/perf/baseline.json (+20 %).
+    Perf(perf::Args),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -53,5 +57,6 @@ fn main() -> anyhow::Result<()> {
         Cmd::KindUp { name } => kind::up(&name),
         Cmd::KindDown { name } => kind::down(&name),
         Cmd::LoadPods(args) => load_pods::run(&args),
+        Cmd::Perf(args) => perf::run(&args),
     }
 }

@@ -23,15 +23,153 @@ measured on a mid-range x86 laptop with an integrated GPU.
 ## How to measure
 
 - `oxikube --perf` logs per-frame times, feed throughput and `notify` counts to
-  `~/.local/share/oxikube/perf/*.jsonl` and prints p50/p95/p99 on exit (E01-S14).
+  `<data dir>/oxikube/perf/*.jsonl` (`~/.local/share/oxikube/perf` on Linux,
+  `~/Library/Application Support/oxikube/perf` on macOS) and prints p50/p95/p99 on exit (E01-S14);
+  see [Perf harness](#perf-harness-oxikube---perf-and-cargo-xtask-perf).
 - `cargo xtask load-pods --count 10000 --churn` seeds the churn scenario on kind (E01-S10); see
   [Load fixture](#load-fixture-cargo-xtask-load-pods) below.
-- `cargo xtask perf <scenario>` runs scripted scenarios headless and writes a report; nightly
-  CI compares against `docs/perf/baseline.json` and fails on > 20 % regression (E01-S14).
+- `cargo xtask perf <scenario>|--all` runs scripted scenarios headless and writes a report; nightly
+  CI compares against [`docs/perf/baseline.json`](perf/baseline.json) and fails on > 20 % regression
+  (E01-S14).
 - macOS: Instruments (Time Profiler, Metal System Trace) for stalls; Linux: `perf` + `tracy`
   via the `tracy` feature on `oxikube_runtime`.
-- Memory: `cargo xtask perf memory` samples RSS; leaks checked with the GPUI
-  `leak-detection` feature in tests.
+- Memory: RSS sampling (`cargo xtask perf memory`) is a follow-up to E01-S14 and does not exist
+  yet; leaks are checked with the GPUI `leak-detection` feature in tests.
+
+## Perf harness: `oxikube --perf` and `cargo xtask perf`
+
+Built in E01-S14. Code: `oxikube_runtime::perf` (recorder, JSONL flusher, frame hook, scripted
+driver), `bins/oxikube` (`--perf`, `--perf-scenario`), `xtask/src/perf.rs` (runner, baseline
+check).
+
+### What a frame is
+
+gpui-pre 0.3.7 has no public frame-start or frame-end callback. The platform's frame request
+handler (private, in `gpui::window`) runs `Window::draw` and then `Window::present` inside one app
+update, and only GPUI's `profiler` feature records draw times (it also instruments every executor
+task, so it is not something to ship). Oxikube therefore wraps the window's root view in
+`oxikube_runtime::perf::PerfRoot` when `--perf` is on:
+
+- **start**: GPUI renders the root view (`PerfRoot::render`) at the start of every `draw`; root
+  views are never served from the view cache;
+- **end**: `PerfRoot::render` schedules an `App::defer` callback, and GPUI runs deferred callbacks
+  when it flushes effects at the end of the update that is drawing, i.e. after `draw` and `present`
+  returned.
+
+So a recorded frame is request-layout, prepaint and paint of the whole tree, scene finish and the
+platform `present` call (which encodes and submits the GPU command buffer). It does not include
+GPU execution or display latency, and GPUI only draws when a window is invalidated: an idle window
+records no frames. With `--perf` off the root is not wrapped and nothing is paid.
+
+### `oxikube --perf`
+
+```
+oxikube --perf                        # until the window closes or Ctrl-C
+oxikube --perf --perf-duration 30     # quit after 30 s
+oxikube --perf --perf-dir /tmp/perf   # write elsewhere
+```
+
+The recorder's hot path is lock-free: a frame is a push into a single-producer ring buffer
+(4 096 frames), feed deltas (`oxikube_runtime::perf::record_feed_deltas`) and coalesced notifies
+(`record_notify`) are relaxed atomic adds. A background thread (`oxikube-perf`) drains it every
+second and appends JSONL; the UI thread never touches the file. Lines:
+
+| `kind` | Fields |
+|---|---|
+| `start` | `schema`, `app_version`, `os`, `arch`, `pid`, `started_unix_ms`, `flush_interval_ms`, `measures` |
+| `tick` (every second) | `t_ms`, `interval_ms`, `frames_us` (every frame in the interval), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s` |
+| `summary` (on exit) | `duration_ms`, `frame_count`, `frames` {`count`, `p50`, `p95`, `p99`, `max`} (ms), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s` |
+
+On exit (window closed, `--perf-duration` elapsed, or Ctrl-C) it prints to stderr, for example:
+
+```
+oxikube --perf: 2 frames in 3.4 s: p50 0.593 ms, p95 8.385 ms, p99 8.385 ms, max 8.385 ms; dropped 0; feed 0 deltas (0.0/s); notify 0 (0.0/s)
+```
+
+Percentiles are nearest-rank (p99 of fewer than 100 frames is the maximum). Until feeds and
+`notify_coalesced` land (E04, E07) nothing calls the feed and notify counters, so they read 0.
+
+Recorder overhead (M-series, release, `cargo run --release -p oxikube_runtime --example
+perf_overhead`): a frame push is about 3 ns and the hook's timing pair about 45 ns; a feed or
+notify call costs about 0.4 ns with `--perf` off and 2.5 ns with it on. End to end, the startup
+scenario's `draw_ms` with and without the hook (`--perf-no-probe`) differs by under 1 µs per frame
+(p50 0.009 vs 0.008 ms, median of 15 runs).
+
+### `cargo xtask perf`
+
+```
+cargo xtask perf startup               # one scenario, 5 samples
+cargo xtask perf --all --check         # every scenario, compare with the baseline
+cargo xtask perf --all --update-baseline   # cannot be combined with --check
+cargo xtask perf --from-report perf-report-Linux/report-Linux.json --update-baseline
+```
+
+It builds `oxikube --features perf-scenarios` (profile `release-fast`), then per scenario runs one
+discarded warm-up process and `--samples` (default 5, nightly 7) fresh processes of
+`oxikube --perf-scenario <name>`. Each sample is a cold process start. The report takes, per
+metric, the **median across samples** of p50/p95/p99/max, so one noisy sample cannot fail the gate.
+It is written to `<target>/perf/report-<os>.json` (`--out` to change) and printed as a table.
+
+Scenarios run headless on GPUI's test platform with the host's real text system and headless GPU
+renderer (`oxikube_testkit::headless`, feature `gpui-headless`). **Headless numbers are CPU,
+layout and paint-preparation time only: there is no `present` and no GPU time.** Compare them with a
+same-runner baseline, never with the absolute budgets above.
+
+| Scenario | Status | Metrics |
+|---|---|---|
+| `startup` | measured | `first_frame_ms` (first line of `main` to the end of the update that drew the first frame: headless app context, text system, GPU renderer, window, first draw); `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask); `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) |
+| `scroll-10k` | not available: needs E05-S11 #93, E07-S01 #107, E07-S03 #109 | frame time scrolling the 10 k-pod table under churn |
+| `palette` | not available: needs E05-S11 #93, E11-S03 #158 | open time, filter of 2 000 entries |
+| `logs-stream` | not available: needs E05-S11 #93, E08-S02 #120 | frame time at 5 000 lines/s |
+| `editor-5mb` | not available: needs E05-S11 #93, E10-S04 #146, E10-S11 #153 | open time, typing latency |
+
+A scenario that is not available yet prints `SKIPPED` with the stories that enable it and exits 0.
+The stories that build those views replace the stub in `bins/oxikube/src/perf_scenario.rs` with a
+script driven by `oxikube_runtime::perf::harness::run_frames` and record a baseline in the same PR.
+The scripted path and the sample schema are covered by a `#[gpui::test]` that drives a fake feed
+through the same driver (`oxikube_runtime::perf::harness`).
+
+### Baseline and the nightly gate
+
+[`docs/perf/baseline.json`](perf/baseline.json) holds p50/p95/p99 per metric, keyed by OS
+(`linux`, `macos`) and scenario. The numbers come from the nightly's own runners
+(`ubuntu-latest`, `macos-latest`), because the gate compares a runner with itself; numbers from a
+laptop are not comparable with a CI VM.
+
+`--check` fails when any p50/p95/p99 of a baselined metric is more than **+20 %** slower **and** more
+than **0.25 ms** slower (`--tolerance`, `--noise-floor-ms`). The absolute floor stops microsecond
+jitter on sub-millisecond metrics (an idle redraw is about 0.01 ms) from failing the job; it is far
+below any budget in the table above. While the app is a placeholder this means only `first_frame_ms`
+and `launch_to_first_frame_ms` effectively gate; the floor is to be re-tuned once real views land (https://github.com/karan-vk/Oxikube/issues/411). A scenario or metric with no baseline is reported as
+`MISSING` and does not fail; a scenario that has a baseline but no longer runs does fail.
+
+The nightly `perf` job (ubuntu + macOS) runs `cargo xtask perf --all --check --samples 7`, uploads
+`perf-report-<OS>` and, on failure, feeds the `nightly-failure` tracking issue.
+
+Committed numbers (`startup`, median of 7 samples, ms; seeded from nightly run 37118815637 on the
+story branch), with a local M-series laptop run for reference (not gated):
+
+| Metric | `linux` (ubuntu-latest) p50 / p99 | `macos` (macos-latest) p50 / p99 | local M5 Max (5 samples) p50 / p99 |
+|---|---|---|---|
+| `launch_to_first_frame_ms` | 110.4 / 110.4 | 78.2 / 78.2 | 103.0 / 103.0 |
+| `first_frame_ms` | 108.1 / 108.1 | 66.9 / 66.9 | 95.7 / 95.7 |
+| `frame_ms` (idle redraw, hook) | 0.349 / 0.406 | 0.010 / 0.076 | 0.008 / 0.016 |
+| `draw_ms` (idle redraw, outside) | 0.350 / 0.410 | 0.011 / 0.084 | 0.008 / 0.017 |
+
+The placeholder window is trivial, so these mostly measure platform, text-system and renderer
+start-up. The startup budget (≤ 400 ms to the first *interactive* frame with real catalog data) is
+E05-S13's job, built on this harness.
+
+Rules for updating the baseline:
+
+1. A PR that adds a scenario (or a metric) seeds it: dispatch the nightly on the branch
+   (`gh workflow run nightly.yml --ref <branch>`), download both `perf-report-<OS>` artifacts and
+   run `cargo xtask perf --from-report <file> --update-baseline` for each. Commit the result.
+2. A PR that makes something intentionally slower (or much faster) refreshes the affected
+   scenarios the same way and says so, with before/after numbers, in its Performance section.
+3. Never edit numbers by hand and never refresh the baseline to make a red nightly green without
+   explaining the regression.
+
 
 ## Load fixture: `cargo xtask load-pods`
 

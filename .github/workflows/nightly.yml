@@ -1,9 +1,10 @@
 name: nightly
 
 # Full matrix the PR gate skips: release builds, both OSes, rustdoc and the GPU screenshot tests
-# (E01-S13). Failures open (or append to) one tracking issue labelled `nightly-failure`.
+# (E01-S13), plus the perf regression gate (E01-S14). Failures open (or append to) one tracking issue
+# labelled `nightly-failure`.
 #
-# Adding a job (E01-S14 perf gate, later epics): add it under `jobs:`, append its id to
+# Adding a job (later epics): add it under `jobs:`, append its id to
 # `report-failure.needs`, and the failure report picks it up automatically (it lists every failed
 # job in the run, not just the matrix legs).
 on:
@@ -104,9 +105,52 @@ jobs:
         if: ${{ !cancelled() && matrix.profile == 'release' }}
         run: cargo build --workspace --release
 
+  # Perf regression gate (E01-S14, ADR 0013): headless scenarios on each OS, median of several
+  # fresh-process samples, compared with docs/perf/baseline.json for the same runner OS. Fails above
+  # +20 % (and +0.25 ms) on any p50/p95/p99; the failure feeds `report-failure` below.
+  perf:
+    name: perf / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: perf
+          cache-on-failure: true
+      - name: Linux system dependencies (GPUI)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libfontconfig-dev libfreetype-dev libglib2.0-dev libssl-dev \
+            libvulkan1 libvulkan-dev libwayland-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config xvfb mesa-vulkan-drivers
+      - name: Perf scenario smoke tests
+        run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube --features perf-scenarios --profile release-fast
+      # Builds `oxikube --features perf-scenarios` (release-fast), runs every scenario, writes the
+      # report and checks it. Headless rendering needs a GPU device: Metal on macOS, Mesa lavapipe
+      # on Linux (xvfb only for windowing init, as in the screenshot step).
+      - name: cargo xtask perf --all --check
+        run: |
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo xtask perf --all --check --samples 7 \
+            --out perf/report-${{ runner.os }}.json
+      - name: Upload perf report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-${{ runner.os }}
+          path: perf/report-*.json
+          if-no-files-found: warn
+
   report-failure:
     name: report failure
-    needs: [matrix]
+    needs: [matrix, perf]
     # Only real failures (a leg timing out counts as a failure). A cancelled run is a person
     # stopping it, which is not a regression to report. Green runs skip this job entirely.
     if: ${{ failure() }}

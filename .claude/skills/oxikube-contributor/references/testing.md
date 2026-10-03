@@ -54,3 +54,7 @@ nightly for everything.
 
 - `cargo xtask load-pods --context kind-oxikube --count 10000 --churn` + `oxikube --perf` logs frame times and
   feed throughput; record numbers in the PR for stories that touch tables or feeds.
+- `cargo xtask perf <scenario>|--all [--check]` runs the headless scenarios against
+  `docs/perf/baseline.json` (nightly gate: +20 %). A story that builds the view behind a stubbed
+  scenario (table, palette, logs, editor) scripts it with `oxikube_runtime::perf::harness` and seeds
+  its baseline (docs/PERFORMANCE.md, "Perf harness").

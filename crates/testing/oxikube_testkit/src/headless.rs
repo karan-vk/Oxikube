@@ -1,4 +1,7 @@
-//! Headless GPUI rendering: draw a view into an [`RgbaImage`] without showing a window.
+//! Headless GPUI: an app context with real text shaping, and drawing a view into an `RgbaImage`
+//! without showing a window.
+//!
+//! Feature `gpui-headless` gives [`headless_context`]; `gpui-screenshot` adds `capture_view`.
 //!
 //! Built on `gpui::HeadlessAppContext` (deterministic `TestDispatcher` scheduling, a real
 //! platform text system, and the platform's headless GPU renderer: Metal on macOS, wgpu/Vulkan on
@@ -12,8 +15,12 @@
 //! from `main` (as `oxikube`'s screenshot mode does) or from a subprocess, not from libtest worker
 //! threads.
 
+#[cfg(feature = "gpui-screenshot")]
 use anyhow::{Context as _, Result};
-use gpui::{App, Entity, HeadlessAppContext, Pixels, Render, Size, Window};
+use gpui::HeadlessAppContext;
+#[cfg(feature = "gpui-screenshot")]
+use gpui::{App, Entity, Pixels, Render, Size, Window};
+#[cfg(feature = "gpui-screenshot")]
 use image::RgbaImage;
 use std::sync::Arc;
 
@@ -36,6 +43,7 @@ pub fn headless_context() -> HeadlessAppContext {
 /// `size * HEADLESS_SCALE_FACTOR` pixels.
 ///
 /// Deterministic: no wall-clock waiting; pending tasks are run with `run_until_parked`.
+#[cfg(feature = "gpui-screenshot")]
 pub fn capture_view<V: Render + 'static>(
     size: Size<Pixels>,
     build_root: impl FnOnce(&mut Window, &mut App) -> Entity<V>,

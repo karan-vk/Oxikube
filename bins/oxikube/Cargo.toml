@@ -19,10 +19,17 @@ gpui_platform.workspace = true
 # Declared now so the full GPUI stack resolves and builds from day one;
 # feature crates will wire these through oxikube_ui (E05).
 gpui-component.workspace = true
+# `--perf` recorder and frame hook; `perf-harness` adds the scripted driver for `--perf-scenario`.
+oxikube_runtime.workspace = true
+serde_json.workspace = true
+# Ctrl-C under `--perf` (print the summary instead of dying silently).
+tokio.workspace = true
 # Screenshot support (feature `screenshot`): headless render + PNG helpers.
+# Perf scenarios (feature `perf-scenarios`): headless app context.
 oxikube_testkit = { workspace = true, optional = true }
 
 [dev-dependencies]
+serde_json.workspace = true
 tempfile.workspace = true
 
 [features]
@@ -34,6 +41,14 @@ screenshot = [
     "oxikube_testkit/gpui-screenshot",
     "gpui/test-support",
     "gpui_platform/test-support",
+]
+# `oxikube --perf-scenario <name>` runs one headless perf sample (driven by `cargo xtask perf`).
+# Turns on gpui/gpui_platform `test-support` (HeadlessAppContext) through the testkit; never part
+# of default or release builds.
+perf-scenarios = [
+    "dep:oxikube_testkit",
+    "oxikube_testkit/gpui-headless",
+    "oxikube_runtime/perf-harness",
 ]
 
 [lints]

@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "scenario": "startup",
+  "status": "ok",
+  "os": "macos",
+  "headless": true,
+  "metrics": {
+    "draw_ms": { "count": 120, "p50": 0.008, "p95": 0.011, "p99": 0.017, "max": 0.053 },
+    "first_frame_ms": { "count": 1, "p50": 95.728, "p95": 95.728, "p99": 95.728, "max": 95.728 },
+    "frame_ms": { "count": 120, "p50": 0.008, "p95": 0.01, "p99": 0.016, "max": 0.047 }
+  },
+  "counters": { "frames": 120, "dropped_frames": 0, "feed_deltas": 0, "notifies": 0 }
+}

@@ -4,11 +4,19 @@
 
 Port fakes, fixtures, builders, kind helpers, gpui test helpers.
 
+## Headless GPUI
+
+- Feature `gpui-headless`: `oxikube_testkit::headless::headless_context()` returns a
+  `gpui::HeadlessAppContext` with the host's real text system and headless GPU renderer
+  (deterministic scheduling, nothing shown). The perf scenarios (`oxikube --perf-scenario`, E01-S14)
+  run on it. This is minimal scaffolding until E05-S11 (#93) ships the `TestApp` harness, which
+  should absorb it.
+
 ## Screenshots
 
 - Feature `screenshot`: `oxikube_testkit::screenshot` saves PNGs and compares an image against a
   golden with a per-channel tolerance and a max differing-pixel ratio (pure image code, no window).
-- Feature `gpui-screenshot` (implies `screenshot`): `oxikube_testkit::headless::capture_view` draws a
+- Feature `gpui-screenshot` (implies `screenshot` and `gpui-headless`): `oxikube_testkit::headless::capture_view` draws a
   view off-screen via `Window::render_to_image` (turns on `gpui/test-support` and
   `gpui_platform/test-support`). Needs a GPU device: Metal on macOS, Vulkan (Mesa lavapipe is fine)
   on Linux. Windows are 2x device pixels.
