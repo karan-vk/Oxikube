@@ -10,7 +10,7 @@ use futures::{FutureExt, StreamExt};
 use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::secrets::SecretString;
-use oxikube_ports::{SecretStorePort, SourceId, SourceKind};
+use oxikube_ports::{SourceId, SourceKind};
 use oxikube_testkit::FakeSecretStorePort;
 use tempfile::TempDir;
 
@@ -445,6 +445,29 @@ async fn a_first_reload_reports_everything_as_added() {
     assert_eq!(try_next(&mut events), Some(diff));
 }
 
+#[tokio::test]
+async fn kubeconfig_env_and_an_added_directory_load_together_in_order() {
+    let dir = TempDir::new().unwrap();
+    let env_file = dir.path().join("env-config");
+    let extra = dir.path().join("extra");
+    fs::create_dir(&extra).unwrap();
+    write(&env_file, &simple(&[("from-env", "https://e")]));
+    write(&extra.join("k.yaml"), &simple(&[("from-dir", "https://d")]));
+    let mut config = config_for(&dir.path().join("unused-default"));
+    config.kubeconfig_env = Some(env_file.clone().into_os_string());
+    config.extra_paths = vec![extra.clone()];
+    let (sources, _) = adapter(config);
+
+    let listed = sources.sources().await.unwrap();
+    assert_eq!(
+        listed.iter().map(|s| s.kind).collect::<Vec<_>>(),
+        [SourceKind::Environment, SourceKind::KubeconfigDir]
+    );
+    let contexts = sources.contexts().await.unwrap();
+    assert_eq!(names(&contexts), ["from-env", "from-dir"]);
+    assert_eq!(contexts[1].source, listed[1].id);
+}
+
 // --- pasted kubeconfigs -------------------------------------------------------------------
 
 fn files_under(dir: &Path) -> Vec<PathBuf> {
@@ -527,28 +550,38 @@ async fn pasted_kubeconfigs_are_restored_from_descriptors_after_a_restart() {
     assert_eq!(names(&second.contexts().await.unwrap()), ["pasted"]);
     assert_eq!(second.pasted(), std::slice::from_ref(&descriptor));
 
-    // The keychain entry vanishing is a diagnostic naming the paste, not an error.
-    secrets
-        .delete(&descriptor.secret_key().unwrap())
-        .await
-        .unwrap();
-    let diff = second.reload().await.unwrap();
-    assert_eq!(diff.removed.len(), 1);
+    // The text is cached after the first read: a later keychain read is not needed.
+    let before = secrets.recorded_calls().len();
+    second.reload().await.unwrap();
+    second.reload().await.unwrap();
+    assert_eq!(
+        secrets.recorded_calls().len(),
+        before,
+        "reloads do not hit the keychain again"
+    );
+}
+
+#[tokio::test]
+async fn a_pasted_kubeconfig_missing_from_the_keychain_is_a_diagnostic_not_an_error() {
+    let dir = TempDir::new().unwrap();
+    let (sources, _) = adapter({
+        let mut config = config_for(&dir.path().join("missing"));
+        config.pasted = vec![PastedDescriptor {
+            id: "0123456789abcdef".into(),
+            label: "gone".into(),
+        }];
+        config
+    });
+    assert!(sources.contexts().await.unwrap().is_empty());
     assert!(
-        second
+        sources
             .diagnostics()
             .iter()
             .any(|d| matches!(d, Diagnostic::MissingFile { .. }))
     );
-    assert!(
-        second
-            .sources()
-            .await
-            .unwrap()
-            .iter()
-            .any(|s| s.id.0 == format!("pasted:{}", descriptor.id))
-    );
-    let status = second
+    let listed = sources.sources().await.unwrap();
+    assert!(listed.iter().any(|s| s.id.0 == "pasted:0123456789abcdef"));
+    let status = sources
         .inner
         .current
         .read()
@@ -623,50 +656,146 @@ async fn a_file_context_shadows_a_pasted_one_with_the_same_name() {
 
 // --- watcher ------------------------------------------------------------------------------
 
+fn watching_config(default: &Path) -> SourcesConfig {
+    let mut config = config_for(default);
+    config.watch = true;
+    config.debounce = Duration::from_millis(50);
+    config
+}
+
+/// Replace `target` with new content by atomic rename every 250 ms until `events` yields a
+/// diff, or fail after two seconds. Repeating the replacement (with different content each
+/// time) tolerates a late first FSEvents delivery; the assertion is that a diff arrives.
+async fn replace_until_event(
+    dir: &Path,
+    target: &Path,
+    events: &mut BoxStream<'static, SourcesChanged>,
+) -> SourcesChanged {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        let staged = dir.join(format!("config.new.{attempt}"));
+        write(
+            &staged,
+            &simple(&[("a", "https://a"), ("b", &format!("https://b{attempt}"))]),
+        );
+        fs::rename(&staged, target).unwrap();
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let wait = remaining.min(Duration::from_millis(250));
+        if let Ok(Some(diff)) = tokio::time::timeout(wait, events.next()).await {
+            return diff;
+        }
+        assert!(Instant::now() < deadline, "no SourcesChanged within 2 s");
+    }
+}
+
+fn mentions_b(diff: &SourcesChanged) -> bool {
+    diff.added
+        .iter()
+        .chain(&diff.changed)
+        .any(|c| c.context.as_str() == "b")
+}
+
 /// Real `notify` watcher on a temp dir, a kubeconfig replaced by atomic rename, and a polling
 /// wait with a two-second deadline (no fixed sleep). Not a GPUI test: the crate has no GPUI.
 ///
-/// The watcher registers asynchronously, so the test first waits for `wait_for_watcher`. FSEvents
-/// on macOS can deliver late, so the replacement is repeated (with new content each time) every
-/// 250 ms until an event arrives; the assertion is that one does within the deadline. The 60 s
-/// safety poll is far outside this window, so only the watcher can satisfy it.
+/// The watcher registers asynchronously, so the test first waits for `wait_for_watcher`. The
+/// 60 s safety poll is far outside the window, so only the watcher can satisfy it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_watcher_reports_an_atomic_replace_within_two_seconds() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("config");
     write(&path, &simple(&[("a", "https://a")]));
-    let mut config = config_for(&path);
-    config.watch = true;
-    config.debounce = Duration::from_millis(50);
+    let (sources, _) = adapter(watching_config(&path));
+    sources.contexts().await.unwrap();
+    let mut events = sources.subscribe();
+    assert_eq!(sources.wait_for_watcher().await, WatchStatus::Active);
+
+    let diff = replace_until_event(dir.path(), &path, &mut events).await;
+    assert!(mentions_b(&diff), "{diff:?}");
+}
+
+/// `~/.kube/config -> elsewhere` (dotfile managers, Nix): writes land in the target's
+/// directory, which must be watched too.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_watcher_sees_writes_through_a_symlinked_kubeconfig() {
+    let dir = TempDir::new().unwrap();
+    let real = dir.path().join("real");
+    let links = dir.path().join("links");
+    fs::create_dir(&real).unwrap();
+    fs::create_dir(&links).unwrap();
+    let target = real.join("config");
+    write(&target, &simple(&[("a", "https://a")]));
+    let link = links.join("config");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    let (sources, _) = adapter(watching_config(&link));
+    assert_eq!(names(&sources.contexts().await.unwrap()), ["a"]);
+    let mut events = sources.subscribe();
+    assert_eq!(sources.wait_for_watcher().await, WatchStatus::Active);
+
+    let diff = replace_until_event(&real, &target, &mut events).await;
+    assert!(mentions_b(&diff), "{diff:?}");
+}
+
+/// A burst of writes inside the debounce window becomes one reload that sees the final state.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_burst_of_writes_is_coalesced_into_one_reload() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("config");
+    write(&path, &simple(&[("a", "https://a")]));
+    let mut config = watching_config(&path);
+    config.debounce = Duration::from_millis(300);
     let (sources, _) = adapter(config);
     sources.contexts().await.unwrap();
     let mut events = sources.subscribe();
     assert_eq!(sources.wait_for_watcher().await, WatchStatus::Active);
 
-    let deadline = Instant::now() + Duration::from_secs(2);
-    let mut attempt = 0;
-    let diff = loop {
-        attempt += 1;
-        let staged = dir.path().join(format!("config.new.{attempt}"));
-        write(
-            &staged,
-            &simple(&[("a", "https://a"), ("b", &format!("https://b{attempt}"))]),
-        );
-        fs::rename(&staged, &path).unwrap();
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        let wait = remaining.min(Duration::from_millis(250));
-        if let Ok(Some(diff)) = tokio::time::timeout(wait, events.next()).await {
-            break diff;
-        }
-        assert!(Instant::now() < deadline, "no SourcesChanged within 2 s");
-    };
-    assert!(
-        diff.added
-            .iter()
-            .chain(&diff.changed)
-            .any(|c| c.context.as_str() == "b"),
-        "{diff:?}"
+    for i in 1..=5 {
+        write(&path, &simple(&[("a", &format!("https://a{i}"))]));
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let first = tokio::time::timeout(Duration::from_secs(3), events.next())
+        .await
+        .expect("an event within the deadline")
+        .unwrap();
+    assert_eq!(
+        first.changed[0].server.as_deref(),
+        Some("https://a5"),
+        "{first:?}"
     );
+    // Nothing further: the intermediate states were never loaded on their own.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(600), events.next())
+            .await
+            .is_err()
+    );
+}
+
+/// With nothing to watch (the directory does not exist yet) the watcher reports `Failed` and
+/// the safety poll alone picks up the file once it appears.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn when_the_watcher_cannot_start_the_safety_poll_still_finds_changes() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("not-yet").join("config");
+    let mut config = watching_config(&path);
+    config.poll_interval = Duration::from_millis(100);
+    let (sources, _) = adapter(config);
+    assert!(sources.contexts().await.unwrap().is_empty());
+    let mut events = sources.subscribe();
+    assert!(matches!(
+        sources.wait_for_watcher().await,
+        WatchStatus::Failed(_)
+    ));
+
+    fs::create_dir(path.parent().unwrap()).unwrap();
+    write(&path, &simple(&[("late", "https://l")]));
+    let diff = tokio::time::timeout(Duration::from_secs(2), events.next())
+        .await
+        .expect("the poll reloads within the deadline")
+        .unwrap();
+    assert_eq!(names(&diff.added), ["late"]);
 }
 
 #[tokio::test]

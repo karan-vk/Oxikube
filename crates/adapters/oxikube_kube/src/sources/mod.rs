@@ -58,6 +58,7 @@ mod watcher;
 #[cfg(test)]
 mod tests;
 
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
@@ -143,6 +144,12 @@ pub(crate) struct Inner {
     current: RwLock<Option<Arc<Snapshot>>>,
     subscribers: Mutex<Vec<mpsc::UnboundedSender<SourcesChanged>>>,
     watch_status: watch::Sender<WatchStatus>,
+    /// Directories the watcher could not register (the poll covers them).
+    unwatched: Mutex<Vec<PathBuf>>,
+    /// Pasted kubeconfig text by descriptor id, read from the keychain once. Reloads are
+    /// frequent and a keychain read can be slow or prompt; the text is already in memory
+    /// whenever it is parsed, and `SecretString` wipes it on drop.
+    pasted_text: Mutex<HashMap<String, SecretString>>,
 }
 
 impl Inner {
@@ -157,7 +164,14 @@ impl Inner {
         })
         .await
         .map_err(|err| OxiError::internal("kubeconfig source task failed").with_source(err))??;
-        pasted::fold_into(&mut loaded, &mut layout, self.secrets.as_ref(), &pasted).await;
+        pasted::fold_into(
+            &mut loaded,
+            &mut layout,
+            self.secrets.as_ref(),
+            &pasted,
+            &self.pasted_text,
+        )
+        .await;
         Ok(Snapshot::build(loaded, layout))
     }
 
@@ -190,7 +204,8 @@ impl Inner {
         Ok(snapshot)
     }
 
-    pub(crate) fn set_watch_status(&self, status: WatchStatus) {
+    pub(crate) fn set_watch_status(&self, status: WatchStatus, unwatched: Vec<PathBuf>) {
+        *self.unwatched.lock() = unwatched;
         self.watch_status.send_replace(status);
     }
 }
@@ -232,6 +247,8 @@ impl KubeconfigSources {
             current: RwLock::new(None),
             subscribers: Mutex::new(Vec::new()),
             watch_status: watch::channel(initial).0,
+            unwatched: Mutex::new(Vec::new()),
+            pasted_text: Mutex::new(HashMap::new()),
         });
         let guard = if inner.config.watch {
             Some(watcher::spawn(Arc::downgrade(&inner), &inner.config)?)
@@ -260,15 +277,31 @@ impl KubeconfigSources {
         settled.unwrap_or_else(|_| status.borrow().clone())
     }
 
-    /// What the last load skipped or shadowed ("file X could not be read"). Empty before the
-    /// first load. Updated on every reload, whether or not the catalog changed.
+    /// What the last load skipped or shadowed ("file X could not be read"), plus directories
+    /// the watcher could not register. Empty before the first load. Updated on every reload,
+    /// whether or not the catalog changed.
+    ///
+    /// Not part of [`ClusterSourcePort`]: callers holding the port as a trait object cannot
+    /// reach it until the port grows a diagnostics method.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        self.inner
+        let mut found: Vec<Diagnostic> = self
+            .inner
             .current
             .read()
-            .as_ref()
-            .map(|s| s.diagnostics.clone())
-            .unwrap_or_default()
+            .iter()
+            .flat_map(|s| s.diagnostics.iter().cloned())
+            .collect();
+        found.extend(
+            self.inner
+                .unwatched
+                .lock()
+                .iter()
+                .map(|path| Diagnostic::Unreadable {
+                    path: path.clone(),
+                    reason: "could not be watched for changes; checked every poll interval".into(),
+                }),
+        );
+        found
     }
 
     /// The merged kubeconfig of the last load, for the client pool. Holds credentials: never
@@ -300,8 +333,12 @@ impl KubeconfigSources {
         pasted::parse(text.expose_secret())?;
         self.inner
             .secrets
-            .set(&descriptor.secret_key()?, text)
+            .set(&descriptor.secret_key()?, text.clone())
             .await?;
+        self.inner
+            .pasted_text
+            .lock()
+            .insert(descriptor.id.clone(), text);
         {
             let mut list = self.inner.pasted.lock();
             match list.iter_mut().find(|d| d.id == descriptor.id) {
@@ -329,6 +366,7 @@ impl KubeconfigSources {
         // Delete the secret first: if the keychain refuses, the entry stays listed and retryable.
         self.inner.secrets.delete(&descriptor.secret_key()?).await?;
         self.inner.pasted.lock().retain(|d| d.id != id);
+        self.inner.pasted_text.lock().remove(id);
         self.inner.reload().await?;
         Ok(true)
     }

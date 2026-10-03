@@ -14,6 +14,7 @@
 //! `Access` events are dropped: the reload itself reads the watched files and would otherwise
 //! trigger itself on inotify.
 
+use std::path::PathBuf;
 use std::sync::Weak;
 use std::time::Duration;
 
@@ -47,10 +48,14 @@ pub(super) fn spawn(inner: Weak<Inner>, config: &SourcesConfig) -> OxiResult<Wat
 }
 
 /// Register a watch on each of `dirs`; the handler forwards relevant events to `tx`.
+///
+/// A directory that cannot be watched is skipped and returned, so one bad path does not
+/// disable the rest (the poll still covers it). Fails only when the watcher cannot start or
+/// no directory could be watched.
 fn start_watcher(
-    dirs: &[std::path::PathBuf],
+    dirs: &[PathBuf],
     tx: UnboundedSender<()>,
-) -> OxiResult<RecommendedWatcher> {
+) -> OxiResult<(RecommendedWatcher, Vec<PathBuf>)> {
     let mut watcher = notify::recommended_watcher(move |event: notify::Result<Event>| {
         // Runs on notify's thread: only a channel send, no task wake-ups of our own.
         let relevant = match &event {
@@ -63,14 +68,18 @@ fn start_watcher(
         }
     })
     .map_err(|err| OxiError::internal("could not start the kubeconfig watcher").with_source(err))?;
+    let mut unwatched = Vec::new();
     for dir in dirs {
-        watcher
-            .watch(dir, RecursiveMode::NonRecursive)
-            .map_err(|err| {
-                OxiError::internal(format!("could not watch {}", dir.display())).with_source(err)
-            })?;
+        if watcher.watch(dir, RecursiveMode::NonRecursive).is_err() {
+            unwatched.push(dir.clone());
+        }
     }
-    Ok(watcher)
+    if unwatched.len() == dirs.len() {
+        return Err(OxiError::internal(
+            "no kubeconfig directory could be watched; relying on the safety poll",
+        ));
+    }
+    Ok((watcher, unwatched))
 }
 
 async fn run(inner: Weak<Inner>, config: SourcesConfig) {
@@ -85,13 +94,17 @@ async fn run(inner: Weak<Inner>, config: SourcesConfig) {
         .await
     };
     // Keep the watcher alive for the life of the task. A failed setup leaves the poll running.
-    let (_watcher, status) = match setup {
-        Ok(Ok(watcher)) => (Some(watcher), WatchStatus::Active),
-        Ok(Err(err)) => (None, WatchStatus::Failed(err.message().to_owned())),
-        Err(err) => (None, WatchStatus::Failed(err.to_string())),
+    let (_watcher, status, unwatched) = match setup {
+        Ok(Ok((watcher, unwatched))) => (Some(watcher), WatchStatus::Active, unwatched),
+        Ok(Err(err)) => (
+            None,
+            WatchStatus::Failed(err.message().to_owned()),
+            Vec::new(),
+        ),
+        Err(err) => (None, WatchStatus::Failed(err.to_string()), Vec::new()),
     };
     match inner.upgrade() {
-        Some(inner) => inner.set_watch_status(status),
+        Some(inner) => inner.set_watch_status(status, unwatched),
         None => return,
     }
 

@@ -8,21 +8,24 @@
 //! reveals the content. If no keychain is available, adding a pasted kubeconfig fails with the
 //! store's error; there is no fallback to a file.
 //!
-//! At every reload the text is read back from the keychain, parsed in memory and merged after
-//! the file sources, so a file defining the same context name wins (the loader's first-wins rule).
+//! The text is read from the keychain once per adapter (then held in memory, as a
+//! `SecretString`, because reloads are frequent and a keychain read can be slow or prompt),
+//! and parsed in memory at every reload. It is merged after the file sources, so a file
+//! defining the same context name wins (the loader's first-wins rule).
 //! Relative `certificate-authority`, `client-key` and similar paths in pasted text are not
 //! rewritten, because there is no directory to resolve them against; use the inline `-data`
 //! fields.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use kube::config::Kubeconfig;
 use oxikube_domain::ids::ContextName;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::cluster_source::{ClusterSource, SourceId, SourceKind};
-use oxikube_ports::secrets::ExposeSecret;
+use oxikube_ports::secrets::{ExposeSecret, SecretString};
 use oxikube_ports::{SecretKey, SecretStorePort};
+use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
 
 use super::layout::Layout;
@@ -100,6 +103,7 @@ pub(super) async fn fold_into(
     layout: &mut Layout,
     secrets: &dyn SecretStorePort,
     pasted: &[PastedDescriptor],
+    cache: &Mutex<HashMap<String, SecretString>>,
 ) {
     for descriptor in pasted {
         let pseudo = descriptor.pseudo_path();
@@ -118,10 +122,15 @@ pub(super) async fn fold_into(
             status: SourceStatus::Loaded,
             contexts: Vec::new(),
         };
-        let text = match descriptor.secret_key() {
-            Ok(key) => secrets.get(&key).await,
-            Err(err) => Err(err),
+        let cached = cache.lock().get(&descriptor.id).cloned();
+        let text = match (cached, descriptor.secret_key()) {
+            (Some(text), _) => Ok(Some(text)),
+            (None, Ok(key)) => secrets.get(&key).await,
+            (None, Err(err)) => Err(err),
         };
+        if let Ok(Some(text)) = &text {
+            cache.lock().insert(descriptor.id.clone(), text.clone());
+        }
         let config = match text {
             Ok(Some(text)) => parse(text.expose_secret()).map_err(|_| Diagnostic::Unparsable {
                 path: pseudo.clone(),

@@ -150,25 +150,30 @@ impl Layout {
 
 /// The directories a watcher should observe (blocking: it stats paths).
 ///
-/// Parent directories of single files, because editors and `kubectl config` replace a file by
-/// renaming over it, which a watch on the file itself would lose; the directory itself for
-/// directory sources. Paths that do not exist yet are left to the safety poll.
+/// Parent directories of single files, because editors and `kubectl config` replace a file
+/// by renaming a new one over it, which a watch on the file itself would lose; the directory
+/// itself for directory sources. A file that is a symlink (dotfile managers, Nix) is written
+/// through its target, so the parent of the resolved path is watched too. Paths that do not
+/// exist yet are left to the safety poll.
 pub(super) fn watch_dirs(config: &SourcesConfig) -> Vec<PathBuf> {
     let layout = Layout::resolve(config);
-    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut candidates: Vec<PathBuf> = Vec::new();
     for entry in &layout.entries {
-        let dir = match entry.source.kind {
-            SourceKind::KubeconfigDir => entry.source.path.clone(),
-            _ => entry
-                .source
-                .path
-                .as_deref()
-                .and_then(Path::parent)
-                .map(Path::to_path_buf),
-        };
-        if let Some(dir) = dir.filter(|d| d.is_dir())
-            && !dirs.contains(&dir)
-        {
+        let source_path = entry.source.path.as_deref();
+        if entry.source.kind == SourceKind::KubeconfigDir {
+            candidates.extend(source_path.map(Path::to_path_buf));
+        } else {
+            candidates.extend(source_path.and_then(Path::parent).map(Path::to_path_buf));
+        }
+        for file in &entry.files {
+            if let Some(target) = fs::canonicalize(file).ok().filter(|t| t != file) {
+                candidates.extend(target.parent().map(Path::to_path_buf));
+            }
+        }
+    }
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    for dir in candidates {
+        if dir.is_dir() && !dirs.contains(&dir) {
             dirs.push(dir);
         }
     }
