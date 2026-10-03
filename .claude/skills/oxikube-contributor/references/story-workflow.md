@@ -26,6 +26,8 @@
 Run `cargo xtask setup` once to install repository git hooks via `pre-commit`.
 Hooks run fast checks (`cargo fmt`, `cargo xtask lint-deps`, `cargo xtask check-gpui-pin`) on `pre-commit`,
 and slower checks (`cargo clippy`, `cargo deny check`) on `pre-push`. CI remains the final authority.
+Git worktrees share one hooks directory, so run `cargo xtask setup` once per clone, not per worktree; a
+branch cut before this config landed has no `.pre-commit-config.yaml` and its hooks will fail until rebased.
 
 ## Commits
 
