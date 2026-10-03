@@ -77,7 +77,10 @@ cargo test --workspace
 cargo xtask lint-deps
 cargo xtask check-gpui-pin
 cargo deny check
+cargo xtask setup   # install pre-commit (fmt, lint-deps, gpui-pin) + pre-push (clippy, deny) hooks
 cargo xtask kind-up && cargo test -p oxikube_kube --features integration   # adapters
+cargo x <subcommand>                         # short alias for cargo xtask <subcommand>
+cargo it                                     # run the integration test suites (needs a kind cluster)
 ```
 
 ## Key technical choices (do not relitigate without an ADR)

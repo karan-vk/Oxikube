@@ -1,0 +1,51 @@
+# Git hooks for Oxikube (E01-S12).
+# Fast checks (rustfmt, xtask lint-deps, xtask check-gpui-pin) run on `pre-commit`.
+# Clippy and cargo-deny are deferred to `pre-push` because compiling and checking
+# this full GPUI multi-crate workspace is slow (~10-30s on incremental).
+# Local hooks provide rapid feedback; CI remains the authoritative gate.
+
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --check
+        language: system
+        pass_filenames: false
+        files: '\.rs$'
+        stages: [pre-commit]
+
+      - id: lint-deps
+        name: cargo xtask lint-deps
+        entry: cargo xtask lint-deps
+        language: system
+        pass_filenames: false
+        files: '(Cargo\.toml|\.rs)$'
+        stages: [pre-commit]
+
+      - id: check-gpui-pin
+        name: cargo xtask check-gpui-pin
+        entry: cargo xtask check-gpui-pin
+        language: system
+        pass_filenames: false
+        files: '(Cargo\.toml|\.rs)$'
+        stages: [pre-commit]
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --workspace --all-targets -- -D warnings
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
+
+      - id: cargo-deny
+        name: cargo deny check
+        entry: cargo deny check
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
