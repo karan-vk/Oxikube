@@ -58,3 +58,17 @@ in `xtask/src/lint_deps.rs`; do not add an `allow`.
 - `k8s-openapi` feature `latest`; `jiff` not `chrono`; `serde-saphyr` for YAML.
 - `agent-client-protocol = "=2.2.0"`.
 - All versions live in `[workspace.dependencies]`; crates use `foo.workspace = true`.
+
+## Crate conventions (read before creating files)
+
+- **Crate root file**: every crate uses Zed's convention `[lib] path = "src/<crate_name>.rs"`
+  (e.g. `crates/domain/oxikube_domain/src/oxikube_domain.rs`). Where a story says `lib.rs`, it
+  means this file. Do not add a separate `lib.rs`.
+- **"No dependencies" in the domain** means no *internal* crates and nothing that does I/O.
+  Pure data crates (`serde`, `serde_json`, `thiserror`, `jiff`, `bitflags`, `indexmap`,
+  `smallvec`, `semver`, `url`, `regex`) are expected. The authoritative ban list per layer is
+  `xtask/src/lint_deps.rs`.
+- **Dev-dependencies are exempt** from the layer lint, so tests may use `oxikube_testkit`,
+  `proptest`, `insta`, `serde_json` and `tempfile` anywhere.
+- Add every new dependency to `[workspace.dependencies]` first, then `foo.workspace = true` in
+  the crate.

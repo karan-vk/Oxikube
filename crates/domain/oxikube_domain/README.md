@@ -2,7 +2,11 @@
 
 **Layer:** `domain`
 
-Dependency-free core: ids (ClusterId, ContextName, Gvk/Gvr, ResourceRef), the thin Resource model (metadata + raw JSON), typed view-models, NamespaceSelection, Command/Capability vocabulary, LogLine/Event/MetricsSample/AuditRecord/ContextBlock, Quantity + Age, error taxonomy, safety (Risk, MutationIntent), redaction.
+Core with no internal dependencies and no I/O: ids (ClusterId, ContextName, Gvk/Gvr, ResourceRef), the thin Resource model (metadata + raw JSON), typed view-models, NamespaceSelection, Command/Capability vocabulary, LogLine/Event/MetricsSample/AuditRecord/ContextBlock, Quantity + Age, error taxonomy, safety (Risk, MutationIntent), redaction.
+
+## Allowed external dependencies
+
+Pure data crates only: `serde`, `serde_json`, `thiserror`, `jiff`, `bitflags`, `indexmap`, `smallvec`, `semver`, `url`, `regex` (and `proptest`/`insta` as dev-dependencies). Anything that does I/O, spawns tasks or talks to a cluster is banned (`cargo xtask lint-deps` enforces the ban list).
 
 ## Allowed internal dependencies
 
