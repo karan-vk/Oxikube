@@ -38,5 +38,10 @@
 - [ ] Vendored code has licence headers + THIRD_PARTY_NOTICES entry.
 - [ ] Project `Status` is `In Review`.
 
+## Code review (mandatory)
+- [ ] Author ran `/code-review high` on Sonnet before opening; summary + model in the PR.
+- [ ] Every CONFIRMED finding fixed; PLAUSIBLE ones fixed or justified in one line.
+- [ ] Reviewer ran `/code-review high <PR#> --comment` on Sonnet; no open confirmed findings.
+
 ## Reviewer verdict
 Approve only when every box is either checked or has a written justification in the PR.

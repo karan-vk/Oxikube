@@ -92,8 +92,9 @@ mode was observed in the reference projects we studied.
    header and a THIRD_PARTY_NOTICES entry; code from kdash keeps its MIT notice; deskribe
    keeps the Kubernetes NOTICE. Prefer copying Zed's *design* over its code when the code
    is entangled. See `references/zed-vendoring.md`.
-9. **Story = branch = PR.** Conventional commits, PR template filled, CI green, one
-   reviewer-agent approval, squash merge. No drive-by changes outside the story's
+9. **Story = branch = PR, reviewed by `/code-review` on Sonnet.** Conventional commits,
+   PR template filled, CI green, `/code-review` run twice (author before opening, reviewer
+   on the PR), one reviewer-agent approval, squash merge. No drive-by changes outside the story's
    scope; open a follow-up issue instead.
 10. **Tests are part of the story.** Unit tests with `oxikube_testkit` fakes for app
     and domain code; kind integration tests (`--features integration`) for adapters;
@@ -113,6 +114,9 @@ A story is done when all of the following hold:
 - Settings you added have defaults in `default.json`, a schema entry, and hot reload.
 - Commands you added appear in the palette with a keybinding (if sensible) and a tool
   stub; mutating ones state their guard tier in the PR.
+- `/code-review high` was run on the branch (model: Sonnet 5.5) and every confirmed
+  finding is fixed or justified in the PR's "Code review" section; the reviewer re-runs
+  `/code-review high <PR#> --comment` before approving (see `references/code-review.md`).
 - The PR checklist (`references/pr-checklist.md`) is filled, the Project `Status` is
   `In Review`, and after merge `Done`.
 
@@ -123,6 +127,7 @@ A story is done when all of the following hold:
 | `references/architecture-rules.md` | adding a crate or module, unsure which crate owns something, lint-deps fails, naming a port/service |
 | `references/story-workflow.md` | starting or finishing a story, writing commits/PRs, splitting a story, writing an ADR |
 | `references/pr-checklist.md` | opening or reviewing a PR |
+| `references/code-review.md` | running the mandatory `/code-review` pass (author and reviewer), which model, what to do with findings |
 | `references/testing.md` | writing any test, using kind, writing a gpui test, adding a screenshot test |
 | `references/gpui-gotchas.md` | writing GPUI or gpui-component code, a UI test is flaky, bumping GPUI |
 | `references/zed-vendoring.md` | copying anything from Zed or another project |

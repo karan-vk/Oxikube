@@ -9,10 +9,15 @@
    is 2-4 words, kebab-case.
 4. **Build**: follow the acceptance criteria literally. Write tests alongside code.
 5. **Verify**: run the full local gate (see SKILL.md section 6).
-6. **PR**: title `feat(resources_ui): E07-S03 generic resource table` (type(scope): ID
-   title). Fill the template. Link the issue with `Closes #<n>`. Set `Status` -> `In Review`.
-7. **Review**: a reviewer agent reviews against `pr-checklist.md`. Address every comment
-   or explain why not. Squash merge when CI is green and approval is given.
+6. **Self-review**: run `/code-review high` on the branch using Sonnet (`/model sonnet`
+   first). Fix every confirmed finding; record the summary for the PR (see
+   `code-review.md`).
+7. **PR**: title `feat(resources_ui): E07-S03 generic resource table` (type(scope): ID
+   title). Fill the template including the **Code review** section. Link the issue with
+   `Closes #<n>`. Set `Status` -> `In Review`.
+8. **Review**: a reviewer agent (Sonnet) runs `/code-review high <PR#> --comment`, then
+   reviews against `pr-checklist.md`. Address every comment or explain why not. Squash
+   merge when CI is green, findings are resolved and approval is given.
 8. **Close**: `Status` -> `Done` (auto when the issue closes). Note follow-ups as new
    issues labelled `story` + the epic's phase label, linked to the epic.
 
