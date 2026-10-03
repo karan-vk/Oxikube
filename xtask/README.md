@@ -9,11 +9,11 @@ Run as `cargo xtask <command>` (aliases `xtask` and `x` in `.cargo/config.toml`)
 | `lint-deps` | Enforces the hexagonal dependency direction and the banned-crate list over `cargo metadata --no-deps` (docs/ARCHITECTURE.md, ADR 0002). The check is a pure function over `cargo_metadata::Metadata`, unit-tested against fixture JSON in `xtask/tests/fixtures/`. |
 | `check-gpui-pin` | Verifies the `gpui-pre*` and `gpui-component`/`gpui-base`/`gpui-kit-assets` pins are exact `=` and a known pair from the table in ADR 0003; prints the Zed commit of the snapshot. |
 | `kind-up` / `kind-down` | Local kind cluster for integration tests. |
-| `load-pods` | Pause-pod load generator for performance work; refuses non-kind contexts unless told otherwise. |
+| `load-pods` | Pause-pod load generator (`--count`, `--namespaces`, `--churn`, `--cleanup`, `--context`) for performance work; refuses non-`kind-*` contexts unless `--allow-non-kind`. See docs/PERFORMANCE.md. |
 
 ## Allowed internal dependencies
 
-- everything (it only shells out and parses metadata today)
+- everything (it only shells out and parses metadata today; `tokio` is used for Ctrl-C handling in `load-pods`)
 
 ## Tests
 
