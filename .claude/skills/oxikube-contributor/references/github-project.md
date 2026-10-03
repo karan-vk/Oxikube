@@ -41,3 +41,17 @@ filter without the Project API. Milestones `M0`..`M6` correspond to phases.
   (`blocked` label + what unblocks it).
 - Never close an epic manually; it closes when all stories are Done and the "done when"
   criteria are checked off by a maintainer.
+
+## Dependencies and ordering
+
+- `docs/DEPENDENCIES.md` is the dependency matrix: epic graph, per-epic story graphs (Mermaid),
+  execution waves and the critical path. Stories on the critical path are marked ⚠️.
+- Every story's issue lists **Blocked by** and **Unblocks** with links, and has a neighbourhood
+  diagram. The same edges are native GitHub relationships, so the issue sidebar and Project
+  show "Blocked".
+- The Project field `Wave` gives the earliest parallel batch a story belongs to. Pick the
+  lowest-wave `Ready` story in your area. A story whose blockers are not done can still start
+  against `oxikube_testkit` fakes if the blocker is only a port or type. Say so in the PR.
+- When you change a story's dependencies, update the issue, the native relationship and
+  `docs/PLAN.md`, and regenerate `docs/DEPENDENCIES.md` (the `cargo xtask deps` follow-up
+  replaces the planning scripts).

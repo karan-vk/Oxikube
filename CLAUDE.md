@@ -34,7 +34,7 @@ cargo xtask kind-up && cargo test -p oxikube_kube --features integration
 - `docs/CONTEXT.md` — domain glossary (use its terms in type names)
 - `docs/adr/` — decisions; add one when you change one
 - `docs/research/` — feature inventories and ecosystem research behind the plan
-- `docs/PLAN.md` — full epic and story catalogue
+- `docs/PLAN.md, docs/DEPENDENCIES.md (dependency matrix, waves, critical path)` — full epic and story catalogue
 
 ## Conventions
 - Rust edition 2024, toolchain pinned in `rust-toolchain.toml`; `[workspace.dependencies]` only.

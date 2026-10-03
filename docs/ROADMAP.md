@@ -1,7 +1,7 @@
 # Roadmap
 
 Phases map to GitHub milestones M0–M6 and the `Phase` field of the GitHub Project.
-Full epic/story catalogue: `docs/PLAN.md`. Live status: the GitHub Project "Oxikube".
+Full epic/story catalogue: `docs/PLAN.md`. Dependency matrix, execution waves and critical path: `docs/DEPENDENCIES.md`. Live status: the GitHub Project "Oxikube" (group by `Wave` to see what can run in parallel).
 
 | Phase | Epics | Outcome |
 |---|---|---|
