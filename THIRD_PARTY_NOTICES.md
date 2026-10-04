@@ -17,6 +17,17 @@ picker delegate, terminal element, ACP thread model). Each file carries the head
 Entries (file → upstream path @ rev):
 - (none yet)
 
+### Zed's Apache-2.0 crates
+Zed's GPUI crates (`gpui`, `gpui_tokio`, ...) are Apache-2.0, not GPL. Ported files keep the
+Apache-2.0 notice (Copyright 2022 - 2025 Zed Industries, Inc.) and state their modifications.
+
+Entries (file → upstream path @ rev):
+- `crates/platform/oxikube_runtime/src/gpui_tokio.rs` → `crates/gpui_tokio/src/gpui_tokio.rs` @
+  a84689073d296dfd39987bc7dd478e43ef76d83a (the `GlobalTokio` global, `init` / `init_from_handle`
+  and the shutdown-on-drop; `Tokio::spawn`'s abort-on-drop guard is reworked as
+  `oxikube_runtime::spawn_kube` in `kube_task.rs`). The `gpui_tokio` crate is not published in the
+  `gpui-pre` snapshot family, so it is ported rather than depended on.
+
 ## kdash (MIT) — https://github.com/kdash-rs/kdash
 Copyright (c) 2021 Deepu K Sasidharan. Ported functions (tolerant kubeconfig loader, cronjob
 trigger, merge-patch builders, log stream reconnect/dedup logic) keep the MIT notice in-file.

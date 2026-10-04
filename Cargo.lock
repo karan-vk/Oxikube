@@ -5626,11 +5626,16 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "dirs 7.0.0",
+ "futures",
  "gpui-pre",
  "libc",
+ "oxikube_domain",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

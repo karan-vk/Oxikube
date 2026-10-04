@@ -14,9 +14,14 @@ doctest = false
 [dependencies]
 anyhow.workspace = true
 dirs.workspace = true
+futures.workspace = true
 gpui.workspace = true
+oxikube_domain.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 
 # Resident-memory reader (`perf::memory`): task_info / getrusage on macOS. Linux reads /proc.
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -35,6 +40,10 @@ perf-harness = []
 [[example]]
 name = "perf_overhead"
 path = "examples/perf_overhead.rs"
+
+[[example]]
+name = "bridge_bench"
+path = "examples/bridge_bench.rs"
 
 [lints]
 workspace = true
