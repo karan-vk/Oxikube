@@ -13,12 +13,13 @@
 //! calls the factory on `tokio::task::spawn_blocking` under
 //! [`PoolConfig::exec_deadline`], which is why the factory itself is synchronous.
 
-use kube::config::{KubeConfigOptions, KubeconfigError};
+use kube::config::KubeConfigOptions;
 use kube::{Client, Config};
 use oxikube_domain::OxiError;
 
 use super::config::PoolConfig;
 use super::entry::ContextDefinition;
+use super::{proxy, tls};
 use crate::auth::{build_client, classify_kubeconfig};
 use crate::kubeconfig::in_cluster_config_fixups;
 
@@ -95,6 +96,13 @@ impl ProxyEnv {
     }
 }
 
+impl ProxyEnv {
+    /// The fallback proxy URL (may carry credentials; never log it).
+    pub(super) fn https_proxy(&self) -> Option<&str> {
+        self.https_proxy.as_deref()
+    }
+}
+
 impl std::fmt::Debug for ProxyEnv {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // A proxy URL can carry `user:password@`; print only whether one is set.
@@ -105,11 +113,12 @@ impl std::fmt::Debug for ProxyEnv {
 }
 
 /// Builds the kube [`Config`] for `definition`: kube's own kubeconfig resolution
-/// (`Config::from_custom_kubeconfig`), then the pool's timeouts, retry mode and
-/// proxy precedence.
+/// (`Config::from_custom_kubeconfig`), then the pool's timeouts, retry mode, TLS rules
+/// (`pool::tls`) and proxy precedence (`pool::proxy`).
 ///
-/// For the synthetic in-cluster context ([`ContextDefinition::is_in_cluster`]) it then applies
-/// [`in_cluster_config_fixups`] (CA hot-reload, no proxy), matching `Config::incluster()`.
+/// For the synthetic in-cluster context ([`ContextDefinition::is_in_cluster`]) it applies
+/// [`in_cluster_config_fixups`] (CA hot-reload, no proxy) instead of the proxy precedence,
+/// matching `Config::incluster()`.
 ///
 /// Compression stays as the kubeconfig says (`disable-compression`, default off).
 /// With the workspace's `gzip` kube feature the client then sends
@@ -133,42 +142,24 @@ pub fn build_config(
     // `from_custom_kubeconfig` is `async` but never awaits (kube 4.2 resolves the
     // kubeconfig synchronously), so `block_on` returns at once. We are on a blocking
     // thread (see the module docs), never on an async worker.
-    let mut config = futures::executor::block_on(Config::from_custom_kubeconfig(
-        definition.kubeconfig().clone(),
-        &options,
-    ))
-    .map_err(|err| classify_kubeconfig(&err))?;
+    let mut kubeconfig = definition.kubeconfig().clone();
+    tls::normalize(&mut kubeconfig);
+    let mut config =
+        futures::executor::block_on(Config::from_custom_kubeconfig(kubeconfig, &options))
+            .map_err(|err| classify_kubeconfig(&err))?;
 
     config.connect_timeout = pool.connect_timeout;
     config.read_timeout = pool.read_timeout;
     config.write_timeout = pool.write_timeout;
     config.default_retry = pool.retry.default_retry();
 
-    let proxy = cluster_proxy_url(definition).or_else(|| proxy_env.https_proxy.clone());
-    config.proxy_url = match proxy {
-        // Same classification as kube's own proxy parse; the URL is never echoed.
-        Some(url) => Some(
-            url.parse()
-                .map_err(|err| classify_kubeconfig(&KubeconfigError::ParseProxyUrl(err)))?,
-        ),
-        None => None,
-    };
+    tls::apply(&mut config, definition)?;
     if definition.is_in_cluster() {
-        // After the proxy decision above: `Config::incluster()` never proxies.
+        // `Config::incluster()` never proxies, so the proxy settings are not even
+        // validated; the fix-ups also clear any proxy kube resolved itself.
         in_cluster_config_fixups(&mut config);
+    } else {
+        config.proxy_url = proxy::resolve(definition, proxy_env)?;
     }
     Ok(config)
-}
-
-/// The cluster's own `proxy-url`, when set and non-empty.
-fn cluster_proxy_url(definition: &ContextDefinition) -> Option<String> {
-    definition
-        .kubeconfig()
-        .clusters
-        .first()?
-        .cluster
-        .as_ref()?
-        .proxy_url
-        .clone()
-        .filter(|url| !url.is_empty())
 }

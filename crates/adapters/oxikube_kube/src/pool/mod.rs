@@ -46,6 +46,14 @@
 //! released after long use gets the full `max_idle`; sweep at least every
 //! `max_idle` to keep that accurate.
 //!
+//! # TLS and proxies
+//!
+//! [`build_config`] applies the cluster's TLS and proxy settings: insecure mode (flagged by
+//! [`ClientPool::tls_verification_disabled`] and logged without secrets), custom CAs with
+//! reload for file CAs, `tls-server-name`, and proxy selection and scheme validation. The rules
+//! and precedence are documented in the private `tls` and `proxy` modules; both are covered by
+//! `security_tests`.
+//!
 //! # Secrets
 //!
 //! Entries hold credentials. Every `Debug` here prints context names and server
@@ -57,9 +65,13 @@ mod build;
 mod config;
 mod entry;
 mod eviction;
+mod proxy;
+mod tls;
 
 #[cfg(test)]
 mod in_cluster_tests;
+#[cfg(test)]
+mod security_tests;
 #[cfg(test)]
 mod tests;
 
@@ -194,6 +206,15 @@ impl ClientPool {
                 return Ok(client);
             }
         }
+    }
+
+    /// Whether `context` connects with TLS verification disabled (`insecure-skip-tls-verify`
+    /// in its cluster entry). Meant for a session badge; `false` for an unknown context.
+    /// See the `tls` module docs: this is the only way verification is ever disabled.
+    pub fn tls_verification_disabled(&self, context: &ContextName) -> bool {
+        let state = self.state.lock();
+        ContextDefinition::from_kubeconfig(&state.kubeconfig, context)
+            .is_some_and(|definition| definition.tls_verification_disabled())
     }
 
     /// Drops the entry for `context`. Returns whether there was one. Holders of
