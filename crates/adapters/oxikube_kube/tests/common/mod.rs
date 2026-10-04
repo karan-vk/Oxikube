@@ -6,11 +6,15 @@
 //! down to the kind context alone: other contexts in a developer's kubeconfig (cloud
 //! clusters with exec plugins) are never built, contacted or written anywhere.
 //!
+//! `health` holds the liveness-loop helpers shared by the health scenarios.
+//!
 //! Namespaced fixtures (service accounts, roles, bindings) live in the test's
 //! `oxi-test-<rand>` namespace and go away with it.
 
 // Each test file uses a different subset of these helpers.
 #![allow(dead_code)]
+
+pub mod health;
 
 use std::future::Future;
 use std::path::PathBuf;
