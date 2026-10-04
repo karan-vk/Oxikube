@@ -22,7 +22,10 @@
 //!    split across writes.
 //! 2. **The fields formatter redacts by name.** [`RedactingFields`] replaces the value of a field
 //!    named like a secret (`token`, `id_token`, `password`, `authorization`, ...) outright and
-//!    scrubs the text of every other field before ANSI or JSON framing can obscure a key.
+//!    scrubs the text of every other field (a `&str` before quoting escapes its newlines). The
+//!    JSON layer cannot use it (the JSON formatter visits event fields itself); it relies on the
+//!    text patterns catching every sensitive name in `"<name>":<value>` form, which
+//!    `oxikube_domain` tests for every name.
 //!
 //! Layers built here format with ANSI off: colour escapes inside a key would hide it from the
 //! scrubber.

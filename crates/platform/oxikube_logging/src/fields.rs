@@ -12,7 +12,8 @@ use tracing_subscriber::fmt::format::{FormatFields, Writer};
 /// - the value of a field whose name [`is_sensitive_field`] is replaced by [`MARKER`] without
 ///   being formatted at all, and
 /// - every other value is passed through [`redact`], so a header map or a derived `Debug` dump
-///   in a field is scrubbed here, before any framing.
+///   in a field is scrubbed here, before any framing. A `&str` value is redacted before it is
+///   quoted, while its line breaks are still real.
 ///
 /// `message` is written bare and `log.*` bridge fields are skipped, as the default does.
 #[derive(Debug, Clone, Copy, Default)]
@@ -36,8 +37,17 @@ struct RedactingVisitor<'a> {
     first: bool,
 }
 
+/// A field value as recorded.
+enum Value<'v> {
+    /// A `&str` field: redacted raw, before `Debug` quoting escapes its newlines (a YAML
+    /// manifest's `data:` block must be seen line by line).
+    Str(&'v str),
+    /// Anything else, formatted with `Debug` and then redacted.
+    Debug(&'v dyn Debug),
+}
+
 impl RedactingVisitor<'_> {
-    fn write_field(&mut self, name: &str, value: &dyn Debug) -> fmt::Result {
+    fn write_field(&mut self, name: &str, value: Value<'_>) -> fmt::Result {
         if !self.first {
             self.writer.write_char(' ')?;
         }
@@ -45,10 +55,17 @@ impl RedactingVisitor<'_> {
         let shown: Cow<'_, str> = if is_sensitive_field(name) {
             Cow::Borrowed(MARKER)
         } else {
-            let text = format!("{value:?}");
-            match redact(&text) {
-                Cow::Borrowed(_) => Cow::Owned(text),
-                Cow::Owned(scrubbed) => Cow::Owned(scrubbed),
+            match value {
+                // Quoted like the default formatter, except for a bare `message`.
+                Value::Str(text) if name == "message" => redact(text),
+                Value::Str(text) => Cow::Owned(format!("{:?}", redact(text))),
+                Value::Debug(value) => {
+                    let text = format!("{value:?}");
+                    match redact(&text) {
+                        Cow::Borrowed(_) => Cow::Owned(text),
+                        Cow::Owned(scrubbed) => Cow::Owned(scrubbed),
+                    }
+                }
             }
         };
         if name == "message" {
@@ -57,15 +74,23 @@ impl RedactingVisitor<'_> {
             write!(self.writer, "{name}={shown}")
         }
     }
-}
 
-impl Visit for RedactingVisitor<'_> {
-    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+    fn record(&mut self, field: &Field, value: Value<'_>) {
         let name = field.name();
         if self.result.is_err() || name.starts_with("log.") {
             return;
         }
         let name = name.strip_prefix("r#").unwrap_or(name);
         self.result = self.write_field(name, value);
+    }
+}
+
+impl Visit for RedactingVisitor<'_> {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.record(field, Value::Str(value));
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+        self.record(field, Value::Debug(value));
     }
 }

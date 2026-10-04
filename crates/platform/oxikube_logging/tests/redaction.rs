@@ -232,6 +232,120 @@ fn json_layer_scrubs_secret_data_with_non_secret_looking_keys() {
     }
 }
 
+/// Logs `SECRETV` under each field name, once as a scalar and once as a `Debug` map.
+macro_rules! log_named {
+    ($($name:literal),+ $(,)?) => {{
+        let map: BTreeMap<&str, &str> = [("user", "SECRETV")].into();
+        $(
+            tracing::info!($name = "SECRETV", "scalar");
+            tracing::info!($name = ?map, "map");
+        )+
+    }};
+}
+
+#[test]
+fn json_layer_redacts_every_sensitive_field_name() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_json_layer(capture.clone()));
+    tracing::subscriber::with_default(subscriber, || {
+        // Every `SENSITIVE_FIELDS` entry, plus names that only a suffix makes sensitive.
+        log_named!(
+            "client-key-data",
+            "client_key_data",
+            "client-certificate-data",
+            "client_certificate_data",
+            "client-secret",
+            "client_secret",
+            "secret-data",
+            "secret_data",
+            "string-data",
+            "string_data",
+            "stringdata",
+            "stringData",
+            "id_token",
+            "db.password",
+            "passwd",
+            "proxy_authorization",
+            "http.authorization",
+            "aws_secret",
+            "x-api-key",
+            "api_key",
+            "apikey",
+        );
+        tracing::info!(
+            proxy_authorization = "Basic YWRtaW46c2VjcmV0UFc=",
+            "upstream"
+        );
+    });
+    let out = capture.text();
+    assert_eq!(out.lines().count(), 43, "{out}");
+    for secret in ["SECRETV", "YWRtaW46c2VjcmV0UFc="] {
+        assert!(!out.contains(secret), "{secret:?} leaked:\n{out}");
+    }
+    for name in [
+        "secret_data",
+        "string_data",
+        "stringData",
+        "proxy_authorization",
+    ] {
+        assert!(
+            out.contains(&format!(r#""{name}":"[redacted]""#)),
+            "{name} not redacted in place:\n{out}"
+        );
+    }
+    for line in out.lines() {
+        serde_json::from_str::<serde_json::Value>(line).expect("valid JSON after scrubbing");
+    }
+}
+
+const MANIFEST: &str = "apiVersion: v1\nkind: Secret\ndata:\n  tls.key: TLSKEYVALUE\n";
+
+fn log_manifest() {
+    tracing::info!("manifest:\n{MANIFEST}");
+    tracing::info!(manifest = MANIFEST, "as str");
+    tracing::info!(manifest = ?MANIFEST, "as debug");
+    tracing::info!(manifest = %MANIFEST, "as display");
+}
+
+#[test]
+fn json_layer_redacts_a_secret_manifest_behind_escaped_newlines() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_json_layer(capture.clone()));
+    tracing::subscriber::with_default(subscriber, log_manifest);
+    let out = capture.text();
+    assert_eq!(out.lines().count(), 4, "{out}");
+    assert!(!out.contains("TLSKEYVALUE"), "{out}");
+    assert_eq!(out.matches("tls.key: [redacted]").count(), 4, "{out}");
+}
+
+#[test]
+fn text_layer_redacts_a_secret_manifest_in_str_and_debug_fields() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_layer(capture.clone()));
+    tracing::subscriber::with_default(subscriber, log_manifest);
+    let out = capture.text();
+    assert!(!out.contains("TLSKEYVALUE"), "{out}");
+    assert_eq!(out.matches("tls.key: [redacted]").count(), 4, "{out}");
+    // A `&str` field is still printed quoted, as the default formatter does.
+    assert!(out.contains(r#"manifest="apiVersion: v1\nkind"#), "{out}");
+}
+
+#[test]
+fn fields_formatter_alone_redacts_a_str_manifest() {
+    // Plain writer: `record_str` must redact before `Debug` quoting escapes the newlines.
+    let capture = Capture::default();
+    let layer = fmt::layer()
+        .with_ansi(false)
+        .fmt_fields(RedactingFields)
+        .with_writer(capture.clone());
+    tracing::subscriber::with_default(tracing_subscriber::registry().with(layer), || {
+        tracing::info!(manifest = MANIFEST, "as str");
+    });
+    let out = capture.text();
+    assert!(!out.contains("TLSKEYVALUE"), "{out}");
+    assert!(out.contains(r#"tls.key: [redacted]\n""#), "{out}");
+}
+
 #[test]
 fn trace_level_output_contains_no_secrets() {
     // RUST_LOG=trace equivalent: every event at every level reaches the writer.
