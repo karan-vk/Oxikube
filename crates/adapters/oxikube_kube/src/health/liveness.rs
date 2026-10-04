@@ -38,12 +38,18 @@ use crate::auth::{CredentialRefresh, classify_with};
 
 mod machine;
 
+/// The shortest interval and probe timeout accepted; smaller values (including zero) are
+/// raised to this so a bad setting cannot turn the loop into a busy loop.
+pub const MIN_INTERVAL: Duration = Duration::from_secs(1);
+
 /// Tuning for [`Liveness::spawn`].
 #[derive(Debug, Clone, Copy)]
 pub struct LivenessConfig {
-    /// Time between probes while healthy. A modest default keeps idle CPU near zero.
+    /// Time between probes while healthy (at least [`MIN_INTERVAL`]). A modest default
+    /// keeps idle CPU near zero.
     pub interval: Duration,
-    /// A single probe that takes longer than this fails with a `Timeout` error.
+    /// A single probe that takes longer than this (at least [`MIN_INTERVAL`]) fails with
+    /// a `Timeout` error.
     pub probe_timeout: Duration,
     /// This many failures in a row end the run with [`HealthEvent::Failed`].
     pub failure_threshold: u32,
@@ -85,16 +91,21 @@ impl Liveness {
     /// Starts probing now (the first probe runs immediately) and returns the handle plus
     /// the event receiver. Must be called inside a Tokio runtime.
     ///
+    /// Start the loop once the session is `Ready`: `Healthy` and `Unhealthy` are not legal
+    /// session events while it is still `Connecting`.
+    ///
     /// The receiver closes when the loop ends (after `Failed`, or when the handle is
     /// dropped). A slow receiver slows the loop down rather than losing events.
     pub fn spawn<P, Fut>(
-        config: LivenessConfig,
+        mut config: LivenessConfig,
         probe: P,
     ) -> (Liveness, mpsc::Receiver<HealthEvent>)
     where
         P: FnMut() -> Fut + Send + 'static,
         Fut: Future<Output = OxiResult<String>> + Send + 'static,
     {
+        config.interval = config.interval.max(MIN_INTERVAL);
+        config.probe_timeout = config.probe_timeout.max(MIN_INTERVAL);
         let (tx, rx) = mpsc::channel(32);
         let (settings, settings_rx) = watch::channel(Settings {
             interval: config.interval,
@@ -122,8 +133,10 @@ impl Liveness {
         self.settings.send_modify(|s| s.paused = false);
     }
 
-    /// Changes the healthy-state interval. Takes effect for the current wait.
+    /// Changes the healthy-state interval (raised to [`MIN_INTERVAL`] if smaller). Takes
+    /// effect for the current wait.
     pub fn set_interval(&self, interval: Duration) {
+        let interval = interval.max(MIN_INTERVAL);
         self.settings.send_modify(|s| s.interval = interval);
     }
 

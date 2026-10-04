@@ -76,26 +76,58 @@ fn view_role_without_log_subresource_has_no_logs() {
 }
 
 #[test]
-fn exec_and_portforward_need_create_on_their_subresources() {
+fn exec_and_portforward_need_both_get_and_create() {
     let r = capabilities_from_rules(&complete(vec![
-        rule(&[""], &["pods/exec"], &["create"]),
-        rule(&[""], &["pods/portforward"], &["get"]),
+        rule(&[""], &["pods/exec"], &["get", "create"]),
+        rule(&[""], &["pods/portforward"], &["create"]),
     ]));
     assert_eq!(r.granted, C::EXEC);
-    assert!(r.denied().contains(C::PORTFORWARD));
+    assert!(
+        r.denied().contains(C::PORTFORWARD),
+        "create alone is not enough"
+    );
+    let r = capabilities_from_rules(&complete(vec![rule(
+        &[""],
+        &["pods/exec", "pods/portforward"],
+        &["get"],
+    )]));
+    assert_eq!(r.granted, C::empty(), "get alone is not enough");
     let r = capabilities_from_rules(&complete(vec![rule(
         &[""],
         &["pods/portforward"],
-        &["create"],
+        &["create", "get"],
     )]));
     assert_eq!(r.granted, C::PORTFORWARD);
+}
+
+#[test]
+fn get_and_create_may_come_from_different_rules() {
+    let r = capabilities_from_rules(&complete(vec![
+        rule(&[""], &["pods/exec"], &["get"]),
+        rule(&["*"], &["*"], &["create"]),
+    ]));
+    assert_eq!(r.granted, C::EXEC | C::MUTATE);
+}
+
+#[test]
+fn a_restricted_half_makes_the_whole_requirement_restricted() {
+    let r = capabilities_from_rules(&complete(vec![
+        rule(&[""], &["pods/exec"], &["get"]),
+        named(rule(&[""], &["pods/exec"], &["create"]), &["web-0"]),
+    ]));
+    assert!(r.restricted.contains(C::EXEC));
+    assert!(!r.granted.contains(C::EXEC));
 }
 
 #[test]
 fn star_slash_subresource_matches_any_resource() {
     let r = capabilities_from_rules(&complete(vec![rule(&[""], &["*/exec", "*/log"], &["*"])]));
     assert_eq!(r.granted, C::EXEC | C::LOGS);
-    let r = capabilities_from_rules(&complete(vec![rule(&[""], &["*/exec"], &["create"])]));
+    let r = capabilities_from_rules(&complete(vec![rule(
+        &[""],
+        &["*/exec"],
+        &["get", "create"],
+    )]));
     assert!(!r.granted.contains(C::LOGS));
 }
 
@@ -122,7 +154,7 @@ fn api_group_must_match_pods_are_in_the_core_group() {
     let r = capabilities_from_rules(&complete(vec![rule(
         &["apps", ""],
         &["pods/exec"],
-        &["create"],
+        &["get", "create"],
     )]));
     assert_eq!(r.granted, C::EXEC);
     let r = capabilities_from_rules(&complete(vec![rule(&["*"], &["pods/log"], &["get"])]));
@@ -176,7 +208,7 @@ fn stream_subresources_do_not_count_as_mutation() {
     let r = capabilities_from_rules(&complete(vec![rule(
         &[""],
         &["pods/exec", "pods/portforward", "pods/attach"],
-        &["create"],
+        &["get", "create"],
     )]));
     assert!(!r.granted.contains(C::MUTATE));
     assert!(r.granted.contains(C::EXEC | C::PORTFORWARD));
@@ -192,7 +224,7 @@ fn stream_subresources_do_not_count_as_mutation() {
 #[test]
 fn resource_names_restrict_instead_of_grant() {
     let r = capabilities_from_rules(&complete(vec![
-        named(rule(&[""], &["pods/exec"], &["create"]), &["web-0"]),
+        named(rule(&[""], &["pods/exec"], &["get", "create"]), &["web-0"]),
         named(
             rule(&[""], &["configmaps"], &["update", "patch"]),
             &["app-config"],
@@ -208,8 +240,8 @@ fn resource_names_restrict_instead_of_grant() {
 #[test]
 fn an_unrestricted_rule_beats_a_restricted_one() {
     let r = capabilities_from_rules(&complete(vec![
-        named(rule(&[""], &["pods/exec"], &["create"]), &["web-0"]),
-        rule(&[""], &["pods/exec"], &["create"]),
+        named(rule(&[""], &["pods/exec"], &["get", "create"]), &["web-0"]),
+        rule(&[""], &["pods/exec"], &["get", "create"]),
     ]));
     assert_eq!(r.granted, C::EXEC);
     assert_eq!(r.restricted, C::empty());
@@ -238,7 +270,7 @@ fn evaluation_error_counts_as_incomplete() {
 #[test]
 fn incomplete_review_keeps_what_it_did_find_even_if_restricted() {
     let r = capabilities_from_rules(&partial(vec![named(
-        rule(&[""], &["pods/exec"], &["create"]),
+        rule(&[""], &["pods/exec"], &["get", "create"]),
         &["web-0"],
     )]));
     assert_eq!(r.restricted, C::EXEC);

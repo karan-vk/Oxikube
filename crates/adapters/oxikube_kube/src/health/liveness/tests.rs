@@ -247,3 +247,41 @@ async fn dropping_the_receiver_ends_the_loop() {
     assert!(live.is_finished());
     assert_eq!(times.lock().unwrap().len(), 1);
 }
+
+#[tokio::test(start_paused = true)]
+async fn zero_interval_is_raised_to_the_minimum() {
+    let cfg = LivenessConfig {
+        interval: Duration::ZERO,
+        ..quick()
+    };
+    let (probe, times) = scripted(vec![ok()]);
+    let (live, mut rx) = Liveness::spawn(cfg, probe);
+    next(&mut rx).await;
+    next(&mut rx).await;
+    live.set_interval(Duration::ZERO);
+    next(&mut rx).await;
+    let t = times.lock().unwrap();
+    assert_eq!(t[1] - t[0], MIN_INTERVAL);
+    assert_eq!(t[2] - t[1], MIN_INTERVAL);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_forbidden_version_probe_stays_degraded_until_the_threshold() {
+    let (probe, _) = scripted(vec![Err(OxiError::forbidden("/version is forbidden"))]);
+    let (_live, mut rx) = Liveness::spawn(quick(), probe);
+    assert!(matches!(
+        next(&mut rx).await,
+        HealthEvent::Unhealthy {
+            consecutive_failures: 1,
+            ..
+        }
+    ));
+    assert!(matches!(
+        next(&mut rx).await,
+        HealthEvent::Unhealthy {
+            consecutive_failures: 2,
+            ..
+        }
+    ));
+    assert!(matches!(next(&mut rx).await, HealthEvent::Failed { .. }));
+}

@@ -16,6 +16,10 @@
 //!   `evaluationError`, so more rules may exist. Unknown is never reported as denied;
 //! * **denied**: nothing matched and the review was complete.
 //!
+//! `EXEC` and `PORTFORWARD` need both `get` and `create` on their subresource (kube-rs
+//! connects with a WebSocket upgrade, authorized as `get`; newer apiservers also check
+//! `create`); `LOGS` needs `get` on `pods/log`.
+//!
 //! Matching follows the apiserver's RBAC rules: `*` matches any verb, API group or
 //! resource; `*/exec` matches the `exec` subresource of any resource; the core group is
 //! the empty string. (RBAC has no `pods/*` form.) Non-resource rules (`/healthz`, ...)
@@ -124,15 +128,15 @@ pub fn capabilities_from_rules(snapshot: &RulesSnapshot) -> CapabilityReport {
         (Capabilities::MUTATE, mutate_grant(rules)),
         (
             Capabilities::EXEC,
-            requirement_grant(rules, "", "pods/exec", "create"),
+            requirement_grant(rules, "", "pods/exec", &STREAM_VERBS),
         ),
         (
             Capabilities::LOGS,
-            requirement_grant(rules, "", "pods/log", "get"),
+            requirement_grant(rules, "", "pods/log", &["get"]),
         ),
         (
             Capabilities::PORTFORWARD,
-            requirement_grant(rules, "", "pods/portforward", "create"),
+            requirement_grant(rules, "", "pods/portforward", &STREAM_VERBS),
         ),
     ];
     let mut report = CapabilityReport::default();
@@ -165,8 +169,23 @@ impl Grant {
     }
 }
 
-/// Best grant for one (group, resource, verb) requirement across all rules.
-fn requirement_grant(rules: &[AccessRule], group: &str, resource: &str, verb: &str) -> Grant {
+/// Verbs a stream subresource (`exec`, `portforward`) needs. kube-rs opens these with a
+/// WebSocket upgrade, which the apiserver authorizes as `get`; newer apiservers also
+/// authorize the `create` of the equivalent POST path. Both are required, so a user
+/// who can only do one of them is not offered an action that would end in a 403.
+const STREAM_VERBS: [&str; 2] = ["get", "create"];
+
+/// Best grant for one (group, resource) requirement: for each verb the best matching
+/// rule, then the weakest verb. All verbs must be covered for anything above `None`.
+fn requirement_grant(rules: &[AccessRule], group: &str, resource: &str, verbs: &[&str]) -> Grant {
+    verbs
+        .iter()
+        .map(|verb| verb_grant(rules, group, resource, verb))
+        .min()
+        .unwrap_or(Grant::None)
+}
+
+fn verb_grant(rules: &[AccessRule], group: &str, resource: &str, verb: &str) -> Grant {
     rules
         .iter()
         .filter(|r| {
