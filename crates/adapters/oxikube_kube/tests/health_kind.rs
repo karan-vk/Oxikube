@@ -217,3 +217,62 @@ async fn pooled_probe_and_capabilities_work_against_the_pool() {
     assert!(matches!(event, HealthEvent::Healthy { .. }), "{event:?}");
     live.stop();
 }
+
+/// The kubeconfig with the CA removed from `context`'s cluster and TLS verification left
+/// on, so the client falls back to the system trust store, which does not know kind's
+/// self-signed CA: the handshake rejects the apiserver certificate. Also returns the
+/// cluster's server URL.
+fn kubeconfig_without_ca(context: &str) -> (Kubeconfig, String) {
+    ensure_kind_context(context).expect("kind context");
+    let mut kubeconfig = Kubeconfig::read().expect("read kubeconfig");
+    let cluster_name = kubeconfig
+        .contexts
+        .iter()
+        .find(|c| c.name == context)
+        .and_then(|c| c.context.as_ref())
+        .map(|c| c.cluster.clone())
+        .expect("context has a cluster");
+    let cluster = kubeconfig
+        .clusters
+        .iter_mut()
+        .find(|c| c.name == cluster_name)
+        .and_then(|c| c.cluster.as_mut())
+        .expect("cluster entry");
+    cluster.certificate_authority = None;
+    cluster.certificate_authority_data = None;
+    cluster.insecure_skip_tls_verify = Some(false);
+    let server = cluster.server.clone().expect("cluster server");
+    (kubeconfig, server)
+}
+
+#[tokio::test]
+async fn an_untrusted_server_certificate_fails_on_the_first_probe() {
+    use std::sync::Arc;
+
+    use oxikube_kube::health::pooled_probe;
+    use oxikube_kube::pool::{ClientPool, PoolConfig};
+
+    let Some(ctx) = test_context() else { return };
+    let (kubeconfig, server) = kubeconfig_without_ca(&ctx);
+    let pool = Arc::new(ClientPool::new(kubeconfig, PoolConfig::default()));
+    let context = ContextName::new(ctx.as_str());
+
+    // A threshold of 3 would allow two more probes if the error were transient.
+    let (_live, rx) = Liveness::spawn(
+        fast_config(3),
+        pooled_probe(pool, context, CredentialRefresh::Static),
+    );
+    let events = collect_events(rx).await;
+    assert_eq!(shape(&events), ["unhealthy", "failed"], "{events:?}");
+    let error = events[1].error().expect("error");
+    assert_eq!(error.kind(), ErrorKind::Network, "{error:?}");
+    assert!(!error.is_retryable(), "{error:?}");
+    let text = format!("{error} {error:?}");
+    assert!(
+        text.contains("certificate was rejected (UnknownIssuer)"),
+        "{text}"
+    );
+    // The message names the reason only, never the server.
+    let host = server.trim_start_matches("https://");
+    assert!(!text.contains(host), "{text}");
+}

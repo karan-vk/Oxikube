@@ -21,8 +21,9 @@ pub enum HealthEvent {
         consecutive_failures: u32,
     },
     /// The connection is not coming back by itself: a permanent failure (non-retryable
-    /// `Auth`, or a TLS/certificate error), or the failure threshold was reached. The session should go to `Error`. The probe loop
-    /// stops after emitting this; restart it after the session reconnects.
+    /// `Auth`, or a rejected server certificate), or the failure threshold was reached.
+    /// The session should go to `Error`. The probe loop stops after emitting this; restart
+    /// it after the session reconnects.
     Failed {
         /// The error that ended the probing.
         error: OxiError,
@@ -61,7 +62,7 @@ impl HealthEvent {
 ///   before it is anything worse).
 /// * A failure ends the run with `Failed` when it is the `threshold`-th in a row, or at
 ///   once when it is *permanent*: a non-retryable `Auth` error (revoked or missing
-///   credential) or a non-retryable `Network` error (a TLS or certificate failure). A
+///   credential) or a non-retryable `Network` error (a rejected server certificate). A
 ///   permanent first failure therefore emits `Unhealthy` then `Failed` together.
 /// * Other non-retryable kinds (`Forbidden` on `/version` on a hardened cluster,
 ///   `NotFound` or `Internal` from a gateway that does not proxy `/version`) are not
@@ -116,7 +117,9 @@ impl HealthMachine {
     }
 }
 
-/// A failure retrying cannot fix.
+/// A failure retrying cannot fix. The classifier marks `Network` non-retryable only for a
+/// server certificate rejected in the TLS handshake (`crate::auth::classify`); other
+/// connection failures stay retryable and count toward the threshold.
 fn is_permanent(error: &OxiError) -> bool {
     !error.is_retryable() && matches!(error.kind(), ErrorKind::Auth | ErrorKind::Network)
 }

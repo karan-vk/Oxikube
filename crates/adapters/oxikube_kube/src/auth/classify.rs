@@ -15,8 +15,10 @@ use oxikube_domain::OxiError;
 use super::scrub::scrub;
 
 mod auth_error;
+mod cert_error;
 mod config_error;
 use auth_error::classify_auth;
+use cert_error::certificate_rejection;
 pub use config_error::{classify_kubeconfig, classify_tls_setup};
 
 /// Whether the credential in use can be renewed by rebuilding the client.
@@ -64,6 +66,7 @@ impl CredentialRefresh {
 /// | 403 | `Forbidden`, with the server's "who cannot do what" message |
 /// | 404 / 409 (and 410 Gone) / 400, 422 | `NotFound` / `Conflict` / `Validation` |
 /// | 429, 503, 504, connection and TLS failures | `Network` |
+/// | server certificate rejected in the handshake | `Network`, not retryable |
 /// | 408, elapsed deadlines | `Timeout` |
 /// | missing API group, 405/406/415/501 | `Unsupported` |
 /// | everything else | `Internal` |
@@ -237,8 +240,12 @@ fn io_error(context: &str, err: &io::Error) -> OxiError {
     transport(context, err)
 }
 
-/// A transport failure: `Timeout` when the text says a deadline elapsed, else `Network`.
+/// A transport failure: a non-retryable `Network` error when the handshake rejected the
+/// server certificate, `Timeout` when the text says a deadline elapsed, else `Network`.
 fn transport(context: &str, err: &(dyn StdError + 'static)) -> OxiError {
+    if let Some(rejected) = certificate_rejection(err) {
+        return rejected;
+    }
     let text = scrub(&err.to_string());
     let lower = text.to_ascii_lowercase();
     if lower.contains("timed out")

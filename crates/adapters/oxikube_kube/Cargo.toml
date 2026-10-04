@@ -22,6 +22,7 @@ http.workspace = true
 k8s-openapi.workspace = true
 kube.workspace = true
 parking_lot.workspace = true
+rustls.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true

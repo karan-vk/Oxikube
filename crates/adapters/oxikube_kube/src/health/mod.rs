@@ -17,7 +17,8 @@
 //! legal session events while it is still `Connecting`. The first failed probe reports
 //! `Unhealthy` (Degraded). The run ends with `Failed` (Error) after `failure_threshold`
 //! consecutive failures (default 3), or at once for a permanent failure: a non-retryable
-//! `Auth` error or a TLS/certificate error. Other non-retryable kinds, such as a 403 on
+//! `Auth` error or a server certificate the TLS handshake rejected (untrusted issuer,
+//! expired, wrong name). Other non-retryable kinds, such as a 403 on
 //! `/version` from a hardened cluster, count toward the threshold. After `Failed` the loop
 //! stops: there is no `Error` -> `Healthy` transition, so recovery is a reconnect
 //! (`Connect`) by the session manager, which then restarts the loop.

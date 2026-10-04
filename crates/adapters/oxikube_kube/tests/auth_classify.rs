@@ -234,6 +234,34 @@ fn transport_failures_are_network_or_timeout() {
     assert_class(&classify(&nested), ErrorKind::Network, true);
 }
 
+/// The shape kube hands back for a failed handshake: the connector's `io::Error` (from
+/// tokio-rustls) around the `rustls::Error`, inside a boxed service error.
+fn handshake_error(tls: rustls::Error) -> kube::Error {
+    kube::Error::Service(Box::new(io::Error::other(io::Error::new(
+        io::ErrorKind::InvalidData,
+        tls,
+    ))))
+}
+
+#[test]
+fn a_rejected_server_certificate_is_a_permanent_network_error() {
+    use rustls::CertificateError as C;
+    for (cert, reason) in [
+        (C::UnknownIssuer, "UnknownIssuer"),
+        (C::Expired, "Expired"),
+        (C::NotValidForName, "NotValidForName"),
+    ] {
+        let err = classify(&handshake_error(rustls::Error::InvalidCertificate(cert)));
+        assert_class(&err, ErrorKind::Network, false);
+        assert!(err.message().contains(reason), "{err}");
+    }
+    let none = classify(&handshake_error(rustls::Error::NoCertificatesPresented));
+    assert_class(&none, ErrorKind::Network, false);
+    // Any other TLS failure stays a transient network error.
+    let other = classify(&handshake_error(rustls::Error::HandshakeNotComplete));
+    assert_class(&other, ErrorKind::Network, true);
+}
+
 #[test]
 fn an_auth_error_wrapped_in_a_service_error_is_still_auth() {
     let wrapped = kube::Error::Service(Box::new(AuthError::MissingCommand));

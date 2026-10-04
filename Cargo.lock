@@ -5505,6 +5505,7 @@ dependencies = [
  "oxikube_testkit",
  "parking_lot",
  "proptest",
+ "rustls",
  "serde",
  "serde_json",
  "tempfile",
