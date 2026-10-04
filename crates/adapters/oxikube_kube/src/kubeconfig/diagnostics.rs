@@ -18,6 +18,38 @@ pub enum Severity {
     Warning,
 }
 
+/// Which input supplied the kubeconfig paths (E03-S10). Tiers are exclusive, in this order of
+/// precedence, as in kubectl: the first one that yields any path is the only one loaded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SourceTier {
+    /// Paths passed in explicitly (settings, a `--kubeconfig` flag).
+    Explicit,
+    /// The `KUBECONFIG` environment variable.
+    KubeconfigEnv,
+    /// `~/.kube/config`.
+    DefaultPath,
+}
+
+impl fmt::Display for SourceTier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            SourceTier::Explicit => "explicit sources",
+            SourceTier::KubeconfigEnv => "KUBECONFIG",
+            SourceTier::DefaultPath => "the default kubeconfig path",
+        })
+    }
+}
+
+/// Why the in-cluster fallback did not run although no kubeconfig context was usable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InClusterSkip {
+    /// The process does not look like it runs in a pod.
+    NotInCluster,
+    /// A kubeconfig file exists but could not be read or parsed. Falling back would silently
+    /// change which cluster the app talks to, so the diagnostics are reported instead.
+    BrokenKubeconfig,
+}
+
 /// One thing worth telling the user about a load.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -62,13 +94,36 @@ pub enum Diagnostic {
         /// The file whose definition is ignored.
         shadowed: PathBuf,
     },
+    /// Which input supplied the paths that were loaded (E03-S10).
+    SourceSelected {
+        /// The winning tier.
+        tier: SourceTier,
+        /// How many paths it listed.
+        paths: usize,
+    },
+    /// No explicit source, `KUBECONFIG` entry or home directory gave any path to load.
+    NoKubeconfigSource,
+    /// No kubeconfig context was usable and the in-cluster service account was used instead.
+    InClusterUsed,
+    /// No kubeconfig context was usable and the in-cluster fallback was not used.
+    InClusterSkipped {
+        /// Why.
+        reason: InClusterSkip,
+    },
 }
 
 impl Diagnostic {
     /// How loudly to show this diagnostic.
     pub fn severity(&self) -> Severity {
         match self {
-            Diagnostic::MissingFile { .. } | Diagnostic::BlankFile { .. } => Severity::Info,
+            Diagnostic::MissingFile { .. }
+            | Diagnostic::BlankFile { .. }
+            | Diagnostic::SourceSelected { .. }
+            | Diagnostic::NoKubeconfigSource
+            | Diagnostic::InClusterUsed
+            | Diagnostic::InClusterSkipped {
+                reason: InClusterSkip::NotInCluster,
+            } => Severity::Info,
             _ => Severity::Warning,
         }
     }
@@ -102,6 +157,22 @@ impl fmt::Display for Diagnostic {
                     path.display()
                 )
             }
+            Diagnostic::SourceSelected { tier, paths } => {
+                write!(f, "kubeconfig source: {tier} ({paths} path(s))")
+            }
+            Diagnostic::NoKubeconfigSource => f.write_str("no kubeconfig path to load"),
+            Diagnostic::InClusterUsed => {
+                f.write_str("no kubeconfig context found; using the in-cluster service account")
+            }
+            Diagnostic::InClusterSkipped {
+                reason: InClusterSkip::NotInCluster,
+            } => f.write_str("no kubeconfig context found and not running in a cluster"),
+            Diagnostic::InClusterSkipped {
+                reason: InClusterSkip::BrokenKubeconfig,
+            } => f.write_str(
+                "a kubeconfig file could not be loaded; not falling back to the in-cluster \
+                 service account",
+            ),
             Diagnostic::DuplicateContext {
                 context,
                 winner,
@@ -160,4 +231,11 @@ pub struct SourceInfo {
     /// Every context name the file defines, including ones shadowed by an earlier file. Empty
     /// unless `status` is [`SourceStatus::Loaded`].
     pub contexts: Vec<ContextName>,
+}
+
+impl SourceInfo {
+    /// True for the synthetic source of the in-cluster context (not a file on disk).
+    pub fn is_in_cluster(&self) -> bool {
+        self.path == std::path::Path::new(super::incluster::IN_CLUSTER_SOURCE_PATH)
+    }
 }

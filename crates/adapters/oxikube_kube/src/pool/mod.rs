@@ -59,6 +59,8 @@ mod entry;
 mod eviction;
 
 #[cfg(test)]
+mod in_cluster_tests;
+#[cfg(test)]
 mod tests;
 
 use std::collections::{HashMap, HashSet};
@@ -84,6 +86,26 @@ pub use eviction::{Clock, DEFAULT_MAX_ENTRIES, DEFAULT_MAX_IDLE, EvictionPolicy,
 use entry::{Checkout, PendingBuild, PoolEntry};
 use eviction::Candidate;
 
+/// The contexts of `loaded` that are the synthetic in-cluster context, by provenance.
+fn in_cluster_contexts(loaded: &LoadedKubeconfig) -> HashSet<ContextName> {
+    loaded
+        .origins
+        .keys()
+        .filter(|context| loaded.is_in_cluster(context))
+        .cloned()
+        .collect()
+}
+
+/// The definition of `context`, flagged when it is in the in-cluster set.
+fn definition_for(
+    kubeconfig: &Kubeconfig,
+    in_cluster: &HashSet<ContextName>,
+    context: &ContextName,
+) -> Option<ContextDefinition> {
+    ContextDefinition::from_kubeconfig(kubeconfig, context)
+        .map(|definition| definition.with_in_cluster(in_cluster.contains(context)))
+}
+
 /// How many times `get` rebuilds when the entry is invalidated while its build runs.
 const MAX_GET_ATTEMPTS: usize = 3;
 
@@ -98,6 +120,8 @@ pub struct ClientPool {
 /// Everything behind the lock. The lock is never held across an `.await`.
 struct State {
     kubeconfig: Kubeconfig,
+    /// Contexts that are the synthetic in-cluster context, by provenance (E03-S10).
+    in_cluster: HashSet<ContextName>,
     entries: HashMap<ContextName, PoolEntry>,
     pinned: HashSet<ContextName>,
 }
@@ -114,10 +138,13 @@ impl ClientPool {
         )
     }
 
-    /// A pool over the merged kubeconfig from E03-S01's loader. The pool keeps only
-    /// `merged`; origins and diagnostics stay with the caller.
+    /// A pool over the merged kubeconfig from E03-S01's loader. The pool keeps `merged` and
+    /// which contexts are the synthetic in-cluster one (by provenance, so their clients get
+    /// the in-cluster fix-ups); other origins and diagnostics stay with the caller.
     pub fn from_loaded(loaded: &LoadedKubeconfig, config: PoolConfig) -> Self {
-        Self::new(loaded.merged.clone(), config)
+        let pool = Self::new(loaded.merged.clone(), config);
+        pool.state.lock().in_cluster = in_cluster_contexts(loaded);
+        pool
     }
 
     /// A pool with an explicit client factory and clock (tests, custom wiring).
@@ -130,6 +157,7 @@ impl ClientPool {
         Self {
             state: Mutex::new(State {
                 kubeconfig,
+                in_cluster: HashSet::new(),
                 entries: HashMap::new(),
                 pinned: HashSet::new(),
             }),
@@ -176,14 +204,31 @@ impl ClientPool {
 
     /// Installs a new merged kubeconfig and drops the entries whose definition
     /// changed or vanished. Unchanged entries keep their client. Returns the
-    /// dropped contexts, sorted.
+    /// dropped contexts, sorted. No context is treated as in-cluster; use
+    /// [`replace_loaded`](Self::replace_loaded) when the kubeconfig may include the
+    /// synthetic in-cluster context.
     pub fn replace_kubeconfig(&self, kubeconfig: Kubeconfig) -> Vec<ContextName> {
+        self.replace_state(kubeconfig, HashSet::new())
+    }
+
+    /// [`replace_kubeconfig`](Self::replace_kubeconfig) for a loader result: also records
+    /// which contexts are the synthetic in-cluster one. A context whose provenance changes
+    /// counts as changed and is rebuilt.
+    pub fn replace_loaded(&self, loaded: &LoadedKubeconfig) -> Vec<ContextName> {
+        self.replace_state(loaded.merged.clone(), in_cluster_contexts(loaded))
+    }
+
+    fn replace_state(
+        &self,
+        kubeconfig: Kubeconfig,
+        in_cluster: HashSet<ContextName>,
+    ) -> Vec<ContextName> {
         let mut state = self.state.lock();
         let mut dropped: Vec<ContextName> = state
             .entries
             .iter()
             .filter(|(name, entry)| {
-                ContextDefinition::from_kubeconfig(&kubeconfig, name)
+                definition_for(&kubeconfig, &in_cluster, name)
                     .is_none_or(|new| !new.same_connection(&entry.definition))
             })
             .map(|(name, _)| name.clone())
@@ -192,6 +237,7 @@ impl ClientPool {
             state.entries.remove(name);
         }
         state.kubeconfig = kubeconfig;
+        state.in_cluster = in_cluster;
         dropped.sort_unstable_by(|a, b| a.as_str().cmp(b.as_str()));
         dropped
     }
@@ -240,7 +286,7 @@ impl ClientPool {
             entry.last_used = now;
             entry.checkout()
         } else {
-            let definition = ContextDefinition::from_kubeconfig(&state.kubeconfig, context)
+            let definition = definition_for(&state.kubeconfig, &state.in_cluster, context)
                 .ok_or_else(|| {
                     OxiError::not_found(format!("context `{context}` is not in the kubeconfig"))
                 })?;

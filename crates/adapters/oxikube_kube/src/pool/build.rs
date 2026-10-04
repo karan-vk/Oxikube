@@ -20,6 +20,7 @@ use oxikube_domain::OxiError;
 use super::config::PoolConfig;
 use super::entry::ContextDefinition;
 use crate::auth::{build_client, classify_kubeconfig};
+use crate::kubeconfig::in_cluster_config_fixups;
 
 /// Builds clients for the pool. Called on a blocking thread inside a Tokio runtime.
 pub trait ClientFactory: Send + Sync + 'static {
@@ -107,6 +108,9 @@ impl std::fmt::Debug for ProxyEnv {
 /// (`Config::from_custom_kubeconfig`), then the pool's timeouts, retry mode and
 /// proxy precedence.
 ///
+/// For the synthetic in-cluster context ([`ContextDefinition::is_in_cluster`]) it then applies
+/// [`in_cluster_config_fixups`] (CA hot-reload, no proxy), matching `Config::incluster()`.
+///
 /// Compression stays as the kubeconfig says (`disable-compression`, default off).
 /// With the workspace's `gzip` kube feature the client then sends
 /// `Accept-Encoding: gzip` and decodes responses.
@@ -149,6 +153,10 @@ pub fn build_config(
         ),
         None => None,
     };
+    if definition.is_in_cluster() {
+        // After the proxy decision above: `Config::incluster()` never proxies.
+        in_cluster_config_fixups(&mut config);
+    }
     Ok(config)
 }
 

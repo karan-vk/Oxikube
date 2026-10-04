@@ -6,7 +6,10 @@
 //!
 //! | File | Role |
 //! |---|---|
-//! | `split` | pure `KUBECONFIG` splitting and default-path resolution |
+//! | `split` | pure, platform-aware `KUBECONFIG` splitting and default-path resolution |
+//! | `env` | the injected [`Env`], source precedence and the in-cluster decision (E03-S10) |
+//! | `home` | the home-directory choice (client-go `homedir.HomeDir`), pure over an injected probe |
+//! | `incluster` | the service account as a synthetic `in-cluster` context (E03-S10) |
 //! | `load` | the loader (a port of kdash's, MIT; see `THIRD_PARTY_NOTICES.md`) |
 //! | `diagnostics` | [`Diagnostic`], [`SourceInfo`], [`SourceStatus`] |
 //!
@@ -30,6 +33,12 @@
 //!   Each shadowed context name yields a [`Diagnostic::DuplicateContext`] naming both files.
 //!   Note this applies to clusters and users too: a context in file B that refers to cluster
 //!   `c` uses file A's `c` if A defines one.
+//! * **Source precedence** (E03-S10, see `env`): explicit sources, then `KUBECONFIG`, then
+//!   `~/.kube/config`, then in-cluster. The first tier with any path is the only one loaded; the
+//!   in-cluster context is a last resort, used only when no context was found and no file was
+//!   broken. [`load_kubeconfig_for_env`] applies it; [`load_kubeconfig_from_paths`] and
+//!   [`load_local_kubeconfig`] stay file-only. `KUBECONFIG` accepts `:` and `;` on every
+//!   platform (see `split`); `~` is not expanded, as in kubectl.
 //! * **Origins.** [`LoadedKubeconfig::origins`] maps each context name to the file whose
 //!   definition won; [`LoadedKubeconfig::cluster_id`] derives the catalog id from it.
 //! * **Relative paths.** `Kubeconfig::read_from` rewrites relative `certificate-authority`,
@@ -41,6 +50,9 @@
 //!   counts and names, not the merged config.
 
 mod diagnostics;
+mod env;
+mod home;
+mod incluster;
 mod load;
 mod split;
 
@@ -51,12 +63,24 @@ use std::path::{Path, PathBuf};
 use kube::config::Kubeconfig;
 use oxikube_domain::ids::{ClusterId, ContextName};
 
-pub use diagnostics::{Diagnostic, Severity, SourceInfo, SourceStatus};
+pub use diagnostics::{Diagnostic, InClusterSkip, Severity, SourceInfo, SourceStatus, SourceTier};
+pub use env::{
+    Env, Selection, apply_in_cluster_fallback, load_kubeconfig_for_env,
+    load_kubeconfig_for_env_blocking, load_kubeconfig_for_process, select_sources,
+};
+pub use incluster::{
+    IN_CLUSTER_CONTEXT, IN_CLUSTER_SOURCE_LABEL, IN_CLUSTER_SOURCE_PATH, apply_in_cluster_fixups,
+    in_cluster_cluster_id, in_cluster_config_fixups, in_cluster_context_name,
+    in_cluster_kubeconfig, in_cluster_server_url,
+};
 pub use load::{
     is_blank_kubeconfig, load_kubeconfig_from_paths, load_kubeconfig_from_paths_blocking,
     load_local_kubeconfig,
 };
-pub use split::{default_kubeconfig_path, resolve_kubeconfig_paths, split_kubeconfig_paths};
+pub use split::{
+    Platform, default_kubeconfig_path, resolve_kubeconfig_paths, split_kubeconfig,
+    split_kubeconfig_os, split_kubeconfig_paths,
+};
 
 /// Whether a load with no usable file is an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -91,6 +115,15 @@ impl LoadedKubeconfig {
     /// The file whose definition of `context` is used.
     pub fn origin(&self, context: &ContextName) -> Option<&Path> {
         self.origins.get(context).map(PathBuf::as_path)
+    }
+
+    /// True when `context` is the synthetic in-cluster context added by the in-cluster fallback,
+    /// decided by its origin ([`IN_CLUSTER_SOURCE_PATH`]), not by its name: a kubeconfig file may
+    /// define a context that is also called `in-cluster`.
+    pub fn is_in_cluster(&self, context: &ContextName) -> bool {
+        self.origins
+            .get(context)
+            .is_some_and(|origin| origin == Path::new(IN_CLUSTER_SOURCE_PATH))
     }
 
     /// The catalog id of `context`: a hash of its origin file's canonical path and its name.

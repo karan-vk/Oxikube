@@ -215,7 +215,7 @@ pub fn load_kubeconfig_from_paths_blocking(
 ///
 /// `NotFound` when every listed path is missing (or none was listed), `Validation` when at
 /// least one file exists but is unusable. The message names files, never their contents.
-fn unusable_error(loaded: &LoadedKubeconfig) -> OxiError {
+pub(super) fn unusable_error(loaded: &LoadedKubeconfig) -> OxiError {
     let only_missing = loaded
         .sources
         .iter()
@@ -226,6 +226,16 @@ fn unusable_error(loaded: &LoadedKubeconfig) -> OxiError {
     let detail = loaded
         .diagnostics
         .iter()
+        .filter(|d| {
+            matches!(
+                d,
+                Diagnostic::MissingFile { .. }
+                    | Diagnostic::BlankFile { .. }
+                    | Diagnostic::Unreadable { .. }
+                    | Diagnostic::Unparsable { .. }
+                    | Diagnostic::Incompatible { .. }
+            )
+        })
         .map(|d| d.to_string())
         .collect::<Vec<_>>()
         .join("; ");
