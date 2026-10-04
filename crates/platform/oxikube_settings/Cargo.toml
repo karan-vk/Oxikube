@@ -12,6 +12,35 @@ path = "src/oxikube_settings.rs"
 doctest = false
 
 [dependencies]
+dirs.workspace = true
+futures.workspace = true
+gpui.workspace = true
+inventory.workspace = true
+notify.workspace = true
+oxikube_assets.workspace = true
+oxikube_domain.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_json_lenient.workspace = true
+serde_path_to_error.workspace = true
+tracing.workspace = true
+tree-sitter.workspace = true
+tree-sitter-json.workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
+
+# Prints settings.schema.json; run by `cargo xtask gen-settings-schema`.
+[[example]]
+name = "settings_schema"
+path = "examples/settings_schema.rs"
+
+# Startup / hot-reload cost with a typical user file (E05-S13 budget).
+[[example]]
+name = "settings_load"
+path = "examples/settings_load.rs"
 
 [lints]
 workspace = true

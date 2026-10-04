@@ -1,0 +1,7 @@
+// Oxikube user settings.
+//
+// Settings here override Oxikube's defaults (default.json, which documents every setting).
+// Changes apply as soon as you save. Per-cluster overrides go under
+// "clusters": { "<cluster id>": { ... } }.
+{
+}
