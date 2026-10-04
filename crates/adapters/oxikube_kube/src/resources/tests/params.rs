@@ -1,22 +1,22 @@
 use oxikube_domain::ErrorKind;
 use oxikube_ports::{ListOptions, VersionMatch};
 
-use crate::resources::params::list_params;
+use std::time::Duration;
+
+use crate::resources::params::{deadline, list_params};
 
 #[test]
-fn selectors_limit_and_timeout_map_through() {
+fn selectors_and_limit_map_through() {
     let p = list_params(
         &ListOptions::default()
             .labels("app=web")
             .fields("spec.nodeName=n1")
-            .limit(250)
-            .timeout_secs(30),
+            .limit(250),
     )
     .unwrap();
     assert_eq!(p.label_selector.as_deref(), Some("app=web"));
     assert_eq!(p.field_selector.as_deref(), Some("spec.nodeName=n1"));
     assert_eq!(p.limit, Some(250));
-    assert_eq!(p.timeout, Some(30));
 }
 
 #[test]
@@ -70,4 +70,17 @@ fn invalid_version_combinations_are_validation_errors() {
         list_params(&exact_zero).unwrap_err().kind(),
         ErrorKind::Validation
     );
+}
+
+#[test]
+fn timeout_is_a_client_side_deadline_with_zero_meaning_none() {
+    assert_eq!(deadline(&ListOptions::default()), None);
+    assert_eq!(deadline(&ListOptions::default().timeout_secs(0)), None);
+    assert_eq!(
+        deadline(&ListOptions::default().timeout_secs(5)),
+        Some(Duration::from_secs(5))
+    );
+    // kube never sends `ListParams::timeout` on a list, so it is not set there.
+    let p = list_params(&ListOptions::default().timeout_secs(5)).unwrap();
+    assert_eq!(p.timeout, None);
 }

@@ -1,6 +1,7 @@
 //! List calls: one page, metadata-only, and the page-until-exhausted helper.
 
-use std::time::Instant;
+use std::future::Future;
+use std::time::{Duration, Instant};
 
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::Verb;
@@ -10,7 +11,7 @@ use tracing::debug;
 
 use super::backend::RawPage;
 use super::error::{bad_object, is_list_expired, list_error};
-use super::params::list_params;
+use super::params::{deadline, list_params};
 use super::{KubeResources, namespace_of};
 
 /// Capacity hint cap: a server-reported remaining count is advisory.
@@ -33,7 +34,8 @@ impl KubeResources {
         let params = list_params(options)?;
         let api = self.kind_api(&resource, namespace);
         let strip = self.config.list_managed_fields.strips();
-        let raw = api.list(&params, strip).await.map_err(|e| list_error(&e))?;
+        let call = async { api.list(&params, strip).await.map_err(|e| list_error(&e)) };
+        let raw = within(deadline(options), call).await?;
         into_resources(raw)
     }
 
@@ -48,11 +50,9 @@ impl KubeResources {
         let namespace = namespace_of(namespace);
         let resource = self.target(kind, namespace, Verb::List, false).await?;
         let params = list_params(options)?;
-        let raw = self
-            .dynamic(&resource, namespace)
-            .list_metadata(&params)
-            .await
-            .map_err(|e| list_error(&e))?;
+        let api = self.dynamic(&resource, namespace);
+        let call = async { api.list_metadata(&params).await.map_err(|e| list_error(&e)) };
+        let raw = within(deadline(options), call).await?;
         let page = into_resources(raw)?;
         Ok(ListPage {
             items: page.items.into_iter().map(|r| r.meta).collect(),
@@ -143,6 +143,23 @@ impl KubeResources {
                 next = page.continue_token;
             }
         }
+    }
+}
+
+/// Runs `call` under `limit` (none = unbounded); elapsed is a retryable `Timeout`. Dropping the
+/// future aborts the in-flight request.
+async fn within<T>(
+    limit: Option<Duration>,
+    call: impl Future<Output = OxiResult<T>>,
+) -> OxiResult<T> {
+    match limit {
+        None => call.await,
+        Some(limit) => tokio::time::timeout(limit, call).await.unwrap_or_else(|_| {
+            Err(OxiError::timeout(format!(
+                "list did not complete within {}s",
+                limit.as_secs()
+            )))
+        }),
     }
 }
 

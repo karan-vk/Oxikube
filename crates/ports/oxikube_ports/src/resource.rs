@@ -104,7 +104,9 @@ pub struct ListOptions {
     pub resource_version: Option<String>,
     /// How `resource_version` is matched.
     pub version_match: Option<VersionMatch>,
-    /// Server-side timeout for the call, in seconds.
+    /// Deadline for one list request, in seconds; `0` means none. Enforced by the adapter
+    /// (client-side: the API server is not told), and elapsed is a `Timeout` error. For a
+    /// paged `list_all` it applies to each page request.
     pub timeout_secs: Option<u32>,
 }
 
@@ -145,7 +147,7 @@ impl ListOptions {
         self
     }
 
-    /// Sets the server-side timeout.
+    /// Sets the per-request deadline.
     #[must_use]
     pub fn timeout_secs(mut self, secs: u32) -> Self {
         self.timeout_secs = Some(secs);

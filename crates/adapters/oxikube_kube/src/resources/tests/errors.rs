@@ -121,3 +121,49 @@ async fn get_checks_the_namespace_against_the_scope() {
     assert_eq!(extra.kind(), ErrorKind::Validation);
     assert_eq!(api.hits(POD_A), 0);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_stalled_list_times_out_at_the_deadline() {
+    let api = server();
+    api.stall(PODS);
+    let r = resources(&api);
+    let started = tokio::time::Instant::now();
+    let err = list_pods(&r, ListOptions::default().timeout_secs(5))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::Timeout);
+    assert!(err.is_retryable());
+    assert_eq!(started.elapsed(), std::time::Duration::from_secs(5));
+    assert_eq!(api.hits(PODS), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stalled_metadata_list_and_paged_list_time_out_too() {
+    let api = server();
+    api.stall(PODS);
+    let r = resources(&api);
+    let options = ListOptions::default().timeout_secs(2);
+    let err = r
+        .list_metadata(&pod_gvk(), Some("default"), &options)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::Timeout);
+    let err = r
+        .list_all(&pod_gvk(), Some("default"), &options)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::Timeout);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_prompt_list_is_unaffected_by_a_deadline() {
+    let api = server();
+    api.reply(PODS, 200, pod_list(&["a"], None, "7"));
+    let r = resources(&api);
+    let page = list_pods(&r, ListOptions::default().timeout_secs(5))
+        .await
+        .unwrap();
+    assert_eq!(page.items.len(), 1);
+    // The deadline is not a query parameter.
+    assert!(!query_of(&api, PODS, 0).contains("timeout"));
+}
