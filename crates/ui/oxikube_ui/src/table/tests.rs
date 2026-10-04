@@ -184,6 +184,41 @@ fn column_widths_follow_ui_zoom_after_creation(cx: &mut TestAppContext) {
     );
 }
 
+/// Heights the table gave column 0's header body and row 0's cell body.
+fn header_and_row_heights(cx: &mut VisualTestContext) -> (f32, f32) {
+    let mut height = |selector: &'static str| {
+        let bounds = cx.debug_bounds(selector).expect("cell was not laid out");
+        f32::from(bounds.size.height)
+    };
+    (height("th-0"), height("td-0-0"))
+}
+
+#[gpui::test]
+fn row_and_header_heights_follow_ui_zoom(cx: &mut TestAppContext) {
+    let (_view, cx) = harness(cx, 5);
+    cx.run_until_parked();
+    let (header_100, row_100) = header_and_row_heights(cx);
+
+    // The medium density is 32 design px, so 200 % adds 32 px to both (cell padding is fixed).
+    set_zoom_and_draw(cx, 2.0);
+    let (header_200, row_200) = header_and_row_heights(cx);
+    assert!(
+        (header_200 - header_100 - 32.).abs() < 1.5,
+        "header is {header_100} px at 100 % and {header_200} px at 200 %: height ignores zoom"
+    );
+    assert!(
+        (row_200 - row_100 - 32.).abs() < 1.5,
+        "row is {row_100} px at 100 % and {row_200} px at 200 %: height ignores zoom"
+    );
+
+    set_zoom_and_draw(cx, 1.0);
+    let (header_back, row_back) = header_and_row_heights(cx);
+    assert!(
+        (header_back - header_100).abs() < 1.5 && (row_back - row_100).abs() < 1.5,
+        "heights did not return at 100 %"
+    );
+}
+
 #[gpui::test]
 fn user_resized_widths_survive_a_zoom_change_unscaled(cx: &mut TestAppContext) {
     let (view, cx) = harness(cx, 5);

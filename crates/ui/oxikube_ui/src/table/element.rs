@@ -6,7 +6,7 @@ use gpui::{App, IntoElement, RenderOnce, Window};
 use gpui_component::Sizable as _;
 use gpui_component::table::DataTable;
 
-use crate::size::ControlSize;
+use crate::size::{ControlSize, u};
 
 /// Renders a [`TableHandle`]: a header row and virtualised rows.
 ///
@@ -44,7 +44,12 @@ impl<D: TableDelegate> Table<D> {
         self
     }
 
-    /// Row density (sets the uniform row height).
+    /// Row density: sets the uniform row height (and the header height, which is one row).
+    ///
+    /// The density's design-time height (32 px for medium) is multiplied by the UI zoom on every
+    /// render, so rows follow the zoom like the columns and the text do. A [`ControlSize::Size`]
+    /// is a design-time row height in pixels. The library styles a pixel height with its medium
+    /// cell padding, so the density's own padding and text step are not applied.
     pub fn size(mut self, size: ControlSize) -> Self {
         self.size = size;
         self
@@ -59,6 +64,8 @@ impl<D: TableDelegate> RenderOnce for Table<D> {
         DataTable::new(self.handle.state())
             .stripe(self.stripe)
             .bordered(self.bordered)
-            .with_size(self.size)
+            // The library reads the row height from this on every render, so a zoom change needs
+            // no refresh: hand it the zoomed height rather than the density enum (a fixed 32 px).
+            .with_size(ControlSize::Size(u(self.size.table_row_height())))
     }
 }

@@ -66,7 +66,13 @@ impl TableDelegate for Synthetic {
         let mut inner = self.counts.0.borrow_mut();
         inner.cells += 1;
         inner.rows.insert(row_ix);
-        div().child(format!("r{row_ix}c{col_ix}"))
+        // Row 0 column 0's cell body is tagged so tests can measure the row height.
+        div()
+            .size_full()
+            .child(format!("r{row_ix}c{col_ix}"))
+            .when(row_ix == 0 && col_ix == 0, |td| {
+                td.debug_selector(|| "td-0-0".into())
+            })
     }
 }
 
