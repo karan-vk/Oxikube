@@ -7,8 +7,7 @@
 //! tracing output captured at `trace` level. Servers point at `127.0.0.1:1`; building a kube
 //! `Client` opens no connection.
 
-use std::io;
-use std::sync::{Arc, LazyLock, Mutex, Once};
+mod support;
 
 use kube::config::Kubeconfig;
 use oxikube_domain::OxiError;
@@ -18,8 +17,7 @@ use oxikube_kube::{
     ClientPool, ContextDefinition, DiscoveryConfig, KubeClientFactory, KubeDiscovery, PoolConfig,
     ProxyEnv,
 };
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::fmt::MakeWriter;
+use support::{captured, init_tracing};
 
 // Fake secrets. Nothing here is a real credential.
 const TOKEN: &str = "dbg-token-AAAA-0123456789";
@@ -104,73 +102,19 @@ fn ctx(name: &str) -> ContextName {
     ContextName::from(name)
 }
 
-/// Collects all formatted tracing output of this test binary.
-#[derive(Clone, Default)]
-struct Capture(Arc<Mutex<Vec<u8>>>);
-
-impl io::Write for Capture {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(buf);
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> MakeWriter<'a> for Capture {
-    type Writer = Capture;
-    fn make_writer(&'a self) -> Capture {
-        self.clone()
-    }
-}
-
-static CAPTURE: LazyLock<Capture> = LazyLock::new(Capture::default);
-
-/// Installs a global trace-level subscriber once. Global, not per-thread: client builds run on
-/// blocking-pool threads, which do not inherit a thread-local default.
-fn init_tracing() {
-    static INIT: Once = Once::new();
-    INIT.call_once(|| {
-        let subscriber = tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::new("trace"))
-            .with_ansi(false)
-            .with_writer(CAPTURE.clone())
-            .finish();
-        tracing::subscriber::set_global_default(subscriber).expect("one global subscriber");
-    });
-}
-
-fn captured() -> String {
-    String::from_utf8_lossy(&CAPTURE.0.lock().unwrap()).into_owned()
-}
-
 #[track_caller]
 fn assert_no_secrets(what: &str, text: &str) {
-    for secret in ALL {
-        assert!(!text.contains(secret), "{what} leaks {secret:?}:\n{text}");
-    }
+    support::assert_no_secrets(what, text, ALL);
 }
 
-/// `{:?}` and `{:#?}` of `value`, for both checks.
 #[track_caller]
 fn assert_debug_clean(what: &str, value: &dyn std::fmt::Debug) {
-    assert_no_secrets(what, &format!("{value:?}"));
-    assert_no_secrets(what, &format!("{value:#?}"));
+    support::assert_debug_clean(what, value, ALL);
 }
 
-/// The error text a caller (and a log line) would show, in every format.
 #[track_caller]
 fn assert_error_clean(what: &str, err: &OxiError) {
-    assert_no_secrets(
-        what,
-        &format!("{err:?} | {err:#?} | {err} | {}", err.message()),
-    );
-    let mut source = std::error::Error::source(err);
-    while let Some(cause) = source {
-        assert_no_secrets(what, &format!("{cause:?} | {cause}"));
-        source = cause.source();
-    }
+    support::assert_error_clean(what, err, ALL);
 }
 
 async fn get_err(pool: &ClientPool, context: &str) -> OxiError {

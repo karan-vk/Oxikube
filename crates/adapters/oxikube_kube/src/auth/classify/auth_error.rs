@@ -5,7 +5,9 @@ use std::io;
 use kube::client::AuthError;
 use oxikube_domain::OxiError;
 
-use crate::auth::scrub::{scrub, scrub_tail};
+use oxikube_domain::redact::redact;
+
+use super::text::{last_lines, one_line};
 
 /// Classifies a client auth error (exec plugin, OIDC, OAuth, token file, ...).
 pub(super) fn classify_auth(err: &AuthError) -> OxiError {
@@ -48,9 +50,10 @@ pub(super) fn classify_auth(err: &AuthError) -> OxiError {
             "the exec credential plugin configuration is incomplete",
             false,
         ),
-        A::AuthExec(msg) => {
-            OxiError::auth(format!("credential helper failed: {}", scrub(msg)), true)
-        }
+        A::AuthExec(msg) => OxiError::auth(
+            format!("credential helper failed: {}", one_line(&redact(msg))),
+            true,
+        ),
         A::ReadTokenFile(e, path) => {
             let permanent = matches!(
                 e.kind(),
@@ -111,7 +114,7 @@ fn classify_oidc(err: &kube::client::oidc_errors::Error) -> OxiError {
 fn exec_run_failed(status: &str, stderr: &[u8]) -> OxiError {
     let stderr = String::from_utf8_lossy(stderr);
     let needs_input = needs_human_input(&stderr);
-    let tail = scrub_tail(&stderr, 3);
+    let tail = last_lines(&redact(&stderr), 3);
     let detail = if tail.is_empty() {
         String::new()
     } else {

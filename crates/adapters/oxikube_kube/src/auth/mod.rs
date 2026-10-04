@@ -30,14 +30,13 @@
 //!
 //! # Secrets
 //!
-//! Error text is built from fixed phrases plus scrubbed free text. The exec command line
-//! (arguments and environment), plugin stdout, request headers and credentials never
-//! appear in an error message or source.
+//! Error text is built from fixed phrases plus free text redacted with
+//! [`oxikube_domain::redact::redact`]. The exec command line (arguments and environment),
+//! plugin stdout, request headers and credentials never appear in an error message or source.
 
 mod classify;
 mod exec;
 mod retry;
-mod scrub;
 
 pub use classify::{
     CredentialRefresh, classify, classify_kubeconfig, classify_tls_setup, classify_with,
