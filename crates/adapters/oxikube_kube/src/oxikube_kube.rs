@@ -21,6 +21,9 @@ pub mod health;
 pub mod kubeconfig;
 pub mod pool;
 
+#[cfg(test)]
+mod fake_api;
+
 pub use discovery::{
     CrdWatch, CrdWatchConfig, DiscoveryConfig, KindChange, KubeDiscovery, Registry, RegistryDiff,
 };

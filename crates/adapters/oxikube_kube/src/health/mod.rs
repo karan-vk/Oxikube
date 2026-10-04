@@ -45,6 +45,9 @@ mod liveness;
 mod pooled;
 mod rules;
 
+#[cfg(test)]
+mod tests;
+
 pub use access::{AccessDecision, AccessQuery, can_i};
 pub use capabilities::{
     AccessLevel, AccessRule, CapabilityReport, RBAC_DERIVED, RulesSnapshot, capabilities_from_rules,

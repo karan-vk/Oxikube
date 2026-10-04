@@ -1,0 +1,117 @@
+{
+    "apiVersion": "authorization.k8s.io/v1",
+    "kind": "SelfSubjectRulesReview",
+    "metadata": {},
+    "spec": {},
+    "status": {
+        "incomplete": false,
+        "nonResourceRules": [
+            {
+                "nonResourceURLs": [
+                    "/.well-known/openid-configuration",
+                    "/.well-known/openid-configuration/",
+                    "/openid/v1/jwks",
+                    "/openid/v1/jwks/"
+                ],
+                "verbs": [
+                    "get"
+                ]
+            },
+            {
+                "nonResourceURLs": [
+                    "/api",
+                    "/api/*",
+                    "/apis",
+                    "/apis/*",
+                    "/healthz",
+                    "/livez",
+                    "/openapi",
+                    "/openapi/*",
+                    "/readyz",
+                    "/version",
+                    "/version/"
+                ],
+                "verbs": [
+                    "get"
+                ]
+            },
+            {
+                "nonResourceURLs": [
+                    "/healthz",
+                    "/livez",
+                    "/readyz",
+                    "/version",
+                    "/version/"
+                ],
+                "verbs": [
+                    "get"
+                ]
+            }
+        ],
+        "resourceRules": [
+            {
+                "apiGroups": [
+                    ""
+                ],
+                "resources": [
+                    "endpoints",
+                    "services",
+                    "pods",
+                    "namespaces"
+                ],
+                "verbs": [
+                    "list",
+                    "watch"
+                ]
+            },
+            {
+                "apiGroups": [
+                    "discovery.k8s.io"
+                ],
+                "resources": [
+                    "endpointslices"
+                ],
+                "verbs": [
+                    "list",
+                    "watch"
+                ]
+            },
+            {
+                "apiGroups": [
+                    "certificates.k8s.io"
+                ],
+                "resources": [
+                    "clustertrustbundles"
+                ],
+                "verbs": [
+                    "get",
+                    "list",
+                    "watch"
+                ]
+            },
+            {
+                "apiGroups": [
+                    "authorization.k8s.io"
+                ],
+                "resources": [
+                    "selfsubjectaccessreviews",
+                    "selfsubjectrulesreviews"
+                ],
+                "verbs": [
+                    "create"
+                ]
+            },
+            {
+                "apiGroups": [
+                    "authentication.k8s.io"
+                ],
+                "resources": [
+                    "selfsubjectreviews"
+                ],
+                "verbs": [
+                    "create"
+                ]
+            }
+        ]
+    }
+}
