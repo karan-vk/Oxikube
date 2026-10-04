@@ -207,15 +207,15 @@ async fn no_token_reaches_the_logs() {
         capture.text.text_since(text_mark),
         capture.json.text_since(json_mark),
     ]) {
-        assert_eq!(
-            deliberate.matches("deliberate").count(),
-            4,
-            "{what}: {deliberate}"
-        );
-        assert!(
-            deliberate.matches(MARKER).count() >= 4,
-            "{what}: {deliberate}"
-        );
+        // Token check first, and counts only in the messages below: if redaction regresses,
+        // the captured text holds the real token and must not reach a panic message.
         assert_no_tokens(what, &output, &tokens);
+        let lines = deliberate.matches("deliberate").count();
+        assert_eq!(lines, 4, "{what}: {lines} deliberate lines, expected 4");
+        let markers = deliberate.matches(MARKER).count();
+        assert!(
+            markers >= 4,
+            "{what}: {markers} redaction markers in the deliberate lines, expected >= 4"
+        );
     }
 }
