@@ -12,6 +12,31 @@ path = "src/oxikube_ui.rs"
 doctest = false
 
 [dependencies]
+gpui.workspace = true
+gpui-component.workspace = true
+gpui-kit-assets.workspace = true
+oxikube_assets.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
+gpui_platform = { workspace = true, features = ["test-support"] }
+serde_json.workspace = true
+anyhow.workspace = true
+
+[features]
+default = []
+# Headless GPU screenshot test of the token sampler (`tests/screenshot.rs`, harness = false so it
+# runs on the process main thread). Needs Metal / Vulkan, so never part of the default gate; the
+# nightly workflow runs it: `cargo test -p oxikube_ui --features screenshot`.
+screenshot = []
+
+[[test]]
+name = "screenshot"
+path = "tests/screenshot.rs"
+harness = false
+required-features = ["screenshot"]
 
 [lints]
 workspace = true

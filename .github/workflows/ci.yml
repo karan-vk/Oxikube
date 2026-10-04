@@ -57,5 +57,5 @@ jobs:
       - run: cargo test --workspace
       # Feature-gated screenshot harness (E01-S11): lint everything with the feature on, and run
       # the pure-image golden-compare tests (no GPU needed). GPU smoke tests run in nightly.
-      - run: cargo clippy -p oxikube -p oxikube_testkit --features oxikube/screenshot,oxikube_testkit/screenshot --all-targets -- -D warnings
+      - run: cargo clippy -p oxikube -p oxikube_testkit -p oxikube_ui --features oxikube/screenshot,oxikube_testkit/screenshot,oxikube_ui/screenshot --all-targets -- -D warnings
       - run: cargo test -p oxikube_testkit --features screenshot
