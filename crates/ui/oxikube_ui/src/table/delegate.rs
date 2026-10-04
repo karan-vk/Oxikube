@@ -21,7 +21,9 @@ pub trait TableDelegate: 'static {
     /// Number of rows.
     fn rows_count(&self, cx: &App) -> usize;
 
-    /// Describes column `col_ix`. Read when the table is created or [`refresh`]ed, not per frame.
+    /// Describes column `col_ix`. Read when the table is created, [`refresh`]ed or the UI zoom
+    /// changes, not per frame. Widths are design-time pixels: the table applies the zoom, so do not
+    /// pass them through [`crate::u`].
     ///
     /// [`refresh`]: super::TableHandle::refresh
     fn column(&self, col_ix: usize, cx: &App) -> TableColumn;

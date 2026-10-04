@@ -27,7 +27,6 @@ use oxikube_ui::{
     input::{Input, InputState},
     layout::{h_flex, v_flex},
     table::{Table, TableColumn, TableDelegate, TableHandle},
-    u,
 };
 use std::path::Path;
 use std::process::ExitCode;
@@ -47,11 +46,9 @@ impl TableDelegate for Pods {
     }
     fn column(&self, col_ix: usize, _: &App) -> TableColumn {
         match col_ix {
-            0 => TableColumn::new("name", "Name")
-                .width(u(px(300.)))
-                .sortable(),
-            1 => TableColumn::new("status", "Status").width(u(px(160.))),
-            _ => TableColumn::new("age", "Age").width(u(px(120.))).right(),
+            0 => TableColumn::new("name", "Name").width(px(300.)).sortable(),
+            1 => TableColumn::new("status", "Status").width(px(160.)),
+            _ => TableColumn::new("age", "Age").width(px(120.)).right(),
         }
     }
     fn render_td(

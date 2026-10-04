@@ -1,5 +1,6 @@
 //! Column description and sort direction.
 
+use crate::size::{UiScale, Unscaled};
 use gpui::{Pixels, SharedString, TextAlign, px};
 use gpui_component::table::{Column, ColumnSort};
 
@@ -49,16 +50,18 @@ pub enum ColumnAlign {
 
 /// One column of a [`Table`](super::Table).
 ///
-/// Widths are pixels as given: pass them through [`crate::u`] to follow UI zoom.
+/// Widths are **design-time** pixels (at 100 % zoom): the table multiplies them by the current UI
+/// zoom itself, on creation and again whenever the zoom changes, so do not pass them through
+/// [`crate::u`] (that would scale twice). Widths the user dragged to are kept unscaled too.
 #[derive(Clone, Debug)]
 pub struct TableColumn {
     /// Stable identifier (usually the field name); survives reordering.
     pub key: SharedString,
     /// Header label.
     pub name: SharedString,
-    /// Initial width.
+    /// Initial width, at 100 % zoom.
     pub width: Pixels,
-    /// Lower bound when the user resizes.
+    /// Lower bound when the user resizes, at 100 % zoom.
     pub min_width: Pixels,
     /// Header and cell alignment.
     pub align: ColumnAlign,
@@ -143,11 +146,17 @@ impl TableColumn {
         self
     }
 
-    /// The gpui-component column this describes.
-    pub(super) fn to_library(&self) -> Column {
+    /// The gpui-component column this describes, at zoom `scale`. `user_width` is a width the user
+    /// dragged to; it replaces [`width`](Self::width).
+    pub(super) fn to_library(&self, scale: UiScale, user_width: Option<Unscaled>) -> Column {
+        let min_width = Unscaled(f32::from(self.min_width)).at(scale);
+        let width = user_width
+            .unwrap_or(Unscaled(f32::from(self.width)))
+            .at(scale)
+            .max(min_width);
         let mut column = Column::new(self.key.clone(), self.name.clone())
-            .width(self.width)
-            .min_width(self.min_width)
+            .width(width)
+            .min_width(min_width)
             .resizable(self.resizable)
             .movable(self.movable);
         column.align = match self.align {

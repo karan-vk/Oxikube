@@ -1,19 +1,21 @@
 //! Renders each curated component once with the default tokens (E05-S02 acceptance test).
 //!
-//! Each test mounts the component in a window and asserts it laid out with a non-empty box, which
-//! fails if the wrapper is mis-wired (missing init, missing asset, panic in render).
+//! Each test mounts the component in a window and asserts on something the component itself
+//! produced, so an empty render fails: a content-sized box (zero height when nothing is drawn), a
+//! child the component must lay out (the dock's panel), or painted quads (the chart's bars). No
+//! assertion may rest on a size the test imposed itself.
 
 use gpui::{
-    AnyElement, App, AppContext as _, Bounds, Context, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, Render, Styled as _, TestAppContext, VisualTestContext, Window,
-    div, px,
+    AnyElement, App, AppContext as _, Bounds, Context, EventEmitter, FocusHandle, Focusable,
+    InteractiveElement as _, IntoElement, ParentElement as _, Pixels, Render, Styled as _,
+    TestAppContext, VisualTestContext, Window, div, px,
 };
 use oxikube_ui::{
     ActiveTokens as _, Icon, IconName,
     button::{Button, ButtonVariants as _},
-    chart::LineChart,
+    chart::{BarChart, LineChart},
     dialog::{Dialog, OverlayExt as _},
-    dock::DockSkin,
+    dock::{DockLayout, DockSkin, PanelBehavior, PanelEvent, panel_handle},
     input::{Input, InputState},
     layout::v_flex,
     markdown::MarkdownView,
@@ -26,8 +28,9 @@ use oxikube_ui::{
 gpui::actions!(components_test, [Noop]);
 
 /// Renders `R` inside a 480 px wide, content-height div tagged with a debug selector. A zero-height
-/// box therefore means the component produced no content; components that fill their parent are
-/// given an explicit height by their test.
+/// box therefore means the component produced no content. Never give a component's parent an
+/// explicit height and then assert on that parent: such tests pass for an empty component. Those
+/// that fill their parent assert on something they produce instead (see the dock and chart tests).
 struct Mount<R>(R);
 
 impl<R: Fn(&mut Window, &mut App) -> AnyElement + 'static> Render for Mount<R> {
@@ -105,23 +108,66 @@ fn tabs_render(cx: &mut TestAppContext) {
     assert_laid_out(cx, "tabs");
 }
 
-#[gpui::test]
-fn sidebar_renders(cx: &mut TestAppContext) {
-    let cx = mount(cx, |_, _| {
-        |_, _| {
-            let sidebar = Sidebar::<SidebarMenu>::new("sidebar").child(
-                SidebarMenu::new()
-                    .child(SidebarMenuItem::new("Workloads").icon(Icon::new(IconName::Layers)))
-                    .child(SidebarMenuItem::new("Network").icon(Icon::new(IconName::Network))),
-            );
+/// Quads painted by a sidebar holding `items` active menu entries. An active entry paints its own
+/// highlight quad, which the test cannot size, so counting them observes what the sidebar drew.
+fn sidebar_quads(cx: &mut TestAppContext, items: usize) -> usize {
+    let cx = mount(cx, move |_, _| {
+        move |_, _| {
+            let mut menu = SidebarMenu::new();
+            for ix in 0..items {
+                menu = menu.child(
+                    SidebarMenuItem::new(format!("Item {ix}"))
+                        .icon(Icon::new(IconName::Layers))
+                        .active(true),
+                );
+            }
+            let sidebar = Sidebar::<SidebarMenu>::new("sidebar").child(menu);
             div().h(px(200.)).child(sidebar).into_any_element()
         }
     });
-    assert_laid_out(cx, "sidebar");
+    cx.update(|window, _| window.painted_quads().len())
+}
+
+#[gpui::test]
+fn sidebar_renders(cx: &mut TestAppContext) {
+    // The sidebar fills a parent the test sizes, so its box proves nothing; its menu entries do.
+    let empty = sidebar_quads(cx, 0);
+    let four = sidebar_quads(cx, 4);
+    assert!(
+        four >= empty + 4,
+        "4 active entries painted {four} quads, an empty sidebar {empty}: entries were not drawn"
+    );
+}
+
+/// Quads painted by a bar chart of `points` bars (plus whatever the window background paints).
+fn bar_chart_quads(cx: &mut TestAppContext, points: usize) -> usize {
+    let cx = mount(cx, move |_, _| {
+        move |_, _| {
+            let data: Vec<(f64, f64)> = (0..points)
+                .map(|i| (i as f64, 1.0 + (i * 3 % 7) as f64))
+                .collect();
+            let chart = BarChart::new(data)
+                .band(|d: &(f64, f64)| format!("{}", d.0))
+                .value(|d: &(f64, f64)| d.1);
+            div().h(px(200.)).child(chart).into_any_element()
+        }
+    });
+    cx.update(|window, _| window.painted_quads().len())
 }
 
 #[gpui::test]
 fn chart_renders(cx: &mut TestAppContext) {
+    // A chart paints into a box its parent sizes, so the box proves nothing; its bars do. Each
+    // bar is a painted quad, so a chart that draws nothing leaves the quad count at its baseline.
+    let baseline = bar_chart_quads(cx, 0);
+    let drawn = bar_chart_quads(cx, 12);
+    assert!(
+        drawn >= baseline + 12,
+        "12-bar chart painted {drawn} quads, empty chart {baseline}: the bars were not painted"
+    );
+
+    // The line chart paints paths and text, which tests cannot observe: smoke test only (it must
+    // build, lay out and paint without panicking).
     let cx = mount(cx, |_, _| {
         |_, _| {
             let data: Vec<(f64, f64)> = (0..20)
@@ -133,7 +179,10 @@ fn chart_renders(cx: &mut TestAppContext) {
             div().h(px(200.)).child(chart).into_any_element()
         }
     });
-    assert_laid_out(cx, "chart");
+    assert!(
+        cx.debug_bounds("subject").is_some(),
+        "line chart not laid out"
+    );
 }
 
 #[gpui::test]
@@ -159,13 +208,52 @@ fn menu_renders(cx: &mut TestAppContext) {
     assert_laid_out(cx, "menu");
 }
 
+/// A panel whose body is tagged, so the test can ask the dock where it put it.
+struct ProbePanel(FocusHandle);
+
+impl PanelBehavior for ProbePanel {
+    fn panel_name(&self) -> &'static str {
+        "ProbePanel"
+    }
+}
+impl oxikube_ui::dock::Panel for ProbePanel {}
+impl EventEmitter<PanelEvent> for ProbePanel {}
+
+impl Focusable for ProbePanel {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.0.clone()
+    }
+}
+
+impl Render for ProbePanel {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .id("probe-panel")
+            .debug_selector(|| "probe-panel".into())
+            .size_full()
+    }
+}
+
 #[gpui::test]
 fn dock_area_renders(cx: &mut TestAppContext) {
     let cx = mount(cx, |window, cx| {
         let (area, _skin) = DockSkin::dock_area("dock", Some(1), window, cx);
+        let panel = cx.new(|cx| ProbePanel(cx.focus_handle()));
+        area.update(cx, |area, cx| {
+            let layout = DockLayout::tabs().panel_view(panel_handle(panel), cx);
+            area.set_center(layout, window, cx);
+        });
         move |_, _| div().h(px(200.)).child(area.clone()).into_any_element()
     });
-    assert_laid_out(cx, "dock area");
+    // The dock, not the test, decides the panel's box: it exists only if the dock rendered it.
+    let panel = cx
+        .debug_bounds("probe-panel")
+        .expect("the dock area did not render its panel");
+    assert!(
+        panel.size.width > px(100.) && panel.size.height > px(50.),
+        "panel got a {:?} box inside a 480 x 200 dock",
+        panel.size
+    );
 }
 
 #[gpui::test]

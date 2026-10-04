@@ -2,8 +2,11 @@
 
 use super::adapter::Adapter;
 use super::delegate::TableDelegate;
-use gpui::{App, AppContext as _, Entity, Pixels, Subscription, Window};
+use super::widths::ColumnWidths;
+use crate::size::Unscaled;
+use gpui::{App, AppContext as _, Entity, Subscription, Window};
 use gpui_component::table::{TableEvent as LibEvent, TableState as LibState};
+use std::rc::Rc;
 
 /// Something happened in a table that its owner may care about.
 #[derive(Clone, Debug, PartialEq)]
@@ -14,8 +17,9 @@ pub enum TableEvent {
     ActivateRow(usize),
     /// A row (or the empty area, `None`) was right-clicked: show a context menu.
     RightClickedRow(Option<usize>),
-    /// The user resized columns; widths in column order.
-    ColumnsResized(Vec<Pixels>),
+    /// The user resized columns; widths in column order, unscaled (persist them as they are; the
+    /// table applies the zoom when it reads them back).
+    ColumnsResized(Vec<Unscaled>),
     /// The user dragged column `from` to position `to`.
     ColumnMoved {
         /// Index the column had.
@@ -28,12 +32,14 @@ pub enum TableEvent {
 }
 
 impl TableEvent {
-    fn from_library(event: &LibEvent) -> Option<Self> {
+    fn from_library(event: &LibEvent, widths: &ColumnWidths) -> Option<Self> {
         Some(match event {
             LibEvent::SelectRow(ix) => TableEvent::SelectRow(*ix),
             LibEvent::DoubleClickedRow(ix) => TableEvent::ActivateRow(*ix),
             LibEvent::RightClickedRow(ix) => TableEvent::RightClickedRow(*ix),
-            LibEvent::ColumnWidthsChanged(widths) => TableEvent::ColumnsResized(widths.clone()),
+            LibEvent::ColumnWidthsChanged(resized) => {
+                TableEvent::ColumnsResized(widths.unscale(resized))
+            }
             LibEvent::MoveColumn(from, to) => TableEvent::ColumnMoved {
                 from: *from,
                 to: *to,
@@ -76,12 +82,14 @@ impl Default for TableOptions {
 /// handle); render it with [`Table::new`](super::Table::new).
 pub struct TableHandle<D: TableDelegate> {
     state: Entity<LibState<Adapter<D>>>,
+    widths: Rc<ColumnWidths>,
 }
 
 impl<D: TableDelegate> Clone for TableHandle<D> {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
+            widths: self.widths.clone(),
         }
     }
 }
@@ -99,14 +107,25 @@ impl<D: TableDelegate> TableHandle<D> {
         window: &mut Window,
         cx: &mut App,
     ) -> Self {
+        let widths = Rc::new(ColumnWidths::new());
+        let adapter_widths = widths.clone();
         let state = cx.new(|cx| {
-            LibState::new(Adapter::new(delegate), window, cx)
+            LibState::new(Adapter::new(delegate, adapter_widths), window, cx)
                 .sortable(options.sortable)
                 .col_resizable(options.resizable_columns)
                 .col_movable(options.movable_columns)
                 .loop_selection(options.loop_selection)
         });
-        Self { state }
+        // Remember what the user resized (unscaled), whether or not anyone listens for events, so
+        // a zoom change keeps those widths. The subscription ends with the table's state.
+        let recorder = widths.clone();
+        cx.subscribe(&state, move |_, event: &LibEvent, _| {
+            if let LibEvent::ColumnWidthsChanged(resized) = event {
+                recorder.record_resize(resized);
+            }
+        })
+        .detach();
+        Self { state, widths }
     }
 
     pub(super) fn state(&self) -> &Entity<LibState<Adapter<D>>> {
@@ -128,12 +147,26 @@ impl<D: TableDelegate> TableHandle<D> {
         })
     }
 
-    /// Re-reads the column definitions from the delegate. Resets user-resized widths.
+    /// Re-reads the column definitions from the delegate. Resets user-resized widths (use it when
+    /// the columns themselves changed; a UI zoom change is handled by the table, keeping them).
     pub fn refresh(&self, cx: &mut App) {
-        self.state.update(cx, |state, cx| {
-            state.refresh(cx);
-            cx.notify();
-        });
+        self.widths.clear_user_widths();
+        self.reread_columns(cx);
+        self.state.update(cx, |_, cx| cx.notify());
+    }
+
+    /// Re-reads the columns (at the current zoom) without forgetting user-resized widths.
+    fn reread_columns(&self, cx: &mut App) {
+        self.state.update(cx, |state, cx| state.refresh(cx));
+        self.widths.mark_applied();
+    }
+
+    /// Called by the element each frame: the library caches widths, so a zoom change since the
+    /// last read means they are stale.
+    pub(super) fn rescale_if_stale(&self, cx: &mut App) {
+        if self.widths.is_stale() {
+            self.reread_columns(cx);
+        }
     }
 
     /// The selected row, if any.
@@ -169,8 +202,9 @@ impl<D: TableDelegate> TableHandle<D> {
         cx: &mut App,
         mut handler: impl FnMut(&TableEvent, &mut App) + 'static,
     ) -> Subscription {
+        let widths = self.widths.clone();
         cx.subscribe(&self.state, move |_, event: &LibEvent, cx| {
-            if let Some(event) = TableEvent::from_library(event) {
+            if let Some(event) = TableEvent::from_library(event, &widths) {
                 handler(&event, cx);
             }
         })

@@ -2,12 +2,15 @@
 
 use super::column::{ColumnAlign, SortDirection};
 use super::delegate::TableDelegate;
+use super::widths::ColumnWidths;
+use crate::size::UiScale;
 use gpui::{App, Context, IntoElement, ParentElement as _, Styled as _, Window, div};
 use gpui_component::table::{
     Column, ColumnSort, TableDelegate as LibDelegate, TableState as LibState,
 };
 use std::cell::RefCell;
 use std::ops::Range;
+use std::rc::Rc;
 
 /// Wraps a delegate so it satisfies gpui-component's trait. Each method forwards, reborrowing the
 /// library's `Context` as the `App` our trait takes.
@@ -15,16 +18,20 @@ use std::ops::Range;
 /// gpui-component 0.7 stores a column's alignment but never applies it, so the adapter does:
 /// `aligns` caches each column's alignment as the library reads the column definitions (once per
 /// create/refresh), and cells and headers are laid out with it.
+///
+/// Column widths are scaled by the UI zoom as the library reads them (see [`ColumnWidths`]).
 pub(super) struct Adapter<D> {
     pub(super) delegate: D,
     aligns: RefCell<Vec<ColumnAlign>>,
+    pub(super) widths: Rc<ColumnWidths>,
 }
 
 impl<D> Adapter<D> {
-    pub(super) fn new(delegate: D) -> Self {
+    pub(super) fn new(delegate: D, widths: Rc<ColumnWidths>) -> Self {
         Self {
             delegate,
             aligns: RefCell::new(Vec::new()),
+            widths,
         }
     }
 
@@ -64,7 +71,12 @@ impl<D: TableDelegate> LibDelegate for Adapter<D> {
             aligns.resize(col_ix + 1, ColumnAlign::default());
         }
         aligns[col_ix] = column.align;
-        column.to_library()
+        let library = column.to_library(
+            UiScale::new(crate::size::current_scale()),
+            self.widths.user_width(col_ix),
+        );
+        self.widths.record_supplied(col_ix, library.width);
+        library
     }
 
     fn render_td(
@@ -102,6 +114,7 @@ impl<D: TableDelegate> LibDelegate for Adapter<D> {
                 aligns.insert(to_ix, align);
             }
         }
+        self.widths.moved(col_ix, to_ix);
         self.delegate.move_column(col_ix, to_ix, window, cx);
     }
 

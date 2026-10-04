@@ -52,7 +52,10 @@ impl<D: TableDelegate> Table<D> {
 }
 
 impl<D: TableDelegate> RenderOnce for Table<D> {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        // The library caches column widths; re-read them (keeping what the user resized) when the
+        // UI zoom changed since.
+        self.handle.rescale_if_stale(cx);
         DataTable::new(self.handle.state())
             .stripe(self.stripe)
             .bordered(self.bordered)

@@ -4,7 +4,9 @@ mod support;
 
 use self::support::harness;
 use super::*;
-use gpui::TestAppContext;
+use crate::size::{UiScale, Unscaled, set_ui_scale};
+use gpui::{TestAppContext, VisualTestContext, px};
+use gpui_component::table::TableEvent as LibEvent;
 
 const ROWS: usize = 10_000;
 
@@ -93,7 +95,7 @@ fn column_builders_map_to_the_library_column() {
         .sorted(SortDirection::Descending)
         .movable(false)
         .fixed_left();
-    let lib = column.to_library();
+    let lib = column.to_library(UiScale::IDENTITY, None);
     assert_eq!(lib.key.as_ref(), "age");
     assert_eq!(lib.name.as_ref(), "Age");
     assert_eq!(lib.width, px(80.));
@@ -124,4 +126,112 @@ fn sort_direction_round_trips() {
     ] {
         assert_eq!(SortDirection::from(ColumnSort::from(sort)), sort);
     }
+}
+
+#[test]
+fn library_columns_scale_design_widths_and_prefer_user_widths() {
+    let column = TableColumn::new("k", "K")
+        .width(px(200.))
+        .min_width(px(40.));
+    let zoomed = UiScale::new(1.5);
+    let lib = column.to_library(zoomed, None);
+    assert_eq!(lib.width, px(300.));
+    assert_eq!(lib.min_width, px(60.));
+    // A width the user chose is unscaled and replaces the design width; the minimum still holds.
+    assert_eq!(
+        column.to_library(zoomed, Some(Unscaled(100.))).width,
+        px(150.)
+    );
+    assert_eq!(
+        column.to_library(zoomed, Some(Unscaled(10.))).width,
+        px(60.)
+    );
+}
+
+/// Width the table gave column 0's header body (tagged `th-0` by the harness delegate).
+fn header_width(cx: &mut VisualTestContext) -> f32 {
+    let bounds = cx.debug_bounds("th-0").expect("header was not laid out");
+    f32::from(bounds.size.width)
+}
+
+fn set_zoom_and_draw(cx: &mut VisualTestContext, factor: f32) {
+    cx.update(|window, cx| {
+        set_ui_scale(cx, UiScale::new(factor));
+        window.refresh();
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+}
+
+#[gpui::test]
+fn column_widths_follow_ui_zoom_after_creation(cx: &mut TestAppContext) {
+    let (_view, cx) = harness(cx, 5);
+    cx.run_until_parked();
+    let at_100 = header_width(cx);
+
+    // 150 design px at 200 % is 300 px: the cached width must have been re-read.
+    set_zoom_and_draw(cx, 2.0);
+    let at_200 = header_width(cx);
+    assert!(
+        (at_200 - at_100 - 150.).abs() < 1.5,
+        "column 0 header is {at_100} px at 100 % and {at_200} px at 200 %: widths did not follow zoom"
+    );
+
+    set_zoom_and_draw(cx, 1.0);
+    assert!(
+        (header_width(cx) - at_100).abs() < 1.5,
+        "widths did not return at 100 %"
+    );
+}
+
+#[gpui::test]
+fn user_resized_widths_survive_a_zoom_change_unscaled(cx: &mut TestAppContext) {
+    let (view, cx) = harness(cx, 5);
+    cx.run_until_parked();
+    set_zoom_and_draw(cx, 2.0);
+    let at_200 = header_width(cx);
+
+    let table = view.read_with(cx, |h, _| h.table.clone());
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let sink = events.clone();
+    let _subscription = cx
+        .update(|_, cx| table.on_event(cx, move |event, _| sink.borrow_mut().push(event.clone())));
+
+    // The user drags column 0 from 300 to 400 on-screen pixels at 200 % (columns 1 and 2 stay).
+    let state = table.state().clone();
+    cx.update(|_, cx| {
+        state.update(cx, |_, cx| {
+            cx.emit(LibEvent::ColumnWidthsChanged(vec![
+                px(400.),
+                px(300.),
+                px(300.),
+            ]));
+        })
+    });
+    assert_eq!(
+        events.borrow().last(),
+        Some(&TableEvent::ColumnsResized(vec![
+            Unscaled(200.),
+            Unscaled(150.),
+            Unscaled(150.)
+        ])),
+        "resize events carry unscaled widths"
+    );
+
+    // At 100 % the dragged column is its 200 design px, not the delegate's 150.
+    set_zoom_and_draw(cx, 1.0);
+    let at_100 = header_width(cx);
+    assert!(
+        (at_200 - at_100 - 100.).abs() < 1.5,
+        "user width lost on zoom: {at_200} px at 200 % before the drag, {at_100} px at 100 % after"
+    );
+
+    // `refresh` is the explicit reset: the delegate's width wins again.
+    cx.update(|_, cx| table.refresh(cx));
+    cx.run_until_parked();
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(
+        (header_width(cx) - at_100 + 50.).abs() < 1.5,
+        "refresh kept the user width"
+    );
 }

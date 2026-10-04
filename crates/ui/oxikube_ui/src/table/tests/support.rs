@@ -1,9 +1,10 @@
 //! A counting delegate and a harness view for table tests.
 
 use crate::table::{Table, TableColumn, TableDelegate, TableHandle};
+use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    App, Context, Entity, IntoElement, ParentElement as _, Render, Styled as _, TestAppContext,
-    VisualTestContext, Window, div,
+    App, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Render,
+    Styled as _, TestAppContext, VisualTestContext, Window, div, px,
 };
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -45,7 +46,15 @@ impl TableDelegate for Synthetic {
         self.rows
     }
     fn column(&self, col_ix: usize, _: &App) -> TableColumn {
-        TableColumn::new(format!("c{col_ix}"), format!("Column {col_ix}"))
+        // Design-time width: the table applies the UI zoom.
+        TableColumn::new(format!("c{col_ix}"), format!("Column {col_ix}")).width(px(150.))
+    }
+    fn render_th(&mut self, col_ix: usize, _: &mut Window, _: &mut App) -> impl IntoElement {
+        // Column 0's header body is tagged so tests can measure the width the table gave it.
+        div()
+            .id(col_ix)
+            .size_full()
+            .when(col_ix == 0, |th| th.debug_selector(|| "th-0".into()))
     }
     fn render_td(
         &mut self,

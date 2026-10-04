@@ -21,7 +21,9 @@ app.run(|cx| {
 - **Tokens**: `cx.tokens()` / `cx.colors()` (`ActiveTokens`). Swap the source with
   `set_token_source(cx, &my_theme, appearance)` once `oxikube_theme` exists.
 - **Zoom**: wrap every literal pixel size in `u(px(..))`; persist dock and panel sizes as
-  `Unscaled`. `set_ui_scale(cx, UiScale::new(1.25))` changes the zoom.
+  `Unscaled`. `set_ui_scale(cx, UiScale::new(1.25))` changes the zoom. Table column widths are the
+  exception: give `TableColumn` design-time widths and the table applies (and re-applies) the zoom
+  itself; user-resized widths are reported and kept unscaled.
 - **Icons**: `Icon::new(IconName::Box).size(u(px(14.)))`. Add an icon by dropping the Lucide SVG
   into `oxikube_assets/assets/icons/` and one line in its `icons.rs`.
 - **Tables**: implement `TableDelegate`, create a `TableHandle`, render `Table::new(&handle)`.
