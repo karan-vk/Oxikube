@@ -17,13 +17,16 @@ oxikube_domain.workspace = true
 oxikube_ports.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+hex.workspace = true
 http.workspace = true
 # kube needs exactly one k8s-openapi version feature enabled (`latest`, set in the workspace).
 k8s-openapi.workspace = true
 kube.workspace = true
+notify.workspace = true
 parking_lot.workspace = true
 rustls.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true

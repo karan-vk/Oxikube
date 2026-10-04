@@ -14,12 +14,14 @@
 //! | [`auth`] | E03-S04 | `kube::Error` classification, exec-plugin interactivity policy, deadline-bounded client build, retry-once helper |
 //! | [`discovery`] | E03-S06 | `DiscoveryPort` over aggregated discovery, the shared kind registry and the CRD watcher |
 //! | [`pool`] | E03-S03 | [`ClientPool`]: one lazily built, shared kube client per context, with invalidation and LRU eviction |
+//! | [`sources`] | E03-S02 | `ClusterSourcePort` over kubeconfig files, directories and pasted text, with hot reload |
 
 pub mod auth;
 pub mod discovery;
 pub mod health;
 pub mod kubeconfig;
 pub mod pool;
+pub mod sources;
 
 #[cfg(test)]
 mod fake_api;

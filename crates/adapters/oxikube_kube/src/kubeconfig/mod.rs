@@ -10,7 +10,7 @@
 //! | `env` | the injected [`Env`], source precedence and the in-cluster decision (E03-S10) |
 //! | `home` | the home-directory choice (client-go `homedir.HomeDir`), pure over an injected probe |
 //! | `incluster` | the service account as a synthetic `in-cluster` context (E03-S10) |
-//! | `load` | the loader (a port of kdash's, MIT; see `THIRD_PARTY_NOTICES.md`) |
+//! | `load` | the loader and its per-source merge, shared with pasted kubeconfigs (a port of kdash's, MIT; see `THIRD_PARTY_NOTICES.md`) |
 //! | `diagnostics` | [`Diagnostic`], [`SourceInfo`], [`SourceStatus`] |
 //!
 //! # Behaviour
@@ -73,6 +73,7 @@ pub use incluster::{
     in_cluster_cluster_id, in_cluster_config_fixups, in_cluster_context_name,
     in_cluster_kubeconfig, in_cluster_server_url,
 };
+pub(crate) use load::KubeconfigMerge;
 pub use load::{
     is_blank_kubeconfig, load_kubeconfig_from_paths, load_kubeconfig_from_paths_blocking,
     load_local_kubeconfig,
