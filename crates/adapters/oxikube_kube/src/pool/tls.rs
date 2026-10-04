@@ -18,6 +18,11 @@
 //! context logs one `warn` naming the context and the server host (no credentials, no
 //! certificate data), and [`ClientPool::tls_verification_disabled`](super::ClientPool::tls_verification_disabled)
 //! lets the session show a badge. A verified connection logs nothing and reports `false`.
+//! The flag describes the current kubeconfig; a holder of an older client keeps its old
+//! connection settings until it asks the pool again.
+//!
+//! The same [`Config`] also drives the leg to an `https://` proxy (see `proxy`), so
+//! `insecure-skip-tls-verify` disables verification of the proxy's certificate too.
 //!
 //! # Custom CAs
 //!
@@ -93,9 +98,18 @@ pub(super) fn apply(config: &mut Config, definition: &ContextDefinition) -> Resu
         );
     }
 
-    let has_ca =
-        cluster.certificate_authority_data.is_some() || cluster.certificate_authority.is_some();
-    if has_ca && config.root_cert.as_ref().is_some_and(Vec::is_empty) {
+    // Empty fields count as unset here too (see `normalize`, which only covers kube's copy).
+    let ca_data = cluster
+        .certificate_authority_data
+        .as_deref()
+        .filter(|data| !data.is_empty());
+    let ca_file = cluster
+        .certificate_authority
+        .as_deref()
+        .filter(|path| !path.is_empty());
+    if (ca_data.is_some() || ca_file.is_some())
+        && config.root_cert.as_ref().is_some_and(Vec::is_empty)
+    {
         return Err(OxiError::validation(format!(
             "context `{context}`: the certificate authority in the kubeconfig contains no PEM \
              certificates"
@@ -104,8 +118,8 @@ pub(super) fn apply(config: &mut Config, definition: &ContextDefinition) -> Resu
 
     // File-only CA: let kube re-read the file so a rotated CA is picked up.
     if !config.accept_invalid_certs
-        && cluster.certificate_authority_data.is_none()
-        && let Some(path) = cluster.certificate_authority.as_deref().map(PathBuf::from)
+        && ca_data.is_none()
+        && let Some(path) = ca_file.map(PathBuf::from)
         && path.is_absolute()
     {
         config.root_cert_file = Some(path);

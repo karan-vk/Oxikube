@@ -208,13 +208,18 @@ impl ClientPool {
         }
     }
 
-    /// Whether `context` connects with TLS verification disabled (`insecure-skip-tls-verify`
-    /// in its cluster entry). Meant for a session badge; `false` for an unknown context.
-    /// See the `tls` module docs: this is the only way verification is ever disabled.
+    /// Whether `context` is configured to connect with TLS verification disabled
+    /// (`insecure-skip-tls-verify` in its cluster entry). Meant for a session badge; `false`
+    /// for an unknown context. See the `tls` module docs: this is the only way verification
+    /// is ever disabled.
+    ///
+    /// This describes the *current kubeconfig*, not clients already handed out: a holder of
+    /// an older `Arc<Client>` keeps its old connection settings after
+    /// [`replace_kubeconfig`](Self::replace_kubeconfig) flips the setting. The session layer
+    /// should `get` again for the contexts that call reports as dropped.
     pub fn tls_verification_disabled(&self, context: &ContextName) -> bool {
         let state = self.state.lock();
-        ContextDefinition::from_kubeconfig(&state.kubeconfig, context)
-            .is_some_and(|definition| definition.tls_verification_disabled())
+        entry::tls_verification_disabled_in(&state.kubeconfig, context.as_str())
     }
 
     /// Drops the entry for `context`. Returns whether there was one. Holders of

@@ -2,6 +2,7 @@
 //! client builds (which open no connection) to prove rustls and kube accept the settings.
 
 use std::io::Write;
+use std::sync::Arc;
 
 use base64::Engine as _;
 use kube::config::Kubeconfig;
@@ -21,6 +22,10 @@ fn b64(text: &str) -> String {
 }
 
 fn kubeconfig(cluster_extra: &str) -> Kubeconfig {
+    kubeconfig_at("10.1.2.3", cluster_extra)
+}
+
+fn kubeconfig_at(host: &str, cluster_extra: &str) -> Kubeconfig {
     let yaml = format!(
         r#"
 apiVersion: v1
@@ -29,7 +34,7 @@ current-context: t
 clusters:
 - name: c
   cluster:
-    server: https://10.1.2.3:6443
+    server: https://{host}:6443
 {cluster_extra}
 users:
 - name: u
@@ -146,8 +151,7 @@ impl<'a> MakeWriter<'a> for PerThreadLogs {
     }
 }
 
-/// Runs `run` on this thread and returns what it logged.
-fn logs_of(run: impl FnOnce()) -> String {
+fn install_log_capture() {
     static INSTALL: std::sync::Once = std::sync::Once::new();
     INSTALL.call_once(|| {
         let subscriber = tracing_subscriber::fmt()
@@ -156,6 +160,11 @@ fn logs_of(run: impl FnOnce()) -> String {
             .finish();
         tracing::subscriber::set_global_default(subscriber).expect("no other global subscriber");
     });
+}
+
+/// Runs `run` on this thread and returns what it logged.
+fn logs_of(run: impl FnOnce()) -> String {
+    install_log_capture();
     let id = std::thread::current().id();
     LOGS.lock().retain(|(t, _)| *t != id);
     run();
@@ -419,4 +428,46 @@ fn defaults_have_no_tls_or_proxy_surprises() {
     assert_eq!(config.root_cert_file, None);
     assert_eq!(config.tls_server_name, None);
     assert_eq!(config.proxy_url, None);
+}
+
+#[test]
+fn empty_ca_data_next_to_an_absolute_ca_file_still_reloads_the_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_ca(&dir, "ca.pem");
+    let extra = format!(
+        "    certificate-authority-data: \"\"\n    certificate-authority: {}",
+        path.display()
+    );
+    let config = config_of(&extra).expect("config");
+    assert_eq!(config.root_cert.as_ref().map(Vec::len), Some(1));
+    assert_eq!(config.root_cert_file.as_deref(), Some(path.as_path()));
+}
+
+#[tokio::test]
+async fn the_pool_build_path_emits_the_insecure_warning() {
+    install_log_capture();
+    // The build runs on a blocking-pool thread, so look across threads for a unique host.
+    let host = "10.77.77.77";
+    let pool = ClientPool::with_parts(
+        kubeconfig_at(host, "    insecure-skip-tls-verify: true"),
+        PoolConfig::default(),
+        Arc::new(KubeClientFactory::new(ProxyEnv::default())),
+        Arc::new(SystemClock),
+    );
+    pool.get(&context()).await.expect("client");
+
+    let logs: String = LOGS
+        .lock()
+        .iter()
+        .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned())
+        .collect();
+    let line = logs
+        .lines()
+        .find(|l| l.contains(host))
+        .unwrap_or_else(|| panic!("no warning for {host}: {logs}"));
+    assert!(
+        line.contains("WARN") && line.contains("verification is disabled"),
+        "{line}"
+    );
+    assert!(!line.contains(TOKEN), "{line}");
 }

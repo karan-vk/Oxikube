@@ -12,10 +12,17 @@
 //!
 //! kube 4.2 (features `http-proxy` and `socks5`, both on in the workspace) supports
 //! `http://` and `https://` proxies through an HTTP `CONNECT` tunnel (the `https` form
-//! talks TLS to the proxy itself with the same rustls setup) and `socks5://`. Basic
+//! talks TLS to the proxy itself) and `socks5://`. Basic
 //! auth in the URL's userinfo is sent to `http`/`https` proxies. Anything else is an
 //! [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) error naming the scheme; a
 //! URL without a scheme is a [`Validation`](oxikube_domain::ErrorKind::Validation) error.
+//!
+//! For an `https://` proxy kube builds the proxy leg from the same [`Config`](kube::Config)
+//! as the API connection: the cluster CA verifies the proxy's certificate, `tls-server-name`
+//! is the SNI and name checked for the proxy (not only for the API server),
+//! `insecure-skip-tls-verify` also disables verification of the proxy, and the kubeconfig
+//! client certificate is presented to the proxy.
+//!
 //! The scheme is matched case-insensitively and `socks5h://` is accepted as `socks5://`:
 //! kube's SOCKS5 connector hands the target hostname to the proxy for resolution, which
 //! is what `socks5h` means. URLs are never echoed in errors (they may carry credentials).
