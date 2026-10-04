@@ -179,3 +179,41 @@ async fn rules_review_with_an_invalid_token_is_an_auth_error() {
     .unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Auth, "{err:?}");
 }
+
+#[tokio::test]
+async fn pooled_probe_and_capabilities_work_against_the_pool() {
+    use std::sync::Arc;
+
+    use oxikube_kube::health::{capabilities_for_context, pooled_probe};
+    use oxikube_kube::pool::{ClientPool, PoolConfig};
+
+    let Some(ctx) = test_context() else { return };
+    ensure_kind_context(&ctx).expect("kind context");
+    let pool = Arc::new(ClientPool::new(
+        Kubeconfig::read().expect("read kubeconfig"),
+        PoolConfig::default(),
+    ));
+    let context = ContextName::new(ctx.as_str());
+
+    let report = capabilities_for_context(
+        &pool,
+        &RulesCache::default(),
+        &context,
+        "default",
+        CredentialRefresh::Static,
+    )
+    .await
+    .expect("capabilities through the pool");
+    assert_eq!(report.granted, RBAC_DERIVED);
+
+    let (live, mut rx) = Liveness::spawn(
+        fast_config(3),
+        pooled_probe(pool.clone(), context, CredentialRefresh::Static),
+    );
+    let event = tokio::time::timeout(DEADLINE, rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(event, HealthEvent::Healthy { .. }), "{event:?}");
+    live.stop();
+}

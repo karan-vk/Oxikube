@@ -7,6 +7,9 @@
 //!   restricted to named objects, unknown, denied).
 //! * `rules`: `SelfSubjectRulesReview` per (context, namespace) behind a TTL cache.
 //! * `access`: [`can_i`], a single `SelfSubjectAccessReview`.
+//! * `pooled`: [`probe_context`], [`capabilities_for_context`] and [`pooled_probe`], which
+//!   run the probes through the `ClientPool` and rebuild the client once after a
+//!   retryable auth failure.
 //!
 //! # Lifecycle and failure policy
 //!
@@ -38,6 +41,7 @@
 mod access;
 mod capabilities;
 mod liveness;
+mod pooled;
 mod rules;
 
 pub use access::{AccessDecision, AccessQuery, can_i};
@@ -45,4 +49,5 @@ pub use capabilities::{
     AccessLevel, AccessRule, CapabilityReport, RBAC_DERIVED, RulesSnapshot, capabilities_from_rules,
 };
 pub use liveness::{HealthEvent, Liveness, LivenessConfig, MIN_INTERVAL, probe_apiserver_version};
+pub use pooled::{capabilities_for_context, pooled_probe, probe_context};
 pub use rules::{DEFAULT_RULES_TTL, RulesCache, fetch_rules, probe_capabilities};
