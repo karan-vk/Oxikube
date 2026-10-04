@@ -5494,6 +5494,7 @@ name = "oxikube_kube"
 version = "0.0.1"
 dependencies = [
  "async-trait",
+ "backon",
  "base64 0.22.1",
  "futures",
  "http",
