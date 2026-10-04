@@ -1,7 +1,8 @@
 //! No credential reaches `Debug` output, error messages or logs from the source-selection and
 //! in-cluster paths (E03-S10): [`Env`], [`Selection`], a [`LoadedKubeconfig`] selected through
 //! `KUBECONFIG`, a `token-file` credential, an unparsable kubeconfig that holds a token, and the
-//! synthetic in-cluster context through the pool. Companion to `debug_redaction.rs`.
+//! synthetic in-cluster context through the pool with a planted service-account token.
+//! Companion to `debug_redaction.rs`.
 
 mod support;
 
@@ -20,7 +21,11 @@ use support::{assert_error_clean, assert_no_secrets, captured, init_tracing};
 const TOKEN: &str = "src-token-BBBB-9876543210";
 const TOKEN_FILE_SECRET: &str = "src-token-file-contents-CCCC";
 const PARSE_SECRET: &str = "src-unparsable-secret-DDDD";
-const ALL: &[&str] = &[TOKEN, TOKEN_FILE_SECRET, PARSE_SECRET];
+const SA_TOKEN: &str = "src-service-account-token-EEEE";
+const ALL: &[&str] = &[TOKEN, TOKEN_FILE_SECRET, PARSE_SECRET, SA_TOKEN];
+
+/// The pod's mounted token, which the synthetic in-cluster user names by path.
+const SERVICE_ACCOUNT_TOKEN_FILE: &str = "/var/run/secrets/kubernetes.io/serviceaccount/token";
 
 #[track_caller]
 fn assert_debug_clean(what: &str, value: &dyn std::fmt::Debug) {
@@ -150,14 +155,49 @@ fn an_unparsable_kubeconfig_holding_a_token_reports_no_contents() {
     assert_error_clean("strict load (unparsable)", &err, ALL);
 }
 
+/// Points the synthetic in-cluster user at `token_file` instead of the pod's mounted token, and
+/// drops the mounted CA (absent off a pod) for `insecure-skip-tls-verify`, so the in-cluster
+/// path really reads a service-account token here. Checks first that the entry is the
+/// synthetic one, holding the mounted token's path.
+fn plant_service_account(loaded: &mut LoadedKubeconfig, token_file: &Path) {
+    let user = loaded
+        .merged
+        .auth_infos
+        .iter_mut()
+        .find(|named| named.name == IN_CLUSTER_CONTEXT)
+        .and_then(|named| named.auth_info.as_mut())
+        .expect("synthetic in-cluster user");
+    assert_eq!(user.token_file.as_deref(), Some(SERVICE_ACCOUNT_TOKEN_FILE));
+    user.token_file = Some(token_file.display().to_string());
+    let cluster = loaded
+        .merged
+        .clusters
+        .iter_mut()
+        .find(|named| named.name == IN_CLUSTER_CONTEXT)
+        .and_then(|named| named.cluster.as_mut())
+        .expect("synthetic in-cluster cluster");
+    cluster.certificate_authority = None;
+    cluster.insecure_skip_tls_verify = Some(true);
+}
+
 #[tokio::test]
 async fn in_cluster_context_debug_and_build_errors_are_clean() {
     init_tracing();
+    let dir = tempfile::tempdir().unwrap();
+    let token_file = dir.path().join("token");
+    std::fs::write(&token_file, SA_TOKEN).unwrap();
+
     let env = pod_env();
     assert_debug_clean("Env (pod)", &env);
-    let loaded = load_kubeconfig_for_env_blocking(&[], &env, Strictness::RequireUsable).unwrap();
+    let mut loaded =
+        load_kubeconfig_for_env_blocking(&[], &env, Strictness::RequireUsable).unwrap();
     let context = ContextName::from(IN_CLUSTER_CONTEXT);
     assert!(loaded.is_in_cluster(&context), "{loaded:?}");
+    plant_service_account(&mut loaded, &token_file);
+    assert!(
+        loaded.is_in_cluster(&context),
+        "still the synthetic context"
+    );
     assert_debug_clean("LoadedKubeconfig (in-cluster)", &loaded);
 
     let definition = ContextDefinition::from_kubeconfig(&loaded.merged, &context)
@@ -167,13 +207,31 @@ async fn in_cluster_context_debug_and_build_errors_are_clean() {
     assert!(shown.contains("10.96.0.1"), "host is still shown: {shown}");
     assert_debug_clean("ContextDefinition (in-cluster)", &definition);
 
-    // Outside a pod the mounted CA and token are absent, so the build fails; inside one it
-    // succeeds. Either way nothing secret may surface.
+    // kube reads a `token-file` when the client is built, so a successful build means the
+    // service-account token is in the pool; the missing-file case below shows the read happens.
     let pool = ClientPool::from_loaded(&loaded, PoolConfig::default());
-    if let Err(err) = pool.get(&context).await {
-        assert_error_clean("in-cluster build", &err, ALL);
-        tracing::trace!(?err, "in-cluster build failed");
-    }
+    pool.get(&context)
+        .await
+        .unwrap_or_else(|e| panic!("in-cluster build with a planted token: {e:?}"));
+    let shown = format!("{pool:?}");
+    assert!(shown.contains("built: true"), "{shown}");
     assert_debug_clean("ClientPool (in-cluster)", &pool);
-    assert_no_secrets("trace output", &captured(), ALL);
+    tracing::trace!(?pool, ?loaded, ?definition, "in-cluster pool ready");
+
+    std::fs::remove_file(&token_file).unwrap();
+    let pool = ClientPool::from_loaded(&loaded, PoolConfig::default());
+    let err = pool
+        .get(&context)
+        .await
+        .err()
+        .expect("the token file is read at build time");
+    assert_error_clean("in-cluster build (token missing)", &err, ALL);
+    tracing::trace!(?err, "in-cluster build failed");
+
+    let out = captured();
+    assert!(
+        out.contains("in-cluster pool ready"),
+        "capture is live:\n{out}"
+    );
+    assert_no_secrets("trace output", &out, ALL);
 }
