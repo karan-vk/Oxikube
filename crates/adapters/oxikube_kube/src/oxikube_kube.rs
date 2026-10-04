@@ -12,11 +12,17 @@
 //! | [`kubeconfig`] | E03-S01 | tolerant `KUBECONFIG` splitting, loading and merging with per-context origins and diagnostics |
 //! | [`auth`] | E03-S04 | `kube::Error` classification, exec-plugin interactivity policy, deadline-bounded client build, retry-once helper |
 //! | [`discovery`] | E03-S06 | `DiscoveryPort` over aggregated discovery, the shared kind registry and the CRD watcher |
+//! | [`pool`] | E03-S03 | [`ClientPool`]: one lazily built, shared kube client per context, with invalidation and LRU eviction |
 
 pub mod auth;
 pub mod discovery;
 pub mod kubeconfig;
+pub mod pool;
 
 pub use discovery::{
     CrdWatch, CrdWatchConfig, DiscoveryConfig, KindChange, KubeDiscovery, Registry, RegistryDiff,
+};
+pub use pool::{
+    ClientFactory, ClientPool, Clock, ContextDefinition, EvictionPolicy, KubeClientFactory,
+    PoolConfig, ProxyEnv, RetryMode, SystemClock,
 };
