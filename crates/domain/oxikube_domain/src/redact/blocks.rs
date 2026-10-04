@@ -6,7 +6,9 @@
 //! *escape level*, and inside the block only a break at that level or a shallower one ends a
 //! line: a deeper escape is a `\n` inside a quoted value (`config: "a\nb"`), not a new line.
 //! When the block sits inside a string (level 1 and up), the quote that closes that string
-//! ends the block too, so the framing after it (`","target":…`) is never read as entries.
+//! ends the block too, so the framing after it (`","target":…`) is never read as entries,
+//! and a header on the string's first line is indented from the string's opening quote, not
+//! from the outer line that frames it (see [`header_indent`]).
 
 use super::scrubber::{DATA_HEADER, DATA_PAIR};
 use super::values::{Cut, replace_values};
@@ -66,9 +68,10 @@ pub(super) fn scrub_data_blocks(input: &str) -> Cow<'_, str> {
                 block = None;
             }
         } else if !line.ending.is_empty() && DATA_HEADER.is_match(line.content) {
+            let level = escape_level(line.ending);
             block = Some(Block {
-                indent: indent(line.content),
-                level: escape_level(line.ending),
+                indent: header_indent(line.content, level),
+                level,
             });
             out.push_str(line.content);
         } else {
@@ -86,6 +89,30 @@ pub(super) fn scrub_data_blocks(input: &str) -> Cow<'_, str> {
 
 fn indent(content: &str) -> usize {
     content.len() - content.trim_start().len()
+}
+
+/// The indent a header at escape `level` gives its block: an entry must be deeper to belong.
+///
+/// At level 0 it is the header line's own indent. Inside a string (level 1 and up) the header
+/// may sit on the string's first line, after the framing that opened it: pretty JSON
+/// (`    "manifest": "data:`) or `{:#?}` Debug (`    manifest: "data:`). The entries are
+/// indented relative to the string's text, not to that outer line, so the indent is also
+/// measured from just after the string's opening quote, and the smaller of the two is kept:
+/// reading a line too many as an entry over-redacts, one too few leaks. The block still ends
+/// at the quote that closes the string.
+fn header_indent(content: &str, level: u32) -> usize {
+    let line = indent(content);
+    if level == 0 {
+        return line;
+    }
+    let bytes = content.as_bytes();
+    let opening = (0..bytes.len())
+        .rev()
+        .find(|&i| bytes[i] == b'"' && closes_string(backslashes_before(bytes, i), level));
+    match opening {
+        Some(quote) => line.min(indent(&content[quote + 1..])),
+        None => line,
+    }
 }
 
 /// Splits `input` into `(content, ending)` pairs at every break, real or escaped, where
@@ -194,7 +221,7 @@ fn carriage_return_before(bytes: &[u8], start: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{Line, break_level, closes_string, escape_level, lines, next_line};
+    use super::{Line, break_level, closes_string, escape_level, header_indent, lines, next_line};
 
     #[test]
     fn lines_split_at_real_and_escaped_breaks_and_round_trip() {
@@ -262,5 +289,23 @@ mod tests {
             next_line("k: \"a\\nb\"", None),
             line("k: \"a", "\\n", false)
         );
+    }
+
+    #[test]
+    fn a_header_inside_a_string_is_indented_from_its_opening_quote() {
+        // Real-newline text: the line's own indent.
+        assert_eq!(header_indent("    data:", 0), 4);
+        assert_eq!(header_indent(r#"    "manifest": "data:"#, 0), 4);
+        // Pretty JSON and `{:#?}` Debug: the string opens after the outer indent.
+        assert_eq!(header_indent(r#"    "manifest": "data:"#, 1), 0);
+        assert_eq!(header_indent(r#"    manifest: "  data:"#, 1), 2);
+        // Two levels: `{:#?}` Debug inside a JSON string, whose string opens at `\"`.
+        assert_eq!(header_indent(r#"    manifest: \"data:"#, 2), 0);
+        // A quote escaped for a value inside the string is not its opening quote.
+        assert_eq!(header_indent(r#"  x: \"y\" data:"#, 1), 2);
+        // No opening quote on the line: the header follows a break inside the string.
+        assert_eq!(header_indent("  data:", 1), 2);
+        // The smaller indent wins, so a doubtful line is redacted rather than leaked.
+        assert_eq!(header_indent(r#"  m: "   data:"#, 1), 2);
     }
 }

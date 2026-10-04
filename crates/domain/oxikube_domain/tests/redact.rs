@@ -296,6 +296,58 @@ fn a_data_block_ends_with_the_string_that_holds_it() {
 }
 
 #[test]
+fn a_data_block_on_the_first_line_of_an_indented_string() {
+    // Pretty JSON: the header follows `    "manifest": "`, the entries are indented from the
+    // string's text, which is shallower than the outer line.
+    let manifest = "data:\n  tls.key: PRETTYSECRET\n  user: YWRtaW4=\n";
+    let pretty = serde_json::to_string_pretty(&serde_json::json!({
+        "spec": { "manifest": manifest, "replicas": 2 },
+        "target": "app::sync",
+    }))
+    .expect("serialise");
+    let out = assert_scrubbed(&pretty, &["PRETTYSECRET", "YWRtaW4="]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("still valid JSON");
+    assert_eq!(
+        parsed["spec"]["manifest"],
+        "data:\n  tls.key: [redacted]\n  user: [redacted]\n"
+    );
+    assert_eq!(parsed["spec"]["replicas"], 2);
+    assert_eq!(parsed["target"], "app::sync");
+    // A second level: the pretty JSON quoted again as a JSON string.
+    let twice = serde_json::json!({ "body": pretty }).to_string();
+    assert_scrubbed(&twice, &["PRETTYSECRET", "YWRtaW4="]);
+
+    // `{:#?}` Debug of a struct holding the manifest, and of one nested deeper.
+    #[derive(Debug)]
+    #[allow(dead_code)]
+    struct Spec {
+        manifest: &'static str,
+        replicas: u32,
+    }
+    #[derive(Debug)]
+    #[allow(dead_code)]
+    struct Wrapper {
+        spec: Spec,
+    }
+    let spec = Spec {
+        manifest: "data:\n  tls.key: DBGPRETTY\n",
+        replicas: 2,
+    };
+    let out = assert_scrubbed(&format!("{spec:#?}"), &["DBGPRETTY"]);
+    assert!(out.contains(r#"tls.key: [redacted]\n","#), "{out}");
+    assert!(out.contains("replicas: 2"), "{out}");
+    let out = assert_scrubbed(&format!("{:#?}", Wrapper { spec }), &["DBGPRETTY"]);
+    assert!(out.contains("replicas: 2"), "{out}");
+    // A manifest that starts indented keeps its entries deeper than the header.
+    let spec = Spec {
+        manifest: "  data:\n    tls.key: DBGPRETTY\n  type: Opaque\n",
+        replicas: 2,
+    };
+    let out = assert_scrubbed(&format!("{spec:#?}"), &["DBGPRETTY"]);
+    assert!(out.contains(r"\n  type: Opaque\n"), "{out}");
+}
+
+#[test]
 fn every_sensitive_field_name_is_caught_as_text() {
     // The JSON log layer has no name-aware visitor: every name `is_sensitive_field` accepts
     // must be caught by the text patterns in every form the formatters print.
@@ -675,6 +727,7 @@ fn fragment() -> impl Strategy<Value = String> {
         Just("data:\\n  ".to_owned()),
         Just("stringData:\n  k: \"a\\nb\"".to_owned()),
         Just("\\\\n".to_owned()),
+        Just("    \"m\": \"data:\\n".to_owned()),
         prop::sample::select(vec![
             ": ", "=", " ", "\n", "\r\n", "\"", "'", "\\\"", "{", "}", "[", "]", "(", ")", ",",
             ";", "  ", "\t",

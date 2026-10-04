@@ -383,6 +383,56 @@ fn json_layer_keeps_a_block_open_across_an_escaped_newline_in_a_quoted_value() {
     }
 }
 
+/// What a `{:#?}` dump of an object holding a Secret manifest would print.
+#[derive(Debug)]
+#[allow(dead_code)]
+struct AppliedSpec {
+    manifest: &'static str,
+    replicas: u32,
+}
+
+/// A pretty-printed object whose manifest string opens with the `data:` header, so the
+/// header's line starts with the outer indent and the field name.
+fn log_pretty_nested_manifest() {
+    let spec = AppliedSpec {
+        manifest: "data:\n  tls.key: NESTEDSECRET1\n",
+        replicas: 2,
+    };
+    tracing::info!("applying {spec:#?}");
+    let body = serde_json::to_string_pretty(&serde_json::json!({
+        "spec": { "manifest": "data:\n  tls.key: NESTEDSECRET2\n" },
+    }))
+    .expect("serialise");
+    tracing::info!("request body: {body}");
+    tracing::info!(body = body.as_str(), "as str");
+}
+
+fn assert_pretty_nested_manifest_redacted(out: &str) {
+    assert!(!out.contains("NESTEDSECRET"), "{out}");
+    assert_eq!(out.matches("tls.key: [redacted]").count(), 3, "{out}");
+    assert!(out.contains("replicas: 2"), "{out}");
+}
+
+#[test]
+fn text_layer_redacts_a_manifest_nested_in_pretty_debug_and_json() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_layer(capture.clone()));
+    tracing::subscriber::with_default(subscriber, log_pretty_nested_manifest);
+    assert_pretty_nested_manifest_redacted(&capture.text());
+}
+
+#[test]
+fn json_layer_redacts_a_manifest_nested_in_pretty_debug_and_json() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_json_layer(capture.clone()));
+    tracing::subscriber::with_default(subscriber, log_pretty_nested_manifest);
+    let out = capture.text();
+    assert_pretty_nested_manifest_redacted(&out);
+    for line in out.lines() {
+        serde_json::from_str::<serde_json::Value>(line).expect("valid JSON after scrubbing");
+    }
+}
+
 #[test]
 fn json_layer_keeps_metadata_after_a_block_with_no_trailing_newline() {
     let capture = Capture::default();
