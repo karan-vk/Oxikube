@@ -7,7 +7,7 @@
 //! fixture-backed server (`discovery/tests/fake.rs`), which models discovery's `Accept`
 //! negotiation on top of the same idea.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -25,6 +25,8 @@ use tower::Service;
 pub(crate) struct Recorded {
     pub(crate) method: Method,
     pub(crate) path: String,
+    /// The raw query string (`limit=2&continue=abc`), empty when the request had none.
+    pub(crate) query: String,
     /// The JSON body, if the request had one.
     pub(crate) body: Option<Value>,
 }
@@ -32,6 +34,7 @@ pub(crate) struct Recorded {
 #[derive(Default)]
 struct State {
     replies: HashMap<String, VecDeque<(u16, Value)>>,
+    stalled: HashSet<String>,
     requests: Vec<Recorded>,
 }
 
@@ -60,6 +63,12 @@ impl FakeApi {
             .entry(path.to_owned())
             .or_default()
             .push_back((status, body));
+        self
+    }
+
+    /// Makes `path` accept requests (they are recorded) and never answer, like a hung server.
+    pub(crate) fn stall(&self, path: &str) -> &Self {
+        self.state.lock().stalled.insert(path.to_owned());
         self
     }
 
@@ -120,8 +129,14 @@ impl Service<Request<Body>> for FakeApi {
             let recorded = Recorded {
                 method: parts.method,
                 path: parts.uri.path().to_owned(),
+                query: parts.uri.query().unwrap_or_default().to_owned(),
                 body: serde_json::from_slice(&bytes).ok(),
             };
+            let stalled = server.state.lock().stalled.contains(&recorded.path);
+            if stalled {
+                server.state.lock().requests.push(recorded);
+                return std::future::pending().await;
+            }
             let (code, body) = server.respond(recorded);
             let response = Response::builder()
                 .status(StatusCode::from_u16(code).expect("status code"))
