@@ -9,8 +9,12 @@
 //! a failed build leaves the cell empty and the next `get` retries.
 //!
 //! Building blocks (certificate files, exec credential plugins), so it runs on
-//! `tokio::task::spawn_blocking`. `get` must be called inside a Tokio runtime,
-//! which in the app means through `oxikube_runtime::spawn_kube`.
+//! `tokio::task::spawn_blocking` under [`PoolConfig::exec_deadline`], applying
+//! [`PoolConfig::exec_policy`] through E03-S04's `auth::build_client`. A build that
+//! outlives the deadline (or whose `get` was cancelled) is parked on its entry and
+//! the next `get` waits on it again, so a hung plugin never piles up processes.
+//! `get` must be called inside a Tokio runtime, which in the app means through
+//! `oxikube_runtime::spawn_kube`.
 //!
 //! # Why `Arc<Client>`
 //!
@@ -45,8 +49,9 @@
 //! # Secrets
 //!
 //! Entries hold credentials. Every `Debug` here prints context names and server
-//! hosts only, and build errors never quote kube's messages that may contain
-//! exec-plugin output.
+//! hosts only. Build errors are classified by `auth` (`classify_kubeconfig`,
+//! `classify_with`), which never quotes exec-plugin output, key bytes or proxy
+//! credentials.
 
 mod build;
 mod config;
@@ -69,14 +74,14 @@ use tokio::sync::OnceCell;
 
 use crate::kubeconfig::LoadedKubeconfig;
 
-pub use build::{ClientFactory, KubeClientFactory, ProxyEnv, build_client, build_config};
+pub use build::{ClientFactory, KubeClientFactory, ProxyEnv, build_config};
 pub use config::{
     DEFAULT_CONNECT_TIMEOUT, DEFAULT_EXEC_DEADLINE, DEFAULT_WRITE_TIMEOUT, PoolConfig, RetryMode,
 };
 pub use entry::ContextDefinition;
 pub use eviction::{Clock, DEFAULT_MAX_ENTRIES, DEFAULT_MAX_IDLE, EvictionPolicy, SystemClock};
 
-use entry::PoolEntry;
+use entry::{Checkout, PendingBuild, PoolEntry};
 use eviction::Candidate;
 
 /// How many times `get` rebuilds when the entry is invalidated while its build runs.
@@ -149,9 +154,9 @@ impl ClientPool {
         let mut attempt = 0;
         loop {
             attempt += 1;
-            let (cell, definition) = self.checkout(context)?;
+            let (cell, definition, pending) = self.checkout(context)?;
             let client = cell
-                .get_or_try_init(|| self.build(definition))
+                .get_or_try_init(|| self.build(definition, pending))
                 .await?
                 .clone();
             // An `invalidate` or `replace_kubeconfig` that ran during the build
@@ -228,22 +233,19 @@ impl ClientPool {
 
     /// Finds or creates the entry, marks it used and returns what the build needs.
     /// The returned cell `Arc` marks the entry in use until the caller drops it.
-    fn checkout(
-        &self,
-        context: &ContextName,
-    ) -> Result<(Arc<OnceCell<Arc<Client>>>, Arc<ContextDefinition>), OxiError> {
+    fn checkout(&self, context: &ContextName) -> Result<Checkout, OxiError> {
         let now = self.clock.now();
         let mut state = self.state.lock();
         let found = if let Some(entry) = state.entries.get_mut(context) {
             entry.last_used = now;
-            (entry.cell.clone(), entry.definition.clone())
+            entry.checkout()
         } else {
             let definition = ContextDefinition::from_kubeconfig(&state.kubeconfig, context)
                 .ok_or_else(|| {
                     OxiError::not_found(format!("context `{context}` is not in the kubeconfig"))
                 })?;
             let entry = PoolEntry::new(definition, now);
-            let found = (entry.cell.clone(), entry.definition.clone());
+            let found = entry.checkout();
             state.entries.insert(context.clone(), entry);
             found
         };
@@ -260,30 +262,22 @@ impl ClientPool {
             .is_some_and(|entry| Arc::ptr_eq(&entry.cell, cell))
     }
 
-    async fn build(&self, definition: Arc<ContextDefinition>) -> Result<Arc<Client>, OxiError> {
-        let factory = self.factory.clone();
-        let config = self.config.clone();
-        let deadline = self.config.exec_deadline;
+    /// Builds on the blocking pool under `exec_deadline`, resuming a build that an
+    /// earlier `get` abandoned (see [`PendingBuild`](entry::PendingBuild)).
+    async fn build(
+        &self,
+        definition: Arc<ContextDefinition>,
+        pending: Arc<PendingBuild>,
+    ) -> Result<Arc<Client>, OxiError> {
         let context = definition.context().clone();
-        let build = tokio::task::spawn_blocking(move || factory.build(&definition, &config));
-        // On timeout the blocking thread keeps running (a plugin process cannot be
-        // cancelled from here); its result is dropped and the next `get` rebuilds.
-        let joined = tokio::time::timeout(deadline, build).await.map_err(|_| {
-            OxiError::timeout(format!(
-                "context `{context}`: building the client (exec credential plugin) did not \
-                 finish within {}s",
-                deadline.as_secs_f32()
-            ))
-        })?;
-        joined
-            .map_err(|join| {
-                let what = if join.is_panic() {
-                    "panicked"
-                } else {
-                    "was cancelled"
-                };
-                OxiError::internal(format!("building the client for `{context}` {what}"))
-            })?
+        let start = || {
+            let factory = self.factory.clone();
+            let config = self.config.clone();
+            tokio::task::spawn_blocking(move || factory.build(&definition, &config))
+        };
+        pending
+            .run(&context, self.config.exec_deadline, start)
+            .await
             .map(Arc::new)
     }
 

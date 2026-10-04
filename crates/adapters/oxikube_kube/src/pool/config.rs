@@ -65,9 +65,12 @@ pub struct PoolConfig {
     /// The most interaction an exec credential plugin may ask for (E03-S04).
     /// Defaults to [`ExecInteractivePolicy::Never`]: a GUI cannot answer prompts.
     pub exec_policy: ExecInteractivePolicy,
-    /// Limit on building one client, exec plugin included. A build that overruns
-    /// fails with [`Timeout`](oxikube_domain::ErrorKind::Timeout); the plugin
-    /// process is left to finish on the blocking pool and its result is dropped.
+    /// Limit on building one client, exec plugin included. kube 4.2 runs an exec
+    /// plugin three times per build, one after another (expiry, TLS client identity,
+    /// auth layer), so this bounds all three runs. A build that overruns fails with
+    /// [`Timeout`](oxikube_domain::ErrorKind::Timeout); it keeps running on the
+    /// blocking pool (a plugin process cannot be cancelled) and the next `get` waits
+    /// on it again instead of starting another plugin.
     pub exec_deadline: Duration,
     /// When idle clients are dropped.
     pub eviction: EvictionPolicy,

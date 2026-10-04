@@ -15,7 +15,9 @@ use oxikube_domain::OxiError;
 use super::scrub::scrub;
 
 mod auth_error;
+mod config_error;
 use auth_error::classify_auth;
+pub use config_error::{classify_kubeconfig, classify_tls_setup};
 
 /// Whether the credential in use can be renewed by rebuilding the client.
 ///
@@ -87,20 +89,16 @@ pub fn classify_with(err: &kube::Error, refresh: CredentialRefresh) -> OxiError 
         }
         E::HyperError(e) => transport("connection to the cluster failed", e),
         E::ReadEvents(e) => io_error("reading the event stream failed", e),
-        E::RustlsTls(e) => OxiError::network(format!(
-            "TLS error talking to the cluster: {}",
-            scrub(&e.to_string())
-        ))
-        .with_retryable(false),
+        E::RustlsTls(e) => classify_tls_setup(e),
         E::TlsRequired => OxiError::internal("TLS is required but no TLS stack is available"),
         E::ProxyProtocolUnsupported { .. } | E::ProxyProtocolDisabled { .. } => {
             OxiError::unsupported("the configured proxy protocol is not supported")
         }
         E::Discovery(d) => classify_discovery(d),
-        E::InferConfig(_) | E::InferKubeconfig(_) => OxiError::internal(format!(
-            "could not load the kubeconfig: {}",
-            scrub(&err.to_string())
-        )),
+        E::InferKubeconfig(e) => classify_kubeconfig(e),
+        // In-cluster inference is not used by the adapter; keep kube's text out anyway,
+        // since it embeds the kubeconfig error too.
+        E::InferConfig(_) => OxiError::internal("could not infer a client configuration"),
         E::UpgradeConnection(e) => OxiError::network(format!(
             "websocket upgrade failed: {}",
             scrub(&e.to_string())

@@ -19,7 +19,9 @@
 //! `AuthRequired` with an explanation instead of failing later in an opaque way.
 //!
 //! Building a client runs the plugin synchronously (`Client::try_from` calls it), so
-//! [`build_client`] does that on the blocking pool under a deadline, never on the UI thread.
+//! [`build_client`] blocks. Its one caller, `ClientPool`, runs it on the blocking pool
+//! under `PoolConfig::exec_deadline` and reuses a build that outlived the deadline
+//! instead of starting another plugin process; nothing calls it on the UI thread.
 
 use std::path::Path;
 use std::time::Duration;
@@ -95,42 +97,25 @@ impl ExecInteractivePolicy {
     }
 }
 
-/// Applies `policy`, then builds a [`Client`] without blocking the caller or waiting forever.
+/// Applies `policy`, then builds a [`Client`], classifying any failure.
 ///
-/// kube runs exec credential plugins synchronously inside `Client::try_from` with no timeout
-/// of its own, so the build runs on the blocking pool under `deadline`. A plugin that does
-/// not finish in time (a device-code poll, a browser login, a read on `/dev/tty`) gives a
-/// retryable `Timeout` error and the session can move on.
-///
-/// Limits: on timeout the blocking thread, and the plugin child process, may keep running
-/// after this returns (Rust cannot cancel either). A plugin that hangs later, when kube
-/// refreshes an expiring token inside a live client, is not covered by this deadline.
+/// **Blocks**: kube runs exec credential plugins synchronously inside `Client::try_from`
+/// with no timeout of its own, and loads the client identity there. Call it on the blocking
+/// pool, inside a Tokio runtime (kube spawns the client's buffer task), under a deadline:
+/// `ClientPool` does all three. A plugin that hangs later, when kube refreshes an
+/// expiring token inside a live client, is not covered by that deadline.
 ///
 /// # Errors
 ///
-/// The policy's `Auth` error, the classified build failure, or `Timeout`.
-pub async fn build_client(
-    mut config: Config,
-    policy: ExecInteractivePolicy,
-    deadline: Duration,
-) -> OxiResult<Client> {
+/// The policy's `Auth` error, or the build failure classified by [`classify_with`].
+pub fn build_client(mut config: Config, policy: ExecInteractivePolicy) -> OxiResult<Client> {
     policy.apply_to_config(&mut config)?;
     let refresh = CredentialRefresh::of(&config.auth_info);
-    let build = tokio::task::spawn_blocking(move || Client::try_from(config));
-    match tokio::time::timeout(deadline, build).await {
-        Ok(Ok(Ok(client))) => Ok(client),
-        Ok(Ok(Err(err))) => Err(classify_with(&err, refresh)),
-        Ok(Err(join)) => Err(OxiError::internal(format!(
-            "building the client failed unexpectedly: {join}"
-        ))),
-        Err(_elapsed) => Err(OxiError::timeout(format!(
-            "exec credential plugin did not finish within {}",
-            describe(deadline)
-        ))),
-    }
+    Client::try_from(config).map_err(|err| classify_with(&err, refresh))
 }
 
-fn describe(d: Duration) -> String {
+/// A deadline as `"30s"` or `"500ms"`, for timeout messages.
+pub(crate) fn describe(d: Duration) -> String {
     if d.as_secs() >= 1 {
         format!("{}s", d.as_secs())
     } else {

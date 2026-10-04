@@ -4,13 +4,19 @@
 //! is written by hand and prints only the context name and the server host.
 
 use std::fmt;
+use std::future::Future;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use kube::Client;
 use kube::config::Kubeconfig;
+use oxikube_domain::OxiError;
 use oxikube_domain::ids::ContextName;
+use parking_lot::Mutex;
 use tokio::sync::OnceCell;
+use tokio::task::JoinHandle;
+
+use crate::auth::describe;
 
 /// The part of a merged kubeconfig one context depends on: the context entry, its
 /// cluster and its user, as a single-context [`Kubeconfig`] whose
@@ -106,12 +112,22 @@ impl fmt::Debug for ContextDefinition {
     }
 }
 
+/// What `get` needs from an entry: its cell, definition and in-flight build slot.
+/// Holding the cell `Arc` marks the entry in use until the caller drops it.
+pub(crate) type Checkout = (
+    Arc<OnceCell<Arc<Client>>>,
+    Arc<ContextDefinition>,
+    Arc<PendingBuild>,
+);
+
 /// One cached context: its definition and the client, built at most once.
 pub(crate) struct PoolEntry {
     pub(crate) definition: Arc<ContextDefinition>,
     /// Filled by the first successful build. Callers clone this `Arc` while they
     /// build or read, which also marks the entry as in use for eviction.
     pub(crate) cell: Arc<OnceCell<Arc<Client>>>,
+    /// A build that outlived its deadline, kept so the next `get` resumes it.
+    pub(crate) pending: Arc<PendingBuild>,
     pub(crate) last_used: Instant,
 }
 
@@ -120,8 +136,18 @@ impl PoolEntry {
         Self {
             definition: Arc::new(definition),
             cell: Arc::new(OnceCell::new()),
+            pending: Arc::new(PendingBuild::default()),
             last_used: now,
         }
+    }
+
+    /// The handles `get` needs.
+    pub(crate) fn checkout(&self) -> Checkout {
+        (
+            self.cell.clone(),
+            self.definition.clone(),
+            self.pending.clone(),
+        )
     }
 
     /// Referenced outside the pool: a build is running, a caller is mid-`get`, or
@@ -144,3 +170,84 @@ impl fmt::Debug for PoolEntry {
             .finish_non_exhaustive()
     }
 }
+
+type BuildHandle = JoinHandle<Result<Client, OxiError>>;
+
+/// The blocking build of one entry that is still running after its caller gave up.
+///
+/// A build cannot be cancelled: an exec plugin process runs to completion on the
+/// blocking pool. Without this slot every `get` after a timeout (or after a
+/// cancelled `get`) would start another plugin process next to the hung one.
+/// Instead the abandoned task's handle is parked here and the next `get` awaits it
+/// again, under a fresh deadline. A build that finished meanwhile is used as is. The
+/// slot dies with its entry, so invalidation never resumes a stale build.
+#[derive(Default)]
+pub(crate) struct PendingBuild(Mutex<Option<BuildHandle>>);
+
+impl PendingBuild {
+    /// Resumes the parked build, or starts one with `start`, and waits at most
+    /// `deadline` for it.
+    pub(crate) async fn run(
+        &self,
+        context: &ContextName,
+        deadline: Duration,
+        start: impl FnOnce() -> BuildHandle,
+    ) -> Result<Client, OxiError> {
+        let handle = self.0.lock().take().unwrap_or_else(start);
+        let mut parked = Parked {
+            slot: self,
+            handle: Some(handle),
+        };
+        let outcome = match parked.handle.as_mut() {
+            Some(handle) => tokio::time::timeout(deadline, handle).await,
+            // Just set above.
+            None => return Err(OxiError::internal("client build handle missing")),
+        };
+        match outcome {
+            Ok(joined) => {
+                // The task finished; a finished handle must not be polled again.
+                parked.handle = None;
+                joined.map_err(|join| {
+                    let what = if join.is_panic() {
+                        "panicked"
+                    } else {
+                        "was cancelled"
+                    };
+                    OxiError::internal(format!("building the client for `{context}` {what}"))
+                })?
+            }
+            // `parked` puts the handle back on drop, for the next `get`.
+            Err(_elapsed) => Err(OxiError::timeout(format!(
+                "context `{context}`: building the client (exec credential plugin) did not \
+                 finish within {}",
+                describe(deadline)
+            ))),
+        }
+    }
+}
+
+/// Puts an unfinished build back into its slot when the waiter stops waiting:
+/// on timeout, and also when the `get` future is dropped mid-wait.
+struct Parked<'a> {
+    slot: &'a PendingBuild,
+    handle: Option<BuildHandle>,
+}
+
+impl Drop for Parked<'_> {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            *self.slot.0.lock() = Some(handle);
+        }
+    }
+}
+
+// `run` is awaited inside `OnceCell::get_or_try_init` from `ClientPool::get`, whose
+// future must stay `Send`.
+const _: fn() = || {
+    fn assert_send<F: Future + Send>(_: F) {}
+    let pending = PendingBuild::default();
+    let context = ContextName::from("x");
+    assert_send(pending.run(&context, Duration::ZERO, || {
+        tokio::task::spawn_blocking(|| Err(OxiError::internal("x")))
+    }));
+};

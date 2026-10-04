@@ -10,9 +10,15 @@ use std::path::Path;
 use kube::config::{ExecConfig, ExecInteractiveMode};
 use kube::{Client, Config};
 use oxikube_domain::ErrorKind;
-use std::time::{Duration, Instant};
 
 use oxikube_kube::auth::{ExecInteractivePolicy, build_client, classify};
+
+/// `auth::build_client` blocks (it runs the plugin), so run it the way the pool does.
+async fn build(config: Config, policy: ExecInteractivePolicy) -> oxikube_domain::OxiResult<Client> {
+    tokio::task::spawn_blocking(move || build_client(config, policy))
+        .await
+        .expect("build task")
+}
 
 const OK_CREDENTIAL: &str = r#"printf '{"apiVersion":"client.authentication.k8s.io/v1","kind":"ExecCredential","status":{"token":"FAKE-PLUGIN-TOKEN","expirationTimestamp":"2099-01-01T00:00:00Z"}}'"#;
 
@@ -132,52 +138,19 @@ async fn always_plugin_under_never_policy_is_rejected_before_it_runs() {
     assert!(!marker.exists(), "the plugin must not have been executed");
 }
 
-#[test]
-fn slow_plugin_hits_the_deadline_and_is_a_retryable_timeout() {
-    let dir = tempfile::tempdir().unwrap();
-    let config = config_with_plugin(dir.path(), "sleep 20\n", Some(ExecInteractiveMode::Never));
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let started = Instant::now();
-    let err = rt
-        .block_on(build_client(
-            config,
-            ExecInteractivePolicy::Never,
-            Duration::from_millis(500),
-        ))
-        .map(|_| ())
-        .unwrap_err();
-    assert_eq!(err.kind(), ErrorKind::Timeout, "{err:?}");
-    assert!(err.is_retryable());
-    assert!(err.message().contains("500ms"), "{}", err.message());
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "returned promptly"
-    );
-    // The blocking thread is still waiting on the plugin; do not wait for it.
-    rt.shutdown_background();
-}
-
 #[tokio::test]
 async fn build_client_builds_with_a_good_plugin_and_applies_the_policy() {
     let dir = tempfile::tempdir().unwrap();
     let config = config_with_plugin(dir.path(), OK_CREDENTIAL, None);
-    build_client(
-        config,
-        ExecInteractivePolicy::Never,
-        Duration::from_secs(20),
-    )
-    .await
-    .expect("client");
+    build(config, ExecInteractivePolicy::Never)
+        .await
+        .expect("client");
 
     let config = config_with_plugin(dir.path(), OK_CREDENTIAL, Some(ExecInteractiveMode::Always));
-    let err = build_client(
-        config,
-        ExecInteractivePolicy::Never,
-        Duration::from_secs(20),
-    )
-    .await
-    .map(|_| ())
-    .unwrap_err();
+    let err = build(config, ExecInteractivePolicy::Never)
+        .await
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Auth);
     assert!(!err.is_retryable());
 }
@@ -186,14 +159,10 @@ async fn build_client_builds_with_a_good_plugin_and_applies_the_policy() {
 async fn build_client_classifies_a_failing_plugin() {
     let dir = tempfile::tempdir().unwrap();
     let config = config_with_plugin(dir.path(), "echo 'oops' >&2\nexit 1\n", None);
-    let err = build_client(
-        config,
-        ExecInteractivePolicy::Never,
-        Duration::from_secs(20),
-    )
-    .await
-    .map(|_| ())
-    .unwrap_err();
+    let err = build(config, ExecInteractivePolicy::Never)
+        .await
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Auth);
     assert!(err.is_retryable());
 }

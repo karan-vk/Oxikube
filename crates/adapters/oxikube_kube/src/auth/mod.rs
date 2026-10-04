@@ -13,7 +13,8 @@
 //!
 //! * [`classify`]: `kube::Error` -> [`OxiError`](oxikube_domain::OxiError) ([`classify()`], [`classify_with`]).
 //! * `exec`: [`ExecInteractivePolicy`], the cap on exec-plugin interactivity, and
-//!   [`build_client`], which applies it and builds a client under a deadline.
+//!   [`build_client`], which applies it and builds a client (blocking; `ClientPool`
+//!   runs it on the blocking pool under a deadline).
 //! * [`retry_once`]: invalidate-and-retry-once for auth failures.
 //!
 //! # The `retryable` rule for `Auth`
@@ -38,6 +39,9 @@ mod exec;
 mod retry;
 mod scrub;
 
-pub use classify::{CredentialRefresh, classify, classify_with};
+pub use classify::{
+    CredentialRefresh, classify, classify_kubeconfig, classify_tls_setup, classify_with,
+};
+pub(crate) use exec::describe;
 pub use exec::{ExecInteractivePolicy, build_client};
 pub use retry::{retry_once, retry_once_kube};

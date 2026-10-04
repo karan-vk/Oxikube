@@ -286,7 +286,7 @@ async fn failing_exec_plugin_is_an_auth_error_without_plugin_details() {
 }
 
 #[tokio::test]
-async fn build_over_the_exec_deadline_times_out_and_is_not_cached() {
+async fn build_over_the_exec_deadline_times_out_and_is_resumed_not_restarted() {
     let factory = CountingFactory::with(Duration::from_millis(300), 0);
     let config = PoolConfig {
         exec_deadline: Duration::from_millis(50),
@@ -297,15 +297,49 @@ async fn build_over_the_exec_deadline_times_out_and_is_not_cached() {
     assert_eq!(err.kind(), ErrorKind::Timeout);
     assert!(err.is_retryable());
     assert!(err.message().contains("context `a`"), "{err}");
-    // The entry stays empty, so the next `get` builds again.
+    assert!(err.message().contains("50ms"), "{err}");
+
+    // The retry waits on the same build instead of starting a second one (a hung
+    // exec plugin must not pile up processes).
+    assert_eq!(get_err(&pool, "a").await.kind(), ErrorKind::Timeout);
     assert_eq!(factory.builds(), 1);
-    let _ = get_err(&pool, "a").await;
-    assert_eq!(factory.builds(), 2);
+
+    // Once the abandoned build finishes, the next `get` takes its client.
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    pool.get(&ctx("a")).await.expect("finished build is used");
+    assert_eq!(factory.builds(), 1);
 }
 
 #[tokio::test]
-async fn plugin_requiring_interaction_is_rejected_by_the_default_policy() {
-    let yaml = r#"
+async fn cancelled_get_parks_its_build_for_the_next_get() {
+    let factory = CountingFactory::with(Duration::from_millis(100), 0);
+    let pool = pool(factory.clone());
+    let cancelled = tokio::time::timeout(Duration::from_millis(20), pool.get(&ctx("a"))).await;
+    assert!(
+        cancelled.is_err(),
+        "the outer timeout dropped the get mid-build"
+    );
+    pool.get(&ctx("a")).await.expect("client");
+    assert_eq!(factory.builds(), 1);
+}
+
+#[tokio::test]
+async fn invalidation_discards_a_parked_build() {
+    let factory = CountingFactory::with(Duration::from_millis(100), 0);
+    let config = PoolConfig {
+        exec_deadline: Duration::from_millis(10),
+        ..PoolConfig::default()
+    };
+    let pool = pool_with(config, factory.clone(), FakeClock::new());
+    assert_eq!(get_err(&pool, "a").await.kind(), ErrorKind::Timeout);
+    assert!(pool.invalidate(&ctx("a")));
+    assert_eq!(get_err(&pool, "a").await.kind(), ErrorKind::Timeout);
+    assert_eq!(factory.builds(), 2, "the new entry starts its own build");
+}
+
+/// A context whose exec plugin requires interaction (`interactiveMode: Always`) and
+/// does not exist, so running it fails with "not found".
+const INTERACTIVE_PLUGIN_YAML: &str = r#"
 apiVersion: v1
 kind: Config
 clusters:
@@ -323,16 +357,40 @@ contexts:
 - name: k
   context: {cluster: k, user: k}
 "#;
+
+async fn interactive_plugin_error(policy: ExecInteractivePolicy) -> OxiError {
+    let config = PoolConfig {
+        exec_policy: policy,
+        ..PoolConfig::default()
+    };
     let pool = ClientPool::with_parts(
-        parse(yaml),
-        PoolConfig::default(),
+        parse(INTERACTIVE_PLUGIN_YAML),
+        config,
         Arc::new(KubeClientFactory::new(ProxyEnv::default())),
         Arc::new(SystemClock),
     );
-    let err = get_err(&pool, "k").await;
+    get_err(&pool, "k").await
+}
+
+#[tokio::test]
+async fn plugin_requiring_interaction_is_rejected_by_the_default_policy() {
+    let err = interactive_plugin_error(PoolConfig::default().exec_policy).await;
     assert_eq!(err.kind(), ErrorKind::Auth);
     assert!(!err.is_retryable(), "a person has to sign in");
     assert!(err.message().contains("interactive"), "{err}");
+    assert!(!format!("{err:?}").contains(EXEC_ARG));
+}
+
+#[tokio::test]
+async fn exec_policy_from_pool_config_reaches_the_plugin() {
+    // `IfAvailable` still refuses a plugin that requires interaction...
+    let err = interactive_plugin_error(ExecInteractivePolicy::IfAvailable).await;
+    assert!(err.message().contains("interactive"), "{err}");
+    // ...while `Always` lets it run: the failure is now the missing binary.
+    let err = interactive_plugin_error(ExecInteractivePolicy::Always).await;
+    assert_eq!(err.kind(), ErrorKind::Auth);
+    assert!(!err.message().contains("interactive"), "{err}");
+    assert!(err.message().contains("not found"), "{err}");
     assert!(!format!("{err:?}").contains(EXEC_ARG));
 }
 
@@ -771,4 +829,52 @@ fn safe_kubeconfig_errors_keep_their_source() {
         .expect_err("missing cluster");
     assert_eq!(err.kind(), ErrorKind::Validation);
     assert!(std::error::Error::source(&err).is_some());
+}
+
+/// PEM-shaped key data whose base64 decodes, wrapping a PEM body that does not:
+/// kube loads it, then rustls fails on the body (`RustlsTls(InvalidIdentityPem)`),
+/// whose text names the offending byte.
+fn malformed_pem_body_kubeconfig() -> Kubeconfig {
+    use base64::Engine as _;
+    let b64 = |text: &str| base64::engine::general_purpose::STANDARD.encode(text);
+    let cert = b64("-----BEGIN CERTIFICATE-----\nTUlJQg==\n-----END CERTIFICATE-----\n");
+    let key = b64("-----BEGIN PRIVATE KEY-----\nc2VjcmV0!S0VZ\n-----END PRIVATE KEY-----\n");
+    parse(&format!(
+        r#"
+apiVersion: v1
+kind: Config
+clusters:
+- name: k
+  cluster: {{server: "https://127.0.0.1:1", insecure-skip-tls-verify: true}}
+users:
+- name: k
+  user:
+    client-certificate-data: {cert}
+    client-key-data: {key}
+contexts:
+- name: k
+  context: {{cluster: k, user: k}}
+"#
+    ))
+}
+
+#[tokio::test]
+async fn malformed_pem_body_in_client_key_is_a_validation_error_without_key_bytes() {
+    let pool = ClientPool::with_parts(
+        malformed_pem_body_kubeconfig(),
+        PoolConfig::default(),
+        Arc::new(KubeClientFactory::new(ProxyEnv::default())),
+        Arc::new(SystemClock),
+    );
+    let err = get_err(&pool, "k").await;
+    assert_eq!(
+        err.kind(),
+        ErrorKind::Validation,
+        "nothing hit the network: {err:?}"
+    );
+    assert!(std::error::Error::source(&err).is_none());
+    let text = format!("{err} {err:?}");
+    for leak in ["c2VjcmV0", "S0VZ", "InvalidCharacter", "33", "base64"] {
+        assert!(!text.contains(leak), "leaked {leak:?} in {text}");
+    }
 }

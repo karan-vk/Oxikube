@@ -26,6 +26,7 @@ tracing.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
 oxikube_testkit.workspace = true
 http.workspace = true
 proptest.workspace = true

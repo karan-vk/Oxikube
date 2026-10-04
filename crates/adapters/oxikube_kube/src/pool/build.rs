@@ -2,13 +2,14 @@
 //!
 //! The path is split so later stories slot in without a rewrite:
 //! [`build_config`] turns a [`ContextDefinition`] and a [`PoolConfig`] into a kube
-//! [`Config`] (TLS flags and SOCKS5 handling from E03-S07 hook in here), and
-//! [`build_client`] turns that into a [`Client`] under E03-S04's
-//! [`ExecInteractivePolicy`] and error classification. [`ClientFactory`] is the
-//! seam the pool calls, so tests can count, slow down or fail builds.
+//! [`Config`] (TLS flags and SOCKS5 handling from E03-S07 hook in here), and E03-S04's
+//! [`auth::build_client`](crate::auth::build_client) turns that into a [`Client`] under
+//! the [`ExecInteractivePolicy`](crate::auth::ExecInteractivePolicy) with its error
+//! classification. [`ClientFactory`] is the seam the pool calls, so tests can count,
+//! slow down or fail builds.
 //!
-//! Both steps block: `build_config` reads certificate files and `build_client` runs
-//! exec credential plugins synchronously (kube 4.2 `Auth::try_from`). The pool
+//! Both steps block: `build_config` reads certificate files and `auth::build_client`
+//! runs exec credential plugins synchronously (kube 4.2 `Auth::try_from`). The pool
 //! calls the factory on `tokio::task::spawn_blocking` under
 //! [`PoolConfig::exec_deadline`], which is why the factory itself is synchronous.
 
@@ -18,7 +19,7 @@ use oxikube_domain::OxiError;
 
 use super::config::PoolConfig;
 use super::entry::ContextDefinition;
-use crate::auth::{CredentialRefresh, ExecInteractivePolicy, classify_with};
+use crate::auth::{build_client, classify_kubeconfig};
 
 /// Builds clients for the pool. Called on a blocking thread inside a Tokio runtime.
 pub trait ClientFactory: Send + Sync + 'static {
@@ -30,7 +31,8 @@ pub trait ClientFactory: Send + Sync + 'static {
     ) -> Result<Client, OxiError>;
 }
 
-/// The production factory: [`build_config`] then [`build_client`].
+/// The production factory: [`build_config`] then
+/// [`auth::build_client`](crate::auth::build_client) with [`PoolConfig::exec_policy`].
 #[derive(Debug, Clone, Default)]
 pub struct KubeClientFactory {
     proxy_env: ProxyEnv,
@@ -55,7 +57,7 @@ impl ClientFactory for KubeClientFactory {
         config: &PoolConfig,
     ) -> Result<Client, OxiError> {
         let kube_config = build_config(definition, config, &self.proxy_env)?;
-        build_client(kube_config, definition, config.exec_policy)
+        build_client(kube_config, config.exec_policy)
     }
 }
 
@@ -109,10 +111,11 @@ impl std::fmt::Debug for ProxyEnv {
 /// With the workspace's `gzip` kube feature the client then sends
 /// `Accept-Encoding: gzip` and decodes responses.
 ///
-/// An unparseable proxy URL, whether from the cluster's `proxy-url`, from
-/// `proxy_env`, or from the process `HTTPS_PROXY` that kube reads itself, is a
-/// [`Validation`](oxikube_domain::ErrorKind::Validation) error naming those
-/// settings; the URL itself is never echoed (it may carry credentials).
+/// Errors are classified by [`classify_kubeconfig`](crate::auth::classify_kubeconfig),
+/// which never quotes credential material. An unparseable proxy URL, whether from the
+/// cluster's `proxy-url`, from `proxy_env`, or from the process `HTTPS_PROXY` that kube
+/// reads itself, is a [`Validation`](oxikube_domain::ErrorKind::Validation) error naming
+/// those settings; the URL itself is never echoed (it may carry credentials).
 pub fn build_config(
     definition: &ContextDefinition,
     pool: &PoolConfig,
@@ -130,7 +133,7 @@ pub fn build_config(
         definition.kubeconfig().clone(),
         &options,
     ))
-    .map_err(|err| kubeconfig_error(context.as_str(), err))?;
+    .map_err(|err| classify_kubeconfig(&err))?;
 
     config.connect_timeout = pool.connect_timeout;
     config.read_timeout = pool.read_timeout;
@@ -139,33 +142,14 @@ pub fn build_config(
 
     let proxy = cluster_proxy_url(definition).or_else(|| proxy_env.https_proxy.clone());
     config.proxy_url = match proxy {
-        // The URL may hold credentials; keep it out of the message.
-        Some(url) => Some(url.parse().map_err(|_| invalid_proxy(context.as_str()))?),
+        // Same classification as kube's own proxy parse; the URL is never echoed.
+        Some(url) => Some(
+            url.parse()
+                .map_err(|err| classify_kubeconfig(&KubeconfigError::ParseProxyUrl(err)))?,
+        ),
         None => None,
     };
     Ok(config)
-}
-
-/// Builds the client under `policy`. Runs exec credential plugins, so it blocks.
-///
-/// The policy is E03-S04's [`ExecInteractivePolicy`]: a plugin that requires
-/// interaction beyond it is rejected before it runs. Failures are classified by
-/// [`classify_with`](crate::auth::classify_with) (scrubbed, credential-free
-/// messages) with one exception: client certificate and key loading errors
-/// (`kube::Error::InferKubeconfig`) go through the same mapping as
-/// [`build_config`]'s kubeconfig errors, which never quotes kube's text, because
-/// a base64 decode error names an offending byte of `client-key-data`.
-pub fn build_client(
-    mut config: Config,
-    definition: &ContextDefinition,
-    policy: ExecInteractivePolicy,
-) -> Result<Client, OxiError> {
-    policy.apply_to_config(&mut config)?;
-    let refresh = CredentialRefresh::of(&config.auth_info);
-    Client::try_from(config).map_err(|err| match err {
-        kube::Error::InferKubeconfig(err) => kubeconfig_error(definition.context().as_str(), err),
-        err => classify_with(&err, refresh),
-    })
 }
 
 /// The cluster's own `proxy-url`, when set and non-empty.
@@ -179,69 +163,4 @@ fn cluster_proxy_url(definition: &ContextDefinition) -> Option<String> {
         .proxy_url
         .clone()
         .filter(|url| !url.is_empty())
-}
-
-/// The proxy error. Never quotes the URL: it may carry `user:password@`.
-fn invalid_proxy(context: &str) -> OxiError {
-    OxiError::validation(format!(
-        "context `{context}`: the proxy URL (kubeconfig `proxy-url`, or `HTTPS_PROXY` / \
-         `https_proxy` in the environment) is not a valid URI"
-    ))
-}
-
-/// Maps kube's kubeconfig errors.
-///
-/// The source is attached only for variants whose messages are known to carry no
-/// credential material (names, paths, URL parse errors). Certificate and key
-/// loading errors are not among them: a base64 decode error quotes an offending
-/// byte and its offset, which for `client-key-data` is part of the private key,
-/// and `OxiError`'s `Debug` prints the source text.
-fn kubeconfig_error(context: &str, err: KubeconfigError) -> OxiError {
-    let (base, safe_source) = match &err {
-        KubeconfigError::LoadContext(_) => (
-            OxiError::not_found(format!("context `{context}` has no definition")),
-            true,
-        ),
-        KubeconfigError::ParseProxyUrl(_) => (invalid_proxy(context), false),
-        KubeconfigError::LoadClientKey(_) => (
-            OxiError::validation(format!(
-                "context `{context}`: the client key could not be loaded"
-            )),
-            false,
-        ),
-        KubeconfigError::LoadClientCertificate(_) => (
-            OxiError::validation(format!(
-                "context `{context}`: the client certificate could not be loaded"
-            )),
-            false,
-        ),
-        KubeconfigError::LoadCertificateAuthority(_) | KubeconfigError::ParseCertificates(_) => (
-            OxiError::validation(format!(
-                "context `{context}`: the certificate authority could not be loaded"
-            )),
-            false,
-        ),
-        KubeconfigError::CurrentContextNotSet
-        | KubeconfigError::KindMismatch
-        | KubeconfigError::ApiVersionMismatch
-        | KubeconfigError::LoadClusterOfContext(_)
-        | KubeconfigError::FindPath
-        | KubeconfigError::ReadConfig(..)
-        | KubeconfigError::MissingClusterUrl
-        | KubeconfigError::ParseClusterUrl(_) => (
-            OxiError::validation(format!("context `{context}`: invalid kubeconfig entry")),
-            true,
-        ),
-        // `Parse` can quote YAML (credentials included); unknown future variants
-        // get the same conservative treatment.
-        _ => (
-            OxiError::validation(format!("context `{context}`: invalid kubeconfig entry")),
-            false,
-        ),
-    };
-    if safe_source {
-        base.with_source(err)
-    } else {
-        base
-    }
 }
