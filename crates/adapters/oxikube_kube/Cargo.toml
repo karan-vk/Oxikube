@@ -16,6 +16,7 @@ oxikube_domain.workspace = true
 oxikube_ports.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+http.workspace = true
 # kube needs exactly one k8s-openapi version feature enabled (`latest`, set in the workspace).
 k8s-openapi.workspace = true
 kube.workspace = true
@@ -28,12 +29,12 @@ url.workspace = true
 [dev-dependencies]
 base64.workspace = true
 oxikube_testkit.workspace = true
-http.workspace = true
 proptest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tower.workspace = true
+tracing-subscriber.workspace = true
 uuid.workspace = true
 # `test-util`: paused clock for the CRD-watch debounce tests.
 tokio = { workspace = true, features = ["test-util"] }

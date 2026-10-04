@@ -46,6 +46,14 @@
 //! released after long use gets the full `max_idle`; sweep at least every
 //! `max_idle` to keep that accurate.
 //!
+//! # TLS and proxies
+//!
+//! [`build_config`] applies the cluster's TLS and proxy settings: insecure mode (flagged by
+//! [`ClientPool::tls_verification_disabled`] and logged without secrets), custom CAs with
+//! reload for file CAs, `tls-server-name`, and proxy selection and scheme validation. The rules
+//! and precedence are documented in the private `tls` and `proxy` modules; both are covered by
+//! `security_tests`.
+//!
 //! # Secrets
 //!
 //! Entries hold credentials. Every `Debug` here prints context names and server
@@ -57,9 +65,13 @@ mod build;
 mod config;
 mod entry;
 mod eviction;
+mod proxy;
+mod tls;
 
 #[cfg(test)]
 mod in_cluster_tests;
+#[cfg(test)]
+mod security_tests;
 #[cfg(test)]
 mod tests;
 
@@ -194,6 +206,20 @@ impl ClientPool {
                 return Ok(client);
             }
         }
+    }
+
+    /// Whether `context` is configured to connect with TLS verification disabled
+    /// (`insecure-skip-tls-verify` in its cluster entry). Meant for a session badge; `false`
+    /// for an unknown context. See the `tls` module docs: this is the only way verification
+    /// is ever disabled.
+    ///
+    /// This describes the *current kubeconfig*, not clients already handed out: a holder of
+    /// an older `Arc<Client>` keeps its old connection settings after
+    /// [`replace_kubeconfig`](Self::replace_kubeconfig) flips the setting. The session layer
+    /// should `get` again for the contexts that call reports as dropped.
+    pub fn tls_verification_disabled(&self, context: &ContextName) -> bool {
+        let state = self.state.lock();
+        entry::tls_verification_disabled_in(&state.kubeconfig, context.as_str())
     }
 
     /// Drops the entry for `context`. Returns whether there was one. Holders of

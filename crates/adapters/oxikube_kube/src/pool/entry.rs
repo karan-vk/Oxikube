@@ -87,6 +87,18 @@ impl ContextDefinition {
         &self.kubeconfig
     }
 
+    /// The cluster entry, when the context's cluster exists. Holds the CA and proxy settings;
+    /// never log it whole.
+    pub(crate) fn cluster(&self) -> Option<&kube::config::Cluster> {
+        self.kubeconfig.clusters.first()?.cluster.as_ref()
+    }
+
+    /// Whether the kubeconfig sets `insecure-skip-tls-verify: true` for this context's
+    /// cluster: the only way TLS verification is ever disabled (see `pool::tls`).
+    pub fn tls_verification_disabled(&self) -> bool {
+        tls_verification_disabled_in(&self.kubeconfig, self.context.as_str())
+    }
+
     /// Host of the cluster's `server` URL, when it parses. Safe to log.
     pub fn server_host(&self) -> Option<String> {
         let server = self
@@ -118,6 +130,21 @@ impl ContextDefinition {
             _ => false,
         }
     }
+}
+
+/// Whether `context`'s cluster entry in `kubeconfig` sets `insecure-skip-tls-verify: true`.
+/// Reads by reference, so callers holding a lock need not clone credentials.
+pub(super) fn tls_verification_disabled_in(kubeconfig: &Kubeconfig, context: &str) -> bool {
+    let cluster_name = kubeconfig
+        .contexts
+        .iter()
+        .find(|c| c.name == context)
+        .and_then(|c| c.context.as_ref())
+        .map(|c| c.cluster.as_str());
+    cluster_name
+        .and_then(|name| kubeconfig.clusters.iter().find(|c| c.name == name))
+        .and_then(|c| c.cluster.as_ref())
+        .is_some_and(|c| c.insecure_skip_tls_verify == Some(true))
 }
 
 impl fmt::Debug for ContextDefinition {
