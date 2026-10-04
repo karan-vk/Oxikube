@@ -41,19 +41,30 @@ pub(super) fn replace_values<'a>(
             pos = val.start();
             continue;
         }
-        let end = match caps.name("bare") {
+        let (start, end) = match caps.name("bare") {
             Some(bare) if bare.range() == val.range() => {
-                bare.start() + bare_len(bare.as_str(), cut)
+                // An escaped line break right after the separator (`stringData:\n  k: v` in a
+                // JSON string) is not part of the value: it ends the key's line.
+                let start = bare.start() + escaped_break_len(bare.as_str());
+                let after_quotes = input[start..].trim_start_matches(['"', '\'', '\\']);
+                if start > bare.start() && after_quotes.starts_with(MARKER) {
+                    // Already redacted on an earlier pass (`key:\n"[redacted]"`).
+                    pos = input.len() - after_quotes.len() + MARKER.len();
+                    continue;
+                }
+                // `bare_len` skips escape pairs, so it never cuts inside the break.
+                let end = bare.start() + bare_len(bare.as_str(), cut);
+                (start, end.max(start))
             }
-            _ => val.end(),
+            _ => (val.start(), val.end()),
         };
-        if end == val.start() {
-            // The bare word was all framing (`token=, next`): no value here.
-            pos = val.start();
+        if end == start {
+            // The bare word was all framing (`token=, next`) or a line break: no value here.
+            pos = start;
             continue;
         }
-        if let Some(rep) = replacement(&input[val.start()..end]) {
-            out.push_str(&input[copied..val.start()]);
+        if let Some(rep) = replacement(&input[start..end]) {
+            out.push_str(&input[copied..start]);
             out.push_str(rep);
             copied = end;
         }
@@ -78,6 +89,20 @@ pub(super) fn replacement(val: &str) -> Option<&'static str> {
         Some("'[redacted]'")
     } else {
         Some(MARKER)
+    }
+}
+
+/// Length of the escaped line breaks (`\n`, `\r\n`, `\\n` when escaped twice) that open
+/// `word`.
+fn escaped_break_len(word: &str) -> usize {
+    let bytes = word.as_bytes();
+    let mut len = 0;
+    loop {
+        let run = bytes[len..].iter().take_while(|&&b| b == b'\\').count();
+        match bytes.get(len + run) {
+            Some(b'n' | b'r') if run > 0 => len += run + 1,
+            _ => return len,
+        }
     }
 }
 

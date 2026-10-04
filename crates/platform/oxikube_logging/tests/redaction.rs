@@ -346,6 +346,69 @@ fn fields_formatter_alone_redacts_a_str_manifest() {
     assert!(out.contains(r#"tls.key: [redacted]\n""#), "{out}");
 }
 
+/// A `stringData` block whose first value is a double-quoted string holding a `\n` escape,
+/// followed by an entry whose name is not sensitive on its own.
+const QUOTED_ESCAPE_MANIFEST: &str = "stringData:\n  config: \"a\\nb\"\n  tls.key: SECRETVALUE4\n";
+
+fn log_quoted_escape_manifest() {
+    tracing::info!("manifest:\n{QUOTED_ESCAPE_MANIFEST}");
+    tracing::info!(manifest = QUOTED_ESCAPE_MANIFEST, "as str");
+    tracing::info!(manifest = ?QUOTED_ESCAPE_MANIFEST, "as debug");
+}
+
+fn assert_quoted_escape_manifest_redacted(out: &str) {
+    assert!(!out.contains("SECRETVALUE4"), "{out}");
+    // The tail of the quoted value is not left behind outside it.
+    assert!(!out.contains("b\\\"") && !out.contains("\nb\""), "{out}");
+    assert_eq!(out.matches("tls.key: [redacted]").count(), 3, "{out}");
+}
+
+#[test]
+fn text_layer_keeps_a_block_open_across_an_escaped_newline_in_a_quoted_value() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_layer(capture.clone()));
+    tracing::subscriber::with_default(subscriber, log_quoted_escape_manifest);
+    assert_quoted_escape_manifest_redacted(&capture.text());
+}
+
+#[test]
+fn json_layer_keeps_a_block_open_across_an_escaped_newline_in_a_quoted_value() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_json_layer(capture.clone()));
+    tracing::subscriber::with_default(subscriber, log_quoted_escape_manifest);
+    let out = capture.text();
+    assert_quoted_escape_manifest_redacted(&out);
+    for line in out.lines() {
+        serde_json::from_str::<serde_json::Value>(line).expect("valid JSON after scrubbing");
+    }
+}
+
+#[test]
+fn json_layer_keeps_metadata_after_a_block_with_no_trailing_newline() {
+    let capture = Capture::default();
+    let layer = redacting_json_layer(capture.clone()).with_line_number(true);
+    let subscriber = tracing_subscriber::registry().with(layer);
+    tracing::subscriber::with_default(subscriber, || {
+        let span = tracing::info_span!("req", request_id = 7);
+        let _guard = span.enter();
+        tracing::info!("data:\n  tls.key: TLSKEY");
+        tracing::info!(manifest = "data:\n  tls.key: TLSKEY", "as str");
+        tracing::info!(manifest = ?"data:\n  tls.key: TLSKEY", "as debug");
+    });
+    let out = capture.text();
+    assert_eq!(out.lines().count(), 3, "{out}");
+    assert!(!out.contains("TLSKEY"), "{out}");
+    for line in out.lines() {
+        let record: serde_json::Value =
+            serde_json::from_str(line).unwrap_or_else(|e| panic!("invalid JSON ({e}): {line}"));
+        assert_eq!(record["target"], "redaction", "{line}");
+        assert!(record["line_number"].is_u64(), "{line}");
+        assert_eq!(record["span"]["name"], "req", "{line}");
+        assert_eq!(record["span"]["request_id"], 7, "{line}");
+        assert_eq!(record["spans"][0]["name"], "req", "{line}");
+    }
+}
+
 #[test]
 fn trace_level_output_contains_no_secrets() {
     // RUST_LOG=trace equivalent: every event at every level reaches the writer.

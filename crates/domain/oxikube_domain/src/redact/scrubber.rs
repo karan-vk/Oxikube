@@ -66,7 +66,7 @@ pub fn redact(input: &str) -> Cow<'_, str> {
         });
     }
     if flags & F_SCHEME != 0 {
-        out = step(out, |s| SCHEME.replace_all(s, replace_scheme));
+        out = step(out, replace_schemes);
     }
     if flags & F_JWT != 0 {
         out = step(out, |s| JWT.replace_all(s, MARKER));
@@ -164,18 +164,30 @@ fn replace_url_userinfo(caps: &Captures<'_>) -> String {
     format!("{}{MARKER}@", &caps["pre"])
 }
 
-/// `Bearer <token>` / `Basic <credentials>`: keep the scheme word, unless the "token" is a
-/// plain word of prose (`bearer of`, `basic authentication`, `Bearer Token`).
-fn replace_scheme(caps: &Captures<'_>) -> String {
-    let tok = &caps["tok"];
-    if is_plain_word(tok) {
-        return caps[0].to_owned();
+/// `Bearer <token>` / `Basic <credentials>`: keep the scheme word and replace the credential,
+/// unless the "token" is a plain word of prose (`bearer of`, `basic authentication`,
+/// `Bearer Token`). Scanning resumes at that word, since it may be a scheme itself
+/// (`basic Bearer <token>`).
+fn replace_schemes(input: &str) -> Cow<'_, str> {
+    let mut out = String::new();
+    let mut copied = 0;
+    let mut pos = 0;
+    while let Some(tok) = SCHEME.captures_at(input, pos).and_then(|c| c.name("tok")) {
+        if is_plain_word(tok.as_str()) {
+            // The next match starts at or after this word, past the scheme just read.
+            pos = tok.start();
+            continue;
+        }
+        out.push_str(&input[copied..tok.start()]);
+        out.push_str(MARKER);
+        copied = tok.end();
+        pos = tok.end();
     }
-    let (Some(whole), Some(tok_match)) = (caps.get(0), caps.name("tok")) else {
-        return caps[0].to_owned();
-    };
-    let scheme = &whole.as_str()[..tok_match.start() - whole.start()];
-    format!("{scheme}{MARKER}")
+    if copied == 0 {
+        return Cow::Borrowed(input);
+    }
+    out.push_str(&input[copied..]);
+    Cow::Owned(out)
 }
 
 /// A short word spelled like prose: all lowercase, or one capital then lowercase. Credentials

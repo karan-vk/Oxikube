@@ -168,7 +168,7 @@ pub const PATTERNS: &[Pattern] = &[
     },
     Pattern {
         name: "secret-data-block",
-        description: "entries indented under a multi-line data / stringData header line; lines end at real newlines and at escaped `\\n` (hand-written scanner; header regex shown, entries use secret-data-pair)",
+        description: "entries indented under a multi-line data / stringData header line; headers are found at real and escaped `\\n` breaks, entry lines end only at a break as shallow as the header's (a deeper `\\n` is inside a quoted value) or at the quote closing the string that holds the block (hand-written scanner; header regex shown, entries use secret-data-pair)",
         source: DATA_HEADER_SRC,
     },
 ];

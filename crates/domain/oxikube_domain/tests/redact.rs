@@ -204,6 +204,98 @@ fn secret_data_blocks_behind_escaped_newlines() {
 }
 
 #[test]
+fn an_escaped_newline_inside_a_quoted_block_value_does_not_end_the_block() {
+    // A double-quoted YAML value holding a `\n` escape (a PEM under stringData), then an
+    // entry whose name is not sensitive on its own.
+    let yaml = "stringData:\n  config: \"a\\nb\"\n  tls.key: SECRETVALUE1\n";
+    assert_eq!(
+        redact(yaml),
+        "stringData:\n  config: \"[redacted]\"\n  tls.key: [redacted]\n"
+    );
+    assert_eq!(
+        redact("data:\n  ca.crt: \"x\\ny\"\n  tls.key: S\ntype: Opaque"),
+        "data:\n  ca.crt: \"[redacted]\"\n  tls.key: [redacted]\ntype: Opaque"
+    );
+    // The same manifest one escape level down (a JSON string or a `Debug`-quoted `&str`),
+    // and two (a `Debug`-quoted `&str` inside a JSON string).
+    let message = format!("manifest:\n{yaml}");
+    let json_line = serde_json::json!({ "message": message, "target": "app" }).to_string();
+    let debug_in_json = serde_json::json!({ "manifest": format!("{message:?}") }).to_string();
+    for text in [
+        json_line.clone(),
+        format!("manifest={message:?} next=1"),
+        debug_in_json.clone(),
+    ] {
+        let out = assert_scrubbed(&text, &["SECRETVALUE1", "b\\"]);
+        assert!(out.contains("tls.key: [redacted]"), "{out}");
+    }
+    for line in [json_line, debug_in_json] {
+        let out = redact(&line);
+        serde_json::from_str::<serde_json::Value>(&out).expect("still valid JSON");
+    }
+    // `stringData` is also a secret field name: its escaped line break is not its value, so
+    // the header survives for the block scanner. A value after the break is still redacted.
+    assert_eq!(
+        redact(r#"{"m":"stringData:\n  k: v"}"#),
+        r#"{"m":"stringData:\n  k: [redacted]"}"#
+    );
+    assert_eq!(
+        redact(r#""stringData:\\n  k: v""#),
+        r#""stringData:\\n  k: [redacted]""#
+    );
+    assert_eq!(
+        redact(r"password:\nhunter2 next"),
+        r"password:\n[redacted] next"
+    );
+}
+
+#[test]
+fn a_data_block_ends_with_the_string_that_holds_it() {
+    // No trailing newline: the block's last entry is followed by the JSON framing, which must
+    // not be read as more block entries.
+    let line = serde_json::json!({
+        "fields": { "message": "data:\n  tls.key: TLSKEY" },
+        "target": "app::sync",
+        "line_number": 42,
+        "span": { "request_id": 7, "name": "req" },
+        "spans": [{ "request_id": 7, "name": "req" }],
+    })
+    .to_string();
+    let out = assert_scrubbed(&line, &["TLSKEY"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("still valid JSON");
+    assert_eq!(parsed["fields"]["message"], "data:\n  tls.key: [redacted]");
+    assert_eq!(parsed["target"], "app::sync");
+    assert_eq!(parsed["line_number"], 42);
+    assert_eq!(parsed["span"]["request_id"], 7);
+    assert_eq!(parsed["spans"][0]["name"], "req");
+    // Escaped twice: the `Debug` string closes first, then the JSON one.
+    let line = serde_json::json!({
+        "fields": { "manifest": format!("{:?}", "data:\n  tls.key: TLSKEY") },
+        "target": "app::sync",
+    })
+    .to_string();
+    let out = assert_scrubbed(&line, &["TLSKEY"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("still valid JSON");
+    assert_eq!(parsed["target"], "app::sync");
+    // A text log line: the `Debug`-quoted field closes the block, the next field survives.
+    let out = assert_scrubbed(
+        &format!("manifest={:?} attempt=3", "data:\n  tls.key: TLSKEY"),
+        &["TLSKEY"],
+    );
+    assert!(out.ends_with(r#"tls.key: [redacted]" attempt=3"#), "{out}");
+    // A later string in the same record can open its own block.
+    let line = serde_json::json!({
+        "a": "data:\n  k: ONE",
+        "b": "stringData:\n  k: TWO",
+        "target": "t",
+    })
+    .to_string();
+    let out = assert_scrubbed(&line, &["ONE", "TWO"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("still valid JSON");
+    assert_eq!(parsed["target"], "t");
+}
+
+#[test]
 fn every_sensitive_field_name_is_caught_as_text() {
     // The JSON log layer has no name-aware visitor: every name `is_sensitive_field` accepts
     // must be caught by the text patterns in every form the formatters print.
@@ -293,6 +385,12 @@ fn bearer_token_anywhere() {
         out.starts_with("retrying with Bearer ") && out.ends_with("after 401"),
         "{out}"
     );
+    // A scheme word read as prose after another scheme word is still a scheme.
+    assert_eq!(
+        redact("using basic Bearer s3cr3tT0k3nXYZ now"),
+        "using basic Bearer [redacted] now"
+    );
+    assert_eq!(redact("Bearer Bearer +"), "Bearer Bearer [redacted]");
 }
 
 #[test]
@@ -457,6 +555,10 @@ fn idempotent_on_every_fixture() {
         r#"{\"token\":\"[redacted]\"}"#,
         "data: {a: [redacted]}",
         "Bearer [redacted] and eyJ[redacted]",
+        // Shrunk property-test cases: a value after an escaped break, and a scheme word that
+        // a later stage redacts.
+        "stringData=\\n\"Authorization",
+        "data:\\n  a://Bearer Bearer +",
     ] {
         let once = redact(text).into_owned();
         assert_eq!(redact(&once), once, "{text:?}");
@@ -571,6 +673,8 @@ fn fragment() -> impl Strategy<Value = String> {
         Just("secret_data".to_owned()),
         Just("\\n".to_owned()),
         Just("data:\\n  ".to_owned()),
+        Just("stringData:\n  k: \"a\\nb\"".to_owned()),
+        Just("\\\\n".to_owned()),
         prop::sample::select(vec![
             ": ", "=", " ", "\n", "\r\n", "\"", "'", "\\\"", "{", "}", "[", "]", "(", ")", ",",
             ";", "  ", "\t",

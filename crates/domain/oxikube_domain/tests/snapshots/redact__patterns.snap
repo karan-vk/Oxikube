@@ -35,7 +35,7 @@ secret-data-pair
   (?P<k>\\?"[^"\\]*\\?"|[\w.-]+)(?P<s>[ \t]*[:=][ \t]*)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|\{(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|[^{}])*\}|(?P<bare>(?:\\.|[^\s"'\\]|["'][^\s,;}\])"'\\])+)))
 
 secret-data-block
-  entries indented under a multi-line data / stringData header line; lines end at real newlines and at escaped `\n` (hand-written scanner; header regex shown, entries use secret-data-pair)
+  entries indented under a multi-line data / stringData header line; headers are found at real and escaped `\n` breaks, entry lines end only at a break as shallow as the header's (a deeper `\n` is inside a quoted value) or at the quote closing the string that holds the block (hand-written scanner; header regex shown, entries use secret-data-pair)
   (?i)(?:^|[^\w.-])\\?"?(?:(?:secret|string)[-_]?)?data\\?"?[ \t]*:[ \t]*\{?[ \t]*\r?$
 
 sensitive field names: ["client-key-data", "client_key_data", "client-certificate-data", "client_certificate_data", "client-secret", "client_secret", "secret-data", "secret_data", "string-data", "string_data", "stringdata"]

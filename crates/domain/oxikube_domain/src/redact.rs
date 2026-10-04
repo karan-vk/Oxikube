@@ -24,7 +24,7 @@
 //! | `scheme-credential` | `Bearer <token>` and `Basic <credentials>` anywhere in text (a plain word such as "bearer authentication" or "basic auth" is left alone) |
 //! | `jwt` | JWT-shaped strings: `eyJ…` header, payload and signature, base64url separated by dots |
 //! | `secret-data-flow` | every value inside a `data` / `stringData` / `secret_data` map written inline (`data: {a: b}`, `"data":{"a":"b"}`, Rust `Debug` maps) |
-//! | `secret-data-block` | every entry under a multi-line `data:` / `stringData:` block (YAML or pretty JSON), with lines ending at real newlines or escaped `\n` (a manifest inside a JSON log line or a `Debug`-quoted string) |
+//! | `secret-data-block` | every entry under a multi-line `data:` / `stringData:` block (YAML or pretty JSON), with lines ending at real newlines or escaped `\n` (a manifest inside a JSON log line or a `Debug`-quoted string); a `\n` escaped one level deeper than the header's break is inside a quoted value and does not end the entry, and the block ends with the string that holds it |
 //!
 //! Field forms handled: YAML `key: value`, JSON `"key":"value"` (also JSON escaped inside a
 //! string, `\"key\":\"value\"`), `key=value`, and Rust `Debug` output (`key: Some("value")`,
