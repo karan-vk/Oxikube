@@ -60,6 +60,29 @@ fn build_config_applies_the_in_cluster_fixups_only_when_flagged() {
 }
 
 #[test]
+fn in_cluster_build_does_not_validate_the_proxy_it_never_uses() {
+    let yaml = Kubeconfig::from_yaml(
+        "clusters:\n- name: c\n  cluster:\n    server: https://127.0.0.1:1\n\
+         users:\n- name: u\n  user:\n    token: t\n\
+         contexts:\n- name: x\n  context: {cluster: c, user: u}\n",
+    )
+    .unwrap();
+    let env = ProxyEnv::with_https_proxy(Some("ftp://env-proxy.example:1".into()));
+    let base = ContextDefinition::from_kubeconfig(&yaml, &ContextName::from("x")).unwrap();
+
+    let flagged = build_config(
+        &base.clone().with_in_cluster(true),
+        &PoolConfig::default(),
+        &env,
+    )
+    .unwrap();
+    assert!(flagged.proxy_url.is_none());
+
+    let err = build_config(&base.with_in_cluster(false), &PoolConfig::default(), &env).unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::Unsupported);
+}
+
+#[test]
 fn provenance_is_part_of_the_connection_identity() {
     assert!(definition(true).same_connection(&definition(true)));
     assert!(!definition(true).same_connection(&definition(false)));
