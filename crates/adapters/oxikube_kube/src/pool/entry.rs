@@ -28,6 +28,7 @@ use crate::auth::describe;
 pub struct ContextDefinition {
     context: ContextName,
     kubeconfig: Kubeconfig,
+    in_cluster: bool,
 }
 
 impl ContextDefinition {
@@ -52,6 +53,7 @@ impl ContextDefinition {
             .and_then(|c| c.user.as_ref())
             .and_then(|u| kubeconfig.auth_infos.iter().find(|a| &a.name == u).cloned());
         Some(Self {
+            in_cluster: false,
             context: context.clone(),
             kubeconfig: Kubeconfig {
                 current_context: Some(context.as_str().to_owned()),
@@ -61,6 +63,18 @@ impl ContextDefinition {
                 ..Kubeconfig::default()
             },
         })
+    }
+
+    /// Marks this definition as the synthetic in-cluster context (E03-S10), by provenance,
+    /// so [`build_config`](super::build_config) applies the in-cluster client fix-ups.
+    pub fn with_in_cluster(mut self, in_cluster: bool) -> Self {
+        self.in_cluster = in_cluster;
+        self
+    }
+
+    /// Whether this is the synthetic in-cluster context (not merely a context of that name).
+    pub fn is_in_cluster(&self) -> bool {
+        self.in_cluster
     }
 
     /// The context this definition is for.
@@ -93,6 +107,9 @@ impl ContextDefinition {
         // `PartialEq` under `cfg(test)`. Secret fields serialise in clear inside
         // this transient value; it is never stored or logged. A serialisation
         // failure counts as "changed", which only costs a rebuild.
+        if self.in_cluster != other.in_cluster {
+            return false;
+        }
         match (
             serde_json::to_value(&self.kubeconfig),
             serde_json::to_value(&other.kubeconfig),
