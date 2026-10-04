@@ -7,7 +7,8 @@
 //! clusters with exec plugins) are never built, contacted or written anywhere.
 //!
 //! `health` holds the liveness-loop helpers shared by the health scenarios; `resources` the
-//! pod fixtures and adapter constructor of the resource data plane scenarios (E04).
+//! pod fixtures and adapter constructor of the resource data plane scenarios (E04); `mutations` the
+//! ConfigMap manifests of the write scenarios (E04-S05).
 //!
 //! Namespaced fixtures (service accounts, roles, bindings) live in the test's
 //! `oxi-test-<rand>` namespace and go away with it.
@@ -16,6 +17,7 @@
 #![allow(dead_code)]
 
 pub mod health;
+pub mod mutations;
 pub mod resources;
 
 use std::future::Future;

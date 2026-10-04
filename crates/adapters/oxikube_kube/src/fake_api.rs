@@ -29,6 +29,8 @@ pub(crate) struct Recorded {
     pub(crate) query: String,
     /// The JSON body, if the request had one.
     pub(crate) body: Option<Value>,
+    /// The `Content-Type` header, if the request had one (patch kinds differ only by it).
+    pub(crate) content_type: Option<String>,
 }
 
 #[derive(Default)]
@@ -131,6 +133,11 @@ impl Service<Request<Body>> for FakeApi {
                 path: parts.uri.path().to_owned(),
                 query: parts.uri.query().unwrap_or_default().to_owned(),
                 body: serde_json::from_slice(&bytes).ok(),
+                content_type: parts
+                    .headers
+                    .get(http::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .map(str::to_owned),
             };
             let stalled = server.state.lock().stalled.contains(&recorded.path);
             if stalled {

@@ -121,7 +121,7 @@ fn meta_json(meta: &k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta) 
 
 /// `DynamicObject` to the server's JSON shape, consuming it (no copy of `spec`/`status`).
 /// Key order is `apiVersion`, `kind`, `metadata`, then the rest.
-fn dynamic_json(mut item: DynamicObject, resource: &ApiResource, strip: bool) -> Value {
+pub(super) fn dynamic_json(mut item: DynamicObject, resource: &ApiResource, strip: bool) -> Value {
     if strip {
         item.metadata.managed_fields = None;
     }

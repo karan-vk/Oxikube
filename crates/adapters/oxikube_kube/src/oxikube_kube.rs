@@ -16,6 +16,7 @@
 //! | [`pool`] | E03-S03 | [`ClientPool`]: one lazily built, shared kube client per context, with invalidation and LRU eviction |
 //! | [`resources`] | E04-S01 | [`KubeResources`]: `ResourceReader` list/get with pagination, selectors and `resourceVersion` semantics over typed and dynamic `Api`s |
 //! | [`metrics`] | E04-S11 | [`KubeMetrics`]: `MetricsPort` on `metrics.k8s.io` via `k8s-metrics`, exact `Quantity` parsing, absence as a visible state |
+//! | [`mutate`] | E04-S05 | [`KubeResources`] as a `ResourceWriter`: create, replace, patch (merge, strategic, JSON, server-side apply), dry-run, delete, delete-collection, with conflict and validation detail in the errors |
 //! | [`sources`] | E03-S02 | `ClusterSourcePort` over kubeconfig files, directories and pasted text, with hot reload |
 
 pub mod auth;
@@ -23,6 +24,7 @@ pub mod discovery;
 pub mod health;
 pub mod kubeconfig;
 pub mod metrics;
+pub mod mutate;
 pub mod pool;
 pub mod resources;
 pub mod sources;
@@ -34,6 +36,7 @@ pub use discovery::{
     CrdWatch, CrdWatchConfig, DiscoveryConfig, KindChange, KubeDiscovery, Registry, RegistryDiff,
 };
 pub use metrics::KubeMetrics;
+pub use mutate::DEFAULT_FIELD_MANAGER;
 pub use pool::{
     ClientFactory, ClientPool, Clock, ContextDefinition, EvictionPolicy, KubeClientFactory,
     PoolConfig, ProxyEnv, RetryMode, SystemClock,

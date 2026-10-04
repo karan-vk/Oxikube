@@ -127,6 +127,14 @@ these rules:
 | Missing API group or version, aggregated API that ignores a feature | `Unsupported` | false |
 | Panics turned into errors, invariant violations, other bugs | `Internal` | false |
 
+A rejected write can carry more than a kind. `oxikube_domain::error_details` defines
+`ConflictDetails` (why a 409: `FieldOwnership` with the clashing fields and the field managers
+that own them, `StaleVersion`, `AlreadyExists`, `Other`) and `ValidationDetails` (the field
+paths a 422 rejected). An adapter attaches one as the error's source and callers read it with
+`OxiError::conflict_details()` / `validation_details()`; `oxikube_kube::mutate` (E04-S05) does
+this for every write. In the same module a 500 or 502 is marked retryable (the server failed
+the request) while keeping the `Internal` kind.
+
 `From` helpers are reserved for adapters, but by the orphan rule an adapter crate cannot
 implement `From<kube::Error> for OxiError` (both types are foreign to it). Adapters instead
 expose a free function or an extension trait, for example

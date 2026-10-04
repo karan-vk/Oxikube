@@ -1,13 +1,27 @@
 //! Single-object reads.
 
+use kube::core::{ApiResource, DynamicObject};
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::Verb;
 use oxikube_domain::{OxiError, OxiResult, Resource};
 
+use super::backend::dynamic_json;
 use super::error::{bad_object, get_error};
 use super::{KubeResources, namespace_of};
 
 impl KubeResources {
+    /// A server object (a write's response) as a domain [`Resource`], with `managedFields`
+    /// handled as for `get`.
+    pub(crate) fn resource_of(
+        &self,
+        item: DynamicObject,
+        resource: &ApiResource,
+    ) -> OxiResult<Resource> {
+        let strip = self.config.get_managed_fields.strips();
+        Resource::from_json(dynamic_json(item, resource, strip))
+            .map_err(|e| bad_object("object", e))
+    }
+
     /// One object, `None` when the server answers 404.
     pub(super) async fn get_one(
         &self,

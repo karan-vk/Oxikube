@@ -60,6 +60,12 @@ impl CredentialRefresh {
     }
 }
 
+/// Free server text made safe for an error message: redacted, one bounded line, long opaque
+/// runs masked. For adapters that build their own error detail (the write path's field causes).
+pub(crate) fn redacted_line(text: &str) -> String {
+    one_line(&redact(text))
+}
+
 /// Classifies a kube error. Equivalent to [`classify_with`] with [`CredentialRefresh::Unknown`].
 ///
 /// | kube error | [`OxiError`] |

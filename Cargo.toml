@@ -97,6 +97,8 @@ serde_json_lenient = "0.2"
 schemars = "1"
 toml = "1"
 json-patch = "4"
+# `Either` of kube's delete responses (object still present / Status). Same major kube uses.
+either = "1"
 similar = "3"
 granit-parser = "1"
 

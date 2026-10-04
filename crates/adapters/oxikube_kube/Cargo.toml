@@ -13,6 +13,7 @@ doctest = false
 
 [dependencies]
 backon.workspace = true
+either.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
 async-trait.workspace = true
@@ -23,6 +24,7 @@ jiff.workspace = true
 # kube needs exactly one k8s-openapi version feature enabled (`latest`, set in the workspace).
 k8s-metrics.workspace = true
 k8s-openapi.workspace = true
+json-patch.workspace = true
 kube.workspace = true
 notify.workspace = true
 parking_lot.workspace = true
