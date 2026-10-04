@@ -65,6 +65,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Lucide icons (ISC) — https://lucide.dev
+Copyright (c) 2026 Lucide Icons and Contributors; some icons derive from Feather (MIT). The SVGs
+under `crates/platform/oxikube_assets/assets/icons/` are copied unmodified from the Lucide set
+bundled in `gpui-kit-assets` 0.7.0 (the curated subset listed in `src/icons.rs`). The full licence
+text, including the Feather attribution, is `crates/platform/oxikube_assets/assets/icons/LICENSE`.
+
+## gpui-component (Apache-2.0) — https://github.com/longbridge/gpui-kit
+Used as a dependency of `oxikube_ui` only; no source is vendored. `oxikube_ui` reuses its bundled
+default icon set at runtime through `gpui-kit-assets`.
+
 ## deskribe (Apache-2.0) — https://github.com/nklmilojevic/deskribe
 Used as a dependency. Its NOTICE (portions © The Kubernetes Authors, Apache-2.0) must be preserved
 if any code is vendored.

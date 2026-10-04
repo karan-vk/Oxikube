@@ -4,6 +4,13 @@
 
 Embedded assets: Lucide icons, fonts, bundled themes, default settings/keymaps.
 
+## Contents
+
+- `IconName`: the closed enum of Lucide SVGs shipped (`assets/icons/`, ISC licence in
+  `assets/icons/LICENSE`). Only listed icons are embedded in the binary.
+- `Assets`: a `gpui::AssetSource` serving them at `icons/<name>.svg`. `oxikube_ui::Assets` chains it
+  in front of gpui-component's own bundle; the bin registers that one.
+
 ## Allowed internal dependencies
 
 - (none)

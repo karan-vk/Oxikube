@@ -5457,6 +5457,9 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_assets"
 version = "0.0.1"
+dependencies = [
+ "gpui-pre",
+]
 
 [[package]]
 name = "oxikube_catalog_ui"
@@ -5682,6 +5685,17 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_ui"
 version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "gpui-component",
+ "gpui-kit-assets",
+ "gpui-pre",
+ "gpui-pre-platform",
+ "oxikube_assets",
+ "oxikube_testkit",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "oxikube_updater"

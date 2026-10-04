@@ -476,6 +476,43 @@ mod tests {
         );
     }
 
+    /// E05-S02: a brand-new crate that imports gpui-component is rejected, whichever UI or
+    /// platform directory it lands in. `oxikube_ui` stays the only importer.
+    #[test]
+    fn a_throwaway_crate_importing_gpui_component_fails() {
+        for dir in ["ui", "platform", "adapters"] {
+            let errors = check_edited(|m| {
+                let mut throwaway = package(m, "oxikube_logs_ui").clone();
+                let name = format!("oxikube_throwaway_{dir}");
+                throwaway["name"] = json!(name);
+                throwaway["id"] = json!(format!("path+file:///ws/crates/{dir}/{name}#0.0.1"));
+                throwaway["manifest_path"] = json!(format!("/ws/crates/{dir}/{name}/Cargo.toml"));
+                throwaway["dependencies"] = json!([]);
+                let id = throwaway["id"].clone();
+                m["packages"].as_array_mut().unwrap().push(throwaway);
+                m["workspace_members"].as_array_mut().unwrap().push(id);
+                add_dep(m, &name, "gpui-component", None);
+            });
+            assert_one(
+                &errors,
+                &format!(
+                    "oxikube_throwaway_{dir}: gpui-component may only be imported by oxikube_ui"
+                ),
+            );
+        }
+    }
+
+    #[test]
+    fn oxikube_ui_may_use_the_component_stack_and_platform_assets() {
+        // The wrapper crate imports all three library crates and the platform asset crate.
+        let errors = check_edited(|m| {
+            for dep in ["gpui-component", "gpui-base", "gpui-kit-assets"] {
+                add_dep(m, "oxikube_ui", dep, None);
+            }
+        });
+        assert_eq!(errors, Vec::<String>::new());
+    }
+
     #[test]
     fn banned_crates_fail_in_every_layer() {
         let crates = [

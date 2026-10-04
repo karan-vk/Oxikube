@@ -12,6 +12,7 @@ path = "src/oxikube_assets.rs"
 doctest = false
 
 [dependencies]
+gpui.workspace = true
 
 [lints]
 workspace = true
