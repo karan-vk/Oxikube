@@ -1,0 +1,17 @@
+{
+    "apiVersion": "authorization.k8s.io/v1",
+    "kind": "SelfSubjectAccessReview",
+    "metadata": {},
+    "spec": {
+        "resourceAttributes": {
+            "namespace": "default",
+            "resource": "pods",
+            "subresource": "exec",
+            "verb": "create",
+            "version": "v1"
+        }
+    },
+    "status": {
+        "allowed": false
+    }
+}

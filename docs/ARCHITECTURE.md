@@ -119,6 +119,7 @@ data before building an error** and map their native errors with these rules:
 | HTTP 409 (conflict, stale `resourceVersion`, already exists) | `Conflict` | false (re-read first) |
 | HTTP 400, 422, failed client-side validation | `Validation` | false |
 | HTTP 429, 503, 504, connection reset or refused, TLS handshake failure | `Network` | true (the default retry policy covers 429, 503, 504) |
+| Server certificate rejected in the TLS handshake (untrusted issuer, expired, wrong name) | `Network` | false (retrying cannot fix it; the health probe fails at once) |
 | Client or request deadline elapsed | `Timeout` | true |
 | Missing API group or version, aggregated API that ignores a feature | `Unsupported` | false |
 | Panics turned into errors, invariant violations, other bugs | `Internal` | false |
