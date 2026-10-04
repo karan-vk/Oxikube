@@ -1,5 +1,6 @@
 //! Deterministic tests: no watcher, no sleeps; every change is followed by a manual `reload()`.
-//! The one watcher test at the end uses a real temp dir and a polling wait with a deadline.
+//! The tests in the watcher section at the end start the real watcher task on temp dirs and
+//! wait with deadlines instead of fixed sleeps.
 
 use std::ffi::OsString;
 use std::fs;
@@ -13,7 +14,9 @@ use oxikube_ports::secrets::SecretString;
 use oxikube_ports::{SourceId, SourceKind};
 
 use crate::kubeconfig::in_cluster_cluster_id;
-use crate::pool::{ClientPool, KubeClientFactory, PoolConfig, ProxyEnv, SystemClock};
+use crate::pool::{
+    ClientPool, ContextDefinition, KubeClientFactory, PoolConfig, ProxyEnv, SystemClock,
+};
 use oxikube_testkit::FakeSecretStorePort;
 use tempfile::TempDir;
 
@@ -524,6 +527,38 @@ async fn a_separators_only_kubeconfig_env_reads_no_file_not_the_default_path() {
     }
 }
 
+/// kubectl accepts `KUBECONFIG=/a:/a`, and settings may repeat a path: each source is listed
+/// once, keeping the first, so `SourceId`s stay unique.
+#[tokio::test]
+async fn repeated_kubeconfig_entries_and_user_added_paths_list_each_source_once() {
+    let dir = TempDir::new().unwrap();
+    let one = dir.path().join("one");
+    let two = dir.path().join("two");
+    let extra = dir.path().join("extra");
+    fs::create_dir(&extra).unwrap();
+    write(&one, &simple(&[("one", "https://1")]));
+    write(&two, &simple(&[("two", "https://2")]));
+    write(&extra.join("k.yaml"), &simple(&[("from-dir", "https://d")]));
+    let mut config = config_for(&default_in(dir.path()));
+    config.env.kubeconfig = Some(std::env::join_paths([&one, &one, &two]).unwrap());
+    config.extra_paths = vec![extra.clone(), one.clone(), extra.clone(), two.clone()];
+    let (sources, _) = adapter(config);
+
+    let listed = sources.sources().await.unwrap();
+    let ids: Vec<SourceId> = listed.iter().map(|s| s.id.clone()).collect();
+    assert_eq!(
+        ids,
+        [
+            SourceId(format!("env:{}", one.display())),
+            SourceId(format!("env:{}", two.display())),
+            SourceId(format!("dir:{}", extra.display())),
+        ]
+    );
+    let contexts = sources.contexts().await.unwrap();
+    assert_eq!(names(&contexts), ["one", "two", "from-dir"]);
+    assert!(contexts.iter().all(|c| ids.contains(&c.source)));
+}
+
 /// An `Env` that looks like a pod (service host, port and mounted service account).
 fn pod_env(config: &mut SourcesConfig) {
     config.env.kubernetes_service_host = Some("10.0.0.1".into());
@@ -642,6 +677,81 @@ async fn a_sources_changed_driven_pool_replace_drops_only_changed_contexts() {
         [ContextName::new("c")]
     );
     assert!(pool.contains(&"a".into()));
+}
+
+/// The UI's diff and the pool's invalidation share one notion of a context's connection: for
+/// each edit, a context is `changed` exactly when its pool definition is no longer the same
+/// connection.
+#[tokio::test]
+async fn the_diff_marks_changed_exactly_the_contexts_whose_pool_definition_changed() {
+    let dir = TempDir::new().unwrap();
+    let path = default_in(dir.path());
+    let pair = [("a", "https://a"), ("b", "https://b")];
+    let edits = [
+        yaml(&pair, None, "token-1", None),
+        yaml(
+            &[("a", "https://a2"), ("b", "https://b")],
+            None,
+            "token-1",
+            None,
+        ),
+        yaml(
+            &[("a", "https://a2"), ("b", "https://b")],
+            None,
+            "token-1",
+            None,
+        ),
+        yaml(
+            &[("a", "https://a2"), ("b", "https://b")],
+            None,
+            "token-2",
+            None,
+        ),
+        yaml(
+            &[("a", "https://a2"), ("b", "https://b")],
+            None,
+            "token-2",
+            Some("ns"),
+        ),
+        yaml(
+            &[("a", "https://a2"), ("b", "https://b")],
+            None,
+            "token-2",
+            Some("ns"),
+        )
+        .replace("    user: b\n", "    user: a\n"),
+        yaml(
+            &[("a", "https://a2"), ("b", "https://b")],
+            None,
+            "token-2",
+            Some("ns"),
+        )
+        .replace("    user: b\n", "    user: a\n")
+        .replace(
+            "- name: b\n  user:\n    token: token-2",
+            "- name: b\n  user:\n    token: unused",
+        ),
+    ];
+    write(&path, &edits[0]);
+    let (sources, _) = adapter(config_for(&path));
+    sources.reload().await.unwrap();
+    for (step, text) in edits.iter().enumerate().skip(1) {
+        let before = sources.loaded().unwrap();
+        write(&path, text);
+        let diff = sources.reload().await.unwrap();
+        let after = sources.loaded().unwrap();
+        let expected: Vec<String> = ["a", "b"]
+            .into_iter()
+            .filter(|name| {
+                let name = ContextName::new(*name);
+                let old = ContextDefinition::from_kubeconfig(&before.merged, &name).unwrap();
+                let new = ContextDefinition::from_kubeconfig(&after.merged, &name).unwrap();
+                !old.same_connection(&new)
+            })
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(names(&diff.changed), expected, "edit {step}");
+    }
 }
 
 // --- pasted kubeconfigs -------------------------------------------------------------------
@@ -984,4 +1094,68 @@ async fn watching_without_a_runtime_is_an_error_and_disabled_starts_nothing() {
     });
     let err = handle.join().unwrap().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Internal);
+}
+
+/// Timings from settings are checked up front. A zero poll interval used to make the watch
+/// task panic after it had reported `Active`, so nothing was watched while the status said
+/// otherwise.
+#[tokio::test]
+async fn out_of_range_watch_timings_are_a_validation_error() {
+    let dir = TempDir::new().unwrap();
+    let path = default_in(dir.path());
+    let invalid = [
+        (Duration::ZERO, Duration::from_millis(300)),
+        (MAX_POLL_INTERVAL + Duration::from_secs(1), Duration::ZERO),
+        (Duration::MAX, Duration::ZERO),
+        (
+            Duration::from_secs(60),
+            MAX_DEBOUNCE + Duration::from_millis(1),
+        ),
+        (Duration::from_secs(60), Duration::MAX),
+    ];
+    for (poll_interval, debounce) in invalid {
+        let mut config = watching_config(&path);
+        config.poll_interval = poll_interval;
+        config.debounce = debounce;
+        let err = KubeconfigSources::new(config, Arc::new(FakeSecretStorePort::new()))
+            .expect_err("rejected");
+        assert_eq!(
+            err.kind(),
+            ErrorKind::Validation,
+            "{poll_interval:?} {debounce:?}"
+        );
+    }
+    let mut config = watching_config(&path);
+    config.poll_interval = MAX_POLL_INTERVAL;
+    config.debounce = Duration::ZERO;
+    let (sources, _) = adapter(config);
+    assert_eq!(sources.wait_for_watcher().await, WatchStatus::Active);
+}
+
+/// A change made after the first load read the files but before the watches were registered
+/// produces no event. The watch task re-reads once after registering, before it reports
+/// `Active`, so the change is not left to the 60 s poll.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_change_before_the_watches_are_registered_is_caught_up() {
+    let dir = TempDir::new().unwrap();
+    let path = default_in(dir.path());
+    write(&path, &simple(&[("a", "https://a")]));
+    // First load with no watcher yet, then the change, then the watch task starts: the
+    // ordering a startup race produces, made deterministic.
+    let (sources, _) = adapter(config_for(&path));
+    assert_eq!(names(&sources.contexts().await.unwrap()), ["a"]);
+    write(&path, &simple(&[("a", "https://a"), ("b", "https://b")]));
+    let mut events = sources.subscribe();
+    sources
+        .inner
+        .watch_status
+        .send_replace(WatchStatus::Starting);
+    let _guard = watcher::spawn(Arc::downgrade(&sources.inner), &watching_config(&path)).unwrap();
+    assert_eq!(sources.wait_for_watcher().await, WatchStatus::Active);
+
+    let diff = tokio::time::timeout(Duration::from_secs(1), events.next())
+        .await
+        .expect("the catch-up reload reports the change")
+        .unwrap();
+    assert_eq!(names(&diff.added), ["b"]);
 }

@@ -2,8 +2,9 @@
 //!
 //! The port's [`ClusterContext`] carries only name, source, server and namespace. A change to a
 //! context's user, its credentials or the kubeconfig's `current-context` must still reach the
-//! pool and the UI, so each entry also carries a [`Fingerprint`]: a SHA-256 over the context,
-//! its cluster entry and its user entry as parsed. Two snapshots with the same digest are
+//! pool and the UI, so each entry also carries a [`Fingerprint`]: a SHA-256 over the pool's
+//! [`ContextDefinition`] of the context (its context, cluster and user entries as parsed), so
+//! the UI's diff and the pool's invalidation share one definition of a context's connection. Two snapshots with the same digest are
 //! identical, which is what makes a `touch` with no content change emit nothing.
 //!
 //! Only digests are kept, never the credentials they were computed from. Files a kubeconfig
@@ -20,6 +21,7 @@ use sha2::{Digest, Sha256};
 
 use super::layout::Layout;
 use crate::kubeconfig::{Diagnostic, LoadedKubeconfig};
+use crate::pool::ContextDefinition;
 
 /// SHA-256 of everything that makes a catalog entry what it is.
 type Fingerprint = [u8; 32];
@@ -155,36 +157,42 @@ impl Snapshot {
 }
 
 /// The port view of one context and its fingerprint.
+///
+/// The fingerprint covers the pool's [`ContextDefinition`] of the context (its context,
+/// cluster and user entries, and whether it is the synthetic in-cluster context), so the
+/// diff reports a context as `changed` exactly when
+/// [`ClientPool::replace_loaded`](crate::ClientPool::replace_loaded) drops its client, plus
+/// the owning source, which the pool does not track.
 fn describe(
     loaded: &LoadedKubeconfig,
     name: ContextName,
     cluster: ClusterId,
     source: SourceId,
 ) -> (ClusterContext, Fingerprint) {
-    let merged = &loaded.merged;
-    let named = merged.contexts.iter().find(|c| c.name == name.as_str());
-    let ctx = named.and_then(|c| c.context.as_ref());
-    let cluster_entry = ctx.and_then(|c| merged.clusters.iter().find(|n| n.name == c.cluster));
-    let user_entry = ctx
-        .and_then(|c| c.user.as_deref())
-        .and_then(|user| merged.auth_infos.iter().find(|n| n.name == user));
-    let server = cluster_entry
+    let definition = ContextDefinition::from_kubeconfig(&loaded.merged, &name)
+        .map(|d| d.with_in_cluster(loaded.is_in_cluster(&name)));
+    let slice = definition.as_ref().map(ContextDefinition::kubeconfig);
+    let server = slice
+        .and_then(|k| k.clusters.first())
         .and_then(|c| c.cluster.as_ref())
         .and_then(|c| c.server.clone());
-    let default_namespace = ctx.and_then(|c| c.namespace.clone());
+    let default_namespace = slice
+        .and_then(|k| k.contexts.first())
+        .and_then(|c| c.context.as_ref())
+        .and_then(|c| c.namespace.clone());
 
     let mut hasher = Sha256::new();
     put(&mut hasher, source.0.as_bytes());
-    // `Kubeconfig` entries serialise to JSON (credentials included, in memory only) and only the
-    // digest leaves this function. A serialisation failure hashes as `null`: the entry then
-    // compares equal to any other failing entry, which can only hide a change, never invent one.
-    for value in [
-        serde_json::to_value(named).ok(),
-        serde_json::to_value(cluster_entry).ok(),
-        serde_json::to_value(user_entry).ok(),
-    ] {
-        hash_value(&mut hasher, &value.unwrap_or(Value::Null));
-    }
+    hasher.update([u8::from(
+        definition
+            .as_ref()
+            .is_some_and(ContextDefinition::is_in_cluster),
+    )]);
+    // The slice serialises to JSON (credentials included, in memory only) and only the digest
+    // leaves this function. A serialisation failure hashes as `null`: the entry then compares
+    // equal to any other failing entry, which can only hide a change, never invent one.
+    let value = slice.and_then(|k| serde_json::to_value(k).ok());
+    hash_value(&mut hasher, &value.unwrap_or(Value::Null));
     let context = ClusterContext {
         cluster,
         context: name,

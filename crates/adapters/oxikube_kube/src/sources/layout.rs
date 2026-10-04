@@ -72,7 +72,20 @@ impl Layout {
         layout
     }
 
+    /// Whether a source with `id` or for `path` is already listed. A repeated `KUBECONFIG`
+    /// entry (kubectl accepts `KUBECONFIG=/a:/a`) or a user-added path that repeats one already
+    /// configured adds nothing: [`SourceId`]s stay unique, and the first entry is kept, matching
+    /// the loader's first-file-wins rule.
+    fn has(&self, id: &SourceId, path: &Path) -> bool {
+        self.entries
+            .iter()
+            .any(|e| e.source.id == *id || e.source.path.as_deref() == Some(path))
+    }
+
     fn push_file(&mut self, id: SourceId, kind: SourceKind, label: String, path: &Path) {
+        if self.has(&id, path) {
+            return;
+        }
         self.entries.push(SourceEntry {
             source: ClusterSource {
                 id,
@@ -85,6 +98,10 @@ impl Layout {
     }
 
     fn push_dir(&mut self, dir: &Path) {
+        let id = SourceId(format!("dir:{}", dir.display()));
+        if self.has(&id, dir) {
+            return;
+        }
         let files = match list_kubeconfig_files(dir) {
             Ok(files) => files,
             Err(err) => {
@@ -104,7 +121,7 @@ impl Layout {
         };
         self.entries.push(SourceEntry {
             source: ClusterSource {
-                id: SourceId(format!("dir:{}", dir.display())),
+                id,
                 kind: SourceKind::KubeconfigDir,
                 label: dir.display().to_string(),
                 path: Some(dir.to_path_buf()),

@@ -99,7 +99,7 @@ use self::layout::Layout;
 use self::snapshot::Snapshot;
 use crate::kubeconfig::{Diagnostic, KubeconfigMerge, LoadedKubeconfig, apply_in_cluster_fallback};
 
-pub use self::config::{SourcesConfig, WatchStatus};
+pub use self::config::{MAX_DEBOUNCE, MAX_POLL_INTERVAL, SourcesConfig, WatchStatus};
 pub use self::pasted::PastedDescriptor;
 
 /// Shared state; the watch task holds a [`std::sync::Weak`] to it.
@@ -158,6 +158,23 @@ impl Inner {
     /// commit, and notify subscribers when the diff is not empty.
     pub(crate) async fn reload(&self) -> OxiResult<SourcesChanged> {
         let _serial = self.reload_lock.lock().await;
+        self.reload_locked().await
+    }
+
+    /// [`reload`](Self::reload) only when something was loaded already, else a no-op: the
+    /// first load reads the files anyway. Waits for a load in flight. The watcher runs it once
+    /// its watches are registered, to catch a change made after the first load read the files
+    /// but before the watches existed (which no event reports).
+    pub(crate) async fn reload_if_loaded(&self) -> OxiResult<()> {
+        let _serial = self.reload_lock.lock().await;
+        if self.current.read().is_none() {
+            return Ok(());
+        }
+        self.reload_locked().await.map(drop)
+    }
+
+    /// The body of [`reload`](Self::reload); the caller holds `reload_lock`.
+    async fn reload_locked(&self) -> OxiResult<SourcesChanged> {
         let snapshot = Arc::new(self.load().await?);
         let previous = self.current.write().replace(snapshot.clone());
         let diff = snapshot.diff_from(previous.as_deref());
@@ -211,8 +228,10 @@ impl KubeconfigSources {
     /// Build the adapter. Nothing is read until the first port call or [`reload`](ClusterSourcePort::reload).
     ///
     /// `secrets` stores pasted kubeconfig text. With `config.watch` the watcher starts, which
-    /// needs a tokio runtime (an error otherwise).
+    /// needs a tokio runtime (an error otherwise). Out-of-range watch timings are a
+    /// validation error ([`SourcesConfig::validate`]).
     pub fn new(config: SourcesConfig, secrets: Arc<dyn SecretStorePort>) -> OxiResult<Self> {
+        config.validate()?;
         let initial = if config.watch {
             WatchStatus::Starting
         } else {

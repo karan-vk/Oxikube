@@ -11,6 +11,9 @@
 //! * **Bursts are debounced.** A rename-over-write produces several events; the task waits for
 //!   a quiet period (capped, so a chatty directory cannot starve reloads) and reloads once.
 //!
+//! Once the watches are registered the task re-reads the sources once, because a change made
+//! between the first load and the registration produces no event.
+//!
 //! `Access` events are dropped: the reload itself reads the watched files and would otherwise
 //! trigger itself on inotify.
 
@@ -103,10 +106,15 @@ async fn run(inner: Weak<Inner>, config: SourcesConfig) {
         ),
         Err(err) => (None, WatchStatus::Failed(err.to_string()), Vec::new()),
     };
-    match inner.upgrade() {
-        Some(inner) => inner.set_watch_status(status, unwatched),
-        None => return,
-    }
+    let Some(strong) = inner.upgrade() else {
+        return;
+    };
+    // A change made after the first load read the files but before the watches existed has no
+    // event; re-read once now (an empty diff when nothing changed). Done before publishing the
+    // status, so `wait_for_watcher` returning means the catalog is current.
+    let _ = strong.reload_if_loaded().await;
+    strong.set_watch_status(status, unwatched);
+    drop(strong);
 
     let mut poll = interval_at(Instant::now() + config.poll_interval, config.poll_interval);
     poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
