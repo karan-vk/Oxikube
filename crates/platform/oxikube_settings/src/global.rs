@@ -154,7 +154,7 @@ pub fn update_user_settings<T: Settings>(
         };
         let new_text = new_text_for_update::<T>(&old_text, cluster.as_ref(), update)?;
         if new_text != old_text {
-            std::fs::write(&path, &new_text).map_err(|err| io_error("write", &path, err))?;
+            paths::write_atomically(&path, &new_text)?;
         }
         let seq = WRITE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
         Ok::<_, OxiError>((seq, new_text))

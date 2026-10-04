@@ -16,6 +16,7 @@
 //! Tests that run under GPUI's deterministic scheduler must not start this (it is an OS
 //! thread); use [`crate::init_with_dir`], which has no watcher.
 
+use std::ffi::OsString;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
@@ -54,15 +55,23 @@ impl SettingsFileWatcher {
         debounce: Duration,
         on_change: impl FnMut(String) -> bool + Send + 'static,
     ) -> OxiResult<Self> {
-        let dir = path
-            .parent()
-            .filter(|dir| !dir.as_os_str().is_empty())
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
-        let file_name = path
-            .file_name()
-            .ok_or_else(|| OxiError::internal("settings path has no file name"))?
-            .to_owned();
+        // The link's own name in its directory, plus the resolved file in its directory
+        // when the settings file is a symlink.
+        let mut watched = vec![dir_and_name(&path)?];
+        if std::fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_symlink()) {
+            match std::fs::canonicalize(&path) {
+                Ok(target) => {
+                    let target = dir_and_name(&target)?;
+                    if !watched.contains(&target) {
+                        watched.push(target);
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!(path = %path.display(), %err, "settings symlink is dangling");
+                }
+            }
+        }
+        let file_names: Vec<OsString> = watched.iter().map(|(_, name)| name.clone()).collect();
 
         let (tx, rx) = channel::<()>();
         let mut watcher = notify::recommended_watcher(move |event: notify::Result<Event>| {
@@ -71,10 +80,10 @@ impl SettingsFileWatcher {
                 Ok(event) => {
                     !matches!(event.kind, EventKind::Access(_))
                         && (event.paths.is_empty()
-                            || event
-                                .paths
-                                .iter()
-                                .any(|p| p.file_name() == Some(file_name.as_os_str())))
+                            || event.paths.iter().any(|p| {
+                                p.file_name()
+                                    .is_some_and(|name| file_names.iter().any(|n| n == name))
+                            }))
                 }
                 // An error (overflow, dropped watch) may hide a change: re-read.
                 Err(_) => true,
@@ -86,11 +95,20 @@ impl SettingsFileWatcher {
         .map_err(|err| {
             OxiError::internal("could not start the settings watcher").with_source(err)
         })?;
-        watcher
-            .watch(&dir, RecursiveMode::NonRecursive)
-            .map_err(|err| {
-                OxiError::internal(format!("could not watch {}", dir.display())).with_source(err)
-            })?;
+        let mut dirs: Vec<&PathBuf> = Vec::new();
+        for (dir, _) in &watched {
+            if !dirs.contains(&dir) {
+                dirs.push(dir);
+            }
+        }
+        for dir in dirs {
+            watcher
+                .watch(dir, RecursiveMode::NonRecursive)
+                .map_err(|err| {
+                    OxiError::internal(format!("could not watch {}", dir.display()))
+                        .with_source(err)
+                })?;
+        }
 
         let thread = std::thread::Builder::new()
             .name("oxikube-settings-watch".into())
@@ -104,6 +122,20 @@ impl SettingsFileWatcher {
             _thread: thread,
         })
     }
+}
+
+/// The directory to watch for `path` and the file name to filter its events on.
+fn dir_and_name(path: &Path) -> OxiResult<(PathBuf, OsString)> {
+    let dir = path
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    let name = path
+        .file_name()
+        .ok_or_else(|| OxiError::internal("settings path has no file name"))?
+        .to_owned();
+    Ok((dir, name))
 }
 
 fn run(
@@ -209,6 +241,41 @@ mod tests {
         // Same content again: no callback.
         std::fs::write(&path, "{\"a\": 2}").unwrap();
         assert!(rx.recv_timeout(Duration::from_millis(600)).is_err());
+    }
+
+    /// `settings.json` symlinked into another directory (dotfile managers): an edit of the
+    /// real file is reported although the link's directory sees no event.
+    #[test]
+    #[cfg(unix)]
+    fn reports_edits_through_a_symlink_into_another_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config");
+        let dotfiles = dir.path().join("dotfiles");
+        std::fs::create_dir(&config).unwrap();
+        std::fs::create_dir(&dotfiles).unwrap();
+        let real = dotfiles.join("oxikube-settings.json");
+        std::fs::write(&real, "{}").unwrap();
+        let link = config.join("settings.json");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let (tx, rx) = mpsc::channel();
+        let _watcher = SettingsFileWatcher::spawn(link, "{}".into(), DEFAULT_DEBOUNCE, {
+            move |text| tx.send(text).is_ok()
+        })
+        .unwrap();
+
+        // Rewrite until the watch is live (see `reports_edits_to_a_real_file`).
+        let landed = (0..20).any(|_| {
+            std::fs::write(&real, "{\"a\": 1}").unwrap();
+            wait_for(&rx, "{\"a\": 1}", Duration::from_millis(500))
+        });
+        assert!(landed, "no reload within 10 s");
+
+        // An editor's atomic save of the real file.
+        let tmp = dotfiles.join("oxikube-settings.json.tmp");
+        std::fs::write(&tmp, "{\"a\": 2}").unwrap();
+        std::fs::rename(&tmp, &real).unwrap();
+        assert!(wait_for(&rx, "{\"a\": 2}", Duration::from_secs(10)));
     }
 
     #[test]

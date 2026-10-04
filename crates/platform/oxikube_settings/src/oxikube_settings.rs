@@ -20,7 +20,7 @@
 //! - [`settings`]: the [`Settings`] trait, [`SettingsLocation`], registration.
 //! - [`store`]: [`SettingsStore`], layer merge, per-setting values and change tracking.
 //! - [`global`]: GPUI global, [`init`], startup load, hot reload task, file edits.
-//! - [`paths`]: config dir (`$OXIKUBE_CONFIG_DIR`), first-run `settings.json`.
+//! - [`paths`]: config dir (`$OXIKUBE_CONFIG_DIR`), first-run `settings.json`, atomic writes.
 //! - [`watcher`]: `notify` watcher with debounce (no GPUI).
 //! - [`update`]: typed edit → comment-preserving text edit.
 //! - [`json_edit`]: vendored Zed `settings_json` text edits (GPL header).

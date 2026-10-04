@@ -163,3 +163,78 @@ fn refuses_to_edit_a_broken_file() {
     assert_eq!(err.kind(), ErrorKind::Validation);
     assert!(err.message().contains("font_size"), "{}", err.message());
 }
+
+/// Every user's first GUI edit: the shipped template is a header of `//` comments above an
+/// empty object. The header stays above `{`, verbatim; the setting goes inside the braces.
+#[test]
+fn the_first_edit_of_the_shipped_template_keeps_its_header() {
+    let template = oxikube_assets::initial_user_settings_content();
+    let text = new_text_for_update::<TerminalSettings>(template, None, |content| {
+        content.font_size = Some(13.0);
+    })
+    .unwrap();
+    let header = template
+        .strip_suffix("{\n}\n")
+        .expect("template ends in an empty object");
+    assert_eq!(
+        text,
+        format!("{header}{{\n  \"terminal\": {{\n    \"font_size\": 13.0\n  }}\n}}\n")
+    );
+
+    // A second edit lands next to the first and still leaves the header alone.
+    let text = new_text_for_update::<GeneralSettings>(&text, None, |content| {
+        content.read_only = Some(true);
+    })
+    .unwrap();
+    assert!(text.starts_with(header), "{text}");
+    let parsed = parse_jsonc_object(&text).unwrap();
+    assert_eq!(parsed["read_only"], json!(true));
+    assert_eq!(parsed["terminal"]["font_size"], json!(13.0));
+}
+
+#[test]
+fn block_comments_around_and_inside_an_empty_object_survive() {
+    let input = "/* hello */\n{\n  /* inner */\n}\n";
+    let text = new_text_for_update::<TerminalSettings>(input, None, |content| {
+        content.font_size = Some(11.0);
+    })
+    .unwrap();
+    assert_eq!(
+        text,
+        "/* hello */\n{\n  /* inner */\n  \"terminal\": {\n    \"font_size\": 11.0\n  }\n}\n"
+    );
+
+    // The same inside an empty section.
+    let input = "{\n  \"terminal\": { /* none yet */ },\n}\n";
+    let text = new_text_for_update::<TerminalSettings>(input, None, |content| {
+        content.font_size = Some(11.0);
+    })
+    .unwrap();
+    assert_eq!(
+        text,
+        "{\n  \"terminal\": { /* none yet */\n    \"font_size\": 11.0\n  },\n}\n"
+    );
+}
+
+/// `f32` fields are written in their shortest form, not widened to `f64` digits
+/// (`0.10000000149011612`).
+#[test]
+fn f32_values_are_written_without_f64_noise() {
+    for (value, written) in [(0.1_f32, "0.1"), (1.1, "1.1"), (13.1, "13.1")] {
+        let text = new_text_for_update::<TerminalSettings>(USER, None, |content| {
+            content.font_size = Some(value);
+        })
+        .unwrap();
+        assert!(
+            text.contains(&format!("\"font_size\": {written}, // points")),
+            "{value}: {text}"
+        );
+    }
+
+    // And when the setting is new (the nested-construction path).
+    let text = new_text_for_update::<GeneralSettings>("{}", None, |content| {
+        content.ui_scale = Some(1.1);
+    })
+    .unwrap();
+    assert!(text.contains("\"ui_scale\": 1.1"), "{text}");
+}

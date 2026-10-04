@@ -8,7 +8,9 @@
 //! Tests for the vendored JSON text edits. `object_replace`, `object_replace_escapes_new_key`,
 //! `object_remove_and_rename_find_an_escaped_key_by_its_own_range` and
 //! `test_infer_json_indent_size` are Zed's; the `update_*` tests below them are ours and drive
-//! [`update_value_in_json_text`] the way the settings store does.
+//! [`update_value_in_json_text`] the way the settings store does. Upstream expectations for
+//! inserting into a member-less object end in a newline the input did not have; ours keep
+//! the text after `}` as it was (see the module docs).
 
 use super::*;
 use serde_json::{Value, json};
@@ -221,8 +223,7 @@ fn object_replace() {
         Some(json!("value")),
         r#"{
                 "new_key": "value"
-            }
-            "#
+            }"#
         .unindent_text(),
     );
 
@@ -478,8 +479,7 @@ fn object_replace() {
         r#"{
                 // This object is empty
                 "key": "value"
-            }
-            "#
+            }"#
         .unindent_text(),
     );
 
@@ -496,8 +496,7 @@ fn object_replace() {
                 // Comment 1
                 // Comment 2
                 "new": 42
-            }
-            "#
+            }"#
         .unindent_text(),
     );
 
@@ -518,6 +517,37 @@ fn object_replace() {
             }"#
         .unindent_text(),
     );
+}
+
+/// Ours: a member-less root object gets the new member inside its braces; text before `{`
+/// and after `}` and every comment inside them are kept byte for byte.
+#[test]
+fn insert_into_a_memberless_root_keeps_the_text_around_it() {
+    #[track_caller]
+    fn check(input: &str, expected: &str) {
+        let mut text = input.to_owned();
+        let (range, replacement) =
+            replace_value_in_json_text(&text, &["a", "b"], 2, Some(&json!(1)), None);
+        text.replace_range(range, &replacement);
+        assert_eq!(text, expected);
+    }
+
+    let nested = "\"a\": {\n    \"b\": 1\n  }";
+    check(
+        "// header\n//\n// more\n{\n}\n",
+        &format!("// header\n//\n// more\n{{\n  {nested}\n}}\n"),
+    );
+    check(
+        "/* hello */\n{\n  /* inner */\n}\n// trailer\n",
+        &format!("/* hello */\n{{\n  /* inner */\n  {nested}\n}}\n// trailer\n"),
+    );
+    check("{}", &format!("{{\n  {nested}\n}}"));
+    // No root object at all: the comments stay and the object follows them.
+    check(
+        "// only a note\n/* and a block */\n",
+        &format!("// only a note\n/* and a block */\n{{\n  {nested}\n}}\n"),
+    );
+    check("", &format!("{{\n  {nested}\n}}\n"));
 }
 
 #[test]

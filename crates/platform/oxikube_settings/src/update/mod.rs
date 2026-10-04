@@ -91,8 +91,13 @@ pub fn new_text_for_update<T: Settings>(
 }
 
 /// The content as JSON with unset (`null`) members removed.
+///
+/// Goes through text rather than `serde_json::to_value`: `to_value` widens an `f32` to `f64`
+/// (`0.1_f32` becomes `0.10000000149011612`), while the text serializer prints each float's
+/// shortest round-tripping form (`0.1`), which parses back to the `f64` that prints the same.
 fn content_value<T: Settings>(content: &T::Content) -> OxiResult<Value> {
-    serde_json::to_value(content)
+    serde_json::to_string(content)
+        .and_then(|text| serde_json::from_str::<Value>(&text))
         .map(|value| strip_nulls(&value))
         .map_err(|err| {
             OxiError::internal(format!(

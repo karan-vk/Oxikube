@@ -17,7 +17,9 @@
 //! replaced as whole values; `find_value_range_in_json_text` and `parse_json_with_comments`
 //! are not vendored ([`crate::jsonc`] parses); `util::RangeExt` is inlined; tree-sitter 0.27's
 //! `QueryMatch::captures()` accessor replaces the field; panicking `unwrap`s carry the
-//! invariant that makes them unreachable. Formatting helpers live in [`format`].
+//! invariant that makes them unreachable; a missing key in a member-less object is inserted
+//! inside its braces (upstream rewrote the whole document at the root, moving a header above
+//! `{` inside it and dropping block comments). Formatting helpers live in [`format`].
 
 mod format;
 #[cfg(test)]
@@ -280,36 +282,46 @@ pub fn replace_value_in_json_text<T: AsRef<str>>(
             (first_key_start..first_key_start, content)
         }
     } else {
-        // We don't have the key, construct the nested objects
+        // The parent object has no members (or there is no root object yet).
         let new_value = construct_json_value(&key_path[depth..], new_value);
-        let indent_prefix_len = tab_size * depth;
-        let mut new_val = to_pretty_json(&new_value, tab_size, indent_prefix_len);
-        if depth == 0 {
-            new_val.push('\n');
-        }
-        // best effort to keep comments with best effort indentation
-        let mut replace_text = &text[existing_value_range.clone()];
-        while let Some(comment_start) = replace_text.rfind("//") {
-            if let Some(comment_end) = replace_text[comment_start..].find('\n') {
-                let mut comment_with_indent_start = replace_text[..comment_start]
-                    .rfind('\n')
-                    .unwrap_or(comment_start);
-                if !replace_text[comment_with_indent_start..comment_start]
-                    .trim()
-                    .is_empty()
-                {
-                    comment_with_indent_start = comment_start;
-                }
-                new_val.insert_str(
-                    1,
-                    &replace_text[comment_with_indent_start..comment_start + comment_end],
-                );
+        let new_val = to_pretty_json(&new_value, tab_size, tab_size * depth);
+        let parent = if depth == 0 {
+            root_object_range(&syntax_tree)
+        } else {
+            Some(existing_value_range.clone())
+        };
+        let members = new_val
+            .strip_prefix('{')
+            .and_then(|val| val.strip_suffix('}'));
+        match (parent, members) {
+            // Insert the members inside the braces: everything before `{` and after `}`
+            // (a file header, say) and every comment inside them stays exactly as it was.
+            (Some(parent), Some(members))
+                if text[parent.clone()].starts_with('{') && text[parent.clone()].ends_with('}') =>
+            {
+                let inner = &text[parent.start + 1..parent.end - 1];
+                let insert_at = parent.start + 1 + inner.trim_end().len();
+                (insert_at..parent.end - 1, members.to_owned())
             }
-            replace_text = &replace_text[..comment_start];
+            // No root object (a blank or comment-only file): keep the text, append one.
+            (None, _) if depth == 0 => {
+                let kept = text.trim_end().len();
+                let separator = if kept == 0 { "" } else { "\n" };
+                (kept..text.len(), format!("{separator}{new_val}\n"))
+            }
+            // The parent is not an object: replace it as a whole.
+            _ => (existing_value_range, new_val),
         }
-
-        (existing_value_range, new_val)
     }
+}
+
+/// The byte range of the document's root object, if it has one.
+fn root_object_range(syntax_tree: &tree_sitter::Tree) -> Option<Range<usize>> {
+    let root = syntax_tree.root_node();
+    let mut cursor = root.walk();
+    root.named_children(&mut cursor)
+        .find(|node| node.kind() == "object")
+        .map(|node| node.byte_range())
 }
 
 /// `key` as a quoted, escaped JSON string.
