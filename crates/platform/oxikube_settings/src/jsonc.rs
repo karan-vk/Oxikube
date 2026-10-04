@@ -92,6 +92,18 @@ mod tests {
         );
     }
 
+    /// Long floats parse to the nearest `f64` (the `float_roundtrip` parser), so a value the
+    /// store wrote reads back bit for bit.
+    #[test]
+    fn parses_long_floats_exactly() {
+        let value = 10.957_860_598_549_463_f64;
+        let parsed = parse_jsonc_object(&format!("{{\"x\": {value}}}")).unwrap();
+        assert_eq!(
+            parsed["x"].as_f64().map(f64::to_bits),
+            Some(value.to_bits())
+        );
+    }
+
     #[test]
     fn blank_text_is_an_empty_object() {
         assert!(parse_jsonc_object("  \n").unwrap().is_empty());

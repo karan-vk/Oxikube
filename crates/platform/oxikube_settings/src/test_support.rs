@@ -28,6 +28,9 @@ pub struct TerminalContent {
     /// Font size in points.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font_size: Option<f32>,
+    /// Line height as a multiple of the font size (an `f64` field).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_height: Option<f64>,
     /// Shell to start.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shell: Option<String>,
@@ -43,6 +46,7 @@ pub struct TerminalContent {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerminalSettings {
     pub font_size: f32,
+    pub line_height: f64,
     pub shell: String,
     pub env: BTreeMap<String, String>,
     pub args: Vec<String>,
@@ -55,6 +59,7 @@ impl Settings for TerminalSettings {
     fn from_content(content: TerminalContent) -> Self {
         Self {
             font_size: content.font_size.unwrap_or_default(),
+            line_height: content.line_height.unwrap_or_default(),
             shell: content.shell.unwrap_or_default(),
             env: content.env.unwrap_or_default(),
             args: content.args.unwrap_or_default(),

@@ -95,6 +95,8 @@ pub fn new_text_for_update<T: Settings>(
 /// Goes through text rather than `serde_json::to_value`: `to_value` widens an `f32` to `f64`
 /// (`0.1_f32` becomes `0.10000000149011612`), while the text serializer prints each float's
 /// shortest round-tripping form (`0.1`), which parses back to the `f64` that prints the same.
+/// The parse is exact for `f64` fields too because the workspace enables serde_json's
+/// `float_roundtrip` feature (without it, 17-digit values drift by one ULP).
 fn content_value<T: Settings>(content: &T::Content) -> OxiResult<Value> {
     serde_json::to_string(content)
         .and_then(|text| serde_json::from_str::<Value>(&text))

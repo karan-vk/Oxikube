@@ -238,3 +238,29 @@ fn f32_values_are_written_without_f64_noise() {
     .unwrap();
     assert!(text.contains("\"ui_scale\": 1.1"), "{text}");
 }
+
+/// `f64` fields are written exactly: a 17-significant-digit value survives the text round trip
+/// without drifting by one ULP (needs serde_json's `float_roundtrip` parser).
+#[test]
+fn f64_values_are_written_exactly() {
+    let values = [
+        10.957_860_598_549_463_f64,
+        0.1 + 0.2,
+        1.0 / 3.0,
+        2.0_f64.sqrt(),
+    ];
+    for value in values {
+        let text = new_text_for_update::<TerminalSettings>(USER, None, |content| {
+            content.line_height = Some(value);
+        })
+        .unwrap();
+        let written = parse_jsonc_object(&text).unwrap()["terminal"]["line_height"]
+            .as_f64()
+            .unwrap();
+        assert_eq!(written.to_bits(), value.to_bits(), "{value}: {text}");
+        assert!(
+            text.contains(&format!("\"line_height\": {value}")),
+            "{value}: {text}"
+        );
+    }
+}
