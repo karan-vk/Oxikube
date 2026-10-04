@@ -1,9 +1,11 @@
 //! The scrubber: byte-level pre-check, then only the patterns that could match.
 
+use super::blocks::scrub_data_blocks;
 use super::patterns::{
-    AUTHORIZATION_SRC, BEARER_SRC, DATA_FLOW_SRC, DATA_HEADER_SRC, DATA_PAIR_SRC, JWT_SRC, MARKER,
-    PEM_SRC, SECRET_FIELD_SRC, URL_USERINFO_SRC,
+    AUTHORIZATION_SRC, DATA_FLOW_SRC, DATA_HEADER_SRC, DATA_PAIR_SRC, JWT_SRC, MARKER, PEM_SRC,
+    SCHEME_SRC, SECRET_FIELD_SRC, URL_USERINFO_SRC,
 };
+use super::values::{Cut, replace_values};
 use regex::{Captures, Regex};
 use std::borrow::Cow;
 use std::sync::LazyLock;
@@ -12,7 +14,7 @@ use std::sync::LazyLock;
 /// programming error caught in CI, never a runtime condition.
 macro_rules! lazy_regex {
     ($name:ident, $src:expr) => {
-        static $name: LazyLock<Regex> =
+        pub(super) static $name: LazyLock<Regex> =
             LazyLock::new(|| Regex::new($src).expect("redaction pattern is a tested literal"));
     };
 }
@@ -21,7 +23,7 @@ lazy_regex!(PEM, PEM_SRC);
 lazy_regex!(AUTHORIZATION, AUTHORIZATION_SRC);
 lazy_regex!(SECRET_FIELD, SECRET_FIELD_SRC);
 lazy_regex!(URL_USERINFO, URL_USERINFO_SRC);
-lazy_regex!(BEARER, BEARER_SRC);
+lazy_regex!(SCHEME, SCHEME_SRC);
 lazy_regex!(JWT, JWT_SRC);
 lazy_regex!(DATA_FLOW, DATA_FLOW_SRC);
 lazy_regex!(DATA_PAIR, DATA_PAIR_SRC);
@@ -31,11 +33,11 @@ lazy_regex!(DATA_HEADER, DATA_HEADER_SRC);
 const F_PEM: u8 = 1;
 const F_AUTH: u8 = 1 << 1;
 const F_FIELD: u8 = 1 << 2;
-const F_BEARER: u8 = 1 << 3;
+const F_SCHEME: u8 = 1 << 3;
 const F_JWT: u8 = 1 << 4;
 const F_DATA: u8 = 1 << 5;
 const F_URL: u8 = 1 << 6;
-const F_ALL: u8 = F_PEM | F_AUTH | F_FIELD | F_BEARER | F_JWT | F_DATA | F_URL;
+const F_ALL: u8 = F_PEM | F_AUTH | F_FIELD | F_SCHEME | F_JWT | F_DATA | F_URL;
 
 /// Replaces secret-bearing substrings of `input` with [`MARKER`].
 ///
@@ -54,13 +56,17 @@ pub fn redact(input: &str) -> Cow<'_, str> {
         out = step(out, |s| URL_USERINFO.replace_all(s, replace_url_userinfo));
     }
     if flags & F_AUTH != 0 {
-        out = step(out, |s| AUTHORIZATION.replace_all(s, replace_assignment));
+        out = step(out, |s| {
+            replace_values(&AUTHORIZATION, s, Cut::Framing, |_| false)
+        });
     }
     if flags & F_FIELD != 0 {
-        out = step(out, |s| SECRET_FIELD.replace_all(s, replace_assignment));
+        out = step(out, |s| {
+            replace_values(&SECRET_FIELD, s, Cut::Framing, data_map_value)
+        });
     }
-    if flags & F_BEARER != 0 {
-        out = step(out, |s| BEARER.replace_all(s, replace_bearer));
+    if flags & F_SCHEME != 0 {
+        out = step(out, |s| SCHEME.replace_all(s, replace_scheme));
     }
     if flags & F_JWT != 0 {
         out = step(out, |s| JWT.replace_all(s, MARKER));
@@ -88,16 +94,27 @@ fn candidates(s: &[u8]) -> u8 {
         let rest = &s[i..];
         match rest[0].to_ascii_lowercase() {
             b'a' if starts_ci(rest, b"authorization") => flags |= F_AUTH,
-            b'b' if starts_ci(rest, b"bearer") => flags |= F_BEARER,
+            b'a' if starts_ci(rest, b"apikey")
+                || starts_ci(rest, b"api_key")
+                || starts_ci(rest, b"api-key") =>
+            {
+                flags |= F_FIELD;
+            }
+            b'b' if starts_ci(rest, b"bearer") || starts_ci(rest, b"basic") => flags |= F_SCHEME,
             b't' if starts_ci(rest, b"token") => flags |= F_FIELD,
+            b's' if starts_ci(rest, b"secret")
+                || starts_ci(rest, b"stringdata")
+                || starts_ci(rest, b"string_data")
+                || starts_ci(rest, b"string-data") =>
+            {
+                flags |= F_FIELD;
+            }
             b'p' if starts_ci(rest, b"password") || starts_ci(rest, b"passwd") => flags |= F_FIELD,
             b'k' if starts_ci(rest, b"key-data") || starts_ci(rest, b"key_data") => {
                 flags |= F_FIELD;
             }
             b'c' if starts_ci(rest, b"certificate-data")
-                || starts_ci(rest, b"certificate_data")
-                || starts_ci(rest, b"client-secret")
-                || starts_ci(rest, b"client_secret") =>
+                || starts_ci(rest, b"certificate_data") =>
             {
                 flags |= F_FIELD;
             }
@@ -122,7 +139,7 @@ fn starts_ci(hay: &[u8], needle: &[u8]) -> bool {
     hay.len() >= needle.len() && hay[..needle.len()].eq_ignore_ascii_case(needle)
 }
 
-/// `data` (any case, so `stringData` too) followed by an optional closing quote and a `:` or `=`.
+/// `data` (any case, so `stringData` and `secret_data` too) followed by an optional closing quote and a `:` or `=`.
 fn data_key(rest: &[u8]) -> bool {
     starts_ci(rest, b"data")
         && rest[4..]
@@ -131,28 +148,15 @@ fn data_key(rest: &[u8]) -> bool {
             .is_some_and(|b| matches!(b, b':' | b'='))
 }
 
-/// The replacement for `val`, keeping its quote style, or `None` when it is already redacted.
-fn replacement(val: &str) -> Option<&'static str> {
-    if val.trim_matches(['"', '\'', '\\']) == MARKER {
-        None
-    } else if val.starts_with("\\\"") {
-        Some("\\\"[redacted]\\\"")
-    } else if val.starts_with('"') {
-        Some("\"[redacted]\"")
-    } else if val.starts_with('\'') {
-        Some("'[redacted]'")
-    } else {
-        Some(MARKER)
-    }
-}
-
-/// `key`, `sep`, `val` groups: keep key and separator, replace the value.
-fn replace_assignment(caps: &Captures<'_>) -> String {
-    let val = &caps["val"];
-    match replacement(val) {
-        None => caps[0].to_owned(),
-        Some(rep) => format!("{}{}{rep}", &caps["key"], &caps["sep"]),
-    }
+/// A `secret_data` / `stringData` key whose value is an inline map: `secret-data-flow` redacts
+/// the map's values and keeps its structure, so the field stage leaves it alone.
+fn data_map_value(caps: &Captures<'_>) -> bool {
+    let key: String = caps["key"]
+        .chars()
+        .filter(|c| !matches!(c, '-' | '_'))
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    matches!(key.as_str(), "secretdata" | "stringdata") && caps["val"].starts_with('{')
 }
 
 /// `scheme://user:password@host`: keep everything but the password.
@@ -160,11 +164,11 @@ fn replace_url_userinfo(caps: &Captures<'_>) -> String {
     format!("{}{MARKER}@", &caps["pre"])
 }
 
-/// `Bearer <token>`: keep the scheme word, unless the "token" is a plain word.
-fn replace_bearer(caps: &Captures<'_>) -> String {
+/// `Bearer <token>` / `Basic <credentials>`: keep the scheme word, unless the "token" is a
+/// plain word of prose (`bearer of`, `basic authentication`, `Bearer Token`).
+fn replace_scheme(caps: &Captures<'_>) -> String {
     let tok = &caps["tok"];
-    let plain_word = tok.len() < 20 && tok.bytes().all(|b| b.is_ascii_alphabetic());
-    if plain_word {
+    if is_plain_word(tok) {
         return caps[0].to_owned();
     }
     let (Some(whole), Some(tok_match)) = (caps.get(0), caps.name("tok")) else {
@@ -174,48 +178,17 @@ fn replace_bearer(caps: &Captures<'_>) -> String {
     format!("{scheme}{MARKER}")
 }
 
+/// A short word spelled like prose: all lowercase, or one capital then lowercase. Credentials
+/// (base64, token68) mix case, digits or symbols.
+fn is_plain_word(tok: &str) -> bool {
+    let mut chars = tok.chars();
+    tok.len() < 20
+        && chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_lowercase())
+}
+
 /// An inline `data` map: redact every entry's value.
 fn replace_data_flow(caps: &Captures<'_>) -> String {
-    let body = DATA_PAIR.replace_all(&caps["body"], replace_pair);
+    let body = replace_values(&DATA_PAIR, &caps["body"], Cut::FramingOrKey, |_| false);
     format!("{}{}{}{body}}}", &caps["key"], &caps["sep"], &caps["open"])
-}
-
-fn replace_pair(caps: &Captures<'_>) -> String {
-    match replacement(&caps["val"]) {
-        None => caps[0].to_owned(),
-        Some(rep) => format!("{}{}{rep}", &caps["k"], &caps["s"]),
-    }
-}
-
-/// Multi-line `data:` / `stringData:` blocks: redact the entries indented under the header.
-fn scrub_data_blocks(input: &str) -> Cow<'_, str> {
-    if !input.lines().any(|l| DATA_HEADER.is_match(l)) {
-        return Cow::Borrowed(input);
-    }
-    let mut out = String::with_capacity(input.len());
-    let mut block_indent: Option<usize> = None;
-    for line in input.split_inclusive('\n') {
-        let content = line.trim_end_matches(['\n', '\r']);
-        let indent = content.len() - content.trim_start().len();
-        if let Some(header_indent) = block_indent {
-            if content.trim().is_empty() {
-                out.push_str(line);
-                continue;
-            }
-            if indent > header_indent {
-                out.push_str(&DATA_PAIR.replace_all(line, replace_pair));
-                continue;
-            }
-            block_indent = None;
-        }
-        if DATA_HEADER.is_match(content) {
-            block_indent = Some(indent);
-        }
-        out.push_str(line);
-    }
-    if out == input {
-        Cow::Borrowed(input)
-    } else {
-        Cow::Owned(out)
-    }
 }

@@ -18,30 +18,35 @@
 //! | Pattern | Matches |
 //! |---|---|
 //! | `pem-private-key` | `-----BEGIN ... PRIVATE KEY-----` blocks (to the END line, or to the end of the text when truncated) |
-//! | `authorization-header` | the value of `Authorization` / `Proxy-Authorization` (any scheme, `["Basic ..."]` arrays, comma-separated parameter lists such as SigV4) in header, YAML, JSON and `key=value` forms |
-//! | `secret-field` | values of keys ending in `token` (`token`, `id-token`, `refresh_token`, ...), keys ending in `password` / `passwd`, `client-key-data`, `client-certificate-data`, `client-secret` |
+//! | `authorization-header` | the value of any key ending in `authorization` (`Authorization`, `Proxy-Authorization`, `proxy_authorization`; any scheme, `["Basic ..."]` arrays, comma-separated parameter lists such as SigV4) in header, YAML, JSON and `key=value` forms |
+//! | `secret-field` | values of keys ending in `token` (`token`, `id-token`, `refresh_token`, ...), `password` / `passwd`, `secret` (`client-secret`, `secret`), `apikey` / `api_key` / `api-key`; `client-key-data`, `client-certificate-data`; scalar `secret_data` / `string_data` / `stringData` values (every [`SENSITIVE_FIELDS`] name and [`SENSITIVE_SUFFIXES`] suffix, so a JSON log line's `"<name>":<value>` is covered) |
 //! | `url-userinfo` | the password in `scheme://user:password@host` URLs (proxy URLs); the user and host stay |
-//! | `bearer-token` | `Bearer <token>` anywhere in text (a plain word such as "bearer authentication" is left alone) |
+//! | `scheme-credential` | `Bearer <token>` and `Basic <credentials>` anywhere in text (a plain word such as "bearer authentication" or "basic auth" is left alone) |
 //! | `jwt` | JWT-shaped strings: `eyJ…` header, payload and signature, base64url separated by dots |
-//! | `secret-data-flow` | every value inside a `data` / `stringData` map written inline (`data: {a: b}`, `"data":{"a":"b"}`, Rust `Debug` maps) |
-//! | `secret-data-block` | every entry under a multi-line `data:` / `stringData:` block (YAML or pretty JSON) |
+//! | `secret-data-flow` | every value inside a `data` / `stringData` / `secret_data` map written inline (`data: {a: b}`, `"data":{"a":"b"}`, Rust `Debug` maps) |
+//! | `secret-data-block` | every entry under a multi-line `data:` / `stringData:` block (YAML or pretty JSON), with lines ending at real newlines or escaped `\n` (a manifest inside a JSON log line or a `Debug`-quoted string) |
 //!
 //! Field forms handled: YAML `key: value`, JSON `"key":"value"` (also JSON escaped inside a
 //! string, `\"key\":\"value\"`), `key=value`, and Rust `Debug` output (`key: Some("value")`,
-//! byte arrays such as `ByteString([1, 2])`).
+//! byte arrays such as `ByteString([1, 2])`). An unquoted value runs to whitespace; a `, ; ) } ]`
+//! inside it (`p4ss;w0rd`) is part of the secret unless it is followed by whitespace, the end,
+//! another closer or a quote (`token=abc}`, `token=abc, next`).
 //!
-//! The bias is deliberate: when in doubt, redact. The `data` rule also scrubs `ConfigMap` data,
-//! and `token: connection refused` loses its value. Long non-secret base64 or hex (a UID, a
-//! digest, `certificate-authority-data`) is untouched because no pattern keys on shape alone
-//! except `jwt` and PEM.
+//! The bias is deliberate: when in doubt, redact. The `data` rule also scrubs `ConfigMap` data;
+//! `token: connection refused` and `secret: not found` lose their value. Long non-secret
+//! base64 or hex (a UID, a digest, `certificate-authority-data`) is untouched here because no
+//! pattern keys on shape alone except `jwt` and PEM; the kube adapter additionally masks long
+//! opaque runs in external error text, where nothing of that shape is worth showing.
 //!
 //! # Adding a secret-bearing field
 //!
 //! **New secret-bearing fields must be added here.** When a later story introduces a credential
 //! (a new kubeconfig auth field, an API key header, a tool secret), extend [`patterns`] and the
 //! pre-check in `scrubber`, add a case to `tests/redact.rs`, accept the changed `insta`
-//! snapshot, and keep this table in sync. Tracing field *names* are covered separately by
-//! [`is_sensitive_field`].
+//! snapshot, and keep this table in sync. Tracing field *names* are checked by
+//! [`is_sensitive_field`]; every name it accepts must also be caught by the text patterns in
+//! `"<name>":<value>` form (the JSON log layer relies on that), which
+//! `every_sensitive_field_name_is_caught_as_text` in `tests/redact.rs` enforces.
 //!
 //! # Not covered
 //!
@@ -50,8 +55,10 @@
 //! separate writes, or hidden by ANSI escapes inside a key, are out of reach for a text
 //! scrubber; `oxikube_logging` formats with ANSI off for that reason.
 
+mod blocks;
 mod patterns;
 mod scrubber;
+mod values;
 mod wrapper;
 
 pub use patterns::{

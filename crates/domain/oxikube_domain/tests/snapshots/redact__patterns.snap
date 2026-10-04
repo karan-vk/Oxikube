@@ -7,36 +7,36 @@ pem-private-key
   (?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\z)
 
 authorization-header
-  Authorization / Proxy-Authorization values: any scheme, quoted, bracketed or comma-separated parameter forms
-  (?i)(?P<key>\bauthorization)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<val>\[[^\]]*\]|[A-Za-z][\w-]*[ \t]+(?:\[redacted\]|(?:(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")(?:=(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])*|(?:=(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])+))(?:,[ \t]*(?:(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")(?:=(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])*|(?:=(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])+))*|(?:\[redacted\]|\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+))
+  *authorization values (Authorization, Proxy-Authorization, proxy_authorization): any scheme, quoted, bracketed or comma-separated parameter forms
+  (?i)(?P<key>\b[\w-]*authorization)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\(\s*)?)(?P<val>\[[^\]]*\]|[A-Za-z][\w-]*[ \t]+(?:\[redacted\]|(?:(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")(?:=(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])*|(?:=(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])+))(?:,[ \t]*(?:(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")(?:=(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])*|(?:=(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*")|\\.|[^\s,}\])"'\\]|["'][^\s,}\])"'\\])+))*|(?:\[redacted\]|\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|\{(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|[^{}])*\}|(?P<bare>(?:\\.|[^\s"'\\]|["'][^\s,;}\])"'\\])+)))
 
 secret-field
-  *token, *password, *passwd, client-key-data, client-certificate-data, client-secret values
-  (?i)(?P<key>\b[\w-]*(?:token|password|passwd)\b|\bclient[-_](?:key|certificate)[-_]data\b|\bclient[-_]secret\b)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+))
+  *token, *password, *passwd, *secret, *apikey / *api_key / *api-key, client-key-data, client-certificate-data, secret-data / string-data values (a data key's inline map is left to secret-data-flow)
+  (?i)(?P<key>\b[\w-]*(?:token|password|passwd|secret|api[-_]?key)\b|\bclient[-_](?:key|certificate)[-_]data\b|\b(?:secret|string)[-_]?data\b)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\(\s*)?)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|\{(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|[^{}])*\}|(?P<bare>(?:\\.|[^\s"'\\]|["'][^\s,;}\])"'\\])+)))
 
 url-userinfo
   the password in scheme://user:password@host URLs (proxy URLs)
   (?P<pre>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@"'\\]*:)(?P<pw>[^\s/"'\\]+)@
 
-bearer-token
-  `Bearer <token>` anywhere in text (plain alphabetic words under 20 chars are kept)
-  (?i)\bbearer[ \t]+(?P<tok>[A-Za-z0-9._~+/=-]{8,})
+scheme-credential
+  `Bearer <token>` / `Basic <credentials>` anywhere in text (a plain word such as `basic auth` or `bearer of` is kept)
+  (?i)\b(?:bearer|basic)[ \t]+(?P<tok>[A-Za-z0-9._~+/=-]+)
 
 jwt
   JWT-shaped strings: eyJ header, payload, signature
   eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*
 
 secret-data-flow
-  values inside an inline data / stringData map; each entry matched by secret-data-pair
-  (?i)(?P<key>\b(?:string)?data)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?)(?P<open>(?:\\?["'])?\{)(?P<body>(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|[^{}])*)\}
+  values inside an inline data / stringData / secret_data map; each entry matched by secret-data-pair
+  (?i)(?P<key>\b(?:(?:secret|string)[-_]?)?data)(?P<sep>(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\(\s*)?)(?P<open>(?:\\?["'])?\{)(?P<body>(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|[^{}])*)\}
 
 secret-data-pair
   one key/value entry of a data map
-  (?P<k>\\?"[^"\\]*\\?"|[\w.-]+)(?P<s>[ \t]*[:=][ \t]*)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+))
+  (?P<k>\\?"[^"\\]*\\?"|[\w.-]+)(?P<s>[ \t]*[:=][ \t]*)(?P<val>(?:\[redacted\]|\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|\{(?:\\"(?:[^"\\]|\\\\\\"|\\[^"])*\\"|"(?:[^"\\]|\\.)*"|[^{}])*\}|(?P<bare>(?:\\.|[^\s"'\\]|["'][^\s,;}\])"'\\])+)))
 
 secret-data-block
-  entries indented under a multi-line data / stringData header line (hand-written scanner; header regex shown, entries use secret-data-pair)
-  (?i)^[ \t]*"?(?:string)?data"?[ \t]*:[ \t]*\{?[ \t]*\r?$
+  entries indented under a multi-line data / stringData header line; lines end at real newlines and at escaped `\n` (hand-written scanner; header regex shown, entries use secret-data-pair)
+  (?i)(?:^|[^\w.-])\\?"?(?:(?:secret|string)[-_]?)?data\\?"?[ \t]*:[ \t]*\{?[ \t]*\r?$
 
 sensitive field names: ["client-key-data", "client_key_data", "client-certificate-data", "client_certificate_data", "client-secret", "client_secret", "secret-data", "secret_data", "string-data", "string_data", "stringdata"]
-sensitive field suffixes: ["token", "password", "passwd", "authorization"]
+sensitive field suffixes: ["token", "password", "passwd", "authorization", "secret", "apikey", "api_key", "api-key"]

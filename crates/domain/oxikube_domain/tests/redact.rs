@@ -1,6 +1,8 @@
 //! Behaviour of `oxikube_domain::redact`: every pattern, idempotence, false positives, panics.
 
-use oxikube_domain::redact::{self, MARKER, Redacted, is_sensitive_field, redact};
+use oxikube_domain::redact::{
+    self, MARKER, Redacted, SENSITIVE_FIELDS, SENSITIVE_SUFFIXES, is_sensitive_field, redact,
+};
 use proptest::prelude::*;
 use std::borrow::Cow;
 
@@ -74,6 +76,160 @@ fn authorization_with_quoted_parameters() {
         &["abc123", "dead", "beef"],
     );
     assert_scrubbed("Authorization: Bearer [redacted], nonce=\"zzz\"", &["zzz"]);
+}
+
+#[test]
+fn authorization_keys_with_a_snake_case_prefix() {
+    // `_` is a word character: `\bauthorization` alone never fires inside these keys.
+    assert_scrubbed(
+        "proxy_authorization: Basic YWRtaW46c2VjcmV0UFc=",
+        &["YWRtaW46c2VjcmV0UFc="],
+    );
+    assert_scrubbed("x_authorization=SECRETXAUTH", &["SECRETXAUTH"]);
+    #[derive(Debug)]
+    #[allow(dead_code)]
+    struct Upstream {
+        proxy_authorization: Option<String>,
+        x_authorization: String,
+    }
+    let upstream = Upstream {
+        proxy_authorization: Some("Basic YWRtaW46c2VjcmV0UFc=".into()),
+        x_authorization: "SECRETXAUTH".into(),
+    };
+    let out = assert_scrubbed(
+        &format!("{upstream:?}"),
+        &["YWRtaW46c2VjcmV0UFc=", "SECRETXAUTH"],
+    );
+    assert_eq!(
+        out,
+        r#"Upstream { proxy_authorization: Some("[redacted]"), x_authorization: "[redacted]" }"#
+    );
+    assert_scrubbed(
+        &format!("{upstream:#?}"),
+        &["YWRtaW46c2VjcmV0UFc=", "SECRETXAUTH"],
+    );
+}
+
+#[test]
+fn closers_inside_a_bare_value_are_part_of_the_secret() {
+    for (input, secrets) in [
+        ("password=p4ss;w0rd!", &["p4ss", "w0rd"][..]),
+        ("password=abc,def", &["abc", "def"]),
+        ("token=abc)xyz", &["abc", "xyz"]),
+        ("api_key=k]e}y", &["k]e}y", "e}y"]),
+        ("data: {tls.key: abc;def}", &["abc", "def"]),
+    ] {
+        assert_scrubbed(input, secrets);
+    }
+    // A closer that ends the value keeps the framing around it.
+    for (input, expected) in [
+        ("(token=abc)", "(token=[redacted])"),
+        ("{token: abc}", "{token: [redacted]}"),
+        ("[token=abc], next", "[token=[redacted]], next"),
+        ("token=abc, user=bob", "token=[redacted], user=bob"),
+        ("token=abc; user=bob", "token=[redacted]; user=bob"),
+        (
+            r#"{"token":abc,"user":"bob"}"#,
+            r#"{"token":[redacted],"user":"bob"}"#,
+        ),
+        ("data: {tls.key: abc;def}", "data: {tls.key: [redacted]}"),
+        ("data: {a: b,c: d}", "data: {a: [redacted],c: [redacted]}"),
+        ("data: {a: x),c: y}", "data: {a: [redacted]),c: [redacted]}"),
+        (
+            r#"secret_data={"user": "SECRETV"}"#,
+            r#"secret_data={"user": "[redacted]"}"#,
+        ),
+    ] {
+        assert_eq!(redact(input), expected, "{input}");
+    }
+}
+
+#[test]
+fn restored_error_text_coverage() {
+    // Shapes the S04 `auth::scrub` stand-in redacted before this module replaced it.
+    for (input, secrets) in [
+        (
+            "error: Basic dXNlcjpwYXNzd29yZA== rejected",
+            &["dXNlcjpwYXNzd29yZA=="][..],
+        ),
+        ("Basic dXNlcjpwYXNz failed", &["dXNlcjpwYXNz"]),
+        ("api_key=SECRETAPIKEY123", &["SECRETAPIKEY123"]),
+        ("x-api-key: SECRETAPIKEY123", &["SECRETAPIKEY123"]),
+        (r#"{"apikey":"FAKEVALUE"}"#, &["FAKEVALUE"]),
+        ("error: api_key=FAKEVALUE", &["FAKEVALUE"]),
+        ("secret: SECRETVAL", &["SECRETVAL"]),
+        ("client_secret=SECRETVAL", &["SECRETVAL"]),
+        ("Bearer SHORT1 rejected", &["SHORT1"]),
+        (
+            "Authorization: Bearer FAKE-abc123 rejected",
+            &["FAKE-abc123"],
+        ),
+    ] {
+        let out = assert_scrubbed(input, secrets);
+        assert!(!out.is_empty(), "{input}");
+    }
+    let out = redact("error: Basic dXNlcjpwYXNzd29yZA== rejected");
+    assert_eq!(out, "error: Basic [redacted] rejected");
+    // Prose after the scheme words stays.
+    for text in [
+        "basic auth is disabled for this cluster",
+        "Bearer Token authentication failed",
+        "secretName: db-creds; kind: Secret",
+    ] {
+        assert_eq!(redact(text), text);
+    }
+}
+
+#[test]
+fn secret_data_blocks_behind_escaped_newlines() {
+    let yaml = "apiVersion: v1\nkind: Secret\ndata:\n  tls.key: TLSKEYVALUE\n  user: YWRtaW4=\ntype: Opaque\n";
+    // A JSON log line: the manifest is one string with `\n` escapes.
+    let json_line = serde_json::json!({ "fields": { "manifest": yaml } }).to_string();
+    let out = assert_scrubbed(&json_line, &["TLSKEYVALUE", "YWRtaW4="]);
+    assert!(out.contains(r"\ntype: Opaque\n"), "{out}");
+    serde_json::from_str::<serde_json::Value>(&out).expect("still valid JSON");
+    // The same manifest as the message (header right after the JSON framing).
+    let json_line = serde_json::json!({ "message": "data:\n  tls.key: TLSKEYVALUE" }).to_string();
+    assert_scrubbed(&json_line, &["TLSKEYVALUE"]);
+    // Escaped twice: a `Debug`-printed `&str` field inside a JSON log line.
+    let json_line = serde_json::json!({ "manifest": format!("{yaml:?}") }).to_string();
+    assert!(json_line.contains(r"data:\\n"), "{json_line}");
+    assert_scrubbed(&json_line, &["TLSKEYVALUE", "YWRtaW4="]);
+    // `Debug` of a `&str` field, as a text log line prints it; and `\r\n` escapes.
+    assert_scrubbed(&format!("manifest={yaml:?}"), &["TLSKEYVALUE", "YWRtaW4="]);
+    assert_scrubbed(
+        &format!("{:?}", yaml.replace('\n', "\r\n")),
+        &["TLSKEYVALUE", "YWRtaW4="],
+    );
+}
+
+#[test]
+fn every_sensitive_field_name_is_caught_as_text() {
+    // The JSON log layer has no name-aware visitor: every name `is_sensitive_field` accepts
+    // must be caught by the text patterns in every form the formatters print.
+    let mut names: Vec<String> = SENSITIVE_FIELDS.iter().map(|n| (*n).to_owned()).collect();
+    names.push("stringData".to_owned());
+    for suffix in SENSITIVE_SUFFIXES {
+        names.push((*suffix).to_owned());
+        names.push(format!("x_{suffix}"));
+        names.push(format!("http.{suffix}"));
+    }
+    for name in &names {
+        assert!(is_sensitive_field(name), "{name}");
+        for form in [
+            format!(r#"{{"{name}":"SECRETV"}}"#),
+            format!(r#"{{"{name}": "SECRETV"}}"#),
+            format!(r#"{{"{name}":"{{\"user\": \"SECRETV\"}}"}}"#),
+            format!(r#"{{\"{name}\":\"SECRETV\"}}"#),
+            format!("{name}=SECRETV"),
+            format!("{name}: SECRETV"),
+            format!(r#"{name}="SECRETV""#),
+            format!(r#"{name}={{"user": "SECRETV"}}"#),
+            format!(r#"S {{ {name}: Some("SECRETV") }}"#),
+        ] {
+            assert_scrubbed(&form, &["SECRETV"]);
+        }
+    }
 }
 
 #[test]
@@ -183,6 +339,15 @@ fn key_value_and_debug_forms() {
         &["abcdef123456"],
     );
     assert_scrubbed("refresh_token='abcdef123456'", &["abcdef123456"]);
+    // Pretty `{:#?}` puts an `Option`'s value on the line after `Some(`.
+    let out = assert_scrubbed(
+        "Config {\n    token: Some(\n        \"abcdef123456\",\n    ),\n}",
+        &["abcdef123456"],
+    );
+    assert!(
+        out.contains("token: Some(\n        \"[redacted]\""),
+        "{out}"
+    );
     assert_scrubbed("db.password = hunter2hunter2", &["hunter2hunter2"]);
     assert_scrubbed(
         "Data { client_key_data: ByteString([1, 2, 3, 4]) }",
@@ -309,6 +474,11 @@ fn sensitive_field_names() {
         "db.password",
         "client_key_data",
         "secret_data",
+        "proxy_authorization",
+        "client_secret",
+        "x-api-key",
+        "openai_api_key",
+        "apikey",
     ] {
         assert!(is_sensitive_field(name), "{name}");
     }
@@ -394,9 +564,16 @@ fn fragment() -> impl Strategy<Value = String> {
         Just("ApiKey ".to_owned()),
         Just("a\"b".to_owned()),
         Just("ByteString([1, 2])".to_owned()),
+        Just("proxy_authorization".to_owned()),
+        Just("Basic ".to_owned()),
+        Just("api_key".to_owned()),
+        Just("secret".to_owned()),
+        Just("secret_data".to_owned()),
+        Just("\\n".to_owned()),
+        Just("data:\\n  ".to_owned()),
         prop::sample::select(vec![
             ": ", "=", " ", "\n", "\r\n", "\"", "'", "\\\"", "{", "}", "[", "]", "(", ")", ",",
-            "  ", "\t",
+            ";", "  ", "\t",
         ])
         .prop_map(str::to_owned),
         "[A-Za-z0-9._=/+-]{0,12}",

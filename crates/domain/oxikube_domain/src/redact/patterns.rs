@@ -18,16 +18,22 @@ pub struct Pattern {
 }
 
 /// A value: the marker itself (keeps redaction idempotent), a JSON-escaped quoted string, a
-/// double- or single-quoted string, a `Debug`-printed byte array, or a bare word. A bare word
-/// may contain escape pairs and quotes that are followed by more value (`a"b`, `a\"b`) so a
-/// secret with a quote in it is consumed whole, but a trailing quote (a JSON string's closing
-/// quote) is left alone.
+/// double- or single-quoted string, a `Debug`-printed byte array, a flat inline map (`{"a":
+/// "b"}`, a `Debug`-printed map), or a bare word (group
+/// `bare`). A bare word may contain escape pairs and quotes that are followed by more value
+/// (`a"b`, `a\"b`) so a secret with a quote in it is consumed whole, but a trailing quote (a
+/// JSON string's closing quote) is left alone. It runs to the next whitespace, so it also takes
+/// `, ; ) } ]`: the scrubber then cuts it at the first of those that ends the value (followed
+/// by whitespace, the end, another closer or a quote), so `p4ss;w0rd` is one secret while
+/// `abc}` and `abc, next` keep their framing.
 macro_rules! value {
     () => {
         concat!(
             r#"(?:\[redacted\]|"#,
             esc_quoted!(),
-            r#"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|(?:\\.|[^\s,;}\])"'\\]|["'][^\s,;}\])"'\\])+)"#
+            r#"|"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z_]\w*\(\[[0-9, \t]*\]\)|\[[0-9][0-9, \t]*\]|\{(?:"#,
+            esc_quoted!(),
+            r#"|"(?:[^"\\]|\\.)*"|[^{}])*\}|(?P<bare>(?:\\.|[^\s"'\\]|["'][^\s,;}\])"'\\])+))"#
         )
     };
 }
@@ -60,10 +66,10 @@ macro_rules! atom {
 
 /// Separator between a key and its value: optional closing quote, `:` or `=`, optional
 /// `Some(` from `Debug` output. Horizontal whitespace only, so a bare `key:` never reaches into
-/// the next line.
+/// the next line; only after `Some(` (pretty `{:#?}` output puts the value on the next line).
 macro_rules! sep {
     () => {
-        r#"(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\()?"#
+        r#"(?:\\?["'])?[ \t]*[:=][ \t]*(?:some\(\s*)?"#
     };
 }
 
@@ -71,7 +77,7 @@ pub(super) const PEM_SRC: &str =
     r"(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\z)";
 
 pub(super) const AUTHORIZATION_SRC: &str = concat!(
-    r"(?i)(?P<key>\bauthorization)(?P<sep>",
+    r"(?i)(?P<key>\b[\w-]*authorization)(?P<sep>",
     sep!(),
     r")(?P<val>\[[^\]]*\]|[A-Za-z][\w-]*[ \t]+(?:\[redacted\]|",
     atom!(),
@@ -83,7 +89,7 @@ pub(super) const AUTHORIZATION_SRC: &str = concat!(
 );
 
 pub(super) const SECRET_FIELD_SRC: &str = concat!(
-    r"(?i)(?P<key>\b[\w-]*(?:token|password|passwd)\b|\bclient[-_](?:key|certificate)[-_]data\b|\bclient[-_]secret\b)(?P<sep>",
+    r"(?i)(?P<key>\b[\w-]*(?:token|password|passwd|secret|api[-_]?key)\b|\bclient[-_](?:key|certificate)[-_]data\b|\b(?:secret|string)[-_]?data\b)(?P<sep>",
     sep!(),
     r")(?P<val>",
     value!(),
@@ -93,12 +99,12 @@ pub(super) const SECRET_FIELD_SRC: &str = concat!(
 pub(super) const URL_USERINFO_SRC: &str =
     r#"(?P<pre>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@"'\\]*:)(?P<pw>[^\s/"'\\]+)@"#;
 
-pub(super) const BEARER_SRC: &str = r"(?i)\bbearer[ \t]+(?P<tok>[A-Za-z0-9._~+/=-]{8,})";
+pub(super) const SCHEME_SRC: &str = r"(?i)\b(?:bearer|basic)[ \t]+(?P<tok>[A-Za-z0-9._~+/=-]+)";
 
 pub(super) const JWT_SRC: &str = r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*";
 
 pub(super) const DATA_FLOW_SRC: &str = concat!(
-    r"(?i)(?P<key>\b(?:string)?data)(?P<sep>",
+    r"(?i)(?P<key>\b(?:(?:secret|string)[-_]?)?data)(?P<sep>",
     sep!(),
     r#")(?P<open>(?:\\?["'])?\{)(?P<body>(?:"#,
     esc_quoted!(),
@@ -112,9 +118,11 @@ pub(super) const DATA_PAIR_SRC: &str = concat!(
     r")"
 );
 
-/// A line that opens a multi-line `data` / `stringData` block.
+/// A line that opens a multi-line `data` / `stringData` block: the key ends the line, at its
+/// start or after a non-key character (`"manifest":"data:` when the line came from an escaped
+/// newline inside a JSON string).
 pub(super) const DATA_HEADER_SRC: &str =
-    r#"(?i)^[ \t]*"?(?:string)?data"?[ \t]*:[ \t]*\{?[ \t]*\r?$"#;
+    r#"(?i)(?:^|[^\w.-])\\?"?(?:(?:secret|string)[-_]?)?data\\?"?[ \t]*:[ \t]*\{?[ \t]*\r?$"#;
 
 /// Every documented pattern, in application order.
 pub const PATTERNS: &[Pattern] = &[
@@ -125,12 +133,12 @@ pub const PATTERNS: &[Pattern] = &[
     },
     Pattern {
         name: "authorization-header",
-        description: "Authorization / Proxy-Authorization values: any scheme, quoted, bracketed or comma-separated parameter forms",
+        description: "*authorization values (Authorization, Proxy-Authorization, proxy_authorization): any scheme, quoted, bracketed or comma-separated parameter forms",
         source: AUTHORIZATION_SRC,
     },
     Pattern {
         name: "secret-field",
-        description: "*token, *password, *passwd, client-key-data, client-certificate-data, client-secret values",
+        description: "*token, *password, *passwd, *secret, *apikey / *api_key / *api-key, client-key-data, client-certificate-data, secret-data / string-data values (a data key's inline map is left to secret-data-flow)",
         source: SECRET_FIELD_SRC,
     },
     Pattern {
@@ -139,9 +147,9 @@ pub const PATTERNS: &[Pattern] = &[
         source: URL_USERINFO_SRC,
     },
     Pattern {
-        name: "bearer-token",
-        description: "`Bearer <token>` anywhere in text (plain alphabetic words under 20 chars are kept)",
-        source: BEARER_SRC,
+        name: "scheme-credential",
+        description: "`Bearer <token>` / `Basic <credentials>` anywhere in text (a plain word such as `basic auth` or `bearer of` is kept)",
+        source: SCHEME_SRC,
     },
     Pattern {
         name: "jwt",
@@ -150,7 +158,7 @@ pub const PATTERNS: &[Pattern] = &[
     },
     Pattern {
         name: "secret-data-flow",
-        description: "values inside an inline data / stringData map; each entry matched by secret-data-pair",
+        description: "values inside an inline data / stringData / secret_data map; each entry matched by secret-data-pair",
         source: DATA_FLOW_SRC,
     },
     Pattern {
@@ -160,7 +168,7 @@ pub const PATTERNS: &[Pattern] = &[
     },
     Pattern {
         name: "secret-data-block",
-        description: "entries indented under a multi-line data / stringData header line (hand-written scanner; header regex shown, entries use secret-data-pair)",
+        description: "entries indented under a multi-line data / stringData header line; lines end at real newlines and at escaped `\\n` (hand-written scanner; header regex shown, entries use secret-data-pair)",
         source: DATA_HEADER_SRC,
     },
 ];
@@ -187,8 +195,18 @@ pub const SENSITIVE_FIELDS: &[&str] = &[
     "stringdata",
 ];
 
-/// Suffixes that mark a field name as secret-bearing (`id_token`, `db.password`, `http.authorization`).
-pub const SENSITIVE_SUFFIXES: &[&str] = &["token", "password", "passwd", "authorization"];
+/// Suffixes that mark a field name as secret-bearing (`id_token`, `db.password`,
+/// `http.authorization`, `client_secret`, `x-api-key`).
+pub const SENSITIVE_SUFFIXES: &[&str] = &[
+    "token",
+    "password",
+    "passwd",
+    "authorization",
+    "secret",
+    "apikey",
+    "api_key",
+    "api-key",
+];
 
 /// Whether a tracing field named `name` must have its value redacted outright.
 ///
