@@ -6,7 +6,8 @@
 //! down to the kind context alone: other contexts in a developer's kubeconfig (cloud
 //! clusters with exec plugins) are never built, contacted or written anywhere.
 //!
-//! `health` holds the liveness-loop helpers shared by the health scenarios.
+//! `health` holds the liveness-loop helpers shared by the health scenarios; `resources` the
+//! pod fixtures and adapter constructor of the resource data plane scenarios (E04).
 //!
 //! Namespaced fixtures (service accounts, roles, bindings) live in the test's
 //! `oxi-test-<rand>` namespace and go away with it.
@@ -15,6 +16,7 @@
 #![allow(dead_code)]
 
 pub mod health;
+pub mod resources;
 
 use std::future::Future;
 use std::path::PathBuf;

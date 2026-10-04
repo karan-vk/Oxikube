@@ -25,6 +25,8 @@ use tower::Service;
 pub(crate) struct Recorded {
     pub(crate) method: Method,
     pub(crate) path: String,
+    /// The raw query string (`limit=2&continue=abc`), empty when the request had none.
+    pub(crate) query: String,
     /// The JSON body, if the request had one.
     pub(crate) body: Option<Value>,
 }
@@ -120,6 +122,7 @@ impl Service<Request<Body>> for FakeApi {
             let recorded = Recorded {
                 method: parts.method,
                 path: parts.uri.path().to_owned(),
+                query: parts.uri.query().unwrap_or_default().to_owned(),
                 body: serde_json::from_slice(&bytes).ok(),
             };
             let (code, body) = server.respond(recorded);
