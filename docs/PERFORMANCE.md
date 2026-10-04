@@ -89,8 +89,9 @@ On exit (window closed, `--perf-duration` elapsed, or Ctrl-C) it prints to stder
 oxikube --perf: 2 frames in 4.5 s: p50 0.651 ms, p95 6.343 ms, p99 6.343 ms, max 6.343 ms; dropped 0; feed 0 deltas (0.0/s); notify 0 (0.0/s); rss p50 95.3 MiB, p95 95.3 MiB, max 95.3 MiB, peak 95.3 MiB
 ```
 
-Percentiles are nearest-rank (p99 of fewer than 100 frames is the maximum). Until feeds and
-`notify_coalesced` land (E04, E07) nothing calls the feed and notify counters, so they read 0.
+Percentiles are nearest-rank (p99 of fewer than 100 frames is the maximum). Every notification
+`oxikube_runtime::notify_coalesced` delivers is counted (E05-S01); until feeds and views use it
+(E04, E07) the feed and notify counters read 0.
 
 Recorder overhead (M-series, release, `cargo run --release -p oxikube_runtime --example
 perf_overhead`): a frame push is about 3 ns and the hook's timing pair about 45 ns; a feed or
