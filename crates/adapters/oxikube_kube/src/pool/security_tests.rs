@@ -408,16 +408,63 @@ fn an_unsupported_proxy_scheme_is_an_unsupported_error_naming_the_scheme_only() 
 }
 
 #[test]
+fn socks5_credentials_are_unsupported_and_never_echoed() {
+    // kube 4.2 never calls `SocksV5::with_auth`, so these credentials would be dropped
+    // and an authenticating proxy would fail every connection with an opaque error.
+    for url in [
+        "socks5://alice:socks-secret@socks.corp:1080",
+        "socks5h://alice:socks-secret@socks.corp:1080",
+        "SOCKS5://alice:socks-secret@socks.corp:1080",
+        "socks5://alice@socks.corp:1080",
+    ] {
+        let from_kubeconfig = config_of(&format!("    proxy-url: \"{url}\""));
+        let from_env = config_with_env("", Some(url));
+        for err in [from_kubeconfig, from_env].map(|r| r.expect_err(url)) {
+            assert_eq!(err.kind(), ErrorKind::Unsupported, "{url}");
+            assert!(
+                err.message().contains("SOCKS5 proxy authentication"),
+                "{err}"
+            );
+            let text = format!("{err} {err:?}");
+            assert!(
+                !text.contains("socks-secret")
+                    && !text.contains("alice")
+                    && !text.contains("socks.corp"),
+                "{text}"
+            );
+        }
+    }
+}
+
+#[test]
 fn the_same_rules_apply_to_the_environment_proxy() {
     let err = config_with_env("", Some("gopher://env:70")).expect_err("gopher");
     assert_eq!(err.kind(), ErrorKind::Unsupported);
 }
 
 #[test]
-fn a_proxy_without_a_scheme_is_a_validation_error() {
+fn a_kubeconfig_proxy_without_a_scheme_is_a_validation_error() {
+    // client-go also requires a scheme on a kubeconfig `proxy-url`.
     let err = config_of("    proxy-url: proxy.corp:3128").expect_err("no scheme");
     assert_eq!(err.kind(), ErrorKind::Validation);
     assert!(err.message().contains("scheme"), "{err}");
+}
+
+#[tokio::test]
+async fn a_scheme_less_environment_proxy_is_read_as_http_like_client_go() {
+    for (env, expect) in [
+        ("proxy.corp:3128", "http://proxy.corp:3128/"),
+        ("localhost:3128", "http://localhost:3128/"),
+        ("user:pw@proxy.corp:3128", "http://user:pw@proxy.corp:3128/"),
+    ] {
+        let config = config_with_env("", Some(env)).expect(env);
+        assert_eq!(
+            config.proxy_url.map(|u| u.to_string()).as_deref(),
+            Some(expect),
+            "{env}"
+        );
+        build("", Some(env)).unwrap_or_else(|e| panic!("{env}: {e}"));
+    }
 }
 
 #[test]

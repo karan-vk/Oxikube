@@ -70,7 +70,8 @@ impl ClientFactory for KubeClientFactory {
 /// no `proxy-url` (`ConfigLoader::proxy_url`), reading the process environment
 /// directly. [`build_config`] recomputes the value from this struct and overwrites
 /// kube's result, so the precedence is ours to test: the kubeconfig `proxy-url`
-/// wins, then `HTTPS_PROXY`, then `https_proxy`. kube still consults the process
+/// wins, then `HTTPS_PROXY`, then `https_proxy`; like client-go, a fallback value
+/// without a scheme is read as `http://` (`pool::proxy`). kube still consults the process
 /// environment first, though: an unparseable `HTTPS_PROXY` there fails the build
 /// before the override runs (reported as an invalid proxy URL, see
 /// [`build_config`]). `NO_PROXY` is not honoured (kube does not either); see E03-S07.

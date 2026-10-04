@@ -14,8 +14,20 @@
 //! `http://` and `https://` proxies through an HTTP `CONNECT` tunnel (the `https` form
 //! talks TLS to the proxy itself) and `socks5://`. Basic
 //! auth in the URL's userinfo is sent to `http`/`https` proxies. Anything else is an
-//! [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) error naming the scheme; a
-//! URL without a scheme is a [`Validation`](oxikube_domain::ErrorKind::Validation) error.
+//! [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) error naming the scheme.
+//!
+//! SOCKS5 credentials are not supported: kube 4.2 builds its SOCKS5 connector without
+//! `with_auth`, and hyper-util never reads the URL's userinfo, so the handshake offers
+//! only "no authentication" and a proxy that wants a password fails every connection
+//! with an opaque error. A `socks5://user:pass@host` URL is therefore rejected up front
+//! as `Unsupported` (without echoing the URL). Sending the credentials would need our
+//! own connector; until then, use an unauthenticated SOCKS5 proxy or an `http(s)` one.
+//!
+//! A kubeconfig `proxy-url` without a scheme is a
+//! [`Validation`](oxikube_domain::ErrorKind::Validation) error, as in client-go. The
+//! environment fallback is more lenient, again matching client-go (Go's
+//! `httpproxy.parseProxy`): a value without `://` (such as `HTTPS_PROXY=proxy.corp:3128`)
+//! is read as `http://` plus the value.
 //!
 //! For an `https://` proxy kube builds the proxy leg from the same [`Config`](kube::Config)
 //! as the API connection: the cluster CA verifies the proxy's certificate, `tls-server-name`
@@ -51,14 +63,24 @@ pub(super) fn resolve(
         .cluster()
         .and_then(|c| c.proxy_url.as_deref())
         .filter(|url| !url.is_empty());
-    let Some(raw) = from_cluster.or(env.https_proxy()) else {
-        return Ok(None);
+    let raw = match (from_cluster, env.https_proxy()) {
+        (Some(url), _) => normalize_scheme(url),
+        (None, Some(url)) => normalize_scheme(&with_default_scheme(url)),
+        (None, None) => return Ok(None),
     };
-    let uri: http::Uri = normalize_scheme(raw)
+    let uri: http::Uri = raw
         .parse()
         .map_err(|err| classify_kubeconfig(&KubeconfigError::ParseProxyUrl(err)))?;
     match uri.scheme_str() {
-        Some("http" | "https" | "socks5") => {}
+        Some("http" | "https") => {}
+        Some("socks5") => {
+            if uri.authority().is_some_and(|a| a.as_str().contains('@')) {
+                return Err(OxiError::unsupported(
+                    "SOCKS5 proxy authentication (user:password in the proxy URL) is not \
+                     supported; use an unauthenticated SOCKS5 proxy or an http(s) proxy",
+                ));
+            }
+        }
         Some(other) => {
             return Err(OxiError::unsupported(format!(
                 "the proxy scheme `{other}` is not supported (use http, https or socks5)"
@@ -74,6 +96,16 @@ pub(super) fn resolve(
         return Err(OxiError::validation("the proxy URL has no host"));
     }
     Ok(Some(uri))
+}
+
+/// client-go's leniency for the environment proxy: a value without `://` is read as
+/// `http://` plus the value (Go `httpproxy.parseProxy`).
+fn with_default_scheme(raw: &str) -> String {
+    if raw.contains("://") {
+        raw.to_owned()
+    } else {
+        format!("http://{raw}")
+    }
 }
 
 /// Lowercases the scheme and maps `socks5h` to `socks5`; the rest is untouched.
