@@ -49,6 +49,9 @@ impl Snapshot {
             else {
                 continue;
             };
+            // Every origin has an owner: files come from the layout, pasted text and the
+            // in-cluster context are registered as virtual entries. The fallback only keeps a
+            // future source that forgot to register visible instead of dropping its contexts.
             let source = layout
                 .owner_of(origin)
                 .cloned()

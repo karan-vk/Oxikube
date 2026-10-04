@@ -16,11 +16,10 @@
 //! rewritten, because there is no directory to resolve them against; use the inline `-data`
 //! fields.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use kube::config::Kubeconfig;
-use oxikube_domain::ids::ContextName;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::cluster_source::{ClusterSource, SourceId, SourceKind};
 use oxikube_ports::secrets::{ExposeSecret, SecretString};
@@ -28,10 +27,9 @@ use oxikube_ports::{SecretKey, SecretStorePort};
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
 
+use super::KubeconfigSources;
 use super::layout::Layout;
-use crate::kubeconfig::{
-    Diagnostic, LoadedKubeconfig, SourceInfo, SourceStatus, is_blank_kubeconfig,
-};
+use crate::kubeconfig::{Diagnostic, KubeconfigMerge, SourceStatus, is_blank_kubeconfig};
 
 /// Keychain namespace of pasted kubeconfig text.
 const SECRET_NAMESPACE: &str = "kubeconfig-paste";
@@ -94,12 +92,14 @@ pub(super) fn parse(text: &str) -> OxiResult<Kubeconfig> {
     }
 }
 
-/// Read every pasted kubeconfig from the keychain and merge it into `loaded`, after the files.
+/// Read every pasted kubeconfig from the keychain and merge it after the files.
 ///
-/// A secret that is missing or no longer parses becomes a [`Diagnostic`] naming the label,
-/// never the text. Each pasted kubeconfig also becomes a source in `layout`.
+/// A secret that is missing or no longer parses becomes a [`Diagnostic`] naming the pseudo
+/// path, never the text. Each pasted kubeconfig also becomes a source in `layout`. Merging goes
+/// through the loader's own [`KubeconfigMerge`], so the first-wins and shadowing rules are the
+/// file loader's.
 pub(super) async fn fold_into(
-    loaded: &mut LoadedKubeconfig,
+    merge: &mut KubeconfigMerge,
     layout: &mut Layout,
     secrets: &dyn SecretStorePort,
     pasted: &[PastedDescriptor],
@@ -116,12 +116,7 @@ pub(super) async fn fold_into(
             },
             pseudo.clone(),
         );
-        let mut info = SourceInfo {
-            path: pseudo.clone(),
-            key: format!("pasted:{}", descriptor.id),
-            status: SourceStatus::Loaded,
-            contexts: Vec::new(),
-        };
+        let key = format!("pasted:{}", descriptor.id);
         let cached = cache.lock().get(&descriptor.id).cloned();
         let text = match (cached, descriptor.secret_key()) {
             (Some(text), _) => Ok(Some(text)),
@@ -131,76 +126,89 @@ pub(super) async fn fold_into(
         if let Ok(Some(text)) = &text {
             cache.lock().insert(descriptor.id.clone(), text.clone());
         }
-        let config = match text {
-            Ok(Some(text)) => parse(text.expose_secret()).map_err(|_| Diagnostic::Unparsable {
-                path: pseudo.clone(),
-            }),
-            Ok(None) => Err(Diagnostic::MissingFile {
-                path: pseudo.clone(),
-            }),
-            Err(err) => Err(Diagnostic::Unreadable {
-                path: pseudo.clone(),
-                reason: err.kind().to_string(),
-            }),
-        };
-        match config {
-            Err(diagnostic) => {
-                info.status = match diagnostic {
-                    Diagnostic::MissingFile { .. } => SourceStatus::Missing,
-                    Diagnostic::Unreadable { .. } => SourceStatus::Unreadable,
-                    _ => SourceStatus::Unparsable,
-                };
-                loaded.diagnostics.push(diagnostic);
-            }
-            Ok(config) => merge(loaded, &mut info, config),
-        }
-        loaded.sources.push(info);
-    }
-    // `Kubeconfig::merge` only filters against what was merged before, so a name repeated
-    // inside one pasted text would otherwise survive twice (the file loader does the same).
-    dedupe_by_name(&mut loaded.merged.contexts, |c| c.name.as_str());
-    dedupe_by_name(&mut loaded.merged.clusters, |c| c.name.as_str());
-    dedupe_by_name(&mut loaded.merged.auth_infos, |a| a.name.as_str());
-}
-
-/// Keep the first entry of each name.
-fn dedupe_by_name<T>(items: &mut Vec<T>, name: impl Fn(&T) -> &str) {
-    let mut seen = HashSet::new();
-    items.retain(|item| seen.insert(name(item).to_owned()));
-}
-
-/// Merge one parsed kubeconfig into `loaded` with the loader's rules: the first definition of
-/// a name wins, and a shadowed context is reported. The same logic as the file loader's loop
-/// body, which works on paths and cannot take text.
-fn merge(loaded: &mut LoadedKubeconfig, info: &mut SourceInfo, next: Kubeconfig) {
-    let names: Vec<ContextName> = next
-        .contexts
-        .iter()
-        .map(|c| ContextName::new(c.name.as_str()))
-        .collect();
-    match loaded.merged.clone().merge(next) {
-        Ok(merged) => {
-            loaded.merged = merged;
-            for name in &names {
-                match loaded.origins.get(name) {
-                    Some(winner) => loaded.diagnostics.push(Diagnostic::DuplicateContext {
-                        context: name.clone(),
-                        winner: winner.clone(),
-                        shadowed: info.path.clone(),
-                    }),
-                    None => {
-                        loaded.origins.insert(name.clone(), info.path.clone());
-                    }
+        let (status, diagnostic) = match text {
+            Ok(Some(text)) => match parse(text.expose_secret()) {
+                Ok(config) => {
+                    merge.add_parsed(pseudo, key, config);
+                    continue;
                 }
+                Err(_) => (
+                    SourceStatus::Unparsable,
+                    Diagnostic::Unparsable {
+                        path: pseudo.clone(),
+                    },
+                ),
+            },
+            Ok(None) => (
+                SourceStatus::Missing,
+                Diagnostic::MissingFile {
+                    path: pseudo.clone(),
+                },
+            ),
+            Err(err) => (
+                SourceStatus::Unreadable,
+                Diagnostic::Unreadable {
+                    path: pseudo.clone(),
+                    reason: err.kind().to_string(),
+                },
+            ),
+        };
+        merge.add_unusable(pseudo, key, status, diagnostic);
+    }
+}
+
+impl KubeconfigSources {
+    /// The pasted kubeconfigs, for the caller to persist (they carry no secret).
+    pub fn pasted(&self) -> Vec<PastedDescriptor> {
+        self.inner.pasted.lock().clone()
+    }
+
+    /// Adds a pasted kubeconfig, reloads, and returns its descriptor.
+    ///
+    /// The text is validated, stored in the keychain through the [`SecretStorePort`] and kept
+    /// nowhere else; the descriptor is what to persist. Pasting identical text again replaces
+    /// the label. Fails with `Validation` for text that is not a kubeconfig (the message never
+    /// quotes it), or with the secret store's error; nothing is written to a file either way.
+    pub async fn add_pasted(&self, label: &str, text: SecretString) -> OxiResult<PastedDescriptor> {
+        let descriptor = PastedDescriptor::for_text(label, text.expose_secret());
+        parse(text.expose_secret())?;
+        self.inner
+            .secrets
+            .set(&descriptor.secret_key()?, text.clone())
+            .await?;
+        self.inner
+            .pasted_text
+            .lock()
+            .insert(descriptor.id.clone(), text);
+        {
+            let mut list = self.inner.pasted.lock();
+            match list.iter_mut().find(|d| d.id == descriptor.id) {
+                Some(existing) => existing.label = descriptor.label.clone(),
+                None => list.push(descriptor.clone()),
             }
-            info.contexts = names;
         }
-        Err(err) => {
-            info.status = SourceStatus::Incompatible;
-            loaded.diagnostics.push(Diagnostic::Incompatible {
-                path: info.path.clone(),
-                reason: err.to_string(),
-            });
-        }
+        self.inner.reload().await?;
+        Ok(descriptor)
+    }
+
+    /// Removes a pasted kubeconfig from the keychain and the catalog and reloads. Returns
+    /// whether `id` was known.
+    pub async fn remove_pasted(&self, id: &str) -> OxiResult<bool> {
+        let Some(descriptor) = self
+            .inner
+            .pasted
+            .lock()
+            .iter()
+            .find(|d| d.id == id)
+            .cloned()
+        else {
+            return Ok(false);
+        };
+        // Delete the secret first: if the keychain refuses, the entry stays listed and retryable.
+        self.inner.secrets.delete(&descriptor.secret_key()?).await?;
+        self.inner.pasted.lock().retain(|d| d.id != id);
+        self.inner.pasted_text.lock().remove(id);
+        self.inner.reload().await?;
+        Ok(true)
     }
 }

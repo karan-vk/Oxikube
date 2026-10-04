@@ -102,37 +102,44 @@ fn dedupe_by_name<T>(items: &mut Vec<T>, name: impl Fn(&T) -> &str) {
     items.retain(|item| seen.insert(name(item).to_owned()));
 }
 
-/// Load and merge the kubeconfig files at `paths`, in order (blocking).
+/// Merges kubeconfig sources one at a time with the loader's rules.
 ///
-/// Call it from a blocking context, or use [`load_kubeconfig_from_paths`]. The result is a pure
-/// function of the listed paths and the files' contents.
-///
-/// Missing, blank, unreadable, unparsable and merge-incompatible files are skipped with a
-/// [`Diagnostic`]; with [`Strictness::Tolerant`] this never fails, and with
-/// [`Strictness::RequireUsable`] it fails only when no file was usable. Paths that resolve to
-/// the same file are loaded once, at the first position.
-pub fn load_kubeconfig_from_paths_blocking(
-    paths: &[PathBuf],
-    strictness: Strictness,
-) -> OxiResult<LoadedKubeconfig> {
-    let mut merged = Kubeconfig::default();
-    let mut sources = Vec::with_capacity(paths.len());
-    let mut origins: BTreeMap<ContextName, PathBuf> = BTreeMap::new();
-    let mut diagnostics = Vec::new();
-    let mut seen_keys = HashSet::new();
+/// The loader's loop body, for callers that also have sources that are not files (pasted text,
+/// E03-S02): [`add_file`](Self::add_file) reads a path, [`add_parsed`](Self::add_parsed) takes
+/// an already-parsed config under a pseudo path, [`add_unusable`](Self::add_unusable) records
+/// a source that could not be read. The first definition of each name wins, a shadowed context
+/// is reported, and a source key seen before is ignored. [`finish`](Self::finish) yields the
+/// [`LoadedKubeconfig`]. Holds credentials: there is deliberately no `Debug`.
+pub(crate) struct KubeconfigMerge {
+    merged: Kubeconfig,
+    sources: Vec<SourceInfo>,
+    origins: BTreeMap<ContextName, PathBuf>,
+    diagnostics: Vec<Diagnostic>,
+    seen_keys: HashSet<String>,
+}
 
-    for path in paths {
-        let key = source_key(path);
-        if !seen_keys.insert(key.clone()) {
-            continue;
+impl KubeconfigMerge {
+    /// An empty merge.
+    pub(crate) fn new() -> Self {
+        Self {
+            merged: Kubeconfig::default(),
+            sources: Vec::new(),
+            origins: BTreeMap::new(),
+            diagnostics: Vec::new(),
+            seen_keys: HashSet::new(),
         }
-        let mut info = SourceInfo {
-            path: path.clone(),
-            key,
-            status: SourceStatus::Loaded,
-            contexts: Vec::new(),
-        };
-        match load_kubeconfig_path(path) {
+    }
+
+    /// Read the file at `path` (blocking) and merge it, or record why it is unusable. A path
+    /// that resolves to a file already added is ignored.
+    pub(crate) fn add_file(&mut self, path: &Path) {
+        let key = source_key(path);
+        if self.seen_keys.contains(&key) {
+            return;
+        }
+        let path = path.to_path_buf();
+        match load_kubeconfig_path(&path) {
+            Ok(config) => self.add_parsed(path, key, config),
             Err(skip) => {
                 let (status, diagnostic) = match skip {
                     Skip::Missing => (
@@ -155,56 +162,109 @@ pub fn load_kubeconfig_from_paths_blocking(
                         Diagnostic::Unparsable { path: path.clone() },
                     ),
                 };
-                info.status = status;
-                diagnostics.push(diagnostic);
-            }
-            Ok(next) => {
-                let names: Vec<ContextName> = next
-                    .contexts
-                    .iter()
-                    .map(|c| ContextName::new(c.name.as_str()))
-                    .collect();
-                // `merge` consumes `self`, so keep a copy to fall back to on refusal.
-                match merged.clone().merge(next) {
-                    Ok(next_merged) => {
-                        merged = next_merged;
-                        for name in &names {
-                            match origins.get(name) {
-                                Some(winner) => diagnostics.push(Diagnostic::DuplicateContext {
-                                    context: name.clone(),
-                                    winner: winner.clone(),
-                                    shadowed: path.clone(),
-                                }),
-                                None => {
-                                    origins.insert(name.clone(), path.clone());
-                                }
-                            }
-                        }
-                        info.contexts = names;
-                    }
-                    Err(err) => {
-                        info.status = SourceStatus::Incompatible;
-                        diagnostics.push(Diagnostic::Incompatible {
-                            path: path.clone(),
-                            reason: err.to_string(),
-                        });
-                    }
-                }
+                self.add_unusable(path, key, status, diagnostic);
             }
         }
-        sources.push(info);
     }
 
-    dedupe_by_name(&mut merged.contexts, |c| c.name.as_str());
-    dedupe_by_name(&mut merged.clusters, |c| c.name.as_str());
-    dedupe_by_name(&mut merged.auth_infos, |a| a.name.as_str());
+    /// Merge an already-parsed `config`. `path` stands in for a file path in origins and
+    /// diagnostics, and `key` is the source identity hashed into its cluster ids.
+    pub(crate) fn add_parsed(&mut self, path: PathBuf, key: String, config: Kubeconfig) {
+        if !self.seen_keys.insert(key.clone()) {
+            return;
+        }
+        let mut info = SourceInfo {
+            path: path.clone(),
+            key,
+            status: SourceStatus::Loaded,
+            contexts: Vec::new(),
+        };
+        let names: Vec<ContextName> = config
+            .contexts
+            .iter()
+            .map(|c| ContextName::new(c.name.as_str()))
+            .collect();
+        // `merge` consumes `self`, so keep a copy to fall back to on refusal.
+        match self.merged.clone().merge(config) {
+            Ok(merged) => {
+                self.merged = merged;
+                for name in &names {
+                    match self.origins.get(name) {
+                        Some(winner) => self.diagnostics.push(Diagnostic::DuplicateContext {
+                            context: name.clone(),
+                            winner: winner.clone(),
+                            shadowed: path.clone(),
+                        }),
+                        None => {
+                            self.origins.insert(name.clone(), path.clone());
+                        }
+                    }
+                }
+                info.contexts = names;
+            }
+            Err(err) => {
+                info.status = SourceStatus::Incompatible;
+                self.diagnostics.push(Diagnostic::Incompatible {
+                    path,
+                    reason: err.to_string(),
+                });
+            }
+        }
+        self.sources.push(info);
+    }
 
-    let loaded = LoadedKubeconfig {
-        merged,
-        sources,
-        origins,
-        diagnostics,
-    };
+    /// Record a source that could not be used, with its status and diagnostic.
+    pub(crate) fn add_unusable(
+        &mut self,
+        path: PathBuf,
+        key: String,
+        status: SourceStatus,
+        diagnostic: Diagnostic,
+    ) {
+        if !self.seen_keys.insert(key.clone()) {
+            return;
+        }
+        self.diagnostics.push(diagnostic);
+        self.sources.push(SourceInfo {
+            path,
+            key,
+            status,
+            contexts: Vec::new(),
+        });
+    }
+
+    /// The merged result. Names repeated inside one source are reduced to their first entry.
+    pub(crate) fn finish(mut self) -> LoadedKubeconfig {
+        dedupe_by_name(&mut self.merged.contexts, |c| c.name.as_str());
+        dedupe_by_name(&mut self.merged.clusters, |c| c.name.as_str());
+        dedupe_by_name(&mut self.merged.auth_infos, |a| a.name.as_str());
+        LoadedKubeconfig {
+            merged: self.merged,
+            sources: self.sources,
+            origins: self.origins,
+            diagnostics: self.diagnostics,
+        }
+    }
+}
+
+/// Load and merge the kubeconfig files at `paths`, in order (blocking).
+///
+/// Call it from a blocking context, or use [`load_kubeconfig_from_paths`]. The result is a pure
+/// function of the listed paths and the files' contents.
+///
+/// Missing, blank, unreadable, unparsable and merge-incompatible files are skipped with a
+/// [`Diagnostic`]; with [`Strictness::Tolerant`] this never fails, and with
+/// [`Strictness::RequireUsable`] it fails only when no file was usable. Paths that resolve to
+/// the same file are loaded once, at the first position.
+pub fn load_kubeconfig_from_paths_blocking(
+    paths: &[PathBuf],
+    strictness: Strictness,
+) -> OxiResult<LoadedKubeconfig> {
+    let mut merge = KubeconfigMerge::new();
+    for path in paths {
+        merge.add_file(path);
+    }
+    let loaded = merge.finish();
     if strictness == Strictness::RequireUsable && !loaded.has_usable_source() {
         return Err(unusable_error(&loaded));
     }

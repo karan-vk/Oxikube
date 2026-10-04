@@ -7,6 +7,7 @@
 //!
 //! | File | Role |
 //! |---|---|
+//! | `config` | [`SourcesConfig`] and [`WatchStatus`] |
 //! | `layout` | expands the configured sources into files; directory filtering |
 //! | `snapshot` | the catalog as of one load, and the diff between two |
 //! | `watcher` | `notify` on parent directories, debounce, 60 s poll, abort-on-drop |
@@ -16,13 +17,19 @@
 //!
 //! In load order (the loader's first-file-wins rule follows it):
 //!
-//! 1. the files named by `KUBECONFIG`, or the default path (`~/.kube/config`) when that is unset
-//!    or empty (kubectl's rule; the caller reads the environment and passes the value in);
-//! 2. user-added paths, in the order given. A file is one source; a directory is one source
+//! 1. the kubectl tier picked by [`select_sources`](crate::kubeconfig::select_sources) from
+//!    [`SourcesConfig::env`]: the files named by `KUBECONFIG` when it is set and non-empty (even
+//!    when it splits to no path, as with `KUBECONFIG=":"`, in which case nothing is read here),
+//!    otherwise the default path (`<home>/.kube/config`);
+//! 2. user-added paths, in the order given. These are additive (loaded after tier 1), unlike
+//!    the loader's exclusive "explicit" tier. A file is one source; a directory is one source
 //!    that expands to the regular files directly inside it (not recursive, sorted by name).
 //!    Hidden files and editor leftovers (`.x`, `x~`, `.bak`, `.swp`, `.orig`, `.tmp`, `.lock`)
 //!    are skipped; other names are tried and reported as unusable if they are not kubeconfigs;
-//! 3. pasted kubeconfigs (the `pasted` module explains where the text lives).
+//! 3. pasted kubeconfigs (the `pasted` module explains where the text lives);
+//! 4. the pod's service account, as a [`SourceKind::InCluster`](oxikube_ports::SourceKind)
+//!    source holding the synthetic `in-cluster` context, only when 1-3 gave no context and no
+//!    file was broken ([`apply_in_cluster_fallback`]).
 //!
 //! The source list is fixed at construction apart from pasted kubeconfigs. Changing the
 //! user-added paths at runtime means building a new adapter (the settings UI is E06).
@@ -46,10 +53,22 @@
 //!
 //! # For the client pool (E03-S03)
 //!
-//! The pool is not wired here. After each reload, [`KubeconfigSources::kubeconfig`] returns the
-//! merged kubeconfig (credentials inside: do not log it) and subscribers receive the
-//! [`SourcesChanged`] to invalidate pooled clients for `changed` and `removed` ids.
+//! The pool is not owned here; the wiring drives it. After each [`SourcesChanged`] (or any
+//! `reload()`), pass [`KubeconfigSources::loaded`] to
+//! [`ClientPool::replace_loaded`](crate::ClientPool::replace_loaded). The pool compares each
+//! pooled context's connection definition with the new kubeconfig and drops only the clients
+//! of contexts that changed or vanished; the diff itself is for the UI.
+//!
+//! ```ignore
+//! let mut changes = sources.subscribe();
+//! while changes.next().await.is_some() {
+//!     if let Some(loaded) = sources.loaded() {
+//!         pool.replace_loaded(&loaded);
+//!     }
+//! }
+//! ```
 
+mod config;
 mod layout;
 mod pasted;
 mod snapshot;
@@ -59,20 +78,17 @@ mod watcher;
 mod tests;
 
 use std::collections::HashMap;
-use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::StreamExt;
 use futures::channel::mpsc;
 use futures::stream::BoxStream;
-use kube::config::Kubeconfig;
 use oxikube_domain::ids::ContextName;
 use oxikube_domain::{OxiError, OxiResult};
-use oxikube_ports::secrets::{ExposeSecret, SecretString};
+use oxikube_ports::secrets::SecretString;
 use oxikube_ports::{
     ClusterContext, ClusterSource, ClusterSourcePort, SecretStorePort, SourcesChanged,
 };
@@ -81,58 +97,10 @@ use tokio::sync::watch;
 
 use self::layout::Layout;
 use self::snapshot::Snapshot;
-use crate::kubeconfig::{Diagnostic, Strictness, load_kubeconfig_from_paths_blocking};
+use crate::kubeconfig::{Diagnostic, KubeconfigMerge, LoadedKubeconfig, apply_in_cluster_fallback};
 
+pub use self::config::{SourcesConfig, WatchStatus};
 pub use self::pasted::PastedDescriptor;
-
-/// Where [`KubeconfigSources`] reads from, and how it watches.
-#[derive(Debug, Clone)]
-pub struct SourcesConfig {
-    /// The value of `KUBECONFIG`, read by the caller (`None` when unset).
-    pub kubeconfig_env: Option<OsString>,
-    /// `~/.kube/config`, used when `kubeconfig_env` is unset or empty. `None` when the home
-    /// directory is unknown.
-    pub default_path: Option<PathBuf>,
-    /// User-added kubeconfig files and directories, from settings.
-    pub extra_paths: Vec<PathBuf>,
-    /// Pasted kubeconfigs to restore (the descriptors the caller persisted).
-    pub pasted: Vec<PastedDescriptor>,
-    /// Start the file watcher and the safety poll. Tests set this to `false`.
-    pub watch: bool,
-    /// Quiet period after the last file event before reloading.
-    pub debounce: Duration,
-    /// Interval of the safety poll that catches events the watcher missed.
-    pub poll_interval: Duration,
-}
-
-impl SourcesConfig {
-    /// A configuration with watching on, a 300 ms debounce and a 60 s safety poll.
-    pub fn new(kubeconfig_env: Option<OsString>, default_path: Option<PathBuf>) -> Self {
-        Self {
-            kubeconfig_env,
-            default_path,
-            extra_paths: Vec::new(),
-            pasted: Vec::new(),
-            watch: true,
-            debounce: Duration::from_millis(300),
-            poll_interval: Duration::from_secs(60),
-        }
-    }
-}
-
-/// Whether the file watcher is running.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WatchStatus {
-    /// `watch` was false: nothing runs besides explicit reloads.
-    Disabled,
-    /// The watcher is being registered.
-    Starting,
-    /// Directories are watched and the safety poll runs.
-    Active,
-    /// The watcher could not start (the reason, without file contents). The safety poll runs,
-    /// so changes still appear within one poll interval.
-    Failed(String),
-}
 
 /// Shared state; the watch task holds a [`std::sync::Weak`] to it.
 pub(crate) struct Inner {
@@ -154,24 +122,35 @@ pub(crate) struct Inner {
 
 impl Inner {
     /// Load every source and build a snapshot. Holds no lock.
+    ///
+    /// Files first (on the blocking pool), then pasted kubeconfigs, then the in-cluster
+    /// fallback, which only applies when neither gave a context and nothing was broken.
     async fn load(&self) -> OxiResult<Snapshot> {
         let config = self.config.clone();
         let pasted = self.pasted.lock().clone();
-        let (mut layout, mut loaded) = tokio::task::spawn_blocking(move || {
+        let (mut layout, mut merge) = tokio::task::spawn_blocking(move || {
             let layout = Layout::resolve(&config);
-            load_kubeconfig_from_paths_blocking(&layout.files(), Strictness::Tolerant)
-                .map(|loaded| (layout, loaded))
+            let mut merge = KubeconfigMerge::new();
+            for file in layout.files() {
+                merge.add_file(&file);
+            }
+            (layout, merge)
         })
         .await
-        .map_err(|err| OxiError::internal("kubeconfig source task failed").with_source(err))??;
+        .map_err(|err| OxiError::internal("kubeconfig source task failed").with_source(err))?;
         pasted::fold_into(
-            &mut loaded,
+            &mut merge,
             &mut layout,
             self.secrets.as_ref(),
             &pasted,
             &self.pasted_text,
         )
         .await;
+        let mut loaded = merge.finish();
+        apply_in_cluster_fallback(&mut loaded, &self.config.env)?;
+        if loaded.sources.iter().any(|s| s.is_in_cluster()) {
+            layout.push_in_cluster();
+        }
         Ok(Snapshot::build(loaded, layout))
     }
 
@@ -304,71 +283,21 @@ impl KubeconfigSources {
         found
     }
 
-    /// The merged kubeconfig of the last load, for the client pool. Holds credentials: never
-    /// log it. `None` before the first load.
-    pub fn kubeconfig(&self) -> Option<Kubeconfig> {
+    /// The loader result of the last load, for the client pool (`None` before the first load).
+    ///
+    /// Hand it to [`ClientPool::replace_loaded`](crate::ClientPool::replace_loaded) after each
+    /// [`SourcesChanged`]: the pool compares connection definitions and drops only the clients
+    /// of contexts that changed or vanished, and it learns which context is the synthetic
+    /// in-cluster one. The merged config holds credentials: never log it.
+    pub fn loaded(&self) -> Option<Arc<LoadedKubeconfig>> {
         let current = self.inner.current.read();
-        current.as_ref().map(|s| s.loaded.merged.clone())
+        current.as_ref().map(|s| s.loaded.clone())
     }
 
     /// The kubeconfig's `current-context` as of the last load.
     pub fn current_context(&self) -> Option<ContextName> {
         let current = self.inner.current.read();
         current.as_ref().and_then(|s| s.current_context.clone())
-    }
-
-    /// The pasted kubeconfigs, for the caller to persist (they carry no secret).
-    pub fn pasted(&self) -> Vec<PastedDescriptor> {
-        self.inner.pasted.lock().clone()
-    }
-
-    /// Adds a pasted kubeconfig, reloads, and returns its descriptor.
-    ///
-    /// The text is validated, stored in the keychain through the [`SecretStorePort`] and kept
-    /// nowhere else; the descriptor is what to persist. Pasting identical text again replaces
-    /// the label. Fails with `Validation` for text that is not a kubeconfig (the message never
-    /// quotes it), or with the secret store's error; nothing is written to a file either way.
-    pub async fn add_pasted(&self, label: &str, text: SecretString) -> OxiResult<PastedDescriptor> {
-        let descriptor = PastedDescriptor::for_text(label, text.expose_secret());
-        pasted::parse(text.expose_secret())?;
-        self.inner
-            .secrets
-            .set(&descriptor.secret_key()?, text.clone())
-            .await?;
-        self.inner
-            .pasted_text
-            .lock()
-            .insert(descriptor.id.clone(), text);
-        {
-            let mut list = self.inner.pasted.lock();
-            match list.iter_mut().find(|d| d.id == descriptor.id) {
-                Some(existing) => existing.label = descriptor.label.clone(),
-                None => list.push(descriptor.clone()),
-            }
-        }
-        self.inner.reload().await?;
-        Ok(descriptor)
-    }
-
-    /// Removes a pasted kubeconfig from the keychain and the catalog and reloads. Returns
-    /// whether `id` was known.
-    pub async fn remove_pasted(&self, id: &str) -> OxiResult<bool> {
-        let Some(descriptor) = self
-            .inner
-            .pasted
-            .lock()
-            .iter()
-            .find(|d| d.id == id)
-            .cloned()
-        else {
-            return Ok(false);
-        };
-        // Delete the secret first: if the keychain refuses, the entry stays listed and retryable.
-        self.inner.secrets.delete(&descriptor.secret_key()?).await?;
-        self.inner.pasted.lock().retain(|d| d.id != id);
-        self.inner.pasted_text.lock().remove(id);
-        self.inner.reload().await?;
-        Ok(true)
     }
 }
 

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use oxikube_ports::cluster_source::{ClusterSource, SourceId, SourceKind};
 
 use super::SourcesConfig;
-use crate::kubeconfig::{Diagnostic, split_kubeconfig_paths};
+use crate::kubeconfig::{Diagnostic, IN_CLUSTER_SOURCE_PATH, SourceTier, select_sources};
 
 /// One configured source and the files it expands to, in load order.
 pub(super) struct SourceEntry {
@@ -29,36 +29,32 @@ pub(super) struct Layout {
 impl Layout {
     /// Expand `config` into sources and files (blocking).
     ///
-    /// Order is load order, and the loader's first-file-wins rule follows it: the files named by
-    /// `KUBECONFIG` (or the default path when that is unset or empty), then the user-added
-    /// paths in the order given.
+    /// Order is load order, and the loader's first-file-wins rule follows it: the files of the
+    /// tier [`select_sources`] picks from `config.env` (`KUBECONFIG` when set and non-empty,
+    /// even if it names no path, else the default path), then the user-added paths in the
+    /// order given. User-added paths are additive here, not the loader's exclusive "explicit"
+    /// tier: settings add to what kubectl would read, they do not replace it.
     pub(super) fn resolve(config: &SourcesConfig) -> Self {
         let mut layout = Layout {
             entries: Vec::new(),
             diagnostics: Vec::new(),
         };
-        let env_paths = config
-            .kubeconfig_env
-            .as_deref()
-            .map(split_kubeconfig_paths)
-            .unwrap_or_default();
-        if env_paths.is_empty() {
-            if let Some(path) = &config.default_path {
-                layout.push_file(
-                    SourceId("default".into()),
-                    SourceKind::KubeconfigFile,
-                    "Default kubeconfig".into(),
-                    path,
-                );
-            }
-        } else {
-            for path in &env_paths {
-                layout.push_file(
+        let selection = select_sources(&[], &config.env);
+        for path in &selection.paths {
+            match selection.tier {
+                Some(SourceTier::KubeconfigEnv) => layout.push_file(
                     SourceId(format!("env:{}", path.display())),
                     SourceKind::Environment,
                     format!("$KUBECONFIG: {}", path.display()),
                     path,
-                );
+                ),
+                // `DefaultPath`; `Explicit` cannot occur, none was passed.
+                _ => layout.push_file(
+                    SourceId("default".into()),
+                    SourceKind::KubeconfigFile,
+                    "Default kubeconfig".into(),
+                    path,
+                ),
             }
         }
         for path in &config.extra_paths {
@@ -124,6 +120,20 @@ impl Layout {
             source,
             files: vec![pseudo_path],
         });
+    }
+
+    /// Adds the pod's service account as a source, owning the synthetic in-cluster context
+    /// that the loader's fallback adds under [`IN_CLUSTER_SOURCE_PATH`].
+    pub(super) fn push_in_cluster(&mut self) {
+        self.push_virtual(
+            ClusterSource {
+                id: SourceId("in-cluster".into()),
+                kind: SourceKind::InCluster,
+                label: "In-cluster service account".into(),
+                path: None,
+            },
+            PathBuf::from(IN_CLUSTER_SOURCE_PATH),
+        );
     }
 
     /// Every file to hand to the loader, in order. Duplicates are the loader's to remove.

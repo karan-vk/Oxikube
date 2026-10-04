@@ -11,11 +11,14 @@ use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::secrets::SecretString;
 use oxikube_ports::{SourceId, SourceKind};
+
+use crate::kubeconfig::in_cluster_cluster_id;
+use crate::pool::{ClientPool, KubeClientFactory, PoolConfig, ProxyEnv, SystemClock};
 use oxikube_testkit::FakeSecretStorePort;
 use tempfile::TempDir;
 
 use super::*;
-use crate::kubeconfig::{Diagnostic, SourceStatus};
+use crate::kubeconfig::{Diagnostic, Env, InClusterSkip, Platform, SourceStatus};
 
 const TOKEN: &str = "s3cr3t-token-do-not-leak";
 
@@ -55,8 +58,30 @@ fn write(path: &Path, text: &str) {
     fs::write(path, text).expect("write fixture");
 }
 
+/// `<dir>/home/.kube/config`, with its directory created: the default path of [`config_for`].
+fn default_in(dir: &Path) -> PathBuf {
+    let kube = dir.join("home").join(".kube");
+    fs::create_dir_all(&kube).expect("create .kube");
+    kube.join("config")
+}
+
+/// A config whose default path is `default`, which must be `<home>/.kube/config` (the home
+/// directory need not exist). No `KUBECONFIG`, not in a cluster, no watcher.
 fn config_for(default: &Path) -> SourcesConfig {
-    let mut config = SourcesConfig::new(None, Some(default.to_path_buf()));
+    assert!(default.ends_with(".kube/config"), "{}", default.display());
+    let home = default.parent().and_then(Path::parent).unwrap();
+    let mut config = SourcesConfig::new(Env {
+        platform: Platform::host(),
+        home: Some(home.to_path_buf()),
+        ..Env::default()
+    });
+    config.watch = false;
+    config
+}
+
+/// A config with no default path at all (no home directory).
+fn config_without_default() -> SourcesConfig {
+    let mut config = SourcesConfig::new(Env::default());
     config.watch = false;
     config
 }
@@ -83,7 +108,7 @@ fn try_next(stream: &mut BoxStream<'static, SourcesChanged>) -> Option<SourcesCh
 #[tokio::test]
 async fn default_path_is_one_source_with_its_contexts() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     write(&path, &simple(&[("a", "https://a"), ("b", "https://b")]));
     let (sources, _) = adapter(config_for(&path));
 
@@ -108,7 +133,7 @@ async fn default_path_is_one_source_with_its_contexts() {
 #[tokio::test]
 async fn kubeconfig_env_replaces_the_default_path() {
     let dir = TempDir::new().unwrap();
-    let default = dir.path().join("default");
+    let default = default_in(dir.path());
     let one = dir.path().join("one");
     let two = dir.path().join("two");
     write(&default, &simple(&[("from-default", "https://d")]));
@@ -116,7 +141,7 @@ async fn kubeconfig_env_replaces_the_default_path() {
     write(&two, &simple(&[("two", "https://2")]));
     let env: OsString = std::env::join_paths([&one, &two]).unwrap();
     let mut config = config_for(&default);
-    config.kubeconfig_env = Some(env);
+    config.env.kubeconfig = Some(env);
     let (sources, _) = adapter(config);
 
     let listed = sources.sources().await.unwrap();
@@ -130,10 +155,10 @@ async fn kubeconfig_env_replaces_the_default_path() {
 #[tokio::test]
 async fn an_empty_kubeconfig_env_falls_back_to_the_default_path() {
     let dir = TempDir::new().unwrap();
-    let default = dir.path().join("default");
+    let default = default_in(dir.path());
     write(&default, &simple(&[("d", "https://d")]));
     let mut config = config_for(&default);
-    config.kubeconfig_env = Some(OsString::new());
+    config.env.kubeconfig = Some(OsString::new());
     let (sources, _) = adapter(config);
     assert_eq!(names(&sources.contexts().await.unwrap()), ["d"]);
 }
@@ -144,7 +169,7 @@ async fn a_new_file_in_a_directory_source_is_reported_as_added() {
     let extra = dir.path().join("extra");
     fs::create_dir(&extra).unwrap();
     write(&extra.join("one.yaml"), &simple(&[("one", "https://1")]));
-    let mut config = config_for(&dir.path().join("missing"));
+    let mut config = config_without_default();
     config.extra_paths = vec![extra.clone()];
     let (sources, _) = adapter(config);
     assert_eq!(names(&sources.contexts().await.unwrap()), ["one"]);
@@ -170,7 +195,7 @@ async fn a_new_file_in_a_directory_source_is_reported_as_added() {
 #[tokio::test]
 async fn editing_the_server_is_reported_as_changed() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     write(&path, &simple(&[("a", "https://a"), ("b", "https://b")]));
     let (sources, _) = adapter(config_for(&path));
     sources.contexts().await.unwrap();
@@ -186,7 +211,7 @@ async fn editing_the_server_is_reported_as_changed() {
 #[tokio::test]
 async fn removing_a_context_is_reported_by_cluster_id() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     write(&path, &simple(&[("a", "https://a"), ("b", "https://b")]));
     let (sources, _) = adapter(config_for(&path));
     let before = sources.contexts().await.unwrap();
@@ -201,7 +226,7 @@ async fn removing_a_context_is_reported_by_cluster_id() {
 #[tokio::test]
 async fn namespace_user_and_credential_changes_are_reported_as_changed() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     let (sources, _) = adapter(config_for(&path));
     write(&path, &yaml(&[("a", "https://a")], None, "token-1", None));
     sources.contexts().await.unwrap();
@@ -232,7 +257,7 @@ async fn namespace_user_and_credential_changes_are_reported_as_changed() {
 #[tokio::test]
 async fn touching_a_file_without_changing_it_emits_nothing() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     let text = yaml(&[("a", "https://a")], Some("a"), TOKEN, None);
     write(&path, &text);
     let (sources, _) = adapter(config_for(&path));
@@ -258,7 +283,7 @@ async fn reordered_hash_maps_in_a_user_entry_are_not_a_change() {
     // kube parses `as-user-extra` and exec `env` into HashMaps, whose iteration order is
     // randomised per instance. The fingerprint must not depend on it.
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     let mut text = simple(&[("a", "https://a")]);
     text = text.replace("    token: s3cr3t-token-do-not-leak\n", "");
     text = text.replace(
@@ -283,7 +308,7 @@ async fn reordered_hash_maps_in_a_user_entry_are_not_a_change() {
 #[tokio::test]
 async fn an_external_current_context_change_reports_both_contexts() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     let two = [("a", "https://a"), ("b", "https://b"), ("c", "https://c")];
     write(&path, &yaml(&two, Some("a"), TOKEN, None));
     let (sources, _) = adapter(config_for(&path));
@@ -302,7 +327,7 @@ async fn an_external_current_context_change_reports_both_contexts() {
 #[tokio::test]
 async fn an_atomic_replace_by_rename_is_seen_by_reload() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     write(&path, &simple(&[("a", "https://a")]));
     let (sources, _) = adapter(config_for(&path));
     sources.contexts().await.unwrap();
@@ -323,8 +348,8 @@ async fn a_broken_file_is_a_diagnostic_and_the_rest_still_load() {
     write(&good, &simple(&[("a", "https://a")]));
     write(&bad, &format!("clusters: [unclosed {TOKEN}\n"));
     let env = std::env::join_paths([&good, &bad, &dir.path().join("absent")]).unwrap();
-    let mut config = config_for(&good);
-    config.kubeconfig_env = Some(env);
+    let mut config = config_for(&default_in(dir.path()));
+    config.env.kubeconfig = Some(env);
     let (sources, _) = adapter(config);
 
     assert_eq!(names(&sources.contexts().await.unwrap()), ["a"]);
@@ -343,7 +368,7 @@ async fn a_broken_file_is_a_diagnostic_and_the_rest_still_load() {
 #[tokio::test]
 async fn diagnostics_follow_the_files_across_reloads() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     write(&path, &simple(&[("a", "https://a")]));
     let (sources, _) = adapter(config_for(&path));
     sources.contexts().await.unwrap();
@@ -354,7 +379,13 @@ async fn diagnostics_follow_the_files_across_reloads() {
     assert_eq!(diff.removed.len(), 1);
     assert_eq!(
         sources.diagnostics(),
-        [Diagnostic::Unparsable { path: path.clone() }]
+        [
+            Diagnostic::Unparsable { path: path.clone() },
+            // The catalog is empty, but a broken kubeconfig never falls back to in-cluster.
+            Diagnostic::InClusterSkipped {
+                reason: InClusterSkip::BrokenKubeconfig
+            },
+        ]
     );
 
     write(&path, &simple(&[("a", "https://a")]));
@@ -374,7 +405,7 @@ async fn directory_sources_skip_hidden_backup_and_nested_files() {
         write(&extra.join(ignored), &simple(&[("ignored", "https://x")]));
     }
     write(&extra.join("nested/c"), &simple(&[("nested", "https://n")]));
-    let mut config = config_for(&dir.path().join("missing"));
+    let mut config = config_without_default();
     config.extra_paths = vec![extra];
     let (sources, _) = adapter(config);
 
@@ -394,7 +425,7 @@ async fn directory_sources_skip_hidden_backup_and_nested_files() {
 #[tokio::test]
 async fn duplicate_context_names_across_sources_resolve_first_wins() {
     let dir = TempDir::new().unwrap();
-    let default = dir.path().join("config");
+    let default = default_in(dir.path());
     let extra = dir.path().join("extra.yaml");
     write(&default, &simple(&[("shared", "https://default")]));
     write(
@@ -422,13 +453,13 @@ async fn duplicate_context_names_across_sources_resolve_first_wins() {
 #[tokio::test]
 async fn the_merged_kubeconfig_is_exposed_for_the_pool() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     write(&path, &simple(&[("a", "https://a")]));
     let (sources, _) = adapter(config_for(&path));
-    assert!(sources.kubeconfig().is_none(), "nothing loaded yet");
+    assert!(sources.loaded().is_none(), "nothing loaded yet");
     sources.reload().await.unwrap();
-    let merged = sources.kubeconfig().unwrap();
-    assert_eq!(merged.contexts.len(), 1);
+    let loaded = sources.loaded().unwrap();
+    assert_eq!(loaded.merged.contexts.len(), 1);
     let shown = format!("{sources:?}");
     assert!(!shown.contains(TOKEN));
 }
@@ -436,7 +467,7 @@ async fn the_merged_kubeconfig_is_exposed_for_the_pool() {
 #[tokio::test]
 async fn a_first_reload_reports_everything_as_added() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     write(&path, &simple(&[("a", "https://a")]));
     let (sources, _) = adapter(config_for(&path));
     let mut events = sources.subscribe();
@@ -453,8 +484,8 @@ async fn kubeconfig_env_and_an_added_directory_load_together_in_order() {
     fs::create_dir(&extra).unwrap();
     write(&env_file, &simple(&[("from-env", "https://e")]));
     write(&extra.join("k.yaml"), &simple(&[("from-dir", "https://d")]));
-    let mut config = config_for(&dir.path().join("unused-default"));
-    config.kubeconfig_env = Some(env_file.clone().into_os_string());
+    let mut config = config_for(&default_in(dir.path()));
+    config.env.kubeconfig = Some(env_file.clone().into_os_string());
     config.extra_paths = vec![extra.clone()];
     let (sources, _) = adapter(config);
 
@@ -466,6 +497,151 @@ async fn kubeconfig_env_and_an_added_directory_load_together_in_order() {
     let contexts = sources.contexts().await.unwrap();
     assert_eq!(names(&contexts), ["from-env", "from-dir"]);
     assert_eq!(contexts[1].source, listed[1].id);
+}
+
+/// kubectl parity: a set, non-empty `KUBECONFIG` that splits to no path still selects the
+/// `KUBECONFIG` tier, so the default path is not read.
+#[tokio::test]
+async fn a_separators_only_kubeconfig_env_reads_no_file_not_the_default_path() {
+    let dir = TempDir::new().unwrap();
+    let default = default_in(dir.path());
+    write(&default, &simple(&[("d", "https://d")]));
+    for value in [":", "::", ";"] {
+        let mut config = config_for(&default);
+        config.env.kubeconfig = Some(OsString::from(value));
+        let (sources, _) = adapter(config);
+
+        assert!(sources.contexts().await.unwrap().is_empty(), "{value:?}");
+        assert!(sources.sources().await.unwrap().is_empty(), "{value:?}");
+        assert!(
+            sources
+                .diagnostics()
+                .contains(&Diagnostic::InClusterSkipped {
+                    reason: InClusterSkip::NotInCluster
+                }),
+            "{value:?}"
+        );
+    }
+}
+
+/// An `Env` that looks like a pod (service host, port and mounted service account).
+fn pod_env(config: &mut SourcesConfig) {
+    config.env.kubernetes_service_host = Some("10.0.0.1".into());
+    config.env.kubernetes_service_port = Some("443".into());
+    config.env.service_account_mounted = true;
+    config.env.service_account_namespace = Some("apps".into());
+}
+
+#[tokio::test]
+async fn in_a_pod_with_no_kubeconfig_the_service_account_is_an_in_cluster_source() {
+    let dir = TempDir::new().unwrap();
+    let default = default_in(dir.path());
+    let mut config = config_for(&default);
+    pod_env(&mut config);
+    let (sources, _) = adapter(config);
+
+    let contexts = sources.contexts().await.unwrap();
+    assert_eq!(names(&contexts), ["in-cluster"]);
+    assert_eq!(contexts[0].cluster, in_cluster_cluster_id());
+    assert_eq!(contexts[0].server.as_deref(), Some("https://10.0.0.1"));
+    assert_eq!(contexts[0].default_namespace.as_deref(), Some("apps"));
+    let listed = sources.sources().await.unwrap();
+    let in_cluster = listed.last().unwrap();
+    assert_eq!(in_cluster.kind, SourceKind::InCluster);
+    assert_eq!(in_cluster.path, None);
+    assert_eq!(contexts[0].source, in_cluster.id, "never a raw pseudo path");
+    assert!(
+        sources
+            .loaded()
+            .unwrap()
+            .is_in_cluster(&"in-cluster".into())
+    );
+    assert!(sources.diagnostics().contains(&Diagnostic::InClusterUsed));
+
+    // Once a kubeconfig gives a context, the fallback steps aside.
+    write(&default, &simple(&[("a", "https://a")]));
+    let diff = sources.reload().await.unwrap();
+    assert_eq!(names(&diff.added), ["a"]);
+    assert_eq!(diff.removed, [in_cluster_cluster_id()]);
+    assert!(
+        sources
+            .sources()
+            .await
+            .unwrap()
+            .iter()
+            .all(|s| s.kind != SourceKind::InCluster)
+    );
+}
+
+#[tokio::test]
+async fn in_a_pod_a_broken_kubeconfig_does_not_fall_back_to_in_cluster() {
+    let dir = TempDir::new().unwrap();
+    let default = default_in(dir.path());
+    write(&default, "{{{ not yaml");
+    let mut config = config_for(&default);
+    pod_env(&mut config);
+    let (sources, _) = adapter(config);
+
+    assert!(sources.contexts().await.unwrap().is_empty());
+    assert!(
+        sources
+            .diagnostics()
+            .contains(&Diagnostic::InClusterSkipped {
+                reason: InClusterSkip::BrokenKubeconfig
+            })
+    );
+}
+
+/// The wiring the module docs describe: on each `SourcesChanged`, hand the adapter's loader
+/// result to `ClientPool::replace_loaded`. Only the edited context's client is dropped.
+#[tokio::test]
+async fn a_sources_changed_driven_pool_replace_drops_only_changed_contexts() {
+    let dir = TempDir::new().unwrap();
+    let path = default_in(dir.path());
+    let servers = |b: &str| {
+        simple(&[
+            ("a", "https://127.0.0.1:1"),
+            ("b", b),
+            ("c", "https://127.0.0.3:1"),
+        ])
+    };
+    write(&path, &servers("https://127.0.0.2:1"));
+    let (sources, _) = adapter(config_for(&path));
+    sources.reload().await.unwrap();
+    let loaded = sources.loaded().unwrap();
+    let pool = ClientPool::with_parts(
+        loaded.merged.clone(),
+        PoolConfig::default(),
+        Arc::new(KubeClientFactory::new(ProxyEnv::default())),
+        Arc::new(SystemClock),
+    );
+    assert!(pool.replace_loaded(&loaded).is_empty());
+    for name in ["a", "b", "c"] {
+        pool.get(&name.into()).await.expect("client builds offline");
+    }
+    let mut events = sources.subscribe();
+
+    // Edit b's server, and touch the file without changing a or c.
+    write(&path, &servers("https://127.0.0.9:1"));
+    sources.reload().await.unwrap();
+    let diff = try_next(&mut events).expect("a SourcesChanged for the edit");
+    assert_eq!(ctx_names(&diff), (vec![], vec!["b".into()]));
+
+    let dropped = pool.replace_loaded(&sources.loaded().unwrap());
+    assert_eq!(dropped, [ContextName::new("b")]);
+    assert!(pool.contains(&"a".into()) && pool.contains(&"c".into()));
+    assert!(!pool.contains(&"b".into()));
+
+    // Removing a context from the file drops its client too.
+    write(&path, &simple(&[("a", "https://127.0.0.1:1")]));
+    sources.reload().await.unwrap();
+    let diff = try_next(&mut events).expect("a SourcesChanged for the removal");
+    assert_eq!(diff.removed.len(), 2);
+    assert_eq!(
+        pool.replace_loaded(&sources.loaded().unwrap()),
+        [ContextName::new("c")]
+    );
+    assert!(pool.contains(&"a".into()));
 }
 
 // --- pasted kubeconfigs -------------------------------------------------------------------
@@ -487,7 +663,7 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
 #[tokio::test]
 async fn a_pasted_kubeconfig_lives_in_the_secret_store_and_never_in_a_file() {
     let dir = TempDir::new().unwrap();
-    let default = dir.path().join("config");
+    let default = default_in(dir.path());
     write(&default, &simple(&[("from-file", "https://f")]));
     let files_before = files_under(dir.path());
     let (sources, secrets) = adapter(config_for(&default));
@@ -536,7 +712,7 @@ async fn a_pasted_kubeconfig_lives_in_the_secret_store_and_never_in_a_file() {
 #[tokio::test]
 async fn pasted_kubeconfigs_are_restored_from_descriptors_after_a_restart() {
     let dir = TempDir::new().unwrap();
-    let default = dir.path().join("missing");
+    let default = dir.path().join("no-home/.kube/config");
     let (first, secrets) = adapter(config_for(&default));
     let descriptor = first
         .add_pasted("p", SecretString::from(simple(&[("pasted", "https://p")])))
@@ -563,9 +739,8 @@ async fn pasted_kubeconfigs_are_restored_from_descriptors_after_a_restart() {
 
 #[tokio::test]
 async fn a_pasted_kubeconfig_missing_from_the_keychain_is_a_diagnostic_not_an_error() {
-    let dir = TempDir::new().unwrap();
     let (sources, _) = adapter({
-        let mut config = config_for(&dir.path().join("missing"));
+        let mut config = config_without_default();
         config.pasted = vec![PastedDescriptor {
             id: "0123456789abcdef".into(),
             label: "gone".into(),
@@ -597,8 +772,7 @@ async fn a_pasted_kubeconfig_missing_from_the_keychain_is_a_diagnostic_not_an_er
 
 #[tokio::test]
 async fn pasting_the_same_text_twice_keeps_one_entry_with_the_new_label() {
-    let dir = TempDir::new().unwrap();
-    let (sources, secrets) = adapter(config_for(&dir.path().join("missing")));
+    let (sources, secrets) = adapter(config_without_default());
     let text = simple(&[("p", "https://p")]);
     let first = sources
         .add_pasted("one", SecretString::from(text.clone()))
@@ -616,8 +790,7 @@ async fn pasting_the_same_text_twice_keeps_one_entry_with_the_new_label() {
 
 #[tokio::test]
 async fn pasting_text_that_is_not_a_kubeconfig_is_refused_without_storing_it() {
-    let dir = TempDir::new().unwrap();
-    let (sources, secrets) = adapter(config_for(&dir.path().join("missing")));
+    let (sources, secrets) = adapter(config_without_default());
     for text in [format!("clusters: [unclosed {TOKEN}"), "   \n".to_owned()] {
         let err = sources
             .add_pasted("x", SecretString::from(text))
@@ -633,7 +806,7 @@ async fn pasting_text_that_is_not_a_kubeconfig_is_refused_without_storing_it() {
 #[tokio::test]
 async fn a_file_context_shadows_a_pasted_one_with_the_same_name() {
     let dir = TempDir::new().unwrap();
-    let default = dir.path().join("config");
+    let default = default_in(dir.path());
     write(&default, &simple(&[("shared", "https://file")]));
     let (sources, _) = adapter(config_for(&default));
     sources
@@ -663,11 +836,11 @@ fn watching_config(default: &Path) -> SourcesConfig {
     config
 }
 
-/// Replace `target` with new content by atomic rename every 250 ms until `events` yields a
-/// diff, or fail after two seconds. Repeating the replacement (with different content each
-/// time) tolerates a late first FSEvents delivery; the assertion is that a diff arrives.
+/// Replace `target` with new content by atomic rename (staged next to it) every 250 ms until
+/// `events` yields a diff, or fail after two seconds. Repeating the replacement (with different
+/// content each time) tolerates a late first FSEvents delivery; the assertion is that a diff
+/// arrives.
 async fn replace_until_event(
-    dir: &Path,
     target: &Path,
     events: &mut BoxStream<'static, SourcesChanged>,
 ) -> SourcesChanged {
@@ -675,7 +848,7 @@ async fn replace_until_event(
     let mut attempt = 0;
     loop {
         attempt += 1;
-        let staged = dir.join(format!("config.new.{attempt}"));
+        let staged = target.with_file_name(format!("config.new.{attempt}"));
         write(
             &staged,
             &simple(&[("a", "https://a"), ("b", &format!("https://b{attempt}"))]),
@@ -705,14 +878,14 @@ fn mentions_b(diff: &SourcesChanged) -> bool {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_watcher_reports_an_atomic_replace_within_two_seconds() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     write(&path, &simple(&[("a", "https://a")]));
     let (sources, _) = adapter(watching_config(&path));
     sources.contexts().await.unwrap();
     let mut events = sources.subscribe();
     assert_eq!(sources.wait_for_watcher().await, WatchStatus::Active);
 
-    let diff = replace_until_event(dir.path(), &path, &mut events).await;
+    let diff = replace_until_event(&path, &mut events).await;
     assert!(mentions_b(&diff), "{diff:?}");
 }
 
@@ -723,9 +896,9 @@ async fn the_watcher_reports_an_atomic_replace_within_two_seconds() {
 async fn the_watcher_sees_writes_through_a_symlinked_kubeconfig() {
     let dir = TempDir::new().unwrap();
     let real = dir.path().join("real");
-    let links = dir.path().join("links");
+    let links = dir.path().join("links").join(".kube");
     fs::create_dir(&real).unwrap();
-    fs::create_dir(&links).unwrap();
+    fs::create_dir_all(&links).unwrap();
     let target = real.join("config");
     write(&target, &simple(&[("a", "https://a")]));
     let link = links.join("config");
@@ -735,7 +908,7 @@ async fn the_watcher_sees_writes_through_a_symlinked_kubeconfig() {
     let mut events = sources.subscribe();
     assert_eq!(sources.wait_for_watcher().await, WatchStatus::Active);
 
-    let diff = replace_until_event(&real, &target, &mut events).await;
+    let diff = replace_until_event(&target, &mut events).await;
     assert!(mentions_b(&diff), "{diff:?}");
 }
 
@@ -743,7 +916,7 @@ async fn the_watcher_sees_writes_through_a_symlinked_kubeconfig() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_burst_of_writes_is_coalesced_into_one_reload() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("config");
+    let path = default_in(dir.path());
     write(&path, &simple(&[("a", "https://a")]));
     let mut config = watching_config(&path);
     config.debounce = Duration::from_millis(300);
@@ -778,7 +951,7 @@ async fn a_burst_of_writes_is_coalesced_into_one_reload() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn when_the_watcher_cannot_start_the_safety_poll_still_finds_changes() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("not-yet").join("config");
+    let path = dir.path().join("not-yet").join(".kube").join("config");
     let mut config = watching_config(&path);
     config.poll_interval = Duration::from_millis(100);
     let (sources, _) = adapter(config);
@@ -789,7 +962,7 @@ async fn when_the_watcher_cannot_start_the_safety_poll_still_finds_changes() {
         WatchStatus::Failed(_)
     ));
 
-    fs::create_dir(path.parent().unwrap()).unwrap();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
     write(&path, &simple(&[("late", "https://l")]));
     let diff = tokio::time::timeout(Duration::from_secs(2), events.next())
         .await
@@ -801,7 +974,7 @@ async fn when_the_watcher_cannot_start_the_safety_poll_still_finds_changes() {
 #[tokio::test]
 async fn watching_without_a_runtime_is_an_error_and_disabled_starts_nothing() {
     let dir = TempDir::new().unwrap();
-    let mut config = config_for(&dir.path().join("config"));
+    let mut config = config_for(&default_in(dir.path()));
     let (sources, _) = adapter(config.clone());
     assert_eq!(sources.watch_status(), WatchStatus::Disabled);
     assert_eq!(sources.wait_for_watcher().await, WatchStatus::Disabled);
