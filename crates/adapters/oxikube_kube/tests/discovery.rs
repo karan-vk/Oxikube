@@ -1,98 +1,21 @@
-//! Kind integration tests for `KubeDiscovery` (E03-S06). Need `cargo xtask kind-up` and
+//! Kind integration tests for `KubeDiscovery` (E03-S06), part of the E03-S09 suite: the
+//! discovery snapshot (a stable subset plus the fixture CRD) and a CRD added at runtime.
+//! Clients come from the `ClientPool`. Need `cargo xtask kind-up` and
 //! `OXIKUBE_TEST_CONTEXT`; skip cleanly otherwise.
 #![cfg(feature = "integration")]
 
-use std::process::Command;
+mod common;
+
 use std::time::{Duration, Instant};
 
-use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-use kube::api::{DeleteParams, PostParams};
-use kube::config::{KubeConfigOptions, Kubeconfig};
-use kube::{Api, Client, Config};
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::Verb;
 use oxikube_kube::{CrdWatchConfig, DiscoveryConfig, KubeDiscovery, RegistryDiff};
 use oxikube_ports::DiscoveryPort;
-use oxikube_testkit::integration::{ensure_kind_context, test_context};
 use tokio::sync::broadcast::Receiver;
 use tokio::time::timeout;
 
-/// Upper bound for the cluster to reflect a CRD change in discovery.
-const DEADLINE: Duration = Duration::from_secs(30);
-
-async fn client_for(context: &str) -> Client {
-    ensure_kind_context(context).expect("kind context");
-    let options = KubeConfigOptions {
-        context: Some(context.to_owned()),
-        ..Default::default()
-    };
-    let kubeconfig = Kubeconfig::read().expect("read kubeconfig");
-    let config = Config::from_custom_kubeconfig(kubeconfig, &options)
-        .await
-        .expect("kubeconfig for context");
-    Client::try_from(config).expect("client")
-}
-
-/// A CRD created by a test; deleted (best effort, no wait) when dropped, also on panic.
-struct TestCrd {
-    context: String,
-    name: String,
-    gvk: Gvk,
-}
-
-impl TestCrd {
-    /// Creates `gizmos.rt-<rand>.test.oxikube.dev` (kind `Gizmo`, version `v1`).
-    async fn create(client: &Client, context: &str) -> Self {
-        let suffix = &uuid::Uuid::new_v4().simple().to_string()[..8];
-        let group = format!("rt-{suffix}.test.oxikube.dev");
-        let name = format!("gizmos.{group}");
-        let crd: CustomResourceDefinition = serde_json::from_value(serde_json::json!({
-            "apiVersion": "apiextensions.k8s.io/v1",
-            "kind": "CustomResourceDefinition",
-            "metadata": {"name": name},
-            "spec": {
-                "group": group,
-                "scope": "Namespaced",
-                "names": {
-                    "plural": "gizmos", "singular": "gizmo", "kind": "Gizmo",
-                    "listKind": "GizmoList", "shortNames": ["gz"],
-                },
-                "versions": [{
-                    "name": "v1", "served": true, "storage": true,
-                    "schema": {"openAPIV3Schema": {"type": "object", "x-kubernetes-preserve-unknown-fields": true}},
-                }],
-            },
-        }))
-        .expect("crd json");
-        // Registered before the create so a failed or interrupted create still cleans up.
-        let guard = Self {
-            context: context.to_owned(),
-            name,
-            gvk: Gvk::new(group, "v1", "Gizmo"),
-        };
-        Api::<CustomResourceDefinition>::all(client.clone())
-            .create(&PostParams::default(), &crd)
-            .await
-            .expect("create CRD");
-        guard
-    }
-
-    async fn delete(&self, client: &Client) {
-        Api::<CustomResourceDefinition>::all(client.clone())
-            .delete(&self.name, &DeleteParams::default())
-            .await
-            .expect("delete CRD");
-    }
-}
-
-impl Drop for TestCrd {
-    fn drop(&mut self) {
-        let _ = Command::new("kubectl")
-            .args(["--context", &self.context, "delete", "crd", &self.name])
-            .args(["--ignore-not-found", "--wait=false"])
-            .output();
-    }
-}
+use common::{DEADLINE, TestCrd};
 
 /// Waits for a published diff for which `wanted` holds, within [`DEADLINE`].
 async fn next_diff(
@@ -114,8 +37,10 @@ async fn next_diff(
 
 #[tokio::test]
 async fn registry_lists_builtin_kinds_and_the_fixture_crd() {
-    let Some(ctx) = test_context() else { return };
-    let discovery = KubeDiscovery::new(client_for(&ctx).await);
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let discovery = KubeDiscovery::new((*kind.admin_client().await).clone());
 
     let started = Instant::now();
     let kinds = discovery.discover().await.expect("discover");
@@ -152,8 +77,10 @@ async fn registry_lists_builtin_kinds_and_the_fixture_crd() {
 
 #[tokio::test]
 async fn aggregated_and_legacy_discovery_agree_on_a_real_cluster() {
-    let Some(ctx) = test_context() else { return };
-    let client = client_for(&ctx).await;
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let client = (*kind.admin_client().await).clone();
     let aggregated = KubeDiscovery::new(client.clone());
     let legacy = KubeDiscovery::with_config(
         client,
@@ -186,8 +113,11 @@ async fn aggregated_and_legacy_discovery_agree_on_a_real_cluster() {
 
 #[tokio::test]
 async fn a_crd_created_at_runtime_appears_and_removal_is_reported() {
-    let Some(ctx) = test_context() else { return };
-    let client = client_for(&ctx).await;
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let ctx = kind.context.as_str();
+    let client = (*kind.admin_client().await).clone();
     let discovery = KubeDiscovery::new(client.clone());
     discovery.discover().await.expect("discover");
     let mut changes = discovery.subscribe();
@@ -196,7 +126,7 @@ async fn a_crd_created_at_runtime_appears_and_removal_is_reported() {
         ..CrdWatchConfig::default()
     });
 
-    let crd = TestCrd::create(&client, &ctx).await;
+    let crd = TestCrd::create(&client, ctx).await;
     let diff = next_diff(&mut changes, "the new CRD's kind", |d| {
         d.added.iter().any(|k| k.gvk == crd.gvk)
     })
@@ -226,8 +156,11 @@ async fn a_crd_created_at_runtime_appears_and_removal_is_reported() {
 
 #[tokio::test]
 async fn a_resolve_miss_finds_a_crd_created_after_discovery() {
-    let Some(ctx) = test_context() else { return };
-    let client = client_for(&ctx).await;
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let ctx = kind.context.as_str();
+    let client = (*kind.admin_client().await).clone();
     let discovery = KubeDiscovery::with_config(
         client.clone(),
         DiscoveryConfig {
@@ -237,7 +170,7 @@ async fn a_resolve_miss_finds_a_crd_created_after_discovery() {
     );
     discovery.discover().await.expect("discover");
 
-    let crd = TestCrd::create(&client, &ctx).await;
+    let crd = TestCrd::create(&client, ctx).await;
     // A CRD is served a moment after creation (until it is established, discovery omits it),
     // so poll `resolve` until the deadline.
     let started = Instant::now();

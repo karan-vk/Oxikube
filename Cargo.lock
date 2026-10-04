@@ -5542,6 +5542,7 @@ dependencies = [
  "kube",
  "notify 8.2.0",
  "oxikube_domain",
+ "oxikube_logging",
  "oxikube_ports",
  "oxikube_testkit",
  "parking_lot",

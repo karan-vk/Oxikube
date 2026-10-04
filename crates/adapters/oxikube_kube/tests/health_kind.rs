@@ -2,21 +2,28 @@
 //! apiserver. Skips cleanly when `OXIKUBE_TEST_CONTEXT` is unset.
 #![cfg(feature = "integration")]
 
-use std::time::Duration;
+mod common;
+
+use std::sync::Arc;
 
 use kube::config::{KubeConfigOptions, Kubeconfig};
 use kube::{Client, Config};
 use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::{ContextName, Gvr};
+use oxikube_domain::session::ClusterSessionState;
 use oxikube_kube::auth::CredentialRefresh;
 use oxikube_kube::health::{
-    AccessQuery, HealthEvent, Liveness, LivenessConfig, RBAC_DERIVED, RulesCache, can_i,
-    probe_apiserver_version, probe_capabilities,
+    AccessQuery, HealthEvent, Liveness, RBAC_DERIVED, RulesCache, can_i, capabilities_for_context,
+    pooled_probe, probe_apiserver_version, probe_capabilities,
 };
+use oxikube_kube::pool::{ClientPool, PoolConfig};
 use oxikube_testkit::integration::{ensure_kind_context, test_context};
 
-/// Generous bound for "eventually" waits; the loops below finish in well under a second.
-const DEADLINE: Duration = Duration::from_secs(60);
+use common::DEADLINE;
+use common::health::{collect_events, fast_liveness, ready_session, session_states, shape};
+
+/// A bearer token the apiserver does not know.
+const INVALID_TOKEN: &str = "oxikube-invalid-token";
 
 async fn kind_config(context: &str) -> Config {
     ensure_kind_context(context).expect("kind context");
@@ -42,44 +49,8 @@ async fn bad_token_config(context: &str) -> Config {
     auth.client_key_data = None;
     auth.exec = None;
     auth.token_file = None;
-    auth.token = Some("oxikube-invalid-token".to_owned().into());
+    auth.token = Some(INVALID_TOKEN.to_owned().into());
     config
-}
-
-fn fast_config(threshold: u32) -> LivenessConfig {
-    LivenessConfig {
-        interval: Duration::from_millis(200),
-        probe_timeout: Duration::from_secs(10),
-        failure_threshold: threshold,
-        backoff: backon::ExponentialBuilder::new()
-            .with_min_delay(Duration::from_millis(50))
-            .with_max_delay(Duration::from_millis(200))
-            .without_max_times(),
-    }
-}
-
-/// Drains events until the loop ends, within [`DEADLINE`].
-async fn collect_events(mut rx: tokio::sync::mpsc::Receiver<HealthEvent>) -> Vec<HealthEvent> {
-    tokio::time::timeout(DEADLINE, async {
-        let mut events = vec![];
-        while let Some(e) = rx.recv().await {
-            events.push(e);
-        }
-        events
-    })
-    .await
-    .expect("liveness loop did not finish within the deadline")
-}
-
-fn shape(events: &[HealthEvent]) -> Vec<&'static str> {
-    events
-        .iter()
-        .map(|e| match e {
-            HealthEvent::Healthy { .. } => "healthy",
-            HealthEvent::Unhealthy { .. } => "unhealthy",
-            HealthEvent::Failed { .. } => "failed",
-        })
-        .collect()
 }
 
 #[tokio::test]
@@ -115,7 +86,7 @@ async fn valid_credentials_are_healthy_and_admin_has_every_rbac_capability() {
 
     // Liveness over the same client reports Healthy repeatedly.
     let probe_client = client.clone();
-    let (live, mut rx) = Liveness::spawn(fast_config(3), move || {
+    let (live, mut rx) = Liveness::spawn(fast_liveness(3), move || {
         let client = probe_client.clone();
         async move { probe_apiserver_version(&client, CredentialRefresh::Static).await }
     });
@@ -129,24 +100,44 @@ async fn valid_credentials_are_healthy_and_admin_has_every_rbac_capability() {
     live.stop();
 }
 
+/// E03-S09: a kubeconfig context whose user presents an invalid token, connected through
+/// the pool and watched by the liveness loop, takes its session from `Ready` to
+/// `Degraded` on the first failed probe and to `Error` right after, because an inline
+/// token is static and a rebuild cannot fix it.
 #[tokio::test]
-async fn invalid_token_is_degraded_then_error_immediately_when_the_credential_is_static() {
-    let Some(ctx) = test_context() else { return };
-    let config = bad_token_config(&ctx).await;
-    let refresh = CredentialRefresh::of(&config.auth_info);
+async fn bad_token_degrades_then_errors() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let context = ContextName::from("oxi-bad-token");
+    let kubeconfig = kind.with_token_context(context.as_str(), INVALID_TOKEN);
+    let user = kubeconfig
+        .auth_infos
+        .last()
+        .and_then(|u| u.auth_info.as_ref());
+    let refresh = CredentialRefresh::of(user.expect("bad-token user"));
     assert_eq!(refresh, CredentialRefresh::Static);
-    let client = Client::try_from(config).expect("client");
+    let pool = Arc::new(kind.pool(kubeconfig));
+    // Building the client does not contact the server: the connect itself succeeds.
+    pool.get(&context).await.expect("client builds");
 
-    let (_live, rx) = Liveness::spawn(fast_config(3), move || {
-        let client = client.clone();
-        async move { probe_apiserver_version(&client, refresh).await }
-    });
+    let (_live, rx) = Liveness::spawn(fast_liveness(3), pooled_probe(pool, context, refresh));
     let events = collect_events(rx).await;
-    assert_eq!(shape(&events), ["unhealthy", "failed"]);
+    assert_eq!(shape(&events), ["unhealthy", "failed"], "{events:?}");
     let error = events[1].error().expect("error");
     assert_eq!(error.kind(), ErrorKind::Auth);
     assert!(!error.is_retryable());
-    assert!(!error.to_string().contains("oxikube-invalid-token"));
+
+    let states = session_states(ready_session(), &events);
+    assert_eq!(states[0], ClusterSessionState::Degraded);
+    let reason = match &states[1] {
+        ClusterSessionState::Error { reason } => reason,
+        other => panic!("expected Error, got {other:?}"),
+    };
+    assert!(!reason.is_empty());
+    for text in [reason.clone(), format!("{error} {error:?}")] {
+        assert!(!text.contains(INVALID_TOKEN), "{text}");
+    }
 }
 
 #[tokio::test]
@@ -155,7 +146,7 @@ async fn invalid_token_is_degraded_then_error_after_repeated_failures_when_a_ref
     let client = Client::try_from(bad_token_config(&ctx).await).expect("client");
 
     // `Unknown`: the 401 looks retryable, so the policy needs the failure threshold.
-    let (_live, rx) = Liveness::spawn(fast_config(3), move || {
+    let (_live, rx) = Liveness::spawn(fast_liveness(3), move || {
         let client = client.clone();
         async move { probe_apiserver_version(&client, CredentialRefresh::Unknown).await }
     });
@@ -182,11 +173,6 @@ async fn rules_review_with_an_invalid_token_is_an_auth_error() {
 
 #[tokio::test]
 async fn pooled_probe_and_capabilities_work_against_the_pool() {
-    use std::sync::Arc;
-
-    use oxikube_kube::health::{capabilities_for_context, pooled_probe};
-    use oxikube_kube::pool::{ClientPool, PoolConfig};
-
     let Some(ctx) = test_context() else { return };
     ensure_kind_context(&ctx).expect("kind context");
     let pool = Arc::new(ClientPool::new(
@@ -207,7 +193,7 @@ async fn pooled_probe_and_capabilities_work_against_the_pool() {
     assert_eq!(report.granted, RBAC_DERIVED);
 
     let (live, mut rx) = Liveness::spawn(
-        fast_config(3),
+        fast_liveness(3),
         pooled_probe(pool.clone(), context, CredentialRefresh::Static),
     );
     let event = tokio::time::timeout(DEADLINE, rx.recv())
@@ -247,11 +233,6 @@ fn kubeconfig_without_ca(context: &str) -> (Kubeconfig, String) {
 
 #[tokio::test]
 async fn an_untrusted_server_certificate_fails_on_the_first_probe() {
-    use std::sync::Arc;
-
-    use oxikube_kube::health::pooled_probe;
-    use oxikube_kube::pool::{ClientPool, PoolConfig};
-
     let Some(ctx) = test_context() else { return };
     let (kubeconfig, server) = kubeconfig_without_ca(&ctx);
     let pool = Arc::new(ClientPool::new(kubeconfig, PoolConfig::default()));
@@ -259,7 +240,7 @@ async fn an_untrusted_server_certificate_fails_on_the_first_probe() {
 
     // A threshold of 3 would allow two more probes if the error were transient.
     let (_live, rx) = Liveness::spawn(
-        fast_config(3),
+        fast_liveness(3),
         pooled_probe(pool, context, CredentialRefresh::Static),
     );
     let events = collect_events(rx).await;
