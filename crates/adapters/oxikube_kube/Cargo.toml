@@ -12,6 +12,7 @@ path = "src/oxikube_kube.rs"
 doctest = false
 
 [dependencies]
+backon.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
 async-trait.workspace = true

@@ -1,0 +1,37 @@
+//! Connection health and RBAC capabilities for one cluster context.
+//!
+//! * `liveness`: a probe loop ([`Liveness`]) that reports [`HealthEvent`]s, with backoff
+//!   and a failure policy (one failure is `Degraded`, repeated or non-retryable failures
+//!   are `Error`). The session manager (E06-S01) maps events onto `ClusterSessionState`.
+//! * `capabilities`: a pure reduction of RBAC rules to a [`CapabilityReport`] (granted,
+//!   restricted to named objects, unknown, denied).
+//! * `rules`: `SelfSubjectRulesReview` per (context, namespace) behind a TTL cache.
+//! * `access`: [`can_i`], a single `SelfSubjectAccessReview`.
+//!
+//! # `MutationGuard` does not apply here
+//!
+//! `SelfSubjectRulesReview` and `SelfSubjectAccessReview` are `POST` requests, but they
+//! create no cluster state: the apiserver evaluates the review and answers it without
+//! storing anything, and Oxikube persists nothing about them. They are not mutations in
+//! the sense of ADR 0012, so they bypass the guard and are allowed in read-only mode. The
+//! health probe itself is a `GET`.
+//!
+//! # Error handling
+//!
+//! Every failure is classified with [`crate::auth::classify_with`]; messages are safe to
+//! show. Absence is a visible state: an incomplete review yields *unknown* capabilities,
+//! never silently "denied", and a failing probe emits an event rather than being swallowed.
+//!
+//! Everything here is `async` and runs on Tokio; nothing blocks the UI thread.
+
+mod access;
+mod capabilities;
+mod liveness;
+mod rules;
+
+pub use access::{AccessDecision, AccessQuery, can_i};
+pub use capabilities::{
+    AccessLevel, AccessRule, CapabilityReport, RBAC_DERIVED, RulesSnapshot, capabilities_from_rules,
+};
+pub use liveness::{HealthEvent, Liveness, LivenessConfig, probe_apiserver_version};
+pub use rules::{DEFAULT_RULES_TTL, RulesCache, fetch_rules, probe_capabilities};
