@@ -11,6 +11,7 @@ Closes #<issue>  —  `E__-S__` <title>
 ## Safety
 - Mutations introduced: <none | list> — guard tier: <none | simple | type-the-name>, dry-run: <yes/no>, audit: <yes/no>
 - Read-only mode test: <path>
+- Secrets: new secret-bearing field, header or credential? Add it to `oxikube_domain::redact` (patterns + `tests/redact.rs` + snapshot) — <n/a | done>
 
 ## Commands / tools / settings / keymap
 - Commands added: ...

@@ -12,8 +12,9 @@
 //! cut to the user ("logs truncated to 64 KiB"). The flag survives serde, and
 //! deserialising re-applies the caps.
 //!
-//! The domain never redacts. A context provider must redact Secret data and
-//! tokens *before* building a block (non-negotiable 5); a block may be written
+//! This type never redacts. A context provider must redact Secret data and
+//! tokens *before* building a block (non-negotiable 5), e.g. with
+//! [`redact::redact`](crate::redact::redact); a block may be written
 //! to an agent thread that is stored locally.
 
 use serde::{Deserialize, Serialize};

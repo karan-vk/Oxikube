@@ -35,7 +35,7 @@ How to read the **Lives in** column:
 |---|---|---|
 | **OxiError / OxiResult** | The error every port returns: `{kind, message, source, retryable}`. Branch on `kind()` and `is_retryable()`, never on the message. | `oxikube_domain::error` |
 | **ErrorKind** | `Auth`, `Forbidden`, `NotFound`, `Conflict`, `Network`, `Timeout`, `Validation`, `Unsupported`, `Internal`. Adapter mapping rules are in `docs/ARCHITECTURE.md`. | `oxikube_domain::error` |
-| **Redaction** | Removing tokens and Secret data from text before it is logged, audited or put in an error. There is no domain type yet: adapters redact before building an error. A shared `redact` module is planned in E19-S10. | *(planned)* `oxikube_domain::redact` |
+| **Redaction** | Removing tokens and Secret data from text before it is logged, audited or put in an error. `oxikube_domain::redact` holds the pure scrubber (`redact(&str) -> Cow<str>`, `Redacted<T>`); adapters redact before building an error and `oxikube_logging` scrubs every log line with it. | `oxikube_domain::redact` |
 
 ## Sessions and state
 

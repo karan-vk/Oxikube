@@ -42,8 +42,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_domain` — ids, `ResourceKind`, the thin `Resource { meta, json }` model, view-models,
   `Quantity`, `Age`, session state and `NamespaceSelection`, `Command` / `Capability` vocabulary,
   safety types (`Risk`, `ConfirmTier`, `Initiator`), `AuditRecord`, telemetry-free records
-  (`LogLine`, `Event`, `MetricsSample`, `ContextBlock`) and the error taxonomy. Redaction is
-  planned (E19-S10). Terms are defined in `docs/CONTEXT.md`.
+  (`LogLine`, `Event`, `MetricsSample`, `ContextBlock`), the error taxonomy and the pure
+  secret scrubber `redact` (`redact(&str) -> Cow<str>`, `Redacted<T>`, the pattern catalogue).
+  Terms are defined in `docs/CONTEXT.md`.
 - `oxikube_ports` — every async, object-safe trait (`ResourcePort`, `LogPort`, `ExecPort`,
   `StatePort`, `IntegrationPort`, `ToolPort`, `AgentPort`, …) with the transport types they
   exchange (`Delta`, `Table`, `ToolDef`, …). One module per port; each names its adapter.
@@ -108,8 +109,10 @@ Every port returns `oxikube_domain::OxiError` (alias `OxiResult<T>`): a struct
 `with_retryable` overrides. `Display` is `"<kind>: <message>"`; the source is reachable via
 `std::error::Error::source`. Errors are not `Clone`; share them with `Arc<OxiError>`.
 
-The domain never redacts and has no I/O dependencies, so **adapters redact tokens and Secret
-data before building an error** and map their native errors with these rules:
+Domain types never redact on their own and the domain has no I/O dependencies, so **adapters
+redact tokens and Secret data before building an error** (with `oxikube_domain::redact::redact`;
+`oxikube_logging` applies the same function to every log line) and map their native errors with
+these rules:
 
 | Condition | `ErrorKind` | `retryable` |
 |---|---|---|

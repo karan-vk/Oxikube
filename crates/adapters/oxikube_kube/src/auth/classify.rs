@@ -3,7 +3,8 @@
 //! Free functions, because the orphan rule forbids `From<kube::Error> for OxiError`
 //! in this crate. Messages are user-readable and never carry credential material: no
 //! exec-plugin command line, no plugin stdout, no request headers. Free text that is
-//! included (an API `Status` message, plugin stderr) goes through [`scrub`](super::scrub).
+//! included (an API `Status` message, plugin stderr) is redacted with
+//! [`oxikube_domain::redact::redact`] and then shaped to one bounded line (`text`).
 
 use std::error::Error as StdError;
 use std::io;
@@ -11,15 +12,16 @@ use std::io;
 use kube::config::AuthInfo;
 use kube::core::Status;
 use oxikube_domain::OxiError;
-
-use super::scrub::scrub;
+use oxikube_domain::redact::redact;
 
 mod auth_error;
 mod cert_error;
 mod config_error;
+mod text;
 use auth_error::classify_auth;
 use cert_error::certificate_rejection;
 pub use config_error::{classify_kubeconfig, classify_tls_setup};
+use text::one_line;
 
 /// Whether the credential in use can be renewed by rebuilding the client.
 ///
@@ -104,7 +106,7 @@ pub fn classify_with(err: &kube::Error, refresh: CredentialRefresh) -> OxiError 
         E::InferConfig(_) => OxiError::internal("could not infer a client configuration"),
         E::UpgradeConnection(e) => OxiError::network(format!(
             "websocket upgrade failed: {}",
-            scrub(&e.to_string())
+            one_line(&redact(&e.to_string()))
         )),
         E::SerdeError(_) | E::FromUtf8(_) | E::LinesCodecMaxLineLengthExceeded => {
             OxiError::internal("the cluster sent a response that could not be decoded")
@@ -113,13 +115,13 @@ pub fn classify_with(err: &kube::Error, refresh: CredentialRefresh) -> OxiError 
         #[allow(unreachable_patterns)]
         _ => OxiError::internal(format!(
             "unexpected client error: {}",
-            scrub(&err.to_string())
+            one_line(&redact(&err.to_string()))
         )),
     }
 }
 
 fn classify_status(status: &Status, refresh: CredentialRefresh) -> OxiError {
-    let msg = scrub(&status.message);
+    let msg = one_line(&redact(&status.message));
     let code = status.code;
     let reason = status.reason.as_str();
     // Match the code as well as the reason: `Status::is_*` ignore the code when the reason is
@@ -208,7 +210,7 @@ fn classify_discovery(err: &kube::error::DiscoveryError) -> OxiError {
     match err {
         D::InvalidGroupVersion(_) => OxiError::validation("invalid group/version"),
         D::MissingKind(_) | D::MissingApiGroup(_) | D::MissingResource(_) | D::EmptyApiGroup(_) => {
-            OxiError::unsupported(scrub(&err.to_string()))
+            OxiError::unsupported(one_line(&redact(&err.to_string())))
         }
     }
 }
@@ -246,7 +248,7 @@ fn transport(context: &str, err: &(dyn StdError + 'static)) -> OxiError {
     if let Some(rejected) = certificate_rejection(err) {
         return rejected;
     }
-    let text = scrub(&err.to_string());
+    let text = one_line(&redact(&err.to_string()));
     let lower = text.to_ascii_lowercase();
     if lower.contains("timed out")
         || lower.contains("deadline has elapsed")
