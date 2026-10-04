@@ -235,3 +235,42 @@ fn user_resized_widths_survive_a_zoom_change_unscaled(cx: &mut TestAppContext) {
         "refresh kept the user width"
     );
 }
+
+#[gpui::test]
+fn dragging_a_column_back_to_its_supplied_width_replaces_the_override(cx: &mut TestAppContext) {
+    let (view, cx) = harness(cx, 5);
+    cx.run_until_parked();
+    let baseline = header_width(cx);
+
+    let table = view.read_with(cx, |h, _| h.table.clone());
+    let state = table.state().clone();
+    let resize = |cx: &mut VisualTestContext, first: f32| {
+        cx.update(|_, cx| {
+            state.update(cx, |_, cx| {
+                cx.emit(LibEvent::ColumnWidthsChanged(vec![
+                    px(first),
+                    px(150.),
+                    px(150.),
+                ]));
+            })
+        });
+    };
+
+    // Column 0 is 150 px at 100 %. The user drags it to 200, then back to 150.
+    resize(cx, 200.);
+    resize(cx, 150.);
+
+    // The user left it at 150, so that is what zoom must keep: not the stale 200.
+    set_zoom_and_draw(cx, 2.0);
+    let at_200 = header_width(cx);
+    assert!(
+        (at_200 - baseline - 150.).abs() < 1.5,
+        "header is {baseline} px at 100 % and {at_200} px at 200 %: expected 150 design px more"
+    );
+    set_zoom_and_draw(cx, 1.0);
+    assert!(
+        (header_width(cx) - baseline).abs() < 1.5,
+        "column 0 header is {} px back at 100 %, expected {baseline}",
+        header_width(cx)
+    );
+}

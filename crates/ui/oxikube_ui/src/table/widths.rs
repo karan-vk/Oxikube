@@ -46,9 +46,11 @@ impl ColumnWidths {
     }
 
     /// The user resized columns: `widths` are on-screen, in column order. Keeps (unscaled) the
-    /// columns whose width differs from what was supplied.
+    /// columns whose width differs from the last known on-screen width (what was supplied, or what
+    /// the previous resize reported), then takes `widths` as the new baseline. Without that, a
+    /// column dragged back to its supplied width would keep its earlier override.
     pub(super) fn record_resize(&self, widths: &[Pixels]) {
-        let supplied = self.supplied.borrow();
+        let mut supplied = self.supplied.borrow_mut();
         let mut overrides = self.overrides.borrow_mut();
         let len = widths.len().max(overrides.len());
         overrides.resize(len, None);
@@ -60,6 +62,10 @@ impl ColumnWidths {
                 overrides[ix] = Some(Unscaled::from_scaled(width, self.applied_scale()));
             }
         }
+        if supplied.len() < widths.len() {
+            supplied.resize(widths.len(), Pixels::ZERO);
+        }
+        supplied[..widths.len()].copy_from_slice(widths);
     }
 
     /// On-screen `widths` (as the library reports them) as unscaled widths.
