@@ -26,6 +26,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backon::{BackoffBuilder, ExponentialBuilder};
+use futures::FutureExt;
 use kube::Client;
 use oxikube_domain::{OxiError, OxiResult};
 use tokio::sync::{Notify, mpsc, watch};
@@ -128,9 +129,22 @@ impl Liveness {
         self.settings.send_modify(|s| s.paused = true);
     }
 
-    /// Resumes probing; the next probe runs immediately.
+    /// Resumes probing; the next probe runs immediately (or, if a probe is still in
+    /// flight, as soon as it finishes). No effect when not paused.
     pub fn resume(&self) {
-        self.settings.send_modify(|s| s.paused = false);
+        self.settings.send_if_modified(|s| {
+            if !s.paused {
+                return false;
+            }
+            s.paused = false;
+            // The loop may not have seen the pause at all (a pause and resume during one
+            // in-flight probe coalesce in the watch channel), so ask for a probe
+            // explicitly. A loop parked on the pause probes on waking anyway and drops
+            // this request first. Requesting inside the closure stores the request
+            // before the loop can wake, so it cannot outlive that probe.
+            self.probe_now.notify_one();
+            true
+        });
     }
 
     /// Changes the healthy-state interval (raised to [`MIN_INTERVAL`] if smaller). Takes
@@ -140,7 +154,9 @@ impl Liveness {
         self.settings.send_modify(|s| s.interval = interval);
     }
 
-    /// Runs a probe as soon as the loop is idle (no effect while paused).
+    /// Runs a probe as soon as the loop is idle. While paused it has no effect: resuming
+    /// probes at once regardless, and a request made while paused is not replayed after
+    /// that probe.
     pub fn probe_now(&self) {
         self.probe_now.notify_one();
     }
@@ -178,6 +194,9 @@ async fn run<P, Fut>(
         if !wait_unpaused(&mut settings).await {
             return;
         }
+        // The probe that starts now answers every `probe_now` made before it (including
+        // any made while paused), so a stored request must not trigger a second one.
+        drop_pending_request(&probe_now);
         let result = match tokio::time::timeout(config.probe_timeout, probe()).await {
             Ok(result) => result,
             Err(_) => Err(OxiError::timeout(format!(
@@ -218,9 +237,17 @@ async fn wait_unpaused(settings: &mut watch::Receiver<Settings>) -> bool {
     settings.wait_for(|s| !s.paused).await.is_ok()
 }
 
+/// Consumes a `probe_now` request stored while nobody was waiting, if there is one.
+fn drop_pending_request(probe_now: &Notify) {
+    // Polling a fresh `Notified` once takes the stored permit, if any, and otherwise
+    // leaves nothing registered when it is dropped.
+    let _ = probe_now.notified().now_or_never();
+}
+
 /// Sleeps until the next probe is due: `failure_delay` (capped at the interval) after a
-/// failure, else the interval. Returns early on `probe_now`, on resume, and re-evaluates
-/// when the interval changes. False when the handle is gone.
+/// failure, else the interval. Returns early on `probe_now`, and re-evaluates when the
+/// interval changes. While paused (including a pause that arrived during the previous
+/// probe) it holds until resumed and then returns at once. False when the handle is gone.
 async fn wait_next(
     failure_delay: Option<Duration>,
     settings: &mut watch::Receiver<Settings>,
@@ -229,6 +256,9 @@ async fn wait_next(
     let started = Instant::now();
     loop {
         let current = *settings.borrow_and_update();
+        if current.paused {
+            return wait_unpaused(settings).await;
+        }
         let delay = failure_delay.map_or(current.interval, |d| d.min(current.interval));
         let deadline = started + delay;
         tokio::select! {
@@ -237,10 +267,6 @@ async fn wait_next(
             changed = settings.changed() => {
                 if changed.is_err() {
                     return false;
-                }
-                if settings.borrow().paused {
-                    // Hold until resumed, then probe at once.
-                    return wait_unpaused(settings).await;
                 }
             }
         }

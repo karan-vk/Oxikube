@@ -45,6 +45,27 @@ fn scripted(
     (probe, times)
 }
 
+type BoxedProbe = std::pin::Pin<Box<dyn Future<Output = OxiResult<String>> + Send>>;
+
+/// A probe that succeeds after `takes` and records when each run started.
+fn slow(
+    takes: Duration,
+) -> (
+    impl FnMut() -> BoxedProbe + Send + 'static,
+    Arc<std::sync::Mutex<Vec<Instant>>>,
+) {
+    let times = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let t = times.clone();
+    let probe = move || -> BoxedProbe {
+        t.lock().unwrap().push(Instant::now());
+        Box::pin(async move {
+            tokio::time::sleep(takes).await;
+            ok()
+        })
+    };
+    (probe, times)
+}
+
 async fn next(rx: &mut mpsc::Receiver<HealthEvent>) -> HealthEvent {
     rx.recv().await.expect("event")
 }
@@ -284,4 +305,74 @@ async fn a_forbidden_version_probe_stays_degraded_until_the_threshold() {
         }
     ));
     assert!(matches!(next(&mut rx).await, HealthEvent::Failed { .. }));
+}
+
+#[tokio::test(start_paused = true)]
+async fn resume_after_a_pause_during_a_probe_probes_immediately() {
+    let (probe, times) = slow(Duration::from_secs(2));
+    let (live, mut rx) = Liveness::spawn(quick(), probe);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    live.pause();
+    next(&mut rx).await; // the in-flight probe finishes at t=2s
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert_eq!(times.lock().unwrap().len(), 1, "no probe while paused");
+    let resumed = Instant::now();
+    live.resume();
+    next(&mut rx).await;
+    assert_eq!(
+        times.lock().unwrap()[1],
+        resumed,
+        "probe at resume, not at the interval"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn pause_and_resume_during_one_probe_still_probe_after_it() {
+    let (probe, times) = slow(Duration::from_secs(2));
+    let (live, mut rx) = Liveness::spawn(quick(), probe);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    live.pause();
+    live.resume();
+    next(&mut rx).await;
+    next(&mut rx).await;
+    let t = times.lock().unwrap();
+    assert_eq!(
+        t[1] - t[0],
+        Duration::from_secs(2),
+        "the resume asks for a probe once the in-flight one returns"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn probe_now_while_paused_adds_no_probe_after_resume() {
+    let (probe, times) = scripted(vec![ok()]);
+    let (live, mut rx) = Liveness::spawn(quick(), probe);
+    next(&mut rx).await;
+    live.pause();
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    live.probe_now();
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    assert_eq!(times.lock().unwrap().len(), 1, "no probe while paused");
+    live.resume();
+    next(&mut rx).await;
+    next(&mut rx).await;
+    let t = times.lock().unwrap();
+    assert_eq!(t[1] - t[0], Duration::from_secs(20), "probe at resume");
+    assert_eq!(
+        t[2] - t[1],
+        Duration::from_secs(30),
+        "then the interval, not a replay of the paused request"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn resume_without_a_pause_does_not_probe() {
+    let (probe, times) = scripted(vec![ok()]);
+    let (live, mut rx) = Liveness::spawn(quick(), probe);
+    next(&mut rx).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    live.resume();
+    next(&mut rx).await;
+    let t = times.lock().unwrap();
+    assert_eq!(t[1] - t[0], Duration::from_secs(30));
 }
