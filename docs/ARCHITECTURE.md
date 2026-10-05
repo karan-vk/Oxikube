@@ -127,6 +127,7 @@ these rules:
 | Client or request deadline elapsed | `Timeout` | true |
 | Missing API group or version, aggregated API that ignores a feature | `Unsupported` | false |
 | Panics turned into errors, invariant violations, other bugs | `Internal` | false |
+| The per-cluster watch budget refuses a new feed (feed or object cap; `oxikube_kube::budget`) | `BudgetExceeded` | false (free room first: close views, narrow the namespace selection) |
 
 A rejected write can carry more than a kind. `oxikube_domain::error_details` defines
 `ConflictDetails` (why a 409: `FieldOwnership` with the clashing fields and the field managers
@@ -167,6 +168,13 @@ Events (`oxikube_kube::events`) are the exception to the reflector store: `core/
 `events.k8s.io/v1` are watched together, merged by `metadata.uid` into domain `Event`s and kept in
 a fixed-size ring (oldest `last_seen` evicted, evictions reported as `Deleted` deltas and counted),
 so a noisy cluster cannot grow memory. A per-object feed filters by the involved object's UID.
+
+Resource feeds (reflector, metadata-only, Table) are opened through their cluster's watch budget
+(`oxikube_kube::budget::FeedRegistry`, E04-S13): equal requests share one feed and count
+subscribers, a feed with no subscriber is torn down after a grace period (30 s; a re-subscribe
+within it reuses the feed), a namespace set is one namespaced feed per namespace, and the
+feed and object caps evict idle feeds, then degrade a full feed to metadata-only, then refuse
+with `BudgetExceeded`. Its counters reach the app as the `oxikube_ports::FeedStats` snapshot.
 
 ## Integrations
 

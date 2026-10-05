@@ -5567,6 +5567,7 @@ dependencies = [
  "futures",
  "hex",
  "http",
+ "http-body",
  "jiff",
  "json-patch",
  "k8s-metrics",

@@ -34,7 +34,7 @@ How to read the **Lives in** column:
 | Term | Meaning | Lives in |
 |---|---|---|
 | **OxiError / OxiResult** | The error every port returns: `{kind, message, source, retryable}`. Branch on `kind()` and `is_retryable()`, never on the message. | `oxikube_domain::error` |
-| **ErrorKind** | `Auth`, `Forbidden`, `NotFound`, `Conflict`, `Network`, `Timeout`, `Validation`, `Unsupported`, `Internal`. Adapter mapping rules are in `docs/ARCHITECTURE.md`. | `oxikube_domain::error` |
+| **ErrorKind** | `Auth`, `Forbidden`, `NotFound`, `Conflict`, `Network`, `Timeout`, `Validation`, `Unsupported`, `Internal`, `BudgetExceeded` (the watch budget refused a new feed). Adapter mapping rules are in `docs/ARCHITECTURE.md`. | `oxikube_domain::error` |
 | **Redaction** | Removing tokens and Secret data from text before it is logged, audited or put in an error. `oxikube_domain::redact` holds the pure scrubber (`redact(&str) -> Cow<str>`, `Redacted<T>`); adapters redact before building an error and `oxikube_logging` scrubs every log line with it. | `oxikube_domain::redact` |
 
 ## Sessions and state
@@ -46,6 +46,7 @@ How to read the **Lives in** column:
 | **NamespaceSelection** | `All` or a `Set` of namespaces chosen in the UI. `NamespaceFavourites` is the user's pinned list. | `oxikube_domain::session` |
 | **WatchScope** | Derived from a `NamespaceSelection` and a kind's `Scope`: `Cluster` or `Namespaces`; decides whether feeds are cluster- or namespace-scoped. | `oxikube_domain::session` |
 | **Feed** | A live stream of `DeltaBatch`es for one (cluster, gvk, scope): reflector, metadata-only, or Table API. Typed as `WatchFeed`. | `oxikube_ports::feed`; producers in `oxikube_kube::feed` (reflector and metadata-only variant: `ReflectorFeed`, E04-S02/S03) |
+| **Watch budget / FeedStats** | Per-cluster limits on feeds (`max_feeds`) and held objects (`max_objects`), the idle grace period after which an unobserved feed is torn down, and the degrade of full feeds to metadata-only above `metadata_above` objects. `FeedRegistry` hands out `FeedLease`s (one per subscriber) and `SelectionLease`s (one feed per selected namespace); `FeedStats` is its counter snapshot (feeds, objects, events, restarts, bytes), `FeedVariant` what a feed carries (`Full`, `Metadata`, `Table`). | `oxikube_ports::feed_stats`; registry `oxikube_kube::budget` (E04-S13) |
 | **FeedState** | Health of one feed: `Warming` (listing or relisting), `Live`, `Retrying` (backing off after a watch error), `Stopped`. Lets the session go `Degraded` while a feed retries. | `oxikube_kube::feed` |
 | **Delta / DeltaBatch** | One change in a feed (`Applied`, `Deleted`, `Restarted`) and a coalesced batch of them. Lives in ports, not the domain: it is transport. | `oxikube_ports::feed` |
 | **Table / TableFeed** | Server-side Table API data (kubectl-identical columns incl. CRD printer columns) as `TableColumn`s and `TableRow`s. | `oxikube_ports::table`; producer `oxikube_kube::table` |

@@ -20,6 +20,8 @@ async-trait.workspace = true
 futures.workspace = true
 hex.workspace = true
 http.workspace = true
+# `Body` of the watch budget's byte-counting client (`budget::transport`).
+http-body.workspace = true
 jiff.workspace = true
 # kube needs exactly one k8s-openapi version feature enabled (`latest`, set in the workspace).
 k8s-metrics.workspace = true

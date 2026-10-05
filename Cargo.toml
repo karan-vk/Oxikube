@@ -85,6 +85,8 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 tokio-util = { version = "0.7", features = ["io", "codec", "compat"] }
 futures = "0.3"
 http = "1"
+# Response-body wrapper of the watch budget's byte counter (`oxikube_kube::budget`).
+http-body = "1"
 tower = "0.5"
 async-trait = "0.1"
 backon = "1"
