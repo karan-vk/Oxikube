@@ -8,6 +8,7 @@ mod dedup;
 mod fake;
 mod fanin;
 mod kube_api;
+mod licence;
 mod lines;
 mod reconnect;
 mod single;
