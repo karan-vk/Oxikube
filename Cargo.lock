@@ -5557,6 +5557,19 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_keymap"
 version = "0.0.1"
+dependencies = [
+ "futures",
+ "gpui-pre",
+ "oxikube_assets",
+ "oxikube_domain",
+ "oxikube_settings",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_json_lenient",
+ "tempfile",
+ "tracing",
+]
 
 [[package]]
 name = "oxikube_kube"

@@ -1,0 +1,18 @@
+// Oxikube keymap: your key bindings, layered on top of the built-in defaults.
+//
+// Each section has an optional "context" (where the binding is active), an optional
+// "use_key_equivalents" (keep shortcuts working on non-US keyboard layouts) and "bindings".
+// A binding maps a keystroke (or a sequence such as "ctrl-k ctrl-s") to an action name, to
+// ["action name", { ...data }], or to null to unbind a default key.
+//
+// [
+//   {
+//     "context": "Table",
+//     "bindings": {
+//       "ctrl-n": "table::SelectNext",
+//       "ctrl-p": "table::SelectPrevious",
+//       "ctrl-x": null
+//     }
+//   }
+// ]
+[]

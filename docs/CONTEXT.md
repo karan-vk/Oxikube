@@ -104,5 +104,8 @@ A **port** is an async, object-safe trait in `oxikube_ports` that the app depend
 | **Item / Panel / Pane / Dock** | Workspace shell concepts (Zed design): tab content, dockable side panel, split container, edge dock. | `oxikube_workspace` |
 | **Main window / Root** | The OS window opened by `oxikube_workspace::window`: native title bar on macOS, client-side decorations on Linux; its root view is `oxikube_ui`'s `Root`, which renders the dialog, sheet and notification layers once above the workspace content. | `oxikube_workspace::window`, `oxikube_ui::root` |
 | **Settings layer** | `default.json → user settings.json → clusters.<id>` overrides. | `oxikube_settings` |
+| **Keymap layer** | `default-<os>.json → vim.json (optional flag) → user keymap.json`, merged into one flat list of GPUI `KeyBinding`s; later layers win and `null` unbinds. Zed's `keymap.json` format. | `oxikube_keymap` |
+| **Key context** | The name and flags a view sets with `.key_context(..)` (`Table`, `Editing`, `os == macos`); a binding's `context` expression is matched against it. Standard names live in `oxikube_keymap::contexts`. | `oxikube_keymap::context` |
+| **Action registry** | The namespaced (`table::SelectNext`) GPUI action names, plus the mapping from an action name to its `Command` (the name *is* the `CommandId`). | `oxikube_keymap::registry` |
 | **Theme tokens** | Our colour/spacing tokens, importable from Zed theme-family JSON plus an `oxikube` block for k8s status colours. | `oxikube_theme` |
 | **Fake / fixture / builder** | A scripted in-memory implementation of a port, a realistic JSON manifest loaded as a `Resource`, and a fluent `Resource` builder (`pod().running().build()`). | `oxikube_testkit::{fakes, fixtures, builders}` |

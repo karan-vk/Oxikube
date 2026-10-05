@@ -12,6 +12,20 @@ path = "src/oxikube_keymap.rs"
 doctest = false
 
 [dependencies]
+futures.workspace = true
+gpui.workspace = true
+oxikube_assets.workspace = true
+oxikube_domain.workspace = true
+oxikube_settings.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_json_lenient.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+schemars.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true
