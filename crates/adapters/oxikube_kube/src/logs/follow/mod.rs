@@ -63,7 +63,7 @@ mod resume;
 use super::config::LogsConfig;
 use super::dedup::Dedup;
 use super::line::{Line, LineReader};
-use super::source::{LogSource, OpenRequest, PodInfo, Reader};
+use super::source::{LogSource, PodInfo, Reader};
 use super::stream::{Closed, Sink};
 
 /// The container a follower reads.
@@ -105,18 +105,6 @@ pub(crate) struct Follower {
     restarts: Option<i32>,
     replay_previous: bool,
     emitted: u64,
-}
-
-/// The request for the first open of `options`.
-pub(crate) fn first_request(container: &str, options: &LogOptions) -> OpenRequest {
-    OpenRequest {
-        container: container.to_owned(),
-        follow: options.follow && !options.previous,
-        previous: options.previous,
-        since: options.since,
-        tail_lines: options.tail_lines,
-        limit_bytes: options.limit_bytes,
-    }
 }
 
 impl Follower {

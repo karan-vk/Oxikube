@@ -5,7 +5,7 @@ use jiff::{SignedDuration, Timestamp};
 use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::LogSince;
 
-use super::{End, Follower, Reopen, first_request};
+use super::{End, Follower, Reopen};
 use crate::logs::source::{ContainerState, OpenRequest};
 use crate::logs::stream::Closed;
 
@@ -63,15 +63,10 @@ impl Follower {
     /// caller's own options when nothing was delivered yet.
     fn resume_request(&self) -> OpenRequest {
         match self.dedup.newest() {
-            Some(newest) => OpenRequest {
-                container: self.target.container.to_string(),
-                follow: true,
-                previous: false,
-                since: Some(self.overlap_start(newest)),
-                tail_lines: None,
-                limit_bytes: None,
-            },
-            None => first_request(&self.target.container, &self.options),
+            Some(newest) => {
+                OpenRequest::resume(&self.target.container, false, self.overlap_start(newest))
+            }
+            None => OpenRequest::first(&self.target.container, &self.options),
         }
     }
 
@@ -86,14 +81,7 @@ impl Follower {
         let Some(newest) = self.dedup.newest() else {
             return Ok(());
         };
-        let request = OpenRequest {
-            container: self.target.container.to_string(),
-            follow: false,
-            previous: true,
-            since: Some(self.overlap_start(newest)),
-            tail_lines: None,
-            limit_bytes: None,
-        };
+        let request = OpenRequest::resume(&self.target.container, true, self.overlap_start(newest));
         self.dedup.begin_replay();
         match self
             .source

@@ -11,8 +11,8 @@ use std::pin::Pin;
 use async_trait::async_trait;
 use futures::io::AsyncBufRead;
 use futures::stream::BoxStream;
-use oxikube_domain::OxiResult;
-use oxikube_ports::LogSince;
+use oxikube_domain::{OxiError, OxiResult};
+use oxikube_ports::{LogOptions, LogSince};
 
 /// A server log response as a buffered byte reader.
 pub(crate) type Reader = Pin<Box<dyn AsyncBufRead + Send>>;
@@ -26,6 +26,33 @@ pub(crate) struct OpenRequest {
     pub(crate) since: Option<LogSince>,
     pub(crate) tail_lines: Option<i64>,
     pub(crate) limit_bytes: Option<i64>,
+}
+
+impl OpenRequest {
+    /// The first open of `container` for `options`.
+    pub(crate) fn first(container: &str, options: &LogOptions) -> Self {
+        Self {
+            container: container.to_owned(),
+            follow: options.follow && !options.previous,
+            previous: options.previous,
+            since: options.since,
+            tail_lines: options.tail_lines,
+            limit_bytes: options.limit_bytes,
+        }
+    }
+
+    /// A reopen from `since`: the live log (`previous` false, followed) or the previous
+    /// instance's (read to its end).
+    pub(crate) fn resume(container: &str, previous: bool, since: LogSince) -> Self {
+        Self {
+            container: container.to_owned(),
+            follow: !previous,
+            previous,
+            since: Some(since),
+            tail_lines: None,
+            limit_bytes: None,
+        }
+    }
 }
 
 /// `spec.restartPolicy`.
@@ -160,4 +187,16 @@ pub(crate) trait LogSource: Send + Sync + 'static {
         namespace: Option<&str>,
         selector: &str,
     ) -> BoxStream<'static, OxiResult<PodEvent>>;
+}
+
+/// The pod, or the `NotFound` a port call reports for one that does not exist.
+pub(crate) async fn require_pod(
+    source: &dyn LogSource,
+    namespace: &str,
+    name: &str,
+) -> OxiResult<PodInfo> {
+    source
+        .pod(namespace, name)
+        .await?
+        .ok_or_else(|| OxiError::not_found(format!("pod {namespace}/{name} does not exist")))
 }

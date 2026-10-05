@@ -11,6 +11,7 @@
 
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
+use std::time::Duration;
 use std::vec;
 
 use futures::Stream;
@@ -34,19 +35,22 @@ pub(crate) struct Sink {
     tx: mpsc::Sender<Message>,
     batch: Vec<LogLine>,
     batch_size: usize,
-    flush_after: std::time::Duration,
+    flush_after: Duration,
     /// When the oldest line in `batch` must go out.
     deadline: Option<Instant>,
 }
 
 impl Sink {
     pub(crate) fn new(tx: mpsc::Sender<Message>, config: &LogsConfig) -> Self {
-        let batch_size = config.batch_size.max(1);
+        Self::with_sender(tx, config.batch_size.max(1), config.flush_interval)
+    }
+
+    fn with_sender(tx: mpsc::Sender<Message>, batch_size: usize, flush_after: Duration) -> Self {
         Self {
             tx,
             batch: Vec::with_capacity(batch_size),
             batch_size,
-            flush_after: config.flush_interval,
+            flush_after,
             deadline: None,
         }
     }
@@ -86,13 +90,7 @@ impl Sink {
 
     /// Another sink into the same channel, for a sibling task.
     pub(crate) fn sibling(&self) -> Self {
-        Self {
-            tx: self.tx.clone(),
-            batch: Vec::with_capacity(self.batch_size),
-            batch_size: self.batch_size,
-            flush_after: self.flush_after,
-            deadline: None,
-        }
+        Self::with_sender(self.tx.clone(), self.batch_size, self.flush_after)
     }
 }
 

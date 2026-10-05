@@ -129,47 +129,31 @@ fn watch_failure(err: &watcher::Error) -> Option<OxiError> {
 pub(crate) fn pod_info(pod: &Pod) -> PodInfo {
     let spec = pod.spec.as_ref();
     let status = pod.status.as_ref();
-    let groups: [(Vec<&str>, Option<&Vec<ContainerStatus>>, bool); 3] = [
-        (
-            spec.and_then(|s| {
-                s.init_containers
-                    .as_ref()
-                    .map(|c| c.iter().map(|c| c.name.as_str()).collect())
-            })
-            .unwrap_or_default(),
-            status.and_then(|s| s.init_container_statuses.as_ref()),
-            true,
-        ),
-        (
-            spec.map(|s| s.containers.iter().map(|c| c.name.as_str()).collect())
-                .unwrap_or_default(),
-            status.and_then(|s| s.container_statuses.as_ref()),
-            false,
-        ),
-        (
-            spec.and_then(|s| {
-                s.ephemeral_containers
-                    .as_ref()
-                    .map(|c| c.iter().map(|c| c.name.as_str()).collect())
-            })
-            .unwrap_or_default(),
-            status.and_then(|s| s.ephemeral_container_statuses.as_ref()),
-            false,
-        ),
-    ];
     let mut containers = Vec::new();
-    for (declared, statuses, init) in groups {
-        let statuses = statuses.map(Vec::as_slice).unwrap_or_default();
-        for name in declared {
-            let status = statuses.iter().find(|s| s.name == name);
-            containers.push(ContainerInfo {
-                name: name.to_owned(),
-                restart_count: status.map_or(0, |s| s.restart_count),
-                state: status.map_or(ContainerState::Unknown, container_state),
-                init,
-            });
-        }
-    }
+    containers.extend(container_infos(
+        spec.and_then(|s| s.init_containers.as_deref())
+            .unwrap_or_default()
+            .iter()
+            .map(|c| c.name.as_str()),
+        status.and_then(|s| s.init_container_statuses.as_deref()),
+        true,
+    ));
+    containers.extend(container_infos(
+        spec.map(|s| s.containers.as_slice())
+            .unwrap_or_default()
+            .iter()
+            .map(|c| c.name.as_str()),
+        status.and_then(|s| s.container_statuses.as_deref()),
+        false,
+    ));
+    containers.extend(container_infos(
+        spec.and_then(|s| s.ephemeral_containers.as_deref())
+            .unwrap_or_default()
+            .iter()
+            .map(|c| c.name.as_str()),
+        status.and_then(|s| s.ephemeral_container_statuses.as_deref()),
+        false,
+    ));
     PodInfo {
         namespace: pod.metadata.namespace.clone().unwrap_or_default(),
         name: pod.metadata.name.clone().unwrap_or_default(),
@@ -195,6 +179,24 @@ pub(crate) fn pod_info(pod: &Pod) -> PodInfo {
             .cloned(),
         containers,
     }
+}
+
+/// The declared containers of one group, each joined with its status (if it has one yet).
+fn container_infos<'a>(
+    declared: impl Iterator<Item = &'a str> + 'a,
+    statuses: Option<&'a [ContainerStatus]>,
+    init: bool,
+) -> impl Iterator<Item = ContainerInfo> + 'a {
+    let statuses = statuses.unwrap_or_default();
+    declared.map(move |name| {
+        let status = statuses.iter().find(|s| s.name == name);
+        ContainerInfo {
+            name: name.to_owned(),
+            restart_count: status.map_or(0, |s| s.restart_count),
+            state: status.map_or(ContainerState::Unknown, container_state),
+            init,
+        }
+    })
 }
 
 fn container_state(status: &ContainerStatus) -> ContainerState {

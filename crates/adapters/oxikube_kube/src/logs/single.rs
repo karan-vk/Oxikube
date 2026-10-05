@@ -9,8 +9,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
 use super::config::LogsConfig;
-use super::follow::{Follower, Target, first_request};
-use super::source::{LogSource, PodInfo};
+use super::follow::{Follower, Target};
+use super::source::{LogSource, OpenRequest, PodInfo, require_pod};
 use super::stream::{ChannelStream, Sink};
 
 /// Opens the log of one container and starts the task that keeps it flowing.
@@ -27,7 +27,7 @@ pub(super) async fn stream_one(
 ) -> OxiResult<LogStream> {
     let (container, info, reader) = match options.container.as_deref() {
         Some(name) => {
-            let request = first_request(name, options);
+            let request = OpenRequest::first(name, options);
             // The pod read seeds the restart and identity checks; it must not slow the open.
             let (reader, info) = future::join(
                 source.open(namespace, pod, &request),
@@ -50,12 +50,10 @@ pub(super) async fn stream_one(
             (name.to_owned(), info, reader)
         }
         None => {
-            let info = source.pod(namespace, pod).await?.ok_or_else(|| {
-                OxiError::not_found(format!("pod {namespace}/{pod} does not exist"))
-            })?;
+            let info = require_pod(source.as_ref(), namespace, pod).await?;
             let name = default_container(&info)?;
             let reader = source
-                .open(namespace, pod, &first_request(&name, options))
+                .open(namespace, pod, &OpenRequest::first(&name, options))
                 .await?;
             (name, Some(info), reader)
         }

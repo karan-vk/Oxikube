@@ -28,7 +28,7 @@ use tokio::task::JoinSet;
 
 use super::config::LogsConfig;
 use super::follow::{Follower, Target};
-use super::source::{LogSource, PodEvent, PodInfo};
+use super::source::{LogSource, PodEvent, PodInfo, require_pod};
 use super::stream::{ChannelStream, Sink};
 
 /// Which containers of a pod [`KubeLogs::stream_containers`](super::KubeLogs::stream_containers) reads.
@@ -51,10 +51,7 @@ pub(super) async fn stream_containers(
     selection: &ContainerSelection,
     options: &LogOptions,
 ) -> OxiResult<LogStream> {
-    let info = source
-        .pod(namespace, pod)
-        .await?
-        .ok_or_else(|| OxiError::not_found(format!("pod {namespace}/{pod} does not exist")))?;
+    let info = require_pod(source.as_ref(), namespace, pod).await?;
     let mut names: Vec<String> = match selection {
         ContainerSelection::All => info
             .containers
