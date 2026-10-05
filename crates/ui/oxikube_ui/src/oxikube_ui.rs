@@ -13,6 +13,7 @@
 //! - [`theme_bridge`]: projects tokens and `oxikube_theme` themes (`set_theme`, `theme_config`,
 //!   `follow_active_theme`) onto gpui-component's theme (the only writer of it).
 //! - [`size`]: [`u`] zoom-safe sizes, [`UiScale`], [`Unscaled`] for persisted sizes.
+//! - [`motion`]: [`motion::reduce_motion`], what animations check (E05-S12 resolves it).
 //! - [`icon`]: [`IconName`] (Lucide, embedded by `oxikube_assets`) and the [`Icon`] element.
 //! - [`assets`]: [`Assets`], the application asset source to pass to `Application::with_assets`.
 //! - [`table`]: [`Table`] over our own [`TableDelegate`] trait (virtualised, uniform rows).
@@ -34,6 +35,7 @@ pub mod input;
 pub mod layout;
 pub mod markdown;
 pub mod menu;
+pub mod motion;
 pub mod root;
 pub mod setup;
 pub mod sidebar;

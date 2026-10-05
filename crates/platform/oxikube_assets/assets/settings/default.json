@@ -17,6 +17,13 @@
     "light": "One Light",
     "dark": "One Dark"
   },
+  // UI zoom factor, 1.0 = 100 %. Clamped to 0.5 - 3.0. cmd/ctrl + and - and 0 change it and
+  // write it back here.
+  "ui_scale": 1.0,
+  // Reduced motion: "system" follows the OS preference, "on" or "off" overrides it.
+  "reduce_motion": "system",
+  // Ask before quitting while exec sessions, port-forwards or applies are running.
+  "confirm_quit": true,
   // Per-cluster overrides, keyed by cluster id. Each value takes any of the settings above.
   "clusters": {}
 }

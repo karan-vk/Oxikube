@@ -8,6 +8,7 @@
 //! there yet. Once the `CommandBus` and keymap core land (E05-S07, E11) they dispatch `Command`s
 //! and the bindings move into `keymap.json`.
 
+use crate::session::{NewWindow, Quit, ZoomIn, ZoomOut, ZoomReset};
 use gpui::{
     App, KeyBinding, Menu, MenuItem, OsAction, ParentElement as _, SystemMenuType, actions,
 };
@@ -19,8 +20,6 @@ use oxikube_ui::{
 actions!(
     oxikube,
     [
-        /// Quits the application.
-        Quit,
         /// Shows the About dialog.
         About,
         /// Opens the preferences (placeholder until the settings UI, E21).
@@ -38,7 +37,7 @@ actions!(
     ]
 );
 
-/// The menu bar, in macOS order: application, Edit, Window.
+/// The menu bar, in macOS order: application, Edit, View, Window.
 pub fn app_menus() -> Vec<Menu> {
     vec![
         Menu::new("Oxikube").items([
@@ -63,7 +62,14 @@ pub fn app_menus() -> Vec<Menu> {
             MenuItem::os_action("Paste", Paste, OsAction::Paste),
             MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
         ]),
+        Menu::new("View").items([
+            MenuItem::action("Zoom In", ZoomIn),
+            MenuItem::action("Zoom Out", ZoomOut),
+            MenuItem::action("Actual Size", ZoomReset),
+        ]),
         Menu::new("Window").items([
+            MenuItem::action("New Window", NewWindow),
+            MenuItem::separator(),
             MenuItem::action("Minimize", Minimize),
             MenuItem::action("Zoom", Zoom),
         ]),
@@ -87,7 +93,7 @@ pub fn default_bindings(macos: bool) -> Vec<KeyBinding> {
 
 /// Registers the action handlers, key bindings and menu bar. Called once from [`super::init`].
 pub(super) fn register(cx: &mut App) {
-    cx.on_action(|_: &Quit, cx| cx.quit());
+    cx.on_action(|_: &Quit, cx| crate::session::request_quit(cx));
     cx.on_action(|_: &Hide, cx| cx.hide());
     cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
     cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
@@ -109,7 +115,10 @@ pub(super) fn register(cx: &mut App) {
 /// Runs `f` on the active window after the current update ends. Menu actions reach the global
 /// handlers while the window that dispatched them is still being updated, so touching that
 /// window inline would fail; `defer` runs after the update has released it.
-fn with_active_window(cx: &mut App, f: impl FnOnce(&mut gpui::Window, &mut App) + 'static) {
+pub(crate) fn with_active_window(
+    cx: &mut App,
+    f: impl FnOnce(&mut gpui::Window, &mut App) + 'static,
+) {
     cx.defer(move |cx| {
         if let Some(window) = cx.active_window() {
             let _ = window.update(cx, |_, window, cx| f(window, cx));

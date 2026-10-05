@@ -31,6 +31,12 @@ workspace.update(cx, |ws, cx| {
   stack (`reopen_closed_item`).
 - Tabs drag between panes, docks resize, panes and dock groups zoom: the dock area does it.
 - `oxikube_workspace::init(cx)` registers the window menu and the `workspace::*` key bindings.
+- Session basics (`session`): `window::New` opens another main window (own `Workspace`);
+  `view::ZoomIn`/`ZoomOut`/`ZoomReset` change the `ui_scale` setting (cmd/ctrl `+`, `-`, `0`);
+  `reduce_motion` resolves the OS preference (fed by `session::set_os_reduce_motion`, GPUI does not
+  read it) and the setting into GPUI's flag; a feature that starts exec sessions, port-forwards or
+  applies calls `session::register_operation_provider(cx, |cx| vec![RunningOperation::new(..)])`
+  so `app::Quit` asks before stopping them (setting `confirm_quit`).
 - Tests: `cargo test -p oxikube_workspace`. Feature `test-support` exports `TestItem` and
   `TestPanel` for other crates' `#[gpui::test]`s. Frame cost of a dock resize and a tab switch:
   `cargo run -p oxikube_workspace --features test-support --profile release-fast --example workspace_bench`.

@@ -64,7 +64,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   reopen-closed, drag-drop tabs, zoom) and side `Panel`s in left/bottom/right docks
   (`toggle_panel`, `toggle_dock`); `item`, `panel`, `pane` (`PaneGroup`/`Pane` snapshots), `dock`,
   `closed`, `actions` (`workspace::*` actions and bindings), `test_support` (feature
-  `test-support`: `TestItem`, `TestPanel`).
+  `test-support`: `TestItem`, `TestPanel`). Module `session` (E05-S12): `window::New` (several
+  windows, one `Workspace` each, shared globals), UI zoom (`view::ZoomIn`/`ZoomOut`/`ZoomReset`,
+  the `ui_scale` setting), the effective reduce-motion flag (`reduce_motion` setting over the OS
+  preference, read by views through `oxikube_ui::motion`), and the quit guard (`app::Quit`:
+  features register providers of running operations; `confirm_quit` setting).
 
 ## Cross-layer wiring (ports + injection)
 

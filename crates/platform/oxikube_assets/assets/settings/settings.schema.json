@@ -4,8 +4,87 @@
       "additionalProperties": false,
       "description": "Overrides for one cluster; any setting may appear here.",
       "properties": {
+        "confirm_quit": {
+          "description": "Ask before quitting (or closing the last window on Linux and Windows) while exec sessions,\nport-forwards or applies are running.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reduce_motion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReduceMotionSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`system` follows the OS reduce-motion preference, `on` and `off` override it."
+        },
         "theme": {
           "$ref": "#/$defs/ThemeSelectionContent"
+        },
+        "ui_scale": {
+          "description": "UI zoom factor: 1.0 is 100 %. Values outside 0.5 to 3.0 are clamped. `cmd +`, `cmd -` and\n`cmd 0` (`ctrl` elsewhere) change it and write it back here.",
+          "format": "float",
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ReduceMotionSetting": {
+      "description": "How the `reduce_motion` setting is decided.",
+      "oneOf": [
+        {
+          "const": "system",
+          "description": "Follow the operating system's reduce-motion preference.",
+          "type": "string"
+        },
+        {
+          "const": "on",
+          "description": "Always reduce motion, whatever the OS says.",
+          "type": "string"
+        },
+        {
+          "const": "off",
+          "description": "Never reduce motion, whatever the OS says.",
+          "type": "string"
+        }
+      ]
+    },
+    "SessionSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about the session.",
+      "properties": {
+        "confirm_quit": {
+          "description": "Ask before quitting (or closing the last window on Linux and Windows) while exec sessions,\nport-forwards or applies are running.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reduce_motion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReduceMotionSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`system` follows the OS reduce-motion preference, `on` and `off` override it."
+        },
+        "ui_scale": {
+          "description": "UI zoom factor: 1.0 is 100 %. Values outside 0.5 to 3.0 are clamped. `cmd +`, `cmd -` and\n`cmd 0` (`ctrl` elsewhere) change it and write it back here.",
+          "format": "float",
+          "type": [
+            "number",
+            "null"
+          ]
         }
       },
       "type": "object"
@@ -88,8 +167,34 @@
       "description": "Per-cluster overrides, keyed by cluster id.",
       "type": "object"
     },
+    "confirm_quit": {
+      "description": "Ask before quitting (or closing the last window on Linux and Windows) while exec sessions,\nport-forwards or applies are running.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "reduce_motion": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReduceMotionSetting"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`system` follows the OS reduce-motion preference, `on` and `off` override it."
+    },
     "theme": {
       "$ref": "#/$defs/ThemeSelectionContent"
+    },
+    "ui_scale": {
+      "description": "UI zoom factor: 1.0 is 100 %. Values outside 0.5 to 3.0 are clamped. `cmd +`, `cmd -` and\n`cmd 0` (`ctrl` elsewhere) change it and write it back here.",
+      "format": "float",
+      "type": [
+        "number",
+        "null"
+      ]
     }
   },
   "title": "Oxikube settings",

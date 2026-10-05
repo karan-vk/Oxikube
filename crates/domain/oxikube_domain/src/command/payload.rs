@@ -67,6 +67,21 @@ pub enum Command {
     /// Show or hide the command palette.
     #[serde(rename = "palette::Toggle")]
     PaletteToggle,
+    /// Quit the application; asks first while operations are running.
+    #[serde(rename = "app::Quit")]
+    AppQuit,
+    /// Open another main window.
+    #[serde(rename = "window::New")]
+    WindowNew,
+    /// Make the UI one zoom step larger.
+    #[serde(rename = "view::ZoomIn")]
+    ViewZoomIn,
+    /// Make the UI one zoom step smaller.
+    #[serde(rename = "view::ZoomOut")]
+    ViewZoomOut,
+    /// Set the UI zoom back to 100 %.
+    #[serde(rename = "view::ZoomReset")]
+    ViewZoomReset,
     /// Open the list view of a resource kind.
     #[serde(rename = "resource::OpenList")]
     ResourceOpenList {
@@ -204,6 +219,11 @@ impl Command {
             Command::NamespaceSelect { .. } => CommandId::NAMESPACE_SELECT,
             Command::ViewOpen { .. } => CommandId::VIEW_OPEN,
             Command::PaletteToggle => CommandId::PALETTE_TOGGLE,
+            Command::AppQuit => CommandId::APP_QUIT,
+            Command::WindowNew => CommandId::WINDOW_NEW,
+            Command::ViewZoomIn => CommandId::VIEW_ZOOM_IN,
+            Command::ViewZoomOut => CommandId::VIEW_ZOOM_OUT,
+            Command::ViewZoomReset => CommandId::VIEW_ZOOM_RESET,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
             Command::ResourceOpen { .. } => CommandId::RESOURCE_OPEN,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
@@ -306,6 +326,11 @@ mod tests {
                 view: "overview".into(),
             },
             Command::PaletteToggle,
+            Command::AppQuit,
+            Command::WindowNew,
+            Command::ViewZoomIn,
+            Command::ViewZoomOut,
+            Command::ViewZoomReset,
             Command::ResourceOpenList {
                 cluster: cluster(),
                 gvk: Gvk::new("apps", "v1", "Deployment"),
@@ -462,6 +487,11 @@ mod tests {
                     | Command::NamespaceSelect { .. }
                     | Command::ViewOpen { .. }
                     | Command::PaletteToggle
+                    | Command::AppQuit
+                    | Command::WindowNew
+                    | Command::ViewZoomIn
+                    | Command::ViewZoomOut
+                    | Command::ViewZoomReset
                     | Command::ResourceOpen { .. }
                     | Command::ResourceOpenList { .. }
                     | Command::ResourceViewYaml { .. }

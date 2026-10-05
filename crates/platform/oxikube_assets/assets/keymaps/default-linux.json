@@ -12,9 +12,14 @@
 [
   {
     "bindings": {
-      "ctrl-q": "oxikube::Quit",
+      "ctrl-q": "app::Quit",
       "ctrl-,": "oxikube::OpenPreferences",
-      "ctrl-shift-p": "palette::Toggle"
+      "ctrl-shift-p": "palette::Toggle",
+      "ctrl-shift-n": "window::New",
+      "ctrl-=": "view::ZoomIn",
+      "ctrl-+": "view::ZoomIn",
+      "ctrl--": "view::ZoomOut",
+      "ctrl-0": "view::ZoomReset"
     }
   }
 ]

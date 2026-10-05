@@ -1,9 +1,10 @@
 //! `#[gpui::test]`s of the main window: it opens with the `Root` as its root view, the overlay
 //! layers render exactly once, the title bar is drawn, the options per platform, and the menu.
 
-use super::menus::{About, Minimize, OpenPreferences, Quit, app_menus, default_bindings};
+use super::menus::{About, Minimize, OpenPreferences, app_menus, default_bindings};
 use super::options::{APP_ID, Chrome, DEFAULT_SIZE, MIN_SIZE, WINDOW_TITLE, window_options};
 use super::*;
+use crate::session::Quit;
 use gpui::{
     Bounds, MenuItem, TestAppContext, VisualTestContext, WindowBounds, WindowDecorations, px,
 };
@@ -128,7 +129,7 @@ fn app_menu_is_installed(cx: &mut TestAppContext) {
         .update(|_, cx| cx.get_menus())
         .expect("the platform keeps the menus");
     let names: Vec<_> = menus.iter().map(|m| m.name.to_string()).collect();
-    assert_eq!(names, ["Oxikube", "Edit", "Window"]);
+    assert_eq!(names, ["Oxikube", "Edit", "View", "Window"]);
 }
 
 #[test]
@@ -152,7 +153,8 @@ fn app_menu_has_about_preferences_and_quit() {
     for wanted in ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"] {
         assert!(edit.iter().any(|n| n == wanted), "Edit menu lacks {wanted}");
     }
-    assert_eq!(items(2), ["Minimize", "Zoom"]);
+    assert_eq!(items(2), ["Zoom In", "Zoom Out", "Actual Size"]);
+    assert_eq!(items(3), ["New Window", "Minimize", "Zoom"]);
 }
 
 #[test]
