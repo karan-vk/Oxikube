@@ -6,6 +6,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
     DeleteOptions, ListOptions, Patch, PatchKind, PropagationPolicy, WriteOptions,
 };
+use serde::Deserialize as _;
 use serde_json::Value;
 
 /// The field manager recorded in `managedFields` when the caller names none.
@@ -48,27 +49,23 @@ pub(super) fn patch_request<'a>(
         ..PatchParams::default()
     };
     let body = &patch.body;
+    let mut requested = options.field_manager.as_deref();
     let kube_patch = match &patch.kind {
         PatchKind::Merge => kube::api::Patch::Merge(body),
         PatchKind::Strategic => kube::api::Patch::Strategic(body),
         PatchKind::Json => {
-            let ops: json_patch::Patch = serde_json::from_value(body.clone()).map_err(|_| {
+            let ops = json_patch::Patch::deserialize(body).map_err(|_| {
                 OxiError::validation("a JSON patch is an array of RFC 6902 operations")
             })?;
             kube::api::Patch::Json(ops)
         }
         PatchKind::Apply { manager: m, force } => {
             params.force = *force;
-            let requested = Some(m.as_str())
-                .filter(|m| !m.is_empty())
-                .or(options.field_manager.as_deref());
-            params.field_manager = Some(manager(requested)?);
+            requested = Some(m.as_str()).filter(|m| !m.is_empty()).or(requested);
             kube::api::Patch::Apply(body)
         }
     };
-    if params.field_manager.is_none() {
-        params.field_manager = Some(manager(options.field_manager.as_deref())?);
-    }
+    params.field_manager = Some(manager(requested)?);
     Ok((params, kube_patch))
 }
 

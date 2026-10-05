@@ -9,18 +9,9 @@ use oxikube_ports::{
     DeleteCollectionOutcome, DeleteOptions, DeleteOutcome, ListOptions, PropagationPolicy,
     ResourceWriter, WriteOptions,
 };
-use oxikube_testkit::integration::TestNamespace;
 
-use common::mutations::{configmap, configmap_gvk, live, owned_configmap};
-use common::resources::adapter;
+use common::mutations::{configmap, configmap_gvk, live, owned_configmap, setup};
 use common::{DEADLINE, wait_until};
-
-async fn setup() -> Option<(oxikube_kube::KubeResources, TestNamespace)> {
-    let kind = common::kind().await?;
-    let ns = TestNamespace::create(kind.context.as_str()).expect("test namespace");
-    let client = kind.admin_client().await;
-    Some((adapter(&client), ns))
-}
 
 /// A parent ConfigMap and a child that names it as owner.
 async fn family(r: &oxikube_kube::KubeResources, ns: &str) {

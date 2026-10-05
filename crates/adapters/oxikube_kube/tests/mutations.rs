@@ -14,17 +14,9 @@ use oxikube_ports::{Patch, ResourceWriter, WriteOptions};
 use oxikube_testkit::integration::TestNamespace;
 use serde_json::json;
 
-use common::mutations::{configmap, configmap_gvk, live, managers};
+use common::mutations::{configmap, configmap_gvk, live, managers, setup};
 use common::resources::adapter;
 use common::{DEADLINE, TestCrd, wait_until};
-
-/// The adapter on the kind cluster and a fresh namespace, or `None` to skip.
-async fn setup() -> Option<(oxikube_kube::KubeResources, TestNamespace)> {
-    let kind = common::kind().await?;
-    let ns = TestNamespace::create(kind.context.as_str()).expect("test namespace");
-    let client = kind.admin_client().await;
-    Some((adapter(&client), ns))
-}
 
 fn apply(data: &[(&str, &str)], manager: &str, force: bool) -> Patch {
     let mut object = configmap("shared", &[], data);

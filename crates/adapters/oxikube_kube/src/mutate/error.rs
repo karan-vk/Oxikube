@@ -42,10 +42,16 @@ pub(super) fn write_error(err: &kube::Error) -> OxiError {
 
 fn conflict_details(status: &Status) -> ConflictDetails {
     let causes: Vec<FieldCause> = causes(status).collect();
+    let ownership = status.reason != "AlreadyExists"
+        && causes.iter().any(|c| c.reason == "FieldManagerConflict");
+    if ownership {
+        return ConflictDetails {
+            reason: ConflictReason::FieldOwnership,
+            causes,
+        };
+    }
     let reason = if status.reason == "AlreadyExists" {
         ConflictReason::AlreadyExists
-    } else if causes.iter().any(|c| c.reason == "FieldManagerConflict") {
-        ConflictReason::FieldOwnership
     } else if status.message.contains("the object has been modified") {
         ConflictReason::StaleVersion
     } else {
@@ -53,11 +59,7 @@ fn conflict_details(status: &Status) -> ConflictDetails {
     };
     ConflictDetails {
         reason,
-        causes: if reason == ConflictReason::FieldOwnership {
-            causes
-        } else {
-            Vec::new()
-        },
+        causes: Vec::new(),
     }
 }
 

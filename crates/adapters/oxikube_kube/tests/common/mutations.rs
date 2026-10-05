@@ -5,7 +5,18 @@ use oxikube_domain::ids::Gvk;
 use oxikube_domain::{OxiResult, Resource};
 use oxikube_kube::KubeResources;
 use oxikube_ports::ResourceReader;
+use oxikube_testkit::integration::TestNamespace;
 use serde_json::{Value, json};
+
+use super::resources::adapter;
+
+/// The adapter on the kind cluster and a fresh namespace, or `None` to skip.
+pub async fn setup() -> Option<(KubeResources, TestNamespace)> {
+    let kind = super::kind().await?;
+    let ns = TestNamespace::create(kind.context.as_str()).expect("test namespace");
+    let client = kind.admin_client().await;
+    Some((adapter(&client), ns))
+}
 
 /// `v1/ConfigMap`.
 pub fn configmap_gvk() -> Gvk {
