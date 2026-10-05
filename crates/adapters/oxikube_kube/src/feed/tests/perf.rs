@@ -117,10 +117,11 @@ async fn memory_of_ten_thousand_pods(metadata: bool) {
     let items: Vec<_> = (0..PODS_IN_LIST)
         .map(|p| {
             if metadata {
-                let mut item = meta_pod(&format!("p{p}"), &format!("u{p}"), &(p + 1).to_string());
-                item["apiVersion"] = "v1".into();
-                item["kind"] = "Pod".into();
-                item
+                typed_pod(meta_pod(
+                    &format!("p{p}"),
+                    &format!("u{p}"),
+                    &(p + 1).to_string(),
+                ))
             } else {
                 realistic_pod(p)
             }

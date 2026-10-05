@@ -300,6 +300,13 @@ pub(super) fn meta_pod(name: &str, uid: &str, rv: &str) -> Value {
     meta_pod_in("default", name, uid, rv)
 }
 
+/// `object` with the `v1` `Pod` type fields a `get` reply carries.
+pub(super) fn typed_pod(mut object: Value) -> Value {
+    object["apiVersion"] = json!("v1");
+    object["kind"] = json!("Pod");
+    object
+}
+
 /// A watch event of `kind` for a metadata-only `object`, typed as the server types them.
 pub(super) fn meta_event(kind: &str, mut object: Value) -> Value {
     object["apiVersion"] = json!("meta.k8s.io/v1");

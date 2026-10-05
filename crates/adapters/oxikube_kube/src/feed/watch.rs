@@ -37,7 +37,7 @@ use super::config::{FeedConfig, RelistDelivery};
 use super::error::{feed_error, streaming_rejected};
 use super::object::FeedObject;
 use super::relist::RelistDiff;
-use super::source::{EventStream, Target};
+use super::source::{self, EventStream, Target};
 use super::state::FeedState;
 use super::transport::Accepted;
 
@@ -67,7 +67,7 @@ struct Closed;
 pub(super) struct SubWatch {
     pub(super) index: usize,
     pub(super) target: Target,
-    /// Watch requests of `api` the server accepted.
+    /// Watch requests of `target` the server accepted.
     pub(super) accepted: Accepted,
     pub(super) resource: ApiResource,
     pub(super) watcher_config: watcher::Config,
@@ -255,5 +255,5 @@ impl SubWatch {
 }
 
 fn rejected_streaming(wc: &watcher::Config, err: &watcher::Error) -> bool {
-    super::source::is_streaming(wc) && streaming_rejected(err)
+    source::is_streaming(wc) && streaming_rejected(err)
 }

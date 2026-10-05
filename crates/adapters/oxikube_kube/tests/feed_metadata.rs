@@ -32,7 +32,7 @@ fn pod_gvk() -> Gvk {
     Gvk::new("", "v1", "Pod")
 }
 
-/// 2 000 labelled pods owned by one ConfigMap; returns the owner's uid.
+/// `count` labelled pods owned by one ConfigMap; returns the owner's uid.
 async fn create_owned_pods(client: &Client, namespace: &str, count: usize) -> String {
     let owners = Api::<ConfigMap>::namespaced(client.clone(), namespace);
     let owner = owners
@@ -118,11 +118,10 @@ async fn two_thousand_pods_arrive_as_metadata_and_one_upgrades_to_full() {
     }
 
     // The cheap list is clearly smaller than the same list in full.
-    let full_feed = resources
+    let mut full_feed = resources
         .reflector_feed(&pod_gvk(), &scope, &WatchOptions::default())
         .await
         .expect("open the full feed");
-    let mut full_feed = full_feed;
     let full = first_list(&mut full_feed).await;
     assert_eq!(full.len(), PODS);
     assert!(

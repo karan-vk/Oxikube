@@ -35,10 +35,7 @@ fn watches(server: &FeedServer, path: &str) -> usize {
 
 /// A full pod as a `get` reply: typed, with a spec.
 fn full_pod(name: &str, uid: &str, rv: &str) -> serde_json::Value {
-    let mut object = pod(name, uid, rv);
-    object["apiVersion"] = "v1".into();
-    object["kind"] = "Pod".into();
-    object
+    typed_pod(pod(name, uid, rv))
 }
 
 #[tokio::test(start_paused = true)]
@@ -271,9 +268,7 @@ async fn upgrade_of_a_gone_or_replaced_object_is_not_found() {
     );
     let resources = server.resources(config());
     let partial = |name: &str, uid: &str| {
-        let mut object = meta_pod(name, uid, "1");
-        object["apiVersion"] = "v1".into();
-        object["kind"] = "Pod".into();
+        let object = typed_pod(meta_pod(name, uid, "1"));
         Resource::from_json(object).unwrap().into_partial()
     };
 
