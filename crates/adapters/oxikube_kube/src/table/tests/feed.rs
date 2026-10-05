@@ -19,18 +19,18 @@ use crate::table::{TABLE_ACCEPT, TableConfig};
 
 /// The next feed item; fails (instead of hanging) when none arrives within an hour of
 /// paused time.
-async fn next(feed: &mut TableFeed) -> Option<OxiResult<TableBatch>> {
+pub(super) async fn next(feed: &mut TableFeed) -> Option<OxiResult<TableBatch>> {
     tokio::time::timeout(Duration::from_secs(3600), feed.next())
         .await
         .expect("the feed produced nothing")
 }
 
-async fn next_ok(feed: &mut TableFeed) -> TableBatch {
+pub(super) async fn next_ok(feed: &mut TableFeed) -> TableBatch {
     next(feed).await.expect("feed ended").expect("feed error")
 }
 
 /// Lets the feed task run until `done` holds (bounded).
-async fn settle(mut done: impl FnMut() -> bool) {
+pub(super) async fn settle(mut done: impl FnMut() -> bool) {
     for _ in 0..200 {
         if done() {
             return;
@@ -40,7 +40,7 @@ async fn settle(mut done: impl FnMut() -> bool) {
     panic!("condition not reached");
 }
 
-fn summary(batch: &TableBatch) -> Vec<String> {
+pub(super) fn summary(batch: &TableBatch) -> Vec<String> {
     batch
         .rows
         .deltas
@@ -65,7 +65,11 @@ fn key(row: &TableRow) -> String {
     )
 }
 
-async fn open(api: &FakeApi, gvk: &oxikube_domain::ids::Gvk, options: TableOptions) -> TableFeed {
+pub(super) async fn open(
+    api: &FakeApi,
+    gvk: &oxikube_domain::ids::Gvk,
+    options: TableOptions,
+) -> TableFeed {
     adapter(api, TableConfig::default())
         .table_feed(gvk, Some(NS), &options)
         .await
