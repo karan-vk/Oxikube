@@ -14,7 +14,7 @@
 //! file outranks them. If such a crate initialises *after* the keymap, call [`rebind`] once
 //! more at the end of start-up so the order is the same as on a reload.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use futures::StreamExt as _;
 use futures::channel::mpsc;
@@ -71,30 +71,27 @@ pub fn init_with_text(user_text: &str, options: KeymapOptions, cx: &mut App) {
 
 fn install(cx: &mut App, options: KeymapOptions, dir: Option<&Path>, watch: bool) {
     let mut store = KeymapStore::new(options);
-    let mut initial_text = None;
+    // The file to watch and the text it had at start-up; absent when it could not be read.
+    let mut watched = None;
     if let Some(dir) = dir {
         let path = user_keymap_path(dir);
         match read_or_empty(&path) {
             Ok(text) => {
                 store.set_user_text(&text);
-                initial_text = Some(text);
+                watched = Some((path, text));
             }
             Err(err) => tracing::warn!(%err, "could not read keymap.json; using the defaults"),
         }
-        store.set_user_keymap_path(Some(path));
     }
     cx.set_global(store);
     rebind(cx);
 
-    if watch
-        && let Some(text) = initial_text
-        && let Some(path) = cx.global::<KeymapStore>().user_keymap_path()
-    {
-        start_watch(cx, path.to_path_buf(), text);
+    if watch && let Some((path, text)) = watched {
+        start_watch(cx, path, text);
     }
 }
 
-fn start_watch(cx: &mut App, path: std::path::PathBuf, initial_text: String) {
+fn start_watch(cx: &mut App, path: PathBuf, initial_text: String) {
     if let Some(dir) = path.parent()
         && let Err(err) = std::fs::create_dir_all(dir)
     {

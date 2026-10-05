@@ -6,8 +6,6 @@
 //! favour of the binding added last (and a `null` hides lower layers through the metadata of
 //! [`KeymapLayer::meta`]), so the user's file wins without any per-key bookkeeping here.
 
-use std::path::{Path, PathBuf};
-
 use gpui::{App, KeyBinding};
 use oxikube_assets::KeymapPlatform;
 
@@ -71,9 +69,7 @@ pub struct KeymapStore {
     default: LayerState,
     vim: Option<LayerState>,
     user: LayerState,
-    user_path: Option<PathBuf>,
     diagnostics: Vec<KeymapDiagnostic>,
-    skipped_embedded: usize,
 }
 
 impl KeymapStore {
@@ -87,9 +83,7 @@ impl KeymapStore {
             ),
             vim: None,
             user: LayerState::default(),
-            user_path: None,
             diagnostics: Vec::new(),
-            skipped_embedded: 0,
         };
         store.set_vim(options.vim);
         store
@@ -138,15 +132,6 @@ impl KeymapStore {
         changed
     }
 
-    /// Where the user's `keymap.json` lives, when there is a config dir.
-    pub fn user_keymap_path(&self) -> Option<&Path> {
-        self.user_path.as_deref()
-    }
-
-    pub(crate) fn set_user_keymap_path(&mut self, path: Option<PathBuf>) {
-        self.user_path = path;
-    }
-
     /// Merge every enabled layer into one list of GPUI bindings, in layer order, and record the
     /// problems found ([`Self::diagnostics`]).
     pub fn merge(&mut self, cx: &App) -> MergedKeymap {
@@ -167,7 +152,6 @@ impl KeymapStore {
             bindings.extend(built.bindings);
         }
         self.diagnostics = diagnostics;
-        self.skipped_embedded = skipped_embedded;
         MergedKeymap {
             bindings,
             skipped_embedded,
@@ -177,10 +161,5 @@ impl KeymapStore {
     /// The problems found by the last merge, for the UI to surface.
     pub fn diagnostics(&self) -> &[KeymapDiagnostic] {
         &self.diagnostics
-    }
-
-    /// How many embedded bindings the last merge skipped for want of a registered action.
-    pub fn skipped_embedded(&self) -> usize {
-        self.skipped_embedded
     }
 }

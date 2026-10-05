@@ -68,34 +68,32 @@ pub enum KeymapAction {
 }
 
 impl KeymapAction {
+    fn named(name: &str, data: Option<Value>) -> Self {
+        Self::Action {
+            name: name.to_owned(),
+            data,
+        }
+    }
+
     /// Read a binding value: `null`, `"name"` or `["name"]` / `["name", data]`.
     pub fn from_json(value: &Value) -> Result<Self, String> {
         match value {
             Value::Null => Ok(Self::Unbind),
-            Value::String(name) => Ok(Self::Action {
-                name: name.clone(),
-                data: None,
-            }),
+            Value::String(name) => Ok(Self::named(name, None)),
             Value::Array(items) => match items.as_slice() {
-                [Value::String(name)] => Ok(Self::Action {
-                    name: name.clone(),
-                    data: None,
-                }),
-                [Value::String(name), data] => Ok(Self::Action {
-                    name: name.clone(),
-                    data: Some(data.clone()),
-                }),
+                [Value::String(name)] => Ok(Self::named(name, None)),
+                [Value::String(name), data] => Ok(Self::named(name, Some(data.clone()))),
                 _ => Err("expected [\"namespace::Name\", data]".to_owned()),
             },
             other => Err(format!(
                 "expected an action name, [name, data] or null, found {}",
-                kind(other)
+                json_kind(other)
             )),
         }
     }
 }
 
-fn kind(value: &Value) -> &'static str {
+fn json_kind(value: &Value) -> &'static str {
     match value {
         Value::Null => "null",
         Value::Bool(_) => "a boolean",
@@ -132,7 +130,7 @@ pub fn parse_keymap(text: &str, layer: KeymapLayer) -> Result<ParsedKeymap, Keym
             layer,
             format!(
                 "the keymap must be a list of sections, found {}",
-                kind(&value)
+                json_kind(&value)
             ),
         ));
     };

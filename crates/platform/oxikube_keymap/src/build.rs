@@ -32,97 +32,114 @@ pub fn build_layer(
     sections: &[(usize, KeymapSection)],
 ) -> BuiltLayer {
     let mut built = BuiltLayer::default();
-    let mapper = cx.keyboard_mapper().clone();
     for (index, section) in sections {
-        let predicate = match section.context_expr() {
-            None => None,
-            Some(context) => match KeyBindingContextPredicate::parse(context) {
-                Ok(predicate) => Some(Rc::new(predicate)),
-                Err(err) => {
-                    built.diagnostics.push(KeymapDiagnostic::section(
-                        layer,
-                        *index,
-                        KeymapProblem::InvalidContext {
-                            context: context.to_owned(),
-                            message: err.to_string(),
-                        },
-                    ));
-                    continue;
-                }
-            },
-        };
-        for (keystrokes, value) in &section.bindings {
-            if keystrokes.split_whitespace().next().is_none() {
-                built.diagnostics.push(KeymapDiagnostic::binding(
-                    layer,
-                    *index,
-                    keystrokes,
-                    KeymapProblem::InvalidKeystrokes {
-                        message: "a binding needs at least one keystroke".to_owned(),
-                    },
-                ));
+        let predicate = match parse_context(section) {
+            Ok(predicate) => predicate,
+            Err(problem) => {
+                built
+                    .diagnostics
+                    .push(KeymapDiagnostic::section(layer, *index, problem));
                 continue;
             }
-            let action = match KeymapAction::from_json(value) {
-                Ok(action) => action,
-                Err(message) => {
-                    built.diagnostics.push(KeymapDiagnostic::binding(
-                        layer,
-                        *index,
-                        keystrokes,
-                        KeymapProblem::InvalidBinding { message },
-                    ));
-                    continue;
-                }
-            };
-            let (action, input) = match action {
-                KeymapAction::Unbind => (Box::new(NoAction) as Box<dyn gpui::Action>, None),
-                KeymapAction::Action { name, data } => {
-                    let input = data.as_ref().map(Value::to_string).map(SharedString::from);
-                    match ActionRegistry::build(cx, &name, data) {
-                        Ok(action) => (action, input),
-                        Err(BuildActionError::Unknown) if layer.tolerates_unknown_actions() => {
-                            built.skipped += 1;
-                            continue;
-                        }
-                        Err(err) => {
-                            built.diagnostics.push(KeymapDiagnostic::binding(
-                                layer,
-                                *index,
-                                keystrokes,
-                                match err {
-                                    BuildActionError::Unknown => {
-                                        KeymapProblem::UnknownAction { name }
-                                    }
-                                    BuildActionError::InvalidData(message) => {
-                                        KeymapProblem::InvalidActionData { name, message }
-                                    }
-                                },
-                            ));
-                            continue;
-                        }
-                    }
-                }
-            };
-            match KeyBinding::load(
-                keystrokes,
-                action,
-                predicate.clone(),
+        };
+        for (keystrokes, value) in &section.bindings {
+            let result = build_binding(
+                cx,
+                layer,
                 section.use_key_equivalents,
-                input,
-                mapper.as_ref(),
-            ) {
-                Ok(binding) => built.bindings.push(binding.with_meta(layer.meta())),
-                Err(err) => built.diagnostics.push(KeymapDiagnostic::binding(
-                    layer,
-                    *index,
-                    keystrokes,
-                    KeymapProblem::InvalidKeystrokes {
-                        message: err.to_string(),
-                    },
-                )),
+                predicate.clone(),
+                keystrokes,
+                value,
+            );
+            match result {
+                Ok(binding) => built.bindings.push(binding),
+                Err(Rejected::Tolerated) => built.skipped += 1,
+                Err(Rejected::Problem(problem)) => built.diagnostics.push(
+                    KeymapDiagnostic::binding(layer, *index, keystrokes, problem),
+                ),
             }
         }
     }
     built
+}
+
+/// Why a binding was not built.
+enum Rejected {
+    /// An embedded layer names an action no crate registered: skipped without a report.
+    Tolerated,
+    Problem(KeymapProblem),
+}
+
+impl From<KeymapProblem> for Rejected {
+    fn from(problem: KeymapProblem) -> Self {
+        Self::Problem(problem)
+    }
+}
+
+fn parse_context(
+    section: &KeymapSection,
+) -> Result<Option<Rc<KeyBindingContextPredicate>>, KeymapProblem> {
+    let Some(context) = section.context_expr() else {
+        return Ok(None);
+    };
+    KeyBindingContextPredicate::parse(context)
+        .map(|predicate| Some(Rc::new(predicate)))
+        .map_err(|err| KeymapProblem::InvalidContext {
+            context: context.to_owned(),
+            message: err.to_string(),
+        })
+}
+
+fn build_binding(
+    cx: &App,
+    layer: KeymapLayer,
+    use_key_equivalents: bool,
+    predicate: Option<Rc<KeyBindingContextPredicate>>,
+    keystrokes: &str,
+    value: &Value,
+) -> Result<KeyBinding, Rejected> {
+    if keystrokes.split_whitespace().next().is_none() {
+        return Err(KeymapProblem::InvalidKeystrokes {
+            message: "a binding needs at least one keystroke".to_owned(),
+        }
+        .into());
+    }
+    let (action, input) = match KeymapAction::from_json(value)
+        .map_err(|message| KeymapProblem::InvalidBinding { message })?
+    {
+        KeymapAction::Unbind => (Box::new(NoAction) as Box<dyn gpui::Action>, None),
+        KeymapAction::Action { name, data } => {
+            let input = data
+                .as_ref()
+                .map(|data| SharedString::from(data.to_string()));
+            let action = match ActionRegistry::build(cx, &name, data) {
+                Ok(action) => action,
+                Err(BuildActionError::Unknown) if layer.tolerates_unknown_actions() => {
+                    return Err(Rejected::Tolerated);
+                }
+                Err(BuildActionError::Unknown) => {
+                    return Err(KeymapProblem::UnknownAction { name }.into());
+                }
+                Err(BuildActionError::InvalidData(message)) => {
+                    return Err(KeymapProblem::InvalidActionData { name, message }.into());
+                }
+            };
+            (action, input)
+        }
+    };
+    KeyBinding::load(
+        keystrokes,
+        action,
+        predicate,
+        use_key_equivalents,
+        input,
+        cx.keyboard_mapper().as_ref(),
+    )
+    .map(|binding| binding.with_meta(layer.meta()))
+    .map_err(|err| {
+        KeymapProblem::InvalidKeystrokes {
+            message: err.to_string(),
+        }
+        .into()
+    })
 }
