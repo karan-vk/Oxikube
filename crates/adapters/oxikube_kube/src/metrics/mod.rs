@@ -20,7 +20,7 @@
 //!
 //! One request per node list, and one per pod list: all namespaces in a single request for
 //! [`NamespaceSelection::All`], one request per selected namespace otherwise (the API has no
-//! multi-namespace selector), at most [`MAX_CONCURRENT_LISTS`] in flight. There is no per-pod
+//! multi-namespace selector), at most `MAX_CONCURRENT_LISTS` in flight. There is no per-pod
 //! request. The API has no pagination, so 2 000 pods are one response of roughly 600 to 800 kB.
 //!
 //! # Absence
@@ -49,7 +49,7 @@ mod tests;
 use std::collections::BTreeSet;
 
 use async_trait::async_trait;
-use futures::future::try_join_all;
+use futures::{StreamExt, TryStreamExt, stream};
 use jiff::Timestamp;
 use kube::Client;
 use oxikube_domain::ids::ClusterId;
@@ -63,7 +63,7 @@ use error::Stop;
 use raw::RawPod;
 
 /// Most namespaced pod lists in flight at once for a [`NamespaceSelection::Set`].
-pub const MAX_CONCURRENT_LISTS: usize = 4;
+const MAX_CONCURRENT_LISTS: usize = 4;
 
 /// Node and pod metrics for one cluster. Cheap to clone; clones share the client.
 #[derive(Clone)]
@@ -76,11 +76,6 @@ impl KubeMetrics {
     /// Reads `metrics.k8s.io` through `client`, the connection to `cluster`.
     pub fn new(client: Client, cluster: ClusterId) -> Self {
         Self { client, cluster }
-    }
-
-    /// The cluster this adapter answers for.
-    pub fn cluster(&self) -> &ClusterId {
-        &self.cluster
     }
 
     fn check_cluster(&self, requested: &ClusterId) -> OxiResult<()> {
@@ -114,17 +109,13 @@ impl KubeMetrics {
             .collect())
     }
 
-    async fn pods_one(&self, namespace: &str) -> Result<Vec<RawPod>, Stop> {
-        Ok(fetch::pods(&self.client, Some(namespace)).await?)
-    }
-
     /// One list per namespace, a few at a time; the first absence or failure ends the call.
     async fn pods_in(&self, names: &BTreeSet<String>) -> Result<Vec<RawPod>, Stop> {
-        let names: Vec<&str> = names.iter().map(String::as_str).collect();
-        let mut lists: Vec<Vec<RawPod>> = Vec::with_capacity(names.len());
-        for chunk in names.chunks(MAX_CONCURRENT_LISTS) {
-            lists.extend(try_join_all(chunk.iter().map(|ns: &&str| self.pods_one(ns))).await?);
-        }
+        let lists: Vec<Vec<RawPod>> = stream::iter(names.iter().cloned())
+            .map(|ns| async move { fetch::pods(&self.client, Some(&ns)).await })
+            .buffered(MAX_CONCURRENT_LISTS)
+            .try_collect()
+            .await?;
         Ok(lists.into_iter().flatten().collect())
     }
 }

@@ -110,7 +110,7 @@ impl RawNode {
     pub(super) fn from_dynamic(object: DynamicObject) -> Self {
         let usage = object.data.get("usage").map(usage_of).unwrap_or_default();
         Self {
-            name: object.metadata.name.clone().unwrap_or_default(),
+            name: object.metadata.name.unwrap_or_default(),
             timestamp: timestamp_of(&object.data),
             window: window_text(&object.data),
             usage,
@@ -132,8 +132,8 @@ impl RawPod {
             })
             .unwrap_or_default();
         Self {
-            namespace: object.metadata.namespace.clone().unwrap_or_default(),
-            name: object.metadata.name.clone().unwrap_or_default(),
+            namespace: object.metadata.namespace.unwrap_or_default(),
+            name: object.metadata.name.unwrap_or_default(),
             timestamp: timestamp_of(&object.data),
             window: window_text(&object.data),
             containers,
