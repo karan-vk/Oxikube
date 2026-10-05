@@ -61,6 +61,7 @@ fn a_million_events_through_a_five_thousand_ring_keep_memory_flat() {
     }
     let elapsed = started.elapsed();
     assert!(ring.len() <= CAPACITY);
+    assert!(ring.shed_remembered() <= ring.shed_remembered_limit());
     assert_eq!(applied - deleted, ring.len());
     eprintln!(
         "events ring perf: {STORM} events through a ring of {CAPACITY} in {elapsed:?} \

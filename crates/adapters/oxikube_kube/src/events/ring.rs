@@ -30,12 +30,14 @@
 //! `capacity`. A new event older than everything held is not stored at all. Both count as
 //! evicted ([`EventRing::evicted`]).
 //!
-//! The count is of *distinct events*, not of attempts: the ring remembers the key of every
-//! event it shed, so the same event arriving again (from the other API, after a relist, from
-//! another namespace watch) is not counted twice, and one that was shed and is not newer than
-//! the oldest held is not let back in to push out a live entry. A shed event that the server
-//! deletes stops counting, and one that comes back into the ring (newer than the oldest held)
-//! stops counting too.
+//! The count is of *distinct events*, not of attempts: the ring remembers the keys of the
+//! events it shed most recently (a [`ShedSet`], bounded to a few times the capacity), so the
+//! same event arriving again (from the other API, after a relist, from another namespace
+//! watch) is not counted twice, and one that was shed and is not newer than the oldest held
+//! is not let back in to push out a live entry. A shed event that the server deletes stops
+//! counting, and one that comes back into the ring (newer than the oldest held) stops
+//! counting too. Memory stays bounded however many events pass through: a shed key forgotten
+//! to make room is still counted, and counts again if that event ever comes back.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -46,6 +48,7 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_ports::Delta;
 
 use super::config::EventApi;
+use super::shed::ShedSet;
 
 /// Identity of one event across both APIs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -95,8 +98,8 @@ pub(super) struct EventRing {
     entries: HashMap<Key, Entry>,
     order: BTreeMap<Order, Key>,
     next_seq: u64,
-    /// Keys of the events dropped to stay within capacity; its size is the evicted count.
-    shed: HashSet<Key>,
+    /// The events dropped to stay within capacity; its count is the evicted count.
+    shed: ShedSet,
 }
 
 impl EventRing {
@@ -106,7 +109,7 @@ impl EventRing {
             entries: HashMap::new(),
             order: BTreeMap::new(),
             next_seq: 0,
-            shed: HashSet::new(),
+            shed: ShedSet::for_capacity(capacity.max(1)),
         }
     }
 
@@ -116,7 +119,19 @@ impl EventRing {
 
     /// Distinct events dropped to stay within capacity and not seen again since.
     pub(super) fn evicted(&self) -> u64 {
-        self.shed.len() as u64
+        self.shed.count()
+    }
+
+    /// How many shed keys the ring will remember (for tests).
+    #[cfg(test)]
+    pub(super) fn shed_remembered_limit(&self) -> usize {
+        self.shed.limit()
+    }
+
+    /// Shed keys currently remembered (bounded; for tests).
+    #[cfg(test)]
+    pub(super) fn shed_remembered(&self) -> usize {
+        self.shed.remembered()
     }
 
     /// The held events, oldest last-seen first.

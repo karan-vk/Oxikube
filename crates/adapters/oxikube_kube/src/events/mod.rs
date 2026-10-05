@@ -18,6 +18,7 @@
 //! | one watcher per API and namespace, no reflector store | `source` |
 //! | merge, window/size batching, backpressure, failures | `pump` |
 //! | de-duplication, eviction, evicted count | `ring` |
+//! | bounded memory of shed keys | `shed` |
 //! | the handle: stream, state, counters, abort on drop | [`EventFeed`] (`handle`) |
 //!
 //! # Field mapping
@@ -60,8 +61,8 @@
 //! tells the consumer (`Deleted`, [`EventFeedStats::evicted`]) so "showing latest N" is
 //! honest. The watches keep no reflector store, the initial list is read page by page (or as a
 //! stream), and a full output channel stops the pump reading: a cluster emitting thousands
-//! of events a minute holds the same memory as a quiet one. The consumer's copy is one
-//! `Event` per delta.
+//! of events a minute holds the same memory as a quiet one (the evicted count's memory of shed
+//! events is bounded too, see `shed`). The consumer's copy is one `Event` per delta.
 //!
 //! # No subscriber, no feed
 //!
@@ -80,6 +81,7 @@ mod config;
 mod handle;
 mod pump;
 mod ring;
+mod shed;
 mod source;
 #[cfg(test)]
 mod tests;

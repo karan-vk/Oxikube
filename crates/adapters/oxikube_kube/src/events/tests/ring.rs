@@ -140,6 +140,55 @@ fn a_shed_event_that_comes_back_newer_or_is_deleted_stops_counting() {
 }
 
 #[test]
+fn the_memory_of_shed_events_is_bounded_and_the_count_keeps_rising() {
+    let mut ring = EventRing::new(3);
+    let limit = ring.shed_remembered_limit();
+    let total = limit * 5;
+    for i in 0..total {
+        let at = format!("2026-10-03T11:{:02}:{:02}Z", (i / 60) % 60, i % 60);
+        put(&mut ring, Core, event(&format!("uid-{i}"), &at, 1));
+    }
+    assert_eq!(ring.len(), 3);
+    assert_eq!(
+        ring.evicted(),
+        (total - 3) as u64,
+        "every shed event counted once"
+    );
+    assert_eq!(
+        ring.shed_remembered(),
+        limit,
+        "but only the latest keys are remembered"
+    );
+}
+
+#[test]
+fn an_event_shed_recently_is_still_recognised_after_older_keys_are_forgotten() {
+    let mut ring = EventRing::new(2);
+    let limit = ring.shed_remembered_limit();
+    for i in 0..limit + 10 {
+        let at = format!("2026-10-03T11:{:02}:{:02}Z", (i / 60) % 60, i % 60);
+        put(&mut ring, Core, event(&format!("uid-{i}"), &at, 1));
+    }
+    let evicted = ring.evicted();
+    // The most recently shed event arrives again from the other API: counted once, no churn.
+    let last_shed = limit + 7;
+    let at = format!(
+        "2026-10-03T11:{:02}:{:02}Z",
+        (last_shed / 60) % 60,
+        last_shed % 60
+    );
+    assert!(
+        put(
+            &mut ring,
+            EventsV1,
+            event(&format!("uid-{last_shed}"), &at, 1)
+        )
+        .is_empty()
+    );
+    assert_eq!(ring.evicted(), evicted);
+}
+
+#[test]
 fn an_updated_event_moves_to_the_newest_end() {
     let mut ring = EventRing::new(2);
     put(&mut ring, Core, event("a", "2026-10-03T11:01:00Z", 1));
