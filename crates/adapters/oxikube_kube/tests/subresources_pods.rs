@@ -47,14 +47,25 @@ async fn ready_pod(env: &Env, name: &str, labels: &[(&str, &str)]) {
                 vec!["get", "pod", name, "-n", env.namespace(), "-o", "yaml"],
                 vec!["get", "events", "-n", env.namespace()],
                 vec!["get", "nodes", "-o", "wide"],
-                vec!["-n", "kube-system", "get", "pods"],
+                vec![
+                    "-n",
+                    "kube-system",
+                    "logs",
+                    "kube-scheduler-oxikube-control-plane",
+                    "--tail=40",
+                ],
+                vec!["get", "node", "-o", "yaml"],
             ] {
                 let out = std::process::Command::new("kubectl")
                     .args(["--context", &env.context])
                     .args(&args)
                     .output();
                 if let Ok(out) = out {
-                    eprintln!("DIAG {args:?}:\n{}", String::from_utf8_lossy(&out.stdout));
+                    eprintln!(
+                        "DIAG {args:?}:\n{}{}",
+                        String::from_utf8_lossy(&out.stdout),
+                        String::from_utf8_lossy(&out.stderr)
+                    );
                 }
             }
         }
