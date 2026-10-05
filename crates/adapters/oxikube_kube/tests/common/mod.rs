@@ -8,7 +8,8 @@
 //!
 //! `health` holds the liveness-loop helpers shared by the health scenarios; `resources` the
 //! pod fixtures and adapter constructor of the resource data plane scenarios (E04); `mutations` the
-//! ConfigMap manifests of the write scenarios (E04-S05).
+//! ConfigMap manifests of the write scenarios (E04-S05); `portforward` the nginx fixtures of the
+//! port-forward scenarios (E04-S10).
 //!
 //! Namespaced fixtures (service accounts, roles, bindings) live in the test's
 //! `oxi-test-<rand>` namespace and go away with it.
@@ -18,6 +19,7 @@
 
 pub mod health;
 pub mod mutations;
+pub mod portforward;
 pub mod resources;
 
 use std::future::Future;
