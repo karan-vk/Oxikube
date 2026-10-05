@@ -31,6 +31,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   OXIKUBE_TEST_CONTEXT: kind-oxikube
+  # A failing test's `TestNamespace` writes its events here before deleting the namespace (which
+  # deletes the events); the diagnostics upload below carries them.
+  OXIKUBE_TEST_DIAGNOSTICS_DIR: ${{ github.workspace }}/diagnostics/namespaces
   # kube, app and testkit integration tests; `--no-fail-fast` reports every failing file.
   SUITE: >-
     cargo test -p oxikube_kube -p oxikube_app -p oxikube_testkit
@@ -64,9 +67,12 @@ jobs:
       - name: Integration tests (flake check, second run)
         if: ${{ github.event_name == 'schedule' }}
         run: $SUITE -- --nocapture
-      # Every test namespace's events plus the node and control-plane logs, so a CI failure can
-      # be read without a rerun. Events and logs carry no credentials; the suite mints only
-      # short-lived service-account tokens that never reach a log.
+      # A failed test's namespace is deleted with its events when the test ends, so those events
+      # are saved by the test itself into diagnostics/namespaces/<ns>.events.txt. This step adds
+      # the cluster-wide events still present (kube-system, nodes, namespaces still running), pods,
+      # nodes and the control-plane logs, so a CI failure can be read without a rerun. Events and
+      # logs carry no credentials; the suite mints only short-lived service-account tokens that
+      # never reach a log.
       - name: Collect cluster diagnostics
         if: ${{ failure() }}
         run: |

@@ -15,12 +15,15 @@ OXIKUBE_TEST_CONTEXT=kind-oxikube cargo test -p oxikube_kube --features integrat
 Without `OXIKUBE_TEST_CONTEXT` every test returns early, so `cargo test --workspace` stays green
 without a cluster. CI runs the suite in `.github/workflows/integration.yml` on PRs that touch
 adapters, ports, app, testing or xtask, and nightly twice in a row as a flake check; on failure it
-uploads every namespace's events and the kind logs.
+uploads each failed test's namespace events (saved by `TestNamespace` before it deletes the
+namespace, into `OXIKUBE_TEST_DIAGNOSTICS_DIR`), the cluster-wide events, pods, nodes and the kind
+logs. Locally, without that variable, a failed test prints its namespace's events to stderr.
 
 ## Rules every test follows
 
-- Its own `oxi-test-<rand>` namespace (`TestNamespace`, deleted on drop) and a random suffix on
-  every cluster-scoped object (`TestCrd`, `FakeNode`), so suites run concurrently on one cluster.
+- Its own `oxi-test-<rand>` namespace (`TestNamespace`, deleted on drop, its events saved first
+  when the test failed) and a random suffix on every cluster-scoped object (`TestCrd`,
+  `FakeNode`), so suites run concurrently on one cluster.
 - The real node is never cordoned, tainted or drained: drain and cordon target a `FakeNode` no
   kubelet backs. Shared fixtures (`oxikube-fixtures`, the `Widget` CRD) are only read.
 - No sleeps as synchronisation: `common::wait_until`, or `common::wait_in` which dumps the
