@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use oxikube_domain::{ObjectMeta, OxiResult, Resource};
 use oxikube_ports::{IncludeObject, TableColumn, TableRow, TableSource};
-use serde_json::{Map, Value};
+use serde_json::{Value, json};
 
 use super::wire::{self, ColumnDefinition};
 use crate::resources::bad_object;
@@ -160,12 +160,12 @@ fn split_object(
 /// Server `metadata` JSON to the domain's typed [`ObjectMeta`], through the domain's own
 /// parser (it only parses `metadata` as part of an object; the type fields are placeholders).
 fn meta_of(metadata: Option<Value>) -> OxiResult<ObjectMeta> {
-    let metadata = metadata.unwrap_or(Value::Null);
-    let mut object = Map::with_capacity(3);
-    object.insert("apiVersion".into(), Value::String("v1".into()));
-    object.insert("kind".into(), Value::String("Row".into()));
-    object.insert("metadata".into(), metadata);
-    Resource::from_json(Value::Object(object))
+    let object = json!({
+        "apiVersion": "v1",
+        "kind": "Row",
+        "metadata": metadata.unwrap_or(Value::Null),
+    });
+    Resource::from_json(object)
         .map(|resource| resource.meta)
         .map_err(|e| bad_object("table row", e))
 }

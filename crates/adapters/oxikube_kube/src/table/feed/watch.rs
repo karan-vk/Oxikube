@@ -19,6 +19,7 @@ use tracing::debug;
 
 use super::state::Feed;
 use crate::auth::classify;
+use crate::resources::bad_object;
 use crate::table::convert::{columns, object_row, table_rows};
 use crate::table::request;
 use crate::table::wire::{self, TABLE_KIND};
@@ -116,16 +117,12 @@ impl Feed {
     /// Interprets one event, updating the version.
     fn step(&mut self, event: WatchEvent<Value>) -> Step {
         match event {
-            WatchEvent::Added(object) | WatchEvent::Modified(object) => match self.decode(object) {
-                Ok(Ok(rows)) => Step::Rows(rows),
-                Ok(Err(end)) => Step::End(end),
-                Err(err) => Step::End(WatchEnd::Failed(err)),
-            },
-            WatchEvent::Deleted(object) => match self.decode(object) {
-                Ok(Ok(rows)) => Step::Deleted(rows),
-                Ok(Err(end)) => Step::End(end),
-                Err(err) => Step::End(WatchEnd::Failed(err)),
-            },
+            WatchEvent::Added(object) | WatchEvent::Modified(object) => {
+                self.decode(object).map_or_else(Step::End, Step::Rows)
+            }
+            WatchEvent::Deleted(object) => {
+                self.decode(object).map_or_else(Step::End, Step::Deleted)
+            }
             WatchEvent::Bookmark(bookmark) => {
                 self.resource_version = Some(bookmark.metadata.resource_version);
                 Step::Nothing
@@ -135,23 +132,23 @@ impl Feed {
     }
 
     /// An event object as rows: a Table (the usual case) or, for a fallback feed, a plain
-    /// object. `Ok(Err(_))` when the event shows the feed must change strategy.
-    fn decode(&mut self, object: Value) -> OxiResult<Result<Vec<TableRow>, WatchEnd>> {
+    /// object. `Err(_)` is how the watch ends: a failure, or the feed must change strategy.
+    fn decode(&mut self, object: Value) -> Result<Vec<TableRow>, WatchEnd> {
         let is_table = object.get("kind").and_then(Value::as_str) == Some(TABLE_KIND);
         match (is_table, self.source) {
             (true, TableSource::Server) => {
                 let table: wire::Table = serde_json::from_value(object)
-                    .map_err(|e| crate::resources::bad_object("table event", e))?;
+                    .map_err(|e| WatchEnd::Failed(bad_object("table event", e)))?;
                 if !table.column_definitions.is_empty()
                     && self.columns.as_deref() != Some(&*columns(table.column_definitions))
                 {
                     debug!(kind = %self.target.gvk, "table: columns changed, relisting");
-                    return Ok(Err(WatchEnd::Relist));
+                    return Err(WatchEnd::Relist);
                 }
                 if let Some(rv) = table.metadata.resource_version.filter(|v| !v.is_empty()) {
                     self.resource_version = Some(rv);
                 }
-                Ok(Ok(table_rows(table.rows, self.target.include)?))
+                table_rows(table.rows, self.target.include).map_err(WatchEnd::Failed)
             }
             (false, TableSource::Objects) => {
                 let version = object
@@ -159,18 +156,18 @@ impl Feed {
                     .and_then(Value::as_str)
                     .filter(|v| !v.is_empty())
                     .map(str::to_owned);
-                let row = object_row(object, self.target.include)?;
+                let row = object_row(object, self.target.include).map_err(WatchEnd::Failed)?;
                 if version.is_some() {
                     self.resource_version = version;
                 }
-                Ok(Ok(vec![row]))
+                Ok(vec![row])
             }
             // The list was a Table but the watch is not: the server only honours the Accept
             // header on lists. Poll the list instead.
-            (false, TableSource::Server) => Ok(Err(WatchEnd::Unsupported)),
+            (false, TableSource::Server) => Err(WatchEnd::Unsupported),
             // A fallback feed now gets Tables: the server learnt the Table API (an aggregated
             // API was upgraded). List again to pick up the real columns.
-            (true, TableSource::Objects) => Ok(Err(WatchEnd::Relist)),
+            (true, TableSource::Objects) => Err(WatchEnd::Relist),
         }
     }
 }

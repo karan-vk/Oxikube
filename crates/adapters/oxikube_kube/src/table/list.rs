@@ -17,7 +17,7 @@ use crate::KubeResources;
 use crate::resources::{bad_object, deadline, list_error, list_params, namespace_of};
 
 /// A resolved Table collection: where requests go and what rows embed.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct Target {
     /// The kind, for logs.
     pub(crate) gvk: Gvk,

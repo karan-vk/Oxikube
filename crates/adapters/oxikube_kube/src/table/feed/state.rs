@@ -12,6 +12,7 @@ use oxikube_ports::{
 use tracing::debug;
 
 use crate::is_list_expired;
+use crate::resources::list_params;
 use crate::table::TableConfig;
 use crate::table::convert::Page;
 use crate::table::index::{Relist, RowIndex};
@@ -137,7 +138,7 @@ impl Feed {
                 }
                 if more.is_none() {
                     self.resource_version = version;
-                    let batch = pending.map(|acc| acc.finish(self)).unwrap_or(None);
+                    let batch = pending.and_then(|acc| acc.finish(self));
                     return Ok(batch);
                 }
                 next = more;
@@ -150,7 +151,7 @@ impl Feed {
             continue_token,
             ..self.list.clone()
         };
-        crate::resources::list_params(&options)
+        list_params(&options)
     }
 }
 
