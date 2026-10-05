@@ -42,6 +42,7 @@ pub struct ReflectorFeed {
     pub(super) batches: mpsc::Receiver<OxiResult<DeltaBatch<Resource>>>,
     pub(super) state: watch::Receiver<FeedState>,
     pub(super) stores: Vec<Store<FeedObject>>,
+    pub(super) metadata_only: bool,
     pub(super) task: JoinHandle<()>,
 }
 
@@ -49,6 +50,12 @@ impl ReflectorFeed {
     /// What this feed watches.
     pub fn key(&self) -> &FeedKey {
         &self.key
+    }
+
+    /// Whether this is a metadata-only feed: every resource it delivers is
+    /// [partial](Resource::is_partial).
+    pub fn is_metadata_only(&self) -> bool {
+        self.metadata_only
     }
 
     /// The feed's state, updated as it changes.
@@ -92,6 +99,7 @@ impl std::fmt::Debug for ReflectorFeed {
         f.debug_struct("ReflectorFeed")
             .field("key", &self.key)
             .field("state", &*self.state.borrow())
+            .field("metadata_only", &self.metadata_only)
             .finish_non_exhaustive()
     }
 }

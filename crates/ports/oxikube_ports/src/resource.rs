@@ -195,7 +195,8 @@ pub struct WatchOptions {
     /// Field selector.
     pub field_selector: Option<String>,
     /// Watch `PartialObjectMetadata` only. Each [`Resource`] then holds
-    /// metadata, `apiVersion` and `kind` but no spec or status.
+    /// metadata, `apiVersion` and `kind` but no spec or status, and is marked
+    /// [`Resource::is_partial`]; a [`get`](ResourceReader::get) returns the full object.
     pub metadata_only: bool,
     /// Page size of the initial list. `None` lets the adapter choose.
     pub page_size: Option<u32>,

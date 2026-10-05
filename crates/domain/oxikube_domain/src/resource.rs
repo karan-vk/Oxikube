@@ -185,8 +185,18 @@ pub struct Resource {
     pub meta: ObjectMeta,
     /// Group-version-kind from `apiVersion` + `kind`.
     pub kind: Gvk,
-    /// The complete object.
+    /// The object as received: complete, unless [`partial`](Self::partial) is set.
     pub json: Value,
+    /// Set on metadata-only objects (`PartialObjectMetadata`): `json` then holds `apiVersion`,
+    /// `kind` and `metadata` but no `spec`, `status` or data, so a view must not render it as a
+    /// complete object. Read through [`is_partial`](Self::is_partial); set by
+    /// [`into_partial`](Self::into_partial). A full `get` of the same object replaces it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub partial: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl std::fmt::Debug for Resource {
@@ -229,7 +239,24 @@ impl Resource {
             }
         };
         let kind = Gvk::from_api_version(api_version, kind);
-        Ok(Self { meta, kind, json })
+        Ok(Self {
+            meta,
+            kind,
+            json,
+            partial: false,
+        })
+    }
+
+    /// Marks this resource as metadata-only (see [`partial`](Self::partial)).
+    #[must_use]
+    pub fn into_partial(mut self) -> Self {
+        self.partial = true;
+        self
+    }
+
+    /// Whether this holds metadata only: `spec`, `status` and data were not fetched.
+    pub fn is_partial(&self) -> bool {
+        self.partial
     }
 
     /// `metadata.name`.

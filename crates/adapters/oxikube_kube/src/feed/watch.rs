@@ -24,7 +24,6 @@
 use std::mem;
 
 use futures::StreamExt;
-use kube::Api;
 use kube::core::{ApiResource, DynamicObject};
 use kube::runtime::reflector::store::Writer;
 use kube::runtime::watcher::{self, Event, InitialListStrategy};
@@ -38,7 +37,7 @@ use super::config::{FeedConfig, RelistDelivery};
 use super::error::{feed_error, streaming_rejected};
 use super::object::FeedObject;
 use super::relist::RelistDiff;
-use super::source::{self, EventStream};
+use super::source::{self, EventStream, Target};
 use super::state::FeedState;
 use super::transport::Accepted;
 
@@ -67,8 +66,8 @@ struct Closed;
 /// One watch and its reflector store.
 pub(super) struct SubWatch {
     pub(super) index: usize,
-    pub(super) api: Api<DynamicObject>,
-    /// Watch requests of `api` the server accepted.
+    pub(super) target: Target,
+    /// Watch requests of `target` the server accepted.
     pub(super) accepted: Accepted,
     pub(super) resource: ApiResource,
     pub(super) watcher_config: watcher::Config,
@@ -155,7 +154,8 @@ impl SubWatch {
     }
 
     fn open(&self) -> EventStream {
-        source::events(self.api.clone(), self.watcher_config.clone(), &self.config)
+        self.target
+            .events(self.watcher_config.clone(), &self.config)
     }
 
     async fn on_event(
@@ -220,8 +220,9 @@ impl SubWatch {
     /// object is not valid, so it is skipped.
     fn convert(&self, event: Event<DynamicObject>) -> Option<Event<FeedObject>> {
         let strip = self.strip_managed_fields;
+        let partial = self.target.is_metadata();
         let one = |object| {
-            let converted = FeedObject::convert(object, &self.resource, strip);
+            let converted = FeedObject::convert(object, &self.resource, strip, partial);
             if converted.is_none() {
                 warn!(kind = %self.resource.kind, "skipping an invalid object from the watch");
             }

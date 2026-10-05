@@ -3,6 +3,7 @@
 //! timeouts) passes instantly and deterministically.
 
 mod delivery;
+mod metadata;
 mod perf;
 mod retry;
 mod server;

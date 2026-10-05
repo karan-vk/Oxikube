@@ -23,15 +23,20 @@ pub struct FeedObject(pub Resource);
 
 impl FeedObject {
     /// Converts a watch or list item, consuming it. `None` when the server sent something
-    /// that is not a valid object (no name); the caller skips it.
+    /// that is not a valid object (no name); the caller skips it. `partial` marks a
+    /// metadata-only object (see [`Resource::is_partial`]).
     pub(super) fn convert(
         item: DynamicObject,
         resource: &ApiResource,
         strip: bool,
+        partial: bool,
     ) -> Option<Self> {
-        Resource::from_json(dynamic_json(item, resource, strip))
-            .ok()
-            .map(Self)
+        let object = Resource::from_json(dynamic_json(item, resource, strip)).ok()?;
+        Some(Self(if partial {
+            object.into_partial()
+        } else {
+            object
+        }))
     }
 }
 

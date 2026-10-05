@@ -22,7 +22,15 @@
 //! | merge watches, window/size batching, backpressure | `pump`, `coalesce` |
 //! | watcher errors to `OxiError`, retryable or final | `error` |
 //! | uncompressed watch responses, accepted-watch count | `transport` |
+//! | metadata-only variant, [`KubeResources::upgrade`] to a full object | `metadata` |
 //! | the handle: stream, [`FeedState`], store snapshot, abort on drop | `handle` |
+//!
+//! # Metadata-only feeds
+//!
+//! `WatchOptions::metadata_only` ([`KubeResources::metadata_feed`]) runs the same pipeline
+//! over `PartialObjectMetadata`: the cheap list view for large kinds, with
+//! [partial](oxikube_domain::Resource::is_partial) resources, and
+//! [`KubeResources::upgrade`] to fetch one full object on demand. See `metadata`.
 //!
 //! # Streaming lists
 //!
@@ -43,6 +51,7 @@ mod coalesce;
 mod config;
 mod error;
 mod handle;
+mod metadata;
 mod object;
 mod pump;
 mod relist;
@@ -55,7 +64,6 @@ mod watch;
 
 use std::sync::Arc;
 
-use kube::Api;
 use kube::runtime::reflector::store::Writer;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::Verb;
@@ -68,6 +76,7 @@ use tracing::debug;
 
 use crate::resources::KubeResources;
 use pump::Pump;
+use source::Target;
 use watch::SubWatch;
 
 pub use config::{
@@ -108,24 +117,21 @@ impl KubeResources {
     /// Opens a reflector feed of `kind` over `scope`.
     ///
     /// Returns once the kind is resolved; listing and watching happen on a task owned by the
-    /// returned handle. Selectors and the initial-list page size come from `options`.
+    /// returned handle. Selectors and the initial-list page size come from `options`; with
+    /// `options.metadata_only` the feed carries [partial](oxikube_domain::Resource::is_partial)
+    /// resources (see [`KubeResources::metadata_feed`]).
     ///
     /// # Errors
     ///
-    /// `Unsupported` for a kind the cluster does not serve or cannot watch, or for
-    /// `options.metadata_only` (E04-S03); `Validation` for namespaces on a cluster-scoped
-    /// kind or an empty namespace list. Failures after that arrive on the feed.
+    /// `Unsupported` for a kind the cluster does not serve or cannot watch; `Validation` for
+    /// namespaces on a cluster-scoped kind or an empty namespace list. Failures after that
+    /// arrive on the feed.
     pub async fn reflector_feed(
         &self,
         kind: &Gvk,
         scope: &WatchScope,
         options: &WatchOptions,
     ) -> OxiResult<ReflectorFeed> {
-        if options.metadata_only {
-            return Err(OxiError::unsupported(
-                "metadata-only feeds are not implemented yet (E04-S03)",
-            ));
-        }
         let namespaces: Vec<Option<&str>> = match scope {
             WatchScope::Cluster => vec![None],
             WatchScope::Namespaces(names)
@@ -152,15 +158,12 @@ impl KubeResources {
         let mut stores = Vec::with_capacity(targets.len());
         for (index, (namespace, resource)) in targets.into_iter().enumerate() {
             let (client, accepted) = transport::watch_client(&self.client);
-            let api = match namespace {
-                Some(ns) => Api::namespaced_with(client, ns, &resource),
-                None => Api::all_with(client, &resource),
-            };
+            let target = Target::new(client, namespace, &resource, options.metadata_only);
             let writer = Writer::default();
             stores.push(writer.as_reader());
             let watch = SubWatch {
                 index,
-                api,
+                target,
                 accepted,
                 resource,
                 watcher_config: watcher_config.clone(),
@@ -191,6 +194,7 @@ impl KubeResources {
             batches: batches_rx,
             state: state_rx,
             stores,
+            metadata_only: options.metadata_only,
             task: tokio::spawn(pump.run()),
         })
     }

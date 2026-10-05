@@ -456,3 +456,34 @@ fn debug_output_never_contains_json_payload() {
     assert!(!dbg.contains("aHVudGVyMg=="));
     assert!(dbg.contains("creds"));
 }
+
+// --- partial (metadata-only) objects ----------------------------------------
+
+#[test]
+fn objects_are_complete_until_marked_partial() {
+    let full = load(POD);
+    assert!(!full.is_partial());
+
+    let partial = full.clone().into_partial();
+    assert!(partial.is_partial());
+    assert_ne!(
+        partial, full,
+        "a partial object is not equal to the full one"
+    );
+    assert_eq!(partial.meta, full.meta);
+}
+
+#[test]
+fn the_partial_marker_survives_serde_and_is_omitted_when_false() {
+    let full = load(POD);
+    let encoded = serde_json::to_value(&full).unwrap();
+    assert!(encoded.get("partial").is_none(), "{encoded}");
+    let back: Resource = serde_json::from_value(encoded).unwrap();
+    assert!(!back.is_partial());
+
+    let partial = full.into_partial();
+    let encoded = serde_json::to_value(&partial).unwrap();
+    assert_eq!(encoded["partial"], json!(true));
+    let back: Resource = serde_json::from_value(encoded).unwrap();
+    assert!(back.is_partial());
+}
