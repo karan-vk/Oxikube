@@ -59,6 +59,7 @@ use backend::{Dynamic, KindApi};
 
 pub use config::{AccessPath, DEFAULT_PAGE_SIZE, ManagedFields, ResourcesConfig};
 pub use error::{ListExpired, is_list_expired};
+pub(crate) use reader::pending;
 
 /// Resource reads for one cluster. Cheap to clone; clones share the client and discovery.
 #[derive(Clone)]
@@ -83,6 +84,11 @@ impl KubeResources {
         }
     }
 
+    /// The client every request goes through.
+    pub(crate) fn client(&self) -> &Client {
+        &self.client
+    }
+
     /// The settings in effect.
     pub fn config(&self) -> &ResourcesConfig {
         &self.config
@@ -90,7 +96,7 @@ impl KubeResources {
 
     /// Resolves `gvk` to its `ApiResource`, checks it supports `verb` and that `namespace` fits its scope.
     /// `namespace_required` is true for single-object calls on namespaced kinds.
-    async fn target(
+    pub(crate) async fn target(
         &self,
         gvk: &Gvk,
         namespace: Option<&str>,
@@ -158,6 +164,6 @@ fn not_served(gvk: &Gvk) -> OxiError {
 }
 
 /// Treats `Some("")` as no namespace.
-fn namespace_of(namespace: Option<&str>) -> Option<&str> {
+pub(crate) fn namespace_of(namespace: Option<&str>) -> Option<&str> {
     namespace.filter(|ns| !ns.is_empty())
 }

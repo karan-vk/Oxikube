@@ -15,7 +15,7 @@
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
 //! | [`agent`] | [`ContextBlock`](agent::ContextBlock), the bounded context handed to agents |
-//! | [`error`] | [`OxiError`], [`ErrorKind`], [`OxiResult`] |
+//! | [`error`], [`error_details`] | [`OxiError`], [`ErrorKind`], [`OxiResult`]; [`ConflictDetails`] and [`ValidationDetails`] (field managers and field paths of a rejected write) |
 //! | [`redact`] | secret redaction: [`redact::redact`], [`redact::Redacted`], the pattern catalogue |
 //!
 //! [`redact`] holds the pure secret scrubber (`redact(&str) -> Cow<str>`, `Redacted<T>`). The
@@ -34,6 +34,7 @@ pub mod audit;
 mod bounds;
 pub mod command;
 pub mod error;
+pub mod error_details;
 pub mod event;
 pub mod ids;
 pub mod kinds;
@@ -51,6 +52,7 @@ pub use command::{
     Capabilities, Capability, Command, CommandId, CommandMeta, CommandScope, Propagation,
 };
 pub use error::{ErrorKind, OxiError, OxiResult};
+pub use error_details::{ConflictDetails, ConflictReason, FieldCause, ValidationDetails};
 pub use quantity::{Quantity, QuantityError, QuantityFormat};
 pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError};
 pub use safety::{ConfirmTier, Initiator, Risk};

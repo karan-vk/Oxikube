@@ -38,6 +38,7 @@ mod classify;
 mod exec;
 mod retry;
 
+pub(crate) use classify::redacted_line;
 pub use classify::{
     CredentialRefresh, classify, classify_kubeconfig, classify_tls_setup, classify_with,
 };

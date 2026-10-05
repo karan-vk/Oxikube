@@ -73,6 +73,6 @@ impl ResourceReader for KubeResources {
 }
 
 /// A port method whose story has not landed yet.
-fn pending(method: &str, story: &str) -> OxiError {
+pub(crate) fn pending(method: &str, story: &str) -> OxiError {
     OxiError::unsupported(format!("`{method}` is not implemented yet ({story})"))
 }
