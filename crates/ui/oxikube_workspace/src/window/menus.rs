@@ -115,10 +115,7 @@ pub(super) fn register(cx: &mut App) {
 /// Runs `f` on the active window after the current update ends. Menu actions reach the global
 /// handlers while the window that dispatched them is still being updated, so touching that
 /// window inline would fail; `defer` runs after the update has released it.
-pub(crate) fn with_active_window(
-    cx: &mut App,
-    f: impl FnOnce(&mut gpui::Window, &mut App) + 'static,
-) {
+fn with_active_window(cx: &mut App, f: impl FnOnce(&mut gpui::Window, &mut App) + 'static) {
     cx.defer(move |cx| {
         if let Some(window) = cx.active_window() {
             let _ = window.update(cx, |_, window, cx| f(window, cx));

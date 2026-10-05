@@ -48,7 +48,8 @@ pub use panel::{DockPosition, Panel, PanelEvent, PanelHandle};
 pub use workspace::{OpenOptions, Workspace, WorkspaceEvent};
 
 /// Registers the workspace: the main window's menu and actions ([`window::init`]), the
-/// `workspace::*` key bindings and the session basics ([`session::init`]). Call once, after `oxikube_ui::init`.
+/// `workspace::*` key bindings and the session basics ([`session::init`]). Call once, after
+/// `oxikube_ui::init`.
 pub fn init(cx: &mut gpui::App) {
     window::init(cx);
     actions::register(cx);

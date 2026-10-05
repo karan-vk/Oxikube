@@ -56,13 +56,17 @@ fn cascaded_bounds(cx: &mut App) -> Option<Bounds<Pixels>> {
 
 /// Whether closing the last window quits the app: on Linux and Windows it does, on macOS the app
 /// stays alive in the Dock (GPUI's default `QuitMode`, which does the quitting).
-pub fn last_window_close_quits() -> bool {
+pub(super) fn last_window_close_quits() -> bool {
     !cfg!(target_os = "macos")
 }
 
 /// Whether a window may close without asking: always, unless it is the last one, closing it
 /// quits, and a quit would stop running operations.
-pub fn allow_close(other_windows: bool, last_close_quits: bool, needs_confirmation: bool) -> bool {
+pub(super) fn allow_close(
+    other_windows: bool,
+    last_close_quits: bool,
+    needs_confirmation: bool,
+) -> bool {
     other_windows || !last_close_quits || !needs_confirmation
 }
 

@@ -106,7 +106,7 @@ pub fn running_operations(cx: &App) -> Vec<RunningOperation> {
 
 /// Whether quitting now has to ask: operations are running and `confirm_quit` is on (the default
 /// when there is no settings store).
-pub fn needs_confirmation(cx: &App) -> bool {
+pub(super) fn needs_confirmation(cx: &App) -> bool {
     let confirm = SessionSettings::try_get(cx).is_none_or(|settings| settings.confirm_quit);
     confirm && !running_operations(cx).is_empty()
 }
@@ -155,11 +155,12 @@ pub(super) fn set_quit_hook(cx: &mut App, hook: impl Fn(&mut App) + 'static) {
 /// Opens the confirm dialog on `window`, unless ours is already open there.
 pub(super) fn show_quit_prompt(window: &mut Window, cx: &mut App) {
     let id = window.window_handle().window_id();
-    let open_here = cx.default_global::<QuitGuard>().prompt_window == Some(id);
+    let guard = cx.default_global::<QuitGuard>();
+    let open_here = guard.prompt_window == Some(id);
+    guard.prompt_window = Some(id);
     if open_here && window.has_active_dialog(cx) {
         return;
     }
-    cx.default_global::<QuitGuard>().prompt_window = Some(id);
     let operations = running_operations(cx);
     window.open_alert_dialog(cx, move |alert: AlertDialog, _, _| {
         alert
