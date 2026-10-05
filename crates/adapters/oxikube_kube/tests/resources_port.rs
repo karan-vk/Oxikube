@@ -26,11 +26,8 @@ use oxikube_testkit::integration::TestNamespace;
 use serde_json::{Value, json};
 
 use common::resources::{adapter, create_pods, pending_pod};
+use common::subresources::pod_gvk;
 use common::{DEADLINE, TestServiceAccount, wait_in};
-
-fn pod_gvk() -> Gvk {
-    Gvk::new("", "v1", "Pod")
-}
 
 fn port(client: &kube::Client) -> Arc<dyn ResourcePort> {
     Arc::new(adapter(client))
@@ -41,10 +38,9 @@ async fn metadata_names(
     port: &dyn ResourcePort,
     kind: &Gvk,
     namespace: Option<&str>,
-    options: ListOptions,
+    mut options: ListOptions,
 ) -> (Vec<String>, usize) {
     let (mut names, mut pages) = (Vec::new(), 0);
-    let mut options = options;
     loop {
         let page = port
             .list_metadata(kind, namespace, &options)
