@@ -4,7 +4,11 @@
 //! links them: the `oxikube_settings` example `settings_schema` prints it (xtask does not
 //! depend on the GPUI-based settings crate, which keeps the pre-commit hook fast). The output
 //! is canonical (keys sorted), so `--check` is a byte comparison; CI runs it so a settings
-//! change without a regenerated schema fails.
+//! change without a regenerated schema fails. A crate that registers settings but is not linked
+//! into the generator would be missing from the schema in a way `--check` cannot see, so
+//! [`coverage`] fails the command until the generator links it (E05-S06b).
+
+mod coverage;
 
 use std::path::Path;
 use std::process::Command;
@@ -30,6 +34,7 @@ pub fn run(args: &Args) -> Result<()> {
         .no_deps()
         .exec()
         .context("cargo metadata")?;
+    coverage::ensure_generator_links_every_settings_crate(&metadata, GENERATOR.0)?;
     let root = metadata.workspace_root.as_std_path();
     let generated = generate(root)?;
     let path = root.join(SCHEMA_PATH);
