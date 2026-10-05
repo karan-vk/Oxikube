@@ -95,10 +95,9 @@ mod tests {
     #[test]
     fn schema_path_matches_the_assets_crate() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        let assets = std::fs::read_to_string(
-            root.join("crates/platform/oxikube_assets/src/oxikube_assets.rs"),
-        )
-        .unwrap();
+        let assets =
+            std::fs::read_to_string(root.join("crates/platform/oxikube_assets/src/settings.rs"))
+                .unwrap();
         assert!(assets.contains(&format!("\"{SCHEMA_PATH}\"")));
         assert!(root.join(SCHEMA_PATH).exists());
     }
