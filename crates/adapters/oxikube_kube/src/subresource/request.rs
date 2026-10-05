@@ -16,7 +16,7 @@ use crate::resources::{KubeResources, namespace_of};
 
 /// A path segment that cannot change the request's route: non-empty, no `/`, `?`, `#`, `%`
 /// or whitespace.
-pub(super) fn segment(what: &str, value: &str) -> OxiResult<()> {
+pub(crate) fn segment(what: &str, value: &str) -> OxiResult<()> {
     let bad = |c: char| matches!(c, '/' | '?' | '#' | '%') || c.is_whitespace();
     if value.is_empty() || value.contains(bad) {
         return Err(OxiError::validation(format!(

@@ -20,7 +20,7 @@
 //! | [`resources`] | E04-S01 | [`KubeResources`]: `ResourceReader` list/get with pagination, selectors and `resourceVersion` semantics over typed and dynamic `Api`s |
 //! | [`metrics`] | E04-S11 | [`KubeMetrics`]: `MetricsPort` on `metrics.k8s.io` via `k8s-metrics`, exact `Quantity` parsing, absence as a visible state |
 //! | [`mutate`] | E04-S05 | [`KubeResources`] as a `ResourceWriter`: create, replace, patch (merge, strategic, JSON, server-side apply), dry-run, delete, delete-collection, with conflict and validation detail in the errors |
-//! | [`remote`] | E04-S10 | [`KubePortForward`]: `PortForwardPort` over `Api<Pod>::portforward`, local-listener forwards with service-to-pod resolution and a target-gone hook |
+//! | [`remote`] | E04-S09, E04-S10 | [`KubeExec`]: `ExecPort` over `Api<Pod>::exec` / `attach`, node shells with guaranteed cleanup, ephemeral debug containers; [`KubePortForward`]: `PortForwardPort` over `Api<Pod>::portforward`, local-listener forwards with service-to-pod resolution and a target-gone hook |
 //! | [`subresource`] | E04-S06 | scale, status, eviction, ephemeral containers and resize as `ResourcePort` methods; [`ResourcePatch`] builders (rollout restart, cordon, uncordon, cronjob suspend) ported from kdash |
 //! | [`algorithms`] | E04-S07 | kubectl-equivalent algorithms over a `ResourcePort`: [`trigger_cronjob`], [`rollout_history`], [`rollout_undo`] and [`drain`] (a progress stream with PodDisruptionBudget retry) |
 //! | [`sources`] | E03-S02 | `ClusterSourcePort` over kubeconfig files, directories and pasted text, with hot reload |
@@ -67,6 +67,9 @@ pub use mutate::DEFAULT_FIELD_MANAGER;
 pub use pool::{
     ClientFactory, ClientPool, Clock, ContextDefinition, EvictionPolicy, KubeClientFactory,
     PoolConfig, ProxyEnv, RetryMode, SystemClock,
+};
+pub use remote::exec::{
+    DEFAULT_DEBUG_START_TIMEOUT, KubeExec, NodeShellConfig, NodeShellSession, node_shell_manifest,
 };
 pub use remote::portforward::{ForwardHandle, KubePortForward};
 pub use resources::{

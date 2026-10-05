@@ -60,3 +60,4 @@ pub use patches::{RESTARTED_AT_ANNOTATION, ResourcePatch};
 pub use pod_patches::{
     EphemeralContainerSpec, ResizeSpec, ephemeral_container_patch, resize_patch,
 };
+pub(crate) use request::segment;
