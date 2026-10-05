@@ -9,6 +9,10 @@
 //! kubelet timestamp matches. Matching is a multiset: if two identical lines carry the same
 //! timestamp, a replay of both drops both, and a replay of one drops one.
 //!
+//! A replay can reach back further than the caller's `tail` or `since` window. Lines older
+//! than the first one delivered are therefore dropped; only lines between the first and the
+//! latest delivered (a gap a restart left) are filled in.
+//!
 //! Outside a replay nothing is dropped, so a stream that happens to repeat a `(timestamp,
 //! text)` pair keeps both.
 
@@ -23,6 +27,10 @@ pub(crate) struct Dedup {
     ring: VecDeque<u64>,
     /// How many of each key are in `ring`.
     counts: HashMap<u64, u32>,
+    /// Earliest timestamp delivered: the start of the window the caller asked for (`tail`,
+    /// `since`). A replay reaches back further than that; what it finds before this point
+    /// was never wanted.
+    oldest: Option<Timestamp>,
     /// Latest timestamp delivered.
     newest: Option<Timestamp>,
     /// While replaying: the newest timestamp at the time of the reconnect. A line after it
@@ -38,6 +46,7 @@ impl Dedup {
             cap: cap.max(1),
             ring: VecDeque::new(),
             counts: HashMap::new(),
+            oldest: None,
             newest: None,
             boundary: None,
             matched: HashMap::new(),
@@ -63,6 +72,10 @@ impl Dedup {
             if ts > boundary {
                 self.boundary = None;
                 self.matched.clear();
+            } else if self.oldest.is_some_and(|oldest| ts < oldest) {
+                // Older than anything the caller's window delivered: the overlap reached
+                // back past a `tail` or `since` limit. Not a gap fill.
+                return false;
             } else if let Some(&delivered) = self.counts.get(&key) {
                 let matched = self.matched.entry(key).or_insert(0);
                 if *matched < delivered {
@@ -73,6 +86,9 @@ impl Dedup {
             }
         }
         self.record(key);
+        if self.oldest.is_none_or(|o| ts < o) {
+            self.oldest = Some(ts);
+        }
         if self.newest.is_none_or(|n| ts > n) {
             self.newest = Some(ts);
         }

@@ -146,6 +146,21 @@ impl PodInfo {
         }
     }
 
+    /// Whether `container` has no log to open yet but is expected to get one: it is waiting
+    /// to start, between restarts, or has no status yet (a pod not yet scheduled or reported
+    /// on by its kubelet, a just-added ephemeral container). A pod that has finished or is
+    /// being deleted will never start a container without a status.
+    pub(crate) fn awaiting_start(&self, container: &ContainerInfo) -> bool {
+        match container.state {
+            ContainerState::Waiting => true,
+            ContainerState::Terminated { .. } => self.will_restart(container),
+            ContainerState::Unknown => {
+                !self.deleting && !matches!(self.phase, PodPhase::Succeeded | PodPhase::Failed)
+            }
+            ContainerState::Running => false,
+        }
+    }
+
     /// The container a request without a name reads, resolved as the API server does:
     /// the default-container annotation, else the only regular container.
     pub(crate) fn default_container_name(&self) -> Option<&str> {

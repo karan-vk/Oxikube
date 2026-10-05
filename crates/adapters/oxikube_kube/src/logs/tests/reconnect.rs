@@ -8,6 +8,7 @@ use oxikube_ports::{LogPort, LogSince};
 use tokio::time::Instant;
 
 use super::fake::{Chunk, FakeSource, collect, expect_lines, follow, lines, pod, texts, ts, wire};
+use crate::logs::ContainerSelection;
 use crate::logs::source::{ContainerState, PodPhase, RestartPolicy};
 
 const APP: &str = "app";
@@ -73,6 +74,27 @@ async fn the_first_open_keeps_tail_and_the_reconnect_drops_it() {
     let requests = source.requests("p");
     assert_eq!(requests[0].tail_lines, Some(100));
     assert_eq!(requests[1].tail_lines, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_reconnect_does_not_replay_lines_older_than_the_tail_window() {
+    let source = FakeSource::new();
+    source.reply("p", APP, [lines(7..10), vec![Chunk::Break]].concat());
+    // The overlap reaches back to line 0, well before the three lines the tail asked for.
+    source.reply("p", APP, lines(0..12));
+    source
+        .pod_state(running(0))
+        .pod_state(running(0))
+        .pod_gone("p");
+
+    let opts = follow().tail_lines(3);
+    let items = collect(source.logs().stream_logs("ns", "p", &opts).await.unwrap()).await;
+
+    assert_eq!(
+        texts(&items),
+        expect_lines(7..12),
+        "in order, nothing from before the window"
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -273,6 +295,57 @@ async fn waiting_to_restart_is_not_counted_as_a_failure() {
         started.elapsed() >= Duration::from_secs(10),
         "backed off between attempts"
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_container_without_a_status_yet_is_waited_for() {
+    let source = FakeSource::new();
+    source.pod_state(pod("p", &[(APP, ContainerState::Unknown, 0)]));
+    // A pod that is not scheduled for longer than `max_open_failures` backoffs.
+    for _ in 0..12 {
+        source.fail(
+            "p",
+            APP,
+            OxiError::validation("container is waiting to start"),
+        );
+    }
+    source.reply("p", APP, [lines(0..2), vec![Chunk::Hang]].concat());
+
+    let stream = source
+        .logs()
+        .stream_containers("ns", "p", &ContainerSelection::All, &follow())
+        .await
+        .unwrap();
+    let items: Vec<_> = stream.take(2).collect().await;
+
+    assert_eq!(texts(&items), expect_lines(0..2));
+    assert_eq!(source.requests("p").len(), 13);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_container_without_a_status_in_a_finished_pod_is_given_up_on() {
+    let source = FakeSource::new();
+    let mut info = pod("p", &[(APP, ContainerState::Unknown, 0)]);
+    info.phase = PodPhase::Failed;
+    source.pod_state(info);
+    for _ in 0..20 {
+        source.fail(
+            "p",
+            APP,
+            OxiError::validation("container is waiting to start"),
+        );
+    }
+
+    let stream = source
+        .logs()
+        .stream_containers("ns", "p", &ContainerSelection::All, &follow())
+        .await
+        .unwrap();
+    let items = collect(stream).await;
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].as_ref().unwrap_err().kind(), ErrorKind::Validation);
+    assert_eq!(source.requests("p").len(), 10);
 }
 
 #[tokio::test(start_paused = true)]

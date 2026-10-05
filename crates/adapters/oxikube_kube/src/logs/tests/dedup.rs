@@ -64,6 +64,22 @@ fn a_line_missed_in_the_gap_is_delivered_even_if_older_than_newest() {
 }
 
 #[test]
+fn a_replay_older_than_the_first_line_delivered_is_not_a_gap_fill() {
+    let mut d = Dedup::new(100);
+    // A `tail` window: the caller only wanted from line 5 on.
+    feed(&mut d, &[(5, 5), (6, 6)]);
+    d.begin_replay();
+    // The overlap replays 1..4 as well, which the window excluded.
+    assert_eq!(
+        feed(
+            &mut d,
+            &[(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)]
+        ),
+        [(7, 7)]
+    );
+}
+
+#[test]
 fn the_replay_ends_at_the_first_newer_line() {
     let mut d = Dedup::new(100);
     feed(&mut d, &[(1, 1)]);

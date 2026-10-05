@@ -121,12 +121,11 @@ impl Follower {
             Ok(Some(pod)) if self.uid.as_deref().is_some_and(|uid| uid != pod.uid) => {
                 return Reopen::Stop;
             }
-            // A container that is starting or between restarts has no log to open yet;
-            // waiting for it is not a failure.
-            Ok(Some(pod)) => pod.container(&target.container).is_some_and(|c| {
-                matches!(c.state, ContainerState::Waiting)
-                    || (matches!(c.state, ContainerState::Terminated { .. }) && pod.will_restart(c))
-            }),
+            // A container that is starting, between restarts or without a status yet has no
+            // log to open; waiting for it is not a failure.
+            Ok(Some(pod)) => pod
+                .container(&target.container)
+                .is_some_and(|c| pod.awaiting_start(c)),
             Err(_) => false,
         };
         if !waiting {
