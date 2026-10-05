@@ -215,6 +215,23 @@ impl Workspace {
         cx.notify();
     }
 
+    /// The side panel whose entity id is `id`.
+    fn docked(&self, id: EntityId) -> Option<&DockedPanel> {
+        self.panels.iter().find(|p| p.handle.panel_id() == id)
+    }
+
+    /// Makes the pane holding `item` the active pane.
+    fn activate_pane_of(&mut self, item: EntityId, cx: &App) {
+        if let Some(pane) = self.pane_group(cx).pane_for_item(item) {
+            self.active_pane = Some(pane.id());
+        }
+    }
+
+    fn toggle_dock_area(&self, placement: DockPlacement, window: &mut Window, cx: &mut App) {
+        self.dock_area
+            .update(cx, |area, cx| area.toggle_dock(placement, window, cx));
+    }
+
     fn focus_item(&self, item: EntityId, window: &mut Window, cx: &mut App) {
         if let Some(open) = self.items.get(&item) {
             open.handle.focus_handle(cx).focus(window, cx);

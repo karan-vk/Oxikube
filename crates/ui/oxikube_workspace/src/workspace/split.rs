@@ -3,7 +3,7 @@
 use gpui::{Context, EntityId, Window};
 use oxikube_ui::dock::InsertTarget;
 
-use super::{Workspace, open::Placement};
+use super::{Workspace, open::ItemPlacement};
 use crate::pane::{PaneId, SplitDirection};
 
 impl Workspace {
@@ -78,8 +78,13 @@ impl Workspace {
         let handle = self.items.get(&item)?.handle.boxed_clone();
         match handle.clone_on_split(window, cx) {
             Some(clone) => {
-                let id =
-                    self.insert_item(clone, Placement::Split(pane, direction), true, window, cx);
+                let id = self.insert_item(
+                    clone,
+                    ItemPlacement::Split(pane, direction),
+                    true,
+                    window,
+                    cx,
+                );
                 self.pane_group(cx).pane_for_item(id).map(|pane| pane.id())
             }
             None => self.move_item_to_split(item, direction, window, cx),

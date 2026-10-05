@@ -1,33 +1,41 @@
 //! Dock snapshots and sizes, and zoom.
 
-use gpui::{Context, Window, px};
+use gpui::{App, Context, EntityId, Pixels, Window, px};
 use oxikube_ui::{UiScale, Unscaled, dock::PanelId, u};
 
 use super::{Workspace, layout::first_group};
-use crate::{dock::Dock, panel::DockPosition};
+use crate::{dock::Dock, pane::PaneId, panel::DockPosition};
 
 impl Workspace {
     /// A snapshot of the dock at `position`; `None` until a panel was added there.
-    pub fn dock(&self, position: DockPosition, cx: &gpui::App) -> Option<Dock> {
+    pub fn dock(&self, position: DockPosition, cx: &App) -> Option<Dock> {
         let area = self.dock_area.read(cx);
         let placement = position.placement();
         let tree = area.layout(placement)?;
-        let entity_of = |panel: PanelId| {
-            self.panels
-                .iter()
-                .find(|p| p.panel_id == panel)
-                .map(|p| p.handle.panel_id())
-        };
         let size = area.dock_size(placement).unwrap_or(px(0.));
         Some(Dock {
             position,
             open: area.is_dock_open(placement),
             size: Unscaled::from_scaled(size, UiScale::get(cx)),
-            panels: tree.panels().filter_map(entity_of).collect(),
-            active_panel: first_group(tree.root())
-                .and_then(|(_, displayed)| displayed)
-                .and_then(entity_of),
+            panels: tree
+                .panels()
+                .filter_map(|panel| self.panel_entity(panel))
+                .collect(),
+            active_panel: self.active_dock_panel(position, cx),
         })
+    }
+
+    /// The entity id of the side panel carried by the dock panel `panel`.
+    fn panel_entity(&self, panel: PanelId) -> Option<EntityId> {
+        let docked = self.panels.iter().find(|p| p.panel_id == panel)?;
+        Some(docked.handle.panel_id())
+    }
+
+    /// The side panel displayed by the first group of the dock at `position`.
+    pub(super) fn active_dock_panel(&self, position: DockPosition, cx: &App) -> Option<EntityId> {
+        let tree = self.dock_area.read(cx).layout(position.placement())?;
+        let (_, displayed) = first_group(tree.root())?;
+        self.panel_entity(displayed?)
     }
 
     /// Resizes the dock at `position` to `size` (unscaled), no smaller than its displayed panel's
@@ -72,12 +80,12 @@ impl Workspace {
     }
 
     /// Whether a pane or dock group fills the window.
-    pub fn is_zoomed(&self, cx: &gpui::App) -> bool {
+    pub fn is_zoomed(&self, cx: &App) -> bool {
         self.dock_area.read(cx).is_zoomed()
     }
 
     /// The centre pane that is zoomed, if a centre pane is what is zoomed.
-    pub fn zoomed_pane(&self, cx: &gpui::App) -> Option<crate::pane::PaneId> {
+    pub fn zoomed_pane(&self, cx: &App) -> Option<PaneId> {
         let node = self.dock_area.read(cx).zoomed_group()?;
         self.pane_group(cx)
             .panes()
@@ -86,15 +94,9 @@ impl Workspace {
             .find(|pane| pane.node() == node)
     }
 
-    fn min_dock_size(
-        &self,
-        position: DockPosition,
-        window: &Window,
-        cx: &gpui::App,
-    ) -> Option<gpui::Pixels> {
-        let active = self.dock(position, cx)?.active_panel?;
-        let entry = self.panels.iter().find(|p| p.handle.panel_id() == active)?;
-        entry.handle.min_size(window, cx)
+    fn min_dock_size(&self, position: DockPosition, window: &Window, cx: &App) -> Option<Pixels> {
+        let active = self.active_dock_panel(position, cx)?;
+        self.docked(active)?.handle.min_size(window, cx)
     }
 
     /// Keeps every dock at least as big as its displayed panel's [`Panel::min_size`] after a

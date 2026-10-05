@@ -35,7 +35,7 @@ impl Default for OpenOptions {
 }
 
 /// Where a new item tab lands.
-pub(super) enum Placement {
+pub(super) enum ItemPlacement {
     InPane(Option<PaneId>, Option<usize>),
     Split(PaneId, SplitDirection),
 }
@@ -78,7 +78,7 @@ impl Workspace {
             .filter(|pane| self.pane_group(cx).pane(*pane).is_some());
         self.insert_item(
             item,
-            Placement::InPane(pane, options.index),
+            ItemPlacement::InPane(pane, options.index),
             options.focus,
             window,
             cx,
@@ -106,9 +106,7 @@ impl Workspace {
         };
         self.dock_area
             .update(cx, |area, cx| area.select_panel(panel, window, cx));
-        if let Some(pane) = self.pane_group(cx).pane_for_item(item) {
-            self.active_pane = Some(pane.id());
-        }
+        self.activate_pane_of(item, cx);
         if focus {
             self.focus_item(item, window, cx);
         }
@@ -119,7 +117,7 @@ impl Workspace {
     pub(super) fn insert_item(
         &mut self,
         item: Box<dyn ItemHandle>,
-        placement: Placement,
+        placement: ItemPlacement,
         focus: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -140,14 +138,14 @@ impl Workspace {
         self.item_panels.insert(panel_id, item_id);
 
         let target = match placement {
-            Placement::InPane(pane, index) => pane
+            ItemPlacement::InPane(pane, index) => pane
                 .or_else(|| self.active_pane(cx).map(|pane| pane.id()))
                 .map(|pane| InsertTarget::Tabs {
                     node: pane.node(),
                     ix: index,
                     activate: true,
                 }),
-            Placement::Split(pane, direction) => Some(InsertTarget::Split {
+            ItemPlacement::Split(pane, direction) => Some(InsertTarget::Split {
                 node: pane.node(),
                 placement: direction.placement(),
                 size: None,
@@ -175,9 +173,7 @@ impl Workspace {
             }
         });
 
-        if let Some(pane) = self.pane_group(cx).pane_for_item(item_id) {
-            self.active_pane = Some(pane.id());
-        }
+        self.activate_pane_of(item_id, cx);
         if focus {
             self.focus_item(item_id, window, cx);
         }
@@ -210,9 +206,7 @@ impl Workspace {
             ItemTabEvent::Removed => this.item_tab_removed(item_id, window, cx),
         });
         let focused = cx.on_focus_in(&item.focus_handle(cx), window, move |this, _, cx| {
-            if let Some(pane) = this.pane_group(cx).pane_for_item(item_id) {
-                this.active_pane = Some(pane.id());
-            }
+            this.activate_pane_of(item_id, cx);
         });
         vec![events, removed, focused]
     }

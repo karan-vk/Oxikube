@@ -120,7 +120,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(entry) = self.panels.iter().find(|p| p.handle.panel_id() == id) else {
+        let Some(entry) = self.docked(id) else {
             return false;
         };
         let (panel_id, focus) = (entry.panel_id, entry.handle.focus_handle(cx));
@@ -133,8 +133,7 @@ impl Workspace {
         let shown = open && self.is_displayed(panel_id, cx);
         if shown && focus.contains_focused(window, cx) {
             if in_dock {
-                self.dock_area
-                    .update(cx, |area, cx| area.toggle_dock(placement, window, cx));
+                self.toggle_dock_area(placement, window, cx);
             }
             self.focus_active_item(window, cx);
             cx.notify();
@@ -160,11 +159,10 @@ impl Workspace {
             return false;
         }
         let had_focus = self.dock_has_focus(placement, window, cx);
-        self.dock_area
-            .update(cx, |area, cx| area.toggle_dock(placement, window, cx));
+        self.toggle_dock_area(placement, window, cx);
         let open = self.dock_area.read(cx).is_dock_open(placement);
         if open {
-            if let Some(panel) = self.dock(position, cx).and_then(|dock| dock.active_panel) {
+            if let Some(panel) = self.active_dock_panel(position, cx) {
                 self.focus_panel(panel, window, cx);
             }
         } else if had_focus {
@@ -181,7 +179,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(entry) = self.panels.iter().find(|p| p.handle.panel_id() == id) else {
+        let Some(entry) = self.docked(id) else {
             return;
         };
         let (panel_id, focus) = (entry.panel_id, entry.handle.focus_handle(cx));
@@ -195,8 +193,7 @@ impl Workspace {
             }
             PanelEvent::Close => {
                 if self.dock_area.read(cx).is_dock_open(placement) {
-                    self.dock_area
-                        .update(cx, |area, cx| area.toggle_dock(placement, window, cx));
+                    self.toggle_dock_area(placement, window, cx);
                     self.focus_active_item(window, cx);
                 }
             }
@@ -231,7 +228,7 @@ impl Workspace {
     }
 
     fn focus_panel(&self, id: EntityId, window: &mut Window, cx: &mut gpui::App) {
-        if let Some(entry) = self.panels.iter().find(|p| p.handle.panel_id() == id) {
+        if let Some(entry) = self.docked(id) {
             entry.handle.focus_handle(cx).focus(window, cx);
         }
     }
