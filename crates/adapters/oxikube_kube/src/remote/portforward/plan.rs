@@ -218,9 +218,9 @@ impl Plan {
     /// does not flap between equivalent replicas.
     pub(super) fn pick(&self, pods: &[PodInfo]) -> Option<Target> {
         pods.iter()
-            .filter(|pod| self.target_on(pod).is_some())
-            .min_by(|a, b| (a.created, &a.name).cmp(&(b.created, &b.name)))
-            .and_then(|pod| self.target_on(pod))
+            .filter_map(|pod| Some((pod.created, self.target_on(pod)?)))
+            .min_by(|(a_created, a), (b_created, b)| (a_created, &a.pod).cmp(&(b_created, &b.pod)))
+            .map(|(_, target)| target)
     }
 
     /// Why [`pick`](Self::pick) found nothing, as the error a caller of `start` sees.

@@ -7,7 +7,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use oxikube_domain::ids::Gvk;
-use oxikube_domain::{ErrorKind, ForwardSpec, ForwardStatus, OxiError, OxiResult};
+use oxikube_domain::{ForwardSpec, OxiError, OxiResult};
 use oxikube_ports::PortForwardPort;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -35,12 +35,11 @@ pub(super) async fn start(
     spec: &ForwardSpec,
 ) -> OxiResult<ForwardHandle> {
     let (namespace, name) = target_of(spec)?;
-    let plan = match spec.target.gvk.kind.as_ref() {
-        "Pod" => Plan::pod(namespace, name, spec.remote_port.clone()),
-        _ => {
-            let service = cluster.service(namespace, name).await?;
-            Plan::service(namespace, name, service, &spec.remote_port)?
-        }
+    let plan = if spec.targets_service() {
+        let service = cluster.service(namespace, name).await?;
+        Plan::service(namespace, name, service, &spec.remote_port)?
+    } else {
+        Plan::pod(namespace, name, spec.remote_port.clone())
     };
     let selector = plan.selector();
     let pods = cluster.pods(namespace, &selector).await?;
@@ -108,10 +107,9 @@ async fn run(
                 }
                 Err(err) => {
                     tracing::warn!(error = %err, "port-forward accept failed");
-                    stop.0.publish(ForwardStatus::Error {
-                        kind: ErrorKind::Internal,
-                        message: format!("accepting a local connection failed: {err}"),
-                    });
+                    stop.0.error(&OxiError::internal(format!(
+                        "accepting a local connection failed: {err}"
+                    )));
                     tokio::time::sleep(ACCEPT_BACKOFF).await;
                 }
             },
@@ -122,10 +120,7 @@ async fn run(
                     }
                 }
                 None => {
-                    stop.0.publish(ForwardStatus::Error {
-                        kind: ErrorKind::Internal,
-                        message: "the pod watch ended unexpectedly".to_owned(),
-                    });
+                    stop.0.error(&OxiError::internal("the pod watch ended unexpectedly"));
                     break;
                 }
             },
