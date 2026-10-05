@@ -9,7 +9,7 @@
 //!
 //! - `open`: open-or-activate, placing a new item's tab.
 //! - `close`: closing items, the reopen-closed stack.
-//! - `split`: moving items between panes, splitting panes.
+//! - `split`: moving items between panes, splitting panes, returning item tabs dropped on a dock.
 //! - `panels`: side panels, toggling a panel or a dock.
 //! - `docks`: dock snapshots and sizes, zoom.
 //! - `layout`: queries on the dock area's layout trees.
@@ -200,6 +200,8 @@ impl Workspace {
     }
 
     fn layout_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Before `locations` is rebuilt: it still says where a stray item was dragged from.
+        self.return_items_from_docks(window, cx);
         let group = self.pane_group(cx);
         self.locations.clear();
         for pane in group.panes() {

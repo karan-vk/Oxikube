@@ -1,6 +1,7 @@
 //! `#[gpui::test]`s of the workspace: items, panes and splits, docks and panels, zoom, and tab
 //! drag and drop, all through a real window with the dock area's skin.
 
+mod dock_sizes;
 mod docks;
 mod drag;
 mod items;
@@ -78,6 +79,16 @@ pub(super) fn add_panel(
     });
     vcx.run_until_parked();
     panel
+}
+
+/// A snapshot of the dock at `position`, which must exist.
+pub(super) fn dock(
+    ws: &Entity<Workspace>,
+    vcx: &mut VisualTestContext,
+    position: DockPosition,
+) -> crate::Dock {
+    vcx.update(|_, cx| ws.read(cx).dock(position, cx))
+        .expect("the dock exists")
 }
 
 /// The centre panes now.

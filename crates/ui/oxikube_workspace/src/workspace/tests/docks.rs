@@ -10,15 +10,6 @@ use crate::{
     test_support::ToggleLeftTestPanel,
 };
 
-fn dock(
-    ws: &Entity<Workspace>,
-    vcx: &mut VisualTestContext,
-    position: DockPosition,
-) -> crate::Dock {
-    vcx.update(|_, cx| ws.read(cx).dock(position, cx))
-        .expect("the dock exists")
-}
-
 #[gpui::test]
 fn panels_create_their_docks_and_each_dock_toggles(cx: &mut TestAppContext) {
     let (ws, mut vcx) = workspace(cx);

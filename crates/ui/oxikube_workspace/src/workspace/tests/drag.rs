@@ -1,4 +1,5 @@
-//! Dragging a tab between panes with the mouse, through the dock area's tab bars.
+//! Dragging a tab between panes with the mouse, through the dock area's tab bars, and an item tab
+//! dropped on a dock.
 
 use gpui::{Modifiers, MouseButton, point, px};
 
@@ -73,4 +74,63 @@ fn dragging_a_pane_s_last_tab_away_removes_the_pane(cx: &mut TestAppContext) {
     let panes = panes(&ws, &mut vcx);
     assert_eq!(panes.len(), 1);
     assert!(panes[0].items().contains(&a) && panes[0].items().contains(&b));
+}
+
+#[gpui::test]
+fn an_item_tab_dropped_on_a_dock_returns_to_its_pane(cx: &mut TestAppContext) {
+    let (ws, mut vcx) = workspace(cx);
+    let a = open(&ws, &mut vcx, "a");
+    let b = open(&ws, &mut vcx, "b");
+    let panel = add_panel(&ws, &mut vcx, DockPosition::Left, "tree", |_| {});
+
+    drag(&mut vcx, "tab-a", "panel-tab-tree");
+
+    let panes = panes(&ws, &mut vcx);
+    assert_eq!(panes.len(), 1, "{panes:?}");
+    assert_eq!(panes[0].items(), [a, b], "a is back at its own index");
+    assert_eq!(panes[0].active_item(), Some(a), "and displayed");
+    assert_eq!(
+        vcx.update(|_, cx| ws.read(cx).active_item(cx).map(|item| item.item_id())),
+        Some(a),
+        "close-active-item and split reach it again"
+    );
+    assert!(item_focused(&ws, &mut vcx, a));
+    let left = vcx
+        .update(|_, cx| ws.read(cx).dock(DockPosition::Left, cx))
+        .expect("the left dock");
+    assert_eq!(
+        left.panels(),
+        [panel.entity_id()],
+        "the dock only holds its panel"
+    );
+    assert_eq!(left.active_panel(), Some(panel.entity_id()));
+    assert!(bounds(&mut vcx, "item-a").is_some());
+    assert!(bounds(&mut vcx, "panel-tree").is_some());
+    assert!(vcx.update(|_, cx| ws.read(cx).closed_items().is_empty()));
+}
+
+#[gpui::test]
+fn an_item_dropped_on_a_dock_from_a_pane_it_emptied_goes_to_the_active_pane(
+    cx: &mut TestAppContext,
+) {
+    let (ws, mut vcx) = workspace(cx);
+    let a = open(&ws, &mut vcx, "a");
+    let b = open(&ws, &mut vcx, "b");
+    add_panel(&ws, &mut vcx, DockPosition::Right, "agent", |_| {});
+    vcx.update(|window, cx| {
+        ws.update(cx, |ws, cx| {
+            ws.move_item_to_split(b, SplitDirection::Right, window, cx)
+        })
+    })
+    .expect("split");
+    vcx.run_until_parked();
+
+    drag(&mut vcx, "tab-b", "panel-tab-agent");
+
+    let panes = panes(&ws, &mut vcx);
+    assert_eq!(panes.len(), 1, "b's emptied pane is gone: {panes:?}");
+    assert_eq!(panes[0].items(), [a, b]);
+    assert_eq!(panes[0].active_item(), Some(b));
+    assert_eq!(active_pane(&ws, &mut vcx).id(), panes[0].id());
+    assert!(item_focused(&ws, &mut vcx, b));
 }

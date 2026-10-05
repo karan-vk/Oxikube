@@ -100,7 +100,8 @@ impl Workspace {
     }
 
     /// Keeps every dock at least as big as its displayed panel's [`Panel::min_size`] after a
-    /// resize by drag.
+    /// resize by drag. The dock area reports a divider drag only on release, so a dock dragged
+    /// below the minimum follows the pointer and settles at the minimum when the button is let go.
     pub(super) fn enforce_min_dock_sizes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         for position in DockPosition::ALL {
             let Some(min) = self.min_dock_size(position, window, cx).map(u) else {

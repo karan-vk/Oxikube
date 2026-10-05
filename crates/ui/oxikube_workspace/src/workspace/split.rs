@@ -1,10 +1,13 @@
-//! Moving items between panes and splitting panes.
+//! Moving items between panes and splitting panes; item tabs dropped on a dock go back.
 
 use gpui::{Context, EntityId, Window};
-use oxikube_ui::dock::InsertTarget;
+use oxikube_ui::dock::{DockPlacement, InsertTarget, PanelId};
 
-use super::{Workspace, open::ItemPlacement};
-use crate::pane::{PaneId, SplitDirection};
+use super::{Workspace, layout::first_group, open::ItemPlacement};
+use crate::{
+    pane::{PaneId, SplitDirection},
+    panel::DockPosition,
+};
 
 impl Workspace {
     /// Moves `item` into `pane` at `index` (after the last tab when `None`), displays it there and
@@ -100,5 +103,52 @@ impl Workspace {
     ) -> Option<PaneId> {
         let pane = self.active_pane(cx)?.id();
         self.split_pane(pane, direction, window, cx)
+    }
+
+    /// Puts back into the centre every item tab that a drag left in a dock. Items live only in
+    /// centre panes (Zed's model): the dock area accepts any tab on any tab bar, so an item tab
+    /// dropped on a dock's tab bar is returned to the pane and index it was dragged from, or to
+    /// the active pane when that pane is gone, and displayed and focused there.
+    pub(super) fn return_items_from_docks(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let area = self.dock_area.read(cx);
+        let stray: Vec<(EntityId, PanelId)> = DockPosition::ALL
+            .iter()
+            .filter_map(|position| area.layout(position.placement()))
+            .flat_map(|tree| tree.panels())
+            .filter_map(|panel| self.item_panels.get(&panel).map(|item| (*item, panel)))
+            .collect();
+        for (item, panel) in stray {
+            let group = self.pane_group(cx);
+            let (node, ix) = match self
+                .locations
+                .get(&item)
+                .filter(|(pane, _)| group.pane(*pane).is_some())
+            {
+                Some((pane, ix)) => (pane.node(), Some(*ix)),
+                None => {
+                    let fallback =
+                        self.active_pane(cx)
+                            .map(|pane| pane.id().node())
+                            .or_else(|| {
+                                let area = self.dock_area.read(cx);
+                                let tree = area.layout(DockPlacement::Center)?;
+                                first_group(tree.root()).map(|(node, _)| node)
+                            });
+                    let Some(node) = fallback else {
+                        continue;
+                    };
+                    (node, None)
+                }
+            };
+            let target = InsertTarget::Tabs {
+                node,
+                ix,
+                activate: true,
+            };
+            self.dock_area
+                .update(cx, |area, cx| area.move_panel(panel, target, window, cx));
+            self.activate_pane_of(item, cx);
+            self.focus_item(item, window, cx);
+        }
     }
 }
