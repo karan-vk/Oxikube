@@ -66,7 +66,6 @@ pub use config::{AccessPath, DEFAULT_PAGE_SIZE, ManagedFields, ResourcesConfig};
 pub use error::{ListExpired, is_list_expired};
 pub(crate) use error::{bad_object, list_error};
 pub(crate) use params::{deadline, list_params};
-pub(crate) use reader::pending;
 
 /// Resource reads for one cluster. Cheap to clone; clones share the client and discovery.
 #[derive(Clone)]
