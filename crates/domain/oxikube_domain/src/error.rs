@@ -50,11 +50,16 @@ pub enum ErrorKind {
     Unsupported,
     /// A bug or an unexpected condition (including panics turned into errors).
     Internal,
+    /// A local resource limit refused the request: the per-cluster watch budget (feed or
+    /// object cap) would be exceeded. The message says which limit and how to free room
+    /// (close views, narrow the namespace selection). Not retryable until something is
+    /// released.
+    BudgetExceeded,
 }
 
 impl ErrorKind {
     /// Every kind, in declaration order.
-    pub const ALL: [ErrorKind; 9] = [
+    pub const ALL: [ErrorKind; 10] = [
         ErrorKind::Auth,
         ErrorKind::Forbidden,
         ErrorKind::NotFound,
@@ -64,6 +69,7 @@ impl ErrorKind {
         ErrorKind::Validation,
         ErrorKind::Unsupported,
         ErrorKind::Internal,
+        ErrorKind::BudgetExceeded,
     ];
 
     /// Stable variant name, e.g. `"NotFound"`. Used in docs, logs and tool output.
@@ -78,6 +84,7 @@ impl ErrorKind {
             ErrorKind::Validation => "Validation",
             ErrorKind::Unsupported => "Unsupported",
             ErrorKind::Internal => "Internal",
+            ErrorKind::BudgetExceeded => "BudgetExceeded",
         }
     }
 
@@ -100,6 +107,7 @@ impl ErrorKind {
             ErrorKind::Validation => "invalid request",
             ErrorKind::Unsupported => "unsupported",
             ErrorKind::Internal => "internal error",
+            ErrorKind::BudgetExceeded => "budget exceeded",
         }
     }
 }
@@ -183,6 +191,11 @@ impl OxiError {
         Self::new(ErrorKind::Internal, message)
     }
 
+    /// [`ErrorKind::BudgetExceeded`] (not retryable): `message` is the human-readable reason.
+    pub fn budget_exceeded(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::BudgetExceeded, message)
+    }
+
     /// Attaches the underlying error. The caller is responsible for it carrying no
     /// secrets (redact before wrapping).
     #[must_use]
@@ -247,7 +260,7 @@ mod tests {
 
     #[test]
     fn each_constructor_sets_its_kind_and_default_retryable() {
-        let cases: [(OxiError, ErrorKind, bool); 9] = [
+        let cases: [(OxiError, ErrorKind, bool); 10] = [
             (OxiError::auth("a", false), ErrorKind::Auth, false),
             (OxiError::forbidden("a"), ErrorKind::Forbidden, false),
             (OxiError::not_found("a"), ErrorKind::NotFound, false),
@@ -257,6 +270,11 @@ mod tests {
             (OxiError::validation("a"), ErrorKind::Validation, false),
             (OxiError::unsupported("a"), ErrorKind::Unsupported, false),
             (OxiError::internal("a"), ErrorKind::Internal, false),
+            (
+                OxiError::budget_exceeded("a"),
+                ErrorKind::BudgetExceeded,
+                false,
+            ),
         ];
         for (err, kind, retryable) in cases {
             assert_eq!(err.kind(), kind);
@@ -270,7 +288,7 @@ mod tests {
         let mut names: Vec<_> = ErrorKind::ALL.iter().map(|k| k.as_str()).collect();
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), 9);
+        assert_eq!(names.len(), 10);
     }
 
     #[test]

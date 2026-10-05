@@ -49,6 +49,7 @@
 //! |---|---|
 //! | [`ResourcePort`] = [`ResourceReader`] + [`ResourceWriter`] | [`resource`] |
 //! | [`WatchFeed`], [`Delta`], [`DeltaBatch`] | [`feed`] |
+//! | [`FeedStats`], [`FeedStat`], [`FeedVariant`] (watch-budget counters, E04-S13) | [`feed_stats`] |
 //! | [`DiscoveryPort`] | [`discovery`] |
 //! | [`TableFeedPort`] | [`table`] |
 //! | [`LogPort`] | [`log`] |
@@ -80,6 +81,7 @@ pub mod describe;
 pub mod discovery;
 pub mod exec;
 pub mod feed;
+pub mod feed_stats;
 pub mod fs;
 pub mod helm;
 pub mod integration;
@@ -115,6 +117,7 @@ pub use describe::{DescribeOutput, DescribePort, DescribeSource};
 pub use discovery::{DiscoveryPort, ServerVersion};
 pub use exec::{ExecOptions, ExecPort, ExecSession, ExitStatus, TerminalSize};
 pub use feed::{Delta, DeltaBatch, WatchFeed};
+pub use feed_stats::{FeedStat, FeedStats, FeedVariant};
 pub use fs::{DirEntry, EntryKind, FsEvent, FsEventKind, FsPort};
 pub use helm::{HelmPort, HelmRelease, HelmReleaseRef, HelmReleaseStatus};
 pub use integration::{
