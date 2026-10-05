@@ -99,9 +99,13 @@ async fn background_propagation_deletes_the_dependents_too() {
     let ns = ns.name();
     family(&r, ns).await;
     let options = DeleteOptions::default().propagation(PropagationPolicy::Background);
-    r.delete(&configmap_gvk(), Some(ns), "parent", &options)
+    let outcome = r
+        .delete(&configmap_gvk(), Some(ns), "parent", &options)
         .await
         .expect("delete");
+    // Foreground answers with the held owner (`Deleting`); background removes it at once, so
+    // this tells the requested policy apart from the foreground one.
+    assert_eq!(outcome, DeleteOutcome::Deleted);
     gone(&r, ns, "parent").await;
     gone(&r, ns, "child").await;
 }
@@ -135,9 +139,18 @@ async fn foreground_propagation_holds_the_owner_until_the_dependents_are_gone() 
         .await
         .expect("delete");
     // The owner carries the foregroundDeletion finalizer while its dependents are deleted.
-    if let DeleteOutcome::Deleting(object) = &outcome {
-        assert!(object.meta.deletion.is_some(), "{object:?}");
-    }
+    let DeleteOutcome::Deleting(object) = &outcome else {
+        panic!("foreground delete should hold the owner, got {outcome:?}");
+    };
+    assert!(object.meta.deletion.is_some(), "{object:?}");
+    assert!(
+        object
+            .meta
+            .finalizers
+            .iter()
+            .any(|f| &**f == "foregroundDeletion"),
+        "{object:?}"
+    );
     gone(&r, ns, "child").await;
     gone(&r, ns, "parent").await;
 }
@@ -172,9 +185,10 @@ async fn delete_collection_removes_only_what_the_selector_matches() {
         )
         .await
         .expect("dry-run delete collection");
-    if let DeleteCollectionOutcome::Deleting(items) = dry {
-        assert_eq!(items.len(), 3);
-    }
+    let DeleteCollectionOutcome::Deleting(items) = dry else {
+        panic!("a dry-run delete collection lists what it would delete, got {dry:?}");
+    };
+    assert_eq!(items.len(), 3);
     assert!(
         live(&r, ns, "a").await.unwrap().is_some(),
         "a dry run deletes nothing"
