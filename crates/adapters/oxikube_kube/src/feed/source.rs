@@ -3,13 +3,13 @@
 
 use std::time::Duration;
 
-use futures::StreamExt;
 use futures::stream::BoxStream;
-use kube::Api;
-use kube::core::DynamicObject;
+use futures::{StreamExt, TryStreamExt};
+use kube::core::{ApiResource, DynamicObject, DynamicResourceScope, PartialObjectMeta};
 use kube::runtime::WatchStreamExt;
 use kube::runtime::utils::ResetTimerBackoff;
-use kube::runtime::watcher::{self, ExponentialBackoff, InitialListStrategy};
+use kube::runtime::watcher::{self, Event, ExponentialBackoff, InitialListStrategy};
+use kube::{Api, Client};
 use oxikube_ports::WatchOptions;
 
 use super::config::FeedConfig;
@@ -65,13 +65,79 @@ fn backoff(config: &FeedConfig) -> ResetTimerBackoff<ExponentialBackoff> {
     ResetTimerBackoff::new(ExponentialBackoff::from(builder), BACKOFF_RESET)
 }
 
-/// Opens the watcher. Nothing is requested until the stream is first polled.
-pub(super) fn events(
-    api: Api<DynamicObject>,
-    wc: watcher::Config,
-    config: &FeedConfig,
-) -> EventStream {
-    watcher::watcher(api, wc).backoff(backoff(config)).boxed()
+/// What one watch lists and watches: whole objects, or only their metadata.
+///
+/// Both yield [`DynamicObject`] events, so everything after the source is shared. A metadata
+/// watch is `Api<PartialObjectMeta<_>>`, which kube 4 sends as `PartialObjectMetadata`
+/// requests (list and watch `Accept` header); its objects arrive with `data` empty and
+/// without type fields (the server's `meta.k8s.io/v1` type would hide the real kind), so
+/// the kind comes from discovery like for list items.
+#[derive(Clone)]
+pub(super) enum Target {
+    Full(Api<DynamicObject>),
+    Metadata(Api<PartialObjectMeta<DynamicObject>>),
+}
+
+impl Target {
+    /// The API of `resource` in `namespace` (the whole cluster for `None`).
+    pub(super) fn new(
+        client: Client,
+        namespace: Option<&str>,
+        resource: &ApiResource,
+        metadata_only: bool,
+    ) -> Self {
+        fn api<K>(client: Client, namespace: Option<&str>, resource: &ApiResource) -> Api<K>
+        where
+            K: kube::Resource<DynamicType = ApiResource, Scope = DynamicResourceScope>,
+        {
+            match namespace {
+                Some(ns) => Api::namespaced_with(client, ns, resource),
+                None => Api::all_with(client, resource),
+            }
+        }
+        if metadata_only {
+            Self::Metadata(api(client, namespace, resource))
+        } else {
+            Self::Full(api(client, namespace, resource))
+        }
+    }
+
+    /// Whether this watches metadata only: its objects are [partial](oxikube_domain::Resource::is_partial).
+    pub(super) fn is_metadata(&self) -> bool {
+        matches!(self, Self::Metadata(_))
+    }
+
+    /// Opens the watcher. Nothing is requested until the stream is first polled.
+    pub(super) fn events(&self, wc: watcher::Config, config: &FeedConfig) -> EventStream {
+        match self {
+            Self::Full(api) => watcher::watcher(api.clone(), wc)
+                .backoff(backoff(config))
+                .boxed(),
+            Self::Metadata(api) => watcher::watcher(api.clone(), wc)
+                .map_ok(map_event)
+                .backoff(backoff(config))
+                .boxed(),
+        }
+    }
+}
+
+fn map_event(event: Event<PartialObjectMeta<DynamicObject>>) -> Event<DynamicObject> {
+    match event {
+        Event::Init => Event::Init,
+        Event::InitDone => Event::InitDone,
+        Event::InitApply(o) => Event::InitApply(metadata_object(o)),
+        Event::Apply(o) => Event::Apply(metadata_object(o)),
+        Event::Delete(o) => Event::Delete(metadata_object(o)),
+    }
+}
+
+/// A metadata-only object as a `DynamicObject` with no data.
+fn metadata_object(partial: PartialObjectMeta<DynamicObject>) -> DynamicObject {
+    DynamicObject {
+        types: None,
+        metadata: partial.metadata,
+        data: serde_json::Value::Null,
+    }
 }
 
 #[cfg(test)]

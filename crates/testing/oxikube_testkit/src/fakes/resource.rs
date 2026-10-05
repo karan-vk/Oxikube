@@ -606,6 +606,11 @@ impl ResourceReader for FakeResourcePort {
                 options.label_selector.as_deref(),
                 options.field_selector.as_deref(),
             )?;
+            let objects = if options.metadata_only {
+                objects.into_iter().map(metadata_only).collect()
+            } else {
+                objects
+            };
             let batch = DeltaBatch::from_deltas(vec![Delta::Restarted(objects)]);
             Ok(Timeline::immediate([batch]).keep_open())
         })?;
@@ -853,6 +858,18 @@ impl ResourceWriter for FakeResourcePort {
             .replace_subresource
             .next_or_unscripted(PORT, "replace_subresource")
     }
+}
+
+/// `object` as a metadata-only feed delivers it: `apiVersion`, `kind` and `metadata`, marked
+/// [partial](Resource::is_partial).
+fn metadata_only(object: Resource) -> Resource {
+    let json = serde_json::json!({
+        "apiVersion": object.json["apiVersion"],
+        "kind": object.json["kind"],
+        "metadata": object.json["metadata"],
+    });
+    // The identity fields are copied from a valid `Resource`, so this cannot fail.
+    Resource::from_json(json).map_or(object, Resource::into_partial)
 }
 
 #[cfg(test)]
@@ -1107,5 +1124,22 @@ mod tests {
             feed.next().now_or_never().is_none(),
             "stays open like a live watch"
         );
+    }
+
+    #[test]
+    fn a_metadata_only_watch_delivers_partial_objects() {
+        let a = pod().name("a").label("app", "web").build();
+        assert!(a.get("/spec").is_some());
+        let fake = FakeResourcePort::new().with_objects([a.clone()]);
+        let options = WatchOptions::default().metadata_only();
+        let mut feed = block_on(fake.watch(&pods(), None, &options)).unwrap();
+        let first = block_on(feed.next()).unwrap().unwrap();
+        let Delta::Restarted(listed) = &first.deltas[0] else {
+            panic!("the first delta is the list");
+        };
+        assert!(listed[0].is_partial());
+        assert_eq!(listed[0].meta, a.meta);
+        assert_eq!(listed[0].kind, a.kind);
+        assert!(listed[0].get("/spec").is_none() && listed[0].get("/status").is_none());
     }
 }

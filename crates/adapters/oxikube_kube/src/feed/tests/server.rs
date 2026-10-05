@@ -51,6 +51,8 @@ struct State {
     requests: Vec<(String, String)>,
     /// `Accept-Encoding` of every watch request, oldest first.
     watch_encodings: Vec<Option<String>>,
+    /// `(path, is_watch, Accept)` of every request, oldest first.
+    accepts: Vec<(String, bool, Option<String>)>,
 }
 
 /// Handle to the fake server; clones share state.
@@ -150,15 +152,33 @@ impl FeedServer {
         self.state.lock().watch_encodings.clone()
     }
 
+    /// The `Accept` header of every request to `path` so far as `(is_watch, header)`, oldest first.
+    pub(super) fn accepts(&self, path: &str) -> Vec<(bool, Option<String>)> {
+        let state = self.state.lock();
+        state
+            .accepts
+            .iter()
+            .filter(|(p, ..)| p == path)
+            .map(|(_, watch, accept)| (*watch, accept.clone()))
+            .collect()
+    }
+
     /// Requests currently hanging on the server: watches with no reply left, and
     /// [`Reply::Hang`].
     pub(super) fn open_watches(&self) -> usize {
         self.open_watches.load(Ordering::SeqCst)
     }
 
-    fn route(&self, path: &str, query: &str, encoding: Option<String>) -> Option<Reply> {
+    fn route(
+        &self,
+        path: &str,
+        query: &str,
+        encoding: Option<String>,
+        accept: Option<String>,
+    ) -> Option<Reply> {
         let mut state = self.state.lock();
         state.requests.push((path.into(), query.into()));
+        state.accepts.push((path.into(), is_watch(query), accept));
         if is_watch(query) {
             state.watch_encodings.push(encoding);
         }
@@ -223,7 +243,12 @@ impl Service<Request<Body>> for FeedServer {
             .get(http::header::ACCEPT_ENCODING)
             .and_then(|v| v.to_str().ok())
             .map(str::to_owned);
-        let reply = self.route(&path, &query, encoding);
+        let accept = req
+            .headers()
+            .get(http::header::ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        let reply = self.route(&path, &query, encoding, accept);
         let counter = self.open_watches.clone();
         Box::pin(async move {
             match reply {
@@ -255,6 +280,31 @@ pub(super) fn pod_in(namespace: &str, name: &str, uid: &str, rv: &str) -> Value 
         },
         "spec": {"containers": [{"name": "c", "image": "busybox"}]},
     })
+}
+
+/// A pod as `PartialObjectMetadata` in `namespace`, as a list item: no `spec`, no type fields.
+pub(super) fn meta_pod_in(namespace: &str, name: &str, uid: &str, rv: &str) -> Value {
+    json!({
+        "metadata": {
+            "name": name, "namespace": namespace, "uid": uid, "resourceVersion": rv,
+            "labels": {"app": "web"},
+            "ownerReferences": [{"apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "web-1",
+                "uid": "rs-1", "controller": true}],
+            "managedFields": [{"manager": "kubectl", "operation": "Update"}],
+        },
+    })
+}
+
+/// A metadata-only pod in `default`.
+pub(super) fn meta_pod(name: &str, uid: &str, rv: &str) -> Value {
+    meta_pod_in("default", name, uid, rv)
+}
+
+/// A watch event of `kind` for a metadata-only `object`, typed as the server types them.
+pub(super) fn meta_event(kind: &str, mut object: Value) -> Value {
+    object["apiVersion"] = json!("meta.k8s.io/v1");
+    object["kind"] = json!("PartialObjectMetadata");
+    json!({"type": kind, "object": object})
 }
 
 /// A pod in `default`.

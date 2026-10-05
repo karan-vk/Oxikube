@@ -21,7 +21,7 @@ How to read the **Lives in** column:
 | **Scope** | Whether a kind is `Namespaced` or `Cluster` scoped. | `oxikube_domain::ids` |
 | **ResourceRef** | `{cluster, gvk, namespace, name}` — the address of one object. | `oxikube_domain::ids` |
 | **ResourceKind** | Discovery record for one served kind: `Gvk`, plural/singular names, short names, categories, `VerbSet` of supported `Verb`s, namespaced flag, preferred version. Filled by API discovery, read by tables, palette and sidebar. | `oxikube_domain::kinds` |
-| **Resource** | Thin model: `ObjectMeta` (with `OwnerRef`s) + raw `serde_json::Value`. The domain never depends on k8s-openapi. | `oxikube_domain::resource` |
+| **Resource** | Thin model: `ObjectMeta` (with `OwnerRef`s) + raw `serde_json::Value`. The domain never depends on k8s-openapi. A metadata-only object (from a metadata feed) is **partial** (`Resource::is_partial`): no `spec`/`status`/data, never to be rendered as complete; `KubeResources::upgrade` fetches the full one. | `oxikube_domain::resource` |
 | **View-model** | Typed projection built from `Resource` JSON for a core kind (`PodSummary` with `ContainerSummary`, `NodeSummary`, `WorkloadSummary`, `JobSummary`, `CronJobSummary`). | `oxikube_domain::view` |
 | **Quantity** | A Kubernetes resource quantity (`500m`, `128Mi`) parsed into an exact decimal (`i128` mantissa × 10^exponent, nano precision), printed like apimachinery `Quantity.String()`. | `oxikube_domain::quantity` |
 | **Age** | A non-negative span since a resource was created, formatted `kubectl`-style (`AgeStyle::Kubectl`) or kdash-style (`AgeStyle::Detailed`). | `oxikube_domain::age` |
@@ -45,7 +45,7 @@ How to read the **Lives in** column:
 | **ClusterSessionState** | `Disconnected → Connecting → (AuthRequired) → Ready ↔ Degraded → Error`. Advanced by `SessionEvent`s; `SessionPhase` is the payload-free discriminant; a bad pair is an `InvalidTransition`. | `oxikube_domain::session` |
 | **NamespaceSelection** | `All` or a `Set` of namespaces chosen in the UI. `NamespaceFavourites` is the user's pinned list. | `oxikube_domain::session` |
 | **WatchScope** | Derived from a `NamespaceSelection` and a kind's `Scope`: `Cluster` or `Namespaces`; decides whether feeds are cluster- or namespace-scoped. | `oxikube_domain::session` |
-| **Feed** | A live stream of `DeltaBatch`es for one (cluster, gvk, scope): reflector, metadata-only, or Table API. Typed as `WatchFeed`. | `oxikube_ports::feed`; producers in `oxikube_kube::feed` (reflector: `ReflectorFeed`, E04-S02) |
+| **Feed** | A live stream of `DeltaBatch`es for one (cluster, gvk, scope): reflector, metadata-only, or Table API. Typed as `WatchFeed`. | `oxikube_ports::feed`; producers in `oxikube_kube::feed` (reflector and metadata-only variant: `ReflectorFeed`, E04-S02/S03) |
 | **FeedState** | Health of one feed: `Warming` (listing or relisting), `Live`, `Retrying` (backing off after a watch error), `Stopped`. Lets the session go `Degraded` while a feed retries. | `oxikube_kube::feed` |
 | **Delta / DeltaBatch** | One change in a feed (`Applied`, `Deleted`, `Restarted`) and a coalesced batch of them. Lives in ports, not the domain: it is transport. | `oxikube_ports::feed` |
 | **Table / TableFeed** | Server-side Table API data (kubectl-identical columns incl. CRD printer columns) as `TableColumn`s and `TableRow`s. | `oxikube_ports::table`; producer `oxikube_kube::table` |

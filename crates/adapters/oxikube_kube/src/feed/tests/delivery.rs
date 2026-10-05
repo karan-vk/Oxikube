@@ -268,12 +268,6 @@ async fn the_port_watch_opens_the_same_feed_and_validates_its_target() {
         .err()
         .unwrap();
     assert_eq!(err.kind(), ErrorKind::Unsupported);
-    let err = resources
-        .watch(&pod_gvk(), None, &WatchOptions::default().metadata_only())
-        .await
-        .err()
-        .unwrap();
-    assert_eq!(err.kind(), ErrorKind::Unsupported);
     let empty = WatchScope::Namespaces(vec![]);
     let err = resources
         .reflector_feed(&pod_gvk(), &empty, &options)
