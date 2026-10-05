@@ -29,12 +29,22 @@ async fn ready_pod(env: &Env, name: &str, labels: &[(&str, &str)]) {
         )
         .await
         .expect("create pod");
+    let last = std::cell::RefCell::new(String::new());
     wait_until("the pod to be Ready", DEADLINE, || async {
         let pod = live_pod(&env.resources, env.namespace(), name)
             .await
             .ok()
             .flatten()?;
-        is_ready(&pod).then_some(())
+        if is_ready(&pod) {
+            return Some(());
+        }
+        // Say why on a slow cluster (a failed pull, an unschedulable pod), once per change.
+        let status = pod.json["status"].to_string();
+        if *last.borrow() != status {
+            eprintln!("pod {name} not Ready yet: {status}");
+            *last.borrow_mut() = status;
+        }
+        None
     })
     .await;
 }

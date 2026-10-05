@@ -119,7 +119,7 @@ pub fn running_pod(name: &str, labels: &[(&str, &str)]) -> Value {
             "containers": [{
                 "name": "pause", "image": PAUSE,
                 "resources": {"requests": {"cpu": "10m", "memory": "8Mi"},
-                              "limits": {"cpu": "50m", "memory": "16Mi"}},
+                              "limits": {"cpu": "50m"}},
             }],
         },
     })
