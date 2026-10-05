@@ -12,7 +12,7 @@ use serde_json::json;
 use super::drain_support::*;
 use super::harness::*;
 use crate::algorithms::{BlockReason, DrainOptions, DrainProgress, drain};
-use crate::fake_api::status_body;
+use crate::fake_api::{FakeApi, status_body};
 
 #[tokio::test(start_paused = true)]
 async fn a_drain_cordons_then_evicts_each_pod_and_skips_daemonset_and_mirror_pods() {
@@ -199,6 +199,82 @@ async fn a_pod_that_blocks_the_drain_refuses_it_before_the_node_is_cordoned() {
         writes(&api)
     );
     assert!(BlockReason::Unmanaged.explain().contains("force"));
+}
+
+/// A node that is schedulable at first; `listings` are what its pod list answers in turn.
+fn late_arrival(listings: Vec<Vec<serde_json::Value>>) -> FakeApi {
+    let api = server();
+    api.reply(NODE, 200, node_json(false));
+    api.reply(NODE, 200, node_json(true));
+    for pods in listings {
+        api.reply(PODS, 200, pod_list(pods));
+    }
+    for name in ["a", "late"] {
+        api.reply(&eviction_path(name), 201, accepted());
+        api.reply(&pod_path(name), 404, gone());
+    }
+    api
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_pod_scheduled_between_the_list_and_the_cordon_is_still_evicted() {
+    let a = pod_json("a", "n1", Some("ReplicaSet"));
+    let late = pod_json("late", "n1", Some("ReplicaSet"));
+    let api = late_arrival(vec![vec![a.clone()], vec![a, late]]);
+    let steps = progress(run(&api, DrainOptions::default()).await);
+
+    let summary = finished(&steps);
+    let mut evicted: Vec<String> = summary.evicted.iter().map(ToString::to_string).collect();
+    evicted.sort();
+    assert_eq!(evicted, ["default/a", "default/late"]);
+    assert!(summary.is_complete(), "{summary:?}");
+    // The second list came after the cordon.
+    let order: Vec<(String, Method)> = calls(&api)
+        .into_iter()
+        .filter(|r| r.path == PODS || r.method == Method::PATCH)
+        .map(|r| (r.path, r.method))
+        .collect();
+    assert_eq!(
+        order,
+        [
+            (PODS.to_owned(), Method::GET),
+            (NODE.to_owned(), Method::PATCH),
+            (PODS.to_owned(), Method::GET),
+        ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_pod_that_lands_and_blocks_fails_the_drain_with_the_node_cordoned() {
+    let a = pod_json("a", "n1", Some("ReplicaSet"));
+    let lone = pod_json("lone", "n1", None);
+    let api = late_arrival(vec![vec![a.clone()], vec![a, lone]]);
+    let steps = run(&api, DrainOptions::default()).await;
+    let err = steps
+        .into_iter()
+        .find_map(Result::err)
+        .expect("the drain is refused");
+    assert_eq!(err.kind(), ErrorKind::Validation);
+    assert!(err.to_string().contains("default/lone"), "{err}");
+    let kinds: Vec<Method> = writes(&api).into_iter().map(|r| r.method).collect();
+    assert_eq!(kinds, [Method::PATCH], "cordoned, nothing evicted");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_node_that_was_already_cordoned_is_listed_once() {
+    let api = server();
+    api.reply(NODE, 200, node_json(true));
+    api.reply(
+        PODS,
+        200,
+        pod_list(vec![pod_json("a", "n1", Some("ReplicaSet"))]),
+    );
+    api.reply(&eviction_path("a"), 201, accepted());
+    api.reply(&pod_path("a"), 404, gone());
+    let steps = progress(run(&api, DrainOptions::default()).await);
+    assert!(finished(&steps).is_complete());
+    let lists = calls(&api).iter().filter(|r| r.path == PODS).count();
+    assert_eq!(lists, 1);
 }
 
 #[tokio::test(start_paused = true)]

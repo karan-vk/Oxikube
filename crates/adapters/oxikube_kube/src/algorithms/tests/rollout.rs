@@ -168,12 +168,46 @@ async fn undo_restores_the_previous_revisions_template_with_a_json_patch() {
                 "metadata": {"labels": {"app": "web"}},
                 "spec": {"containers": [{"name": "web", "image": "web:v2"}]},
             }},
-            // Its annotations, minus the revision bookkeeping and the last-applied copy.
+            // Its annotations, minus its revision bookkeeping and last-applied copy; the
+            // Deployment keeps its own revision.
             {"op": "add", "path": "/metadata/annotations", "value": {
+                "deployment.kubernetes.io/revision": "3",
                 "kubernetes.io/change-cause": "bump to v2",
                 "team": "web",
             }},
         ])
+    );
+}
+
+#[tokio::test]
+async fn undo_keeps_the_deployments_own_bookkeeping_annotations() {
+    let port = cluster();
+    let mut live = deployment_json(3, "web:v3");
+    live["metadata"]["annotations"] = json!({
+        "deployment.kubernetes.io/revision": "3",
+        "kubectl.kubernetes.io/last-applied-configuration": "{\"live\":true}",
+        "deployment.kubernetes.io/revision-history": "1,2",
+        "kubernetes.io/change-cause": "bump to v3",
+        // Not bookkeeping and not on the ReplicaSet: kubectl drops it, too.
+        "owner": "ops",
+    });
+    port.insert(object(live));
+    port.script()
+        .patch
+        .push_ok(object(deployment_json(4, "web:v2")));
+    rollout_undo(&port, "default", "web", None, &WriteOptions::default())
+        .await
+        .expect("undo");
+    let (patch, _) = patch_of(&port);
+    assert_eq!(
+        patch.body[1]["value"],
+        json!({
+            "deployment.kubernetes.io/revision": "3",
+            "kubectl.kubernetes.io/last-applied-configuration": "{\"live\":true}",
+            "deployment.kubernetes.io/revision-history": "1,2",
+            "kubernetes.io/change-cause": "bump to v2",
+            "team": "web",
+        })
     );
 }
 

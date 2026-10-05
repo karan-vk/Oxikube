@@ -8,8 +8,8 @@ use tracing::debug;
 use super::revisions::{HASH_LABEL, REVISION_ANNOTATION, revision_of, revisions};
 use crate::algorithms::api::deployment_gvk;
 
-/// Annotations of a ReplicaSet that describe the ReplicaSet, not the Deployment, and are not
-/// copied back (kubectl's `annotationsToSkip`).
+/// Bookkeeping annotations: a ReplicaSet's are not copied back to the Deployment and the
+/// Deployment keeps its own (kubectl's `annotationsToSkip`).
 const SKIPPED_ANNOTATIONS: [&str; 6] = [
     "kubectl.kubernetes.io/last-applied-configuration",
     REVISION_ANNOTATION,
@@ -85,7 +85,7 @@ pub async fn rollout_undo(
     );
     let patch = Patch::json(json!([
         {"op": "replace", "path": "/spec/template", "value": template},
-        {"op": "add", "path": "/metadata/annotations", "value": restored_annotations(target)},
+        {"op": "add", "path": "/metadata/annotations", "value": restored_annotations(&deployment, target)},
     ]));
     let patched = port
         .patch(&deployment_gvk(), Some(namespace), name, &patch, options)
@@ -151,14 +151,20 @@ fn same_template(restored: &Value, current: Option<&Value>) -> bool {
     })
 }
 
-/// The Deployment's annotations after the undo: the ReplicaSet's, less the bookkeeping ones.
-fn restored_annotations(rs: &Resource) -> Value {
-    let kept: Map<String, Value> = rs
+/// The Deployment's annotations after the undo, as kubectl computes them: the Deployment's own
+/// bookkeeping annotations (revision, last-applied configuration, ...) stay, and the
+/// ReplicaSet's other annotations are laid over them.
+fn restored_annotations(deployment: &Resource, rs: &Resource) -> Value {
+    let skipped = |key: &str| SKIPPED_ANNOTATIONS.contains(&key);
+    let own = deployment
         .meta
         .annotations
         .iter()
-        .filter(|(key, _)| !SKIPPED_ANNOTATIONS.contains(&&***key))
+        .filter(|(key, _)| skipped(key));
+    let restored = rs.meta.annotations.iter().filter(|(key, _)| !skipped(key));
+    let merged: Map<String, Value> = own
+        .chain(restored)
         .map(|(key, value)| (key.to_string(), Value::String(value.to_string())))
         .collect();
-    Value::Object(kept)
+    Value::Object(merged)
 }

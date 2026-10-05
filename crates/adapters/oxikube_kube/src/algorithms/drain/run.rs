@@ -30,6 +30,9 @@ const NAMED: usize = 5;
 /// that cannot be evicted is `PodFailed` and the drain goes on with the others, so check
 /// [`DrainSummary::is_complete`] (or use [`drain_to_completion`]).
 ///
+/// The node is listed again once it is cordoned, so a pod scheduled onto it after the first
+/// list is evicted too; `Planned` shows the first plan, `Finished` what was done.
+///
 /// Nothing runs until the stream is polled and dropping it stops the drain at once (an
 /// eviction already sent stays sent; the node stays cordoned). Pods are evicted
 /// [`concurrency`](DrainOptions::concurrency) at a time, on the caller's task: nothing is
@@ -103,18 +106,14 @@ async fn execute(
         evict: plan.evict.clone(),
         skipped: plan.skipped.clone(),
     });
-    let summary = |evicted, failed| DrainSummary {
-        node: node.to_owned(),
-        evicted,
-        skipped: plan.skipped.clone(),
-        failed,
-        dry_run: options.dry_run,
-    };
     if options.dry_run {
-        announce(DrainProgress::Finished(summary(
-            plan.evict.clone(),
-            Vec::new(),
-        )));
+        announce(DrainProgress::Finished(DrainSummary {
+            node: node.to_owned(),
+            evicted: plan.evict.clone(),
+            skipped: plan.skipped.clone(),
+            failed: Vec::new(),
+            dry_run: true,
+        }));
         return Ok(());
     }
 
@@ -131,6 +130,27 @@ async fn execute(
         .await?;
     }
     announce(DrainProgress::Cordoned { already });
+
+    // The scheduler may have bound a pod between the list and the cordon. Once cordoned the
+    // node takes no more, so one more look finds them all (kubectl cordons first and so never
+    // has the gap). A node that was already cordoned had no gap.
+    let plan = if already {
+        plan
+    } else {
+        let pods = pods_on(port, node).await?;
+        let replan = plan_drain(&pods, options);
+        if !replan.blocked.is_empty() {
+            return Err(blocked_error(node, &replan));
+        }
+        replan
+    };
+    let summary = |evicted, failed| DrainSummary {
+        node: node.to_owned(),
+        evicted,
+        skipped: plan.skipped.clone(),
+        failed,
+        dry_run: false,
+    };
 
     let shared = Shared {
         port,
