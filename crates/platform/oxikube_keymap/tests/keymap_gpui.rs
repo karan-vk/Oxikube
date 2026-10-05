@@ -329,7 +329,9 @@ fn bindings_for_an_action_are_listed_strongest_first(cx: &mut TestAppContext) {
     assert_eq!(listed[0].keystrokes_text(), "ctrl-t");
     assert_eq!(listed[0].context.as_deref(), Some("Table"));
     assert_eq!(listed[0].layer, Some(KeymapLayer::User));
-    assert_eq!(listed[1].keystrokes_text(), "cmd-shift-p");
+    // `unparse` spells the platform key per OS (`cmd` is `super` on Linux), so derive it.
+    let default_keys = gpui::Keystroke::parse("cmd-shift-p").unwrap().unparse();
+    assert_eq!(listed[1].keystrokes_text(), default_keys);
     assert_eq!(listed[1].layer, Some(KeymapLayer::Default));
 
     cx.update(|cx| reload_user_keymap(cx, r#"[{"bindings": {"cmd-shift-p": null}}]"#));
