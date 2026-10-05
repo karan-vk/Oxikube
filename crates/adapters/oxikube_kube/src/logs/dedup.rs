@@ -1,0 +1,138 @@
+// Portions derived from kdash (https://github.com/kdash-rs/kdash), `src/network/stream.rs` at
+// commit c303673 (v2.1.1): the dedup of lines a reconnect replays in `stream_container_logs`.
+// MIT licence; the full text follows. Modifications (c) Oxikube contributors: a bounded
+// multiset of (timestamp, text) hashes instead of the text of the last 50 lines, applied only
+// while replaying the overlap.
+//
+// Copyright (c) 2021 Deepu K Sasidharan
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+//! Dropping the lines a reconnect replays.
+//!
+//! After a reconnect the server is asked for everything since a little before the last line
+//! seen (the overlap), so nothing written during the gap is missed. The overlap replays lines
+//! that were already delivered; [`Dedup`] recognises them by a hash of `(timestamp, text)`.
+//!
+//! Matching on the timestamp as well as the text means a line the application genuinely
+//! repeats (`"retrying..."` every second) is never mistaken for a replay: only the exact same
+//! kubelet timestamp matches. Matching is a multiset: if two identical lines carry the same
+//! timestamp, a replay of both drops both, and a replay of one drops one.
+//!
+//! A replay can reach back further than the caller's `tail` or `since` window. Lines older
+//! than the first one delivered are therefore dropped; only lines between the first and the
+//! latest delivered (a gap a restart left) are filled in.
+//!
+//! Outside a replay nothing is dropped, so a stream that happens to repeat a `(timestamp,
+//! text)` pair keeps both.
+
+use std::collections::{HashMap, VecDeque};
+
+use jiff::Timestamp;
+
+/// Remembers the last `cap` delivered lines and filters the replay after a reconnect.
+pub(crate) struct Dedup {
+    cap: usize,
+    /// Keys of the delivered lines, oldest first.
+    ring: VecDeque<u64>,
+    /// How many of each key are in `ring`.
+    counts: HashMap<u64, u32>,
+    /// Earliest timestamp delivered: the start of the window the caller asked for (`tail`,
+    /// `since`). A replay reaches back further than that; what it finds before this point
+    /// was never wanted.
+    oldest: Option<Timestamp>,
+    /// Latest timestamp delivered.
+    newest: Option<Timestamp>,
+    /// While replaying: the newest timestamp at the time of the reconnect. A line after it
+    /// is new, and ends the replay.
+    boundary: Option<Timestamp>,
+    /// While replaying: how many of each key the replay has already matched.
+    matched: HashMap<u64, u32>,
+}
+
+impl Dedup {
+    pub(crate) fn new(cap: usize) -> Self {
+        Self {
+            cap: cap.max(1),
+            ring: VecDeque::new(),
+            counts: HashMap::new(),
+            oldest: None,
+            newest: None,
+            boundary: None,
+            matched: HashMap::new(),
+        }
+    }
+
+    /// The latest timestamp delivered, from which a reconnect resumes.
+    pub(crate) fn newest(&self) -> Option<Timestamp> {
+        self.newest
+    }
+
+    /// Marks the start of a reconnect: lines up to [`newest`](Self::newest) that were
+    /// delivered already are dropped until the first newer line arrives.
+    pub(crate) fn begin_replay(&mut self) {
+        self.boundary = self.newest;
+        self.matched.clear();
+    }
+
+    /// Whether to deliver the line. `ts` is the line's timestamp (a line without one takes
+    /// the newest seen, so it is never older than what was delivered).
+    pub(crate) fn admit(&mut self, ts: Timestamp, key: u64) -> bool {
+        if let Some(boundary) = self.boundary {
+            if ts > boundary {
+                self.boundary = None;
+                self.matched.clear();
+            } else if self.oldest.is_some_and(|oldest| ts < oldest) {
+                // Older than anything the caller's window delivered: the overlap reached
+                // back past a `tail` or `since` limit. Not a gap fill.
+                return false;
+            } else if let Some(&delivered) = self.counts.get(&key) {
+                let matched = self.matched.entry(key).or_insert(0);
+                if *matched < delivered {
+                    *matched += 1;
+                    // A replay of a line already delivered: drop it, and keep the record.
+                    return false;
+                }
+            }
+        }
+        self.record(key);
+        if self.oldest.is_none_or(|o| ts < o) {
+            self.oldest = Some(ts);
+        }
+        if self.newest.is_none_or(|n| ts > n) {
+            self.newest = Some(ts);
+        }
+        true
+    }
+
+    fn record(&mut self, key: u64) {
+        *self.counts.entry(key).or_insert(0) += 1;
+        self.ring.push_back(key);
+        if self.ring.len() > self.cap {
+            if let Some(old) = self.ring.pop_front() {
+                if let Some(count) = self.counts.get_mut(&old) {
+                    *count -= 1;
+                    if *count == 0 {
+                        self.counts.remove(&old);
+                    }
+                }
+            }
+        }
+    }
+}
