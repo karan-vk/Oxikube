@@ -101,13 +101,9 @@ pub trait Settings: PartialEq + Send + Sync + Sized + 'static {
     /// Reloads that leave the value equal do not call it, so unrelated edits to
     /// `settings.json` never wake this observer.
     fn observe(cx: &mut App, mut f: impl FnMut(&mut App) + 'static) -> Subscription {
-        let mut seen = cx
-            .try_global::<SettingsStore>()
-            .map_or(0, |store| store.generation::<Self>());
+        let mut seen = generation::<Self>(cx);
         cx.observe_global::<SettingsStore>(move |cx| {
-            let current = cx.global::<SettingsStore>().generation::<Self>();
-            if current != seen {
-                seen = current;
+            if take_change::<Self>(&mut seen, cx) {
                 f(cx);
             }
         })
@@ -118,17 +114,25 @@ pub trait Settings: PartialEq + Send + Sync + Sized + 'static {
         cx: &mut Context<V>,
         mut f: impl FnMut(&mut V, &mut Context<V>) + 'static,
     ) -> Subscription {
-        let mut seen = cx
-            .try_global::<SettingsStore>()
-            .map_or(0, |store| store.generation::<Self>());
+        let mut seen = generation::<Self>(cx);
         cx.observe_global::<SettingsStore>(move |this, cx| {
-            let current = cx.global::<SettingsStore>().generation::<Self>();
-            if current != seen {
-                seen = current;
+            if take_change::<Self>(&mut seen, cx) {
                 f(this, cx);
             }
         })
     }
+}
+
+/// `T`'s change counter, `0` without a store.
+fn generation<T: Settings>(cx: &App) -> u64 {
+    cx.try_global::<SettingsStore>()
+        .map_or(0, |store| store.generation::<T>())
+}
+
+/// Whether `T` changed since `seen`; records the new counter.
+fn take_change<T: Settings>(seen: &mut u64, cx: &App) -> bool {
+    let current = cx.global::<SettingsStore>().generation::<T>();
+    std::mem::replace(seen, current) != current
 }
 
 /// A setting type collected through `inventory` and registered by [`SettingsStore::new`].

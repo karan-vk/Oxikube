@@ -70,15 +70,15 @@ impl SettingsStore {
     pub fn without_registered(default_settings: &str) -> OxiResult<Self> {
         let defaults = parse_jsonc_object(default_settings)
             .map_err(|err| OxiError::internal(format!("default settings are invalid: {err}")))?;
-        let mut store = Self::empty();
-        store.layers = MergedLayers::build(&defaults, &store.user);
-        store.defaults = defaults;
-        Ok(store)
+        Ok(Self::with_defaults(defaults))
     }
 
     /// A store with empty defaults and nothing registered.
     pub fn empty() -> Self {
-        let defaults = Map::new();
+        Self::with_defaults(Map::new())
+    }
+
+    fn with_defaults(defaults: Map<String, Value>) -> Self {
         let user = Map::new();
         let layers = MergedLayers::build(&defaults, &user);
         Self {
@@ -160,9 +160,9 @@ impl SettingsStore {
     pub fn set_user_settings(&mut self, text: &str) -> OxiResult<()> {
         if self.user_text.as_deref() == Some(text) {
             return match self.diagnostics.first() {
-                Some(SettingsDiagnostic::InvalidJson { message }) => Err(OxiError::validation(
-                    format!("settings.json is invalid: {message}"),
-                )),
+                Some(diagnostic @ SettingsDiagnostic::InvalidJson { .. }) => {
+                    Err(OxiError::validation(diagnostic.to_string()))
+                }
                 _ => Ok(()),
             };
         }
@@ -174,22 +174,12 @@ impl SettingsStore {
                 Ok(())
             }
             Err(message) => {
-                self.diagnostics = vec![SettingsDiagnostic::InvalidJson {
-                    message: message.clone(),
-                }];
-                Err(OxiError::validation(format!(
-                    "settings.json is invalid: {message}"
-                )))
+                let diagnostic = SettingsDiagnostic::InvalidJson { message };
+                let error = OxiError::validation(diagnostic.to_string());
+                self.diagnostics = vec![diagnostic];
+                Err(error)
             }
         }
-    }
-
-    /// Replace the default layer (normally the embedded `default.json`).
-    pub fn set_default_settings(&mut self, text: &str) -> OxiResult<()> {
-        self.defaults = parse_jsonc_object(text)
-            .map_err(|err| OxiError::validation(format!("default settings are invalid: {err}")))?;
-        self.recompute_all();
-        Ok(())
     }
 
     /// Problems found by the last load (syntax errors, type errors, unknown keys).

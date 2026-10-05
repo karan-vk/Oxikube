@@ -16,8 +16,8 @@
 //! Tests that run under GPUI's deterministic scheduler must not start this (it is an OS
 //! thread); use [`crate::init_with_dir`], which has no watcher.
 
+use std::collections::BTreeSet;
 use std::ffi::OsString;
-use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::thread::JoinHandle;
@@ -25,6 +25,8 @@ use std::time::{Duration, Instant};
 
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
 use oxikube_domain::{OxiError, OxiResult};
+
+use crate::paths;
 
 /// Quiet period before a reload; keeps the save-to-applied latency well under one second.
 pub const DEFAULT_DEBOUNCE: Duration = Duration::from_millis(100);
@@ -95,12 +97,7 @@ impl SettingsFileWatcher {
         .map_err(|err| {
             OxiError::internal("could not start the settings watcher").with_source(err)
         })?;
-        let mut dirs: Vec<&PathBuf> = Vec::new();
-        for (dir, _) in &watched {
-            if !dirs.contains(&dir) {
-                dirs.push(dir);
-            }
-        }
+        let dirs: BTreeSet<&PathBuf> = watched.iter().map(|(dir, _)| dir).collect();
         for dir in dirs {
             watcher
                 .watch(dir, RecursiveMode::NonRecursive)
@@ -157,9 +154,8 @@ fn run(
             }
         }
         pending = false;
-        let text = match std::fs::read_to_string(path) {
+        let text = match paths::read_or_empty(path) {
             Ok(text) => text,
-            Err(err) if err.kind() == ErrorKind::NotFound => String::new(),
             Err(err) => {
                 tracing::warn!(path = %path.display(), %err, "could not read settings file");
                 continue;

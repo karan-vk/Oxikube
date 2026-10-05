@@ -147,11 +147,7 @@ pub fn update_user_settings<T: Settings>(
         let _guard = FILE_EDIT_LOCK
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let old_text = match std::fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
-            Err(err) => return Err(io_error("read", &path, err)),
-        };
+        let old_text = paths::read_or_empty(&path).map_err(|err| io_error("read", &path, err))?;
         let new_text = new_text_for_update::<T>(&old_text, cluster.as_ref(), update)?;
         if new_text != old_text {
             paths::write_atomically(&path, &new_text)?;

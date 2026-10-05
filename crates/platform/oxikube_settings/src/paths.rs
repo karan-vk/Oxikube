@@ -24,8 +24,8 @@ pub fn config_dir() -> Option<PathBuf> {
     )
 }
 
-/// [`config_dir`] with its inputs explicit (pure, for tests).
-pub fn config_dir_from(
+/// [`config_dir`] with its inputs explicit (pure, so tests need no environment).
+fn config_dir_from(
     override_dir: Option<PathBuf>,
     xdg_config_home: Option<PathBuf>,
     home: Option<PathBuf>,
@@ -45,6 +45,14 @@ pub fn config_dir_from(
 /// The user settings file inside `config_dir`.
 pub fn user_settings_path(config_dir: &Path) -> PathBuf {
     config_dir.join(SETTINGS_FILE_NAME)
+}
+
+/// The text of the settings file at `path`; a missing file reads as empty text (no overrides).
+pub(crate) fn read_or_empty(path: &Path) -> std::io::Result<String> {
+    match std::fs::read_to_string(path) {
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(String::new()),
+        other => other,
+    }
 }
 
 /// Read the user settings at `path`, creating the dir and a commented template on first run.

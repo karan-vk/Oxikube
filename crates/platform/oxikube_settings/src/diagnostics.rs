@@ -64,7 +64,7 @@ impl fmt::Display for SettingsDiagnostic {
 
 /// The keys a setting's content accepts, derived from its JSON schema.
 #[derive(Clone, Debug, PartialEq)]
-pub enum KeyTree {
+pub(crate) enum KeyTree {
     /// Anything goes below this point (scalars, maps, arrays, recursive types).
     Any,
     /// An object with a fixed set of keys.
@@ -73,7 +73,7 @@ pub enum KeyTree {
 
 impl KeyTree {
     /// Build the tree from a schema generated with inlined subschemas.
-    pub fn from_schema(schema: &Value) -> KeyTree {
+    pub(crate) fn from_schema(schema: &Value) -> KeyTree {
         let Some(schema) = schema.as_object() else {
             return KeyTree::Any;
         };
@@ -125,7 +125,7 @@ fn is_object_like(schema: &Value) -> bool {
 }
 
 /// Append the dotted path of every key in `value` that `keys` does not know.
-pub fn collect_unknown_keys(
+pub(crate) fn collect_unknown_keys(
     value: &Map<String, Value>,
     keys: &BTreeMap<String, KeyTree>,
     prefix: &str,

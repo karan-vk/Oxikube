@@ -31,7 +31,7 @@ pub fn parse_jsonc_object(text: &str) -> Result<Map<String, Value>, String> {
 /// Merge `overlay` into `base`: objects merge key by key (recursively); any other value in
 /// the overlay replaces the base value, arrays included. `null` in the overlay is skipped, so
 /// writing `null` in a higher layer means "use the layer below".
-pub fn merge_layer(base: &mut Map<String, Value>, overlay: &Map<String, Value>) {
+pub(crate) fn merge_layer(base: &mut Map<String, Value>, overlay: &Map<String, Value>) {
     for (key, value) in overlay {
         match (base.get_mut(key), value) {
             (_, Value::Null) => {}
@@ -46,7 +46,7 @@ pub fn merge_layer(base: &mut Map<String, Value>, overlay: &Map<String, Value>) 
 }
 
 /// `value` with `null` object members removed at every depth (array elements are kept).
-pub fn strip_nulls(value: &Value) -> Value {
+pub(crate) fn strip_nulls(value: &Value) -> Value {
     match value {
         Value::Object(map) => Value::Object(
             map.iter()
@@ -60,7 +60,7 @@ pub fn strip_nulls(value: &Value) -> Value {
 }
 
 /// A short name for the JSON type of `value`, for error messages.
-pub fn value_kind(value: &Value) -> &'static str {
+fn value_kind(value: &Value) -> &'static str {
     match value {
         Value::Null => "null",
         Value::Bool(_) => "a boolean",
