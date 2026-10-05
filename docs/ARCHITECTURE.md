@@ -159,6 +159,11 @@ header and re-lists on a refresh interval otherwise; a server that ignores the h
 plain-JSON fallback flagged `TableSource::Objects`, so the `ColumnProvider` substitutes its
 generic NAME / NAMESPACE / AGE columns.
 
+Events (`oxikube_kube::events`) are the exception to the reflector store: `core/v1` and
+`events.k8s.io/v1` are watched together, merged by `metadata.uid` into domain `Event`s and kept in
+a fixed-size ring (oldest `last_seen` evicted, evictions reported as `Deleted` deltas and counted),
+so a noisy cluster cannot grow memory. A per-object feed filters by the involved object's UID.
+
 ## Integrations
 
 Optional integrations (Argo CD first; Flux later) implement `IntegrationPort`: detect → sidebar

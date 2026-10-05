@@ -27,12 +27,12 @@ use tokio::sync::watch;
 use tower::Service;
 
 /// How many watch requests the server has accepted (2xx) so far; changes on every one.
-pub(super) type Accepted = watch::Receiver<u64>;
+pub(crate) type Accepted = watch::Receiver<u64>;
 
 /// `client` with `Accept-Encoding: identity` on every watch request, and the count of
 /// accepted watch requests made through it. Shares `client`'s connection pool and auth;
 /// cheap to build, so each feed watch gets its own.
-pub(super) fn watch_client(client: &Client) -> (Client, Accepted) {
+pub(crate) fn watch_client(client: &Client) -> (Client, Accepted) {
     let (accepted, rx) = watch::channel(0);
     let service = IdentityWatches {
         client: client.clone(),

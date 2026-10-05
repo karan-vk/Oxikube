@@ -17,6 +17,7 @@
 //! | `reason` | `reason` | `reason` |
 //! | `message` | `message` | `note` |
 //! | `regarding` | `involvedObject` | `regarding` |
+//! | `regarding_uid` | `involvedObject.uid` | `regarding.uid` |
 //! | `related` | `related` | `related` |
 //! | `count` | `series.count`, else `count`, else 1 | `series.count`, else `deprecatedCount`, else 1 |
 //! | `first_seen` | `firstTimestamp`, else `eventTime`, else `metadata.creationTimestamp` | `deprecatedFirstTimestamp`, else `eventTime`, else `metadata.creationTimestamp` |
@@ -90,6 +91,10 @@ pub struct Event {
     pub truncated: bool,
     /// The object the event is about.
     pub regarding: ResourceRef,
+    /// `uid` of the object the event is about, when the writer set it. Lets a feed
+    /// filter and an index group by object even after the object is renamed or re-created.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regarding_uid: Option<Arc<str>>,
     /// A secondary object, when the writer gave one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub related: Option<ResourceRef>,
@@ -209,6 +214,10 @@ impl Event {
 
         let regarding = object_ref(cluster, obj.get(n.regarding))
             .ok_or(EventParseError::MissingField(n.regarding))?;
+        let regarding_uid = obj
+            .get(n.regarding)
+            .and_then(|r| str_field(r, "uid"))
+            .map(Arc::from);
         let related = object_ref(cluster, obj.get("related"));
 
         let mut message = str_field(json, n.message).unwrap_or_default().to_owned();
@@ -254,6 +263,7 @@ impl Event {
             message,
             truncated,
             regarding,
+            regarding_uid,
             related,
             count,
             first_seen,
@@ -356,7 +366,8 @@ mod tests {
                 "kind": "Pod",
                 "namespace": "default",
                 "name": "web-0",
-                "apiVersion": "v1"
+                "apiVersion": "v1",
+                "uid": "abc"
             },
             "reason": "BackOff",
             "note": "Back-off restarting failed container",
@@ -384,6 +395,7 @@ mod tests {
         assert_eq!(e.regarding.namespace(), Some("default"));
         assert_eq!(&*e.regarding.name, "web-0");
         assert_eq!(e.regarding.cluster, cluster());
+        assert_eq!(e.regarding_uid.as_deref(), Some("abc"));
         assert!(e.related.is_none());
         assert_eq!(e.count, 7);
         assert_eq!(e.first_seen, Some("2026-10-03T11:00:00Z".parse().unwrap()));
@@ -400,6 +412,7 @@ mod tests {
         assert_eq!(&*e.reason, "BackOff");
         assert_eq!(e.message, "Back-off restarting failed container");
         assert_eq!(&*e.regarding.name, "web-0");
+        assert_eq!(e.regarding_uid.as_deref(), Some("abc"));
         assert_eq!(e.count, 7);
         assert_eq!(
             e.first_seen,
@@ -544,9 +557,11 @@ mod tests {
         )
         .unwrap();
         assert!(minimal.uid.is_none() && minimal.first_seen.is_none());
+        assert!(minimal.regarding_uid.is_none());
         let json = serde_json::to_value(&minimal).unwrap();
         for absent in [
             "uid",
+            "regarding_uid",
             "related",
             "first_seen",
             "last_seen",
