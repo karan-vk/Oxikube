@@ -12,20 +12,8 @@ use oxikube_ui::{ActiveTokens as _, layout::v_flex, title_bar::TitleBar};
 use super::options::WINDOW_TITLE;
 
 /// Root content view of the main window.
+#[derive(Default)]
 pub struct MainView;
-
-impl MainView {
-    /// Creates the view.
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for MainView {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl Render for MainView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

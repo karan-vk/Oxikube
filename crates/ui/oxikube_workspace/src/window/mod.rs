@@ -58,7 +58,7 @@ pub fn build_root(
     cx: &mut App,
     wrap: impl FnOnce(AnyView, &mut App) -> AnyView,
 ) -> Entity<Root> {
-    let content: AnyView = cx.new(|_| MainView::new()).into();
+    let content: AnyView = cx.new(|_| MainView).into();
     let content = wrap(content, cx);
     new_root(content, window, cx)
 }

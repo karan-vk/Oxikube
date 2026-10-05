@@ -89,8 +89,6 @@ fn write_sample(sample: &ScenarioSample, report: Option<&Path>) -> Result<()> {
     }
 }
 
-/// Cold start to first frame drawn, then `FRAMES` idle redraws of the main view.
-///
 /// The real main window content, as `oxikube` builds it, in the headless context.
 fn main_window(
     window: &mut gpui::Window,
@@ -101,6 +99,8 @@ fn main_window(
     oxikube_workspace::window::build_root(window, cx, wrap)
 }
 
+/// Cold start to first frame drawn, then `FRAMES` idle redraws of the main view.
+///
 /// `first_frame_ms` runs from the first line of `main` to the end of the window-opening update
 /// (headless context with the platform text system and GPU renderer, window, first draw). Process
 /// exec and dynamic loading before `main` are added from outside by `cargo xtask perf`

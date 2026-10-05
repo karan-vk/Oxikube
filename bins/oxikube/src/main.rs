@@ -17,7 +17,7 @@ mod perf_scenario;
 #[cfg(feature = "screenshot")]
 mod screenshot;
 
-use gpui::{AnyView, App, AppContext as _};
+use gpui::{App, AppContext as _};
 use oxikube_runtime::perf::{PerfRoot, Recorder};
 use std::io::Write as _;
 use std::process::ExitCode;
@@ -100,8 +100,7 @@ fn run_app(perf: Option<Arc<Recorder>>, perf_duration: Option<Duration>) {
                 Some(recorder) => {
                     perf_mode::attach(cx, perf_duration);
                     oxikube_workspace::window::open_main_window_with(cx, move |content, cx| {
-                        let hook: AnyView = cx.new(|_| PerfRoot::new(content, recorder)).into();
-                        hook
+                        cx.new(|_| PerfRoot::new(content, recorder)).into()
                     })
                 }
                 None => oxikube_workspace::window::open_main_window(cx),
