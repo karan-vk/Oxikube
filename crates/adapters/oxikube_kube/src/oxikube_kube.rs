@@ -14,6 +14,7 @@
 //! | [`auth`] | E03-S04 | `kube::Error` classification, exec-plugin interactivity policy, deadline-bounded client build, retry-once helper |
 //! | [`discovery`] | E03-S06 | `DiscoveryPort` over aggregated discovery, the shared kind registry and the CRD watcher |
 //! | [`pool`] | E03-S03 | [`ClientPool`]: one lazily built, shared kube client per context, with invalidation and LRU eviction |
+//! | [`logs`] | E04-S08 | [`KubeLogs`]: `LogPort` with reconnect, overlap and dedup, plus multi-container and label-selector fan-in |
 //! | [`resources`] | E04-S01 | [`KubeResources`]: `ResourceReader` list/get with pagination, selectors and `resourceVersion` semantics over typed and dynamic `Api`s |
 //! | [`metrics`] | E04-S11 | [`KubeMetrics`]: `MetricsPort` on `metrics.k8s.io` via `k8s-metrics`, exact `Quantity` parsing, absence as a visible state |
 //! | [`mutate`] | E04-S05 | [`KubeResources`] as a `ResourceWriter`: create, replace, patch (merge, strategic, JSON, server-side apply), dry-run, delete, delete-collection, with conflict and validation detail in the errors |
@@ -24,6 +25,7 @@ pub mod auth;
 pub mod discovery;
 pub mod health;
 pub mod kubeconfig;
+pub mod logs;
 pub mod metrics;
 pub mod mutate;
 pub mod pool;
@@ -37,6 +39,7 @@ mod fake_api;
 pub use discovery::{
     CrdWatch, CrdWatchConfig, DiscoveryConfig, KindChange, KubeDiscovery, Registry, RegistryDiff,
 };
+pub use logs::{ContainerSelection, KubeLogs, LogsConfig};
 pub use metrics::KubeMetrics;
 pub use mutate::DEFAULT_FIELD_MANAGER;
 pub use pool::{

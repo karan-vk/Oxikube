@@ -9,7 +9,8 @@
 //! `health` holds the liveness-loop helpers shared by the health scenarios; `resources` the
 //! pod fixtures and adapter constructor of the resource data plane scenarios (E04); `mutations` the
 //! ConfigMap manifests of the write scenarios (E04-S05); `portforward` the nginx fixtures of the
-//! port-forward scenarios (E04-S10).
+//! port-forward scenarios (E04-S10); `logs` the chatty pods and stream readers of the log scenarios
+//! (E04-S08).
 //!
 //! Namespaced fixtures (service accounts, roles, bindings) live in the test's
 //! `oxi-test-<rand>` namespace and go away with it.
@@ -18,6 +19,7 @@
 #![allow(dead_code)]
 
 pub mod health;
+pub mod logs;
 pub mod mutations;
 pub mod portforward;
 pub mod resources;

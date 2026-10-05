@@ -38,6 +38,13 @@ Entries:
   `src/network/mod.rs` @ c303673 (v2.1.1). Reworked to return per-file sources, context origins
   and diagnostics, and to take explicit inputs instead of reading the environment. The MIT
   notice and permission text are the file header (same text as below).
+- `crates/adapters/oxikube_kube/src/logs/follow/mod.rs`: ports `stream_container_logs` (reconnect
+  loop with a `since` overlap, backoff, dedup against recent lines, size/time batching) and
+  `fetch_previous_logs` from `src/network/stream.rs` @ c303673 (v2.1.1). Reworked to emit `LogLine`s
+  over a bounded channel, resume from the last kubelet timestamp, dedup on (timestamp, text), read
+  a restarted container's previous instance and end when the pod is gone. The MIT notice and
+  permission text are the file header (same text as below). `logs/follow/resume.rs` and
+  `logs/dedup.rs` carry the derived reconnect decisions of the same port.
 - `crates/domain/oxikube_domain/src/age.rs` (test module `kdash_corpus`): test inputs and expected
   strings from `src/app/utils.rs` (`test_to_age`, `test_to_age_secs`), and the `duration_to_age`
   algorithm reimplemented as `AgeStyle::Detailed`. The full MIT licence text
