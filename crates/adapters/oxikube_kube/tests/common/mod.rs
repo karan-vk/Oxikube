@@ -11,7 +11,9 @@
 //! ConfigMap manifests of the write scenarios (E04-S05); `portforward` the nginx fixtures of the
 //! port-forward scenarios (E04-S10); `logs` the chatty pods and stream readers of the log scenarios
 //! (E04-S08); `table` the `kubectl get` parser the Table API parity tests compare against;
-//! `subresources` the workload, pod and CRD fixtures of the subresource scenarios (E04-S06).
+//! `exec` the busybox pods and output readers of the exec/attach/node shell scenarios (E04-S09);
+//! `subresources` the workload, pod and CRD fixtures of the subresource scenarios (E04-S06);
+//! `exec` the busybox pods and output readers of the exec, attach and node shell scenarios (E04-S09).
 //!
 //! Namespaced fixtures (service accounts, roles, bindings) live in the test's
 //! `oxi-test-<rand>` namespace and go away with it.
@@ -19,6 +21,7 @@
 // Each test file uses a different subset of these helpers.
 #![allow(dead_code)]
 
+pub mod exec;
 pub mod health;
 pub mod logs;
 pub mod mutations;
