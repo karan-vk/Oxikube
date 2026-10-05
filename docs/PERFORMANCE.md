@@ -215,7 +215,10 @@ the headless figure, which is why the headless number is only a regression signa
 runner's headless figure is about four times the macOS runner's (different renderer and system
 libraries; not investigated further), another reason baselines are per OS.
 
-The placeholder window is trivial, so these mostly measure platform, text-system and renderer
+Since E05-S03 the `startup` scenario opens the real main window (`oxikube_ui::init`, `Root`, title
+bar), so `first_frame_ms` includes the component library's `init` (about 65 ms of the ~120 ms on the
+local M-series laptop, `release-fast`); the committed baselines predate it and are refreshed from
+the nightly artifacts after merge. The rest still mostly measures platform, text-system and renderer
 start-up. The startup budget (≤ 400 ms to the first *interactive* frame with real catalog data) is
 E05-S13's job, built on this harness.
 

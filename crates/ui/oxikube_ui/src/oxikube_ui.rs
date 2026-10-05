@@ -18,6 +18,7 @@
 //! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`chart`], [`markdown`],
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
 //! - [`root`]: the window root, which owns the dialog, sheet and notification layers.
+//! - [`title_bar`]: the window title bar (drag area, window controls, traffic-light inset).
 //!
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction.
@@ -39,6 +40,7 @@ pub mod size;
 pub mod table;
 pub mod tabs;
 pub mod theme_bridge;
+pub mod title_bar;
 pub mod tokens;
 
 pub use assets::Assets;

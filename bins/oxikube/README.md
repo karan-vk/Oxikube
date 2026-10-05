@@ -7,9 +7,10 @@ init order (Zed `main.rs` pattern): logging → settings → keymap → theme �
 each crate's `init(cx)` → workspace restore. It is the only crate allowed to depend on every
 layer.
 
-Today it opens a placeholder window that proves the GPUI stack (`gpui-pre` + `gpui-component`)
-builds and renders. E05 replaces this with the real shell, and E05-S13 holds it to the 400 ms
-startup budget (`docs/PERFORMANCE.md`).
+Today it opens the themed main window (`oxikube_workspace::window`: `Root`, title bar, application
+menu; E05-S03) with an empty body; E05-S04 mounts the workspace in it and E05-S13 holds startup to
+the 400 ms budget (`docs/PERFORMANCE.md`). Linux packaging assets (`.desktop` file, icon) live in
+`resources/linux/` and are named after `oxikube_workspace::window::APP_ID`.
 
 ## Flags
 

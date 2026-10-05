@@ -12,6 +12,12 @@ path = "src/oxikube_workspace.rs"
 doctest = false
 
 [dependencies]
+anyhow.workspace = true
+gpui.workspace = true
+oxikube_ui.workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true

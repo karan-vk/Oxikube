@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Oxikube
+GenericName=Kubernetes Client
+Comment=Native Kubernetes desktop client
+Exec=oxikube %U
+Icon=dev.karan.oxikube
+Terminal=false
+Categories=Development;System;
+Keywords=kubernetes;k8s;cluster;kubectl;
+StartupNotify=true
+# Must equal the Wayland app_id / X11 WM_CLASS the window sets (oxikube_workspace::window::APP_ID).
+StartupWMClass=dev.karan.oxikube

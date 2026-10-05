@@ -21,6 +21,8 @@ gpui_platform.workspace = true
 gpui-component.workspace = true
 # `--perf` recorder and frame hook; `perf-harness` adds the scripted driver for `--perf-scenario`.
 oxikube_runtime.workspace = true
+oxikube_ui.workspace = true
+oxikube_workspace.workspace = true
 serde_json.workspace = true
 # Ctrl-C under `--perf` (print the summary instead of dying silently).
 tokio.workspace = true

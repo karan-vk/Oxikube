@@ -1,9 +1,10 @@
 //! Oxikube binary. Wires adapters into the app and mounts the UI.
 //!
-//! Until E05 lands this is a placeholder window proving the GPUI stack
-//! (gpui-pre + gpui-component) resolves and renders on macOS and Linux.
-//! Init order will follow Zed's `main.rs` pattern: logging → settings → keymap →
-//! theme → AppState → each crate's `init(cx)` → workspace restore.
+//! Opens the themed main window (`oxikube_workspace::window`): the `Root` over a title bar and an
+//! empty body, plus the application menu. Init order will follow Zed's `main.rs` pattern
+//! (E05-S09): logging → settings → keymap → theme → AppState → each crate's `init(cx)` →
+//! workspace restore. Today: `oxikube_ui::init`, `window::init`, open the window; nothing waits on
+//! disk or network before the first frame.
 //!
 //! Flags (`oxikube --help`): `--perf` records frame times, feed throughput, notify counts and RSS
 //! (docs/PERFORMANCE.md); `--perf-scenario` runs one headless perf sample (feature
@@ -16,27 +17,12 @@ mod perf_scenario;
 #[cfg(feature = "screenshot")]
 mod screenshot;
 
-use gpui::{AnyWindowHandle, App, Context, Window, WindowOptions, div, prelude::*, rgb};
-use oxikube_runtime::perf::PerfRoot;
+use gpui::{AnyView, App, AppContext as _};
+use oxikube_runtime::perf::{PerfRoot, Recorder};
 use std::io::Write as _;
 use std::process::ExitCode;
-use std::time::Instant;
-
-struct Placeholder;
-
-impl Render for Placeholder {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .flex()
-            .size_full()
-            .items_center()
-            .justify_center()
-            .bg(rgb(0x1e2127))
-            .text_color(rgb(0xd7dae0))
-            .text_xl()
-            .child("Oxikube — workspace skeleton. See docs/ROADMAP.md.")
-    }
-}
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 fn main() -> ExitCode {
     // First statement: the startup scenario measures from here.
@@ -93,27 +79,38 @@ fn main() -> ExitCode {
     };
     let perf_duration = args.perf_duration;
 
-    gpui_platform::application().run(move |cx: &mut App| {
-        let opened = match perf {
-            // `--perf`: the root is wrapped in the frame hook. Without it the window holds the
-            // placeholder directly and nothing is measured or paid for.
-            Some(recorder) => {
-                perf_mode::attach(cx, perf_duration);
-                cx.open_window(WindowOptions::default(), |_, cx| {
-                    let inner = cx.new(|_| Placeholder);
-                    cx.new(|_| PerfRoot::new(inner, recorder))
-                })
-                .map(AnyWindowHandle::from)
-            }
-            None => cx
-                .open_window(WindowOptions::default(), |_, cx| cx.new(|_| Placeholder))
-                .map(AnyWindowHandle::from),
-        };
-        opened.expect("open main window");
-        cx.activate(true);
-    });
+    run_app(perf, perf_duration);
     // Platforms where `run` returns after quitting (macOS exits from inside it; the quit hook
     // already finished the session there). Idempotent.
     perf_mode::finish();
     ExitCode::SUCCESS
+}
+
+/// Runs the GPUI application: registers the assets, initialises the UI stack, opens the main
+/// window. With a `--perf` recorder the frame hook sits between the `Root` and the content (the
+/// `Root` must remain the window's root view for overlays to work); without it nothing is
+/// measured or paid for.
+fn run_app(perf: Option<Arc<Recorder>>, perf_duration: Option<Duration>) {
+    gpui_platform::application()
+        .with_assets(oxikube_ui::Assets)
+        .run(move |cx: &mut App| {
+            oxikube_ui::init(cx);
+            oxikube_workspace::window::init(cx);
+            let opened = match perf {
+                Some(recorder) => {
+                    perf_mode::attach(cx, perf_duration);
+                    oxikube_workspace::window::open_main_window_with(cx, move |content, cx| {
+                        let hook: AnyView = cx.new(|_| PerfRoot::new(content, recorder)).into();
+                        hook
+                    })
+                }
+                None => oxikube_workspace::window::open_main_window(cx),
+            };
+            if let Err(err) = opened {
+                eprintln!("oxikube: {err:#}");
+                cx.quit();
+                return;
+            }
+            cx.activate(true);
+        });
 }

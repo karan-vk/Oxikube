@@ -57,7 +57,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
   events).
 - `oxikube_ui` — the only crate that imports `gpui-component`; exposes tokens and curated
   components to every view.
-- `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence.
+- `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
+  `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
+  the application menu.
 
 ## Cross-layer wiring (ports + injection)
 

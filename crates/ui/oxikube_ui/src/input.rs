@@ -4,3 +4,8 @@
 //! module's state types.
 
 pub use gpui_component::input::{Input, InputEvent, InputState};
+
+/// The text-editing actions inputs handle, for the Edit menu and key bindings.
+pub mod actions {
+    pub use gpui_component::input::{Copy, Cut, Paste, Redo, SelectAll, Undo};
+}
