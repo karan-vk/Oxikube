@@ -36,7 +36,7 @@ pub fn is_list_expired(err: &OxiError) -> bool {
 }
 
 /// Maps a failed list call: [`classify`], plus the [`ListExpired`] marker on 410.
-pub(super) fn list_error(err: &kube::Error) -> OxiError {
+pub(crate) fn list_error(err: &kube::Error) -> OxiError {
     match err {
         kube::Error::Api(status) if status.code == 410 => {
             classify(err).with_source(ListExpired).with_retryable(true)
@@ -51,6 +51,6 @@ pub(super) fn get_error(err: &kube::Error) -> OxiError {
 }
 
 /// A server object that did not decode into a `Resource`.
-pub(super) fn bad_object(what: &str, err: impl fmt::Display) -> OxiError {
+pub(crate) fn bad_object(what: &str, err: impl fmt::Display) -> OxiError {
     OxiError::internal(format!("the cluster sent an invalid {what}: {err}"))
 }

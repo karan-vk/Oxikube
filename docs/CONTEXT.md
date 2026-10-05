@@ -47,7 +47,8 @@ How to read the **Lives in** column:
 | **WatchScope** | Derived from a `NamespaceSelection` and a kind's `Scope`: `Cluster` or `Namespaces`; decides whether feeds are cluster- or namespace-scoped. | `oxikube_domain::session` |
 | **Feed** | A live stream of `DeltaBatch`es for one (cluster, gvk, scope): reflector, metadata-only, or Table API. Typed as `WatchFeed`. | `oxikube_ports::feed`; producers in `oxikube_kube::feed` *(planned)* |
 | **Delta / DeltaBatch** | One change in a feed (`Applied`, `Deleted`, `Restarted`) and a coalesced batch of them. Lives in ports, not the domain: it is transport. | `oxikube_ports::feed` |
-| **Table / TableFeed** | Server-side Table API data (kubectl-identical columns incl. CRD printer columns) as `TableColumn`s and `TableRow`s. | `oxikube_ports::table` |
+| **Table / TableFeed** | Server-side Table API data (kubectl-identical columns incl. CRD printer columns) as `TableColumn`s and `TableRow`s. | `oxikube_ports::table`; producer `oxikube_kube::table` |
+| **TableSource** | Whether a `Table`'s columns are the server's (`Server`) or the adapter's plain-JSON fallback (`Objects`, the server ignored the Table `Accept` header). | `oxikube_ports::table` |
 | **ResourceStore** | App-side cache over feeds with sort/filter/index and ref-counted subscriptions. | `oxikube_app::store` *(planned)* |
 | **ColumnProvider** | Produces table columns + cells for a kind (core columns, Table API columns, metrics columns). | `oxikube_app::columns` *(planned)* |
 | **KindSpec** | Per-kind registration: columns, detail renderer, actions, templates, sidebar section. | `oxikube_resources_ui::kinds` *(planned)* |

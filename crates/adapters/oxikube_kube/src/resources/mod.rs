@@ -14,6 +14,7 @@
 //! | `ListOptions` to `ListParams`, `resourceVersion` rules | `params` |
 //! | [`KubeResources::list_all`]: pages until exhausted, restarts on a stale continue token | `list` |
 //! | 410 Gone marker ([`is_list_expired`]) and error mapping | `error` |
+//! | `TableFeedPort` (E04-S04), sharing `target`, `list_params` and `list_error` | [`crate::table`] |
 //!
 //! # Pagination and memory
 //!
@@ -60,6 +61,8 @@ use backend::{Dynamic, KindApi};
 pub use config::{AccessPath, DEFAULT_PAGE_SIZE, ManagedFields, ResourcesConfig};
 pub use error::{ListExpired, is_list_expired};
 pub(crate) use reader::pending;
+pub(crate) use error::{bad_object, list_error};
+pub(crate) use params::{deadline, list_params};
 
 /// Resource reads for one cluster. Cheap to clone; clones share the client and discovery.
 #[derive(Clone)]
@@ -92,6 +95,19 @@ impl KubeResources {
     /// The settings in effect.
     pub fn config(&self) -> &ResourcesConfig {
         &self.config
+    }
+
+    /// The cluster's client, for sibling modules that build their own requests (`table`).
+    pub(crate) fn client(&self) -> &Client {
+        &self.client
+    }
+
+    /// Whether the cluster serves `gvk` with `verb`, per the current discovery snapshot.
+    pub(crate) fn serves(&self, gvk: &Gvk, verb: Verb) -> bool {
+        self.discovery
+            .registry()
+            .get(gvk)
+            .is_some_and(|kind| kind.supports(verb))
     }
 
     /// Resolves `gvk` to its `ApiResource`, checks it supports `verb` and that `namespace` fits its scope.
