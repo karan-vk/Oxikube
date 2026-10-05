@@ -59,7 +59,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   components to every view.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
-  the application menu.
+  the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's
+  `DockArea` (via `oxikube_ui::dock`): centre panes of `Item`s (`open_item`, split, move, close,
+  reopen-closed, drag-drop tabs, zoom) and side `Panel`s in left/bottom/right docks
+  (`toggle_panel`, `toggle_dock`); `item`, `panel`, `pane` (`PaneGroup`/`Pane` snapshots), `dock`,
+  `closed`, `actions` (`workspace::*` actions and bindings), `test_support` (feature
+  `test-support`: `TestItem`, `TestPanel`).
 
 ## Cross-layer wiring (ports + injection)
 

@@ -15,9 +15,34 @@ doctest = false
 anyhow.workspace = true
 gpui.workspace = true
 oxikube_ui.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
+gpui_platform = { workspace = true, features = ["test-support"] }
+oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
+
+[features]
+default = []
+# `test_support`: a test item and a test panel for `#[gpui::test]`s in this crate and in the crates
+# that build on the workspace (layout persistence, status bar, cluster tabs).
+test-support = ["gpui/test-support"]
+# Headless GPU screenshot of a populated workspace (`tests/screenshot.rs`, harness = false so it runs
+# on the process main thread). Needs Metal / Vulkan, so never part of the default gate; the nightly
+# workflow runs it: `cargo test -p oxikube_workspace --features screenshot --test screenshot`.
+screenshot = ["test-support"]
+
+[[test]]
+name = "screenshot"
+path = "tests/screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+# Frame cost of a dock resize and a tab switch with a heavy item mounted (test platform):
+# `cargo run -p oxikube_workspace --features test-support --profile release-fast --example workspace_bench`
+[[example]]
+name = "workspace_bench"
+required-features = ["test-support"]
 
 [lints]
 workspace = true

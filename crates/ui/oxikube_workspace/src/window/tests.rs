@@ -40,6 +40,23 @@ fn opens_with_root_hosting_main_view(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn main_view_hosts_an_empty_workspace(cx: &mut TestAppContext) {
+    let (_handle, mut vcx) = open(cx);
+    vcx.update(|window, cx| {
+        let root = window.root::<Root>().flatten().expect("root");
+        let main = root
+            .read(cx)
+            .view()
+            .clone()
+            .downcast::<MainView>()
+            .expect("main view");
+        let workspace = main.read(cx).workspace().read(cx);
+        assert!(workspace.is_blank(), "nothing is open at start");
+        assert!(workspace.panes(cx).is_empty());
+    });
+}
+
+#[gpui::test]
 fn title_bar_is_drawn_at_the_top(cx: &mut TestAppContext) {
     let (_handle, mut vcx) = open(cx);
     let title = vcx

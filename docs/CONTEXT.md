@@ -101,7 +101,7 @@ A **port** is an async, object-safe trait in `oxikube_ports` that the app depend
 
 | Term | Meaning | Lives in |
 |---|---|---|
-| **Item / Panel / Pane / Dock** | Workspace shell concepts (Zed design): tab content, dockable side panel, split container, edge dock. | `oxikube_workspace` |
+| **Item / Panel / Pane / Dock** | Workspace shell concepts (Zed design): an **Item** is the content of a centre tab (title, icon, dirty; may refuse to close); a **Panel** is a dockable side view; a **Pane** is a tab strip of items, and the **PaneGroup** the tree of horizontal/vertical splits of panes in the centre; a **Dock** is the left, bottom or right edge area holding panels. Closed items are kept as descriptors (kind + state), not live entities, so they can be reopened. | `oxikube_workspace` |
 | **Main window / Root** | The OS window opened by `oxikube_workspace::window`: native title bar on macOS, client-side decorations on Linux; its root view is `oxikube_ui`'s `Root`, which renders the dialog, sheet and notification layers once above the workspace content. | `oxikube_workspace::window`, `oxikube_ui::root` |
 | **Settings layer** | `default.json → user settings.json → clusters.<id>` overrides. | `oxikube_settings` |
 | **Keymap layer** | `default-<os>.json → vim.json (optional flag) → user keymap.json`, merged into one flat list of GPUI `KeyBinding`s; later layers win and `null` unbinds. Zed's `keymap.json` format. | `oxikube_keymap` |
