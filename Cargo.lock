@@ -1248,6 +1248,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "constcat"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "136d3e02915a2cea4d74caa8681e2d44b1c3254bdbf17d11d41d587ff858832c"
+
+[[package]]
 name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2530,6 +2536,12 @@ checksum = "2c4ee00b289aba7a9e5306d57c2d05499b2e5dc427f84ac708bd2c090212cf3e"
 dependencies = [
  "gl_generator",
 ]
+
+[[package]]
+name = "go-parse-duration"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "558b88954871f5e5b2af0e62e2e176c8bde7a6c2c4ed41b13d138d96da2e2cbd"
 
 [[package]]
 name = "gpu-allocator"
@@ -4042,6 +4054,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "k8s-metrics"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b3dd5f8960f8cb843eeb9514ffd9f292c4a13d270e0b64af462e9b757957633"
+dependencies = [
+ "constcat",
+ "go-parse-duration",
+ "k8s-openapi",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "k8s-openapi"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5541,6 +5566,8 @@ dependencies = [
  "futures",
  "hex",
  "http",
+ "jiff",
+ "k8s-metrics",
  "k8s-openapi",
  "kube",
  "notify 8.2.0",

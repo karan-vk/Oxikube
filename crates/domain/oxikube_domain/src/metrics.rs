@@ -24,6 +24,7 @@ use jiff::{SignedDuration, Timestamp};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::ResourceRef;
+use crate::quantity::{Quantity, QuantityFormat};
 
 /// Why a metric has no value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -149,6 +150,34 @@ impl MetricsSample {
         self.memory.value()
     }
 
+    /// CPU usage as an exact [`Quantity`] in cores (`1234567890n` is about `1.23`), if present.
+    pub fn cpu_quantity(&self) -> Option<Quantity> {
+        self.cpu
+            .value()
+            .map(|n| Quantity::from_nanos(i128::from(n)))
+    }
+
+    /// Memory usage as an exact [`Quantity`] in bytes, printed in binary notation (`Mi`, `Gi`),
+    /// if present.
+    pub fn memory_quantity(&self) -> Option<Quantity> {
+        self.memory
+            .value()
+            .map(|bytes| Quantity::from_nanos(i128::from(bytes) * 1_000_000_000))
+            .map(|q| q.with_format(QuantityFormat::BinarySI))
+    }
+
+    /// CPU utilisation in percent of `total` (a node's `allocatable.cpu`, a pod's CPU limit),
+    /// or `None` when the reading is missing or `total` is zero. For display only; compare
+    /// the [`Quantity`] values, not this float.
+    pub fn cpu_percent_of(&self, total: &Quantity) -> Option<f64> {
+        self.cpu_quantity()?.percent_of(total)
+    }
+
+    /// Memory utilisation in percent of `total`; see [`MetricsSample::cpu_percent_of`].
+    pub fn memory_percent_of(&self, total: &Quantity) -> Option<f64> {
+        self.memory_quantity()?.percent_of(total)
+    }
+
     /// Whether either reading is missing.
     pub fn is_partial(&self) -> bool {
         self.cpu.value().is_none() || self.memory.value().is_none()
@@ -186,6 +215,32 @@ mod tests {
         assert_eq!(s.cpu_millicores(), Some(1234));
         assert_eq!(s.memory_bytes(), Some(67_108_864));
         assert!(!s.is_partial());
+    }
+
+    #[test]
+    fn quantities_and_utilisation_are_exact() {
+        let s = MetricsSample::new(
+            MetricsSubject::Pod { pod: pod() },
+            ts(),
+            None,
+            250_000_000,
+            512 * 1024 * 1024,
+        );
+        assert_eq!(s.cpu_quantity(), Some(Quantity::from_milli(250)));
+        assert_eq!(s.memory_quantity(), Quantity::parse("512Mi").ok());
+        assert_eq!(s.memory_quantity().unwrap().to_string(), "512Mi");
+        assert_eq!(s.cpu_percent_of(&Quantity::from_value(1)), Some(25.0));
+        let gi = Quantity::parse("1Gi").unwrap();
+        assert_eq!(s.memory_percent_of(&gi), Some(50.0));
+        assert_eq!(s.cpu_percent_of(&Quantity::ZERO), None);
+
+        let missing = MetricsSample::missing(
+            MetricsSubject::Node { node: "n".into() },
+            ts(),
+            MissingReason::NotInstalled,
+        );
+        assert_eq!(missing.cpu_quantity(), None);
+        assert_eq!(missing.memory_percent_of(&gi), None);
     }
 
     #[test]
