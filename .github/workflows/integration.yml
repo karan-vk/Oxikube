@@ -2,6 +2,11 @@ name: integration
 
 # kind-backed integration tests (`--features integration`) on PRs touching adapters and
 # the layers/tooling they depend on. Docs-only PRs do not trigger it.
+#
+# The data plane suite (E04-S14) is `crates/adapters/oxikube_kube/tests/`; its README maps every
+# port method and epic acceptance item to the test that exercises it. The nightly run executes the
+# whole suite twice on the same cluster as a flake check: a test that passes once and fails once is
+# a flake to fix, not to retry.
 on:
   pull_request:
     paths:
@@ -11,30 +16,80 @@ on:
       - "crates/testing/**"
       - "xtask/**"
       - ".github/workflows/integration.yml"
+  schedule:
+    - cron: "41 3 * * *"
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a PR supersedes its running suite; scheduled and manual runs queue instead.
+concurrency:
+  group: integration-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
+  OXIKUBE_TEST_CONTEXT: kind-oxikube
+  # A failing test's `TestNamespace` writes its events here before deleting the namespace (which
+  # deletes the events); the diagnostics upload below carries them.
+  OXIKUBE_TEST_DIAGNOSTICS_DIR: ${{ github.workspace }}/diagnostics/namespaces
+  # kube, app and testkit integration tests; `--no-fail-fast` reports every failing file.
+  SUITE: >-
+    cargo test -p oxikube_kube -p oxikube_app -p oxikube_testkit
+    --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration
+    --no-fail-fast
 
 jobs:
   kind:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: integration
+          cache-on-failure: true
       - uses: helm/kind-action@v1
         with:
           cluster_name: oxikube
           wait: 120s
-      # Idempotent: the cluster already exists, so this only installs metrics-server + fixtures.
+      # Idempotent: the cluster already exists, so this only installs metrics-server
+      # (with --kubelet-insecure-tls) and the fixtures (Widget CRD with printer columns, workloads).
       - name: Cluster fixtures
         run: cargo run -q -p xtask -- kind-up --name oxikube
+      # Compiled apart from the run so the test step's time is the suite's own.
+      - name: Build the suite
+        run: $SUITE --no-run
       - name: Integration tests
-        run: cargo test -p oxikube_kube -p oxikube_app -p oxikube_testkit --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration -- --nocapture
-        env:
-          OXIKUBE_TEST_CONTEXT: kind-oxikube
+        run: $SUITE -- --nocapture
+      - name: Integration tests (flake check, second run)
+        if: ${{ github.event_name == 'schedule' }}
+        run: $SUITE -- --nocapture
+      # A failed test's namespace is deleted with its events when the test ends, so those events
+      # are saved by the test itself into diagnostics/namespaces/<ns>.events.txt. This step adds
+      # the cluster-wide events still present (kube-system, nodes, namespaces still running), pods,
+      # nodes and the control-plane logs, so a CI failure can be read without a rerun. Events and
+      # logs carry no credentials; the suite mints only short-lived service-account tokens that
+      # never reach a log.
+      - name: Collect cluster diagnostics
+        if: ${{ failure() }}
+        run: |
+          mkdir -p diagnostics
+          kubectl --context kind-oxikube get events -A -o wide \
+            --sort-by=.metadata.creationTimestamp > diagnostics/events.txt || true
+          kubectl --context kind-oxikube get pods -A -o wide > diagnostics/pods.txt || true
+          kubectl --context kind-oxikube get nodes -o wide > diagnostics/nodes.txt || true
+          kind export logs diagnostics/kind --name oxikube || true
+      - name: Upload cluster diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Teardown
         if: always()
         run: cargo run -q -p xtask -- kind-down --name oxikube || true

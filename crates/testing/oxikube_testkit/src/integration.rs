@@ -2,16 +2,24 @@
 //!
 //! The cluster comes from `cargo xtask kind-up`; tests learn its kubectl context from
 //! [`CONTEXT_ENV`] and skip cleanly when it is unset. Each test creates its own
-//! `oxi-test-<rand>` namespace via [`TestNamespace`], which is deleted on drop.
+//! `oxi-test-<rand>` namespace via [`TestNamespace`], which is deleted on drop. When a test
+//! panics, the namespace's events are saved first (see [`DIAGNOSTICS_DIR_ENV`]), because
+//! deleting the namespace deletes its events.
 //!
 //! This shells out to `kubectl --context <ctx>` on purpose: the testkit stays free of
 //! `kube`, and every call is pinned to the named context.
 
 use std::fmt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Environment variable naming the kubectl context of the kind cluster under test.
 pub const CONTEXT_ENV: &str = "OXIKUBE_TEST_CONTEXT";
+
+/// Environment variable naming a directory where a failed test's namespace events are written
+/// (`<dir>/<namespace>.events.txt`) before the namespace is deleted. Unset, they go to stderr,
+/// which the test harness prints with the failure. CI points it into the uploaded diagnostics.
+pub const DIAGNOSTICS_DIR_ENV: &str = "OXIKUBE_TEST_DIAGNOSTICS_DIR";
 
 /// Prefix of every namespace created by tests.
 pub const NAMESPACE_PREFIX: &str = "oxi-test-";
@@ -88,11 +96,13 @@ fn kubectl(context: &str, args: &[&str]) -> Result<(), IntegrationError> {
     }
 }
 
-/// A namespace created for one test and deleted when dropped (also on panic).
+/// A namespace created for one test and deleted when dropped (also on panic). Dropped while
+/// panicking, it first saves its events (see [`DIAGNOSTICS_DIR_ENV`]).
 #[derive(Debug)]
 pub struct TestNamespace {
     context: String,
     name: String,
+    diagnostics_dir: Option<PathBuf>,
 }
 
 impl TestNamespace {
@@ -104,6 +114,8 @@ impl TestNamespace {
         Ok(Self {
             context: context.to_owned(),
             name,
+            diagnostics_dir: context_from(std::env::var(DIAGNOSTICS_DIR_ENV).ok())
+                .map(PathBuf::from),
         })
     }
 
@@ -114,10 +126,67 @@ impl TestNamespace {
     pub fn context(&self) -> &str {
         &self.context
     }
+
+    /// The namespace's events, oldest first, as `kubectl get events -o wide` prints them, for a
+    /// test that times out to show what the cluster did. Never fails: when kubectl cannot be run
+    /// or exits non-zero, the text says so instead. Events carry reasons and messages written by
+    /// controllers, not object payloads.
+    pub fn events(&self) -> String {
+        let out = Command::new("kubectl")
+            .args(["--context", &self.context, "-n", &self.name])
+            .args(["get", "events", "-o", "wide"])
+            .arg("--sort-by=.metadata.creationTimestamp")
+            .output();
+        match out {
+            Ok(out) if out.status.success() => {
+                let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+                if text.is_empty() {
+                    format!("(no events in {})", self.name)
+                } else {
+                    text
+                }
+            }
+            Ok(out) => format!(
+                "(kubectl get events failed: {})",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+            Err(e) => format!("(kubectl could not be run: {e})"),
+        }
+    }
+
+    /// Writes [`Self::events`] to `<dir>/<namespace>.events.txt`, creating `dir`, and returns
+    /// the file's path.
+    fn write_events(&self, dir: &Path) -> std::io::Result<PathBuf> {
+        std::fs::create_dir_all(dir)?;
+        let path = dir.join(format!("{}.events.txt", self.name));
+        std::fs::write(&path, self.events() + "\n")?;
+        Ok(path)
+    }
+
+    /// Saves the events of a failed test's namespace before it is deleted: to the diagnostics
+    /// directory when one is configured, else to stderr (best effort).
+    fn save_failure_events(&self) {
+        if let Some(dir) = &self.diagnostics_dir {
+            match self.write_events(dir) {
+                Ok(_) => return,
+                Err(e) => eprintln!(
+                    "could not write events of {} to {}: {e}",
+                    self.name,
+                    dir.display()
+                ),
+            }
+        }
+        eprintln!("events in {} (test failed):\n{}", self.name, self.events());
+    }
 }
 
 impl Drop for TestNamespace {
     fn drop(&mut self) {
+        // Deleting the namespace deletes its events, so a failed test's evidence is saved now;
+        // a diagnostics step after the run would find nothing.
+        if std::thread::panicking() {
+            self.save_failure_events();
+        }
         // Best effort: never panic in drop. `--wait=false` keeps test teardown fast; the
         // namespace controller finishes the job.
         let _ = kubectl(
@@ -175,6 +244,72 @@ mod tests {
                 n.chars()
                     .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
             );
+        }
+    }
+
+    /// Runs only with a cluster (`OXIKUBE_TEST_CONTEXT=kind-oxikube`); skips otherwise.
+    #[test]
+    fn a_fresh_namespace_reports_its_events_as_text() {
+        let Some(ctx) = test_context() else { return };
+        let ns = TestNamespace::create(&ctx).expect("create namespace");
+        let events = ns.events();
+        assert!(!events.starts_with("(kubectl"), "{events}");
+    }
+
+    /// Runs only with a cluster (`OXIKUBE_TEST_CONTEXT=kind-oxikube`); skips otherwise.
+    #[test]
+    fn a_namespace_dropped_by_a_failing_test_saves_its_events_first() {
+        let Some(ctx) = test_context() else { return };
+        let dir = tempfile::tempdir().expect("temp dir");
+        let mut ns = TestNamespace::create(&ctx).expect("create namespace");
+        ns.diagnostics_dir = Some(dir.path().join("namespaces"));
+        let name = ns.name().to_owned();
+        // An event the namespace controller would delete along with the namespace.
+        create_event(&ctx, &name).expect("create event");
+
+        let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let _ns = ns;
+            panic!("a test assertion failed");
+        }));
+        assert!(failed.is_err());
+
+        let saved = std::fs::read_to_string(
+            dir.path()
+                .join("namespaces")
+                .join(format!("{name}.events.txt")),
+        )
+        .expect("events saved before the namespace was deleted");
+        assert!(saved.contains("OxiEvidence"), "{saved}");
+    }
+
+    /// Creates a Warning event with reason `OxiEvidence` in `ns` (kubectl has no `create event`).
+    fn create_event(ctx: &str, ns: &str) -> Result<(), IntegrationError> {
+        use std::io::Write;
+        let manifest = format!(
+            r#"{{"apiVersion":"v1","kind":"Event","metadata":{{"name":"oxi-evidence","namespace":"{ns}"}},"involvedObject":{{"kind":"Namespace","name":"{ns}","namespace":"{ns}"}},"reason":"OxiEvidence","message":"left for the diagnostics","type":"Warning"}}"#
+        );
+        let mut child = Command::new("kubectl")
+            .args(["--context", ctx, "apply", "-f", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| IntegrationError::Kubectl(e.to_string()))?;
+        child
+            .stdin
+            .take()
+            .expect("piped stdin")
+            .write_all(manifest.as_bytes())
+            .map_err(|e| IntegrationError::Kubectl(e.to_string()))?;
+        let out = child
+            .wait_with_output()
+            .map_err(|e| IntegrationError::Kubectl(e.to_string()))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(IntegrationError::Kubectl(
+                String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+            ))
         }
     }
 
