@@ -16,13 +16,14 @@ gpui.workspace = true
 gpui-component.workspace = true
 gpui-kit-assets.workspace = true
 oxikube_assets.workspace = true
+oxikube_theme.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
-serde_json.workspace = true
 anyhow.workspace = true
 
 [features]
@@ -35,6 +36,13 @@ screenshot = []
 [[test]]
 name = "screenshot"
 path = "tests/screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+# The same sample under two themes (E05-S08); same requirements as `screenshot`.
+[[test]]
+name = "theme_screenshot"
+path = "tests/theme_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 

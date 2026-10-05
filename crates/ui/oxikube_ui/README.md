@@ -18,8 +18,12 @@ app.run(|cx| {
 });
 ```
 
-- **Tokens**: `cx.tokens()` / `cx.colors()` (`ActiveTokens`). Swap the source with
-  `set_token_source(cx, &my_theme, appearance)` once `oxikube_theme` exists.
+- **Tokens**: `cx.tokens()` / `cx.colors()` (`ActiveTokens`). Themes: after `oxikube_ui::init` and
+  `oxikube_theme::init`, call `let _theme = oxikube_ui::follow_active_theme(cx);` (keep the
+  subscription): it applies `oxikube_theme`'s active theme now and on every change (settings edit,
+  light/dark flip, hot-reloaded file) through `set_theme`, which maps `ThemeTokens` onto
+  gpui-component's `ThemeConfig` (`theme_config`) and our `Tokens`. `set_tokens` /
+  `set_token_source` still set plain tokens (no theme).
 - **Zoom**: wrap every literal pixel size in `u(px(..))`; persist dock and panel sizes as
   `Unscaled`. `set_ui_scale(cx, UiScale::new(1.25))` changes the zoom. Table column widths are the
   exception: give `TableColumn` design-time widths and the table applies (and re-applies) the zoom

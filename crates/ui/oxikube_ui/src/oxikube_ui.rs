@@ -9,8 +9,9 @@
 //! Module map:
 //! - [`setup`]: [`init`] (one call to initialise and theme the library), [`set_token_source`].
 //! - [`tokens`]: [`Tokens`] (colours, spacing, radius, font sizes), [`ActiveTokens`]
-//!   (`cx.tokens()` / `cx.colors()`), the [`TokenSource`] adapter `oxikube_theme` will implement.
-//! - [`theme_bridge`]: projects tokens onto gpui-component's theme (the only writer of it).
+//!   (`cx.tokens()` / `cx.colors()`), the [`TokenSource`] adapter trait.
+//! - [`theme_bridge`]: projects tokens and `oxikube_theme` themes (`set_theme`, `theme_config`,
+//!   `follow_active_theme`) onto gpui-component's theme (the only writer of it).
 //! - [`size`]: [`u`] zoom-safe sizes, [`UiScale`], [`Unscaled`] for persisted sizes.
 //! - [`icon`]: [`IconName`] (Lucide, embedded by `oxikube_assets`) and the [`Icon`] element.
 //! - [`assets`]: [`Assets`], the application asset source to pass to `Application::with_assets`.
@@ -48,7 +49,7 @@ pub use icon::{Icon, IconName};
 pub use setup::{init, set_token_source};
 pub use size::{ControlSize, Sizable, UiScale, Unscaled, set_ui_scale, u};
 pub use table::{Table, TableColumn, TableDelegate, TableHandle};
-pub use theme_bridge::set_tokens;
+pub use theme_bridge::{follow_active_theme, set_theme, set_tokens, theme_config};
 pub use tokens::{
     ActiveTokens, Appearance, Colors, FontSizes, Radius, Spacing, TokenSource, Tokens,
 };

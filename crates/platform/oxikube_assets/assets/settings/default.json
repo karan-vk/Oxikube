@@ -8,6 +8,15 @@
 // Every setting a crate registers has its default here (and a schema entry in
 // settings.schema.json, regenerated with `cargo xtask gen-settings-schema`).
 {
+  // Colour theme: a theme name ("Ayu Dark"), or a mode with a light and a dark theme.
+  // `mode` is "system" (follow the OS appearance), "light" or "dark". Themes are Zed
+  // theme-family JSON: One Dark and One Light are built in; drop more into the `themes/`
+  // folder next to settings.json and they are picked up without a restart.
+  "theme": {
+    "mode": "system",
+    "light": "One Light",
+    "dark": "One Dark"
+  },
   // Per-cluster overrides, keyed by cluster id. Each value takes any of the settings above.
   "clusters": {}
 }

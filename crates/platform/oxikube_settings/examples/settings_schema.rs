@@ -5,7 +5,9 @@
 #![allow(clippy::print_stdout)]
 
 use oxikube_settings::SettingsStore;
+// Linked only for its `register_settings!` (inventory) registrations. See E05-S06b (#454).
 use oxikube_settings::schema::to_schema_text;
+use oxikube_theme as _;
 
 fn main() -> Result<(), oxikube_domain::OxiError> {
     let store = SettingsStore::new(oxikube_assets::default_settings())?;

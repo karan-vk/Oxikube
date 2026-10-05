@@ -5698,6 +5698,7 @@ dependencies = [
  "notify 8.2.0",
  "oxikube_assets",
  "oxikube_domain",
+ "oxikube_theme",
  "schemars",
  "serde",
  "serde_json",
@@ -5745,6 +5746,20 @@ dependencies = [
 [[package]]
 name = "oxikube_theme"
 version = "0.0.1"
+dependencies = [
+ "futures",
+ "gpui-pre",
+ "notify 8.2.0",
+ "oxikube_assets",
+ "oxikube_settings",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_json_lenient",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+]
 
 [[package]]
 name = "oxikube_ui"
@@ -5757,6 +5772,7 @@ dependencies = [
  "gpui-pre-platform",
  "oxikube_assets",
  "oxikube_testkit",
+ "oxikube_theme",
  "serde",
  "serde_json",
 ]
