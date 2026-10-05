@@ -34,7 +34,9 @@ app.run(|cx| {
   Virtualised, uniform row height; no gpui-component types in the trait.
 - **Overlays**: `window.open_dialog(cx, |dialog, _, _| ..)` (`dialog::OverlayExt`). gpui-component
   0.7's `Root` renders the dialog, sheet, notification and tooltip layers itself, so there is no
-  separate layer helper to call.
+  separate layer helper to call. `dialog::{Cancel, Confirm}` are the library's Escape / Enter
+  actions; `oxikube_workspace`'s modal layer (one modal view over the workspace, focus-trapped)
+  listens for the same `Cancel`, so components inside a modal consume Escape first.
 - Everything else (`dock`, `dialog`, `menu`, `input`, `tabs`, `sidebar`, `chart`, `markdown`,
   `button`, `layout`) is a curated re-export under our names; there is no `pub use gpui_component::*`.
 

@@ -68,6 +68,21 @@ impl Render for Workspace {
 
         // An empty dock area still paints its split background; keep the plain window background
         // until there is something to lay out.
-        root.when(!self.is_blank(), |this| this.child(self.dock_area.clone()))
+        let body = div()
+            .id("workspace-body")
+            .flex_1()
+            .min_h_0()
+            .w_full()
+            .when(!self.is_blank(), |this| this.child(self.dock_area.clone()));
+
+        // The status bar takes the bottom strip; the toast and modal layers are absolute, so
+        // they overlay the whole workspace without taking part in its layout (modal on top).
+        root.flex()
+            .flex_col()
+            .relative()
+            .child(body)
+            .child(self.status_bar.clone())
+            .child(self.toast_layer.clone())
+            .child(self.modal_layer.clone())
     }
 }

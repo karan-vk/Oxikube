@@ -5,8 +5,11 @@ mod dock_sizes;
 mod docks;
 mod drag;
 mod items;
+mod modal;
 mod panes;
 mod persist;
+mod status_bar;
+mod toast;
 
 use gpui::{
     AppContext as _, Bounds, Entity, EntityId, Pixels, TestAppContext, VisualTestContext, point,
@@ -25,6 +28,10 @@ pub(super) fn workspace(cx: &mut TestAppContext) -> (Entity<Workspace>, VisualTe
     cx.update(|cx| {
         oxikube_ui::init(cx);
         crate::actions::register(cx);
+        crate::modal::register(cx);
+        crate::toast::register(cx);
+        // Fades would keep requesting frames while the test clock stands still.
+        crate::motion::set_reduce_motion(cx, true);
         register_test_item(cx);
     });
     let mut workspace = None;
@@ -131,6 +138,14 @@ pub(super) fn bounds(
 ) -> Option<Bounds<Pixels>> {
     vcx.update(|window, cx| window.draw(cx).clear(cx));
     vcx.debug_bounds(selector)
+}
+
+/// [`bounds`] for a selector built at run time.
+pub(super) fn bounds_named(
+    vcx: &mut VisualTestContext,
+    selector: String,
+) -> Option<Bounds<Pixels>> {
+    bounds(vcx, Box::leak(selector.into_boxed_str()))
 }
 
 /// Whether the item `id` (or anything inside it) has focus.

@@ -1,7 +1,7 @@
 //! The content of the main window: the title bar over the [`Workspace`].
 //!
-//! This is the view the `Root` hosts. The workspace fills the body (docks and centre panes); the
-//! status bar arrives with E05-S10.
+//! This is the view the `Root` hosts. The workspace fills the body: docks and centre panes, the
+//! status bar below them, and the toast and modal layers over them (E05-S10).
 
 use gpui::{
     AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,

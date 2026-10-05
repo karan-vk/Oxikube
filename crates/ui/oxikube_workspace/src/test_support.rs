@@ -10,6 +10,10 @@ use gpui::{
 };
 use oxikube_ui::IconName;
 
+mod layers;
+
+pub use layers::{TestModal, TestStatusItem};
+
 use crate::{
     item::{Item, ItemEvent, TabContent, register_item},
     panel::{DockPosition, Panel, PanelEvent},
@@ -56,7 +60,9 @@ impl TestItem {
     /// A closable, non-cloneable item titled `title`.
     pub fn new(title: impl Into<SharedString>, cx: &mut Context<Self>) -> Self {
         Self {
-            focus_handle: cx.focus_handle(),
+            // A tab stop, like a real item with a focusable body: lets tests check that overlays
+            // keep Tab away from what is behind them.
+            focus_handle: cx.focus_handle().tab_stop(true),
             title: title.into(),
             key: None,
             closable: true,
