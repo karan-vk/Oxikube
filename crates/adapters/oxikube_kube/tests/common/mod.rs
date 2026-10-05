@@ -14,6 +14,10 @@
 //! `exec` the busybox pods and output readers of the exec/attach/node shell scenarios (E04-S09);
 //! `subresources` the workload, pod and CRD fixtures of the subresource scenarios (E04-S06).
 //!
+//! Waits poll with [`wait_until`], or [`wait_in`] when the condition lives in a test namespace:
+//! its timeout failure carries that namespace's events. `tests/README.md` maps each port method
+//! to its scenarios (E04-S14).
+//!
 //! Namespaced fixtures (service accounts, roles, bindings) live in the test's
 //! `oxi-test-<rand>` namespace and go away with it.
 
@@ -47,7 +51,7 @@ use oxikube_kube::kubeconfig::{Strictness, default_kubeconfig_path, load_local_k
 use oxikube_kube::{
     ClientPool, ContextDefinition, KubeClientFactory, PoolConfig, ProxyEnv, SystemClock,
 };
-use oxikube_testkit::integration::{ensure_kind_context, test_context};
+use oxikube_testkit::integration::{TestNamespace, ensure_kind_context, test_context};
 
 /// Default upper bound for the cluster to reflect a change (RBAC, CRDs, discovery).
 pub const DEADLINE: Duration = Duration::from_secs(30);
@@ -241,7 +245,37 @@ pub async fn whoami(client: &Client) -> Result<String, kube::Error> {
 
 /// Polls `check` every [`POLL`] until it returns `Some`, failing the test after
 /// `deadline`. Real time: kind is a real cluster.
-pub async fn wait_until<T, F, Fut>(what: &str, deadline: Duration, mut check: F) -> T
+pub async fn wait_until<T, F, Fut>(what: &str, deadline: Duration, check: F) -> T
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Option<T>>,
+{
+    match poll(deadline, check).await {
+        Some(value) => value,
+        None => panic!("{what} not reached within {deadline:?}"),
+    }
+}
+
+/// As [`wait_until`] for a condition inside `ns`: on timeout the failure carries the
+/// namespace's events, so a CI failure shows what the cluster did (image pulls, scheduling,
+/// budget refusals) without a rerun.
+pub async fn wait_in<T, F, Fut>(ns: &TestNamespace, what: &str, deadline: Duration, check: F) -> T
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Option<T>>,
+{
+    match poll(deadline, check).await {
+        Some(value) => value,
+        None => panic!(
+            "{what} not reached within {deadline:?}; events in {}:\n{}",
+            ns.name(),
+            ns.events()
+        ),
+    }
+}
+
+/// Polls `check` every [`POLL`] until it returns `Some`, or `None` once `deadline` has passed.
+async fn poll<T, F, Fut>(deadline: Duration, mut check: F) -> Option<T>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Option<T>>,
@@ -249,12 +283,11 @@ where
     let started = Instant::now();
     loop {
         if let Some(value) = check().await {
-            return value;
+            return Some(value);
         }
-        assert!(
-            started.elapsed() < deadline,
-            "{what} not reached within {deadline:?}"
-        );
+        if started.elapsed() >= deadline {
+            return None;
+        }
         tokio::time::sleep(POLL).await;
     }
 }

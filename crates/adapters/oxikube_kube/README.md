@@ -11,6 +11,11 @@ kube-rs adapter: tolerant kubeconfig loading, ClientPool per context with exec/O
 
 See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps` fails CI when this crate depends on anything outside its layer rules.
 
+## Integration tests
+
+`tests/` is the kind integration suite (`--features integration`, `OXIKUBE_TEST_CONTEXT`); its
+`README.md` maps every data-plane port method and E04 acceptance item to the test that covers it.
+
 ## Owning epics
 
 See `docs/ROADMAP.md` and the GitHub Project for the epics and stories that build this crate.

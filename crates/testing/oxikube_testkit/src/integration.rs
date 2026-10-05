@@ -114,6 +114,33 @@ impl TestNamespace {
     pub fn context(&self) -> &str {
         &self.context
     }
+
+    /// The namespace's events, oldest first, as `kubectl get events -o wide` prints them, for a
+    /// test that times out to show what the cluster did. Never fails: when kubectl cannot be run
+    /// or exits non-zero, the text says so instead. Events carry reasons and messages written by
+    /// controllers, not object payloads.
+    pub fn events(&self) -> String {
+        let out = Command::new("kubectl")
+            .args(["--context", &self.context, "-n", &self.name])
+            .args(["get", "events", "-o", "wide"])
+            .arg("--sort-by=.metadata.creationTimestamp")
+            .output();
+        match out {
+            Ok(out) if out.status.success() => {
+                let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+                if text.is_empty() {
+                    format!("(no events in {})", self.name)
+                } else {
+                    text
+                }
+            }
+            Ok(out) => format!(
+                "(kubectl get events failed: {})",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+            Err(e) => format!("(kubectl could not be run: {e})"),
+        }
+    }
 }
 
 impl Drop for TestNamespace {
@@ -176,6 +203,15 @@ mod tests {
                     .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
             );
         }
+    }
+
+    /// Runs only with a cluster (`OXIKUBE_TEST_CONTEXT=kind-oxikube`); skips otherwise.
+    #[test]
+    fn a_fresh_namespace_reports_its_events_as_text() {
+        let Some(ctx) = test_context() else { return };
+        let ns = TestNamespace::create(&ctx).expect("create namespace");
+        let events = ns.events();
+        assert!(!events.starts_with("(kubectl"), "{events}");
     }
 
     /// Runs only with a cluster (`OXIKUBE_TEST_CONTEXT=kind-oxikube`); skips otherwise.
