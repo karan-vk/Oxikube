@@ -8,6 +8,7 @@
 //! there yet. Once the `CommandBus` and keymap core land (E05-S07, E11) they dispatch `Command`s
 //! and the bindings move into `keymap.json`.
 
+use crate::session::{NewWindow, Quit, ZoomIn, ZoomOut, ZoomReset};
 use gpui::{
     App, KeyBinding, Menu, MenuItem, OsAction, ParentElement as _, SystemMenuType, actions,
 };
@@ -19,8 +20,6 @@ use oxikube_ui::{
 actions!(
     oxikube,
     [
-        /// Quits the application.
-        Quit,
         /// Shows the About dialog.
         About,
         /// Opens the preferences (placeholder until the settings UI, E21).
@@ -38,7 +37,7 @@ actions!(
     ]
 );
 
-/// The menu bar, in macOS order: application, Edit, Window.
+/// The menu bar, in macOS order: application, Edit, View, Window.
 pub fn app_menus() -> Vec<Menu> {
     vec![
         Menu::new("Oxikube").items([
@@ -63,31 +62,52 @@ pub fn app_menus() -> Vec<Menu> {
             MenuItem::os_action("Paste", Paste, OsAction::Paste),
             MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
         ]),
+        Menu::new("View").items([
+            MenuItem::action("Zoom In", ZoomIn),
+            MenuItem::action("Zoom Out", ZoomOut),
+            MenuItem::action("Actual Size", ZoomReset),
+        ]),
         Menu::new("Window").items([
+            MenuItem::action("New Window", NewWindow),
+            MenuItem::separator(),
             MenuItem::action("Minimize", Minimize),
             MenuItem::action("Zoom", Zoom),
         ]),
     ]
 }
 
-/// Default key bindings of the menu actions (shown next to the items by macOS).
+/// Default key bindings of the menu actions (shown next to the items by macOS), including the
+/// session shortcuts: zoom in (`=` and `+`), out and actual size, and New Window.
+///
+/// The binary does not load the keymap files of `oxikube_assets` yet (E05-S07/S09), so these
+/// interim bindings are what makes the shortcuts work; the files carry the same keys for when it
+/// does.
 pub fn default_bindings(macos: bool) -> Vec<KeyBinding> {
+    let m = if macos { "cmd" } else { "ctrl" };
+    let mut bindings = vec![
+        KeyBinding::new(&format!("{m}-="), ZoomIn, None),
+        KeyBinding::new(&format!("{m}-+"), ZoomIn, None),
+        KeyBinding::new(&format!("{m}--"), ZoomOut, None),
+        KeyBinding::new(&format!("{m}-0"), ZoomReset, None),
+        KeyBinding::new(&format!("{m}-shift-n"), NewWindow, None),
+    ];
     if macos {
-        vec![
+        bindings.extend([
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-,", OpenPreferences, None),
             KeyBinding::new("cmd-h", Hide, None),
             KeyBinding::new("alt-cmd-h", HideOthers, None),
             KeyBinding::new("cmd-m", Minimize, None),
-        ]
+        ]);
     } else {
-        vec![KeyBinding::new("ctrl-q", Quit, None)]
+        bindings.push(KeyBinding::new("ctrl-q", Quit, None));
     }
+    bindings
 }
 
 /// Registers the action handlers, key bindings and menu bar. Called once from [`super::init`].
 pub(super) fn register(cx: &mut App) {
-    cx.on_action(|_: &Quit, cx| cx.quit());
+    cx.on_action(|_: &Quit, cx| crate::session::request_quit(cx));
     cx.on_action(|_: &Hide, cx| cx.hide());
     cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
     cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());

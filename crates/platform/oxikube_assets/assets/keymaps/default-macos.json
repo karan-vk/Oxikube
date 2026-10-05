@@ -12,12 +12,17 @@
 [
   {
     "bindings": {
-      "cmd-q": "oxikube::Quit",
+      "cmd-q": "app::Quit",
       "cmd-,": "oxikube::OpenPreferences",
       "cmd-h": "oxikube::Hide",
       "alt-cmd-h": "oxikube::HideOthers",
       "cmd-m": "oxikube::Minimize",
-      "cmd-shift-p": "palette::Toggle"
+      "cmd-shift-p": "palette::Toggle",
+      "cmd-shift-n": "window::New",
+      "cmd-=": "view::ZoomIn",
+      "cmd-+": "view::ZoomIn",
+      "cmd--": "view::ZoomOut",
+      "cmd-0": "view::ZoomReset"
     }
   }
 ]

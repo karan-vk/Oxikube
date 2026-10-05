@@ -14,10 +14,17 @@ doctest = false
 [dependencies]
 anyhow.workspace = true
 gpui.workspace = true
+oxikube_domain.workspace = true
+oxikube_settings.workspace = true
 oxikube_ui.workspace = true
+schemars.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
+oxikube_keymap.workspace = true
+tempfile.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }

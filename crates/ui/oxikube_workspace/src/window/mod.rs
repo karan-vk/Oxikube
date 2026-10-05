@@ -19,12 +19,13 @@ mod view;
 mod tests;
 
 use anyhow::{Context as _, Result};
-use gpui::{AnyView, App, AppContext as _, Entity, Window, WindowHandle};
+use gpui::{
+    AnyView, App, AppContext as _, Bounds, Entity, Pixels, Window, WindowBounds, WindowHandle,
+};
 use oxikube_ui::root::{Root, new_root};
 
-pub use menus::{
-    About, Hide, HideOthers, Minimize, OpenPreferences, Quit, ShowAll, Zoom, app_menus,
-};
+pub use crate::session::Quit;
+pub use menus::{About, Hide, HideOthers, Minimize, OpenPreferences, ShowAll, Zoom, app_menus};
 pub use options::{APP_ID, Chrome, WINDOW_TITLE, main_window_options, window_options};
 pub use view::MainView;
 
@@ -46,9 +47,26 @@ pub fn open_main_window_with(
     cx: &mut App,
     wrap: impl FnOnce(AnyView, &mut App) -> AnyView + 'static,
 ) -> Result<WindowHandle<Root>> {
-    let options = main_window_options(cx);
-    cx.open_window(options, move |window, cx| build_root(window, cx, wrap))
-        .context("opening the main window")
+    open_main_window_at(cx, None, wrap)
+}
+
+/// Like [`open_main_window_with`], at `bounds` (centred when `None`). Every main window gets
+/// the close guard of the session module: the last one asks before quitting while operations
+/// run (E05-S12).
+pub fn open_main_window_at(
+    cx: &mut App,
+    bounds: Option<Bounds<Pixels>>,
+    wrap: impl FnOnce(AnyView, &mut App) -> AnyView + 'static,
+) -> Result<WindowHandle<Root>> {
+    let mut options = main_window_options(cx);
+    if let Some(bounds) = bounds {
+        options.window_bounds = Some(WindowBounds::Windowed(bounds));
+    }
+    cx.open_window(options, move |window, cx| {
+        crate::session::windows::install_close_guard(window, cx);
+        build_root(window, cx, wrap)
+    })
+    .context("opening the main window")
 }
 
 /// Builds the window root: [`MainView`] (wrapped by `wrap`) inside the `Root`. Also what the

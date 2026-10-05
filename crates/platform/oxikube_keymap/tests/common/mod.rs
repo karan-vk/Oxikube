@@ -12,7 +12,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 // Actions the embedded default keymaps name: registering them here makes those bindings live.
-actions!(oxikube, [Quit, Hide]);
+actions!(oxikube, [Hide]);
+actions!(app, [Quit]);
 actions!(palette, [Toggle]);
 // Actions of the vim layer.
 actions!(table, [SelectNext, SelectPrevious]);

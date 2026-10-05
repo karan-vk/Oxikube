@@ -94,7 +94,7 @@ impl CommandId {
         let verb = snake_case(self.verb());
         match ns {
             "helm" | "argo" => format!("{ns}.{verb}"),
-            "cluster" | "namespace" | "view" | "palette" | "settings" | "app" => {
+            "cluster" | "namespace" | "view" | "palette" | "settings" | "app" | "window" => {
                 format!("app.{ns}_{verb}")
             }
             _ => format!("k8s.{ns}_{verb}"),

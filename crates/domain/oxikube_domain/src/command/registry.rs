@@ -13,6 +13,8 @@ use super::meta::{CommandMeta, CommandScope};
 use crate::safety::Risk;
 
 impl CommandId {
+    /// `app::Quit`: quit the application (confirms first while operations run).
+    pub const APP_QUIT: CommandId = CommandId::new("app::Quit");
     /// `cluster::Select`: make a cluster the active one.
     pub const CLUSTER_SELECT: CommandId = CommandId::new("cluster::Select");
     /// `cluster::ToggleReadOnly`: set or toggle a cluster's read-only mode.
@@ -47,6 +49,14 @@ impl CommandId {
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `view::Open`: open a registered view by id.
     pub const VIEW_OPEN: CommandId = CommandId::new("view::Open");
+    /// `view::ZoomIn`: make the UI one zoom step larger.
+    pub const VIEW_ZOOM_IN: CommandId = CommandId::new("view::ZoomIn");
+    /// `view::ZoomOut`: make the UI one zoom step smaller.
+    pub const VIEW_ZOOM_OUT: CommandId = CommandId::new("view::ZoomOut");
+    /// `view::ZoomReset`: set the UI zoom back to 100 %.
+    pub const VIEW_ZOOM_RESET: CommandId = CommandId::new("view::ZoomReset");
+    /// `window::New`: open another main window.
+    pub const WINDOW_NEW: CommandId = CommandId::new("window::New");
     /// `workload::Restart`: rolling-restart a workload.
     pub const WORKLOAD_RESTART: CommandId = CommandId::new("workload::Restart");
     /// `workload::Scale`: set a workload's replica count.
@@ -58,6 +68,12 @@ const NONE: Capabilities = Capabilities::empty();
 /// Every declared command, **sorted by id** (lookup is a binary search; a test
 /// enforces the order).
 pub static COMMANDS: &[CommandMeta] = &[
+    CommandMeta::read(
+        CommandId::APP_QUIT,
+        "Quit Oxikube",
+        CommandScope::Global,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::CLUSTER_SELECT,
         "Select Cluster",
@@ -164,6 +180,30 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::VIEW_OPEN,
         "Open View",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::VIEW_ZOOM_IN,
+        "Zoom In",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::VIEW_ZOOM_OUT,
+        "Zoom Out",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::VIEW_ZOOM_RESET,
+        "Reset Zoom",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::WINDOW_NEW,
+        "New Window",
         CommandScope::Global,
         NONE,
     ),

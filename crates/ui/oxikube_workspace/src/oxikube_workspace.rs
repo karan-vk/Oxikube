@@ -17,6 +17,9 @@
 //! - [`dock`]: [`Dock`] snapshots of the edge docks.
 //! - [`closed`]: the bounded reopen-closed stack.
 //! - [`actions`]: `workspace::*` actions and their default key bindings.
+//! - [`session`]: window and session basics (E05-S12): `window::New`, UI zoom (`view::ZoomIn`,
+//!   `view::ZoomOut`, `view::ZoomReset`), reduce-motion, and the quit confirmation while
+//!   operations run (`app::Quit`).
 //!
 //! The Item / Panel / Pane / Dock model follows Zed's `workspace` crate design; it is written
 //! from scratch (no Zed code copied), on top of gpui-component's `DockArea`.
@@ -30,6 +33,7 @@ pub mod dock;
 pub mod item;
 pub mod pane;
 pub mod panel;
+pub mod session;
 mod tab_label;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
@@ -43,9 +47,11 @@ pub use pane::{Member, Pane, PaneAxis, PaneGroup, PaneId, SplitDirection};
 pub use panel::{DockPosition, Panel, PanelEvent, PanelHandle};
 pub use workspace::{OpenOptions, Workspace, WorkspaceEvent};
 
-/// Registers the workspace: the main window's menu and actions ([`window::init`]) and the
-/// `workspace::*` key bindings. Call once, after `oxikube_ui::init`.
+/// Registers the workspace: the main window's menu and actions ([`window::init`]), the
+/// `workspace::*` key bindings and the session basics ([`session::init`]). Call once, after
+/// `oxikube_ui::init`.
 pub fn init(cx: &mut gpui::App) {
     window::init(cx);
     actions::register(cx);
+    session::init(cx);
 }
