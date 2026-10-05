@@ -141,14 +141,12 @@ impl Pump {
                 // every delta queued so far, so those are dropped with the old list.
                 run.batch = Coalescer::default();
                 run.deadline = None;
-                run.initial = self
-                    .stores
-                    .iter()
-                    .zip(&run.synced)
-                    .filter(|&(_, &synced)| synced)
-                    .flat_map(|(store, _)| store.state())
-                    .map(|object| object.0.clone())
-                    .collect();
+                run.initial = resources_of(
+                    self.stores
+                        .iter()
+                        .zip(&run.synced)
+                        .filter_map(|(store, &synced)| synced.then_some(store)),
+                );
             }
             SubEvent::Delta(delta) => self.queue(run, delta),
             SubEvent::State { index, state } => {
@@ -181,12 +179,17 @@ impl Pump {
 
     /// Everything in the stores, for a [`Restarted`](Delta::Restarted).
     fn snapshot(&self) -> Vec<Resource> {
-        self.stores
-            .iter()
-            .flat_map(Store::state)
-            .map(|object| object.0.clone())
-            .collect()
+        resources_of(&self.stores)
     }
+}
+
+/// The objects in `stores`, as domain resources.
+fn resources_of<'a>(stores: impl IntoIterator<Item = &'a Store<FeedObject>>) -> Vec<Resource> {
+    stores
+        .into_iter()
+        .flat_map(Store::state)
+        .map(|object| object.0.clone())
+        .collect()
 }
 
 impl Drop for Pump {

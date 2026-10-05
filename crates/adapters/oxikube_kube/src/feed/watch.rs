@@ -13,7 +13,6 @@
 //! | error | [`SubEvent::Error`] (retryable) or [`SubEvent::Fatal`] (then the task ends) | | |
 
 use std::mem;
-use std::time::Duration;
 
 use futures::StreamExt;
 use kube::Api;
@@ -124,7 +123,7 @@ impl SubWatch {
                         cycle.before_retry = cycle.state;
                         self.set_state(&mut cycle, FeedState::Retrying).await?;
                     }
-                    settle_at = Some(Instant::now() + self.retry_settle());
+                    settle_at = Some(Instant::now() + self.config.retry_settle);
                     self.send(SubEvent::Error(error)).await?;
                 }
                 Some(Ok(event)) => {
@@ -139,10 +138,6 @@ impl SubWatch {
         source::events(self.api.clone(), self.watcher_config.clone(), &self.config)
     }
 
-    fn retry_settle(&self) -> Duration {
-        self.config.retry_settle
-    }
-
     async fn on_event(
         &mut self,
         cycle: &mut Cycle,
@@ -155,7 +150,7 @@ impl SubWatch {
             Event::Init | Event::InitApply(_) => FeedState::Warming,
             Event::InitDone | Event::Apply(_) | Event::Delete(_) => FeedState::Live,
         };
-        let store = self.writer.as_reader();
+        // Deltas of a relist diff; live changes are sent straight from their arm.
         let mut out = Vec::new();
         // The writer clones what it stores; the event keeps its own object for the consumer.
         // `InitDone` is applied below, after a relist diff has read the previous state.
@@ -170,12 +165,12 @@ impl SubWatch {
                 if !cycle.synced {
                     cycle.initial.push(object.0);
                 } else if let Some(diff) = cycle.relist.as_mut() {
-                    diff.object(&store, object, &mut out);
+                    diff.object(&self.writer.as_reader(), object, &mut out);
                 }
             }
             Event::InitDone => {
                 if let Some(diff) = cycle.relist.take() {
-                    diff.finish(&store, &mut out);
+                    diff.finish(&self.writer.as_reader(), &mut out);
                 }
                 self.writer.apply_watcher_event(&Event::InitDone);
                 if !cycle.synced {
@@ -190,8 +185,8 @@ impl SubWatch {
                     self.send(SubEvent::Resynced).await?;
                 }
             }
-            Event::Apply(object) => out.push(Delta::Applied(object.0)),
-            Event::Delete(object) => out.push(Delta::Deleted(object.0)),
+            Event::Apply(object) => self.send(SubEvent::Delta(Delta::Applied(object.0))).await?,
+            Event::Delete(object) => self.send(SubEvent::Delta(Delta::Deleted(object.0))).await?,
         }
         for delta in out {
             self.send(SubEvent::Delta(delta)).await?;

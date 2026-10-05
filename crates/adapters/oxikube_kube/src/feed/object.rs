@@ -33,11 +33,6 @@ impl FeedObject {
             .ok()
             .map(Self)
     }
-
-    /// The wrapped resource.
-    pub fn into_inner(self) -> Resource {
-        self.0
-    }
 }
 
 impl Deref for FeedObject {

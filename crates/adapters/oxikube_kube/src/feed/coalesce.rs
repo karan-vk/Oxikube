@@ -8,6 +8,7 @@
 //! stay two deltas in their original order. A `Restarted` discards everything before it.
 
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use oxikube_domain::Resource;
@@ -44,10 +45,10 @@ impl Coalescer {
         if let Some(rv) = &resource.meta.resource_version {
             self.resource_version = Some(rv.clone());
         }
-        match self.index.get(&key_of(resource)) {
-            Some(&at) => self.deltas[at] = delta,
-            None => {
-                self.index.insert(key_of(resource), self.deltas.len());
+        match self.index.entry(key_of(resource)) {
+            Entry::Occupied(slot) => self.deltas[*slot.get()] = delta,
+            Entry::Vacant(slot) => {
+                slot.insert(self.deltas.len());
                 self.deltas.push(delta);
             }
         }
