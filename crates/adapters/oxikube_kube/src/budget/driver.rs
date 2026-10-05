@@ -54,22 +54,30 @@ pub(super) fn spawn(
 ) -> (AbortOnDrop, FeedStream) {
     match source {
         FeedStream::Resources(source) => {
-            let (tx, rx) = mpsc::channel(1);
-            let task = runtime.spawn(run(source, tx, counters, on_end).instrument(span));
-            (
-                AbortOnDrop(task),
-                FeedStream::Resources(Box::pin(Forwarded(rx))),
-            )
+            let (task, rx) = drive(runtime, source, counters, span, on_end);
+            (task, FeedStream::Resources(rx))
         }
         FeedStream::Table(source) => {
-            let (tx, rx) = mpsc::channel(1);
-            let task = runtime.spawn(run(source, tx, counters, on_end).instrument(span));
-            (
-                AbortOnDrop(task),
-                FeedStream::Table(Box::pin(Forwarded(rx))),
-            )
+            let (task, rx) = drive(runtime, source, counters, span, on_end);
+            (task, FeedStream::Table(rx))
         }
     }
+}
+
+/// Spawns [`run`] for one item type and returns the task with the consumer's end.
+fn drive<T: Countable + Send + 'static>(
+    runtime: &Handle,
+    source: Pin<Box<dyn Stream<Item = OxiResult<T>> + Send>>,
+    counters: Arc<FeedCounters>,
+    span: Span,
+    on_end: impl FnOnce(DriverEnd) + Send + 'static,
+) -> (
+    AbortOnDrop,
+    Pin<Box<dyn Stream<Item = OxiResult<T>> + Send>>,
+) {
+    let (tx, rx) = mpsc::channel(1);
+    let task = runtime.spawn(run(source, tx, counters, on_end).instrument(span));
+    (AbortOnDrop(task), Box::pin(Forwarded(rx)))
 }
 
 async fn run<T: Countable + Send + 'static>(

@@ -23,21 +23,16 @@ impl KubeResources {
     /// A clone whose requests count their response bytes into `bytes`.
     pub(super) fn counting_bytes(&self, bytes: ByteCounter) -> KubeResources {
         let mut counted = self.clone();
-        counted.client = counting_client(&self.client, bytes);
+        let service = CountBytes {
+            client: self.client.clone(),
+            bytes,
+        };
+        counted.client = Client::new(service, self.client.default_namespace());
         counted
     }
 }
 
-/// `client` with every response body counted into `bytes`.
-pub(super) fn counting_client(client: &Client, bytes: ByteCounter) -> Client {
-    let service = CountBytes {
-        client: client.clone(),
-        bytes,
-    };
-    Client::new(service, client.default_namespace())
-}
-
-/// The service behind [`counting_client`].
+/// The service of a client whose response bodies are counted.
 #[derive(Clone)]
 struct CountBytes {
     client: Client,

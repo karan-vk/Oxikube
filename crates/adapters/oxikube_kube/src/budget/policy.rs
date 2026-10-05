@@ -151,7 +151,7 @@ impl ScopeChange {
 }
 
 /// The feeds `target` needs: one per namespace, or the cluster-wide one.
-pub(crate) fn scope_namespaces(target: &WatchScope) -> Vec<Option<String>> {
+fn scope_namespaces(target: &WatchScope) -> Vec<Option<String>> {
     match target {
         WatchScope::Cluster => vec![None],
         WatchScope::Namespaces(names) => names.iter().cloned().map(Some).collect(),
@@ -170,10 +170,9 @@ pub(crate) fn plan<'a>(
     let mut wanted = scope_namespaces(target);
     wanted.sort();
     wanted.dedup();
-    let (keep, stop) = current
+    let (keep, stop): (Vec<_>, Vec<_>) = current
         .into_iter()
         .partition(|ns| wanted.binary_search(ns).is_ok());
-    let keep: Vec<Option<String>> = keep;
     let start = wanted
         .into_iter()
         .filter(|ns| keep.binary_search(ns).is_err())
