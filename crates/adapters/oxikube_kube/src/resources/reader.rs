@@ -8,7 +8,9 @@ use oxikube_ports::{
 };
 use serde_json::Value;
 
-use super::KubeResources;
+use oxikube_domain::session::WatchScope;
+
+use super::{KubeResources, namespace_of};
 
 #[async_trait]
 impl ResourceReader for KubeResources {
@@ -45,11 +47,18 @@ impl ResourceReader for KubeResources {
 
     async fn watch(
         &self,
-        _kind: &Gvk,
-        _namespace: Option<&str>,
-        _options: &WatchOptions,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        options: &WatchOptions,
     ) -> OxiResult<WatchFeed<Resource>> {
-        Err(pending("watch", "E04-S02"))
+        let scope = match namespace_of(namespace) {
+            Some(ns) => WatchScope::Namespaces(vec![ns.to_owned()]),
+            None => WatchScope::Cluster,
+        };
+        Ok(self
+            .reflector_feed(kind, &scope, options)
+            .await?
+            .into_watch_feed())
     }
 
     async fn get_scale(

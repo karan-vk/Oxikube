@@ -197,12 +197,7 @@ async fn list_metadata_returns_object_meta() {
 async fn deferred_methods_are_unsupported() {
     let api = server();
     let r = resources(&api);
-    let err = r
-        .watch(&pod_gvk(), None, &oxikube_ports::WatchOptions::default())
-        .await
-        .map(|_| ())
-        .unwrap_err();
-    assert_eq!(err.kind(), ErrorKind::Unsupported);
+    // `watch` is the reflector feed now (E04-S02, `feed::tests`).
     assert_eq!(
         r.get_scale(&pod_gvk(), Some("default"), "a")
             .await

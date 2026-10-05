@@ -45,7 +45,8 @@ How to read the **Lives in** column:
 | **ClusterSessionState** | `Disconnected → Connecting → (AuthRequired) → Ready ↔ Degraded → Error`. Advanced by `SessionEvent`s; `SessionPhase` is the payload-free discriminant; a bad pair is an `InvalidTransition`. | `oxikube_domain::session` |
 | **NamespaceSelection** | `All` or a `Set` of namespaces chosen in the UI. `NamespaceFavourites` is the user's pinned list. | `oxikube_domain::session` |
 | **WatchScope** | Derived from a `NamespaceSelection` and a kind's `Scope`: `Cluster` or `Namespaces`; decides whether feeds are cluster- or namespace-scoped. | `oxikube_domain::session` |
-| **Feed** | A live stream of `DeltaBatch`es for one (cluster, gvk, scope): reflector, metadata-only, or Table API. Typed as `WatchFeed`. | `oxikube_ports::feed`; producers in `oxikube_kube::feed` *(planned)* |
+| **Feed** | A live stream of `DeltaBatch`es for one (cluster, gvk, scope): reflector, metadata-only, or Table API. Typed as `WatchFeed`. | `oxikube_ports::feed`; producers in `oxikube_kube::feed` (reflector: `ReflectorFeed`, E04-S02) |
+| **FeedState** | Health of one feed: `Warming` (listing or relisting), `Live`, `Retrying` (backing off after a watch error), `Stopped`. Lets the session go `Degraded` while a feed retries. | `oxikube_kube::feed` |
 | **Delta / DeltaBatch** | One change in a feed (`Applied`, `Deleted`, `Restarted`) and a coalesced batch of them. Lives in ports, not the domain: it is transport. | `oxikube_ports::feed` |
 | **Table / TableFeed** | Server-side Table API data (kubectl-identical columns incl. CRD printer columns) as `TableColumn`s and `TableRow`s. | `oxikube_ports::table`; producer `oxikube_kube::table` |
 | **TableSource** | Whether a `Table`'s columns are the server's (`Server`) or the adapter's plain-JSON fallback (`Objects`, the server ignored the Table `Accept` header). | `oxikube_ports::table` |

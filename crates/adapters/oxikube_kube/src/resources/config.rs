@@ -21,7 +21,7 @@ pub enum ManagedFields {
 }
 
 impl ManagedFields {
-    pub(super) fn strips(self) -> bool {
+    pub(crate) fn strips(self) -> bool {
         self == Self::Strip
     }
 }

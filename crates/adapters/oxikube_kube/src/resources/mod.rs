@@ -33,10 +33,11 @@
 //! missing one for `get` on a namespaced kind) is `Validation`. HTTP 410 on a list is a
 //! `Conflict` carrying the [`ListExpired`] marker.
 //!
-//! # Not here yet
+//! # Elsewhere, or not here yet
 //!
-//! `watch` (E04-S02), `get_scale` and `get_subresource` (E04-S06) answer `Unsupported`
-//! until their stories land; the writer half of `ResourcePort` is E04-S05.
+//! `watch` is the reflector feed in [`crate::feed`] (E04-S02). `get_scale` and
+//! `get_subresource` (E04-S06) answer `Unsupported` until their stories land; the writer half
+//! of `ResourcePort` is E04-S05.
 
 mod backend;
 mod config;
@@ -56,7 +57,11 @@ use oxikube_domain::kinds::Verb;
 use oxikube_domain::{OxiError, OxiResult};
 
 use crate::discovery::KubeDiscovery;
+use crate::feed::FeedSettings;
 use backend::{Dynamic, KindApi};
+
+pub(crate) use backend::dynamic_json;
+pub(crate) use error::list_error;
 
 pub use config::{AccessPath, DEFAULT_PAGE_SIZE, ManagedFields, ResourcesConfig};
 pub use error::{ListExpired, is_list_expired};
@@ -67,9 +72,11 @@ pub(crate) use reader::pending;
 /// Resource reads for one cluster. Cheap to clone; clones share the client and discovery.
 #[derive(Clone)]
 pub struct KubeResources {
-    client: Client,
-    discovery: KubeDiscovery,
-    config: ResourcesConfig,
+    pub(crate) client: Client,
+    pub(crate) discovery: KubeDiscovery,
+    pub(crate) config: ResourcesConfig,
+    /// Reflector feed settings (E04-S02, `crate::feed`).
+    pub(crate) feeds: FeedSettings,
 }
 
 impl KubeResources {
@@ -84,6 +91,7 @@ impl KubeResources {
             client,
             discovery,
             config,
+            feeds: FeedSettings::default(),
         }
     }
 
