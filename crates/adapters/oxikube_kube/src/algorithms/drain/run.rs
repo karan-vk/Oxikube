@@ -4,15 +4,15 @@ use std::sync::Arc;
 
 use futures::channel::mpsc;
 use futures::{FutureExt as _, Stream, StreamExt as _, future, stream};
-use oxikube_domain::ids::Gvk;
-use oxikube_domain::{ErrorKind, OxiError, OxiResult, Resource};
+use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::{ListOptions, ResourcePort, WriteOptions};
 use tokio::time::Instant;
 use tracing::debug;
 
-use super::evict::{Events, Shared, evict_and_wait};
+use super::evict::{Events, Shared, emit, evict_and_wait};
 use super::options::{DrainOptions, DrainPlan, DrainProgress, DrainSummary, PodRef};
 use super::plan::plan_drain;
+use crate::algorithms::api::{list_all, node_gvk, pod_gvk};
 use crate::subresource::ResourcePatch;
 
 /// Pods are listed this many at a time.
@@ -20,14 +20,6 @@ const PAGE: u32 = 500;
 
 /// How many blocking pods an error names.
 const NAMED: usize = 5;
-
-fn node_gvk() -> Gvk {
-    Gvk::new("", "v1", "Node")
-}
-
-fn pod_gvk() -> Gvk {
-    Gvk::new("", "v1", "Pod")
-}
 
 /// Drains `node`: cordons it and evicts its pods, reporting each step as it happens.
 ///
@@ -82,15 +74,12 @@ where
             return if summary.is_complete() {
                 Ok(summary)
             } else {
-                Err(OxiError::new(
-                    ErrorKind::Conflict,
-                    format!(
-                        "drain of node {} left {} pod(s): {}",
-                        summary.node,
-                        summary.failed.len(),
-                        names(summary.failed.iter().map(ToString::to_string)),
-                    ),
-                ))
+                Err(OxiError::conflict(format!(
+                    "drain of node {} left {} pod(s): {}",
+                    summary.node,
+                    summary.failed.len(),
+                    names(summary.failed.iter().map(ToString::to_string)),
+                )))
             };
         }
     }
@@ -109,9 +98,7 @@ async fn execute(
     if !plan.blocked.is_empty() {
         return Err(blocked_error(node, &plan));
     }
-    let announce = |progress| {
-        let _ = events.unbounded_send(Ok(progress));
-    };
+    let announce = |progress| emit(events, progress);
     announce(DrainProgress::Planned {
         evict: plan.evict.clone(),
         skipped: plan.skipped.clone(),
@@ -170,23 +157,13 @@ async fn execute(
 
 /// Every pod on `node`, across namespaces.
 async fn pods_on(port: &dyn ResourcePort, node: &str) -> OxiResult<Vec<Resource>> {
-    let mut options = ListOptions::default()
+    let options = ListOptions::default()
         .fields(format!("spec.nodeName={node}"))
         .limit(PAGE);
-    let mut pods = Vec::new();
-    loop {
-        let page = port.list(&pod_gvk(), None, &options).await?;
-        let next = page.continue_token.clone().filter(|t| !t.is_empty());
-        pods.extend(
-            page.items
-                .into_iter()
-                .filter(|pod| pod.get_str("/spec/nodeName") == Some(node)),
-        );
-        match next {
-            Some(token) => options = options.continue_from(token),
-            None => return Ok(pods),
-        }
-    }
+    let mut pods = list_all(port, &pod_gvk(), None, options).await?;
+    // The field selector does the work; this guards a server that ignores it.
+    pods.retain(|pod| pod.get_str("/spec/nodeName") == Some(node));
+    Ok(pods)
 }
 
 fn blocked_error(node: &str, plan: &DrainPlan) -> OxiError {

@@ -35,11 +35,12 @@
 //! owned by the CronJob (`controller` and `blockOwnerDeletion` true), so deleting the CronJob
 //! deletes the Jobs it triggered and the CronJob's history limits apply to them.
 
-use oxikube_domain::ids::Gvk;
 use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::{ResourcePort, WriteOptions};
 use serde_json::{Map, Value, json};
 use tracing::debug;
+
+use super::api::{cronjob_gvk, job_gvk};
 
 /// The annotation `kubectl create job --from=cronjob/x` puts on the Jobs it creates.
 pub const INSTANTIATE_ANNOTATION: &str = "cronjob.kubernetes.io/instantiate";
@@ -47,15 +48,8 @@ pub const INSTANTIATE_ANNOTATION: &str = "cronjob.kubernetes.io/instantiate";
 /// The most characters of `generateName` the API server keeps (63 minus its 5 random ones).
 const MAX_GENERATE_NAME: usize = 58;
 
+/// What follows the CronJob's name in the generated name.
 const SUFFIX: &str = "-manual-";
-
-fn cronjob_gvk() -> Gvk {
-    Gvk::new("batch", "v1", "CronJob")
-}
-
-fn job_gvk() -> Gvk {
-    Gvk::new("batch", "v1", "Job")
-}
 
 /// Creates a Job from the CronJob `namespace/name`'s job template and returns it.
 ///
@@ -65,8 +59,7 @@ fn job_gvk() -> Gvk {
 /// # Errors
 ///
 /// `NotFound` for a missing CronJob, `Validation` if it has no `spec.jobTemplate.spec` (or no
-/// uid for the owner reference), and the
-/// port's errors for the create (`Forbidden`, `Validation` from admission, ...).
+/// uid for the owner reference), and the port's errors for the create (`Forbidden`, `Validation` from admission, ...).
 pub async fn trigger_cronjob(
     port: &dyn ResourcePort,
     namespace: &str,

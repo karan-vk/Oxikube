@@ -1,9 +1,10 @@
 //! Finding a Deployment's ReplicaSets and reading their revisions.
 
-use oxikube_domain::ids::Gvk;
 use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::{ListOptions, ResourcePort};
 use serde_json::Value;
+
+use crate::algorithms::api::{list_all, replicaset_gvk};
 
 /// The annotation holding a revision number, on the Deployment (current) and on each of its
 /// ReplicaSets.
@@ -12,23 +13,6 @@ pub const REVISION_ANNOTATION: &str = "deployment.kubernetes.io/revision";
 /// The label the Deployment controller adds to a ReplicaSet and its pods to tell its
 /// ReplicaSets apart; never part of the Deployment's own template.
 pub(super) const HASH_LABEL: &str = "pod-template-hash";
-
-pub(super) fn deployment_gvk() -> Gvk {
-    Gvk::new("apps", "v1", "Deployment")
-}
-
-pub(super) fn replicaset_gvk() -> Gvk {
-    Gvk::new("apps", "v1", "ReplicaSet")
-}
-
-/// The Deployment `namespace/name`, after checking it is a namespaced name.
-pub(super) async fn get_deployment(
-    port: &dyn ResourcePort,
-    namespace: &str,
-    name: &str,
-) -> OxiResult<Resource> {
-    port.get(&deployment_gvk(), Some(namespace), name).await
-}
 
 /// A revision number: the annotation parsed, `None` when absent or not a number.
 pub(super) fn revision_of(object: &Resource) -> Option<i64> {
@@ -47,24 +31,13 @@ pub(super) async fn revisions(
     deployment: &Resource,
 ) -> OxiResult<Vec<(i64, Resource)>> {
     let selector = label_selector(deployment)?;
-    let namespace = deployment.namespace();
-    let mut found = Vec::new();
-    let mut options = ListOptions::default().labels(selector).limit(500);
-    loop {
-        let page = port.list(&replicaset_gvk(), namespace, &options).await?;
-        let next = page.continue_token.clone().filter(|t| !t.is_empty());
-        for rs in page.items {
-            if is_controlled_by(&rs, deployment) {
-                if let Some(revision) = revision_of(&rs) {
-                    found.push((revision, rs));
-                }
-            }
-        }
-        match next {
-            Some(token) => options = options.continue_from(token),
-            None => break,
-        }
-    }
+    let options = ListOptions::default().labels(selector).limit(500);
+    let replicasets = list_all(port, &replicaset_gvk(), deployment.namespace(), options).await?;
+    let mut found: Vec<(i64, Resource)> = replicasets
+        .into_iter()
+        .filter(|rs| is_controlled_by(rs, deployment))
+        .filter_map(|rs| Some((revision_of(&rs)?, rs)))
+        .collect();
     found.sort_by_key(|(revision, _)| *revision);
     Ok(found)
 }

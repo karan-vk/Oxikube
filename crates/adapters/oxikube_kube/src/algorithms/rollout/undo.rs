@@ -5,13 +5,14 @@ use oxikube_ports::{Patch, ResourcePort, WriteOptions};
 use serde_json::{Map, Value, json};
 use tracing::debug;
 
-use super::revisions::{HASH_LABEL, deployment_gvk, get_deployment, revision_of, revisions};
+use super::revisions::{HASH_LABEL, REVISION_ANNOTATION, revision_of, revisions};
+use crate::algorithms::api::deployment_gvk;
 
 /// Annotations of a ReplicaSet that describe the ReplicaSet, not the Deployment, and are not
 /// copied back (kubectl's `annotationsToSkip`).
 const SKIPPED_ANNOTATIONS: [&str; 6] = [
     "kubectl.kubernetes.io/last-applied-configuration",
-    "deployment.kubernetes.io/revision",
+    REVISION_ANNOTATION,
     "deployment.kubernetes.io/revision-history",
     "deployment.kubernetes.io/desired-replicas",
     "deployment.kubernetes.io/max-replicas",
@@ -55,7 +56,7 @@ pub async fn rollout_undo(
     if to_revision.is_some_and(|r| r < 1) {
         return Err(OxiError::validation("a revision is a number from 1"));
     }
-    let deployment = get_deployment(port, namespace, name).await?;
+    let deployment = port.get(&deployment_gvk(), Some(namespace), name).await?;
     if deployment.get_bool("/spec/paused") == Some(true) {
         return Err(OxiError::conflict(format!(
             "deployment {name} is paused: resume it before rolling back"

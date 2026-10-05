@@ -33,6 +33,7 @@
 //! 429 at once: build the [`KubeResources`](crate::KubeResources) the drain runs on with
 //! [`with_unretried_client`](crate::KubeResources::with_unretried_client), as for any eviction.
 
+mod api;
 mod cronjob;
 mod drain;
 mod rollout;

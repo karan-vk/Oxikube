@@ -1,13 +1,13 @@
 //! One pod of a drain: evict it, back off while a budget refuses, wait until it is gone.
 
 use futures::channel::mpsc::UnboundedSender;
-use oxikube_domain::ids::Gvk;
 use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 use oxikube_ports::{DeleteOptions, Preconditions, ResourcePort};
 use tokio::time::{Instant, sleep};
 use tracing::debug;
 
 use super::options::{DrainOptions, DrainProgress, PodRef};
+use crate::algorithms::api::pod_gvk;
 use crate::subresource::eviction_blocked;
 
 /// Where progress goes. A closed receiver (the stream was dropped) is ignored: the drain is
@@ -24,12 +24,13 @@ pub(super) struct Shared<'a> {
 
 impl Shared<'_> {
     pub(super) fn emit(&self, progress: DrainProgress) {
-        let _ = self.events.unbounded_send(Ok(progress));
+        emit(self.events, progress);
     }
 }
 
-fn pod_gvk() -> Gvk {
-    Gvk::new("", "v1", "Pod")
+/// Sends `progress`, ignoring a closed receiver.
+pub(super) fn emit(events: &Events, progress: DrainProgress) {
+    let _ = events.unbounded_send(Ok(progress));
 }
 
 /// Evicts `pod` and waits for it to go. Reports every step; `true` if the pod is gone, `false`
@@ -57,11 +58,11 @@ async fn run(shared: &Shared<'_>, pod: &PodRef) -> Result<(), String> {
             pod: pod.clone(),
             attempt,
         });
-        let result = shared
+        let evicted = shared
             .port
             .evict(&pod.namespace, &pod.name, &delete_options(pod, options))
             .await;
-        match result {
+        match evicted {
             Ok(()) => {
                 debug!(op = "drain_evict", %pod, attempt, "algorithm");
                 shared.emit(DrainProgress::Evicted { pod: pod.clone() });

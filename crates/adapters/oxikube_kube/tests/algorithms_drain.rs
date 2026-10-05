@@ -23,12 +23,8 @@ use oxikube_ports::{
 };
 use serde_json::{Value, json};
 
-use common::subresources::{Env, FakeNode, PAUSE, live_pod, pod_gvk, setup};
+use common::subresources::{Env, FakeNode, PAUSE, live_pod, node_gvk, pod_gvk, setup};
 use common::wait_until;
-
-fn node_gvk() -> Gvk {
-    Gvk::new("", "v1", "Node")
-}
 
 fn pdb_gvk() -> Gvk {
     Gvk::new("policy", "v1", "PodDisruptionBudget")
