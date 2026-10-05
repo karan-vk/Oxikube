@@ -1,14 +1,31 @@
-//! Projects [`Tokens`] onto gpui-component's global `Theme`.
+//! Projects [`Tokens`] and `oxikube_theme` themes onto gpui-component's global `Theme`.
 //!
 //! This is the only place that writes the component library's theme. Views read [`Tokens`]
 //! (through [`crate::ActiveTokens`]) and never gpui-component theme fields, so a library bump
 //! that renames a field is fixed here and nowhere else.
+//!
+//! - this file: [`set_tokens`] and [`apply_tokens`], the per-component colour projection.
+//! - `config`: [`set_theme`] and [`theme_config`], `ThemeTokens` -> the library's `ThemeConfig`
+//!   (core colours, editor/syntax highlight) applied through its own theme mechanism.
+//! - `follow`: [`follow_active_theme`], keeps the library in step with `oxikube_theme`.
+
+mod config;
+mod follow;
+
+pub use config::{set_theme, theme_config};
+pub use follow::follow_active_theme;
 
 use crate::setup::Initialised;
 use crate::size::UiScale;
 use crate::tokens::{Appearance, Tokens, TokensGlobal};
-use gpui::{App, Hsla, hsla};
-use gpui_component::{Theme, ThemeMode};
+use gpui::{App, Global, Hsla, hsla};
+use gpui_component::{Theme, ThemeConfig, ThemeMode};
+use std::rc::Rc;
+
+/// The `ThemeConfig` the active tokens came from, when they came from a theme ([`set_theme`]).
+struct ThemeConfigGlobal(Option<Rc<ThemeConfig>>);
+
+impl Global for ThemeConfigGlobal {}
 
 /// Installs `tokens` as the active set and re-themes the component library.
 ///
@@ -16,9 +33,15 @@ use gpui_component::{Theme, ThemeMode};
 ///
 /// Switches gpui-component to the matching light/dark mode first (which loads that mode's
 /// registered base theme), then overwrites the colours, radii and font sizes from `tokens`.
-/// Refreshes all windows.
+/// Refreshes all windows. Drops any theme config a previous [`set_theme`] recorded.
 pub fn set_tokens(cx: &mut App, tokens: Tokens) {
+    install(cx, tokens, None);
+}
+
+/// Records `tokens` (and the theme config they came from, if any) and applies them.
+fn install(cx: &mut App, tokens: Tokens, config: Option<Rc<ThemeConfig>>) {
     cx.set_global(TokensGlobal(tokens));
+    cx.set_global(ThemeConfigGlobal(config));
     reapply(cx);
 }
 
@@ -30,13 +53,21 @@ pub(crate) fn reapply(cx: &mut App) {
     let Some(tokens) = cx.try_global::<TokensGlobal>().map(|g| g.0) else {
         return;
     };
+    let config = cx
+        .try_global::<ThemeConfigGlobal>()
+        .and_then(|global| global.0.clone());
     let scale = UiScale::get(cx);
     let mode = match tokens.appearance {
         Appearance::Dark => ThemeMode::Dark,
         Appearance::Light => ThemeMode::Light,
     };
     Theme::change(mode, None, cx);
-    Theme::update(cx, |theme| apply_tokens(theme, &tokens, scale));
+    Theme::update(cx, |theme| {
+        if let Some(config) = &config {
+            theme.apply_config(config);
+        }
+        apply_tokens(theme, &tokens, scale);
+    });
 }
 
 /// Writes `tokens` into `theme`. Pure (no `App`), so it is unit-testable.

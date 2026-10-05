@@ -10,6 +10,9 @@ Embedded assets: Lucide icons, fonts, bundled themes, default settings/keymaps.
   `assets/icons/LICENSE`). Only listed icons are embedded in the binary.
 - `Assets`: a `gpui::AssetSource` serving them at `icons/<name>.svg`. `oxikube_ui::Assets` chains it
   in front of gpui-component's own bundle; the bin registers that one.
+- `BUNDLED_THEME_FAMILIES`: Zed theme-family JSON for One Dark and One Light (`assets/themes/`, MIT
+  licence text in `assets/themes/LICENSES.md`), parsed by `oxikube_theme`.
+- Settings assets: `default_settings()`, `initial_user_settings_content()`, `settings_schema()`.
 
 ## Allowed internal dependencies
 

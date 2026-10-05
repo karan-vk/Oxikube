@@ -1,9 +1,9 @@
 //! Where tokens come from.
 //!
-//! `oxikube_theme` (E05-S08) owns the real theme registry. Until it lands, `oxikube_ui` runs on
-//! [`DefaultTokens`]. The dependency is deliberately an adapter trait: the theme crate (or the
-//! bin that wires both) implements [`TokenSource`] and hands it to [`crate::set_token_source`],
-//! so nothing in the views changes when the source flips.
+//! `oxikube_theme` (E05-S08) owns the theme registry and the active theme. `oxikube_ui` runs on
+//! [`DefaultTokens`] until the bin calls [`crate::follow_active_theme`], which applies the active
+//! theme (and every later change of it) through [`crate::set_theme`]; nothing in the views
+//! changes when the source flips. [`TokenSource`] stays for sources that only know an appearance.
 
 use super::tokens::{Appearance, Tokens};
 

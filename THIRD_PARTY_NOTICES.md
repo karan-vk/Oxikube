@@ -141,4 +141,18 @@ Used as a dependency through `oxikube_ui`. Bundled Lucide icons (ISC) via `gpui-
 
 ## Bundled themes
 Theme families bundled under `crates/platform/oxikube_assets` list their own licence in the JSON `author`/`license` fields and here:
-- (none yet)
+- One Dark and One Light (MIT, Copyright (c) 2014 GitHub Inc., from Atom's `one-dark-ui` /
+  `one-light-ui`; the theme file is Zed's `assets/themes/one/one.json` @
+  56cf49bc1afe05bbc777a7df5a01f79299ab4956): `crates/platform/oxikube_assets/assets/themes/one.json`,
+  licence text in `assets/themes/LICENSES.md` next to it. Bundled, and the fallback for any key
+  a user theme leaves unset.
+
+Test-only fixtures (not bundled, not shipped in the application): `crates/platform/oxikube_theme/tests/fixtures/`
+holds Zed's `ayu/ayu.json` (MIT, Copyright (c) 2016 Ike Ku, https://github.com/dempfi/ayu) and
+`gruvbox/gruvbox.json` (MIT, https://github.com/morhetz/gruvbox), copied from Zed's `assets/themes`
+@ 56cf49bc1afe05bbc777a7df5a01f79299ab4956 with their licences in `tests/fixtures/LICENSES.md`.
+They are the import tests' input (E05-S08). Do not bundle another family without adding it here
+and checking its licence in Zed's `assets/themes/LICENSES`.
+
+`oxikube_theme` reads Zed's theme-family *file format* (schema v0.2.0) but contains no Zed code:
+its types and the key mapping table are our own.

@@ -3,8 +3,73 @@
     "ClusterSettings": {
       "additionalProperties": false,
       "description": "Overrides for one cluster; any setting may appear here.",
-      "properties": {},
+      "properties": {
+        "theme": {
+          "$ref": "#/$defs/ThemeSelectionContent"
+        }
+      },
       "type": "object"
+    },
+    "ThemeMode": {
+      "description": "How the `theme` setting picks between a light and a dark theme.",
+      "oneOf": [
+        {
+          "const": "system",
+          "description": "Follow the operating system's appearance.",
+          "type": "string"
+        },
+        {
+          "const": "light",
+          "description": "Always use the light theme.",
+          "type": "string"
+        },
+        {
+          "const": "dark",
+          "description": "Always use the dark theme.",
+          "type": "string"
+        }
+      ]
+    },
+    "ThemeSelectionContent": {
+      "anyOf": [
+        {
+          "description": "One theme, whatever the system appearance.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A light and a dark theme with a mode choosing between them.",
+          "properties": {
+            "dark": {
+              "description": "The theme to use in dark appearance.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "light": {
+              "description": "The theme to use in light appearance.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "mode": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThemeMode"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`system` (follow the OS, the default), `light` or `dark`."
+            }
+          },
+          "type": "object"
+        }
+      ],
+      "description": "What one settings layer says about the theme."
     }
   },
   "$schema": "https://json-schema.org/draft/2019-09/schema",
@@ -22,6 +87,9 @@
       },
       "description": "Per-cluster overrides, keyed by cluster id.",
       "type": "object"
+    },
+    "theme": {
+      "$ref": "#/$defs/ThemeSelectionContent"
     }
   },
   "title": "Oxikube settings",

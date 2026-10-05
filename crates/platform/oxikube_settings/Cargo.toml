@@ -31,6 +31,9 @@ tree-sitter-json.workspace = true
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
+# Only so the `settings_schema` example links the crates that register settings (a dev-dependency
+# cycle is allowed); drop it when the generator moves to a target linking everything (E05-S06b).
+oxikube_theme.workspace = true
 
 # Prints settings.schema.json; run by `cargo xtask gen-settings-schema`.
 [[example]]
