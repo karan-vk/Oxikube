@@ -12,6 +12,7 @@
 //! | [`kubeconfig`] | E03-S01 | tolerant `KUBECONFIG` splitting, loading and merging with per-context origins and diagnostics |
 //! | [`health`] | E03-S05 | liveness probe loop with backoff, RBAC rules review cache, capability reduction, `can_i` |
 //! | [`auth`] | E03-S04 | `kube::Error` classification, exec-plugin interactivity policy, deadline-bounded client build, retry-once helper |
+//! | [`feed`] | E04-S02 | [`ReflectorFeed`]: `watcher` + reflector store per (cluster, gvk, scope), coalesced delta batches on a bounded channel, relist diffs, backoff and [`FeedState`] |
 //! | [`discovery`] | E03-S06 | `DiscoveryPort` over aggregated discovery, the shared kind registry and the CRD watcher |
 //! | [`pool`] | E03-S03 | [`ClientPool`]: one lazily built, shared kube client per context, with invalidation and LRU eviction |
 //! | [`logs`] | E04-S08 | [`KubeLogs`]: `LogPort` with reconnect, overlap and dedup, plus multi-container and label-selector fan-in |
@@ -24,6 +25,7 @@
 
 pub mod auth;
 pub mod discovery;
+pub mod feed;
 pub mod health;
 pub mod kubeconfig;
 pub mod logs;
@@ -40,6 +42,9 @@ mod fake_api;
 
 pub use discovery::{
     CrdWatch, CrdWatchConfig, DiscoveryConfig, KindChange, KubeDiscovery, Registry, RegistryDiff,
+};
+pub use feed::{
+    FeedConfig, FeedKey, FeedObject, FeedState, ReflectorFeed, RelistDelivery, StreamingLists,
 };
 pub use logs::{ContainerSelection, KubeLogs, LogsConfig};
 pub use metrics::KubeMetrics;
