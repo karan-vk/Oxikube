@@ -26,8 +26,10 @@
 //! * **One websocket per connection.** Each accepted local connection opens its own
 //!   `portforward` and copies bytes both ways with `copy_bidirectional`; a failure on one
 //!   connection does not touch the others. The pod's error channel becomes
-//!   [`ForwardStatus::Error`](oxikube_domain::ForwardStatus::Error); the next connection
-//!   that works restores `Listening`.
+//!   [`ForwardStatus::Error`](oxikube_domain::ForwardStatus::Error). `Listening` comes back
+//!   when a connection shows it works (the first bytes from the pod, or a close with no
+//!   reported error), never merely because its websocket opened: the pod reports an unreachable
+//!   port only after the upgrade.
 //! * **Service targets.** The requested port is a *service* port; its `targetPort` (a number,
 //!   or a container port name looked up on the chosen pod) is what is dialed. The oldest ready
 //!   pod behind the selector serves, and the forward stays on it until it cannot serve.

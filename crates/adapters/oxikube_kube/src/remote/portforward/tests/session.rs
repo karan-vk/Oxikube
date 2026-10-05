@@ -195,6 +195,73 @@ async fn a_connection_error_is_published_and_cleared_by_the_next_good_connection
 }
 
 #[tokio::test]
+async fn a_connection_that_only_opens_does_not_clear_the_error() {
+    // The pod port is not listening: every websocket opens, then the pod reports the failure.
+    let cluster = FakeCluster::new(None, vec![pod("web-1", 1)]);
+    let connector = FakeConnector::new([
+        Behaviour::ServerError(OxiError::network("connection refused")),
+        Behaviour::ServerError(OxiError::network("connection refused")),
+    ]);
+    let handle = start(
+        &cluster,
+        &connector,
+        &spec("Pod", "web-1", ForwardPort::Number(80)),
+    )
+    .await
+    .expect("start");
+    let _first = tokio::net::TcpStream::connect(handle.local_addr())
+        .await
+        .expect("connect");
+    wait_status(&handle, |s| matches!(s, ForwardStatus::Error { .. })).await;
+
+    let mut events = handle.events();
+    let _second = tokio::net::TcpStream::connect(handle.local_addr())
+        .await
+        .expect("connect");
+    tokio::time::timeout(DEADLINE, async {
+        while connector.calls().len() < 2 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the second connection reaches the pod");
+    // Well past the bridge's grace period for the pod's error.
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+
+    assert_eq!(
+        events.try_recv(),
+        Err(tokio::sync::broadcast::error::TryRecvError::Empty),
+        "a failing connection must not flap the status through Listening"
+    );
+    assert!(matches!(handle.status(), ForwardStatus::Error { .. }));
+}
+
+#[tokio::test]
+async fn a_clean_close_without_an_error_clears_the_error() {
+    let cluster = FakeCluster::new(None, vec![pod("web-1", 1)]);
+    let connector = FakeConnector::new([
+        Behaviour::ServerError(OxiError::network("connection refused")),
+        Behaviour::CleanClose,
+    ]);
+    let handle = start(
+        &cluster,
+        &connector,
+        &spec("Pod", "web-1", ForwardPort::Number(80)),
+    )
+    .await
+    .expect("start");
+    let _first = tokio::net::TcpStream::connect(handle.local_addr())
+        .await
+        .expect("connect");
+    wait_status(&handle, |s| matches!(s, ForwardStatus::Error { .. })).await;
+
+    let _second = tokio::net::TcpStream::connect(handle.local_addr())
+        .await
+        .expect("connect");
+    wait_status(&handle, |s| matches!(s, ForwardStatus::Listening { .. })).await;
+}
+
+#[tokio::test]
 async fn a_failure_to_open_the_pod_connection_is_published() {
     let cluster = FakeCluster::new(None, vec![pod("web-1", 1)]);
     let connector = FakeConnector::new([Behaviour::Refuse(OxiError::forbidden(

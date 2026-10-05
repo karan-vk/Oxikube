@@ -130,6 +130,8 @@ pub(super) enum Behaviour {
     Refuse(OxiError),
     /// Open, then report `error` on the error channel and close.
     ServerError(OxiError),
+    /// Open, then close without a byte and without an error.
+    CleanClose,
 }
 
 /// The pod side, in memory. Records `(namespace, pod, port)` of every call.
@@ -170,6 +172,13 @@ impl PortForwardPort for FakeConnector {
                 Ok(PortForwardConnection {
                     stream: Box::pin(ours.compat()),
                     closed: Box::pin(futures::future::pending()),
+                })
+            }
+            Behaviour::CleanClose => {
+                drop(theirs);
+                Ok(PortForwardConnection {
+                    stream: Box::pin(ours.compat()),
+                    closed: Box::pin(futures::future::ready(None)),
                 })
             }
             Behaviour::ServerError(err) => {
