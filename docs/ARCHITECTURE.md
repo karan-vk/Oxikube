@@ -53,7 +53,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
   `ContextRegistry`, `AgentSessionManager`. No gpui, no kube.
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
-  mutations, subresources, logs, exec, port-forward, metrics, events).
+  mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
+  events).
 - `oxikube_ui` — the only crate that imports `gpui-component`; exposes tokens and curated
   components to every view.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence.
@@ -137,6 +138,9 @@ the request) while keeping the `Internal` kind.
 `oxikube_kube::subresource` (E04-S06) keeps `Network` and `retryable` for an eviction that a
 PodDisruptionBudget refuses (HTTP 429) and attaches an `EvictionBlocked` marker with the budget's
 explanation (`eviction_blocked(&err)`), which a drain waits on; no new `ErrorKind`.
+`oxikube_kube::algorithms` (E04-S07) adds only `Validation` (input it refuses: a CronJob without a
+template, a drain a pod blocks), `Conflict` (a paused Deployment, a drain that left pods) and the
+port's own errors.
 
 `From` helpers are reserved for adapters, but by the orphan rule an adapter crate cannot
 implement `From<kube::Error> for OxiError` (both types are foreign to it). Adapters instead

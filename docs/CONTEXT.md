@@ -49,6 +49,8 @@ How to read the **Lives in** column:
 | **FeedState** | Health of one feed: `Warming` (listing or relisting), `Live`, `Retrying` (backing off after a watch error), `Stopped`. Lets the session go `Degraded` while a feed retries. | `oxikube_kube::feed` |
 | **Delta / DeltaBatch** | One change in a feed (`Applied`, `Deleted`, `Restarted`) and a coalesced batch of them. Lives in ports, not the domain: it is transport. | `oxikube_ports::feed` |
 | **Table / TableFeed** | Server-side Table API data (kubectl-identical columns incl. CRD printer columns) as `TableColumn`s and `TableRow`s. | `oxikube_ports::table`; producer `oxikube_kube::table` |
+| **Drain** | Emptying a node of its pods like `kubectl drain`: plan (which pods are evicted, skipped as DaemonSet or mirror pods, or block the drain), cordon, evict with retry while a PodDisruptionBudget refuses, wait for each pod to go. Runs as a stream of `DrainProgress` and ends in a `DrainSummary`; configured by `DrainOptions`. | `oxikube_kube::algorithms` |
+| **RolloutRevision** | One entry of a Deployment's rollout history: the revision number, the ReplicaSet that holds its template, the change cause and the images. `rollout undo` restores the template of one. | `oxikube_kube::algorithms` |
 | **TableSource** | Whether a `Table`'s columns are the server's (`Server`) or the adapter's plain-JSON fallback (`Objects`, the server ignored the Table `Accept` header). | `oxikube_ports::table` |
 | **ResourceStore** | App-side cache over feeds with sort/filter/index and ref-counted subscriptions. | `oxikube_app::store` *(planned)* |
 | **ColumnProvider** | Produces table columns + cells for a kind (core columns, Table API columns, metrics columns). | `oxikube_app::columns` *(planned)* |

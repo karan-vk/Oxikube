@@ -22,9 +22,11 @@
 //! | [`mutate`] | E04-S05 | [`KubeResources`] as a `ResourceWriter`: create, replace, patch (merge, strategic, JSON, server-side apply), dry-run, delete, delete-collection, with conflict and validation detail in the errors |
 //! | [`remote`] | E04-S10 | [`KubePortForward`]: `PortForwardPort` over `Api<Pod>::portforward`, local-listener forwards with service-to-pod resolution and a target-gone hook |
 //! | [`subresource`] | E04-S06 | scale, status, eviction, ephemeral containers and resize as `ResourcePort` methods; [`ResourcePatch`] builders (rollout restart, cordon, uncordon, cronjob suspend) ported from kdash |
+//! | [`algorithms`] | E04-S07 | kubectl-equivalent algorithms over a `ResourcePort`: [`trigger_cronjob`], [`rollout_history`], [`rollout_undo`] and [`drain`] (a progress stream with PodDisruptionBudget retry) |
 //! | [`sources`] | E03-S02 | `ClusterSourcePort` over kubeconfig files, directories and pasted text, with hot reload |
 //! | [`table`] | E04-S04 | `TableFeedPort` on [`KubeResources`]: hand-rolled server Table API list + watch feed with refresh, diffing and plain-JSON fallback |
 
+pub mod algorithms;
 pub mod auth;
 pub mod discovery;
 pub mod events;
@@ -44,6 +46,11 @@ pub mod table;
 #[cfg(test)]
 mod fake_api;
 
+pub use algorithms::{
+    BlockReason, DrainOptions, DrainProgress, DrainSummary, PodRef, RolloutRevision, RolloutUndo,
+    SkipReason, drain, drain_to_completion, job_from_cronjob, plan_drain, rollout_history,
+    rollout_undo, trigger_cronjob,
+};
 pub use discovery::{
     CrdWatch, CrdWatchConfig, DiscoveryConfig, KindChange, KubeDiscovery, Registry, RegistryDiff,
 };
