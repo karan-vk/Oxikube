@@ -14,7 +14,7 @@ use crate::auth::classify;
 use crate::resources::{ListExpired, list_error};
 
 /// The domain error for a watcher failure.
-pub(super) fn feed_error(err: &watcher::Error) -> OxiError {
+pub(crate) fn feed_error(err: &watcher::Error) -> OxiError {
     use watcher::Error as E;
     match err {
         E::InitialListFailed(e) | E::WatchStartFailed(e) => list_error(e),
@@ -47,7 +47,7 @@ fn status_error(status: &Status) -> OxiError {
 
 /// Whether the server refused a streaming list (`sendInitialEvents`), as an API server
 /// with the WatchList feature gate off does (HTTP 400 or 422 on the initial watch).
-pub(super) fn streaming_rejected(err: &watcher::Error) -> bool {
+pub(crate) fn streaming_rejected(err: &watcher::Error) -> bool {
     use watcher::Error as E;
     matches!(
         err,

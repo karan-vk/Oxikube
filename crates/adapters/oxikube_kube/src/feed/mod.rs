@@ -49,17 +49,17 @@
 
 mod coalesce;
 mod config;
-mod error;
+pub(crate) mod error;
 mod handle;
 mod metadata;
 mod object;
 mod pump;
 mod relist;
-mod source;
+pub(crate) mod source;
 mod state;
 #[cfg(test)]
 mod tests;
-mod transport;
+pub(crate) mod transport;
 mod watch;
 
 use std::sync::Arc;
@@ -200,7 +200,7 @@ impl KubeResources {
     }
 
     /// Whether new feeds ask for streaming lists ([`StreamingLists`]).
-    async fn streaming_lists(&self) -> bool {
+    pub(crate) async fn streaming_lists(&self) -> bool {
         match self.feeds.config.streaming_lists {
             StreamingLists::Never => false,
             StreamingLists::Always => true,

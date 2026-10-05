@@ -18,11 +18,11 @@ use super::config::FeedConfig;
 const BACKOFF_RESET: Duration = Duration::from_secs(120);
 
 /// The watcher's events, with backoff applied after every error.
-pub(super) type EventStream = BoxStream<'static, watcher::Result<watcher::Event<DynamicObject>>>;
+pub(crate) type EventStream = BoxStream<'static, watcher::Result<watcher::Event<DynamicObject>>>;
 
 /// The `watcher::Config` for `options`: selectors, initial-list page size, server-side
 /// timeout, bookmarks on, and a streaming list when `streaming`.
-pub(super) fn watcher_config(
+pub(crate) fn watcher_config(
     options: &WatchOptions,
     config: &FeedConfig,
     streaming: bool,
@@ -44,7 +44,7 @@ pub(super) fn watcher_config(
 }
 
 /// Whether `wc` asks for a streaming list.
-pub(super) fn is_streaming(wc: &watcher::Config) -> bool {
+pub(crate) fn is_streaming(wc: &watcher::Config) -> bool {
     wc.initial_list_strategy == InitialListStrategy::StreamingList
 }
 
@@ -138,6 +138,16 @@ fn metadata_object(partial: PartialObjectMeta<DynamicObject>) -> DynamicObject {
         metadata: partial.metadata,
         data: serde_json::Value::Null,
     }
+}
+
+/// Opens the watcher of a whole-object `api`. Nothing is requested until the stream is first
+/// polled.
+pub(crate) fn events(
+    api: Api<DynamicObject>,
+    wc: watcher::Config,
+    config: &FeedConfig,
+) -> EventStream {
+    Target::Full(api).events(wc, config)
 }
 
 #[cfg(test)]
