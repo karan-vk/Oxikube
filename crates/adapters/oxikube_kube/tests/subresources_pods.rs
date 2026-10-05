@@ -15,7 +15,13 @@ use oxikube_ports::{DeleteOptions, ResourceReader, ResourceWriter, Subresource, 
 use serde_json::json;
 
 use common::subresources::{Env, is_ready, live_pod, pod_gvk, running_pod, setup};
-use common::{DEADLINE, wait_until};
+use common::wait_until;
+use std::time::Duration;
+
+/// How long a pod may take to schedule and become Ready. The CI cluster's single scheduler is
+/// throttled for a while after the large-list tests create and delete their pods, so the usual
+/// 30 s deadline is too tight for anything that needs a scheduled pod.
+const DEADLINE: Duration = Duration::from_secs(120);
 
 /// Creates pod `name` and waits until it is Ready.
 async fn ready_pod(env: &Env, name: &str, labels: &[(&str, &str)]) {
@@ -29,51 +35,12 @@ async fn ready_pod(env: &Env, name: &str, labels: &[(&str, &str)]) {
         )
         .await
         .expect("create pod");
-    let last = std::cell::RefCell::new(String::new());
-    let polls = std::cell::Cell::new(0);
     wait_until("the pod to be Ready", DEADLINE, || async {
         let pod = live_pod(&env.resources, env.namespace(), name)
             .await
             .ok()
             .flatten()?;
-        if is_ready(&pod) {
-            return Some(());
-        }
-        // Say why on a slow cluster (a failed pull, an unschedulable pod), once per change.
-        let status = pod.json["status"].to_string();
-        polls.set(polls.get() + 1);
-        if polls.get() == 40 {
-            for args in [
-                vec!["get", "pod", name, "-n", env.namespace(), "-o", "yaml"],
-                vec!["get", "events", "-n", env.namespace()],
-                vec!["get", "nodes", "-o", "wide"],
-                vec![
-                    "-n",
-                    "kube-system",
-                    "logs",
-                    "kube-scheduler-oxikube-control-plane",
-                    "--tail=40",
-                ],
-                vec!["get", "node", "-o", "yaml"],
-            ] {
-                let out = std::process::Command::new("kubectl")
-                    .args(["--context", &env.context])
-                    .args(&args)
-                    .output();
-                if let Ok(out) = out {
-                    eprintln!(
-                        "DIAG {args:?}:\n{}{}",
-                        String::from_utf8_lossy(&out.stdout),
-                        String::from_utf8_lossy(&out.stderr)
-                    );
-                }
-            }
-        }
-        if *last.borrow() != status {
-            eprintln!("pod {name} not Ready yet: {status}");
-            *last.borrow_mut() = status;
-        }
-        None
+        is_ready(&pod).then_some(())
     })
     .await;
 }
