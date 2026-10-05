@@ -61,7 +61,6 @@ use crate::feed::FeedSettings;
 use backend::{Dynamic, KindApi};
 
 pub(crate) use backend::dynamic_json;
-pub(crate) use error::list_error;
 
 pub use config::{AccessPath, DEFAULT_PAGE_SIZE, ManagedFields, ResourcesConfig};
 pub use error::{ListExpired, is_list_expired};
