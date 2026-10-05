@@ -365,6 +365,40 @@ fn the_user_file_is_read_from_the_config_dir(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn an_unreadable_user_file_is_reported_and_a_later_fix_applies(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    // Invalid UTF-8, as a UTF-16 save from Notepad is.
+    std::fs::write(
+        dir.path().join("keymap.json"),
+        [0xFF, 0xFE, b'[', 0, b']', 0],
+    )
+    .unwrap();
+    cx.update(|cx| init_with_dir(dir.path(), mac(), cx));
+    let (window, log) = probe(cx, "Pane");
+    assert_eq!(
+        press(cx, window, &log, "cmd-q"),
+        ["Quit"],
+        "defaults stay bound"
+    );
+    let found = diagnostics_of(cx);
+    assert!(
+        matches!(found.as_slice(), [d] if d.layer == KeymapLayer::User
+            && matches!(d.problem, KeymapProblem::Unreadable { .. })),
+        "{found:?}"
+    );
+    assert!(
+        found[0]
+            .to_string()
+            .starts_with("keymap.json could not be read")
+    );
+
+    // What the watcher delivers once the file is saved as UTF-8.
+    cx.update(|cx| reload_user_keymap(cx, r#"[{"bindings": {"cmd-q": "kmtest::Alpha"}}]"#));
+    assert_eq!(press(cx, window, &log, "cmd-q"), ["Alpha"]);
+    assert!(diagnostics_of(cx).is_empty());
+}
+
+#[gpui::test]
 fn init_with_the_default_options_installs_the_current_os_keymap(cx: &mut TestAppContext) {
     // `init_with_options` reads the real config dir, so point it at an empty temp dir.
     let dir = tempfile::tempdir().unwrap();

@@ -19,6 +19,12 @@ pub enum KeymapProblem {
         /// Parser message with line and column.
         message: String,
     },
+    /// The file exists but could not be read (not UTF-8, permission denied, a directory). The
+    /// defaults stay in effect and the file is still watched, so fixing it reloads it.
+    Unreadable {
+        /// The I/O error.
+        message: String,
+    },
     /// A list entry that is not a valid section (wrong type, unknown field).
     InvalidSection {
         /// Deserialiser message.
@@ -78,6 +84,15 @@ impl KeymapDiagnostic {
         }
     }
 
+    pub(crate) fn unreadable(layer: KeymapLayer, message: String) -> Self {
+        Self {
+            layer,
+            section: None,
+            keystrokes: None,
+            problem: KeymapProblem::Unreadable { message },
+        }
+    }
+
     pub(crate) fn section(layer: KeymapLayer, section: usize, problem: KeymapProblem) -> Self {
         Self {
             layer,
@@ -106,6 +121,7 @@ impl fmt::Display for KeymapProblem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidFile { message } => write!(f, "is invalid: {message}"),
+            Self::Unreadable { message } => write!(f, "could not be read: {message}"),
             Self::InvalidSection { message } => write!(f, "section is invalid: {message}"),
             Self::InvalidContext { context, message } => {
                 write!(f, "invalid context `{context}`: {message}")
@@ -130,7 +146,9 @@ impl fmt::Display for KeymapDiagnostic {
             write!(f, ", `{keystrokes}`")?;
         }
         match &self.problem {
-            KeymapProblem::InvalidFile { .. } => write!(f, " {}", self.problem),
+            KeymapProblem::InvalidFile { .. } | KeymapProblem::Unreadable { .. } => {
+                write!(f, " {}", self.problem)
+            }
             problem => write!(f, ": {problem}"),
         }
     }
@@ -156,5 +174,13 @@ mod tests {
         );
         let d = KeymapDiagnostic::file(KeymapLayer::User, "line 3".into());
         assert_eq!(d.to_string(), "keymap.json is invalid: line 3");
+        let d = KeymapDiagnostic::unreadable(
+            KeymapLayer::User,
+            "stream did not contain valid UTF-8".into(),
+        );
+        assert_eq!(
+            d.to_string(),
+            "keymap.json could not be read: stream did not contain valid UTF-8"
+        );
     }
 }

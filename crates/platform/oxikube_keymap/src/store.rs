@@ -132,6 +132,15 @@ impl KeymapStore {
         changed
     }
 
+    /// Record that the user file exists but could not be read. The previous user sections stay
+    /// in effect (none at start-up) and the problem is reported on the next merge.
+    pub fn set_user_unreadable(&mut self, message: &str) {
+        self.user.parse_diagnostics = vec![KeymapDiagnostic::unreadable(
+            KeymapLayer::User,
+            message.to_owned(),
+        )];
+    }
+
     /// Merge every enabled layer into one list of GPUI bindings, in layer order, and record the
     /// problems found ([`Self::diagnostics`]).
     pub fn merge(&mut self, cx: &App) -> MergedKeymap {

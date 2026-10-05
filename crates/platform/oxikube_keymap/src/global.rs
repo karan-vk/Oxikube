@@ -71,23 +71,37 @@ pub fn init_with_text(user_text: &str, options: KeymapOptions, cx: &mut App) {
 
 fn install(cx: &mut App, options: KeymapOptions, dir: Option<&Path>, watch: bool) {
     let mut store = KeymapStore::new(options);
-    // The file to watch and the text it had at start-up; absent when it could not be read.
+    // The file to watch and the text it had at start-up.
     let mut watched = None;
     if let Some(dir) = dir {
         let path = user_keymap_path(dir);
-        match read_or_empty(&path) {
-            Ok(text) => {
-                store.set_user_text(&text);
-                watched = Some((path, text));
-            }
-            Err(err) => tracing::warn!(%err, "could not read keymap.json; using the defaults"),
-        }
+        let text = load_initial(&mut store, &path);
+        watched = Some((path, text));
     }
     cx.set_global(store);
     rebind(cx);
 
     if watch && let Some((path, text)) = watched {
         start_watch(cx, path, text);
+    }
+}
+
+/// Read `path` into the store's user layer and return the text the watcher should treat as
+/// current. An unreadable file (UTF-16, permission denied, a directory) is recorded as a
+/// diagnostic and yields empty text, so the watcher still starts and the fixed file is picked up.
+fn load_initial(store: &mut KeymapStore, path: &Path) -> String {
+    match read_or_empty(path) {
+        Ok(text) => {
+            store.set_user_text(&text);
+            text
+        }
+        Err(err) => {
+            tracing::warn!(%err, "could not read keymap.json; using the defaults");
+            let reason = std::error::Error::source(&err)
+                .map_or_else(|| err.to_string(), |source| format!("{err}: {source}"));
+            store.set_user_unreadable(&reason);
+            String::new()
+        }
     }
 }
 
@@ -178,4 +192,20 @@ pub fn diagnostics(cx: &App) -> Vec<KeymapDiagnostic> {
     cx.try_global::<KeymapStore>()
         .map(|store| store.diagnostics().to_vec())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_unreadable_file_is_recorded_and_hands_the_watcher_empty_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = user_keymap_path(dir.path());
+        // Invalid UTF-8, as a UTF-16 save is.
+        std::fs::write(&path, [0xFF, 0xFE, b'[', 0, b']', 0]).unwrap();
+        let mut store = KeymapStore::new(KeymapOptions::default());
+        // `install` starts the watcher with whatever this returns, so it must not be skipped.
+        assert_eq!(load_initial(&mut store, &path), "");
+    }
 }

@@ -151,17 +151,17 @@ fn data_action_names_and_build_errors_are_values_not_panics(cx: &mut TestAppCont
 #[allow(clippy::print_stdout)]
 fn reload_cost_is_small(cx: &mut TestAppContext) {
     let sections = 50;
-    let per_section = 12;
+    // Valid, distinct keys: `ctrl-alt-<letter>` (13 letters) for the plain bindings.
+    let letters: Vec<char> = ('a'..='l').collect();
+    let per_section = letters.len();
     let mut text = String::from("[\n");
     for s in 0..sections {
         text.push_str("{\"context\": \"Table && selection == one\", \"bindings\": {");
-        for b in 0..per_section {
+        for (b, letter) in letters.iter().enumerate() {
             let action = ["kmtest::Alpha", "kmtest::Beta", "kmtest::Gamma"][b % 3];
-            text.push_str(&format!(
-                "\"ctrl-alt-{}-{}\": \"{action}\",",
-                (b % 9) + 1,
-                s % 7
-            ));
+            // A different modifier set per section keeps every binding in the file distinct.
+            let mods = ["ctrl-alt", "ctrl-shift", "alt-shift", "ctrl-alt-shift"][s % 4];
+            text.push_str(&format!("\"{mods}-{letter}\": \"{action}\","));
         }
         text.push_str("\"ctrl-k ctrl-s\": [\"kmtest::Scale\", {\"replicas\": 2}]}},\n");
     }
@@ -181,5 +181,17 @@ fn reload_cost_is_small(cx: &mut TestAppContext) {
         "reload of {sections} sections x {} bindings: {elapsed:?} ({per:?} per section)",
         per_section + 1
     );
+    // Every binding was accepted: this measures real `KeyBinding` construction and layering,
+    // not the cheap rejection path.
+    let problems = cx.read(oxikube_keymap::diagnostics);
+    assert!(problems.is_empty(), "{problems:?}");
+    let bound = cx.read(|cx| {
+        cx.key_bindings()
+            .borrow()
+            .bindings()
+            .filter(|b| KeymapLayer::from_meta(b.meta()) == Some(KeymapLayer::User))
+            .count()
+    });
+    assert_eq!(bound, sections * (per_section + 1));
     assert!(per.as_millis() < 5, "{per:?} per section");
 }
