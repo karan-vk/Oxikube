@@ -70,6 +70,7 @@ A **port** is an async, object-safe trait in `oxikube_ports` that the app depend
 | Term | Meaning | Lives in |
 |---|---|---|
 | **ResourcePort** | `ResourceReader` + `ResourceWriter`. Only `MutationGuard` holds the writer half. | `oxikube_ports::resource` |
+| **Forward** | One port-forward: a `ForwardSpec` (a pod or service `ResourceRef`, a remote `ForwardPort`, a local port and bind address, loopback by default) and its `ForwardStatus` (`Starting`, `Listening`, `TargetGone`, `Error`, `Stopped`). Run by the kube adapter, owned by `PortForwardManager` (E15). | `oxikube_domain::portforward`; adapter in `oxikube_kube::remote::portforward` |
 | **DiscoveryPort / LogPort / ExecPort / PortForwardPort / TableFeedPort** | Data-plane access to a connected cluster. | `oxikube_ports::{discovery, log, exec, portforward, table}` |
 | **ClusterSourcePort / CloudDiscoveryPort** | Where cluster contexts come from: kubeconfig sources and cloud CLIs. | `oxikube_ports::{cluster_source, cloud}` |
 | **MetricsPort / PromqlPort / DescribePort / HelmPort** | Optional read access: metrics-server, Prometheus, `describe`, Helm releases. | `oxikube_ports::{metrics, promql, describe, helm}` |

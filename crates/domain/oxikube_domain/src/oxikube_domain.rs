@@ -14,6 +14,7 @@
 //! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
+//! | [`portforward`] | [`ForwardSpec`], [`ForwardStatus`]: what a port-forward targets and how it is doing |
 //! | [`agent`] | [`ContextBlock`](agent::ContextBlock), the bounded context handed to agents |
 //! | [`error`], [`error_details`] | [`OxiError`], [`ErrorKind`], [`OxiResult`]; [`ConflictDetails`] and [`ValidationDetails`] (field managers and field paths of a rejected write) |
 //! | [`redact`] | secret redaction: [`redact::redact`], [`redact::Redacted`], the pattern catalogue |
@@ -40,6 +41,7 @@ pub mod ids;
 pub mod kinds;
 pub mod log;
 pub mod metrics;
+pub mod portforward;
 pub mod quantity;
 pub mod redact;
 pub mod resource;
@@ -53,6 +55,7 @@ pub use command::{
 };
 pub use error::{ErrorKind, OxiError, OxiResult};
 pub use error_details::{ConflictDetails, ConflictReason, FieldCause, ValidationDetails};
+pub use portforward::{ForwardPort, ForwardSpec, ForwardStatus};
 pub use quantity::{Quantity, QuantityError, QuantityFormat};
 pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError};
 pub use safety::{ConfirmTier, Initiator, Risk};
