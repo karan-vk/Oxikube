@@ -13,8 +13,9 @@ pub enum FeedState {
     /// here.
     #[default]
     Warming,
-    /// A watch failed and is backing off before it reconnects. Returns to the previous
-    /// state on the next event, or after `FeedConfig::retry_settle` without another error.
+    /// A watch failed and is backing off or reconnecting. Returns to the previous state on
+    /// the next object event, or `FeedConfig::retry_settle` after the server accepted a new
+    /// watch request without another error. Stays here for as long as reconnects fail.
     Retrying,
     /// The feed ended: the consumer dropped it or a non-retryable error stopped it.
     Stopped,

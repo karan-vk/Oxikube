@@ -21,7 +21,7 @@
 //! | relist diff against the store | `relist` |
 //! | merge watches, window/size batching, backpressure | `pump`, `coalesce` |
 //! | watcher errors to `OxiError`, retryable or final | `error` |
-//! | uncompressed watch responses | `transport` |
+//! | uncompressed watch responses, accepted-watch count | `transport` |
 //! | the handle: stream, [`FeedState`], store snapshot, abort on drop | `handle` |
 //!
 //! # Streaming lists
@@ -147,20 +147,21 @@ impl KubeResources {
         let config = self.feeds.config.clone();
         let watcher_config = source::watcher_config(options, &config, self.streaming_lists().await);
 
-        let client = transport::watch_client(&self.client);
         let (events_tx, events_rx) = mpsc::channel(WATCH_EVENT_BUFFER);
         let mut watches = JoinSet::new();
         let mut stores = Vec::with_capacity(targets.len());
         for (index, (namespace, resource)) in targets.into_iter().enumerate() {
+            let (client, accepted) = transport::watch_client(&self.client);
             let api = match namespace {
-                Some(ns) => Api::namespaced_with(client.clone(), ns, &resource),
-                None => Api::all_with(client.clone(), &resource),
+                Some(ns) => Api::namespaced_with(client, ns, &resource),
+                None => Api::all_with(client, &resource),
             };
             let writer = Writer::default();
             stores.push(writer.as_reader());
             let watch = SubWatch {
                 index,
                 api,
+                accepted,
                 resource,
                 watcher_config: watcher_config.clone(),
                 config: config.clone(),

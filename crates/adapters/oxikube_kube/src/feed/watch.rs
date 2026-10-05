@@ -11,6 +11,15 @@
 //! | `InitDone` | [`SubEvent::Synced`] with the list | `Deleted` for what vanished | — |
 //! | `Apply(o)` / `Delete(o)` | — | — | `Applied(o)` / `Deleted(o)` |
 //! | error | [`SubEvent::Error`] (retryable) or [`SubEvent::Fatal`] (then the task ends) | | |
+//!
+//! # Retrying
+//!
+//! A retryable error puts the watch in [`FeedState::Retrying`]; it stays there through the
+//! backoff and every failed or still-connecting attempt. It leaves on the first object event
+//! (`Init` alone does not count: the watcher emits it before its list request), or once the
+//! server has accepted a new watch request ([`Accepted`]) and
+//! [`FeedConfig::retry_settle`] has passed since without another error: the reconnected
+//! watch is quiet, not broken.
 
 use std::mem;
 
@@ -31,6 +40,7 @@ use super::object::FeedObject;
 use super::relist::RelistDiff;
 use super::source::{self, EventStream};
 use super::state::FeedState;
+use super::transport::Accepted;
 
 /// What a [`SubWatch`] tells the pump.
 pub(super) enum SubEvent {
@@ -58,6 +68,8 @@ struct Closed;
 pub(super) struct SubWatch {
     pub(super) index: usize,
     pub(super) api: Api<DynamicObject>,
+    /// Watch requests of `api` the server accepted.
+    pub(super) accepted: Accepted,
     pub(super) resource: ApiResource,
     pub(super) watcher_config: watcher::Config,
     pub(super) config: FeedConfig,
@@ -89,11 +101,17 @@ impl SubWatch {
     async fn drive(&mut self) -> Result<(), Closed> {
         let mut stream = self.open();
         let mut cycle = Cycle::default();
+        // Set once a reconnect got through while retrying.
         let mut settle_at: Option<Instant> = None;
         let mut fell_back = false;
         loop {
+            let reconnecting = cycle.state == FeedState::Retrying && settle_at.is_none();
             let item = tokio::select! {
                 item = stream.next() => item,
+                Ok(()) = self.accepted.changed(), if reconnecting => {
+                    settle_at = Some(Instant::now() + self.config.retry_settle);
+                    continue;
+                }
                 () = sleep_until(settle_at.unwrap_or_else(Instant::now)), if settle_at.is_some() => {
                     settle_at = None;
                     let back = cycle.before_retry;
@@ -123,7 +141,9 @@ impl SubWatch {
                         cycle.before_retry = cycle.state;
                         self.set_state(&mut cycle, FeedState::Retrying).await?;
                     }
-                    settle_at = Some(Instant::now() + self.config.retry_settle);
+                    // Only a watch accepted after this error shows the server is back.
+                    settle_at = None;
+                    self.accepted.borrow_and_update();
                     self.send(SubEvent::Error(error)).await?;
                 }
                 Some(Ok(event)) => {
@@ -147,6 +167,8 @@ impl SubWatch {
             return Ok(());
         };
         let next = match &event {
+            // The watcher restarting its list, before any request: no sign of recovery.
+            Event::Init if cycle.state == FeedState::Retrying => FeedState::Retrying,
             Event::Init | Event::InitApply(_) => FeedState::Warming,
             Event::InitDone | Event::Apply(_) | Event::Delete(_) => FeedState::Live,
         };

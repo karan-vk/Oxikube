@@ -152,6 +152,8 @@ async fn a_retry_settles_back_to_live_on_a_quiet_watch() {
     let server = FeedServer::new(31);
     server.list(PODS, pod_list(vec![pod("a", "ua", "1")], "10"));
     server.watch(PODS, Reply::Drop);
+    // The reconnect is accepted and only sends a bookmark: alive, nothing changed.
+    server.watch(PODS, Reply::Events(vec![bookmark("10")]));
     let mut feed = open(&server, config()).await;
     let mut state = feed.state();
 
@@ -168,6 +170,83 @@ async fn a_retry_settles_back_to_live_on_a_quiet_watch() {
         started.elapsed() >= Duration::from_secs(10),
         "after retry_settle"
     );
+}
+
+/// Backoff delays longer than `retry_settle` (10 s).
+fn slow_backoff() -> FeedConfig {
+    FeedConfig {
+        backoff_min: Duration::from_secs(20),
+        backoff_max: Duration::from_secs(20),
+        ..config()
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn retrying_lasts_while_reconnects_keep_failing() {
+    let server = FeedServer::new(31);
+    server.list(PODS, pod_list(vec![pod("a", "ua", "1")], "10"));
+    // Refused connections, and answers that are not an accepted watch.
+    let refused = || {
+        Reply::Json(
+            500,
+            crate::fake_api::status_body(500, "InternalError", "down"),
+        )
+    };
+    for reply in [Reply::Drop, refused(), Reply::Drop, refused()] {
+        server.watch(PODS, reply);
+    }
+    server.watch(PODS, Reply::Events(vec![bookmark("10")]));
+    let mut feed = open(&server, slow_backoff()).await;
+    let mut state = feed.state();
+
+    next_batch(&mut feed).await;
+    next(&mut feed).await.unwrap_err();
+    assert_eq!(*state.borrow(), FeedState::Retrying);
+    let started = tokio::time::Instant::now();
+    // Attempts at 20, 40 and 60 s fail; the one at 80 s is accepted and settles at 90 s.
+    let settled = tokio::time::timeout(
+        Duration::from_secs(600),
+        state.wait_for(|s| *s != FeedState::Retrying),
+    );
+    assert_eq!(*settled.await.unwrap().unwrap(), FeedState::Live);
+    assert!(
+        started.elapsed() >= Duration::from_secs(90),
+        "left Retrying after {:?}, before a reconnect got through",
+        started.elapsed()
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn retrying_lasts_while_a_reconnect_hangs() {
+    let server = FeedServer::new(31);
+    server.list(PODS, pod_list(vec![pod("a", "ua", "1")], "10"));
+    server.watch(PODS, Reply::Drop);
+    server.watch(PODS, Reply::Hang);
+    let mut feed = open(&server, config()).await;
+    let state = feed.state();
+
+    next_batch(&mut feed).await;
+    next(&mut feed).await.unwrap_err();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    assert_eq!(server.open_watches(), 1, "the reconnect is still in flight");
+    assert_eq!(*state.borrow(), FeedState::Retrying);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failing_initial_list_stays_retrying_until_objects_arrive() {
+    let server = FeedServer::new(31);
+    server.list(PODS, Reply::Drop);
+    server.list(PODS, Reply::Hang);
+    let mut feed = open(&server, config()).await;
+    let state = feed.state();
+
+    let err = next(&mut feed).await.unwrap_err();
+    assert!(err.is_retryable(), "{err}");
+    assert_eq!(*state.borrow(), FeedState::Retrying);
+    // The watcher restarts its list (`Init`) after the backoff; that alone is no recovery.
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    assert_eq!(server.list_hits(PODS), 2, "the list was retried");
+    assert_eq!(*state.borrow(), FeedState::Retrying);
 }
 
 #[tokio::test(start_paused = true)]

@@ -39,6 +39,8 @@ pub(super) enum Reply {
     Events(Vec<Value>),
     /// The connection fails before any response.
     Drop,
+    /// No response ever, like a connect attempt to an unreachable server.
+    Hang,
 }
 
 #[derive(Default)]
@@ -148,7 +150,8 @@ impl FeedServer {
         self.state.lock().watch_encodings.clone()
     }
 
-    /// Watch requests currently hanging on the server.
+    /// Requests currently hanging on the server: watches with no reply left, and
+    /// [`Reply::Hang`].
     pub(super) fn open_watches(&self) -> usize {
         self.open_watches.load(Ordering::SeqCst)
     }
@@ -224,7 +227,7 @@ impl Service<Request<Body>> for FeedServer {
         let counter = self.open_watches.clone();
         Box::pin(async move {
             match reply {
-                None => {
+                None | Some(Reply::Hang) => {
                     let _open = OpenWatch::new(&counter);
                     std::future::pending::<()>().await;
                     unreachable!("a pending future never completes")
@@ -278,6 +281,12 @@ pub(super) fn event(kind: &str, mut object: Value) -> Value {
 pub(super) fn initial_events_end(rv: &str) -> Value {
     json!({"type": "BOOKMARK", "object": {"kind": "Pod", "apiVersion": "v1", "metadata": {
         "resourceVersion": rv, "annotations": {"k8s.io/initial-events-end": "true"}}}})
+}
+
+/// A plain bookmark at `rv`: the watch is alive but nothing changed.
+pub(super) fn bookmark(rv: &str) -> Value {
+    json!({"type": "BOOKMARK", "object": {"kind": "Pod", "apiVersion": "v1", "metadata": {
+        "resourceVersion": rv}}})
 }
 
 /// A watch `ERROR` event carrying HTTP `code`.

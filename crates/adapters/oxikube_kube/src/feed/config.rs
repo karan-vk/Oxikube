@@ -71,8 +71,9 @@ pub struct FeedConfig {
     /// Randomise retry delays so many feeds do not reconnect in lockstep. Default `true`.
     pub backoff_jitter: bool,
     /// A feed in [`FeedState::Retrying`](super::FeedState::Retrying) returns to its previous
-    /// state after this long without a new error: the reconnected watch is quiet, not broken.
-    /// Default 10 s.
+    /// state this long after the server accepted a reconnecting watch request, if no error
+    /// came since: the reconnected watch is quiet, not broken. The backoff delay and a
+    /// connect attempt still in flight do not count. Default 10 s.
     pub retry_settle: Duration,
 }
 
