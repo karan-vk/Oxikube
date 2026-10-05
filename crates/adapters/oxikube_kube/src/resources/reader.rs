@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use oxikube_domain::ids::Gvk;
-use oxikube_domain::{ObjectMeta, OxiError, OxiResult, Resource};
+use oxikube_domain::{ObjectMeta, OxiResult, Resource};
 use oxikube_ports::{
     ListOptions, ListPage, ResourceReader, Scale, Subresource, WatchFeed, WatchOptions,
 };
@@ -75,9 +75,4 @@ impl ResourceReader for KubeResources {
         self.read_subresource(kind, namespace, name, subresource)
             .await
     }
-}
-
-/// A port method whose story has not landed yet.
-fn pending(method: &str, story: &str) -> OxiError {
-    OxiError::unsupported(format!("`{method}` is not implemented yet ({story})"))
 }
