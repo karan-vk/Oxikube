@@ -5454,6 +5454,8 @@ dependencies = [
  "gpui-pre-platform",
  "oxikube_runtime",
  "oxikube_testkit",
+ "oxikube_ui",
+ "oxikube_workspace",
  "serde_json",
  "tempfile",
  "tokio",
@@ -5753,6 +5755,11 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_workspace"
 version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "gpui-pre",
+ "oxikube_ui",
+]
 
 [[package]]
 name = "parking"

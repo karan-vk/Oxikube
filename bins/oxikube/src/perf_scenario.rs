@@ -9,7 +9,6 @@
 //! Scenarios whose views do not exist yet report `not_available` (exit 0) with the stories that
 //! enable them, so the harness, the nightly job and the baseline format are in place before them.
 
-use crate::Placeholder;
 use anyhow::{Context as _, Result, bail};
 use gpui::{AnyWindowHandle, AppContext as _, Pixels, Size, px, size};
 use oxikube_runtime::perf::harness::{self, metric};
@@ -90,6 +89,16 @@ fn write_sample(sample: &ScenarioSample, report: Option<&Path>) -> Result<()> {
     }
 }
 
+/// The real main window content, as `oxikube` builds it, in the headless context.
+fn main_window(
+    window: &mut gpui::Window,
+    cx: &mut gpui::App,
+    wrap: impl FnOnce(gpui::AnyView, &mut gpui::App) -> gpui::AnyView,
+) -> gpui::Entity<oxikube_ui::root::Root> {
+    oxikube_ui::init(cx);
+    oxikube_workspace::window::build_root(window, cx, wrap)
+}
+
 /// Cold start to first frame drawn, then `FRAMES` idle redraws of the main view.
 ///
 /// `first_frame_ms` runs from the first line of `main` to the end of the window-opening update
@@ -101,14 +110,17 @@ fn startup(launched: Instant, probe: bool) -> Result<ScenarioSample> {
     let mut cx = headless::headless_context();
     let window: AnyWindowHandle = if probe {
         let recorder = recorder.clone();
-        cx.open_window(WINDOW_SIZE, move |_, cx| {
-            let inner = cx.new(|_| Placeholder);
-            cx.new(|_| PerfRoot::new(inner, recorder))
+        cx.open_window(WINDOW_SIZE, move |window, cx| {
+            main_window(window, cx, move |content, cx| {
+                cx.new(|_| PerfRoot::new(content, recorder)).into()
+            })
         })?
         .into()
     } else {
-        cx.open_window(WINDOW_SIZE, |_, cx| cx.new(|_| Placeholder))?
-            .into()
+        cx.open_window(WINDOW_SIZE, |window, cx| {
+            main_window(window, cx, |content, _| content)
+        })?
+        .into()
     };
     // A test-mode context draws dirty windows when an update flushes its effects, so the window
     // has drawn its first frame by the time `open_window` returns.
