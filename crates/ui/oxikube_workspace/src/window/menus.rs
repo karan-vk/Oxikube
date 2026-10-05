@@ -76,19 +76,33 @@ pub fn app_menus() -> Vec<Menu> {
     ]
 }
 
-/// Default key bindings of the menu actions (shown next to the items by macOS).
+/// Default key bindings of the menu actions (shown next to the items by macOS), including the
+/// session shortcuts: zoom in (`=` and `+`), out and actual size, and New Window.
+///
+/// The binary does not load the keymap files of `oxikube_assets` yet (E05-S07/S09), so these
+/// interim bindings are what makes the shortcuts work; the files carry the same keys for when it
+/// does.
 pub fn default_bindings(macos: bool) -> Vec<KeyBinding> {
+    let m = if macos { "cmd" } else { "ctrl" };
+    let mut bindings = vec![
+        KeyBinding::new(&format!("{m}-="), ZoomIn, None),
+        KeyBinding::new(&format!("{m}-+"), ZoomIn, None),
+        KeyBinding::new(&format!("{m}--"), ZoomOut, None),
+        KeyBinding::new(&format!("{m}-0"), ZoomReset, None),
+        KeyBinding::new(&format!("{m}-shift-n"), NewWindow, None),
+    ];
     if macos {
-        vec![
+        bindings.extend([
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-,", OpenPreferences, None),
             KeyBinding::new("cmd-h", Hide, None),
             KeyBinding::new("alt-cmd-h", HideOthers, None),
             KeyBinding::new("cmd-m", Minimize, None),
-        ]
+        ]);
     } else {
-        vec![KeyBinding::new("ctrl-q", Quit, None)]
+        bindings.push(KeyBinding::new("ctrl-q", Quit, None));
     }
+    bindings
 }
 
 /// Registers the action handlers, key bindings and menu bar. Called once from [`super::init`].

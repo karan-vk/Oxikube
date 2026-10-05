@@ -168,6 +168,21 @@ fn quit_is_bound_on_every_platform() {
     }
 }
 
+#[test]
+fn zoom_and_new_window_are_bound_on_every_platform() {
+    use crate::session::{NewWindow, ZoomIn, ZoomOut, ZoomReset};
+    for macos in [true, false] {
+        let bindings = default_bindings(macos);
+        let bound =
+            |action: &dyn gpui::Action| bindings.iter().any(|b| b.action().partial_eq(action));
+        assert!(
+            bound(&ZoomIn) && bound(&ZoomOut) && bound(&ZoomReset),
+            "zoom (macos: {macos})"
+        );
+        assert!(bound(&NewWindow), "New Window (macos: {macos})");
+    }
+}
+
 fn bounds() -> WindowBounds {
     WindowBounds::Windowed(Bounds::new(gpui::point(px(0.), px(0.)), DEFAULT_SIZE))
 }

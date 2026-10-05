@@ -142,14 +142,25 @@ fn quit_confirmation_is_configurable(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn no_window_means_nobody_to_ask(cx: &mut TestAppContext) {
+fn quitting_with_no_window_reopens_one_to_ask(cx: &mut TestAppContext) {
+    // macOS keeps the app alive after its last window closes; operations may still be running.
     let _dir = setup(cx);
     let quits = count_quits(cx);
     let running = provider(cx);
     running.borrow_mut().push(exec_session());
+    assert_eq!(cx.update(|cx| cx.windows().len()), 0);
+
     cx.update(request_quit);
     cx.run_until_parked();
-    assert_eq!(quits.get(), 1);
+    assert_eq!(quits.get(), 0, "not quit without asking");
+    let windows = cx.update(|cx| cx.windows());
+    assert_eq!(windows.len(), 1, "a window was opened for the question");
+    let mut vcx = VisualTestContext::from_window(windows[0], cx);
+    assert!(dialog_open(&mut vcx));
+
+    vcx.simulate_keystrokes("enter");
+    vcx.run_until_parked();
+    assert_eq!(quits.get(), 1, "confirming quits");
 }
 
 #[test]

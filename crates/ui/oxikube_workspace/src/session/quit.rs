@@ -120,14 +120,22 @@ pub fn request_quit(cx: &mut App) {
     // Action handlers run while the window that dispatched the action is borrowed, so the dialog
     // opens once that update has ended.
     cx.defer(|cx| {
-        let window = cx.active_window().or_else(|| cx.windows().first().copied());
+        // On macOS the app outlives its last window, so operations may still be running with no
+        // window to ask on: bring a window back for the question rather than quit silently.
+        let window = cx
+            .active_window()
+            .or_else(|| cx.windows().first().copied())
+            .or_else(|| crate::window::open_main_window(cx).ok().map(Into::into));
         let shown = window.is_some_and(|window| {
             window
-                .update(cx, |_, window, cx| show_quit_prompt(window, cx))
+                .update(cx, |_, window, cx| {
+                    window.activate_window();
+                    show_quit_prompt(window, cx)
+                })
                 .is_ok()
         });
         if !shown {
-            // No window to ask on, so nobody to ask.
+            // Not even a window could be opened: nobody to ask.
             quit_now(cx);
         }
     });

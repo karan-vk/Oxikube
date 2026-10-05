@@ -79,3 +79,35 @@ fn the_zoom_keys_zoom(cx: &mut TestAppContext) {
     vcx.simulate_keystrokes(reset);
     assert_eq!(scale(&mut vcx), 1.0);
 }
+
+/// The binary installs only what `crate::init` binds (the keymap files are not loaded yet), so
+/// the session shortcuts have to work from that alone.
+#[gpui::test]
+fn the_session_keys_work_without_the_keymap_files(cx: &mut TestAppContext) {
+    let _dir = super::setup(cx);
+    let (_handle, mut vcx) = super::open_window(cx);
+    let m = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    let scale = |vcx: &mut gpui::VisualTestContext| {
+        vcx.update(|_, cx| oxikube_ui::UiScale::get(cx).factor())
+    };
+    vcx.simulate_keystrokes(&format!("{m}-="));
+    assert_eq!(scale(&mut vcx), 1.1);
+    vcx.simulate_keystrokes(&format!("{m}--"));
+    vcx.simulate_keystrokes(&format!("{m}--"));
+    assert_eq!(scale(&mut vcx), 0.9);
+    vcx.simulate_keystrokes(&format!("{m}-0"));
+    assert_eq!(scale(&mut vcx), 1.0);
+
+    assert_eq!(cx.update(|cx| cx.windows().len()), 1);
+    vcx.simulate_keystrokes(&format!("{m}-shift-n"));
+    vcx.run_until_parked();
+    assert_eq!(
+        cx.update(|cx| cx.windows().len()),
+        2,
+        "New Window opened one"
+    );
+}

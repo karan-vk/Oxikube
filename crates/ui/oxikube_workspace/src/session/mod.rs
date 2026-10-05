@@ -20,7 +20,8 @@
 //!
 //! Each user action is a GPUI action named after its `oxikube_domain::command` id (`view::ZoomIn`,
 //! `window::New`, `app::Quit`), so the keymap, the palette and the MCP tools share one name; the
-//! default key bindings are in the per-OS keymap files of `oxikube_assets`.
+//! default key bindings are in the per-OS keymap files of `oxikube_assets` and, until the binary
+//! loads those (E05-S07/S09), in `window::menus::default_bindings`.
 //!
 //! Order in the binary: settings, [`oxikube_ui::init`], then `oxikube_workspace::init`, which calls
 //! [`init`]. Opening a second window runs none of this again: the globals (settings, tokens, zoom,
