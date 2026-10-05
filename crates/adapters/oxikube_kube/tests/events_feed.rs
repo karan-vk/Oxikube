@@ -340,10 +340,9 @@ async fn a_storm_of_events_stays_within_capacity() {
     // What survived is the newest: the last CAPACITY storm events.
     let mut kept: Vec<_> = folded.0.values().map(|e| e.message.clone()).collect();
     kept.sort();
-    let expected: Vec<_> = (STORM - CAPACITY..STORM)
+    let mut expected: Vec<_> = (STORM - CAPACITY..STORM)
         .map(|i| format!("event {i}"))
         .collect();
-    let mut expected = expected;
     expected.sort();
     assert_eq!(kept, expected);
 }

@@ -86,7 +86,7 @@ pub(super) struct Source {
     pub(super) config: FeedConfig,
     pub(super) cluster: ClusterId,
     pub(super) regarding_uid: Option<Arc<str>>,
-    pub(super) stats: Arc<Counters>,
+    pub(super) counters: Arc<Counters>,
     pub(super) tx: mpsc::Sender<Tagged>,
 }
 
@@ -230,7 +230,7 @@ impl Source {
         let event = match Event::from_json(&self.cluster, &json) {
             Ok(event) => event,
             Err(_) => {
-                self.stats.skipped.fetch_add(1, Ordering::Relaxed);
+                self.counters.skipped.fetch_add(1, Ordering::Relaxed);
                 debug!(api = ?self.api, "skipping an event that does not map to the domain type");
                 return None;
             }

@@ -220,7 +220,7 @@ impl KubeEvents {
                         config: feed_config.clone(),
                         cluster: self.cluster.clone(),
                         regarding_uid: regarding_uid.clone(),
-                        stats: counters.clone(),
+                        counters: counters.clone(),
                         tx: tx.clone(),
                     }
                     .run(),

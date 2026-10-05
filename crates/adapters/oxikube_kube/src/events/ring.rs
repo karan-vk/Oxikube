@@ -65,6 +65,12 @@ impl Key {
 /// Eviction order: last-seen time, then arrival.
 type Order = (Timestamp, u64);
 
+/// The position of `event` arriving now, advancing the arrival counter `seq`.
+fn next_order(seq: &mut u64, event: &Event) -> Order {
+    *seq += 1;
+    (event.last_seen.unwrap_or(Timestamp::MIN), *seq)
+}
+
 struct Entry {
     event: Event,
     /// The API whose view `event` is.
@@ -114,11 +120,6 @@ impl EventRing {
             .collect()
     }
 
-    fn order_of(&mut self, event: &Event) -> Order {
-        self.next_seq += 1;
-        (event.last_seen.unwrap_or(Timestamp::MIN), self.next_seq)
-    }
-
     /// Adds or updates the event `key` as seen through `api` by the watch of `namespace`,
     /// pushing the resulting deltas onto `out`.
     pub(super) fn upsert(
@@ -133,8 +134,7 @@ impl EventRing {
             entry.holders |= api.bit();
             let newer = (event.last_seen, event.count) > (entry.event.last_seen, entry.event.count);
             if (entry.origin == api || newer) && event != entry.event {
-                let order = self.order_of(&event);
-                let entry = self.entries.get_mut(&key).expect("entry checked above");
+                let order = next_order(&mut self.next_seq, &event);
                 self.order.remove(&entry.order);
                 self.order.insert(order, key);
                 entry.order = order;
@@ -147,7 +147,7 @@ impl EventRing {
         if self.entries.len() >= self.capacity && !self.make_room(&event, out) {
             return;
         }
-        let order = self.order_of(&event);
+        let order = next_order(&mut self.next_seq, &event);
         self.order.insert(order, key.clone());
         self.entries.insert(
             key,
