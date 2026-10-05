@@ -142,7 +142,7 @@ impl KubeExec {
             return first;
         }
         match self.pods.shape(target.namespace, target.pod).await {
-            Ok(shape) => refine(first, target, shape.as_ref()),
+            Ok(shape) => refine(target, shape.as_ref()),
             // The lookup failing (RBAC on `get pods`, a dropped connection) leaves the
             // first answer standing.
             Err(_) => first,

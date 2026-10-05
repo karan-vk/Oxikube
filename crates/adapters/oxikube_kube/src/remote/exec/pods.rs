@@ -7,11 +7,12 @@ use std::time::Duration;
 use async_trait::async_trait;
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
-use kube::api::{DeleteParams, ListParams, ObjectMeta, Patch, PatchParams, PostParams};
+use kube::api::{DeleteParams, ListParams, Patch, PatchParams, PostParams};
 use kube::runtime::WatchStreamExt;
 use kube::runtime::watcher::watch_object;
 use kube::{Api, Client};
 use oxikube_domain::{OxiError, OxiResult};
+use serde::Deserialize;
 use serde_json::Value;
 
 use super::wait::{Container, Readiness, readiness};
@@ -88,15 +89,17 @@ impl KubePods {
 #[async_trait]
 impl Pods for KubePods {
     async fn create(&self, namespace: &str, manifest: &Value) -> OxiResult<String> {
-        let pod: Pod = serde_json::from_value(manifest.clone())
+        let pod = Pod::deserialize(manifest)
             .map_err(|err| OxiError::validation(format!("not a valid pod: {err}")))?;
         let created = self
             .api(namespace)
             .create(&PostParams::default(), &pod)
             .await
             .map_err(|err| classify(&err))?;
-        let ObjectMeta { name, .. } = created.metadata;
-        name.ok_or_else(|| OxiError::internal("the created pod has no name"))
+        created
+            .metadata
+            .name
+            .ok_or_else(|| OxiError::internal("the created pod has no name"))
     }
 
     async fn delete(&self, namespace: &str, name: &str) -> OxiResult<()> {

@@ -56,22 +56,19 @@ pub(super) async fn open(
     tracing::info!(node, namespace = %namespace, pod = %pod, "node shell pod created");
     let cleanup = PodCleanup::new(pods.clone(), &namespace, &pod);
 
-    let started = match pods
-        .wait_running(
+    let started = async {
+        pods.wait_running(
             &namespace,
             &pod,
             &Container::Regular(CONTAINER.into()),
             config.start_timeout,
         )
-        .await
-    {
-        Ok(()) => {
-            let options = ExecOptions::interactive().container(CONTAINER);
-            exec.exec(&namespace, &pod, &exec_command(config), &options)
-                .await
-        }
-        Err(err) => Err(err),
-    };
+        .await?;
+        let options = ExecOptions::interactive().container(CONTAINER);
+        exec.exec(&namespace, &pod, &exec_command(config), &options)
+            .await
+    }
+    .await;
     let session = match started {
         Ok(session) => session,
         Err(err) => {

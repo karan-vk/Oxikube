@@ -5,10 +5,11 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
-use kube::api::PostParams;
-use kube::{Api, Client};
+use kube::Client;
 use oxikube_ports::exec::OutputStream;
 use serde_json::{Value, json};
+
+use super::logs;
 
 /// Small, and has `sh`, `cat`, `stty`, `sleep` and `nsenter`.
 pub const BUSYBOX: &str = "busybox:1.37";
@@ -18,10 +19,7 @@ pub const OUTPUT_DEADLINE: Duration = Duration::from_secs(30);
 
 async fn create(client: &Client, namespace: &str, pod: Value) {
     let pod: Pod = serde_json::from_value(pod).expect("pod");
-    Api::<Pod>::namespaced(client.clone(), namespace)
-        .create(&PostParams::default(), &pod)
-        .await
-        .expect("create pod");
+    logs::create(client, namespace, &pod).await;
 }
 
 /// A pod `name` that sleeps, with a container named `main`.

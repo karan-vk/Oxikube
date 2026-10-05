@@ -61,11 +61,7 @@ pub(super) fn open_error(err: &kube::Error, target: &Target<'_>) -> OxiError {
 
 /// Sharpens a 400 or 404 with what the cluster has for the pod: `shape` is `None` when the
 /// pod does not exist.
-pub(super) fn refine(first: OxiError, target: &Target<'_>, shape: Option<&PodShape>) -> OxiError {
-    use oxikube_domain::ErrorKind::{NotFound, Validation};
-    if !matches!(first.kind(), NotFound | Validation) {
-        return first;
-    }
+pub(super) fn refine(target: &Target<'_>, shape: Option<&PodShape>) -> OxiError {
     let Target {
         namespace,
         pod,
