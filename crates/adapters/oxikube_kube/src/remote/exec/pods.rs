@@ -184,12 +184,14 @@ impl Pods for KubePods {
         container: &Container,
         timeout: Duration,
     ) -> OxiResult<()> {
-        // A watch that fails is retried with backoff; only the timeout ends the wait.
+        // A watch that fails is retried with backoff. The wait ends when the container settles,
+        // when the pod is gone (`None` from `watch_object`: deleted, or absent from the initial
+        // list) or when the timeout expires.
         let events = watch_object(self.api(namespace), pod)
             .default_backoff()
             .filter_map(|event| {
                 futures::future::ready(match event {
-                    Ok(pod) => pod,
+                    Ok(pod) => Some(pod),
                     Err(err) => {
                         tracing::debug!(
                             error = %redacted_line(&err.to_string()),
@@ -201,9 +203,13 @@ impl Pods for KubePods {
             });
         let settled = async {
             let mut events = std::pin::pin!(events);
-            while let Some(found) = events.next().await {
-                if readiness(&found, container) != Readiness::Waiting {
-                    return Some(found);
+            while let Some(event) = events.next().await {
+                match event {
+                    None => return None,
+                    Some(found) if readiness(&found, container) != Readiness::Waiting => {
+                        return Some(found);
+                    }
+                    Some(_) => {}
                 }
             }
             None

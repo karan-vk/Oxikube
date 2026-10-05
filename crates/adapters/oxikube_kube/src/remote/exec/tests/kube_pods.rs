@@ -1,5 +1,7 @@
 //! `KubePods` against the fake API: the requests it builds and how it reads the answers.
 
+use std::time::Duration;
+
 use http::Method;
 use oxikube_domain::ErrorKind;
 use serde_json::json;
@@ -7,6 +9,7 @@ use serde_json::json;
 use crate::fake_api::{FakeApi, status_body};
 use crate::remote::exec::node_shell::{NODE_SHELL_LABEL, NodeShellConfig, node_shell_manifest};
 use crate::remote::exec::pods::{KubePods, PodShape, Pods};
+use crate::remote::exec::wait::Container;
 use crate::subresource::{EphemeralContainerSpec, ephemeral_container_patch};
 
 const PODS: &str = "/api/v1/namespaces/ns/pods";
@@ -161,5 +164,65 @@ async fn the_ephemeral_container_patch_goes_to_its_subresource() {
     assert_eq!(
         request.body.as_ref().expect("body")["spec"]["ephemeralContainers"][0]["name"],
         "dbg"
+    );
+}
+
+fn pending_pod() -> serde_json::Value {
+    json!({"metadata": {"name": "p", "namespace": "ns", "resourceVersion": "2"},
+           "status": {"phase": "Pending"}})
+}
+
+#[tokio::test]
+async fn waiting_for_a_pod_that_is_not_there_is_not_found_not_a_timeout() {
+    let api = FakeApi::new();
+    api.reply(
+        PODS,
+        200,
+        json!({"metadata": {"resourceVersion": "1"}, "items": []}),
+    );
+    let started = std::time::Instant::now();
+    let err = KubePods::new(api.client())
+        .wait_running(
+            "ns",
+            "p",
+            &Container::Regular("shell".into()),
+            Duration::from_secs(30),
+        )
+        .await
+        .expect_err("pod absent");
+    assert_eq!(err.kind(), ErrorKind::NotFound);
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "did not wait out the timeout"
+    );
+}
+
+#[tokio::test]
+async fn a_pod_deleted_while_waiting_is_not_found_not_a_timeout() {
+    let api = FakeApi::new();
+    api.reply(
+        PODS,
+        200,
+        json!({"metadata": {"resourceVersion": "1"}, "items": [pending_pod()]}),
+    );
+    api.reply_watch(
+        PODS,
+        200,
+        &[json!({"type": "DELETED", "object": pending_pod()})],
+    );
+    let started = std::time::Instant::now();
+    let err = KubePods::new(api.client())
+        .wait_running(
+            "ns",
+            "p",
+            &Container::Regular("shell".into()),
+            Duration::from_secs(30),
+        )
+        .await
+        .expect_err("pod deleted");
+    assert_eq!(err.kind(), ErrorKind::NotFound);
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "did not wait out the timeout"
     );
 }
