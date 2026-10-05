@@ -28,7 +28,7 @@ fn manager(requested: Option<&str>) -> OxiResult<String> {
 }
 
 /// `PostParams` for create and replace.
-pub(super) fn post_params(options: &WriteOptions) -> OxiResult<PostParams> {
+pub(crate) fn post_params(options: &WriteOptions) -> OxiResult<PostParams> {
     Ok(PostParams {
         dry_run: options.dry_run,
         field_manager: Some(manager(options.field_manager.as_deref())?),
@@ -40,7 +40,7 @@ pub(super) fn post_params(options: &WriteOptions) -> OxiResult<PostParams> {
 /// Apply: the patch's manager wins, then `options.field_manager`, then the default; `force`
 /// is sent only for apply (the server rejects it elsewhere). JSON patch: the body must be an
 /// RFC 6902 operation array.
-pub(super) fn patch_request<'a>(
+pub(crate) fn patch_request<'a>(
     patch: &'a Patch,
     options: &WriteOptions,
 ) -> OxiResult<(PatchParams, kube::api::Patch<&'a Value>)> {

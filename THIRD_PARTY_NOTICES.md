@@ -45,6 +45,11 @@ Entries:
   a restarted container's previous instance and end when the pod is gone. The MIT notice and
   permission text are the file header (same text as below). `logs/follow/resume.rs` and
   `logs/dedup.rs` carry the derived reconnect decisions of the same port.
+- `crates/adapters/oxikube_kube/src/subresource/patches.rs`: ports `ResourcePatch::to_merge_patch`
+  (rollout-restart annotation, cordon and uncordon, cronjob suspend, scale replicas) from
+  `src/network/mod.rs` @ c303673 (v2.1.1). Reworked so the restart timestamp is an argument and
+  the result is an `oxikube_ports::Patch`; pinned by exact-JSON tests. The MIT notice and
+  permission text are the file header (same text as below).
 - `crates/domain/oxikube_domain/src/age.rs` (test module `kdash_corpus`): test inputs and expected
   strings from `src/app/utils.rs` (`test_to_age`, `test_to_age_secs`), and the `duration_to_age`
   algorithm reimplemented as `AgeStyle::Detailed`. The full MIT licence text

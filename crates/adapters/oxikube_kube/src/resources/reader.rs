@@ -61,27 +61,23 @@ impl ResourceReader for KubeResources {
             .into_watch_feed())
     }
 
-    async fn get_scale(
-        &self,
-        _kind: &Gvk,
-        _namespace: Option<&str>,
-        _name: &str,
-    ) -> OxiResult<Scale> {
-        Err(pending("get_scale", "E04-S06"))
+    async fn get_scale(&self, kind: &Gvk, namespace: Option<&str>, name: &str) -> OxiResult<Scale> {
+        self.read_scale(kind, namespace, name).await
     }
 
     async fn get_subresource(
         &self,
-        _kind: &Gvk,
-        _namespace: Option<&str>,
-        _name: &str,
-        _subresource: &Subresource,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+        subresource: &Subresource,
     ) -> OxiResult<Value> {
-        Err(pending("get_subresource", "E04-S06"))
+        self.read_subresource(kind, namespace, name, subresource)
+            .await
     }
 }
 
 /// A port method whose story has not landed yet.
-pub(crate) fn pending(method: &str, story: &str) -> OxiError {
+fn pending(method: &str, story: &str) -> OxiError {
     OxiError::unsupported(format!("`{method}` is not implemented yet ({story})"))
 }

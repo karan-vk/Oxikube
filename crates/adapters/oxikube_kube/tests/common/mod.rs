@@ -10,7 +10,8 @@
 //! pod fixtures and adapter constructor of the resource data plane scenarios (E04); `mutations` the
 //! ConfigMap manifests of the write scenarios (E04-S05); `portforward` the nginx fixtures of the
 //! port-forward scenarios (E04-S10); `logs` the chatty pods and stream readers of the log scenarios
-//! (E04-S08); `table` the `kubectl get` parser the Table API parity tests compare against.
+//! (E04-S08); `table` the `kubectl get` parser the Table API parity tests compare against;
+//! `subresources` the workload, pod and CRD fixtures of the subresource scenarios (E04-S06).
 //!
 //! Namespaced fixtures (service accounts, roles, bindings) live in the test's
 //! `oxi-test-<rand>` namespace and go away with it.
@@ -23,6 +24,7 @@ pub mod logs;
 pub mod mutations;
 pub mod portforward;
 pub mod resources;
+pub mod subresources;
 pub mod table;
 
 use std::future::Future;
@@ -83,9 +85,14 @@ pub async fn kind() -> Option<Kind> {
 impl Kind {
     /// A pool over `kubeconfig` with the real kube factory and no proxy fallback.
     pub fn pool(&self, kubeconfig: Kubeconfig) -> ClientPool {
+        self.pool_with(kubeconfig, PoolConfig::default())
+    }
+
+    /// As [`pool`](Self::pool) with explicit settings.
+    pub fn pool_with(&self, kubeconfig: Kubeconfig, config: PoolConfig) -> ClientPool {
         ClientPool::with_parts(
             kubeconfig,
-            PoolConfig::default(),
+            config,
             Arc::new(KubeClientFactory::new(ProxyEnv::default())),
             Arc::new(SystemClock),
         )
