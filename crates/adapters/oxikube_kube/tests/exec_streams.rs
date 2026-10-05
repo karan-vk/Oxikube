@@ -15,7 +15,7 @@ use oxikube_kube::KubeExec;
 use oxikube_ports::{ExecOptions, ExecPort, TerminalSize};
 use oxikube_testkit::integration::TestNamespace;
 
-use common::exec::{create_cat, create_sleeper, read_all, read_until};
+use common::exec::{create_cat, create_sleeper, read_all, read_until, restart_count};
 use common::portforward::wait_ready;
 use common::{DEADLINE, TestServiceAccount, wait_until};
 
@@ -273,11 +273,22 @@ async fn attach_talks_to_the_main_process() {
     drop(stdin);
     drop(stdout);
     drop(session);
-    let again = exec
+    // The same `cat` is still there: a second attach reaches a live process that was never
+    // restarted.
+    let mut again = exec
         .attach(ns.name(), "cat", &options)
         .await
         .expect("attach again");
-    drop(again);
+    let mut stdin = again.stdin.take().expect("stdin");
+    let mut stdout = again.stdout.take().expect("stdout");
+    stdin.send(b"second-ping\n".to_vec()).await.expect("send");
+    read_until(&mut stdout, "second-ping").await;
+    assert_eq!(
+        restart_count(&client, ns.name(), "cat", "main").await,
+        0,
+        "dropping the first session must not end the pod's process"
+    );
+    drop((stdin, stdout, again));
 }
 
 #[tokio::test]

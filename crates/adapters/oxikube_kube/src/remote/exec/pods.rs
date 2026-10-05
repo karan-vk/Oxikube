@@ -27,6 +27,8 @@ pub(super) struct PodShape {
     pub(super) deleting: bool,
     /// Names of its containers, init containers and ephemeral containers.
     pub(super) containers: Vec<String>,
+    /// Names of its regular containers only: the ones the server picks a default from.
+    pub(super) regular: Vec<String>,
 }
 
 /// A pod found by label, for the leftover sweep.
@@ -141,11 +143,11 @@ impl Pods for KubePods {
             .map_err(|err| classify(&err))?;
         Ok(pod.map(|pod| {
             let spec = pod.spec.unwrap_or_default();
-            let containers = spec
-                .containers
-                .into_iter()
-                .chain(spec.init_containers.into_iter().flatten())
-                .map(|c| c.name)
+            let regular: Vec<String> = spec.containers.into_iter().map(|c| c.name).collect();
+            let containers = regular
+                .iter()
+                .cloned()
+                .chain(spec.init_containers.into_iter().flatten().map(|c| c.name))
                 .chain(
                     spec.ephemeral_containers
                         .into_iter()
@@ -157,6 +159,7 @@ impl Pods for KubePods {
                 phase: pod.status.and_then(|s| s.phase).unwrap_or_default(),
                 deleting: pod.metadata.deletion_timestamp.is_some(),
                 containers,
+                regular,
             }
         }))
     }

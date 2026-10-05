@@ -12,8 +12,8 @@ use super::super::pods::Pods;
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Owns the obligation to delete one pod. [`run`](Self::run) deletes it and waits for the
-/// answer; dropping the guard without running it (the session was dropped, or aborted) spawns
-/// the delete on the runtime the guard was made in.
+/// answer; dropping the guard before that answer came (the session was dropped, or aborted,
+/// even mid-delete) spawns the delete on the runtime the guard was made in.
 pub(super) struct PodCleanup {
     pods: Arc<dyn Pods>,
     namespace: String,
@@ -34,10 +34,11 @@ impl PodCleanup {
         }
     }
 
-    /// Deletes the pod now.
+    /// Deletes the pod now. The guard stays armed until the delete has finished, so a `run`
+    /// future that is dropped half way is covered by the drop fallback like any other.
     pub(super) async fn run(mut self) {
-        self.armed = false;
         delete(self.pods.as_ref(), &self.namespace, &self.name).await;
+        self.armed = false;
     }
 }
 

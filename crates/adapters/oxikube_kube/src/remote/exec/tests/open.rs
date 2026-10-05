@@ -162,6 +162,37 @@ async fn an_unknown_container_is_not_found() {
 }
 
 #[tokio::test]
+async fn no_container_name_on_a_multi_container_pod_is_validation() {
+    let api = FakeApi::new();
+    api.reply(
+        EXEC,
+        400,
+        status_body(
+            400,
+            "BadRequest",
+            "a container name must be specified for pod p, choose one of: [app sidecar]",
+        ),
+    );
+    api.reply(POD, 200, pod("Running", &["app", "sidecar"]));
+    let err = exec_error(&api, &ExecOptions::default()).await;
+    assert_eq!(err.kind(), ErrorKind::Validation, "{err}");
+    assert!(err.message().contains("app, sidecar"), "{err}");
+}
+
+#[tokio::test]
+async fn a_single_container_pod_that_refuses_is_a_conflict_not_a_container_choice() {
+    let api = FakeApi::new();
+    api.reply(
+        EXEC,
+        400,
+        status_body(400, "BadRequest", "container not running"),
+    );
+    api.reply(POD, 200, pod("Running", &["app"]));
+    let err = exec_error(&api, &ExecOptions::default()).await;
+    assert_eq!(err.kind(), ErrorKind::Conflict, "{err}");
+}
+
+#[tokio::test]
 async fn a_pod_that_is_not_running_is_a_conflict() {
     let api = FakeApi::new();
     api.reply(

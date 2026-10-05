@@ -50,6 +50,18 @@ pub async fn create_cat(client: &Client, namespace: &str, name: &str) {
     .await;
 }
 
+/// The restart count of container `container` in pod `name`; 0 before it has a status.
+pub async fn restart_count(client: &Client, namespace: &str, name: &str, container: &str) -> i32 {
+    let pod = kube::Api::<Pod>::namespaced(client.clone(), namespace)
+        .get(name)
+        .await
+        .expect("get the pod");
+    pod.status
+        .and_then(|s| s.container_statuses)
+        .and_then(|all| all.into_iter().find(|c| c.name == container))
+        .map_or(0, |c| c.restart_count)
+}
+
 /// Reads `stream` until its output contains `marker`; returns everything read so far.
 /// Panics on a read error, on the end of the stream, or after [`OUTPUT_DEADLINE`].
 pub async fn read_until(stream: &mut OutputStream, marker: &str) -> String {

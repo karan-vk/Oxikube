@@ -194,6 +194,45 @@ async fn the_pod_is_deleted_when_the_status_is_dropped_and_the_streams_are_kept(
 }
 
 #[tokio::test]
+async fn dropping_the_status_while_the_delete_is_in_flight_still_deletes_the_pod() {
+    let (pods, mut deleted) = FakePods::new();
+    pods.stall_next_delete
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let pods = Arc::new(pods);
+    let exec = FakeExecPort::new();
+    exec.script().exec.push(Ok(ExecScript::new()));
+    let shell = open(&exec, &pods).await.expect("open");
+    // The shell has exited, so the status is inside the stalled delete when the timeout
+    // drops it.
+    let waited = tokio::time::timeout(Duration::from_millis(200), shell.session.status).await;
+    assert!(waited.is_err(), "the delete is still in flight");
+    assert_eq!(pods.deletions(), [POD], "the first delete was sent");
+    let name = tokio::time::timeout(Duration::from_secs(5), deleted.recv())
+        .await
+        .expect("the guard deletes in the background")
+        .expect("a deletion");
+    assert_eq!(name, POD);
+    assert_eq!(pods.deletions().len(), 2, "the cancelled delete was redone");
+}
+
+#[tokio::test]
+async fn cancelling_open_while_its_failure_cleanup_is_in_flight_still_deletes_the_pod() {
+    let (pods, mut deleted) = FakePods::new();
+    *pods.wait_error.lock() = Some((ErrorKind::Conflict, "ImagePullBackOff"));
+    pods.stall_next_delete
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let pods = Arc::new(pods);
+    let exec = FakeExecPort::new();
+    let opened = tokio::time::timeout(Duration::from_millis(200), open(&exec, &pods)).await;
+    assert!(opened.is_err(), "the cleanup is still in flight");
+    let name = tokio::time::timeout(Duration::from_secs(5), deleted.recv())
+        .await
+        .expect("the guard deletes in the background")
+        .expect("a deletion");
+    assert_eq!(name, POD);
+}
+
+#[tokio::test]
 async fn a_pod_that_cannot_start_is_deleted_and_the_error_returned() {
     let (pods, _deleted) = FakePods::new();
     *pods.wait_error.lock() = Some((ErrorKind::Conflict, "ImagePullBackOff"));

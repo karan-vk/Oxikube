@@ -88,6 +88,13 @@ pub(super) fn refine(target: &Target<'_>, shape: Option<&PodShape>) -> OxiError 
             }
         ));
     }
+    // The server picks a default only when the pod has exactly one regular container.
+    if container.is_none() && shape.regular.len() > 1 {
+        return OxiError::validation(format!(
+            "pod {namespace}/{pod} has several containers; choose one of: {}",
+            shape.regular.join(", ")
+        ));
+    }
     OxiError::conflict(format!(
         "the container in pod {namespace}/{pod} is not running yet, or has stopped"
     ))

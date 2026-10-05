@@ -127,6 +127,7 @@ async fn shape_lists_every_kind_of_container() {
             phase: "Running".into(),
             deleting: false,
             containers: vec!["app".into(), "init".into(), "dbg".into()],
+            regular: vec!["app".into()],
         })
     );
     assert_eq!(pods.shape("ns", "missing").await.expect("lookup"), None);

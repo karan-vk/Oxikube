@@ -37,6 +37,9 @@ pub(super) struct FakePods {
     pub(super) wait_error: Fail,
     /// Fails every `delete` when set.
     pub(super) delete_error: Fail,
+    /// When set, the next `delete` is recorded and then never answers (a request that is in
+    /// flight when its caller goes away); later deletes behave normally.
+    pub(super) stall_next_delete: std::sync::atomic::AtomicBool,
     /// Pods `list` returns.
     pub(super) listed: Mutex<Vec<PodStamp>>,
     /// Fails `add_ephemeral_container` when set.
@@ -53,6 +56,7 @@ impl FakePods {
                 calls: Mutex::default(),
                 wait_error: Mutex::default(),
                 delete_error: Mutex::default(),
+                stall_next_delete: std::sync::atomic::AtomicBool::new(false),
                 listed: Mutex::default(),
                 patch_error: Mutex::default(),
                 deleted,
@@ -91,6 +95,12 @@ impl Pods for FakePods {
             namespace: namespace.into(),
             name: name.into(),
         });
+        if self
+            .stall_next_delete
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            std::future::pending::<()>().await;
+        }
         let _ = self.deleted.send(name.to_owned());
         fail(&self.delete_error)
     }
