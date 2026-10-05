@@ -30,6 +30,7 @@ async fn ready_pod(env: &Env, name: &str, labels: &[(&str, &str)]) {
         .await
         .expect("create pod");
     let last = std::cell::RefCell::new(String::new());
+    let polls = std::cell::Cell::new(0);
     wait_until("the pod to be Ready", DEADLINE, || async {
         let pod = live_pod(&env.resources, env.namespace(), name)
             .await
@@ -40,6 +41,23 @@ async fn ready_pod(env: &Env, name: &str, labels: &[(&str, &str)]) {
         }
         // Say why on a slow cluster (a failed pull, an unschedulable pod), once per change.
         let status = pod.json["status"].to_string();
+        polls.set(polls.get() + 1);
+        if polls.get() == 40 {
+            for args in [
+                vec!["get", "pod", name, "-n", env.namespace(), "-o", "yaml"],
+                vec!["get", "events", "-n", env.namespace()],
+                vec!["get", "nodes", "-o", "wide"],
+                vec!["-n", "kube-system", "get", "pods"],
+            ] {
+                let out = std::process::Command::new("kubectl")
+                    .args(["--context", &env.context])
+                    .args(&args)
+                    .output();
+                if let Ok(out) = out {
+                    eprintln!("DIAG {args:?}:\n{}", String::from_utf8_lossy(&out.stdout));
+                }
+            }
+        }
         if *last.borrow() != status {
             eprintln!("pod {name} not Ready yet: {status}");
             *last.borrow_mut() = status;
