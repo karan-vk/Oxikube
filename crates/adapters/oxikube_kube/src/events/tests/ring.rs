@@ -81,6 +81,65 @@ fn an_event_older_than_everything_held_is_dropped_but_counted() {
 }
 
 #[test]
+fn a_shed_event_redelivered_by_the_other_api_or_a_relist_is_counted_once() {
+    let mut ring = EventRing::new(3);
+    let all = [
+        ("e1", "2026-10-03T11:01:00Z"),
+        ("e2", "2026-10-03T11:02:00Z"),
+        ("e3", "2026-10-03T11:03:00Z"),
+        ("e4", "2026-10-03T11:04:00Z"),
+    ];
+    for (uid, at) in all {
+        put(&mut ring, Core, event(uid, at, 1));
+    }
+    assert_eq!(ring.evicted(), 1, "e1");
+    // The other API's list, then a relist of each: e1 is older than everything held.
+    for api in [EventsV1, Core, EventsV1] {
+        for (uid, at) in all {
+            put(&mut ring, api, event(uid, at, 1));
+        }
+    }
+    assert_eq!((ring.len(), ring.evicted()), (3, 1));
+}
+
+#[test]
+fn a_shed_event_tied_with_the_oldest_does_not_push_out_a_live_one() {
+    let mut ring = EventRing::new(2);
+    put(&mut ring, Core, event("a", "2026-10-03T11:01:00Z", 1));
+    put(&mut ring, Core, event("b", "2026-10-03T11:01:00Z", 1));
+    // Same second as `a` and `b`: `c` evicts `a` as the oldest by arrival.
+    assert_eq!(
+        put(&mut ring, Core, event("c", "2026-10-03T11:01:00Z", 1)),
+        ["-a@1", "+c@1"]
+    );
+    // The other API's late view of `a` ties the oldest held: dropped, no churn, one count.
+    assert!(put(&mut ring, EventsV1, event("a", "2026-10-03T11:01:00Z", 1)).is_empty());
+    assert_eq!((ring.len(), ring.evicted()), (2, 1));
+}
+
+#[test]
+fn a_shed_event_that_comes_back_newer_or_is_deleted_stops_counting() {
+    let mut ring = EventRing::new(2);
+    put(&mut ring, Core, event("a", "2026-10-03T11:01:00Z", 1));
+    put(&mut ring, Core, event("b", "2026-10-03T11:02:00Z", 1));
+    put(&mut ring, Core, event("c", "2026-10-03T11:03:00Z", 1));
+    put(&mut ring, Core, event("old", "2026-10-03T10:00:00Z", 1));
+    assert_eq!(ring.evicted(), 2, "a and old");
+
+    // `old` is deleted on the server: nothing is hidden for it any more.
+    let old = event("old", "2026-10-03T10:00:00Z", 1);
+    ring.remove(&Key::of(&old), &mut Vec::new());
+    assert_eq!(ring.evicted(), 1);
+
+    // `a` happens again and is newer than everything: it is held, `b` is shed instead.
+    assert_eq!(
+        put(&mut ring, Core, event("a", "2026-10-03T11:04:00Z", 2)),
+        ["-b@1", "+a@2"]
+    );
+    assert_eq!((ring.len(), ring.evicted()), (2, 1), "b only");
+}
+
+#[test]
 fn an_updated_event_moves_to_the_newest_end() {
     let mut ring = EventRing::new(2);
     put(&mut ring, Core, event("a", "2026-10-03T11:01:00Z", 1));

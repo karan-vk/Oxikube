@@ -427,6 +427,12 @@ async fn a_forbidden_api_drops_out_while_the_other_carries_on() {
     assert_eq!(restart_uids(&next_batch(&mut feed).await), ["x"]);
     assert_eq!(*feed.state().borrow(), FeedState::Live);
     assert!(!feed.is_finished());
+
+    // The refused watch has ended: it is not retried (the backoff would re-list it).
+    settle().await;
+    let hits = api.hits(V1);
+    tokio::time::sleep(Duration::from_secs(120)).await;
+    assert_eq!(api.hits(V1), hits, "a forbidden watch stays stopped");
 }
 
 #[tokio::test(start_paused = true)]

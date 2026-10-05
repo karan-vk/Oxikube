@@ -145,7 +145,9 @@ impl Source {
                         stream = self.open();
                         continue;
                     }
-                    self.on_error(&mut cycle, &err).await?;
+                    if !self.on_error(&mut cycle, &err).await? {
+                        return Ok(());
+                    }
                 }
                 Some(Ok(event)) => {
                     cycle.settle_at = None;
@@ -171,11 +173,14 @@ impl Source {
         }
     }
 
-    async fn on_error(&mut self, cycle: &mut Cycle, err: &watcher::Error) -> Result<(), Closed> {
+    /// Reports `err`. `false` when it is not retryable: the watch is over and must not be
+    /// polled again (the stream would re-list and keep failing).
+    async fn on_error(&mut self, cycle: &mut Cycle, err: &watcher::Error) -> Result<bool, Closed> {
         let error = feed_error(err);
         if !error.is_retryable() {
             self.set_state(cycle, FeedState::Stopped).await?;
-            return self.send(Msg::Fatal(error)).await;
+            self.send(Msg::Fatal(error)).await?;
+            return Ok(false);
         }
         debug!(api = ?self.api, error = %error, "events watch failed; backing off");
         if cycle.state != FeedState::Retrying {
@@ -185,7 +190,8 @@ impl Source {
         // Only a watch accepted after this error shows the server is back.
         cycle.settle_at = None;
         self.accepted.borrow_and_update();
-        self.send(Msg::Error(error)).await
+        self.send(Msg::Error(error)).await?;
+        Ok(true)
     }
 
     async fn on_event(

@@ -29,6 +29,13 @@
 //! `Deleted` delta before the new event's `Applied`, so a consumer never holds more than
 //! `capacity`. A new event older than everything held is not stored at all. Both count as
 //! evicted ([`EventRing::evicted`]).
+//!
+//! The count is of *distinct events*, not of attempts: the ring remembers the key of every
+//! event it shed, so the same event arriving again (from the other API, after a relist, from
+//! another namespace watch) is not counted twice, and one that was shed and is not newer than
+//! the oldest held is not let back in to push out a live entry. A shed event that the server
+//! deletes stops counting, and one that comes back into the ring (newer than the oldest held)
+//! stops counting too.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -88,7 +95,8 @@ pub(super) struct EventRing {
     entries: HashMap<Key, Entry>,
     order: BTreeMap<Order, Key>,
     next_seq: u64,
-    evicted: u64,
+    /// Keys of the events dropped to stay within capacity; its size is the evicted count.
+    shed: HashSet<Key>,
 }
 
 impl EventRing {
@@ -98,7 +106,7 @@ impl EventRing {
             entries: HashMap::new(),
             order: BTreeMap::new(),
             next_seq: 0,
-            evicted: 0,
+            shed: HashSet::new(),
         }
     }
 
@@ -106,9 +114,9 @@ impl EventRing {
         self.entries.len()
     }
 
-    /// Events dropped to stay within capacity so far.
+    /// Distinct events dropped to stay within capacity and not seen again since.
     pub(super) fn evicted(&self) -> u64 {
-        self.evicted
+        self.shed.len() as u64
     }
 
     /// The held events, oldest last-seen first.
@@ -144,9 +152,10 @@ impl EventRing {
             }
             return;
         }
-        if self.entries.len() >= self.capacity && !self.make_room(&event, out) {
+        if self.entries.len() >= self.capacity && !self.make_room(&key, &event, out) {
             return;
         }
+        self.shed.remove(&key);
         let order = next_order(&mut self.next_seq, &event);
         self.order.insert(order, key.clone());
         self.entries.insert(
@@ -162,26 +171,31 @@ impl EventRing {
         out.push(Delta::Applied(event));
     }
 
-    /// Evicts the oldest entry for `incoming`. `false` when `incoming` is older than every
-    /// entry, so it is the one to drop.
-    fn make_room(&mut self, incoming: &Event, out: &mut Vec<Delta<Event>>) -> bool {
-        self.evicted += 1;
+    /// Evicts the oldest entry for `incoming` (the event `key`). `false` when `incoming` is
+    /// the one to drop: older than every entry, or, if it was shed before, not newer than the
+    /// oldest (a late second view of it must not push out a live entry).
+    fn make_room(&mut self, key: &Key, incoming: &Event, out: &mut Vec<Delta<Event>>) -> bool {
         let Some((&(oldest, _), _)) = self.order.first_key_value() else {
             return true;
         };
-        if incoming.last_seen.unwrap_or(Timestamp::MIN) < oldest {
+        let seen = incoming.last_seen.unwrap_or(Timestamp::MIN);
+        if seen < oldest || (seen == oldest && self.shed.contains(key)) {
+            self.shed.insert(key.clone());
             return false;
         }
-        if let Some((_, key)) = self.order.pop_first() {
-            if let Some(entry) = self.entries.remove(&key) {
+        if let Some((_, oldest_key)) = self.order.pop_first() {
+            if let Some(entry) = self.entries.remove(&oldest_key) {
+                self.shed.insert(oldest_key);
                 out.push(Delta::Deleted(entry.event));
             }
         }
         true
     }
 
-    /// Removes the event `key`, if held.
+    /// Removes the event `key`, if held; a shed event is no longer hidden once the server
+    /// deletes it.
     pub(super) fn remove(&mut self, key: &Key, out: &mut Vec<Delta<Event>>) {
+        self.shed.remove(key);
         if let Some(entry) = self.entries.remove(key) {
             self.order.remove(&entry.order);
             out.push(Delta::Deleted(entry.event));
