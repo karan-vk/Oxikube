@@ -6,6 +6,8 @@ use gpui::{
 };
 use oxikube_ui::title_bar::TitleBar;
 
+use crate::persistence::{SerializedWindow, restore_window_bounds};
+
 /// The application id. On Linux it is the Wayland `app_id` (and the X11 `WM_CLASS`), which the
 /// compositor matches against `dev.karan.oxikube.desktop` to find the icon and group windows, so
 /// it must equal the desktop file's name and its `StartupWMClass`
@@ -15,7 +17,7 @@ pub const APP_ID: &str = "dev.karan.oxikube";
 /// The window title shown by the OS (Mission Control, task switchers, Wayland title).
 pub const WINDOW_TITLE: &str = "Oxikube";
 
-/// Size of the first window when there is no saved layout (E05-S05 restores a saved one).
+/// Size of the first window when there is no saved layout.
 pub const DEFAULT_SIZE: Size<Pixels> = size(px(1280.), px(800.));
 
 /// The smallest the window can be resized to.
@@ -53,6 +55,20 @@ impl Chrome {
 pub fn main_window_options(cx: &App) -> WindowOptions {
     let bounds = Bounds::centered(None, DEFAULT_SIZE, cx);
     window_options(Chrome::current(), WindowBounds::Windowed(bounds))
+}
+
+/// Options for the main window opened where a saved layout left it (`saved`, see
+/// `persistence::LayoutStore::load`), fitted to the displays that exist now: moved onto a display
+/// that is still there, shrunk to fit, kept fully on screen. `None` is the default placement,
+/// like [`main_window_options`].
+pub fn main_window_options_for(cx: &App, saved: Option<&SerializedWindow>) -> WindowOptions {
+    let primary = cx.primary_display().map(|d| d.id());
+    let mut displays = cx.displays();
+    // The primary display first: that is where an unplaceable window goes.
+    displays.sort_by_key(|d| Some(d.id()) != primary);
+    let displays: Vec<_> = displays.iter().map(|d| d.bounds()).collect();
+    let bounds = restore_window_bounds(saved, &displays, DEFAULT_SIZE);
+    window_options(Chrome::current(), bounds)
 }
 
 /// Options for the main window with `chrome`.

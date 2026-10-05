@@ -13,6 +13,7 @@
 //! - `panels`: side panels, toggling a panel or a dock.
 //! - `docks`: dock snapshots and sizes, zoom.
 //! - `layout`: queries on the dock area's layout trees.
+//! - `restore`: capturing the layout for persistence and restoring a saved one (E05-S05).
 //! - `render`: the view and its action handlers.
 
 mod close;
@@ -21,6 +22,7 @@ mod layout;
 mod open;
 mod panels;
 mod render;
+mod restore;
 mod split;
 
 #[cfg(test)]
@@ -29,7 +31,8 @@ mod tests;
 use std::{collections::HashMap, rc::Rc};
 
 use gpui::{
-    App, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable, Subscription, Window,
+    AnyEntity, App, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable, Subscription,
+    Window,
 };
 use oxikube_ui::dock::{DockArea, DockEvent, DockPlacement, DockSkin, PanelId, PanelStyle};
 
@@ -83,6 +86,8 @@ pub struct Workspace {
     active_pane: Option<PaneId>,
     closed: ClosedItemStack,
     focus_handle: FocusHandle,
+    /// Entities that live and die with the workspace (the layout persistence controller).
+    attached: Vec<AnyEntity>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -120,11 +125,19 @@ impl Workspace {
             active_pane: None,
             closed: ClosedItemStack::default(),
             focus_handle: cx.focus_handle(),
+            attached: Vec::new(),
             _subscriptions: vec![subscription],
         }
     }
 
-    /// The dock area the layout lives in (for layout persistence, E05-S05).
+    /// Makes the workspace keep `entity` alive for as long as it lives itself. For helpers that
+    /// observe the workspace (layout persistence) and hold it only weakly, so there is no cycle
+    /// and no one has to remember to store them.
+    pub fn attach<T: 'static>(&mut self, entity: Entity<T>) {
+        self.attached.push(entity.into_any());
+    }
+
+    /// The dock area the layout lives in.
     pub fn dock_area(&self) -> &Entity<DockArea> {
         &self.dock_area
     }

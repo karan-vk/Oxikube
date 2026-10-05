@@ -6,6 +6,7 @@ mod docks;
 mod drag;
 mod items;
 mod panes;
+mod persist;
 
 use gpui::{
     AppContext as _, Bounds, Entity, EntityId, Pixels, TestAppContext, VisualTestContext, point,

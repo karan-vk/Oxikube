@@ -115,8 +115,14 @@ pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
     /// the zoom state; read it with [`crate::Workspace::is_zoomed`].
     fn set_zoomed(&mut self, zoomed: bool, window: &mut Window, cx: &mut Context<Self>) {}
 
-    /// The panel's own state for layout persistence (E05-S05). Never put secrets here.
+    /// The panel's own state for layout persistence. Never put secrets here: it is written to
+    /// disk with the layout.
     fn serialize(&self, cx: &App) -> Option<serde_json::Value> {
         None
     }
+
+    /// Applies the state [`Panel::serialize`] produced in an earlier session, when the layout is
+    /// restored (after the panel was added). Unknown or outdated state must be ignored, not
+    /// fatal.
+    fn restore(&mut self, state: &serde_json::Value, window: &mut Window, cx: &mut Context<Self>) {}
 }
