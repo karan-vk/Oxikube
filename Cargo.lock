@@ -5787,7 +5787,10 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "gpui-pre",
+ "gpui-pre-platform",
+ "oxikube_testkit",
  "oxikube_ui",
+ "serde_json",
 ]
 
 [[package]]

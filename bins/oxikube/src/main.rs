@@ -1,9 +1,9 @@
 //! Oxikube binary. Wires adapters into the app and mounts the UI.
 //!
 //! Opens the themed main window (`oxikube_workspace::window`): the `Root` over a title bar and an
-//! empty body, plus the application menu. Init order will follow Zed's `main.rs` pattern
+//! empty workspace, plus the application menu. Init order will follow Zed's `main.rs` pattern
 //! (E05-S09): logging → settings → keymap → theme → AppState → each crate's `init(cx)` →
-//! workspace restore. Today: `oxikube_ui::init`, `window::init`, open the window; nothing waits on
+//! workspace restore. Today: `oxikube_ui::init`, `oxikube_workspace::init`, open the window; nothing waits on
 //! disk or network before the first frame.
 //!
 //! Flags (`oxikube --help`): `--perf` records frame times, feed throughput, notify counts and RSS
@@ -95,7 +95,7 @@ fn run_app(perf: Option<Arc<Recorder>>, perf_duration: Option<Duration>) {
         .with_assets(oxikube_ui::Assets)
         .run(move |cx: &mut App| {
             oxikube_ui::init(cx);
-            oxikube_workspace::window::init(cx);
+            oxikube_workspace::init(cx);
             let opened = match perf {
                 Some(recorder) => {
                     perf_mode::attach(cx, perf_duration);
