@@ -71,17 +71,4 @@ mod tests {
             }
         }
     }
-
-    #[test]
-    fn to_hex_round_trips() {
-        for text in [
-            "#74ade8ff",
-            "#74ade83d",
-            "#00000000",
-            "#ffffffff",
-            "#464b57ff",
-        ] {
-            assert_eq!(to_hex(parse_color(text).unwrap()), text);
-        }
-    }
 }

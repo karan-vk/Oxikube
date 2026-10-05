@@ -8,7 +8,7 @@ use crate::registry::ThemeFileProblem;
 use std::path::{Path, PathBuf};
 
 /// Name of the themes directory inside the config dir.
-pub const THEMES_DIR_NAME: &str = "themes";
+const THEMES_DIR_NAME: &str = "themes";
 
 /// Theme files larger than this are skipped (a real family is tens of kilobytes).
 const MAX_THEME_FILE_BYTES: u64 = 8 * 1024 * 1024;

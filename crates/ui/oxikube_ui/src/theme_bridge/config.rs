@@ -14,9 +14,9 @@ use super::install;
 use crate::tokens::Tokens;
 use gpui::{App, Hsla};
 use gpui_component::ThemeConfig;
+use oxikube_theme::ThemeTokens;
 use oxikube_theme::color::to_hex;
 use oxikube_theme::tokens::{FontStyle, SyntaxStyle};
-use oxikube_theme::{Appearance, ThemeTokens};
 use serde_json::{Map, Value, json};
 use std::rc::Rc;
 
@@ -34,17 +34,13 @@ pub fn set_theme(cx: &mut App, theme: &ThemeTokens) {
 pub fn theme_config(theme: &ThemeTokens) -> ThemeConfig {
     let value = json!({
         "name": theme.name,
-        "mode": if theme.appearance == Appearance::Dark { "dark" } else { "light" },
+        "mode": if theme.appearance.is_dark() { "dark" } else { "light" },
         "colors": colors(theme),
         "highlight": highlight(theme),
     });
     // A config that does not deserialize is a bug in the maps below (the tests check every
     // bundled theme); the theme still applies through `apply_tokens`, so degrade to a blank one.
     serde_json::from_value(value).unwrap_or_default()
-}
-
-fn hex(color: Hsla) -> String {
-    to_hex(color)
 }
 
 /// The core colours, from the same [`Tokens`] the views read, so config and overlay agree.
@@ -121,7 +117,7 @@ fn colors(theme: &ThemeTokens) -> Value {
     Value::Object(
         pairs
             .iter()
-            .map(|(key, color)| ((*key).to_owned(), Value::String(hex(*color))))
+            .map(|(key, color)| ((*key).to_owned(), Value::String(to_hex(*color))))
             .collect(),
     )
 }
@@ -132,7 +128,7 @@ pub(super) fn highlight(theme: &ThemeTokens) -> Value {
     let e = theme.editor;
     let mut style = Map::new();
     let mut put = |key: &str, color: Hsla| {
-        style.insert(key.to_owned(), Value::String(hex(color)));
+        style.insert(key.to_owned(), Value::String(to_hex(color)));
     };
     put("editor.background", e.background);
     put("editor.foreground", e.foreground);
@@ -165,7 +161,7 @@ pub(super) fn highlight(theme: &ThemeTokens) -> Value {
 fn syntax_style(style: &SyntaxStyle) -> Value {
     let mut entry = Map::new();
     if let Some(color) = style.color {
-        entry.insert("color".into(), Value::String(hex(color)));
+        entry.insert("color".into(), Value::String(to_hex(color)));
     }
     // gpui-component has no oblique; italic is the nearest.
     match style.font_style {

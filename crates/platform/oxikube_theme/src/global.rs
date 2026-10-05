@@ -23,7 +23,7 @@ use crate::watcher::{DEFAULT_DEBOUNCE, ThemeDirWatcher};
 use futures::StreamExt as _;
 use gpui::{App, BorrowAppContext as _, Global, Task};
 use oxikube_settings::Settings as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 impl Global for ThemeRegistry {}
@@ -49,11 +49,6 @@ impl ThemeRegistry {
     #[track_caller]
     pub fn global(cx: &App) -> &Self {
         cx.global::<Self>()
-    }
-
-    /// The registry, or `None` before [`init`].
-    pub fn try_global(cx: &App) -> Option<&Self> {
-        cx.try_global::<Self>()
     }
 }
 
@@ -112,7 +107,7 @@ fn install(cx: &mut App, dir: Option<&Path>, watch: bool) {
     }
 }
 
-fn start_watch(cx: &mut App, dir: std::path::PathBuf) {
+fn start_watch(cx: &mut App, dir: PathBuf) {
     let (tx, mut rx) = futures::channel::mpsc::unbounded::<UserThemes>();
     let watcher = match ThemeDirWatcher::spawn(dir, DEFAULT_DEBOUNCE, move |scan| {
         tx.unbounded_send(scan).is_ok()

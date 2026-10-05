@@ -20,7 +20,7 @@
 
 use crate::user_dir::{UserThemes, scan_dir};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -100,7 +100,7 @@ impl ThemeDirWatcher {
 }
 
 fn run(
-    dir: &std::path::Path,
+    dir: &Path,
     debounce: Duration,
     rx: &Receiver<()>,
     mut on_scan: impl FnMut(UserThemes) -> bool,

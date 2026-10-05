@@ -29,11 +29,7 @@ pub(super) fn color_at(
             }
         },
         _ => {
-            report.diagnostics.push(ImportDiagnostic::InvalidValue {
-                theme: theme.to_owned(),
-                key: key.to_owned(),
-                expected: "a colour string like \"#rrggbbaa\"",
-            });
+            expected(report, theme, key, "a colour string like \"#rrggbbaa\"");
             None
         }
     }
