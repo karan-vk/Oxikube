@@ -1,7 +1,7 @@
 //! Opening, deduplicating, closing and reopening items.
 
 use super::*;
-use crate::actions::CloseActiveItem;
+use crate::{actions::CloseActiveItem, pane::SplitDirection};
 
 #[gpui::test]
 fn open_item_creates_a_pane_and_displays_and_focuses_the_item(cx: &mut TestAppContext) {
@@ -183,6 +183,44 @@ fn reopen_closed_item_restores_it_where_it_was(cx: &mut TestAppContext) {
     let nothing =
         vcx.update(|window, cx| ws.update(cx, |ws, cx| ws.reopen_closed_item(window, cx)));
     assert!(nothing.is_none());
+}
+
+#[gpui::test]
+fn reopen_closed_item_appends_to_the_active_pane_when_its_pane_is_gone(cx: &mut TestAppContext) {
+    let (ws, mut vcx) = workspace(cx);
+    open(&ws, &mut vcx, "a");
+    open(&ws, &mut vcx, "c");
+    let b = open(&ws, &mut vcx, "b");
+    let right = vcx
+        .update(|window, cx| {
+            ws.update(cx, |ws, cx| {
+                ws.move_item_to_split(b, SplitDirection::Right, window, cx)
+            })
+        })
+        .expect("b moves to a new pane");
+    vcx.run_until_parked();
+
+    // Closing b removes its pane; the descriptor still names that pane and index 0.
+    vcx.update(|window, cx| ws.update(cx, |ws, cx| ws.close_item(b, window, cx)));
+    vcx.run_until_parked();
+    let closed = vcx.update(|_, cx| ws.read(cx).closed_items().peek().cloned());
+    let closed = closed.expect("b is remembered");
+    assert_eq!(closed.pane, Some(right));
+    assert_eq!(closed.index, Some(0));
+    assert!(vcx.update(|_, cx| ws.read(cx).pane_group(cx).pane(right).is_none()));
+
+    let reopened =
+        vcx.update(|window, cx| ws.update(cx, |ws, cx| ws.reopen_closed_item(window, cx)));
+    vcx.run_until_parked();
+    let reopened = reopened.expect("b reopens");
+    let panes = panes(&ws, &mut vcx);
+    assert_eq!(panes.len(), 1);
+    assert_eq!(
+        titles(&ws, &mut vcx, &panes[0]),
+        ["a", "c", "b"],
+        "the stale index of the removed pane is not applied to the active pane"
+    );
+    assert_eq!(panes[0].active_item(), Some(reopened));
 }
 
 #[gpui::test]

@@ -14,7 +14,8 @@ use crate::{
 pub struct OpenOptions {
     /// The pane to open in; the active pane when `None` or when the pane no longer exists.
     pub pane: Option<PaneId>,
-    /// The tab index in that pane; after the last tab when `None`.
+    /// The tab index in that pane; after the last tab when `None` or when `pane` names a pane
+    /// that no longer exists.
     pub index: Option<usize>,
     /// Focus the item once it is displayed.
     pub focus: bool,
@@ -73,12 +74,14 @@ impl Workspace {
             self.activate_item(existing, options.focus, window, cx);
             return existing;
         }
-        let pane = options
-            .pane
-            .filter(|pane| self.pane_group(cx).pane(*pane).is_some());
+        // An index belongs to its pane: when the requested pane is gone, append to the active one.
+        let (pane, index) = match options.pane {
+            Some(pane) if self.pane_group(cx).pane(pane).is_none() => (None, None),
+            pane => (pane, options.index),
+        };
         self.insert_item(
             item,
-            ItemPlacement::InPane(pane, options.index),
+            ItemPlacement::InPane(pane, index),
             options.focus,
             window,
             cx,
