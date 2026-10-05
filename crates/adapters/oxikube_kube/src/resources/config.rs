@@ -1,5 +1,7 @@
 //! Tuning for [`KubeResources`](super::KubeResources).
 
+use crate::table::TableConfig;
+
 /// Page size of [`KubeResources::list_all`](super::KubeResources::list_all) when the caller
 /// sets no limit. 500 keeps one page of raw JSON well under a few MB for pods while a 2 000
 /// object list still takes only a handful of requests.
@@ -55,9 +57,11 @@ pub struct ResourcesConfig {
     pub get_managed_fields: ManagedFields,
     /// Typed or dynamic decoding. Default `Dynamic`.
     pub access_path: AccessPath,
-    /// How often `list_all` restarts from the first page after the server expires its
-    /// continue token (HTTP 410) before giving up. Default 3.
+    /// How often `list_all` (and a Table feed's list) restarts from the first page after the
+    /// server expires its continue token (HTTP 410) before giving up. Default 3.
     pub max_restarts: u32,
+    /// Table API feed settings (E04-S04).
+    pub table: TableConfig,
 }
 
 impl Default for ResourcesConfig {
@@ -68,6 +72,7 @@ impl Default for ResourcesConfig {
             get_managed_fields: ManagedFields::Keep,
             access_path: AccessPath::Dynamic,
             max_restarts: 3,
+            table: TableConfig::default(),
         }
     }
 }

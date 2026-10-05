@@ -30,7 +30,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{ListOptions, VersionMatch};
 
 /// The client-side deadline for one list request: `timeout_secs`, with 0 meaning none.
-pub(super) fn deadline(options: &ListOptions) -> Option<Duration> {
+pub(crate) fn deadline(options: &ListOptions) -> Option<Duration> {
     options
         .timeout_secs
         .filter(|&s| s > 0)
@@ -38,7 +38,7 @@ pub(super) fn deadline(options: &ListOptions) -> Option<Duration> {
 }
 
 /// Builds the kube parameters for one list request, validating the combination.
-pub(super) fn list_params(options: &ListOptions) -> OxiResult<ListParams> {
+pub(crate) fn list_params(options: &ListOptions) -> OxiResult<ListParams> {
     let nonempty = |s: &Option<String>| s.clone().filter(|v| !v.is_empty());
     let continue_token = nonempty(&options.continue_token);
     let (resource_version, version_match) = if continue_token.is_some() {

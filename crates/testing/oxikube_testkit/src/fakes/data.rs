@@ -396,6 +396,7 @@ mod tests {
             TableBatch {
                 columns: None,
                 rows: DeltaBatch::from_deltas(vec![Delta::Applied(row)]),
+                source: Default::default(),
             },
         ));
         let mut feed =

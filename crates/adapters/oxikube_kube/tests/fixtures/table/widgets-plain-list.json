@@ -1,0 +1,61 @@
+{
+  "apiVersion": "test.oxikube.dev/v1",
+  "items": [
+    {
+      "apiVersion": "test.oxikube.dev/v1",
+      "kind": "Widget",
+      "metadata": {
+        "creationTimestamp": "2026-10-03T23:25:40Z",
+        "generation": 1,
+        "name": "large",
+        "namespace": "oxikube-fixtures",
+        "resourceVersion": "156691",
+        "uid": "6e53a984-64c9-47f1-b71a-81c57199fcf6"
+      },
+      "spec": {
+        "owner": "team-a",
+        "replicas": 10,
+        "size": "large"
+      }
+    },
+    {
+      "apiVersion": "test.oxikube.dev/v1",
+      "kind": "Widget",
+      "metadata": {
+        "creationTimestamp": "2026-10-03T23:25:40Z",
+        "generation": 1,
+        "name": "medium",
+        "namespace": "oxikube-fixtures",
+        "resourceVersion": "730",
+        "uid": "24d6b754-2ad4-4f4d-822b-7d36548df839"
+      },
+      "spec": {
+        "owner": "team-b",
+        "replicas": 3,
+        "size": "medium"
+      }
+    },
+    {
+      "apiVersion": "test.oxikube.dev/v1",
+      "kind": "Widget",
+      "metadata": {
+        "creationTimestamp": "2026-10-03T23:25:40Z",
+        "generation": 1,
+        "name": "small",
+        "namespace": "oxikube-fixtures",
+        "resourceVersion": "725",
+        "uid": "8bea2474-6855-4a26-a398-d41ffba1f60b"
+      },
+      "spec": {
+        "owner": "team-a",
+        "replicas": 1,
+        "size": "small"
+      }
+    }
+  ],
+  "kind": "WidgetList",
+  "metadata": {
+    "continue": "",
+    "resourceVersion": "157561"
+  }
+}

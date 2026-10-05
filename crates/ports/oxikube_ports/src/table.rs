@@ -71,6 +71,31 @@ impl TableOptions {
     }
 }
 
+/// Where a [`Table`]'s columns and cells came from.
+///
+/// This is the feed capability flag of the JSON fallback (ADR 0006): a `ColumnProvider`
+/// reads it to decide whether to trust the columns (server Table API) or substitute its own
+/// generic ones.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum TableSource {
+    /// The server's Table API answered: kubectl-identical columns, including CRD
+    /// `additionalPrinterColumns`.
+    #[default]
+    Server,
+    /// The server ignored the Table `Accept` header (some aggregated APIs) and sent plain
+    /// objects. The adapter synthesised the server's generic columns (`Name`, `Created At`)
+    /// so the table still renders; a `ColumnProvider` should prefer its own generic set
+    /// (NAME / NAMESPACE / AGE).
+    Objects,
+}
+
+impl TableSource {
+    /// Whether the columns are the server's own (`Server`).
+    pub fn is_server(self) -> bool {
+        self == TableSource::Server
+    }
+}
+
 /// One column definition (`TableColumnDefinition`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct TableColumn {
@@ -116,6 +141,9 @@ pub struct Table {
     pub continue_token: Option<String>,
     /// The collection's resource version.
     pub resource_version: Option<String>,
+    /// Whether the server's Table API produced the columns or the adapter fell back to
+    /// plain objects.
+    pub source: TableSource,
 }
 
 /// One item of a [`TableFeed`]: row deltas plus the columns when they change.
@@ -126,6 +154,9 @@ pub struct TableBatch {
     pub columns: Option<Arc<[TableColumn]>>,
     /// Row deltas.
     pub rows: DeltaBatch<TableRow>,
+    /// Where the feed's columns come from. Always set to the feed's current source; it can
+    /// only change together with `columns` (and a restart).
+    pub source: TableSource,
 }
 
 /// A live Table feed: a pinned, boxed, `Send` stream of [`TableBatch`]es.
@@ -136,7 +167,8 @@ pub type TableFeed = Pin<Box<dyn Stream<Item = OxiResult<TableBatch>> + Send>>;
 ///
 /// When the server ignores the Table `Accept` header (some aggregated APIs),
 /// the adapter falls back to plain JSON and still returns a [`Table`]; how it
-/// derives columns then is adapter behaviour (E04-S04).
+/// derives columns then is adapter behaviour (E04-S04), and it marks the result
+/// [`TableSource::Objects`] (ADR 0006).
 ///
 /// # Effects
 ///
@@ -228,13 +260,17 @@ mod tests {
             rows: vec![row.clone()],
             continue_token: None,
             resource_version: Some("1".into()),
+            source: TableSource::Server,
         };
         assert_eq!(table.rows[0].cells.len(), table.columns.len());
 
         let batch = TableBatch {
             columns: Some(columns),
             rows: DeltaBatch::from_deltas(vec![Delta::Restarted(vec![row])]),
+            source: TableSource::Objects,
         };
         assert!(batch.rows.contains_restart());
+        assert!(!batch.source.is_server());
+        assert_eq!(TableSource::default(), TableSource::Server);
     }
 }

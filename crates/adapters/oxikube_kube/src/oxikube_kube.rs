@@ -20,6 +20,7 @@
 //! | [`mutate`] | E04-S05 | [`KubeResources`] as a `ResourceWriter`: create, replace, patch (merge, strategic, JSON, server-side apply), dry-run, delete, delete-collection, with conflict and validation detail in the errors |
 //! | [`remote`] | E04-S10 | [`KubePortForward`]: `PortForwardPort` over `Api<Pod>::portforward`, local-listener forwards with service-to-pod resolution and a target-gone hook |
 //! | [`sources`] | E03-S02 | `ClusterSourcePort` over kubeconfig files, directories and pasted text, with hot reload |
+//! | [`table`] | E04-S04 | `TableFeedPort` on [`KubeResources`]: hand-rolled server Table API list + watch feed with refresh, diffing and plain-JSON fallback |
 
 pub mod auth;
 pub mod discovery;
@@ -32,6 +33,7 @@ pub mod pool;
 pub mod remote;
 pub mod resources;
 pub mod sources;
+pub mod table;
 
 #[cfg(test)]
 mod fake_api;
@@ -50,3 +52,4 @@ pub use remote::portforward::{ForwardHandle, KubePortForward};
 pub use resources::{
     AccessPath, KubeResources, ListExpired, ManagedFields, ResourcesConfig, is_list_expired,
 };
+pub use table::TableConfig;

@@ -133,7 +133,8 @@ pub use resource::{
 pub use secrets::{SecretKey, SecretStorePort};
 pub use state::{AuditQuery, StateKey, StatePort, StatePortExt, StateTable};
 pub use table::{
-    IncludeObject, Table, TableBatch, TableColumn, TableFeed, TableFeedPort, TableOptions, TableRow,
+    IncludeObject, Table, TableBatch, TableColumn, TableFeed, TableFeedPort, TableOptions,
+    TableRow, TableSource,
 };
 pub use tool::{ToolAnnotations, ToolContext, ToolDef, ToolName, ToolOutput, ToolPort};
 pub use updater::{DownloadedUpdate, UpdateChannel, UpdateInfo, UpdaterPort};

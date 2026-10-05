@@ -144,13 +144,17 @@ expose a free function or an extension trait, for example
 ## Data flow for a resource table
 
 ```
-kube API ──watch──▶ oxikube_kube::feed (reflector / metadata / Table) ──Delta batches──▶
+kube API ──watch──▶ oxikube_kube::{feed (reflector / metadata), table (Table API)} ──Delta batches──▶
 oxikube_app::ResourceStore (cache, sort, filter, index) ──subscribe──▶
 oxikube_resources_ui::ResourceTable (uniform_list rows via oxikube_ui::Table) ──▶ GPUI
 ```
 
 Core kinds use typed/metadata reflectors plus our own column definitions; CRDs and unknown kinds
 use the server-side Table API (kubectl-identical columns incl. `additionalPrinterColumns`).
+The Table feed (`oxikube_kube::table`) watches where the server honours the Table `Accept`
+header and re-lists on a refresh interval otherwise; a server that ignores the header gets a
+plain-JSON fallback flagged `TableSource::Objects`, so the `ColumnProvider` substitutes its
+generic NAME / NAMESPACE / AGE columns.
 
 ## Integrations
 
