@@ -61,4 +61,4 @@ mod writer;
 
 pub(crate) use error::write_error;
 pub use params::DEFAULT_FIELD_MANAGER;
-pub(crate) use params::{patch_request, post_params};
+pub(crate) use params::{delete_params, patch_request, post_params};

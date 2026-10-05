@@ -70,7 +70,7 @@ pub(crate) fn patch_request<'a>(
 }
 
 /// `DeleteParams` for delete and delete-collection.
-pub(super) fn delete_params(options: &DeleteOptions) -> DeleteParams {
+pub(crate) fn delete_params(options: &DeleteOptions) -> DeleteParams {
     DeleteParams {
         dry_run: options.dry_run,
         grace_period_seconds: options.grace_period_secs,
