@@ -11,7 +11,7 @@ use oxikube_ports::{
 };
 use serde_json::Value;
 
-use crate::resources::{KubeResources, pending};
+use crate::resources::KubeResources;
 
 #[async_trait]
 impl ResourceWriter for KubeResources {
@@ -72,52 +72,56 @@ impl ResourceWriter for KubeResources {
 
     async fn scale(
         &self,
-        _kind: &Gvk,
-        _namespace: Option<&str>,
-        _name: &str,
-        _replicas: i32,
-        _options: &WriteOptions,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+        replicas: i32,
+        options: &WriteOptions,
     ) -> OxiResult<Scale> {
-        Err(pending("scale", "E04-S06"))
+        self.write_scale(kind, namespace, name, replicas, options)
+            .await
     }
 
-    async fn evict(&self, _namespace: &str, _pod: &str, _options: &DeleteOptions) -> OxiResult<()> {
-        Err(pending("evict", "E04-S06"))
+    async fn evict(&self, namespace: &str, pod: &str, options: &DeleteOptions) -> OxiResult<()> {
+        self.evict_pod(namespace, pod, options).await
     }
 
     async fn create_subresource(
         &self,
-        _kind: &Gvk,
-        _namespace: Option<&str>,
-        _name: &str,
-        _subresource: &Subresource,
-        _body: &Value,
-        _options: &WriteOptions,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+        subresource: &Subresource,
+        body: &Value,
+        options: &WriteOptions,
     ) -> OxiResult<Value> {
-        Err(pending("create_subresource", "E04-S06"))
+        self.post_subresource(kind, namespace, name, subresource, body, options)
+            .await
     }
 
     async fn patch_subresource(
         &self,
-        _kind: &Gvk,
-        _namespace: Option<&str>,
-        _name: &str,
-        _subresource: &Subresource,
-        _patch: &Patch,
-        _options: &WriteOptions,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+        subresource: &Subresource,
+        patch: &Patch,
+        options: &WriteOptions,
     ) -> OxiResult<Value> {
-        Err(pending("patch_subresource", "E04-S06"))
+        self.patch_subresource_of(kind, namespace, name, subresource, patch, options)
+            .await
     }
 
     async fn replace_subresource(
         &self,
-        _kind: &Gvk,
-        _namespace: Option<&str>,
-        _name: &str,
-        _subresource: &Subresource,
-        _body: &Value,
-        _options: &WriteOptions,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+        subresource: &Subresource,
+        body: &Value,
+        options: &WriteOptions,
     ) -> OxiResult<Value> {
-        Err(pending("replace_subresource", "E04-S06"))
+        self.replace_subresource_of(kind, namespace, name, subresource, body, options)
+            .await
     }
 }

@@ -35,9 +35,9 @@
 //!
 //! # Elsewhere, or not here yet
 //!
-//! `watch` is the reflector feed in [`crate::feed`] (E04-S02). `get_scale` and
-//! `get_subresource` (E04-S06) answer `Unsupported` until their stories land; the writer half
-//! of `ResourcePort` is E04-S05.
+//! `watch` is the reflector feed in [`crate::feed`] (E04-S02). The writer half of
+//! `ResourcePort` is E04-S05 (`mutate`); `get_scale` and `get_subresource` are E04-S06
+//! (`subresource`).
 
 mod backend;
 mod config;
@@ -66,7 +66,6 @@ pub use config::{AccessPath, DEFAULT_PAGE_SIZE, ManagedFields, ResourcesConfig};
 pub use error::{ListExpired, is_list_expired};
 pub(crate) use error::{bad_object, list_error};
 pub(crate) use params::{deadline, list_params};
-pub(crate) use reader::pending;
 
 /// Resource reads for one cluster. Cheap to clone; clones share the client and discovery.
 #[derive(Clone)]
@@ -76,6 +75,7 @@ pub struct KubeResources {
     pub(crate) config: ResourcesConfig,
     /// Reflector feed settings (E04-S02, `crate::feed`).
     pub(crate) feeds: FeedSettings,
+    unretried: Option<Client>,
 }
 
 impl KubeResources {
@@ -91,10 +91,30 @@ impl KubeResources {
             discovery,
             config,
             feeds: FeedSettings::default(),
+            unretried: None,
         }
     }
 
-    /// The client every request goes through (sibling modules such as `table` build their own).
+    /// Sends evictions through `client`, which must be built without automatic retries
+    /// (`PoolConfig::retry = RetryMode::Disabled`).
+    ///
+    /// A PodDisruptionBudget refuses an eviction with HTTP 429, and the pool's default client
+    /// retries 429 with backoff and the server's `Retry-After` (up to 15 times), so a refused
+    /// eviction would take minutes to surface. A drain needs the refusal at once to decide
+    /// whether to wait; without this client `evict` still works but shares that delay.
+    #[must_use]
+    pub fn with_unretried_client(mut self, client: Client) -> Self {
+        self.unretried = Some(client);
+        self
+    }
+
+    /// The client for requests whose 429 is an answer, not an overload: the one from
+    /// [`with_unretried_client`](Self::with_unretried_client), else the shared client.
+    pub(crate) fn unretried_client(&self) -> &Client {
+        self.unretried.as_ref().unwrap_or(&self.client)
+    }
+
+    /// The client every request goes through.
     pub(crate) fn client(&self) -> &Client {
         &self.client
     }

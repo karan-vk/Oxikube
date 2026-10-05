@@ -8,7 +8,7 @@
 //!
 //! | Piece | Where |
 //! |---|---|
-//! | `ResourceWriter` impl; scale, evict and the subresource methods answer `Unsupported` until E04-S06 | `writer` |
+//! | `ResourceWriter` impl; scale, evict and the subresource methods delegate to [`subresource`](crate::subresource) (E04-S06) | `writer` |
 //! | create, replace, patch, delete, delete-collection requests | `ops` |
 //! | port options to `PostParams` / `PatchParams` / `DeleteParams`, patch content types | `params` |
 //! | error mapping with field managers and field paths | `error` |
@@ -59,4 +59,6 @@ mod params;
 mod tests;
 mod writer;
 
+pub(crate) use error::write_error;
 pub use params::DEFAULT_FIELD_MANAGER;
+pub(crate) use params::{delete_params, patch_request, post_params};

@@ -192,17 +192,3 @@ async fn list_metadata_returns_object_meta() {
     assert_eq!(page.continue_token.as_deref(), Some("c"));
     assert_eq!(page.resource_version.as_deref(), Some("9"));
 }
-
-#[tokio::test]
-async fn deferred_methods_are_unsupported() {
-    let api = server();
-    let r = resources(&api);
-    // `watch` is the reflector feed now (E04-S02, `feed::tests`).
-    assert_eq!(
-        r.get_scale(&pod_gvk(), Some("default"), "a")
-            .await
-            .unwrap_err()
-            .kind(),
-        ErrorKind::Unsupported
-    );
-}

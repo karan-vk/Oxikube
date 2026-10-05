@@ -134,6 +134,9 @@ paths a 422 rejected). An adapter attaches one as the error's source and callers
 `OxiError::conflict_details()` / `validation_details()`; `oxikube_kube::mutate` (E04-S05) does
 this for every write. In the same module a 500 or 502 is marked retryable (the server failed
 the request) while keeping the `Internal` kind.
+`oxikube_kube::subresource` (E04-S06) keeps `Network` and `retryable` for an eviction that a
+PodDisruptionBudget refuses (HTTP 429) and attaches an `EvictionBlocked` marker with the budget's
+explanation (`eviction_blocked(&err)`), which a drain waits on; no new `ErrorKind`.
 
 `From` helpers are reserved for adapters, but by the orphan rule an adapter crate cannot
 implement `From<kube::Error> for OxiError` (both types are foreign to it). Adapters instead

@@ -24,7 +24,7 @@ use oxikube_domain::{
 use crate::auth::{classify, redacted_line};
 
 /// Maps a failed write.
-pub(super) fn write_error(err: &kube::Error) -> OxiError {
+pub(crate) fn write_error(err: &kube::Error) -> OxiError {
     let base = classify(err);
     let kube::Error::Api(status) = err else {
         return base;
