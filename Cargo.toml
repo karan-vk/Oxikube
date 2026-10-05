@@ -93,9 +93,12 @@ backon = "1"
 
 # --- serde / formats ---
 serde = { version = "1", features = ["derive", "rc"] }
-serde_json = { version = "1", features = ["preserve_order"] }
+# float_roundtrip: parse floats to the nearest f64, so settings edits and reads stay bit-exact.
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 serde-saphyr = "1"
-serde_json_lenient = "0.2"
+serde_json_lenient = { version = "0.2", features = ["float_roundtrip"] }
+# Field path ("terminal.font_size") in settings type errors.
+serde_path_to_error = "0.1"
 schemars = "1"
 toml = "1"
 json-patch = "4"
@@ -148,6 +151,8 @@ openidconnect = "4"
 alacritty_terminal = "0.26"
 portable-pty = "0.9"
 tree-sitter = "0.27"
+# JSON grammar for comment-preserving settings.json edits (oxikube_settings::json_edit).
+tree-sitter-json = "0.24"
 ropey = "2.0.0-beta.1"
 
 # --- plugins ---

@@ -15,7 +15,19 @@ picker delegate, terminal element, ACP thread model). Each file carries the head
 ```
 
 Entries (file → upstream path @ rev):
-- (none yet)
+- `crates/platform/oxikube_settings/src/json_edit/mod.rs`, `json_edit/format.rs`:
+  `update_value_in_json_text`, `replace_value_in_json_text`, `construct_json_value`,
+  `infer_json_indent_size` and `to_pretty_json` from `crates/settings_json/src/settings_json.rs`
+  @ a84689073d296dfd39987bc7dd478e43ef76d83a. Array-index (`#N`) key paths not vendored; adapted
+  to tree-sitter 0.27.
+- `crates/platform/oxikube_settings/src/json_edit/tests.rs`: the `object_replace`,
+  `object_replace_escapes_new_key`, `object_remove_and_rename_find_an_escaped_key_by_its_own_range`
+  and `test_infer_json_indent_size` tests from the same file @ a84689073d.
+- `crates/platform/oxikube_settings/src/settings.rs`, `store/mod.rs`, `store/value.rs`,
+  `update/mod.rs`: the `Settings` trait shape, the type-erased `SettingValue`/`AnySettingValue`
+  slots, inventory registration and `edits_for_update`, derived from
+  `crates/settings/src/settings_store.rs` @ a84689073d (rewritten for per-crate content types,
+  a cluster layer and change-tracking generations).
 
 ### Zed's Apache-2.0 crates
 Zed's GPUI crates (`gpui`, `gpui_tokio`, ...) are Apache-2.0, not GPL. Ported files keep the

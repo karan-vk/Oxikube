@@ -7,6 +7,7 @@
 //! - `kind-up` / `kind-down`  local kind cluster for integration tests (E01-S09)
 //! - `load-pods`      create N pause pods (+ optional churn) for perf work (E01-S10)
 //! - `perf`           headless perf scenarios, report, baseline check (E01-S14)
+//! - `gen-settings-schema`  write (or `--check`) settings.schema.json (E05-S06)
 #![allow(clippy::print_stdout)]
 
 mod check_gpui_pin;
@@ -14,6 +15,7 @@ mod kind;
 mod lint_deps;
 mod load_pods;
 mod perf;
+mod settings_schema;
 mod setup;
 
 use clap::{Parser, Subcommand};
@@ -47,6 +49,8 @@ enum Cmd {
     LoadPods(load_pods::Args),
     /// Run headless perf scenarios; `--check` gates on docs/perf/baseline.json (+20 %).
     Perf(perf::Args),
+    /// Write settings.schema.json from the registered settings; `--check` fails when stale.
+    GenSettingsSchema(settings_schema::Args),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -58,5 +62,6 @@ fn main() -> anyhow::Result<()> {
         Cmd::KindDown { name } => kind::down(&name),
         Cmd::LoadPods(args) => load_pods::run(&args),
         Cmd::Perf(args) => perf::run(&args),
+        Cmd::GenSettingsSchema(args) => settings_schema::run(&args),
     }
 }
