@@ -64,6 +64,16 @@ impl SubState {
         }
     }
 
+    /// Adopts `columns` and flags them for delivery when they differ; returns whether they did.
+    fn adopt_columns(&mut self, columns: &TableColumns) -> bool {
+        let changed = self.columns.as_ref() != Some(columns);
+        if changed {
+            self.columns = Some(columns.clone());
+            self.columns_dirty = true;
+        }
+        changed
+    }
+
     fn snapshot_next(&mut self) {
         self.pending_snapshot = true;
         self.pending_ops.clear();
@@ -125,9 +135,7 @@ impl SubShared {
     /// A Table feed sent (new) columns.
     pub fn set_columns(&self, columns: &TableColumns) {
         let mut st = self.inner.lock();
-        if st.columns.as_ref() != Some(columns) {
-            st.columns = Some(columns.clone());
-            st.columns_dirty = true;
+        if st.adopt_columns(columns) {
             st.wake();
         }
     }
@@ -146,11 +154,8 @@ impl SubShared {
             .collect();
         st.index.apply(&[], &seed, None);
         st.index.resort();
-        if let Some(columns) = &entry.columns
-            && st.columns.as_ref() != Some(columns)
-        {
-            st.columns = Some(columns.clone());
-            st.columns_dirty = true;
+        if let Some(columns) = &entry.columns {
+            st.adopt_columns(columns);
         }
         st.snapshot_next();
     }
@@ -211,12 +216,12 @@ impl SubShared {
 /// stream never ends on its own. Dropping the subscription releases its feeds: the last
 /// subscriber of a feed starts the store's grace timer, after which the feed is aborted.
 pub struct Subscription {
-    pub(crate) store: Arc<StoreInner>,
-    pub(crate) shared: Arc<SubShared>,
-    pub(crate) id: SubId,
-    pub(crate) query: StoreQuery,
-    pub(crate) feeds: BTreeMap<FeedScope, Arc<FeedEntry>>,
-    pub(crate) kind: FeedKind,
+    store: Arc<StoreInner>,
+    shared: Arc<SubShared>,
+    id: SubId,
+    query: StoreQuery,
+    feeds: BTreeMap<FeedScope, Arc<FeedEntry>>,
+    kind: FeedKind,
 }
 
 impl std::fmt::Debug for Subscription {

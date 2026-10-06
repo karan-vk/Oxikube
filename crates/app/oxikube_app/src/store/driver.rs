@@ -16,6 +16,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use futures::StreamExt;
+use oxikube_domain::OxiError;
 use oxikube_ports::ClockPort;
 
 use super::delta::FeedState;
@@ -52,6 +53,17 @@ impl Backoff {
     }
 }
 
+/// Puts the entry in the state `error` leaves it in; returns whether the feed should reopen
+/// (a terminal error also marks the entry stopped, so a later subscriber restarts it).
+fn record_failure(entry: &FeedEntry, error: &OxiError) -> bool {
+    let retrying = error.is_retryable();
+    entry.set_state(FeedState::from_error(error, retrying));
+    if !retrying {
+        entry.stopped();
+    }
+    retrying
+}
+
 /// Runs one feed until it fails terminally or the entry is gone (or the task is aborted).
 pub(crate) async fn drive(
     entry: Weak<FeedEntry>,
@@ -72,10 +84,7 @@ pub(crate) async fn drive(
                             backoff.reset();
                         }
                         Err(error) => {
-                            let retrying = error.is_retryable();
-                            live.set_state(FeedState::from_error(&error, retrying));
-                            if !retrying {
-                                live.stopped();
+                            if !record_failure(&live, &error) {
                                 return;
                             }
                         }
@@ -88,10 +97,7 @@ pub(crate) async fn drive(
             }
             Err(error) => {
                 let Some(live) = entry.upgrade() else { return };
-                let retrying = error.is_retryable();
-                live.set_state(FeedState::from_error(&error, retrying));
-                if !retrying {
-                    live.stopped();
+                if !record_failure(&live, &error) {
                     return;
                 }
             }

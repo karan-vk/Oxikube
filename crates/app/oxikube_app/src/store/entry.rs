@@ -71,13 +71,13 @@ impl FeedEntry {
     /// Applies one feed batch and hands the net change to every subscriber.
     pub fn apply(&self, batch: FeedBatch) {
         let mut st = self.state.lock();
-        if let Some(columns) = batch.columns.clone()
-            && st.columns.as_ref() != Some(&columns)
+        if let Some(columns) = &batch.columns
+            && st.columns.as_ref() != Some(columns)
         {
             for (_, sub) in &st.subscribers {
-                sub.set_columns(&columns);
+                sub.set_columns(columns);
             }
-            st.columns = Some(columns);
+            st.columns = Some(columns.clone());
         }
         let change = st.cache.apply(batch);
         let ready = change.restarted || matches!(st.feed_state, FeedState::Retrying { .. });

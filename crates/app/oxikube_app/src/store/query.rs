@@ -60,18 +60,13 @@ impl StoreQuery {
 
     /// The feeds this query reads, one per [`FeedScope`], in order.
     pub(crate) fn parts(&self) -> Vec<FeedScope> {
-        parts_of(&self.scope)
-    }
-}
-
-/// The [`FeedScope`]s a [`WatchScope`] is served by.
-pub(crate) fn parts_of(scope: &WatchScope) -> Vec<FeedScope> {
-    match scope {
-        WatchScope::Cluster => vec![FeedScope::Cluster],
-        WatchScope::Namespaces(names) => names
-            .iter()
-            .map(|n| FeedScope::Namespace(Arc::from(n.as_str())))
-            .collect(),
+        match &self.scope {
+            WatchScope::Cluster => vec![FeedScope::Cluster],
+            WatchScope::Namespaces(names) => names
+                .iter()
+                .map(|n| FeedScope::Namespace(Arc::from(n.as_str())))
+                .collect(),
+        }
     }
 }
 
@@ -330,6 +325,9 @@ mod tests {
                 FeedScope::Namespace("b".into())
             ]
         );
-        assert_eq!(parts_of(&WatchScope::Cluster), vec![FeedScope::Cluster]);
+        assert_eq!(
+            StoreQuery::new(Gvk::new("", "v1", "Pod"), WatchScope::Cluster).parts(),
+            vec![FeedScope::Cluster]
+        );
     }
 }

@@ -41,10 +41,10 @@ impl FeedState {
     /// The state an error leaves a feed in; `retrying` says whether the feed carries on.
     pub(crate) fn from_error(error: &OxiError, retrying: bool) -> Self {
         let message = error.message().to_owned();
-        match error.kind() {
-            ErrorKind::Forbidden | ErrorKind::Auth if !retrying => FeedState::Forbidden { message },
-            _ if retrying => FeedState::Retrying { message },
-            kind => FeedState::Failed { kind, message },
+        match (retrying, error.kind()) {
+            (true, _) => FeedState::Retrying { message },
+            (false, ErrorKind::Forbidden | ErrorKind::Auth) => FeedState::Forbidden { message },
+            (false, kind) => FeedState::Failed { kind, message },
         }
     }
 

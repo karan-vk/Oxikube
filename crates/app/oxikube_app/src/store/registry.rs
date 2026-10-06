@@ -13,7 +13,6 @@ use oxikube_ports::ClusterPrefs;
 use parking_lot::Mutex;
 
 use super::config::{StoreOptions, StoreRuntime};
-use super::feed::StorePorts;
 use super::service::ResourceStore;
 use crate::session::ClusterSession;
 
@@ -63,12 +62,8 @@ impl ResourceStores {
         {
             return Some(store.clone());
         }
-        let ports = StorePorts {
-            resources,
-            tables: session.tables()?,
-        };
         let options = (self.options)(session.id(), session.prefs());
-        let store = ResourceStore::new(session.id().clone(), ports, self.runtime.clone(), options);
+        let store = ResourceStore::for_session(session, self.runtime.clone(), options)?;
         stores.insert(session.id().clone(), store.clone());
         Some(store)
     }

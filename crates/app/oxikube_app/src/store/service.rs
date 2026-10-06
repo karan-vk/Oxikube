@@ -2,8 +2,8 @@
 //! ref-counted subscriptions, grace-period teardown and the budget hook.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Weak};
 
 use jiff::Timestamp;
 use oxikube_domain::ErrorKind;
@@ -119,6 +119,9 @@ impl ResourceStore {
     }
 }
 
+/// The driver and grace-timer guards of a removed entry; dropping them aborts the tasks.
+type Retired = (Option<TaskGuard>, Option<TaskGuard>);
+
 /// The shared state behind [`ResourceStore`] and its subscriptions.
 pub(crate) struct StoreInner {
     cluster: ClusterId,
@@ -205,7 +208,7 @@ impl StoreInner {
         &self,
         key: &FeedKey,
         entries: &mut HashMap<FeedKey, Arc<FeedEntry>>,
-        evicted: &mut Vec<(Option<TaskGuard>, Option<TaskGuard>)>,
+        evicted: &mut Vec<Retired>,
     ) -> Arc<FeedEntry> {
         let plan = self.plan(&key.gvk);
         let mut request = FeedRequest {
@@ -244,10 +247,7 @@ impl StoreInner {
     }
 
     /// Removes the idle entry that has been idle longest; returns its guards to drop.
-    fn evict_oldest_idle(
-        &self,
-        entries: &mut HashMap<FeedKey, Arc<FeedEntry>>,
-    ) -> Option<(Option<TaskGuard>, Option<TaskGuard>)> {
+    fn evict_oldest_idle(&self, entries: &mut HashMap<FeedKey, Arc<FeedEntry>>) -> Option<Retired> {
         let oldest = entries
             .values()
             .filter_map(|e| {
@@ -262,7 +262,7 @@ impl StoreInner {
     }
 
     /// Releases the budget slot and takes the entry's task guards (dropping them aborts).
-    fn retire(&self, entry: &FeedEntry) -> (Option<TaskGuard>, Option<TaskGuard>) {
+    fn retire(&self, entry: &FeedEntry) -> Retired {
         let mut st = entry.state.lock();
         st.running = false;
         if entry.admitted {
@@ -291,7 +291,9 @@ impl StoreInner {
                 let deadline = now.checked_add(grace).unwrap_or(Timestamp::MAX);
                 st.grace = Some(spawn_guarded(&self.runtime.spawner, async move {
                     clock.sleep_until(deadline).await;
-                    reap(&store, &key, generation);
+                    if let Some(store) = store.upgrade() {
+                        store.reap(&key, generation);
+                    }
                 }));
                 return;
             }
@@ -317,11 +319,5 @@ impl StoreInner {
         drop(entries);
         tracing::debug!(feed = %key, "resource store feed stopped");
         drop(guards);
-    }
-}
-
-fn reap(store: &Weak<StoreInner>, key: &FeedKey, generation: u64) {
-    if let Some(store) = store.upgrade() {
-        store.reap(key, generation);
     }
 }
