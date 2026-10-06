@@ -11,6 +11,7 @@
 //! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
 //! | [`quantity`], [`age`] | [`Quantity`] parsing/formatting and [`Age`] formatting |
 //! | [`session`] | the cluster session state machine, `NamespaceSelection`, `WatchScope` |
+//! | [`colour`] | [`ClusterColour`], a cluster's `#rrggbb` accent colour |
 //! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
@@ -33,6 +34,7 @@ pub mod age;
 pub mod agent;
 pub mod audit;
 mod bounds;
+pub mod colour;
 pub mod command;
 pub mod error;
 pub mod error_details;
@@ -50,6 +52,7 @@ pub mod session;
 pub mod view;
 
 pub use age::{Age, AgeStyle};
+pub use colour::{ClusterColour, InvalidColour};
 pub use command::{
     Capabilities, Capability, Command, CommandId, CommandMeta, CommandScope, Propagation,
 };

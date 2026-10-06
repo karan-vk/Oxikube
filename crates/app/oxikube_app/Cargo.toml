@@ -12,6 +12,19 @@ path = "src/oxikube_app.rs"
 doctest = false
 
 [dependencies]
+futures.workspace = true
+indexmap.workspace = true
+oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+parking_lot.workspace = true
+# `tokio::sync::broadcast` only (the session update stream); runtime-agnostic, no task is spawned.
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+oxikube_testkit.workspace = true
+proptest.workspace = true
 
 [features]
 default = []

@@ -7,11 +7,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use oxikube_ports::{
-    AgentClient, AgentPort, ClockPort, CloudDiscoveryPort, ClusterSourcePort, ContextProviderPort,
-    CrashReporterPort, DescribePort, DiscoveryPort, ExecPort, FsPort, HelmPort, IntegrationPort,
-    LogPort, MetricsPort, NotifierPort, PortForwardPort, PromqlPort, ResourcePort, ResourceReader,
-    ResourceWriter, SecretStorePort, StatePort, TableFeedPort, ToolDef, ToolName, ToolPort,
-    UpdaterPort,
+    AccessReviewPort, AgentClient, AgentPort, ClockPort, CloudDiscoveryPort, ClusterConnectorPort,
+    ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort, DiscoveryPort,
+    ExecPort, FsPort, HelmPort, IntegrationPort, LogPort, MetricsPort, NotifierPort,
+    PortForwardPort, PromqlPort, ResourcePort, ResourceReader, ResourceWriter, SecretStorePort,
+    StatePort, TableFeedPort, ToolDef, ToolName, ToolPort, UpdaterPort,
 };
 use oxikube_testkit::*;
 
@@ -42,10 +42,18 @@ const FAKES: &[(&str, &str)] = &[
     ("ContextProviderPort", "FakeContextProviderPort"),
     ("AgentPort", "FakeAgentPort"),
     ("AgentClient", "FakeAgentClient"),
+    ("ClusterConnectorPort", "FakeClusterConnectorPort"),
+    ("AccessReviewPort", "FakeAccessReviewPort"),
 ];
 
-/// Traits in `oxikube_ports` that are not ports: blanket combinations and extensions.
-const NOT_PORTS: &[&str] = &["ResourcePort", "StatePortExt", "DuplexStream"];
+/// Traits in `oxikube_ports` that are not ports: blanket combinations, extensions, and
+/// callbacks the app implements for adapters (`HealthReporter`).
+const NOT_PORTS: &[&str] = &[
+    "ResourcePort",
+    "StatePortExt",
+    "DuplexStream",
+    "HealthReporter",
+];
 
 #[test]
 fn fakes_are_port_trait_objects() {
@@ -81,6 +89,8 @@ fn fakes_are_port_trait_objects() {
     let _: Arc<dyn ContextProviderPort> = Arc::new(FakeContextProviderPort::new("x"));
     let _: Arc<dyn AgentPort> = Arc::new(FakeAgentPort::new());
     let _: Arc<dyn AgentClient> = Arc::new(FakeAgentClient::new());
+    let _: Arc<dyn ClusterConnectorPort> = Arc::new(FakeClusterConnectorPort::new());
+    let _: Arc<dyn AccessReviewPort> = Arc::new(FakeAccessReviewPort::new());
 }
 
 /// Every `pub trait` declared in `oxikube_ports/src` is either a port with a listed fake
