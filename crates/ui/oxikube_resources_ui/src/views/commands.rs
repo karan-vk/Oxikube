@@ -2,9 +2,10 @@
 //! `resource::RetryFeed` (E07-S10) and `resource::SelectAll`.
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, select
-//! rows, restart a feed (a read) or write the user's clipboard. Each is declared in `oxikube_domain::command`, so it has
-//! an MCP tool stub, and [`register_commands`] installs handlers that push a [`ViewRequest`]
-//! into the window's [`ResourceCommandSink`]; [`ResourceViews`] applies it on the UI thread.
+//! rows, restart a feed (a read) or write the user's clipboard. Each is declared in
+//! `oxikube_domain::command`, so it has an MCP tool stub, and [`register_commands`] installs
+//! handlers that push a [`ViewRequest`] into the window's [`ResourceCommandSink`];
+//! [`ResourceViews`] applies it on the UI thread.
 //!
 //! `resource::OpenList` is [`navigate`](crate::navigate)'s (E07-S11): its handler hands the
 //! request to the window, which asks the registered kind views; [`ResourceViews`] is one of them

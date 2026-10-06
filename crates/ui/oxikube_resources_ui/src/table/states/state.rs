@@ -25,6 +25,18 @@ pub enum Stale {
     },
 }
 
+impl Stale {
+    /// Whether a "Retry" helps: the feed is failing or has stopped, not merely refreshing.
+    pub fn can_retry(&self) -> bool {
+        !matches!(self, Stale::Refreshing)
+    }
+
+    /// Whether the feed is on its way back (the badge spins).
+    pub fn is_busy(&self) -> bool {
+        matches!(self, Stale::Refreshing | Stale::Reconnecting { .. })
+    }
+}
+
 /// What a resource table shows. Four distinct "no rows" states, so a blank table is never
 /// ambiguous (k9s #4121), plus the rows themselves.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,41 +88,17 @@ impl TableState {
     /// [`FilteredEmpty`](Self::FilteredEmpty) when a filter is active (it may hide everything)
     /// and [`Empty`](Self::Empty) otherwise.
     pub fn derive(feed: &FeedState, rows: usize, filter: Option<&str>) -> Self {
-        let filter = filter.filter(|f| !f.is_empty());
-        if rows > 0 {
-            return TableState::Rows {
-                stale: match feed {
-                    FeedState::Ready => None,
-                    FeedState::Warming => Some(Stale::Refreshing),
-                    FeedState::Retrying { message } => Some(Stale::Reconnecting {
-                        message: message.clone(),
-                    }),
-                    FeedState::Forbidden { .. } => Some(Stale::Forbidden),
-                    FeedState::Unauthorized { .. } => Some(Stale::Unauthorized),
-                    FeedState::Failed {
-                        kind: ErrorKind::Forbidden,
-                        ..
-                    } => Some(Stale::Forbidden),
-                    FeedState::Failed {
-                        kind: ErrorKind::Auth,
-                        ..
-                    } => Some(Stale::Unauthorized),
-                    FeedState::Failed { message, .. } => Some(Stale::Failed {
-                        message: message.clone(),
-                    }),
-                },
-            };
-        }
-        match feed {
-            FeedState::Warming => TableState::Loading,
-            FeedState::Retrying { message } => TableState::Reconnecting {
-                message: message.clone(),
-            },
-            FeedState::Ready => match filter {
+        let state = match feed {
+            FeedState::Ready if rows > 0 => return TableState::Rows { stale: None },
+            FeedState::Ready => match filter.filter(|f| !f.is_empty()) {
                 Some(filter) => TableState::FilteredEmpty {
                     filter: filter.to_owned(),
                 },
                 None => TableState::Empty,
+            },
+            FeedState::Warming => TableState::Loading,
+            FeedState::Retrying { message } => TableState::Reconnecting {
+                message: message.clone(),
             },
             FeedState::Forbidden { message } => TableState::Forbidden {
                 message: message.clone(),
@@ -135,6 +123,22 @@ impl TableState {
                 kind: *kind,
                 message: message.clone(),
             },
+        };
+        if rows == 0 {
+            return state;
+        }
+        // Rows win: the same cause, shown as a badge over the rows instead of a replacement.
+        TableState::Rows {
+            stale: match state {
+                TableState::Loading => Some(Stale::Refreshing),
+                TableState::Reconnecting { message } => Some(Stale::Reconnecting { message }),
+                TableState::Forbidden { .. } => Some(Stale::Forbidden),
+                TableState::Unauthorized { .. } => Some(Stale::Unauthorized),
+                TableState::Failed { message, .. } => Some(Stale::Failed { message }),
+                TableState::Empty | TableState::FilteredEmpty { .. } | TableState::Rows { .. } => {
+                    None
+                }
+            },
         }
     }
 
@@ -146,15 +150,7 @@ impl TableState {
             | TableState::Forbidden { .. }
             | TableState::Unauthorized { .. }
             | TableState::Failed { .. } => true,
-            TableState::Rows { stale } => matches!(
-                stale,
-                Some(
-                    Stale::Reconnecting { .. }
-                        | Stale::Forbidden
-                        | Stale::Unauthorized
-                        | Stale::Failed { .. }
-                )
-            ),
+            TableState::Rows { stale } => stale.as_ref().is_some_and(Stale::can_retry),
             TableState::Loading | TableState::Empty | TableState::FilteredEmpty { .. } => false,
         }
     }
@@ -169,13 +165,10 @@ impl TableState {
 
     /// Whether the state wants the animated spinner (loading, reconnecting, refreshing).
     pub fn is_busy(&self) -> bool {
-        matches!(
-            self,
-            TableState::Loading
-                | TableState::Reconnecting { .. }
-                | TableState::Rows {
-                    stale: Some(Stale::Refreshing | Stale::Reconnecting { .. })
-                }
-        )
+        match self {
+            TableState::Loading | TableState::Reconnecting { .. } => true,
+            TableState::Rows { stale } => stale.as_ref().is_some_and(Stale::is_busy),
+            _ => false,
+        }
     }
 }

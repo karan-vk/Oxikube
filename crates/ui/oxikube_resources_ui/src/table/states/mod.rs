@@ -37,7 +37,8 @@ mod state;
 mod view;
 mod warnings;
 
-pub use copy::{StateCopy, StateLabels, copy, scope_label, short, stale_label, stale_tip};
+pub(super) use copy::scope_label;
+pub use copy::{StateCopy, StateLabels, copy};
 pub use state::{Stale, TableState};
 pub(super) use view::{stale_badge, state_view};
 pub(super) use warnings::poll_warnings;

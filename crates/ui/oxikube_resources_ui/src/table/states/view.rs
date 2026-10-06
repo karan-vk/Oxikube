@@ -65,25 +65,10 @@ pub fn state_view(
                 .child(SharedString::from(words.title.clone())),
         );
     if let Some(hint) = &words.hint {
-        column = column.child(
-            div()
-                .max_w(u(px(520.)))
-                .text_center()
-                .text_size(u(px(12.)))
-                .text_color(colors.text_muted)
-                .child(SharedString::from(hint.clone())),
-        );
+        column = column.child(muted_line("resource-table-state-hint", hint, cx));
     }
     if let Some(summary) = &words.summary {
-        column = column.child(
-            div()
-                .debug_selector(|| "resource-table-state-summary".into())
-                .max_w(u(px(520.)))
-                .text_center()
-                .text_size(u(px(12.)))
-                .text_color(colors.text_muted)
-                .child(SharedString::from(summary.clone())),
-        );
+        column = column.child(muted_line("resource-table-state-summary", summary, cx));
     }
     column = column.child(buttons(state, words.detail.is_some(), details_open, view));
     if details_open && let Some(detail) = &words.detail {
@@ -106,16 +91,29 @@ pub fn state_view(
     column.into_any_element()
 }
 
+/// One centred line of muted text (the hint, the failure summary).
+fn muted_line(selector: &'static str, text: &str, cx: &App) -> AnyElement {
+    div()
+        .debug_selector(move || selector.into())
+        .max_w(u(px(520.)))
+        .text_center()
+        .text_size(u(px(12.)))
+        .text_color(cx.colors().text_muted)
+        .child(SharedString::from(text.to_owned()))
+        .into_any_element()
+}
+
 fn icon_colour(state: &TableState, cx: &App) -> gpui::Hsla {
     let colors = cx.colors();
     match state {
-        TableState::Loading | TableState::Empty | TableState::FilteredEmpty { .. } => {
-            colors.text_muted
-        }
-        TableState::Reconnecting { .. } => colors.warning,
-        TableState::Forbidden { .. } | TableState::Unauthorized { .. } => colors.warning,
+        TableState::Reconnecting { .. }
+        | TableState::Forbidden { .. }
+        | TableState::Unauthorized { .. } => colors.warning,
         TableState::Failed { .. } => colors.error,
-        TableState::Rows { .. } => colors.text_muted,
+        TableState::Loading
+        | TableState::Empty
+        | TableState::FilteredEmpty { .. }
+        | TableState::Rows { .. } => colors.text_muted,
     }
 }
 
@@ -240,7 +238,6 @@ pub fn stale_badge(
     cx: &App,
 ) -> AnyElement {
     let colors = cx.colors();
-    let busy = matches!(stale, Stale::Refreshing | Stale::Reconnecting { .. });
     let mut badge = h_flex()
         .id("resource-table-stale")
         .debug_selector(|| "resource-table-stale".into())
@@ -258,7 +255,7 @@ pub fn stale_badge(
             let tip = SharedString::from(stale_tip(stale));
             move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
         })
-        .child(if busy {
+        .child(if stale.is_busy() {
             Spinner::new()
                 .icon(Icon::new(IconName::LoaderCircle))
                 .xsmall()

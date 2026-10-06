@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use oxikube_domain::ErrorKind;
 use oxikube_domain::redact::redact;
+use oxikube_domain::session::WatchScope;
 use oxikube_ui::IconName;
 
 use super::state::{Stale, TableState};
@@ -154,7 +155,7 @@ fn failed_hint(kind: ErrorKind, plural: &str) -> String {
 }
 
 /// The text of the stale badge: "Stale · reconnecting".
-pub fn stale_label(stale: &Stale) -> &'static str {
+pub(super) fn stale_label(stale: &Stale) -> &'static str {
     match stale {
         Stale::Refreshing => "Stale · refreshing",
         Stale::Reconnecting { .. } => "Stale · reconnecting",
@@ -165,7 +166,7 @@ pub fn stale_label(stale: &Stale) -> &'static str {
 }
 
 /// The tooltip of the stale badge: what happened, redacted.
-pub fn stale_tip(stale: &Stale) -> String {
+pub(super) fn stale_tip(stale: &Stale) -> String {
     match stale {
         Stale::Refreshing => "Listing again; these rows are from before.".to_owned(),
         Stale::Reconnecting { message } => {
@@ -190,7 +191,7 @@ pub fn stale_tip(stale: &Stale) -> String {
 }
 
 /// `text` redacted, as one line of at most [`SHORT`] characters.
-pub fn short(text: &str) -> String {
+pub(super) fn short(text: &str) -> String {
     let redacted = redact(text);
     let line = redacted
         .lines()
@@ -212,8 +213,7 @@ fn bound(text: &str, max: usize) -> String {
 }
 
 /// How a scope reads in the copy.
-pub fn scope_label(scope: &oxikube_domain::session::WatchScope, namespaced: bool) -> String {
-    use oxikube_domain::session::WatchScope;
+pub(in crate::table) fn scope_label(scope: &WatchScope, namespaced: bool) -> String {
     if !namespaced {
         return "the cluster".to_owned();
     }

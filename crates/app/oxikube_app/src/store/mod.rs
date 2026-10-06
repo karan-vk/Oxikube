@@ -41,9 +41,9 @@
 //! The first subscriber of an entry asks the [`FeedBudget`], then starts its feed on the
 //! [`Spawner`] (`Warming`). The initial list makes it `Ready`; retryable errors are `Retrying`
 //! (the store reopens a feed that failed to open or ended, with doubling backoff on the
-//! [`ClockPort`](oxikube_ports::ClockPort)); a `403` is `Forbidden`, a `401` (or an expired credential) is `Unauthorized`, and other
-//! terminal errors are `Failed`, retried when a view subscribes again or calls
-//! [`Subscription::retry`] (a feed the budget refused asks it again then,
+//! [`ClockPort`](oxikube_ports::ClockPort)); a `403` is `Forbidden`, a `401` (or an expired
+//! credential) is `Unauthorized`, and other terminal errors are `Failed`, retried when a view
+//! subscribes again or calls [`Subscription::retry`] (a feed the budget refused asks it again then,
 //! even while another view still holds it). When the last subscriber drops, the entry
 //! waits [`StoreConfig::idle_grace`] (a new subscriber in that window reuses it) and is then
 //! removed: dropping its abort-on-drop task guard aborts the feed. The store spawns only on the
