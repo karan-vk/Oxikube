@@ -234,6 +234,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_state_sqlite` — the `StatePort` adapter (ADR 0010): rusqlite (bundled) on a dedicated
   thread, embedded ordered migrations, one `kv` table for the kv store and typed tables, the
   append-only audit log, corrupt-file fallback (`state.db.corrupt-<timestamp>`).
+- `oxikube_terminal` — the terminal stack. Module `backend::local` (E09-S02): `LocalPty`, the user's
+  shell on a `portable-pty` PTY as a `TerminalBackend` (`terminal.shell` / `terminal.shell_args`
+  settings, default `$SHELL` then `/bin/sh`). Three OS threads per session (read into a bounded
+  queue, write, wait for the child) that end with the backend; `kill` signals the whole process
+  group; the exit status carries the code or the signal. A cluster terminal (`ClusterEnv`) gets
+  `KUBECONFIG` (a private `0600` file in a per-process `0700` runtime directory that holds only the
+  selected context, its cluster and its user, paths made absolute; deleted when the shell exits or
+  the backend drops, swept after a crash), `KUBE_CONTEXT` and `OXIKUBE_NAMESPACE`; `PATH` is
+  inherited untouched. The grid, element and view arrive with E09-S04..S07.
 - `oxikube_ui` — the only crate that imports `gpui-component`; exposes tokens and curated
   components to every view.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module

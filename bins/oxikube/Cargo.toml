@@ -44,6 +44,7 @@ oxikube_resources_ui.workspace = true
 oxikube_runtime.workspace = true
 oxikube_settings.workspace = true
 oxikube_state_sqlite.workspace = true
+oxikube_terminal.workspace = true
 oxikube_theme.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true

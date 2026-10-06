@@ -12,6 +12,27 @@ path = "src/oxikube_terminal.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
+bytes.workspace = true
+futures.workspace = true
+gpui.workspace = true
+oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+oxikube_settings.workspace = true
+parking_lot.workspace = true
+portable-pty.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde-saphyr.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

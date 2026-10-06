@@ -120,6 +120,9 @@
         "session": {
           "$ref": "#/$defs/SessionRestoreContent"
         },
+        "terminal": {
+          "$ref": "#/$defs/TerminalContent"
+        },
         "terminal_cwd": {
           "description": "Working directory of terminals opened for the cluster. Unset uses the home directory.",
           "type": [
@@ -535,6 +538,30 @@
       },
       "type": "object"
     },
+    "TerminalContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about terminals: the `terminal` object of `settings.json`.",
+      "properties": {
+        "shell": {
+          "description": "The shell a local terminal runs (a path or a name found on `PATH`). `null` uses the\n`SHELL` environment variable, then `/bin/sh`. Applies to terminals opened afterwards.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shell_args": {
+          "description": "Arguments passed to the shell, e.g. `[\"-l\"]` for a login shell. Empty by default: a\nlogin shell re-reads the profile files and slows opening a terminal, so it is only\nstarted when you ask for it here.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "ThemeMode": {
       "description": "How the `theme` setting picks between a light and a dark theme.",
       "oneOf": [
@@ -742,6 +769,9 @@
     },
     "session": {
       "$ref": "#/$defs/SessionRestoreContent"
+    },
+    "terminal": {
+      "$ref": "#/$defs/TerminalContent"
     },
     "terminal_cwd": {
       "description": "Working directory of terminals opened for the cluster. Unset uses the home directory.",
