@@ -39,6 +39,9 @@ pub(in crate::detail) struct YamlTab {
     pub(in crate::detail) editor: Option<Entity<EditorState>>,
     /// The key of the text the editor holds.
     pub(in crate::detail) pushed: Option<YamlKey>,
+    /// How many times the text was handed to the editor (a re-parse each time).
+    #[cfg(test)]
+    pub(in crate::detail) pushes: usize,
 }
 
 impl DetailView {
@@ -63,30 +66,28 @@ impl DetailView {
             return false;
         }
         let managed_fields = self.yaml.managed_fields;
-        let made = self.complete_resource().and_then(|resource| {
-            let key = YamlKey {
-                version: resource.meta.resource_version.clone(),
-                managed_fields,
-            };
-            if self.yaml.text.as_ref().is_some_and(|t| t.key == key) {
-                return None;
-            }
-            let result = yaml_text(resource, YamlOptions { managed_fields })
-                .map(Arc::<str>::from)
-                .map_err(|error| format!("The object cannot be written as YAML: {error}"));
-            Some(YamlText {
-                key,
-                result,
-                has_managed_fields: has_managed_fields(resource),
-            })
-        });
-        match made {
-            Some(text) => {
-                self.yaml.text = Some(text);
-                true
-            }
-            None => false,
+        let Some(resource) = self.complete_resource() else {
+            // The object is no longer known in full (its re-read failed, or it is gone): the
+            // old text is not the current object, so neither shown nor copied nor saved.
+            return self.yaml.text.take().is_some();
+        };
+        let key = YamlKey {
+            version: resource.meta.resource_version.clone(),
+            managed_fields,
+        };
+        if self.yaml.text.as_ref().is_some_and(|t| t.key == key) {
+            return false;
         }
+        let result = yaml_text(resource, YamlOptions { managed_fields })
+            .map(Arc::<str>::from)
+            .map_err(|error| format!("The object cannot be written as YAML: {error}"));
+        let text = YamlText {
+            key,
+            result,
+            has_managed_fields: has_managed_fields(resource),
+        };
+        self.yaml.text = Some(text);
+        true
     }
 
     /// The YAML the tab shows (what copy and save write), once the object is known in full.

@@ -358,15 +358,69 @@ fn a_100_kb_object_is_made_once_per_version_and_drawn_in_one_frame(cx: &mut Test
         std::sync::Arc::ptr_eq(&first, &again),
         "one text per object version"
     );
-    // Drawing frames does not push the text to the editor again.
+    // Drawing frames does not push the text to the editor again (each push is a re-parse).
     let editor = d.read(&view, |v| v.yaml.editor.clone()).expect("an editor");
-    let revision = |d: &mut Detail| d.f.vcx.update(|_, cx| editor.read(cx).value().len());
-    let before = revision(&mut d);
+    let held =
+        d.f.vcx
+            .update(|_, cx| oxikube_ui::editor::text(&editor, cx));
+    assert_eq!(held.len(), first.len(), "the editor holds the text");
+    let pushes = d.read(&view, |v| v.yaml.pushes);
+    assert_eq!(pushes, 1, "pushed once, when the text was made");
     let started = std::time::Instant::now();
     for _ in 0..10 {
         d.draw();
     }
-    eprintln!("10 frames with a 100 KB YAML tab: {:?}", started.elapsed());
-    assert_eq!(revision(&mut d), before);
-    assert_eq!(before, first.len());
+    let elapsed = started.elapsed();
+    assert_eq!(
+        d.read(&view, |v| v.yaml.pushes),
+        pushes,
+        "a frame must not push the text again"
+    );
+    // A re-parse of 100 KB per frame would take far longer than this (debug build, loaded CI).
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "10 frames with a 100 KB YAML tab took {elapsed:?}"
+    );
+}
+
+#[gpui::test]
+fn a_failed_re_read_does_not_leave_the_old_yaml_to_copy_or_save(cx: &mut TestAppContext) {
+    // A ConfigMap arrives metadata-only, so its YAML depends on the full read.
+    let config_map = Resource::from_json(json!({
+        "apiVersion": "v1", "kind": "ConfigMap",
+        "metadata": {"name": "settings", "namespace": "shop", "resourceVersion": "3"},
+        "data": {"mode": "fast"}
+    }))
+    .unwrap();
+    let mut d = Detail::new(cx, [config_map]);
+    let target = ResourceRef::namespaced(
+        cluster(),
+        Gvk::new("", "v1", "ConfigMap"),
+        "shop",
+        "settings",
+    );
+    let view = d.open(&target);
+    d.click("detail-tab-yaml");
+    d.settle();
+    assert!(
+        d.read(&view, |v| v.yaml().is_some()),
+        "the first read succeeded"
+    );
+
+    // The object is read again (a new version) and the read fails.
+    d.f.ports()
+        .resources
+        .script()
+        .get
+        .push_err(oxikube_domain::OxiError::network("api server unreachable"));
+    d.update(&view, |v, cx| v.fetch_full(cx));
+    assert_eq!(
+        d.read(&view, |v| v.yaml().map(str::to_owned)),
+        None,
+        "the old text is not offered to copy or save"
+    );
+    assert!(
+        d.shown("detail-yaml-error"),
+        "the tab says the object could not be read"
+    );
 }

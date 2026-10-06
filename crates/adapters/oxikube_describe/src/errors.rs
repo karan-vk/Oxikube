@@ -11,7 +11,14 @@ pub(crate) fn classify(message: &str) -> OxiError {
     let message = redact(message.trim()).into_owned();
     let lower = message.to_lowercase();
     let has = |needles: &[&str]| needles.iter().any(|n| lower.contains(n));
-    if has(&["notfound", "not found", "code: 404"]) {
+    // The object is not there: the API server's reason (`NotFound`, `code: 404`) or its message
+    // (`pods "x" not found`). A bare "not found" is not enough: a missing exec credential plugin
+    // (`executable file not found in $PATH`) says that too.
+    let object_not_found = lower.contains("notfound")
+        || lower.contains("code: 404")
+        || lower.contains("\" not found")
+        || lower.contains("server could not find the requested resource");
+    if object_not_found {
         OxiError::not_found(message)
     } else if has(&["forbidden", "code: 403"]) {
         OxiError::forbidden(message)
@@ -65,6 +72,25 @@ mod tests {
             ErrorKind::Network
         );
         assert_eq!(kind("something odd"), ErrorKind::Internal);
+    }
+
+    #[test]
+    fn a_missing_credential_plugin_is_not_a_missing_object() {
+        let kind = |text: &str| classify(text).kind();
+        for message in [
+            r#"Unable to connect to the server: getting credentials: exec: executable gke-gcloud-auth-plugin not found"#,
+            r#"error: exec: "gke-gcloud-auth-plugin": executable file not found in $PATH"#,
+        ] {
+            assert_ne!(kind(message), ErrorKind::NotFound, "{message}");
+        }
+        assert_eq!(
+            kind(r#"Error from server (NotFound): pods "web" not found"#),
+            ErrorKind::NotFound
+        );
+        assert_eq!(
+            kind(r#"Error from server: pods "web" not found"#),
+            ErrorKind::NotFound
+        );
     }
 
     #[test]

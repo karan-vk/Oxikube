@@ -135,6 +135,10 @@ impl DetailView {
         if self.yaml.pushed.as_ref() != Some(&key) {
             editor::set_text(&state, &text, window, cx);
             self.yaml.pushed = Some(key);
+            #[cfg(test)]
+            {
+                self.yaml.pushes += 1;
+            }
         }
         div()
             .debug_selector(|| "detail-yaml-editor".to_owned())
