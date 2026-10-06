@@ -33,11 +33,3 @@ impl Tally {
 fn rate(object: &StoreObject) -> Option<bool> {
     health_of(object.resource()?).map(|h| h.is_healthy())
 }
-
-/// One cache's totals for a part of the cluster.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct CacheTally {
-    pub total: usize,
-    pub rated: usize,
-    pub healthy: usize,
-}

@@ -1,9 +1,11 @@
 //! [`ResourceStore::counts`]: reading counts off the caches without starting a feed.
 
 use oxikube_domain::ErrorKind;
+use oxikube_domain::ids::Gvk;
 use oxikube_domain::session::{NamespaceSelection, WatchScope};
 
-use super::{CacheTally, CountState, CountTarget, KindCount};
+use super::{CountState, CountTarget, KindCount};
+use crate::store::FeedPriority;
 use crate::store::delta::FeedState;
 use crate::store::object::{FeedKey, FeedScope};
 use crate::store::service::ResourceStore;
@@ -23,14 +25,9 @@ impl ResourceStore {
     /// The count of one kind under `selection`.
     pub fn count(&self, target: &CountTarget, selection: &NamespaceSelection) -> CountState {
         let scope = WatchScope::derive(selection, target.scope);
-        let parts = parts_of(&scope);
-        let mut total = CacheTally {
-            total: 0,
-            rated: 0,
-            healthy: 0,
-        };
+        let mut total = KindCount::default();
         let mut worst: Option<FeedState> = None;
-        for part in parts {
+        for part in parts_of(&scope) {
             let Some((state, tally)) = self.read_part(target, &part) else {
                 return CountState::NotWatched;
             };
@@ -52,13 +49,13 @@ impl ResourceStore {
 
     /// Whether counting `gvk` always opens its feed (the kinds the overview and the sidebar
     /// need whatever else is open: the policy's [`FeedPriority::High`](crate::store::FeedPriority)).
-    pub fn counts_eagerly(&self, gvk: &oxikube_domain::ids::Gvk) -> bool {
-        self.plan(gvk).priority == crate::store::FeedPriority::High
+    pub fn counts_eagerly(&self, gvk: &Gvk) -> bool {
+        self.plan(gvk).priority == FeedPriority::High
     }
 
     /// The state and tally of `part` of `target`: from its own feed, or from the cluster-wide
     /// feed of the kind when that is what is open (a table on All namespaces).
-    fn read_part(&self, target: &CountTarget, part: &FeedScope) -> Option<(FeedState, CacheTally)> {
+    fn read_part(&self, target: &CountTarget, part: &FeedScope) -> Option<(FeedState, KindCount)> {
         let own = FeedKey {
             gvk: target.gvk.clone(),
             scope: part.clone(),
@@ -80,7 +77,7 @@ impl ResourceStore {
 }
 
 /// The feed parts a scope reads.
-pub(super) fn parts_of(scope: &WatchScope) -> Vec<FeedScope> {
+fn parts_of(scope: &WatchScope) -> Vec<FeedScope> {
     match scope {
         WatchScope::Cluster => vec![FeedScope::Cluster],
         WatchScope::Namespaces(names) => names
@@ -91,12 +88,7 @@ pub(super) fn parts_of(scope: &WatchScope) -> Vec<FeedScope> {
 }
 
 /// What the worst feed state and the summed tally say about the count.
-fn resolve(state: FeedState, tally: CacheTally) -> CountState {
-    let count = KindCount {
-        total: tally.total,
-        rated: tally.rated,
-        healthy: tally.healthy,
-    };
+fn resolve(state: FeedState, count: KindCount) -> CountState {
     match state {
         FeedState::Forbidden { message } => CountState::NoAccess { message },
         FeedState::Failed {

@@ -165,14 +165,3 @@ pub const CORE_TARGETS: &[CoreTarget] = &[
         true,
     ),
 ];
-
-/// The plurals of the kinds the Workloads overview counts, in tile order.
-pub const WORKLOAD_TARGETS: [(&str, &str); 7] = [
-    ("apps", "deployments"),
-    ("apps", "statefulsets"),
-    ("apps", "daemonsets"),
-    ("apps", "replicasets"),
-    ("batch", "jobs"),
-    ("batch", "cronjobs"),
-    ("", "pods"),
-];

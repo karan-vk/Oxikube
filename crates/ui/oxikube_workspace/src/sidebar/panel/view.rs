@@ -172,10 +172,10 @@ fn count_badge(
     };
     let tokens = cx.tokens();
     let unhealthy = state.count().is_some_and(|c| !c.all_healthy());
-    let colour = match state {
-        _ if unhealthy => tokens.colors.warning,
-        CountState::NoAccess { .. } => tokens.colors.warning,
-        _ => tokens.colors.text_muted,
+    let colour = if unhealthy || state.is_no_access() {
+        tokens.colors.warning
+    } else {
+        tokens.colors.text_muted
     };
     let selector = format!("sidebar-badge-{id}");
     let badge = div()

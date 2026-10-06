@@ -13,7 +13,7 @@
 //!
 //! A metadata-only object ([`Resource::is_partial`]) has no status, so it has no health either.
 
-use super::{CronJobSummary, JobStatus, JobSummary, NodeSummary, PodPhase, PodSummary};
+use super::{CronJobSummary, JobStatus, JobSummary, NodeSummary, PodPhase};
 use super::{WorkloadSummary, str_of, sub};
 use crate::resource::Resource;
 
@@ -65,7 +65,7 @@ pub fn health_of(res: &Resource) -> Option<Health> {
         ("", "Pod") => {
             // Read the phase directly: building the whole summary would walk every container.
             let phase = PodPhase::parse(str_of(sub(&res.json, "status"), "phase"));
-            pod_phase_is_healthy(phase)
+            matches!(phase, PodPhase::Running | PodPhase::Succeeded)
         }
         ("", "Node") => NodeSummary::from_resource(res).ok()?.is_ready(),
         ("batch", "Job") => !matches!(
@@ -79,14 +79,4 @@ pub fn health_of(res: &Resource) -> Option<Health> {
         }
     };
     Some(Health::of(healthy))
-}
-
-/// Whether a pod in `phase` is healthy: `Running` and `Succeeded` are.
-pub const fn pod_phase_is_healthy(phase: PodPhase) -> bool {
-    matches!(phase, PodPhase::Running | PodPhase::Succeeded)
-}
-
-/// The health of a pod summary (for views that already built one).
-pub fn pod_health(pod: &PodSummary) -> Health {
-    Health::of(pod_phase_is_healthy(pod.phase))
 }

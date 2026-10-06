@@ -5,7 +5,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use super::counts::{CacheTally, Tally};
+use super::counts::{KindCount, Tally};
 use super::feed::{FeedBatch, ObjectDelta};
 use super::object::{FeedScope, ObjectKey, StoreObject};
 use super::query::StoreFilter;
@@ -53,13 +53,14 @@ impl ObjectCache {
 
     /// The health tally of the objects whose namespace `scope` covers. O(1) for a cluster-wide
     /// part (the common case); a namespace part of a wider feed walks the objects.
-    pub fn tally_in(&self, scope: &FeedScope) -> CacheTally {
+    pub fn tally_in(&self, scope: &FeedScope) -> KindCount {
+        let count = |tally: Tally, total| KindCount {
+            total,
+            rated: tally.rated,
+            healthy: tally.healthy,
+        };
         match scope {
-            FeedScope::Cluster => CacheTally {
-                total: self.objects.len(),
-                rated: self.tally.rated,
-                healthy: self.tally.healthy,
-            },
+            FeedScope::Cluster => count(self.tally, self.objects.len()),
             FeedScope::Namespace(_) => {
                 let mut tally = Tally::default();
                 let mut total = 0;
@@ -71,11 +72,7 @@ impl ObjectCache {
                     total += 1;
                     tally.add(object);
                 }
-                CacheTally {
-                    total,
-                    rated: tally.rated,
-                    healthy: tally.healthy,
-                }
+                count(tally, total)
             }
         }
     }

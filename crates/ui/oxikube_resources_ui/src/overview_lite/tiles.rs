@@ -3,7 +3,6 @@
 
 use gpui::{App, Global, SharedString};
 use oxikube_app::CountTarget;
-use oxikube_app::store::WORKLOAD_TARGETS;
 
 /// One tile: a kind to count.
 #[derive(Clone, Debug, PartialEq)]
@@ -47,30 +46,29 @@ impl TileRegistry {
     }
 }
 
-/// The titles of [`WORKLOAD_TARGETS`], in the same order.
-const TITLES: [&str; 7] = [
-    "Deployments",
-    "StatefulSets",
-    "DaemonSets",
-    "ReplicaSets",
-    "Jobs",
-    "CronJobs",
-    "Pods",
+/// The workload tiles in order: API group, plural of the kind counted, heading.
+const WORKLOADS: [(&str, &str, &str); 7] = [
+    ("apps", "deployments", "Deployments"),
+    ("apps", "statefulsets", "StatefulSets"),
+    ("apps", "daemonsets", "DaemonSets"),
+    ("apps", "replicasets", "ReplicaSets"),
+    ("batch", "jobs", "Jobs"),
+    ("batch", "cronjobs", "CronJobs"),
+    ("", "pods", "Pods"),
 ];
 
 /// The seven workload tiles: Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs, CronJobs,
 /// Pods.
 pub fn workload_tiles() -> Vec<Tile> {
-    WORKLOAD_TARGETS
+    WORKLOADS
         .iter()
-        .zip(TITLES)
-        .enumerate()
-        .filter_map(|(ix, ((group, plural), title))| {
+        .zip(0u32..)
+        .filter_map(|((group, plural, title), ix)| {
             Some(Tile {
                 id: (*plural).to_owned().into(),
-                title: title.into(),
+                title: (*title).into(),
                 target: CountTarget::core(group, plural)?,
-                order: u32::try_from(ix).unwrap_or(u32::MAX) * 100,
+                order: ix * 100,
             })
         })
         .collect()

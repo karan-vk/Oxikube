@@ -42,9 +42,9 @@ mod tally;
 mod target;
 
 pub use lease::CountsLease;
-pub use target::{CORE_TARGETS, CoreTarget, CountTarget, WORKLOAD_TARGETS};
+pub use target::{CORE_TARGETS, CoreTarget, CountTarget};
 
-pub(crate) use tally::{CacheTally, Tally};
+pub(crate) use tally::Tally;
 
 /// How many objects of a kind there are and how many of them are healthy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

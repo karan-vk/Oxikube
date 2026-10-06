@@ -40,7 +40,7 @@ mod node;
 mod pod;
 mod workload;
 
-pub use health::{Health, has_health_rule, health_of, pod_health, pod_phase_is_healthy};
+pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};
 pub use node::NodeSummary;
 pub use pod::{
