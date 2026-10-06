@@ -8,7 +8,7 @@ use alacritty_terminal::term::TermDamage;
 use alacritty_terminal::term::color::COUNT as COLOR_COUNT;
 use bitflags::bitflags;
 
-use super::{GridPoint, TermGrid, convert};
+use super::{GridPoint, TermGrid, convert, selection};
 
 /// An RGB colour.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -192,7 +192,9 @@ pub enum Damage {
     /// Repaint everything (first frame, scroll, resize, mode change).
     #[default]
     Full,
-    /// Only these rows changed (the cursor's old and new cells included).
+    /// Only these rows changed, sorted by row, one entry per row. The cursor's old and new
+    /// cells are included, and so is every row whose selection highlight changed (the rows of
+    /// the old and the new selection, whole).
     Lines(Vec<LineDamage>),
 }
 
@@ -324,6 +326,16 @@ impl TermGrid {
             };
             if let Some(marks) = cell.zerowidth() {
                 out.zerowidth.extend(marks.iter().map(|&c| (index, c)));
+            }
+        }
+
+        // alacritty's damage leaves the selection out: repaint the rows it left and entered.
+        if out.selection != self.painted_selection {
+            let previous = std::mem::replace(&mut self.painted_selection, out.selection);
+            if let Damage::Lines(lines) = &mut out.damage {
+                for range in [previous, out.selection].into_iter().flatten() {
+                    selection::damage_selection(lines, range, out.display_offset, rows, columns);
+                }
             }
         }
     }

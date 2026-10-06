@@ -7,11 +7,12 @@ use bytes::Bytes;
 use gpui::{AppContext as _, Context, Task};
 use oxikube_domain::OxiResult;
 use oxikube_ports::TerminalSize;
+use parking_lot::MutexGuard;
 
 use super::TerminalState;
 use crate::grid::{
-    ColorRequest, GridMatch, GridPoint, SelectionKind, SelectionSide, TermRgb, TerminalModes,
-    TerminalScroll, TerminalSnapshot,
+    ColorRequest, GridMatch, GridPoint, GridSearch, SelectionKind, SelectionSide, TermRgb,
+    TerminalModes, TerminalScroll, TerminalSnapshot,
 };
 
 impl TerminalState {
@@ -137,14 +138,33 @@ impl TerminalState {
         self.grid.lock().selection_text()
     }
 
-    /// Every match of `pattern` over screen and scrollback (see [`crate::grid::TermGrid::search`]),
-    /// computed on the background executor so a long history never stalls a frame (about 6 ms
-    /// per 10 000 lines in release builds; frames meanwhile use
-    /// [`try_snapshot_into`](Self::try_snapshot_into)). Matches are grid points as of the search:
-    /// output that arrives afterwards shifts them.
+    /// Every match of `pattern` over screen and scrollback (see [`crate::grid::GridSearch`]),
+    /// computed on the background executor in slices of
+    /// [`SEARCH_SLICE_LINES`](crate::grid::SEARCH_SLICE_LINES) lines (about 0.4 ms each in
+    /// release builds). The grid lock is handed back between slices, so scrolling, selecting,
+    /// resizing and painting go on during a long search; new output waits until it ends, so the
+    /// matches are consistent. Matches are grid points as of the search: output that arrives
+    /// afterwards shifts them.
+    ///
+    /// # Errors
+    ///
+    /// The task yields `Validation` when `pattern` is not a valid regex.
     pub fn search(&self, pattern: &str, cx: &mut Context<Self>) -> Task<OxiResult<Vec<GridMatch>>> {
         let grid = self.grid.clone();
+        let gate = self.output_gate.clone();
         let pattern = pattern.to_owned();
-        cx.background_spawn(async move { grid.lock().search(&pattern) })
+        cx.background_spawn(async move {
+            let mut search = GridSearch::new(&pattern)?;
+            let _frozen = gate.lock().await;
+            loop {
+                let locked = grid.lock();
+                let done = search.step(&locked);
+                // Hand the lock straight to a waiter (the UI thread) rather than re-taking it.
+                MutexGuard::unlock_fair(locked);
+                if done {
+                    return Ok(search.into_matches());
+                }
+            }
+        })
     }
 }

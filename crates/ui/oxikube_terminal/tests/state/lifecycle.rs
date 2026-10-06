@@ -107,3 +107,30 @@ fn search_runs_off_the_ui_thread_and_selection_copies(cx: &mut TestAppContext) {
         .update(cx, |terminal, cx| terminal.clear_selection(cx));
     assert_eq!(h.terminal.read_with(cx, |t, _| t.selection_text()), None);
 }
+
+#[gpui::test]
+fn a_search_longer_than_one_slice_finds_everything(cx: &mut TestAppContext) {
+    let backend = FakeTerminalBackend::silent();
+    let h = harness(cx, &backend, (20, 3));
+    let lines = 2 * oxikube_terminal::grid::SEARCH_SLICE_LINES + 7;
+    let output: String = (0..lines)
+        .map(|line| format!("pod-{line} Running\r\n"))
+        .collect();
+    backend.output(output);
+    next_frame(cx);
+    let task = h
+        .terminal
+        .update(cx, |terminal, cx| terminal.search("Running", cx));
+    cx.run_until_parked();
+    let matches = cx.foreground_executor().block_test(task).unwrap();
+    assert_eq!(matches.len(), lines);
+    assert!(matches.windows(2).all(|pair| pair[0].start < pair[1].start));
+
+    // The UI side holds no lock afterwards and output flows again.
+    backend.output("pod-last Running");
+    next_frame(cx);
+    let row = h
+        .terminal
+        .read_with(cx, |terminal, _| terminal.snapshot().row_text(2));
+    assert_eq!(row, "pod-last Running");
+}

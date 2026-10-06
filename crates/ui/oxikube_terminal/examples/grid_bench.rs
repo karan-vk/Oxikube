@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{AppContext as _, TestAppContext};
 use oxikube_ports::TerminalSize;
+use oxikube_terminal::grid::{GridSearch, SEARCH_SLICE_LINES};
 use oxikube_terminal::{TermGrid, TerminalScroll, TerminalSnapshot, TerminalState};
 use oxikube_testkit::fakes::FakeTerminalBackend;
 
@@ -117,6 +118,21 @@ fn search_cost() {
         println!(
             "search 10k lines {pattern:<19} {:>8.1} ms ({found} matches)",
             start.elapsed().as_secs_f64() * 1e3
+        );
+        // What the UI thread can wait behind: the longest single slice (one hold of the lock).
+        let mut search = GridSearch::new(pattern).expect("valid pattern");
+        let mut longest = Duration::ZERO;
+        loop {
+            let start = Instant::now();
+            let done = search.step(&grid);
+            longest = longest.max(start.elapsed());
+            if done {
+                break;
+            }
+        }
+        println!(
+            "search slice ({SEARCH_SLICE_LINES} lines) {pattern:<13} {:>8.3} ms (longest hold)",
+            longest.as_secs_f64() * 1e3
         );
     }
 }

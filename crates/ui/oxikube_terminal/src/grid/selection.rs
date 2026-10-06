@@ -4,7 +4,11 @@ use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 
-use super::TermGrid;
+use super::{LineDamage, TermGrid};
+
+/// A selection as a snapshot carries it: first and last cell (inclusive, start before end) and
+/// whether it is a block.
+pub(super) type SelectionRange = (GridPoint, GridPoint, bool);
 
 /// A cell of the whole grid, scrollback included: `line` `0` is the top row of the live screen,
 /// negative lines are history (`-1` the newest history line), `column` counts from `0`.
@@ -122,4 +126,40 @@ impl TermGrid {
             Column(point.column.min(last_column)),
         )
     }
+}
+
+/// Adds the viewport rows `range` covers (scrolled `display_offset` lines up, `rows` x `columns`
+/// viewport) to `damage` as whole rows, keeping it sorted by row with one entry per row.
+///
+/// alacritty's damage leaves the selection out (its renderer diffs selections itself), so a
+/// selection that appears, grows, shrinks or goes away changes rows nothing else reports.
+pub(super) fn damage_selection(
+    damage: &mut Vec<LineDamage>,
+    range: SelectionRange,
+    display_offset: usize,
+    rows: usize,
+    columns: usize,
+) {
+    let offset = display_offset as i32;
+    let first = range.0.line + offset;
+    let last = range.1.line + offset;
+    if rows == 0 || columns == 0 || last < 0 || first >= rows as i32 {
+        return;
+    }
+    let first = first.max(0) as usize;
+    let last = (last as usize).min(rows - 1);
+    damage.extend((first..=last).map(|row| LineDamage {
+        row,
+        left: 0,
+        right: columns - 1,
+    }));
+    damage.sort_unstable_by_key(|line| line.row);
+    damage.dedup_by(|later, kept| {
+        if later.row != kept.row {
+            return false;
+        }
+        kept.left = kept.left.min(later.left);
+        kept.right = kept.right.max(later.right);
+        true
+    });
 }

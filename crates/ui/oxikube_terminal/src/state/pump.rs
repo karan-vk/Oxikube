@@ -21,6 +21,11 @@ use crate::grid::{GridEvent, TermGrid};
 /// at most this much parsing (well under 0.1 ms in release builds), however large the chunk.
 pub(crate) const PARSE_SLICE: usize = 16 * 1024;
 
+/// Held by a search for its whole sliced scan (see `TerminalState::search`): the pump takes it
+/// before parsing, so output waits (asynchronously, no thread blocked) instead of moving lines a
+/// search is halfway through, and the grid lock itself is only ever held for one slice.
+pub(crate) type OutputGate = Arc<futures::lock::Mutex<()>>;
+
 /// What the pump tells the UI thread.
 #[derive(Debug)]
 pub(crate) enum GridUpdate {
@@ -37,10 +42,12 @@ pub(crate) enum GridUpdate {
 
 /// Reads `events` until the session ends: parses output into `grid` in [`PARSE_SLICE`] pieces,
 /// sends the emulator's replies to the writer through `replies`, and wakes the UI through
-/// `updates` (once per wave of output, see [`GridUpdate::Changed`]).
+/// `updates` (once per wave of output, see [`GridUpdate::Changed`]). Parses only while it holds
+/// `gate` (a search may be running).
 pub(crate) async fn pump(
     mut events: BoxStream<'static, BackendEvent>,
     grid: Arc<Mutex<TermGrid>>,
+    gate: OutputGate,
     replies: UnboundedSender<Bytes>,
     updates: mpsc::Sender<GridUpdate>,
     wake: Arc<AtomicBool>,
@@ -51,6 +58,7 @@ pub(crate) async fn pump(
         let Some(event) = next_event(&mut events, sync_deadline).await else {
             // The deadline of a synchronized update passed with no more output: apply it.
             sync_deadline = {
+                let _parsing = gate.lock().await;
                 let mut grid = grid.lock();
                 grid.flush_sync(&mut grid_events);
                 grid.sync_deadline()
@@ -62,11 +70,13 @@ pub(crate) async fn pump(
         };
         match event {
             Some(BackendEvent::Output(bytes)) => {
+                let parsing = gate.lock().await;
                 for slice in bytes.chunks(PARSE_SLICE) {
                     let mut grid = grid.lock();
                     grid.advance(slice, &mut grid_events);
                     sync_deadline = grid.sync_deadline();
                 }
+                drop(parsing);
                 oxikube_runtime::perf::record_feed_deltas(1);
                 if !deliver(&mut grid_events, &replies, &updates, &wake).await {
                     return;

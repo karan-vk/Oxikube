@@ -11,6 +11,10 @@
 //! * The **pump** ([`pump::pump`]) runs on tokio through `oxikube_runtime::spawn_kube`. It parses
 //!   every chunk as it arrives (a flood of megabytes is applied in full), holding the grid lock for
 //!   at most [`pump::PARSE_SLICE`] bytes at a time and never across an `.await`.
+//! * **Search** scans screen and scrollback on the background executor in slices of
+//!   [`SEARCH_SLICE_LINES`](crate::grid::SEARCH_SLICE_LINES), releasing the grid lock (fairly)
+//!   between slices; output waits on an async gate meanwhile so lines do not move under it. The UI
+//!   thread therefore never waits on the lock for more than one parse or search slice.
 //! * **Frame coalescing**: the pump sends [`GridUpdate::Changed`](pump::GridUpdate) only when it
 //!   turns the shared wake flag on; the UI turns it off and calls
 //!   `oxikube_runtime::notify_coalesced`, so observers (the element) hear at most one `notify` per
@@ -42,7 +46,7 @@ use tokio::sync::watch;
 
 use crate::grid::{ColorRequest, GridEvent, TermGrid};
 use crate::settings::TerminalSettings;
-use pump::GridUpdate;
+use pump::{GridUpdate, OutputGate};
 
 /// Capacity of the pump → UI channel. Small on purpose: `Changed` is at most one in flight, so
 /// only titles, bells and the like queue here, and a process spamming them is slowed down.
@@ -72,6 +76,8 @@ pub enum TerminalEvent {
 /// (repaint) and subscribes to [`TerminalEvent`]s.
 pub struct TerminalState {
     grid: Arc<Mutex<TermGrid>>,
+    /// Keeps output from moving lines while a [`search`](Self::search) runs.
+    output_gate: OutputGate,
     backend: Arc<dyn TerminalBackend>,
     input: mpsc::UnboundedSender<Bytes>,
     resize: watch::Sender<TerminalSize>,
@@ -114,11 +120,13 @@ impl TerminalState {
         let (resize, resize_rx) = watch::channel(size);
         let (updates, updates_rx) = batch_channel::<GridUpdate>(UPDATE_CAPACITY);
 
+        let output_gate = OutputGate::default();
         let pump = spawn_kube(
             cx,
             pump::pump(
                 backend.output_stream(),
                 grid.clone(),
+                output_gate.clone(),
                 input.clone(),
                 updates,
                 wake.clone(),
@@ -138,6 +146,7 @@ impl TerminalState {
 
         Self {
             grid,
+            output_gate,
             backend,
             input,
             resize,

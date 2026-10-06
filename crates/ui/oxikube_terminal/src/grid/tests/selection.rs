@@ -1,6 +1,6 @@
 //! Selection kinds and the selected text.
 
-use super::super::{GridPoint, SelectionKind, SelectionSide};
+use super::super::{Damage, GridPoint, SelectionKind, SelectionSide, TermGrid, TerminalScroll};
 use super::{feed, grid};
 
 const LEFT: SelectionSide = SelectionSide::Left;
@@ -84,4 +84,67 @@ fn points_outside_the_grid_are_clamped() {
 fn a_selection_in_the_scrolled_view_maps_viewport_rows() {
     let point = GridPoint::from_viewport(0, 4, 3);
     assert_eq!(point, GridPoint::new(-3, 4));
+}
+
+/// The rows a snapshot damages, and whether they are whole (`0..=columns - 1`).
+fn damaged_rows(grid: &mut TermGrid) -> Vec<(usize, bool)> {
+    let snap = grid.snapshot();
+    let Damage::Lines(lines) = snap.damage else {
+        panic!("expected partial damage");
+    };
+    lines
+        .iter()
+        .map(|line| (line.row, line.left == 0 && line.right == snap.columns - 1))
+        .collect()
+}
+
+#[test]
+fn selection_changes_damage_the_rows_they_highlight() {
+    let mut grid = grid(10, 5, 0);
+    feed(&mut grid, "one\r\ntwo\r\nthree\r\nfour");
+    grid.snapshot();
+    // The cursor's row 3 is always reported (partially); selecting elsewhere damages the
+    // selected rows, whole.
+    const CURSOR: (usize, bool) = (3, false);
+    grid.start_selection(SelectionKind::Line, GridPoint::new(1, 0), LEFT);
+    assert_eq!(damaged_rows(&mut grid), [(1, true), CURSOR]);
+
+    grid.update_selection(GridPoint::new(2, 4), RIGHT);
+    assert_eq!(damaged_rows(&mut grid), [(1, true), (2, true), CURSOR]);
+
+    // Shrinking repaints the row the highlight left.
+    grid.update_selection(GridPoint::new(1, 2), RIGHT);
+    assert_eq!(damaged_rows(&mut grid), [(1, true), (2, true), CURSOR]);
+
+    grid.clear_selection();
+    assert_eq!(damaged_rows(&mut grid), [(1, true), CURSOR]);
+    assert_eq!(
+        damaged_rows(&mut grid),
+        [CURSOR],
+        "no change, no selection damage"
+    );
+}
+
+#[test]
+fn selection_damage_merges_with_output_damage() {
+    let mut grid = grid(10, 4, 0);
+    feed(&mut grid, "ab\r\ncd");
+    grid.snapshot();
+    grid.start_selection(SelectionKind::Cell, GridPoint::new(1, 0), LEFT);
+    grid.update_selection(GridPoint::new(1, 1), RIGHT);
+    feed(&mut grid, "e");
+    let rows = damaged_rows(&mut grid);
+    assert_eq!(rows, [(1, true)], "one entry per row, sorted: {rows:?}");
+}
+
+#[test]
+fn selection_damage_is_clipped_to_the_viewport() {
+    let mut grid = grid(10, 2, 10);
+    feed(&mut grid, "a\r\nb\r\nc\r\nd\r\ne");
+    grid.scroll(TerminalScroll::Lines(1));
+    grid.snapshot();
+    // History lines -3..=-2 are above the view (which starts at line -1); -1 is its row 0.
+    grid.start_selection(SelectionKind::Line, GridPoint::new(-3, 0), LEFT);
+    grid.update_selection(GridPoint::new(-1, 0), RIGHT);
+    assert_eq!(damaged_rows(&mut grid), [(0, true)]);
 }

@@ -38,7 +38,7 @@ use alacritty_terminal::vte::ansi::{Processor, StdSyncHandler};
 use oxikube_ports::TerminalSize;
 
 pub use events::{ColorRequest, GridEvent};
-pub use search::{GridMatch, MAX_SEARCH_MATCHES};
+pub use search::{GridMatch, GridSearch, MAX_SEARCH_MATCHES, SEARCH_SLICE_LINES};
 pub use selection::{GridPoint, SelectionKind, SelectionSide};
 pub use snapshot::{
     CellFlags, CursorShape, Damage, LineDamage, SnapshotCell, TermColor, TermRgb, TerminalCursor,
@@ -46,6 +46,7 @@ pub use snapshot::{
 };
 
 use events::GridListener;
+use selection::SelectionRange;
 
 /// Scrollback kept when the setting says nothing: 10 000 lines.
 pub const DEFAULT_SCROLLBACK_LINES: usize = 10_000;
@@ -126,7 +127,8 @@ fn clamp_size(size: TerminalSize) -> TerminalSize {
 /// title, plus the VT parser that turns a process's output into grid changes.
 ///
 /// See the module docs. Every method is cheap except [`advance`](Self::advance) (linear in the
-/// bytes) and [`search`](Self::search) (linear in the scrollback).
+/// bytes) and [`search`](Self::search) (linear in the scrollback; [`GridSearch`] runs the same
+/// scan in bounded slices).
 pub struct TermGrid {
     term: Term<GridListener>,
     parser: Processor<StdSyncHandler>,
@@ -134,6 +136,12 @@ pub struct TermGrid {
     size: TerminalSize,
     scrollback: usize,
     title: Option<Arc<str>>,
+    /// The selection the last snapshot showed: alacritty's damage leaves selection changes out,
+    /// so [`snapshot_into`](Self::snapshot_into) compares against this and damages the rows.
+    painted_selection: Option<SelectionRange>,
+    /// Bumped whenever lines move without new output (a resize reflows, a smaller scrollback
+    /// drops history): a sliced [`GridSearch`] seeing it change starts over.
+    layout_generation: u64,
 }
 
 impl std::fmt::Debug for TermGrid {
@@ -160,6 +168,8 @@ impl TermGrid {
             size,
             scrollback,
             title: None,
+            painted_selection: None,
+            layout_generation: 0,
         }
     }
 
@@ -196,6 +206,7 @@ impl TermGrid {
         let size = clamp_size(size);
         if (size.width, size.height) != (self.size.width, self.size.height) {
             self.term.resize(Cells::new(size));
+            self.layout_generation += 1;
         }
         self.size = size;
         size
@@ -210,6 +221,7 @@ impl TermGrid {
         }
         self.scrollback = lines;
         self.term.set_options(config(lines));
+        self.layout_generation += 1;
         // `set_options` re-announces the title; the title did not change.
         self.listener.discard();
     }

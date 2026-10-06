@@ -14,11 +14,12 @@ use oxikube_testkit::fakes::FakeTerminalBackend;
 use parking_lot::Mutex;
 use tokio::sync::{mpsc, watch};
 
-use super::pump::{GridUpdate, pump, write_loop};
+use super::pump::{GridUpdate, OutputGate, pump, write_loop};
 use crate::grid::TermGrid;
 
 struct Pumped {
     grid: Arc<Mutex<TermGrid>>,
+    gate: OutputGate,
     updates: mpsc::Receiver<GridUpdate>,
     wake: Arc<AtomicBool>,
     task: tokio::task::JoinHandle<()>,
@@ -29,9 +30,18 @@ fn start(events: stream::BoxStream<'static, BackendEvent>) -> Pumped {
     let (replies, _replies_rx) = futures_mpsc::unbounded::<Bytes>();
     let (tx, updates) = mpsc::channel(16);
     let wake = Arc::new(AtomicBool::new(false));
-    let task = tokio::spawn(pump(events, grid.clone(), replies, tx, wake.clone()));
+    let gate = OutputGate::default();
+    let task = tokio::spawn(pump(
+        events,
+        grid.clone(),
+        gate.clone(),
+        replies,
+        tx,
+        wake.clone(),
+    ));
     Pumped {
         grid,
+        gate,
         updates,
         wake,
         task,
@@ -62,6 +72,27 @@ async fn a_synchronized_update_that_never_ends_is_applied_at_its_deadline() {
     let woke = tokio::time::timeout(Duration::from_secs(5), pumped.updates.recv()).await;
     assert!(matches!(woke, Ok(Some(GridUpdate::Changed))));
     assert_eq!(row0(&pumped.grid), "held back");
+    pumped.task.abort();
+}
+
+#[tokio::test]
+async fn output_waits_while_a_search_holds_the_gate() {
+    let backend = FakeTerminalBackend::silent();
+    let mut pumped = start(backend.output_stream());
+    // A search is running: lines must not move under it.
+    let searching = pumped.gate.lock().await;
+    backend.output("during the search");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(row0(&pumped.grid), "", "output waits for the search");
+    assert!(
+        pumped.grid.try_lock().is_some(),
+        "the waiting pump does not hold the grid lock"
+    );
+
+    drop(searching);
+    let woke = tokio::time::timeout(Duration::from_secs(5), pumped.updates.recv()).await;
+    assert!(matches!(woke, Ok(Some(GridUpdate::Changed))));
+    assert_eq!(row0(&pumped.grid), "during the search");
     pumped.task.abort();
 }
 
