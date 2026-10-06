@@ -44,6 +44,7 @@ mod testing_posture;
 pub use actions::{
     ActionContext, ActionState, DeleteError, DeleteFlow, DeletePlan, DeleteReport, ItemResult,
     ItemStatus, ResolvedAction, RowAction, RowActionRegistry, RowActionSpec, RowActions,
+    object_label,
 };
 pub use audit::AuditLog;
 pub use catalog::{

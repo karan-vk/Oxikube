@@ -78,7 +78,11 @@ fn a_selection_with_a_namespace_asks_for_the_cluster_name_once() {
     assert_eq!(plan.tier(), ConfirmTier::TypeName);
     assert_eq!(plan.phrase(), Some("a"), "the cluster's context name");
     assert_eq!(plan.kinds(), [("Namespace".into(), 1), ("Pod".into(), 2)]);
-    assert_eq!(plan.typed_items().count(), 1);
+    let typed = plan
+        .items()
+        .iter()
+        .filter(|i| i.tier == ConfirmTier::TypeName);
+    assert_eq!(typed.count(), 1);
     assert_eq!(plan.items().len(), 3);
 }
 

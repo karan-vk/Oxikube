@@ -5,6 +5,7 @@ use oxikube_domain::command::{self, Command, CommandId, Propagation};
 use oxikube_ports::{DeleteOptions, DeleteOutcome, PropagationPolicy};
 use serde_json::json;
 
+use super::object_label;
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 
 /// Registers the `resource::Delete` handler on `registry` (the app installs it under
@@ -35,10 +36,7 @@ pub fn register_commands(registry: &mut CommandRegistry) -> Result<(), RegisterE
         let options = mutation.delete_options().propagation(policy(propagation));
         let ns = target.namespace();
         let writer = mutation.writer();
-        let object = match ns {
-            Some(ns) => format!("{} {ns}/{}", target.gvk.kind, target.name),
-            None => format!("{} {}", target.gvk.kind, target.name),
-        };
+        let object = object_label(&target);
         if mutation.dry_run() {
             writer
                 .delete(&target.gvk, ns, &target.name, &options)

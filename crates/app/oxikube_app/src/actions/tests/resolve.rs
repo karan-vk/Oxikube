@@ -70,7 +70,6 @@ fn actions_come_from_the_bus_not_from_the_registry_alone() {
         ),
     );
     let actions = RowActions::from_bus(&bare, &RowActionRegistry::core());
-    assert!(actions.all().is_empty());
     assert!(actions.actions_for(&pods(), Capabilities::all()).is_empty());
 }
 

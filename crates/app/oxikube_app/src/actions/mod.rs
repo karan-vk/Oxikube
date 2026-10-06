@@ -46,7 +46,7 @@ mod tests;
 
 pub use delete::{
     DeleteError, DeleteFlow, DeletePlan, DeleteReport, ItemResult, ItemStatus, PlannedDelete,
-    register_commands,
+    object_label, register_commands,
 };
 pub use registry::{DuplicateAction, KindFilter, RowActionRegistry, RowActionSpec};
 pub use snapshot::{ResolvedAction, RowAction, RowActions};

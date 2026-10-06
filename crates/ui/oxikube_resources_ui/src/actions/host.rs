@@ -87,11 +87,6 @@ impl ResourceActions {
         &self.flow
     }
 
-    /// The actions of the bus.
-    pub fn actions(&self) -> &RowActions {
-        &self.actions
-    }
-
     /// What `cluster`'s session allows (nothing while it has none).
     pub fn context(&self, cluster: &ClusterId) -> ActionContext {
         self.sessions

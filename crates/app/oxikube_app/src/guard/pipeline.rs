@@ -187,7 +187,7 @@ impl MutationGuard {
                         token,
                         command: meta.id,
                         tier,
-                        risk: command.effective_risk().or(meta.risk),
+                        risk: command.effective_risk(),
                         cluster,
                         summary: policy::summary(meta, command, context.as_str()),
                         expected_name,

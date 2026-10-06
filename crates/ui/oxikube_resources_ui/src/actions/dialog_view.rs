@@ -5,6 +5,7 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
     SharedString, Styled as _, Window, div, px, uniform_list,
 };
+use oxikube_app::object_label;
 use oxikube_domain::command::Propagation;
 use oxikube_domain::safety::Risk;
 use oxikube_ui::button::{Button, ButtonVariants as _};
@@ -16,7 +17,7 @@ use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 use oxikube_workspace::modal::DIALOG_KEY_CONTEXT;
 
 use super::dialog::{DeleteDialog, Stage};
-use super::results::{ROW_HEIGHT, object_label, result_row};
+use super::results::{ROW_HEIGHT, result_row};
 
 /// How many result rows show before the list scrolls.
 const VISIBLE_RESULTS: f32 = 10.0;
@@ -37,7 +38,7 @@ impl DeleteDialog {
             .into_iter()
             .map(|(kind, n)| format!("{n} {kind}{}", if n == 1 { "" } else { "s" }))
             .collect();
-        format!("{} on {}", kinds.join(", "), self.context)
+        format!("{} on {}", kinds.join(", "), self.plan.context())
     }
 
     /// One line on what is at stake, for the objects whose delete reaches further than the object.
@@ -238,7 +239,7 @@ impl DeleteDialog {
                     Button::new("delete-close")
                         .label("Close")
                         .primary()
-                        .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
+                        .on_click(cx.listener(|this, _, _, cx| this.cancel(cx))),
                 ),
             ),
         }
@@ -278,7 +279,7 @@ impl Render for DeleteDialog {
             .on_action(cx.listener(
                 |this, _: &oxikube_ui::dialog::Confirm, _, cx| match this.stage {
                     Stage::Confirm => this.confirm(cx),
-                    Stage::Done => this.close(cx),
+                    Stage::Done => this.cancel(cx),
                     Stage::Running => {}
                 },
             ))

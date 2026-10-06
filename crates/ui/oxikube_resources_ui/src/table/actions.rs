@@ -9,7 +9,8 @@
 //! The default bindings live in the per-OS keymap files of `oxikube_assets`, in the sections
 //! for the `Table` key context (`oxikube_keymap::contexts::TABLE`): `j` / `k` and the arrows
 //! move, shift extends, `enter` opens, `escape` clears, `cmd-a` / `ctrl-a` selects all,
-//! `cmd-c` / `ctrl-c` copies the name, `delete` (and k9s's `ctrl-d`) opens the delete dialog. Users rebind them in `keymap.json`.
+//! `cmd-c` / `ctrl-c` copies the name, `delete` (and k9s's `ctrl-d`) opens the delete dialog.
+//! Users rebind them in `keymap.json`.
 
 use gpui::actions;
 

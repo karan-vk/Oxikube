@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use oxikube_domain::command::{Command, CommandId, Propagation};
-use oxikube_domain::ids::{ClusterId, ResourceRef};
+use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::safety::{ConfirmTier, Risk};
 
 use crate::guard::policy;
@@ -45,18 +45,18 @@ pub struct PlannedDelete {
 /// guard applies, so a dialog drawn from it asks what the guard will ask.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeletePlan {
-    cluster: ClusterId,
     propagation: Propagation,
     items: Vec<PlannedDelete>,
     tier: ConfirmTier,
     risk: Risk,
+    context: String,
     phrase: Option<String>,
 }
 
 impl DeletePlan {
-    /// The cluster.
-    pub fn cluster(&self) -> &ClusterId {
-        &self.cluster
+    /// The cluster's context name, for the text of a dialog.
+    pub fn context(&self) -> &str {
+        &self.context
     }
 
     /// How dependents are handled.
@@ -93,13 +93,6 @@ impl DeletePlan {
             *counts.entry(item.target.gvk.kind.clone()).or_default() += 1;
         }
         counts.into_iter().collect()
-    }
-
-    /// The objects that need the typed name (their own tier is [`ConfirmTier::TypeName`]).
-    pub fn typed_items(&self) -> impl Iterator<Item = &PlannedDelete> {
-        self.items
-            .iter()
-            .filter(|item| item.tier == ConfirmTier::TypeName)
     }
 }
 
@@ -171,7 +164,7 @@ impl DeleteFlow {
                 PlannedDelete {
                     target: target.clone(),
                     tier: policy::confirm_tier_for(meta, &command),
-                    risk: command.effective_risk().or(meta.risk).unwrap_or(Risk::High),
+                    risk: command.effective_risk().unwrap_or(Risk::High),
                     command,
                 }
             })
@@ -186,19 +179,20 @@ impl DeleteFlow {
             .map(|item| item.risk)
             .max()
             .unwrap_or(Risk::Medium);
+        let context = self
+            .sessions
+            .get(&cluster)
+            .map_or_else(|| cluster.to_string(), |s| s.context().to_string());
         let phrase = (tier == ConfirmTier::TypeName).then(|| match items.as_slice() {
             [only] => only.target.name.to_string(),
-            _ => self
-                .sessions
-                .get(&cluster)
-                .map_or_else(|| cluster.to_string(), |s| s.context().to_string()),
+            _ => context.clone(),
         });
         Ok(DeletePlan {
-            cluster,
             propagation,
             items,
             tier,
             risk,
+            context,
             phrase,
         })
     }

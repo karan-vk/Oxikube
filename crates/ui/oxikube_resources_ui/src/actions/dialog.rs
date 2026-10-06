@@ -32,10 +32,7 @@ pub enum Stage {
 /// The delete confirmation. See the [module docs](self).
 pub struct DeleteDialog {
     pub(super) flow: DeleteFlow,
-    pub(super) targets: Vec<ResourceRef>,
     pub(super) plan: DeletePlan,
-    /// The cluster's context name, for the dialog's text.
-    pub(super) context: SharedString,
     pub(super) typed: Entity<InputState>,
     pub(super) stage: Stage,
     pub(super) report: Option<DeleteReport>,
@@ -72,28 +69,20 @@ impl ModalView for DeleteDialog {
 
 impl DeleteDialog {
     /// A dialog for `plan` (from `flow.plan(targets, Propagation::default())`: the kubectl
-    /// default). `context` is the cluster's context name, for the text.
+    /// default).
     pub fn new(
         flow: DeleteFlow,
         plan: DeletePlan,
-        context: impl Into<SharedString>,
         workspace: gpui::WeakEntity<Workspace>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let targets = plan
-            .items()
-            .iter()
-            .map(|item| item.target.clone())
-            .collect();
         let typed =
             cx.new(|cx| InputState::new(window, cx).placeholder("Type the name to confirm"));
         let subscriptions = vec![cx.subscribe_in(&typed, window, Self::on_typed)];
         Self {
             flow,
-            targets,
             plan,
-            context: context.into(),
             typed,
             stage: Stage::Confirm,
             report: None,
@@ -145,7 +134,13 @@ impl DeleteDialog {
         if self.stage != Stage::Confirm || propagation == self.plan.propagation() {
             return;
         }
-        if let Ok(plan) = self.flow.plan(&self.targets, propagation) {
+        let targets: Vec<ResourceRef> = self
+            .plan
+            .items()
+            .iter()
+            .map(|item| item.target.clone())
+            .collect();
+        if let Ok(plan) = self.flow.plan(&targets, propagation) {
             self.plan = plan;
             self.error = None;
             cx.notify();
@@ -161,16 +156,11 @@ impl DeleteDialog {
                 .is_none_or(|phrase| self.typed_text(cx) == phrase)
     }
 
-    /// Cancels: nothing was sent, so there is nothing to undo.
+    /// Cancels while asking, closes once finished: nothing is sent, so there is nothing to undo.
     pub fn cancel(&mut self, cx: &mut Context<Self>) {
         if self.stage != Stage::Running {
             cx.emit(DismissEvent);
         }
-    }
-
-    /// Closes a finished dialog.
-    pub fn close(&mut self, cx: &mut Context<Self>) {
-        self.cancel(cx);
     }
 
     /// Deletes. Does nothing while the phrase is not typed.
@@ -213,15 +203,13 @@ impl DeleteDialog {
     fn finished(&mut self, result: &Result<DeleteReport, String>, cx: &mut Context<Self>) {
         match result {
             Ok(report) => {
-                let single_success = report.items.len() == 1 && report.failed() == 0;
+                self.stage = Stage::Done;
                 self.report = Some(report.clone());
-                if single_success {
+                if report.items.len() == 1 && report.failed() == 0 {
                     // A result list for one object that went well is friction: toast and close.
-                    self.stage = Stage::Done;
                     self.show_toast(summary_toast(report), cx);
                     cx.emit(DismissEvent);
                 } else {
-                    self.stage = Stage::Done;
                     cx.notify();
                 }
             }

@@ -1,20 +1,12 @@
 //! The results of a finished delete: one line per object.
 
 use gpui::{IntoElement, ParentElement as _, Styled as _, div, px};
-use oxikube_app::{DeleteReport, ItemStatus};
+use oxikube_app::{DeleteReport, ItemStatus, object_label};
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{Colors, Icon, IconName, u};
 
 /// The height of one result row, at 100 % zoom: uniform, as `uniform_list` needs.
 pub(super) const ROW_HEIGHT: f32 = 24.0;
-
-/// "Pod default/web-0", "Namespace payments".
-pub(super) fn object_label(target: &oxikube_domain::ids::ResourceRef) -> String {
-    match target.namespace() {
-        Some(ns) => format!("{} {ns}/{}", target.gvk.kind, target.name),
-        None => format!("{} {}", target.gvk.kind, target.name),
-    }
-}
 
 /// Row `ix` of `report`'s results.
 pub(super) fn result_row(report: &DeleteReport, ix: usize, colors: &Colors) -> impl IntoElement {

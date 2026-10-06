@@ -33,11 +33,6 @@ impl RowAction {
         self.label
     }
 
-    /// Whether the action also applies to a selection of several objects.
-    pub fn is_bulk(&self) -> bool {
-        self.bulk
-    }
-
     /// The command for `target`.
     pub fn command_for(&self, target: &ResourceRef) -> Command {
         (self.build)(target)
@@ -90,11 +85,6 @@ impl RowActions {
         Self {
             actions: actions.into(),
         }
-    }
-
-    /// Every action, in menu order.
-    pub fn all(&self) -> &[RowAction] {
-        &self.actions
     }
 
     /// The actions that apply to `kind` and that a session with `capabilities` can ever run, in

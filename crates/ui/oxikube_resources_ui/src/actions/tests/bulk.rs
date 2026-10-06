@@ -77,7 +77,7 @@ fn five_selected_objects_one_confirmation_per_object_results(cx: &mut TestAppCon
     assert!(f.vcx.debug_bounds("delete-summary").is_some());
     assert!(f.vcx.debug_bounds("delete-results").is_some());
     assert!(f.vcx.debug_bounds("delete-close").is_some());
-    with_dialog(&mut f, &d, |d, _, cx| d.close(cx));
+    with_dialog(&mut f, &d, |d, _, cx| d.cancel(cx));
     assert!(dialog(&mut f).is_none());
 }
 

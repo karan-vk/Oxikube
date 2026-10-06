@@ -102,15 +102,10 @@ impl ResourceTable {
                 return;
             }
         };
-        let context = self
-            .deps
-            .sessions
-            .get(&self.cluster)
-            .map_or_else(|| self.cluster.to_string(), |s| s.context().to_string());
         let flow = actions.flow().clone();
         let host = workspace.downgrade();
         workspace.update(cx, |workspace, cx| {
-            let dialog = cx.new(|cx| DeleteDialog::new(flow, plan, context, host, window, cx));
+            let dialog = cx.new(|cx| DeleteDialog::new(flow, plan, host, window, cx));
             workspace.show_modal(dialog.clone(), window, cx);
             dialog.update(cx, |dialog, cx| dialog.focus_input(window, cx));
         });
