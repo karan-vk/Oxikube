@@ -17,6 +17,9 @@ indexmap.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
 parking_lot.workspace = true
+# Tool stub input schemas (`ToolDef::input_schema`) and command output data.
+serde_json.workspace = true
+thiserror.workspace = true
 # `tokio::sync::broadcast` only (the session update stream); runtime-agnostic, no task is spawned.
 tokio.workspace = true
 tracing.workspace = true
