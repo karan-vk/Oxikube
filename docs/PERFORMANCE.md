@@ -383,6 +383,12 @@ Store side (`cargo bench -p oxikube_app --bench store_apply`, on the feed's task
 thread): a 500-event batch into 10 000 objects with two subscribers, median 1.98 ms, p95 2.31 ms;
 subscribing or re-sorting costs the caller 0.14 ms (median), the seeding task 2.76 ms.
 
+Log ingest (E08-S01, `cargo bench -p oxikube_app --bench log_ingest`, the service's own cost over a synthetic
+always-ready port of 100-byte lines): 3 000 000 lines (10 minutes at 5 000 lines/s) into a 50 000-line ring in
+about 225 ms, 13 M lines/s, 2 000-line batches (about 150 µs to build and commit each, an upper bound of the
+time the session's lock is held); copying a 60-row viewport out under the lock costs 0.4 to 6 µs; RSS stays at
+the ring's bound (17 MB with a 5 000 to 50 000-line ring) however many lines were read.
+
 Main thread (macOS `sample`, 8 s of the windowed run while scrolling under churn): 55 % idle, 42 %
 in `Window::draw`, of which about half is laying out the visible rows (gpui-component's per-row
 horizontal virtual list and taffy); the cell path (`TextCell`, `CellCache`, the provider) is about

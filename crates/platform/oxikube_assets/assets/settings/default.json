@@ -60,6 +60,13 @@
     // Saved per kind, not per cluster; only the text you typed is kept.
     "persist_filter": false
   },
+  // Logs (E08-S01).
+  "logs": {
+    // Lines each log session keeps in memory (100 to 5,000,000). When a chatty pod writes more,
+    // the oldest lines are dropped and the viewer shows a "truncated" marker above the first one.
+    // A change applies to the sessions that are open at once.
+    "buffer_lines": 50000
+  },
   // The Describe tab of a resource's detail (`kubectl describe`-style text). `backend`:
   //   "auto"     render in process (deskribe: 36 specialised kinds, a generic layout for custom
   //              resources), and run the `kubectl` binary for a kind deskribe does not cover

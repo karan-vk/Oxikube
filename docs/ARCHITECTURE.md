@@ -143,6 +143,21 @@ crate's `README.md` for its allowed dependencies. Highlights:
   read-only on a production-flagged cluster, audited, persisted through the `PrefsWriter` the binary
   implements over `ClusterSettings::update_cluster`), and every `Mutation` writer re-checks the
   read-only flag before each request.
+- `oxikube_app::logs` (E08-S01) — `LogService`: `open(port, target, options)` returns a `LogSession` for one
+  container of one pod (`LogTarget`; the port's `LogOptions` carry follow / since / tail / previous /
+  timestamps) and returns at once; the stream is opened and read by one task on the service's `Spawner`
+  (abort-on-drop, held by the session). The task collects lines into batches (2 048 lines or one 32 ms tick)
+  and commits each to a `LogBuffer`, a ring of the newest `logs.buffer_lines` lines (`LogEntry`: seq, server
+  timestamp, shared pod and container names, one `Arc<str>`), with O(1) access by index or seq and range
+  reads; older lines are dropped and counted (the "truncated" marker). Readers (`LogReader`, cheap to clone,
+  not owners of the stream) poll `LogDeltas`: per-consumer cursors yield `LogDelta { appended, dropped_front,
+  first_seq, state }` computed at poll time, so a slow consumer gets one larger delta and nothing queues. The
+  state machine is `Connecting`, `Streaming`, `Ended(Completed | StreamClosed | Cancelled)` or
+  `Failed(LogFailure)` (kind, redacted message, retryable); `ReconnectPolicy` is the seam of E08-S07.
+  `set_buffer_lines` applies a changed setting to open sessions at once. Line text is never logged.
+- `oxikube_logs_ui` — E08-S01: `LogsSettings` (`logs.buffer_lines`, default 50 000, clamped 100 to 5 000 000),
+  `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload into the `LogService`). The log
+  viewer item arrives with E08-S02.
 - `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
   mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,
@@ -333,7 +348,9 @@ weaken `cargo xtask lint-deps`.
   command bus (`mount::bus::build_registry`: cluster, namespace, kubeconfig, posture, tab and
   `view::Open` commands; its `MutationGuard`; stored with `AppState::set_command_bus`), the catalog
   home as the first tab, the hotbar strip, the active cluster's status item, the kubeconfig
-  sources (settings list, hot reload, the sources screen behind `view::Open`) and session restore.
+  sources (settings list, hot reload, the sources screen behind `view::Open`), session restore and the app's
+  one `LogService` (`mount::logs`, stored with `AppState::set_log_service`; `logs.buffer_lines` follows the
+  settings).
   Views dispatch through `mount::bus::BusDispatcher`, which runs each command on the bus through
   the window's `ClusterCommandRunner` (toasts, confirmations, denials).
 

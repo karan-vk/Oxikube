@@ -268,6 +268,7 @@ pub struct FakeLogPort {
     script: LogScripts,
     calls: CallLog<LogCall>,
     clock: Arc<FakeClockPort>,
+    streams: StreamGauge,
 }
 
 fake_plumbing!(FakeLogPort, LogScripts, LogCall);
@@ -290,12 +291,19 @@ impl FakeLogPort {
             script: LogScripts::default(),
             calls: CallLog::default(),
             clock,
+            streams: StreamGauge::default(),
         }
     }
 
     /// The clock streams are timed on.
     pub fn clock(&self) -> &Arc<FakeClockPort> {
         &self.clock
+    }
+
+    /// Streams handed out by `stream_logs` that the caller has not dropped yet: proves a
+    /// consumer cancelled (dropped) a stream, not only that it opened one.
+    pub fn live_streams(&self) -> usize {
+        self.streams.live()
     }
 }
 
@@ -317,7 +325,7 @@ impl LogPort for FakeLogPort {
             .stream_logs
             .next_or_unscripted("FakeLogPort", "stream_logs")?;
         let clock: Arc<dyn ClockPort> = self.clock.clone();
-        Ok(timeline.replay(clock))
+        Ok(self.streams.track(timeline.replay(clock)))
     }
 }
 

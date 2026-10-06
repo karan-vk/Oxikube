@@ -17,7 +17,9 @@
 //! 6. the resource stores and the resource views of every cluster tab (E07-S11, [`resources`]):
 //!    sidebar count badges, the Workloads overview as the first screen, and `resource::OpenList`;
 //!    the [`ResourceViews`] controller (E07-S03) opens a kind's table in its cluster's tab when
-//!    the sidebar or `resource::OpenList` asks.
+//!    the sidebar or `resource::OpenList` asks;
+//! 7. the log service (E08-S01, [`logs`]): the app's one `LogService`, with `logs.buffer_lines`
+//!    following the settings.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -26,6 +28,7 @@
 
 pub mod bus;
 mod describe;
+mod logs;
 mod resources;
 mod tabs;
 #[cfg(test)]
@@ -99,6 +102,10 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // The views' dispatcher: the bus, once it exists (right after the tabs it routes to).
     let bus_dispatcher = bus::BusDispatcher::new(window.window_handle());
     let dispatcher: Rc<dyn CommandDispatcher> = Rc::new(bus_dispatcher.clone());
+
+    // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
+    // the settings.
+    logs::install(&state, ports.clusters.clock.clone(), cx);
 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);

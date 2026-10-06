@@ -68,6 +68,9 @@
         "log": {
           "$ref": "#/$defs/LogSettingsContent"
         },
+        "logs": {
+          "$ref": "#/$defs/LogsContent"
+        },
         "node_shell_image": {
           "description": "Container image of the node shell pod. Unset uses the built-in image.",
           "type": [
@@ -351,6 +354,22 @@
           "description": "Log filter in `RUST_LOG` syntax, for example `info,oxikube_kube=debug`. Keep the HTTP\nstack (hyper, h2, tower, rustls) at `warn` or quieter: at debug and trace they log request\nheaders (the writer redacts them, but they are noise). A `RUST_LOG` set at launch takes\nprecedence for that run.",
           "type": [
             "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "LogsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about logs: the `logs` object of `settings.json`.",
+      "properties": {
+        "buffer_lines": {
+          "description": "Lines each log session keeps in memory (100 to 5 000 000). When a chatty pod writes more,\nthe oldest lines are dropped and the viewer shows a \"truncated\" marker above the first\none. A change applies to open sessions at once.",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
             "null"
           ]
         }
@@ -671,6 +690,9 @@
     },
     "log": {
       "$ref": "#/$defs/LogSettingsContent"
+    },
+    "logs": {
+      "$ref": "#/$defs/LogsContent"
     },
     "node_shell_image": {
       "description": "Container image of the node shell pod. Unset uses the built-in image.",
