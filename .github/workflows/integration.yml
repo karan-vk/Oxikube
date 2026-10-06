@@ -3,6 +3,9 @@ name: integration
 # kind-backed integration tests (`--features integration`) on PRs touching adapters and
 # the layers/tooling they depend on. Docs-only PRs do not trigger it.
 #
+# The E06 smoke test (`crates/app/oxikube_app/tests/kind_smoke`, E06-S12) runs in the same job through
+# the `oxikube_app/integration` feature of SUITE: two contexts, one session manager, no UI.
+#
 # The data plane suite (E04-S14) is `crates/adapters/oxikube_kube/tests/`; its README maps every
 # port method and epic acceptance item to the test that exercises it. The nightly run executes the
 # whole suite twice on the same cluster as a flake check: a test that passes once and fails once is

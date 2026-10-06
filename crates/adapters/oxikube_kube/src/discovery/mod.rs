@@ -129,6 +129,33 @@ impl KubeDiscovery {
         self.refresh_locked().await
     }
 
+    /// Whether the server serves any kind in API group `group`, discovering first when nothing has
+    /// been discovered yet. Safe to call beside [`discover`](DiscoveryPort::discover): the two
+    /// share the refresh lock, so a caller that arrives while the first discovery runs waits for
+    /// it and reuses its result instead of starting another. A discovery failure answers `false`
+    /// (the group is not known to be served).
+    pub async fn serves_group(&self, group: &str) -> bool {
+        self.ensure_discovered().await;
+        self.registry()
+            .kinds()
+            .any(|kind| kind.gvk.group.as_ref() == group)
+    }
+
+    /// Runs the first discovery unless one has completed (or is in flight, in which case this
+    /// waits for it).
+    async fn ensure_discovered(&self) {
+        if self.shared.generation.load(Ordering::Acquire) != 0 {
+            return;
+        }
+        let _guard = self.shared.refresh.lock().await;
+        if self.shared.generation.load(Ordering::Acquire) != 0 {
+            return;
+        }
+        if let Err(error) = self.refresh_locked().await {
+            debug!(%error, "discovery: first refresh failed");
+        }
+    }
+
     /// kube's `ApiResource` for `gvk`, for building dynamic `Api` handles. Same lookup, miss and
     /// error rules as [`DiscoveryPort::resolve`]. Adapter-internal (E04).
     pub async fn resolve_api_resource(&self, gvk: &Gvk) -> OxiResult<Option<ApiResource>> {

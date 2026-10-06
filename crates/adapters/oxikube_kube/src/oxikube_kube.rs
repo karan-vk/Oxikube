@@ -24,12 +24,14 @@
 //! | [`remote`] | E04-S09, E04-S10 | [`KubeExec`]: `ExecPort` over `Api<Pod>::exec` / `attach`, node shells with guaranteed cleanup, ephemeral debug containers; [`KubePortForward`]: `PortForwardPort` over `Api<Pod>::portforward`, local-listener forwards with service-to-pod resolution and a target-gone hook |
 //! | [`subresource`] | E04-S06 | scale, status, eviction, ephemeral containers and resize as `ResourcePort` methods; [`ResourcePatch`] builders (rollout restart, cordon, uncordon, cronjob suspend) ported from kdash |
 //! | [`algorithms`] | E04-S07 | kubectl-equivalent algorithms over a `ResourcePort`: [`trigger_cronjob`], [`rollout_history`], [`rollout_undo`] and [`drain`] (a progress stream with PodDisruptionBudget retry) |
+//! | [`connector`] | E06-S12 | [`KubeConnector`]: `ClusterConnectorPort` over the [`ClientPool`]: the per-connection `ClusterPorts` bundle, the RBAC `AccessReviewPort`, the liveness bridge to the session manager and a per-connection [`FeedRegistry`] |
 //! | [`sources`] | E03-S02 | `ClusterSourcePort` over kubeconfig files, directories and pasted text, with hot reload |
 //! | [`table`] | E04-S04 | `TableFeedPort` on [`KubeResources`]: hand-rolled server Table API list + watch feed with refresh, diffing and plain-JSON fallback |
 
 pub mod algorithms;
 pub mod auth;
 pub mod budget;
+pub mod connector;
 pub mod discovery;
 pub mod events;
 pub mod feed;
@@ -57,6 +59,7 @@ pub use budget::{
     BudgetConfig, ByteCounter, FeedLease, FeedRegistry, FeedRequest, FeedSource, FeedStream,
     ScopeChange, SelectionLease,
 };
+pub use connector::{ConnectorConfig, KubeConnector};
 pub use discovery::{
     CrdWatch, CrdWatchConfig, DiscoveryConfig, KindChange, KubeDiscovery, Registry, RegistryDiff,
 };

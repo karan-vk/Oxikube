@@ -118,9 +118,16 @@ impl SelectionLease {
         Ok(change)
     }
 
-    async fn subscribe(&self, namespace: Option<String>) -> OxiResult<FeedLease> {
+    /// Takes what it needs by value so the future never borrows `self`: the leases hold feed
+    /// streams, which are `Send` but not `Sync`, and a `&self` held across the await would make
+    /// `reselect` impossible to spawn on the runtime.
+    fn subscribe(
+        &self,
+        namespace: Option<String>,
+    ) -> impl std::future::Future<Output = OxiResult<FeedLease>> + Send + use<> {
+        let registry = self.registry.clone();
         let request = self.template.clone().in_namespace(namespace);
-        self.registry.subscribe(request).await
+        async move { registry.subscribe(request).await }
     }
 
     /// Best effort: subscribes `namespaces` again after a failed reselect.
