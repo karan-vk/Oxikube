@@ -17,19 +17,25 @@
 //!   `node().cordoned()`, ... producing the same `Resource` shape as the fixtures. The entry
 //!   points are re-exported here.
 //! - [`script`]: the [`Script`] / [`CallLog`] / [`Timeline`] helpers the fakes share.
+//! - [`test_ports`]: [`TestPorts`], the seeded bundle of fakes an `AppState` is built from.
 //!
 //! # Features
 //!
 //! - `integration`: tests that need a live kind cluster.
 //! - `screenshot`: PNG save and golden-image comparison (module `screenshot`); pure image code.
-//! - `gpui-headless`: a headless GPUI app context with the real text system (module `headless`);
-//!   minimal scaffolding for the perf scenarios until E05-S11's `TestApp` lands.
-//! - `gpui-screenshot`: headless GPUI rendering to an image (`headless::capture_view`); implies
-//!   `screenshot` and `gpui-headless`.
+//! - `gpui-test`: the deterministic GPUI harness for `#[gpui::test]`s (module `gpui_test`:
+//!   `TestApp`, `TestWindow`); see `docs/testing-gpui.md`.
+//! - `gpui-headless`: a headless GPUI app context with the real text system (module `headless`),
+//!   used by the perf scenarios and by `ScreenshotApp`.
+//! - `gpui-screenshot`: headless GPUI rendering to an image (`headless::capture_view`,
+//!   `gpui_test::ScreenshotApp`, `gpui_test::run_golden_cases`); implies `screenshot`,
+//!   `gpui-headless` and `gpui-test`.
 
 pub mod builders;
 pub mod fakes;
 pub mod fixtures;
+#[cfg(feature = "gpui-test")]
+pub mod gpui_test;
 #[cfg(feature = "gpui-headless")]
 pub mod headless;
 /// kind-backed integration test helpers (`OXIKUBE_TEST_CONTEXT`, `oxi-test-<rand>` namespaces).
@@ -38,7 +44,9 @@ pub mod integration;
 #[cfg(feature = "screenshot")]
 pub mod screenshot;
 pub mod script;
+pub mod test_ports;
 
 pub use builders::{daemonset, deployment, job, node, pod, replicaset, resource, statefulset};
 pub use fakes::*;
 pub use script::{CallLog, Script, Timeline, unscripted};
+pub use test_ports::TestPorts;

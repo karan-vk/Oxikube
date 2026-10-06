@@ -34,15 +34,37 @@ tempfile.workspace = true
 default = []
 # PNG save + golden-image comparison (pure image code, no window, no gpui).
 screenshot = ["dep:image", "dep:anyhow"]
+# Deterministic GPUI test harness (`gpui_test::TestApp`, `TestWindow`): wraps `TestAppContext` /
+# `VisualTestContext` for `#[gpui::test]`s. Turns on `gpui/test-support` (which includes leak
+# detection). No GPU, no real text system, runs on libtest worker threads on every OS.
+gpui-test = ["dep:gpui", "gpui/test-support"]
 # Headless GPUI app context with the host's real text system and headless renderer
 # (`headless::headless_context`); used by the perf scenarios (`oxikube --perf-scenario`).
 # Forwards `test-support` to gpui + gpui_platform, which gate `HeadlessAppContext`.
 gpui-headless = ["dep:gpui", "dep:gpui_platform", "gpui/test-support", "gpui_platform/test-support"]
 # Headless GPUI rendering to an RgbaImage (`capture_view`); needs a GPU/Vulkan/Metal device
 # (`Window::render_to_image`).
-gpui-screenshot = ["screenshot", "gpui-headless"]
+gpui-screenshot = ["screenshot", "gpui-headless", "gpui-test"]
+# The testkit's own golden screenshot example (`tests/gpui_screenshot.rs`). A separate feature, so
+# `cargo test --workspace` (where feature unification turns `gpui-screenshot` on for every
+# consumer) does not run a GPU test on runners without a GPU; the nightly job turns it on.
+gpui-golden = ["gpui-screenshot"]
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
 integration = ["dep:uuid"]
+
+# The harness's own `#[gpui::test]`s: one example per helper (E05-S11).
+[[test]]
+name = "gpui_harness"
+path = "tests/gpui_harness.rs"
+required-features = ["gpui-test"]
+
+# Golden-image screenshot example. `harness = false`: on macOS the platform text system can only be
+# created on the process main thread (see `headless`). Needs a GPU device (Metal / Vulkan).
+[[test]]
+name = "gpui_screenshot"
+path = "tests/gpui_screenshot.rs"
+harness = false
+required-features = ["gpui-golden"]
 
 [lints]
 workspace = true

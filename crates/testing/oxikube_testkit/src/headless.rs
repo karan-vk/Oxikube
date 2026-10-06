@@ -1,7 +1,8 @@
 //! Headless GPUI: an app context with real text shaping, and drawing a view into an `RgbaImage`
 //! without showing a window.
 //!
-//! Feature `gpui-headless` gives [`headless_context`]; `gpui-screenshot` adds `capture_view`.
+//! Feature `gpui-headless` gives [`headless_context`]; `gpui-screenshot` adds `capture_view` and
+//! the `gpui_test::ScreenshotApp` harness (keystrokes, actions, golden comparison) built on it.
 //!
 //! Built on `gpui::HeadlessAppContext` (deterministic `TestDispatcher` scheduling, a real
 //! platform text system, and the platform's headless GPU renderer: Metal on macOS, wgpu/Vulkan on
@@ -17,9 +18,9 @@
 
 #[cfg(feature = "gpui-screenshot")]
 use anyhow::{Context as _, Result};
-use gpui::HeadlessAppContext;
 #[cfg(feature = "gpui-screenshot")]
-use gpui::{App, Entity, Pixels, Render, Size, Window};
+use gpui::{AnyWindowHandle, App, Entity, Pixels, Render, Size, Window};
+use gpui::{AssetSource, HeadlessAppContext};
 #[cfg(feature = "gpui-screenshot")]
 use image::RgbaImage;
 use std::sync::Arc;
@@ -30,10 +31,16 @@ pub const HEADLESS_SCALE_FACTOR: u32 = 2;
 /// Creates a [`HeadlessAppContext`] with the host's real text system (so text shapes and
 /// measures like the real app) and the host's headless GPU renderer (so screenshots work).
 pub fn headless_context() -> HeadlessAppContext {
+    headless_context_with_assets(Arc::new(()))
+}
+
+/// [`headless_context`] with an asset source (icons and fonts a view loads by path, such as
+/// `oxikube_ui::Assets`).
+pub fn headless_context_with_assets(assets: Arc<dyn AssetSource>) -> HeadlessAppContext {
     // `current_platform(true)` is the headless variant: it owns the platform text system but
     // opens no window and runs no event loop.
     let text_system = gpui_platform::current_platform(true).text_system();
-    HeadlessAppContext::with_platform(text_system, Arc::new(()), || {
+    HeadlessAppContext::with_platform(text_system, assets, || {
         gpui_platform::current_headless_renderer()
     })
 }
@@ -53,11 +60,16 @@ pub fn capture_view<V: Render + 'static>(
         .open_window(size, build_root)
         .context("opening headless window")?;
     cx.run_until_parked();
-    cx.update_window(window.into(), |_, window, cx| {
-        window.draw(cx).clear(cx);
-    })
-    .context("drawing headless window")?;
+    capture_window(&mut cx, window.into())
+}
+
+/// Draws one frame of `window` and returns what it rendered (the shared tail of [`capture_view`]
+/// and `gpui_test::ScreenshotApp::capture`).
+#[cfg(feature = "gpui-screenshot")]
+pub fn capture_window(cx: &mut HeadlessAppContext, window: AnyWindowHandle) -> Result<RgbaImage> {
+    cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+        .context("drawing headless window")?;
     cx.run_until_parked();
-    cx.capture_screenshot(window.into())
+    cx.capture_screenshot(window)
         .context("Window::render_to_image (needs a GPU device; on Linux a Vulkan driver)")
 }

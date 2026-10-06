@@ -82,15 +82,22 @@ impl StartupEnv {
 #[cfg(any(test, feature = "test-support"))]
 impl StartupEnv {
     /// Test fakes, no disk, no OS threads: the embedded defaults, the deterministic runtime and a
-    /// `FakeStatePort` / `FakeSecretStorePort` bundle.
+    /// `FakeStatePort` / `FakeSecretStorePort` bundle ([`StartupEnv::test_with`] over
+    /// `TestPorts::seeded()`).
     pub fn test() -> Self {
+        Self::test_with(&oxikube_testkit::TestPorts::seeded())
+    }
+
+    /// [`StartupEnv::test`] over `ports`: the app's state and secret ports are the fakes of the
+    /// bundle, so the test keeps handles to script them and to assert on their recorded calls.
+    pub fn test_with(ports: &oxikube_testkit::TestPorts) -> Self {
         use std::sync::Arc;
-        let ports = AppPorts::new(Arc::new(oxikube_testkit::FakeStatePort::new()))
-            .with_secrets(Arc::new(oxikube_testkit::FakeSecretStorePort::new()));
+        let bundle =
+            AppPorts::new(ports.state.clone()).with_secrets(Arc::clone(&ports.secrets) as _);
         Self {
             config: ConfigSource::Memory,
             runtime: RuntimeChoice::Deterministic,
-            ports: PortsChoice::Provided(ports),
+            ports: PortsChoice::Provided(bundle),
             data_dir: None,
             log: None,
             earlier: StartupReport::default(),

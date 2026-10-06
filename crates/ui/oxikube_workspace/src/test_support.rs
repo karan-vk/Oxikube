@@ -1,5 +1,5 @@
 //! A test item and a test panel for `#[gpui::test]`s of the workspace and of the crates built on
-//! it (feature `test-support`).
+//! it (feature `test-support`), and [`open_workspace`], the window to start them from.
 
 use std::{cell::Cell, rc::Rc};
 
@@ -11,8 +11,10 @@ use gpui::{
 use oxikube_ui::IconName;
 
 mod layers;
+mod open;
 
 pub use layers::{TestModal, TestStatusItem};
+pub use open::open_workspace;
 
 use crate::{
     item::{Item, ItemEvent, TabContent, register_item},
