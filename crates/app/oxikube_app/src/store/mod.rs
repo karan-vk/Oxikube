@@ -21,6 +21,7 @@
 //! | what a subscriber asks: kind, scope, filter, sort | [`StoreQuery`], [`StoreFilter`], [`SortKey`] (`query`), [`LabelSelector`] (`selector`) |
 //! | what it gets: snapshot, then coalesced ops with positions, plus the feed state | [`Subscription`], [`StoreDelta`], [`RowOp`], [`FeedState`] (`subscription`, `mailbox`, `delta`) |
 //! | which feed serves a kind | [`FeedPolicy`] (`policy`) |
+//! | counts and health for sidebar badges and overview tiles | [`ResourceStore::counts`], [`CountsLease`], [`CountState`] (`counts`, E07-S11) |
 //! | the watch-budget hook and admission | [`FeedBudget`] (`budget`, `admission`) |
 //! | the cached objects | [`StoreObject`], [`ObjectKey`], [`FeedKey`] (`object`), `cache`, `index` |
 //! | the feed task and its spawner | `driver`, [`Spawner`] (`spawn`) |
@@ -69,6 +70,7 @@ mod admission;
 mod budget;
 mod cache;
 mod config;
+mod counts;
 mod delta;
 mod driver;
 mod entry;
@@ -89,6 +91,9 @@ mod tests;
 
 pub use budget::{Admission, FeedBudget, FeedRequest, MaxFeeds, UnlimitedBudget};
 pub use config::{DEFAULT_IDLE_GRACE, FeedInfo, StoreConfig, StoreOptions, StoreRuntime};
+pub use counts::{
+    CORE_TARGETS, CoreTarget, CountState, CountTarget, CountsLease, KindCount, WORKLOAD_TARGETS,
+};
 pub use delta::{FeedState, RowChange, RowOp, StoreDelta};
 pub use feed::{StorePorts, TableColumns};
 pub use object::{FeedKey, FeedScope, ObjectKey, StoreObject, TableObject};

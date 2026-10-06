@@ -26,6 +26,10 @@ pub const FEATURES: &[Feature] = &[
         init: oxikube_catalog_ui::init,
     },
     Feature {
+        name: "oxikube_resources_ui",
+        init: oxikube_resources_ui::init,
+    },
+    Feature {
         name: "cluster_prefs",
         init: follow_cluster_prefs,
     },

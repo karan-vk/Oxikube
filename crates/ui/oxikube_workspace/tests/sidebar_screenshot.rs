@@ -99,6 +99,7 @@ fn render(tokens: Tokens, restricted: bool) -> anyhow::Result<RgbaImage> {
         sessions,
         integrations: IntegrationRegistry::new(),
         state: Arc::new(FakeStatePort::new()),
+        stores: None,
     };
     let mut cx = headless();
     let mut shown = None;

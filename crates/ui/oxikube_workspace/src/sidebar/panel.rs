@@ -6,6 +6,7 @@
 //! | `follow.rs` | following the session: reviews, discovery, rebuilding the rows |
 //! | `interact.rs` | open and close, highlight, activate |
 //! | `view.rs` | drawing the virtualised list |
+//! | `counts.rs` | the count badges: a `ResourceStore` read on a timer |
 //!
 //! # What runs where
 //!
@@ -24,6 +25,7 @@ use gpui::{
 };
 use oxikube_app::{
     ClusterSessionManager, CustomResourceGroup, IntegrationRegistry, IntegrationSection,
+    ResourceStores,
 };
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::StatePort;
@@ -36,6 +38,7 @@ use super::store::SidebarStore;
 use super::writer::SidebarWriter;
 use crate::panel::{DockPosition, Panel, PanelEvent};
 
+mod counts;
 mod follow;
 mod interact;
 mod view;
@@ -49,6 +52,8 @@ pub struct SidebarDeps {
     pub integrations: IntegrationRegistry,
     /// Where the collapsed state is saved, per cluster.
     pub state: Arc<dyn StatePort>,
+    /// The per-cluster resource stores the count badges read (E07-S11). `None`: no badges.
+    pub stores: Option<Arc<ResourceStores>>,
 }
 
 /// What the sidebar tells whoever hosts it.
@@ -84,6 +89,8 @@ pub struct SidebarPanel {
     store: Option<SidebarStore>,
     /// Writes the open and closed choices in order; `None` when there is no store.
     writer: Option<SidebarWriter>,
+    /// The count badges: the store read, the lease and the timer.
+    counts: counts::CountsState,
     review_task: Option<Task<()>>,
     discovery_task: Option<Task<()>>,
     load_task: Option<Task<()>>,
@@ -213,6 +220,7 @@ impl SidebarPanel {
                 selected: None,
                 store,
                 writer,
+                counts: counts::CountsState::default(),
                 review_task: None,
                 discovery_task: None,
                 load_task: None,

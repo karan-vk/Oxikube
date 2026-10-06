@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use super::config::{FeedInfo, StoreOptions, StoreRuntime};
 use super::delta::FeedState;
 use super::driver::{Backoff, drive};
-use super::entry::{FeedEntry, SubId};
+use super::entry::{EntryState, FeedEntry, SubId};
 use super::feed::StorePorts;
 use super::mailbox::SubShared;
 use super::object::{FeedKey, FeedScope};
@@ -72,6 +72,15 @@ impl ResourceStore {
             tables: session.tables()?,
         };
         Some(Self::new(session.id().clone(), ports, runtime, options))
+    }
+
+    /// Whether `other` is a handle on this same store (not merely one for the same cluster).
+    pub fn is_same_store(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
+    pub(super) fn inner(&self) -> &Arc<StoreInner> {
+        &self.inner
     }
 
     /// The cluster this store caches.
@@ -135,6 +144,14 @@ impl StoreInner {
 
     pub fn plan(&self, gvk: &Gvk) -> FeedPlan {
         self.options.policy.plan(gvk)
+    }
+
+    /// Runs `read` on the entry of `key` under its lock, if there is one (a cache read, never a
+    /// feed start).
+    pub fn with_entry<R>(&self, key: &FeedKey, read: impl FnOnce(&EntryState) -> R) -> Option<R> {
+        let entry = self.entries.lock().get(key).cloned()?;
+        let st = entry.state.lock();
+        Some(read(&st))
     }
 
     /// Runs `task` on the store's spawner, abortable through the returned guard.

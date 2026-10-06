@@ -2,6 +2,7 @@
 //! executor (no runtime, no threads) and the fake clock.
 
 mod budget;
+mod counts;
 mod feeds;
 mod filter;
 mod order;

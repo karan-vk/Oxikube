@@ -5,8 +5,9 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use super::counts::{CacheTally, Tally};
 use super::feed::{FeedBatch, ObjectDelta};
-use super::object::{ObjectKey, StoreObject};
+use super::object::{FeedScope, ObjectKey, StoreObject};
 use super::query::StoreFilter;
 
 type KeySet = HashSet<ObjectKey>;
@@ -37,6 +38,9 @@ impl CacheChange {
 #[derive(Debug, Default)]
 pub(crate) struct ObjectCache {
     objects: HashMap<ObjectKey, Arc<StoreObject>>,
+    /// How many objects have a health verdict, and how many of those are healthy: kept in step
+    /// by `upsert` and `remove`, so a count read is O(1) however many objects there are.
+    tally: Tally,
     by_name: HashMap<Arc<str>, KeySet>,
     by_namespace: HashMap<Arc<str>, KeySet>,
     by_label: HashMap<(Arc<str>, Arc<str>), KeySet>,
@@ -45,6 +49,35 @@ pub(crate) struct ObjectCache {
 impl ObjectCache {
     pub fn len(&self) -> usize {
         self.objects.len()
+    }
+
+    /// The health tally of the objects whose namespace `scope` covers. O(1) for a cluster-wide
+    /// part (the common case); a namespace part of a wider feed walks the objects.
+    pub fn tally_in(&self, scope: &FeedScope) -> CacheTally {
+        match scope {
+            FeedScope::Cluster => CacheTally {
+                total: self.objects.len(),
+                rated: self.tally.rated,
+                healthy: self.tally.healthy,
+            },
+            FeedScope::Namespace(_) => {
+                let mut tally = Tally::default();
+                let mut total = 0;
+                for object in self
+                    .objects
+                    .values()
+                    .filter(|o| scope.covers(o.namespace()))
+                {
+                    total += 1;
+                    tally.add(object);
+                }
+                CacheTally {
+                    total,
+                    rated: tally.rated,
+                    healthy: tally.healthy,
+                }
+            }
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -120,8 +153,10 @@ impl ObjectCache {
             }
             let old = old.clone();
             self.unindex(&key, &old);
+            self.tally.sub(&old);
         }
         self.index(&key, &object);
+        self.tally.add(&object);
         self.objects.insert(key, object);
         true
     }
@@ -129,6 +164,7 @@ impl ObjectCache {
     pub fn remove(&mut self, key: &ObjectKey) -> Option<Arc<StoreObject>> {
         let old = self.objects.remove(key)?;
         self.unindex(key, &old);
+        self.tally.sub(&old);
         Some(old)
     }
 

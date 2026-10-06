@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use gpui::SharedString;
-use oxikube_app::{AccessOutcome, CustomResourceGroup, IntegrationSection};
+use oxikube_app::{AccessOutcome, CountState, CustomResourceGroup, IntegrationSection};
 use oxikube_domain::access::AccessRequirement;
 use oxikube_ui::IconName;
 
@@ -60,7 +60,8 @@ pub struct SectionRow {
     pub open: bool,
     /// Whether it has entries to show or hide (a heading without any is one link).
     pub expandable: bool,
-    /// The count badge. `None` draws the placeholder; the `ResourceStore` fills it in later.
+    /// The count badge of a section that is one kind (Nodes, Namespaces, Events); `None` draws
+    /// the placeholder dash.
     pub count: Option<usize>,
     /// Where the heading goes when it is not expandable.
     pub target: Option<SidebarTarget>,
@@ -90,6 +91,9 @@ pub struct EntryRow {
     pub depth: u8,
     /// Where activating it goes.
     pub target: Option<SidebarTarget>,
+    /// What the `ResourceStore` says about the kind's count; `None` for entries that list no
+    /// built-in kind. Filled by [`apply_counts`](super::apply_counts), never by [`build_rows`].
+    pub count: Option<CountState>,
 }
 
 /// How a notice is drawn.
@@ -240,6 +244,7 @@ fn section_rows(section: &SidebarSection, input: &RowInputs<'_>) -> Shown {
                         title: e.title.clone(),
                         depth: 1,
                         target: e.target.clone(),
+                        count: None,
                     })
                 }));
             }
@@ -286,6 +291,7 @@ fn section_rows(section: &SidebarSection, input: &RowInputs<'_>) -> Shown {
                                     group.group.clone(),
                                     kind.plural.clone(),
                                 )),
+                                count: None,
                             })
                         }));
                     }
@@ -321,6 +327,7 @@ fn integration_rows(
                 title: item.title.clone().into(),
                 depth: 1,
                 target: Some(SidebarTarget::Command(item.command)),
+                count: None,
             })
         }));
     }

@@ -5519,6 +5519,7 @@ dependencies = [
  "oxikube_kube",
  "oxikube_logging",
  "oxikube_ports",
+ "oxikube_resources_ui",
  "oxikube_runtime",
  "oxikube_settings",
  "oxikube_state_sqlite",
@@ -5795,6 +5796,18 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_resources_ui"
 version = "0.0.1"
+dependencies = [
+ "futures",
+ "gpui-pre",
+ "oxikube_app",
+ "oxikube_domain",
+ "oxikube_ports",
+ "oxikube_runtime",
+ "oxikube_testkit",
+ "oxikube_ui",
+ "oxikube_workspace",
+ "tracing",
+]
 
 [[package]]
 name = "oxikube_runtime"
