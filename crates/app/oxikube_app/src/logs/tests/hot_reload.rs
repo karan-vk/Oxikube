@@ -1,5 +1,7 @@
 //! `logs.buffer_lines`: the bound, its clamp, and how a change reaches open sessions.
 
+use std::sync::Arc;
+
 use super::{Harness, burst};
 use crate::logs::{
     DEFAULT_BUFFER_LINES, LogConfig, MAX_BUFFER_LINES, MIN_BUFFER_LINES, clamp_buffer_lines,
@@ -81,4 +83,36 @@ fn a_setting_below_the_floor_is_clamped_when_applied() {
     let h = with_lines(1_000);
     h.service.set_buffer_lines(1);
     assert_eq!(h.service.buffer_lines(), MIN_BUFFER_LINES);
+}
+
+#[test]
+fn a_commit_never_overwrites_a_newer_bound_with_an_older_one() {
+    use crate::logs::shared::Shared;
+    use crate::logs::{LogEntry, LogTarget};
+    use oxikube_ports::LogOptions;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    for _ in 0..500 {
+        let shared = Arc::new(Shared::new(
+            1,
+            LogTarget::pod("default", "web-0"),
+            LogOptions::default(),
+            1_500,
+        ));
+        let setting = Arc::new(AtomicUsize::new(1_500));
+        let committer = {
+            let (shared, setting) = (shared.clone(), setting.clone());
+            std::thread::spawn(move || {
+                for i in 0..20 {
+                    shared.commit(vec![LogEntry::new(super::line(i))], &setting);
+                }
+            })
+        };
+        // What `LogService::set_buffer_lines` does: store the setting, then apply it.
+        setting.store(400, Ordering::Release);
+        shared.set_capacity(400);
+        committer.join().unwrap();
+        // A commit after the change reads 400, one before it was trimmed: both end at 400.
+        shared.read(|buffer, _| assert_eq!(buffer.capacity(), 400));
+    }
 }

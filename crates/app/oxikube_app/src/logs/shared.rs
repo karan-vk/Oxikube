@@ -3,7 +3,7 @@
 //! One short critical section per commit (the driver builds its entries first) and per read (the
 //! UI copies the visible rows out). Waking is done after the lock is released.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::task::Waker;
 
 use oxikube_ports::LogOptions;
@@ -72,11 +72,14 @@ impl Shared {
         self.batches.load(Ordering::Relaxed)
     }
 
-    /// Appends one batch, at `capacity` lines of room.
-    pub(super) fn commit(&self, entries: Vec<LogEntry>, capacity: usize) {
+    /// Appends one batch, at `buffer_lines` of room. The bound is read under the lock, so a
+    /// concurrent [`Shared::set_capacity`] (which stores the setting first) is never overwritten
+    /// by an older value.
+    pub(super) fn commit(&self, entries: Vec<LogEntry>, buffer_lines: &AtomicUsize) {
         self.batches.fetch_add(1, Ordering::Relaxed);
         let wakers = {
             let mut inner = self.inner.lock();
+            let capacity = buffer_lines.load(Ordering::Acquire);
             if inner.buffer.capacity() != capacity {
                 inner.buffer.set_capacity(capacity);
             }

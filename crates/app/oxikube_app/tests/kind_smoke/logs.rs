@@ -48,6 +48,13 @@ fn echo_pod(name: &str) -> Pod {
 }
 
 fn service(buffer_lines: usize) -> LogService {
+    service_with(LogConfig {
+        buffer_lines,
+        ..LogConfig::default()
+    })
+}
+
+fn service_with(config: LogConfig) -> LogService {
     let spawner: Arc<dyn Spawner> = Arc::new(|task: BoxFuture<'static, ()>| {
         tokio::spawn(task);
     });
@@ -56,10 +63,7 @@ fn service(buffer_lines: usize) -> LogService {
             spawner,
             clock: Arc::new(TokioClock),
         },
-        LogConfig {
-            buffer_lines,
-            ..LogConfig::default()
-        },
+        config,
     )
 }
 
@@ -89,7 +93,12 @@ async fn a_followed_session_streams_a_live_pod_and_cancels_on_drop() {
     .await;
 
     let logs = Arc::new(KubeLogs::new(client.clone()));
-    let service = service(1_000);
+    // A flush tick several lines wide (the pod emits five a second), so batching is observable:
+    // with the default 32 ms tick every line would be a batch of its own.
+    let service = service_with(LogConfig {
+        flush_interval: Duration::from_millis(800),
+        ..LogConfig::default()
+    });
     let session = service.open(
         logs.clone(),
         LogTarget::pod(ns.name(), "echo"),
@@ -127,8 +136,10 @@ async fn a_followed_session_streams_a_live_pod_and_cancels_on_drop() {
             assert_eq!(number as u64, entry.seq, "line {i}");
         }
     });
+    // Batched: lines arrive five a second and a batch spans 800 ms, so a batch holds ~4 lines. A
+    // commit per line (the regression) would make batches == lines.
     assert!(
-        reader.batches() < reader.len() as u64 + 1,
+        reader.batches() * 2 <= reader.len() as u64,
         "{} batches for {} lines",
         reader.batches(),
         reader.len()

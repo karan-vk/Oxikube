@@ -75,13 +75,14 @@ proptest! {
             LogOptions::default(),
             start,
         ));
+        let setting = std::sync::atomic::AtomicUsize::new(start);
         let mut deltas = LogDeltas::new(shared.clone());
         let (mut first, mut end) = (0u64, 0u64);
         let waker = noop_waker();
         let mut cx = Context::from_waker(&waker);
         for op in ops {
             match op {
-                Op::Append(n) => shared.commit((0..n).map(|i| LogEntry::new(line(i))).collect(), start.max(1)),
+                Op::Append(n) => shared.commit((0..n).map(|i| LogEntry::new(line(i))).collect(), &setting),
                 Op::Capacity(c) => shared.set_capacity(c),
                 Op::Poll => {}
             }

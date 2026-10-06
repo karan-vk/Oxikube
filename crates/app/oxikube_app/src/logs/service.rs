@@ -76,14 +76,14 @@ impl LogService {
 
     /// Lines each session keeps (`logs.buffer_lines`).
     pub fn buffer_lines(&self) -> usize {
-        self.buffer_lines.load(Ordering::Relaxed)
+        self.buffer_lines.load(Ordering::Acquire)
     }
 
     /// Applies a new `logs.buffer_lines` (clamped) to every open session at once and to the
     /// ones opened later. A smaller bound drops the oldest lines of the sessions now.
     pub fn set_buffer_lines(&self, lines: usize) {
         let lines = clamp_buffer_lines(lines);
-        self.buffer_lines.store(lines, Ordering::Relaxed);
+        self.buffer_lines.store(lines, Ordering::Release);
         for shared in self.live() {
             shared.set_capacity(lines);
         }

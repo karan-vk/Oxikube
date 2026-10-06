@@ -7,7 +7,7 @@
 //! line. Entries are built before the buffer's lock is taken.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 
 use futures::future::FutureExt as _;
 use futures::{StreamExt as _, select_biased};
@@ -117,8 +117,8 @@ impl Driver {
         if batch.is_empty() {
             return;
         }
-        let capacity = self.buffer_lines.load(Ordering::Relaxed);
-        self.shared.commit(std::mem::take(batch), capacity);
+        self.shared
+            .commit(std::mem::take(batch), &self.buffer_lines);
     }
 }
 

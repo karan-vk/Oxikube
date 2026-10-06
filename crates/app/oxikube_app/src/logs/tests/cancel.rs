@@ -32,6 +32,11 @@ fn a_session_dropped_before_its_task_ran_never_opens_the_stream() {
     drop(session);
     let mut h = h;
     h.settle();
+    assert!(
+        h.port.recorded_calls().is_empty(),
+        "the aborted driver still opened the stream: {:?}",
+        h.port.recorded_calls()
+    );
     assert_eq!(h.port.live_streams(), 0);
 }
 
