@@ -108,3 +108,73 @@ fn sort_keys_are_typed() {
         CellSort::Age(Age::from_secs(27 * 3600 + 4 * 60 + 5))
     );
 }
+
+/// One cell of every sort kind, including pairs that tie across kinds.
+fn every_kind() -> Vec<Cell<'static>> {
+    use oxikube_domain::Quantity;
+    let q = |s: &str| Cell::quantity(s.to_owned(), s.parse::<Quantity>().unwrap());
+    vec![
+        Cell::int(2),
+        Cell::int(10),
+        Cell::int(i64::MAX),
+        Cell::int((1 << 53) + 1),
+        Cell::float("1/2", 0.5),
+        Cell::float("2.0", 2.0),
+        Cell::float("2^53", (1u64 << 53) as f64),
+        Cell::float("NaN", f64::NAN),
+        q("250m"),
+        q("1Gi"),
+        q("500Mi"),
+        Cell::age(Age::from_secs(5)),
+        Cell::age(Age::from_secs(90_000)),
+        Cell::text("abc"),
+        Cell::text("ABD"),
+        Cell::time("t0", "2026-01-01T00:00:00Z".parse().unwrap()),
+        Cell::time("t1", "2026-02-01T00:00:00Z".parse().unwrap()),
+        Cell::empty(),
+        Cell::Pending,
+    ]
+}
+
+#[test]
+fn compare_is_a_total_order_across_every_sort_kind() {
+    let cells = every_kind();
+    for a in &cells {
+        assert_eq!(a.compare(a), Ordering::Equal, "{a:?} is not reflexive");
+        for b in &cells {
+            assert_eq!(
+                a.compare(b),
+                b.compare(a).reverse(),
+                "not antisymmetric: {a:?} vs {b:?}"
+            );
+            for c in &cells {
+                if a.compare(b) != Ordering::Greater && b.compare(c) != Ordering::Greater {
+                    assert_ne!(
+                        a.compare(c),
+                        Ordering::Greater,
+                        "not transitive: {a:?} <= {b:?} <= {c:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_column_mixing_numbers_and_quantities_sorts_in_any_input_order() {
+    let mut cells = vec![
+        Cell::int(10),
+        Cell::quantity("2Gi", "2Gi".parse().unwrap()),
+        Cell::int(3),
+        Cell::int(1),
+        Cell::quantity("500Mi", "500Mi".parse().unwrap()),
+    ];
+    let expect = ["1", "3", "10", "500Mi", "2Gi"];
+    for _ in 0..cells.len() {
+        cells.rotate_left(1);
+        let mut sorted = cells.clone();
+        sorted.sort_by(|a, b| a.compare(b));
+        let shown: Vec<&str> = sorted.iter().map(Cell::display).collect();
+        assert_eq!(shown, expect);
+    }
+}

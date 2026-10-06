@@ -217,6 +217,30 @@ fn events() {
 }
 
 #[test]
+fn event_last_seen_prefers_the_series_over_the_first_observation() {
+    // `eventTime` is the first observation of a series event; the series says when it last
+    // repeated (10 days before `now()` versus 10 seconds before).
+    let series = namespaced(
+        "v1",
+        "Event",
+        json!({
+            "eventTime": "2025-12-23T03:04:05.000000Z",
+            "series": {"count": 9, "lastObservedTime": "2026-01-02T03:03:55.000000Z"},
+        }),
+    );
+    check(&series, &[("last-seen", "10s")]);
+    let plain = namespaced(
+        "v1",
+        "Event",
+        json!({
+            "lastTimestamp": "2026-01-02T03:03:05Z",
+            "eventTime": "2025-12-23T03:04:05Z",
+        }),
+    );
+    check(&plain, &[("last-seen", "60s")]);
+}
+
+#[test]
 fn custom_resource_definitions_and_cluster_policy_kinds() {
     check(
         &fx::widget_crd(),

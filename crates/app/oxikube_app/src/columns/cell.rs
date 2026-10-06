@@ -30,9 +30,12 @@ pub enum Tone {
 /// The typed value a cell sorts by.
 ///
 /// [`CellSort::Text`] sorts by the cell's display text, ASCII-case-insensitively. Every other
-/// variant carries its own value. Across variants numbers sort before text, text before times,
-/// and a cell without a value ([`CellSort::None`]) after everything, so blanks sink to the bottom
-/// when ascending (the same order as the store's own sort).
+/// variant carries its own value. Across variants the order is a fixed ladder, so a column that
+/// mixes kinds (a CRD string column holding `3` and `1Gi`) still sorts deterministically:
+/// plain numbers ([`CellSort::Int`] and [`CellSort::Float`], compared by value), then
+/// quantities, then ages, then text, then times, and a cell without a value
+/// ([`CellSort::None`]) after everything, so blanks sink to the bottom when ascending (the same
+/// order as the store's own sort).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum CellSort {
     /// No value: the cell is blank (a missing field, a metric not reported yet).
@@ -56,10 +59,12 @@ pub enum CellSort {
 impl CellSort {
     fn rank(&self) -> u8 {
         match self {
-            CellSort::Int(_) | CellSort::Float(_) | CellSort::Quantity(_) | CellSort::Age(_) => 0,
-            CellSort::Text => 1,
-            CellSort::Time(_) => 2,
-            CellSort::None => 3,
+            CellSort::Int(_) | CellSort::Float(_) => 0,
+            CellSort::Quantity(_) => 1,
+            CellSort::Age(_) => 2,
+            CellSort::Text => 3,
+            CellSort::Time(_) => 4,
+            CellSort::None => 5,
         }
     }
 }
@@ -196,8 +201,8 @@ impl<'a> Cell<'a> {
         match (a, b) {
             (Int(x), Int(y)) => x.cmp(&y),
             (Float(x), Float(y)) => x.total_cmp(&y),
-            (Int(x), Float(y)) => (x as f64).total_cmp(&y),
-            (Float(x), Int(y)) => x.total_cmp(&(y as f64)),
+            (Int(x), Float(y)) => cmp_int_float(x, y),
+            (Float(x), Int(y)) => cmp_int_float(y, x).reverse(),
             (Quantity(x), Quantity(y)) => x.cmp(&y),
             (Age(x), Age(y)) => x.cmp(&y),
             (Time(x), Time(y)) => x.cmp(&y),
@@ -205,6 +210,13 @@ impl<'a> Cell<'a> {
             _ => a.rank().cmp(&b.rank()),
         }
     }
+}
+
+/// Orders an integer against a float exactly: by the float approximation first, and by the
+/// integers themselves when that ties, so two integers above 2^53 keep their order relative to
+/// any float (a lossy cast alone would make the comparison intransitive).
+fn cmp_int_float(x: i64, y: f64) -> Ordering {
+    (x as f64).total_cmp(&y).then_with(|| x.cmp(&(y as i64)))
 }
 
 /// ASCII-case-insensitive byte order without allocating.

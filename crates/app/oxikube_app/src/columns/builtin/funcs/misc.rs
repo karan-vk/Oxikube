@@ -93,16 +93,15 @@ fn metric_value(m: &Value, which: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// Event `LAST SEEN`: time since the event last happened.
+/// Event `LAST SEEN`: time since the event last happened. `series.lastObservedTime` wins (a
+/// series event's `eventTime` is its first observation), then `lastTimestamp`, then `eventTime`.
 pub(crate) fn event_last_seen<'a>(res: &'a Resource, now: Timestamp) -> Cell<'a> {
     let json = &res.json;
-    let at = ["lastTimestamp", "eventTime"]
-        .iter()
-        .find_map(|k| str_at(json, k))
-        .or_else(|| {
-            json.pointer("/series/lastObservedTime")
-                .and_then(Value::as_str)
-        })
+    let at = json
+        .pointer("/series/lastObservedTime")
+        .and_then(Value::as_str)
+        .or_else(|| str_at(json, "lastTimestamp"))
+        .or_else(|| str_at(json, "eventTime"))
         .and_then(|s| s.parse::<Timestamp>().ok())
         .or(res.meta.creation);
     at.map_or_else(Cell::empty, |t| Cell::age(Age::between(t, now)))
