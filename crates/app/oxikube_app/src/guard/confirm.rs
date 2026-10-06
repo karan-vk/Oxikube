@@ -6,6 +6,7 @@
 //! and dispatches the *same* command again with a [`Confirmation`] in the context, or
 //! declines it through [`CommandBus::decline`](crate::command_bus::CommandBus::decline).
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use indexmap::IndexMap;
@@ -93,7 +94,7 @@ pub enum ConfirmationError {
 pub(crate) struct Pending {
     pub(crate) command: Command,
     pub(crate) initiator: Initiator,
-    pub(crate) who: std::sync::Arc<str>,
+    pub(crate) who: Arc<str>,
     pub(crate) cluster: ClusterId,
     pub(crate) expected_name: Option<String>,
     pub(crate) dry_run: bool,

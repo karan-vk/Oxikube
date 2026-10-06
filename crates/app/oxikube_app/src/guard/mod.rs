@@ -45,8 +45,6 @@ mod tests;
 
 use std::sync::Arc;
 
-use oxikube_domain::command::CommandMeta;
-use oxikube_domain::safety::ConfirmTier;
 use oxikube_ports::{ClockPort, StatePort};
 
 pub use confirm::{
@@ -84,11 +82,6 @@ impl MutationGuard {
             audit: AuditLog::new(state, clock),
             confirmations: PendingConfirmations::default(),
         }
-    }
-
-    /// The tier the guard asks for before running a command described by `meta`.
-    pub fn confirm_tier(meta: &CommandMeta) -> ConfirmTier {
-        policy::confirm_tier(meta)
     }
 
     /// The audit log.

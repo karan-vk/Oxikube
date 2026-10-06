@@ -5,9 +5,6 @@ use oxikube_domain::command::{Command, CommandMeta};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::safety::{ConfirmTier, Risk};
 
-/// The kind [`audit_target`] names when a command has no single target object.
-const CLUSTER_KIND: (&str, &str, &str) = ("oxikube.io", "v1", "Cluster");
-
 /// The confirmation tier the guard asks for before running a command.
 ///
 /// * A non-mutating command never confirms ([`ConfirmTier::None`]).
@@ -69,8 +66,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
 /// service (E19) audits each applied object on its own.
 pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
     command.target().cloned().unwrap_or_else(|| {
-        let (group, version, kind) = CLUSTER_KIND;
-        ResourceRef::cluster_scoped(cluster.clone(), Gvk::new(group, version, kind), "*")
+        let gvk = Gvk::new("oxikube.io", "v1", "Cluster");
+        ResourceRef::cluster_scoped(cluster.clone(), gvk, "*")
     })
 }
 

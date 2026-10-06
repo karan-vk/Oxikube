@@ -77,11 +77,8 @@ impl From<DispatchError> for OxiError {
     /// `ReadOnly` and `NotPermitted` are `Forbidden` (the user, not the cluster, said
     /// no; `ErrorKind` has no `ReadOnly` variant, see `docs/CONTEXT.md`).
     fn from(err: DispatchError) -> Self {
-        if let DispatchError::Handler(inner) = err {
-            return inner;
-        }
-        let kind = match &err {
-            DispatchError::Handler(inner) => inner.kind(),
+        let kind = match err {
+            DispatchError::Handler(inner) => return inner,
             DispatchError::UnknownCommand(_) | DispatchError::NoSession(_) => ErrorKind::NotFound,
             DispatchError::NotPermitted { .. } | DispatchError::ReadOnly { .. } => {
                 ErrorKind::Forbidden

@@ -4,7 +4,7 @@ use oxikube_domain::Capabilities;
 use oxikube_domain::command::{COMMANDS, Command, CommandId, CommandMeta, CommandScope};
 use oxikube_domain::safety::{ConfirmTier, Risk};
 
-use crate::guard::{MutationGuard, policy};
+use crate::guard::policy;
 use crate::testing::{id, node, pod, pod_delete};
 
 const TEST_ID: CommandId = CommandId::new("test::Mutate");
@@ -28,7 +28,7 @@ fn tier_follows_the_risk_matrix() {
         (Risk::Irreversible, ConfirmTier::TypeName),
     ];
     for (risk, tier) in expected {
-        assert_eq!(MutationGuard::confirm_tier(&mutation(risk)), tier, "{risk}");
+        assert_eq!(policy::confirm_tier(&mutation(risk)), tier, "{risk}");
     }
 }
 
