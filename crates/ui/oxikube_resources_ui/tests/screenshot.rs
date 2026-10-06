@@ -7,6 +7,8 @@
 //!
 //! - `pods_table_filtered`: the same pods with `cart|checkout|web` typed in the filter bar: three
 //!   rows and the `3 of 7` count (E07-S04).
+//! - `detail_crd_schema_dark`, `detail_crd_schema_light` (`crd`): the Schema tab of a CRD's detail
+//!   (E07-S07) with `spec` and `spec.containers` open.
 //!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
@@ -38,6 +40,8 @@ use oxikube_testkit::{
 };
 use oxikube_workspace::CommandDispatcher;
 
+#[path = "screenshot/crd.rs"]
+mod crd;
 #[path = "screenshot/detail.rs"]
 mod detail;
 
@@ -192,6 +196,7 @@ fn main() -> ExitCode {
         render(Some("cart|checkout|web"))
             .and_then(|image| check("pods_table_filtered", image, WIDTH, HEIGHT)),
         detail::run(),
+        crd::run(),
     ];
     let mut failed = false;
     for result in results {

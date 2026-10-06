@@ -10,6 +10,7 @@
 //! |---|---|
 //! | `view` | [`ResourceTable`]: construction, the `Item` impl, [`ResourceTableDeps`], [`ResourceTableEvent`] |
 //! | `columns` | the column provider (core catalogue or a Table feed's columns) and the saved layout |
+//! | `crd` | what a custom resource table adds (E07-S07): the version switcher and the note that its columns are the basic ones |
 //! | `feed` | the store subscription: deltas applied in one update, coalesced redraws, rescoping on a namespace change, re-subscribing on a reconnect |
 //! | `filtering` | the filter bar's side: applying a parsed filter to the subscription, `/` focus, saving and restoring the text |
 //! | `interact` | clicks, keys, column picker, and the commands they dispatch |
@@ -38,6 +39,7 @@
 pub mod actions;
 mod cells;
 mod columns;
+mod crd;
 mod delegate;
 mod feed;
 mod filtering;

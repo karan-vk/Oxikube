@@ -47,10 +47,14 @@ fn argo() -> Vec<CustomResourceGroup> {
             CustomKind {
                 kind: "AppProject".into(),
                 plural: "appprojects".into(),
+                version: "v1alpha1".into(),
+                namespaced: true,
             },
             CustomKind {
                 kind: "Application".into(),
                 plural: "applications".into(),
+                version: "v1alpha1".into(),
+                namespaced: true,
             },
         ],
     }]
@@ -314,4 +318,69 @@ fn row_ids_are_unique() {
     ids.sort();
     ids.dedup();
     assert_eq!(ids.len(), total);
+}
+
+#[test]
+fn custom_groups_carry_how_many_kinds_they_have_and_the_crd_list_comes_first() {
+    let rows = rows_for(
+        &known(AccessRules::all_access()),
+        Some(&argo()),
+        &BTreeMap::new(),
+        &[],
+    );
+    let ids: Vec<&str> = rows.iter().map(Row::id).collect();
+    let at = ids.iter().position(|id| *id == "custom-resources").unwrap();
+    assert_eq!(
+        &ids[at..],
+        [
+            "custom-resources",
+            "custom-resources/definitions",
+            "crd:argoproj.io"
+        ]
+    );
+    let Some(Row::Group(group)) = rows.iter().find(|r| matches!(r, Row::Group(_))) else {
+        panic!("a group row");
+    };
+    assert_eq!(group.count, Some(2), "AppProject and Application");
+    let Some(Row::Entry(definitions)) = rows
+        .iter()
+        .find(|r| r.id() == "custom-resources/definitions")
+    else {
+        panic!("the definitions entry");
+    };
+    assert_eq!(
+        definitions.target,
+        Some(SidebarTarget::Command(CommandId::CRD_OPEN_LIST))
+    );
+    assert_eq!(definitions.depth, 1);
+}
+
+#[test]
+fn the_definitions_entry_needs_list_on_customresourcedefinitions() {
+    // The user may list one custom kind but not the definitions: the group shows, the entry not.
+    let rows = rows_for(
+        &known(can_list(&[("argoproj.io", "applications")])),
+        Some(&argo()),
+        &BTreeMap::new(),
+        &[],
+    );
+    assert!(rows.iter().any(|r| r.id() == "crd:argoproj.io"));
+    assert!(
+        !rows
+            .iter()
+            .any(|r| r.id() == "custom-resources/definitions")
+    );
+    let both = rows_for(
+        &known(can_list(&[
+            ("argoproj.io", "applications"),
+            ("apiextensions.k8s.io", "customresourcedefinitions"),
+        ])),
+        Some(&argo()),
+        &BTreeMap::new(),
+        &[],
+    );
+    assert!(
+        both.iter()
+            .any(|r| r.id() == "custom-resources/definitions")
+    );
 }

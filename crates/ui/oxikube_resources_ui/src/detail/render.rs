@@ -25,6 +25,7 @@ impl Render for DetailView {
         let body = match self.tab {
             DetailTab::Overview => self.overview_body(cx),
             DetailTab::Events => self.events_body(cx),
+            DetailTab::Schema => self.schema_body(cx),
             tab => self.placeholder_body(tab, cx),
         };
         v_flex()
@@ -184,30 +185,34 @@ impl DetailView {
             .gap(u(tokens.spacing.sm))
             .border_b_1()
             .border_color(colors.border_variant)
-            .children(DetailTab::ALL.into_iter().map(|tab| {
-                let active = tab == self.tab;
-                div()
-                    .id(("detail-tab", tab as usize))
-                    .debug_selector(move || format!("detail-tab-{}", tab.id()))
-                    .px(u(tokens.spacing.lg))
-                    .py(u(tokens.spacing.md))
-                    .cursor_pointer()
-                    .text_size(u(tokens.font.body))
-                    .border_b_2()
-                    .border_color(if active {
-                        colors.accent
-                    } else {
-                        gpui::transparent_black()
-                    })
-                    .text_color(if active {
-                        colors.text
-                    } else {
-                        colors.text_muted
-                    })
-                    .hover(|style| style.text_color(colors.text))
-                    .on_click(cx.listener(move |this, _, _, cx| this.set_tab(tab, cx)))
-                    .child(tab.title())
-            }))
+            .children(
+                DetailTab::for_kind(&self.target.gvk)
+                    .into_iter()
+                    .map(|tab| {
+                        let active = tab == self.tab;
+                        div()
+                            .id(("detail-tab", tab as usize))
+                            .debug_selector(move || format!("detail-tab-{}", tab.id()))
+                            .px(u(tokens.spacing.lg))
+                            .py(u(tokens.spacing.md))
+                            .cursor_pointer()
+                            .text_size(u(tokens.font.body))
+                            .border_b_2()
+                            .border_color(if active {
+                                colors.accent
+                            } else {
+                                gpui::transparent_black()
+                            })
+                            .text_color(if active {
+                                colors.text
+                            } else {
+                                colors.text_muted
+                            })
+                            .hover(|style| style.text_color(colors.text))
+                            .on_click(cx.listener(move |this, _, _, cx| this.set_tab(tab, cx)))
+                            .child(tab.title())
+                    }),
+            )
     }
 
     fn placeholder_body(&self, tab: DetailTab, cx: &mut Context<Self>) -> AnyElement {

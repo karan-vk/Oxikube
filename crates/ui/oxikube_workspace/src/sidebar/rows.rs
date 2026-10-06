@@ -10,9 +10,18 @@ use std::collections::BTreeMap;
 use gpui::SharedString;
 use oxikube_app::{AccessOutcome, CountState, CustomResourceGroup, IntegrationSection};
 use oxikube_domain::access::AccessRequirement;
+use oxikube_domain::command::CommandId;
 use oxikube_ui::IconName;
 
 use super::section::{SectionBody, SidebarEntry, SidebarSection, SidebarTarget};
+
+/// The id of the "Definitions" entry at the top of Custom Resources: the list of the cluster's
+/// CustomResourceDefinitions (E07-S07).
+pub const DEFINITIONS_ENTRY: &str = "custom-resources/definitions";
+
+/// The API group and plural of the CRD kind, which the Definitions entry needs `list` on.
+const CRD_GROUP: &str = "apiextensions.k8s.io";
+const CRD_PLURAL: &str = "customresourcedefinitions";
 
 /// What the sidebar knows about the user's access.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -77,7 +86,7 @@ pub struct GroupRow {
     pub title: SharedString,
     /// Whether its kinds are shown.
     pub open: bool,
-    /// The count badge placeholder, as for sections.
+    /// How many custom kinds the group has (from discovery, so no feed was started for it).
     pub count: Option<usize>,
 }
 
@@ -273,6 +282,19 @@ fn section_rows(section: &SidebarSection, input: &RowInputs<'_>) -> Shown {
                 target: None,
             })];
             if open {
+                // The list of the definitions themselves, before the groups they define.
+                if input
+                    .access
+                    .offers(&[AccessRequirement::list(CRD_GROUP, CRD_PLURAL)])
+                {
+                    rows.push(Row::Entry(EntryRow {
+                        id: DEFINITIONS_ENTRY.into(),
+                        title: "Definitions".into(),
+                        depth: 1,
+                        target: Some(SidebarTarget::Command(CommandId::CRD_OPEN_LIST)),
+                        count: None,
+                    }));
+                }
                 for group in groups {
                     let group_id = format!("crd:{}", group.group);
                     let group_open = is_open(input.open, &group_id, false);
@@ -280,7 +302,7 @@ fn section_rows(section: &SidebarSection, input: &RowInputs<'_>) -> Shown {
                         id: group_id.clone().into(),
                         title: group.group.clone().into(),
                         open: group_open,
-                        count: None,
+                        count: Some(group.kinds.len()),
                     }));
                     if group_open {
                         rows.extend(group.kinds.iter().map(|kind| {

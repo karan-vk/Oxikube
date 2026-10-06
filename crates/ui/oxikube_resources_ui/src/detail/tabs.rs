@@ -13,16 +13,29 @@ pub enum DetailTab {
     Describe,
     /// The events about the object.
     Events,
+    /// A CRD's `openAPIV3Schema` as a tree (E07-S07). Only a CustomResourceDefinition has it.
+    Schema,
 }
 
 impl DetailTab {
-    /// Every tab, in the order they are shown.
+    /// The tabs every object has, in the order they are shown ([`DetailTab::for_kind`] adds the
+    /// kind's own).
     pub const ALL: [DetailTab; 4] = [
         DetailTab::Overview,
         DetailTab::Yaml,
         DetailTab::Describe,
         DetailTab::Events,
     ];
+
+    /// The tabs of an object of type `gvk`: [`ALL`](Self::ALL), and for a CustomResourceDefinition
+    /// the Schema tab after them.
+    pub fn for_kind(gvk: &oxikube_domain::ids::Gvk) -> Vec<DetailTab> {
+        let mut tabs = Self::ALL.to_vec();
+        if crate::crds::is_crd_kind(gvk) {
+            tabs.push(DetailTab::Schema);
+        }
+        tabs
+    }
 
     /// The tab's label.
     pub fn title(self) -> &'static str {
@@ -31,6 +44,7 @@ impl DetailTab {
             DetailTab::Yaml => "YAML",
             DetailTab::Describe => "Describe",
             DetailTab::Events => "Events",
+            DetailTab::Schema => "Schema",
         }
     }
 
@@ -41,6 +55,7 @@ impl DetailTab {
             DetailTab::Yaml => "yaml",
             DetailTab::Describe => "describe",
             DetailTab::Events => "events",
+            DetailTab::Schema => "schema",
         }
     }
 
@@ -49,7 +64,7 @@ impl DetailTab {
         match self {
             DetailTab::Yaml => Some("The YAML view is not available yet."),
             DetailTab::Describe => Some("The Describe view is not available yet."),
-            DetailTab::Overview | DetailTab::Events => None,
+            DetailTab::Overview | DetailTab::Events | DetailTab::Schema => None,
         }
     }
 }

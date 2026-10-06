@@ -119,10 +119,19 @@ impl ResourceTable {
         }
     }
 
-    /// Opens the detail of the object `key` (wherever its row is now): dispatches
-    /// `resource::Open`.
+    /// Opens the object `key` (wherever its row is now): dispatches `resource::Open`, its detail.
+    /// On the CRD list (E07-S07) it dispatches `crd::OpenResources` instead: the table of the
+    /// custom resources the definition defines (its detail is "Show Details" in the row menu).
     pub fn open_object(&mut self, key: ObjectKey, cx: &mut Context<Self>) {
         let target = self.resource_ref(key);
+        if crate::crds::is_crd_kind(&self.kind.gvk) {
+            let command = Command::CrdOpenResources {
+                cluster: target.cluster,
+                name: target.name.to_string(),
+            };
+            self.deps.dispatcher.dispatch(command, cx);
+            return;
+        }
         self.deps
             .dispatcher
             .dispatch(Command::ResourceOpen { target }, cx);

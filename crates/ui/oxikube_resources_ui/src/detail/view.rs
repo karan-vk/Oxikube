@@ -19,6 +19,7 @@ use oxikube_workspace::{Item, ItemEvent, TabContent};
 
 use super::events::EventRow;
 use super::model::{DetailModel, OwnerLink, Row};
+use super::schema_tab::SchemaPane;
 use super::state::{DetailDeps, DetailEvent, DetailState, EventsTab, FullState, Mount};
 use super::tabs::DetailTab;
 
@@ -56,6 +57,8 @@ pub struct DetailView {
     pub(super) owner_scopes: HashMap<Gvk, Option<Scope>>,
     pub(super) events: EventsTab,
     pub(super) events_list: ListState,
+    /// The Schema tab of a CRD (E07-S07).
+    pub(super) schema: SchemaPane,
     pub(super) store: Option<ResourceStore>,
     /// The store the Events feed is subscribed on.
     pub(super) events_store: Option<ResourceStore>,
@@ -118,6 +121,7 @@ impl DetailView {
             owner_scopes: HashMap::new(),
             events: EventsTab::default(),
             events_list: ListState::new(0, ListAlignment::Top, px(240.)),
+            schema: SchemaPane::default(),
             store: None,
             events_store: None,
             subscription: None,

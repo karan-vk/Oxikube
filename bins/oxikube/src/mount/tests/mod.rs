@@ -204,6 +204,8 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::CLUSTER_SELECT, "oxikube_workspace"),
         (CommandId::VIEW_OPEN, "oxikube"),
         (CommandId::RESOURCE_OPEN_LIST, "oxikube_resources_ui"),
+        (CommandId::CRD_OPEN_LIST, "oxikube_resources_ui"),
+        (CommandId::CRD_OPEN_RESOURCES, "oxikube_resources_ui"),
         (CommandId::RESOURCE_DELETE, "oxikube_app::actions"),
     ] {
         assert_eq!(bus.owner(id), Some(owner), "{id}");

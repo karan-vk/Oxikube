@@ -32,7 +32,8 @@ pub(super) fn kind(
     }
 }
 
-/// The kinds the tests serve: pods, replica sets, deployments, secrets and the Widget CRD.
+/// The kinds the tests serve: pods, replica sets, deployments, secrets, nodes, the Widget custom
+/// kind and the CRD kind.
 pub(super) fn kinds() -> Vec<ResourceKind> {
     vec![
         kind("", "v1", "Pod", "pods", true),
@@ -41,6 +42,13 @@ pub(super) fn kinds() -> Vec<ResourceKind> {
         kind("", "v1", "Secret", "secrets", true),
         kind("", "v1", "Node", "nodes", false),
         kind("example.com", "v1", "Widget", "widgets", true),
+        kind(
+            "apiextensions.k8s.io",
+            "v1",
+            "CustomResourceDefinition",
+            "customresourcedefinitions",
+            false,
+        ),
     ]
 }
 

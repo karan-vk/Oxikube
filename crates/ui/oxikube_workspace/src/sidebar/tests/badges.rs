@@ -42,7 +42,7 @@ fn all_access() -> AccessState {
 
 #[test]
 fn the_plan_names_every_builtin_kind_the_user_may_list_once() {
-    let plan = count_plan(&core_sections(), &all_access());
+    let plan = count_plan(&core_sections(), &all_access(), None);
     let kinds: Vec<&KindKey> = plan.kinds.iter().map(|(k, _)| k).collect();
     assert!(kinds.contains(&&key("", "pods")));
     assert!(kinds.contains(&&key("apps", "deployments")));
@@ -60,12 +60,12 @@ fn a_kind_the_user_may_not_list_is_not_counted() {
     let rules =
         AccessRules::none().with_rule(AccessRule::granting(&["list"], &[""], &["pods"], &[]));
     let access = AccessState::Known(AccessOutcome::Reviewed(rules));
-    let plan = count_plan(&core_sections(), &access);
+    let plan = count_plan(&core_sections(), &access, None);
     let kinds: Vec<&KindKey> = plan.kinds.iter().map(|(k, _)| k).collect();
     assert_eq!(kinds, [&key("", "pods")]);
     // Until the review answers only entries that need nothing are offered: none are counted.
     assert!(
-        count_plan(&core_sections(), &AccessState::Pending)
+        count_plan(&core_sections(), &AccessState::Pending, None)
             .kinds
             .is_empty()
     );
@@ -85,13 +85,14 @@ fn custom_resources_and_unknown_kinds_have_no_badge() {
         &AccessState::Known(AccessOutcome::Failed {
             reason: String::new(),
         }),
+        None,
     );
     assert!(plan.kinds.is_empty());
 }
 
 #[test]
 fn single_kind_sections_show_their_kind_total() {
-    let plan = count_plan(&core_sections(), &all_access());
+    let plan = count_plan(&core_sections(), &all_access(), None);
     let sections: Vec<&str> = plan.sections.iter().map(|(id, _)| &**id).collect();
     for id in ["nodes", "namespaces", "events"] {
         assert!(sections.contains(&id), "{id}");
@@ -102,7 +103,7 @@ fn single_kind_sections_show_their_kind_total() {
 #[test]
 fn answers_land_on_the_entries_and_single_kind_sections() {
     let access = all_access();
-    let plan = count_plan(&core_sections(), &access);
+    let plan = count_plan(&core_sections(), &access, None);
     let mut rows = rows_with(&access);
     let states: HashMap<KindKey, CountState> = [
         (key("", "pods"), counted(5, 5, 4)),
@@ -141,7 +142,7 @@ fn answers_land_on_the_entries_and_single_kind_sections() {
 #[test]
 fn a_forbidden_single_kind_section_says_no_access() {
     let access = all_access();
-    let plan = count_plan(&core_sections(), &access);
+    let plan = count_plan(&core_sections(), &access, None);
     let mut rows = rows_with(&access);
     let states: HashMap<KindKey, CountState> = [(
         key("", "nodes"),

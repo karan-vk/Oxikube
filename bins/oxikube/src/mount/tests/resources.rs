@@ -320,3 +320,138 @@ fn slash_in_a_table_focuses_its_filter_through_the_real_bus(cx: &mut TestAppCont
     assert!(app.drawn("resource-filter-input"));
     assert!(!editing(&mut app));
 }
+
+/// The Widget CRD as the cluster stores it: cluster-scoped object, two versions, `v1` the storage
+/// one.
+fn widget_crd() -> oxikube_domain::Resource {
+    oxikube_domain::Resource::from_json(serde_json::json!({
+        "apiVersion": "apiextensions.k8s.io/v1",
+        "kind": "CustomResourceDefinition",
+        "metadata": {"name": "widgets.example.com", "resourceVersion": "1"},
+        "spec": {
+            "group": "example.com",
+            "scope": "Namespaced",
+            "names": {"plural": "widgets", "kind": "Widget", "shortNames": ["wd"]},
+            "versions": [
+                {"name": "v1beta1", "served": true, "storage": false},
+                {"name": "v1", "served": true, "storage": true,
+                 "schema": {"openAPIV3Schema": {"type": "object", "properties": {
+                     "spec": {"type": "object", "properties": {"size": {"type": "string"}}}
+                 }}}}
+            ]
+        }
+    }))
+    .expect("a CRD")
+}
+
+#[gpui::test]
+fn custom_resources_are_reachable_from_the_sidebar_through_the_crd_list(cx: &mut TestAppContext) {
+    use oxikube_ports::{Delta, DeltaBatch, TableBatch, TableColumn, TableRow, TableSource};
+    use oxikube_testkit::Timeline;
+
+    let mut app = App::start(cx, TestPorts::seeded());
+    let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
+    let mut crd = kind(
+        "apiextensions.k8s.io",
+        "v1",
+        "CustomResourceDefinition",
+        "customresourcedefinitions",
+    );
+    crd.namespaced = false;
+    let mut beta = kind("example.com", "v1beta1", "Widget", "widgets");
+    beta.preferred = false;
+    app.serve([crd, beta, kind("example.com", "v1", "Widget", "widgets")]);
+    ports.resources.insert(widget_crd());
+    ports.tables.script().table_feed.push_ok(
+        Timeline::immediate([TableBatch {
+            columns: Some(
+                vec![TableColumn {
+                    name: "Name".into(),
+                    column_type: "string".into(),
+                    ..TableColumn::default()
+                }]
+                .into(),
+            ),
+            rows: DeltaBatch::from_deltas(vec![Delta::Restarted(vec![TableRow {
+                cells: vec![serde_json::json!("w-1")],
+                meta: Some(oxikube_domain::ObjectMeta::named("w-1")),
+                object: None,
+            }])]),
+            source: TableSource::Server,
+        }])
+        .keep_open(),
+    );
+    app.press("enter");
+    app.tick();
+
+    // The Custom Resources section (below the fold of the test window, so the sidebar's own API
+    // stands in for the click) lists the API group, collapsed, with how many kinds it has, and
+    // the CRD list.
+    let ws = app.tab_workspace();
+    let panel = app
+        .vcx
+        .update(|_, cx| ws.read(cx).panel::<SidebarPanel>())
+        .expect("the sidebar");
+    let rows = app.vcx.update(|_, cx| {
+        panel
+            .read(cx)
+            .rows()
+            .iter()
+            .map(|row| row.id().to_owned())
+            .collect::<Vec<_>>()
+    });
+    assert!(
+        rows.contains(&"custom-resources/definitions".to_owned()),
+        "{rows:?}"
+    );
+    assert!(rows.contains(&"crd:example.com".to_owned()));
+    assert!(
+        !rows.contains(&"crd:example.com/widgets".to_owned()),
+        "collapsed by default"
+    );
+    let kinds = app
+        .vcx
+        .update(|_, cx| match panel.read(cx).row("crd:example.com") {
+            Some(oxikube_workspace::sidebar::Row::Group(group)) => group.count,
+            _ => None,
+        });
+    assert_eq!(kinds, Some(1), "one kind in the group");
+    app.vcx.update(|_, cx| {
+        panel.update(cx, |panel, cx| {
+            panel.activate("custom-resources/definitions", cx)
+        })
+    });
+    app.tick();
+    assert_eq!(app.tables(), ["CustomResourceDefinition"]);
+
+    // Enter on the CRD row (`crd::OpenResources` on the real bus) opens the Widget table at the
+    // storage version, on the Table feed.
+    app.tick();
+    assert!(app.drawn("cell-0-0"), "the CRD list has its row");
+    app.click("cell-0-0");
+    app.press("enter");
+    app.tick();
+    app.tick();
+    let mut tables = app.tables();
+    tables.sort();
+    assert_eq!(tables, ["CustomResourceDefinition", "Widget"]);
+    let widget = app.vcx.update(|_, cx| {
+        ws.read(cx)
+            .items_of_type::<ResourceTable>()
+            .into_iter()
+            .find(|t| &*t.read(cx).gvk().kind == "Widget")
+            .map(|t| {
+                let t = t.read(cx);
+                (
+                    t.gvk().version.to_string(),
+                    t.read_rows(cx, |d| d.rows().len()),
+                    t.has_version_switcher(),
+                )
+            })
+    });
+    assert_eq!(widget, Some(("v1".to_owned(), 1, true)));
+    assert!(
+        app.drawn("resource-table-version"),
+        "two served versions: a switcher"
+    );
+}

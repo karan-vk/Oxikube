@@ -141,6 +141,7 @@ impl ResourceTable {
     /// selection by identity.
     pub(super) fn apply(&mut self, delta: StoreDelta, cx: &mut Context<Self>) {
         if let Some(columns) = &delta.columns {
+            self.note_columns_source(columns.source);
             let provider: Arc<dyn ColumnProvider> = Arc::new(TableColumns::new(
                 &columns.columns,
                 columns.source,

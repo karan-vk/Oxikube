@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use gpui::SharedString;
-use oxikube_app::{CountState, CountTarget};
+use oxikube_app::{CountState, CountTarget, CustomResourceGroup};
 
 use super::rows::{AccessState, Row};
 use super::section::{SectionBody, SidebarSection, SidebarTarget};
@@ -31,10 +31,17 @@ impl CountPlan {
     }
 }
 
-/// The kinds worth a badge: built-in kinds ([`CountTarget::core`]) of entries `access` offers.
-/// Custom resources and integration items have none (their badge appears when a table opens the
-/// feed, which a custom-resource entry cannot know here).
-pub fn count_plan(sections: &[SidebarSection], access: &AccessState) -> CountPlan {
+/// The kinds worth a badge: built-in kinds ([`CountTarget::core`]) of entries `access` offers,
+/// and the custom kinds discovery found (E07-S07) in the groups the user may list. The custom ones are never in a lease ([`ResourceStore::counts_eagerly`] is false
+/// for them): they answer only while a table or another view has their feed open, so expanding
+/// the sidebar starts no feeds. Integration items have no badge.
+///
+/// [`ResourceStore::counts_eagerly`]: oxikube_app::ResourceStore::counts_eagerly
+pub fn count_plan(
+    sections: &[SidebarSection],
+    access: &AccessState,
+    custom: Option<&[CustomResourceGroup]>,
+) -> CountPlan {
     let mut plan = CountPlan::default();
     let mut add = |group: &SharedString, resource: &SharedString| -> Option<KindKey> {
         let target = CountTarget::core(group, resource)?;
@@ -70,6 +77,20 @@ pub fn count_plan(sections: &[SidebarSection], access: &AccessState) -> CountPla
         }
     }
     plan.sections = single;
+    for group in custom.unwrap_or_default() {
+        let Some(group) = group.visible(|reqs| access.offers(reqs)) else {
+            continue;
+        };
+        for kind in &group.kinds {
+            let key = (
+                SharedString::from(group.group.clone()),
+                SharedString::from(kind.plural.clone()),
+            );
+            if !plan.kinds.iter().any(|(k, _)| *k == key) {
+                plan.kinds.push((key, kind.count_target(&group.group)));
+            }
+        }
+    }
     plan
 }
 

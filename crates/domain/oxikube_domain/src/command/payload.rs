@@ -190,6 +190,22 @@ pub enum Command {
     /// Set the UI zoom back to 100 %.
     #[serde(rename = "view::ZoomReset")]
     ViewZoomReset,
+    /// Open the list of the cluster's CustomResourceDefinitions (the sidebar's "Definitions").
+    /// Read-only.
+    #[serde(rename = "crd::OpenList")]
+    CrdOpenList {
+        /// Cluster whose definitions are listed.
+        cluster: ClusterId,
+    },
+    /// Open the table of the custom resources the CRD `name` defines, for its served storage
+    /// version (a CRD row's "Open", E07-S07). Read-only: the CRD is read to find the version.
+    #[serde(rename = "crd::OpenResources")]
+    CrdOpenResources {
+        /// Cluster the CRD is in.
+        cluster: ClusterId,
+        /// The CRD's name (`widgets.example.com`).
+        name: String,
+    },
     /// Open the list view of a resource kind.
     #[serde(rename = "resource::OpenList")]
     ResourceOpenList {
@@ -398,6 +414,8 @@ impl Command {
             Command::ViewZoomIn => CommandId::VIEW_ZOOM_IN,
             Command::ViewZoomOut => CommandId::VIEW_ZOOM_OUT,
             Command::ViewZoomReset => CommandId::VIEW_ZOOM_RESET,
+            Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
+            Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
             Command::ResourceOpen { .. } => CommandId::RESOURCE_OPEN,
             Command::ResourceCopyName { .. } => CommandId::RESOURCE_COPY_NAME,
@@ -564,6 +582,11 @@ mod tests {
             Command::ViewZoomIn,
             Command::ViewZoomOut,
             Command::ViewZoomReset,
+            Command::CrdOpenList { cluster: cluster() },
+            Command::CrdOpenResources {
+                cluster: cluster(),
+                name: "widgets.example.com".into(),
+            },
             Command::ResourceOpenList {
                 cluster: cluster(),
                 gvk: Gvk::new("apps", "v1", "Deployment"),
@@ -754,6 +777,8 @@ mod tests {
                     | Command::ViewZoomIn
                     | Command::ViewZoomOut
                     | Command::ViewZoomReset
+                    | Command::CrdOpenList { .. }
+                    | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }
                     | Command::ResourceOpenList { .. }
                     | Command::ResourceCopyName { .. }

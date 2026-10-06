@@ -225,3 +225,134 @@ fn a_thousand_deltas_in_a_second_redraw_the_sidebar_a_handful_of_times(cx: &mut 
         renders.get()
     );
 }
+
+/// A kind in `group` at `version`, listable and watchable, as discovery serves it.
+fn served(
+    group: &str,
+    kind: &str,
+    plural: &str,
+    namespaced: bool,
+) -> oxikube_domain::kinds::ResourceKind {
+    let mut kind = super::crd(group, kind, plural);
+    kind.namespaced = namespaced;
+    kind
+}
+
+#[gpui::test]
+fn expanding_the_custom_resources_starts_no_feed_and_a_kind_is_counted_once_a_table_opens_it(
+    cx: &mut TestAppContext,
+) {
+    let mut fx = Fixture::open_counted(cx, AccessRules::all_access());
+    let kinds: Vec<_> = (0..40)
+        .map(|i| {
+            served(
+                &format!("group{}.example.com", i % 8),
+                &format!("Kind{i}"),
+                &format!("kind{i}s"),
+                i % 2 == 0,
+            )
+        })
+        .collect();
+    fx.ports.discovery.set_kinds(kinds);
+    fx.connect();
+    tick(&mut fx);
+    let before = (
+        fx.ports.resources.live_watches(),
+        fx.ports.tables.live_feeds(),
+    );
+    assert_eq!(before.1, 0, "no table feed for a custom kind");
+
+    // Open the section's every group: 8 groups, 40 kinds on screen.
+    for group in 0..8 {
+        assert!(
+            fx.toggle(&format!("crd:group{group}.example.com")),
+            "expand"
+        );
+    }
+    tick(&mut fx);
+    let rows = fx.row_ids();
+    assert_eq!(
+        rows.iter()
+            .filter(|id| id.starts_with("crd:group") && id.contains('/'))
+            .count(),
+        40
+    );
+    assert_eq!(
+        (
+            fx.ports.resources.live_watches(),
+            fx.ports.tables.live_feeds()
+        ),
+        before,
+        "expanding the sidebar started no feed"
+    );
+    assert_eq!(
+        fx.panel.read_with(&fx.vcx, |p, _| p.counts_lease_len()),
+        4,
+        "only the eager kinds"
+    );
+    // The group rows say how many kinds each has; the kinds have no number yet.
+    let groups: Vec<_> = fx
+        .rows()
+        .into_iter()
+        .filter_map(|row| match row {
+            Row::Group(g) => Some(g.count),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(groups, vec![Some(5); 8]);
+    assert_eq!(count(&mut fx, "group0.example.com", "kind0s"), None);
+    assert_eq!(entry_count(&mut fx, "crd:group0.example.com/kind0s"), None);
+
+    // A table opens Kind0's feed (a namespaced kind, so it is read per scope): the badge reads
+    // it and starts none of its own.
+    let session = fx.sessions.get(&fx.cluster).expect("a session");
+    let store = fx
+        .stores
+        .as_ref()
+        .and_then(|s| s.for_session(&session))
+        .expect("a store");
+    fx.ports.tables.script().table_feed.push_ok(
+        Timeline::immediate([oxikube_ports::TableBatch {
+            columns: Some(std::sync::Arc::from(vec![oxikube_ports::TableColumn {
+                name: "Name".into(),
+                column_type: "string".into(),
+                ..Default::default()
+            }])),
+            rows: DeltaBatch::from_deltas(vec![Delta::Restarted(vec![
+                oxikube_ports::TableRow {
+                    cells: vec![serde_json::json!("one")],
+                    meta: Some(oxikube_domain::ObjectMeta::named("one")),
+                    object: None,
+                },
+                oxikube_ports::TableRow {
+                    cells: vec![serde_json::json!("two")],
+                    meta: Some(oxikube_domain::ObjectMeta::named("two")),
+                    object: None,
+                },
+            ])]),
+            source: oxikube_ports::TableSource::Server,
+        }])
+        .keep_open(),
+    );
+    let table = store.subscribe(oxikube_app::StoreQuery::new(
+        Gvk::new("group0.example.com", "v1", "Kind0"),
+        WatchScope::Cluster,
+    ));
+    fx.vcx.run_until_parked();
+    let feeds = fx.ports.tables.live_feeds();
+    tick(&mut fx);
+    assert_eq!(
+        count(&mut fx, "group0.example.com", "kind0s"),
+        Some(counted(2, 0, 0))
+    );
+    assert_eq!(
+        entry_count(&mut fx, "crd:group0.example.com/kind0s"),
+        Some(counted(2, 0, 0))
+    );
+    assert_eq!(
+        fx.ports.tables.live_feeds(),
+        feeds,
+        "counting started no feed"
+    );
+    drop(table);
+}

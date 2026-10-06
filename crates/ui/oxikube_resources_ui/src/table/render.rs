@@ -66,7 +66,9 @@ impl Render for ResourceTable {
                     stale_badge(stale, state.can_retry(), &cx.entity().downgrade(), cx)
                 }))
                 .child(self.filter.clone())
+                .children(self.basic_columns_note(cx))
                 .child(div().flex_1())
+                .children(self.version_switcher(cx))
                 .child(self.column_picker(cx));
         v_flex()
             .id("resource-table")

@@ -28,16 +28,19 @@ pub struct ResourceViewsDeps {
 
 /// A cluster's discovered kinds, with the discovery port they came from (a reconnect hands out
 /// a new port, and the cache starts over).
-struct Kinds {
-    port: usize,
-    kinds: Arc<[ResourceKind]>,
+pub(super) struct Kinds {
+    pub(super) port: usize,
+    pub(super) kinds: Arc<[ResourceKind]>,
 }
 
 /// Opens resource tables and runs the resource commands of one window. See the
 /// [module docs](super).
 pub struct ResourceViews {
     pub(super) deps: ResourceViewsDeps,
-    kinds: HashMap<ClusterId, Kinds>,
+    pub(super) kinds: HashMap<ClusterId, Kinds>,
+    /// The CRD navigation in flight (`crd::OpenResources`, E07-S07), and the reads of the
+    /// versions a custom resource table's kind is served at.
+    pub(super) crds: super::crd::CrdTasks,
     /// The sidebar navigation in flight (a newer click replaces, and so cancels, it).
     navigate_task: Option<Task<()>>,
     /// The `resource::OpenList` waiting on discovery (a newer one replaces, and so cancels, it).
@@ -69,6 +72,7 @@ impl ResourceViews {
             Self {
                 deps,
                 kinds: HashMap::new(),
+                crds: Default::default(),
                 navigate_task: None,
                 open_task: None,
                 _requests: pump,
@@ -103,6 +107,9 @@ impl ResourceViews {
                     table.update(cx, |table, cx| table.focus_filter(window, cx));
                 }
             }
+            ViewRequest::OpenCrdResources { cluster, name } => {
+                self.open_crd_resources(&cluster, name, window, cx);
+            }
             other => self.apply(other, cx),
         }
     }
@@ -112,7 +119,10 @@ impl ResourceViews {
     /// opens the drawer, and `PinDetail` and `FocusFilter` need it, so they do nothing here.
     pub fn apply(&mut self, request: ViewRequest, cx: &mut Context<Self>) {
         match request {
-            ViewRequest::PinDetail(_) => {}
+            ViewRequest::PinDetail(_) | ViewRequest::OpenCrdResources { .. } => {}
+            ViewRequest::OpenCrdList(cluster) => {
+                self.open_command(&cluster, &crate::crds::crd_gvk(), cx)
+            }
             ViewRequest::CopyLabel {
                 target,
                 key,
@@ -258,6 +268,7 @@ impl ResourceViews {
         workspace.update(cx, |ws, cx| {
             ws.open_item_with(Box::new(table.clone()), options, window, cx)
         });
+        self.load_versions(&table, cx);
         Some(table)
     }
 
@@ -331,7 +342,7 @@ impl ResourceViews {
         }));
     }
 
-    fn open_command(&self, cluster: &ClusterId, gvk: &Gvk, cx: &mut App) {
+    pub(super) fn open_command(&self, cluster: &ClusterId, gvk: &Gvk, cx: &mut App) {
         let command = Command::ResourceOpenList {
             cluster: cluster.clone(),
             gvk: gvk.clone(),
@@ -341,7 +352,7 @@ impl ResourceViews {
 }
 
 /// The identity of a discovery port, to tell a reconnect's new port from the old one.
-fn port_id<T: ?Sized>(port: &Arc<T>) -> usize {
+pub(super) fn port_id<T: ?Sized>(port: &Arc<T>) -> usize {
     Arc::as_ptr(port).cast::<()>() as usize
 }
 

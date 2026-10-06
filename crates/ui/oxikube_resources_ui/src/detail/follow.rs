@@ -221,6 +221,7 @@ impl DetailView {
                 self.fetch_full(cx);
             }
             self.rebuild(cx);
+            self.rebuild_schema();
             if first {
                 cx.emit(ItemEvent::UpdateTab);
             }

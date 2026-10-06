@@ -294,3 +294,28 @@ fn a_discovery_failure_is_the_ports_error() {
     let err = block_on(discover_custom_resources(&discovery)).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Timeout);
 }
+
+#[test]
+fn a_custom_kind_carries_its_preferred_version_and_scope_as_a_count_target() {
+    let crud = [Verb::Get, Verb::List, Verb::Watch];
+    let mut cluster_scoped = kind("example.com", "Fleet", "fleets", &crud, true);
+    cluster_scoped.namespaced = false;
+    let mut old = kind("example.com", "Widget", "widgets", &crud, false);
+    old.gvk = Gvk::new("example.com", "v1alpha1", "Widget");
+    let mut new = kind("example.com", "Widget", "widgets", &crud, true);
+    new.gvk = Gvk::new("example.com", "v1beta1", "Widget");
+    let discovery = FakeDiscoveryPort::new().with_kinds([old, new, cluster_scoped]);
+
+    let groups = block_on(discover_custom_resources(&discovery)).unwrap();
+    let group = &groups[0];
+    let widget = group.kinds.iter().find(|k| k.kind == "Widget").unwrap();
+    assert_eq!(widget.version, "v1beta1", "the preferred version");
+    let target = widget.count_target(&group.group);
+    assert_eq!(target.gvk, Gvk::new("example.com", "v1beta1", "Widget"));
+    assert_eq!(target.scope, oxikube_domain::ids::Scope::Namespaced);
+    let fleet = group.kinds.iter().find(|k| k.kind == "Fleet").unwrap();
+    assert_eq!(
+        fleet.count_target(&group.group).scope,
+        oxikube_domain::ids::Scope::Cluster
+    );
+}

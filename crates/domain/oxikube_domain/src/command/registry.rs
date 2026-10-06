@@ -41,6 +41,10 @@ impl CommandId {
     pub const CLUSTER_TOGGLE_FAVOURITE: CommandId = CommandId::new("cluster::ToggleFavourite");
     /// `cluster::ToggleReadOnly`: set or toggle a cluster's read-only mode.
     pub const CLUSTER_TOGGLE_READ_ONLY: CommandId = CommandId::new("cluster::ToggleReadOnly");
+    /// `crd::OpenList`: open the list of the cluster's CustomResourceDefinitions.
+    pub const CRD_OPEN_LIST: CommandId = CommandId::new("crd::OpenList");
+    /// `crd::OpenResources`: open the table of the custom resources a CRD defines.
+    pub const CRD_OPEN_RESOURCES: CommandId = CommandId::new("crd::OpenResources");
     /// `kubeconfig::AddSource`: add a kubeconfig file, directory or pasted text as a source.
     pub const KUBECONFIG_ADD_SOURCE: CommandId = CommandId::new("kubeconfig::AddSource");
     /// `kubeconfig::Reload`: re-read every kubeconfig source.
@@ -198,6 +202,20 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::CLUSTER_TOGGLE_READ_ONLY,
         "Toggle Read-Only Mode",
         CommandScope::Cluster,
+        NONE,
+    ),
+    // The CRD navigation commands read the cluster to find a kind's list; they open views and
+    // change nothing in it.
+    CommandMeta::read(
+        CommandId::CRD_OPEN_LIST,
+        "Open Custom Resource Definitions",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CRD_OPEN_RESOURCES,
+        "Open Custom Resources",
+        CommandScope::Selection,
         NONE,
     ),
     // The kubeconfig commands change the user's settings list and Oxikube's own files, never a

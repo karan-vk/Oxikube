@@ -14,7 +14,7 @@ use crate::detail::{DetailDeps, DetailDrawer, DetailView, item_key};
 
 impl ResourceViews {
     /// The workspace of `cluster`'s tab.
-    fn tab_workspace(&self, cluster: &ClusterId, cx: &App) -> Option<Entity<Workspace>> {
+    pub(super) fn tab_workspace(&self, cluster: &ClusterId, cx: &App) -> Option<Entity<Workspace>> {
         let tabs = self.deps.tabs.upgrade()?;
         let tab = tabs.read(cx).tab(cluster)?;
         Some(tab.read(cx).workspace().clone())

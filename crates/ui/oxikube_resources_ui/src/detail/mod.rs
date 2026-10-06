@@ -10,13 +10,14 @@
 //! |---|---|
 //! | `model` | [`DetailModel`]: header, labels, annotations, owners, finalizers, conditions, the `status` summary and a Secret's key names; plain Rust, no GPUI |
 //! | `events` | [`EventRow`], [`events_about`]: the events of the object from the namespace's `Event` feed |
-//! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events |
+//! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, and a CRD's Schema |
 //! | `state` | [`DetailDeps`], [`Mount`], [`DetailState`]: what the view is built over and how the object stands |
 //! | `view` | [`DetailView`]: the entity and its commands |
 //! | `follow` | the store subscription (one row on the table's own feed), the model and the list's rows kept in step |
 //! | `full` | the full read for metadata-only and Table feeds, and the owners' scopes from discovery |
 //! | `events_feed` | the Events tab's subscription, started on first show |
 //! | `render`, `overview`, `parts`, `events_tab` | drawing: header, tab strip, the virtualised Overview (its stateless rows in `parts`) and Events lists |
+//! | `schema_tab`, `schema_view` | the Schema tab of a CRD's detail (E07-S07): its `openAPIV3Schema` as a collapsible tree, the version chips and the way to the custom resources (state and commands, then drawing) |
 //! | `drawer` | [`DetailDrawer`]: the `Panel` that hosts a detail and hands it to the workspace when pinned |
 //!
 //! # How a user gets here
@@ -48,6 +49,8 @@ pub mod model;
 mod overview;
 mod parts;
 mod render;
+mod schema_tab;
+mod schema_view;
 mod state;
 mod tabs;
 mod view;
