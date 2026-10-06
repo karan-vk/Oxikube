@@ -7,8 +7,8 @@
 
 use gpui::{
     App, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, InteractiveElement as _,
-    IntoElement, KeyBinding, ParentElement as _, Render, SharedString, Styled as _, Window, div,
-    px,
+    IntoElement, KeyBinding, NoAction, ParentElement as _, Render, SharedString, Styled as _,
+    Window, div, px,
 };
 use oxikube_ui::{
     ActiveTokens as _,
@@ -23,13 +23,24 @@ use super::{ModalPlacement, ModalView};
 /// The key context of the dialog.
 pub const DIALOG_KEY_CONTEXT: &str = "DialogModal";
 
+/// The key context wrapped around each footer button, so Enter reaches the focused button.
+const BUTTON_KEY_CONTEXT: &str = "DialogButton";
+
 /// Registers Enter = confirm in the dialog's context. Called by [`super::register`].
+///
+/// GPUI matches key bindings before it hands a key-down to the focused element, so a bare Enter
+/// binding on the dialog would confirm even while Tab has put focus on Cancel. The footer buttons
+/// therefore sit in a [`BUTTON_KEY_CONTEXT`] where Enter is unbound, and the button's own
+/// Enter-to-click handling runs. Enter with the dialog itself focused still confirms.
 pub(super) fn register(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new(
-        "enter",
-        Confirm { secondary: false },
-        Some(DIALOG_KEY_CONTEXT),
-    )]);
+    cx.bind_keys([
+        KeyBinding::new(
+            "enter",
+            Confirm { secondary: false },
+            Some(DIALOG_KEY_CONTEXT),
+        ),
+        KeyBinding::new("enter", NoAction, Some(BUTTON_KEY_CONTEXT)),
+    ]);
 }
 
 type Handler = Box<dyn Fn(&mut Window, &mut App)>;
@@ -171,11 +182,13 @@ impl Render for DialogModal {
                 DialogFooter::new()
                     .child(
                         div()
+                            .key_context(BUTTON_KEY_CONTEXT)
                             .debug_selector(|| "dialog-cancel".to_owned())
                             .child(cancel),
                     )
                     .child(
                         div()
+                            .key_context(BUTTON_KEY_CONTEXT)
                             .debug_selector(|| "dialog-confirm".to_owned())
                             .child(confirm),
                     ),

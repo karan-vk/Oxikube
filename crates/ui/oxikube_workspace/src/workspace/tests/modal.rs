@@ -3,7 +3,10 @@
 
 use std::{cell::Cell, rc::Rc};
 
-use gpui::{AppContext as _, Entity, Modifiers, VisualTestContext, point, px};
+use gpui::{
+    AppContext as _, Entity, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, VisualTestContext,
+    point, px,
+};
 
 use super::*;
 use crate::{
@@ -267,6 +270,58 @@ fn a_dialog_modal_confirms_on_enter_and_cancels_on_escape(cx: &mut TestAppContex
 
     open_dialog(&mut vcx);
     vcx.simulate_keystrokes("escape");
+    assert_eq!((confirmed.get(), cancelled.get()), (1, 1));
+    assert!(!is_open(&layer, &mut vcx));
+}
+
+/// A full Enter press (down then up), the way a keyboard delivers it. A button clicks on key-up.
+fn press_enter(vcx: &mut VisualTestContext) {
+    let keystroke = Keystroke::parse("enter").unwrap();
+    vcx.simulate_event(KeyDownEvent {
+        keystroke: keystroke.clone(),
+        is_held: false,
+        prefer_character_input: false,
+    });
+    vcx.simulate_event(KeyUpEvent { keystroke });
+}
+
+#[gpui::test]
+fn enter_activates_the_focused_dialog_button(cx: &mut TestAppContext) {
+    let (ws, mut vcx) = workspace(cx);
+    let layer = layer(&ws, &mut vcx);
+    let confirmed = Rc::new(Cell::new(0));
+    let cancelled = Rc::new(Cell::new(0));
+
+    let open_dialog = |vcx: &mut VisualTestContext| {
+        let (confirmed, cancelled) = (confirmed.clone(), cancelled.clone());
+        vcx.update(|window, cx| {
+            ws.update(cx, |ws, cx| {
+                ws.toggle_modal(window, cx, move |_, cx| {
+                    DialogModal::new("Delete pod?", cx)
+                        .destructive()
+                        .on_confirm(move |_, _| confirmed.set(confirmed.get() + 1))
+                        .on_cancel(move |_, _| cancelled.set(cancelled.get() + 1))
+                });
+            });
+        });
+        vcx.run_until_parked();
+    };
+
+    // Tab moves focus onto the first button (Cancel); Enter must press it, not confirm.
+    open_dialog(&mut vcx);
+    vcx.simulate_keystrokes("tab");
+    press_enter(&mut vcx);
+    assert_eq!(
+        (confirmed.get(), cancelled.get()),
+        (0, 1),
+        "Enter on the focused Cancel button cancels"
+    );
+    assert!(!is_open(&layer, &mut vcx));
+
+    // A second Tab reaches the confirm button; Enter presses it.
+    open_dialog(&mut vcx);
+    vcx.simulate_keystrokes("tab tab");
+    press_enter(&mut vcx);
     assert_eq!((confirmed.get(), cancelled.get()), (1, 1));
     assert!(!is_open(&layer, &mut vcx));
 }
