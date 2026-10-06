@@ -100,3 +100,31 @@ fn without_connect_views_the_tab_keeps_its_placeholder(cx: &mut TestAppContext) 
     );
     assert!(drawn(&mut fx, "cluster-placeholder-alpha"));
 }
+
+#[gpui::test]
+fn the_toolbar_shows_only_while_the_cluster_is_connected(cx: &mut TestAppContext) {
+    let mut fx = open(cx);
+    let tab = fx.tab("alpha");
+    fx.vcx.update(|_, cx| {
+        let toolbar = cx.new(|_| Marker("marker-toolbar"));
+        tab.update(cx, |tab, cx| tab.set_toolbar(toolbar.into(), cx));
+    });
+    assert!(
+        fx.vcx.update(|_, cx| tab.read(cx).toolbar().is_some()),
+        "the tab keeps it"
+    );
+    assert!(
+        !drawn(&mut fx, "marker-toolbar"),
+        "AuthRequired: the connect body alone"
+    );
+
+    block_on(fx.sessions.reconnect(&id("alpha"))).expect("reconnect");
+    fx.vcx.run_until_parked();
+    assert!(drawn(&mut fx, "marker-toolbar"), "Ready: above the content");
+    assert!(drawn(&mut fx, "cluster-toolbar-alpha"));
+
+    fx.connector.report(&id("alpha"), HealthSignal::Unhealthy);
+    fx.vcx.run_until_parked();
+    assert!(drawn(&mut fx, "marker-toolbar"), "Degraded: still there");
+    assert!(drawn(&mut fx, "marker-banner"));
+}

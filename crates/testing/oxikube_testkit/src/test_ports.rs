@@ -26,8 +26,8 @@ use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{ClusterContext, ClusterSource, SourceId, SourceKind};
 
 use crate::{
-    FakeClockPort, FakeClusterSourcePort, FakeResourcePort, FakeSecretStorePort, FakeStatePort,
-    fixtures,
+    FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeFsPort, FakeResourcePort,
+    FakeSecretStorePort, FakeStatePort, fixtures,
 };
 
 /// The fakes that make up a test app. See the [module docs](self).
@@ -39,6 +39,11 @@ pub struct TestPorts {
     pub secrets: Arc<FakeSecretStorePort>,
     /// The cluster catalog (`ClusterSourcePort`).
     pub clusters: Arc<FakeClusterSourcePort>,
+    /// Connects the catalog's contexts (`ClusterConnectorPort`): every connect succeeds with a
+    /// bundle of fakes unless the test scripts it.
+    pub connector: Arc<FakeClusterConnectorPort>,
+    /// Local files by path (`FsPort`), in memory.
+    pub fs: Arc<FakeFsPort>,
     /// The cluster's objects (`ResourcePort`), replayed on [`TestPorts::clock`].
     pub resources: Arc<FakeResourcePort>,
     /// The virtual clock the fakes replay streams on. It is independent of GPUI's test clock:
@@ -59,6 +64,8 @@ impl TestPorts {
             state: Arc::new(FakeStatePort::new()),
             secrets: Arc::new(FakeSecretStorePort::new()),
             clusters: Arc::new(FakeClusterSourcePort::new()),
+            connector: Arc::new(FakeClusterConnectorPort::new()),
+            fs: Arc::new(FakeFsPort::new()),
             resources: Arc::new(FakeResourcePort::with_clock(clock.clone())),
             clock,
         }

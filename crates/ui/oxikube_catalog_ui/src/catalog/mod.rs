@@ -40,6 +40,9 @@ pub mod test_support;
 #[cfg(test)]
 mod tests;
 
+/// The id of the catalog home in `view::Open` (`Command::ViewOpen { view }`), and its tab key.
+pub const CATALOG_VIEW: &str = "catalog";
+
 pub use actions::{
     ConnectSelected, DisconnectSelected, FocusSearch, SelectFirst, SelectLast, SelectNext,
     SelectPrevious, ToggleFavouriteSelected,

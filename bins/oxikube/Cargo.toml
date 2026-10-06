@@ -26,11 +26,16 @@ gpui_platform.workspace = true
 # Declared now so the full GPUI stack resolves and builds from day one;
 # feature crates will wire these through oxikube_ui (E05).
 gpui-component.workspace = true
+jiff.workspace = true
+# `kube_ports`: the kube adapter's catalog and connector need kube-rs' `Kubeconfig` type.
+kube.workspace = true
 # `--perf` recorder and frame hook; `perf-harness` adds the scripted driver for `--perf-scenario`.
 oxikube_app.workspace = true
 oxikube_assets.workspace = true
+oxikube_catalog_ui.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
+oxikube_kube.workspace = true
 oxikube_logging.workspace = true
 oxikube_ports.workspace = true
 oxikube_runtime.workspace = true
@@ -39,6 +44,7 @@ oxikube_state_sqlite.workspace = true
 oxikube_theme.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
+parking_lot.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -58,11 +64,15 @@ tempfile.workspace = true
 
 [features]
 default = []
+# `tests/kind_app.rs`: the app against the kind cluster (`OXIKUBE_TEST_CONTEXT`). Forwards to the
+# testkit helpers the test imports.
+integration = ["oxikube_testkit/integration"]
 # `AppState::test(cx)`: the real init order on testkit fakes, for `#[gpui::test]`s outside this crate.
 test-support = ["dep:oxikube_testkit"]
 # `OXIKUBE_SCREENSHOT=out.png cargo run -p oxikube --features screenshot` renders the main view
 # headlessly via `Window::render_to_image` and exits. Never part of default or release builds.
 screenshot = [
+    "test-support",
     "dep:oxikube_testkit",
     "oxikube_testkit/gpui-screenshot",
     "gpui/test-support",
@@ -72,6 +82,7 @@ screenshot = [
 # Turns on gpui/gpui_platform `test-support` (HeadlessAppContext) through the testkit; never part
 # of default or release builds.
 perf-scenarios = [
+    "test-support",
     "dep:oxikube_testkit",
     "oxikube_testkit/gpui-headless",
     "oxikube_runtime/perf-harness",

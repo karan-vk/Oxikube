@@ -80,3 +80,47 @@ fn probe_results_map_onto_health_signals() {
         HealthSignal::Failed { reason } if reason.contains("gone")
     ));
 }
+
+/// A loader result holding one token-auth context `name` on an address nothing listens on.
+fn loaded_with(name: &str) -> Arc<LoadedKubeconfig> {
+    let merged: Kubeconfig = serde_json::from_value(serde_json::json!({
+        "clusters": [{ "name": "c", "cluster": { "server": "https://127.0.0.1:1" } }],
+        "users": [{ "name": "u", "user": { "token": "not-a-real-token" } }],
+        "contexts": [{ "name": name, "context": { "cluster": "c", "user": "u" } }],
+    }))
+    .unwrap();
+    Arc::new(LoadedKubeconfig {
+        merged,
+        sources: Vec::new(),
+        origins: Default::default(),
+        diagnostics: Vec::new(),
+    })
+}
+
+#[tokio::test]
+async fn a_reloaded_kubeconfig_reaches_pools_built_before_and_after_it() {
+    let connector = empty_connector();
+    let context = ContextName::new("added");
+    let before = connector.pool(ExecInteractivity::Never);
+    assert_eq!(
+        before.get(&context).await.err().map(|e| e.kind()),
+        Some(ErrorKind::NotFound)
+    );
+
+    let dropped = connector.replace_loaded(loaded_with("added"));
+    assert!(dropped.is_empty(), "nothing was pooled: {dropped:?}");
+    assert!(
+        before.get(&context).await.is_ok(),
+        "the existing pool sees it"
+    );
+    let after = connector.pool(ExecInteractivity::Always);
+    assert!(after.get(&context).await.is_ok(), "a later pool sees it");
+
+    // The context goes away again: its pooled clients are dropped, once per name.
+    let dropped = connector.replace_loaded(loaded_with("other"));
+    assert_eq!(dropped, vec![context.clone()]);
+    assert_eq!(
+        before.get(&context).await.err().map(|e| e.kind()),
+        Some(ErrorKind::NotFound)
+    );
+}

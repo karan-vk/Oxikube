@@ -1,9 +1,10 @@
 //! Stage 13: the main window, opened behind the startup placeholder.
 //!
 //! The window opens with the workspace's default layout while the saved layout is read through
-//! the state db (`oxikube_workspace::window::open_main_window_restoring`): neither the SQLite open
-//! nor the layout read is awaited before the first frame. Its content is wrapped in the
-//! first-frame probe ([`super::first_frame::mark`]).
+//! the state db (`oxikube_workspace::window::open_main_window_mounted`): neither the SQLite open
+//! nor the layout read is awaited before the first frame. The cluster UI is mounted in it before
+//! that frame ([`crate::mount`]: the catalog home, hotbar and cluster tabs), and its content is
+//! wrapped in the first-frame probe ([`super::first_frame::mark`]).
 
 use anyhow::{Context as _, Result};
 use gpui::{AnyView, App, AppContext as _, WindowHandle};
@@ -29,15 +30,21 @@ pub fn probe_first_frame(content: AnyView, cx: &mut App) -> AnyView {
         .into()
 }
 
-/// Opens the app's main window: restoring its layout, probed for the first frame, with `wrap`
-/// applied to the content first (the `--perf` frame hook).
+/// Opens the app's main window: restoring its layout, with the cluster UI mounted
+/// ([`crate::mount::mount_main_window`]), probed for the first frame, with `wrap` applied to the
+/// content first (the `--perf` frame hook).
 pub fn open_main_window(
     cx: &mut App,
     wrap: impl FnOnce(AnyView, &mut App) -> AnyView + 'static,
 ) -> Result<WindowHandle<Root>> {
     let layout = main_layout_store(cx)?;
-    oxikube_workspace::window::open_main_window_restoring(cx, layout, move |content, cx| {
-        let content = wrap(content, cx);
-        probe_first_frame(content, cx)
-    })
+    oxikube_workspace::window::open_main_window_mounted(
+        cx,
+        Some(layout),
+        crate::mount::mount_main_window,
+        move |content, cx| {
+            let content = wrap(content, cx);
+            probe_first_frame(content, cx)
+        },
+    )
 }

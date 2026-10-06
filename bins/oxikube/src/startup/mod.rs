@@ -16,12 +16,12 @@
 //! | 5 | `Theme` | `oxikube_theme::init` | reads the `theme` setting and the system appearance | 1.4 / 0.4 |
 //! | 6 | `Keymap` | `oxikube_keymap::init` | binds the layered key bindings; needs settings' config dir | 0.7 / 0.04 |
 //! | 7 | `Ui` | `oxikube_ui::init`, `follow_active_theme` | component library and tokens; consumes the active theme | 72–81 / 71 (gpui-component enumerates the installed fonts, about 56 ms) |
-//! | 8 | `StateDb` | build `LazyState` and start its open on the background executor | construction is instant; the open (SQLite, migrations) must not block the first frame, so it is not awaited | 0.01 / 0.003 (the open itself, off the UI thread: 2.6) |
-//! | 9 | `AppState` | `AppState::install` | refuses to install unless the runtime, settings, theme and keymap exist, which is what makes a wrong order an error | < 0.01 |
+//! | 8 | `StateDb` | build `LazyState` and start its open on the background executor; build the cluster adapters ([`crate::kube_ports`]: kubeconfig catalog, kube connector, clock) | construction is instant; the open (SQLite, migrations) must not block the first frame, so it is not awaited; no kubeconfig is read until the catalog's first use | 0.01 / 0.003 (the open itself, off the UI thread: 2.6) |
+//! | 9 | `AppState` | `AppState::install`, which builds the cluster services (session manager, catalog, namespaces) over the ports | refuses to install unless the runtime, settings, theme and keymap exist, which is what makes a wrong order an error | < 0.01 |
 //! | 10 | `Workspace` | `oxikube_workspace::init` | window menu actions, workspace actions, session basics (the menu bar itself is installed after the first frame: about 19 ms with AppKit) | 0.02 / 0.03 |
-//! | 11 | `Features` | [`features::FEATURES`], in order | feature crates register actions, settings, item builders | 0 (none yet) |
+//! | 11 | `Features` | [`features::FEATURES`], in order | feature crates register actions, settings, item builders; the per-cluster settings start following into the session manager | 0.02 |
 //! | 12 | `KeymapRebind` | `oxikube_keymap::rebind` | crates that bound keys after stage 6 (the workspace's interim bindings, the component library) must not outrank the user's `keymap.json` | 0.04 |
-//! | 13 | `Window` | open the main window behind the startup placeholder ([`window`]) | everything it shows is ready; the state db open and the layout read continue in the background | 61–65 / 17 (the window and its first draw; on macOS the first frame is drawn inside `open_window`) |
+//! | 13 | `Window` | open the main window behind the startup placeholder and mount the cluster UI in it ([`window`], [`crate::mount`]: catalog home, hotbar, cluster tabs, command bus) | everything it shows is ready; the state db open, the layout read and the catalog's first kubeconfig read continue in the background | 61–65 / 17 (the window and its first draw; on macOS the first frame is drawn inside `open_window`) |
 //! | | first interactive frame | [`first_frame::mark`] | ends start-up: logged with every stage's cost | **258–265 / 139** from the first line of `main`; budget 400 ([`STARTUP_BUDGET`]) |
 //!
 //! Costs: Apple M5 Max, `release-fast`, 20 launches each with the reference fixture (3
@@ -112,6 +112,10 @@ pub enum StartupError {
     /// An `init` ran out of order.
     #[error(transparent)]
     AppState(#[from] AppStateError),
+    /// The app's adapters ([`PortsChoice::Sqlite`]) were asked for on the deterministic test
+    /// runtime: the kube adapters need Tokio.
+    #[error("the app's adapters need the Tokio runtime")]
+    NeedsTokio,
 }
 
 /// Marks that [`init`] has run in this app.
@@ -163,7 +167,7 @@ pub(crate) fn init_with_features(
         oxikube_ui::follow_active_theme(cx).detach();
     });
 
-    let ports = report.time(Stage::StateDb, || build_ports(cx, &env.ports));
+    let ports = report.time(Stage::StateDb, || build_ports(cx, &env))?;
     report.time(Stage::AppState, || {
         AppState::new(ports, env.data_dir.clone()).install(cx)
     })?;
@@ -196,15 +200,30 @@ fn init_settings(cx: &mut App, env: &StartupEnv) -> Result<(), StartupError> {
     Ok(())
 }
 
-/// Builds the ports bundle. The SQLite adapter is constructed here (and only here) and starts
-/// opening in the background; nothing waits for it.
-fn build_ports(cx: &mut App, choice: &PortsChoice) -> AppPorts {
-    match choice {
-        PortsChoice::Provided(ports) => ports.clone(),
+/// Builds the ports bundle. The SQLite and kube adapters are constructed here (and only here);
+/// the state db starts opening in the background and nothing waits for it, and the kube
+/// adapters read nothing until their first use.
+fn build_ports(cx: &mut App, env: &StartupEnv) -> Result<AppPorts, StartupError> {
+    match &env.ports {
+        PortsChoice::Provided(ports) => Ok(ports.clone()),
         PortsChoice::Sqlite(path) => {
+            let runtime = oxikube_runtime::handle(cx).ok_or(StartupError::NeedsTokio)?;
             let state = state_db::LazyState::new(path.clone());
             state.start(cx).detach();
-            AppPorts::new(Arc::new(state))
+            let clusters = crate::kube_ports::kube_adapters(
+                user_sources(cx),
+                runtime,
+                paths::kubeconfigs_dir(&env.config),
+            );
+            Ok(AppPorts::new(Arc::new(state), clusters))
         }
     }
+}
+
+/// The user's kubeconfig source list as settings have it now (`kubeconfig.sources`).
+fn user_sources(cx: &App) -> Vec<oxikube_ports::UserSource> {
+    use oxikube_settings::Settings as _;
+    oxikube_settings::KubeconfigSettings::try_get(cx)
+        .map(|settings| settings.user_sources())
+        .unwrap_or_else(|| vec![oxikube_ports::UserSource::default_source()])
 }

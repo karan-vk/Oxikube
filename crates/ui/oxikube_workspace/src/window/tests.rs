@@ -250,3 +250,44 @@ fn layout_is_in_logical_pixels_on_a_hidpi_display(cx: &mut TestAppContext) {
     let title = vcx.debug_bounds("window-title").expect("title rendered");
     assert!(title.size.height <= TITLE_BAR_HEIGHT);
 }
+
+#[gpui::test]
+fn the_mount_hook_fills_the_window_before_its_first_frame(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        oxikube_ui::init(cx);
+        init(cx);
+    });
+    let mounted = Rc::new(Cell::new(false));
+    let seen = mounted.clone();
+    let handle = cx
+        .update(|cx| {
+            open_main_window_mounted(
+                cx,
+                None,
+                move |main, window, cx| {
+                    let item = crate::test_support::TestItem::build("Home", cx);
+                    let workspace = main.read(cx).workspace().clone();
+                    workspace.update(cx, |ws, cx| ws.open_item(item, window, cx));
+                    seen.set(true);
+                },
+                |content, _| content,
+            )
+        })
+        .expect("the main window opens");
+    assert!(mounted.get(), "mounted while the window was built");
+    let mut vcx = VisualTestContext::from_window(handle.into(), cx);
+    vcx.run_until_parked();
+    vcx.update(|window, cx| {
+        let root = window.root::<Root>().flatten().expect("root");
+        let main = root
+            .read(cx)
+            .view()
+            .clone()
+            .downcast::<MainView>()
+            .expect("the Root still hosts the main view");
+        assert!(
+            !main.read(cx).workspace().read(cx).is_blank(),
+            "the item is open"
+        );
+    });
+}

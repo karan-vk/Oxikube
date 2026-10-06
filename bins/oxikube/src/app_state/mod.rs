@@ -5,7 +5,9 @@
 //!
 //! | Part | Where it lives | Read with |
 //! |---|---|---|
-//! | ports bundle | the state itself ([`AppPorts`]: `Arc<dyn Port>`s built by this binary) | [`AppState::ports`], [`AppState::state`] |
+//! | ports bundle | the state itself ([`AppPorts`]: `Arc<dyn Port>`s built by this binary, the cluster adapters among them) | [`AppState::ports`], [`AppState::state`] |
+//! | cluster services | the state itself ([`ClusterServices`]: session manager, catalog, namespaces, integrations) | [`AppState::services`] |
+//! | command bus | set once by the main window's mount ([`CommandBus`] with its `MutationGuard`) | [`AppState::command_bus`] |
 //! | state db | `ports.state`: the SQLite adapter, opened off the UI thread | [`AppState::state`] |
 //! | settings | `oxikube_settings::SettingsStore` global | [`AppState::settings`] |
 //! | theme | `oxikube_theme::ThemeRegistry` + `ActiveTheme` globals | [`AppState::theme_registry`], [`AppState::active_theme`] |
@@ -19,8 +21,13 @@
 //! service-locator map: every part is a named, typed field or accessor.
 //!
 //! Adapters are built by `startup` (the only place that names them) and arrive here as port
-//! trait objects, so nothing that takes an `AppState` knows SQLite or the keychain. The
+//! trait objects, so nothing that takes an `AppState` knows SQLite, kube-rs or the keychain. The
 //! `SecretStorePort` is wired when its adapter exists (`AppPorts::secrets` is `None` until then).
+//!
+//! The command bus is built when the main window is mounted (`crate::mount`), because the cluster
+//! tab commands it routes need that window's tab controller; [`AppState::set_command_bus`] stores
+//! it once and [`AppState::command_bus`] hands it out (the palette, MCP and extensions dispatch
+//! there too, later).
 //!
 //! # Tests
 //!
@@ -33,20 +40,23 @@
 #[cfg(test)]
 mod harness_tests;
 mod ports;
+mod services;
 #[cfg(test)]
 mod tests;
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use gpui::{App, Global};
+use oxikube_app::CommandBus;
 use oxikube_keymap::KeymapStore;
 use oxikube_ports::StatePort;
 use oxikube_runtime::RuntimeMode;
 use oxikube_settings::SettingsStore;
 use oxikube_theme::{ActiveTheme, ThemeRegistry, ThemeTokens};
 
-pub use ports::AppPorts;
+pub use ports::{AppPorts, ClusterAdapters};
+pub use services::ClusterServices;
 
 /// Why [`AppState::install`] refused.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -62,6 +72,8 @@ pub enum AppStateError {
 /// The dependency container. See the [module docs](self).
 pub struct AppState {
     ports: AppPorts,
+    services: ClusterServices,
+    bus: OnceLock<CommandBus>,
     data_dir: Option<PathBuf>,
 }
 
@@ -73,8 +85,15 @@ impl AppState {
     /// A state over `ports`. `data_dir` is where logs, crash reports and the state database live
     /// (`None` for tests and when the OS reports none). It is not installed yet: see
     /// [`AppState::install`].
+    ///
+    /// Builds the [`ClusterServices`] over the ports (cheap: nothing is read or spawned).
     pub fn new(ports: AppPorts, data_dir: Option<PathBuf>) -> Self {
-        Self { ports, data_dir }
+        Self {
+            services: ClusterServices::new(&ports),
+            ports,
+            bus: OnceLock::new(),
+            data_dir,
+        }
     }
 
     /// Installs `self` as the global.
@@ -118,6 +137,22 @@ impl AppState {
     /// The ports bundle.
     pub fn ports(&self) -> &AppPorts {
         &self.ports
+    }
+
+    /// The cluster services (sessions, catalog, namespaces, integrations).
+    pub fn services(&self) -> &ClusterServices {
+        &self.services
+    }
+
+    /// The command bus, once the main window has been mounted (`None` before).
+    pub fn command_bus(&self) -> Option<&CommandBus> {
+        self.bus.get()
+    }
+
+    /// Stores the command bus. The first one stays: `false` (and `bus` is dropped) when one was
+    /// set already.
+    pub fn set_command_bus(&self, bus: CommandBus) -> bool {
+        self.bus.set(bus).is_ok()
     }
 
     /// The state db port (`ports().state`). In the app it is the SQLite adapter, opened in the

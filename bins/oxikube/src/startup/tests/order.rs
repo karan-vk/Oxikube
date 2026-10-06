@@ -10,7 +10,7 @@ use oxikube_settings::{Settings as _, SettingsStore};
 use oxikube_theme::{ActiveTheme, ThemeRegistry};
 use oxikube_workspace::session::SessionSettings;
 
-use crate::app_state::{AppPorts, AppState, AppStateError};
+use crate::app_state::{AppPorts, AppState, AppStateError, ClusterAdapters};
 use crate::startup::{
     ConfigSource, Feature, Stage, StartupEnv, StartupError, StartupReport, init, init_with_features,
 };
@@ -120,7 +120,8 @@ fn app_state_test_runs_the_real_order_once(cx: &mut TestAppContext) {
 }
 
 fn fake_ports() -> AppPorts {
-    AppPorts::new(std::sync::Arc::new(oxikube_testkit::FakeStatePort::new()))
+    let ports = oxikube_testkit::TestPorts::empty();
+    AppPorts::new(ports.state.clone(), ClusterAdapters::fakes(&ports))
 }
 
 #[gpui::test]

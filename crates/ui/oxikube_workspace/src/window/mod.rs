@@ -5,8 +5,10 @@
 //!   root is `oxikube_ui`'s `Root`, which renders the dialog, sheet and notification layers
 //!   exactly once above [`MainView`].
 //! - [`open_main_window_restoring`]: the same window, restoring its saved layout in the
-//!   background behind the startup placeholder (E05-S13; see [`MainView`]). The app opens its
-//!   first window this way.
+//!   background behind the startup placeholder (E05-S13; see [`MainView`]).
+//! - [`open_main_window_mounted`]: the same, with a mount hook that fills the new window before
+//!   its first frame (the binary puts the catalog home, the hotbar and the cluster tabs there,
+//!   E07-S00). The app opens its first window this way.
 //! - [`options`]: the per-platform `WindowOptions` and the application id.
 //! - [`menus`]: the macOS app menu and its actions.
 //!
@@ -84,10 +86,33 @@ pub fn open_main_window_restoring(
     open(cx, None, Some(layout), wrap)
 }
 
+/// Like [`open_main_window_restoring`] (or [`open_main_window_with`] when `layout` is `None`),
+/// with `mount` run on the new [`MainView`] (its workspace and layout persistence) before the
+/// `Root` hosts it, so what it opens (the catalog home, the hotbar) is in the first frame. Items `mount` opens are kept by the layout restore, which
+/// only fills an empty centre.
+pub fn open_main_window_mounted(
+    cx: &mut App,
+    layout: Option<LayoutStore>,
+    mount: impl FnOnce(&Entity<MainView>, &mut Window, &mut App) + 'static,
+    wrap: impl FnOnce(AnyView, &mut App) -> AnyView + 'static,
+) -> Result<WindowHandle<Root>> {
+    open_with(cx, None, layout, mount, wrap)
+}
+
 fn open(
     cx: &mut App,
     bounds: Option<Bounds<Pixels>>,
     layout: Option<LayoutStore>,
+    wrap: impl FnOnce(AnyView, &mut App) -> AnyView + 'static,
+) -> Result<WindowHandle<Root>> {
+    open_with(cx, bounds, layout, |_, _, _| {}, wrap)
+}
+
+fn open_with(
+    cx: &mut App,
+    bounds: Option<Bounds<Pixels>>,
+    layout: Option<LayoutStore>,
+    mount: impl FnOnce(&Entity<MainView>, &mut Window, &mut App) + 'static,
     wrap: impl FnOnce(AnyView, &mut App) -> AnyView + 'static,
 ) -> Result<WindowHandle<Root>> {
     let mut options = main_window_options(cx);
@@ -96,7 +121,7 @@ fn open(
     }
     cx.open_window(options, move |window, cx| {
         crate::session::windows::install_close_guard(window, cx);
-        build_root_with_layout(window, cx, layout, wrap)
+        build_root_mounted(window, cx, layout, mount, wrap)
     })
     .context("opening the main window")
 }
@@ -119,12 +144,23 @@ pub fn build_root_with_layout(
     layout: Option<LayoutStore>,
     wrap: impl FnOnce(AnyView, &mut App) -> AnyView,
 ) -> Entity<Root> {
-    let content: AnyView = cx
-        .new(|cx| match layout {
-            Some(store) => MainView::restoring(store, window, cx),
-            None => MainView::new(window, cx),
-        })
-        .into();
-    let content = wrap(content, cx);
+    build_root_mounted(window, cx, layout, |_, _, _| {}, wrap)
+}
+
+/// [`build_root_with_layout`] with `mount` run on the [`MainView`] before `wrap` and the `Root`
+/// (see [`open_main_window_mounted`]). Also what the headless screenshot of the app renders.
+pub fn build_root_mounted(
+    window: &mut Window,
+    cx: &mut App,
+    layout: Option<LayoutStore>,
+    mount: impl FnOnce(&Entity<MainView>, &mut Window, &mut App),
+    wrap: impl FnOnce(AnyView, &mut App) -> AnyView,
+) -> Entity<Root> {
+    let main = cx.new(|cx| match layout {
+        Some(store) => MainView::restoring(store, window, cx),
+        None => MainView::new(window, cx),
+    });
+    mount(&main, window, cx);
+    let content = wrap(main.into(), cx);
     new_root(content, window, cx)
 }

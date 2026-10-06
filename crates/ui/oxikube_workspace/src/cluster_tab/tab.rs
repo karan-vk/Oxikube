@@ -85,6 +85,9 @@ pub struct ClusterTab {
     /// the flush when the tab closes.
     persistence: Option<Entity<LayoutPersistence>>,
     connect_ui: Option<ConnectUi>,
+    /// The strip above the content of a connected cluster (the namespace selector), set by the
+    /// owner.
+    toolbar: Option<AnyView>,
     active: bool,
     _observe_workspace: Subscription,
 }
@@ -110,6 +113,7 @@ impl ClusterTab {
             workspace,
             persistence: None,
             connect_ui: None,
+            toolbar: None,
             active: false,
             _observe_workspace: observe,
         }
@@ -155,6 +159,19 @@ impl ClusterTab {
     /// them.
     pub fn connect_ui(&self) -> Option<&ConnectUi> {
         self.connect_ui.as_ref()
+    }
+
+    /// Shows `toolbar` above the content while the cluster is connected (`Ready` or
+    /// `Degraded`): the namespace selector (E06-S07) and, later, the view's own controls. It
+    /// comes from crates this one cannot depend on, so the owner hands it in.
+    pub fn set_toolbar(&mut self, toolbar: AnyView, cx: &mut Context<Self>) {
+        self.toolbar = Some(toolbar);
+        cx.notify();
+    }
+
+    /// The toolbar the tab shows while connected, if its owner set one.
+    pub fn toolbar(&self) -> Option<&AnyView> {
+        self.toolbar.as_ref()
     }
 
     pub(super) fn set_persistence(&mut self, persistence: Entity<LayoutPersistence>) {
@@ -212,6 +229,7 @@ impl Render for ClusterTab {
         let colors = cx.colors();
         let title = &self.info.title;
         let blank = self.workspace.read(cx).is_blank();
+        let phase = self.info.state.phase();
         let content = {
             let content = div().flex_1().min_h_0().w_full();
             if blank {
@@ -220,7 +238,24 @@ impl Render for ClusterTab {
                 content.child(self.workspace.clone())
             }
         };
-        let phase = self.info.state.phase();
+        let content = match &self.toolbar {
+            Some(toolbar) if phase.is_connected() => v_flex()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .child(
+                    div()
+                        .id("cluster-toolbar")
+                        .debug_selector(|| format!("cluster-toolbar-{title}"))
+                        .flex_none()
+                        .w_full()
+                        .border_b_1()
+                        .border_color(colors.border_variant)
+                        .child(toolbar.clone()),
+                )
+                .child(content),
+            _ => v_flex().flex_1().min_h_0().w_full().child(content),
+        };
         let body = match &self.connect_ui {
             Some(ui) if !phase.is_connected() => div()
                 .id("cluster-connect")

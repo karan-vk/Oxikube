@@ -24,9 +24,10 @@ pub struct Deferred {
 pub const DEFERRED: &[Deferred] = &[
     Deferred {
         name: "kubeconfig_sources",
-        owner: "E03 / E06",
-        started_by: "the catalog home after the first frame: kubeconfig files are parsed on \
-                     `spawn_kube`, never on the UI thread",
+        owner: "E03 / E06 / E07-S00",
+        started_by: "the catalog home's first read, after the first frame: \
+                     `kube_ports::LazyKubeSources` builds the adapter (environment, files, \
+                     watcher) on `spawn_kube`, never on the UI thread",
     },
     Deferred {
         name: "api_discovery",

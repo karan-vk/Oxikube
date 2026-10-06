@@ -150,3 +150,16 @@ fn auth_required_has_its_own_badge(cx: &mut TestAppContext) {
     let badge = f.read(|v| v.model().badge(0)).unwrap();
     assert_eq!((badge.label, badge.tone), ("Auth required", Tone::Warning));
 }
+
+#[gpui::test]
+fn the_sources_button_asks_for_the_sources_screen(cx: &mut TestAppContext) {
+    let mut f = Fixture::open(cx, contexts(2));
+    f.window.draw_frame();
+    f.click("catalog-sources");
+    assert_eq!(
+        f.recorder.sent(),
+        [Command::ViewOpen {
+            view: crate::sources::SOURCES_VIEW.to_owned()
+        }]
+    );
+}

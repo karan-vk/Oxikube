@@ -253,6 +253,28 @@ weaken `cargo xtask lint-deps`.
    selected modules (settings store, keymap, theme loader, picker, terminal element) may be
    vendored with a GPL header and an entry in `THIRD_PARTY_NOTICES.md`.
 
+## The running app's wiring (E07-S00)
+
+`bins/oxikube` is where the views built against fakes meet the real adapters:
+
+- `kube_ports`: the cluster adapters. `LazyKubeSources` is the `ClusterSourcePort` over
+  `oxikube_kube::sources::KubeconfigSources`, built on its first port call (on `spawn_kube`, after
+  the first frame) from the `kubeconfig.sources` setting; `SourcesConnector` is the
+  `ClusterConnectorPort` over `oxikube_kube::KubeConnector`, handing it the catalog's current
+  kubeconfig before each connect (`KubeConnector::replace_loaded`); `SystemClock` is the
+  `ClockPort`. They join the state db in `AppPorts` (`AppPorts::clusters`).
+- `app_state::ClusterServices`: the session manager, catalog, cluster commands, namespace service
+  and integration registry over those ports, held by `AppState`.
+- `mount`: `mount_main_window` runs inside the main window's construction
+  (`oxikube_workspace::window::open_main_window_mounted`): the cluster tabs with their setup
+  (sidebar, connect views, namespace selector in the tab toolbar, `ClusterTab::set_toolbar`), the
+  command bus (`mount::bus::build_registry`: cluster, namespace, kubeconfig, posture, tab and
+  `view::Open` commands; its `MutationGuard`; stored with `AppState::set_command_bus`), the catalog
+  home as the first tab, the hotbar strip, the active cluster's status item, the kubeconfig
+  sources (settings list, hot reload, the sources screen behind `view::Open`) and session restore.
+  Views dispatch through `mount::bus::BusDispatcher`, which runs each command on the bus through
+  the window's `ClusterCommandRunner` (toasts, confirmations, denials).
+
 ## App start-up and init order
 
 `bins/oxikube` owns the order in which each crate's `init(cx)` runs (Zed's `main.rs` pattern); the

@@ -5,7 +5,8 @@
 //! hook) into a scratch data directory, the platform (timed as the `assets` stage, which builds the
 //! `Application` in the app), [`startup::init`] with a scratch config directory (the settings,
 //! keymap and themes files are created and read like a first launch), then the main window behind
-//! the startup placeholder with the first-frame probe. Differences from the app, each because the
+//! the startup placeholder with the cluster UI mounted (catalog home, hotbar, cluster tabs; E07-S00)
+//! and the first-frame probe. Differences from the app, each because the
 //! headless scheduler rejects foreign threads waking its tasks: no settings/keymap file watchers
 //! (`ConfigSource::Dir`), and the state db is an in-memory fake (the SQLite open runs off the UI
 //! thread in the app, so it is not on the path to the first frame; its cost is measured separately
@@ -27,7 +28,7 @@ use std::time::Instant;
 
 use anyhow::{Context as _, Result, bail};
 use gpui::{AnyView, AnyWindowHandle, App, AppContext as _};
-use oxikube::app_state::AppPorts;
+use oxikube::app_state::{AppPorts, ClusterAdapters};
 use oxikube::startup::{
     self, ConfigSource, PortsChoice, RuntimeChoice, Stage, StartupEnv, StartupReport,
 };
@@ -64,9 +65,7 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
     let env = StartupEnv {
         config: ConfigSource::Dir(scratch.join("config")),
         runtime: RuntimeChoice::Tokio,
-        ports: PortsChoice::Provided(AppPorts::new(Arc::new(
-            oxikube_testkit::FakeStatePort::new(),
-        ))),
+        ports: PortsChoice::Provided(fake_ports()),
         data_dir: boot.data_dir,
         log: boot.log,
         earlier,
@@ -80,10 +79,12 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
     let opening = Instant::now();
     let window: AnyWindowHandle = cx
         .open_window(WINDOW_SIZE, move |window, cx| {
-            oxikube_workspace::window::build_root_with_layout(
+            // The app's window: the cluster UI mounted before the first frame (E07-S00).
+            oxikube_workspace::window::build_root_mounted(
                 window,
                 cx,
                 Some(layout),
+                oxikube::mount::mount_main_window,
                 move |content, cx| wrap(content, hook, cx),
             )
         })?
@@ -146,6 +147,13 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
         state_db_open_ms(&scratch.join("state.db"))?,
     ));
     Ok(run.into_sample("startup", extra))
+}
+
+/// The app's ports with in-memory fakes: the state db (see the module docs) and the cluster side
+/// (an empty catalog, so nothing is read or connected).
+fn fake_ports() -> AppPorts {
+    let ports = oxikube_testkit::TestPorts::empty();
+    AppPorts::new(ports.state.clone(), ClusterAdapters::fakes(&ports))
 }
 
 /// The window content as the app wraps it: the `--perf` hook (when probing), then the first-frame
