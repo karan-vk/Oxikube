@@ -9,7 +9,7 @@ use oxikube_ports::AccessReviewPort;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccessOutcome {
     /// The reviews succeeded: the union of the rules of every selected namespace. Under
-    /// [`NamespaceSelection::All`] the rules are marked partial (see [`review_access`]).
+    /// [`NamespaceSelection::All`] the rules cover only some namespaces (see [`review_access`]).
     Reviewed(AccessRules),
     /// A review failed: everything is offered and `reason` is shown as a warning.
     Failed {
@@ -46,9 +46,12 @@ impl AccessOutcome {
 ///   namespaces nobody selected.
 /// * `All` has no namespace to ask in: the cluster-wide review sees the cluster-scoped grants but
 ///   only one probe namespace's Roles, so a user bound only in `dev` looks denied everywhere. The
-///   merged rules are therefore marked partial: what the review did not list is unknown, not
-///   denied, and the sidebar keeps the section (hiding by mistake is worse than showing a page the
-///   server refuses). Selecting a namespace gives the precise answer.
+///   merged rules are therefore marked [`AccessRules::namespaces_unseen`]: a namespaced resource
+///   the review did not list is unknown, not denied, and the sidebar keeps it (hiding by mistake
+///   is worse than showing a page the server refuses). Cluster-scoped resources (nodes,
+///   namespaces, persistent volumes, storage classes, cluster roles, CRDs) are granted only by
+///   ClusterRoleBindings, which the cluster-wide review sees in full, so those are still hidden
+///   when not listed. Selecting a namespace gives the precise answer for the rest.
 ///
 /// Never fails: an error from the port becomes [`AccessOutcome::Failed`], so the sidebar shows
 /// everything with a warning.
@@ -74,7 +77,7 @@ pub async fn review_access(
         }
     }
     if selection.is_all() {
-        merged.partial = true;
+        merged.namespaces_unseen = true;
     }
     AccessOutcome::Reviewed(merged)
 }

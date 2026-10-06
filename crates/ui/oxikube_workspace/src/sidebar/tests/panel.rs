@@ -126,10 +126,21 @@ fn changing_the_namespace_selection_recomputes_visibility(cx: &mut TestAppContex
         .access
         .set_namespace_rules("ops", can_list(&[("", "secrets")]));
     fx.connect();
+    let all_namespaces = [
+        "cluster",
+        "workloads",
+        "config",
+        "network",
+        "storage",
+        "events",
+        "helm",
+        "access-control",
+    ];
     assert_eq!(
-        fx.sections().len(),
-        10,
-        "All namespaces: the review only sees one probe namespace, so nothing is hidden"
+        fx.sections(),
+        all_namespaces,
+        "All namespaces: namespaced sections stay (the review sees one probe namespace), \
+         cluster-scoped Nodes and Namespaces are hidden (no cluster-wide grant)"
     );
 
     let select = |fx: &mut Fixture, names: &[&str]| {
@@ -154,9 +165,9 @@ fn changing_the_namespace_selection_recomputes_visibility(cx: &mut TestAppContex
     select(&mut fx, &["dev", "ops"]);
     assert_eq!(fx.sections(), ["cluster", "workloads", "config", "helm"]);
 
-    // Back to all namespaces: unknown again, so everything shows.
+    // Back to all namespaces: namespaced sections are unknown again, so they show.
     select(&mut fx, &[]);
-    assert_eq!(fx.sections().len(), 10);
+    assert_eq!(fx.sections(), all_namespaces);
 }
 
 #[gpui::test]

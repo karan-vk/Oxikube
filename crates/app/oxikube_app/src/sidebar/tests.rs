@@ -110,16 +110,32 @@ fn another_namespaces_grants_do_not_leak_into_the_selection() {
 }
 
 #[test]
-fn all_namespaces_never_hides_what_the_probe_namespace_did_not_grant() {
+fn all_namespaces_never_hides_namespaced_resources_the_probe_namespace_did_not_grant() {
     // A Role bound only in `dev`: the cluster-wide review (in `default`) lists nothing.
     let access = FakeAccessReviewPort::new().with_rules(AccessRules::none());
     let outcome = block_on(review_access(&access, &NamespaceSelection::All));
-    assert!(matches!(&outcome, AccessOutcome::Reviewed(rules) if rules.partial));
+    assert!(matches!(&outcome, AccessOutcome::Reviewed(rules) if rules.namespaces_unseen));
     assert!(
         outcome.offers(&list("", "pods")),
         "unknown is shown, not hidden"
     );
     assert!(outcome.offers(&list("apps", "deployments")));
+    // Cluster-scoped kinds only come from ClusterRoleBindings, which the review sees in full.
+    for (group, resource) in [
+        ("", "nodes"),
+        ("", "namespaces"),
+        ("", "persistentvolumes"),
+        ("storage.k8s.io", "storageclasses"),
+        ("rbac.authorization.k8s.io", "clusterroles"),
+    ] {
+        assert!(!outcome.offers(&list(group, resource)), "{resource}");
+    }
+    let nodes = FakeAccessReviewPort::new().with_rules(grant_list("", "nodes"));
+    let nodes = block_on(review_access(&nodes, &NamespaceSelection::All));
+    assert!(
+        nodes.offers(&list("", "nodes")),
+        "a granted cluster-scoped kind shows"
+    );
     // Naming a namespace gives the precise answer.
     let dev = block_on(review_access(&access, &NamespaceSelection::single("dev")));
     assert!(!dev.offers(&list("", "pods")));

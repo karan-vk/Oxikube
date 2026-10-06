@@ -68,6 +68,7 @@ impl RulesSnapshot {
                 })
                 .collect(),
             partial: self.is_partial(),
+            namespaces_unseen: false,
         }
     }
 

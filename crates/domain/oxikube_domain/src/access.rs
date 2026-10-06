@@ -102,6 +102,12 @@ pub struct AccessRules {
     /// The server could not list every rule (webhook or node authorizers) or reported an
     /// evaluation error: more rules may exist than are listed.
     pub partial: bool,
+    /// The review listed only some namespaces' Roles (for example the cluster-wide ask of the
+    /// "all namespaces" selection, which sees one probe namespace). What it did not list is
+    /// unknown for namespaced resources, but still definitely denied for cluster-scoped ones:
+    /// only a ClusterRoleBinding grants those, and the review sees every cluster-wide binding.
+    #[serde(default)]
+    pub namespaces_unseen: bool,
 }
 
 impl AccessRules {
@@ -115,6 +121,7 @@ impl AccessRules {
         Self {
             rules: vec![AccessRule::granting(&["*"], &["*"], &["*"], &[])],
             partial: false,
+            namespaces_unseen: false,
         }
     }
 
@@ -132,10 +139,20 @@ impl AccessRules {
         self
     }
 
-    /// Adds the rules of `other`: the union of what both reviews allow. Partial when either is.
+    /// The same list marked as covering only some namespaces (see
+    /// [`AccessRules::namespaces_unseen`]).
+    #[must_use]
+    pub fn into_namespaces_unseen(mut self) -> Self {
+        self.namespaces_unseen = true;
+        self
+    }
+
+    /// Adds the rules of `other`: the union of what both reviews allow. Partial (or
+    /// namespaces-unseen) when either is.
     pub fn merge(&mut self, other: AccessRules) {
         self.rules.extend(other.rules);
         self.partial |= other.partial;
+        self.namespaces_unseen |= other.namespaces_unseen;
     }
 
     /// What the rules say about `verb` on `group`/`resource` (`resource` may carry a
@@ -155,6 +172,9 @@ impl AccessRules {
         match best {
             Some(level) => level,
             None if self.partial => Access::Unknown,
+            None if self.namespaces_unseen && !is_cluster_scoped(group, resource) => {
+                Access::Unknown
+            }
             None => Access::Denied,
         }
     }
@@ -196,6 +216,39 @@ impl AccessRequirement {
             verb: Verb::List,
         }
     }
+}
+
+/// Whether `group`/`resource` is a built-in cluster-scoped resource (nodes, namespaces,
+/// persistent volumes, storage classes, cluster roles, CRDs, ...). `resource` may carry a
+/// subresource. Resources of custom groups are not listed: discovery, not this table, says
+/// whether a custom resource is namespaced, so they count as namespaced here.
+pub fn is_cluster_scoped(group: &str, resource: &str) -> bool {
+    let resource = resource.split('/').next().unwrap_or(resource);
+    matches!(
+        (group, resource),
+        (
+            "",
+            "nodes" | "namespaces" | "persistentvolumes" | "componentstatuses"
+        ) | (
+            "storage.k8s.io",
+            "storageclasses" | "volumeattachments" | "csidrivers" | "csinodes"
+        ) | (
+            "rbac.authorization.k8s.io",
+            "clusterroles" | "clusterrolebindings"
+        ) | ("scheduling.k8s.io", "priorityclasses")
+            | ("node.k8s.io", "runtimeclasses")
+            | ("networking.k8s.io", "ingressclasses")
+            | ("apiextensions.k8s.io", "customresourcedefinitions")
+            | ("apiregistration.k8s.io", "apiservices")
+            | ("certificates.k8s.io", "certificatesigningrequests")
+            | (
+                "admissionregistration.k8s.io",
+                "mutatingwebhookconfigurations"
+                    | "validatingwebhookconfigurations"
+                    | "validatingadmissionpolicies"
+                    | "validatingadmissionpolicybindings"
+            )
+    )
 }
 
 /// Whether `group` is one of the API groups Kubernetes itself serves, as opposed to a group a
@@ -342,6 +395,34 @@ mod tests {
         ] {
             assert!(!is_builtin_api_group(custom), "{custom}");
         }
+    }
+
+    #[test]
+    fn unseen_namespaces_leave_namespaced_resources_unknown_but_cluster_scoped_ones_denied() {
+        let r =
+            rules(AccessRule::granting(&["list"], &[""], &["nodes"], &[])).into_namespaces_unseen();
+        assert_eq!(r.level("list", "", "nodes"), Access::Granted);
+        assert_eq!(r.level("list", "", "pods"), Access::Unknown);
+        assert_eq!(r.level("list", "apps", "deployments"), Access::Unknown);
+        for (group, resource) in [
+            ("", "namespaces"),
+            ("", "persistentvolumes"),
+            ("storage.k8s.io", "storageclasses"),
+            ("rbac.authorization.k8s.io", "clusterroles"),
+            ("apiextensions.k8s.io", "customresourcedefinitions"),
+            ("", "nodes/proxy"),
+        ] {
+            assert!(is_cluster_scoped(group, resource), "{group}/{resource}");
+        }
+        assert_eq!(r.level("list", "", "namespaces"), Access::Denied);
+        assert!(!is_cluster_scoped("rbac.authorization.k8s.io", "roles"));
+        // A partial review still never hides anything.
+        let partial = AccessRules::none().into_partial().into_namespaces_unseen();
+        assert_eq!(partial.level("list", "", "nodes"), Access::Unknown);
+        // The flag survives a merge.
+        let mut merged = AccessRules::none();
+        merged.merge(r);
+        assert!(merged.namespaces_unseen);
     }
 
     #[test]
