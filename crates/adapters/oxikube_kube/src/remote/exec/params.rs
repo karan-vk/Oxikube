@@ -41,7 +41,8 @@ pub(super) fn check_command(command: &[String]) -> OxiResult<()> {
     }
 }
 
-/// The kube parameters for `options`.
+/// The kube parameters for `options`, with the pipes sized to [`STREAM_BUFFER`]. An interactive
+/// terminal ([`ExecOptions::interactive`]) comes out as kube's `AttachParams::interactive_tty()`.
 pub(super) fn attach_params(options: &ExecOptions) -> AttachParams {
     let mut params = AttachParams::default()
         .stdin(options.stdin)

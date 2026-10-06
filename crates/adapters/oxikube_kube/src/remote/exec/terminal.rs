@@ -1,26 +1,25 @@
 //! [`ExecPort`] for [`KubeExec`]: descriptors to the stream-level calls, sessions to
-//! [`TerminalBackend`]s.
+//! [`KubeStream`]s.
 //!
 //! Everything here is mapping; the websocket, the node-shell pod and the debug patch are the
-//! existing stream-level code. Each session is wrapped in a [`SessionBackend`], which pulls
-//! output through the session's bounded pipes (a stalled terminal stalls the container) and
-//! reads the exit status when the output ends. Killing or dropping a node-shell backend drops
-//! the session's status future, which deletes the helper pod.
+//! existing stream-level code. Each session is wrapped in a [`KubeStream`], which pulls output
+//! through the session's bounded pipes (a stalled terminal stalls the container) and reads the
+//! exit status when the output ends. Killing or dropping a node-shell backend drops the
+//! session's status future, which deletes the helper pod.
+
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use oxikube_domain::OxiResult;
 use oxikube_ports::{
-    AttachTarget, DebugContainerSpec, ExecOptions, ExecPort, ExecSession, ExecStreamPort,
-    ExecTarget, NodeShellSpec, SessionBackend, TerminalBackend,
+    AttachTarget, DebugContainerSpec, ExecOptions, ExecPort, ExecStreamPort, ExecTarget,
+    NodeShellSpec, TerminalBackend,
 };
 use uuid::Uuid;
 
+use super::kube_stream::{KubeStream, Reopen};
 use super::{KubeExec, NodeShellConfig};
 use crate::subresource::EphemeralContainerSpec;
-
-fn boxed(session: ExecSession) -> Box<dyn TerminalBackend> {
-    Box::new(SessionBackend::new(session))
-}
 
 /// The server rejects `stderr` with a TTY (a TTY merges both into stdout), so a TTY session
 /// asks for stdout only.
@@ -64,21 +63,51 @@ pub(super) fn node_config(spec: &NodeShellSpec) -> NodeShellConfig {
     }
 }
 
-#[async_trait]
-impl ExecPort for KubeExec {
-    async fn exec(&self, target: &ExecTarget) -> OxiResult<Box<dyn TerminalBackend>> {
+impl KubeExec {
+    fn port(&self) -> Arc<dyn ExecStreamPort> {
+        Arc::new(self.clone())
+    }
+
+    /// Runs `target.command` (argv, no shell) in a container of `target.pod`, as the concrete
+    /// [`KubeStream`] ([`ExecPort::exec`] boxes the same thing). With `target.tty` and
+    /// `target.stdin` this is kube's `AttachParams::interactive_tty()`.
+    ///
+    /// # Errors
+    ///
+    /// As [`ExecPort::exec`].
+    pub async fn exec_stream(&self, target: &ExecTarget) -> OxiResult<KubeStream> {
         let (namespace, pod) = target.namespaced_pod()?;
         let options = options(target.container.as_deref(), target.tty, target.stdin);
         let session = self
             .exec_session(namespace, pod, &target.command, &options)
             .await?;
-        Ok(boxed(session))
+        let reopen = Reopen::exec(self.port(), namespace, pod, &target.command, &options);
+        Ok(KubeStream::new(session, Some(reopen)))
+    }
+
+    /// Attaches to the main process of a container of `target.pod`, as the concrete
+    /// [`KubeStream`] ([`ExecPort::attach`] boxes the same thing).
+    ///
+    /// # Errors
+    ///
+    /// As [`ExecPort::attach`].
+    pub async fn attach_stream(&self, target: &AttachTarget) -> OxiResult<KubeStream> {
+        let (namespace, pod) = target.namespaced_pod()?;
+        let options = options(target.container.as_deref(), target.tty, target.stdin);
+        let session = self.attach_session(namespace, pod, &options).await?;
+        let reopen = Reopen::attach(self.port(), namespace, pod, &options);
+        Ok(KubeStream::new(session, Some(reopen)))
+    }
+}
+
+#[async_trait]
+impl ExecPort for KubeExec {
+    async fn exec(&self, target: &ExecTarget) -> OxiResult<Box<dyn TerminalBackend>> {
+        Ok(Box::new(self.exec_stream(target).await?))
     }
 
     async fn attach(&self, target: &AttachTarget) -> OxiResult<Box<dyn TerminalBackend>> {
-        let (namespace, pod) = target.namespaced_pod()?;
-        let options = options(target.container.as_deref(), target.tty, target.stdin);
-        Ok(boxed(self.attach_session(namespace, pod, &options).await?))
+        Ok(Box::new(self.attach_stream(target).await?))
     }
 
     async fn create_debug_container(
@@ -86,14 +115,19 @@ impl ExecPort for KubeExec {
         spec: &DebugContainerSpec,
     ) -> OxiResult<Box<dyn TerminalBackend>> {
         let (namespace, pod) = spec.namespaced_pod()?;
+        let container = debug_spec(spec);
         let session = self
-            .debug_container(namespace, pod, &debug_spec(spec), spec.start_timeout)
+            .debug_container(namespace, pod, &container, spec.start_timeout)
             .await?;
-        Ok(boxed(session))
+        // Reconnecting attaches to the same ephemeral container again (it stays in the pod).
+        let attach = options(Some(&container.name), container.tty, container.stdin);
+        let reopen = Reopen::attach(self.port(), namespace, pod, &attach);
+        Ok(Box::new(KubeStream::new(session, Some(reopen))))
     }
 
     async fn node_shell(&self, spec: &NodeShellSpec) -> OxiResult<Box<dyn TerminalBackend>> {
         let shell = KubeExec::node_shell(self, &spec.node, &node_config(spec)).await?;
-        Ok(boxed(shell.session))
+        // The helper pod goes with the session: a reconnect would have nothing to reach.
+        Ok(Box::new(KubeStream::new(shell.session, None)))
     }
 }
