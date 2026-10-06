@@ -108,12 +108,16 @@ async fn register(
 
 async fn run(inner: Weak<Inner>, config: SourcesConfig) {
     let (tx, mut rx) = unbounded_channel::<()>();
-    // Keep the watcher alive for the life of the task. A failed setup leaves the poll running.
-    let (mut _watcher, status, unwatched) = register(config.clone(), tx.clone()).await;
     let Some(strong) = inner.upgrade() else {
         return;
     };
+    // Subscribe before reading the list: a receiver counts the current value as seen, so a
+    // `set_user_sources` that lands while this task starts must either be in the list read
+    // below (it stores the list before bumping) or wake `changed()` (it bumps after we
+    // subscribed). Subscribing after the first registration lost such a change.
     let mut rewatch = strong.rewatch.subscribe();
+    // Keep the watcher alive for the life of the task. A failed setup leaves the poll running.
+    let (mut _watcher, status, unwatched) = register(strong.config(), tx.clone()).await;
     // A change made after the first load read the files but before the watches existed has no
     // event; re-read once now (an empty diff when nothing changed). Done before publishing the
     // status, so `wait_for_watcher` returning means the catalog is current.

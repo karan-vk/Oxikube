@@ -70,7 +70,10 @@ pub(super) fn build(source: &UserSource, stored: bool, statuses: &[SourceStatus]
     // The worst problem decides, unless something was found: a missing default file next to a
     // working `KUBECONFIG` entry is not worth an error.
     let (state, message) = if mine.is_empty() {
-        (None, None)
+        match repeated(source, statuses) {
+            Some(first) => return repeated_row(source, stored, first),
+            None => (None, None),
+        }
     } else if mine.iter().any(|s| s.state == SourceState::Found) {
         let note = mine.iter().find_map(|s| s.message.clone());
         (Some(SourceState::Found), note)
@@ -84,6 +87,33 @@ pub(super) fn build(source: &UserSource, stored: bool, statuses: &[SourceStatus]
         stored,
         state,
         contexts,
+        message,
+    }
+}
+
+/// The status of the earlier source that already lists `source`'s path. The adapter keeps only
+/// the first entry for a path, so a file or folder the user added a second time (the default
+/// file, a `KUBECONFIG` file, another entry) has no status of its own.
+fn repeated<'a>(source: &UserSource, statuses: &'a [SourceStatus]) -> Option<&'a SourceStatus> {
+    let path = source.path.as_deref()?;
+    statuses
+        .iter()
+        .find(|s| s.source.path.as_deref() == Some(path))
+}
+
+/// The row of a repeated entry: it shows how reading the shared path went (so a broken file is
+/// flagged on both rows) but owns no contexts, which the first entry already counts.
+fn repeated_row(source: &UserSource, stored: bool, first: &SourceStatus) -> SourceRow {
+    let message = match first.state {
+        SourceState::Found => Some("Same path as an earlier source".to_owned()),
+        _ => first.message.clone(),
+    };
+    SourceRow {
+        source: source.clone(),
+        label: label(source),
+        stored,
+        state: Some(first.state),
+        contexts: 0,
         message,
     }
 }

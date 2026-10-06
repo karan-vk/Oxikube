@@ -231,27 +231,56 @@ async fn validation_counts_contexts_and_never_echoes_the_text() {
     assert!(sources.contexts().await.unwrap().is_empty());
 }
 
-/// The watcher follows the list: a directory added at run time is watched, so a file dropped
-/// into it is picked up without a manual reload. Real `notify` watcher, polling wait with a
-/// deadline (no fixed sleep); the 60 s safety poll is far outside the window.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn the_watcher_follows_a_directory_added_at_run_time() {
+/// A watcher-enabled adapter whose default path is under `<dir>/home`, plus a directory
+/// `<dir>/added` to add later.
+fn watched_adapter(dir: &Path) -> (KubeconfigSources, std::path::PathBuf) {
+    let watched = dir.join("added");
+    fs::create_dir(&watched).unwrap();
+    fs::create_dir_all(dir.join("home").join(".kube")).unwrap();
+    let mut config = SourcesConfig::new(Env {
+        platform: Platform::host(),
+        home: Some(dir.join("home")),
+        ..Env::default()
+    });
+    config.debounce = std::time::Duration::from_millis(50);
+    let sources = KubeconfigSources::new(config, Arc::new(FakeSecretStorePort::new())).unwrap();
+    (sources, watched)
+}
+
+/// Drops a kubeconfig into `watched` until a `SourcesChanged` arrives (polling wait with a
+/// deadline, no fixed sleep; the 60 s safety poll is far outside the window).
+async fn drop_file_until_seen(
+    root: &Path,
+    watched: &Path,
+    events: &mut futures::stream::BoxStream<'static, oxikube_ports::SourcesChanged>,
+) -> oxikube_ports::SourcesChanged {
     use std::time::{Duration, Instant};
 
     use futures::StreamExt as _;
 
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        let staged = root.join(format!("staged-{attempt}"));
+        fs::write(&staged, yaml(&["dropped"])).unwrap();
+        fs::rename(&staged, watched.join("new.yaml")).unwrap();
+        let wait = deadline
+            .saturating_duration_since(Instant::now())
+            .min(Duration::from_millis(250));
+        if let Ok(Some(diff)) = tokio::time::timeout(wait, events.next()).await {
+            return diff;
+        }
+        assert!(Instant::now() < deadline, "no SourcesChanged within 3 s");
+    }
+}
+
+/// The watcher follows the list: a directory added at run time is watched, so a file dropped
+/// into it is picked up without a manual reload. Real `notify` watcher.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_watcher_follows_a_directory_added_at_run_time() {
     let dir = TempDir::new().unwrap();
-    let watched = dir.path().join("added");
-    fs::create_dir(&watched).unwrap();
-    let kube = dir.path().join("home").join(".kube");
-    fs::create_dir_all(&kube).unwrap();
-    let mut config = SourcesConfig::new(Env {
-        platform: Platform::host(),
-        home: Some(dir.path().join("home")),
-        ..Env::default()
-    });
-    config.debounce = Duration::from_millis(50);
-    let sources = KubeconfigSources::new(config, Arc::new(FakeSecretStorePort::new())).unwrap();
+    let (sources, watched) = watched_adapter(dir.path());
     sources.contexts().await.unwrap();
     sources.wait_for_watcher().await;
     sources
@@ -260,21 +289,29 @@ async fn the_watcher_follows_a_directory_added_at_run_time() {
         .unwrap();
     let mut events = sources.subscribe();
 
-    let deadline = Instant::now() + Duration::from_secs(3);
-    let mut attempt = 0;
-    let diff = loop {
-        attempt += 1;
-        let staged = dir.path().join(format!("staged-{attempt}"));
-        fs::write(&staged, yaml(&["dropped"])).unwrap();
-        fs::rename(&staged, watched.join("new.yaml")).unwrap();
-        let wait = deadline
-            .saturating_duration_since(Instant::now())
-            .min(Duration::from_millis(250));
-        if let Ok(Some(diff)) = tokio::time::timeout(wait, events.next()).await {
-            break diff;
-        }
-        assert!(Instant::now() < deadline, "no SourcesChanged within 3 s");
-    };
+    let diff = drop_file_until_seen(dir.path(), &watched, &mut events).await;
+    assert_eq!(context_names(&diff.added), ["dropped"]);
+}
+
+/// A list change that lands while the watcher task is still starting must not be lost. On a
+/// current-thread runtime the task cannot run before the first await, so the list is changed
+/// (and `rewatch` bumped, exactly as `set_user_sources` does) before the first registration.
+#[tokio::test]
+async fn a_list_change_made_before_the_watcher_starts_is_still_watched() {
+    let dir = TempDir::new().unwrap();
+    let (sources, watched) = watched_adapter(dir.path());
+    sources.inner.config.write().extra_paths = vec![watched.clone()];
+    sources
+        .inner
+        .rewatch
+        .send_modify(|generation| *generation += 1);
+    let mut events = sources.subscribe();
+
+    assert_eq!(
+        sources.wait_for_watcher().await,
+        crate::sources::WatchStatus::Active
+    );
+    let diff = drop_file_until_seen(dir.path(), &watched, &mut events).await;
     assert_eq!(context_names(&diff.added), ["dropped"]);
 }
 

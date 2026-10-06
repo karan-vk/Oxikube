@@ -133,6 +133,34 @@ fn a_missing_default_file_is_reported_as_missing() {
 }
 
 #[test]
+fn a_file_repeating_the_default_path_shows_the_status_of_that_path() {
+    let f = Fixture::new([UserSource::default_source(), file("/home/me/.kube/config")]);
+    f.source.set_statuses([default_status(3)]);
+    let rows = f.run(f.service.rows()).unwrap();
+    assert_eq!(rows[0].contexts, 3);
+    assert_eq!(rows[1].state, Some(SourceState::Found));
+    assert_eq!(rows[1].contexts, 0, "the first entry owns the contexts");
+    assert_eq!(
+        rows[1].message.as_deref(),
+        Some("Same path as an earlier source")
+    );
+}
+
+#[test]
+fn a_repeated_broken_file_shows_its_error_on_both_rows() {
+    let f = Fixture::new([UserSource::default_source(), file("/home/me/.kube/config")]);
+    f.source.set_statuses([SourceStatus {
+        state: SourceState::Invalid,
+        message: Some("Not a valid kubeconfig".into()),
+        ..default_status(0)
+    }]);
+    let rows = f.run(f.service.rows()).unwrap();
+    assert!(rows[0].is_error());
+    assert!(rows[1].is_error());
+    assert_eq!(rows[1].message.as_deref(), Some("Not a valid kubeconfig"));
+}
+
+#[test]
 fn a_source_not_read_yet_has_no_state() {
     let f = Fixture::new([file("/work/new.yaml")]);
     f.source.set_statuses([]);
