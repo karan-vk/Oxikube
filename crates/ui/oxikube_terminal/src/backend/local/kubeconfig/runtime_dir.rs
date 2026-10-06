@@ -50,11 +50,16 @@ impl Drop for TempKubeconfig {
     }
 }
 
-/// Removes this process's runtime directory (call when the app quits; files of terminals still
-/// open go with it). A crash leaves it behind: the next start sweeps directories of dead
-/// processes.
+/// Removes this process's runtime directory (files of terminals still open go with it). The
+/// app calls it when it quits ([`crate::init`]), because quitting does not drop the terminals.
+/// A crash leaves the directory behind: the next start sweeps directories of dead processes.
 pub fn cleanup_runtime_dir() {
-    if let Some(Ok(dir)) = RUNTIME_DIR.get() {
+    cleanup_in(&RUNTIME_DIR);
+}
+
+/// [`cleanup_runtime_dir`] for the runtime directory held by `cell` (tests use their own).
+fn cleanup_in(cell: &OnceLock<Result<PathBuf, String>>) {
+    if let Some(Ok(dir)) = cell.get() {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
@@ -104,5 +109,31 @@ fn sweep_stale(base: &Path) {
             // Fails harmlessly for a directory that belongs to another user.
             let _ = std::fs::remove_dir_all(entry.path());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cleanup_removes_the_runtime_directory_with_its_files() {
+        let base = tempfile::tempdir().unwrap();
+        let dir = base.path().join("oxikube-term-1");
+        std::fs::create_dir(&dir).unwrap();
+        let file = dir.join("kubeconfig-0");
+        std::fs::write(&file, "token: secret").unwrap();
+        let cell = OnceLock::new();
+        cell.set(Ok(dir.clone())).unwrap();
+
+        cleanup_in(&cell);
+
+        assert!(!file.exists());
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn cleanup_is_a_no_op_before_any_terminal_created_the_directory() {
+        cleanup_in(&OnceLock::new());
     }
 }

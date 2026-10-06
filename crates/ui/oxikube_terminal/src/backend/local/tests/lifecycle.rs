@@ -109,8 +109,8 @@ async fn a_leftover_background_process_does_not_delay_the_exit() {
 async fn a_flood_is_throttled_and_still_killable() {
     let pty = LocalPty::spawn(sh("yes")).unwrap();
     let mut stream = pty.output_stream();
-    // Nobody reads for a while: the reader stops at the queue bound instead of buffering
-    // without limit.
+    // Nobody reads for a while (the bound itself is tested in `backpressure`); a flood must
+    // still arrive in full once the consumer is there, and the shell must stay killable.
     tokio::time::sleep(Duration::from_millis(300)).await;
     let mut seen = 0usize;
     let run = read_until(&mut stream, |out| {

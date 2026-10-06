@@ -1,6 +1,7 @@
 //! Tests of [`LocalPty`]. The PTY ones run real `/bin/sh` and `cat` processes, so they are
 //! gated to Unix (macOS and Linux); the options tests run everywhere.
 
+mod backpressure;
 mod env;
 #[cfg(unix)]
 mod lifecycle;
