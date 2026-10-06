@@ -81,11 +81,6 @@ impl<V: Render + 'static> TestWindow<V> {
         self.vcx.dispatch_action(action);
     }
 
-    /// Runs every runnable task until nothing is left.
-    pub fn run_until_parked(&self) {
-        self.vcx.run_until_parked();
-    }
-
     /// Moves the test clock forward by `duration` and runs what falls due.
     pub fn advance_clock(&self, duration: Duration) {
         self.vcx.executor().advance_clock(duration);
@@ -102,11 +97,6 @@ impl<V: Render + 'static> TestWindow<V> {
     /// The bounds of the element tagged `.debug_selector(|| "name".into())` in the last frame.
     pub fn bounds(&mut self, selector: &'static str) -> Option<Bounds<Pixels>> {
         self.vcx.debug_bounds(selector)
-    }
-
-    /// The gpui context of this window, for calls this wrapper does not cover.
-    pub fn visual(&mut self) -> &mut VisualTestContext {
-        &mut self.vcx
     }
 }
 

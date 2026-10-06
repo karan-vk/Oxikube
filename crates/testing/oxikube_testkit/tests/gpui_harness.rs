@@ -8,13 +8,14 @@ mod support;
 use std::time::Duration;
 
 use gpui::{Entity, TestAppContext};
-use oxikube_testkit::{TestPorts, gpui_test::TestApp};
+use oxikube_testkit::{
+    TestPorts,
+    gpui_test::{TestApp, TestWindow},
+};
 use support::{Counter, Increment, Reset, SETTLE_AFTER, bindings};
 
 /// Helper: open a window with a bound, focused counter.
-fn counter_window(
-    cx: &mut TestAppContext,
-) -> (TestApp, oxikube_testkit::gpui_test::TestWindow<Counter>) {
+fn counter_window(cx: &mut TestAppContext) -> (TestApp, TestWindow<Counter>) {
     let mut app = TestApp::new(cx);
     app.bind_keys(bindings());
     let window = app.open_window(Counter::new);

@@ -14,7 +14,7 @@ use gpui::{
 };
 
 use crate::{
-    headless::{HEADLESS_SCALE_FACTOR, headless_context_with_assets},
+    headless::{HEADLESS_SCALE_FACTOR, capture_window, headless_context_with_assets},
     screenshot::{
         RgbaImage, Tolerance, UPDATE_GOLDENS_ENV, check_golden, distinct_colors_at_least,
         golden_path,
@@ -105,13 +105,7 @@ impl ScreenshotApp {
     /// Draws a frame and returns what the window rendered
     /// (`size * `[`HEADLESS_SCALE_FACTOR`]` pixels).
     pub fn capture(&mut self, window: AnyWindowHandle) -> Result<RgbaImage> {
-        self.cx
-            .update_window(window, |_, window, cx| window.draw(cx).clear(cx))
-            .context("drawing the headless window")?;
-        self.cx.run_until_parked();
-        self.cx
-            .capture_screenshot(window)
-            .context("Window::render_to_image (needs a GPU device; on Linux a Vulkan driver)")
+        capture_window(&mut self.cx, window)
     }
 }
 

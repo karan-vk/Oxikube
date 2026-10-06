@@ -19,7 +19,7 @@
 #[cfg(feature = "gpui-screenshot")]
 use anyhow::{Context as _, Result};
 #[cfg(feature = "gpui-screenshot")]
-use gpui::{App, Entity, Pixels, Render, Size, Window};
+use gpui::{AnyWindowHandle, App, Entity, Pixels, Render, Size, Window};
 use gpui::{AssetSource, HeadlessAppContext};
 #[cfg(feature = "gpui-screenshot")]
 use image::RgbaImage;
@@ -60,11 +60,16 @@ pub fn capture_view<V: Render + 'static>(
         .open_window(size, build_root)
         .context("opening headless window")?;
     cx.run_until_parked();
-    cx.update_window(window.into(), |_, window, cx| {
-        window.draw(cx).clear(cx);
-    })
-    .context("drawing headless window")?;
+    capture_window(&mut cx, window.into())
+}
+
+/// Draws one frame of `window` and returns what it rendered (the shared tail of [`capture_view`]
+/// and `gpui_test::ScreenshotApp::capture`).
+#[cfg(feature = "gpui-screenshot")]
+pub fn capture_window(cx: &mut HeadlessAppContext, window: AnyWindowHandle) -> Result<RgbaImage> {
+    cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+        .context("drawing headless window")?;
     cx.run_until_parked();
-    cx.capture_screenshot(window.into())
+    cx.capture_screenshot(window)
         .context("Window::render_to_image (needs a GPU device; on Linux a Vulkan driver)")
 }
