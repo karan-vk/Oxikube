@@ -27,8 +27,11 @@
 //! `AppState::test(cx)` (test builds and feature `test-support`) runs the real init order with testkit fakes and no OS
 //! threads: an in-memory settings store, the deterministic runtime, no file watchers, a
 //! `oxikube_testkit::FakeStatePort`. It is the same code path as the app
-//! (`startup::init`), so a test that calls it exercises the order.
+//! (`startup::init`), so a test that calls it exercises the order. `AppState::test_with(cx, &ports)`
+//! does the same over a `oxikube_testkit::TestPorts` the test keeps, to script and assert on the fakes.
 
+#[cfg(test)]
+mod harness_tests;
 mod ports;
 #[cfg(test)]
 mod tests;
@@ -168,6 +171,22 @@ impl AppState {
             return state;
         }
         crate::startup::init(cx, crate::startup::StartupEnv::test())
+            .expect("the test init order runs");
+        Self::global(cx)
+    }
+
+    /// The real init order over the fakes of `ports` (`oxikube_testkit::TestPorts`), so the test
+    /// keeps its handles: script `ports.state`, then assert on `ports.state.recorded_calls()`.
+    ///
+    /// Must be the first `AppState` call of the app: ports cannot be swapped under an installed
+    /// state, so it panics when one is already installed.
+    #[track_caller]
+    pub fn test_with(cx: &mut App, ports: &oxikube_testkit::TestPorts) -> Arc<AppState> {
+        assert!(
+            Self::try_global(cx).is_none(),
+            "AppState::test_with must run before any other AppState::test call in the app"
+        );
+        crate::startup::init(cx, crate::startup::StartupEnv::test_with(ports))
             .expect("the test init order runs");
         Self::global(cx)
     }

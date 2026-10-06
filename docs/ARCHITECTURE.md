@@ -48,7 +48,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_ports` — every async, object-safe trait (`ResourcePort`, `LogPort`, `ExecPort`,
   `StatePort`, `IntegrationPort`, `ToolPort`, `AgentPort`, …) with the transport types they
   exchange (`Delta`, `Table`, `ToolDef`, …). One module per port; each names its adapter.
-- `oxikube_testkit` — a `Fake*` for every port, fixtures and builders.
+- `oxikube_testkit` — a `Fake*` for every port, fixtures and builders, `TestPorts` (the seeded fakes
+  `AppState::test` is built from), and the GPUI test harness (`gpui_test::TestApp` / `TestWindow`,
+  `ScreenshotApp` with golden compare; `docs/testing-gpui.md`).
 - `oxikube_app` — services: `ClusterSessionManager`, `ResourceStore`, `CommandBus`,
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
   `ContextRegistry`, `AgentSessionManager`. No gpui, no kube.

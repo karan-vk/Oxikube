@@ -8,7 +8,7 @@
 | ports | compile-time only (traits); fakes live in testkit | — |
 | app | unit tests against `oxikube_testkit::Fake*` ports with scripted responses and recorded calls | `FakeResourcePort::script(...)`, `recorded_calls()` |
 | adapters | unit tests with recorded payloads + kind integration tests behind `--features integration` | `cargo xtask kind-up` |
-| platform/ui | `#[gpui::test]` with `TestApp` helpers from testkit; screenshot tests via `render_to_image` | `oxikube_testkit::gpui` |
+| platform/ui | `#[gpui::test]` with `TestApp` helpers from testkit; screenshot tests via `ScreenshotApp` | `oxikube_testkit::gpui_test` (feature `gpui-test` / `gpui-screenshot`), `docs/testing-gpui.md` |
 | bins | smoke test `--version`, startup without kubeconfig | CI |
 
 ## Fakes and fixtures
@@ -48,7 +48,9 @@ nightly for everything.
   `.detach()`.
 - Screenshot tests need both `gpui/test-support` and `gpui_platform/test-support`;
   compare against goldens with a small tolerance; goldens live under `tests/goldens/<os>/`.
-- Use `TestApp::simulate_keystrokes` to drive keymaps rather than calling handlers.
+- Use `TestWindow::simulate_keystrokes` to drive keymaps rather than calling handlers.
+- The full recipe, one worked example per helper and the "don't" list are in
+  `docs/testing-gpui.md`; copy the tests in `crates/testing/oxikube_testkit/tests/gpui_harness.rs`.
 
 ## Performance checks
 

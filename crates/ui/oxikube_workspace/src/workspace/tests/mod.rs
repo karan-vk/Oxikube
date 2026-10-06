@@ -19,32 +19,13 @@ use oxikube_ui::root::Root;
 use super::*;
 use crate::{
     pane::Pane,
-    test_support::{TestItem, TestPanel, register_test_item},
+    test_support::{TestItem, TestPanel},
 };
 
 /// A window whose root hosts a fresh workspace, with the workspace's actions and the test item
 /// builder registered.
 pub(super) fn workspace(cx: &mut TestAppContext) -> (Entity<Workspace>, VisualTestContext) {
-    cx.update(|cx| {
-        oxikube_ui::init(cx);
-        crate::actions::register(cx);
-        crate::modal::register(cx);
-        crate::toast::register(cx);
-        // Fades would keep requesting frames while the test clock stands still.
-        cx.set_reduce_motion(true);
-        register_test_item(cx);
-    });
-    let mut workspace = None;
-    let window = cx.add_window(|window, cx| {
-        let entity = cx.new(|cx| Workspace::new(window, cx));
-        workspace = Some(entity.clone());
-        Root::new(entity, window, cx)
-    });
-    let mut vcx = VisualTestContext::from_window(window.into(), cx);
-    // Focus events (which make a pane active) are only delivered to the active window.
-    vcx.update(|window, _| window.activate_window());
-    vcx.run_until_parked();
-    (workspace.expect("the window was built"), vcx)
+    crate::test_support::open_workspace(cx)
 }
 
 /// Opens a [`TestItem`] titled `title` (built by `configure`) with `options`.

@@ -74,6 +74,7 @@ jobs:
         run: |
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube --features screenshot --profile "$CARGO_PROFILE"
           cargo test -p oxikube_testkit --features screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_testkit --features gpui-golden --test gpui_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_ui --features screenshot --test screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_workspace --features screenshot --test screenshot --profile "$CARGO_PROFILE"
       - name: Capture screenshot
