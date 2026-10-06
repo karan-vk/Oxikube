@@ -27,7 +27,7 @@ use oxikube_kube::{EventApi, EventApis, EventFeed, EventsConfig, EventsOptions, 
 use oxikube_ports::Delta;
 use oxikube_testkit::integration::TestNamespace;
 
-use common::resources::{adapter, pending_pod};
+use common::resources::{adapter, unschedulable_pod};
 use common::{DEADLINE, Kind};
 
 /// The events of an `oxikube.invalid` image: the pull fails at once, with a `Warning`.
@@ -113,7 +113,7 @@ async fn a_failing_pod_has_a_warning_and_the_object_feed_isolates_it() {
         .create(&PostParams::default(), &broken_pod("broken"))
         .await
         .expect("create the broken pod");
-    pods.create(&PostParams::default(), &pending_pod("stuck", &[]))
+    pods.create(&PostParams::default(), &unschedulable_pod("stuck", &[]))
         .await
         .expect("create the unschedulable pod");
     let broken_uid = broken.metadata.uid.expect("pod uid");
@@ -224,7 +224,7 @@ async fn each_api_alone_agrees_with_the_merged_feed() {
     let ns = TestNamespace::create(kind.context.as_str()).expect("test namespace");
     let client = kind.admin_client().await;
     let pods = Api::<Pod>::namespaced((*client).clone(), ns.name());
-    pods.create(&PostParams::default(), &pending_pod("stuck", &[]))
+    pods.create(&PostParams::default(), &unschedulable_pod("stuck", &[]))
         .await
         .expect("create the unschedulable pod");
 

@@ -16,6 +16,7 @@
 //! - [`builders`]: `pod().running().restarts(3).build()`, `deployment().replicas(3).ready(2)`,
 //!   `node().cordoned()`, ... producing the same `Resource` shape as the fixtures. The entry
 //!   points are re-exported here.
+//! - [`images`]: the container images the kind suites run (one list, pre-pulled by `kind-up`).
 //! - [`script`]: the [`Script`] / [`CallLog`] / [`Timeline`] helpers the fakes share.
 //! - [`test_ports`]: [`TestPorts`], the seeded bundle of fakes an `AppState` is built from.
 //!
@@ -38,6 +39,7 @@ pub mod fixtures;
 pub mod gpui_test;
 #[cfg(feature = "gpui-headless")]
 pub mod headless;
+pub mod images;
 /// kind-backed integration test helpers (`OXIKUBE_TEST_CONTEXT`, `oxi-test-<rand>` namespaces).
 #[cfg(feature = "integration")]
 pub mod integration;

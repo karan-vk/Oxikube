@@ -3,7 +3,7 @@
 //! full object on demand. Needs `cargo xtask kind-up` and `OXIKUBE_TEST_CONTEXT`; skips
 //! cleanly otherwise.
 //!
-//! The pods are unschedulable (`pending_pod`) and live in the test's own `oxi-test-<rand>`
+//! The pods are never scheduled (`pending_pod`: a scheduler nobody runs) and live in the test's own `oxi-test-<rand>`
 //! namespace; they are owned by a ConfigMap of that namespace, so garbage collection keeps
 //! them.
 #![cfg(feature = "integration")]

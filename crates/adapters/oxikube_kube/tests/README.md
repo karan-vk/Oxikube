@@ -27,7 +27,17 @@ logs. Locally, without that variable, a failed test prints its namespace's event
 - The real node is never cordoned, tainted or drained: drain and cordon target a `FakeNode` no
   kubelet backs. Shared fixtures (`oxikube-fixtures`, the `Widget` CRD) are only read.
 - No sleeps as synchronisation: `common::wait_until`, or `common::wait_in` which dumps the
-  namespace's events when it times out.
+  namespace's events when it times out. Waiting for a pod goes through `common::pods`
+  (`wait_started`, `wait_ready`): time spent pulling an image is charged to its own budget, not
+  the start deadline, an unusable image fails at once, and every failure prints the pod's states,
+  its scheduling and its events (`pod_waits.rs`).
+- Images come from `oxikube_testkit::images` and the list `cargo xtask kind-up` pre-pulls
+  (`fixtures/test-images.txt`); a test never relies on an image that only some clusters cache.
+- Bulk pods that must stay `Pending` are `pending_pod`s: they name a scheduler nobody runs, so they
+  cost the API server but not the real scheduler. A pod made unschedulable with a `nodeSelector`
+  is recorded by the scheduler on every attempt through one throttled client, and a few thousand of
+  them delay the scheduling of every other test's pod by half a minute (`unschedulable_pod` is for
+  the one or two tests that assert the scheduler's verdict).
 - Errors are asserted by `ErrorKind`, never by HTTP code; nothing prints a token or an object
   payload.
 

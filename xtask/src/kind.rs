@@ -1,18 +1,20 @@
 //! Local kind cluster helpers for integration tests and perf fixtures.
 //!
-//! `kind-up` creates a cluster (if missing), installs a pinned metrics-server (insecure
+//! `kind-up` creates a cluster (if missing), pre-pulls every test image into its nodes
+//! (`kind_images.rs`, list in `fixtures/test-images.txt`), installs a pinned metrics-server (insecure
 //! kubelet TLS for kind), waits for it, and applies the fixtures under
 //! `crates/testing/oxikube_testkit/fixtures/` (sample CRD with printer columns, workloads in
 //! several states). It is idempotent and every kubectl call carries `--context kind-<name>`
 //! so it can never touch another cluster. (`load-pods` lives in `load_pods.rs`.)
 //! Requires `kind` and `kubectl` on PATH.
 
+use crate::kind_images;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use xshell::{Shell, cmd};
 
 /// `crates/testing/oxikube_testkit/fixtures`, resolved from this crate so it works from any cwd.
-fn fixtures_dir() -> PathBuf {
+pub(crate) fn fixtures_dir() -> PathBuf {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("crates/testing/oxikube_testkit/fixtures");
@@ -50,6 +52,10 @@ pub fn up(name: &str) -> Result<()> {
     }
     let ctx = format!("kind-{name}");
     let fixtures = fixtures_dir();
+
+    // Every image the suites and fixtures run is pulled into the nodes first, so nothing below
+    // (nor any test later) waits on a registry. Idempotent: present images are skipped.
+    kind_images::preload(name).context("pre-pull the test images")?;
 
     // metrics-server: pinned release via kustomize (adds --kubelet-insecure-tls), so re-running
     // is a no-op instead of re-appending the flag.

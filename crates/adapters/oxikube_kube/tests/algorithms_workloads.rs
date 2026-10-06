@@ -10,13 +10,14 @@ use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::Gvk;
 use oxikube_kube::{rollout_history, rollout_undo, trigger_cronjob};
 use oxikube_ports::{Patch, ResourceReader, ResourceWriter, WriteOptions};
+use oxikube_testkit::images;
 use serde_json::json;
 
 use common::subresources::{Env, cronjob, cronjob_gvk, deployment, deployment_gvk, setup};
 use common::wait_until;
 
-const V1: &str = "registry.k8s.io/pause:3.10";
-const V2: &str = "registry.k8s.io/pause:3.9";
+const V1: &str = images::PAUSE;
+const V2: &str = images::PAUSE_PREVIOUS;
 
 fn job_gvk() -> Gvk {
     Gvk::new("batch", "v1", "Job")
@@ -73,7 +74,7 @@ async fn triggering_a_cronjob_creates_an_owned_job_from_its_template() {
     // The job runs what the template says.
     assert_eq!(
         job.json["spec"]["template"]["spec"]["containers"][0]["image"],
-        json!("registry.k8s.io/pause:3.10")
+        json!(images::PAUSE)
     );
     assert_eq!(
         job.json["spec"]["template"]["spec"]["restartPolicy"],

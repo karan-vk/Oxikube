@@ -7,12 +7,13 @@ use futures::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
 use kube::Client;
 use oxikube_ports::exec::OutputStream;
+use oxikube_testkit::images;
 use serde_json::{Value, json};
 
 use super::logs;
 
 /// Small, and has `sh`, `cat`, `stty`, `sleep` and `nsenter`.
-pub const BUSYBOX: &str = "busybox:1.37";
+pub const BUSYBOX: &str = images::BUSYBOX;
 
 /// How long a scenario waits for output it expects.
 pub const OUTPUT_DEADLINE: Duration = Duration::from_secs(30);

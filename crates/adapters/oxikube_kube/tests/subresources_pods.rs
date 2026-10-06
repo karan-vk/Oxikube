@@ -12,16 +12,11 @@ use oxikube_kube::{
     EphemeralContainerSpec, ResizeSpec, ephemeral_container_patch, eviction_blocked, resize_patch,
 };
 use oxikube_ports::{DeleteOptions, ResourceReader, ResourceWriter, Subresource, WriteOptions};
+use oxikube_testkit::images;
 use serde_json::json;
 
 use common::subresources::{Env, is_ready, live_pod, pod_gvk, running_pod, setup};
-use common::wait_until;
-use std::time::Duration;
-
-/// How long a pod may take to schedule and become Ready. The CI cluster's single scheduler is
-/// throttled for a while after the large-list tests create and delete their pods, so the usual
-/// 30 s deadline is too tight for anything that needs a scheduled pod.
-const DEADLINE: Duration = Duration::from_secs(120);
+use common::{DEADLINE, wait_until};
 
 /// Creates pod `name` and waits until it is Ready.
 async fn ready_pod(env: &Env, name: &str, labels: &[(&str, &str)]) {
@@ -153,7 +148,7 @@ async fn an_ephemeral_container_is_added_through_its_subresource() {
 
     let patch = ephemeral_container_patch(&EphemeralContainerSpec {
         name: "dbg".into(),
-        image: "registry.k8s.io/e2e-test-images/busybox:1.36.1-1".into(),
+        image: images::E2E_BUSYBOX.into(),
         command: vec!["sleep".into(), "3600".into()],
         target_container: Some("pause".into()),
         ..EphemeralContainerSpec::default()
@@ -197,7 +192,7 @@ async fn an_ephemeral_container_is_added_through_its_subresource() {
             "debuggee",
             &ephemeral_container_patch(&EphemeralContainerSpec {
                 name: "second".into(),
-                image: "registry.k8s.io/e2e-test-images/busybox:1.36.1-1".into(),
+                image: images::E2E_BUSYBOX.into(),
                 ..EphemeralContainerSpec::default()
             }),
             &WriteOptions::default(),
