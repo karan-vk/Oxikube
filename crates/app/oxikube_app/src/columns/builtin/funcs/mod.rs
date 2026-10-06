@@ -25,6 +25,7 @@ pub(super) use rbac::*;
 pub(super) use storage::*;
 pub(super) use workload::*;
 
+use super::read::key_values;
 use crate::columns::Tone;
 
 /// The tone of a status word (`Running`, `CrashLoopBackOff`, `Bound`, `Init:1/2`...), by the
@@ -140,16 +141,10 @@ pub(crate) fn selector_text(v: Option<&Value>) -> String {
     let Some(Value::Object(map)) = v else {
         return String::new();
     };
-    let mut out = String::new();
-    for (k, v) in map {
-        if !out.is_empty() {
-            out.push(',');
-        }
-        out.push_str(k);
-        out.push('=');
-        out.push_str(v.as_str().unwrap_or_default());
-    }
-    out
+    key_values(
+        map.iter()
+            .map(|(k, v)| (k.as_str(), v.as_str().unwrap_or_default())),
+    )
 }
 
 /// Every container image of a pod template `spec`, comma-separated.

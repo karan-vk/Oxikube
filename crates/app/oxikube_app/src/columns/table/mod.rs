@@ -21,7 +21,7 @@ use oxikube_domain::{Age, Capabilities};
 use oxikube_ports::{TableColumn, TableSource};
 use serde_json::Value;
 
-use super::builtin::meta_cell;
+use super::builtin::{meta_cell, scalar, status_tone};
 use super::{Align, Cell, Column, ColumnId, ColumnProvider, SortKind};
 use crate::store::StoreObject;
 
@@ -107,30 +107,22 @@ impl ColumnProvider for TableColumns {
         };
         let cell = typed(value, ty, slot.age);
         if slot.status {
-            let tone = super::builtin::status_tone(cell.display());
+            let tone = status_tone(cell.display());
             return cell.with_tone(tone);
         }
         cell
     }
 }
 
-/// A row cell value as a cell, typed by its column.
+/// A row cell value as a cell, typed by its column. Only strings need the column's type;
+/// numbers, booleans and blanks read the same as in the core catalogue.
 fn typed(value: &Value, ty: CellType, age_like: bool) -> Cell<'_> {
-    match (value, ty) {
-        (Value::Null, _) => Cell::empty(),
-        (Value::Bool(b), _) => Cell::text(if *b { "true" } else { "false" }),
-        (Value::Number(n), _) => match (n.as_i64(), n.as_f64()) {
-            (Some(i), _) => Cell::int(i),
-            (None, Some(f)) => Cell::float(n.to_string(), f),
-            (None, None) => Cell::text(n.to_string()),
-        },
-        (Value::String(s), CellType::Date) => Cell::shown(s.as_str(), sniff::age_sort(s)),
-        (Value::String(s), _) if age_like => Cell::shown(s.as_str(), sniff::age_sort(s)),
-        (Value::String(s), CellType::Integer | CellType::Number) => {
-            Cell::shown(s.as_str(), sniff::text_sort(s))
+    match value {
+        Value::String(s) if age_like || ty == CellType::Date => {
+            Cell::shown(s.as_str(), sniff::age_sort(s))
         }
-        (Value::String(s), CellType::Text) => Cell::shown(s.as_str(), sniff::text_sort(s)),
-        (Value::Array(_) | Value::Object(_), _) => Cell::empty(),
+        Value::String(s) => Cell::shown(s.as_str(), sniff::text_sort(s)),
+        other => scalar(other),
     }
 }
 
@@ -147,6 +139,7 @@ fn server(definitions: &[TableColumn], scope: Scope) -> (Vec<Column>, Vec<Slot>)
     let mut columns = Vec::with_capacity(definitions.len() + 1);
     let mut slots = Vec::with_capacity(definitions.len() + 1);
     let mut used: Vec<String> = Vec::new();
+    let synthesise_namespace = scope == Scope::Namespaced && !has_namespace(definitions);
     for (index, def) in definitions.iter().enumerate() {
         let ty = cell_type(def);
         let age = def.name.eq_ignore_ascii_case("age");
@@ -175,7 +168,7 @@ fn server(definitions: &[TableColumn], scope: Scope) -> (Vec<Column>, Vec<Slot>)
             status,
         });
         // The synthetic namespace column goes right after the name.
-        if scope == Scope::Namespaced && def.format == "name" && !has_namespace(definitions) {
+        if synthesise_namespace && def.format == "name" {
             columns.push(namespace_column(true));
             slots.push(meta_slot());
             used.push(ColumnId::NAMESPACE.to_owned());
@@ -211,34 +204,48 @@ fn meta_slot() -> Slot {
     }
 }
 
-fn namespace_column(wide: bool) -> Column {
+/// A column read from metadata, with no server definition behind it.
+fn meta_column(id: &str, title: &str, wide: bool, align: Align, sort: SortKind) -> Column {
     Column {
-        id: ColumnId::new(ColumnId::NAMESPACE),
-        title: Arc::from("Namespace"),
+        id: ColumnId::new(id),
+        title: Arc::from(title),
         description: None,
         wide,
-        align: Align::Left,
-        sort: SortKind::Text,
+        align,
+        sort,
         table_index: None,
     }
 }
 
+fn namespace_column(wide: bool) -> Column {
+    meta_column(
+        ColumnId::NAMESPACE,
+        "Namespace",
+        wide,
+        Align::Left,
+        SortKind::Text,
+    )
+}
+
 /// Name, Namespace (namespaced kinds), Age: what any object answers from its metadata.
 fn generic(scope: Scope) -> (Vec<Column>, Vec<Slot>) {
-    let plain = |id: &str, title: &str, align, sort| Column {
-        id: ColumnId::new(id),
-        title: Arc::from(title),
-        description: None,
-        wide: false,
-        align,
-        sort,
-        table_index: None,
-    };
-    let mut columns = vec![plain(ColumnId::NAME, "Name", Align::Left, SortKind::Text)];
+    let mut columns = vec![meta_column(
+        ColumnId::NAME,
+        "Name",
+        false,
+        Align::Left,
+        SortKind::Text,
+    )];
     if scope == Scope::Namespaced {
         columns.push(namespace_column(false));
     }
-    columns.push(plain(ColumnId::AGE, "Age", Align::Right, SortKind::Age));
+    columns.push(meta_column(
+        ColumnId::AGE,
+        "Age",
+        false,
+        Align::Right,
+        SortKind::Age,
+    ));
     let slots = columns.iter().map(|_| meta_slot()).collect();
     (columns, slots)
 }

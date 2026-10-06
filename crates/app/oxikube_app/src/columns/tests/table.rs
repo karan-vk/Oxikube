@@ -141,7 +141,7 @@ fn types_decide_alignment_and_sort_kind() {
     assert_eq!(col("replicas").sort, SortKind::Number);
     assert_eq!(col("age").sort, SortKind::Age);
     assert_eq!(col("size").sort, SortKind::Text);
-    assert_eq!(col("owner").description.as_deref().is_some(), true);
+    assert!(col("owner").description.is_some());
 }
 
 #[test]

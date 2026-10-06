@@ -24,6 +24,7 @@ pub use self::def::Metric;
 use self::def::{ColumnDef, GENERIC, KindDef, Src};
 pub(super) use self::funcs::status_tone;
 pub use self::metrics::MetricsSource;
+pub(super) use self::read::scalar;
 use super::{Cell, Column, ColumnId, ColumnProvider};
 use crate::store::StoreObject;
 
@@ -165,11 +166,8 @@ impl ColumnProvider for CoreColumns {
 /// no spec, can answer.
 pub(super) fn meta_cell<'a>(meta: &'a ObjectMeta, column: &ColumnId, now: Timestamp) -> Cell<'a> {
     match column.as_str() {
-        ColumnId::NAME => Cell::text(&*meta.name),
-        ColumnId::NAMESPACE => meta
-            .namespace
-            .as_deref()
-            .map_or_else(Cell::empty, Cell::text),
+        ColumnId::NAME => read::name(meta),
+        ColumnId::NAMESPACE => read::namespace(meta),
         ColumnId::AGE => read::age(meta, now),
         ColumnId::LABELS => read::labels(meta),
         _ => Cell::empty(),

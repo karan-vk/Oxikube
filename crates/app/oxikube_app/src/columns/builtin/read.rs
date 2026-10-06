@@ -14,12 +14,8 @@ use crate::columns::Cell;
 /// registered source) and reads as pending.
 pub(super) fn read<'a>(src: Src, res: &'a Resource, now: Timestamp) -> Cell<'a> {
     match src {
-        Src::Name => Cell::text(&*res.meta.name),
-        Src::Namespace => res
-            .meta
-            .namespace
-            .as_deref()
-            .map_or_else(Cell::empty, Cell::text),
+        Src::Name => name(&res.meta),
+        Src::Namespace => namespace(&res.meta),
         Src::Age => age(&res.meta, now),
         Src::Labels => labels(&res.meta),
         Src::Text(ptr) => res.json.pointer(ptr).map_or_else(Cell::empty, scalar),
@@ -39,6 +35,18 @@ pub(super) fn read<'a>(src: Src, res: &'a Resource, now: Timestamp) -> Cell<'a> 
     }
 }
 
+/// `metadata.name`.
+pub(crate) fn name(meta: &ObjectMeta) -> Cell<'_> {
+    Cell::text(&*meta.name)
+}
+
+/// `metadata.namespace`; blank for a cluster-scoped object.
+pub(crate) fn namespace(meta: &ObjectMeta) -> Cell<'_> {
+    meta.namespace
+        .as_deref()
+        .map_or_else(Cell::empty, Cell::text)
+}
+
 /// Time since creation; blank when the object has no creation timestamp.
 pub(crate) fn age<'a>(meta: &ObjectMeta, now: Timestamp) -> Cell<'a> {
     meta.creation
@@ -47,8 +55,13 @@ pub(crate) fn age<'a>(meta: &ObjectMeta, now: Timestamp) -> Cell<'a> {
 
 /// `k=v,k=v` in key order; blank when there are no labels.
 pub(crate) fn labels<'a>(meta: &ObjectMeta) -> Cell<'a> {
+    Cell::text(key_values(meta.labels.iter().map(|(k, v)| (&**k, &**v))))
+}
+
+/// `k=v,k=v` in the order given.
+pub(crate) fn key_values<'a>(pairs: impl IntoIterator<Item = (&'a str, &'a str)>) -> String {
     let mut out = String::new();
-    for (k, v) in &meta.labels {
+    for (k, v) in pairs {
         if !out.is_empty() {
             out.push(',');
         }
@@ -56,7 +69,7 @@ pub(crate) fn labels<'a>(meta: &ObjectMeta) -> Cell<'a> {
         out.push('=');
         out.push_str(v);
     }
-    Cell::text(out)
+    out
 }
 
 /// A scalar JSON value as a text cell; arrays and objects are blank.
