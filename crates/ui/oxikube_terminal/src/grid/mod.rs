@@ -29,6 +29,7 @@ mod snapshot;
 #[cfg(test)]
 mod tests;
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use alacritty_terminal::grid::{Dimensions, Scroll};
@@ -78,6 +79,15 @@ struct Cells {
     rows: usize,
 }
 
+impl Cells {
+    fn new(size: TerminalSize) -> Self {
+        Self {
+            columns: usize::from(size.width),
+            rows: usize::from(size.height),
+        }
+    }
+}
+
 impl Dimensions for Cells {
     fn total_lines(&self) -> usize {
         self.rows
@@ -123,7 +133,7 @@ pub struct TermGrid {
     listener: GridListener,
     size: TerminalSize,
     scrollback: usize,
-    title: Option<std::sync::Arc<str>>,
+    title: Option<Arc<str>>,
 }
 
 impl std::fmt::Debug for TermGrid {
@@ -143,12 +153,8 @@ impl TermGrid {
         let size = clamp_size(size);
         let scrollback = scrollback_lines.min(MAX_SCROLLBACK_LINES);
         let listener = GridListener::default();
-        let cells = Cells {
-            columns: usize::from(size.width),
-            rows: usize::from(size.height),
-        };
         Self {
-            term: Term::new(config(scrollback), &cells, listener.clone()),
+            term: Term::new(config(scrollback), &Cells::new(size), listener.clone()),
             parser: Processor::new(),
             listener,
             size,
@@ -189,10 +195,7 @@ impl TermGrid {
     pub fn resize(&mut self, size: TerminalSize) -> TerminalSize {
         let size = clamp_size(size);
         if (size.width, size.height) != (self.size.width, self.size.height) {
-            self.term.resize(Cells {
-                columns: usize::from(size.width),
-                rows: usize::from(size.height),
-            });
+            self.term.resize(Cells::new(size));
         }
         self.size = size;
         size
@@ -240,7 +243,7 @@ impl TermGrid {
     }
 
     /// The title the process set (OSC 0 / 2), if any.
-    pub fn title(&self) -> Option<&std::sync::Arc<str>> {
+    pub fn title(&self) -> Option<&Arc<str>> {
         self.title.as_ref()
     }
 

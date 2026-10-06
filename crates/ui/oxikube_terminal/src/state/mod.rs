@@ -33,7 +33,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use bytes::Bytes;
 use futures::channel::mpsc;
 use gpui::{Context, EventEmitter, Subscription, Task};
-use oxikube_domain::OxiError;
+use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{ExitStatus, TerminalBackend, TerminalSize};
 use oxikube_runtime::{KubeTask, NotifyCoalescedExt as _, batch_channel, spawn_kube};
 use oxikube_settings::Settings as _;
@@ -195,7 +195,7 @@ impl TerminalState {
 
     /// Ends the session (closes the backend). The pump then reports [`TerminalEvent::Exited`].
     /// Keep the task to wait for it, or detach it.
-    pub fn kill(&self, cx: &mut Context<Self>) -> KubeTask<oxikube_domain::OxiResult<()>> {
+    pub fn kill(&self, cx: &mut Context<Self>) -> KubeTask<OxiResult<()>> {
         let backend = self.backend.clone();
         spawn_kube(cx, async move { backend.kill().await })
     }

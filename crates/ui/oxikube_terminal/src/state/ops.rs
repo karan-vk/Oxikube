@@ -1,6 +1,8 @@
 //! What the element and the keymap do with a [`TerminalState`]: snapshot, resize, scroll,
 //! selection, search and input. Each takes the grid lock briefly and never across an `.await`.
 
+use std::sync::Arc;
+
 use bytes::Bytes;
 use gpui::{AppContext as _, Context, Task};
 use oxikube_domain::OxiResult;
@@ -52,7 +54,7 @@ impl TerminalState {
     }
 
     /// The title the process set, if any.
-    pub fn title(&self) -> Option<std::sync::Arc<str>> {
+    pub fn title(&self) -> Option<Arc<str>> {
         self.grid.lock().title().cloned()
     }
 
