@@ -45,11 +45,7 @@ pub fn crates_text() -> String {
     let crates: BTreeSet<&str> = RegisteredSetting::all()
         .map(RegisteredSetting::crate_name)
         .collect();
-    crates.into_iter().fold(String::new(), |mut text, name| {
-        text.push_str(name);
-        text.push('\n');
-        text
-    })
+    crates.into_iter().map(|name| format!("{name}\n")).collect()
 }
 
 #[cfg(test)]
@@ -70,17 +66,6 @@ mod tests {
                     setting.crate_name()
                 );
             }
-        }
-    }
-
-    #[test]
-    fn the_app_crates_that_own_settings_are_linked() {
-        let crates = crates_text();
-        for owner in ["oxikube_logging", "oxikube_theme", "oxikube_workspace"] {
-            assert!(
-                crates.lines().any(|line| line == owner),
-                "{owner} is not linked into the oxikube binary:\n{crates}"
-            );
         }
     }
 }

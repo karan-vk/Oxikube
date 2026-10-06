@@ -138,24 +138,22 @@ fn take_change<T: Settings>(seen: &mut u64, cx: &App) -> bool {
 /// A setting type collected through `inventory` and registered by [`SettingsStore::new`].
 ///
 /// Build it with [`register_settings!`](crate::register_settings). Besides the registration
-/// function it records which crate and type registered it and under which key, so tools can
-/// check that every settings-owning crate is linked into a binary (`cargo xtask
-/// gen-settings-schema` does, E05-S06b).
+/// function it records which crate registered it and under which key, so tools can check that
+/// every settings-owning crate is linked into a binary (`cargo xtask gen-settings-schema` does,
+/// E05-S06b).
 pub struct RegisteredSetting {
     register: fn(&mut SettingsStore),
     crate_name: &'static str,
-    type_name: &'static str,
     key: Option<&'static str>,
 }
 
 impl RegisteredSetting {
-    /// The registration record for `T`, registered by the crate `crate_name` as `type_name`.
-    /// [`register_settings!`](crate::register_settings) fills both in.
-    pub const fn of<T: Settings>(crate_name: &'static str, type_name: &'static str) -> Self {
+    /// The registration record for `T`, registered by the crate `crate_name`.
+    /// [`register_settings!`](crate::register_settings) fills it in.
+    pub const fn of<T: Settings>(crate_name: &'static str) -> Self {
         Self {
             register: SettingsStore::register_setting::<T>,
             crate_name,
-            type_name,
             key: T::KEY,
         }
     }
@@ -168,11 +166,6 @@ impl RegisteredSetting {
     /// The crate whose `register_settings!` invocation registered this setting.
     pub fn crate_name(&self) -> &'static str {
         self.crate_name
-    }
-
-    /// The registered type as written in the invocation.
-    pub fn type_name(&self) -> &'static str {
-        self.type_name
     }
 
     /// The `settings.json` key of the setting (`None` for root-level content).
@@ -202,10 +195,7 @@ macro_rules! register_settings {
     ($($setting:ty),+ $(,)?) => {
         $(
             $crate::private::inventory::submit! {
-                $crate::RegisteredSetting::of::<$setting>(
-                    env!("CARGO_PKG_NAME"),
-                    stringify!($setting),
-                )
+                $crate::RegisteredSetting::of::<$setting>(env!("CARGO_PKG_NAME"))
             }
         )+
     };

@@ -291,12 +291,11 @@ impl Settings for InventorySettings {
 crate::register_settings!(InventorySettings);
 
 #[test]
-fn registrations_record_the_registering_crate_type_and_key() {
+fn registrations_record_the_registering_crate_and_key() {
     let probe = crate::RegisteredSetting::all()
         .find(|setting| setting.key() == Some("inventory_probe"))
         .expect("the probe is registered");
     assert_eq!(probe.crate_name(), "oxikube_settings");
-    assert_eq!(probe.type_name(), "InventorySettings");
 }
 
 #[test]
