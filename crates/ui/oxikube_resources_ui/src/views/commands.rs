@@ -1,6 +1,6 @@
 //! The table and detail commands on the `CommandBus`: `resource::Open`, `resource::CopyName`,
 //! `resource::RetryFeed` (E07-S10), `resource::SelectAll` (E07-S03) and `resource::PinDetail`,
-//! `resource::CopyLabel` (E07-S05).
+//! `resource::CopyLabel` (E07-S05) and `table::FocusFilter` (E07-S04).
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, pin it
 //! as a tab, select rows, restart a feed (a read) or write the user's clipboard. Each is declared
@@ -21,13 +21,14 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 6] = [
+pub const RESOURCE_COMMANDS: [CommandId; 7] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
     CommandId::RESOURCE_SELECT_ALL,
     CommandId::RESOURCE_PIN_DETAIL,
     CommandId::RESOURCE_COPY_LABEL,
+    CommandId::TABLE_FOCUS_FILTER,
 ];
 
 /// A resource command, resolved, for the UI thread.
@@ -58,6 +59,13 @@ pub enum ViewRequest {
     },
     /// Select every row of the tables of `gvk` in `cluster`.
     SelectAll {
+        /// The cluster.
+        cluster: ClusterId,
+        /// The kind.
+        gvk: Gvk,
+    },
+    /// Focus the filter bar of the tables of `gvk` in `cluster` (`table::FocusFilter`, `/`).
+    FocusFilter {
         /// The cluster.
         cluster: ClusterId,
         /// The kind.
@@ -103,6 +111,10 @@ impl ResourceCommandSink {
                 annotation: *annotation,
             },
             Command::ResourceSelectAll { cluster, gvk } => ViewRequest::SelectAll {
+                cluster: cluster.clone(),
+                gvk: gvk.clone(),
+            },
+            Command::TableFocusFilter { cluster, gvk } => ViewRequest::FocusFilter {
                 cluster: cluster.clone(),
                 gvk: gvk.clone(),
             },

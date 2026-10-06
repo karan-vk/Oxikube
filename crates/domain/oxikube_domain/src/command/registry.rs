@@ -87,6 +87,8 @@ impl CommandId {
     pub const RESOURCE_SELECT_ALL: CommandId = CommandId::new("resource::SelectAll");
     /// `resource::ViewYaml`: open a resource's YAML.
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
+    /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
+    pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
     /// `view::Open`: open a registered view by id.
     pub const VIEW_OPEN: CommandId = CommandId::new("view::Open");
     /// `view::ZoomIn`: make the UI one zoom step larger.
@@ -349,6 +351,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::RESOURCE_VIEW_YAML,
         "View YAML",
         CommandScope::Selection,
+        NONE,
+    ),
+    // Moves focus inside a window, never touches the cluster: allowed in read-only mode.
+    CommandMeta::read(
+        CommandId::TABLE_FOCUS_FILTER,
+        "Focus Table Filter",
+        CommandScope::ResourceKind,
         NONE,
     ),
     CommandMeta::read(

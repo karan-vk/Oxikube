@@ -78,6 +78,9 @@ How to read the **Lives in** column:
 | **ApiWarning / WarningPort** | One `Warning:` response header of the API server (deprecated API, unknown field, admission note), redacted, broadcast per connection; the store shows each distinct (code, text) once per session. | `oxikube_ports::warnings`, `oxikube_kube::warnings` (E07-S10) |
 | **ResourceTable** | The generic, virtualised table of one kind in one cluster tab: rows from a `ResourceStore` subscription, cells from a `ColumnProvider`, multi-select by object identity, keyboard navigation in the `Table` key context. | `oxikube_resources_ui::table` (E07-S03) |
 | **ColumnLayout / ColumnPrefs** | A kind's columns as the user arranged them (order, shown or hidden, widths, sort); saved per kind (not per cluster) under `table.columns.<group>/<Kind>`. | `oxikube_resources_ui::table` |
+| **Filter / FilterExpr** | What the table's `/` bar means: `foo` (regex or substring on the name, case-insensitive), `!foo` (inverse), `-l k=v` (label selector) and `-f text` (fuzzy). Parsed by `oxikube_app::store::filter::parse`; an invalid one is an error shown in the bar, never an empty table. | `oxikube_app::store::filter` (E07-S04) |
+| **Server-side selector** | The `-l` part of a filter: a label selector the subscription's feeds are keyed with, so the API server returns only the matches. Not the same as `StoreFilter::labels`, which filters cached objects. | `oxikube_app::store` (`FeedKey`, `Subscription::set_selector`) |
+| **FilterBar** | The text field, error and `123 of 4,812` count of a table's filter. | `oxikube_resources_ui::filter` (E07-S04) |
 | **KindSpec** | Per-kind registration: columns, detail renderer, actions, templates, sidebar section. | `oxikube_resources_ui::kinds` *(planned)* |
 
 ## Commands and safety

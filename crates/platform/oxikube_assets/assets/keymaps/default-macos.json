@@ -103,7 +103,16 @@
       "delete": "resource_table::DeleteSelected",
       "cmd-backspace": "resource_table::DeleteSelected",
       // k9s: ctrl-d deletes the selection (the same delete dialog, never a silent delete).
-      "ctrl-d": "resource_table::DeleteSelected"
+      "ctrl-d": "resource_table::DeleteSelected",
+      "/": "resource_table::FocusFilter"
+    }
+  },
+  {
+    // The table's filter field has the focus: escape clears the filter and returns to the rows
+    // (enter returns without clearing; the field handles it).
+    "context": "Table && Editing",
+    "bindings": {
+      "escape": "resource_table::ClearFilter"
     }
   }
 ]

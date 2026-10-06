@@ -10,7 +10,7 @@ use std::fmt;
 use std::sync::Arc;
 
 /// One term of a [`LabelSelector`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LabelTerm {
     /// `key=value` or `key==value`.
     Eq(String, String),
@@ -41,7 +41,7 @@ impl LabelTerm {
 }
 
 /// A parsed label selector. The empty selector matches everything.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LabelSelector {
     terms: Vec<LabelTerm>,
 }

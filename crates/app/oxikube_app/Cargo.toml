@@ -19,6 +19,8 @@ jiff.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
 parking_lot.workspace = true
+# The `/` filter's name patterns (E07-S04): compiled once per edit, linear-time matching.
+regex.workspace = true
 serde.workspace = true
 # Tool stub input schemas (`ToolDef::input_schema`) and command output data.
 serde_json.workspace = true
@@ -40,6 +42,11 @@ oxikube_kube.workspace = true
 # `cargo bench -p oxikube_app --bench store_apply` (E07-S01): a 500-event batch into a 10k cache.
 [[bench]]
 name = "store_apply"
+harness = false
+
+# `cargo bench -p oxikube_app --bench store_filter` (E07-S04): typing a filter over 10k rows.
+[[bench]]
+name = "store_filter"
 harness = false
 
 # `cargo bench -p oxikube_app --bench column_cell` (E07-S02): the per-cell cost of `ColumnProvider`.

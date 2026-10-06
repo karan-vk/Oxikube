@@ -192,8 +192,9 @@ fn buttons(
                 .icon(Icon::new(IconName::X))
                 .primary()
                 .small()
-                .on_click(move |_, _, cx| {
-                    view.update(cx, |table, cx| table.clear_filter(cx)).ok();
+                .on_click(move |_, window, cx| {
+                    view.update(cx, |table, cx| table.clear_filter(window, cx))
+                        .ok();
                 }),
         ));
     }

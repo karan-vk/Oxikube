@@ -49,6 +49,11 @@ struct SubState {
     index: SortedIndex,
     /// The parts (feeds) this subscriber reads and each one's state.
     parts: BTreeMap<FeedScope, FeedState>,
+    /// How many objects each part's cache holds (before the filter), for "123 of 4,812".
+    totals: BTreeMap<FeedScope, usize>,
+    /// Holds the next item back while a re-keyed (server-side selector) subscription waits for
+    /// its new feeds' first data, so the view keeps its previous rows instead of flashing empty.
+    hold: bool,
     /// Parts whose cached objects are not in the index yet (a seeding task is pending).
     unseeded: BTreeSet<FeedScope>,
     /// Bumped whenever a rebuild is checked out or superseded.
@@ -73,6 +78,10 @@ impl SubState {
             .max_by_key(|s| s.severity())
             .cloned()
             .unwrap_or(FeedState::Warming)
+    }
+
+    fn total(&self) -> usize {
+        self.totals.values().sum()
     }
 
     fn wake(&mut self) {
@@ -105,6 +114,8 @@ impl SubShared {
             inner: Mutex::new(SubState {
                 index: SortedIndex::new(query.filter.clone(), query.sort.clone()),
                 parts: BTreeMap::new(),
+                totals: BTreeMap::new(),
+                hold: false,
                 unseeded: BTreeSet::new(),
                 generation: 0,
                 building: None,
@@ -130,11 +141,25 @@ impl SubShared {
     /// A small change is applied in place. A bulk change (a relist) checks the index out and
     /// re-sorts it on this (the feed's) task, off the lock. While the index is out, a change
     /// is queued for the rebuild to replay.
-    pub fn apply_change(&self, part: &FeedScope, change: &CacheChange) {
+    pub fn apply_change(&self, part: &FeedScope, change: &CacheChange, cached: usize) {
         let checkout = {
             let mut st = self.inner.lock();
-            if !st.parts.contains_key(part) || st.unseeded.contains(part) {
+            if !st.parts.contains_key(part) {
                 return;
+            }
+            // The count of cached objects moves with every add and delete, whatever the filter
+            // shows. With a filter on, the count is on screen: tell the view.
+            if st.totals.insert(part.clone(), cached) != Some(cached)
+                && !st.index.filter().is_empty()
+            {
+                st.wake();
+            }
+            if st.unseeded.contains(part) {
+                return;
+            }
+            if st.hold {
+                st.hold = false;
+                st.wake();
             }
             if st.building.is_some() {
                 st.replay.push(Replay::of(change));
@@ -183,7 +208,13 @@ impl SubShared {
         let mut st = self.inner.lock();
         if let Some(slot) = st.parts.get_mut(part) {
             *slot = state.clone();
-            if st.delivered.as_ref() != Some(&st.state()) {
+            // Releasing the hold must wake the consumer: it parked on the hold, and an empty
+            // first list (a selector nothing matches) never reaches `apply_change`.
+            let released = st.hold && *state != FeedState::Warming;
+            if released {
+                st.hold = false;
+            }
+            if released || st.delivered.as_ref() != Some(&st.state()) {
                 st.wake();
             }
         }
@@ -203,6 +234,7 @@ impl SubShared {
         let mut st = self.inner.lock();
         Self::supersede(&mut st);
         st.parts.insert(part.clone(), entry.feed_state.clone());
+        st.totals.insert(part.clone(), entry.cache.len());
         if !entry.cache.is_empty() {
             st.unseeded.insert(part.clone());
         }
@@ -216,6 +248,7 @@ impl SubShared {
     pub fn detach_part(&self, part: &FeedScope) {
         let mut st = self.inner.lock();
         Self::supersede(&mut st);
+        st.totals.remove(part);
         if st.parts.remove(part).is_some() {
             st.unseeded.remove(part);
             st.index.remove_part(part);
@@ -232,6 +265,15 @@ impl SubShared {
         st.snapshot_next();
     }
 
+    /// Holds the next item back until a part has data or leaves `Warming`, unless one of the
+    /// parts is past that already. Called after a re-key attached its new feeds.
+    pub fn hold_until_data(&self) {
+        let mut st = self.inner.lock();
+        st.hold = !st.parts.is_empty()
+            && st.parts.values().all(|state| *state == FeedState::Warming)
+            && st.unseeded.is_empty();
+    }
+
     /// Whether a part waits for a seeding task.
     pub fn needs_seed(&self) -> bool {
         !self.inner.lock().unseeded.is_empty()
@@ -239,7 +281,7 @@ impl SubShared {
 
     pub fn poll(&self, cx: &mut Context<'_>) -> Poll<Option<StoreDelta>> {
         let mut st = self.inner.lock();
-        if !st.dirty || !st.unseeded.is_empty() || st.building.is_some() {
+        if !st.dirty || st.hold || !st.unseeded.is_empty() || st.building.is_some() {
             st.waker = Some(cx.waker().clone());
             return Poll::Pending;
         }
@@ -260,11 +302,13 @@ impl SubShared {
         st.columns_dirty = false;
         st.dirty = false;
         st.delivered = Some(state.clone());
+        let total = st.total();
         Poll::Ready(Some(StoreDelta {
             rows,
             state,
             columns,
             len: st.index.len(),
+            total,
         }))
     }
 }

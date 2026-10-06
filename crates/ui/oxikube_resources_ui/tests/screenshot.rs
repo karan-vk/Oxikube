@@ -5,6 +5,9 @@
 //! - `detail_deployment_dark`, `detail_deployment_light` (`detail`): the detail drawer of a
 //!   Deployment in both themes: header with status chip, owner-less metadata, conditions, status.
 //!
+//! - `pods_table_filtered`: the same pods with `cart|checkout|web` typed in the filter bar: three
+//!   rows and the `3 of 7` count (E07-S04).
+//!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
 //! process main thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so
@@ -117,7 +120,8 @@ fn fixture() -> (
     (sessions, cluster, state, clock)
 }
 
-fn render() -> anyhow::Result<RgbaImage> {
+/// Renders the table, with `filter` typed in the bar when given.
+fn render(filter: Option<&str>) -> anyhow::Result<RgbaImage> {
     let (sessions, cluster, state, clock) = fixture();
     let mut cx = headless();
     let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
@@ -138,9 +142,12 @@ fn render() -> anyhow::Result<RgbaImage> {
         cx.new(|cx| ResourceTable::new(cluster, pods_kind(), deps, window, cx))
     })?;
     cx.run_until_parked();
-    cx.update_window(window.into(), |view, _, cx| {
+    cx.update_window(window.into(), |view, window, cx| {
         let table = view.downcast::<ResourceTable>().expect("the root view");
         table.update(cx, |table, cx| {
+            if let Some(filter) = filter {
+                table.set_filter_text(filter, window, cx);
+            }
             table.move_cursor(1, false, cx);
             table.move_cursor(3, false, cx);
         });
@@ -181,7 +188,9 @@ pub(crate) fn check(name: &str, image: RgbaImage, width: f32, height: f32) -> an
 
 fn main() -> ExitCode {
     let results = [
-        render().and_then(|image| check("pods_table_tones", image, WIDTH, HEIGHT)),
+        render(None).and_then(|image| check("pods_table_tones", image, WIDTH, HEIGHT)),
+        render(Some("cart|checkout|web"))
+            .and_then(|image| check("pods_table_filtered", image, WIDTH, HEIGHT)),
         detail::run(),
     ];
     let mut failed = false;

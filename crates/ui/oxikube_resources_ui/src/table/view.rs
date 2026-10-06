@@ -5,11 +5,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-    App, Context, EventEmitter, FocusHandle, Focusable, SharedString, Subscription, Task, Window,
+    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, SharedString,
+    Subscription, Task, Window,
 };
 use jiff::Timestamp;
 use oxikube_app::store::{
-    FeedKind, FeedState, ObjectKey, ResourceStore, ResourceStores, StoreFilter,
+    FeedKind, FeedState, FilterParts, ObjectKey, ResourceStore, ResourceStores,
 };
 use oxikube_app::{ClusterSessionManager, CoreColumns};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
@@ -29,6 +30,7 @@ use super::prefs::{ColumnPrefs, PrefsWriter};
 use super::selection::Selection;
 use super::states::{StateLabels, scope_label};
 use crate::actions::{ActionSource, ResourceActions};
+use crate::filter::{FilterBar, FilterWriter};
 
 /// How often ages are redrawn while the table is shown.
 const TICK: Duration = Duration::from_secs(1);
@@ -82,8 +84,6 @@ pub struct ResourceTable {
     pub(super) feed_task: Option<Task<()>>,
     /// Forwards the store's `Warning:` headers; replaced with the store.
     pub(super) warning_task: Option<Task<()>>,
-    /// The in-app filter, kept to re-apply after a reconnect.
-    pub(super) filter: StoreFilter,
     /// The feed kind the provider was chosen for.
     pub(super) feed_kind: Option<FeedKind>,
     pub(super) writer: Option<PrefsWriter>,
@@ -95,6 +95,16 @@ pub struct ResourceTable {
     pub(super) workspace: Option<gpui::WeakEntity<Workspace>>,
     /// How many rows are selected (mirrored for the key context, which has no `App`).
     pub(super) selected: usize,
+    /// The `/` filter bar in the toolbar (E07-S04).
+    pub(super) filter: Entity<FilterBar>,
+    /// The filter the subscription runs with: the bar's last good one.
+    pub(super) filter_parts: FilterParts,
+    /// Whether the filter field has the focus (mirrored for the key context).
+    pub(super) editing: bool,
+    /// Saves the filter text while `resource_table.persist_filter` is on (made on first save).
+    pub(super) filter_writer: Option<FilterWriter>,
+    /// Reads the saved filter when the table opens; replaced, never cleared from inside.
+    pub(super) filter_task: Option<Task<()>>,
     _session_task: Task<()>,
     pub(super) prefs_task: Option<Task<()>>,
     _tick: Task<()>,
@@ -162,6 +172,9 @@ impl ResourceTable {
             window.focus(&view.focus, cx);
         });
 
+        let filter = cx.new(|cx| FilterBar::new(window, cx));
+        let filter_events = cx.subscribe_in(&filter, window, Self::on_filter_event);
+
         let session_task = Self::follow_session(&cluster, &deps, cx);
         let tick = cx.spawn(async move |this, cx| {
             loop {
@@ -188,19 +201,24 @@ impl ResourceTable {
             subscription: None,
             feed_task: None,
             warning_task: None,
-            filter: StoreFilter::default(),
             feed_kind: None,
             writer: None,
             prefs_loaded: false,
             active: false,
             workspace: None,
             selected: 0,
+            filter,
+            filter_parts: FilterParts::default(),
+            editing: false,
+            filter_writer: None,
+            filter_task: None,
             _session_task: session_task,
             prefs_task: None,
             _tick: tick,
-            _subscriptions: vec![events, refocus],
+            _subscriptions: vec![events, refocus, filter_events],
         };
         this.load_prefs(cx);
+        this.load_filter(window, cx);
         this.resubscribe(cx);
         this
     }
@@ -218,6 +236,11 @@ impl ResourceTable {
     /// The kind's type.
     pub fn gvk(&self) -> &Gvk {
         &self.kind.gvk
+    }
+
+    /// The filter bar (E07-S04): its text, error and count.
+    pub fn filter(&self) -> &Entity<FilterBar> {
+        &self.filter
     }
 
     /// The table handle (rows, layout and selection live in its delegate).
@@ -307,6 +330,8 @@ impl KeyContextual for ResourceTable {
             _ => "many",
         };
         context.value("selection", selection);
+        // Bare keys (`j`, `k`, `/`, enter) are text while the filter field has the focus.
+        context.flag_if(self.editing, contexts::EDITING);
     }
 }
 

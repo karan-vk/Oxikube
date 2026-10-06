@@ -6,6 +6,7 @@ mod counts;
 mod diagnostics;
 mod feeds;
 mod filter;
+mod filter_bar;
 mod order;
 mod props;
 mod refcount;

@@ -56,19 +56,13 @@ impl ResourceStore {
     /// The state and tally of `part` of `target`: from its own feed, or from the cluster-wide
     /// feed of the kind when that is what is open (a table on All namespaces).
     fn read_part(&self, target: &CountTarget, part: &FeedScope) -> Option<(FeedState, KindCount)> {
-        let own = FeedKey {
-            gvk: target.gvk.clone(),
-            scope: part.clone(),
-        };
+        let own = FeedKey::new(target.gvk.clone(), part.clone());
         let read = |key: &FeedKey, scope: &FeedScope| {
             self.inner()
                 .with_entry(key, |st| (st.feed_state.clone(), st.cache.tally_in(scope)))
         };
         read(&own, &FeedScope::Cluster).or_else(|| {
-            let wide = FeedKey {
-                gvk: target.gvk.clone(),
-                scope: FeedScope::Cluster,
-            };
+            let wide = FeedKey::new(target.gvk.clone(), FeedScope::Cluster);
             (*part != FeedScope::Cluster)
                 .then(|| read(&wide, part))
                 .flatten()

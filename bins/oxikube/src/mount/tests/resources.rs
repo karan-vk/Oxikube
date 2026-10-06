@@ -285,3 +285,38 @@ fn enter_on_a_row_opens_the_detail_drawer_and_pinning_makes_it_a_tab(cx: &mut Te
     assert_eq!(pinned, [shown]);
     assert!(in_drawer.is_none());
 }
+
+#[gpui::test]
+fn slash_in_a_table_focuses_its_filter_through_the_real_bus(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.serve([kind("", "v1", "Pod", "pods")]);
+    app.press("enter");
+    app.tick();
+    app.click("sidebar-entry-workloads/pods");
+    app.tick();
+    assert_eq!(app.tables(), ["Pod"]);
+    let ws = app.tab_workspace();
+    let table = app
+        .vcx
+        .update(|_, cx| ws.read(cx).items_of_type::<ResourceTable>().remove(0));
+    let editing = |app: &mut App| {
+        let bar = app.vcx.update(|_, cx| table.read(cx).filter().clone());
+        app.vcx.update(|_, cx| bar.read(cx).is_editing())
+    };
+    assert!(!editing(&mut app));
+    // Focus events only reach an active window (a real one is; the test window must be told).
+    app.vcx.update(|window, _| window.activate_window());
+    app.tick();
+    // `/` runs `table::FocusFilter` (the command bus, the registered handler, the window's
+    // views), which moves the focus into the bar.
+    app.press("/");
+    app.tick();
+    assert!(app.drawn("resource-filter-input"));
+    app.tick();
+    assert!(editing(&mut app), "the filter bar has the focus");
+    // While typing, `escape` clears and returns to the rows.
+    app.press("escape");
+    app.tick();
+    assert!(app.drawn("resource-filter-input"));
+    assert!(!editing(&mut app));
+}

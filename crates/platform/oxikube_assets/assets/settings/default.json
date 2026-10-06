@@ -53,6 +53,13 @@
     // a time).
     "restore_connect": "active"
   },
+  // Resource tables (E07-S04).
+  "resource_table": {
+    // Remember the filter typed in each kind's table (the `/` bar) and restore it the next time
+    // that table opens. Off by default: a filter you forgot about is a table that looks empty.
+    // Saved per kind, not per cluster; only the text you typed is kept.
+    "persist_filter": false
+  },
   // Per-cluster settings. Each key below is a default for every cluster; write the same key under
   // `clusters.<id>` (below) to override it for one cluster. Layers merge field by field:
   // this file, then your top-level values, then the cluster's own.

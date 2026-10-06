@@ -7,7 +7,6 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{Entity, TestAppContext};
-use oxikube_app::store::StoreFilter;
 use oxikube_domain::command::Command;
 use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::{Delta, DeltaBatch};
@@ -121,9 +120,9 @@ fn filtered_empty_names_the_filter_and_one_click_clears_it(cx: &mut TestAppConte
             sink.borrow_mut().push(event.clone());
         })
     });
-    f.update(&table, |t, cx| {
-        t.set_filter(StoreFilter::text("zzz"), Some("zzz".into()), cx)
-    });
+    f.keys(&table, "/");
+    f.vcx.simulate_keystrokes("z z z");
+    f.settle();
     assert_eq!(f.names(&table), Vec::<String>::new());
     assert_eq!(
         state(&mut f, &table),

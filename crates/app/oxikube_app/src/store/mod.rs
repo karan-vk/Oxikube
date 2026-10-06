@@ -20,6 +20,7 @@
 //! | one store per connected session | [`ResourceStores`] (`registry`) |
 //! | what a subscriber asks: kind, scope, filter, sort | [`StoreQuery`], [`StoreFilter`] (`query`), [`SortKey`], [`SortField`], [`CellSortKey`] (`sort`), [`LabelSelector`] (`selector`) |
 //! | what it gets: snapshot, then coalesced ops with positions, plus the feed state | [`Subscription`], [`StoreDelta`], [`RowOp`], [`FeedState`] (`subscription`, `mailbox`, `delta`) |
+//! | the `/` filter: grammar, name predicates, fuzzy ranking, the server-side selector split | [`filter::parse`], [`FilterExpr`], [`FilterParts`], [`NameFilter`], [`Fuzzy`] (`filter`, E07-S04) |
 //! | which feed serves a kind | [`FeedPolicy`] (`policy`) |
 //! | counts and health for sidebar badges and overview tiles | [`ResourceStore::counts`], [`CountsLease`], [`CountState`] (`counts`, E07-S11) |
 //! | the watch-budget hook and admission | [`FeedBudget`] (`budget`, `admission`) |
@@ -28,7 +29,7 @@
 //!
 //! # Cache keys and namespaces
 //!
-//! Entries are keyed by (gvk, [`FeedScope`]): a `WatchScope::Cluster` query reads one
+//! Entries are keyed by (gvk, [`FeedScope`], server-side label selector): a `WatchScope::Cluster` query reads one
 //! cluster-wide entry, a `WatchScope::Namespaces` query one entry per namespace, merged in the
 //! subscriber's index. Two views of the same kind and scope share one feed. When the session's
 //! namespace selection changes, [`Subscription::rescope`] keeps the namespaces that stay
@@ -76,6 +77,7 @@ mod delta;
 mod driver;
 mod entry;
 mod feed;
+pub mod filter;
 mod index;
 mod mailbox;
 mod object;
@@ -97,6 +99,9 @@ pub use config::{DEFAULT_IDLE_GRACE, FeedInfo, StoreConfig, StoreOptions, StoreR
 pub use counts::{CORE_TARGETS, CoreTarget, CountState, CountTarget, CountsLease, KindCount};
 pub use delta::{FeedState, RowChange, RowOp, StoreDelta};
 pub use feed::{StorePorts, TableColumns};
+pub use filter::{
+    FilterError, FilterExpr, FilterParts, Fuzzy, NameFilter, NameMatcher, TextPattern,
+};
 pub use object::{FeedKey, FeedScope, ObjectKey, StoreObject, TableObject};
 #[cfg(test)]
 pub(crate) use policy::core_kinds;

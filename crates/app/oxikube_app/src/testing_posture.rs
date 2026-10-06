@@ -216,6 +216,10 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),
         },
+        "table::FocusFilter" => Command::TableFocusFilter {
+            cluster,
+            gvk: Gvk::new("", "v1", "Pod"),
+        },
         "resource::ViewYaml" => Command::ResourceViewYaml { target: target() },
         "view::Open" => Command::ViewOpen {
             view: "overview".into(),

@@ -8,6 +8,8 @@ use oxikube_domain::ids::Gvk;
 use oxikube_domain::{ObjectMeta, Resource};
 use serde_json::Value;
 
+use super::selector::LabelSelector;
+
 /// The identity of one object inside a kind: namespace (`None` for cluster-scoped kinds) and
 /// name. Orders by namespace, then name (kubectl's default order).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -187,17 +189,50 @@ impl fmt::Display for FeedScope {
     }
 }
 
-/// The key of one cache entry (one feed) inside a cluster's store: kind plus [`FeedScope`].
+/// The key of one cache entry (one feed) inside a cluster's store: kind, [`FeedScope`] and the
+/// label selector the server applies (`/-l`, E07-S04).
+///
+/// Feeds with different selectors are different feeds: each has its own cache, holding only the
+/// objects the server returned for it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FeedKey {
     /// The kind.
     pub gvk: Gvk,
     /// The part of the cluster the feed watches.
     pub scope: FeedScope,
+    /// The server-side label selector, `None` for every object.
+    pub selector: Option<LabelSelector>,
+}
+
+impl FeedKey {
+    /// The unselected feed of `gvk` in `scope`.
+    pub fn new(gvk: Gvk, scope: FeedScope) -> Self {
+        Self {
+            gvk,
+            scope,
+            selector: None,
+        }
+    }
+
+    /// The same feed with the server-side `selector` (`None` or empty: every object).
+    #[must_use]
+    pub fn with_selector(mut self, selector: Option<LabelSelector>) -> Self {
+        self.selector = selector.filter(|s| !s.is_empty());
+        self
+    }
+
+    /// Whether an object with `labels` belongs to this feed's selector.
+    pub fn selects(&self, labels: &std::collections::BTreeMap<Arc<str>, Arc<str>>) -> bool {
+        self.selector.as_ref().is_none_or(|s| s.matches(labels))
+    }
 }
 
 impl fmt::Display for FeedKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} in {}", self.gvk, self.scope)
+        write!(f, "{} in {}", self.gvk, self.scope)?;
+        match &self.selector {
+            Some(selector) => write!(f, " ({selector})"),
+            None => Ok(()),
+        }
     }
 }

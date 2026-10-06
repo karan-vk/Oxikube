@@ -11,6 +11,7 @@
 //! | `view` | [`ResourceTable`]: construction, the `Item` impl, [`ResourceTableDeps`], [`ResourceTableEvent`] |
 //! | `columns` | the column provider (core catalogue or a Table feed's columns) and the saved layout |
 //! | `feed` | the store subscription: deltas applied in one update, coalesced redraws, rescoping on a namespace change, re-subscribing on a reconnect |
+//! | `filtering` | the filter bar's side: applying a parsed filter to the subscription, `/` focus, saving and restoring the text |
 //! | `interact` | clicks, keys, column picker, and the commands they dispatch |
 //! | `render` | the toolbar and the table element |
 //! | `delegate` | [`RowsDelegate`]: rows, layout, provider and selection behind `TableDelegate` |
@@ -39,6 +40,7 @@ mod cells;
 mod columns;
 mod delegate;
 mod feed;
+mod filtering;
 mod interact;
 mod layout;
 mod prefs;
@@ -55,6 +57,7 @@ pub(crate) mod tests;
 pub use cells::ToneColors;
 pub use delegate::RowsDelegate;
 pub use layout::ColumnLayout;
+pub(crate) use prefs::kind_key;
 pub use prefs::{ColumnPrefs, ColumnPrefsStore, PREFS_PREFIX, PREFS_VERSION, SavedSort, prefs_key};
 pub use runtime::store_runtime;
 pub use selection::{ClickMode, Selection};

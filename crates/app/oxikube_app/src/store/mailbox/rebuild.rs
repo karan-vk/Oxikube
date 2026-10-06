@@ -16,6 +16,8 @@ use super::super::cache::CacheChange;
 use super::super::entry::FeedEntry;
 use super::super::index::SortedIndex;
 use super::super::object::{FeedScope, ObjectKey, StoreObject};
+use super::super::query::StoreFilter;
+use super::super::sort::SortKey;
 use super::{SubShared, SubState};
 
 /// A change that arrived while the index was checked out.
@@ -109,6 +111,32 @@ impl SubShared {
             return None;
         }
         Some(st.unseeded.remove(part))
+    }
+
+    /// Starts an in-place narrowing to `filter` and `sort`: when the index is settled (seeded, no
+    /// rebuild in flight) it is checked out and the returned task keeps the rows that still pass,
+    /// in the new order, and checks it back in (replaying what changed meanwhile). That is one
+    /// pass over the rows the old filter let through, not over the cache. The task runs on the
+    /// store's spawner and never awaits. `None` means the caller must reseed from the caches.
+    pub(crate) fn narrowing(
+        self: &Arc<Self>,
+        filter: StoreFilter,
+        sort: SortKey,
+    ) -> Option<impl Future<Output = ()> + Send + 'static> {
+        let mut checkout = {
+            let mut st = self.inner.lock();
+            if st.building.is_some() || !st.unseeded.is_empty() {
+                return None;
+            }
+            Self::check_out(&mut st)
+        };
+        let shared = Arc::downgrade(self);
+        Some(async move {
+            checkout.index.narrow(filter, sort);
+            if let Some(shared) = shared.upgrade() {
+                shared.check_in(checkout);
+            }
+        })
     }
 }
 
