@@ -21,7 +21,7 @@ use crate::{
     panel::DockPosition,
     persistence::{
         LAYOUT_SCHEMA_VERSION, RestoreReport, SerializedWorkspace, SkipReason, SkippedItem,
-        item_descriptor, prune, prune::surviving_active,
+        item_descriptor, prune, surviving_active,
     },
 };
 

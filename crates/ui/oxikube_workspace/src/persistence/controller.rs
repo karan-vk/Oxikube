@@ -18,7 +18,7 @@
 //! entity and are never cleared from inside themselves (replacing the debounce timer from
 //! `note_change` is what cancels the previous one).
 
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use gpui::{
     AnyWindowHandle, App, AppContext as _, Context, Entity, EventEmitter, Subscription, Task,
@@ -59,7 +59,6 @@ pub struct LayoutPersistence {
     workspace: WeakEntity<Workspace>,
     store: LayoutStore,
     window: AnyWindowHandle,
-    debounce: Duration,
     status: RestoreStatus,
     /// A change since the last write that the timer has not yet turned into one.
     dirty: bool,
@@ -82,17 +81,6 @@ impl LayoutPersistence {
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<Self> {
-        Self::start_with_debounce(workspace, store, SAVE_DEBOUNCE, window, cx)
-    }
-
-    /// [`Self::start`] with an explicit debounce.
-    pub fn start_with_debounce(
-        workspace: &Entity<Workspace>,
-        store: LayoutStore,
-        debounce: Duration,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Entity<Self> {
         let this = cx.new(|cx| {
             let subscriptions = vec![
                 cx.subscribe_in(
@@ -111,7 +99,6 @@ impl LayoutPersistence {
                 workspace: workspace.downgrade(),
                 store,
                 window: window.window_handle(),
-                debounce,
                 status: RestoreStatus::Restoring,
                 dirty: false,
                 last_written: None,
@@ -199,11 +186,10 @@ impl LayoutPersistence {
             // Written once the restore is done (`finish_restore`).
             return;
         }
-        let debounce = self.debounce;
         // Replacing the previous timer cancels it. The timer only dispatches; the write is a
         // separate task, so nothing here is dropped from inside itself.
         self.debounce_task = Some(cx.spawn_in(window, async move |this, cx| {
-            cx.background_executor().timer(debounce).await;
+            cx.background_executor().timer(SAVE_DEBOUNCE).await;
             this.update_in(cx, |this, window, cx| {
                 // Only a new write replaces the in-flight one (which a newer layout supersedes).
                 if let Some(write) = this
@@ -276,7 +262,6 @@ impl LayoutPersistence {
         self.last_written = Some(json);
         self.dirty = false;
         let store = self.store.clone();
-        let snapshot = Arc::new(snapshot);
         Some(cx.spawn(async move |this, cx| {
             if let Err(error) = store.save(&snapshot).await {
                 tracing::warn!(%error, "saving the layout failed");

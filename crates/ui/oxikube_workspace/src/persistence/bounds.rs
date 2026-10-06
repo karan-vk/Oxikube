@@ -42,7 +42,7 @@ fn area(b: Bounds<Pixels>) -> f32 {
 
 /// Pulls `bounds` fully inside `display`, shrinking it to the display (but not below
 /// [`MIN_SIZE`]) when it is bigger.
-pub fn clamp_into(bounds: Bounds<Pixels>, display: Bounds<Pixels>) -> Bounds<Pixels> {
+fn clamp_into(bounds: Bounds<Pixels>, display: Bounds<Pixels>) -> Bounds<Pixels> {
     let width = bounds
         .size
         .width

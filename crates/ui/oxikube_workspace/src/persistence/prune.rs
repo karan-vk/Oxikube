@@ -7,7 +7,7 @@ use crate::item::ITEM_PANEL_NAME;
 
 /// What an item tab was saved as: the kind it rebuilds under and its state.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ItemDescriptor {
+pub(crate) struct ItemDescriptor {
     /// The item's [`Item::serialized_kind`](crate::Item::serialized_kind).
     pub kind: String,
     /// The item's [`Item::serialize`](crate::Item::serialize) output.
@@ -16,7 +16,7 @@ pub struct ItemDescriptor {
 
 /// The descriptor of an item-tab leaf; `None` for any other panel state, or an item tab that was
 /// saved without a kind (an item that cannot be rebuilt).
-pub fn item_descriptor(state: &PanelState) -> Option<ItemDescriptor> {
+pub(crate) fn item_descriptor(state: &PanelState) -> Option<ItemDescriptor> {
     if state.panel_name != ITEM_PANEL_NAME {
         return None;
     }
@@ -43,16 +43,18 @@ pub(crate) fn surviving_active(saved_active: usize, survivors: &[usize]) -> usiz
 
 /// Removes every leaf of `state` that `keep` rejects, then every tab group and split left empty,
 /// fixing active indices and split sizes. Returns whether anything is left.
-pub fn prune(state: &mut PanelState, keep: &mut impl FnMut(&PanelState) -> bool) -> bool {
+pub(crate) fn prune(state: &mut PanelState, keep: &mut impl FnMut(&PanelState) -> bool) -> bool {
     match state.info.clone() {
         PanelInfo::Tabs { active_index } => {
-            let survivors: Vec<usize> = (0..state.children.len())
-                .filter(|&ix| keep(&state.children[ix]))
-                .collect();
+            let mut survivors = Vec::new();
             let mut ix = 0;
-            state.children.retain(|_| {
+            state.children.retain(|child| {
+                let alive = keep(child);
+                if alive {
+                    survivors.push(ix);
+                }
                 ix += 1;
-                survivors.contains(&(ix - 1))
+                alive
             });
             state.info = PanelInfo::tabs(surviving_active(active_index, &survivors));
             !state.children.is_empty()

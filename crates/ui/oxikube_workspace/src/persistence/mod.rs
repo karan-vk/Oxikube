@@ -23,17 +23,17 @@
 mod bounds;
 mod controller;
 mod model;
-pub mod prune;
+mod prune;
 mod report;
 mod store;
 
-pub use bounds::{clamp_into, restore_window_bounds};
+pub use bounds::restore_window_bounds;
 pub use controller::{LayoutPersistence, PersistenceEvent, RestoreStatus, SAVE_DEBOUNCE};
 pub use model::{
     LAYOUT_SCHEMA_VERSION, LAYOUT_TABLE, LayoutError, MAIN_WINDOW_ID, SerializedWindow,
     SerializedWorkspace, WindowMode,
 };
-pub use prune::{ItemDescriptor, item_descriptor, prune};
+pub(crate) use prune::{item_descriptor, prune, surviving_active};
 pub use report::{RestoreReport, SkipReason, SkippedItem};
 pub use store::{LayoutStore, LoadOutcome};
 

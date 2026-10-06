@@ -9,7 +9,6 @@ use serde_json::Value;
 
 use crate::{
     audit,
-    error::StateFailure,
     kv::{self, KV_NAMESPACE},
     open::{self, Recovery},
     worker::Worker,
@@ -52,11 +51,8 @@ impl SqliteState {
     pub async fn open(path: impl Into<PathBuf>) -> OxiResult<Self> {
         let path = path.into();
         let thread_path = path.clone();
-        let (worker, ready) = Worker::spawn(move || {
-            let (conn, recovery) =
-                open::open(&thread_path).map_err(|f: StateFailure| OxiError::from(f))?;
-            Ok((conn, recovery))
-        })?;
+        let (worker, ready) =
+            Worker::spawn(move || open::open(&thread_path).map_err(OxiError::from))?;
         let recovery = ready
             .await
             .map_err(|_| OxiError::internal("the state database thread stopped while opening"))??;
