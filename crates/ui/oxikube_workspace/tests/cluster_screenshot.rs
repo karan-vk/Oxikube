@@ -37,13 +37,11 @@ fn headless() -> HeadlessAppContext {
 }
 
 fn render(tokens: Tokens) -> anyhow::Result<RgbaImage> {
-    let context = ClusterContext {
-        cluster: PROD.parse()?,
-        context: ContextName::new("prod-eu"),
-        source: SourceId("kubeconfig".into()),
-        server: None,
-        default_namespace: None,
-    };
+    let context = ClusterContext::new(
+        PROD.parse()?,
+        ContextName::new("prod-eu"),
+        SourceId("kubeconfig".into()),
+    );
     let manager = ClusterSessionManager::new(
         Arc::new(FakeClusterConnectorPort::new()),
         Arc::new(FakeClusterSourcePort::new().with_contexts([context.clone()])),
