@@ -19,8 +19,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use gpui::{
-    App, Context, EventEmitter, FocusHandle, Focusable, Pixels, SharedString, Subscription, Task,
-    UniformListScrollHandle, Window, px,
+    App, AppContext as _, Entity, EventEmitter, FocusHandle, Focusable, Pixels, SharedString,
+    Subscription, Task, UniformListScrollHandle, Window, px,
 };
 use oxikube_app::{
     ClusterSessionManager, CustomResourceGroup, IntegrationRegistry, IntegrationSection,
@@ -184,36 +184,38 @@ impl Panel for SidebarPanel {
 }
 
 impl SidebarPanel {
-    /// The panel for `cluster`, already following its session (see [`SidebarPanel::build`]).
-    pub(super) fn new_in(cluster: ClusterId, deps: SidebarDeps, cx: &mut Context<Self>) -> Self {
-        let store = match SidebarStore::new(deps.state.clone(), &cluster) {
-            Ok(store) => Some(store),
-            Err(error) => {
-                tracing::warn!(%error, %cluster, "the sidebar state is not saved");
-                None
-            }
-        };
-        let mut this = Self {
-            cluster,
-            deps,
-            focus: cx.focus_handle(),
-            scroll: UniformListScrollHandle::new(),
-            sections: Vec::new(),
-            integrations: Vec::new(),
-            custom: None,
-            access: AccessState::Pending,
-            open: BTreeMap::new(),
-            rows: Vec::new(),
-            highlighted: None,
-            selected: None,
-            store,
-            review_task: None,
-            discovery_task: None,
-            load_task: None,
-            _watch_session: None,
-            _subscriptions: Vec::new(),
-        };
-        this.start(cx);
-        this
+    /// The sidebar of `cluster`, following its session through `deps`.
+    pub fn build(cluster: ClusterId, deps: SidebarDeps, cx: &mut App) -> Entity<Self> {
+        cx.new(|cx| {
+            let store = match SidebarStore::new(deps.state.clone(), &cluster) {
+                Ok(store) => Some(store),
+                Err(error) => {
+                    tracing::warn!(%error, %cluster, "the sidebar state is not saved");
+                    None
+                }
+            };
+            let mut this = Self {
+                cluster,
+                deps,
+                focus: cx.focus_handle(),
+                scroll: UniformListScrollHandle::new(),
+                sections: Vec::new(),
+                integrations: Vec::new(),
+                custom: None,
+                access: AccessState::Pending,
+                open: BTreeMap::new(),
+                rows: Vec::new(),
+                highlighted: None,
+                selected: None,
+                store,
+                review_task: None,
+                discovery_task: None,
+                load_task: None,
+                _watch_session: None,
+                _subscriptions: Vec::new(),
+            };
+            this.start(cx);
+            this
+        })
     }
 }

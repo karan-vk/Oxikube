@@ -26,11 +26,6 @@ pub struct CustomResourceGroup {
 }
 
 impl CustomResourceGroup {
-    /// The access a kind of this group needs to be shown.
-    pub fn requirement(&self, kind: &CustomKind) -> AccessRequirement {
-        AccessRequirement::list(self.group.clone(), kind.plural.clone())
-    }
-
     /// The group's kinds the user may list, `None` when there are none (the group is hidden).
     pub fn visible(
         &self,
@@ -39,7 +34,7 @@ impl CustomResourceGroup {
         let kinds: Vec<CustomKind> = self
             .kinds
             .iter()
-            .filter(|kind| offers(&[self.requirement(kind)]))
+            .filter(|kind| offers(&[AccessRequirement::list(&self.group, &kind.plural)]))
             .cloned()
             .collect();
         (!kinds.is_empty()).then(|| CustomResourceGroup {

@@ -17,7 +17,7 @@ use std::{path::Path, process::ExitCode, sync::Arc};
 use futures::executor::block_on;
 use gpui::{HeadlessAppContext, px, size};
 use oxikube_app::{ClusterSessionManager, IntegrationRegistry};
-use oxikube_domain::access::AccessRules;
+use oxikube_domain::access::{AccessRule, AccessRules};
 use oxikube_domain::ids::{ContextName, Gvk};
 use oxikube_domain::kinds::{ResourceKind, Verb};
 use oxikube_ports::{ClusterContext, SourceId};
@@ -55,7 +55,7 @@ fn rules_for(restricted: bool) -> AccessRules {
         [("", "pods"), ("", "services")].iter().fold(
             AccessRules::none(),
             |rules, (group, resource)| {
-                rules.with_rule(AccessRules::granting(&["list"], &[group], &[resource], &[]))
+                rules.with_rule(AccessRule::granting(&["list"], &[group], &[resource], &[]))
             },
         )
     } else {

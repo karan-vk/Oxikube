@@ -12,7 +12,7 @@ use std::sync::Arc;
 use futures::executor::block_on;
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use oxikube_app::{ClusterSessionManager, IntegrationRegistry};
-use oxikube_domain::access::AccessRules;
+use oxikube_domain::access::{AccessRule, AccessRules};
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::kinds::{ResourceKind, Verb, VerbSet};
 use oxikube_ports::{ClusterContext, SourceId};
@@ -55,7 +55,7 @@ pub(super) fn crd(group: &str, kind: &str, plural: &str) -> ResourceKind {
 /// Grants `list` on each `(group, resource)`.
 pub(super) fn can_list(items: &[(&str, &str)]) -> AccessRules {
     items.iter().fold(AccessRules::none(), |rules, (g, r)| {
-        rules.with_rule(AccessRules::granting(&["list"], &[g], &[r], &[]))
+        rules.with_rule(AccessRule::granting(&["list"], &[g], &[r], &[]))
     })
 }
 

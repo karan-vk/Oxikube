@@ -1,7 +1,7 @@
 //! The sidebar's access review and custom-resource discovery over testkit fakes.
 
 use futures::executor::block_on;
-use oxikube_domain::access::{AccessRequirement, AccessRules};
+use oxikube_domain::access::{AccessRequirement, AccessRule, AccessRules};
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::{ResourceKind, Verb, VerbSet};
 use oxikube_domain::session::NamespaceSelection;
@@ -15,7 +15,7 @@ fn list(group: &str, resource: &str) -> [AccessRequirement; 1] {
 }
 
 fn grant_list(group: &str, resource: &str) -> AccessRules {
-    AccessRules::none().with_rule(AccessRules::granting(&["list"], &[group], &[resource], &[]))
+    AccessRules::none().with_rule(AccessRule::granting(&["list"], &[group], &[resource], &[]))
 }
 
 #[test]

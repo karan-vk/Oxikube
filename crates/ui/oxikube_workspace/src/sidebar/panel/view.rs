@@ -1,9 +1,9 @@
 //! Drawing the sidebar: one virtualised list of uniform rows.
 
 use gpui::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
-    uniform_list,
+    AnyElement, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    Render, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px, uniform_list,
 };
 use oxikube_ui::{
     ActiveTokens as _, Icon, IconName,
@@ -79,10 +79,10 @@ impl SidebarPanel {
     fn row_frame(
         &self,
         ix: usize,
-        id: &gpui::SharedString,
+        id: &SharedString,
         indent: f32,
         cx: &mut Context<Self>,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> Stateful<Div> {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let highlighted = self.highlighted.as_ref() == Some(id);
@@ -127,7 +127,7 @@ impl SidebarPanel {
                 div()
                     .flex_1()
                     .truncate()
-                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .font_weight(FontWeight::MEDIUM)
                     .child(row.title.clone()),
             )
             .child(count_placeholder(&row.id, row.count, cx))
@@ -173,7 +173,7 @@ fn disclosure(expandable: bool, open: bool, cx: &mut Context<SidebarPanel>) -> i
 
 /// The count badge: the number when the `ResourceStore` has one, a muted dash until then.
 fn count_placeholder(
-    id: &gpui::SharedString,
+    id: &SharedString,
     count: Option<usize>,
     cx: &mut Context<SidebarPanel>,
 ) -> impl IntoElement {

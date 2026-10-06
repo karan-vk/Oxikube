@@ -58,6 +58,23 @@ pub struct AccessRule {
 }
 
 impl AccessRule {
+    /// A single rule granting `verbs` on `resources` of `api_groups`, for tests and fakes.
+    #[must_use]
+    pub fn granting(
+        verbs: &[&str],
+        api_groups: &[&str],
+        resources: &[&str],
+        resource_names: &[&str],
+    ) -> Self {
+        let own = |items: &[&str]| items.iter().map(|s| (*s).to_owned()).collect();
+        Self {
+            verbs: own(verbs),
+            api_groups: own(api_groups),
+            resources: own(resources),
+            resource_names: own(resource_names),
+        }
+    }
+
     /// Whether the rule covers `verb` on `group`/`resource`.
     fn covers(&self, verb: &str, group: &str, resource: &str) -> bool {
         self.api_groups.iter().any(|g| g == "*" || g == group)
@@ -93,26 +110,10 @@ impl AccessRules {
         Self::default()
     }
 
-    /// A single rule granting `verbs` on `resources` of `api_groups`, for tests and fakes.
-    pub fn granting(
-        verbs: &[&str],
-        api_groups: &[&str],
-        resources: &[&str],
-        resource_names: &[&str],
-    ) -> AccessRule {
-        let own = |items: &[&str]| items.iter().map(|s| (*s).to_owned()).collect();
-        AccessRule {
-            verbs: own(verbs),
-            api_groups: own(api_groups),
-            resources: own(resources),
-            resource_names: own(resource_names),
-        }
-    }
-
     /// Rules that allow every verb on every resource (cluster admin).
     pub fn all_access() -> Self {
         Self {
-            rules: vec![Self::granting(&["*"], &["*"], &["*"], &[])],
+            rules: vec![AccessRule::granting(&["*"], &["*"], &["*"], &[])],
             partial: false,
         }
     }
@@ -246,7 +247,7 @@ mod tests {
 
     #[test]
     fn nothing_matches_means_denied_unless_the_review_was_partial() {
-        let pods = AccessRules::granting(&["list"], &[""], &["pods"], &[]);
+        let pods = AccessRule::granting(&["list"], &[""], &["pods"], &[]);
         let r = rules(pods);
         assert_eq!(r.level("list", "", "pods"), Access::Granted);
         assert_eq!(r.level("list", "", "secrets"), Access::Denied);
@@ -263,17 +264,17 @@ mod tests {
         let admin = AccessRules::all_access();
         assert_eq!(admin.level("list", "apps", "deployments"), Access::Granted);
         assert_eq!(admin.level("get", "", "pods/log"), Access::Granted);
-        let any_exec = rules(AccessRules::granting(&["create"], &[""], &["*/exec"], &[]));
+        let any_exec = rules(AccessRule::granting(&["create"], &[""], &["*/exec"], &[]));
         assert_eq!(any_exec.level("create", "", "pods/exec"), Access::Granted);
         assert_eq!(any_exec.level("create", "", "pods"), Access::Denied);
         // `pods` alone does not grant its subresources.
-        let pods = rules(AccessRules::granting(&["get"], &[""], &["pods"], &[]));
+        let pods = rules(AccessRule::granting(&["get"], &[""], &["pods"], &[]));
         assert_eq!(pods.level("get", "", "pods/log"), Access::Denied);
     }
 
     #[test]
     fn named_objects_only_is_restricted_and_full_grants_win() {
-        let named = rules(AccessRules::granting(
+        let named = rules(AccessRule::granting(
             &["list"],
             &["apps"],
             &["deployments"],
@@ -283,7 +284,7 @@ mod tests {
             named.level("list", "apps", "deployments"),
             Access::Restricted
         );
-        let both = named.with_rule(AccessRules::granting(
+        let both = named.with_rule(AccessRule::granting(
             &["list"],
             &["apps"],
             &["deployments"],
@@ -294,8 +295,8 @@ mod tests {
 
     #[test]
     fn merging_reviews_is_a_union_and_keeps_partiality() {
-        let mut a = rules(AccessRules::granting(&["list"], &[""], &["pods"], &[]));
-        let b = rules(AccessRules::granting(&["list"], &[""], &["secrets"], &[])).into_partial();
+        let mut a = rules(AccessRule::granting(&["list"], &[""], &["pods"], &[]));
+        let b = rules(AccessRule::granting(&["list"], &[""], &["secrets"], &[])).into_partial();
         a.merge(b);
         assert!(a.partial);
         assert_eq!(a.level("list", "", "pods"), Access::Granted);
@@ -305,7 +306,7 @@ mod tests {
 
     #[test]
     fn a_requirement_set_is_met_by_any_listable_member() {
-        let r = rules(AccessRules::granting(
+        let r = rules(AccessRule::granting(
             &["list"],
             &["apps"],
             &["deployments"],

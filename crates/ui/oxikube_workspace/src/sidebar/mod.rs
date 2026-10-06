@@ -54,7 +54,7 @@ pub use rows::{
 pub use section::{SectionBody, SidebarEntry, SidebarSection, SidebarTarget};
 pub use store::{SIDEBAR_TABLE, SIDEBAR_VERSION, SavedSidebar, SidebarStore};
 
-use gpui::{App, AppContext as _, Entity, Window};
+use gpui::{App, Entity, Window};
 use oxikube_app::ClusterSession;
 
 use crate::cluster_tab::ClusterTab;
@@ -63,17 +63,6 @@ use crate::cluster_tab::ClusterTab;
 pub fn init(cx: &mut App) {
     register_core_sections(cx);
     actions::register(cx);
-}
-
-impl SidebarPanel {
-    /// The sidebar of `cluster`, following its session through `deps`.
-    pub fn build(
-        cluster: oxikube_domain::ids::ClusterId,
-        deps: SidebarDeps,
-        cx: &mut App,
-    ) -> Entity<Self> {
-        cx.new(|cx| Self::new_in(cluster, deps, cx))
-    }
 }
 
 /// The setup hook that gives every cluster tab its sidebar: pass it to

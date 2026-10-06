@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use gpui::SharedString;
 use oxikube_app::{AccessOutcome, CustomResourceGroup, IntegrationSection};
+use oxikube_domain::access::AccessRequirement;
 use oxikube_ui::IconName;
 
 use super::section::{SectionBody, SidebarEntry, SidebarSection, SidebarTarget};
@@ -25,7 +26,7 @@ pub enum AccessState {
 
 impl AccessState {
     /// Whether an entry needing any of `requirements` is shown.
-    pub fn offers(&self, requirements: &[oxikube_domain::access::AccessRequirement]) -> bool {
+    pub fn offers(&self, requirements: &[AccessRequirement]) -> bool {
         match self {
             AccessState::Pending => requirements.is_empty(),
             AccessState::Known(outcome) => outcome.offers(requirements),
