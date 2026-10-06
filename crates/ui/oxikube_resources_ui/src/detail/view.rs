@@ -203,7 +203,7 @@ impl DetailView {
                 self.refresh_yaml();
             }
             DetailTab::Describe => self.start_describe(cx),
-            DetailTab::Overview => {}
+            DetailTab::Overview | DetailTab::Schema => {}
         }
         cx.notify();
     }

@@ -130,7 +130,11 @@ impl ResourceViews {
             Some(text) => cx.write_to_clipboard(ClipboardItem::new_string(text)),
             None => {
                 tracing::debug!(%target, "no YAML to copy");
-                self.toast(target, Toast::info("The YAML is not ready yet."), cx);
+                self.toast(
+                    &target.cluster,
+                    Toast::info("The YAML is not ready yet."),
+                    cx,
+                );
             }
         }
     }
@@ -145,7 +149,11 @@ impl ResourceViews {
                 .map(|text| (text.to_owned(), view.yaml_file_name()))
         }) else {
             tracing::debug!(%target, "no YAML to save");
-            self.toast(target, Toast::info("The YAML is not ready yet."), cx);
+            self.toast(
+                &target.cluster,
+                Toast::info("The YAML is not ready yet."),
+                cx,
+            );
             return;
         };
         let answer = cx.prompt_for_new_path(&save_directory(), Some(&name));
@@ -175,19 +183,10 @@ impl ResourceViews {
                         Toast::error(format!("Could not save the YAML: {}", error.message()))
                     }
                 };
-                views.toast(&target, toast, cx);
+                views.toast(&target.cluster, toast, cx);
             })
             .ok();
         }));
-    }
-
-    /// Shows `toast` in `target`'s cluster tab.
-    fn toast(&self, target: &ResourceRef, toast: Toast, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.tab_workspace(&target.cluster, cx) {
-            workspace.update(cx, |ws, cx| {
-                ws.show_toast(toast, cx);
-            });
-        }
     }
 }
 
