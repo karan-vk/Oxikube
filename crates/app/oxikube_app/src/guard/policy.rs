@@ -14,14 +14,27 @@ use oxikube_domain::safety::{ConfirmTier, Risk};
 /// * A mutating command that declares no risk is treated as the worst case
 ///   ([`ConfirmTier::TypeName`]): the registry tests forbid it, the guard fails safe.
 ///
-/// Target-sensitive raising (namespaces, nodes, PVs, cascading deletes) and the per-session
-/// "skip low-risk confirms" setting are E19.
+/// Target-sensitive raising lives in [`confirm_tier_for`] (what the guard uses); the per-session
+/// "skip low-risk confirms" setting is E19.
 pub fn confirm_tier(meta: &CommandMeta) -> ConfirmTier {
     if !meta.mutating {
         return ConfirmTier::None;
     }
     let from_risk = meta.risk.map_or(ConfirmTier::TypeName, Risk::confirm_tier);
     meta.confirm.max(from_risk)
+}
+
+/// The confirmation tier the guard asks for before running `command`: [`confirm_tier`] of its
+/// metadata, raised by what the command targets. A `resource::Delete` of a Namespace, Node or
+/// PersistentVolume, or with foreground propagation (a cascading delete), is
+/// [`Command::effective_risk`] `High` or `Irreversible` and so takes a typed name (ADR 0012);
+/// an ordinary object keeps the declared simple confirm. The tier never drops below the
+/// declared one.
+pub fn confirm_tier_for(meta: &CommandMeta, command: &Command) -> ConfirmTier {
+    let raised = command
+        .effective_risk()
+        .map_or(ConfirmTier::None, Risk::confirm_tier);
+    confirm_tier(meta).max(raised)
 }
 
 /// Whether `command` changes a cluster's safety posture (read-only mode, colour, preset).

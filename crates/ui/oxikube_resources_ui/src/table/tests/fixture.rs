@@ -11,10 +11,14 @@ use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use futures::executor::block_on;
 use gpui::{Entity, Task, TestAppContext, VisualTestContext};
+use oxikube_app::actions::KindFilter;
+use oxikube_app::command_bus::{CommandBus, CommandOutput, CommandRegistry, HandlerContext};
 use oxikube_app::store::ResourceStores;
 use oxikube_app::{ClusterSessionManager, CoreColumns, IntegrationRegistry};
+use oxikube_app::{MutationGuard, RowActionRegistry, RowActionSpec};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
+use oxikube_domain::command::{self, CommandId};
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::kinds::ResourceKind;
 use oxikube_keymap::KeymapOptions;
@@ -27,11 +31,60 @@ use oxikube_workspace::test_support::open_workspace;
 use oxikube_workspace::{ClusterTabs, ClusterTabsDeps, CommandDispatcher, Workspace};
 
 use super::pods_kind;
+use crate::actions::ResourceActions;
 use crate::navigate::{OpenKind, open_kind};
 use crate::table::{ResourceTable, ResourceTableDeps, store_runtime};
 use crate::{
     ResourceCommandSink, ResourceViews, ResourceViewsDeps, ResourceViewsSlot, sidebar_navigation,
 };
+
+/// The row actions over a real bus: the guard on the session manager and the state port (its
+/// audit log), `resource::Delete` for real, the table commands, and a do-nothing `pod::ViewLogs`
+/// offered for Pods only.
+fn actions_rig(
+    sessions: &ClusterSessionManager,
+    state: &Arc<FakeStatePort>,
+    clock: Arc<dyn ClockPort>,
+    sink: &ResourceCommandSink,
+) -> ResourceActions {
+    let mut registry = CommandRegistry::new();
+    registry
+        .install(
+            "oxikube_app::actions",
+            oxikube_app::actions::register_commands,
+        )
+        .unwrap();
+    registry
+        .install("oxikube_resources_ui", |r| {
+            crate::register_commands(r, sink.clone())
+        })
+        .unwrap();
+    registry
+        .register(
+            *command::lookup(CommandId::POD_VIEW_LOGS).unwrap(),
+            |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
+        )
+        .unwrap();
+    let bus = CommandBus::new(
+        registry,
+        MutationGuard::new(sessions.clone(), state.clone(), clock),
+    );
+    let mut rows = RowActionRegistry::core();
+    rows.register(
+        RowActionSpec::new(CommandId::POD_VIEW_LOGS, |target| Command::PodViewLogs {
+            target: target.clone(),
+            container: None,
+            follow: false,
+            previous: false,
+            tail_lines: None,
+        })
+        .label("Logs")
+        .kinds(KindFilter::Matching(|kind| &*kind.gvk.kind == "Pod"))
+        .order(100),
+    )
+    .unwrap();
+    ResourceActions::with_registry(&bus, sessions.clone(), "alice", &rows)
+}
 
 /// The cluster of every test.
 pub(crate) fn cluster() -> ClusterId {
@@ -92,6 +145,17 @@ impl Fixture {
 
     /// [`Self::new`] over an existing state port (a "restarted app").
     pub(crate) fn with_state(cx: &mut TestAppContext, state: Arc<FakeStatePort>) -> Self {
+        Self::build(cx, state, false)
+    }
+
+    /// [`Self::new`] with the row actions (E07-S08) over a real `CommandBus` and `MutationGuard`
+    /// on the fakes: the real `resource::Delete` handler, the table commands, and a `pod::ViewLogs`
+    /// whose handler does nothing (a per-kind action, for Pods only).
+    pub(crate) fn with_actions(cx: &mut TestAppContext) -> Self {
+        Self::build(cx, Arc::new(FakeStatePort::new()), true)
+    }
+
+    fn build(cx: &mut TestAppContext, state: Arc<FakeStatePort>, with_actions: bool) -> Self {
         let entry = ClusterContext::new(
             cluster(),
             ContextName::new("kind"),
@@ -131,12 +195,17 @@ impl Fixture {
                 });
         let tabs = vcx.update(|window, cx| ClusterTabs::start(&workspace, tabs_deps, window, cx));
         let clock_port: Arc<dyn ClockPort> = clock;
+        // One object at a time: scripted responses then follow the selection's order.
+        let actions = with_actions.then(|| {
+            actions_rig(&sessions, &state, clock_port.clone(), &dispatcher.sink).with_concurrency(1)
+        });
         let deps = vcx.update(|_, cx| ResourceTableDeps {
             sessions: sessions.clone(),
             stores: Arc::new(ResourceStores::new(store_runtime(clock_port, cx))),
             columns: Arc::new(CoreColumns::new()),
             state: state.clone(),
             dispatcher: Rc::new(dispatcher.clone()),
+            actions: actions.clone(),
         });
         let views = vcx.update(|window, cx| {
             ResourceViews::start(

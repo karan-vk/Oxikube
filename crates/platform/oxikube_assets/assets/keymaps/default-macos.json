@@ -99,7 +99,11 @@
       "shift-j": "resource_table::ExtendNext",
       "shift-k": "resource_table::ExtendPrevious",
       "enter": "resource_table::OpenSelected",
-      "escape": "resource_table::ClearSelection"
+      "escape": "resource_table::ClearSelection",
+      "delete": "resource_table::DeleteSelected",
+      "cmd-backspace": "resource_table::DeleteSelected",
+      // k9s: ctrl-d deletes the selection (the same delete dialog, never a silent delete).
+      "ctrl-d": "resource_table::DeleteSelected"
     }
   }
 ]

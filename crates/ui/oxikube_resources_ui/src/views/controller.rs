@@ -200,6 +200,8 @@ impl ResourceViews {
         let deps = self.deps.table.clone();
         let cluster = cluster.clone();
         let table = cx.new(|cx| ResourceTable::new(cluster, kind, deps, window, cx));
+        // The tab's workspace hosts the table's dialogs (delete) and toasts.
+        table.update(cx, |table, _| table.set_workspace(workspace.downgrade()));
         let options = OpenOptions {
             focus: true,
             reuse_existing: true,

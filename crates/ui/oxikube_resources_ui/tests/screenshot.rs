@@ -128,6 +128,7 @@ fn render() -> anyhow::Result<RgbaImage> {
             columns: Arc::new(CoreColumns::new()),
             state,
             dispatcher: Rc::new(Ignore),
+            actions: None,
         };
         cx.new(|cx| ResourceTable::new(cluster, pods_kind(), deps, window, cx))
     })?;

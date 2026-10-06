@@ -20,6 +20,7 @@
 //! | `cells` | [`ToneColors`]: a cell's tone to the theme's `oxikube` status colours |
 //! | `empty` | the empty view (loading, none, forbidden) |
 //! | `actions` | the key actions of the `Table` context |
+//! | `row_actions` | the row actions (E07-S08): the targets of a menu or key, the entries the palette lists, running an action, the delete key |
 //! | `runtime` | [`store_runtime`]: where the stores' feed tasks run |
 //!
 //! # Performance
@@ -43,12 +44,13 @@ mod interact;
 mod layout;
 mod prefs;
 mod render;
+mod row_actions;
 mod runtime;
 mod selection;
 mod view;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use cells::ToneColors;
 pub use delegate::RowsDelegate;

@@ -31,7 +31,7 @@ use gpui::{
 };
 use oxikube_ui::{ActiveTokens as _, dialog::Cancel, layout::h_flex, u};
 
-pub use dialog::DialogModal;
+pub use dialog::{DIALOG_KEY_CONTEXT, DialogModal};
 pub use view::{ModalPlacement, ModalView, ModalViewHandle};
 
 /// The key context the layer sets while a modal is open.

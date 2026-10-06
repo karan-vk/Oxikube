@@ -17,13 +17,14 @@ use oxikube_ports::StatePort;
 use oxikube_ui::TableHandle;
 use oxikube_ui::table::TableEvent;
 use oxikube_ui::table::TableOptions;
-use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent};
+use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent, Workspace};
 
 use super::columns::{initial_provider, session_capabilities};
 use super::delegate::RowsDelegate;
 use super::layout::ColumnLayout;
 use super::prefs::{ColumnPrefs, PrefsWriter};
 use super::selection::Selection;
+use crate::actions::{ActionSource, ResourceActions};
 
 /// How often ages are redrawn while the table is shown.
 const TICK: Duration = Duration::from_secs(1);
@@ -41,6 +42,9 @@ pub struct ResourceTableDeps {
     pub state: Arc<dyn StatePort>,
     /// Where the table's commands go (`resource::Open`, `CopyName`, `SelectAll`).
     pub dispatcher: Rc<dyn CommandDispatcher>,
+    /// The row actions (E07-S08): the context menu's entries, the delete key and the delete
+    /// dialog. `None` for a table without them.
+    pub actions: Option<ResourceActions>,
 }
 
 /// What a resource table tells its owner.
@@ -73,6 +77,8 @@ pub struct ResourceTable {
     /// saved over it).
     pub(super) prefs_loaded: bool,
     pub(super) active: bool,
+    /// The cluster tab's workspace, which hosts the delete dialog and the toasts.
+    pub(super) workspace: Option<gpui::WeakEntity<Workspace>>,
     /// How many rows are selected (mirrored for the key context, which has no `App`).
     pub(super) selected: usize,
     _session_task: Task<()>,
@@ -108,6 +114,11 @@ impl ResourceTable {
             now: Timestamp::now(),
             colors: None,
             view: cx.entity().downgrade(),
+            actions: deps.actions.clone().map(|actions| ActionSource {
+                actions,
+                cluster: cluster.clone(),
+                kind: kind.clone(),
+            }),
             #[cfg(test)]
             rendered_cells: 0,
         };
@@ -160,6 +171,7 @@ impl ResourceTable {
             writer: None,
             prefs_loaded: false,
             active: false,
+            workspace: None,
             selected: 0,
             _session_task: session_task,
             prefs_task: None,

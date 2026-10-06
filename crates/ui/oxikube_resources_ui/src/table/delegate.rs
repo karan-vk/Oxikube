@@ -25,6 +25,7 @@ use super::empty;
 use super::layout::ColumnLayout;
 use super::selection::Selection;
 use super::view::ResourceTable;
+use crate::actions::ActionSource;
 
 /// The data behind a [`ResourceTable`]'s rows. See the [`table`](crate::table) module docs.
 pub struct RowsDelegate {
@@ -46,6 +47,8 @@ pub struct RowsDelegate {
     pub(super) colors: Option<ToneColors>,
     /// The view, for the context menu's entries.
     pub(super) view: WeakEntity<ResourceTable>,
+    /// The row actions of the context menu (none for a table without them).
+    pub(super) actions: Option<ActionSource>,
     /// How many cells were drawn (virtualisation tests).
     #[cfg(test)]
     pub(super) rendered_cells: usize,
@@ -205,12 +208,27 @@ impl TableDelegate for RowsDelegate {
                         .ok();
                 })
             };
-        menu.item(entry("Open", ResourceTable::open_object))
+        let menu = menu
+            .item(entry("Open", ResourceTable::open_object))
             .item(entry("Copy Name", ResourceTable::copy_object_name))
             .separator()
             .item(entry("Select All", |table, _, cx| {
                 table.request_select_all(cx)
-            }))
+            }));
+        let Some(source) = &self.actions else {
+            return menu;
+        };
+        // The actions work on the selection when the row is part of it, else on the row alone.
+        let targets = if self.selection.contains(&key) {
+            self.selection
+                .in_row_order(&self.rows)
+                .into_iter()
+                .map(|key| source.target(key))
+                .collect()
+        } else {
+            vec![source.target(key)]
+        };
+        source.append(menu, targets, view)
     }
 
     fn cell_text(&self, row_ix: usize, col_ix: usize, _: &App) -> String {

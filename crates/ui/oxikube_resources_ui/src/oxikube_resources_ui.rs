@@ -5,6 +5,7 @@
 //!
 //! | Module | Story | Holds |
 //! |---|---|---|
+//! | [`actions`] | E07-S08 | row actions in the table: the context menu and the palette's list from the `CommandBus` registry ([`actions::ResourceActions`]), disabled in read-only mode, the delete key and [`actions::DeleteDialog`] (propagation choice, type-the-name, bulk delete with per-object results) |
 //! | [`navigate`] | E07-S11 | opening a kind's list: the `resource::OpenList` handler and the registry of kind views ([`navigate::KindViews`]) |
 //! | [`overview_lite`] | E07-S11 | the Workloads overview (store-only counts and health tiles) |
 //! | [`table`] | E07-S03 | [`ResourceTable`](table::ResourceTable): the generic, virtualised table of one kind, with sorting, column layout per kind, multi-select, context menu and keyboard navigation |
@@ -13,6 +14,7 @@
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
+pub mod actions;
 pub mod navigate;
 pub mod overview_lite;
 pub mod table;

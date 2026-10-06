@@ -39,7 +39,7 @@ fn first_dispatch_asks_with_the_tier_from_command_meta() {
         (CommandId::NODE_UNCORDON, ConfirmTier::Simple), // Risk::Low
         (CommandId::POD_DELETE, ConfirmTier::Simple),    // Risk::Medium
         (CommandId::WORKLOAD_SCALE, ConfirmTier::Simple), // Risk::Medium
-        (CommandId::RESOURCE_DELETE, ConfirmTier::TypeName), // Risk::High
+        (CommandId::RESOURCE_DELETE, ConfirmTier::Simple), // Risk::Medium, a Pod
         (CommandId::NODE_DRAIN, ConfirmTier::TypeName),  // Risk::High
     ];
     for (command, tier) in expected {

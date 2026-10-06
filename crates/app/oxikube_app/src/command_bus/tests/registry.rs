@@ -44,7 +44,7 @@ fn duplicate_registration_is_rejected_naming_both_crates() {
     let mut registry = CommandRegistry::new();
     registry
         .install("oxikube_resources_ui", |reg| {
-            register_mutations(reg, &calls)
+            register_mutations(reg, &calls, &[])
         })
         .unwrap();
     let err = registry

@@ -5,6 +5,7 @@
 //! connect view, the sources button opens the sources screen. The window's chrome (hotbar strip,
 //! status bar badge, session restore) is in [`chrome`].
 
+mod actions;
 mod chrome;
 mod resources;
 
@@ -203,6 +204,7 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::CLUSTER_SELECT, "oxikube_workspace"),
         (CommandId::VIEW_OPEN, "oxikube"),
         (CommandId::RESOURCE_OPEN_LIST, "oxikube_resources_ui"),
+        (CommandId::RESOURCE_DELETE, "oxikube_app::actions"),
     ] {
         assert_eq!(bus.owner(id), Some(owner), "{id}");
         assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");

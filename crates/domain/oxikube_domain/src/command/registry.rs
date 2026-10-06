@@ -296,7 +296,9 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::RESOURCE_DELETE,
         "Delete Resource",
         CommandScope::Selection,
-        Risk::High,
+        // The floor: the guard raises it by target (Namespace, Node, PersistentVolume, a cascading
+        // delete: `Command::effective_risk`), so an ordinary object takes a simple confirm.
+        Risk::Medium,
         NONE,
     ),
     CommandMeta::read(
@@ -511,10 +513,7 @@ mod tests {
     #[test]
     fn spot_check_declared_tiers() {
         let get = |id: CommandId| lookup(id).unwrap();
-        assert_eq!(
-            get(CommandId::RESOURCE_DELETE).confirm,
-            ConfirmTier::TypeName
-        );
+        assert_eq!(get(CommandId::RESOURCE_DELETE).confirm, ConfirmTier::Simple);
         assert_eq!(get(CommandId::NODE_DRAIN).confirm, ConfirmTier::TypeName);
         assert_eq!(get(CommandId::WORKLOAD_SCALE).confirm, ConfirmTier::Simple);
         assert_eq!(get(CommandId::POD_VIEW_LOGS).needs, Capabilities::LOGS);
