@@ -9,6 +9,7 @@
 //! | `close.rs` | closing a tab: the running-operations confirmation, then `cluster::Disconnect` |
 //! | `commands.rs` | the command queue, `apply`, and the `CommandBus` registration |
 //! | `persist.rs` | saving which tabs are open, in what order, which is displayed |
+//! | `restore.rs` | session restore: placeholder tabs, lazy connect, the dropped-clusters notice (E06-S11) |
 //!
 //! # A tab per live session
 //!
@@ -28,10 +29,15 @@
 mod close;
 mod commands;
 mod persist;
+mod restore;
 mod sessions;
 mod switch;
 
-use std::{collections::HashMap, rc::Rc, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    rc::Rc,
+    sync::Arc,
+};
 
 use futures::StreamExt as _;
 use gpui::{
@@ -39,6 +45,7 @@ use gpui::{
     Window, WindowId,
 };
 use indexmap::IndexMap;
+use oxikube_app::session::restore::RestoreSkips;
 use oxikube_app::{ClusterSession, ClusterSessionManager};
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::StatePort;
@@ -144,6 +151,14 @@ pub struct ClusterTabs {
     active: Option<ClusterId>,
     sink: CommandSink,
     save: DebouncedSave,
+    /// Restored clusters whose tab is shown before they connect (session restore, E06-S11).
+    pending: HashSet<ClusterId>,
+    /// The cluster the restore itself connects first; its tab is not connected again on display.
+    restore_active: Option<ClusterId>,
+    /// Told when a placeholder is closed, so the restore's queue does not connect it anyway.
+    restore_skips: Option<RestoreSkips>,
+    /// The restore: held here, replaced only from outside (never cleared by the task itself).
+    restore_task: Option<Task<()>>,
     /// Applies session updates. Lives as long as the controller.
     _watch_sessions: Task<()>,
     /// Applies queued commands. Lives as long as the controller.
@@ -218,6 +233,10 @@ impl ClusterTabs {
                 active: None,
                 sink,
                 save: DebouncedSave::default(),
+                pending: HashSet::new(),
+                restore_active: None,
+                restore_skips: None,
+                restore_task: None,
                 _watch_sessions: watch_sessions,
                 _watch_commands: watch_commands,
                 _subscriptions: subscriptions,
@@ -234,7 +253,7 @@ impl ClusterTabs {
         self.sink.clone()
     }
 
-    /// The store the open tabs are saved in; session restore (E06-S11) reads it.
+    /// The store the open tabs are saved in; session restore (E06-S11) reads it too.
     pub fn store(&self) -> &ClusterTabsStore {
         &self.store
     }
@@ -267,6 +286,14 @@ impl ClusterTabs {
 
     /// What would be saved now.
     pub fn snapshot(&self, cx: &App) -> SavedTabs {
-        SavedTabs::new(self.display_order(cx), self.active.clone())
+        let order = self.display_order(cx);
+        let titles = order.iter().filter_map(|cluster| {
+            let tab = self.tabs.get(cluster)?.tab.read(cx);
+            Some((cluster.clone(), tab.info().title.to_string()))
+        });
+        let titles: BTreeMap<_, _> = titles.collect();
+        let mut saved = SavedTabs::new(order, self.active.clone());
+        saved.titles = titles;
+        saved
     }
 }

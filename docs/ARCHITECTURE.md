@@ -83,6 +83,13 @@ crate's `README.md` for its allowed dependencies. Highlights:
   namespaces through `ResourceReader` (a `403` falls back to the typed names), drops stale
   selected names, maps `0`-`9` to All / the first nine favourites, computes a `ScopeDelta` for
   the `ResourceStore`, and runs the `namespace::Select` / `namespace::ToggleFavourite` commands.
+  Module `session::restore` (E06-S11): `SessionRestorer` reopens the last session. `prepare` reads
+  the saved tabs (`ClusterTabsStore`, moved here from the workspace so the app layer can read what
+  the tabs write), matches them against the catalog, opens each cluster as a `Disconnected`
+  session in tab order with its remembered namespace selection, and forgets the clusters no
+  kubeconfig defines any more (`RestorePlan::dropped`); `connect` connects the displayed cluster
+  and, with `RestoreConnect::All`, the rest two at a time, each under its own deadline
+  (`ClusterSessionManager::connect_with_deadline`) and with exec-plugin prompts one at a time.
   Module `guard`
   (E06-S02, E06-S09): besides the mutation pipeline, `guard::posture` holds the safety-posture commands
   (`cluster::ToggleReadOnly`, `cluster::SetColour`, `cluster::ApplyPreset`; confirm when lifting
@@ -147,7 +154,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `cluster::Disconnect`) and saves the open list in the `cluster_tabs` state table; the tab
   commands register on the bus with `register_commands`. A tab shows the `ConnectUi` its owner
   sets (E06-S06: the connect view's body in place of the content while the session is not
-  connected, its banner above the content while degraded). `Item::intercepts_close` /
+  connected, its banner above the content while degraded). With `session.restore` on,
+  `ClusterTabs::restore_session` (E06-S11) waits for the first frame and the layout restore, runs the
+  `SessionRestorer` on `spawn_kube`, shows the restored clusters as placeholder tabs (a `Disconnected`
+  session whose tab stays until it connects), and connects a placeholder when its tab is first
+  shown; the vanished clusters are named in a toast. `Item::intercepts_close` /
   `close_requested` let an item ask before its tab closes; `Workspace::set_strip` places the
   hotbar. Module `session` (E05-S12): `window::New`
   (several windows, one `Workspace` each, shared globals), UI zoom (`view::ZoomIn`/`ZoomOut`/`ZoomReset`,

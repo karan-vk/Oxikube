@@ -63,12 +63,13 @@ fn the_open_tabs_their_order_and_the_displayed_one_are_saved(cx: &mut TestAppCon
     }));
     settle(&mut fx);
 
+    let saved = saved_tabs(&fx.state).expect("saved");
+    assert_eq!(saved.open, [id("alpha"), id("beta"), id("gamma")]);
+    assert_eq!(saved.active, Some(id("beta")));
     assert_eq!(
-        saved_tabs(&fx.state),
-        Some(SavedTabs::new(
-            vec![id("alpha"), id("beta"), id("gamma")],
-            Some(id("beta"))
-        ))
+        saved.title(&id("gamma")),
+        Some("gamma"),
+        "the names the tabs show are saved too, for the notice about a vanished cluster"
     );
 
     // Closing one updates the row.

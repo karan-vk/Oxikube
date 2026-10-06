@@ -1,6 +1,7 @@
 //! [`ClusterSessionManager`]: the public face of the session service.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use indexmap::IndexMap;
 use oxikube_domain::ids::ClusterId;
@@ -137,11 +138,36 @@ impl ClusterSessionManager {
     /// source's error when the catalog cannot be read. Connection failures are states,
     /// not errors.
     pub async fn connect(&self, cluster: &ClusterId) -> OxiResult<ClusterSessionState> {
+        self.connect_within(cluster, None).await
+    }
+
+    /// [`connect`](Self::connect) with a time limit for the whole attempt (retries included),
+    /// measured on the injected clock. An attempt that is still running when `deadline` passes
+    /// is cancelled and the session lands in `Error` with a timeout reason, so a slow VPN
+    /// cluster shows as failed in its own tab instead of connecting forever. Session restore
+    /// (E06-S11) uses it so one dead cluster cannot hold up the others.
+    ///
+    /// # Errors
+    ///
+    /// As [`connect`](Self::connect).
+    pub async fn connect_with_deadline(
+        &self,
+        cluster: &ClusterId,
+        deadline: Duration,
+    ) -> OxiResult<ClusterSessionState> {
+        self.connect_within(cluster, Some(deadline)).await
+    }
+
+    async fn connect_within(
+        &self,
+        cluster: &ClusterId,
+        deadline: Option<Duration>,
+    ) -> OxiResult<ClusterSessionState> {
         let entry = match self.shared.entry(cluster) {
             Some(entry) => entry,
             None => self.open_from_catalog(cluster).await?,
         };
-        Ok(self.shared.run_connect(entry).await)
+        Ok(self.shared.run_connect(entry, deadline).await)
     }
 
     /// Drops the connection (tearing down its feeds and health loop) and moves the

@@ -61,6 +61,13 @@ path = "tests/cluster_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# Session restore: placeholder tabs and a failed cluster's tab (E06-S11); same harness and gate.
+[[test]]
+name = "restore_screenshot"
+path = "tests/restore_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 # Frame cost of a dock resize and a tab switch with a heavy item mounted (test platform):
 # `cargo run -p oxikube_workspace --features test-support --profile release-fast --example workspace_bench`
 [[example]]
