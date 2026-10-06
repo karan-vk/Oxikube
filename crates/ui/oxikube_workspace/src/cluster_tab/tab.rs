@@ -140,8 +140,7 @@ impl Focusable for ClusterTab {
 
 impl Item for ClusterTab {
     fn tab_content(&self, _: &App) -> TabContent {
-        TabContent::new(self.info.title.clone())
-            .cluster(self.info.mark)
+        TabContent::new(self.info.title.clone()).cluster(self.info.mark)
     }
 
     fn item_key(&self, _: &App) -> Option<SharedString> {
