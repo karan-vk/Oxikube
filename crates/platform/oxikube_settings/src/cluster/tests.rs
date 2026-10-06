@@ -223,6 +223,80 @@ fn a_type_error_keeps_the_previous_value_and_names_the_field() {
 }
 
 #[test]
+fn a_typo_next_to_read_only_never_leaves_the_cluster_writable_on_a_first_load() {
+    let store = load(&format!(
+        r##"{{ "clusters": {{ "{PROD}": {{ "read_only": true, "colour": "red" }} }} }}"##
+    ));
+    assert!(prefs(&store, Some(&id(PROD))).read_only);
+    assert!(
+        !prefs(&store, Some(&id(LAB))).read_only,
+        "others unaffected"
+    );
+    assert_eq!(store.diagnostics().len(), 1);
+}
+
+#[test]
+fn a_typo_in_a_top_level_key_keeps_a_top_level_read_only_on_a_first_load() {
+    let store = load(&format!(
+        r#"{{ "read_only": true, "exec_interactivity": "bogus",
+              "clusters": {{ "{PROD}": {{ "default_namespace": "pay" }} }} }}"#
+    ));
+    assert!(prefs(&store, None).read_only, "global");
+    assert!(
+        prefs(&store, Some(&id(LAB))).read_only,
+        "a cluster without a block"
+    );
+    // The cluster's own block sees the same bad key, and still reads as read-only.
+    assert!(
+        prefs(&store, Some(&id(PROD))).read_only,
+        "a cluster with a block"
+    );
+}
+
+#[test]
+fn a_typo_next_to_a_new_read_only_true_takes_effect_on_a_reload() {
+    let mut store = load(&format!(
+        r#"{{ "clusters": {{ "{PROD}": {{ "default_namespace": "pay" }} }} }}"#
+    ));
+    assert!(!prefs(&store, Some(&id(PROD))).read_only);
+
+    store
+        .set_user_settings(&format!(
+            r##"{{ "clusters": {{ "{PROD}": {{ "read_only": true, "colour": "red" }} }} }}"##
+        ))
+        .unwrap();
+
+    let now = prefs(&store, Some(&id(PROD)));
+    assert!(now.read_only, "protection is added");
+    assert_eq!(
+        now.default_namespace.as_deref(),
+        Some("pay"),
+        "rest stays last good"
+    );
+}
+
+#[test]
+fn a_read_only_that_is_not_a_bool_fails_closed() {
+    let store = load(&format!(
+        r#"{{ "clusters": {{ "{PROD}": {{ "read_only": "yes" }} }} }}"#
+    ));
+    assert!(prefs(&store, Some(&id(PROD))).read_only);
+    assert_eq!(store.diagnostics().len(), 1, "still reported");
+}
+
+#[test]
+fn an_explicit_false_with_a_typo_does_not_lift_a_global_read_only() {
+    let store = load(&format!(
+        r##"{{ "read_only": true,
+              "clusters": {{ "{PROD}": {{ "read_only": false, "colour": "red" }} }} }}"##
+    ));
+    assert!(
+        prefs(&store, Some(&id(PROD))).read_only,
+        "the bad block is not applied"
+    );
+}
+
+#[test]
 fn a_type_error_in_the_wrong_kind_of_value_is_helpful() {
     for (field, bad, needle) in [
         ("read_only", json!("yes"), "read_only"),

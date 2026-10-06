@@ -158,7 +158,7 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
                     message,
                 });
                 // Keep the last good value; on first load fall back to the defaults alone.
-                match self.global {
+                let fallback = match self.global {
                     Some(_) => None,
                     None => Some(resolve::<T>(&layers.defaults).unwrap_or_else(|message| {
                         diagnostics.push(SettingsDiagnostic::InvalidValue {
@@ -168,7 +168,10 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
                         });
                         T::from_content(T::Content::default())
                     })),
-                }
+                };
+                let base = fallback.as_ref().or(self.global.as_ref());
+                let salvaged = base.and_then(|base| T::salvage(&layers.root, base));
+                salvaged.or(fallback)
             }
         };
         if let Some(global) = global
@@ -195,8 +198,20 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
                         cluster: Some(cluster.id.clone()),
                         message,
                     });
-                    if let Some(last_good) = previous.remove(&cluster.id) {
-                        self.clusters.insert(cluster.id.clone(), last_good);
+                    // Keep the last good block; with none, the global value stands in. Either
+                    // way a setting that must fail closed may be salvaged from the bad block.
+                    let last_good = previous.remove(&cluster.id);
+                    let base = last_good.as_ref().or(self.global.as_ref());
+                    let salvaged = base.and_then(|base| T::salvage(&cluster.merged, base));
+                    match (salvaged, last_good) {
+                        (Some(value), last_good) => {
+                            changed |= last_good.as_ref() != Some(&value);
+                            self.clusters.insert(cluster.id.clone(), value);
+                        }
+                        (None, Some(last_good)) => {
+                            self.clusters.insert(cluster.id.clone(), last_good);
+                        }
+                        (None, None) => {}
                     }
                 }
             }

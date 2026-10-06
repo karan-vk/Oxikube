@@ -6,6 +6,7 @@ use std::sync::Arc;
 use gpui::{App, Subscription};
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::{ClusterPrefs, ClusterPrefsTable, PrometheusOverride};
+use serde_json::Value;
 
 use super::content::{ClusterSettingsContent, PrometheusContent};
 use crate::settings::{Settings, SettingsLocation};
@@ -40,6 +41,22 @@ impl Settings for ClusterSettings {
         Self {
             prefs: Arc::new(prefs_from_content(content)),
         }
+    }
+
+    /// `read_only` fails closed: when a block does not deserialise (a typo in some other
+    /// field), a `read_only` that is anything but plainly off still makes the cluster
+    /// read-only, on a first load as much as on a reload. Everything else keeps `base`.
+    fn salvage(merged: &Value, base: &Self) -> Option<Self> {
+        let wants_read_only = !matches!(
+            merged.get("read_only"),
+            None | Some(Value::Null | Value::Bool(false))
+        );
+        (wants_read_only && !base.prefs.read_only).then(|| Self {
+            prefs: Arc::new(ClusterPrefs {
+                read_only: true,
+                ..ClusterPrefs::clone(&base.prefs)
+            }),
+        })
     }
 }
 

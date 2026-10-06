@@ -66,6 +66,15 @@ pub trait Settings: PartialEq + Send + Sync + Sized + 'static {
     /// Resolve the merged content into the runtime value.
     fn from_content(content: Self::Content) -> Self;
 
+    /// Called when the merged content does not deserialise, with the value that would otherwise
+    /// stand (the last good one, or on a first load the global or default value). Return a
+    /// replacement for a setting that must not be lost to a typo elsewhere in the same block,
+    /// such as a safety flag that has to fail closed; `None` (the default) keeps `base`.
+    fn salvage(merged: &serde_json::Value, base: &Self) -> Option<Self> {
+        let _ = (merged, base);
+        None
+    }
+
     /// Register this setting with the global store (a no-op when already registered).
     fn register(cx: &mut App) {
         SettingsStore::update_global(cx, |store, _| store.register_setting::<Self>());
