@@ -57,6 +57,24 @@ impl Service {
             .clone();
         let read_only = Posture::of(&self.sessions, &cluster).read_only;
         let patch = patch_of(&command, read_only).ok_or_else(not_posture)?;
+        if cx.dry_run() {
+            // A preview: report what would be true afterwards; write and change nothing.
+            let before = Posture::of(&self.sessions, &cluster);
+            let read_only = patch.read_only.unwrap_or(before.read_only);
+            let colour = patch.colour.unwrap_or(before.colour);
+            return Ok(CommandOutput {
+                message: Some(format!(
+                    "Dry run: {}",
+                    message(&command, &before.label(&cluster))
+                )),
+                data: Some(json!({
+                    "cluster": cluster,
+                    "read_only": read_only,
+                    "colour": colour,
+                    "dry_run": true,
+                })),
+            });
+        }
         tracing::info!(command = %command.id(), initiator = %cx.initiator(), "posture change");
         self.apply(&cluster, patch).await?;
         let now = Posture::of(&self.sessions, &cluster);

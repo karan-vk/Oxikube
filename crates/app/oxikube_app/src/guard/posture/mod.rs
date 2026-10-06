@@ -27,7 +27,10 @@
 //!    writer, supplied by the binary) and applies the change to the live session. Raising
 //!    protection goes live first and is persisted second, so a failing disk never leaves a
 //!    cluster less protected than the user asked for; lowering is persisted first and applied
-//!    second, so a failed write never lowers it.
+//!    second, so a failed write never lowers it. A dry run
+//!    ([`DispatchContext::dry_run`](crate::command_bus::DispatchContext::dry_run)) gets a preview
+//!    of the resulting posture instead: nothing is written, the session is untouched, and the
+//!    audit record says `dry_run`.
 
 mod handlers;
 mod pipeline;

@@ -89,7 +89,8 @@ impl MutationGuard {
             target,
             ctx.dry_run,
         );
-        let cx = HandlerContext::new(ctx.initiator, ctx.who.clone(), Some(cluster), None);
+        let cx = HandlerContext::new(ctx.initiator, ctx.who.clone(), Some(cluster), None)
+            .with_dry_run(ctx.dry_run);
         let result = handler.handle(command, cx).await;
         attempt.finish(match result {
             Ok(_) => AuditOutcome::Succeeded,

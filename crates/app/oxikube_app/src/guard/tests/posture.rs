@@ -410,3 +410,63 @@ fn colour_and_preset_commands_have_tool_stubs() {
         assert!(!tool.is_mutating(), "it never changes cluster state");
     }
 }
+
+#[test]
+fn a_dry_run_previews_a_posture_change_and_changes_nothing() {
+    let h = prod_cluster();
+    let before = h.prefs.stored(&id("a"));
+    let mut updates = h.manager.subscribe();
+
+    let commands = [
+        preset("a", ClusterPreset::Prod),
+        colour("a", None),
+        toggle("a", Some(true)),
+    ];
+    for command in commands {
+        let out = h
+            .dispatch(command, ctx(Initiator::Ui).with_dry_run(true))
+            .unwrap();
+        let Outcome::Completed(output) = out else {
+            panic!("expected a completed preview, got {out:?}");
+        };
+        let data = output.data.expect("a preview describes the outcome");
+        assert_eq!(data["dry_run"], true, "{data}");
+        assert!(output.message.unwrap().starts_with("Dry run:"));
+    }
+
+    assert!(h.prefs.writes().is_empty(), "nothing is saved");
+    assert_eq!(h.prefs.stored(&id("a")), before);
+    let session = h.manager.get(&id("a")).unwrap();
+    assert!(!session.read_only(), "the live session is untouched");
+    assert_eq!(session.colour(), Some(RED), "the production flag survives");
+    assert!(
+        updates.next().now_or_never().is_none(),
+        "no change is announced"
+    );
+
+    let audit = h.audit();
+    assert_eq!(audit.len(), 3);
+    assert!(audit.iter().all(|r| r.dry_run), "{audit:?}");
+}
+
+#[test]
+fn a_dry_run_reports_what_the_preset_would_leave_behind() {
+    let h = Harness::new();
+    h.connect("a", false);
+    let out = h
+        .dispatch(
+            preset("a", ClusterPreset::Prod),
+            ctx(Initiator::Ui).with_dry_run(true),
+        )
+        .unwrap();
+    let Outcome::Completed(output) = out else {
+        panic!("{out:?}");
+    };
+    let data = output.data.unwrap();
+    assert_eq!(data["read_only"], true);
+    assert_eq!(
+        data["colour"],
+        serde_json::json!(ClusterPreset::PROD_COLOUR)
+    );
+    assert!(!read_only(&h, "a"));
+}
