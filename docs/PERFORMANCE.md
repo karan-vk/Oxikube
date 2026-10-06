@@ -178,7 +178,7 @@ same-runner baseline, never with the absolute budgets above.
 | `editor-5mb` | not available: needs E05-S11 #93, E10-S04 #146, E10-S11 #153 | open time, typing latency |
 
 A scenario that is not available yet prints `SKIPPED` with the stories that enable it and exits 0.
-The stories that build those views replace the stub in `bins/oxikube/src/perf_scenario.rs` with a
+The stories that build those views replace the stub in `bins/oxikube/src/perf_scenario/mod.rs` with a
 script driven by `oxikube_runtime::perf::harness::run_frames` and record a baseline in the same PR.
 The scripted path and the sample schema are covered by a `#[gpui::test]` that drives a fake feed
 through the same driver (`oxikube_runtime::perf::harness`).
@@ -330,7 +330,7 @@ cargo xtask load-pods --namespace oxi-<you>-load --cleanup
 the catalog lists the context it runs `cluster::Connect` on the command bus (the catalog's Enter),
 waits for the session, runs `resource::OpenList` for pods (the sidebar's Pods entry), waits for
 the table to list, then scrolls it `--perf-scroll` rows (default 3, a fast trackpad fling) every
-8.3 ms, to the end and back, until the session ends. Code: `bins/oxikube/src/perf_mode/drive.rs`.
+8.3 ms, to the end and back, until the session ends. Code: `bins/oxikube/src/perf_table/mod.rs`.
 It logs each step and how long the table took to list.
 
 Headless, on the fake feed generator (the CI regression gate, no cluster):
@@ -408,6 +408,24 @@ on the main thread: no lock contention.
    rows. A side effect: right-aligned columns (Ready, Restarts) are now right-aligned; the old
    cell element filled its column, so the alignment never showed.
 5. **No layout-dependent work per row**: none was found; the fit check reads cached line layouts.
+
+### Idle CPU: at the budget (follow-up)
+
+`--perf` has no CPU metric, so idle CPU is the process's CPU time from `ps -o time=` over a 60 s
+window, started once the app has settled (15 s unconnected, 30 s with the table so the list is in).
+Same machine and build, after the review fixes; the 10 000 load pods without `--churn`; load
+average 6 to 11, so a tenth of a percent is noise:
+
+| Run | CPU | Redraws |
+|---|---|---|
+| idle app, no cluster (`oxikube --perf --perf-duration 80`) | 0.7–0.9 % | about 2 frames/s, nothing visibly changing |
+| connected, pods table open and still, 10 000 pods listed (`--perf-table kind-oxikube --perf-scroll 0 --perf-duration 95`, two runs) | 0.93 %, 1.18 % | about 1.5 frames/s (ages tick each second); frame p95 7.1 and 9.5 ms |
+
+So the connected table sits at the < 1 % budget rather than clearly under it, and most of the cost
+is the app itself, which redraws about twice a second with no cluster; the table and its watch add
+about 0.1–0.3 %. Only one cluster was measured (the budget says two). Finding what drives the idle
+redraws, and redrawing ages only when a visible age string changes, is tracked in
+[#512](https://github.com/karan-vk/Oxikube/issues/512).
 
 ### Memory: over budget (follow-up)
 

@@ -3,7 +3,7 @@
 use super::column::{ColumnAlign, SortDirection};
 use super::delegate::TableDelegate;
 use super::events::{RowClick, TableEvent, TableEvents};
-use super::text_cell::text_cell;
+use super::text_cell::{fit_width, text_cell};
 use super::widths::ColumnWidths;
 use crate::menu::PopupMenu;
 use crate::size::UiScale;
@@ -130,7 +130,7 @@ impl<D: TableDelegate> LibDelegate for Adapter<D> {
     ) -> impl IntoElement {
         let align = self.align(col_ix);
         if let Some(cell) = self.delegate.text_cell(row_ix, col_ix, window, cx) {
-            let width = self.widths.supplied(col_ix);
+            let width = fit_width(self.widths.supplied(col_ix), cx);
             return text_cell(cell, align, width, row_ix, col_ix, window);
         }
         aligned(align, self.delegate.render_td(row_ix, col_ix, window, cx)).into_any_element()

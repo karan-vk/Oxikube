@@ -1,11 +1,14 @@
-//! The plain-text cell fast path (E07-S09): a delegate's `TextCell`s are drawn by the table, in
-//! their colour and alignment, and only a text too wide for its column takes the ellipsis box.
+//! The plain-text cell fast path (E07-S09): a delegate's `TextCell`s are drawn by the table, and
+//! only a text too wide for its column (or any text while a column is being resized) takes the
+//! ellipsis box.
 
+use crate::size::ControlSize;
 use crate::table::text_cell::{FIT_SLACK, fits};
 use crate::table::{Table, TableColumn, TableDelegate, TableHandle, TextCell};
 use gpui::{
-    App, Context, IntoElement, ParentElement as _, Render, Styled as _, TestAppContext, Window,
-    div, hsla, px,
+    App, Bounds, Context, CursorStyle, Entity, IntoElement, Modifiers, MouseButton,
+    ParentElement as _, Pixels, Render, Styled as _, TestAppContext, VisualTestContext, Window,
+    div, hsla, point, px,
 };
 
 const SHORT: &str = "1/1";
@@ -57,8 +60,7 @@ impl Render for View {
     }
 }
 
-#[gpui::test]
-fn text_cells_are_drawn_by_the_table_aligned_and_kept_inside_their_column(cx: &mut TestAppContext) {
+fn open(cx: &mut TestAppContext) -> (Entity<View>, &mut VisualTestContext) {
     cx.update(crate::init);
     let (view, cx) = cx.add_window_view(|window, cx| {
         let delegate = Texts {
@@ -70,23 +72,105 @@ fn text_cells_are_drawn_by_the_table_aligned_and_kept_inside_their_column(cx: &m
         }
     });
     cx.run_until_parked();
+    (view, cx)
+}
+
+fn draw(cx: &mut VisualTestContext) {
+    cx.run_until_parked();
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+}
+
+/// Whether the cell at (`row`, `col`) was last drawn through the ellipsis box.
+fn has_ellipsis(cx: &mut VisualTestContext, row: usize, col: usize) -> bool {
+    let selector = Box::leak(format!("td-ellipsis-{row}-{col}").into_boxed_str());
+    cx.debug_bounds(selector).is_some()
+}
+
+fn cell_bounds(cx: &mut VisualTestContext, row: usize, col: usize) -> Bounds<Pixels> {
+    let selector = Box::leak(format!("td-{row}-{col}").into_boxed_str());
+    cx.debug_bounds(selector).expect("the cell was laid out")
+}
+
+#[gpui::test]
+fn only_a_text_too_wide_for_its_column_takes_the_ellipsis_box(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
     let (text_cells, elements) =
         view.read_with(cx, |v, cx| v.table.read(cx, |d| (d.text_cells, d.elements)));
     assert!(text_cells >= 4, "every visible cell came from text_cell");
     assert_eq!(elements, 0, "render_td is the fallback only");
 
-    for row in 0..2 {
-        let cell = cx
-            .debug_bounds(Box::leak(format!("td-{row}-0").into_boxed_str()))
-            .expect("the cell was laid out");
-        let name = cx
-            .debug_bounds(Box::leak(format!("td-{row}-1").into_boxed_str()))
-            .expect("the cell was laid out");
-        assert!(
-            cell.right() <= name.left() + px(1.),
-            "row {row}: the narrow column's text stays inside it ({cell:?} vs {name:?})"
-        );
+    // The branch each cell took is the one `fits` gives for its column width (60 and 400 px at
+    // 100 % zoom): the short text is a bare text, the long one is truncated in the 60 px column.
+    for (row, text) in [(0, SHORT), (1, LONG)] {
+        for (col, width) in [(0, px(60.)), (1, px(400.))] {
+            let expected = !cx.update(|window, _| fits(&TextCell::new(text), width, window));
+            assert_eq!(
+                has_ellipsis(cx, row, col),
+                expected,
+                "cell ({row}, {col}) holding {text:?}: ellipsis box expected {expected}"
+            );
+        }
     }
+    assert!(!has_ellipsis(cx, 0, 0), "a text that fits is drawn bare");
+    assert!(
+        has_ellipsis(cx, 1, 0),
+        "a text too wide gets the ellipsis box"
+    );
+
+    // The ellipsis box is as wide as its cell, so the truncated text ends inside the column.
+    let ellipsis = cx
+        .debug_bounds("td-ellipsis-1-0")
+        .expect("the ellipsis box was laid out");
+    let cell = cell_bounds(cx, 1, 0);
+    assert!(
+        ellipsis.right() <= cell.right() + px(0.5),
+        "the truncated text overflows its column ({ellipsis:?} in {cell:?})"
+    );
+}
+
+#[gpui::test]
+fn a_column_being_resized_draws_its_texts_with_the_ellipsis(cx: &mut TestAppContext) {
+    let (_view, cx) = open(cx);
+    draw(cx);
+    assert!(!has_ellipsis(cx, 0, 0), "\"1/1\" fits the 60 px column");
+
+    // Column 0's resize handle is the right edge of the column, in the header above row 0.
+    let padding = ControlSize::Size(px(0.)).table_cell_padding();
+    let cell = cell_bounds(cx, 0, 0);
+    let column_right = cell.right() + padding.right;
+    let header = point(column_right - px(1.), cell.top() - padding.top - px(6.));
+
+    // Drag it down to its 20 px minimum; the library reports the width only on mouse-up.
+    let none = Modifiers::default();
+    cx.simulate_mouse_down(header, MouseButton::Left, none);
+    for step in 1..=4 {
+        let x = column_right - px(10. * step as f32);
+        cx.simulate_mouse_move(point(x, header.y), MouseButton::Left, none);
+    }
+    draw(cx);
+    assert!(
+        cx.update(|_, cx| cx.active_drag_cursor_style()) == Some(CursorStyle::ResizeColumn),
+        "the test is dragging the column's resize handle"
+    );
+    assert!(
+        has_ellipsis(cx, 0, 0),
+        "mid-drag, a text that fit the old width is drawn with the ellipsis"
+    );
+
+    // On mouse-up the new width is known: the 20 px column fits nothing, the 400 px one fits
+    // "1/1" again.
+    cx.simulate_mouse_up(
+        point(column_right - px(40.), header.y),
+        MouseButton::Left,
+        none,
+    );
+    draw(cx);
+    assert!(!cx.update(|_, cx| cx.has_active_drag()), "the drag ended");
+    assert!(has_ellipsis(cx, 0, 0), "the narrowed column truncates");
+    assert!(
+        !has_ellipsis(cx, 0, 1),
+        "an untouched column draws fitting text bare"
+    );
 }
 
 #[gpui::test]
