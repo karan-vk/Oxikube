@@ -9,7 +9,7 @@
 //! menu: show or connect, close the tab, add to or remove from favourites.
 
 use gpui::{
-    App, AppContext as _, Context, InteractiveElement as _, IntoElement, MouseButton,
+    AppContext as _, Context, InteractiveElement as _, IntoElement, MouseButton,
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
     div, prelude::FluentBuilder as _, px, uniform_list,
 };
@@ -23,7 +23,7 @@ use oxikube_workspace::cluster_tab::cluster_hsla;
 
 use super::model::HotbarEntry;
 use super::view::Hotbar;
-use crate::catalog::{Badge, Tone};
+use crate::catalog::{Badge, tone_colour};
 
 /// The strip's width at 100 % zoom.
 pub const HOTBAR_WIDTH: f32 = 52.;
@@ -56,17 +56,6 @@ impl Render for DraggedCluster {
             .text_color(colors.text)
             .opacity(0.9)
             .child(self.initials.clone())
-    }
-}
-
-fn tone_colour(tone: Tone, cx: &App) -> gpui::Hsla {
-    let colors = cx.colors();
-    match tone {
-        Tone::Muted => colors.text_muted,
-        Tone::Info => colors.info,
-        Tone::Success => colors.success,
-        Tone::Warning => colors.warning,
-        Tone::Error => colors.error,
     }
 }
 
@@ -113,7 +102,7 @@ impl Hotbar {
         let badge = Badge::of(None, &entry.state);
         let state_colour = tone_colour(badge.tone, cx);
         let accent = entry.colour.map_or(colors.accent, cluster_hsla);
-        let name = entry.name.clone();
+        let name = &entry.name;
         let cluster = entry.cluster.clone();
         let (connected, favourite, active) = (entry.connected, entry.favourite, entry.active);
         let tooltip_text = if connected {
@@ -128,10 +117,7 @@ impl Hotbar {
 
         let tile = div()
             .id(("hotbar-tile", ix))
-            .debug_selector({
-                let name = name.clone();
-                move || format!("hotbar-tile-{name}")
-            })
+            .debug_selector(|| format!("hotbar-tile-{name}"))
             .relative()
             .size(u(px(TILE)))
             .flex_none()
@@ -157,10 +143,7 @@ impl Hotbar {
             // The cluster's own colour.
             .child(
                 div()
-                    .debug_selector({
-                        let name = name.clone();
-                        move || format!("hotbar-colour-{name}")
-                    })
+                    .debug_selector(|| format!("hotbar-colour-{name}"))
                     .absolute()
                     .top(u(px(3.)))
                     .right(u(px(3.)))
@@ -172,10 +155,7 @@ impl Hotbar {
             .when(connected, |this| {
                 this.child(
                     div()
-                        .debug_selector({
-                            let name = name.clone();
-                            move || format!("hotbar-state-{name}")
-                        })
+                        .debug_selector(|| format!("hotbar-state-{name}"))
                         .absolute()
                         .bottom(u(px(3.)))
                         .right(u(px(3.)))
@@ -204,7 +184,7 @@ impl Hotbar {
 
         let menu_host = cx.entity().downgrade();
         let menu_cluster = cluster;
-        let menu_name = name.clone();
+        let menu_name = entry.name.clone();
         let tile = tile.context_menu(move |menu, _, _| {
             let host = menu_host.clone();
             let (cluster, name) = (menu_cluster.clone(), menu_name.clone());
@@ -248,10 +228,7 @@ impl Hotbar {
 
         h_flex()
             .id(("hotbar-slot", ix))
-            .debug_selector({
-                let name = name.clone();
-                move || format!("hotbar-slot-{name}")
-            })
+            .debug_selector(|| format!("hotbar-slot-{name}"))
             .h(u(px(SLOT)))
             .w_full()
             .flex_none()
@@ -262,10 +239,7 @@ impl Hotbar {
             .when(active, |this| {
                 this.child(
                     div()
-                        .debug_selector({
-                            let name = name.clone();
-                            move || format!("hotbar-active-{name}")
-                        })
+                        .debug_selector(|| format!("hotbar-active-{name}"))
                         .absolute()
                         .left_0()
                         .top(u(px(8.)))

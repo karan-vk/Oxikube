@@ -11,19 +11,10 @@
 use gpui::{Context, Window};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use oxikube_domain::OxiError;
-use oxikube_domain::command::{self, Command, CommandId};
+use oxikube_domain::command::{self, Command};
 
 use super::ClusterTabs;
-use crate::cluster_tab::dispatch::CommandSink;
-
-/// The commands the tabs run.
-const TAB_COMMANDS: [CommandId; 5] = [
-    CommandId::CLUSTER_SELECT,
-    CommandId::CLUSTER_SWITCH_TAB,
-    CommandId::CLUSTER_NEXT_TAB,
-    CommandId::CLUSTER_PREVIOUS_TAB,
-    CommandId::CLUSTER_CLOSE_TAB,
-];
+use crate::cluster_tab::dispatch::{CommandSink, TAB_COMMANDS};
 
 impl ClusterTabs {
     /// Runs a tab command. Returns whether `command` is one of the tab commands and found

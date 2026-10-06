@@ -91,18 +91,13 @@ impl ClusterTabs {
         self.activate(&order[target].clone(), window, cx)
     }
 
-    pub(super) fn set_active(
-        &mut self,
-        active: Option<ClusterId>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn set_active(&mut self, active: Option<ClusterId>, cx: &mut Context<Self>) {
         if self.active == active {
             return;
         }
         self.active = active.clone();
         cx.emit(ClusterTabsEvent::ActiveChanged(active));
-        self.note_change(window, cx);
+        self.mark_dirty(cx);
         cx.notify();
     }
 }

@@ -16,7 +16,7 @@ use std::rc::Rc;
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gpui::App;
-use oxikube_domain::command::Command;
+use oxikube_domain::command::{Command, CommandId};
 
 /// Where a view sends a [`Command`]. The palette, the keymap and the view's own buttons all end
 /// here, so each runs one behaviour (non-negotiable 4).
@@ -32,16 +32,18 @@ pub trait CommandDispatcher: 'static {
     fn dispatch(&self, command: Command, cx: &mut App);
 }
 
+/// The commands the cluster tabs run themselves.
+pub(super) const TAB_COMMANDS: [CommandId; 5] = [
+    CommandId::CLUSTER_SELECT,
+    CommandId::CLUSTER_SWITCH_TAB,
+    CommandId::CLUSTER_NEXT_TAB,
+    CommandId::CLUSTER_PREVIOUS_TAB,
+    CommandId::CLUSTER_CLOSE_TAB,
+];
+
 /// Whether `command` is one the cluster tabs run themselves.
 pub fn is_tab_command(command: &Command) -> bool {
-    matches!(
-        command,
-        Command::ClusterSelect { .. }
-            | Command::ClusterSwitchTab { .. }
-            | Command::ClusterNextTab
-            | Command::ClusterPreviousTab
-            | Command::ClusterCloseTab { .. }
-    )
+    TAB_COMMANDS.contains(&command.id())
 }
 
 /// A handle on the controller's command queue. Cheap to clone; usable from any thread.

@@ -132,19 +132,28 @@ impl HotbarModel {
     /// The order of the clusters shown now: what [`move_entry`](Self::move_entry) leaves and what
     /// is saved.
     pub fn shown_order(&self) -> Vec<ClusterId> {
-        self.entries().into_iter().map(|e| e.cluster).collect()
+        self.shown().into_iter().cloned().collect()
     }
 
     /// The tiles, top to bottom.
     pub fn entries(&self) -> Vec<HotbarEntry> {
+        self.shown()
+            .into_iter()
+            .map(|cluster| self.entry(cluster))
+            .collect()
+    }
+
+    fn is_shown(&self, cluster: &ClusterId) -> bool {
+        self.sessions.contains_key(cluster) || self.favourites.contains_key(cluster)
+    }
+
+    /// The clusters shown, top to bottom.
+    fn shown(&self) -> Vec<&ClusterId> {
         let mut shown: Vec<&ClusterId> =
             Vec::with_capacity(self.sessions.len() + self.favourites.len());
-        let is_shown = |cluster: &ClusterId| {
-            self.sessions.contains_key(cluster) || self.favourites.contains_key(cluster)
-        };
         // The user's placement first, then what they never placed.
         for cluster in &self.order {
-            if is_shown(cluster) && !shown.contains(&cluster) {
+            if self.is_shown(cluster) && !shown.contains(&cluster) {
                 shown.push(cluster);
             }
         }
@@ -164,11 +173,7 @@ impl HotbarModel {
                 .then_with(|| a_id.cmp(b_id))
         });
         shown.extend(rest.into_iter().map(|(cluster, _)| cluster));
-
         shown
-            .into_iter()
-            .map(|cluster| self.entry(cluster))
-            .collect()
     }
 
     fn entry(&self, cluster: &ClusterId) -> HotbarEntry {
@@ -191,8 +196,7 @@ impl HotbarModel {
 
     /// The tile of `cluster`, if it is shown.
     pub fn find(&self, cluster: &ClusterId) -> Option<HotbarEntry> {
-        (self.sessions.contains_key(cluster) || self.favourites.contains_key(cluster))
-            .then(|| self.entry(cluster))
+        self.is_shown(cluster).then(|| self.entry(cluster))
     }
 
     /// Number of tiles.

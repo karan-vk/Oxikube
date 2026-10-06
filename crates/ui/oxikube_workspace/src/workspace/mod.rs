@@ -148,6 +148,16 @@ impl Workspace {
     }
 
     fn build(layers: Option<SharedLayers>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let shared_layers = layers.is_some();
+        let SharedLayers {
+            status_bar,
+            modal_layer,
+            toast_layer,
+        } = layers.unwrap_or_else(|| SharedLayers {
+            status_bar: cx.new(|_| StatusBar::new()),
+            modal_layer: cx.new(ModalLayer::new),
+            toast_layer: cx.new(|cx| ToastLayer::new(window, cx)),
+        });
         let (dock_area, skin) = DockSkin::dock_area("workspace", Some(LAYOUT_VERSION), window, cx);
         // Items get a real tab bar even when alone in their pane, with close buttons.
         skin.set_panel_style(PanelStyle::TabBar, cx);
@@ -170,19 +180,10 @@ impl Workspace {
             panels: Vec::new(),
             active_pane: None,
             closed: ClosedItemStack::default(),
-            shared_layers: layers.is_some(),
-            status_bar: match &layers {
-                Some(layers) => layers.status_bar.clone(),
-                None => cx.new(|_| StatusBar::new()),
-            },
-            modal_layer: match &layers {
-                Some(layers) => layers.modal_layer.clone(),
-                None => cx.new(ModalLayer::new),
-            },
-            toast_layer: match &layers {
-                Some(layers) => layers.toast_layer.clone(),
-                None => cx.new(|cx| ToastLayer::new(window, cx)),
-            },
+            shared_layers,
+            status_bar,
+            modal_layer,
+            toast_layer,
             strip: None,
             focus_handle: cx.focus_handle(),
             attached: Vec::new(),

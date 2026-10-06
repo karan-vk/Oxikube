@@ -181,20 +181,17 @@ impl Item for ClusterTab {
 impl Render for ClusterTab {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.colors();
-        let title = self.info.title.clone();
+        let title = &self.info.title;
         let blank = self.workspace.read(cx).is_blank();
         v_flex()
             .id("cluster-tab")
-            .debug_selector({
-                let title = title.clone();
-                move || format!("cluster-tab-{title}")
-            })
+            .debug_selector(|| format!("cluster-tab-{title}"))
             .size_full()
             .bg(colors.background)
             .child(
                 div()
                     .id("cluster-stripe")
-                    .debug_selector(move || format!("cluster-stripe-{title}"))
+                    .debug_selector(|| format!("cluster-stripe-{title}"))
                     .flex_none()
                     .h(u(px(2.)))
                     .w_full()
@@ -229,10 +226,7 @@ fn placeholder(info: &ClusterTabInfo, cx: &App) -> impl IntoElement {
     };
     v_flex()
         .id("cluster-placeholder")
-        .debug_selector({
-            let title = info.title.clone();
-            move || format!("cluster-placeholder-{title}")
-        })
+        .debug_selector(|| format!("cluster-placeholder-{}", info.title))
         .size_full()
         .items_center()
         .justify_center()

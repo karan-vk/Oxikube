@@ -126,7 +126,8 @@ pub(crate) fn last_used_text(last_used: Option<Timestamp>, now: Timestamp) -> St
     }
 }
 
-fn tone_colour(tone: Tone, cx: &App) -> gpui::Hsla {
+/// The colour a status [`Tone`] is drawn in.
+pub(crate) fn tone_colour(tone: Tone, cx: &App) -> gpui::Hsla {
     let colors = cx.colors();
     match tone {
         Tone::Muted => colors.text_muted,

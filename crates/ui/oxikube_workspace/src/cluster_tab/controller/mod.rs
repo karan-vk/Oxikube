@@ -44,7 +44,7 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_ports::StatePort;
 
 pub use commands::register_commands;
-pub use persist::DebouncedSave;
+use persist::DebouncedSave;
 
 use super::{
     dispatch::{CommandDispatcher, CommandSink},

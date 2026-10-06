@@ -44,9 +44,7 @@ mod tab;
 mod tests;
 
 pub use colour::{cluster_hsla, initials};
-pub use controller::{
-    ClusterTabs, ClusterTabsDeps, ClusterTabsEvent, DebouncedSave, TabSetup, register_commands,
-};
+pub use controller::{ClusterTabs, ClusterTabsDeps, ClusterTabsEvent, TabSetup, register_commands};
 pub use dispatch::{CommandDispatcher, CommandSink, TabsDispatcher, is_tab_command};
 pub use store::{
     CLUSTER_TABS_TABLE, CLUSTER_TABS_VERSION, ClusterTabsStore, SavedTabs, cluster_layout_key,

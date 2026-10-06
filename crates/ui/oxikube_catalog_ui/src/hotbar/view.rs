@@ -4,17 +4,20 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use futures::StreamExt as _;
+use futures::{Stream, StreamExt as _};
 use gpui::{
-    Context, Entity, FocusHandle, Focusable, Subscription, Task, UniformListScrollHandle, Window,
+    Context, Entity, FocusHandle, Focusable, Subscription, Task, UniformListScrollHandle,
+    WeakEntity, Window,
 };
 use oxikube_app::{
-    ClusterCatalog, ClusterSession, ClusterSessionManager, SessionChange, SessionUpdate,
+    ClusterCatalog, ClusterSession, ClusterSessionManager, FavouriteChanged, FavouritesLagged,
+    SessionChange, SessionUpdate,
 };
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::StatePort;
-use oxikube_runtime::{NotifyCoalescedExt as _, spawn_kube};
+use oxikube_runtime::{KubeTaskError, NotifyCoalescedExt as _, spawn_kube};
 use oxikube_workspace::persistence::MAIN_WINDOW_ID;
 use oxikube_workspace::{ClusterTabs, ClusterTabsEvent, CommandDispatcher};
 
@@ -103,60 +106,26 @@ impl Hotbar {
         };
 
         // Subscribe before taking the snapshot, so no update falls between the two.
-        let mut updates = deps.sessions.subscribe();
-        let watch_sessions = cx.spawn(async move |this: gpui::WeakEntity<Self>, cx| {
-            while let Some(item) = updates.next().await {
-                let alive = this.update(cx, |this, cx| match item {
-                    Ok(update) => this.apply_session_update(update, cx),
-                    // Missed some: re-read every session instead of replaying.
-                    Err(_) => this.sync_sessions(cx),
-                });
-                if alive.is_err() {
-                    break;
-                }
-            }
+        let watch_sessions = watch(deps.sessions.subscribe(), cx, |this, item, cx| match item {
+            Ok(update) => this.apply_session_update(update, cx),
+            // Missed some: re-read every session instead of replaying.
+            Err(_) => this.sync_sessions(cx),
         });
-        let mut favourites = deps.catalog.favourite_changes();
-        let watch_favourites = cx.spawn(async move |this: gpui::WeakEntity<Self>, cx| {
-            while let Some(item) = favourites.next().await {
-                let alive = this.update(cx, |this, cx| match item {
-                    Ok(change) => {
-                        let name = this
-                            .model
-                            .favourite_name(&change.cluster)
-                            .map(str::to_owned);
-                        this.apply_favourite(&change.cluster, name, change.favourite, cx);
-                    }
-                    Err(_) => this.reload(cx),
-                });
-                if alive.is_err() {
-                    break;
-                }
-            }
-        });
-        let mut changes = deps.catalog.changes();
-        let watch_sources = cx.spawn(async move |this: gpui::WeakEntity<Self>, cx| {
-            while changes.next().await.is_some() {
-                if this.update(cx, |this, cx| this.reload(cx)).is_err() {
-                    break;
-                }
-            }
-        });
+        let watch_favourites = watch(
+            deps.catalog.favourite_changes(),
+            cx,
+            Self::on_favourite_change,
+        );
+        let watch_sources = watch(deps.catalog.changes(), cx, |this, _, cx| this.reload(cx));
         let load_order = {
             let store = store.clone();
-            cx.spawn(async move |this: gpui::WeakEntity<Self>, cx| {
+            cx.spawn(async move |this: WeakEntity<Self>, cx| {
                 let Some(store) = store else { return };
-                let loaded = spawn_kube(&*cx, async move { store.load().await }).await;
-                let order = match loaded {
-                    Ok(Ok(order)) => order,
-                    Ok(Err(error)) => {
-                        tracing::warn!(%error, "the saved hotbar order could not be read");
-                        return;
-                    }
-                    Err(error) => {
-                        tracing::warn!(%error, "reading the hotbar order failed");
-                        return;
-                    }
+                let Some(order) = log_failure(
+                    spawn_kube(&*cx, async move { store.load().await }).await,
+                    "reading the saved hotbar order",
+                ) else {
+                    return;
                 };
                 this.update(cx, |this, cx| {
                     // An order the user changed while this was reading wins.
@@ -209,17 +178,11 @@ impl Hotbar {
     pub fn reload(&mut self, cx: &mut Context<Self>) {
         let catalog = self.deps.catalog.clone();
         self.load = Some(cx.spawn(async move |this, cx| {
-            let result = spawn_kube(&*cx, async move { catalog.load().await }).await;
-            let entries = match result {
-                Ok(Ok(entries)) => entries,
-                Ok(Err(error)) => {
-                    tracing::warn!(%error, "the hotbar could not read the catalog");
-                    return;
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "reading the catalog for the hotbar failed");
-                    return;
-                }
+            let Some(entries) = log_failure(
+                spawn_kube(&*cx, async move { catalog.load().await }).await,
+                "reading the catalog for the hotbar",
+            ) else {
+                return;
             };
             this.update(cx, |this, cx| {
                 let favourites: HashMap<ClusterId, String> = entries
@@ -269,6 +232,24 @@ impl Hotbar {
         }
     }
 
+    fn on_favourite_change(
+        &mut self,
+        item: Result<FavouriteChanged, FavouritesLagged>,
+        cx: &mut Context<Self>,
+    ) {
+        match item {
+            Ok(change) => {
+                let name = self
+                    .model
+                    .favourite_name(&change.cluster)
+                    .map(str::to_owned);
+                self.apply_favourite(&change.cluster, name, change.favourite, cx);
+            }
+            // Missed some: read the catalog again.
+            Err(_) => self.reload(cx),
+        }
+    }
+
     /// A favourite was marked or unmarked (here or elsewhere). `name` is what the catalog calls
     /// the cluster when it is known; otherwise the catalog is read again.
     pub(super) fn apply_favourite(
@@ -302,18 +283,47 @@ impl Hotbar {
         };
         let order = self.model.shown_order();
         self.save = Some(cx.spawn(async move |_, cx| {
-            let result = spawn_kube(&*cx, async move { store.save(&order).await }).await;
-            match result {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => tracing::warn!(%error, "saving the hotbar order failed"),
-                Err(error) => tracing::warn!(%error, "saving the hotbar order failed"),
-            }
+            log_failure(
+                spawn_kube(&*cx, async move { store.save(&order).await }).await,
+                "saving the hotbar order",
+            );
         }));
     }
 
     /// Sends `command` through the dispatcher.
     pub(super) fn send(&self, command: Command, cx: &mut Context<Self>) {
         self.deps.dispatcher.dispatch(command, cx);
+    }
+}
+
+/// Applies every item of `stream` to the view until the view is gone.
+fn watch<S>(
+    mut stream: S,
+    cx: &mut Context<Hotbar>,
+    apply: impl Fn(&mut Hotbar, S::Item, &mut Context<Hotbar>) + 'static,
+) -> Task<()>
+where
+    S: Stream + Unpin + 'static,
+    S::Item: 'static,
+{
+    cx.spawn(async move |this: WeakEntity<Hotbar>, cx| {
+        while let Some(item) = stream.next().await {
+            if this.update(cx, |this, cx| apply(this, item, cx)).is_err() {
+                break;
+            }
+        }
+    })
+}
+
+/// The value of a finished [`spawn_kube`] task; a failure (the port's, or the task's) is logged
+/// as `what` and gives `None`.
+fn log_failure<T>(result: Result<OxiResult<T>, KubeTaskError>, what: &str) -> Option<T> {
+    match result.map_err(OxiError::from).and_then(|r| r) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            tracing::warn!(%error, "{what} failed");
+            None
+        }
     }
 }
 

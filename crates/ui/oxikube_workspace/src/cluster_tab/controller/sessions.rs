@@ -116,7 +116,7 @@ impl ClusterTabs {
         );
         cx.emit(ClusterTabsEvent::Opened(cluster));
         cx.emit(ClusterTabsEvent::OrderChanged);
-        self.note_change(window, cx);
+        self.mark_dirty(cx);
         cx.notify();
     }
 
@@ -146,20 +146,18 @@ impl ClusterTabs {
         cx: &mut Context<Self>,
     ) {
         match event {
-            ClusterTabEvent::ActiveChanged(true) => {
-                self.set_active(Some(cluster.clone()), window, cx)
-            }
+            ClusterTabEvent::ActiveChanged(true) => self.set_active(Some(cluster.clone()), cx),
             ClusterTabEvent::ActiveChanged(false) => {
                 if self.active.as_ref() == Some(cluster) {
-                    self.set_active(None, window, cx);
+                    self.set_active(None, cx);
                 }
             }
             ClusterTabEvent::CloseRequested => self.request_close(cluster, window, cx),
-            ClusterTabEvent::Closed => self.forget(cluster, window, cx),
+            ClusterTabEvent::Closed => self.forget(cluster, cx),
         }
     }
 
-    fn forget(&mut self, cluster: &ClusterId, window: &mut Window, cx: &mut Context<Self>) {
+    fn forget(&mut self, cluster: &ClusterId, cx: &mut Context<Self>) {
         if self.tabs.shift_remove(cluster).is_none() {
             return;
         }
@@ -169,7 +167,7 @@ impl ClusterTabs {
         }
         cx.emit(ClusterTabsEvent::Closed(cluster.clone()));
         cx.emit(ClusterTabsEvent::OrderChanged);
-        self.note_change(window, cx);
+        self.mark_dirty(cx);
         cx.notify();
     }
 }

@@ -8,7 +8,7 @@
 
 use std::future::Future;
 
-use gpui::{Context, Task, Window};
+use gpui::{Context, Task};
 
 use super::ClusterTabs;
 use crate::cluster_tab::store::SavedTabs;
@@ -16,7 +16,7 @@ use crate::persistence::SAVE_DEBOUNCE;
 
 /// The debounce and write bookkeeping of [`ClusterTabs`].
 #[derive(Default)]
-pub struct DebouncedSave {
+pub(super) struct DebouncedSave {
     dirty: bool,
     last_written: Option<SavedTabs>,
     debounce_task: Option<Task<()>>,
@@ -37,11 +37,7 @@ impl ClusterTabs {
     }
 
     /// Something saved changed: write soon, once changes stop for [`SAVE_DEBOUNCE`].
-    pub(super) fn note_change(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.mark_dirty(cx);
-    }
-
-    fn mark_dirty(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn mark_dirty(&mut self, cx: &mut Context<Self>) {
         self.save.dirty = true;
         // Replacing the timer cancels the previous one. The timer only dispatches; the write is
         // a separate task, so nothing here is dropped from inside itself.

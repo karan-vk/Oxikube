@@ -46,4 +46,5 @@ pub use actions::{
 };
 pub use dispatch::{CommandDispatcher, ServiceDispatcher};
 pub use model::{Badge, CatalogModel, LoadState, Row, Tone};
+pub(crate) use view::tone_colour;
 pub use view::{CatalogDeps, CatalogView, EMPTY_STEPS, EMPTY_TITLE, LOADING_TEXT};
