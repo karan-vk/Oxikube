@@ -22,7 +22,7 @@ use oxikube_app::columns::Tone;
 use oxikube_app::store::StoreObject;
 
 /// Rows kept at most (a few screens); beyond it the cache starts over.
-pub(super) const MAX_ROWS: usize = 1024;
+const MAX_ROWS: usize = 1024;
 
 /// One row's cells, by column.
 struct RowCells {

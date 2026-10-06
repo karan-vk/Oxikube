@@ -131,7 +131,7 @@ impl<D: TableDelegate> LibDelegate for Adapter<D> {
         let align = self.align(col_ix);
         if let Some(cell) = self.delegate.text_cell(row_ix, col_ix, window, cx) {
             let width = self.widths.supplied(col_ix);
-            return text_cell(cell, align, width, row_ix, col_ix, window, cx);
+            return text_cell(cell, align, width, row_ix, col_ix, window);
         }
         aligned(align, self.delegate.render_td(row_ix, col_ix, window, cx)).into_any_element()
     }

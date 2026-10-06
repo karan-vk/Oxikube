@@ -27,7 +27,7 @@ use oxikube_runtime::{FRAME_INTERVAL, spawn_kube};
 use oxikube_workspace::{ClusterCommandRunner, ClusterTab, Workspace};
 
 /// How long each step (catalog, connect, table) may take.
-pub const STEP_DEADLINE: Duration = Duration::from_secs(120);
+const STEP_DEADLINE: Duration = Duration::from_secs(120);
 /// How often a step checks whether it is done.
 const POLL: Duration = Duration::from_millis(50);
 /// Who the audit log names for the commands this runs.

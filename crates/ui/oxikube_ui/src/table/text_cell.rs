@@ -15,7 +15,7 @@
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, App, HighlightStyle, Hsla, InteractiveElement as _, IntoElement as _,
+    AnyElement, HighlightStyle, Hsla, InteractiveElement as _, IntoElement as _,
     ParentElement as _, Pixels, SharedString, Styled as _, StyledText, Window, div, px,
 };
 
@@ -86,8 +86,7 @@ pub(super) fn text_cell(
     column_width: Option<Pixels>,
     row: usize,
     col: usize,
-    window: &mut Window,
-    _: &mut App,
+    window: &Window,
 ) -> AnyElement {
     let fitting = column_width.is_some_and(|width| fits(&cell, width, window));
     let body = if fitting {

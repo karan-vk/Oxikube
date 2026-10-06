@@ -41,17 +41,15 @@ use oxikube_runtime::perf::harness;
 use oxikube_runtime::perf::{PerfRoot, Recorder, ScenarioSample, Summary, round_ms};
 use oxikube_testkit::{FakeClockPort, FakeStatePort, headless};
 
-use super::WINDOW_SIZE;
+use super::{FRAMES, WINDOW_SIZE};
 
 mod fixture;
 
-pub use fixture::{FRAME, PODS};
+use fixture::{FRAME, PODS};
 
-/// Scripted frames: one second at 120 Hz, 240 measured frames. Kept short for the nightly's Linux
-/// runner, whose software renderer (lavapipe) draws these frames far slower than a GPU (#509).
-pub const FRAMES: usize = 120;
-/// Overrides [`FRAMES`] (at most [`FRAMES`]): the smoke test runs a debug build with a few frames.
-pub const FRAMES_ENV: &str = "OXIKUBE_PERF_SCROLL_FRAMES";
+/// Overrides the scripted frame count, [`FRAMES`] (at most that many): the smoke test runs a
+/// debug build with a few frames.
+const FRAMES_ENV: &str = "OXIKUBE_PERF_SCROLL_FRAMES";
 
 /// The frames to script: [`FRAMES`], or fewer from [`FRAMES_ENV`].
 fn frames() -> usize {
@@ -62,18 +60,18 @@ fn frames() -> usize {
 }
 
 /// Rows scrolled per frame: a fast trackpad fling at 120 Hz.
-pub const STEP: usize = 3;
+const STEP: usize = 3;
 /// Upper bound on the executor turns the warm-up and the first rows may take.
 const MAX_TURNS: usize = 1_000;
 
 /// The scenario's name (`table-scroll-10k` is accepted for it).
-pub const NAME: &str = "scroll-10k";
+pub(super) const NAME: &str = "scroll-10k";
 
 /// The scenario's own metric.
-pub const FIRST_ROWS_MS: &str = "first_rows_ms";
+const FIRST_ROWS_MS: &str = "first_rows_ms";
 
 /// One sample. `probe` puts the `--perf` frame hook in the window.
-pub fn run(probe: bool) -> Result<ScenarioSample> {
+pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
     let recorder = Arc::new(Recorder::new());
     // The process-wide recorder: the stores' feed probe and `notify_coalesced` report to it.
     oxikube_runtime::perf::install(recorder.clone());

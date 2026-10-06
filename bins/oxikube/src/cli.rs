@@ -1,5 +1,5 @@
-//! Command-line flags. Hand-rolled (a handful of flags) so the binary does not pull in an argument parser
-//! and a GUI launch with unexpected platform arguments still starts.
+//! Command-line flags. Hand-rolled (a handful of flags) so the binary does not pull in an argument
+//! parser and a GUI launch with unexpected platform arguments still starts.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
