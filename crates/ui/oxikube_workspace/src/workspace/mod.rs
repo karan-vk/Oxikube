@@ -14,7 +14,8 @@
 //! - `docks`: dock snapshots and sizes, zoom.
 //! - `layout`: queries on the dock area's layout trees.
 //! - `restore`: capturing the layout for persistence and restoring a saved one (E05-S05).
-//! - `layers`: the status bar, modal layer and toast layer the window draws over the docks.
+//! - `layers`: the status bar, modal layer and toast layer the window draws over the docks (an
+//!   [embedded](Workspace::embedded) workspace uses its parent's).
 //! - `render`: the view and its action handlers.
 
 mod close;
@@ -33,7 +34,7 @@ mod tests;
 use std::{collections::HashMap, rc::Rc};
 
 use gpui::{
-    AnyEntity, App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle,
+    AnyEntity, AnyView, App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle,
     Focusable, Subscription, Window,
 };
 use oxikube_ui::dock::{DockArea, DockEvent, DockPlacement, DockSkin, PanelId, PanelStyle};
@@ -52,6 +53,15 @@ pub use open::OpenOptions;
 
 /// Version written into the dock area's layout dump (E05-S05 persists it).
 pub const LAYOUT_VERSION: usize = 1;
+
+/// A workspace's status bar, modal layer and toast layer, handed to an
+/// [embedded](Workspace::embedded) workspace so it shares them.
+#[derive(Clone)]
+pub struct SharedLayers {
+    status_bar: Entity<StatusBar>,
+    modal_layer: Entity<ModalLayer>,
+    toast_layer: Entity<ToastLayer>,
+}
 
 /// What the workspace reports outward.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -93,6 +103,11 @@ pub struct Workspace {
     status_bar: Entity<StatusBar>,
     modal_layer: Entity<ModalLayer>,
     toast_layer: Entity<ToastLayer>,
+    /// The status bar, modal layer and toast layer belong to an enclosing workspace (this one is
+    /// [embedded](Self::embedded)), which draws them: this one does not.
+    shared_layers: bool,
+    /// A fixed strip drawn left of the docks ([`Self::set_strip`]).
+    strip: Option<AnyView>,
     focus_handle: FocusHandle,
     /// Entities that live and die with the workspace (the layout persistence controller).
     attached: Vec<AnyEntity>,
@@ -110,6 +125,29 @@ impl Focusable for Workspace {
 impl Workspace {
     /// An empty workspace: no items, no panels, no docks.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self::build(None, window, cx)
+    }
+
+    /// An empty workspace that lives inside another one (a cluster's workspace inside its tab,
+    /// itself an item of the window's workspace). It has its own docks and pane group, and
+    /// shares the enclosing workspace's status bar, modal layer and toast layer (`layers`, from
+    /// [`Workspace::layers`]): those are drawn once, by the enclosing workspace, and
+    /// `toggle_modal`, `show_toast` and `register_status_item` on this workspace reach the same
+    /// ones.
+    pub fn embedded(layers: SharedLayers, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self::build(Some(layers), window, cx)
+    }
+
+    /// The status bar, modal layer and toast layer, for [`Workspace::embedded`].
+    pub fn layers(&self) -> SharedLayers {
+        SharedLayers {
+            status_bar: self.status_bar.clone(),
+            modal_layer: self.modal_layer.clone(),
+            toast_layer: self.toast_layer.clone(),
+        }
+    }
+
+    fn build(layers: Option<SharedLayers>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let (dock_area, skin) = DockSkin::dock_area("workspace", Some(LAYOUT_VERSION), window, cx);
         // Items get a real tab bar even when alone in their pane, with close buttons.
         skin.set_panel_style(PanelStyle::TabBar, cx);
@@ -132,9 +170,20 @@ impl Workspace {
             panels: Vec::new(),
             active_pane: None,
             closed: ClosedItemStack::default(),
-            status_bar: cx.new(|_| StatusBar::new()),
-            modal_layer: cx.new(ModalLayer::new),
-            toast_layer: cx.new(|cx| ToastLayer::new(window, cx)),
+            shared_layers: layers.is_some(),
+            status_bar: match &layers {
+                Some(layers) => layers.status_bar.clone(),
+                None => cx.new(|_| StatusBar::new()),
+            },
+            modal_layer: match &layers {
+                Some(layers) => layers.modal_layer.clone(),
+                None => cx.new(ModalLayer::new),
+            },
+            toast_layer: match &layers {
+                Some(layers) => layers.toast_layer.clone(),
+                None => cx.new(|cx| ToastLayer::new(window, cx)),
+            },
+            strip: None,
             focus_handle: cx.focus_handle(),
             attached: Vec::new(),
             _subscriptions: vec![subscription],
@@ -146,6 +195,18 @@ impl Workspace {
     /// and no one has to remember to store them.
     pub fn attach<T: 'static>(&mut self, entity: Entity<T>) {
         self.attached.push(entity.into_any());
+    }
+
+    /// Shows `strip` in a fixed column left of the docks (the window's cluster hotbar), or
+    /// removes it with `None`. The strip is not part of the layout and is not persisted.
+    pub fn set_strip(&mut self, strip: Option<AnyView>, cx: &mut Context<Self>) {
+        self.strip = strip;
+        cx.notify();
+    }
+
+    /// Whether this workspace [embeds](Self::embedded) in another.
+    pub fn is_embedded(&self) -> bool {
+        self.shared_layers
     }
 
     /// The dock area the layout lives in.

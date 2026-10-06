@@ -36,7 +36,11 @@ impl Render for Workspace {
                 this.split_active_pane(SplitDirection::Down, window, cx);
             }))
             .on_action(cx.listener(|this, _: &CloseActiveItem, window, cx| {
-                this.close_active_item(window, cx);
+                // Nothing to close here: let a workspace around this one (a cluster tab's
+                // workspace inside the window's) close its own item, the tab.
+                if !this.close_active_item(window, cx) {
+                    cx.propagate();
+                }
             }))
             .on_action(cx.listener(|this, _: &ReopenClosedItem, window, cx| {
                 this.reopen_closed_item(window, cx);
@@ -71,18 +75,33 @@ impl Render for Workspace {
         let body = div()
             .id("workspace-body")
             .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .h_full()
+            .when(!self.is_blank(), |this| this.child(self.dock_area.clone()));
+        let row = div()
+            .id("workspace-row")
+            .flex()
+            .flex_row()
+            .flex_1()
             .min_h_0()
             .w_full()
-            .when(!self.is_blank(), |this| this.child(self.dock_area.clone()));
+            .when_some(self.strip.clone(), |this, strip| {
+                this.child(div().flex_none().h_full().child(strip))
+            })
+            .child(body);
 
         // The status bar takes the bottom strip; the toast and modal layers are absolute, so
         // they overlay the whole workspace without taking part in its layout (modal on top).
+        // A workspace embedded in another leaves all three to it.
         root.flex()
             .flex_col()
             .relative()
-            .child(body)
-            .child(self.status_bar.clone())
-            .child(self.toast_layer.clone())
-            .child(self.modal_layer.clone())
+            .child(row)
+            .when(!self.shared_layers, |this| {
+                this.child(self.status_bar.clone())
+                    .child(self.toast_layer.clone())
+                    .child(self.modal_layer.clone())
+            })
     }
 }

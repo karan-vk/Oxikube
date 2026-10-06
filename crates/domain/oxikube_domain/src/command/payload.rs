@@ -46,17 +46,36 @@ pub enum Command {
         /// The catalog entry to connect.
         cluster: ClusterId,
     },
+    /// Close a cluster's workspace tab, which disconnects the cluster. Asks first while
+    /// operations of that cluster (exec sessions, port-forwards) are running.
+    #[serde(rename = "cluster::CloseTab")]
+    ClusterCloseTab {
+        /// The cluster whose tab closes.
+        cluster: ClusterId,
+    },
     /// Disconnect a cluster: cancel an attempt in flight or close its connection.
     #[serde(rename = "cluster::Disconnect")]
     ClusterDisconnect {
         /// The catalog entry to disconnect.
         cluster: ClusterId,
     },
-    /// Make a cluster the active one.
+    /// Show the next cluster tab (wraps around).
+    #[serde(rename = "cluster::NextTab")]
+    ClusterNextTab,
+    /// Show the previous cluster tab (wraps around).
+    #[serde(rename = "cluster::PreviousTab")]
+    ClusterPreviousTab,
+    /// Make a cluster the active one: its tab is shown.
     #[serde(rename = "cluster::Select")]
     ClusterSelect {
         /// The cluster to activate.
         cluster: ClusterId,
+    },
+    /// Show the nth cluster tab (`cmd-1` to `cmd-9`).
+    #[serde(rename = "cluster::SwitchTab")]
+    ClusterSwitchTab {
+        /// The tab, counted from 1 in tab order.
+        index: u8,
     },
     /// Mark a cluster as a favourite (`Some(true)`), clear it (`Some(false)`) or flip it
     /// (`None`). A favourite sorts to the top of the catalog; the flag is local state.
@@ -271,8 +290,12 @@ impl Command {
     pub const fn id(&self) -> CommandId {
         match self {
             Command::ClusterConnect { .. } => CommandId::CLUSTER_CONNECT,
+            Command::ClusterCloseTab { .. } => CommandId::CLUSTER_CLOSE_TAB,
             Command::ClusterDisconnect { .. } => CommandId::CLUSTER_DISCONNECT,
+            Command::ClusterNextTab => CommandId::CLUSTER_NEXT_TAB,
+            Command::ClusterPreviousTab => CommandId::CLUSTER_PREVIOUS_TAB,
             Command::ClusterSelect { .. } => CommandId::CLUSTER_SELECT,
+            Command::ClusterSwitchTab { .. } => CommandId::CLUSTER_SWITCH_TAB,
             Command::ClusterToggleFavourite { .. } => CommandId::CLUSTER_TOGGLE_FAVOURITE,
             Command::ClusterToggleReadOnly { .. } => CommandId::CLUSTER_TOGGLE_READ_ONLY,
             Command::ClusterSetColour { .. } => CommandId::CLUSTER_SET_COLOUR,
@@ -373,8 +396,12 @@ mod tests {
     fn samples() -> Vec<Command> {
         vec![
             Command::ClusterConnect { cluster: cluster() },
+            Command::ClusterCloseTab { cluster: cluster() },
             Command::ClusterDisconnect { cluster: cluster() },
+            Command::ClusterNextTab,
+            Command::ClusterPreviousTab,
             Command::ClusterSelect { cluster: cluster() },
+            Command::ClusterSwitchTab { index: 2 },
             Command::ClusterToggleFavourite {
                 cluster: cluster(),
                 favourite: None,
@@ -573,6 +600,10 @@ mod tests {
             if matches!(
                 command,
                 Command::ClusterConnect { .. }
+                    | Command::ClusterCloseTab { .. }
+                    | Command::ClusterNextTab
+                    | Command::ClusterPreviousTab
+                    | Command::ClusterSwitchTab { .. }
                     | Command::ClusterDisconnect { .. }
                     | Command::ClusterToggleFavourite { .. }
                     | Command::ClusterSelect { .. }

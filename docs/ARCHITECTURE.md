@@ -92,7 +92,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   state that explains how to add kubeconfigs, and invalid contexts kept with an error badge.
   `model` is plain Rust (order: favourites, last used, name; with a query: match score), `dispatch`
   sends the cluster commands through a `CommandDispatcher` (the bus once it lands), keys live in the
-  `Catalog` sections of the default keymaps.
+  `Catalog` sections of the default keymaps. Module `hotbar` (E06-S04): `Hotbar`, the strip at the
+  window's left edge with every connected and favourite cluster (colour dot, initials, state dot,
+  tooltip, right-click menu, drag to reorder, order kept in the `hotbar` state table); the
+  displayed cluster comes from `ClusterTabs`, favourites from `ClusterCatalog` and its
+  `favourite_changes` stream. Clicks send `cluster::Select` / `cluster::Connect`; the favourite
+  toggle is `cluster::ToggleFavourite`.
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
   mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
   events).
@@ -108,7 +113,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   reopen-closed, drag-drop tabs, zoom) and side `Panel`s in left/bottom/right docks
   (`toggle_panel`, `toggle_dock`); `item`, `panel`, `pane` (`PaneGroup`/`Pane` snapshots), `dock`,
   `closed`, `actions` (`workspace::*` actions and bindings), `test_support` (feature
-  `test-support`: `TestItem`, `TestPanel`, `TestStatusItem`, `TestModal`). Module `session` (E05-S12): `window::New`
+  `test-support`: `TestItem`, `TestPanel`, `TestStatusItem`, `TestModal`). Module `cluster_tab`
+  (E06-S04): `ClusterTab` is an `Item` that hosts a `Workspace` of its own, embedded in the window's
+  (own docks for the sidebar, own pane group, own layout saved under `cluster:<id>`; the status
+  bar, modal and toast layers are the window's); `ClusterTabs` keeps one tab per session that is
+  not `Disconnected`, switches (`cmd-1..9`, `cluster::NextTab`/`PreviousTab`/`Select`/`SwitchTab`),
+  closes (`cluster::CloseTab`: confirms while the cluster's operations run, then
+  `cluster::Disconnect`) and saves the open list in the `cluster_tabs` state table; the tab
+  commands register on the bus with `register_commands`. `Item::intercepts_close` /
+  `close_requested` let an item ask before its tab closes; `Workspace::set_strip` places the
+  hotbar. Module `session` (E05-S12): `window::New`
   (several windows, one `Workspace` each, shared globals), UI zoom (`view::ZoomIn`/`ZoomOut`/`ZoomReset`,
   the `ui_scale` setting), the effective reduce-motion flag (`reduce_motion` setting over the OS
   preference, read by views through `oxikube_ui::motion`), and the quit guard (`app::Quit`:

@@ -72,6 +72,16 @@ impl DialogModal {
         }
     }
 
+    /// The dialog's title.
+    pub fn title(&self) -> &SharedString {
+        &self.title
+    }
+
+    /// The explanatory text under the title, if any.
+    pub fn message_text(&self) -> Option<&SharedString> {
+        self.message.as_ref()
+    }
+
     /// The explanatory text under the title.
     pub fn message(mut self, message: impl Into<SharedString>) -> Self {
         self.message = Some(message.into());

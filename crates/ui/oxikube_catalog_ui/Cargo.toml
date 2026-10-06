@@ -14,6 +14,7 @@ doctest = false
 [dependencies]
 futures.workspace = true
 gpui.workspace = true
+indexmap.workspace = true
 jiff.workspace = true
 nucleo-matcher.workspace = true
 oxikube_app.workspace = true
@@ -43,9 +44,10 @@ default = []
 # `#[gpui::test]`s of this crate and of the crates built on the catalog.
 test-support = []
 # Headless GPU screenshots (`tests/screenshot.rs` for the namespace selector,
-# `tests/catalog_screenshot.rs` for the catalog; harness = false so they run on the process main
+# `tests/catalog_screenshot.rs` for the catalog, `tests/cluster_tabs_screenshot.rs` for the hotbar
+# and cluster tabs; harness = false so they run on the process main
 # thread). Need Metal / Vulkan, so never part of the default gate; the nightly workflow runs them:
-# `cargo test -p oxikube_catalog_ui --features screenshot --test screenshot --test catalog_screenshot`.
+# `cargo test -p oxikube_catalog_ui --features screenshot --test screenshot --test catalog_screenshot --test cluster_tabs_screenshot`.
 screenshot = ["test-support"]
 
 [[test]]
@@ -57,6 +59,12 @@ required-features = ["screenshot"]
 [[test]]
 name = "catalog_screenshot"
 path = "tests/catalog_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+[[test]]
+name = "cluster_tabs_screenshot"
+path = "tests/cluster_tabs_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 

@@ -165,3 +165,62 @@ fn source_changes_reach_the_catalog_subscribers() {
     assert_eq!(diff.added.len(), 1);
     assert_eq!(diff.removed.len(), 2);
 }
+
+#[test]
+fn favourite_changes_are_announced_to_every_subscriber_once_stored() {
+    use futures::StreamExt as _;
+
+    use crate::catalog::FavouriteChanged;
+
+    let h = Harness::new();
+    let mut first = h.catalog.favourite_changes();
+    let mut second = h.catalog.clone().favourite_changes();
+    toggle(&h, "a", Some(true));
+    toggle(&h, "a", None);
+    toggle(&h, "b", Some(false));
+    let expected = [
+        FavouriteChanged {
+            cluster: id("a"),
+            favourite: true,
+        },
+        FavouriteChanged {
+            cluster: id("a"),
+            favourite: false,
+        },
+        FavouriteChanged {
+            cluster: id("b"),
+            favourite: false,
+        },
+    ];
+    for stream in [&mut first, &mut second] {
+        for change in &expected {
+            let got = stream
+                .next()
+                .now_or_never()
+                .expect("already sent")
+                .expect("open");
+            assert_eq!(got.as_ref(), Ok(change));
+        }
+        assert!(stream.next().now_or_never().is_none(), "nothing more");
+    }
+}
+
+#[test]
+fn a_failed_write_announces_nothing() {
+    use futures::StreamExt as _;
+
+    let h = Harness::new();
+    let mut changes = h.catalog.favourite_changes();
+    h.state
+        .script()
+        .table_put
+        .push(Err(OxiError::internal("disk full")));
+    assert!(
+        h.catalog
+            .set_favourite(&id("a"), Some(true))
+            .now_or_never()
+            .expect("no wait")
+            .is_err()
+    );
+    assert!(changes.next().now_or_never().is_none());
+}

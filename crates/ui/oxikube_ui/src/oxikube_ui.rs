@@ -19,6 +19,7 @@
 //! - [`table`]: [`Table`] over our own [`TableDelegate`] trait (virtualised, uniform rows).
 //! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`chart`], [`markdown`],
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
+//! - [`tooltip`]: [`tooltip::Tooltip`], hover text for any element.
 //! - [`root`]: the window root, which owns the dialog, sheet and notification layers.
 //! - [`title_bar`]: the window title bar (drag area, window controls, traffic-light inset).
 //!
@@ -45,6 +46,7 @@ pub mod tabs;
 pub mod theme_bridge;
 pub mod title_bar;
 pub mod tokens;
+pub mod tooltip;
 
 pub use assets::Assets;
 pub use icon::{Icon, IconName};

@@ -13,6 +13,7 @@ use std::rc::Rc;
 use gpui::{
     App, Global, ParentElement as _, SharedString, Styled as _, Window, WindowId, actions, div,
 };
+use oxikube_domain::ids::ClusterId;
 use oxikube_settings::Settings as _;
 use oxikube_ui::{
     button::ButtonVariant,
@@ -40,6 +41,9 @@ pub struct RunningOperation {
     pub kind: SharedString,
     /// What it works on (`pod/web-0 in prod`).
     pub label: SharedString,
+    /// The cluster it runs against, when it belongs to one: closing that cluster's tab asks
+    /// about the operations with this cluster ([`RunningOperation::on_cluster`]).
+    pub cluster: Option<ClusterId>,
 }
 
 impl RunningOperation {
@@ -48,7 +52,15 @@ impl RunningOperation {
         Self {
             kind: kind.into(),
             label: label.into(),
+            cluster: None,
         }
+    }
+
+    /// Marks the operation as running against `cluster`.
+    #[must_use]
+    pub fn on_cluster(mut self, cluster: ClusterId) -> Self {
+        self.cluster = Some(cluster);
+        self
     }
 }
 
@@ -191,7 +203,7 @@ pub(super) fn show_quit_prompt(window: &mut Window, cx: &mut App) {
 }
 
 /// The dialog's operation lines: one per operation, the first few only.
-pub(super) fn operation_lines(operations: &[RunningOperation]) -> Vec<String> {
+pub(crate) fn operation_lines(operations: &[RunningOperation]) -> Vec<String> {
     let mut lines: Vec<String> = operations
         .iter()
         .take(LISTED)

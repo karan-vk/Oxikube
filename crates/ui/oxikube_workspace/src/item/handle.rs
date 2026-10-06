@@ -2,7 +2,7 @@
 
 use gpui::{AnyView, App, Entity, EntityId, FocusHandle, SharedString, Subscription, Window};
 
-use super::{Item, ItemEvent, TabContent};
+use super::{CloseRequest, Item, ItemEvent, TabContent};
 
 /// An [`Item`] entity of any type. Implemented for every `Entity<T: Item>`.
 ///
@@ -21,6 +21,10 @@ pub trait ItemHandle: 'static {
     fn item_key(&self, cx: &App) -> Option<SharedString>;
     /// See [`Item::can_close`].
     fn can_close(&self, cx: &App) -> bool;
+    /// See [`Item::intercepts_close`].
+    fn intercepts_close(&self, cx: &App) -> bool;
+    /// See [`Item::close_requested`].
+    fn close_requested(&self, window: &mut Window, cx: &mut App) -> CloseRequest;
     /// See [`Item::on_close`].
     fn on_close(&self, window: &mut Window, cx: &mut App);
     /// See [`Item::set_active`].
@@ -65,6 +69,14 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn can_close(&self, cx: &App) -> bool {
         self.read(cx).can_close(cx)
+    }
+
+    fn intercepts_close(&self, cx: &App) -> bool {
+        self.read(cx).intercepts_close(cx)
+    }
+
+    fn close_requested(&self, window: &mut Window, cx: &mut App) -> CloseRequest {
+        self.update(cx, |item, cx| item.close_requested(window, cx))
     }
 
     fn on_close(&self, window: &mut Window, cx: &mut App) {

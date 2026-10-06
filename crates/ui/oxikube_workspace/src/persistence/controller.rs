@@ -60,6 +60,9 @@ pub struct LayoutPersistence {
     store: LayoutStore,
     window: AnyWindowHandle,
     status: RestoreStatus,
+    /// Whether window moves and resizes count as changes and the window's place is saved (the
+    /// main window's layout; not a cluster's workspace embedded in a tab).
+    track_window: bool,
     /// A change since the last write that the timer has not yet turned into one.
     dirty: bool,
     last_written: Option<Value>,
@@ -81,8 +84,30 @@ impl LayoutPersistence {
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<Self> {
+        Self::start_with(workspace, store, true, window, cx)
+    }
+
+    /// [`Self::start`] for a workspace [embedded](Workspace::embedded) in another (a cluster's
+    /// workspace inside its tab): the window's place is neither saved nor does moving the window
+    /// count as a change of this layout.
+    pub fn start_embedded(
+        workspace: &Entity<Workspace>,
+        store: LayoutStore,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<Self> {
+        Self::start_with(workspace, store, false, window, cx)
+    }
+
+    fn start_with(
+        workspace: &Entity<Workspace>,
+        store: LayoutStore,
+        track_window: bool,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<Self> {
         let this = cx.new(|cx| {
-            let subscriptions = vec![
+            let mut subscriptions = vec![
                 cx.subscribe_in(
                     workspace,
                     window,
@@ -90,15 +115,20 @@ impl LayoutPersistence {
                         this.note_change(window, cx)
                     },
                 ),
-                cx.observe_window_bounds(window, |this: &mut Self, window, cx| {
-                    this.note_change(window, cx)
-                }),
                 cx.on_app_quit(|this: &mut Self, cx| this.on_quit(cx)),
             ];
+            if track_window {
+                subscriptions.push(
+                    cx.observe_window_bounds(window, |this: &mut Self, window, cx| {
+                        this.note_change(window, cx)
+                    }),
+                );
+            }
             Self {
                 workspace: workspace.downgrade(),
                 store,
                 window: window.window_handle(),
+                track_window,
                 status: RestoreStatus::Restoring,
                 dirty: false,
                 last_written: None,
@@ -178,7 +208,9 @@ impl LayoutPersistence {
     /// The layout as it is now, window included; `None` once the workspace is gone.
     fn capture(&self, window: &Window, cx: &App) -> Option<SerializedWorkspace> {
         let mut layout = self.workspace.upgrade()?.read(cx).serialize_layout(cx);
-        layout.window = Some(SerializedWindow::from_window_bounds(window.window_bounds()));
+        if self.track_window {
+            layout.window = Some(SerializedWindow::from_window_bounds(window.window_bounds()));
+        }
         Some(layout)
     }
 

@@ -9,7 +9,7 @@ use oxikube_ui::dock::{
 };
 
 use super::PanelHandle;
-use crate::tab_label::tab_label;
+use crate::tab_label::{TabLabel, tab_label};
 
 /// A dock panel showing one side panel. Side panels are not closed from their tab: their dock is
 /// toggled instead, so the wrapper reports itself not closable.

@@ -68,6 +68,16 @@ impl TabContent {
     }
 }
 
+/// How an item answers a request to close its tab ([`Item::close_requested`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CloseRequest {
+    /// Close the tab now.
+    Close,
+    /// Keep the tab: the item is asking the user (or waiting for something) first, and closes
+    /// itself afterwards by emitting [`ItemEvent::CloseItem`].
+    Deferred,
+}
+
 /// What an item tells the workspace.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ItemEvent {
@@ -98,6 +108,24 @@ pub trait Item: Focusable + EventEmitter<ItemEvent> + Render + Sized {
     /// button); the item is expected to say why, for example with a toast.
     fn can_close(&self, cx: &App) -> bool {
         true
+    }
+
+    /// Whether a close the user asks for (the tab's close button, `workspace::CloseActiveItem`)
+    /// goes through [`Item::close_requested`] first. The default `false` closes at once. An item
+    /// that must ask before it goes (a cluster tab with operations running) returns `true`; its
+    /// tab then draws its own close button, which asks the item instead of removing the tab.
+    /// Closing it with [`Workspace::close_item`](crate::Workspace::close_item) or
+    /// [`ItemEvent::CloseItem`] still closes at once.
+    fn intercepts_close(&self, cx: &App) -> bool {
+        false
+    }
+
+    /// The user asked to close this tab and [`Item::intercepts_close`] is `true`. Answer
+    /// [`CloseRequest::Close`] to close now, or [`CloseRequest::Deferred`] after starting
+    /// whatever asks (a dialog) and emit [`ItemEvent::CloseItem`] once the answer is yes. Runs
+    /// inside the workspace's update: open dialogs from an event or a deferred call, not here.
+    fn close_requested(&mut self, window: &mut Window, cx: &mut Context<Self>) -> CloseRequest {
+        CloseRequest::Close
     }
 
     /// Called once when the item leaves the workspace (closed by the user, by a command, or
