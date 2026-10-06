@@ -3,6 +3,7 @@
 use super::column::{ColumnAlign, SortDirection};
 use super::delegate::TableDelegate;
 use super::events::{RowClick, TableEvent, TableEvents};
+use super::text_cell::{fit_width, text_cell};
 use super::widths::ColumnWidths;
 use crate::menu::PopupMenu;
 use crate::size::UiScale;
@@ -67,7 +68,7 @@ impl<D> Adapter<D> {
 }
 
 /// Places `cell` in a full-size flex box, vertically centred, justified per `align`.
-fn aligned(align: ColumnAlign, cell: impl IntoElement) -> impl IntoElement {
+pub(super) fn aligned(align: ColumnAlign, cell: impl IntoElement) -> Div {
     let base = div().size_full().flex().items_center();
     match align {
         ColumnAlign::Left => base.justify_start(),
@@ -128,7 +129,11 @@ impl<D: TableDelegate> LibDelegate for Adapter<D> {
         cx: &mut Context<LibState<Adapter<D>>>,
     ) -> impl IntoElement {
         let align = self.align(col_ix);
-        aligned(align, self.delegate.render_td(row_ix, col_ix, window, cx))
+        if let Some(cell) = self.delegate.text_cell(row_ix, col_ix, window, cx) {
+            let width = fit_width(self.widths.supplied(col_ix), cx);
+            return text_cell(cell, align, width, row_ix, col_ix, window);
+        }
+        aligned(align, self.delegate.render_td(row_ix, col_ix, window, cx)).into_any_element()
     }
 
     fn render_th(

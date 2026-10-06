@@ -41,7 +41,13 @@ use oxikube_testkit::{
 use oxikube_workspace::CommandDispatcher;
 
 const PODS: usize = 10_000;
-const FRAMES: usize = 300;
+/// Frames measured (`OXIKUBE_BENCH_FRAMES` overrides).
+fn frames() -> usize {
+    std::env::var("OXIKUBE_BENCH_FRAMES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(300)
+}
 /// Pods modified per frame (`OXIKUBE_BENCH_CHURN` overrides).
 fn churn_per_frame() -> usize {
     std::env::var("OXIKUBE_BENCH_CHURN")
@@ -98,7 +104,7 @@ fn main() {
         )]),
     );
     let churn = churn_per_frame();
-    for frame in 1..=FRAMES {
+    for frame in 1..=frames() {
         if churn == 0 {
             break;
         }
@@ -159,10 +165,10 @@ fn main() {
 
     let recorder = Arc::new(oxikube_runtime::perf::Recorder::new());
     oxikube_runtime::perf::install(recorder.clone());
-    let mut frame_ms = Vec::with_capacity(FRAMES);
-    let mut draw_ms = Vec::with_capacity(FRAMES);
+    let mut frame_ms = Vec::with_capacity(frames());
+    let mut draw_ms = Vec::with_capacity(frames());
     let typing = typed();
-    for frame in 0..FRAMES {
+    for frame in 0..frames() {
         if let Some(text) = &typing
             && frame % KEY_EVERY == 0
         {
@@ -220,14 +226,15 @@ fn main() {
     let pct = |v: &[f64], q: usize| v[(v.len() * q / 100).min(v.len() - 1)];
     let at = |q: usize| pct(&frame_ms, q);
     println!(
-        "resource table_bench: {PODS} pods, {churn} modified and {} rows scrolled per frame, {FRAMES} frames: \
+        "resource table_bench: {PODS} pods, {churn} modified and {} rows scrolled per frame, {} frames: \
          frame ms p50 {:.2} p95 {:.2} p99 {:.2} max {:.2}; coalesced redraws {notifies} ({:.2}/frame)",
         step(),
+        frames(),
         at(50),
         at(95),
         at(99),
         frame_ms[frame_ms.len() - 1],
-        notifies as f64 / FRAMES as f64,
+        notifies as f64 / frames() as f64,
     );
     println!(
         "  of which draw (render, layout, paint of the window): p50 {:.2} p95 {:.2} p99 {:.2} max {:.2}",

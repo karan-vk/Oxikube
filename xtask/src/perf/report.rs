@@ -46,6 +46,9 @@ pub struct Counters {
     pub dropped_frames: u64,
     pub feed_deltas: u64,
     pub notifies: u64,
+    /// The most coalesced notifies between two frames (E07-S09); absent in older samples.
+    #[serde(default)]
+    pub max_notifies_per_frame: u64,
 }
 
 /// One `oxikube --perf-scenario` run.

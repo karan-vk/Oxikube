@@ -259,7 +259,7 @@ impl StoreInner {
             self.ports.clone(),
             st.request.kind,
             entry.key.clone(),
-            self.runtime.clock.clone(),
+            self.runtime.clone(),
             Backoff::new(
                 self.options.config.retry_initial,
                 self.options.config.retry_max,

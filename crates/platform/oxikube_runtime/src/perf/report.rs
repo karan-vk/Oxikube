@@ -31,6 +31,10 @@ pub struct Counters {
     pub feed_deltas: u64,
     /// Coalesced notifies.
     pub notifies: u64,
+    /// The most coalesced notifies between two consecutive frames (1 when the one streaming view
+    /// is coalesced to frame cadence).
+    #[serde(default)]
+    pub max_notifies_per_frame: u64,
 }
 
 /// One sample (one process run) of one scenario.

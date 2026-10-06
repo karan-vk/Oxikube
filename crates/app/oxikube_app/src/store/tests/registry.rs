@@ -14,6 +14,7 @@ fn stores_follow_the_session_connection() {
     let stores = ResourceStores::new(StoreRuntime {
         spawner: exec.spawner(),
         clock: Arc::new(oxikube_testkit::FakeClockPort::default()),
+        probe: None,
     });
 
     bus.manager.open(

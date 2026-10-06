@@ -34,7 +34,9 @@ app.run(|cx| {
 - **Icons**: `Icon::new(IconName::Box).size(u(px(14.)))`. Add an icon by dropping the Lucide SVG
   into `oxikube_assets/assets/icons/` and one line in its `icons.rs`.
 - **Tables**: implement `TableDelegate`, create a `TableHandle`, render `Table::new(&handle)`.
-  Virtualised, uniform row height; no gpui-component types in the trait.
+  Virtualised, uniform row height; no gpui-component types in the trait. Plain text cells: return
+  a `TextCell` from `text_cell` and the table draws it itself (one element less, the ellipsis only
+  when the text does not fit its column; E07-S09); `render_td` is the fallback.
 - **Overlays**: `window.open_dialog(cx, |dialog, _, _| ..)` (`dialog::OverlayExt`). gpui-component
   0.7's `Root` renders the dialog, sheet, notification and tooltip layers itself, so there is no
   separate layer helper to call. `dialog::{Cancel, Confirm}` are the library's Escape / Enter

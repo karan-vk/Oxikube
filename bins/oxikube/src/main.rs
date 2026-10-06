@@ -16,8 +16,9 @@
 //! settings, see [`settings_schema`].
 //!
 //! Flags (`oxikube --help`): `--perf` records frame times, feed throughput, notify counts and RSS
-//! (docs/PERFORMANCE.md); `--perf-scenario` runs one headless perf sample (feature
-//! `perf-scenarios`, driven by `cargo xtask perf`).
+//! (docs/PERFORMANCE.md), and `--perf-table` makes that run connect a context and scroll its pods
+//! table; `--perf-scenario` runs one headless perf sample (feature `perf-scenarios`, driven by
+//! `cargo xtask perf`).
 
 mod cli;
 mod perf_mode;
@@ -99,8 +100,15 @@ fn main() -> ExitCode {
         None
     };
     let perf_duration = args.perf_duration;
+    let drive = args
+        .perf_table
+        .clone()
+        .map(|context| oxikube::perf_table::TableDrive {
+            context,
+            scroll: args.perf_scroll.unwrap_or(DEFAULT_SCROLL),
+        });
 
-    run_app(boot, perf, perf_duration);
+    run_app(boot, perf, perf_duration, drive);
     // Platforms where `run` returns after quitting (macOS exits from inside it; the quit hook
     // already finished the session there). Idempotent.
     perf_mode::finish();
@@ -112,12 +120,17 @@ fn main() -> ExitCode {
 /// the main window. With a `--perf` recorder the frame hook sits between the `Root` and the
 /// content (the `Root` must remain the window's root view for overlays to work); without it
 /// nothing is measured or paid for.
-fn run_app(mut boot: startup::Boot, perf: Option<Arc<Recorder>>, perf_duration: Option<Duration>) {
+fn run_app(
+    mut boot: startup::Boot,
+    perf: Option<Arc<Recorder>>,
+    perf_duration: Option<Duration>,
+    drive: Option<oxikube::perf_table::TableDrive>,
+) {
     let application = boot.report.time(Stage::Assets, || {
         gpui_platform::application().with_assets(oxikube_ui::Assets)
     });
     application.run(move |cx: &mut App| {
-        let up = start(cx, boot, perf, perf_duration);
+        let up = start(cx, boot, perf, perf_duration, drive);
         // Registered after every other quit observer (the window's persistence controller, the
         // perf recorder), so the log outlives their quit work; also on the failure paths, which
         // quit below. macOS exits from inside `run`, so `main` never gets to flush there.
@@ -137,6 +150,7 @@ fn start(
     boot: startup::Boot,
     perf: Option<Arc<Recorder>>,
     perf_duration: Option<Duration>,
+    drive: Option<oxikube::perf_table::TableDrive>,
 ) -> bool {
     if let Err(err) = startup::init(cx, StartupEnv::app(boot)) {
         tracing::error!(%err, "start-up failed");
@@ -154,10 +168,20 @@ fn start(
         }
         None => startup::window::open_main_window(cx, |content, _| content),
     });
-    if let Err(err) = opened {
-        tracing::error!(%err, "cannot open the main window");
-        eprintln!("oxikube: {err:#}");
-        return false;
+    let handle = match opened {
+        Ok(handle) => handle,
+        Err(err) => {
+            tracing::error!(%err, "cannot open the main window");
+            eprintln!("oxikube: {err:#}");
+            return false;
+        }
+    };
+    if let Some(drive) = drive {
+        oxikube::perf_table::start(drive, handle.into(), cx);
     }
     true
 }
+
+/// Rows `--perf-table` scrolls per frame without `--perf-scroll`: a fast trackpad fling at
+/// 120 Hz, as the `scroll-10k` scenario does.
+const DEFAULT_SCROLL: usize = 3;

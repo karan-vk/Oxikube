@@ -230,7 +230,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     });
 
     let open_views = open_views(views_rx, view_deps, &workspace, window, cx);
-    let open_kinds = resources::open_kinds(kinds_rx, tabs.clone(), &workspace, window, cx);
+    let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,

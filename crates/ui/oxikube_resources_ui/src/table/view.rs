@@ -23,6 +23,7 @@ use oxikube_ui::table::TableEvent;
 use oxikube_ui::table::TableOptions;
 use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent, Workspace};
 
+use super::cell_cache::CellCache;
 use super::columns::{initial_provider, session_capabilities};
 use super::delegate::RowsDelegate;
 use super::layout::ColumnLayout;
@@ -114,6 +115,9 @@ pub struct ResourceTable {
     pub(super) prefs_task: Option<Task<()>>,
     _tick: Task<()>,
     _subscriptions: Vec<Subscription>,
+    /// How many times the view rendered (coalescing tests).
+    #[cfg(test)]
+    pub(super) renders: usize,
 }
 
 impl EventEmitter<ItemEvent> for ResourceTable {}
@@ -148,6 +152,7 @@ impl ResourceTable {
             details_open: false,
             now: Timestamp::now(),
             colors: None,
+            cells: CellCache::default(),
             view: cx.entity().downgrade(),
             actions: deps.actions.clone().map(|actions| ActionSource {
                 actions,
@@ -223,6 +228,8 @@ impl ResourceTable {
             prefs_task: None,
             _tick: tick,
             _subscriptions: vec![events, refocus, filter_events],
+            #[cfg(test)]
+            renders: 0,
         };
         this.load_prefs(cx);
         this.load_filter(window, cx);

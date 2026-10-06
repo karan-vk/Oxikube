@@ -53,6 +53,19 @@ pub(crate) struct FeedBatch {
     pub columns: Option<TableColumns>,
 }
 
+impl FeedBatch {
+    /// The watch events in this batch: one per change, one per object of a relist.
+    pub fn events(&self) -> usize {
+        self.deltas
+            .iter()
+            .map(|delta| match delta {
+                ObjectDelta::Restarted(all) => all.len(),
+                ObjectDelta::Applied(_) | ObjectDelta::Deleted(_) => 1,
+            })
+            .sum()
+    }
+}
+
 pub(crate) type NormalisedFeed = BoxStream<'static, OxiResult<FeedBatch>>;
 
 /// Opens the feed `kind` names for `key` (the port call the policy chose).

@@ -122,6 +122,7 @@ impl Fixture {
                     executor.spawn(task).detach();
                 }),
                 clock: Arc::new(FakeClockPort::default()),
+                probe: None,
             };
             Arc::new(ResourceStores::new(runtime))
         });

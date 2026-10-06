@@ -16,7 +16,7 @@ fn click(f: &mut Fixture, row: usize, modifiers: Modifiers) {
     f.vcx.update(|window, cx| window.draw(cx).clear(cx));
     let at = f
         .vcx
-        .debug_bounds(Box::leak(format!("cell-{row}-0").into_boxed_str()))
+        .debug_bounds(Box::leak(format!("td-{row}-0").into_boxed_str()))
         .unwrap_or_else(|| panic!("row {row} was not laid out"))
         .center();
     f.vcx.simulate_click(at, modifiers);
@@ -256,7 +256,7 @@ fn menu_entry_after_churn(cx: &mut TestAppContext, entry: usize) -> (Fixture, Ve
     f.vcx.update(|window, cx| window.draw(cx).clear(cx));
     let at = f
         .vcx
-        .debug_bounds("cell-1-0")
+        .debug_bounds("td-1-0")
         .expect("row 1 was laid out")
         .center();
     f.vcx

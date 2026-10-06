@@ -25,6 +25,8 @@ pub struct Budget {
     pub tolerance: f64,
     /// What the budget is, for the table.
     pub what: &'static str,
+    /// Only check on this OS (`std::env::consts::OS`); `None`: everywhere.
+    pub os: Option<&'static str>,
 }
 
 /// Every budget, in report order.
@@ -36,6 +38,7 @@ pub const BUDGETS: &[Budget] = &[
         // The nightly tolerance: the scenario fails when the first frame is more than 20 % over.
         tolerance: 0.20,
         what: "cold start to the first interactive frame (process spawn, headless)",
+        os: None,
     },
     Budget {
         scenario: "startup",
@@ -45,6 +48,28 @@ pub const BUDGETS: &[Budget] = &[
         // main thread.
         tolerance: 0.0,
         what: "settings + theme + keymap load on the main thread",
+        os: None,
+    },
+    Budget {
+        scenario: "scroll-10k",
+        metric: "first_rows_ms",
+        limit: 1000.0,
+        tolerance: 0.0,
+        what: "first table rows after the feed is warm (10 000 pods, headless)",
+        os: None,
+    },
+    Budget {
+        scenario: "scroll-10k",
+        metric: "frame_ms",
+        // 55 fps (E07's acceptance): a frame of the table scrolling under churn, headless. The
+        // p95 <= 8 ms budget is the windowed `oxikube --perf` figure (docs/PERFORMANCE.md).
+        limit: 1000.0 / 55.0,
+        tolerance: 0.0,
+        what: ">= 55 fps scrolling 10 000 pods under churn (headless frame, p95)",
+        // macOS only: the Linux runner draws these frames with Mesa's software renderer, about
+        // 340 ms each, which says nothing about the app on a GPU (#509). The baseline gate still
+        // catches a regression there.
+        os: Some("macos"),
     },
 ];
 
@@ -97,6 +122,7 @@ impl fmt::Display for BudgetRow {
 pub fn check(report: &Report, budgets: &[Budget]) -> Vec<BudgetRow> {
     budgets
         .iter()
+        .filter(|budget| budget.os.is_none_or(|os| os == report.os))
         .filter_map(|budget| {
             let result = report.scenarios.get(budget.scenario)?;
             if result.status != Status::Ok {
@@ -181,6 +207,37 @@ mod tests {
     fn the_config_load_budget_is_strict() {
         assert_eq!(verdicts(&report(Some(100.0), 30.0))[1], Verdict::Within);
         assert_eq!(verdicts(&report(Some(100.0), 30.5))[1], Verdict::Fail);
+    }
+
+    #[test]
+    fn the_table_budgets_check_first_rows_and_the_55_fps_frame() {
+        let mut r = report(Some(100.0), 1.0);
+        let mut launches = BTreeMap::new();
+        launches.insert("first_rows_ms".to_owned(), pct(240.0));
+        let mut metrics = BTreeMap::new();
+        metrics.insert("frame_ms".to_owned(), pct(6.0));
+        r.scenarios.insert(
+            "scroll-10k".to_owned(),
+            ScenarioResult {
+                status: Status::Ok,
+                reason: None,
+                enabled_by: vec![],
+                samples: 5,
+                metrics,
+                counters: Counters::default(),
+                launches,
+            },
+        );
+        assert_eq!(verdicts(&r)[2..], [Verdict::Within, Verdict::Within]);
+        let scroll = r.scenarios.get_mut("scroll-10k").unwrap();
+        scroll
+            .launches
+            .insert("first_rows_ms".to_owned(), pct(1000.5));
+        scroll.metrics.insert("frame_ms".to_owned(), pct(18.5));
+        assert_eq!(verdicts(&r)[2..], [Verdict::Fail, Verdict::Fail]);
+        // The frame budget is macOS only (#509).
+        r.os = "linux".into();
+        assert_eq!(verdicts(&r)[2..], [Verdict::Fail]);
     }
 
     #[test]

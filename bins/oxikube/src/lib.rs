@@ -16,12 +16,15 @@
 //! - [`mount`]: the cluster UI in the main window: catalog home, hotbar, cluster tabs with their
 //!   sidebar, connect views and namespace selector, the status bar item, the command bus, session
 //!   restore (E07-S00).
+//! - [`perf_table`]: what `oxikube --perf-table` does in the window: connect a context, open its
+//!   pods table and scroll it, through the same commands as a user (E07-S09).
 //!
-//! Everything else (command line, `--perf`, screenshot and perf scenarios) stays private to the
-//! binary.
+//! Everything else (command line, the `--perf` session, screenshot and perf scenarios) stays
+//! private to the binary.
 
 pub mod app_state;
 pub mod cluster_prefs;
 pub mod kube_ports;
 pub mod mount;
+pub mod perf_table;
 pub mod startup;

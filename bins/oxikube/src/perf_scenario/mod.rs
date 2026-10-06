@@ -11,7 +11,10 @@
 //!
 //! - `startup` ([`startup`]): the real init order, the main window behind the startup
 //!   placeholder, the first interactive frame and the per-stage breakdown (E05-S13).
+//! - `scroll-10k` ([`scroll_10k`], also `table-scroll-10k`): the resource table scrolling
+//!   10 000 pods under feed churn, first rows after the feed is warm (E07-S09).
 
+mod scroll_10k;
 mod startup;
 
 use anyhow::{Context as _, Result};
@@ -40,12 +43,7 @@ const NEEDS_TEST_APP: &str = "E05-S11 #93";
 pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) -> ExitCode {
     let sample = match name {
         "startup" => startup::run(launched, probe),
-        "scroll-10k" => Ok(ScenarioSample::not_available(
-            name,
-            "no pod table yet: scrolling 10k rows under 1 %/5 s churn needs the generic \
-             ResourceTable fed from the load-pods fixture",
-            &[NEEDS_TEST_APP, "E07-S01 #107", "E07-S03 #109"],
-        )),
+        scroll_10k::NAME | "table-scroll-10k" => scroll_10k::run(probe),
         "palette" => Ok(ScenarioSample::not_available(
             name,
             "no command palette yet: open <= 1 frame and filter 2 000 entries <= 5 ms",
@@ -63,8 +61,8 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
         )),
         other => {
             eprintln!(
-                "oxikube: unknown perf scenario `{other}` (startup, scroll-10k, palette, \
-                 logs-stream, editor-5mb)"
+                "oxikube: unknown perf scenario `{other}` (startup, scroll-10k or \
+                 table-scroll-10k, palette, logs-stream, editor-5mb)"
             );
             return ExitCode::from(2);
         }

@@ -2,6 +2,7 @@
 //! executor (no runtime, no threads) and the fake clock.
 
 mod budget;
+mod churn;
 mod counts;
 mod diagnostics;
 mod feeds;
@@ -86,6 +87,15 @@ impl Harness {
     }
 
     pub fn with_options(options: StoreOptions) -> Self {
+        Self::build(options, None)
+    }
+
+    /// A store whose runtime reports to `probe`.
+    pub fn with_probe(probe: Arc<dyn super::StoreProbe>) -> Self {
+        Self::build(StoreOptions::default(), Some(probe))
+    }
+
+    fn build(options: StoreOptions, probe: Option<Arc<dyn super::StoreProbe>>) -> Self {
         let clock = Arc::new(FakeClockPort::default());
         let resources = Arc::new(FakeResourcePort::with_clock(clock.clone()));
         let tables = Arc::new(FakeTableFeedPort::with_clock(clock.clone()));
@@ -100,6 +110,7 @@ impl Harness {
             StoreRuntime {
                 spawner: exec.spawner(),
                 clock: clock.clone(),
+                probe,
             },
             options,
             Some(warnings.clone()),

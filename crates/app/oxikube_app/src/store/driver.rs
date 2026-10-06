@@ -17,8 +17,8 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use oxikube_domain::OxiError;
-use oxikube_ports::ClockPort;
 
+use super::config::StoreRuntime;
 use super::delta::FeedState;
 use super::entry::FeedEntry;
 use super::feed::{StorePorts, open};
@@ -64,7 +64,8 @@ fn record_failure(entry: &FeedEntry, error: &OxiError) -> bool {
     retrying
 }
 
-/// Runs one feed until it fails terminally or the entry is gone (or the task is aborted).
+/// Runs one feed until it fails terminally or the entry is gone (or the task is aborted). Every
+/// batch is reported to the runtime's probe, if any, before it is applied.
 ///
 /// A new entry is first seeded from `seed_from` (the feeds a rescope left), here rather than on
 /// the subscriber's thread, and before the feed opens so its relist reconciles the seed.
@@ -73,7 +74,7 @@ pub(crate) async fn drive(
     ports: StorePorts,
     kind: FeedKind,
     key: FeedKey,
-    clock: Arc<dyn ClockPort>,
+    runtime: StoreRuntime,
     mut backoff: Backoff,
     seed_from: Vec<Arc<FeedEntry>>,
 ) {
@@ -89,6 +90,9 @@ pub(crate) async fn drive(
                     let Some(live) = entry.upgrade() else { return };
                     match item {
                         Ok(batch) => {
+                            if let Some(probe) = &runtime.probe {
+                                probe.feed_batch(batch.events());
+                            }
                             live.apply(batch);
                             backoff.reset();
                         }
@@ -111,7 +115,7 @@ pub(crate) async fn drive(
                 }
             }
         }
-        clock.sleep(backoff.take()).await;
+        runtime.clock.sleep(backoff.take()).await;
     }
 }
 

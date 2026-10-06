@@ -67,6 +67,7 @@ fn main() {
         StoreRuntime {
             spawner: Arc::new(move |task| spawn_queue.lock().push(task)),
             clock,
+            probe: None,
         },
         StoreOptions::default(),
     );
