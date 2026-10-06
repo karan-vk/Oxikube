@@ -368,9 +368,30 @@ fn two_tables_of_one_cluster_show_a_warning_once(cx: &mut TestAppContext) {
     f.ports()
         .discovery
         .set_kinds([super::pods_kind(), services.clone()]);
-    f.open_pods();
-    f.open(services);
+    let pods = f.open_pods();
+    let services = f.open(services);
+    // The toast queue keys toasts by text and would hide a duplicate, so count the tables'
+    // `ApiWarning` events: the store's ledger must let exactly one table surface it.
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let _subscriptions: Vec<_> = [&pods, &services]
+        .into_iter()
+        .map(|table| {
+            let sink = events.clone();
+            f.vcx.update(|_, cx| {
+                cx.subscribe(table, move |_, event: &ResourceTableEvent, _| {
+                    if let ResourceTableEvent::ApiWarning(w) = event {
+                        sink.borrow_mut().push(w.text.clone());
+                    }
+                })
+            })
+        })
+        .collect();
     f.ports().warnings.push_text("shared deprecation");
     f.settle();
+    assert_eq!(
+        *events.borrow(),
+        ["shared deprecation"],
+        "one ApiWarning across both tables"
+    );
     assert_eq!(toasts(&mut f), ["shared deprecation"]);
 }
