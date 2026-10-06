@@ -2,8 +2,9 @@
 //! (`PortsChoice::Sqlite`: SQLite state db, the kube catalog and connector, the Tokio runtime),
 //! its main window headless (GPUI's test platform, no display), and a user's path through it:
 //! the catalog lists the kind context, searching for it and pressing Enter connects it and opens
-//! its cluster tab with the sidebar; a context whose token the API server rejects opens a tab
-//! that shows `AuthRequired`, not a blank screen.
+//! its cluster tab with the sidebar; activating the sidebar's Pods entry opens the pods table in
+//! that tab, fed by the cluster (E07-S03); a context whose token the API server rejects opens a
+//! tab that shows `AuthRequired`, not a blank screen.
 //!
 //! `cargo test -p oxikube --features integration --test kind_app` with `OXIKUBE_TEST_CONTEXT`
 //! set (`cargo xtask kind-up`); without it the test returns at once. It creates nothing in the
@@ -22,10 +23,12 @@ use oxikube::app_state::AppState;
 use oxikube::startup::{
     ConfigSource, PortsChoice, RuntimeChoice, StartupEnv, StartupReport, init, window,
 };
+use oxikube_app::store::FeedState;
 use oxikube_catalog_ui::{CatalogView, ConnectView};
 use oxikube_domain::ids::ContextName;
 use oxikube_domain::session::SessionPhase;
 use oxikube_kube::kubeconfig::{Strictness, default_kubeconfig_path, load_local_kubeconfig};
+use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::integration::{ensure_kind_context, test_context};
 use oxikube_workspace::sidebar::SidebarPanel;
 use oxikube_workspace::{ClusterTab, Workspace};
@@ -97,6 +100,7 @@ fn the_app_connects_kind_from_the_catalog_and_shows_a_bad_context_as_auth_requir
             .is_some()
     });
     assert!(sidebar, "the kind tab has its sidebar");
+    open_pods_from_sidebar(&mut vcx, &tab);
 
     // Back to the catalog (the first tab) for the second connect.
     let catalog_id = catalog.entity_id();
@@ -129,6 +133,45 @@ fn the_app_connects_kind_from_the_catalog_and_shows_a_bad_context_as_auth_requir
         state.services().sessions.disconnect(&cluster).ok();
     }
     vcx.run_until_parked();
+}
+
+/// Activates the sidebar's Pods entry, as a click does, and waits for the pods table to list
+/// what the cluster serves (kind always runs pods in `kube-system`).
+fn open_pods_from_sidebar(vcx: &mut VisualTestContext, tab: &Entity<ClusterTab>) {
+    let inner = vcx.update(|_, cx| tab.read(cx).workspace().clone());
+    let panel = vcx
+        .update(|_, cx| inner.read(cx).panel::<SidebarPanel>())
+        .expect("the sidebar");
+    wait(vcx, "the sidebar to list Pods", |vcx| {
+        vcx.update(|_, cx| panel.read(cx).row("workloads/pods").is_some())
+    });
+    vcx.update(|_, cx| panel.update(cx, |panel, cx| panel.activate("workloads/pods", cx)));
+    wait(vcx, "the pods table to open and list", |vcx| {
+        vcx.update(|_, cx| {
+            let tables = inner.read(cx).items_of_type::<ResourceTable>();
+            tables.first().is_some_and(|table| {
+                table.read(cx).read_rows(cx, |d| {
+                    d.state() == &FeedState::Ready && !d.rows().is_empty()
+                })
+            })
+        })
+    });
+    let (kind, namespaces) = vcx.update(|_, cx| {
+        let table = inner.read(cx).items_of_type::<ResourceTable>()[0].clone();
+        let table = table.read(cx);
+        let namespaces: Vec<String> = table.read_rows(cx, |d| {
+            d.rows()
+                .iter()
+                .filter_map(|row| row.namespace().map(str::to_owned))
+                .collect()
+        });
+        (table.gvk().kind.to_string(), namespaces)
+    });
+    assert_eq!(kind, "Pod");
+    assert!(
+        namespaces.iter().any(|ns| ns == "kube-system"),
+        "the pods table lists kind's kube-system pods, got namespaces {namespaces:?}"
+    );
 }
 
 /// Types `name` into the catalog's search and presses Enter, as a user would.

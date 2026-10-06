@@ -30,7 +30,8 @@ use super::entry::EntryState;
 use super::feed::TableColumns;
 use super::index::SortedIndex;
 use super::object::FeedScope;
-use super::query::{SortKey, StoreFilter, StoreQuery};
+use super::query::{StoreFilter, StoreQuery};
+use super::sort::SortKey;
 use rebuild::Replay;
 pub(crate) use rebuild::seed;
 

@@ -73,5 +73,33 @@
       "end": "catalog::SelectLast",
       "/": "catalog::FocusSearch"
     }
+  },
+  {
+    // Resource tables (E07-S03): move the cursor and the selection, select all, copy the name.
+    "context": "Table",
+    "bindings": {
+      "down": "resource_table::SelectNext",
+      "up": "resource_table::SelectPrevious",
+      "shift-down": "resource_table::ExtendNext",
+      "shift-up": "resource_table::ExtendPrevious",
+      "home": "resource_table::SelectFirst",
+      "end": "resource_table::SelectLast",
+      "pagedown": "resource_table::SelectPageDown",
+      "pageup": "resource_table::SelectPageUp",
+      "cmd-a": "resource_table::SelectAll",
+      "cmd-c": "resource_table::CopyName"
+    }
+  },
+  {
+    // Bare keys stay off while a text field inside the table (its filter) has the focus.
+    "context": "Table && !Editing",
+    "bindings": {
+      "j": "resource_table::SelectNext",
+      "k": "resource_table::SelectPrevious",
+      "shift-j": "resource_table::ExtendNext",
+      "shift-k": "resource_table::ExtendPrevious",
+      "enter": "resource_table::OpenSelected",
+      "escape": "resource_table::ClearSelection"
+    }
   }
 ]

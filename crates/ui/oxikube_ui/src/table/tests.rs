@@ -1,5 +1,6 @@
 //! Table tests: virtualisation, delegate forwarding, events.
 
+mod events;
 mod support;
 
 use self::support::harness;

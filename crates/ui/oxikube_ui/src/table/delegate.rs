@@ -1,6 +1,7 @@
 //! The data-source trait a table renders from.
 
 use super::column::{SortDirection, TableColumn};
+use crate::menu::PopupMenu;
 use gpui::{App, IntoElement, ParentElement as _, Styled as _, Window, div};
 use std::ops::Range;
 
@@ -87,6 +88,25 @@ pub trait TableDelegate: 'static {
         _window: &mut Window,
         _cx: &mut App,
     ) {
+    }
+
+    /// Whether row `row_ix` is part of the owner's selection, drawn with the selection
+    /// background. Only consulted for tables whose owner selects
+    /// ([`TableOptions::select_rows`](super::TableOptions) off); it runs for every visible row
+    /// each frame, so keep it to a lookup.
+    fn row_selected(&self, _row_ix: usize, _cx: &App) -> bool {
+        false
+    }
+
+    /// The context menu of row `row_ix` (right click). Return `menu` unchanged for none.
+    fn context_menu(
+        &mut self,
+        _row_ix: usize,
+        menu: PopupMenu,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> PopupMenu {
+        menu
     }
 
     /// Plain-text value of a cell, for copy and CSV export.

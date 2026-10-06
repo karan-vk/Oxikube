@@ -69,12 +69,16 @@ impl CommandId {
     pub const POD_VIEW_LOGS: CommandId = CommandId::new("pod::ViewLogs");
     /// `resource::Apply`: apply a manifest.
     pub const RESOURCE_APPLY: CommandId = CommandId::new("resource::Apply");
+    /// `resource::CopyName`: copy a resource's name to the clipboard.
+    pub const RESOURCE_COPY_NAME: CommandId = CommandId::new("resource::CopyName");
     /// `resource::Delete`: delete any resource.
     pub const RESOURCE_DELETE: CommandId = CommandId::new("resource::Delete");
     /// `resource::Open`: open a resource's detail view.
     pub const RESOURCE_OPEN: CommandId = CommandId::new("resource::Open");
     /// `resource::OpenList`: open the list view of a resource kind.
     pub const RESOURCE_OPEN_LIST: CommandId = CommandId::new("resource::OpenList");
+    /// `resource::SelectAll`: select every row of a kind's list views.
+    pub const RESOURCE_SELECT_ALL: CommandId = CommandId::new("resource::SelectAll");
     /// `resource::ViewYaml`: open a resource's YAML.
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `view::Open`: open a registered view by id.
@@ -281,6 +285,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         Risk::Medium,
         NONE,
     ),
+    // Writes the user's clipboard, never the cluster.
+    CommandMeta::read(
+        CommandId::RESOURCE_COPY_NAME,
+        "Copy Resource Name",
+        CommandScope::Selection,
+        NONE,
+    ),
     CommandMeta::mutation(
         CommandId::RESOURCE_DELETE,
         "Delete Resource",
@@ -297,6 +308,12 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::RESOURCE_OPEN_LIST,
         "Open Resource List",
+        CommandScope::ResourceKind,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::RESOURCE_SELECT_ALL,
+        "Select All Resources",
         CommandScope::ResourceKind,
         NONE,
     ),

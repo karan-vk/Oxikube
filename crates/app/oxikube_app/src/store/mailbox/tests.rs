@@ -16,7 +16,8 @@ use super::super::entry::FeedEntry;
 use super::super::feed::{FeedBatch, ObjectDelta};
 use super::super::object::{FeedKey, FeedScope, StoreObject};
 use super::super::policy::{FeedKind, FeedPriority};
-use super::super::query::{SortField, SortKey, StoreFilter};
+use super::super::query::StoreFilter;
+use super::super::sort::{SortField, SortKey};
 use super::super::tests::{all, names, p, pods};
 use super::{SubShared, seed};
 

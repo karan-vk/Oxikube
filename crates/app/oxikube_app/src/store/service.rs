@@ -88,6 +88,12 @@ impl ResourceStore {
         &self.inner.cluster
     }
 
+    /// Whether `other` is a handle on this same store (a reconnect builds a new one, so a view
+    /// holding a store can tell it must re-subscribe).
+    pub fn is_same(&self, other: &ResourceStore) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
     /// The ports the store reads (to tell whether a session reconnected under it).
     pub(crate) fn ports(&self) -> &StorePorts {
         &self.inner.ports

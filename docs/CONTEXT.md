@@ -71,6 +71,8 @@ How to read the **Lives in** column:
 | **ColumnProvider** | The one trait a table asks for a kind's `Column`s and an object's `Cell` in a column; `CoreColumns` (our catalogue of ~40 core kinds) and `TableColumns` (the server's Table columns) implement it. Cheap, synchronous, memoised per (kind, capabilities). | `oxikube_app::columns` (E07-S02) |
 | **Column / ColumnId** | One table column: a stable `ColumnId` (the key column visibility and order persist under), title, `wide` flag (hidden by default, `kubectl -o wide`; Table `priority > 0`), alignment and `SortKind`. | `oxikube_app::columns` |
 | **Cell / CellSort / Tone** | One table cell: display text, a typed sort key (`Int`, `Float`, `Quantity`, `Age`, `Time`, `Text`) so sorting never reparses text, and a `Tone` (neutral / ok / warn / error) the table maps to theme colours. `Cell::Pending` is a metrics hook with no value yet: shown blank, never `0`. | `oxikube_app::columns` |
+| **ResourceTable** | The generic, virtualised table of one kind in one cluster tab: rows from a `ResourceStore` subscription, cells from a `ColumnProvider`, multi-select by object identity, keyboard navigation in the `Table` key context. | `oxikube_resources_ui::table` (E07-S03) |
+| **ColumnLayout / ColumnPrefs** | A kind's columns as the user arranged them (order, shown or hidden, widths, sort); saved per kind (not per cluster) under `table.columns.<group>/<Kind>`. | `oxikube_resources_ui::table` |
 | **KindSpec** | Per-kind registration: columns, detail renderer, actions, templates, sidebar section. | `oxikube_resources_ui::kinds` *(planned)* |
 
 ## Commands and safety

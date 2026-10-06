@@ -15,7 +15,9 @@
 //!    cluster source, and the sources screen behind `view::Open`;
 //! 5. session restore (E06-S11), which waits for the first frame and the layout restore by itself;
 //! 6. the resource stores and the resource views of every cluster tab (E07-S11, [`resources`]):
-//!    sidebar count badges, the Workloads overview as the first screen, and `resource::OpenList`.
+//!    sidebar count badges, the Workloads overview as the first screen, and `resource::OpenList`;
+//!    the [`ResourceViews`] controller (E07-S03) opens a kind's table in its cluster's tab when
+//!    the sidebar or `resource::OpenList` asks.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -36,9 +38,13 @@ use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui::{App, AppContext as _, Entity, Subscription, Task, Window};
 use oxikube_app::session::restore::{RestoreConfig, SessionRestorer};
-use oxikube_app::{CommandBus, KubeconfigSourcesService};
+use oxikube_app::{CommandBus, CoreColumns, KubeconfigSourcesService};
 use oxikube_catalog_ui::sources::{SettingsSourceList, SettingsSourceListHandle};
 use oxikube_catalog_ui::{Hotbar, HotbarDeps};
+use oxikube_resources_ui::table::ResourceTableDeps;
+use oxikube_resources_ui::{
+    ResourceCommandSink, ResourceViews, ResourceViewsDeps, ResourceViewsSlot,
+};
 use oxikube_workspace::cluster_tab::TabsDispatcher;
 use oxikube_workspace::window::MainView;
 use oxikube_workspace::{
@@ -67,6 +73,8 @@ pub struct Wiring {
     _open_views: Task<()>,
     /// Opens the lists `resource::OpenList` asks for. Lives as long as the window.
     _open_kinds: Task<()>,
+    /// Opens the resource tables and runs the table commands.
+    _resource_views: Entity<ResourceViews>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -87,6 +95,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let bus_dispatcher = bus::BusDispatcher::new(window.window_handle());
     let dispatcher: Rc<dyn CommandDispatcher> = Rc::new(bus_dispatcher.clone());
 
+    let resources_slot = ResourceViewsSlot::new();
+    let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
     let tab_deps = tabs::TabDeps {
         sessions: services.sessions.clone(),
         namespaces: services.namespaces.clone(),
@@ -94,7 +104,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         state: ports.state.clone(),
         dispatcher: dispatcher.clone(),
         workspace: workspace.downgrade(),
-        stores: resources::stores(&state, ports.clusters.clock.clone(), cx),
+        stores: stores.clone(),
+        resources: resources_slot.clone(),
     };
     let tabs_deps = ClusterTabsDeps::new(
         services.sessions.clone(),
@@ -117,6 +128,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
 
     let (views_tx, views_rx) = mpsc::unbounded();
     let (kinds_tx, kinds_rx) = mpsc::unbounded();
+    let (resources_sink, resources_rx) = ResourceCommandSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -126,6 +138,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         tabs: sink.clone(),
         views: views_tx,
         kinds: kinds_tx,
+        resources: resources_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -139,6 +152,23 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     if !state.set_command_bus(bus.clone()) {
         tracing::warn!("a command bus was set already: this window uses its own");
     }
+
+    let resource_views = ResourceViews::start(
+        ResourceViewsDeps {
+            table: ResourceTableDeps {
+                sessions: services.sessions.clone(),
+                stores,
+                columns: Arc::new(CoreColumns::new()),
+                state: ports.state.clone(),
+                dispatcher: dispatcher.clone(),
+            },
+            tabs: tabs.downgrade(),
+        },
+        resources_rx,
+        window,
+        cx,
+    );
+    resources_slot.set(&resource_views);
 
     let status = cx.new(|cx| ClusterStatusItem::new(services.sessions.clone(), cx));
     workspace.update(cx, |ws, cx| {
@@ -198,6 +228,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _follow_active: follow_active,
         _open_views: open_views,
         _open_kinds: open_kinds,
+        _resource_views: resource_views,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

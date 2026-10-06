@@ -108,6 +108,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   0 is the `wide` flag) and rows, recovering typed sort keys from the server's text and substituting
   generic Name / Namespace / Age for a `TableSource::Objects` feed. A `Cell` carries display text, a
   typed `CellSort` (number, quantity, age, time, text) and a `Tone`; colours stay in the theme.
+  The store sorts by any column through `SortField::Cell(CellSortKey)`: each object ranks by its
+  cell's typed sort key, read once per object version from the view's provider (E07-S03).
   Module `session::restore` (E06-S11): `SessionRestorer` reopens the last session. `prepare` reads
   the saved tabs (`ClusterTabsStore`, moved here from the workspace so the app layer can read what
   the tabs write), matches them against the catalog, opens each cluster as a `Disconnected`
@@ -387,6 +389,17 @@ kube API ──watch──▶ oxikube_kube::{feed (reflector / metadata), table 
 oxikube_app::ResourceStore (cache, sort, filter, index) ──subscribe──▶
 oxikube_resources_ui::ResourceTable (uniform_list rows via oxikube_ui::Table) ──▶ GPUI
 ```
+
+The table (E07-S03, `oxikube_resources_ui::table`) is a workspace item in the cluster's tab,
+opened by `resource::OpenList` (from the cluster sidebar, a Workloads overview tile, the palette
+or an agent): the command's handler (`oxikube_resources_ui::navigate`, E07-S11) hands the request
+to the window, and `ResourceViews` (`oxikube_resources_ui::views`), registered as a kind view in
+`navigate::KindViews`, resolves the kind through discovery and opens the table. It holds the store `Subscription` and applies each coalesced `StoreDelta` in one update, redrawing
+through `notify_coalesced`; it never sorts itself (the header asks the store for a
+`SortField::Cell` order). Its `RowsDelegate` implements `oxikube_ui::TableDelegate`, the only code
+that meets gpui-component's table. Selection is kept by object identity, so deltas that move rows
+keep it; column order, visibility, widths and sort persist per kind in the `StatePort`
+(`table.columns.<group>/<Kind>`).
 
 Core kinds use typed/metadata reflectors plus our own column definitions; CRDs and unknown kinds
 use the server-side Table API (kubectl-identical columns incl. `additionalPrinterColumns`).

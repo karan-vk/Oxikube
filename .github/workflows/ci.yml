@@ -59,7 +59,7 @@ jobs:
       - run: cargo run -q -p xtask -- gen-settings-schema --check
       # Feature-gated screenshot harness (E01-S11): lint everything with the feature on, and run
       # the pure-image golden-compare tests (no GPU needed). GPU smoke tests run in nightly.
-      - run: cargo clippy -p oxikube -p oxikube_testkit -p oxikube_ui -p oxikube_workspace -p oxikube_catalog_ui --features oxikube/screenshot,oxikube_testkit/screenshot,oxikube_ui/screenshot,oxikube_workspace/screenshot,oxikube_catalog_ui/screenshot --all-targets -- -D warnings
+      - run: cargo clippy -p oxikube -p oxikube_testkit -p oxikube_ui -p oxikube_workspace -p oxikube_catalog_ui -p oxikube_resources_ui --features oxikube/screenshot,oxikube_testkit/screenshot,oxikube_ui/screenshot,oxikube_workspace/screenshot,oxikube_catalog_ui/screenshot,oxikube_resources_ui/screenshot --all-targets -- -D warnings
       - run: cargo test -p oxikube_testkit --features screenshot
       # GPUI test harness (E05-S11, docs/testing-gpui.md): lint it and run its `#[gpui::test]`s on
       # both OSes (deterministic: no GPU, no OS threads). The golden screenshot example runs in

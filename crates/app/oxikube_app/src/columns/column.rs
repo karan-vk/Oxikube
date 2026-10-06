@@ -100,7 +100,8 @@ pub struct Column {
     /// What the column sorts by.
     pub sort: SortKind,
     /// For a Table-feed column, the index of its cell in each row: the `SortField::Column` index
-    /// the store sorts by. `None` for core columns, which the store ranks by their cells.
+    /// the store sorts by. `None` for core columns, which the store ranks by their cells
+    /// ([`SortField::Cell`](crate::store::SortField::Cell)).
     pub table_index: Option<usize>,
 }
 
