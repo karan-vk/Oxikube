@@ -10,6 +10,13 @@ use crate::actions::Stage;
 use crate::table::tests::fixture::Fixture;
 use crate::table::tests::p;
 
+/// The platform's select-all chord (the keymaps bind `cmd-a` on macOS, `ctrl-a` elsewhere).
+const SELECT_ALL: &str = if cfg!(target_os = "macos") {
+    "cmd-a"
+} else {
+    "ctrl-a"
+};
+
 #[gpui::test]
 fn five_selected_objects_one_confirmation_per_object_results(cx: &mut TestAppContext) {
     let mut f = Fixture::with_actions(cx);
@@ -33,7 +40,7 @@ fn five_selected_objects_one_confirmation_per_object_results(cx: &mut TestAppCon
     script.delete.push_ok(oxikube_ports::DeleteOutcome::Deleted); // web-4 rehearsal
     script.delete.push_ok(oxikube_ports::DeleteOutcome::Deleted); // web-4
 
-    f.keys(&table, "cmd-a");
+    f.keys(&table, SELECT_ALL);
     assert_eq!(f.selected(&table).len(), 5);
     f.keys(&table, "delete");
     let d = dialog(&mut f).expect("one dialog for the whole selection");
@@ -86,7 +93,7 @@ fn a_right_click_inside_the_selection_deletes_the_selection(cx: &mut TestAppCont
     let mut f = Fixture::with_actions(cx);
     f.connect_with((0..4).map(|i| p("x", &format!("web-{i}"), "1")));
     let table = f.open_pods();
-    f.keys(&table, "cmd-a");
+    f.keys(&table, SELECT_ALL);
     super::right_click(&mut f, 2);
     // Open, Copy Name, Select All, Delete: the per-kind action is for one object only.
     super::choose(&mut f, 3);
@@ -100,7 +107,7 @@ fn a_read_only_cluster_refuses_each_object_even_when_the_dialog_was_open(cx: &mu
     let mut f = Fixture::with_actions(cx);
     f.connect_with((0..3).map(|i| p("x", &format!("web-{i}"), "1")));
     let table = f.open_pods();
-    f.keys(&table, "cmd-a");
+    f.keys(&table, SELECT_ALL);
     f.keys(&table, "delete");
     let d = dialog(&mut f).expect("dialog");
     // Read-only goes on while the dialog is open: the guard still refuses every object.
