@@ -130,8 +130,9 @@ impl Shared {
         self.inner.lock().closed
     }
 
-    /// The numbers a stream computes its next delta from; registers `waker` to be woken by the
-    /// next change when `register` says the caller found nothing new.
+    /// The numbers a stream computes its next delta from, when `is_new` says there is something
+    /// to deliver. Otherwise `None`, and `waker` (if any) is registered to be woken by the next
+    /// change.
     pub(super) fn snapshot(
         &self,
         waker: Option<&Waker>,

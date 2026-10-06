@@ -1,11 +1,10 @@
 //! [`LogService`]: opens log sessions over a `LogPort` and keeps their memory bounded.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Weak};
 
 use oxikube_ports::{LogOptions, LogPort};
 use parking_lot::Mutex;
-use std::sync::Weak;
 
 use super::driver::Driver;
 use super::options::{LogConfig, LogRuntime, clamp_buffer_lines};

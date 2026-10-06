@@ -54,6 +54,13 @@ pub struct LogDeltas {
     done: bool,
 }
 
+impl Cursor {
+    /// Whether `now` shows nothing the consumer has not seen.
+    fn has_seen(&self, now: &Snapshot) -> bool {
+        now.next_seq == self.next && now.first_seq == self.first && now.state == self.state
+    }
+}
+
 impl LogDeltas {
     pub(super) fn new(shared: Arc<Shared>) -> Self {
         Self {
@@ -95,20 +102,14 @@ impl Stream for LogDeltas {
             return Poll::Ready(None);
         }
         let cursor = &this.cursor;
-        let found = this.shared.snapshot(Some(cx.waker()), |now| {
-            now.next_seq != cursor.next
-                || now.first_seq != cursor.first
-                || now.state != cursor.state
-                || now.closed
-        });
+        let found = this
+            .shared
+            .snapshot(Some(cx.waker()), |now| now.closed || !cursor.has_seen(now));
         let Some(now) = found else {
             return Poll::Pending;
         };
         let closed = now.closed;
-        let unchanged = now.next_seq == this.cursor.next
-            && now.first_seq == this.cursor.first
-            && now.state == this.cursor.state;
-        if closed && unchanged {
+        if closed && this.cursor.has_seen(&now) {
             // The session went away after everything was delivered.
             this.done = true;
             return Poll::Ready(None);

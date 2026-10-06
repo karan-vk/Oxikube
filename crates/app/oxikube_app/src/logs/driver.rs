@@ -7,6 +7,7 @@
 //! line. Entries are built before the buffer's lock is taken.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use futures::future::FutureExt as _;
 use futures::{StreamExt as _, select_biased};
@@ -26,7 +27,7 @@ pub(super) struct Driver {
     pub clock: Arc<dyn ClockPort>,
     pub config: LogConfig,
     /// `logs.buffer_lines`, read at every commit so a changed setting applies to the next batch.
-    pub buffer_lines: Arc<std::sync::atomic::AtomicUsize>,
+    pub buffer_lines: Arc<AtomicUsize>,
 }
 
 /// How the stream stopped.
@@ -116,7 +117,7 @@ impl Driver {
         if batch.is_empty() {
             return;
         }
-        let capacity = self.buffer_lines.load(std::sync::atomic::Ordering::Relaxed);
+        let capacity = self.buffer_lines.load(Ordering::Relaxed);
         self.shared.commit(std::mem::take(batch), capacity);
     }
 }

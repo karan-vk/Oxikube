@@ -58,15 +58,15 @@ impl LogReader {
         self.read(|buffer, _| buffer.len())
     }
 
+    /// Whether no line is retained.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Batches the session has committed so far: the unit its readers are woken in (one per
     /// flush tick or full batch, not one per line).
     pub fn batches(&self) -> u64 {
         self.shared.batches()
-    }
-
-    /// Whether no line is retained.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     /// A new stream of the session's batched deltas, starting from nothing seen: its first delta
