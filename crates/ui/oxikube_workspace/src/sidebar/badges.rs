@@ -32,9 +32,10 @@ impl CountPlan {
 }
 
 /// The kinds worth a badge: built-in kinds ([`CountTarget::core`]) of entries `access` offers,
-/// and the custom kinds discovery found (E07-S07) in the groups the user may list. The custom ones are never in a lease ([`ResourceStore::counts_eagerly`] is false
-/// for them): they answer only while a table or another view has their feed open, so expanding
-/// the sidebar starts no feeds. Integration items have no badge.
+/// and the custom kinds discovery found (E07-S07) in the groups the user may list. The custom
+/// ones are never in a lease ([`ResourceStore::counts_eagerly`] is false for them): they answer
+/// only while a table or another view has their feed open, so expanding the sidebar starts no
+/// feeds. Integration items have no badge.
 ///
 /// [`ResourceStore::counts_eagerly`]: oxikube_app::ResourceStore::counts_eagerly
 pub fn count_plan(

@@ -39,14 +39,6 @@ fn something_that_is_not_a_crd_does_not_parse() {
 fn a_table_opens_the_storage_version_when_it_is_served_else_the_newest_served() {
     let info = CrdInfo::parse(&widget_crd_json()).unwrap();
     assert_eq!(info.display_version().unwrap().name, "v1");
-    assert_eq!(
-        info.served()
-            .iter()
-            .map(|v| v.name.as_str())
-            .collect::<Vec<_>>(),
-        ["v1", "v1beta1"],
-        "newest first, the unserved one left out"
-    );
 
     // The storage version is no longer served: the newest served one is shown.
     let mut json = widget_crd_json();

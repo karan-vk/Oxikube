@@ -1,5 +1,9 @@
 //! The drawer's tabs.
 
+use oxikube_domain::ids::Gvk;
+
+use crate::crds::is_crd_kind;
+
 /// A tab of the detail view. The active one is part of the view's state, so pinning the drawer
 /// as a tab keeps it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -27,14 +31,23 @@ impl DetailTab {
         DetailTab::Events,
     ];
 
+    /// [`ALL`](Self::ALL) and the Schema tab: what a CustomResourceDefinition has.
+    const CRD: [DetailTab; 5] = [
+        DetailTab::Overview,
+        DetailTab::Yaml,
+        DetailTab::Describe,
+        DetailTab::Events,
+        DetailTab::Schema,
+    ];
+
     /// The tabs of an object of type `gvk`: [`ALL`](Self::ALL), and for a CustomResourceDefinition
     /// the Schema tab after them.
-    pub fn for_kind(gvk: &oxikube_domain::ids::Gvk) -> Vec<DetailTab> {
-        let mut tabs = Self::ALL.to_vec();
-        if crate::crds::is_crd_kind(gvk) {
-            tabs.push(DetailTab::Schema);
+    pub fn for_kind(gvk: &Gvk) -> &'static [DetailTab] {
+        if is_crd_kind(gvk) {
+            &Self::CRD
+        } else {
+            &Self::ALL
         }
-        tabs
     }
 
     /// The tab's label.

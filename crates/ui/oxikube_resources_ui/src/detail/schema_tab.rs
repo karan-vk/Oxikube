@@ -39,6 +39,23 @@ impl Default for SchemaPane {
     }
 }
 
+impl SchemaPane {
+    /// The visible rows of `version`'s schema in `crd`, walking only the open nodes (none when the
+    /// version is unknown or has no schema).
+    fn walk(&self, crd: &Value, version: Option<&str>) -> SchemaRows {
+        version
+            .and_then(|v| schema_root(crd, v))
+            .map(|root| self.tree.rows(root))
+            .unwrap_or_default()
+    }
+
+    /// Takes `rows` as the visible ones, and tells the list what changed.
+    fn replace_rows(&mut self, rows: SchemaRows) {
+        let old = std::mem::replace(&mut self.rows, rows);
+        sync_list(&self.list, &old.rows, &self.rows.rows);
+    }
+}
+
 /// Tells `list` which rows of `old` became `new`: the middle that differs is spliced, the rest is
 /// remeasured in place, so the scroll position stays.
 fn sync_list(list: &ListState, old: &[SchemaRow], new: &[SchemaRow]) {
@@ -87,16 +104,11 @@ impl DetailView {
                 .filter(|name| versions.contains(name))
                 .or_else(|| versions.first().cloned())
         });
-        let rows = version
-            .as_deref()
-            .and_then(|v| schema_root(json, v))
-            .map(|root| self.schema.tree.rows(root))
-            .unwrap_or_default();
-        let old = std::mem::replace(&mut self.schema.rows, rows);
+        let rows = self.schema.walk(json, version.as_deref());
         self.schema.info = info;
         self.schema.versions = versions;
         self.schema.version = version;
-        sync_list(&self.schema.list, &old.rows, &self.schema.rows.rows);
+        self.schema.replace_rows(rows);
     }
 
     /// The CRD as read for the Schema tab (`None` for another kind, and until the object is known).
@@ -159,15 +171,8 @@ impl DetailView {
         let Some(json) = self.crd_json() else {
             return;
         };
-        let rows = self
-            .schema
-            .version
-            .as_deref()
-            .and_then(|v| schema_root(json, v))
-            .map(|root| self.schema.tree.rows(root))
-            .unwrap_or_default();
-        let old = std::mem::replace(&mut self.schema.rows, rows);
-        sync_list(&self.schema.list, &old.rows, &self.schema.rows.rows);
+        let rows = self.schema.walk(json, self.schema.version.as_deref());
+        self.schema.replace_rows(rows);
     }
 
     /// Opens the table of the custom resources this CRD defines: sends `crd::OpenResources`.

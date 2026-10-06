@@ -115,13 +115,6 @@ impl CrdInfo {
             })
     }
 
-    /// The versions the API server serves, newest first.
-    pub fn served(&self) -> Vec<&CrdVersion> {
-        let mut served: Vec<&CrdVersion> = self.versions.iter().filter(|v| v.served).collect();
-        served.sort_by(|a, b| version_order(&a.name, &b.name));
-        served
-    }
-
     /// The type of the custom resources at `version`.
     pub fn gvk(&self, version: &str) -> Gvk {
         Gvk::new(self.group.as_str(), version, self.kind.as_str())

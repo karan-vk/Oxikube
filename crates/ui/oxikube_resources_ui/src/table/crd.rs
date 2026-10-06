@@ -19,7 +19,6 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use oxikube_domain::command::Command;
-use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::ResourceKind;
 use oxikube_ports::TableSource;
 use oxikube_ui::button::{Button, ButtonVariants as _};
@@ -104,17 +103,17 @@ impl ResourceTable {
         }
         let view = cx.entity().downgrade();
         let shown = self.kind.gvk.version.to_string();
-        let versions: Vec<(String, Gvk, bool)> = self
+        let versions: Vec<(String, bool)> = self
             .served
             .iter()
-            .map(|k| (k.gvk.version.to_string(), k.gvk.clone(), k.preferred))
+            .map(|k| (k.gvk.version.to_string(), k.preferred))
             .collect();
         let button = Button::new("resource-table-version")
             .label(format!("Version {shown}"))
             .ghost()
             .xsmall()
             .dropdown_menu(move |mut menu, _, _| {
-                for (version, _, preferred) in &versions {
+                for (version, preferred) in &versions {
                     let label = if *preferred {
                         format!("{version} (preferred)")
                     } else {
