@@ -65,8 +65,8 @@ mod entry;
 mod health;
 mod manager;
 mod model;
-mod prefs;
 pub mod namespaces;
+mod prefs;
 mod updates;
 
 #[cfg(test)]
