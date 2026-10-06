@@ -12,6 +12,41 @@ path = "src/oxikube_catalog_ui.rs"
 doctest = false
 
 [dependencies]
+futures.workspace = true
+gpui.workspace = true
+oxikube_app.workspace = true
+oxikube_domain.workspace = true
+oxikube_runtime.workspace = true
+oxikube_ui.workspace = true
+oxikube_workspace.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+gpui = { workspace = true, features = ["test-support"] }
+gpui_platform = { workspace = true, features = ["test-support"] }
+oxikube_ports.workspace = true
+oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
+oxikube_workspace = { workspace = true, features = ["test-support"] }
+serde_json.workspace = true
+
+[features]
+default = []
+# Headless GPU screenshot of the open dropdown (`tests/screenshot.rs`, harness = false so it runs
+# on the process main thread). Needs Metal / Vulkan, so never part of the default gate; the
+# nightly workflow runs it: `cargo test -p oxikube_catalog_ui --features screenshot --test screenshot`.
+screenshot = []
+
+[[test]]
+name = "screenshot"
+path = "tests/screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+# Cost of the selector's local work: `cargo run -p oxikube_catalog_ui --profile release-fast --example namespace_bench`
+[[example]]
+name = "namespace_bench"
 
 [lints]
 workspace = true

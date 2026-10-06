@@ -63,6 +63,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `oxikube_settings::ClusterSettings` from `clusters.<id>`) into `set_prefs_table`; new sessions
   start from it and open ones follow it live (read-only, colour, display name; exec policy on the
   next connect), with a `SessionChange` per field for the clusters that changed.
+  Module `session::namespaces` (E06-S07): `NamespaceService` sets a session's `NamespaceSelection`
+  (one `NamespaceChanged` per change, 150 ms debounce on the `ClockPort`), remembers selection,
+  favourites and typed names per cluster in `StatePort` (kv `cluster/<id>/namespaces`), lists
+  namespaces through `ResourceReader` (a `403` falls back to the typed names), drops stale
+  selected names, maps `0`-`9` to All / the first nine favourites, computes a `ScopeDelta` for
+  the `ResourceStore`, and runs the `namespace::Select` / `namespace::ToggleFavourite` commands.
+- `oxikube_catalog_ui` — the cluster catalog UI. Module `namespaces` (E06-S07): the
+  `NamespaceSelector` dropdown for the cluster tab toolbar (All, multi-select, favourites with
+  their digits, local search, virtualised list, the restricted-cluster fallback), a view over
+  `NamespaceService`; it emits `NamespaceSelectorEvent` for the host's toasts.
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
   mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
   events).

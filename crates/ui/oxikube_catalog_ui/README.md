@@ -4,6 +4,11 @@
 
 Cluster catalog home, hotbar, kubeconfig sources management, cloud discovery UI, connect lifecycle, namespace selector.
 
+## Modules
+
+- `namespaces` (E06-S07): the namespace selector dropdown (All, multi-select, favourites, search,
+  `0`-`9` keys). See the module docs in `src/namespaces/mod.rs`.
+
 ## Allowed internal dependencies
 
 - `oxikube_domain`

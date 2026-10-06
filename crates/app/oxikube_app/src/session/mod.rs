@@ -55,7 +55,8 @@
 //!
 //! The manager persists nothing. Namespace selection, read-only and colour are set
 //! through its methods, which send updates; callers persist them with `StatePort`
-//! (E06-S07, E06-S11). Credentials never reach this layer, and state reasons are
+//! (the namespace selection through [`namespaces::NamespaceService`], E06-S07; session restore
+//! is E06-S11). Credentials never reach this layer, and state reasons are
 //! redacted before they are stored or sent.
 
 mod config;
@@ -65,6 +66,7 @@ mod health;
 mod manager;
 mod model;
 mod prefs;
+pub mod namespaces;
 mod updates;
 
 #[cfg(test)]

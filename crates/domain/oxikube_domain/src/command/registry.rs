@@ -21,6 +21,8 @@ impl CommandId {
     pub const CLUSTER_TOGGLE_READ_ONLY: CommandId = CommandId::new("cluster::ToggleReadOnly");
     /// `namespace::Select`: choose the namespace selection.
     pub const NAMESPACE_SELECT: CommandId = CommandId::new("namespace::Select");
+    /// `namespace::ToggleFavourite`: pin or unpin a namespace as a favourite.
+    pub const NAMESPACE_TOGGLE_FAVOURITE: CommandId = CommandId::new("namespace::ToggleFavourite");
     /// `node::Cordon`: mark a node unschedulable.
     pub const NODE_CORDON: CommandId = CommandId::new("node::Cordon");
     /// `node::Drain`: evict a node's pods.
@@ -89,6 +91,12 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::NAMESPACE_SELECT,
         "Select Namespaces",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::NAMESPACE_TOGGLE_FAVOURITE,
+        "Toggle Favourite Namespace",
         CommandScope::Cluster,
         NONE,
     ),
