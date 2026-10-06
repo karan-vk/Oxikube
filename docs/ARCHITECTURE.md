@@ -133,7 +133,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   read-only on a production-flagged cluster, audited, persisted through the `PrefsWriter` the binary
   implements over `ClusterSettings::update_cluster`), and every `Mutation` writer re-checks the
   read-only flag before each request.
-- `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
+- `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
+  module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
+  mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,
+  after `resource::PinDetail`, a workspace `Item` that moves between panes with its tab, scroll and expanded values intact.
+  It follows the object as a one-row `ResourceStore` subscription on the table's own feed, reads the full object once (`spawn_kube`)
+  for metadata-only and Table feeds (Secret values removed inside that read), and draws header, labels/annotations (copy through
+  `resource::CopyLabel`), owner links (`resource::Open`), finalizers, conditions, the `status` summary and the Events tab
+  (the namespace's `Event` feed, started on first show) in virtualised lists. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
   (a workspace `Item`): one `oxikube_ui::tile::StatTile` per `Tile` of the `TileRegistry` (Deployments, StatefulSets,
   DaemonSets, ReplicaSets, Jobs, CronJobs, Pods) with total and healthy from a `CountsLease`, read once a second and redrawn
   coalesced only on change; a click sends `resource::OpenList`. Module `navigate`: the `resource::OpenList` handler and the
@@ -410,6 +417,11 @@ through `notify_coalesced`; it never sorts itself (the header asks the store for
 that meets gpui-component's table. Selection is kept by object identity, so deltas that move rows
 keep it; column order, visibility, widths and sort persist per kind in the `StatePort`
 (`table.columns.<group>/<Kind>`).
+
+Opening a row (`resource::Open`: Enter or double-click) shows the detail drawer
+(`oxikube_resources_ui::detail`, E07-S05) in the cluster tab's right dock. The detail subscribes to
+that one object on the feed the table already holds, so it starts no extra watch; "Pin as tab"
+(`resource::PinDetail`) hands the same entity to the workspace as an `Item`.
 
 Core kinds use typed/metadata reflectors plus our own column definitions; CRDs and unknown kinds
 use the server-side Table API (kubectl-identical columns incl. `additionalPrinterColumns`).

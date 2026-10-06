@@ -77,6 +77,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::ResourceOpen { target }
         | Command::ResourceCopyName { target }
+        | Command::ResourcePinDetail { target }
+        | Command::ResourceCopyLabel { target, .. }
         | Command::ResourceViewYaml { target }
         | Command::ResourceDelete { target, .. }
         | Command::PodDelete { target, .. }

@@ -36,7 +36,7 @@ struct Kinds {
 /// Opens resource tables and runs the resource commands of one window. See the
 /// [module docs](super).
 pub struct ResourceViews {
-    deps: ResourceViewsDeps,
+    pub(super) deps: ResourceViewsDeps,
     kinds: HashMap<ClusterId, Kinds>,
     /// The sidebar navigation in flight (a newer click replaces, and so cancels, it).
     navigate_task: Option<Task<()>>,
@@ -58,7 +58,9 @@ impl ResourceViews {
         let views = cx.new(|cx| {
             let pump = cx.spawn_in(window, async move |this, cx| {
                 while let Some(request) = requests.next().await {
-                    let applied = this.update(cx, |views: &mut Self, cx| views.apply(request, cx));
+                    let applied = this.update_in(cx, |views: &mut Self, window, cx| {
+                        views.apply_in(request, window, cx)
+                    });
                     if applied.is_err() {
                         break;
                     }
@@ -83,9 +85,32 @@ impl ResourceViews {
         views
     }
 
-    /// Applies one request.
+    /// Applies one request, with the window it opens views in: what [`Self::apply`] does, plus
+    /// opening the detail drawer for `Open` and pinning it for `PinDetail`.
+    pub fn apply_in(&mut self, request: ViewRequest, window: &mut Window, cx: &mut Context<Self>) {
+        match request {
+            ViewRequest::Open(target) => {
+                self.open_detail(&target, window, cx);
+                self.apply(ViewRequest::Open(target), cx);
+            }
+            ViewRequest::PinDetail(target) => {
+                self.pin_detail(&target, window, cx);
+            }
+            other => self.apply(other, cx),
+        }
+    }
+
+    /// Applies one request that needs no window: tells the tables, writes the clipboard.
+    /// `Open` only reaches the tables here (their `OpenDetail` event); [`Self::apply_in`] also
+    /// opens the drawer, and `PinDetail` needs it, so it does nothing here.
     pub fn apply(&mut self, request: ViewRequest, cx: &mut Context<Self>) {
         match request {
+            ViewRequest::PinDetail(_) => {}
+            ViewRequest::CopyLabel {
+                target,
+                key,
+                annotation,
+            } => self.copy_label(&target, &key, annotation, cx),
             ViewRequest::Open(target) => {
                 for table in self.tables(&target.cluster, &target.gvk, cx) {
                     let target = target.clone();

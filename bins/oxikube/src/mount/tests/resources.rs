@@ -1,7 +1,8 @@
 //! The resource views of a cluster tab on the real init path (E07-S11): the Workloads overview is
 //! the first screen of a connected cluster, the sidebar shows count badges from the store, and a
 //! tile or sidebar click reaches `resource::OpenList` on the bus, which opens the kind's table
-//! (E07-S03).
+//! (E07-S03). Enter on a row opens the detail drawer in the cluster tab, and "Pin as tab" makes
+//! it a tab (E07-S05).
 
 use std::time::Duration;
 
@@ -12,6 +13,7 @@ use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
+use oxikube_resources_ui::detail::{DetailDrawer, DetailView, Mount};
 use oxikube_resources_ui::overview_lite::WorkloadsOverview;
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::TestPorts;
@@ -232,4 +234,54 @@ fn a_forbidden_table_offers_retry_and_the_click_reaches_the_feed_through_the_bus
         !app.drawn("resource-table-retry"),
         "the retry listed (the fake serves an empty list now): no failure left to retry"
     );
+}
+
+#[gpui::test]
+fn enter_on_a_row_opens_the_detail_drawer_and_pinning_makes_it_a_tab(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.serve([kind("", "v1", "Pod", "pods")]);
+    app.ports
+        .connector
+        .ports_for(&TestPorts::cluster_id())
+        .resources
+        .insert(oxikube_testkit::fixtures::pod_running());
+    app.press("enter");
+    app.tick();
+    app.click("sidebar-entry-workloads/pods");
+    app.tick();
+    assert_eq!(app.tables(), ["Pod"]);
+
+    // Select the first row and open it: `resource::Open` on the bus, then the drawer.
+    app.click("cell-0-0");
+    app.press("enter");
+    app.tick();
+    assert!(app.drawn("detail-view"), "the drawer shows the detail");
+    assert!(app.drawn("detail-name"));
+    let ws = app.tab_workspace();
+    let (drawer, tabs) = app.vcx.update(|_, cx| {
+        let ws = ws.read(cx);
+        (
+            ws.panel::<DetailDrawer>()
+                .and_then(|d| d.read(cx).view().cloned()),
+            ws.items_of_type::<DetailView>().len(),
+        )
+    });
+    let shown = drawer.expect("the cluster tab has a detail drawer");
+    assert_eq!(tabs, 0);
+    let mount = app.vcx.update(|_, cx| shown.read(cx).mount());
+    assert_eq!(mount, Mount::Drawer);
+
+    // "Pin as tab": a workspace tab (the same view), and the drawer lets go.
+    app.click("detail-pin");
+    app.tick();
+    let (pinned, in_drawer) = app.vcx.update(|_, cx| {
+        let ws = ws.read(cx);
+        (
+            ws.items_of_type::<DetailView>(),
+            ws.panel::<DetailDrawer>()
+                .and_then(|d| d.read(cx).view().cloned()),
+        )
+    });
+    assert_eq!(pinned, [shown]);
+    assert!(in_drawer.is_none());
 }

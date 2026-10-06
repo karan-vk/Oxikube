@@ -201,11 +201,17 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),
         },
+        "resource::CopyLabel" => Command::ResourceCopyLabel {
+            target: target(),
+            key: "app".into(),
+            annotation: false,
+        },
         "resource::CopyName" => Command::ResourceCopyName { target: target() },
         "resource::RetryFeed" => Command::ResourceRetryFeed {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),
         },
+        "resource::PinDetail" => Command::ResourcePinDetail { target: target() },
         "resource::SelectAll" => Command::ResourceSelectAll {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),

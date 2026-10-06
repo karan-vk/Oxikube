@@ -69,6 +69,8 @@ impl CommandId {
     pub const POD_VIEW_LOGS: CommandId = CommandId::new("pod::ViewLogs");
     /// `resource::Apply`: apply a manifest.
     pub const RESOURCE_APPLY: CommandId = CommandId::new("resource::Apply");
+    /// `resource::CopyLabel`: copy a label or annotation of a resource as `key=value`.
+    pub const RESOURCE_COPY_LABEL: CommandId = CommandId::new("resource::CopyLabel");
     /// `resource::CopyName`: copy a resource's name to the clipboard.
     pub const RESOURCE_COPY_NAME: CommandId = CommandId::new("resource::CopyName");
     /// `resource::Delete`: delete any resource.
@@ -79,6 +81,8 @@ impl CommandId {
     pub const RESOURCE_OPEN_LIST: CommandId = CommandId::new("resource::OpenList");
     /// `resource::RetryFeed`: restart the feed behind a kind's list views.
     pub const RESOURCE_RETRY_FEED: CommandId = CommandId::new("resource::RetryFeed");
+    /// `resource::PinDetail`: promote a resource's detail drawer to a workspace tab.
+    pub const RESOURCE_PIN_DETAIL: CommandId = CommandId::new("resource::PinDetail");
     /// `resource::SelectAll`: select every row of a kind's list views.
     pub const RESOURCE_SELECT_ALL: CommandId = CommandId::new("resource::SelectAll");
     /// `resource::ViewYaml`: open a resource's YAML.
@@ -289,6 +293,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     ),
     // Writes the user's clipboard, never the cluster.
     CommandMeta::read(
+        CommandId::RESOURCE_COPY_LABEL,
+        "Copy Label",
+        CommandScope::Selection,
+        NONE,
+    ),
+    // Writes the user's clipboard, never the cluster.
+    CommandMeta::read(
         CommandId::RESOURCE_COPY_NAME,
         "Copy Resource Name",
         CommandScope::Selection,
@@ -313,6 +324,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::RESOURCE_OPEN_LIST,
         "Open Resource List",
         CommandScope::ResourceKind,
+        NONE,
+    ),
+    // Moves a view between a drawer and a tab; changes nothing in the cluster.
+    CommandMeta::read(
+        CommandId::RESOURCE_PIN_DETAIL,
+        "Pin Detail as Tab",
+        CommandScope::Selection,
         NONE,
     ),
     CommandMeta::read(

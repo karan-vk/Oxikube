@@ -25,6 +25,13 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 - `table::states` (E07-S10): `TableState` (the pure derivation), the state views, the stale badge, Retry and the API server warnings.
 - `views` (E07-S03): `ResourceViews`, which opens tables in cluster tabs from the sidebar and
   `resource::OpenList`, and runs `resource::Open`, `CopyName`, `SelectAll` and `RetryFeed` (E07-S10).
+- `detail` (E07-S05): `DetailView`, the generic detail of one object (header, labels and
+  annotations with copy, owner links, finalizers, conditions, `status` summary, Events; YAML and
+  Describe are placeholders until E07-S06), as the right-dock `DetailDrawer` of a cluster tab or,
+  after `resource::PinDetail`, a workspace tab. Secrets show key names, never values.
+- `views` (E07-S03): `ResourceViews`, which opens tables in cluster tabs from the sidebar and
+  `resource::OpenList`, and runs `resource::Open` (which opens the detail drawer), `CopyName`,
+  `SelectAll`, `PinDetail` and `CopyLabel`.
 
 Bench: `cargo run -p oxikube_resources_ui --profile release-fast --example table_bench`.
 Screenshots: `cargo test -p oxikube_resources_ui --features screenshot --test screenshot` (status tones) and `--test states_screenshot` (the table states, E07-S10).

@@ -55,7 +55,8 @@ pub struct ResourceTableDeps {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ResourceTableEvent {
     /// `resource::Open` ran for one of this table's rows: show its detail. The detail drawer
-    /// (E07-S05) listens for this.
+    /// (E07-S05) is opened by [`ResourceViews`](crate::ResourceViews) for the same command; this
+    /// event is for whoever else wants to follow it.
     OpenDetail(ResourceRef),
     /// The selection changed.
     SelectionChanged,

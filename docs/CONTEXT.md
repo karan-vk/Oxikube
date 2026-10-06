@@ -26,6 +26,7 @@ How to read the **Lives in** column:
 | **Quantity** | A Kubernetes resource quantity (`500m`, `128Mi`) parsed into an exact decimal (`i128` mantissa × 10^exponent, nano precision), printed like apimachinery `Quantity.String()`. | `oxikube_domain::quantity` |
 | **Age** | A non-negative span since a resource was created, formatted `kubectl`-style (`AgeStyle::Kubectl`) or kdash-style (`AgeStyle::Detailed`). | `oxikube_domain::age` |
 | **LogLine** | One line of container output with its kubelet timestamp; over-long lines are cut and flagged. | `oxikube_domain::log` |
+| **Detail drawer / DetailView** | The generic detail of one object (header with status chip, labels and annotations with copy, owner links, finalizers, conditions, `status` summary, Events). One entity with two mounting modes: the right-dock `DetailDrawer` of a cluster tab, or, pinned, a workspace tab. Never shows a Secret value, only key names. | `oxikube_resources_ui::detail` |
 | **Event** | A Kubernetes Event (`EventType` Normal/Warning, reason, message, the `regarding` object). | `oxikube_domain::event` |
 | **MetricsSample** | One CPU and memory reading for a node, pod or container (`MetricsSubject`); an absent value is `Reading::Missing` with a `MissingReason`. | `oxikube_domain::metrics` |
 

@@ -158,7 +158,35 @@ fn the_commands_reach_the_views_through_the_bus() {
     .unwrap();
     assert_eq!(
         requests.try_recv().ok(),
-        Some(ViewRequest::CopyName(target))
+        Some(ViewRequest::CopyName(target.clone()))
+    );
+    block_on(bus.dispatch(
+        Command::ResourcePinDetail {
+            target: target.clone(),
+        },
+        ctx(),
+    ))
+    .unwrap();
+    assert_eq!(
+        requests.try_recv().ok(),
+        Some(ViewRequest::PinDetail(target.clone()))
+    );
+    block_on(bus.dispatch(
+        Command::ResourceCopyLabel {
+            target: target.clone(),
+            key: "app".into(),
+            annotation: false,
+        },
+        ctx(),
+    ))
+    .unwrap();
+    assert_eq!(
+        requests.try_recv().ok(),
+        Some(ViewRequest::CopyLabel {
+            target,
+            key: "app".into(),
+            annotation: false,
+        })
     );
     block_on(bus.dispatch(
         Command::ResourceSelectAll {

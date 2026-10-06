@@ -219,6 +219,25 @@ pub enum Command {
         /// The kind listed.
         gvk: Gvk,
     },
+    /// Pin a resource's detail drawer as a tab of the cluster's workspace (the drawer's "Pin as
+    /// tab"). The drawer and the tab are one view, so nothing it shows is reset.
+    #[serde(rename = "resource::PinDetail")]
+    ResourcePinDetail {
+        /// The resource whose detail is pinned.
+        target: ResourceRef,
+    },
+    /// Copy one label (or annotation) of a resource to the clipboard as `key=value`. The value is
+    /// read from the open detail, so it never travels in the command (nor into logs).
+    #[serde(rename = "resource::CopyLabel")]
+    ResourceCopyLabel {
+        /// The resource the label is on.
+        target: ResourceRef,
+        /// The label or annotation key.
+        key: String,
+        /// Whether `key` names an annotation rather than a label.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        annotation: bool,
+    },
     /// Select every row of the open list views of a kind (`cmd-a` in a resource table).
     #[serde(rename = "resource::SelectAll")]
     ResourceSelectAll {
@@ -374,6 +393,8 @@ impl Command {
             Command::ResourceOpen { .. } => CommandId::RESOURCE_OPEN,
             Command::ResourceCopyName { .. } => CommandId::RESOURCE_COPY_NAME,
             Command::ResourceRetryFeed { .. } => CommandId::RESOURCE_RETRY_FEED,
+            Command::ResourcePinDetail { .. } => CommandId::RESOURCE_PIN_DETAIL,
+            Command::ResourceCopyLabel { .. } => CommandId::RESOURCE_COPY_LABEL,
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
@@ -410,6 +431,8 @@ impl Command {
         match self {
             Command::ResourceOpen { target }
             | Command::ResourceCopyName { target }
+            | Command::ResourcePinDetail { target }
+            | Command::ResourceCopyLabel { target, .. }
             | Command::ResourceViewYaml { target }
             | Command::ResourceDelete { target, .. }
             | Command::PodDelete { target, .. }
@@ -540,6 +563,12 @@ mod tests {
             Command::ResourceRetryFeed {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
+            },
+            Command::ResourcePinDetail { target: pod() },
+            Command::ResourceCopyLabel {
+                target: pod(),
+                key: "app".into(),
+                annotation: false,
             },
             Command::ResourceSelectAll {
                 cluster: cluster(),
@@ -715,6 +744,8 @@ mod tests {
                     | Command::ResourceOpenList { .. }
                     | Command::ResourceCopyName { .. }
                     | Command::ResourceRetryFeed { .. }
+                    | Command::ResourcePinDetail { .. }
+                    | Command::ResourceCopyLabel { .. }
                     | Command::ResourceSelectAll { .. }
                     | Command::ResourceViewYaml { .. }
                     | Command::ClusterToggleReadOnly { .. }
