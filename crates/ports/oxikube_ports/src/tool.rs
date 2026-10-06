@@ -218,7 +218,7 @@ impl ToolDef {
             input_schema,
         );
         def.title = Some(meta.title.to_owned());
-        def.risk = meta.risk;
+        def.risk = meta.tool_risk();
         def.needs = meta.needs;
         Ok(def)
     }
@@ -493,7 +493,7 @@ mod tests {
             if meta.allows(Initiator::Agent) {
                 let tool = tool.unwrap_or_else(|e| panic!("{}: {e}", meta.id));
                 assert_eq!(tool.name.as_str(), meta.id.tool_name());
-                assert_eq!(tool.risk, meta.risk);
+                assert_eq!(tool.risk, meta.tool_risk());
                 assert_eq!(tool.needs, meta.needs);
                 tool.validate().unwrap();
             } else {
@@ -514,6 +514,17 @@ mod tests {
         assert!(tool.destructive_hint());
         assert!(tool.needs.contains(Capabilities::MUTATE));
         assert_eq!(tool.title.as_deref(), Some("Drain Node"));
+    }
+
+    #[test]
+    fn the_delete_tool_is_advertised_as_destructive() {
+        let meta = COMMANDS
+            .iter()
+            .find(|m| m.id == CommandId::RESOURCE_DELETE)
+            .unwrap();
+        let tool = ToolDef::for_command(meta, "Delete a resource", schema()).unwrap();
+        assert!(tool.destructive_hint());
+        assert_eq!(tool.risk, Some(Risk::Irreversible));
     }
 
     #[test]

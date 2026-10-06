@@ -135,7 +135,7 @@ fn every_registered_command_has_a_tool_stub() {
         stubs += 1;
         assert_eq!(tool.name, ToolName::new(&meta.id.tool_name()).unwrap());
         assert_eq!(tool.title.as_deref(), Some(meta.title));
-        assert_eq!(tool.risk, meta.risk, "{}", meta.id);
+        assert_eq!(tool.risk, meta.tool_risk(), "{}", meta.id);
         assert_eq!(tool.is_mutating(), meta.mutating, "{}", meta.id);
         assert_eq!(tool.needs, meta.needs);
         assert!(tool.description.contains(meta.id.as_str()));

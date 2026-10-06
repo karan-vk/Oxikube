@@ -61,7 +61,18 @@ fn add_entry(
     targets: &[ResourceRef],
     view: &gpui::WeakEntity<ResourceTable>,
 ) -> PopupMenu {
-    let reason = entry.reason();
+    entry_items(&entry, targets, view)
+        .into_iter()
+        .fold(menu, PopupMenu::item)
+}
+
+/// The menu items of one action: the item itself (greyed out and not selectable when the action
+/// is disabled), then, for a disabled action, a label line with the reason.
+pub(super) fn entry_items(
+    entry: &ActionEntry,
+    targets: &[ResourceRef],
+    view: &gpui::WeakEntity<ResourceTable>,
+) -> Vec<PopupMenuItem> {
     let command = entry.command();
     let (view, targets) = (view.clone(), targets.to_vec());
     let item = PopupMenuItem::new(entry.label.clone())
@@ -72,9 +83,7 @@ fn add_entry(
             })
             .ok();
         });
-    let menu = menu.item(item);
-    match reason {
-        Some(reason) => menu.item(PopupMenuItem::label(reason)),
-        None => menu,
-    }
+    let mut items = vec![item];
+    items.extend(entry.reason().map(PopupMenuItem::label));
+    items
 }

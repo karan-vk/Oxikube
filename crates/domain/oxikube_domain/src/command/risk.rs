@@ -6,7 +6,7 @@
 //! and takes the higher of the two. The rule is pure data and lives here so the guard, the
 //! confirmation dialog and the MCP tool stubs all read one table (ADR 0012).
 
-use super::{Command, Propagation};
+use super::{Command, CommandId, CommandMeta, Propagation};
 use crate::ids::Gvk;
 use crate::safety::Risk;
 
@@ -45,6 +45,22 @@ impl Command {
                 propagation,
             } => declared.max(delete_risk(&target.gvk, *propagation)),
             _ => declared,
+        })
+    }
+}
+
+impl CommandMeta {
+    /// The risk the MCP tool stub advertises: the worst case over every target the command can
+    /// name. A tool is one static entry that cannot vary by target, so it must not understate
+    /// what `resource.delete` does to a Namespace or PersistentVolume; for every other command
+    /// it is the declared [`CommandMeta::risk`]. The guard still decides per target
+    /// ([`Command::effective_risk`]).
+    pub fn tool_risk(&self) -> Option<Risk> {
+        let declared = self.risk?;
+        Some(if self.id == CommandId::RESOURCE_DELETE {
+            declared.max(Risk::Irreversible)
+        } else {
+            declared
         })
     }
 }
@@ -131,5 +147,16 @@ mod tests {
             target: ResourceRef::cluster_scoped(cluster, gvk("", "Pod"), "x"),
         };
         assert_eq!(read.effective_risk(), None);
+    }
+
+    #[test]
+    fn the_delete_tool_advertises_the_worst_case_target() {
+        let meta = super::super::lookup(CommandId::RESOURCE_DELETE).unwrap();
+        assert_eq!(meta.risk, Some(Risk::Medium));
+        assert_eq!(meta.tool_risk(), Some(Risk::Irreversible));
+        let pod_logs = super::super::lookup(CommandId::POD_VIEW_LOGS).unwrap();
+        assert_eq!(pod_logs.tool_risk(), None);
+        let apply = super::super::lookup(CommandId::RESOURCE_APPLY).unwrap();
+        assert_eq!(apply.tool_risk(), apply.risk);
     }
 }

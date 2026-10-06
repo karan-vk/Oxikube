@@ -116,8 +116,8 @@ fn a_disabled_delete_does_not_open_a_dialog_and_says_why(cx: &mut TestAppContext
         .set_read_only(&crate::table::tests::fixture::cluster(), true)
         .unwrap();
     right_click(&mut f, 0);
-    // The disabled entry is skipped by the keys: the last selectable item is Logs, so a fifth
-    // `down` stays there and Enter runs Logs, never Delete.
+    // Whichever enabled item the keys land on, never Delete: the menu does not select a
+    // disabled item (asserted on the items in `a_disabled_action_is_a_disabled_item_with_its_reason`).
     choose(&mut f, 4);
     assert!(dialog(&mut f).is_none());
     assert!(f.ports().resources.mutating_calls().is_empty());
@@ -131,4 +131,62 @@ fn a_disabled_delete_does_not_open_a_dialog_and_says_why(cx: &mut TestAppContext
         "{toasts:?}"
     );
     assert!(f.state.audit_log().is_empty(), "nothing reached the guard");
+}
+
+#[gpui::test]
+fn a_disabled_action_is_a_disabled_item_with_its_reason(cx: &mut TestAppContext) {
+    use oxikube_ui::menu::PopupMenuItem;
+
+    let mut f = Fixture::with_actions(cx);
+    f.connect_with([p("x", "web-0", "1")]);
+    let table = f.open_pods();
+    let items_of = |f: &mut Fixture, command: CommandId| {
+        let view = table.downgrade();
+        f.vcx.update(|_, cx| {
+            let entry = table
+                .read(cx)
+                .action_entries(cx)
+                .into_iter()
+                .find(|e| e.command() == command)
+                .unwrap();
+            crate::actions::menu::entry_items(&entry, &[], &view)
+        })
+    };
+
+    // Enabled: one clickable item, no reason line.
+    let items = items_of(&mut f, CommandId::RESOURCE_DELETE);
+    assert!(
+        matches!(
+            items.as_slice(),
+            [PopupMenuItem::Item {
+                disabled: false,
+                ..
+            }]
+        ),
+        "an enabled delete is one live item"
+    );
+
+    // Read-only: the item is disabled (the menu skips it and ignores a click) and the reason
+    // follows as a label line.
+    f.sessions
+        .set_read_only(&crate::table::tests::fixture::cluster(), true)
+        .unwrap();
+    let items = items_of(&mut f, CommandId::RESOURCE_DELETE);
+    match items.as_slice() {
+        [
+            PopupMenuItem::Item {
+                disabled: true,
+                label,
+                ..
+            },
+            PopupMenuItem::Label(reason),
+        ] => {
+            assert_eq!(&**label, "Delete");
+            assert!(reason.contains("read-only"), "{reason}");
+        }
+        other => panic!(
+            "expected a disabled item and its reason, got {} items",
+            other.len()
+        ),
+    }
 }
