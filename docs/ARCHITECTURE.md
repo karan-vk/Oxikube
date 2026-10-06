@@ -130,8 +130,8 @@ In short:
 
 ```mermaid
 flowchart LR
-  A1["Logging + panic hook"] --> A2["Runtime bridge"]
-  A2 --> A3["Assets"]
+  A1["Logging + panic hook"] --> A2["Assets"]
+  A2 --> A3["Runtime bridge"]
   A3 --> A4["Settings store"]
   A4 --> A5["Theme registry"]
   A4 --> A6["Keymap"]

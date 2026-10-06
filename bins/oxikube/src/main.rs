@@ -4,7 +4,7 @@
 //! workspace, plus the application menu.
 //!
 //! Init order (Zed's `main.rs` pattern, E05-S09), documented stage by stage in [`oxikube::startup`]:
-//! logging and the panic hook → runtime → assets → settings → theme → keymap → ui → state db
+//! logging and the panic hook → assets → runtime → settings → theme → keymap → ui → state db
 //! (opened in the background) → [`oxikube::app_state::AppState`] → workspace → feature crates → keymap
 //! re-bind → open the window. Nothing waits on disk or network before the first frame; each stage
 //! is timed in a `tracing` span.
@@ -105,34 +105,45 @@ fn run_app(mut boot: startup::Boot, perf: Option<Arc<Recorder>>, perf_duration: 
         gpui_platform::application().with_assets(oxikube_ui::Assets)
     });
     application.run(move |cx: &mut App| {
-        // Flush the log when the app quits (macOS exits from inside `run`, so `main` never gets
-        // to drop the guard there).
-        cx.on_app_quit(|_| {
-            startup::shutdown();
-            async {}
-        })
-        .detach();
-        if let Err(err) = startup::init(cx, StartupEnv::app(boot)) {
-            tracing::error!(%err, "start-up failed");
-            eprintln!("oxikube: {err}");
+        let up = start(cx, boot, perf, perf_duration);
+        // Registered after every other quit observer (the window's persistence controller, the
+        // perf recorder), so the log outlives their quit work; also on the failure paths, which
+        // quit below. macOS exits from inside `run`, so `main` never gets to flush there.
+        startup::flush_log_on_quit(cx);
+        if up {
+            cx.activate(true);
+        } else {
             cx.quit();
-            return;
         }
-        let opened = startup::time_after_init(cx, Stage::Window, |cx| match perf {
-            Some(recorder) => {
-                perf_mode::attach(cx, perf_duration);
-                oxikube_workspace::window::open_main_window_with(cx, move |content, cx| {
-                    cx.new(|_| PerfRoot::new(content, recorder)).into()
-                })
-            }
-            None => oxikube_workspace::window::open_main_window(cx),
-        });
-        if let Err(err) = opened {
-            tracing::error!(%err, "cannot open the main window");
-            eprintln!("oxikube: {err:#}");
-            cx.quit();
-            return;
-        }
-        cx.activate(true);
     });
+}
+
+/// The body of the `run` callback: the init order, then the main window. Returns whether the app
+/// is up; on failure the error is already logged and printed and the caller quits.
+fn start(
+    cx: &mut App,
+    boot: startup::Boot,
+    perf: Option<Arc<Recorder>>,
+    perf_duration: Option<Duration>,
+) -> bool {
+    if let Err(err) = startup::init(cx, StartupEnv::app(boot)) {
+        tracing::error!(%err, "start-up failed");
+        eprintln!("oxikube: {err}");
+        return false;
+    }
+    let opened = startup::time_after_init(cx, Stage::Window, |cx| match perf {
+        Some(recorder) => {
+            perf_mode::attach(cx, perf_duration);
+            oxikube_workspace::window::open_main_window_with(cx, move |content, cx| {
+                cx.new(|_| PerfRoot::new(content, recorder)).into()
+            })
+        }
+        None => oxikube_workspace::window::open_main_window(cx),
+    });
+    if let Err(err) = opened {
+        tracing::error!(%err, "cannot open the main window");
+        eprintln!("oxikube: {err:#}");
+        return false;
+    }
+    true
 }

@@ -10,8 +10,8 @@
 //! | # | [`Stage`] | What runs | Why here |
 //! |---|---|---|---|
 //! | 1 | `Logging` | [`boot`]: `oxikube_logging::init` (rolling files, redaction), the panic hook | before GPUI exists, so every later stage can log and every panic leaves a crash file |
-//! | 2 | `Runtime` | `oxikube_runtime::init` | nothing may spawn Kubernetes work before it |
-//! | 3 | `Assets` | `Application::with_assets(oxikube_ui::Assets)` | GPUI fixes the asset source when the `Application` is built, so this happens in `main` just before `run` |
+//! | 2 | `Assets` | `Application::with_assets(oxikube_ui::Assets)` | GPUI fixes the asset source when the `Application` is built, so this happens in `main` just before `run`; it needs no `App`, which is why it can precede the runtime |
+//! | 3 | `Runtime` | `oxikube_runtime::init` | needs an `App`, so it is the first stage inside `run` (hence after assets); nothing may spawn Kubernetes work before it |
 //! | 4 | `Settings` | `oxikube_settings::init`, then `oxikube_logging::follow` | everything below reads settings; the log filter follows the `log.filter` setting from here on |
 //! | 5 | `Theme` | `oxikube_theme::init` | reads the `theme` setting and the system appearance |
 //! | 6 | `Keymap` | `oxikube_keymap::init` | binds the layered key bindings; needs settings' config dir |
@@ -23,8 +23,9 @@
 //! | 12 | `KeymapRebind` | `oxikube_keymap::rebind` | crates that bound keys after stage 6 (the workspace's interim bindings, the component library) must not outrank the user's `keymap.json` |
 //! | 13 | `Window` | open the main window | everything it shows is ready; layout restore and the state db continue in the background |
 //!
-//! Stages 1 and 3 run in `main` ([`boot`], `run_app`); 2 and 4 to 12 are [`init`]; 13 is in
-//! `run_app`. [`init`] runs once: a second call returns [`StartupError::AlreadyInitialised`] and
+//! Stages 1 and 2 run in `main` ([`boot`], `run_app`); 3 to 12 are [`init`]; 13 is in
+//! `run_app`. `Stage::ALL` and the order of a real start-up's [`StartupReport`] are this table.
+//! [`init`] runs once: a second call returns [`StartupError::AlreadyInitialised`] and
 //! changes nothing, so nothing registers twice.
 //!
 //! # Cost
@@ -43,11 +44,13 @@
 //! - `state_db`: the lazily opened state database.
 //! - `features`: the feature crates' inits.
 //! - `paths`: data directory and file locations.
+//! - `quit`: stopping the log at the end of the quit.
 
 mod boot;
 mod env;
 mod features;
 mod paths;
+mod quit;
 mod stage;
 mod state_db;
 #[cfg(test)]
@@ -64,6 +67,7 @@ use crate::app_state::{AppPorts, AppState, AppStateError};
 pub use boot::{Boot, boot, shutdown};
 pub use env::{ConfigSource, PortsChoice, RuntimeChoice, StartupEnv};
 pub use features::{FEATURES, Feature};
+pub use quit::{QUIT_LOG_GRACE, flush_log_on_quit};
 pub use stage::{Stage, StageTiming, StartupReport, time_after_init};
 
 /// Why [`init`] stopped.
@@ -88,7 +92,7 @@ struct Initialised;
 
 impl Global for Initialised {}
 
-/// Runs stages 2 and 4 to 12 of the [module docs](self) in order. Stage 13 (the window) is the
+/// Runs stages 3 to 12 of the [module docs](self) in order. Stage 13 (the window) is the
 /// caller's.
 pub fn init(cx: &mut App, env: StartupEnv) -> Result<(), StartupError> {
     init_with_features(cx, env, FEATURES)

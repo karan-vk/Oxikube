@@ -4,8 +4,8 @@
 
 The application binary. It wires adapters into `oxikube_app`, mounts the UI crates, and owns the
 init order (Zed `main.rs` pattern), documented stage by stage in `src/startup/mod.rs` and summarised
-in `docs/ARCHITECTURE.md` ("App start-up and init order"): logging and the panic hook → runtime →
-assets → settings → theme → keymap → ui → state db (background open) → `AppState` → workspace →
+in `docs/ARCHITECTURE.md` ("App start-up and init order"): logging and the panic hook → assets →
+runtime → settings → theme → keymap → ui → state db (background open) → `AppState` → workspace →
 feature crates → keymap re-bind → open window. It is the only crate allowed to depend on every
 layer.
 

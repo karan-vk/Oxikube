@@ -2,4 +2,5 @@
 //! one-shot config, no watchers), testkit fakes for the ports.
 
 mod order;
+mod quit;
 mod state_db;

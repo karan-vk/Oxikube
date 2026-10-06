@@ -1,6 +1,5 @@
 //! The documented order, the globals it leaves behind, and the refusal to run twice.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use gpui::{App, BorrowAppContext as _, TestAppContext};
@@ -37,7 +36,7 @@ fn the_stages_run_in_the_documented_order(cx: &mut TestAppContext) {
         let report = StartupReport::get(cx).expect("report installed");
         assert_eq!(report.order(), INIT_STAGES);
         // The documented order is the declaration order of `Stage` (minus the three stages that
-        // run in `main`).
+        // run in `main`: logging, assets, the window).
         let declared: Vec<Stage> = Stage::ALL
             .into_iter()
             .filter(|s| INIT_STAGES.contains(s))
@@ -48,22 +47,18 @@ fn the_stages_run_in_the_documented_order(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn earlier_stages_keep_their_place_in_the_report(cx: &mut TestAppContext) {
+fn a_real_start_up_reports_every_stage_in_the_documented_order(cx: &mut TestAppContext) {
     cx.update(|cx| {
+        // What `main` does: logging in `boot`, assets in `run_app`, then `init` inside `run`,
+        // then the window. The report of that whole sequence is `Stage::ALL`, which is also the
+        // table in the module docs.
         let mut env = StartupEnv::test();
         env.earlier
             .record(Stage::Logging, Duration::from_micros(40));
-        env.earlier.record(Stage::Assets, Duration::from_micros(10));
+        env.earlier.time(Stage::Assets, || ());
         init(cx, env).unwrap();
-        let order = StartupReport::get(cx).unwrap().order();
-        assert_eq!(&order[..2], [Stage::Logging, Stage::Assets]);
-        assert_eq!(order.len(), 2 + INIT_STAGES.len());
-        // The window is opened after `init`; its cost joins the report.
         crate::startup::time_after_init(cx, Stage::Window, |_| ());
-        assert_eq!(
-            StartupReport::get(cx).unwrap().order().last(),
-            Some(&Stage::Window)
-        );
+        assert_eq!(StartupReport::get(cx).unwrap().order(), Stage::ALL);
     });
 }
 
@@ -162,16 +157,23 @@ fn install_refuses_until_its_prerequisites_exist(cx: &mut TestAppContext) {
     });
 }
 
-static ORDER: AtomicUsize = AtomicUsize::new(0);
-static FIRST_AT: AtomicUsize = AtomicUsize::new(usize::MAX);
-static SECOND_AT: AtomicUsize = AtomicUsize::new(usize::MAX);
+/// The feature inits that ran, in order. A GPUI global rather than a static, so each run of the
+/// test body (`ITERATIONS`, retries) starts from nothing.
+#[derive(Default)]
+struct FeatureCalls(Vec<&'static str>);
 
-fn first(_: &mut App) {
-    FIRST_AT.store(ORDER.fetch_add(1, Ordering::SeqCst), Ordering::SeqCst);
+impl gpui::Global for FeatureCalls {}
+
+fn record(cx: &mut App, name: &'static str) {
+    cx.default_global::<FeatureCalls>().0.push(name);
 }
 
-fn second(_: &mut App) {
-    SECOND_AT.store(ORDER.fetch_add(1, Ordering::SeqCst), Ordering::SeqCst);
+fn first(cx: &mut App) {
+    record(cx, "first");
+}
+
+fn second(cx: &mut App) {
+    record(cx, "second");
 }
 
 #[gpui::test]
@@ -188,8 +190,7 @@ fn feature_crates_init_in_list_order_after_the_workspace(cx: &mut TestAppContext
             },
         ];
         init_with_features(cx, StartupEnv::test(), &features).unwrap();
-        assert_eq!(FIRST_AT.load(Ordering::SeqCst), 0);
-        assert_eq!(SECOND_AT.load(Ordering::SeqCst), 1);
+        assert_eq!(cx.global::<FeatureCalls>().0, ["first", "second"]);
         assert_eq!(StartupReport::get(cx).unwrap().order(), INIT_STAGES);
     });
 }

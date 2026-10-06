@@ -11,10 +11,10 @@ use gpui::{App, Global};
 pub enum Stage {
     /// `tracing` to rolling files, the panic hook (before GPUI exists).
     Logging,
-    /// The tokio <-> GPUI bridge.
-    Runtime,
     /// The asset source registered on the `Application` (before GPUI's `run`).
     Assets,
+    /// The tokio <-> GPUI bridge (needs an `App`, so it is the first stage inside `run`).
+    Runtime,
     /// The settings store, then the log filter following it.
     Settings,
     /// The theme registry and the active theme.
@@ -41,8 +41,8 @@ impl Stage {
     /// Every stage, in start-up order.
     pub const ALL: [Stage; 13] = [
         Stage::Logging,
-        Stage::Runtime,
         Stage::Assets,
+        Stage::Runtime,
         Stage::Settings,
         Stage::Theme,
         Stage::Keymap,
