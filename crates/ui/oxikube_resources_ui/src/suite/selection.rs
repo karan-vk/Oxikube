@@ -15,7 +15,7 @@ fn click(s: &mut Scripted, row: usize, toggle: bool) {
     s.draw();
     let at =
         s.f.vcx
-            .debug_bounds(Box::leak(format!("cell-{row}-0").into_boxed_str()))
+            .debug_bounds(Box::leak(format!("td-{row}-0").into_boxed_str()))
             .unwrap_or_else(|| panic!("row {row} was not laid out"))
             .center();
     let modifiers = if toggle {
