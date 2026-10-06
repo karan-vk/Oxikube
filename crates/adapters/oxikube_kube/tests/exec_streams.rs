@@ -12,7 +12,7 @@ use futures::SinkExt;
 use k8s_openapi::api::rbac::v1::PolicyRule;
 use oxikube_domain::ErrorKind;
 use oxikube_kube::KubeExec;
-use oxikube_ports::{ExecOptions, ExecPort, TerminalSize};
+use oxikube_ports::{ExecOptions, ExecStreamPort, TerminalSize};
 use oxikube_testkit::integration::TestNamespace;
 
 use common::exec::{create_cat, create_sleeper, read_all, read_until, restart_count};
@@ -35,7 +35,7 @@ async fn a_tty_shell_echoes_and_reports_the_round_trip_latency() {
     let exec = KubeExec::new((*client).clone());
 
     let mut session = exec
-        .exec(
+        .exec_session(
             ns.name(),
             "box",
             &argv(&["sh"]),
@@ -103,7 +103,7 @@ async fn a_large_payload_round_trips_through_cat() {
         tty: false,
     };
     let mut session = exec
-        .exec(ns.name(), "box", &argv(&["cat"]), &options)
+        .exec_session(ns.name(), "box", &argv(&["cat"]), &options)
         .await
         .expect("exec");
     let mut stdin = session.stdin.take().expect("stdin");
@@ -148,7 +148,7 @@ async fn a_resize_is_observed_by_stty() {
     let exec = KubeExec::new((*client).clone());
 
     let mut session = exec
-        .exec(
+        .exec_session(
             ns.name(),
             "box",
             &argv(&["sh"]),
@@ -212,7 +212,7 @@ async fn the_exit_status_and_separate_stderr_are_propagated() {
     let options = ExecOptions::default().container("main");
 
     let mut session = exec
-        .exec(
+        .exec_session(
             ns.name(),
             "box",
             &argv(&["sh", "-c", "echo to-out; echo to-err >&2; exit 3"]),
@@ -229,14 +229,14 @@ async fn the_exit_status_and_separate_stderr_are_propagated() {
     assert!(!status.is_success());
 
     let ok = exec
-        .exec(ns.name(), "box", &argv(&["true"]), &options)
+        .exec_session(ns.name(), "box", &argv(&["true"]), &options)
         .await
         .expect("exec");
     assert!(ok.status.await.expect("status").is_success());
 
     // The command is not run through a shell: a missing program is a failure result.
     let missing = exec
-        .exec(ns.name(), "box", &argv(&["no-such-program"]), &options)
+        .exec_session(ns.name(), "box", &argv(&["no-such-program"]), &options)
         .await
         .expect("the stream opens");
     let status = missing.status.await.expect("a result");
@@ -262,7 +262,7 @@ async fn attach_talks_to_the_main_process() {
         tty: false,
     };
     let mut session = exec
-        .attach(ns.name(), "cat", &options)
+        .attach_session(ns.name(), "cat", &options)
         .await
         .expect("attach");
     let mut stdin = session.stdin.take().expect("stdin");
@@ -276,7 +276,7 @@ async fn attach_talks_to_the_main_process() {
     // The same `cat` is still there: a second attach reaches a live process that was never
     // restarted.
     let mut again = exec
-        .attach(ns.name(), "cat", &options)
+        .attach_session(ns.name(), "cat", &options)
         .await
         .expect("attach again");
     let mut stdin = again.stdin.take().expect("stdin");
@@ -304,13 +304,13 @@ async fn failures_map_to_the_error_kinds() {
     let options = ExecOptions::default();
 
     let err = exec
-        .exec(ns.name(), "ghost", &argv(&["true"]), &options)
+        .exec_session(ns.name(), "ghost", &argv(&["true"]), &options)
         .await
         .expect_err("no such pod");
     assert_eq!(err.kind(), ErrorKind::NotFound, "{err}");
 
     let err = exec
-        .exec(
+        .exec_session(
             ns.name(),
             "box",
             &argv(&["true"]),
@@ -335,7 +335,7 @@ async fn failures_map_to_the_error_kinds() {
     let denied = KubeExec::new((*client).clone());
     let err = wait_until("the role is effective", DEADLINE, || async {
         denied
-            .exec(ns.name(), "box", &argv(&["true"]), &options)
+            .exec_session(ns.name(), "box", &argv(&["true"]), &options)
             .await
             .err()
             .filter(|e| e.kind() == ErrorKind::Forbidden)

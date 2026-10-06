@@ -2,15 +2,18 @@
 //! (E04-S09).
 //!
 //! [`KubeExec`] is the adapter for one cluster. It implements
-//! [`ExecPort`] on kube's `Api<Pod>::exec` / `attach` and adds the two
+//! [`ExecStreamPort`] (raw streams) and [`oxikube_ports::ExecPort`] (terminal backends) on kube's
+//! `Api<Pod>::exec` / `attach` and adds the two
 //! helpers that get a user into a node or into a pod that has no shell:
 //! [`KubeExec::node_shell`] and [`KubeExec::debug_container`]. There is no `kubectl` binary
 //! involved anywhere. This crate stays free of terminal emulation: the session is raw byte
-//! streams plus a resize sink, which `oxikube_terminal` adapts in E09.
+//! streams plus a resize sink; `ExecPort` hands them out as `TerminalBackend`s, which
+//! `oxikube_terminal` drives.
 //!
 //! | Piece | Where |
 //! |---|---|
-//! | `ExecPort` impl, opening the websocket | `mod` (this file) |
+//! | `ExecStreamPort` impl, opening the websocket | `mod` (this file) |
+//! | `ExecPort` impl: descriptors to options, sessions to `TerminalBackend`s | `terminal` |
 //! | `ExecOptions` to `AttachParams`, validation, pipe sizes | `params` |
 //! | kube `AttachedProcess` to [`oxikube_ports::ExecSession`] | `session` |
 //! | stdin as a `Sink`, output as chunk streams, resize as a `Sink` | `stdin`, `output`, `resize` |
@@ -58,6 +61,7 @@ mod resize;
 mod session;
 mod status;
 mod stdin;
+mod terminal;
 #[cfg(test)]
 mod tests;
 mod wait;
@@ -68,7 +72,7 @@ use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Pod;
 use kube::{Api, Client};
 use oxikube_domain::OxiResult;
-use oxikube_ports::{ExecOptions, ExecPort, ExecSession};
+use oxikube_ports::{ExecOptions, ExecSession, ExecStreamPort};
 
 use crate::subresource::EphemeralContainerSpec;
 use error::{Target, open_error, refine};
@@ -220,8 +224,8 @@ impl std::fmt::Debug for KubeExec {
 }
 
 #[async_trait]
-impl ExecPort for KubeExec {
-    async fn exec(
+impl ExecStreamPort for KubeExec {
+    async fn exec_session(
         &self,
         namespace: &str,
         pod: &str,
@@ -231,7 +235,7 @@ impl ExecPort for KubeExec {
         self.open(namespace, pod, Some(command), options).await
     }
 
-    async fn attach(
+    async fn attach_session(
         &self,
         namespace: &str,
         pod: &str,

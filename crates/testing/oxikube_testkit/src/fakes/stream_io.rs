@@ -1,4 +1,4 @@
-//! Byte-stream fakes: [`FakeExecPort`] and [`FakePortForwardPort`].
+//! Byte-stream fakes: [`FakeExecStreamPort`] (`ExecStreamPort`) and [`FakePortForwardPort`].
 //!
 //! Each scripted session comes with a capture handle ([`ExecCapture`],
 //! [`ForwardCapture`]) the test keeps to inspect what the app wrote (stdin, resizes,
@@ -15,14 +15,14 @@ use futures::io::{AsyncRead, AsyncWrite};
 use futures::{FutureExt, StreamExt, sink, stream};
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
-    ExecOptions, ExecPort, ExecSession, ExitStatus, PortForwardConnection, PortForwardPort,
+    ExecOptions, ExecSession, ExecStreamPort, ExitStatus, PortForwardConnection, PortForwardPort,
     TerminalSize,
 };
 use parking_lot::Mutex;
 
 use crate::script::{CallLog, Script};
 
-// --- ExecPort ----------------------------------------------------------------------------
+// --- ExecStreamPort ----------------------------------------------------------------------------
 
 #[derive(Default)]
 struct ExecShared {
@@ -178,18 +178,18 @@ impl ExecScript {
     }
 }
 
-/// Queued sessions for each [`FakeExecPort`] method.
+/// Queued sessions for each [`FakeExecStreamPort`] method.
 #[derive(Debug, Default)]
-pub struct ExecScripts {
+pub struct ExecStreamScripts {
     /// `exec`.
     pub exec: Script<ExecScript>,
     /// `attach`.
     pub attach: Script<ExecScript>,
 }
 
-/// One call made on a [`FakeExecPort`].
+/// One call made on a [`FakeExecStreamPort`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecCall {
+pub enum ExecStreamCall {
     /// `exec`.
     Exec {
         /// Pod namespace.
@@ -212,18 +212,18 @@ pub enum ExecCall {
     },
 }
 
-/// Fake `ExecPort`. Scripted only: each call takes the next [`ExecScript`]. The session
+/// Fake `ExecStreamPort`. Scripted only: each call takes the next [`ExecScript`]. The session
 /// exposes stdin/stdout/stderr/resize exactly as the options ask (stderr is absent with a
 /// TTY, as on a real cluster).
 #[derive(Debug, Default)]
-pub struct FakeExecPort {
-    script: ExecScripts,
-    calls: CallLog<ExecCall>,
+pub struct FakeExecStreamPort {
+    script: ExecStreamScripts,
+    calls: CallLog<ExecStreamCall>,
 }
 
-fake_plumbing!(FakeExecPort, ExecScripts, ExecCall);
+fake_plumbing!(FakeExecStreamPort, ExecStreamScripts, ExecStreamCall);
 
-impl FakeExecPort {
+impl FakeExecStreamPort {
     /// A fake with nothing scripted.
     pub fn new() -> Self {
         Self::default()
@@ -231,15 +231,15 @@ impl FakeExecPort {
 }
 
 #[async_trait]
-impl ExecPort for FakeExecPort {
-    async fn exec(
+impl ExecStreamPort for FakeExecStreamPort {
+    async fn exec_session(
         &self,
         namespace: &str,
         pod: &str,
         command: &[String],
         options: &ExecOptions,
     ) -> OxiResult<ExecSession> {
-        self.calls.record(ExecCall::Exec {
+        self.calls.record(ExecStreamCall::Exec {
             namespace: namespace.to_owned(),
             pod: pod.to_owned(),
             command: command.to_vec(),
@@ -248,17 +248,17 @@ impl ExecPort for FakeExecPort {
         let script = self
             .script
             .exec
-            .next_or_unscripted("FakeExecPort", "exec")?;
+            .next_or_unscripted("FakeExecStreamPort", "exec_session")?;
         Ok(script.into_session(options))
     }
 
-    async fn attach(
+    async fn attach_session(
         &self,
         namespace: &str,
         pod: &str,
         options: &ExecOptions,
     ) -> OxiResult<ExecSession> {
-        self.calls.record(ExecCall::Attach {
+        self.calls.record(ExecStreamCall::Attach {
             namespace: namespace.to_owned(),
             pod: pod.to_owned(),
             options: options.clone(),
@@ -266,7 +266,7 @@ impl ExecPort for FakeExecPort {
         let script = self
             .script
             .attach
-            .next_or_unscripted("FakeExecPort", "attach")?;
+            .next_or_unscripted("FakeExecStreamPort", "attach_session")?;
         Ok(script.into_session(options))
     }
 }
@@ -476,15 +476,12 @@ mod tests {
 
     #[test]
     fn exec_scripted_session_produces_output_and_captures_stdin() {
-        let fake = FakeExecPort::new();
+        let fake = FakeExecStreamPort::new();
         let script = ExecScript::new()
             .stdout("hello ")
             .stdout("world")
             .stderr("warn")
-            .exit(Ok(ExitStatus {
-                code: Some(2),
-                message: None,
-            }));
+            .exit(Ok(ExitStatus::with_code(2)));
         let capture = script.capture();
         fake.script()
             .exec
@@ -496,7 +493,8 @@ mod tests {
             ..ExecOptions::default()
         };
         let mut session =
-            block_on(fake.exec("demo", "web", &argv(&["sh", "-c", "true"]), &options)).unwrap();
+            block_on(fake.exec_session("demo", "web", &argv(&["sh", "-c", "true"]), &options))
+                .unwrap();
         assert!(session.resize.is_none());
         let out: Vec<u8> = block_on(session.stdout.take().unwrap().map(Result::unwrap).concat());
         assert_eq!(out, b"hello world");
@@ -510,11 +508,12 @@ mod tests {
         assert_eq!(capture.stdin(), b"ls\nexit\n");
         assert_eq!(block_on(session.status).unwrap().code, Some(2));
 
-        let denied = block_on(fake.exec("demo", "web", &argv(&["id"]), &options)).unwrap_err();
+        let denied =
+            block_on(fake.exec_session("demo", "web", &argv(&["id"]), &options)).unwrap_err();
         assert_eq!(denied.kind(), ErrorKind::Forbidden);
         assert_eq!(
             fake.recorded_calls()[0],
-            ExecCall::Exec {
+            ExecStreamCall::Exec {
                 namespace: "demo".into(),
                 pod: "web".into(),
                 command: argv(&["sh", "-c", "true"]),
@@ -526,12 +525,12 @@ mod tests {
 
     #[test]
     fn attach_with_tty_captures_resizes_and_waits_for_finish() {
-        let fake = FakeExecPort::new();
+        let fake = FakeExecStreamPort::new();
         let script = ExecScript::new().exit_when_told();
         let capture = script.capture();
         fake.script().attach.push_ok(script);
         let mut session =
-            block_on(fake.attach("demo", "web", &ExecOptions::interactive())).unwrap();
+            block_on(fake.attach_session("demo", "web", &ExecOptions::interactive())).unwrap();
         assert!(session.stderr.is_none(), "no stderr with a tty");
         block_on(send_all(
             session.resize.as_mut().unwrap(),
@@ -547,8 +546,11 @@ mod tests {
         assert!(capture.finish(Ok(ExitStatus::success())));
         assert!(block_on(status).unwrap().is_success());
         assert!(!capture.finish(Ok(ExitStatus::success())));
-        assert!(matches!(fake.recorded_calls()[0], ExecCall::Attach { .. }));
-        assert!(block_on(fake.attach("demo", "web", &ExecOptions::default())).is_err());
+        assert!(matches!(
+            fake.recorded_calls()[0],
+            ExecStreamCall::Attach { .. }
+        ));
+        assert!(block_on(fake.attach_session("demo", "web", &ExecOptions::default())).is_err());
     }
 
     #[test]

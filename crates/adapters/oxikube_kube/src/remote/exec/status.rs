@@ -32,5 +32,9 @@ pub(super) fn exit_status(status: &Status) -> ExitStatus {
         .as_deref()
         .filter(|message| !message.trim().is_empty())
         .map(redacted_line);
-    ExitStatus { code, message }
+    ExitStatus {
+        code,
+        message,
+        ..ExitStatus::default()
+    }
 }

@@ -53,7 +53,7 @@
 //! | [`DiscoveryPort`] | [`discovery`] |
 //! | [`TableFeedPort`] | [`table`] |
 //! | [`LogPort`] | [`log`] |
-//! | [`ExecPort`] | [`exec`] |
+//! | [`ExecPort`], [`ExecStreamPort`], [`TerminalBackend`] | [`exec`] |
 //! | [`PortForwardPort`] | [`portforward`] |
 //!
 //! # Session ports (E06-S01)
@@ -139,7 +139,11 @@ pub use context::{ContentPart, ContextProviderPort, ContextScope, Mention, Menti
 pub use crash::{CrashId, CrashReport, CrashReporterPort};
 pub use describe::{DescribeOutput, DescribePort, DescribeSource};
 pub use discovery::{DiscoveryPort, ServerVersion};
-pub use exec::{ExecOptions, ExecPort, ExecSession, ExitStatus, TerminalSize};
+pub use exec::{
+    AttachTarget, BackendEvent, DebugContainerSpec, ExecOptions, ExecPort, ExecSession,
+    ExecStreamPort, ExecTarget, ExitStatus, NodeShellSpec, SessionBackend, TerminalBackend,
+    TerminalSize,
+};
 pub use feed::{Delta, DeltaBatch, WatchFeed};
 pub use feed_stats::{FeedStat, FeedStats, FeedVariant};
 pub use fs::{DirEntry, EntryKind, FsEvent, FsEventKind, FsPort};

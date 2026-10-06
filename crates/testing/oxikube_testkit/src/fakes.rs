@@ -24,7 +24,8 @@
 //! | `DiscoveryPort` | [`FakeDiscoveryPort`] |
 //! | `TableFeedPort` | [`FakeTableFeedPort`] |
 //! | `LogPort` | [`FakeLogPort`] |
-//! | `ExecPort` | [`FakeExecPort`] |
+//! | `ExecPort` (+ `TerminalBackend`) | [`FakeExecPort`] (+ [`FakeTerminalBackend`]) |
+//! | `ExecStreamPort` | [`FakeExecStreamPort`] |
 //! | `PortForwardPort` | [`FakePortForwardPort`] |
 //! | `ClusterSourcePort` | [`FakeClusterSourcePort`] |
 //! | `CloudDiscoveryPort` | [`FakeCloudDiscoveryPort`] |
@@ -81,6 +82,7 @@ mod resource;
 mod session;
 mod storage;
 mod stream_io;
+mod terminal;
 mod warnings;
 
 pub use agent::{
@@ -115,7 +117,10 @@ pub use storage::{
     StateCall, StateScripts,
 };
 pub use stream_io::{
-    ExecCall, ExecCapture, ExecScript, ExecScripts, FakeExecPort, FakePortForwardPort,
-    ForwardCapture, ForwardScript, PortForwardCall, PortForwardScripts,
+    ExecCapture, ExecScript, ExecStreamCall, ExecStreamScripts, FakeExecStreamPort,
+    FakePortForwardPort, ForwardCapture, ForwardScript, PortForwardCall, PortForwardScripts,
+};
+pub use terminal::{
+    ExecPortCall, ExecPortScripts, FakeExecPort, FakeTerminalBackend, TerminalCall,
 };
 pub use warnings::FakeWarningPort;

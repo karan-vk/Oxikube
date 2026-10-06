@@ -7,7 +7,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::{ExecOptions, ExitStatus};
-use oxikube_testkit::fakes::{ExecCall, ExecScript, FakeExecPort};
+use oxikube_testkit::fakes::{ExecScript, ExecStreamCall, FakeExecStreamPort};
 
 use super::fakes::{Call, FakePods};
 use crate::remote::exec::node_shell::{
@@ -86,7 +86,7 @@ fn a_bad_node_namespace_or_image_is_refused() {
 }
 
 async fn open(
-    exec: &FakeExecPort,
+    exec: &FakeExecStreamPort,
     pods: &Arc<FakePods>,
 ) -> Result<node_shell::NodeShellSession, OxiError> {
     node_shell::open(exec, pods.clone(), "worker-1", &config()).await
@@ -96,7 +96,7 @@ async fn open(
 async fn open_creates_waits_then_execs_a_tty_shell_in_the_node_namespaces() {
     let (pods, _deleted) = FakePods::new();
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     exec.script()
         .exec
         .push(Ok(ExecScript::new().stdout("# ").exit_when_told()));
@@ -120,7 +120,7 @@ async fn open_creates_waits_then_execs_a_tty_shell_in_the_node_namespaces() {
     );
     assert_eq!(calls.len(), 2, "nothing is deleted while the shell runs");
 
-    let ExecCall::Exec {
+    let ExecStreamCall::Exec {
         namespace,
         pod,
         command,
@@ -139,13 +139,10 @@ async fn open_creates_waits_then_execs_a_tty_shell_in_the_node_namespaces() {
 async fn the_pod_is_deleted_when_the_shell_exits() {
     let (pods, _deleted) = FakePods::new();
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     exec.script()
         .exec
-        .push(Ok(ExecScript::new().exit(Ok(ExitStatus {
-            code: Some(7),
-            message: None,
-        }))));
+        .push(Ok(ExecScript::new().exit(Ok(ExitStatus::with_code(7)))));
     let shell = open(&exec, &pods).await.expect("open");
     assert!(pods.deletions().is_empty());
     let status = shell.session.status.await.expect("status");
@@ -165,7 +162,7 @@ async fn the_pod_is_deleted_when_the_shell_exits() {
 async fn the_pod_is_deleted_when_the_session_is_dropped() {
     let (pods, mut deleted) = FakePods::new();
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     exec.script()
         .exec
         .push(Ok(ExecScript::new().exit_when_told()));
@@ -182,7 +179,7 @@ async fn the_pod_is_deleted_when_the_session_is_dropped() {
 async fn the_pod_is_deleted_when_the_status_is_dropped_and_the_streams_are_kept() {
     let (pods, mut deleted) = FakePods::new();
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     exec.script()
         .exec
         .push(Ok(ExecScript::new().exit_when_told()));
@@ -199,7 +196,7 @@ async fn dropping_the_status_while_the_delete_is_in_flight_still_deletes_the_pod
     pods.stall_next_delete
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     exec.script().exec.push(Ok(ExecScript::new()));
     let shell = open(&exec, &pods).await.expect("open");
     // The shell has exited, so the status is inside the stalled delete when the timeout
@@ -222,7 +219,7 @@ async fn cancelling_open_while_its_failure_cleanup_is_in_flight_still_deletes_th
     pods.stall_next_delete
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     let opened = tokio::time::timeout(Duration::from_millis(200), open(&exec, &pods)).await;
     assert!(opened.is_err(), "the cleanup is still in flight");
     let name = tokio::time::timeout(Duration::from_secs(5), deleted.recv())
@@ -237,7 +234,7 @@ async fn a_pod_that_cannot_start_is_deleted_and_the_error_returned() {
     let (pods, _deleted) = FakePods::new();
     *pods.wait_error.lock() = Some((ErrorKind::Conflict, "ImagePullBackOff"));
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     let err = open(&exec, &pods).await.expect_err("fails");
     assert_eq!(err.kind(), ErrorKind::Conflict);
     assert_eq!(pods.deletions(), [POD]);
@@ -249,7 +246,7 @@ async fn a_failed_exec_deletes_the_pod() {
     let (pods, _deleted) = FakePods::new();
     let pods = Arc::new(pods);
     // Nothing scripted: the fake exec port fails the call.
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     open(&exec, &pods).await.expect_err("exec fails");
     assert_eq!(pods.deletions(), [POD]);
 }
@@ -259,7 +256,7 @@ async fn a_failed_delete_is_survivable() {
     let (pods, _deleted) = FakePods::new();
     *pods.delete_error.lock() = Some((ErrorKind::Network, "down"));
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     exec.script().exec.push(Ok(ExecScript::new()));
     let shell = open(&exec, &pods).await.expect("open");
     shell
@@ -274,7 +271,7 @@ async fn a_failed_delete_is_survivable() {
 async fn nothing_is_created_for_an_invalid_request() {
     let (pods, _deleted) = FakePods::new();
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     node_shell::open(&exec, pods.clone(), "a/b", &config())
         .await
         .expect_err("invalid node");
@@ -285,7 +282,7 @@ async fn nothing_is_created_for_an_invalid_request() {
 async fn a_custom_shell_replaces_the_default_login_shell() {
     let (pods, _deleted) = FakePods::new();
     let pods = Arc::new(pods);
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     exec.script().exec.push(Ok(ExecScript::new()));
     let config = NodeShellConfig {
         shell: vec!["zsh".into()],
@@ -294,7 +291,7 @@ async fn a_custom_shell_replaces_the_default_login_shell() {
     node_shell::open(&exec, pods, "worker-1", &config)
         .await
         .expect("open");
-    let ExecCall::Exec { command, .. } = &exec.recorded_calls()[0] else {
+    let ExecStreamCall::Exec { command, .. } = &exec.recorded_calls()[0] else {
         panic!("expected an exec");
     };
     assert_eq!(command.last().map(String::as_str), Some("zsh"));

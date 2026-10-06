@@ -5874,9 +5874,11 @@ name = "oxikube_ports"
 version = "0.0.1"
 dependencies = [
  "async-trait",
+ "bytes",
  "futures",
  "jiff",
  "oxikube_domain",
+ "parking_lot",
  "proptest",
  "secrecy",
  "serde",
@@ -5993,6 +5995,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
+ "bytes",
  "flate2",
  "futures",
  "gpui-pre",

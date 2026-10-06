@@ -95,8 +95,8 @@ fn outcome(status: Option<Status>, ended: Result<(), String>) -> OxiResult<ExitS
     match (status, ended) {
         (Some(status), _) => Ok(exit_status(&status)),
         (None, Ok(())) => Ok(ExitStatus {
-            code: None,
             message: Some("the connection closed without an exit status".into()),
+            ..ExitStatus::default()
         }),
         (None, Err(reason)) => Err(OxiError::network(format!(
             "the connection to the container was lost: {reason}"

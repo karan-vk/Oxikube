@@ -9,9 +9,10 @@ use std::sync::Arc;
 use oxikube_ports::{
     AccessReviewPort, AgentClient, AgentPort, ClockPort, CloudDiscoveryPort, ClusterConnectorPort,
     ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort, DiscoveryPort,
-    ExecPort, FsPort, HelmPort, IntegrationPort, LogPort, MetricsPort, NotifierPort,
-    PortForwardPort, PromqlPort, ResourcePort, ResourceReader, ResourceWriter, SecretStorePort,
-    StatePort, TableFeedPort, ToolDef, ToolName, ToolPort, UpdaterPort, WarningPort,
+    ExecPort, ExecStreamPort, FsPort, HelmPort, IntegrationPort, LogPort, MetricsPort,
+    NotifierPort, PortForwardPort, PromqlPort, ResourcePort, ResourceReader, ResourceWriter,
+    SecretStorePort, StatePort, TableFeedPort, TerminalBackend, ToolDef, ToolName, ToolPort,
+    UpdaterPort, WarningPort,
 };
 use oxikube_testkit::*;
 
@@ -23,6 +24,8 @@ const FAKES: &[(&str, &str)] = &[
     ("TableFeedPort", "FakeTableFeedPort"),
     ("LogPort", "FakeLogPort"),
     ("ExecPort", "FakeExecPort"),
+    ("ExecStreamPort", "FakeExecStreamPort"),
+    ("TerminalBackend", "FakeTerminalBackend"),
     ("PortForwardPort", "FakePortForwardPort"),
     ("ClusterSourcePort", "FakeClusterSourcePort"),
     ("CloudDiscoveryPort", "FakeCloudDiscoveryPort"),
@@ -71,6 +74,8 @@ fn fakes_are_port_trait_objects() {
     let _: Arc<dyn TableFeedPort> = Arc::new(FakeTableFeedPort::new());
     let _: Arc<dyn LogPort> = Arc::new(FakeLogPort::new());
     let _: Arc<dyn ExecPort> = Arc::new(FakeExecPort::new());
+    let _: Arc<dyn ExecStreamPort> = Arc::new(FakeExecStreamPort::new());
+    let _: Box<dyn TerminalBackend> = Box::new(FakeTerminalBackend::echo());
     let _: Arc<dyn PortForwardPort> = Arc::new(FakePortForwardPort::new());
     let _: Arc<dyn ClusterSourcePort> = Arc::new(FakeClusterSourcePort::new());
     let _: Arc<dyn CloudDiscoveryPort> = Arc::new(FakeCloudDiscoveryPort::new());
@@ -101,15 +106,23 @@ fn fakes_are_port_trait_objects() {
 fn every_port_trait_in_oxikube_ports_has_a_fake() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ports/oxikube_ports/src");
     let mut traits = Vec::new();
-    for entry in std::fs::read_dir(&src).unwrap() {
-        let text = std::fs::read_to_string(entry.unwrap().path()).unwrap();
-        for line in text.lines() {
-            if let Some(rest) = line.trim_start().strip_prefix("pub trait ") {
-                let name: String = rest
-                    .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                    .collect();
-                traits.push(name);
+    let mut dirs = vec![src];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for line in text.lines() {
+                if let Some(rest) = line.trim_start().strip_prefix("pub trait ") {
+                    let name: String = rest
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                        .collect();
+                    traits.push(name);
+                }
             }
         }
     }

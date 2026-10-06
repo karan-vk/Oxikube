@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use oxikube_domain::{OxiError, OxiResult};
-use oxikube_ports::{ExecOptions, ExecPort, ExecSession};
+use oxikube_ports::{ExecOptions, ExecSession, ExecStreamPort};
 
 use super::pods::Pods;
 use super::wait::Container;
@@ -16,7 +16,7 @@ pub const DEFAULT_DEBUG_START_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Adds `spec` to `namespace/pod`, waits for it to run and attaches to it.
 pub(super) async fn attach_debug(
-    exec: &dyn ExecPort,
+    exec: &dyn ExecStreamPort,
     pods: &dyn Pods,
     namespace: &str,
     pod: &str,
@@ -47,5 +47,5 @@ pub(super) async fn attach_debug(
         stderr: !spec.tty,
         tty: spec.tty,
     };
-    exec.attach(namespace, pod, &options).await
+    exec.attach_session(namespace, pod, &options).await
 }
