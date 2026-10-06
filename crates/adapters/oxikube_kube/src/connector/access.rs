@@ -56,14 +56,9 @@ impl AccessReviewPort for KubeAccess {
             capabilities_for_context(&self.pool, &self.rules, &self.context, namespace, REFRESH)
                 .await?;
         let mut capabilities = report.available();
-        // The registry is filled by the discovery the manager runs beside this call; when it
-        // is not there yet the flag is simply absent, which is the safe direction.
-        if self
-            .discovery
-            .registry()
-            .kinds()
-            .any(|kind| kind.gvk.group.as_ref() == METRICS_GROUP)
-        {
+        // Waits for the discovery the manager runs beside this call (or runs it), so the flag
+        // does not depend on which of the two finishes first.
+        if self.discovery.serves_group(METRICS_GROUP).await {
             capabilities |= Capabilities::METRICS;
         }
         Ok(capabilities)

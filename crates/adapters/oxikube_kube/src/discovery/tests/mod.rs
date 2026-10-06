@@ -7,3 +7,4 @@ mod fake;
 mod fetch;
 mod registry;
 mod resolve;
+mod serves_group;
