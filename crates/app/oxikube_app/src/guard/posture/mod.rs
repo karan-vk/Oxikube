@@ -9,8 +9,8 @@
 //! | Command | Effect | Initiators |
 //! |---|---|---|
 //! | `cluster::ToggleReadOnly` | sets or flips `clusters.<id>.read_only` | people only (privileged) |
-//! | `cluster::SetColour` | sets or clears `clusters.<id>.colour` | everyone |
-//! | `cluster::ApplyPreset` | writes a [`ClusterPreset`]'s colour and, for production, read-only on | everyone |
+//! | `cluster::SetColour` | sets or clears `clusters.<id>.colour` | everyone (not off a production flag: people only) |
+//! | `cluster::ApplyPreset` | writes a [`ClusterPreset`]'s colour and, for production, read-only on | everyone (not off a production flag: people only) |
 //!
 //! None of them touches the cluster, so none is `mutating` and none is blocked by read-only
 //! mode (lifting it must be possible). They run through the guard's posture pipeline instead
@@ -20,9 +20,14 @@
 //!    the [`Prod`](ClusterPreset::Prod) red) answers
 //!    [`Outcome::NeedsConfirmation`](crate::command_bus::Outcome::NeedsConfirmation) with a
 //!    simple confirm first. No hidden state: the flag is read from the colour field.
+//!    Taking the production colour off such a cluster (`SetColour` to anything else or to
+//!    nothing, or a preset other than production) removes that flag, so it is lowering
+//!    protection as well: people may do it (it is their explicit way around the confirm), agents
+//!    and plugins are refused with [`DispatchError::NotPermitted`](crate::command_bus::DispatchError::NotPermitted),
+//!    because they could otherwise clear the flag and lift read-only without a confirm later.
 //! 2. **Audit**: one record per attempt, like a mutation. When the command lowers protection
-//!    the audit log must be writable first (fail closed); raising protection is never refused
-//!    because the log is down.
+//!    (lifts read-only or removes the production flag) the audit log must be writable first
+//!    (fail closed); raising protection is never refused because the log is down.
 //! 3. **Handler**: persists through the [`PrefsWriter`] (the comment-preserving settings
 //!    writer, supplied by the binary) and applies the change to the live session. Raising
 //!    protection goes live first and is persisted second, so a failing disk never leaves a
@@ -38,10 +43,10 @@ mod pipeline;
 use std::sync::Arc;
 
 use futures::future::BoxFuture;
-use oxikube_domain::ClusterColour;
 use oxikube_domain::OxiResult;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName};
+use oxikube_domain::{ClusterColour, ClusterPreset};
 
 pub use handlers::register_commands;
 
@@ -136,6 +141,16 @@ pub(crate) fn patch_of(command: &Command, read_only: bool) -> Option<PrefsPatch>
 pub(crate) fn lowers_protection(command: &Command, posture: &Posture) -> bool {
     posture.read_only
         && patch_of(command, posture.read_only).is_some_and(|p| p.read_only == Some(false))
+}
+
+/// Whether running `command` on a cluster with `posture` takes the production flag (the
+/// [`Prod`](ClusterPreset::Prod) colour) off it: the flag is what asks for the confirm to lift
+/// read-only, so removing it is lowering protection too.
+pub(crate) fn unflags_production(command: &Command, posture: &Posture) -> bool {
+    ClusterPreset::detect(posture.colour) == ClusterPreset::Prod
+        && patch_of(command, posture.read_only)
+            .and_then(|p| p.colour)
+            .is_some_and(|colour| ClusterPreset::detect(colour) != ClusterPreset::Prod)
 }
 
 /// A shared handle, for the handlers.

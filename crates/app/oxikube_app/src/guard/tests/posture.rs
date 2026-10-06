@@ -231,7 +231,7 @@ fn no_confirm_to_turn_it_on_or_for_a_cluster_that_is_not_flagged() {
         h.dispatch(toggle("a", Some(true)), ctx(Initiator::Ui)),
         Ok(Outcome::Completed(_))
     ));
-    // Unflagging production first is the user's explicit choice, and then lifting is plain.
+    // Unflagging production first is a person's explicit choice, and then lifting is plain.
     h.dispatch(colour("a", None), ctx(Initiator::Ui)).unwrap();
     assert!(matches!(
         h.dispatch(toggle("a", Some(false)), ctx(Initiator::Ui)),
@@ -253,6 +253,100 @@ fn agents_and_plugins_cannot_lift_read_only_even_with_a_confirmation() {
     }
     assert!(read_only(&h, "a"));
     assert!(h.bus.tool(CommandId::CLUSTER_TOGGLE_READ_ONLY).is_none());
+}
+
+/// Every command that takes the production colour off a cluster flagged with it.
+fn unflagging_commands() -> Vec<Command> {
+    vec![
+        colour("a", None),
+        colour("a", Some(ClusterColour::rgb(1, 2, 3))),
+        preset("a", ClusterPreset::Staging),
+        preset("a", ClusterPreset::Dev),
+        preset("a", ClusterPreset::None),
+    ]
+}
+
+#[test]
+fn agents_and_plugins_cannot_clear_the_production_flag() {
+    for initiator in [Initiator::Agent, Initiator::Plugin] {
+        for command in unflagging_commands() {
+            let h = prod_cluster();
+            let err = h.dispatch(command.clone(), ctx(initiator)).unwrap_err();
+            assert!(
+                matches!(err, DispatchError::NotPermitted { .. }),
+                "{initiator} {command:?}: {err:?}"
+            );
+            assert_eq!(OxiError::from(err).kind(), ErrorKind::Forbidden);
+            assert_eq!(h.manager.get(&id("a")).unwrap().colour(), Some(RED));
+            assert!(h.prefs.writes().is_empty(), "nothing was written");
+            assert_eq!(h.outcomes(), [(AuditOutcome::Denied, initiator)]);
+        }
+    }
+}
+
+#[test]
+fn people_may_clear_the_production_flag_and_agents_may_keep_or_set_it() {
+    for command in unflagging_commands() {
+        for initiator in [Initiator::Ui, Initiator::Command] {
+            let h = prod_cluster();
+            let out = h.dispatch(command.clone(), ctx(initiator));
+            assert!(
+                matches!(out, Ok(Outcome::Completed(_))),
+                "{command:?}: {out:?}"
+            );
+            assert_ne!(h.manager.get(&id("a")).unwrap().colour(), Some(RED));
+        }
+    }
+    for initiator in [Initiator::Agent, Initiator::Plugin] {
+        // Keeping the flag, or setting it, never lowers anything.
+        let h = prod_cluster();
+        for command in [colour("a", Some(RED)), preset("a", ClusterPreset::Prod)] {
+            let out = h.dispatch(command.clone(), ctx(initiator));
+            assert!(
+                matches!(out, Ok(Outcome::Completed(_))),
+                "{command:?}: {out:?}"
+            );
+        }
+        // A cluster that is not flagged production can be recoloured freely.
+        let h = Harness::new();
+        h.connect("a", false);
+        for command in [
+            colour("a", Some(ClusterColour::rgb(1, 2, 3))),
+            colour("a", None),
+        ] {
+            let out = h.dispatch(command.clone(), ctx(initiator));
+            assert!(
+                matches!(out, Ok(Outcome::Completed(_))),
+                "{command:?}: {out:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn clearing_the_production_flag_needs_a_writable_audit_log() {
+    let h = prod_cluster();
+    // A record that could not be written leaves a backlog (raising protection still ran).
+    h.state
+        .script()
+        .append_audit
+        .push_err(OxiError::internal("disk full"));
+    h.dispatch(toggle("a", Some(true)), ctx(Initiator::Ui))
+        .unwrap();
+    assert_eq!(h.bus.guard().audit().backlog_len(), 1);
+
+    // While the log stays unwritable, clearing the flag is refused before anything changes.
+    h.state
+        .script()
+        .append_audit
+        .push_err(OxiError::internal("disk full"));
+    let writes = h.prefs.writes().len();
+    let err = h
+        .dispatch(colour("a", None), ctx(Initiator::Ui))
+        .unwrap_err();
+    assert!(matches!(err, DispatchError::AuditUnavailable(_)), "{err:?}");
+    assert_eq!(h.manager.get(&id("a")).unwrap().colour(), Some(RED));
+    assert_eq!(h.prefs.writes().len(), writes, "nothing was written");
 }
 
 #[test]

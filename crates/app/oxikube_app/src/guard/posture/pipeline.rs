@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use oxikube_domain::ClusterPreset;
 use oxikube_domain::audit::AuditOutcome;
+use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::{Command, CommandMeta};
 use oxikube_domain::safety::ConfirmTier;
 
-use super::{Posture, lowers_protection};
+use super::{Posture, lowers_protection, unflags_production};
 use crate::command_bus::{CommandHandler, DispatchContext, DispatchError, HandlerContext, Outcome};
 use crate::guard::confirm::{ConfirmationRequest, Pending};
 use crate::guard::{MutationGuard, policy};
@@ -27,6 +28,28 @@ impl MutationGuard {
         let posture = Posture::of(&self.sessions, &cluster);
         let target = policy::audit_target(&command, &cluster);
         let lowers = lowers_protection(&command, &posture);
+
+        // The production colour is what asks for the confirm above, so clearing it is a
+        // person's explicit choice; an agent or a plugin may not.
+        let unflags = unflags_production(&command, &posture);
+        if unflags && matches!(ctx.initiator, Initiator::Agent | Initiator::Plugin) {
+            let record = self.audit.entry(
+                &ctx.who,
+                ctx.initiator,
+                meta.id.as_str(),
+                target,
+                ctx.dry_run,
+                AuditOutcome::Denied,
+            );
+            if let Err(audit) = self.audit.record(record).await {
+                tracing::warn!(error = %audit, "could not audit a refused posture change");
+            }
+            return Err(DispatchError::NotPermitted {
+                command: meta.id,
+                initiator: ctx.initiator,
+            });
+        }
+        let weakens = lowers || unflags;
 
         // Lifting read-only on a cluster the user flagged as production asks first.
         if lowers && ClusterPreset::detect(posture.colour) == ClusterPreset::Prod {
@@ -76,7 +99,7 @@ impl MutationGuard {
         }
 
         // Taking protection away needs a log to write to; adding it never waits on one.
-        if lowers {
+        if weakens {
             self.audit
                 .ensure_writable()
                 .await
@@ -98,7 +121,7 @@ impl MutationGuard {
         });
         match self.audit.flush().await {
             Ok(()) => {}
-            Err(err) if lowers => return Err(DispatchError::AuditFailed(err)),
+            Err(err) if weakens => return Err(DispatchError::AuditFailed(err)),
             Err(err) => tracing::warn!(error = %err, "posture change not audited yet; retrying"),
         }
         result
