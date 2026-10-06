@@ -47,6 +47,7 @@ pub struct HandlerContext {
     who: Arc<str>,
     cluster: Option<ClusterId>,
     mutation: Option<Mutation>,
+    dry_run: bool,
 }
 
 impl HandlerContext {
@@ -61,7 +62,21 @@ impl HandlerContext {
             who,
             cluster,
             mutation,
+            dry_run: false,
         }
+    }
+
+    /// Marks the call as a dry run (see [`HandlerContext::dry_run`]).
+    pub(crate) fn with_dry_run(mut self, dry_run: bool) -> Self {
+        self.dry_run = dry_run;
+        self
+    }
+
+    /// Whether the caller asked for a dry run: the handler must describe what it would do and
+    /// change nothing. Mutating handlers read this from their [`Mutation`] instead; it is set
+    /// for commands that run outside the mutating pipeline (the posture commands).
+    pub fn dry_run(&self) -> bool {
+        self.dry_run
     }
 
     /// Which door the request came through.

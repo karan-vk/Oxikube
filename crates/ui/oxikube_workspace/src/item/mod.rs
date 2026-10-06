@@ -16,6 +16,8 @@ mod tab;
 use gpui::{App, Context, Entity, EventEmitter, Focusable, Render, SharedString, Window};
 use oxikube_ui::IconName;
 
+use crate::cluster::ClusterMark;
+
 pub use handle::ItemHandle;
 pub use registry::{ItemBuilder, ItemRegistry, register_item};
 pub use tab::ITEM_PANEL_NAME;
@@ -30,6 +32,10 @@ pub struct TabContent {
     pub icon: Option<IconName>,
     /// The item holds unsaved changes (a dot is drawn after the title).
     pub dirty: bool,
+    /// The cluster's colour and read-only lock, drawn before the title. `None` (or a plain
+    /// mark) draws nothing. Set by cluster tabs; the item emits [`ItemEvent::UpdateTab`] when
+    /// the mark changes, so the tab redraws on that change and not on every frame.
+    pub cluster: Option<ClusterMark>,
 }
 
 impl TabContent {
@@ -39,12 +45,19 @@ impl TabContent {
             title: title.into(),
             icon: None,
             dirty: false,
+            cluster: None,
         }
     }
 
     /// Sets the icon.
     pub fn icon(mut self, icon: IconName) -> Self {
         self.icon = Some(icon);
+        self
+    }
+
+    /// Sets the cluster mark (colour dot and read-only lock).
+    pub fn cluster(mut self, mark: ClusterMark) -> Self {
+        self.cluster = Some(mark);
         self
     }
 

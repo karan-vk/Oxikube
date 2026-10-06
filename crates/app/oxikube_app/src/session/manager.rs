@@ -204,6 +204,14 @@ impl ClusterSessionManager {
         })
     }
 
+    /// Whether `cluster`'s session is read-only. A cluster with no open session reports `true`
+    /// (fail closed): nothing may write to it. In-memory, one short lock.
+    pub fn is_read_only(&self, cluster: &ClusterId) -> bool {
+        self.shared
+            .entry(cluster)
+            .is_none_or(|entry| entry.lock().read_only)
+    }
+
     /// Sets the read-only flag. Returns whether it changed.
     ///
     /// # Errors

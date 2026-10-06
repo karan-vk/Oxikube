@@ -14,6 +14,7 @@
 //! | [`session`] `prefs` | E06-S08 | per-cluster settings: `set_prefs_table` pushes the resolved `clusters.<id>` values; new sessions start from them, open ones follow them live |
 //! | [`command_bus`] | E06-S02 | [`CommandBus`]: dispatch by command id, the per-crate [`CommandRegistry`], MCP tool stubs |
 //! | [`guard`] | E06-S02 | [`MutationGuard`]: read-only check, confirmation tier and token, dry-run stage (stub), the [`Mutation`] permit, audit |
+//! | [`guard::posture`] | E06-S09 | read-only mode, colour and presets as commands (`cluster::ToggleReadOnly`, `cluster::SetColour`, `cluster::ApplyPreset`): confirm when lifting read-only on a production-flagged cluster, audit, the [`PrefsWriter`] port to the settings; the guard also re-checks the flag right before each request |
 //! | [`audit`] | E06-S02 | [`AuditLog`]: redacted, batched, fail-closed audit appends through `StatePort` |
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
@@ -25,6 +26,8 @@ pub mod session;
 
 #[cfg(test)]
 mod testing;
+#[cfg(test)]
+mod testing_posture;
 
 pub use audit::AuditLog;
 pub use catalog::{CatalogEntry, ClusterCatalog, ClusterCommandOutcome, ClusterCommands};
@@ -32,7 +35,10 @@ pub use command_bus::{
     CommandBus, CommandHandler, CommandOutput, CommandRegistry, DispatchContext, DispatchError,
     HandlerContext, Outcome, RegisterError,
 };
-pub use guard::{Confirmation, ConfirmationRequest, ConfirmationToken, Mutation, MutationGuard};
+pub use guard::{
+    Confirmation, ConfirmationRequest, ConfirmationToken, Mutation, MutationGuard, PrefsPatch,
+    PrefsWriter,
+};
 pub use session::{
     ClusterSession, ClusterSessionManager, SessionChange, SessionUpdate, SessionUpdates,
 };

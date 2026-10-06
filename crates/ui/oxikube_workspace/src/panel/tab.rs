@@ -74,6 +74,7 @@ impl DockPanel for PanelTab {
             title,
             self.panel.icon(window, cx),
             false,
+            None,
             cx,
         )
     }

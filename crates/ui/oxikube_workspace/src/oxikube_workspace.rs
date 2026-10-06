@@ -19,6 +19,9 @@
 //!   store, the controller that restores at launch, debounces saves and flushes on quit, and window
 //!   bounds fitted to the displays.
 //! - [`closed`]: the bounded reopen-closed stack.
+//! - [`cluster`]: cluster badges (colour dot, read-only lock) for tabs, hotbar and status bar, the
+//!   status bar [`ClusterStatusItem`](cluster::ClusterStatusItem), the read-only / preset menu and the
+//!   [`ClusterCommandRunner`](cluster::ClusterCommandRunner) (E06-S09).
 //! - [`actions`]: `workspace::*` actions and their default key bindings.
 //! - [`session`]: window and session basics (E05-S12): `window::New`, UI zoom (`view::ZoomIn`,
 //!   `view::ZoomOut`, `view::ZoomReset`), reduce-motion, and the quit confirmation while
@@ -40,6 +43,7 @@
 
 pub mod actions;
 pub mod closed;
+pub mod cluster;
 pub mod dock;
 pub mod item;
 pub mod modal;
@@ -57,6 +61,9 @@ pub mod window;
 pub mod workspace;
 
 pub use closed::{ClosedItem, ClosedItemStack};
+pub use cluster::{
+    BadgeSurface, ClusterBadge, ClusterCommandRunner, ClusterMark, ClusterStatusItem,
+};
 pub use dock::Dock;
 pub use item::{Item, ItemEvent, ItemHandle, ItemRegistry, TabContent, register_item};
 pub use modal::{DialogModal, ModalLayer, ModalView};

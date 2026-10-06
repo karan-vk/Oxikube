@@ -6,6 +6,13 @@
 //! [`ClusterSessionManager`] now and after every change of the cluster settings (a hot reload of
 //! `settings.json`, or an in-app edit such as the read-only toggle). The manager applies only
 //! what changed, to the clusters it changed for, without reconnecting.
+//!
+//! The other direction (E06-S09): [`SettingsPrefsWriter`] is the `oxikube_app::PrefsWriter` the
+//! posture commands (`cluster::ToggleReadOnly`, `cluster::SetColour`, `cluster::ApplyPreset`)
+//! persist through; it applies each edit on the foreground with the comment-preserving settings
+//! editor, and the edit flows back through [`follow_cluster_settings`] to the live session.
+
+mod writer;
 
 use gpui::{App, Subscription};
 use oxikube_app::ClusterSessionManager;
@@ -25,5 +32,9 @@ fn push(cx: &App, manager: &ClusterSessionManager) {
     manager.set_prefs_table(ClusterSettings::table(cx));
 }
 
+pub use writer::SettingsPrefsWriter;
+
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod writer_tests;

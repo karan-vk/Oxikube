@@ -24,6 +24,21 @@ pub fn confirm_tier(meta: &CommandMeta) -> ConfirmTier {
     meta.confirm.max(from_risk)
 }
 
+/// Whether `command` changes a cluster's safety posture (read-only mode, colour, preset).
+///
+/// Such a command never touches the cluster, so it is not `mutating` and the read-only check
+/// does not apply to it (it must run on a read-only cluster, or nobody could turn the mode
+/// off). It still goes through the guard's posture pipeline: confirmation when it lowers
+/// protection on a production cluster, and an audit record.
+pub fn is_posture(command: &Command) -> bool {
+    matches!(
+        command,
+        Command::ClusterToggleReadOnly { .. }
+            | Command::ClusterSetColour { .. }
+            | Command::ClusterApplyPreset { .. }
+    )
+}
+
 /// The cluster a command names in its payload, if any.
 ///
 /// Resource verbs carry it in their [`ResourceRef`]; cluster verbs carry it directly.
@@ -38,6 +53,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ClusterToggleReadOnly { cluster, .. }
         | Command::NamespaceSelect { cluster, .. }
         | Command::NamespaceToggleFavourite { cluster, .. }
+        | Command::ClusterSetColour { cluster, .. }
+        | Command::ClusterApplyPreset { cluster, .. }
         | Command::ResourceOpenList { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::ResourceOpen { target }

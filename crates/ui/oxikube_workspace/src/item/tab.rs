@@ -93,6 +93,7 @@ impl DockPanel for ItemTab {
             content.title,
             content.icon,
             content.dirty,
+            content.cluster,
             cx,
         )
     }
