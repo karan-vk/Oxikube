@@ -26,6 +26,9 @@ tokio <-> GPUI bridge (gpui_tokio), spawn_kube with abort-on-drop, frame-coalesc
   process's RSS and peak per OS for the flush thread and the scenarios.
 - Overhead: `cargo run --release -p oxikube_runtime --example perf_overhead`.
 - `lazy` (E05-S13): `LazyService<T>`, a service started on first use (`ensure_init`) rather than by
+- `fs` (E06-S05): `StdFs`, the `FsPort` on `std::fs` and `notify`: atomic writes (temp file + rename),
+  `write_private` (created `0600`, new directories `0700`, for kubeconfigs that may hold credentials),
+  `remove`, `list`, `watch`. All file work runs on tokio's blocking pool.
   an `init(cx)`, its cost logged in a `lazy_init` span and listed in the `LazyServices` global (the
   start-up checks prove none started before the first frame).
 - `perf::FirstFrameProbe` and `perf::sockets` (E05-S13): the first-interactive-frame marker the

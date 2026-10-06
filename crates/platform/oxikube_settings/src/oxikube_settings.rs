@@ -18,6 +18,7 @@
 //!
 //! Module map:
 //! - [`cluster`]: the per-cluster settings (`clusters.<id>`: name, colour, read-only, ...), E06-S08.
+//! - [`kubeconfig`]: the `kubeconfig.sources` setting, the kubeconfig files and folders to read (E06-S05).
 //! - [`settings`]: the [`Settings`] trait, [`SettingsLocation`], registration.
 //! - [`store`]: [`SettingsStore`], layer merge, per-setting values and change tracking.
 //! - [`global`]: GPUI global, [`init`], startup load, hot reload task, file edits.
@@ -35,6 +36,7 @@ pub mod diagnostics;
 pub mod global;
 pub mod json_edit;
 pub mod jsonc;
+pub mod kubeconfig;
 pub mod paths;
 pub mod schema;
 pub mod settings;
@@ -47,6 +49,7 @@ pub mod watcher;
 pub use cluster::{ClusterSettings, ClusterSettingsContent};
 pub use diagnostics::SettingsDiagnostic;
 pub use global::{init, init_with_dir, update_user_settings};
+pub use kubeconfig::{KubeconfigSettings, KubeconfigSettingsContent};
 pub use settings::{RegisteredSetting, Settings, SettingsContent, SettingsLocation};
 pub use store::SettingsStore;
 pub use update::new_text_for_update;

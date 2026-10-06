@@ -73,6 +73,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         Command::ClusterNextTab
         | Command::ClusterPreviousTab
         | Command::ClusterSwitchTab { .. }
+        | Command::KubeconfigAddSource { .. }
+        | Command::KubeconfigRemoveSource { .. }
+        | Command::KubeconfigReload
         | Command::ViewOpen { .. }
         | Command::PaletteToggle
         | Command::AppQuit

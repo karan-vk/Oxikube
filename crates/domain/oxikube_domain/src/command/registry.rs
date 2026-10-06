@@ -37,6 +37,12 @@ impl CommandId {
     pub const CLUSTER_TOGGLE_FAVOURITE: CommandId = CommandId::new("cluster::ToggleFavourite");
     /// `cluster::ToggleReadOnly`: set or toggle a cluster's read-only mode.
     pub const CLUSTER_TOGGLE_READ_ONLY: CommandId = CommandId::new("cluster::ToggleReadOnly");
+    /// `kubeconfig::AddSource`: add a kubeconfig file, directory or pasted text as a source.
+    pub const KUBECONFIG_ADD_SOURCE: CommandId = CommandId::new("kubeconfig::AddSource");
+    /// `kubeconfig::Reload`: re-read every kubeconfig source.
+    pub const KUBECONFIG_RELOAD: CommandId = CommandId::new("kubeconfig::Reload");
+    /// `kubeconfig::RemoveSource`: remove a kubeconfig source.
+    pub const KUBECONFIG_REMOVE_SOURCE: CommandId = CommandId::new("kubeconfig::RemoveSource");
     /// `namespace::Select`: choose the namespace selection.
     pub const NAMESPACE_SELECT: CommandId = CommandId::new("namespace::Select");
     /// `namespace::ToggleFavourite`: pin or unpin a namespace as a favourite.
@@ -162,6 +168,27 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::CLUSTER_TOGGLE_READ_ONLY,
         "Toggle Read-Only Mode",
         CommandScope::Cluster,
+        NONE,
+    ),
+    // The kubeconfig commands change the user's settings list and Oxikube's own files, never a
+    // cluster: not `mutating`, no guard tier. Removing a pasted kubeconfig deletes a file, so
+    // the UI confirms it first and the handler refuses it for agents.
+    CommandMeta::read(
+        CommandId::KUBECONFIG_ADD_SOURCE,
+        "Add Kubeconfig Source",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::KUBECONFIG_RELOAD,
+        "Reload Kubeconfigs",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::KUBECONFIG_REMOVE_SOURCE,
+        "Remove Kubeconfig Source",
+        CommandScope::Global,
         NONE,
     ),
     CommandMeta::read(

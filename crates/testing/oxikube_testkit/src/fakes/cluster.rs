@@ -6,10 +6,11 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use futures::channel::mpsc;
 use futures::stream::BoxStream;
-use oxikube_domain::OxiResult;
+use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
     CloudDiscoveryPort, CloudProvider, CloudToolStatus, ClusterContext, ClusterSource,
-    ClusterSourcePort, DiscoveredCluster, SourcesChanged,
+    ClusterSourcePort, DiscoveredCluster, SourceState as ReadState, SourceStatus, SourcesChanged,
+    UserSource,
 };
 use parking_lot::Mutex;
 
@@ -26,10 +27,16 @@ pub struct ClusterSourceScripts {
     pub contexts: Script<Vec<ClusterContext>>,
     /// `reload`.
     pub reload: Script<SourcesChanged>,
+    /// `set_user_sources`.
+    pub set_user_sources: Script<SourcesChanged>,
+    /// `source_statuses`.
+    pub source_statuses: Script<Vec<SourceStatus>>,
+    /// `validate_kubeconfig`.
+    pub validate_kubeconfig: Script<usize>,
 }
 
 /// One call made on a [`FakeClusterSourcePort`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClusterSourceCall {
     /// `sources()`.
     Sources,
@@ -39,26 +46,40 @@ pub enum ClusterSourceCall {
     Subscribe,
     /// `reload()`.
     Reload,
+    /// `set_user_sources(sources)`.
+    SetUserSources(Vec<UserSource>),
+    /// `source_statuses()`.
+    SourceStatuses,
+    /// `validate_kubeconfig(text)`. The text is kept, so tests can check what was parsed; it
+    /// is test data, never a real credential.
+    ValidateKubeconfig(String),
 }
 
 #[derive(Default)]
-struct SourceState {
+struct FakeSources {
     sources: Vec<ClusterSource>,
     contexts: Vec<ClusterContext>,
+    statuses: Option<Vec<SourceStatus>>,
+    user_sources: Vec<UserSource>,
     subscribers: Vec<mpsc::UnboundedSender<SourcesChanged>>,
 }
 
 /// Fake `ClusterSourcePort`.
 ///
 /// Fallbacks: `sources` and `contexts` return the configured lists, `reload` reports no
-/// change. [`set_contexts`](Self::set_contexts) replaces the contexts and pushes the diff
+/// change. `set_user_sources` remembers the list ([`user_sources`](Self::user_sources)) and
+/// reports no change. `source_statuses` returns the configured statuses
+/// ([`with_statuses`](Self::with_statuses)) or, when none were set, one `Found` status per
+/// source counting the contexts that name it. `validate_kubeconfig` accepts text with a
+/// `contexts:` line and counts its `- context:` entries; anything else is a `Validation`
+/// error (a stand-in for the real parser, which the adapter tests cover). [`set_contexts`](Self::set_contexts) replaces the contexts and pushes the diff
 /// to every `subscribe` stream; a non-empty scripted `reload` result is pushed the same
 /// way, as a real source would after re-reading its files.
 #[derive(Default)]
 pub struct FakeClusterSourcePort {
     script: ClusterSourceScripts,
     calls: CallLog<ClusterSourceCall>,
-    state: Mutex<SourceState>,
+    state: Mutex<FakeSources>,
 }
 
 fake_plumbing!(
@@ -112,6 +133,23 @@ impl FakeClusterSourcePort {
         diff
     }
 
+    /// Sets the statuses `source_statuses` returns (instead of deriving them from the sources).
+    #[must_use]
+    pub fn with_statuses(self, statuses: impl IntoIterator<Item = SourceStatus>) -> Self {
+        self.state.lock().statuses = Some(statuses.into_iter().collect());
+        self
+    }
+
+    /// Replaces the statuses `source_statuses` returns, after construction.
+    pub fn set_statuses(&self, statuses: impl IntoIterator<Item = SourceStatus>) {
+        self.state.lock().statuses = Some(statuses.into_iter().collect());
+    }
+
+    /// The list last given to `set_user_sources`.
+    pub fn user_sources(&self) -> Vec<UserSource> {
+        self.state.lock().user_sources.clone()
+    }
+
     /// Number of `subscribe` streams still alive.
     pub fn subscriber_count(&self) -> usize {
         let mut state = self.state.lock();
@@ -119,7 +157,7 @@ impl FakeClusterSourcePort {
         state.subscribers.len()
     }
 
-    fn broadcast(state: &mut SourceState, diff: &SourcesChanged) {
+    fn broadcast(state: &mut FakeSources, diff: &SourcesChanged) {
         if diff.is_empty() {
             return;
         }
@@ -160,6 +198,62 @@ impl ClusterSourcePort for FakeClusterSourcePort {
             .next_or_else(|| Ok(SourcesChanged::default()))?;
         Self::broadcast(&mut self.state.lock(), &changed);
         Ok(changed)
+    }
+
+    async fn set_user_sources(&self, sources: &[UserSource]) -> OxiResult<SourcesChanged> {
+        self.calls
+            .record(ClusterSourceCall::SetUserSources(sources.to_vec()));
+        let changed = self
+            .script
+            .set_user_sources
+            .next_or_else(|| Ok(SourcesChanged::default()))?;
+        let mut state = self.state.lock();
+        state.user_sources = sources.to_vec();
+        Self::broadcast(&mut state, &changed);
+        Ok(changed)
+    }
+
+    async fn source_statuses(&self) -> OxiResult<Vec<SourceStatus>> {
+        self.calls.record(ClusterSourceCall::SourceStatuses);
+        self.script.source_statuses.next_or_else(|| {
+            let state = self.state.lock();
+            if let Some(statuses) = &state.statuses {
+                return Ok(statuses.clone());
+            }
+            Ok(state
+                .sources
+                .iter()
+                .map(|source| SourceStatus {
+                    source: source.clone(),
+                    state: ReadState::Found,
+                    contexts: state
+                        .contexts
+                        .iter()
+                        .filter(|c| c.source == source.id)
+                        .count(),
+                    message: None,
+                })
+                .collect())
+        })
+    }
+
+    async fn validate_kubeconfig(&self, text: &str) -> OxiResult<usize> {
+        self.calls
+            .record(ClusterSourceCall::ValidateKubeconfig(text.to_owned()));
+        self.script.validate_kubeconfig.next_or_else(|| {
+            if text.trim().is_empty() {
+                return Err(OxiError::validation("the pasted kubeconfig is empty"));
+            }
+            if !text.lines().any(|line| line.trim() == "contexts:") {
+                return Err(OxiError::validation(
+                    "the pasted text is not a valid kubeconfig",
+                ));
+            }
+            Ok(text
+                .lines()
+                .filter(|line| line.trim_start().starts_with("- context:"))
+                .count())
+        })
     }
 }
 
@@ -365,6 +459,72 @@ mod tests {
         assert_eq!(
             fake.recorded_calls()[5],
             CloudCall::Discover(CloudProvider::Azure)
+        );
+    }
+
+    #[test]
+    fn user_sources_statuses_and_validation_have_working_fallbacks() {
+        let source = ClusterSource {
+            id: SourceId("file:/a.yaml".into()),
+            kind: oxikube_ports::SourceKind::KubeconfigFile,
+            label: "/a.yaml".into(),
+            path: Some("/a.yaml".into()),
+        };
+        let mut a = ctx("a");
+        a.source = source.id.clone();
+        let fake = FakeClusterSourcePort::new()
+            .with_sources([source])
+            .with_contexts([a]);
+
+        // Statuses default to one `Found` per source, counting its contexts.
+        let statuses = block_on(fake.source_statuses()).unwrap();
+        assert_eq!(statuses.len(), 1);
+        assert_eq!(statuses[0].state, ReadState::Found);
+        assert_eq!(statuses[0].contexts, 1);
+        fake.set_statuses([SourceStatus {
+            state: ReadState::Missing,
+            message: Some("File not found".into()),
+            ..statuses[0].clone()
+        }]);
+        assert_eq!(
+            block_on(fake.source_statuses()).unwrap()[0].state,
+            ReadState::Missing
+        );
+
+        // The list is remembered and recorded; a scripted diff reaches subscribers.
+        let mut stream = fake.subscribe();
+        fake.script().set_user_sources.push_ok(SourcesChanged {
+            added: vec![ctx("b")],
+            ..SourcesChanged::default()
+        });
+        let list = [UserSource::default_source(), UserSource::file("/a.yaml")];
+        let diff = block_on(fake.set_user_sources(&list)).unwrap();
+        assert_eq!(diff.added.len(), 1);
+        assert_eq!(fake.user_sources(), list);
+        assert_eq!(stream.next().now_or_never().flatten(), Some(diff));
+        assert_eq!(
+            fake.recorded_calls().last(),
+            Some(&ClusterSourceCall::SetUserSources(list.to_vec()))
+        );
+
+        // Validation: accepts text with a `contexts:` line, counts entries, rejects the rest.
+        let text = "contexts:\n- context:\n    cluster: x\n  name: x\n- context:\n    cluster: y\n  name: y\n";
+        assert_eq!(block_on(fake.validate_kubeconfig(text)).unwrap(), 2);
+        for bad in ["", "  ", "words"] {
+            assert_eq!(
+                block_on(fake.validate_kubeconfig(bad)).unwrap_err().kind(),
+                ErrorKind::Validation,
+                "{bad:?}"
+            );
+        }
+        fake.script()
+            .validate_kubeconfig
+            .push_err(OxiError::validation("scripted"));
+        assert_eq!(
+            block_on(fake.validate_kubeconfig(text))
+                .unwrap_err()
+                .message(),
+            "scripted"
         );
     }
 }

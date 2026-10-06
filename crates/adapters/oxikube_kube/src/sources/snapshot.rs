@@ -15,11 +15,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use oxikube_domain::ids::{ClusterId, ContextName};
-use oxikube_ports::{ClusterContext, ClusterSource, SourceId, SourcesChanged};
+use oxikube_ports::{ClusterContext, ClusterSource, SourceId, SourceStatus, SourcesChanged};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use super::layout::Layout;
+use super::status;
 use crate::kubeconfig::{Diagnostic, LoadedKubeconfig};
 use crate::pool::ContextDefinition;
 
@@ -35,6 +36,8 @@ struct Entry {
 /// The catalog as of one load.
 pub(super) struct Snapshot {
     pub(super) sources: Vec<ClusterSource>,
+    /// How reading each source went, in source order.
+    pub(super) statuses: Vec<SourceStatus>,
     entries: Vec<Entry>,
     pub(super) current_context: Option<ContextName>,
     pub(super) diagnostics: Vec<Diagnostic>,
@@ -81,14 +84,20 @@ impl Snapshot {
                 .map_or("", |c| c.as_str())
                 .as_bytes(),
         );
-        let diagnostics = layout
+        let diagnostics: Vec<Diagnostic> = layout
             .diagnostics
             .iter()
             .chain(&loaded.diagnostics)
             .cloned()
             .collect();
+        let mut owned: HashMap<SourceId, usize> = HashMap::new();
+        for entry in &entries {
+            *owned.entry(entry.context.source.clone()).or_default() += 1;
+        }
+        let statuses = status::build(&layout, &loaded.sources, &diagnostics, &owned);
         Snapshot {
             sources: layout.sources(),
+            statuses,
             entries,
             current_context,
             diagnostics,

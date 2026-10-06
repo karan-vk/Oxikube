@@ -76,3 +76,7 @@ Tests use `init_with_dir` (no watcher thread).
 See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps` fails CI when this crate depends on anything outside its layer rules.
 
 Vendored Zed code (GPL-3.0-or-later) is listed in `THIRD_PARTY_NOTICES.md`.
+
+- `kubeconfig` (E06-S05): the `kubeconfig.sources` setting, the list of kubeconfig files and folders
+  the catalog reads (`{ kind: default|file|dir, path }`, default `[{ "kind": "default" }]`, `~` expanded,
+  arrays replace rather than merge). Edited by the sources screen through `update_user_settings`.

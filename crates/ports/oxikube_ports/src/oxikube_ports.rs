@@ -126,7 +126,8 @@ pub use clock::ClockPort;
 pub use cloud::{CloudDiscoveryPort, CloudProvider, CloudToolStatus, DiscoveredCluster};
 pub use cluster_prefs::{ClusterPrefs, ClusterPrefsTable, PrometheusOverride};
 pub use cluster_source::{
-    ClusterContext, ClusterSource, ClusterSourcePort, SourceId, SourceKind, SourcesChanged,
+    ClusterContext, ClusterSource, ClusterSourcePort, SourceId, SourceKind, SourceState,
+    SourceStatus, SourcesChanged, UserSource, UserSourceKind,
 };
 pub use connector::{
     ClusterConnection, ClusterConnectorPort, ClusterPorts, ConnectRequest, ConnectionGuard,

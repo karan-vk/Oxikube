@@ -13,10 +13,13 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 dirs.workspace = true
 futures.workspace = true
 gpui.workspace = true
+notify.workspace = true
 oxikube_domain.workspace = true
+oxikube_ports.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

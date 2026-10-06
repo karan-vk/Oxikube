@@ -40,7 +40,12 @@ impl Layout {
             diagnostics: Vec::new(),
         };
         let selection = select_sources(&[], &config.env);
-        for path in &selection.paths {
+        let tier_one: &[PathBuf] = if config.include_default {
+            &selection.paths
+        } else {
+            &[]
+        };
+        for path in tier_one {
             match selection.tier {
                 Some(SourceTier::KubeconfigEnv) => layout.push_file(
                     SourceId(format!("env:{}", path.display())),

@@ -11,6 +11,13 @@ kube-rs adapter: tolerant kubeconfig loading, ClientPool per context with exec/O
 
 See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps` fails CI when this crate depends on anything outside its layer rules.
 
+## Sources
+
+`sources` (E03-S02, E06-S05): `KubeconfigSources` implements `ClusterSourcePort`. The source list can be replaced at
+run time (`set_user_sources`, the `kubeconfig.sources` setting), each source reports how its last read went
+(`source_statuses`: found with N contexts, missing, blank, invalid; file content is never in a message) and pasted
+text can be checked without storing it (`validate_kubeconfig`). Tests use temp files, no cluster.
+
 ## Integration tests
 
 `tests/` is the kind integration suite (`--features integration`, `OXIKUBE_TEST_CONTEXT`); its

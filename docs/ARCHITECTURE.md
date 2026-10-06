@@ -69,6 +69,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   user's favourites and last-used times in the `cluster_catalog` state table; reading it is local,
   never a network call. `ClusterCommands` runs `cluster::Connect`, `cluster::Disconnect` and
   `cluster::ToggleFavourite` (reads, so no `MutationGuard`); the `CommandBus` (E06-S02) registers it.
+  Module `sources` (E06-S05): `KubeconfigSourcesService` manages the user's kubeconfig sources
+  (`add` a file or folder, `add` pasted text, `remove`, `reload`, `rows` with each source's status)
+  over a `SourceListStore` (settings in the app), the `ClusterSourcePort` (`set_user_sources`,
+  `source_statuses`, `validate_kubeconfig`) and the `FsPort` (`write_private`, `remove`); a pasted
+  kubeconfig is stored `0600` as `<config dir>/kubeconfigs/<name>.yaml` (ADR 0015), only such files
+  are ever deleted, and the `kubeconfig::*` handlers register with `register_commands`.
   Module `session::namespaces` (E06-S07): `NamespaceService` sets a session's `NamespaceSelection`
   (one `NamespaceChanged` per change, 150 ms debounce on the `ClockPort`), remembers selection,
   favourites and typed names per cluster in `StatePort` (kv `cluster/<id>/namespaces`), lists
@@ -81,7 +87,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   read-only on a production-flagged cluster, audited, persisted through the `PrefsWriter` the binary
   implements over `ClusterSettings::update_cluster`), and every `Mutation` writer re-checks the
   read-only flag before each request.
-- `oxikube_catalog_ui` — the cluster catalog UI. Module `namespaces` (E06-S07): the
+- `oxikube_catalog_ui` — the cluster catalog UI. Module `sources` (E06-S05): `SourcesView`, the
+  kubeconfig sources screen (a workspace `Item`): one row per entry of `kubeconfig.sources` with its
+  status (found with N contexts, or the error inline next to that one source), add file / add folder
+  through the platform picker (async), a paste dialog with a credentials warning (hosted by the
+  workspace modal layer), remove with a confirmation that says whether a file is deleted, and
+  reload all; a `SourcesBackend` sends the `kubeconfig::*` commands, `SettingsSourceList` keeps the
+  list in `settings.json` and `follow` pushes every change (hot reload) to the cluster source.
+  Module `namespaces` (E06-S07): the
   `NamespaceSelector` dropdown for the cluster tab toolbar (All, multi-select, favourites with
   their digits, local search, virtualised list, the restricted-cluster fallback), a view over
   `NamespaceService`; it emits `NamespaceSelectorEvent` for the host's toasts. Module `catalog`
@@ -156,6 +169,8 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | Extensions contributing themes/commands/MCP servers | `ThemeSinkPort`, `CommandSinkPort`, `ContextServerSinkPort` | `oxikube_theme`, `oxikube_app`, `oxikube_mcp` | `oxikube_extension_host` |
 | App reading user settings (aliases, budgets, per-cluster read-only / colour / name) | plain values pushed in at init / on change (`ClusterPrefsTable` for `clusters.<id>`, via `bins/oxikube::cluster_prefs`) | `oxikube_settings` (via bins) | `oxikube_app` |
 | App writing per-cluster read-only / colour back to `settings.json` | `oxikube_app::PrefsWriter` (a trait of the app crate, not a port: it carries no cluster I/O) | `bins/oxikube::cluster_prefs::SettingsPrefsWriter` over `ClusterSettings::update_cluster` | `oxikube_app::guard::posture` |
+| App editing the user's kubeconfig source list (`kubeconfig.sources`) | `SourceListStore` (a trait in `oxikube_app::sources`, async `load` / `save`) | `oxikube_catalog_ui::sources::SettingsSourceList` over `oxikube_settings::update_user_settings` | `oxikube_app::sources::KubeconfigSourcesService` |
+| Local files by path (pasted kubeconfigs: owner-only write, delete) | `FsPort` | `oxikube_runtime::StdFs` (tests: `FakeFsPort`) | `oxikube_app::sources` |
 | Per-cluster ports for a connected context | `ClusterConnectorPort` (returns `ClusterPorts` + `AccessReviewPort`; health via the `HealthReporter` callback) | `oxikube_kube` (wired by `bins/oxikube`) | `oxikube_app::session` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`) | `oxikube_terminal`, `oxikube_kube`, `oxikube_argocd` | `oxikube_terminal` element |
 

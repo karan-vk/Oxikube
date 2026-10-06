@@ -85,19 +85,17 @@ fn start_watcher(
     Ok((watcher, unwatched))
 }
 
-async fn run(inner: Weak<Inner>, config: SourcesConfig) {
-    let (tx, mut rx) = unbounded_channel::<()>();
-    let setup = {
-        let tx = tx.clone();
-        let config = config.clone();
-        tokio::task::spawn_blocking(move || {
-            let dirs = watch_dirs(&config);
-            start_watcher(&dirs, tx)
-        })
-        .await
-    };
-    // Keep the watcher alive for the life of the task. A failed setup leaves the poll running.
-    let (_watcher, status, unwatched) = match setup {
+/// Registers the watches the current source list needs (blocking work, on the blocking pool).
+async fn register(
+    config: SourcesConfig,
+    tx: UnboundedSender<()>,
+) -> (Option<RecommendedWatcher>, WatchStatus, Vec<PathBuf>) {
+    let setup = tokio::task::spawn_blocking(move || {
+        let dirs = watch_dirs(&config);
+        start_watcher(&dirs, tx)
+    })
+    .await;
+    match setup {
         Ok(Ok((watcher, unwatched))) => (Some(watcher), WatchStatus::Active, unwatched),
         Ok(Err(err)) => (
             None,
@@ -105,10 +103,17 @@ async fn run(inner: Weak<Inner>, config: SourcesConfig) {
             Vec::new(),
         ),
         Err(err) => (None, WatchStatus::Failed(err.to_string()), Vec::new()),
-    };
+    }
+}
+
+async fn run(inner: Weak<Inner>, config: SourcesConfig) {
+    let (tx, mut rx) = unbounded_channel::<()>();
+    // Keep the watcher alive for the life of the task. A failed setup leaves the poll running.
+    let (mut _watcher, status, unwatched) = register(config.clone(), tx.clone()).await;
     let Some(strong) = inner.upgrade() else {
         return;
     };
+    let mut rewatch = strong.rewatch.subscribe();
     // A change made after the first load read the files but before the watches existed has no
     // event; re-read once now (an empty diff when nothing changed). Done before publishing the
     // status, so `wait_for_watcher` returning means the catalog is current.
@@ -119,11 +124,25 @@ async fn run(inner: Weak<Inner>, config: SourcesConfig) {
     let mut poll = interval_at(Instant::now() + config.poll_interval, config.poll_interval);
     poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
     // `tx` stays alive here so `rx.recv()` pends instead of ending when the watcher is absent.
-    let _keep_open = tx;
     loop {
         tokio::select! {
             _ = rx.recv() => settle(&mut rx, config.debounce).await,
             _ = poll.tick() => {}
+            changed = rewatch.changed() => {
+                if changed.is_err() {
+                    return;
+                }
+                // The source list changed (and was reloaded by whoever changed it): watch the
+                // directories of the new list. The old watcher is dropped after the new one
+                // is registered, so no event is lost in between.
+                let Some(strong) = inner.upgrade() else {
+                    return;
+                };
+                let (next, status, unwatched) = register(strong.config(), tx.clone()).await;
+                _watcher = next;
+                strong.set_watch_status(status, unwatched);
+                continue;
+            }
         }
         let Some(inner) = inner.upgrade() else {
             return;
