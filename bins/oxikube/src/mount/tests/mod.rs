@@ -2,7 +2,10 @@
 //! `TestPorts`) and its main window (`startup::window::open_main_window`, which mounts the cluster
 //! UI), driven like a user would: the catalog is the home tab, Enter connects the selected cluster
 //! and opens its tab with the sidebar and the namespace selector, a refused connect shows the
-//! connect view, the sources button opens the sources screen.
+//! connect view, the sources button opens the sources screen. The window's chrome (hotbar strip,
+//! status bar badge, session restore) is in [`chrome`].
+
+mod chrome;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use oxikube_catalog_ui::namespaces::NamespaceSelector;
@@ -25,8 +28,19 @@ struct App {
 
 impl App {
     fn start(cx: &mut TestAppContext, ports: TestPorts) -> Self {
+        Self::start_with(cx, ports, |_| {})
+    }
+
+    /// [`Self::start`], running `before_window` between the start-up and the window's opening
+    /// (where a user's `settings.json` would already be loaded).
+    fn start_with(
+        cx: &mut TestAppContext,
+        ports: TestPorts,
+        before_window: impl FnOnce(&mut gpui::App),
+    ) -> Self {
         cx.update(|cx| init(cx, StartupEnv::test_with(&ports)))
             .expect("the init order runs");
+        cx.update(before_window);
         let handle = cx
             .update(|cx| window::open_main_window(cx, |content, _| content))
             .expect("the main window opens");
@@ -54,6 +68,13 @@ impl App {
     fn press(&mut self, keys: &str) {
         self.vcx.simulate_keystrokes(keys);
         self.vcx.run_until_parked();
+    }
+
+    /// Draws a frame and reports whether `selector` is in it.
+    fn drawn(&mut self, selector: &str) -> bool {
+        self.vcx.update(|window, cx| window.draw(cx).clear(cx));
+        let selector: &'static str = Box::leak(selector.to_owned().into_boxed_str());
+        self.vcx.debug_bounds(selector).is_some()
     }
 
     fn click(&mut self, selector: &'static str) {
