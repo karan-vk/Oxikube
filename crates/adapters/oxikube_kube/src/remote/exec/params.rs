@@ -41,20 +41,10 @@ pub(super) fn check_command(command: &[String]) -> OxiResult<()> {
     }
 }
 
-/// The kube parameters for `options`. An interactive terminal ([`ExecOptions::interactive`]:
-/// stdin, stdout and a TTY, stderr merged) starts from kube's `AttachParams::interactive_tty()`;
-/// anything else from the server defaults. The pipes are sized to [`STREAM_BUFFER`] either way.
+/// The kube parameters for `options`, with the pipes sized to [`STREAM_BUFFER`]. An interactive
+/// terminal ([`ExecOptions::interactive`]) comes out as kube's `AttachParams::interactive_tty()`.
 pub(super) fn attach_params(options: &ExecOptions) -> AttachParams {
-    let interactive = ExecOptions {
-        container: options.container.clone(),
-        ..ExecOptions::interactive()
-    };
-    let base = if *options == interactive {
-        AttachParams::interactive_tty()
-    } else {
-        AttachParams::default()
-    };
-    let mut params = base
+    let mut params = AttachParams::default()
         .stdin(options.stdin)
         .stdout(options.stdout)
         .stderr(options.stderr)

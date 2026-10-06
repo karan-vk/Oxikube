@@ -59,13 +59,7 @@ impl Reopen {
         command: &[String],
         options: &ExecOptions,
     ) -> Self {
-        Self {
-            port,
-            namespace: namespace.to_owned(),
-            pod: pod.to_owned(),
-            command: Some(command.to_vec()),
-            options: options.clone(),
-        }
+        Self::new(port, namespace, pod, Some(command.to_vec()), options)
     }
 
     /// An attach to `namespace/pod`, through `port`.
@@ -75,11 +69,21 @@ impl Reopen {
         pod: &str,
         options: &ExecOptions,
     ) -> Self {
+        Self::new(port, namespace, pod, None, options)
+    }
+
+    fn new(
+        port: Arc<dyn ExecStreamPort>,
+        namespace: &str,
+        pod: &str,
+        command: Option<Vec<String>>,
+        options: &ExecOptions,
+    ) -> Self {
         Self {
             port,
             namespace: namespace.to_owned(),
             pod: pod.to_owned(),
-            command: None,
+            command,
             options: options.clone(),
         }
     }
