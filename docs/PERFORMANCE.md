@@ -129,7 +129,7 @@ SAFETY-commented); there is no sampler crate.
   [`docs/perf/baseline.json`](perf/baseline.json) gates it like every other metric.
 - **Headless RSS is not the windowed app's RSS.** The scenario runs on GPUI's test platform: no swap
   chain, no GPU surfaces, no windowing-system state. For the same placeholder window, a headless
-  scenario sits at about 31 MiB on an M-series Mac while `oxikube --perf` in a real window reads
+  scenario sits at about 45 MiB on an M-series Mac (31 MiB before E05-S13 ran the full init order) while `oxikube --perf` in a real window reads
   about 95 MiB. Use the scenario figure only to see change against the same-runner baseline, and
   use `oxikube --perf` (window open, real clusters) for the budget in the table above (idle < 150
   MB with two clusters, 10 k pods < 400 MB). The 10 k-pod and two-cluster numbers need E04/E07; the
@@ -198,27 +198,34 @@ The nightly `perf` job (ubuntu + macOS) runs `cargo xtask perf --all --check --s
 `perf-report-<OS>` and, on failure, feeds the `nightly-failure` tracking issue.
 
 Committed numbers (`startup`, median of 7 samples; ms for timings, MiB for memory; seeded from
-nightly run 37124550799 on the story branch E01-S14b), with a local M-series laptop run for
-reference (not gated):
+nightly run 37401630806 on the story branch E05-S13, which runs the real init order), with a local
+M-series laptop run for reference (not gated):
 
-| Metric | `linux` (ubuntu-latest) p50 / p99 | `macos` (macos-latest) p50 / p99 | local M5 Max (9 samples) p50 / p99 |
+| Metric | `linux` (ubuntu-latest) p50 / p99 | `macos` (macos-latest) p50 / p99 | local M5 Max (20 samples) p50 / p99 |
 |---|---|---|---|
-| `launch_to_first_frame_ms` | 97.9 / 97.9 | 65.2 / 65.2 | 74.0 / 74.0 |
-| `first_frame_ms` | 95.7 / 95.7 | 56.2 / 56.2 | 68.3 / 68.3 |
-| `frame_ms` (idle redraw, hook) | 0.249 / 0.284 | 0.010 / 0.052 | 0.006 / 0.011 |
-| `draw_ms` (idle redraw, outside) | 0.250 / 0.287 | 0.011 / 0.058 | 0.006 / 0.011 |
-| `rss_mib` (headless, after the redraws) | 110.1 / 110.2 | 27.6 / 27.6 | 31.3 / 31.3 |
-| `peak_rss_mib` (headless) | 110.2 / 110.2 | 27.6 / 27.6 | 31.3 / 31.3 |
+| `launch_to_first_frame_ms` | 130.9 / 130.9 | 105.9 / 105.9 | 146.2 / 146.2 |
+| `first_frame_ms` | 113.5 / 113.5 | 95.1 / 95.1 | 139.5 / 139.5 |
+| `config_load_ms` (settings + theme + keymap) | 1.19 / 1.19 | 1.47 / 1.47 | 0.78 / 0.78 |
+| `state_db_open_ms` (off the UI thread in the app) | 3.0 / 3.0 | 4.1 / 4.1 | 2.6 / 2.6 |
+| `frame_ms` (idle redraw, hook) | 0.136 / 0.178 | 0.066 / 0.294 | 0.037 / 0.044 |
+| `draw_ms` (idle redraw, outside) | 0.150 / 0.192 | 0.071 / 0.322 | 0.039 / 0.047 |
+| `rss_mib` (headless, after the redraws) | 122.4 / 122.4 | 39.7 / 39.7 | 44.9 / 44.9 |
+| `peak_rss_mib` (headless) | 122.4 / 122.4 | 39.7 / 39.7 | 44.9 / 44.9 |
 
-For scale: `oxikube --perf` with a real window on the same laptop reads about 95 MiB RSS, three times
+The `init_<stage>_ms` breakdown is baselined too (`docs/perf/baseline.json`). On the macOS runner the
+component library's `init` (`init_ui_ms`, the font enumeration) and the platform (`init_assets_ms`)
+dominate as on the laptop; on the Linux runner (lavapipe) they are 3-4 ms and opening the window with
+its first draw (`init_window_ms`, about 119 ms) is the whole cost.
+
+For scale: `oxikube --perf` with a real window on the same laptop reads about 95 MiB RSS, two to three times
 the headless figure, which is why the headless number is only a regression signal. The Linux
-runner's headless figure is about four times the macOS runner's (different renderer and system
+runner's headless figure is about three times the macOS runner's (different renderer and system
 libraries; not investigated further), another reason baselines are per OS.
 
 Since E05-S13 the `startup` scenario runs the real init order (logging, platform, runtime,
 settings, theme, keymap, component library, state db, `AppState`, workspace, features, keymap
-re-bind, window), so `first_frame_ms` is about twice the committed numbers above (139 ms p50 on the
-local M5 Max); the baselines are refreshed from the nightly artifacts (rule 2 below).
+re-bind, window); the baselines above were refreshed from that story's nightly artifacts (rule 2
+below).
 
 Rules for updating the baseline:
 

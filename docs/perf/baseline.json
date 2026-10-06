@@ -3,81 +3,231 @@
   "note": "Headless perf baseline for `cargo xtask perf --check` (docs/PERFORMANCE.md, Perf harness). Keyed by OS (`std::env::consts::OS`) then scenario then metric; *_ms metrics (p50/p95/p99) are in milliseconds and *_mib metrics (rss_mib, peak_rss_mib) are in MiB; all are medians across samples. Numbers come from the nightly's own runners (ubuntu-latest, macos-latest): refresh with `cargo xtask perf --from-report <perf-report artifact> --update-baseline`, never by hand.",
   "os": {
     "linux": {
-      "source": "github-actions ubuntu-latest nightly run 37124550799",
-      "updated": "2026-10-03",
+      "source": "github-actions ubuntu-latest nightly run 37401630806",
+      "updated": "2026-10-06",
       "profile": "release-fast",
       "samples_per_scenario": 7,
       "scenarios": {
         "startup": {
+          "config_load_ms": {
+            "p50": 1.193,
+            "p95": 1.193,
+            "p99": 1.193
+          },
           "draw_ms": {
-            "p50": 0.25,
-            "p95": 0.272,
-            "p99": 0.287
+            "p50": 0.15,
+            "p95": 0.176,
+            "p99": 0.192
           },
           "first_frame_ms": {
-            "p50": 95.689,
-            "p95": 95.689,
-            "p99": 95.689
+            "p50": 113.454,
+            "p95": 113.454,
+            "p99": 113.454
           },
           "frame_ms": {
-            "p50": 0.249,
-            "p95": 0.271,
-            "p99": 0.284
+            "p50": 0.136,
+            "p95": 0.162,
+            "p99": 0.178
+          },
+          "init_app_state_ms": {
+            "p50": 0.002,
+            "p95": 0.002,
+            "p99": 0.002
+          },
+          "init_assets_ms": {
+            "p50": 3.921,
+            "p95": 3.921,
+            "p99": 3.921
+          },
+          "init_features_ms": {
+            "p50": 0.001,
+            "p95": 0.001,
+            "p99": 0.001
+          },
+          "init_keymap_ms": {
+            "p50": 0.045,
+            "p95": 0.045,
+            "p99": 0.045
+          },
+          "init_keymap_rebind_ms": {
+            "p50": 0.049,
+            "p95": 0.049,
+            "p99": 0.049
+          },
+          "init_logging_ms": {
+            "p50": 0.361,
+            "p95": 0.361,
+            "p99": 0.361
+          },
+          "init_runtime_ms": {
+            "p50": 0.15,
+            "p95": 0.15,
+            "p99": 0.15
+          },
+          "init_settings_ms": {
+            "p50": 0.202,
+            "p95": 0.202,
+            "p99": 0.202
+          },
+          "init_state_db_ms": {
+            "p50": 0.003,
+            "p95": 0.003,
+            "p99": 0.003
+          },
+          "init_theme_ms": {
+            "p50": 0.937,
+            "p95": 0.937,
+            "p99": 0.937
+          },
+          "init_ui_ms": {
+            "p50": 2.63,
+            "p95": 2.63,
+            "p99": 2.63
+          },
+          "init_window_ms": {
+            "p50": 119.389,
+            "p95": 119.389,
+            "p99": 119.389
+          },
+          "init_workspace_ms": {
+            "p50": 0.025,
+            "p95": 0.025,
+            "p99": 0.025
           },
           "launch_to_first_frame_ms": {
-            "p50": 97.851,
-            "p95": 97.851,
-            "p99": 97.851
+            "p50": 130.944,
+            "p95": 130.944,
+            "p99": 130.944
           },
           "peak_rss_mib": {
-            "p50": 110.152,
-            "p95": 110.152,
-            "p99": 110.152
+            "p50": 122.422,
+            "p95": 122.422,
+            "p99": 122.422
           },
           "rss_mib": {
-            "p50": 110.148,
-            "p95": 110.152,
-            "p99": 110.152
+            "p50": 122.422,
+            "p95": 122.422,
+            "p99": 122.422
+          },
+          "state_db_open_ms": {
+            "p50": 2.985,
+            "p95": 2.985,
+            "p99": 2.985
           }
         }
       }
     },
     "macos": {
-      "source": "github-actions macos-latest nightly run 37124550799",
-      "updated": "2026-10-03",
+      "source": "github-actions macos-latest nightly run 37401630806",
+      "updated": "2026-10-06",
       "profile": "release-fast",
       "samples_per_scenario": 7,
       "scenarios": {
         "startup": {
+          "config_load_ms": {
+            "p50": 1.468,
+            "p95": 1.468,
+            "p99": 1.468
+          },
           "draw_ms": {
-            "p50": 0.011,
-            "p95": 0.017,
-            "p99": 0.058
+            "p50": 0.071,
+            "p95": 0.157,
+            "p99": 0.322
           },
           "first_frame_ms": {
-            "p50": 56.217,
-            "p95": 56.217,
-            "p99": 56.217
+            "p50": 95.094,
+            "p95": 95.094,
+            "p99": 95.094
           },
           "frame_ms": {
-            "p50": 0.01,
-            "p95": 0.016,
-            "p99": 0.052
+            "p50": 0.066,
+            "p95": 0.147,
+            "p99": 0.294
+          },
+          "init_app_state_ms": {
+            "p50": 0.002,
+            "p95": 0.002,
+            "p99": 0.002
+          },
+          "init_assets_ms": {
+            "p50": 28.583,
+            "p95": 28.583,
+            "p99": 28.583
+          },
+          "init_features_ms": {
+            "p50": 0.001,
+            "p95": 0.001,
+            "p99": 0.001
+          },
+          "init_keymap_ms": {
+            "p50": 0.073,
+            "p95": 0.073,
+            "p99": 0.073
+          },
+          "init_keymap_rebind_ms": {
+            "p50": 0.055,
+            "p95": 0.055,
+            "p99": 0.055
+          },
+          "init_logging_ms": {
+            "p50": 0.378,
+            "p95": 0.378,
+            "p99": 0.378
+          },
+          "init_runtime_ms": {
+            "p50": 0.103,
+            "p95": 0.103,
+            "p99": 0.103
+          },
+          "init_settings_ms": {
+            "p50": 0.377,
+            "p95": 0.377,
+            "p99": 0.377
+          },
+          "init_state_db_ms": {
+            "p50": 0.003,
+            "p95": 0.003,
+            "p99": 0.003
+          },
+          "init_theme_ms": {
+            "p50": 0.814,
+            "p95": 0.814,
+            "p99": 0.814
+          },
+          "init_ui_ms": {
+            "p50": 46.979,
+            "p95": 46.979,
+            "p99": 46.979
+          },
+          "init_window_ms": {
+            "p50": 14.306,
+            "p95": 14.306,
+            "p99": 14.306
+          },
+          "init_workspace_ms": {
+            "p50": 0.031,
+            "p95": 0.031,
+            "p99": 0.031
           },
           "launch_to_first_frame_ms": {
-            "p50": 65.226,
-            "p95": 65.226,
-            "p99": 65.226
+            "p50": 105.88,
+            "p95": 105.88,
+            "p99": 105.88
           },
           "peak_rss_mib": {
-            "p50": 27.578,
-            "p95": 27.578,
-            "p99": 27.578
+            "p50": 39.734,
+            "p95": 39.734,
+            "p99": 39.734
           },
           "rss_mib": {
-            "p50": 27.578,
-            "p95": 27.578,
-            "p99": 27.578
+            "p50": 39.734,
+            "p95": 39.734,
+            "p99": 39.734
+          },
+          "state_db_open_ms": {
+            "p50": 4.141,
+            "p95": 4.141,
+            "p99": 4.141
           }
         }
       }
