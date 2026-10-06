@@ -53,6 +53,8 @@ pub struct TestItem {
     pub closed: Rc<Cell<usize>>,
     /// The last [`Item::set_active`] value.
     pub active: bool,
+    /// The cluster badge the tab shows, if any.
+    pub cluster: Option<crate::cluster::ClusterMark>,
 }
 
 impl TestItem {
@@ -72,6 +74,7 @@ impl TestItem {
             dirty: false,
             closed: Rc::default(),
             active: false,
+            cluster: None,
         }
     }
 
@@ -84,6 +87,12 @@ impl TestItem {
     /// Sets the dedup key.
     pub fn with_key(mut self, key: impl Into<SharedString>) -> Self {
         self.key = Some(key.into());
+        self
+    }
+
+    /// Gives the tab a cluster badge.
+    pub fn with_cluster(mut self, mark: crate::cluster::ClusterMark) -> Self {
+        self.cluster = Some(mark);
         self
     }
 
@@ -130,9 +139,13 @@ impl Render for TestItem {
 
 impl Item for TestItem {
     fn tab_content(&self, _: &App) -> TabContent {
-        TabContent::new(self.title.clone())
+        let content = TabContent::new(self.title.clone())
             .icon(IconName::FileText)
-            .dirty(self.dirty)
+            .dirty(self.dirty);
+        match self.cluster {
+            Some(mark) => content.cluster(mark),
+            None => content,
+        }
     }
 
     fn item_key(&self, _: &App) -> Option<SharedString> {

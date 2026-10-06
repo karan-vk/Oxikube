@@ -75,6 +75,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   namespaces through `ResourceReader` (a `403` falls back to the typed names), drops stale
   selected names, maps `0`-`9` to All / the first nine favourites, computes a `ScopeDelta` for
   the `ResourceStore`, and runs the `namespace::Select` / `namespace::ToggleFavourite` commands.
+  Module `guard`
+  (E06-S02, E06-S09): besides the mutation pipeline, `guard::posture` holds the safety-posture commands
+  (`cluster::ToggleReadOnly`, `cluster::SetColour`, `cluster::ApplyPreset`; confirm when lifting
+  read-only on a production-flagged cluster, audited, persisted through the `PrefsWriter` the binary
+  implements over `ClusterSettings::update_cluster`), and every `Mutation` writer re-checks the
+  read-only flag before each request.
 - `oxikube_catalog_ui` — the cluster catalog UI. Module `namespaces` (E06-S07): the
   `NamespaceSelector` dropdown for the cluster tab toolbar (All, multi-select, favourites with
   their digits, local search, virtualised list, the restricted-cluster fallback), a view over
@@ -112,6 +118,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   Escape / outside-click dismissal, Tab trapped inside, focus restored on close; `DialogModal`
   for confirmations), `toast` (`ToastLayer`: queue with a visible cap, key deduplication,
   auto-dismiss, actions), `motion` (the 150 ms animation cap, off under the app's reduce-motion flag).
+  Module `cluster` (E06-S09): `ClusterMark` / `ClusterBadge` (colour dot + read-only lock drawn on a
+  cluster tab via `TabContent::cluster`, a hotbar entry and the status bar), `ClusterStatusItem`,
+  `cluster_menu` (read-only toggle and presets as commands) and `ClusterCommandRunner` (dispatch on the
+  `CommandBus`, toast / confirmation dialog / denial toast).
   Module `persistence`
   (E05-S05): `SerializedWorkspace` (versioned `DockAreaState` + item descriptors + window place),
   `LayoutStore` over `StatePort`, `LayoutPersistence` (async restore, 500 ms debounced save, flush
@@ -131,6 +141,7 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | Argo backends reading the cluster | `ResourcePort`, `PortForwardPort`, `ExecPort` | `oxikube_kube` | `oxikube_argocd` |
 | Extensions contributing themes/commands/MCP servers | `ThemeSinkPort`, `CommandSinkPort`, `ContextServerSinkPort` | `oxikube_theme`, `oxikube_app`, `oxikube_mcp` | `oxikube_extension_host` |
 | App reading user settings (aliases, budgets, per-cluster read-only / colour / name) | plain values pushed in at init / on change (`ClusterPrefsTable` for `clusters.<id>`, via `bins/oxikube::cluster_prefs`) | `oxikube_settings` (via bins) | `oxikube_app` |
+| App writing per-cluster read-only / colour back to `settings.json` | `oxikube_app::PrefsWriter` (a trait of the app crate, not a port: it carries no cluster I/O) | `bins/oxikube::cluster_prefs::SettingsPrefsWriter` over `ClusterSettings::update_cluster` | `oxikube_app::guard::posture` |
 | Per-cluster ports for a connected context | `ClusterConnectorPort` (returns `ClusterPorts` + `AccessReviewPort`; health via the `HealthReporter` callback) | `oxikube_kube` (wired by `bins/oxikube`) | `oxikube_app::session` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`) | `oxikube_terminal`, `oxikube_kube`, `oxikube_argocd` | `oxikube_terminal` element |
 

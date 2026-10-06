@@ -135,7 +135,10 @@ mod tests {
     fn suggestions_follow_the_context_name_and_prefer_the_safest() {
         let cases = [
             ("prod-eu-1", Some(ClusterPreset::Prod)),
-            ("arn:aws:eks:eu-west-1:1:cluster/PROD", Some(ClusterPreset::Prod)),
+            (
+                "arn:aws:eks:eu-west-1:1:cluster/PROD",
+                Some(ClusterPreset::Prod),
+            ),
             ("gke_acme_europe_staging", Some(ClusterPreset::Staging)),
             ("kind-oxikube", Some(ClusterPreset::Dev)),
             ("minikube", Some(ClusterPreset::Dev)),
@@ -150,7 +153,10 @@ mod tests {
 
     #[test]
     fn serde_uses_snake_case_names() {
-        assert_eq!(serde_json::to_string(&ClusterPreset::Prod).unwrap(), "\"prod\"");
+        assert_eq!(
+            serde_json::to_string(&ClusterPreset::Prod).unwrap(),
+            "\"prod\""
+        );
         assert_eq!(
             serde_json::from_str::<ClusterPreset>("\"none\"").unwrap(),
             ClusterPreset::None
