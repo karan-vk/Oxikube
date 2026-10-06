@@ -16,8 +16,8 @@
 //! settings, see [`settings_schema`].
 //!
 //! Flags (`oxikube --help`): `--perf` records frame times, feed throughput, notify counts and RSS
-//! (docs/PERFORMANCE.md), and `--perf-table` makes that run connect a context and scroll its pods
-//! table; `--perf-scenario` runs one headless perf sample (feature `perf-scenarios`, driven by
+//! (docs/PERFORMANCE.md), `--perf-table` makes that run connect a context and scroll its pods
+//! table, and `--perf-logs` makes it open a pod's log view; `--perf-scenario` runs one headless perf sample (feature `perf-scenarios`, driven by
 //! `cargo xtask perf`).
 
 mod cli;
@@ -107,6 +107,10 @@ fn main() -> ExitCode {
             context,
             scroll: args.perf_scroll.unwrap_or(DEFAULT_SCROLL),
         });
+    let logs = args.perf_logs.as_deref().and_then(|value| {
+        oxikube::perf_logs::LogsDrive::parse(value, args.perf_logs_wrap, args.perf_logs_paused)
+    });
+    let drive = Drive { table: drive, logs };
 
     run_app(boot, perf, perf_duration, drive);
     // Platforms where `run` returns after quitting (macOS exits from inside it; the quit hook
@@ -124,7 +128,7 @@ fn run_app(
     mut boot: startup::Boot,
     perf: Option<Arc<Recorder>>,
     perf_duration: Option<Duration>,
-    drive: Option<oxikube::perf_table::TableDrive>,
+    drive: Drive,
 ) {
     let application = boot.report.time(Stage::Assets, || {
         gpui_platform::application().with_assets(oxikube_ui::Assets)
@@ -150,7 +154,7 @@ fn start(
     boot: startup::Boot,
     perf: Option<Arc<Recorder>>,
     perf_duration: Option<Duration>,
-    drive: Option<oxikube::perf_table::TableDrive>,
+    drive: Drive,
 ) -> bool {
     if let Err(err) = startup::init(cx, StartupEnv::app(boot)) {
         tracing::error!(%err, "start-up failed");
@@ -176,10 +180,20 @@ fn start(
             return false;
         }
     };
-    if let Some(drive) = drive {
-        oxikube::perf_table::start(drive, handle.into(), cx);
+    if let Some(table) = drive.table {
+        oxikube::perf_table::start(table, handle.into(), cx);
+    }
+    if let Some(logs) = drive.logs {
+        oxikube::perf_logs::start(logs, handle.into(), cx);
     }
     true
+}
+
+/// What a `--perf` run drives in the window: the pods table (`--perf-table`), a log view
+/// (`--perf-logs`), or nothing (a plain recorded launch).
+struct Drive {
+    table: Option<oxikube::perf_table::TableDrive>,
+    logs: Option<oxikube::perf_logs::LogsDrive>,
 }
 
 /// Rows `--perf-table` scrolls per frame without `--perf-scroll`: a fast trackpad fling at

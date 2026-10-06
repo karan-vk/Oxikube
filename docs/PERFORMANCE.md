@@ -468,6 +468,51 @@ times its JSON. Halving it means sharing one object between the reflector store 
 and the JSON compact or lazy. Both are store/adapter changes beyond this story: tracked in
 [#508](https://github.com/karan-vk/Oxikube/issues/508).
 
+## Log viewer: streaming 5 000 lines/s (E08-S02)
+
+Budget: streaming 5 000 lines/s with p95 frame ≤ 8 ms and no frame > 50 ms; scroll and keypress
+≤ 1 frame; memory bounded by `logs.buffer_lines`.
+
+How the view stays inside it (`oxikube_logs_ui::view`): the `LogService` commits lines in batches
+(2 048 lines or one 32 ms tick); the view polls one delta per wake (computed at poll time, so a slow
+frame gets one larger delta, never a queue) and redraws through `notify_coalesced`; the lines stay in
+the session's ring buffer and a frame reads only the rows on screen, by seq, under one short lock;
+unwrapped rows are a `uniform_list` and draw at most 1 024 bytes of a line, wrapped rows a `list`
+over a `ListState` spliced per delta (only rows on screen are measured). GPUI's line layout cache
+reuses the shaping of rows drawn in the previous frame.
+
+### Measuring it
+
+Windowed, against kind: a pod that writes about 5 000 lines/s, then the app opening its log view
+through the same commands as a user (`cluster::Connect`, `pod::ViewLogs`, optionally
+`logs::ToggleWrap` and `logs::ToggleAutoscroll`):
+
+```
+kubectl --context kind-oxikube -n <ns> run firehose --image=registry.k8s.io/e2e-test-images/busybox:1.36.1-1 \
+  -- sh -c 'while true; do seq 1 1000 | sed "s/^/INFO fast line /"; sleep 0.2; done'
+cargo build -p oxikube --profile release-fast
+target/release-fast/oxikube --perf-logs kind-oxikube/<ns>/firehose [--perf-logs-wrap] [--perf-logs-paused] --perf-duration 30
+```
+
+`--perf-logs` prints the lines received per second every 5 s; `--perf` prints the frame times and
+notify counts on exit.
+
+### Numbers (E08-S02, M-series laptop, release-fast, 30 s each)
+
+| Mode | lines/s received | frames | p50 | p95 | max | notify |
+|---|---|---|---|---|---|---|
+| wrap off, autoscroll on | ~4 930 | 18 | 2.42 ms | 9.96 ms | 9.96 ms | 5.2/s, ≤ 3 per frame |
+| wrap off, autoscroll paused | ~4 920 | 40 | 2.55 ms | 5.56 ms | 9.15 ms | 5.1/s |
+| wrap on, autoscroll on | ~4 880 | 105 | 2.31 ms | 2.71 ms | 9.10 ms | 6.8/s |
+| wrap on, autoscroll paused | ~4 920 | 12 | 2.85 ms | 10.10 ms | 10.10 ms | 5.1/s |
+
+RSS stayed at 150-156 MiB with the default 50 000-line buffer full. The window was not in front
+during these runs (macOS draws an occluded window rarely), hence the low frame counts: the p95 of
+the runs with under 50 frames is the slowest single frame, the window's first draw of the view
+included. A run with the window in front, and the headless `logs-stream` scenario of
+`cargo xtask perf` (still a stub, needs the scripted harness), are the follow-ups for a stable
+baseline.
+
 ## Load fixture: `cargo xtask load-pods`
 
 The perf fixture for the E07 table/feed stories and the E01-S14 harness. It creates pause pods

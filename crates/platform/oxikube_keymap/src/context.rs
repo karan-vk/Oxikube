@@ -16,7 +16,7 @@
 //! | `Modal` | a dialog or sheet | |
 //! | `Editor` | the YAML editor | `mode == yaml\|diff`, `Editing` |
 //! | `Terminal` | a terminal pane | |
-//! | `Logs` | the log viewer | `Editing` while its search field has focus |
+//! | `LogView` | the log viewer (E08-S02) | `Editing` while its search field has focus, `wrap`, `autoscroll` |
 //! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
 //!
 //! Every context built with [`KeyContextBuilder`] also carries `os == macos|linux|windows`, so a
@@ -57,7 +57,7 @@ pub mod contexts {
     /// A terminal pane.
     pub const TERMINAL: &str = "Terminal";
     /// The log viewer.
-    pub const LOGS: &str = "Logs";
+    pub const LOGS: &str = "LogView";
     /// The cluster catalog home.
     pub const CATALOG: &str = "Catalog";
     /// Flag: a text field inside the context has focus, so bare-letter bindings (vim layer)

@@ -26,6 +26,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::bounds::truncate_in_place;
 
+mod range;
+
+pub use range::LogRange;
+
 /// Longest log line text kept, in bytes (16 KiB). Longer lines are cut on a
 /// char boundary and flagged [`LogLine::truncated`].
 pub const MAX_LOG_LINE_BYTES: usize = 16 * 1024;

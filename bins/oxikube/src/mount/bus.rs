@@ -16,6 +16,7 @@
 //! | `oxikube` | `view::Open` for the catalog home and the kubeconfig sources screen |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
+//! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (E08-S02; reads only) |
 //!
 //! Only `resource::Delete` mutates a cluster; it and the posture commands confirm and audit through
 //! the `MutationGuard` the bus owns, and E12's per-kind actions join here.
@@ -34,6 +35,7 @@ use oxikube_catalog_ui::catalog::CATALOG_VIEW;
 use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
+use oxikube_logs_ui::LogCommandSink;
 use oxikube_resources_ui::ResourceCommandSink;
 use oxikube_resources_ui::navigate::OpenKind;
 use oxikube_workspace::cluster_tab::CommandSink;
@@ -63,6 +65,8 @@ pub struct BusParts {
     pub kinds: mpsc::UnboundedSender<OpenKind>,
     /// The resource views' queue (the table commands, applied on the UI thread).
     pub resources: ResourceCommandSink,
+    /// The log views' queue (`pod::ViewLogs` and `logs::*`, applied on the UI thread).
+    pub logs: LogCommandSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -95,6 +99,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_resources_ui", |r| {
         oxikube_resources_ui::navigate::register_commands(r, parts.kinds)?;
         oxikube_resources_ui::register_commands(r, parts.resources)
+    })?;
+    registry.install("oxikube_logs_ui", |r| {
+        oxikube_logs_ui::register_commands(r, parts.logs)
     })?;
     Ok(registry)
 }

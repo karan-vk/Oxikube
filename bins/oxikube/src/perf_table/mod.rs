@@ -135,7 +135,7 @@ async fn run(drive: &TableDrive, window: AnyWindowHandle, cx: &mut AsyncApp) -> 
 }
 
 /// Runs `command` on the window's command bus, as the views dispatch it.
-fn run_command(
+pub(crate) fn run_command(
     state: &Arc<AppState>,
     workspace: &Entity<Workspace>,
     window: AnyWindowHandle,
@@ -171,7 +171,11 @@ fn pods_table(
 }
 
 /// Polls `done` every [`POLL`] until it holds, or fails after [`STEP_DEADLINE`].
-async fn wait(cx: &mut AsyncApp, what: &str, mut done: impl FnMut(&App) -> bool) -> Result<()> {
+pub(crate) async fn wait(
+    cx: &mut AsyncApp,
+    what: &str,
+    mut done: impl FnMut(&App) -> bool,
+) -> Result<()> {
     let started = Instant::now();
     loop {
         if cx.update(|cx| done(cx)) {
