@@ -67,8 +67,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ClusterCatalog` joins the `ClusterSourcePort` contexts (name, kubeconfig cluster and user,
   source file, `problem` when the context names a cluster or user the kubeconfig lacks) with the
   user's favourites and last-used times in the `cluster_catalog` state table; reading it is local,
-  never a network call. `ClusterCommands` runs `cluster::Connect`, `cluster::Disconnect` and
+  never a network call. `ClusterCommands` runs `cluster::Connect`, `cluster::Reconnect` (the
+  retry), `cluster::CancelConnect` (only while an attempt is in flight), `cluster::Disconnect` and
   `cluster::ToggleFavourite` (reads, so no `MutationGuard`); the `CommandBus` (E06-S02) registers it.
+  A `ClusterSession` also carries the API server URL of its catalog entry (`server()`).
   Module `sources` (E06-S05): `KubeconfigSourcesService` manages the user's kubeconfig sources
   (`add` a file or folder, `add` pasted text, `remove`, `reload`, `rows` with each source's status)
   over a `SourceListStore` (settings in the app), the `ClusterSourcePort` (`set_user_sources`,
@@ -110,7 +112,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   tooltip, right-click menu, drag to reorder, order kept in the `hotbar` state table); the
   displayed cluster comes from `ClusterTabs`, favourites from `ClusterCatalog` and its
   `favourite_changes` stream. Clicks send `cluster::Select` / `cluster::Connect`; the favourite
-  toggle is `cluster::ToggleFavourite`.
+  toggle is `cluster::ToggleFavourite`. Module `connect` (E06-S06): the connect lifecycle of a cluster
+  tab. `ConnectView` follows one session and draws its state (`Connecting`: spinner, server, context,
+  Cancel; `AuthRequired`: the plugin's message, the cluster's exec policy and how to sign in, Open
+  terminal, Retry; `Error`: summary, expandable and copyable details, Retry, Edit kubeconfig
+  sources; `Disconnected`: Connect), `DegradedBanner` is the strip above a degraded cluster's
+  content, and `ConnectViewModel::of(state, info)` is the pure state-to-content mapping with every
+  text redacted. `connect::install` / `tab_setup` hand both to a `ClusterTab` (`ConnectUi`); Retry,
+  Cancel and Connect send `cluster::Reconnect`, `cluster::CancelConnect` and `cluster::Connect`
+  through the `CommandDispatcher`. The terminal (E09) and kubeconfig sources (E06-S05) are host
+  hooks on `ConnectDeps`: the terminal button is drawn disabled until a terminal exists, the
+  sources link is hidden until the sources page exists.
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
   mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
   events).
@@ -133,7 +145,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
   not `Disconnected`, switches (`cmd-1..9`, `cluster::NextTab`/`PreviousTab`/`Select`/`SwitchTab`),
   closes (`cluster::CloseTab`: confirms while the cluster's operations run, then
   `cluster::Disconnect`) and saves the open list in the `cluster_tabs` state table; the tab
-  commands register on the bus with `register_commands`. `Item::intercepts_close` /
+  commands register on the bus with `register_commands`. A tab shows the `ConnectUi` its owner
+  sets (E06-S06: the connect view's body in place of the content while the session is not
+  connected, its banner above the content while degraded). `Item::intercepts_close` /
   `close_requested` let an item ask before its tab closes; `Workspace::set_strip` places the
   hotbar. Module `session` (E05-S12): `window::New`
   (several windows, one `Workspace` each, shared globals), UI zoom (`view::ZoomIn`/`ZoomOut`/`ZoomReset`,

@@ -47,6 +47,13 @@ pub enum Command {
         /// The catalog entry to connect.
         cluster: ClusterId,
     },
+    /// Cancel a connection attempt that is still in flight (the connect view's Cancel). Does
+    /// nothing once the attempt has ended.
+    #[serde(rename = "cluster::CancelConnect")]
+    ClusterCancelConnect {
+        /// The cluster whose attempt to cancel.
+        cluster: ClusterId,
+    },
     /// Close a cluster's workspace tab, which disconnects the cluster. Asks first while
     /// operations of that cluster (exec sessions, port-forwards) are running.
     #[serde(rename = "cluster::CloseTab")]
@@ -58,6 +65,13 @@ pub enum Command {
     #[serde(rename = "cluster::Disconnect")]
     ClusterDisconnect {
         /// The catalog entry to disconnect.
+        cluster: ClusterId,
+    },
+    /// Reconnect a cluster: drop its connection, if any, and connect again. The retry of the
+    /// connect view. Reads from the cluster, never changes it.
+    #[serde(rename = "cluster::Reconnect")]
+    ClusterReconnect {
+        /// The cluster to reconnect.
         cluster: ClusterId,
     },
     /// Show the next cluster tab (wraps around).
@@ -309,8 +323,10 @@ impl Command {
     pub const fn id(&self) -> CommandId {
         match self {
             Command::ClusterConnect { .. } => CommandId::CLUSTER_CONNECT,
+            Command::ClusterCancelConnect { .. } => CommandId::CLUSTER_CANCEL_CONNECT,
             Command::ClusterCloseTab { .. } => CommandId::CLUSTER_CLOSE_TAB,
             Command::ClusterDisconnect { .. } => CommandId::CLUSTER_DISCONNECT,
+            Command::ClusterReconnect { .. } => CommandId::CLUSTER_RECONNECT,
             Command::ClusterNextTab => CommandId::CLUSTER_NEXT_TAB,
             Command::ClusterPreviousTab => CommandId::CLUSTER_PREVIOUS_TAB,
             Command::ClusterSelect { .. } => CommandId::CLUSTER_SELECT,
@@ -418,8 +434,10 @@ mod tests {
     fn samples() -> Vec<Command> {
         vec![
             Command::ClusterConnect { cluster: cluster() },
+            Command::ClusterCancelConnect { cluster: cluster() },
             Command::ClusterCloseTab { cluster: cluster() },
             Command::ClusterDisconnect { cluster: cluster() },
+            Command::ClusterReconnect { cluster: cluster() },
             Command::ClusterNextTab,
             Command::ClusterPreviousTab,
             Command::ClusterSelect { cluster: cluster() },
@@ -640,6 +658,8 @@ mod tests {
                 command,
                 Command::ClusterConnect { .. }
                     | Command::ClusterCloseTab { .. }
+                    | Command::ClusterCancelConnect { .. }
+                    | Command::ClusterReconnect { .. }
                     | Command::ClusterNextTab
                     | Command::ClusterPreviousTab
                     | Command::ClusterSwitchTab { .. }

@@ -19,6 +19,7 @@
 //! - [`table`]: [`Table`] over our own [`TableDelegate`] trait (virtualised, uniform rows).
 //! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`chart`], [`markdown`],
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
+//! - [`spinner`]: [`spinner::Spinner`], a loading indicator that stands still under reduce-motion.
 //! - [`tooltip`]: [`tooltip::Tooltip`], hover text for any element.
 //! - [`root`]: the window root, which owns the dialog, sheet and notification layers.
 //! - [`title_bar`]: the window title bar (drag area, window controls, traffic-light inset).
@@ -41,6 +42,7 @@ pub mod root;
 pub mod setup;
 pub mod sidebar;
 pub mod size;
+pub mod spinner;
 pub mod table;
 pub mod tabs;
 pub mod theme_bridge;

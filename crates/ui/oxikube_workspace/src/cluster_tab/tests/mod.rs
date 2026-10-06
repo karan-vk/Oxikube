@@ -4,6 +4,7 @@
 
 mod bus;
 mod close;
+mod connect_ui;
 mod layout;
 mod switch;
 mod tabs;

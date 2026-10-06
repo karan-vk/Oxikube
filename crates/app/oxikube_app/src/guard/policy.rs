@@ -47,8 +47,10 @@ pub fn is_posture(command: &Command) -> bool {
 pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
     match command {
         Command::ClusterConnect { cluster }
+        | Command::ClusterCancelConnect { cluster }
         | Command::ClusterCloseTab { cluster }
         | Command::ClusterDisconnect { cluster }
+        | Command::ClusterReconnect { cluster }
         | Command::ClusterSelect { cluster }
         | Command::ClusterToggleFavourite { cluster, .. }
         | Command::ClusterToggleReadOnly { cluster, .. }

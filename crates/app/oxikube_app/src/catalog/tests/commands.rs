@@ -102,6 +102,98 @@ fn disconnect_closes_a_connected_cluster_and_ignores_one_never_opened() {
 }
 
 #[test]
+fn reconnect_retries_a_cluster_that_needed_auth() {
+    let h = Harness::new();
+    h.connector
+        .connect_script_for(&id("a"))
+        .push_err(oxikube_domain::OxiError::auth("token expired", false));
+    let first = run(&h, Command::ClusterConnect { cluster: id("a") }).expect("connect");
+    assert!(
+        matches!(
+            first,
+            ClusterCommandOutcome::Connected(ClusterSessionState::AuthRequired { .. })
+        ),
+        "{first:?}"
+    );
+    let retry = run(&h, Command::ClusterReconnect { cluster: id("a") }).expect("reconnect");
+    assert_eq!(
+        retry,
+        ClusterCommandOutcome::Connected(ClusterSessionState::Ready)
+    );
+    assert_eq!(
+        h.sessions.get(&id("a")).unwrap().phase(),
+        SessionPhase::Ready
+    );
+}
+
+#[test]
+fn reconnect_replaces_a_live_connection() {
+    let h = Harness::new();
+    run(&h, Command::ClusterConnect { cluster: id("a") }).expect("connect");
+    let retry = run(&h, Command::ClusterReconnect { cluster: id("a") }).expect("reconnect");
+    assert_eq!(
+        retry,
+        ClusterCommandOutcome::Connected(ClusterSessionState::Ready)
+    );
+    assert_eq!(h.connector.live_connections(&id("a")), 1);
+}
+
+#[test]
+fn cancel_connect_stops_only_an_attempt_in_flight() {
+    let h = Harness::new();
+    h.connector.hold();
+    let handler = commands(&h);
+    let command = Command::ClusterConnect { cluster: id("a") };
+    let mut connect = Box::pin(async { handler.handle(&command).await });
+    assert!(connect.as_mut().now_or_never().is_none());
+    assert_eq!(
+        h.sessions.get(&id("a")).unwrap().phase(),
+        SessionPhase::Connecting
+    );
+
+    let outcome = run(&h, Command::ClusterCancelConnect { cluster: id("a") }).expect("cancel");
+    assert_eq!(outcome, ClusterCommandOutcome::Cancelled(true));
+    assert_eq!(
+        h.sessions.get(&id("a")).unwrap().phase(),
+        SessionPhase::Disconnected
+    );
+    // The attempt's own future ends with the state it was cancelled into.
+    assert_eq!(
+        connect.now_or_never().expect("aborted").expect("connect"),
+        ClusterCommandOutcome::Connected(ClusterSessionState::Disconnected)
+    );
+    assert_eq!(h.connector.cancelled(), 1);
+
+    // Nothing in flight any more (and one never opened): nothing to cancel, nothing changes.
+    let again = run(&h, Command::ClusterCancelConnect { cluster: id("a") }).expect("cancel");
+    assert_eq!(again, ClusterCommandOutcome::Cancelled(false));
+    let ghost = run(&h, Command::ClusterCancelConnect { cluster: id("c") }).expect("cancel");
+    assert_eq!(ghost, ClusterCommandOutcome::Cancelled(false));
+}
+
+#[test]
+fn cancel_connect_leaves_a_connected_cluster_alone() {
+    let h = Harness::new();
+    run(&h, Command::ClusterConnect { cluster: id("a") }).expect("connect");
+    let outcome = run(&h, Command::ClusterCancelConnect { cluster: id("a") }).expect("cancel");
+    assert_eq!(outcome, ClusterCommandOutcome::Cancelled(false));
+    assert_eq!(
+        h.sessions.get(&id("a")).unwrap().phase(),
+        SessionPhase::Ready
+    );
+}
+
+#[test]
+fn the_session_knows_the_api_server_of_its_catalog_entry() {
+    let h = Harness::new();
+    run(&h, Command::ClusterConnect { cluster: id("b") }).expect("connect");
+    assert_eq!(
+        h.sessions.get(&id("b")).unwrap().server(),
+        Some("https://b.example:6443")
+    );
+}
+
+#[test]
 fn toggle_favourite_flips_or_sets() {
     let h = Harness::new();
     let toggle = |favourite| Command::ClusterToggleFavourite {
@@ -131,6 +223,12 @@ fn other_commands_are_refused_and_handles_says_which_are_ours() {
     assert!(ClusterCommands::handles(&Command::ClusterDisconnect {
         cluster: id("a")
     }));
+    assert!(ClusterCommands::handles(&Command::ClusterReconnect {
+        cluster: id("a")
+    }));
+    assert!(ClusterCommands::handles(&Command::ClusterCancelConnect {
+        cluster: id("a")
+    }));
     assert!(ClusterCommands::handles(&Command::ClusterToggleFavourite {
         cluster: id("a"),
         favourite: None
@@ -148,6 +246,8 @@ fn connecting_never_goes_through_the_mutation_path() {
     for command in [
         Command::ClusterConnect { cluster: id("a") },
         Command::ClusterDisconnect { cluster: id("a") },
+        Command::ClusterReconnect { cluster: id("a") },
+        Command::ClusterCancelConnect { cluster: id("a") },
         Command::ClusterToggleFavourite {
             cluster: id("a"),
             favourite: None,

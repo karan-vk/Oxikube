@@ -32,6 +32,15 @@
 //!   [`cluster_layout_key`]), so closing a cluster and opening it again gives its layout back.
 //!
 //! Reconnecting the saved clusters at launch is session restore (E06-S11).
+//!
+//! # While the cluster is not connected
+//!
+//! A tab opens when its session starts connecting, so it is where the connect lifecycle shows
+//! (E06-S06). The tab hosts a [`ConnectUi`] when its owner sets one
+//! ([`ClusterTab::set_connect_ui`]; `oxikube_catalog_ui::connect` builds it): its body replaces
+//! the content while the session is connecting, needs credentials or failed, and its banner sits
+//! above the content while the session is degraded. Without one the tab shows a plain
+//! placeholder.
 
 pub mod actions;
 mod colour;
@@ -49,7 +58,7 @@ pub use dispatch::{CommandDispatcher, CommandSink, TabsDispatcher, is_tab_comman
 pub use store::{
     CLUSTER_TABS_TABLE, CLUSTER_TABS_VERSION, ClusterTabsStore, SavedTabs, cluster_layout_key,
 };
-pub use tab::{ClusterTab, ClusterTabEvent, ClusterTabInfo};
+pub use tab::{ClusterTab, ClusterTabEvent, ClusterTabInfo, ConnectUi};
 
 /// Registers the cluster-tab actions and their key handlers. Called by [`crate::init`].
 pub fn init(cx: &mut gpui::App) {
