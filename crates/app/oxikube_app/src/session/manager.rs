@@ -3,10 +3,9 @@
 use std::sync::Arc;
 
 use indexmap::IndexMap;
-use oxikube_domain::ClusterColour;
-use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPhase};
+use oxikube_domain::{ClusterColour, OxiError, OxiResult};
 use oxikube_ports::{
     ClockPort, ClusterConnectorPort, ClusterContext, ClusterSourcePort, ExecInteractivity,
     HealthSignal,
@@ -14,8 +13,7 @@ use oxikube_ports::{
 use parking_lot::{Mutex, RwLock};
 
 use super::config::{SessionManagerConfig, SessionOptions};
-use super::connect::unknown;
-use super::entry::Entry;
+use super::entry::{Entry, Released};
 use super::model::ClusterSession;
 use super::updates::{SessionChange, SessionUpdates, UpdateSender};
 
@@ -170,7 +168,7 @@ impl ClusterSessionManager {
                     SessionPhase::Connecting | SessionPhase::Ready | SessionPhase::Degraded => {
                         e.disconnect(&self.shared.updates)
                     }
-                    _ => super::entry::Released(None),
+                    _ => Released(None),
                 }
             };
             drop(released);
@@ -314,12 +312,17 @@ impl Shared {
                 tracing::trace!(%cluster, ?signal, "health report ignored");
                 return false;
             }
-            match e.apply(signal.to_session_event(), &self.updates) {
-                Ok(released) => released,
-                Err(_) => return false,
-            }
+            let Ok(released) = e.apply(signal.to_session_event(), &self.updates) else {
+                return false;
+            };
+            released
         };
         drop(released);
         true
     }
+}
+
+/// The error for an unknown session id.
+fn unknown(cluster: &ClusterId) -> OxiError {
+    OxiError::not_found(format!("no cluster session or catalog entry {cluster}"))
 }

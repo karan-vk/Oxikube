@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use futures::future::{AbortHandle, Abortable, Aborted};
 use oxikube_domain::session::{ClusterSessionState, SessionEvent, SessionEventKind, SessionPhase};
-use oxikube_domain::{Capabilities, ErrorKind, OxiError, OxiResult};
+use oxikube_domain::{Capabilities, ErrorKind, OxiResult};
 use oxikube_ports::{ClusterConnection, ConnectRequest};
 use parking_lot::Mutex;
 
@@ -177,9 +177,4 @@ impl Drop for DropGuard<'_> {
         };
         drop(released);
     }
-}
-
-/// The error for an unknown session id.
-pub(super) fn unknown(cluster: &oxikube_domain::ids::ClusterId) -> OxiError {
-    OxiError::not_found(format!("no cluster session or catalog entry {cluster}"))
 }

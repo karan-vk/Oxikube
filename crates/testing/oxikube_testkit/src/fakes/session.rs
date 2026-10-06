@@ -361,8 +361,7 @@ mod tests {
         assert_eq!(fake.cancelled(), 1);
         assert_eq!(fake.held(), 0);
 
-        let pending = fake.connect(request("b")).boxed();
-        let mut pending = pending;
+        let mut pending = fake.connect(request("b")).boxed();
         assert!((&mut pending).now_or_never().is_none());
         fake.release();
         assert!(block_on(pending).is_ok());
