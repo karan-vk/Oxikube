@@ -24,9 +24,10 @@ use std::{cell::RefCell, rc::Rc};
 use futures::channel::oneshot;
 use gpui::{Context, Window};
 use oxikube_app::session::restore::{RestoreConnect, RestorePlan, SessionRestorer};
-use oxikube_domain::OxiResult;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::session::SessionPhase;
+use oxikube_domain::{OxiError, OxiResult};
 use oxikube_runtime::spawn_kube;
 use oxikube_settings::Settings as _;
 
@@ -121,7 +122,7 @@ impl ClusterTabs {
             let Some(session) = self.deps.sessions.get(cluster) else {
                 continue;
             };
-            if session.phase() == oxikube_domain::session::SessionPhase::Disconnected {
+            if session.phase() == SessionPhase::Disconnected {
                 self.pending.insert(cluster.clone());
             }
             self.follow(&session, window, cx);
@@ -132,7 +133,8 @@ impl ClusterTabs {
             .filter(|active| !user_is_on_a_cluster && self.tabs.contains_key(*active));
         match saved_active {
             Some(active) => {
-                self.activate(&active.clone(), window, cx);
+                let active = active.clone();
+                self.activate(&active, window, cx);
             }
             // The catalog (or whatever was shown) stays shown.
             None => {
@@ -232,5 +234,5 @@ fn layout_restored(
 
 /// A `spawn_kube` result with the bridge's own failure folded into the error.
 fn flatten<T>(result: Result<OxiResult<T>, oxikube_runtime::KubeTaskError>) -> OxiResult<T> {
-    result.unwrap_or_else(|error| Err(oxikube_domain::OxiError::internal(error.to_string())))
+    result.map_err(OxiError::from).and_then(|inner| inner)
 }

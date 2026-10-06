@@ -80,10 +80,9 @@ impl RestorePlan {
     /// The saved session without the dropped clusters: what is written back so the next launch
     /// does not report them again. `saved` is the row this plan was resolved from.
     pub fn pruned(&self, saved: &SavedTabs) -> SavedTabs {
-        let open: Vec<ClusterId> = self.ids().cloned().collect();
-        let titles = open
-            .iter()
+        let titles = self
+            .ids()
             .filter_map(|id| saved.title(id).map(|t| (id.clone(), t.to_owned())));
-        SavedTabs::new(open.clone(), self.active.clone()).with_titles(titles)
+        SavedTabs::new(self.ids().cloned().collect(), self.active.clone()).with_titles(titles)
     }
 }

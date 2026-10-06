@@ -92,8 +92,8 @@ impl SessionRestorer {
     /// Connects what `connect` asks for: the displayed cluster first, then (for
     /// [`RestoreConnect::All`]) the rest in tab order, at most
     /// [`concurrency`](RestoreConfig::concurrency) at a time, plus one more for clusters whose
-    /// credential plugin may prompt (those connect strictly one after another). Each attempt has its own timeout
-    /// and its own outcome: a failing or slow cluster never delays or fails another, and a
+    /// credential plugin may prompt (those connect strictly one after another). Each attempt has
+    /// its own timeout and its own outcome: a failing or slow cluster never delays or fails another, and a
     /// cluster the user already connected is left alone. With [`RestoreConnect::Active`] and no
     /// displayed cluster nothing connects.
     ///
@@ -140,21 +140,6 @@ impl SessionRestorer {
             .buffer_unordered(width)
             .collect()
             .await
-    }
-
-    /// [`prepare`](Self::prepare) then [`connect`](Self::connect), for callers that have no
-    /// placeholders to show in between.
-    ///
-    /// # Errors
-    ///
-    /// As [`prepare`](Self::prepare).
-    pub async fn restore(
-        &self,
-        connect: RestoreConnect,
-    ) -> OxiResult<(RestorePlan, RestoreReport)> {
-        let plan = self.prepare().await?;
-        let report = self.connect(&plan, connect).await;
-        Ok((plan, report))
     }
 
     async fn connect_one(&self, cluster: ClusterId) -> ConnectOutcome {

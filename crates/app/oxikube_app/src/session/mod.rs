@@ -56,8 +56,9 @@
 //! The manager persists nothing. Namespace selection, read-only and colour are set
 //! through its methods, which send updates; callers persist them with `StatePort`
 //! (the namespace selection through [`namespaces::NamespaceService`], E06-S07; the open tabs
-//! through [`restore::ClusterTabsStore`]; [`restore::SessionRestorer`] reads both back, E06-S11). Credentials never reach this layer, and state reasons are
-//! redacted before they are stored or sent.
+//! through [`restore::ClusterTabsStore`]; [`restore::SessionRestorer`] reads both back, E06-S11).
+//! Credentials never reach this layer, and state reasons are redacted before they are stored or
+//! sent.
 
 mod config;
 mod connect;

@@ -34,7 +34,7 @@ mod sessions;
 mod switch;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     rc::Rc,
     sync::Arc,
 };
@@ -249,8 +249,7 @@ impl ClusterTabs {
         self.sink.clone()
     }
 
-    /// The store the open tabs are saved in; session restore (E06-S11) reads it through the same
-    /// store.
+    /// The store the open tabs are saved in; session restore (E06-S11) reads it too.
     pub fn store(&self) -> &ClusterTabsStore {
         &self.store
     }
@@ -288,7 +287,9 @@ impl ClusterTabs {
             let tab = self.tabs.get(cluster)?.tab.read(cx);
             Some((cluster.clone(), tab.info().title.to_string()))
         });
-        let titles: Vec<_> = titles.collect();
-        SavedTabs::new(order, self.active.clone()).with_titles(titles)
+        let titles: BTreeMap<_, _> = titles.collect();
+        let mut saved = SavedTabs::new(order, self.active.clone());
+        saved.titles = titles;
+        saved
     }
 }
