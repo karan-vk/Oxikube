@@ -14,7 +14,6 @@ use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_runtime::spawn_kube;
 use oxikube_workspace::{OpenOptions, Toast, Workspace};
 
-use super::commands::ViewRequest;
 use super::controller::ResourceViews;
 use crate::detail::{DetailDeps, DetailDrawer, DetailView, item_key};
 
@@ -106,26 +105,18 @@ impl ResourceViews {
             None => tracing::debug!(%target, key, "no such label to copy"),
         }
     }
-}
 
-impl ResourceViews {
-    /// Applies a request for the YAML or Describe tab of an open detail (`resource::CopyYaml`,
-    /// `SaveYaml`, `ToggleManagedFields`, `RefreshDescribe`); any other request is not its.
-    pub(super) fn apply_tab_request(&mut self, request: ViewRequest, cx: &mut Context<Self>) {
-        match request {
-            ViewRequest::CopyYaml(target) => self.copy_yaml(&target, cx),
-            ViewRequest::SaveYaml(target) => self.save_yaml(&target, cx),
-            ViewRequest::ToggleManagedFields(target) => {
-                if let Some(view) = self.detail_view(&target, cx) {
-                    view.update(cx, |view, cx| view.toggle_managed_fields(cx));
-                }
-            }
-            ViewRequest::RefreshDescribe(target) => {
-                if let Some(view) = self.detail_view(&target, cx) {
-                    view.update(cx, |view, cx| view.refresh_describe(cx));
-                }
-            }
-            _ => {}
+    /// Shows or hides `managedFields` in the YAML tab of `target`'s open detail.
+    pub(super) fn toggle_managed_fields(&self, target: &ResourceRef, cx: &mut Context<Self>) {
+        if let Some(view) = self.detail_view(target, cx) {
+            view.update(cx, |view, cx| view.toggle_managed_fields(cx));
+        }
+    }
+
+    /// Reads the describe text of `target`'s open detail again.
+    pub(super) fn refresh_describe(&self, target: &ResourceRef, cx: &mut Context<Self>) {
+        if let Some(view) = self.detail_view(target, cx) {
+            view.update(cx, |view, cx| view.refresh_describe(cx));
         }
     }
 

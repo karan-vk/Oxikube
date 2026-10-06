@@ -12,9 +12,10 @@ use oxikube_ui::editor::EditorState;
 use crate::detail::view::DetailView;
 
 /// How the Describe tab stands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum DescribeState {
     /// Not asked for yet (the tab was never shown).
+    #[default]
     Idle,
     /// The text is being read (a refresh keeps the previous text on screen meanwhile).
     Loading,
@@ -41,8 +42,8 @@ pub(in crate::detail) struct DescribeText {
 }
 
 /// The Describe tab of a [`DetailView`].
+#[derive(Default)]
 pub(in crate::detail) struct DescribeTab {
-    pub(in crate::detail) started: bool,
     pub(in crate::detail) state: DescribeState,
     /// The last text read, kept while a refresh is in flight or failed.
     pub(in crate::detail) output: Option<DescribeText>,
@@ -53,20 +54,6 @@ pub(in crate::detail) struct DescribeTab {
     pub(in crate::detail) editor: Option<Entity<EditorState>>,
     /// The request in flight; dropping it cancels it (and `kubectl`).
     pub(in crate::detail) task: Option<Task<()>>,
-}
-
-impl Default for DescribeTab {
-    fn default() -> Self {
-        Self {
-            started: false,
-            state: DescribeState::Idle,
-            output: None,
-            generation: 0,
-            pushed: None,
-            editor: None,
-            task: None,
-        }
-    }
 }
 
 impl DetailView {
@@ -82,11 +69,9 @@ impl DetailView {
 
     /// Starts the describe the first time the tab is shown.
     pub(in crate::detail) fn start_describe(&mut self, cx: &mut Context<Self>) {
-        if self.describe.started {
-            return;
+        if self.describe.state == DescribeState::Idle {
+            self.refresh_describe(cx);
         }
-        self.describe.started = true;
-        self.refresh_describe(cx);
     }
 
     /// The refresh button (and the Retry button): sends `resource::RefreshDescribe`.
@@ -100,7 +85,6 @@ impl DetailView {
     /// Reads the describe text again (`resource::RefreshDescribe`). An earlier request still in
     /// flight is cancelled. Starts the first read when the tab was never shown.
     pub fn refresh_describe(&mut self, cx: &mut Context<Self>) {
-        self.describe.started = true;
         let Some(port) = self
             .deps
             .sessions

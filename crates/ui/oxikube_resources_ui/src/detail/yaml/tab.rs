@@ -91,10 +91,7 @@ impl DetailView {
 
     /// The YAML the tab shows (what copy and save write), once the object is known in full.
     pub fn yaml(&self) -> Option<&str> {
-        match &self.yaml.text.as_ref()?.result {
-            Ok(text) => Some(text),
-            Err(_) => None,
-        }
+        self.yaml.text.as_ref()?.result.as_deref().ok()
     }
 
     /// Whether `metadata.managedFields` is shown in the YAML.

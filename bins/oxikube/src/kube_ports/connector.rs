@@ -61,12 +61,13 @@ impl SourcesConnector {
         let synced: Arc<Mutex<Option<Arc<LoadedKubeconfig>>>> = Arc::default();
         let origins = synced.clone();
         kube.set_describe_factory(Arc::new(move |connection: DescribeConnection| {
-            let kubeconfig = origins.lock().as_ref().and_then(|loaded| {
-                // The in-cluster context has no file `kubectl` could be pointed at.
-                (!loaded.is_in_cluster(&connection.context))
-                    .then(|| loaded.origin(&connection.context).map(Path::to_path_buf))
-                    .flatten()
-            });
+            let context = &connection.context;
+            // The in-cluster context has no file `kubectl` could be pointed at.
+            let kubeconfig = origins
+                .lock()
+                .as_ref()
+                .filter(|loaded| !loaded.is_in_cluster(context))
+                .and_then(|loaded| loaded.origin(context).map(Path::to_path_buf));
             describer(connection, &describe, kubeconfig)
         }));
         Self {

@@ -11,6 +11,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{DescribeOutput, DescribePort, DescribeSource, DiscoveryPort};
 
 use crate::errors::classify;
+use crate::resolve::resolve_kind;
 
 /// Renders `kubectl describe`-style text in process with deskribe.
 ///
@@ -37,9 +38,7 @@ impl NativeDescribe {
     /// The REST description of `target`'s kind, from discovery. `Unsupported` when the cluster
     /// does not serve the kind.
     async fn api_resource(&self, target: &ResourceRef) -> OxiResult<ApiResource> {
-        let kind = self.discovery.resolve(&target.gvk).await?.ok_or_else(|| {
-            OxiError::unsupported(format!("the cluster does not serve {}", target.gvk))
-        })?;
+        let kind = resolve_kind(self.discovery.as_ref(), &target.gvk).await?;
         let gvk = GroupVersionKind::gvk(&kind.gvk.group, &kind.gvk.version, &kind.gvk.kind);
         Ok(ApiResource::from_gvk_with_plural(&gvk, &kind.plural))
     }

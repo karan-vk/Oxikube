@@ -4,6 +4,7 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
     Window, div, px,
 };
+use oxikube_domain::ErrorKind;
 use oxikube_ports::DescribeSource;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{h_flex, v_flex};
@@ -90,9 +91,9 @@ impl DetailView {
             .as_ref()
             .map(|output| (output.text.clone(), output.serial));
         let Some((text, serial)) = output else {
-            return match self.describe.state.clone() {
+            return match &self.describe.state {
                 DescribeState::Failed { kind, message } => {
-                    self.describe_failure(kind, &message, cx)
+                    self.describe_failure(*kind, message, cx)
                 }
                 _ => div()
                     .debug_selector(|| "describe-loading".to_owned())
@@ -106,7 +107,7 @@ impl DetailView {
                     .into_any_element(),
             };
         };
-        let banner = match self.describe.state.clone() {
+        let banner = match &self.describe.state {
             DescribeState::Failed { message, .. } => Some(
                 div()
                     .debug_selector(|| "describe-refresh-error".to_owned())
@@ -150,16 +151,16 @@ impl DetailView {
     /// The error pane: what went wrong, why for an unsupported kind, and Retry.
     fn describe_failure(
         &self,
-        kind: oxikube_domain::ErrorKind,
+        kind: ErrorKind,
         message: &str,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let tokens = cx.tokens();
         let tones = ToneColors::current(cx);
         let title = match kind {
-            oxikube_domain::ErrorKind::Unsupported => "Describe is not available for this kind",
-            oxikube_domain::ErrorKind::NotFound => "The object was not found",
-            oxikube_domain::ErrorKind::Forbidden => "You may not describe this object",
+            ErrorKind::Unsupported => "Describe is not available for this kind",
+            ErrorKind::NotFound => "The object was not found",
+            ErrorKind::Forbidden => "You may not describe this object",
             _ => "Describe failed",
         };
         v_flex()

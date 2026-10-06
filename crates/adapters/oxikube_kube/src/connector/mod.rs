@@ -48,7 +48,7 @@ use oxikube_domain::OxiResult;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{
     ClusterConnection, ClusterConnectorPort, ClusterPorts, ConnectRequest, ConnectionGuard,
-    ExecInteractivity,
+    DescribePort, DiscoveryPort, ExecInteractivity,
 };
 use parking_lot::Mutex;
 
@@ -202,8 +202,8 @@ impl KubeConnector {
         &self,
         request: &ConnectRequest,
         client: &kube::Client,
-        discovery: &Arc<dyn oxikube_ports::DiscoveryPort>,
-    ) -> Arc<dyn oxikube_ports::DescribePort> {
+        discovery: &Arc<dyn DiscoveryPort>,
+    ) -> Arc<dyn DescribePort> {
         let factory = self.shared.describe.lock().clone();
         match factory {
             Some(factory) => factory(DescribeConnection {
@@ -270,7 +270,7 @@ impl ClusterConnectorPort for KubeConnector {
             .lock()
             .insert(request.cluster.clone(), Arc::downgrade(&state));
 
-        let discovery: Arc<dyn oxikube_ports::DiscoveryPort> = Arc::new(discovery);
+        let discovery: Arc<dyn DiscoveryPort> = Arc::new(discovery);
         let describe = self.describe_port(&request, &client, &discovery);
         let ports = ClusterPorts {
             resources: Arc::new(resources.clone()),

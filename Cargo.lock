@@ -5718,7 +5718,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tower",
- "tracing",
 ]
 
 [[package]]

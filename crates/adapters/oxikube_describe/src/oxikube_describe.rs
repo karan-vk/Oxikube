@@ -10,6 +10,7 @@
 //! | `native` | [`NativeDescribe`]: deskribe over the connection's kube client; resolves the kind's plural through discovery |
 //! | `kubectl` | [`KubectlDescribe`]: `kubectl describe` as a child process, never on the UI thread, killed when dropped |
 //! | `describer` | [`Describer`]: the port the app gets, choosing between the two by the preference |
+//! | `resolve` | the kind's plural through discovery, shared by both backends |
 //! | `errors` | classification of deskribe's and kubectl's failures into the error taxonomy (redacted) |
 //!
 //! # Contract
@@ -30,6 +31,7 @@ mod errors;
 mod kubectl;
 mod native;
 mod preference;
+mod resolve;
 
 pub use describer::Describer;
 pub use kubectl::{KubectlDescribe, KubectlTarget};

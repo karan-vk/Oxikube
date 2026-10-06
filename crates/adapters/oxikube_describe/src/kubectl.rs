@@ -13,6 +13,7 @@ use tokio::process::Command;
 
 use crate::errors::classify;
 use crate::preference::DescribePreference;
+use crate::resolve::resolve_kind;
 
 /// How long a `kubectl describe` may take before it is killed.
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -82,9 +83,7 @@ impl KubectlDescribe {
 #[async_trait]
 impl DescribePort for KubectlDescribe {
     async fn describe(&self, target: &ResourceRef) -> OxiResult<DescribeOutput> {
-        let kind = self.discovery.resolve(&target.gvk).await?.ok_or_else(|| {
-            OxiError::unsupported(format!("the cluster does not serve {}", target.gvk))
-        })?;
+        let kind = resolve_kind(self.discovery.as_ref(), &target.gvk).await?;
         let resource = if kind.gvk.group.is_empty() {
             kind.plural.clone()
         } else {

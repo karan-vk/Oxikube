@@ -140,10 +140,10 @@ impl ResourceViews {
                     table.update(cx, |table, cx| table.open_detail(target, cx));
                 }
             }
-            tab @ (ViewRequest::CopyYaml(_)
-            | ViewRequest::SaveYaml(_)
-            | ViewRequest::ToggleManagedFields(_)
-            | ViewRequest::RefreshDescribe(_)) => self.apply_tab_request(tab, cx),
+            ViewRequest::CopyYaml(target) => self.copy_yaml(&target, cx),
+            ViewRequest::SaveYaml(target) => self.save_yaml(&target, cx),
+            ViewRequest::ToggleManagedFields(target) => self.toggle_managed_fields(&target, cx),
+            ViewRequest::RefreshDescribe(target) => self.refresh_describe(&target, cx),
             ViewRequest::CopyName(target) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(target.name.to_string()));
             }
