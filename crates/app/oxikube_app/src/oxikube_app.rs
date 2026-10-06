@@ -27,8 +27,8 @@ pub mod command_bus;
 pub mod guard;
 pub mod integrations;
 pub mod session;
-pub mod sources;
 pub mod sidebar;
+pub mod sources;
 
 #[cfg(test)]
 mod testing;
@@ -52,5 +52,5 @@ pub use integrations::{IntegrationRegistry, IntegrationSection, RegisterIntegrat
 pub use session::{
     ClusterSession, ClusterSessionManager, SessionChange, SessionUpdate, SessionUpdates,
 };
-pub use sources::{KubeconfigSourcesService, SourceListStore, SourceRow};
 pub use sidebar::{AccessOutcome, CustomKind, CustomResourceGroup};
+pub use sources::{KubeconfigSourcesService, SourceListStore, SourceRow};
