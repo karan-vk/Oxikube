@@ -25,8 +25,12 @@ impl NamespaceService {
             .shared
             .manager
             .set_namespace_selection(cluster, selection.clone())?;
+        self.ensure_loaded(cluster).await?;
+        // An explicit choice is remembered even when it equals the selection the session
+        // opened with (the cache is seeded from it), so it outlives a changed default.
+        let unremembered = !self.shared.stored.lock().contains(cluster);
         let mut outcome = self
-            .mutate(cluster, |prefs| {
+            .mutate_inner(cluster, unremembered, |prefs| {
                 let changed = prefs.selection != selection;
                 prefs.selection = selection;
                 changed
@@ -56,19 +60,51 @@ impl NamespaceService {
         if self.shared.cache.lock().contains_key(cluster) {
             return Ok(());
         }
-        let loaded = prefs::read(self.shared.state.as_ref(), cluster).await?;
-        self.shared
-            .cache
-            .lock()
-            .entry(cluster.clone())
-            .or_insert(loaded);
+        let found = prefs::read(self.shared.state.as_ref(), cluster).await?;
+        let mut cache = self.shared.cache.lock();
+        if cache.contains_key(cluster) {
+            return Ok(());
+        }
+        let loaded = match found {
+            Some(stored) => {
+                self.shared.stored.lock().insert(cluster.clone());
+                stored
+            }
+            // Nothing remembered: the session's own starting selection (the cluster's default
+            // namespace, or the kubeconfig's) is the selection, not `All`.
+            None => self.unremembered(cluster),
+        };
+        cache.insert(cluster.clone(), loaded);
         Ok(())
+    }
+
+    /// Default prefs whose selection is the open session's current one.
+    pub(super) fn unremembered(&self, cluster: &ClusterId) -> NamespacePrefs {
+        NamespacePrefs {
+            selection: self
+                .shared
+                .manager
+                .get(cluster)
+                .map(|session| session.namespace_selection().clone())
+                .unwrap_or_default(),
+            ..NamespacePrefs::default()
+        }
     }
 
     /// Applies `change` to the cached prefs; when it reports a change, stores them.
     pub(super) async fn mutate(
         &self,
         cluster: &ClusterId,
+        change: impl FnOnce(&mut NamespacePrefs) -> bool,
+    ) -> OxiResult<NamespaceOutcome> {
+        self.mutate_inner(cluster, false, change).await
+    }
+
+    /// [`mutate`](Self::mutate), storing the prefs even when `change` reports none if `force`.
+    async fn mutate_inner(
+        &self,
+        cluster: &ClusterId,
+        force: bool,
         change: impl FnOnce(&mut NamespacePrefs) -> bool,
     ) -> OxiResult<NamespaceOutcome> {
         self.ensure_loaded(cluster).await?;
@@ -78,12 +114,13 @@ impl NamespaceService {
             let changed = change(prefs);
             (changed, prefs.clone())
         };
-        if changed {
+        if changed || force {
             // Write whatever is newest once it is this write's turn, so concurrent changes
             // never store an older snapshot last.
             let _turn = self.shared.write.lock().await;
             let latest = self.cached(cluster);
             prefs::write(self.shared.state.as_ref(), cluster, &latest).await?;
+            self.shared.stored.lock().insert(cluster.clone());
         }
         Ok(NamespaceOutcome { changed, prefs })
     }

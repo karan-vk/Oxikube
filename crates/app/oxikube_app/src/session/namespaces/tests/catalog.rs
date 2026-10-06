@@ -206,3 +206,79 @@ fn namespace_name_rules() {
         assert!(!is_valid_namespace_name(bad), "{bad:?}");
     }
 }
+
+fn with_accessible(h: &Harness, names: &[&str]) {
+    h.manager.set_prefs_table(
+        oxikube_ports::ClusterPrefsTable::new(oxikube_ports::ClusterPrefs::default()).with_cluster(
+            id("a"),
+            oxikube_ports::ClusterPrefs {
+                accessible_namespaces: names.iter().map(|n| (*n).to_owned()).collect(),
+                ..Default::default()
+            },
+        ),
+    );
+}
+
+#[test]
+fn a_forbidden_list_offers_the_accessible_namespaces_setting_with_the_typed_names() {
+    let h = Harness::new();
+    h.connect("a", &["dev"]);
+    with_accessible(&h, &["payments", "billing"]);
+    h.run(h.service.add_typed(&id("a"), "team-a")).unwrap();
+    h.connector
+        .ports_for(&id("a"))
+        .resources
+        .script()
+        .list_metadata
+        .push_err(OxiError::forbidden("namespaces is forbidden"));
+
+    let catalog = h.run(h.service.catalog(&id("a"))).unwrap();
+
+    assert_eq!(catalog.source, NamespaceSource::Forbidden);
+    assert_eq!(catalog.names, ["billing", "payments", "team-a"]);
+}
+
+#[test]
+fn the_accessible_namespaces_setting_is_offered_when_the_list_cannot_be_read() {
+    let h = Harness::new();
+    with_accessible(&h, &["payments"]);
+
+    let catalog = h.run(h.service.catalog(&id("a"))).unwrap();
+
+    assert_eq!(catalog.source, NamespaceSource::Unavailable);
+    assert_eq!(catalog.names, ["payments"]);
+}
+
+#[test]
+fn the_accessible_namespaces_setting_does_not_change_a_listed_cluster() {
+    let h = Harness::new();
+    h.connect("a", &["dev"]);
+    with_accessible(&h, &["payments"]);
+
+    let catalog = h.run(h.service.catalog(&id("a"))).unwrap();
+
+    assert_eq!(catalog.source, NamespaceSource::Cluster);
+    assert_eq!(catalog.names, ["dev"]);
+}
+
+#[test]
+fn a_forbidden_list_with_accessible_namespaces_prunes_nothing() {
+    let h = Harness::new();
+    h.connect("a", &[]);
+    with_accessible(&h, &["payments"]);
+    h.run(h.service.select(&id("a"), set(&["elsewhere"])))
+        .unwrap();
+    for _ in 0..2 {
+        h.connector
+            .ports_for(&id("a"))
+            .resources
+            .script()
+            .list_metadata
+            .push_err(OxiError::forbidden("namespaces is forbidden"));
+    }
+
+    let reconciled = h.run(h.service.reconcile(&id("a"))).unwrap();
+
+    assert!(reconciled.dropped.is_empty());
+    assert_eq!(h.selection("a"), set(&["elsewhere"]));
+}

@@ -1,6 +1,6 @@
 //! [`NamespaceService`]: the selection, favourites and namespace list of every cluster.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -54,6 +54,9 @@ pub(super) struct Shared {
     pub(super) state: Arc<dyn StatePort>,
     pub(super) clock: Arc<dyn ClockPort>,
     pub(super) cache: Mutex<HashMap<ClusterId, NamespacePrefs>>,
+    /// Clusters that have a record in `StatePort` (loaded or written). Without one the
+    /// session keeps the selection it started with.
+    pub(super) stored: Mutex<HashSet<ClusterId>>,
     /// The latest debounce ticket per cluster. A pending debounced selection applies only if
     /// its ticket is still the latest when its quiet time ends.
     pub(super) tickets: Mutex<HashMap<ClusterId, u64>>,
@@ -82,6 +85,7 @@ impl NamespaceService {
                 state,
                 clock,
                 cache: Mutex::new(HashMap::new()),
+                stored: Mutex::new(HashSet::new()),
                 tickets: Mutex::new(HashMap::new()),
                 write: AsyncMutex::new(()),
             }),
@@ -105,15 +109,25 @@ impl NamespaceService {
 
     /// Applies the remembered selection to the session: call it when `cluster` connects.
     /// Sends `NamespaceChanged` when the remembered selection differs from the session's.
+    /// When nothing is remembered yet the session keeps the selection it opened with (the
+    /// cluster's `default_namespace` or the kubeconfig's), and the returned prefs say so.
     ///
     /// # Errors
     ///
     /// `NotFound` when the session is not open; the state store's error.
     pub async fn restore(&self, cluster: &ClusterId) -> OxiResult<NamespacePrefs> {
-        let prefs = self.prefs(cluster).await?;
-        self.shared
-            .manager
-            .set_namespace_selection(cluster, prefs.selection.clone())?;
+        let mut prefs = self.prefs(cluster).await?;
+        if self.shared.stored.lock().contains(cluster) {
+            self.shared
+                .manager
+                .set_namespace_selection(cluster, prefs.selection.clone())?;
+        } else {
+            // A session reopened since the cache was filled may start elsewhere.
+            prefs.selection = self.unremembered(cluster).selection;
+            if let Some(cached) = self.shared.cache.lock().get_mut(cluster) {
+                cached.selection = prefs.selection.clone();
+            }
+        }
         Ok(prefs)
     }
 
@@ -125,13 +139,15 @@ impl NamespaceService {
     ///
     /// The state store's error.
     pub async fn catalog(&self, cluster: &ClusterId) -> OxiResult<NamespaceCatalog> {
-        let typed = self.prefs(cluster).await?.typed;
-        let reader = self
-            .shared
-            .manager
-            .get(cluster)
-            .and_then(|session| session.resources());
-        let Some(reader) = reader else {
+        let mut fallback = self.prefs(cluster).await?.typed;
+        let session = self.shared.manager.get(cluster);
+        // The cluster's `accessible_namespaces` setting (E06-S08) is offered with the typed
+        // names whenever the list is not the cluster's own.
+        if let Some(session) = &session {
+            fallback.extend(session.prefs().accessible_namespaces.iter().cloned());
+        }
+        let typed = fallback;
+        let Some(reader) = session.and_then(|session| session.resources()) else {
             return Ok(NamespaceCatalog::new(typed, NamespaceSource::Unavailable));
         };
         Ok(match catalog::list_names(reader.as_ref()).await {

@@ -19,8 +19,8 @@ pub struct NamespacePrefs {
     /// [`slot_selection`](super::slot_selection)).
     pub favourites: NamespaceFavourites,
     /// Names the user typed because the cluster refuses to list namespaces (RBAC). Offered
-    /// as the namespace list while listing is forbidden. E06-S08's per-cluster
-    /// "accessible namespaces" setting feeds the same list.
+    /// as the namespace list while listing is forbidden, together with the cluster's
+    /// `accessible_namespaces` setting (E06-S08).
     pub typed: Vec<String>,
 }
 
@@ -50,15 +50,18 @@ pub fn prefs_key(cluster: &ClusterId) -> StateKey {
     StateKey::new(format!("cluster/{cluster}/namespaces")).expect("cluster ids make valid keys")
 }
 
-/// Reads `cluster`'s prefs. A missing record is the default; a record that no longer parses
-/// is logged and treated as missing (a stale format must not lock the user out of the
+/// Reads `cluster`'s prefs: `None` when nothing is stored. A record that no longer parses is
+/// logged and treated as missing (a stale format must not lock the user out of the
 /// selector). Storage errors propagate.
-pub(super) async fn read(state: &dyn StatePort, cluster: &ClusterId) -> OxiResult<NamespacePrefs> {
+pub(super) async fn read(
+    state: &dyn StatePort,
+    cluster: &ClusterId,
+) -> OxiResult<Option<NamespacePrefs>> {
     match state.kv_get_as::<NamespacePrefs>(&prefs_key(cluster)).await {
-        Ok(found) => Ok(found.unwrap_or_default()),
+        Ok(found) => Ok(found),
         Err(err) if err.kind() == ErrorKind::Validation => {
             tracing::warn!(%cluster, %err, "ignoring unreadable namespace prefs");
-            Ok(NamespacePrefs::default())
+            Ok(None)
         }
         Err(err) => Err(err),
     }

@@ -16,13 +16,14 @@
 //!   five boxes re-scopes once.
 //! * **Remembered per cluster** in `StatePort` kv under [`prefs_key`] (`cluster/<id>/namespaces`),
 //!   not in settings: the selection, the favourites and the names typed for RBAC-restricted
-//!   clusters ([`NamespacePrefs`]). [`restore`](NamespaceService::restore) applies them on
-//!   connect; [`reconcile`](NamespaceService::reconcile) drops selected namespaces that no
+//!   clusters ([`NamespacePrefs`]). [`restore`](NamespaceService::restore) applies a remembered
+//!   selection on connect (with nothing remembered, the session keeps the selection it opened
+//!   with: the cluster's `default_namespace`, else the kubeconfig's); [`reconcile`](NamespaceService::reconcile) drops selected namespaces that no
 //!   longer exist (the UI says so with a toast).
 //! * **Namespace list.** From a `ResourceReader::list_metadata` of `Namespace`. When the cluster
-//!   answers `Forbidden` the catalog falls back to the typed names
-//!   ([`NamespaceSource::Forbidden`]) so the user can still pick; E06-S08's "accessible
-//!   namespaces" setting feeds the same list.
+//!   answers `Forbidden` the catalog falls back to the cluster's `accessible_namespaces` setting
+//!   (E06-S08, `ClusterSession::prefs`) plus the names the user typed
+//!   ([`NamespaceSource::Forbidden`]) so the user can still pick.
 //! * **Shortcuts.** `0` is All, `1`-`9` the first nine favourites ([`slot_selection`]).
 //! * **Commands.** `namespace::Select` and `namespace::ToggleFavourite` run through
 //!   [`NamespaceService::execute`], the handler a `CommandBus` registers.

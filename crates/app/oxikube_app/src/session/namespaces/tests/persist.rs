@@ -150,3 +150,80 @@ fn a_failed_write_is_an_error_and_the_session_still_changed() {
     let stored = h.run(h.restarted().prefs(&id("a"))).unwrap();
     assert_eq!(stored.selection, set(&["x"]));
 }
+
+/// Reopens cluster `a` the way the catalog does, with these settings: a session that starts
+/// at the cluster's default namespace.
+fn reopen_with_prefs(h: &Harness, prefs: oxikube_ports::ClusterPrefs) {
+    h.manager.close(&id("a"));
+    h.manager.set_prefs_table(
+        oxikube_ports::ClusterPrefsTable::new(oxikube_ports::ClusterPrefs::default())
+            .with_cluster(id("a"), prefs),
+    );
+    h.manager.open_configured(&ctx("a"));
+}
+
+fn payments_prefs() -> oxikube_ports::ClusterPrefs {
+    oxikube_ports::ClusterPrefs {
+        default_namespace: Some("payments".into()),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn restore_keeps_the_default_namespace_when_nothing_is_remembered() {
+    let mut h = Harness::new();
+    reopen_with_prefs(&h, payments_prefs());
+    assert_eq!(h.selection("a"), set(&["payments"]));
+    h.namespace_changes();
+
+    let prefs = h.run(h.service.restore(&id("a"))).unwrap();
+
+    assert_eq!(
+        h.selection("a"),
+        set(&["payments"]),
+        "not overwritten by All"
+    );
+    assert_eq!(
+        prefs.selection,
+        set(&["payments"]),
+        "the prefs say what the session has"
+    );
+    assert!(h.namespace_changes().is_empty());
+    let reconciled = h.run(h.service.start(&id("a"))).unwrap();
+    assert_eq!(reconciled.prefs.selection, set(&["payments"]));
+}
+
+#[test]
+fn a_remembered_selection_beats_the_default_namespace() {
+    let h = Harness::new();
+    h.run(h.service.select(&id("a"), set(&["prod"]))).unwrap();
+    reopen_with_prefs(&h, payments_prefs());
+    assert_eq!(h.selection("a"), set(&["payments"]));
+
+    h.run(h.restarted().restore(&id("a"))).unwrap();
+
+    assert_eq!(h.selection("a"), set(&["prod"]));
+}
+
+#[test]
+fn a_session_reopened_with_a_new_default_namespace_follows_it_until_the_user_picks() {
+    let h = Harness::new();
+    h.run(h.service.restore(&id("a"))).unwrap();
+    reopen_with_prefs(&h, payments_prefs());
+
+    let prefs = h.run(h.service.restore(&id("a"))).unwrap();
+
+    assert_eq!(prefs.selection, set(&["payments"]));
+    assert_eq!(h.selection("a"), set(&["payments"]));
+}
+
+#[test]
+fn a_favourite_pinned_before_restore_does_not_replace_the_default_namespace() {
+    let h = Harness::new();
+    reopen_with_prefs(&h, payments_prefs());
+    h.run(h.service.toggle_favourite(&id("a"), "dev")).unwrap();
+
+    h.run(h.restarted().restore(&id("a"))).unwrap();
+
+    assert_eq!(h.selection("a"), set(&["payments"]));
+}

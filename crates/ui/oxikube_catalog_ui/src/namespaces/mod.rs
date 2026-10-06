@@ -18,9 +18,8 @@
 //!   The GPUI actions here (`namespace_selector::*`) are only the view's own movements and the
 //!   digit slot.
 //! * **Restricted clusters.** When the cluster answers `403` to the namespace list, the dropdown
-//!   says so and offers the names the user typed; typing a valid name offers `Add "name"`. The
-//!   typed names are remembered per cluster (E06-S08's accessible-namespaces setting feeds the
-//!   same list).
+//!   says so and offers the cluster's `accessible_namespaces` setting and the names the user
+//!   typed; typing a valid name offers `Add "name"`. The typed names are remembered per cluster.
 //! * **Stale names.** A remembered namespace that no longer exists is dropped when the selector
 //!   opens, and [`NamespaceSelectorEvent::StaleDropped`] asks the host for a toast
 //!   ([`stale_dropped_toast`]).
