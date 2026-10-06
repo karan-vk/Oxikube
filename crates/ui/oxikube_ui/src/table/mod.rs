@@ -3,7 +3,8 @@
 //! Module map:
 //! - `delegate`: [`TableDelegate`], the data source. No gpui-component types in its signature.
 //! - `column`: [`TableColumn`], [`SortDirection`], [`ColumnAlign`].
-//! - `handle`: [`TableHandle`] (retained state, selection, scroll) and [`TableEvent`].
+//! - `handle`: [`TableHandle`] (retained state, selection, scroll) and [`TableOptions`].
+//! - `events`: [`TableEvent`] and [`RowClick`], what the table tells its owner.
 //! - `element`: [`Table`], the element views place in their tree.
 //! - `widths` (private): column widths under UI zoom (design-time widths, scaled on read).
 //! - `adapter` (private): forwards our trait to gpui-component's `TableDelegate`.
@@ -15,13 +16,15 @@ mod adapter;
 mod column;
 mod delegate;
 mod element;
+mod events;
 mod handle;
 mod widths;
 
 pub use column::{ColumnAlign, SortDirection, TableColumn};
 pub use delegate::TableDelegate;
 pub use element::Table;
-pub use handle::{TableEvent, TableHandle, TableOptions};
+pub use events::{RowClick, TableEvent};
+pub use handle::{TableHandle, TableOptions};
 
 #[cfg(test)]
 mod tests;

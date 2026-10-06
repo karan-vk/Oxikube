@@ -1,58 +1,14 @@
-//! The retained table state: [`TableHandle`] and [`TableEvent`].
+//! The retained table state: [`TableHandle`] and [`TableOptions`].
 
 use super::adapter::Adapter;
 use super::delegate::TableDelegate;
+use super::events::{TableEvent, TableEvents};
 use super::widths::ColumnWidths;
-use crate::size::Unscaled;
-use gpui::{App, AppContext as _, Entity, Subscription, Window};
+use gpui::{
+    App, AppContext as _, Entity, FocusHandle, Focusable as _, ScrollStrategy, Subscription, Window,
+};
 use gpui_component::table::{TableEvent as LibEvent, TableState as LibState};
 use std::rc::Rc;
-
-/// Something happened in a table that its owner may care about.
-#[derive(Clone, Debug, PartialEq)]
-pub enum TableEvent {
-    /// A row was selected (click or keyboard).
-    SelectRow(usize),
-    /// A row was double-clicked (or Enter): open it.
-    ActivateRow(usize),
-    /// A row (or the empty area, `None`) was right-clicked: show a context menu.
-    RightClickedRow(Option<usize>),
-    /// The user resized columns; widths in column order, unscaled (persist them as they are; the
-    /// table applies the zoom when it reads them back).
-    ColumnsResized(Vec<Unscaled>),
-    /// The user dragged column `from` to position `to`.
-    ColumnMoved {
-        /// Index the column had.
-        from: usize,
-        /// Index it now has.
-        to: usize,
-    },
-    /// The selection was cleared.
-    SelectionCleared,
-}
-
-impl TableEvent {
-    fn from_library(event: &LibEvent, widths: &ColumnWidths) -> Option<Self> {
-        Some(match event {
-            LibEvent::SelectRow(ix) => TableEvent::SelectRow(*ix),
-            LibEvent::DoubleClickedRow(ix) => TableEvent::ActivateRow(*ix),
-            LibEvent::RightClickedRow(ix) => TableEvent::RightClickedRow(*ix),
-            LibEvent::ColumnWidthsChanged(resized) => {
-                TableEvent::ColumnsResized(widths.unscale(resized))
-            }
-            LibEvent::MoveColumn(from, to) => TableEvent::ColumnMoved {
-                from: *from,
-                to: *to,
-            },
-            LibEvent::ClearSelection => TableEvent::SelectionCleared,
-            // Column and cell selection are not used: tables select whole rows.
-            LibEvent::SelectColumn(_)
-            | LibEvent::SelectCell(..)
-            | LibEvent::DoubleClickedCell(..)
-            | LibEvent::RightClickedCell(..) => return None,
-        })
-    }
-}
 
 /// Behaviour switches fixed when the table is created.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,6 +21,10 @@ pub struct TableOptions {
     pub movable_columns: bool,
     /// Arrow-key selection wraps at the ends.
     pub loop_selection: bool,
+    /// The table selects one row itself on click and arrow keys (`true`, the default). Off, it
+    /// selects nothing: the owner keeps its own selection (multi-select), draws it through
+    /// [`TableDelegate::row_selected`] and reacts to [`TableEvent::RowClicked`].
+    pub select_rows: bool,
 }
 
 impl Default for TableOptions {
@@ -74,6 +34,7 @@ impl Default for TableOptions {
             resizable_columns: true,
             movable_columns: false,
             loop_selection: false,
+            select_rows: true,
         }
     }
 }
@@ -83,6 +44,8 @@ impl Default for TableOptions {
 pub struct TableHandle<D: TableDelegate> {
     state: Entity<LibState<Adapter<D>>>,
     widths: Rc<ColumnWidths>,
+    /// Our own events (row clicks, sort changes), which the library has no event for.
+    events: Entity<TableEvents>,
 }
 
 impl<D: TableDelegate> Clone for TableHandle<D> {
@@ -90,6 +53,7 @@ impl<D: TableDelegate> Clone for TableHandle<D> {
         Self {
             state: self.state.clone(),
             widths: self.widths.clone(),
+            events: self.events.clone(),
         }
     }
 }
@@ -109,12 +73,19 @@ impl<D: TableDelegate> TableHandle<D> {
     ) -> Self {
         let widths = Rc::new(ColumnWidths::new());
         let adapter_widths = widths.clone();
+        let events = cx.new(|_| TableEvents);
+        let adapter_events = events.clone();
         let state = cx.new(|cx| {
-            LibState::new(Adapter::new(delegate, adapter_widths), window, cx)
-                .sortable(options.sortable)
-                .col_resizable(options.resizable_columns)
-                .col_movable(options.movable_columns)
-                .loop_selection(options.loop_selection)
+            LibState::new(
+                Adapter::new(delegate, adapter_widths, adapter_events, options.sortable),
+                window,
+                cx,
+            )
+            .sortable(options.sortable)
+            .col_resizable(options.resizable_columns)
+            .col_movable(options.movable_columns)
+            .loop_selection(options.loop_selection)
+            .row_selectable(options.select_rows)
         });
         // Remember what the user resized (unscaled), whether or not anyone listens for events, so
         // a zoom change keeps those widths. The subscription ends with the table's state.
@@ -125,7 +96,11 @@ impl<D: TableDelegate> TableHandle<D> {
             }
         })
         .detach();
-        Self { state, widths }
+        Self {
+            state,
+            widths,
+            events,
+        }
     }
 
     pub(super) fn state(&self) -> &Entity<LibState<Adapter<D>>> {
@@ -145,6 +120,14 @@ impl<D: TableDelegate> TableHandle<D> {
             cx.notify();
             result
         })
+    }
+
+    /// Mutates the delegate without redrawing the table: for an owner that applies a stream
+    /// (feed deltas) and redraws at frame cadence through its own coalesced notify
+    /// (`oxikube_runtime::notify_coalesced`), which redraws the window the table is in.
+    pub fn update_quiet<R>(&self, cx: &mut App, f: impl FnOnce(&mut D) -> R) -> R {
+        self.state
+            .update(cx, |state, _| f(&mut state.delegate_mut().delegate))
     }
 
     /// Re-reads the column definitions from the delegate. Resets user-resized widths (use it when
@@ -185,6 +168,22 @@ impl<D: TableDelegate> TableHandle<D> {
         self.state.update(cx, |state, cx| state.clear_selection(cx));
     }
 
+    /// Scrolls just enough to show `row_ix` (nothing when it is on screen): keyboard navigation.
+    pub fn reveal_row(&self, row_ix: usize, cx: &mut App) {
+        self.state.update(cx, |state, cx| {
+            state
+                .vertical_scroll_handle
+                .scroll_to_item(row_ix, ScrollStrategy::Nearest);
+            cx.notify();
+        });
+    }
+
+    /// The table's own focus handle. It takes the focus when the user clicks a header or a row;
+    /// an owner with its own key context moves the focus back to itself.
+    pub fn focus_handle(&self, cx: &App) -> FocusHandle {
+        self.state.read(cx).focus_handle(cx)
+    }
+
     /// Scrolls `row_ix` to the top of the viewport.
     pub fn scroll_to_row(&self, row_ix: usize, cx: &mut App) {
         self.state
@@ -200,13 +199,19 @@ impl<D: TableDelegate> TableHandle<D> {
     pub fn on_event(
         &self,
         cx: &mut App,
-        mut handler: impl FnMut(&TableEvent, &mut App) + 'static,
+        handler: impl FnMut(&TableEvent, &mut App) + 'static,
     ) -> Subscription {
         let widths = self.widths.clone();
-        cx.subscribe(&self.state, move |_, event: &LibEvent, cx| {
+        let handler = Rc::new(std::cell::RefCell::new(handler));
+        let library = handler.clone();
+        let library = cx.subscribe(&self.state, move |_, event: &LibEvent, cx| {
             if let Some(event) = TableEvent::from_library(event, &widths) {
-                handler(&event, cx);
+                (library.borrow_mut())(&event, cx);
             }
-        })
+        });
+        let ours = cx.subscribe(&self.events, move |_, event: &TableEvent, cx| {
+            (handler.borrow_mut())(event, cx);
+        });
+        Subscription::join(library, ours)
     }
 }

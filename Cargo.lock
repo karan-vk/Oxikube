@@ -5797,15 +5797,22 @@ version = "0.0.1"
 name = "oxikube_resources_ui"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
  "futures",
  "gpui-pre",
+ "gpui-pre-platform",
+ "jiff",
  "oxikube_app",
  "oxikube_domain",
+ "oxikube_keymap",
  "oxikube_ports",
  "oxikube_runtime",
  "oxikube_testkit",
+ "oxikube_theme",
  "oxikube_ui",
  "oxikube_workspace",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 

@@ -157,3 +157,46 @@ fn the_cache_answers_filters_from_its_indices() {
     assert_eq!(names(&cache, &by_ns), ["web-3"]);
     assert_eq!(cache.len(), 3);
 }
+
+#[test]
+fn sorting_by_a_provider_column_ranks_by_typed_cells_and_follows_changes() {
+    use crate::columns::{ColumnId, ColumnProvider, CoreColumns};
+    use crate::store::CellSortKey;
+
+    let restarts = |name: &str, n: u32, rv: &str| {
+        let mut r = pod().namespace("x").name(name).restarts(n).build();
+        r.meta.resource_version = Some(rv.into());
+        r
+    };
+    let mut h = Harness::new();
+    h.resources.script().watch.push_ok(timeline(vec![
+        batch(vec![Delta::Restarted(vec![
+            restarts("a", 10, "1"),
+            restarts("b", 9, "1"),
+            restarts("c", 100, "1"),
+        ])]),
+        // A modify that changes the cell moves the row to its new rank.
+        batch(vec![Delta::Applied(restarts("b", 1000, "2"))]),
+    ]));
+    let provider: Arc<dyn ColumnProvider> = Arc::new(CoreColumns::new());
+    let by_restarts = SortKey::by(SortField::Cell(CellSortKey::new(
+        ColumnId::new("restarts"),
+        provider,
+    )));
+    let mut sub = h.subscribe(all(pods()).with_sort(by_restarts.clone()));
+    let mut m = Mirror::default();
+    m.drain(&mut sub);
+    assert_eq!(
+        m.names(),
+        ["x/b", "x/a", "x/c"],
+        "9 < 10 < 100, not text order"
+    );
+
+    sub.set_sort(by_restarts.descending());
+    reseeded(&mut h, &mut sub, &mut m);
+    assert_eq!(m.names(), ["x/c", "x/a", "x/b"]);
+
+    h.advance(1);
+    m.drain(&mut sub);
+    assert_eq!(m.names(), ["x/b", "x/c", "x/a"]);
+}

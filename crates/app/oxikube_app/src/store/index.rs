@@ -18,7 +18,8 @@ use std::sync::Arc;
 
 use super::delta::RowOp;
 use super::object::{FeedScope, ObjectKey, StoreObject};
-use super::query::{SortKey, SortValue, StoreFilter};
+use super::query::StoreFilter;
+use super::sort::{SortKey, SortValue};
 
 /// Changes larger than this share of the index (and than [`BULK_MIN`]) are applied in bulk.
 const BULK_DIVISOR: usize = 4;

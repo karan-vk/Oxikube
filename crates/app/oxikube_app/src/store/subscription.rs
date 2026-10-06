@@ -14,8 +14,9 @@ use super::entry::{FeedEntry, SubId};
 use super::mailbox::{SubShared, seed};
 use super::object::FeedScope;
 use super::policy::FeedKind;
-use super::query::{SortKey, StoreFilter, StoreQuery};
+use super::query::{StoreFilter, StoreQuery};
 use super::service::StoreInner;
+use super::sort::SortKey;
 use super::spawn::TaskGuard;
 use crate::session::namespaces::ScopeDelta;
 

@@ -1,6 +1,7 @@
 //! What every cluster tab gets when it opens: the sidebar (E06-S10) in its left dock, the connect
-//! lifecycle views (E06-S06), the namespace selector (E06-S07) in its toolbar, and the resource
-//! views (E07-S11: the overview and the sidebar's navigation, see `resources`).
+//! lifecycle views (E06-S06), the namespace selector (E06-S07) in its toolbar, the resource
+//! views (E07-S11: the overview, see `resources`) and the sidebar's navigation to the resource
+//! tables (E07-S03).
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use oxikube_catalog_ui::namespaces::{
 use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_domain::command::Command;
 use oxikube_ports::StatePort;
+use oxikube_resources_ui::{ResourceViewsSlot, sidebar_navigation};
 use oxikube_workspace::sidebar::{self, SidebarDeps};
 use oxikube_workspace::{ClusterTab, CommandDispatcher, Toast, Workspace};
 
@@ -33,11 +35,14 @@ pub struct TabDeps {
     pub dispatcher: Rc<dyn CommandDispatcher>,
     /// The window's workspace, for the selector's toasts.
     pub workspace: WeakEntity<Workspace>,
+    /// Where the window's resource views will be, for the sidebar's kind entries.
+    pub resources: ResourceViewsSlot,
     /// The resource stores the sidebar's badges and the overview read (E07-S11).
     pub stores: Arc<ResourceStores>,
 }
 
-/// The `ClusterTabsDeps` setup hook: sidebar, connect views, namespace selector.
+/// The `ClusterTabsDeps` setup hook: sidebar (and its navigation to the resource tables),
+/// connect views, namespace selector.
 pub fn tab_setup(
     deps: TabDeps,
 ) -> impl Fn(&Entity<ClusterTab>, &ClusterSession, &mut Window, &mut App) + 'static {
@@ -54,8 +59,10 @@ pub fn tab_setup(
             sources.dispatch(Command::ViewOpen { view }, cx);
         }),
     );
+    let navigation = sidebar_navigation(deps.resources.clone());
     move |tab, session, window, cx| {
         sidebar(tab, session, window, cx);
+        navigation(tab, session, window, cx);
         connect(tab, session, window, cx);
         install_selector(tab, session, &deps, window, cx);
         super::resources::install(tab, session, &deps, window, cx);

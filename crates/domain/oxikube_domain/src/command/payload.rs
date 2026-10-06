@@ -204,6 +204,20 @@ pub enum Command {
         /// The resource to open.
         target: ResourceRef,
     },
+    /// Copy a resource's name to the clipboard (a resource table's "Copy Name").
+    #[serde(rename = "resource::CopyName")]
+    ResourceCopyName {
+        /// The resource whose name is copied.
+        target: ResourceRef,
+    },
+    /// Select every row of the open list views of a kind (`cmd-a` in a resource table).
+    #[serde(rename = "resource::SelectAll")]
+    ResourceSelectAll {
+        /// Cluster of the list.
+        cluster: ClusterId,
+        /// The kind listed.
+        gvk: Gvk,
+    },
     /// Open a resource's YAML.
     #[serde(rename = "resource::ViewYaml")]
     ResourceViewYaml {
@@ -349,6 +363,8 @@ impl Command {
             Command::ViewZoomReset => CommandId::VIEW_ZOOM_RESET,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
             Command::ResourceOpen { .. } => CommandId::RESOURCE_OPEN,
+            Command::ResourceCopyName { .. } => CommandId::RESOURCE_COPY_NAME,
+            Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
             Command::ResourceApply { .. } => CommandId::RESOURCE_APPLY,
@@ -383,6 +399,7 @@ impl Command {
     pub fn target(&self) -> Option<&ResourceRef> {
         match self {
             Command::ResourceOpen { target }
+            | Command::ResourceCopyName { target }
             | Command::ResourceViewYaml { target }
             | Command::ResourceDelete { target, .. }
             | Command::PodDelete { target, .. }
@@ -509,6 +526,11 @@ mod tests {
                 gvk: Gvk::new("apps", "v1", "Deployment"),
             },
             Command::ResourceOpen { target: pod() },
+            Command::ResourceCopyName { target: pod() },
+            Command::ResourceSelectAll {
+                cluster: cluster(),
+                gvk: Gvk::new("", "v1", "Pod"),
+            },
             Command::ResourceViewYaml { target: pod() },
             Command::ResourceDelete {
                 target: deployment(),
@@ -677,6 +699,8 @@ mod tests {
                     | Command::ViewZoomReset
                     | Command::ResourceOpen { .. }
                     | Command::ResourceOpenList { .. }
+                    | Command::ResourceCopyName { .. }
+                    | Command::ResourceSelectAll { .. }
                     | Command::ResourceViewYaml { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }

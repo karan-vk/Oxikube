@@ -201,6 +201,11 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),
         },
+        "resource::CopyName" => Command::ResourceCopyName { target: target() },
+        "resource::SelectAll" => Command::ResourceSelectAll {
+            cluster,
+            gvk: Gvk::new("", "v1", "Pod"),
+        },
         "resource::ViewYaml" => Command::ResourceViewYaml { target: target() },
         "view::Open" => Command::ViewOpen {
             view: "overview".into(),

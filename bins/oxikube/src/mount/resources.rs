@@ -7,11 +7,12 @@
 //!   back-off on the app clock.
 //! * [`install`] runs for every cluster tab: it opens the [`WorkloadsOverview`] as the tab's first
 //!   screen once the cluster is connected (when nothing else is open), and routes the sidebar's
-//!   `Navigate` events: the "Cluster" section opens the overview, a kind entry sends
-//!   `resource::OpenList` on the bus.
+//!   "Cluster" section to the overview. A kind entry is the resource views' (E07-S03,
+//!   `oxikube_resources_ui::sidebar_navigation`): they find the kind through discovery, custom
+//!   resources included, and send `resource::OpenList` on the bus.
 //! * [`open_kinds`] applies the `resource::OpenList` requests on the UI thread: the views
-//!   registered with `oxikube_resources_ui::navigate::KindViews` open the list, or a notice says
-//!   that none exists yet.
+//!   registered with `oxikube_resources_ui::navigate::KindViews` (the generic resource table of
+//!   E07-S03) open the list, or a notice says that none can.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -19,11 +20,8 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
-use futures::future::BoxFuture;
 use gpui::{App, Entity, Task, Window};
-use oxikube_app::store::{Spawner, StoreRuntime};
-use oxikube_app::{ClusterSession, CountTarget, ResourceStores};
-use oxikube_domain::command::Command;
+use oxikube_app::{ClusterSession, ResourceStores};
 use oxikube_ports::ClockPort;
 use oxikube_resources_ui::navigate::{OpenKind, open_kind};
 use oxikube_resources_ui::overview_lite::{OverviewDeps, WorkloadsOverview};
@@ -41,17 +39,8 @@ pub fn stores(state: &AppState, clock: Arc<dyn ClockPort>, cx: &App) -> Arc<Reso
     if let Some(stores) = state.resource_stores() {
         return stores.clone();
     }
-    let spawner: Arc<dyn Spawner> = match oxikube_runtime::handle(cx) {
-        Some(handle) => Arc::new(move |task: BoxFuture<'static, ()>| {
-            handle.spawn(task);
-        }),
-        // The deterministic runtime of the tests has no Tokio: GPUI's executor runs the feeds.
-        None => {
-            let executor = cx.background_executor().clone();
-            Arc::new(move |task: BoxFuture<'static, ()>| executor.spawn(task).detach())
-        }
-    };
-    let stores = Arc::new(ResourceStores::new(StoreRuntime { spawner, clock }));
+    let runtime = oxikube_resources_ui::table::store_runtime(clock, cx);
+    let stores = Arc::new(ResourceStores::new(runtime));
     if !state.set_resource_stores(stores.clone()) {
         // Another window set them first: use those so every window shares the feeds.
         return state.resource_stores().cloned().unwrap_or(stores);
@@ -99,25 +88,14 @@ pub fn install(
         tracing::warn!(%cluster, "the cluster tab has no sidebar: its entries do not navigate");
         return;
     };
-    let dispatcher = deps.dispatcher.clone();
     let navigate = window.subscribe(&panel, cx, move |_, event: &SidebarEvent, window, cx| {
         let SidebarEvent::Navigate(target) = event;
         match target {
             SidebarTarget::Page(page) if page.as_ref() == OVERVIEW_PAGE => {
                 WorkloadsOverview::open(&workspace, cluster.clone(), overview.clone(), window, cx);
             }
-            SidebarTarget::Kind { group, resource } => match CountTarget::core(group, resource) {
-                Some(kind) => dispatcher.dispatch(
-                    Command::ResourceOpenList {
-                        cluster: cluster.clone(),
-                        gvk: kind.gvk,
-                    },
-                    cx,
-                ),
-                // Custom resources are resolved through discovery by the CRD browser (E07-S07).
-                None => tracing::debug!(%group, %resource, "no built-in kind for this entry"),
-            },
-            SidebarTarget::Page(_) | SidebarTarget::Command(_) => {}
+            // Kind entries: `oxikube_resources_ui::sidebar_navigation` (see the module docs).
+            SidebarTarget::Page(_) | SidebarTarget::Kind { .. } | SidebarTarget::Command(_) => {}
         }
     });
     navigate.detach();

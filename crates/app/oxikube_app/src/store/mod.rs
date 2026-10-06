@@ -18,7 +18,7 @@
 //! | the store, the cache map, grace teardown | [`ResourceStore`] (`service`) |
 //! | its inputs: spawner and clock, policy, budget, tuning | [`StoreRuntime`], [`StoreOptions`], [`StoreConfig`] (`config`) |
 //! | one store per connected session | [`ResourceStores`] (`registry`) |
-//! | what a subscriber asks: kind, scope, filter, sort | [`StoreQuery`], [`StoreFilter`], [`SortKey`] (`query`), [`LabelSelector`] (`selector`) |
+//! | what a subscriber asks: kind, scope, filter, sort | [`StoreQuery`], [`StoreFilter`] (`query`), [`SortKey`], [`SortField`], [`CellSortKey`] (`sort`), [`LabelSelector`] (`selector`) |
 //! | what it gets: snapshot, then coalesced ops with positions, plus the feed state | [`Subscription`], [`StoreDelta`], [`RowOp`], [`FeedState`] (`subscription`, `mailbox`, `delta`) |
 //! | which feed serves a kind | [`FeedPolicy`] (`policy`) |
 //! | counts and health for sidebar badges and overview tiles | [`ResourceStore::counts`], [`CountsLease`], [`CountState`] (`counts`, E07-S11) |
@@ -83,6 +83,7 @@ mod query;
 mod registry;
 mod selector;
 mod service;
+mod sort;
 mod spawn;
 mod subscription;
 
@@ -98,9 +99,10 @@ pub use object::{FeedKey, FeedScope, ObjectKey, StoreObject, TableObject};
 #[cfg(test)]
 pub(crate) use policy::core_kinds;
 pub use policy::{FALLBACK, FeedKind, FeedPlan, FeedPolicy, FeedPriority};
-pub use query::{SortField, SortKey, StoreFilter, StoreQuery};
+pub use query::{StoreFilter, StoreQuery};
 pub use registry::{OptionsFor, ResourceStores};
 pub use selector::{LabelSelector, LabelTerm, SelectorError};
 pub use service::ResourceStore;
+pub use sort::{CellSortKey, SortField, SortKey};
 pub use spawn::Spawner;
 pub use subscription::Subscription;
