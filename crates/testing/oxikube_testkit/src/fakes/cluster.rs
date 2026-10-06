@@ -259,14 +259,12 @@ mod tests {
     fn ctx(name: &str) -> ClusterContext {
         let context = ContextName::new(name);
         ClusterContext {
-            cluster: ClusterId::new("/home/u/.kube/config", &context),
-            context,
-            source: SourceId("kubeconfig".into()),
             server: Some("https://127.0.0.1:6443".into()),
-            default_namespace: None,
-            cluster_name: None,
-            user: None,
-            problem: None,
+            ..ClusterContext::new(
+                ClusterId::new("/home/u/.kube/config", &context),
+                context,
+                SourceId("kubeconfig".into()),
+            )
         }
     }
 

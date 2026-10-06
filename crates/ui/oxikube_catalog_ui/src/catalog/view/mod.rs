@@ -24,8 +24,8 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use gpui::{
-    AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, SharedString,
-    Subscription, Task, UniformListScrollHandle, Window,
+    AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, Subscription, Task,
+    UniformListScrollHandle, Window,
 };
 use oxikube_app::{
     CatalogEntry, ClusterCatalog, ClusterSessionManager, SessionChange, SessionUpdate,
@@ -164,7 +164,7 @@ impl CatalogView {
             Ok(entries) => self.model.set_entries(entries),
             Err(message) => {
                 tracing::warn!(%message, "the cluster catalog could not be read");
-                self.model.set_failed(SharedString::from(message));
+                self.model.set_failed(message);
             }
         }
         cx.notify();

@@ -79,8 +79,7 @@ impl CatalogModel {
 
     /// Replaces the entries (a load finished) and applies the current query. Marks the catalog
     /// loaded.
-    pub fn set_entries(&mut self, entries: Vec<CatalogEntry>) {
-        let mut entries = entries;
+    pub fn set_entries(&mut self, mut entries: Vec<CatalogEntry>) {
         entries.sort_by(CatalogEntry::cmp_default);
         self.rows = entries.into_iter().map(Row::new).collect();
         self.load = LoadState::Ready;
@@ -184,30 +183,32 @@ impl CatalogModel {
     /// Sets a favourite flag now, before the state db has it. Reorders the list. Returns
     /// whether anything changed.
     pub fn set_favourite(&mut self, cluster: &ClusterId, favourite: bool) -> bool {
-        self.edit(cluster, |entry| {
+        let changed = self.update_entry(cluster, |entry| {
             let changed = entry.favourite != favourite;
             entry.favourite = favourite;
             changed
-        })
+        });
+        if changed {
+            self.rows.sort_by(|a, b| a.entry().cmp_default(b.entry()));
+            self.refilter();
+        }
+        changed
     }
 
     /// Sets the last-used time now, before the state db has it. The list is *not* reordered: a
     /// row must not jump under the pointer that just clicked it. The next read of the catalog
     /// sorts it into place. Returns whether anything changed.
     pub fn set_last_used(&mut self, cluster: &ClusterId, at: Timestamp) -> bool {
-        let Some(row) = self.rows.iter_mut().find(|r| r.entry().id() == cluster) else {
-            return false;
-        };
-        if row.entry().last_used == Some(at) {
-            return false;
-        }
-        let mut entry = row.entry().clone();
-        entry.last_used = Some(at);
-        *row = Row::new(entry);
-        true
+        self.update_entry(cluster, |entry| {
+            let changed = entry.last_used != Some(at);
+            entry.last_used = Some(at);
+            changed
+        })
     }
 
-    fn edit(
+    /// Applies `change` to the entry of `cluster` and rebuilds its row when `change` returns
+    /// `true`. Neither reorders nor refilters.
+    fn update_entry(
         &mut self,
         cluster: &ClusterId,
         change: impl FnOnce(&mut CatalogEntry) -> bool,
@@ -220,8 +221,6 @@ impl CatalogModel {
             return false;
         }
         *row = Row::new(entry);
-        self.rows.sort_by(|a, b| a.entry().cmp_default(b.entry()));
-        self.refilter();
         true
     }
 

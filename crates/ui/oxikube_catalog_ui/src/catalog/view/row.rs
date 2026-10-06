@@ -145,8 +145,8 @@ impl CatalogView {
             return div().into_any_element();
         };
         let badge = self.model.badge(ix).expect("the row exists");
-        let selected = self.model.selected_index() == Some(ix);
         let cluster = row.entry().id().clone();
+        let selected = self.model.selected() == Some(&cluster);
         let favourite = row.entry().favourite;
         let last_used = last_used_text(row.entry().last_used, self.deps.clock.now());
         let (name, cluster_name, user, source) = (
@@ -188,13 +188,17 @@ impl CatalogView {
                     .font_weight(gpui::FontWeight::MEDIUM)
                     .child(name),
             );
-            if let Some(detail) = badge.detail.clone().filter(|_| badge.tone != Tone::Muted) {
+            if let Some(detail) = badge
+                .detail
+                .as_deref()
+                .filter(|_| badge.tone != Tone::Muted)
+            {
                 lines = lines.child(
                     div()
                         .truncate()
                         .text_size(u(tokens.font.small))
                         .text_color(tone_colour(badge.tone, cx))
-                        .child(detail),
+                        .child(detail.to_owned()),
                 );
             }
             COLUMNS[NAME].frame().child(lines)

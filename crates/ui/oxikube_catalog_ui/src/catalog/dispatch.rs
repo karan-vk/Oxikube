@@ -1,7 +1,5 @@
 //! [`CommandDispatcher`]: how the catalog sends the commands its keys and clicks stand for.
 
-use std::rc::Rc;
-
 use gpui::App;
 use oxikube_app::{ClusterCommandOutcome, ClusterCommands};
 use oxikube_domain::command::Command;
@@ -19,12 +17,6 @@ use oxikube_runtime::spawn_kube;
 pub trait CommandDispatcher: 'static {
     /// Sends `command`.
     fn dispatch(&self, command: Command, cx: &mut App);
-}
-
-impl<D: CommandDispatcher + ?Sized> CommandDispatcher for Rc<D> {
-    fn dispatch(&self, command: Command, cx: &mut App) {
-        (**self).dispatch(command, cx);
-    }
 }
 
 /// Runs the cluster commands against [`ClusterCommands`] on the Tokio bridge.

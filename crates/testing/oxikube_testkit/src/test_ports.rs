@@ -78,14 +78,11 @@ impl TestPorts {
                 path: None,
             }])
             .with_contexts([ClusterContext {
-                cluster: Self::cluster_id(),
-                context: ContextName::new(Self::CONTEXT),
-                source,
                 server: Some("https://127.0.0.1:6443".to_owned()),
                 default_namespace: Some("default".to_owned()),
                 cluster_name: Some(Self::CONTEXT.to_owned()),
                 user: Some(Self::CONTEXT.to_owned()),
-                problem: None,
+                ..ClusterContext::new(Self::cluster_id(), ContextName::new(Self::CONTEXT), source)
             }]);
         for object in [
             fixtures::pod_running(),

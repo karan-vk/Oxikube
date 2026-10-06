@@ -108,17 +108,12 @@ impl CatalogView {
     }
 
     fn body(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        match self.model.load_state() {
-            LoadState::Loading if self.model.total() == 0 => {
-                return empty::loading(cx).into_any_element();
-            }
-            LoadState::Failed(message) if self.model.total() == 0 => {
-                return empty::failed(message, cx).into_any_element();
-            }
-            _ => {}
-        }
         if self.model.total() == 0 {
-            return empty::empty(cx).into_any_element();
+            return match self.model.load_state() {
+                LoadState::Loading => empty::loading(cx).into_any_element(),
+                LoadState::Failed(message) => empty::failed(message, cx).into_any_element(),
+                LoadState::Ready => empty::empty(cx).into_any_element(),
+            };
         }
         if self.model.visible_len() == 0 {
             return empty::no_match(self.model.query().trim(), cx).into_any_element();

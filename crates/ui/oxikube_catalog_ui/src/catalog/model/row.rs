@@ -6,6 +6,11 @@ use oxikube_app::CatalogEntry;
 /// What the view shows for a missing cluster or user name.
 const NONE: &str = "-";
 
+/// A cluster or user name for display, `-` when the context names none.
+fn or_none(name: Option<&str>) -> SharedString {
+    SharedString::from(name.unwrap_or(NONE).to_owned())
+}
+
 /// One catalog entry, prepared when the entries are set so rendering and filtering do no string
 /// building per frame or per keystroke.
 #[derive(Debug, Clone)]
@@ -22,20 +27,8 @@ pub struct Row {
 impl Row {
     pub(super) fn new(entry: CatalogEntry) -> Self {
         let name = SharedString::from(entry.name().to_owned());
-        let cluster = SharedString::from(
-            entry
-                .context
-                .cluster_name
-                .clone()
-                .unwrap_or_else(|| NONE.to_owned()),
-        );
-        let user = SharedString::from(
-            entry
-                .context
-                .user
-                .clone()
-                .unwrap_or_else(|| NONE.to_owned()),
-        );
+        let cluster = or_none(entry.context.cluster_name.as_deref());
+        let user = or_none(entry.context.user.as_deref());
         let source = SharedString::from(entry.source_label().to_owned());
         let mut haystack =
             String::with_capacity(name.len() + cluster.len() + user.len() + source.len() + 3);

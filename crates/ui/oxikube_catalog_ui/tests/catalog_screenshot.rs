@@ -26,11 +26,13 @@ use std::time::Duration;
 
 use gpui::{AppContext as _, HeadlessAppContext, px, size};
 use jiff::Timestamp;
+use oxikube_app::catalog::CATALOG_TABLE;
 use oxikube_app::{ClusterCatalog, ClusterSessionManager};
-use oxikube_catalog_ui::catalog::test_support::{RecordingDispatcher, context, source};
+use oxikube_catalog_ui::catalog::test_support::{
+    RecordingDispatcher, cluster_id as id, context, source,
+};
 use oxikube_catalog_ui::{CatalogDeps, CatalogView};
 use oxikube_domain::OxiError;
-use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{
     ClockPort as _, ClusterContext, SourceId, StateKey, StatePort as _, StateTable,
 };
@@ -51,10 +53,6 @@ fn headless() -> HeadlessAppContext {
     HeadlessAppContext::with_platform(text_system, Arc::new(oxikube_ui::Assets), || {
         gpui_platform::current_headless_renderer()
     })
-}
-
-fn id(name: &str) -> ClusterId {
-    ClusterId::new("/home/me/.kube/config", &ContextName::new(name))
 }
 
 /// Eight contexts: five in the default file, three in a team file.
@@ -96,7 +94,7 @@ fn render(contexts: Vec<ClusterContext>, search: Option<&str>) -> anyhow::Result
     let sessions = ClusterSessionManager::new(connector.clone(), source, clock.clone());
 
     // Marks: two favourites and a few last-used times, relative to the fake clock.
-    let table = StateTable::new("cluster_catalog")?;
+    let table = StateTable::new(CATALOG_TABLE)?;
     let now: Timestamp = clock.now();
     for (name, favourite, minutes) in [
         ("prod-eu", true, Some(3)),
