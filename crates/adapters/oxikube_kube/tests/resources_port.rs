@@ -5,7 +5,7 @@
 //! (an eviction posted by name, dry run, and the error kinds). Needs `cargo xtask kind-up` and
 //! `OXIKUBE_TEST_CONTEXT`; skips cleanly otherwise.
 //!
-//! Pods are unschedulable (`pending_pod`): they cost the API server, not the shared node, and
+//! Pods are never scheduled (`pending_pod`): they cost the API server, not the shared node or its scheduler, and
 //! live in the test's own `oxi-test-<rand>` namespace. The `Widget` fixtures are only read.
 #![cfg(feature = "integration")]
 

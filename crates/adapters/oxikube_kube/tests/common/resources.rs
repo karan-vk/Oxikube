@@ -8,6 +8,7 @@ use k8s_openapi::api::core::v1::{Container, Pod, PodSpec};
 use kube::api::{ObjectMeta, PostParams};
 use kube::{Api, Client};
 use oxikube_kube::{KubeDiscovery, KubeResources, ResourcesConfig};
+use oxikube_testkit::images;
 
 /// The adapter on `client`, with discovery on the same client.
 pub fn adapter(client: &Client) -> KubeResources {
@@ -19,41 +20,71 @@ pub fn adapter_with(client: &Client, config: ResourcesConfig) -> KubeResources {
     KubeResources::with_config(client.clone(), KubeDiscovery::new(client.clone()), config)
 }
 
-/// A pod that cannot be scheduled (`nodeSelector` no node has), so it stays `Pending`:
-/// thousands of them load the API server and etcd but not the kubelet.
+/// The scheduler no cluster runs: a pod naming it stays `Pending` and the default scheduler never
+/// looks at it.
+pub const NO_SCHEDULER: &str = "oxikube-test-no-scheduler";
+
+/// A pod no scheduler will ever place, so it stays `Pending`: thousands of them load the API
+/// server and etcd but neither a kubelet nor the scheduler.
+///
+/// The default scheduler ignores a pod whose `schedulerName` is not its own, so these cost it
+/// nothing. A pod made unschedulable with a `nodeSelector` is *not* free: the scheduler records
+/// every attempt (a status patch and a `FailedScheduling` event per pod) through one throttled
+/// client, and 2 000 such pods delay the scheduling of a real pod by 30 s (E04-B01). Use
+/// [`unschedulable_pod`] only where the scheduler's verdict is the thing under test.
 pub fn pending_pod(name: &str, labels: &[(&str, &str)]) -> Pod {
-    pod(name, labels, None)
+    pod(name, labels, Placement::NoScheduler)
+}
+
+/// A pod the default scheduler tries and fails to place (`nodeSelector` no node has): it gets a
+/// `PodScheduled=False` condition and `FailedScheduling` warnings. One or two per test; for
+/// bulk pods use [`pending_pod`].
+pub fn unschedulable_pod(name: &str, labels: &[(&str, &str)]) -> Pod {
+    pod(name, labels, Placement::Unschedulable)
 }
 
 /// A pod bound to `node` (`spec.nodeName`), bypassing the scheduler.
 pub fn bound_pod(name: &str, labels: &[(&str, &str)], node: &str) -> Pod {
-    pod(name, labels, Some(node))
+    pod(name, labels, Placement::Node(node))
 }
 
-fn pod(name: &str, labels: &[(&str, &str)], node: Option<&str>) -> Pod {
+enum Placement<'a> {
+    Node(&'a str),
+    NoScheduler,
+    Unschedulable,
+}
+
+fn pod(name: &str, labels: &[(&str, &str)], placement: Placement<'_>) -> Pod {
     let labels: BTreeMap<String, String> = labels
         .iter()
         .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
         .collect();
+    let mut spec = PodSpec {
+        termination_grace_period_seconds: Some(1),
+        containers: vec![Container {
+            name: "pause".into(),
+            image: Some(images::PAUSE.into()),
+            ..Container::default()
+        }],
+        ..PodSpec::default()
+    };
+    match placement {
+        Placement::Node(node) => spec.node_name = Some(node.to_owned()),
+        Placement::NoScheduler => spec.scheduler_name = Some(NO_SCHEDULER.to_owned()),
+        Placement::Unschedulable => {
+            spec.node_selector = Some(BTreeMap::from([(
+                "oxikube.test/unschedulable".to_owned(),
+                "true".to_owned(),
+            )]));
+        }
+    }
     Pod {
         metadata: ObjectMeta {
             name: Some(name.to_owned()),
             labels: Some(labels),
             ..ObjectMeta::default()
         },
-        spec: Some(PodSpec {
-            node_name: node.map(str::to_owned),
-            node_selector: node.is_none().then(|| {
-                BTreeMap::from([("oxikube.test/unschedulable".to_owned(), "true".to_owned())])
-            }),
-            termination_grace_period_seconds: Some(1),
-            containers: vec![Container {
-                name: "pause".into(),
-                image: Some("registry.k8s.io/pause:3.10".into()),
-                ..Container::default()
-            }],
-            ..PodSpec::default()
-        }),
+        spec: Some(spec),
         ..Pod::default()
     }
 }

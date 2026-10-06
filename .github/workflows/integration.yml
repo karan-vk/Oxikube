@@ -55,9 +55,10 @@ jobs:
         with:
           cluster_name: oxikube
           wait: 120s
-      # Idempotent: the cluster already exists, so this only installs metrics-server
-      # (with --kubelet-insecure-tls) and the fixtures (Widget CRD with printer columns, workloads).
-      - name: Cluster fixtures
+      # Idempotent: the cluster already exists, so this pulls every test image into the node
+      # (fixtures/test-images.txt: no test waits on a registry), installs metrics-server (with
+      # --kubelet-insecure-tls) and the fixtures (Widget CRD with printer columns, workloads).
+      - name: Test images and cluster fixtures
         run: cargo run -q -p xtask -- kind-up --name oxikube
       # Compiled apart from the run so the test step's time is the suite's own.
       - name: Build the suite

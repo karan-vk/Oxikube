@@ -10,12 +10,11 @@ use kube::{Api, Client};
 use oxikube_domain::log::LogLine;
 use oxikube_kube::KubeLogs;
 use oxikube_ports::LogStream;
+use oxikube_testkit::images;
 use serde_json::json;
 
-use super::{DEADLINE, wait_until};
-
-/// The busybox image every kind node has preloaded.
-pub const BUSYBOX: &str = "registry.k8s.io/e2e-test-images/busybox:1.36.1-1";
+/// The busybox image of the log scenarios; `cargo xtask kind-up` pulls it into every node.
+pub const BUSYBOX: &str = images::E2E_BUSYBOX;
 
 /// The adapter under test on `client`.
 pub fn logs(client: &Client) -> KubeLogs {
@@ -67,24 +66,11 @@ pub async fn create(client: &Client, namespace: &str, pod: &Pod) {
         .expect("create pod");
 }
 
-/// Waits until every container of `name` is running or has run (so there is a log to read).
+/// Waits until every container of `name` is running or has run (so there is a log to read); an
+/// image pull does not count against the deadline and a failure carries the pod's events
+/// (see [`super::pods`]).
 pub async fn wait_started(client: &Client, namespace: &str, name: &str) {
-    let api = Api::<Pod>::namespaced(client.clone(), namespace);
-    wait_until(&format!("pod {name} started"), DEADLINE, || {
-        let api = api.clone();
-        async move {
-            let pod = api.get_opt(name).await.expect("get pod")?;
-            let statuses = pod.status?.container_statuses?;
-            let started = !statuses.is_empty()
-                && statuses.iter().all(|s| {
-                    s.state
-                        .as_ref()
-                        .is_some_and(|st| st.running.is_some() || st.terminated.is_some())
-                });
-            started.then_some(())
-        }
-    })
-    .await;
+    super::pods::wait_started(client, namespace, name).await;
 }
 
 /// Reads `count` lines from `stream`, failing the test when `within` passes first or an error

@@ -267,9 +267,11 @@ mod tests {
         // An event the namespace controller would delete along with the namespace.
         create_event(&ctx, &name).expect("create event");
 
+        // `resume_unwind` unwinds like a failing assertion (so `Drop` sees `panicking()`) without
+        // calling the panic hook: no "panicked at ..." and backtrace in the log of a passing run.
         let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
             let _ns = ns;
-            panic!("a test assertion failed");
+            std::panic::resume_unwind(Box::new("a test assertion failed"));
         }));
         assert!(failed.is_err());
 

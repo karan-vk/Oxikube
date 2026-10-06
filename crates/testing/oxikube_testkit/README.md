@@ -30,6 +30,16 @@ Port fakes, fixtures, builders, kind helpers, gpui test helpers.
 - `tests/port_coverage.rs` fails when a port trait appears in `oxikube_ports` without a fake.
   Add a port method, add it to the fake in the same PR.
 
+## Images (always on)
+
+- `fixtures/test-images.txt` is the one list of container images the kind suites and the cluster
+  fixtures run. `cargo xtask kind-up` pulls each into every node (`crictl pull`, with retries),
+  so no test waits on a registry and none depends on an image cached only on a developer's cluster.
+- `images::{PAUSE, PAUSE_PREVIOUS, E2E_BUSYBOX, BUSYBOX, NGINX}` name them for tests; use these,
+  not literals. `tests/test_images.rs` fails when an integration test (`crates/{adapters,app,testing}/*/tests`)
+  or a cluster fixture uses an image that is not in the list (images that must fail to pull, `*.invalid`
+  and `does-not-exist`, are exempt).
+
 ## Fixtures and builders (always on)
 
 - `fixtures/{pods,workloads,nodes,crds,events,helm,core}/*.json`: realistic manifests, loaded

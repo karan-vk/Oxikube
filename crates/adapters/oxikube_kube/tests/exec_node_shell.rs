@@ -17,6 +17,7 @@ use oxikube_domain::ErrorKind;
 use oxikube_kube::{
     EphemeralContainerSpec, KubeExec, NodeShellConfig, NodeShellSession, node_shell_manifest,
 };
+use oxikube_testkit::images;
 use oxikube_testkit::integration::TestNamespace;
 
 use common::exec::{BUSYBOX, create_sleeper, read_until};
@@ -53,8 +54,9 @@ async fn a_node(client: &Client) -> String {
 fn config(namespace: &str) -> NodeShellConfig {
     NodeShellConfig {
         namespace: namespace.into(),
-        // Pulling busybox for the first time can be slow.
-        start_timeout: Duration::from_secs(120),
+        // The shell image is pulled into the node by `cargo xtask kind-up`; the adapter's own
+        // start timeout still covers a pull, and `pod_waits.rs` checks the default image is listed.
+        image: images::BUSYBOX.into(),
         ..NodeShellConfig::default()
     }
 }
@@ -276,7 +278,7 @@ async fn an_ephemeral_debug_container_is_attached_to() {
     assert!(finished.message().contains("exited"), "{finished}");
     // Ephemeral containers cannot be changed: the same name with another image is refused.
     let changed = EphemeralContainerSpec {
-        image: "busybox:1.36".into(),
+        image: images::E2E_BUSYBOX.into(),
         ..spec.clone()
     };
     let refused = exec

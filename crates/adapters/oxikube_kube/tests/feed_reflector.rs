@@ -3,8 +3,8 @@
 //! state must equal a fresh list. Needs `cargo xtask kind-up` and `OXIKUBE_TEST_CONTEXT`;
 //! skips cleanly otherwise.
 //!
-//! Pods are unschedulable (`pending_pod`) so the churn loads the API server, not the
-//! shared node, and live in the test's own `oxi-test-<rand>` namespace.
+//! Pods are never scheduled (`pending_pod`) so the churn loads the API server, neither the
+//! shared node nor its scheduler, and live in the test's own `oxi-test-<rand>` namespace.
 #![cfg(feature = "integration")]
 
 mod common;

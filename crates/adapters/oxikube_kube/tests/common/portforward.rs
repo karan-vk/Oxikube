@@ -10,6 +10,7 @@ use kube::api::PostParams;
 use kube::{Api, Client};
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::{ForwardPort, ForwardSpec};
+use oxikube_testkit::images;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -17,7 +18,7 @@ use tokio::net::TcpStream;
 use super::{DEADLINE, wait_until};
 
 /// Small, and serves its welcome page on port 80 as soon as it starts.
-pub const NGINX_IMAGE: &str = "nginx:1.27-alpine";
+pub const NGINX_IMAGE: &str = images::NGINX;
 
 fn nginx_container() -> Value {
     json!({
@@ -75,23 +76,10 @@ pub async fn create_nginx_deployment(client: &Client, namespace: &str, name: &st
         .expect("create deployment");
 }
 
-/// Waits until the pod `name` is Ready.
+/// Waits until the pod `name` is Ready; an image pull does not count against the deadline and a
+/// failure carries the pod's events (see [`super::pods`]).
 pub async fn wait_ready(client: &Client, namespace: &str, name: &str) {
-    let pods = Api::<Pod>::namespaced(client.clone(), namespace);
-    wait_until(
-        &format!("pod {name} ready"),
-        Duration::from_secs(120),
-        || async {
-            let pod = pods.get_opt(name).await.ok()??;
-            let ready = pod
-                .status?
-                .conditions?
-                .iter()
-                .any(|c| c.type_ == "Ready" && c.status == "True");
-            ready.then_some(())
-        },
-    )
-    .await;
+    super::pods::wait_ready(client, namespace, name).await;
 }
 
 /// The names of the pods labelled `app=<app>` that are not terminating.

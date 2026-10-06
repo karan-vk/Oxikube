@@ -33,6 +33,16 @@ In tests, `oxikube_testkit::integration` (feature `integration`) reads `OXIKUBE_
 `TestNamespace::create(&ctx)` makes an `oxi-test-<rand>` namespace that is deleted on drop.
 `cargo it` runs the integration tests of kube, app and testkit with the feature on.
 
+Container images: `kind-up` pulls every image in `oxikube_testkit/fixtures/test-images.txt` into
+the nodes first, so a fresh CI cluster starts with them present. A test names an image through
+`oxikube_testkit::images` (`images::BUSYBOX`, ...), never a literal; a test fails when an
+integration test or fixture uses an image missing from that file. Do not rely on an image that
+merely happens to be cached on your long-lived cluster. To wait for a pod use
+`common::pods::wait_started` / `wait_ready` (kube suite): image pulls are timed apart from the
+start deadline and a failure prints the pod's states and events. Bulk pods that must stay
+`Pending` use `pending_pod` (a scheduler nobody runs), never a `nodeSelector` no node matches:
+thousands of those make the real scheduler minutes late for every other test.
+
 Integration tests must create their own namespace (`oxi-test-<rand>`) and delete it. They
 run in CI only for PRs touching `crates/adapters/**`, `crates/ports/**`, `xtask/**`, plus
 nightly for everything.

@@ -28,6 +28,7 @@ pub mod exec;
 pub mod health;
 pub mod logs;
 pub mod mutations;
+pub mod pods;
 pub mod portforward;
 pub mod resources;
 pub mod subresources;

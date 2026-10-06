@@ -14,13 +14,14 @@ use oxikube_domain::ids::Gvk;
 use oxikube_domain::{OxiResult, Resource};
 use oxikube_kube::{KubeResources, PoolConfig, RetryMode};
 use oxikube_ports::ResourceReader;
+use oxikube_testkit::images;
 use oxikube_testkit::integration::TestNamespace;
 use serde_json::{Value, json};
 
 use super::resources::adapter;
 
-/// The pause image the kind node already has.
-pub const PAUSE: &str = "registry.k8s.io/pause:3.10";
+/// The pause image: the cheapest pod that stays running.
+pub const PAUSE: &str = images::PAUSE;
 
 /// The kind cluster, the adapter on it and a fresh namespace.
 pub struct Env {
