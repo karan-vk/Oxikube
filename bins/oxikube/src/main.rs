@@ -9,6 +9,10 @@
 //! re-bind → open the window. Nothing waits on disk or network before the first frame; each stage
 //! is timed in a `tracing` span.
 //!
+//! Hidden tooling flags (`--print-settings-schema`, `--print-settings-crates`) make this binary the
+//! generator behind `cargo xtask gen-settings-schema`: it links every crate that registers
+//! settings, see [`settings_schema`].
+//!
 //! Flags (`oxikube --help`): `--perf` records frame times, feed throughput, notify counts and RSS
 //! (docs/PERFORMANCE.md); `--perf-scenario` runs one headless perf sample (feature
 //! `perf-scenarios`, driven by `cargo xtask perf`).
@@ -19,6 +23,7 @@ mod perf_mode;
 mod perf_scenario;
 #[cfg(feature = "screenshot")]
 mod screenshot;
+mod settings_schema;
 
 use gpui::{App, AppContext as _};
 use oxikube::startup::{self, Stage, StartupEnv};
@@ -43,6 +48,11 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+
+    // Tooling flags: print and exit before logging, windows or any stage runs.
+    if let Some(print) = args.print {
+        return settings_schema::print(print);
+    }
 
     if let Some(scenario) = &args.perf_scenario {
         #[cfg(feature = "perf-scenarios")]

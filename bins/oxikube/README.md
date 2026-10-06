@@ -31,6 +31,13 @@ feed throughput, notify counts and resident memory (RSS) to `<data dir>/oxikube/
 exit. `--perf-scenario <name>` (feature `perf-scenarios`, never in default or release builds) runs
 one headless perf sample; `cargo xtask perf` drives it. See docs/PERFORMANCE.md ("Perf harness").
 
+Two hidden tooling flags (not in `--help`; they print and exit before logging or any window) make
+this binary the generator behind `cargo xtask gen-settings-schema`: `--print-settings-schema` prints
+`settings.schema.json` and `--print-settings-crates` lists the crates that registered settings. The
+binary links every settings-owning crate, so the schema covers every setting the app accepts
+(`src/settings_schema.rs`, E05-S06b). A feature crate that registers settings must be a dependency
+of this binary and be referenced from it (its `init` in `startup::FEATURES`); xtask fails otherwise.
+
 ## Allowed internal dependencies
 
 - everything (domain, ports, app, adapters, platform, ui, testing)

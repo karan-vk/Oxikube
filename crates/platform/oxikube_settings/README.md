@@ -19,11 +19,11 @@ Typed, layered, hot-reloading settings (Zed's settings design, E05-S06):
 4. Defaults in `crates/platform/oxikube_assets/assets/settings/default.json`, then
    `cargo xtask gen-settings-schema` (CI runs it with `--check`).
 
-   The schema is printed by the `settings_schema` example, which links only this crate, so a
-   setting registered in another crate would be silently absent from it. `gen-settings-schema`
-   (and `--check`) therefore fails when a crate that calls `register_settings!` is not linked
-   into the generator. Until the generator moves to a target linking every settings crate
-   (E05-S06b, issue #454), that story must land first.
+   The schema is printed by the app binary (`oxikube --print-settings-schema`, a hidden flag), which
+   links every crate that registers settings. `gen-settings-schema` (and `--check`) also asks it
+   which crates registered settings (`--print-settings-crates`) and fails when a crate whose source
+   calls `register_settings!` is not among them, so a crate nobody links cannot silently drop out of
+   the schema. Make sure `bins/oxikube` depends on your crate and references it (its `init`).
 
 Read with `MySettings::get_global(cx)` or `MySettings::get(Some(SettingsLocation { cluster }), cx)`;
 react with `MySettings::observe(cx, ..)` / `observe_in` (fires only when the value changes);
