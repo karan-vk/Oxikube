@@ -12,7 +12,7 @@
 //! * **Empty means All.** A selection with no names is `All` (the domain normalises it), and
 //!   unticking the last namespace gives `All`: the selector never shows an empty selection.
 //! * **Debounce.** [`select_debounced`](NamespaceService::select_debounced) waits
-//!   [`DEFAULT_DEBOUNCE`] (150 ms) for the next toggle, on the injected `ClockPort`, so ticking
+//!   [`DEBOUNCE`] (150 ms) for the next toggle, on the injected `ClockPort`, so ticking
 //!   five boxes re-scopes once.
 //! * **Remembered per cluster** in `StatePort` kv under [`prefs_key`] (`cluster/<id>/namespaces`),
 //!   not in settings: the selection, the favourites and the names typed for RBAC-restricted
@@ -43,7 +43,5 @@ mod tests;
 pub use catalog::{NamespaceCatalog, NamespaceSource, is_valid_namespace_name};
 pub use prefs::{NamespacePrefs, prefs_key};
 pub use scope::{ClusterWide, ScopeDelta};
-pub use service::{
-    DEFAULT_DEBOUNCE, NamespaceConfig, NamespaceOutcome, NamespaceService, Reconciled,
-};
+pub use service::{DEBOUNCE, NamespaceOutcome, NamespaceService, Reconciled};
 pub use shortcuts::{MAX_SLOTS, favourite_slot, slot_selection};

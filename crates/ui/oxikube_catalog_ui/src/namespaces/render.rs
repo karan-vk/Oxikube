@@ -28,7 +28,7 @@ const MAX_VISIBLE_ROWS: usize = 10;
 const WIDTH: f32 = 300.;
 
 impl Render for NamespaceSelector {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut root = div()
             .id("namespace-selector")
             .relative()
@@ -39,9 +39,11 @@ impl Render for NamespaceSelector {
             )
             .on_action(cx.listener(|this, _: &MoveUp, _, cx| this.move_highlight(-1, cx)))
             .on_action(cx.listener(|this, _: &MoveDown, _, cx| this.move_highlight(1, cx)))
-            .on_action(cx.listener(|this, _: &ToggleHighlighted, window, cx| {
-                this.activate(this.highlighted, window, cx)
-            }))
+            .on_action(
+                cx.listener(|this, _: &ToggleHighlighted, _, cx| {
+                    this.activate(this.highlighted, cx)
+                }),
+            )
             .on_action(cx.listener(|this, _: &ToggleFavouriteHighlighted, _, cx| {
                 if let Some(name) = this
                     .rows
@@ -60,7 +62,7 @@ impl Render for NamespaceSelector {
             }))
             .child(self.render_trigger(cx));
         if self.open {
-            root = root.child(deferred(self.render_dropdown(window, cx)).with_priority(2));
+            root = root.child(deferred(self.render_dropdown(cx)).with_priority(2));
         }
         root
     }
@@ -105,8 +107,7 @@ impl NamespaceSelector {
             .on_click(cx.listener(|this, _, window, cx| this.toggle_open(window, cx)))
     }
 
-    fn render_dropdown(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let _ = window;
+    fn render_dropdown(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let visible = self.rows.len().clamp(1, MAX_VISIBLE_ROWS);
@@ -153,11 +154,11 @@ impl NamespaceSelector {
                     .track_focus(&self.list_focus)
                     .child(list),
             )
-            .children(self.render_notice(cx))
+            .child(self.render_notice(cx))
     }
 
     /// The line under the list: why it is short, or what went wrong.
-    fn render_notice(&self, cx: &Context<Self>) -> Option<AnyElement> {
+    fn render_notice(&self, cx: &Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let (text, colour) = if let Some(error) = &self.error {
@@ -179,16 +180,13 @@ impl NamespaceSelector {
                 ),
             }
         };
-        Some(
-            div()
-                .id("namespace-notice")
-                .debug_selector(|| "namespace-notice".to_owned())
-                .px(u(tokens.spacing.sm))
-                .text_size(tokens.font.small)
-                .text_color(colour)
-                .child(text)
-                .into_any_element(),
-        )
+        div()
+            .id("namespace-notice")
+            .debug_selector(|| "namespace-notice".to_owned())
+            .px(u(tokens.spacing.sm))
+            .text_size(tokens.font.small)
+            .text_color(colour)
+            .child(text)
     }
 
     fn render_row(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
@@ -234,7 +232,7 @@ impl NamespaceSelector {
                 .child(check(*checked))
                 .child(div().flex_1().child("All namespaces"))
                 .child(digit(0))
-                .on_click(cx.listener(move |this, _, window, cx| this.activate(ix, window, cx)))
+                .on_click(cx.listener(move |this, _, _, cx| this.activate(ix, cx)))
                 .into_any_element(),
             Row::Add { name } => base
                 .debug_selector(|| "namespace-row-add".to_owned())
@@ -245,7 +243,7 @@ impl NamespaceSelector {
                         .color(colors.text_muted),
                 )
                 .child(div().flex_1().child(format!("Add \"{name}\"")))
-                .on_click(cx.listener(move |this, _, window, cx| this.activate(ix, window, cx)))
+                .on_click(cx.listener(move |this, _, _, cx| this.activate(ix, cx)))
                 .into_any_element(),
             Row::Namespace(NamespaceRow {
                 name,
@@ -286,7 +284,7 @@ impl NamespaceSelector {
                 .child(div().flex_1().overflow_hidden().child(label))
                 .children(slot.map(digit))
                 .child(star)
-                .on_click(cx.listener(move |this, _, window, cx| this.activate(ix, window, cx)))
+                .on_click(cx.listener(move |this, _, _, cx| this.activate(ix, cx)))
                 .into_any_element()
             }
         }

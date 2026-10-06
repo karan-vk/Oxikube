@@ -1,8 +1,8 @@
 //! [`NamespacePrefs`]: what is remembered per cluster about namespaces, and where.
 
-use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::{NamespaceFavourites, NamespaceSelection};
+use oxikube_domain::{ErrorKind, OxiResult};
 use oxikube_ports::{StateKey, StatePort, StatePortExt};
 use serde::{Deserialize, Serialize};
 
@@ -56,7 +56,7 @@ pub fn prefs_key(cluster: &ClusterId) -> StateKey {
 pub(super) async fn read(state: &dyn StatePort, cluster: &ClusterId) -> OxiResult<NamespacePrefs> {
     match state.kv_get_as::<NamespacePrefs>(&prefs_key(cluster)).await {
         Ok(found) => Ok(found.unwrap_or_default()),
-        Err(err) if err.kind() == oxikube_domain::ErrorKind::Validation => {
+        Err(err) if err.kind() == ErrorKind::Validation => {
             tracing::warn!(%cluster, %err, "ignoring unreadable namespace prefs");
             Ok(NamespacePrefs::default())
         }

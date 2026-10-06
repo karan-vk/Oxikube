@@ -11,11 +11,10 @@ mod restricted;
 mod session;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use gpui::{TestAppContext, point};
 use oxikube_app::ClusterSessionManager;
-use oxikube_app::session::namespaces::{NamespacePrefs, NamespaceService, prefs_key};
+use oxikube_app::session::namespaces::{DEBOUNCE, NamespacePrefs, NamespaceService, prefs_key};
 use oxikube_domain::Resource;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::session::NamespaceSelection;
@@ -107,9 +106,9 @@ impl Env {
             .clone()
     }
 
-    /// Lets the debounce (150 ms on the service's clock) elapse and runs what it wakes.
+    /// Lets the debounce elapse on the service's clock and runs what it wakes.
     pub fn settle(&self, window: &TestWindow<NamespaceSelector>) {
-        self.clock.advance(Duration::from_millis(150));
+        self.clock.advance(DEBOUNCE);
         window.run_until_parked();
     }
 }

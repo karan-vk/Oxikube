@@ -40,9 +40,8 @@ impl NamespaceSelector {
                 if this.commit_generation == generation {
                     this.dirty = false;
                 }
-                match result {
-                    Ok(_) => {}
-                    Err(err) => this.failed(err, cx),
+                if let Err(err) = result {
+                    this.failed(err, cx);
                 }
             })
             .ok();
@@ -54,18 +53,16 @@ impl NamespaceSelector {
     pub(super) fn run(&mut self, command: Command, cx: &mut Context<Self>) {
         let service = self.service.clone();
         self.error = None;
-        self.inflight += 1;
         cx.spawn(async move |this, cx| {
             let result =
                 flatten(spawn_kube(cx, async move { service.execute(&command).await }).await);
-            let result = result.map(|outcome| outcome.prefs);
             this.update(cx, |this, cx| this.answered(result, cx)).ok();
         })
         .detach();
     }
 
-    pub(super) fn answered(&mut self, result: OxiResult<impl Sized>, cx: &mut Context<Self>) {
-        self.inflight = self.inflight.saturating_sub(1);
+    /// Shows a failed answer; a success needs nothing, the view already moved.
+    pub(super) fn answered<T>(&mut self, result: OxiResult<T>, cx: &mut Context<Self>) {
         if let Err(err) = result {
             self.failed(err, cx);
         }
@@ -114,11 +111,11 @@ impl NamespaceSelector {
                 dropped,
             }) => {
                 self.catalog = catalog;
-                if !self.dirty {
-                    self.prefs = prefs;
-                } else {
+                if self.dirty {
                     self.prefs.favourites = prefs.favourites;
                     self.prefs.typed = prefs.typed;
+                } else {
+                    self.prefs = prefs;
                 }
                 self.rebuild();
                 if !dropped.is_empty() {

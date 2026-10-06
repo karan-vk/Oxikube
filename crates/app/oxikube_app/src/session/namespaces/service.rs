@@ -17,22 +17,7 @@ use crate::session::ClusterSessionManager;
 
 /// How long [`select_debounced`](NamespaceService::select_debounced) waits for the next toggle
 /// before it re-scopes the feeds.
-pub const DEFAULT_DEBOUNCE: Duration = Duration::from_millis(150);
-
-/// Configuration of the [`NamespaceService`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NamespaceConfig {
-    /// The quiet time [`select_debounced`](NamespaceService::select_debounced) waits for.
-    pub debounce: Duration,
-}
-
-impl Default for NamespaceConfig {
-    fn default() -> Self {
-        Self {
-            debounce: DEFAULT_DEBOUNCE,
-        }
-    }
-}
+pub const DEBOUNCE: Duration = Duration::from_millis(150);
 
 /// The result of a change: what is remembered now, and whether anything changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,7 +53,6 @@ pub(super) struct Shared {
     pub(super) manager: ClusterSessionManager,
     pub(super) state: Arc<dyn StatePort>,
     pub(super) clock: Arc<dyn ClockPort>,
-    pub(super) config: NamespaceConfig,
     pub(super) cache: Mutex<HashMap<ClusterId, NamespacePrefs>>,
     /// The latest debounce ticket per cluster. A pending debounced selection applies only if
     /// its ticket is still the latest when its quiet time ends.
@@ -86,28 +70,17 @@ impl std::fmt::Debug for NamespaceService {
 }
 
 impl NamespaceService {
-    /// A service with the default configuration. `clock` times the debounce.
+    /// A service over `manager`. `clock` times the debounce.
     pub fn new(
         manager: ClusterSessionManager,
         state: Arc<dyn StatePort>,
         clock: Arc<dyn ClockPort>,
-    ) -> Self {
-        Self::with_config(manager, state, clock, NamespaceConfig::default())
-    }
-
-    /// A service with `config`.
-    pub fn with_config(
-        manager: ClusterSessionManager,
-        state: Arc<dyn StatePort>,
-        clock: Arc<dyn ClockPort>,
-        config: NamespaceConfig,
     ) -> Self {
         Self {
             shared: Arc::new(Shared {
                 manager,
                 state,
                 clock,
-                config,
                 cache: Mutex::new(HashMap::new()),
                 tickets: Mutex::new(HashMap::new()),
                 write: AsyncMutex::new(()),
@@ -118,11 +91,6 @@ impl NamespaceService {
     /// The session manager this service drives.
     pub fn manager(&self) -> &ClusterSessionManager {
         &self.shared.manager
-    }
-
-    /// The configured debounce.
-    pub fn debounce(&self) -> Duration {
-        self.shared.config.debounce
     }
 
     /// The remembered prefs of `cluster` (read from `StatePort` the first time).
@@ -234,7 +202,7 @@ impl NamespaceService {
         self.apply_selection(cluster, selection).await
     }
 
-    /// Like [`select`](Self::select), but waits [`debounce`](Self::debounce) first and does
+    /// Like [`select`](Self::select), but waits [`DEBOUNCE`] first and does
     /// nothing when a newer `select` or `select_debounced` arrived meanwhile (`None`), so
     /// ticking five boxes re-scopes the feeds once. Run it off the UI thread; dropping the
     /// future cancels the wait.
@@ -248,7 +216,7 @@ impl NamespaceService {
         selection: NamespaceSelection,
     ) -> OxiResult<Option<NamespaceOutcome>> {
         let ticket = self.next_ticket(cluster);
-        self.shared.clock.sleep(self.shared.config.debounce).await;
+        self.shared.clock.sleep(DEBOUNCE).await;
         if self.shared.tickets.lock().get(cluster) != Some(&ticket) {
             return Ok(None);
         }

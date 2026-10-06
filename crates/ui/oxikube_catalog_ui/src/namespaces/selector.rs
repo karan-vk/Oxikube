@@ -44,8 +44,6 @@ pub struct NamespaceSelector {
     pub(super) commit_generation: u64,
     /// A tick is waiting for its commit: the view's selection is ahead of the session's.
     pub(super) dirty: bool,
-    /// Commands sent and not answered yet.
-    pub(super) inflight: usize,
     /// Keeps the load alive; dropped with the view.
     pub(super) _load: Option<Task<()>>,
     /// Keeps the session subscription alive; dropped with the view.
@@ -75,12 +73,12 @@ impl NamespaceSelector {
         cx.subscribe_in(
             &search,
             window,
-            |this, input, event: &InputEvent, window, cx| match event {
+            |this, input, event: &InputEvent, _, cx| match event {
                 InputEvent::Change => {
                     let query = input.read(cx).value();
                     this.set_query(query, cx);
                 }
-                InputEvent::PressEnter { .. } => this.activate(this.highlighted, window, cx),
+                InputEvent::PressEnter { .. } => this.activate(this.highlighted, cx),
                 _ => {}
             },
         )
@@ -110,7 +108,6 @@ impl NamespaceSelector {
             commit: None,
             commit_generation: 0,
             dirty: false,
-            inflight: 0,
             _load: None,
             _watch: None,
         };
@@ -226,7 +223,7 @@ impl NamespaceSelector {
     // --- changing the selection ------------------------------------------------------
 
     /// Activates row `index`: picks All, ticks or unticks a namespace, or adds a typed one.
-    pub fn activate(&mut self, index: usize, _window: &mut Window, cx: &mut Context<Self>) {
+    pub fn activate(&mut self, index: usize, cx: &mut Context<Self>) {
         match self.rows.get(index).cloned() {
             Some(Row::All { .. }) => self.select_slot(0, cx),
             Some(Row::Namespace(row)) => self.toggle_namespace(&row.name, cx),
@@ -291,7 +288,6 @@ impl NamespaceSelector {
         }
         let (service, cluster, name_owned) =
             (self.service.clone(), self.cluster.clone(), name.to_owned());
-        self.inflight += 1;
         cx.spawn(async move |this, cx| {
             let result = flatten(
                 spawn_kube(
