@@ -132,6 +132,27 @@ fn app_menu_is_installed(cx: &mut TestAppContext) {
     assert_eq!(names, ["Oxikube", "Edit", "View", "Window"]);
 }
 
+#[gpui::test]
+fn the_menu_bar_waits_for_the_first_frame(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        oxikube_ui::init(cx);
+        init(cx);
+        // Building the menu bar is not on the path to the first frame (E05-S13).
+        assert!(!super::menus::installed(cx));
+        assert!(cx.is_action_available(&Quit), "its actions work already");
+    });
+    let (_handle, mut vcx) = {
+        let handle = cx.update(open_main_window).expect("opens");
+        let vcx = VisualTestContext::from_window(handle.into(), cx);
+        vcx.run_until_parked();
+        (handle, vcx)
+    };
+    vcx.update(|_, cx| {
+        assert!(super::menus::installed(cx));
+        assert!(cx.get_menus().is_some_and(|menus| menus.len() == 4));
+    });
+}
+
 #[test]
 fn app_menu_has_about_preferences_and_quit() {
     let menus = app_menus();

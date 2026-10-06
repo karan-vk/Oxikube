@@ -48,7 +48,13 @@ workspace.update(cx, |ws, cx| {
   capped at 150 ms and off under reduce-motion (`oxikube_ui::motion::reduce_motion`). The layers are not
   gpui-component's `Root` dialog/notification layers, which keep serving `OverlayExt`.
 - Tabs drag between panes, docks resize, panes and dock groups zoom: the dock area does it.
-- `oxikube_workspace::init(cx)` registers the window menu and the `workspace::*` key bindings.
+- `oxikube_workspace::init(cx)` registers the window menu's actions and the `workspace::*` key
+  bindings; the menu bar itself is installed at the end of the first main window's first frame
+  (E05-S13: about 19 ms with AppKit, not on the path to the first frame).
+- `window::open_main_window_restoring(cx, layout_store, wrap)` (E05-S13) opens the main window
+  behind the startup placeholder: the default layout, interactive, with "Restoring layout…" in the
+  title bar until the saved layout read through the async `StatePort` replaces it (a failed read
+  leaves the default layout usable). The app opens its first window this way.
 - Session basics (`session`): `window::New` opens another main window (own `Workspace`);
   `view::ZoomIn`/`ZoomOut`/`ZoomReset` change the `ui_scale` setting (cmd/ctrl `+`, `-`, `0`);
   `reduce_motion` resolves the OS preference (fed by `session::set_os_reduce_motion`, GPUI does not
@@ -57,7 +63,7 @@ workspace.update(cx, |ws, cx| {
   so `app::Quit` asks before stopping them (setting `confirm_quit`).
 - Tests: `cargo test -p oxikube_workspace`. Feature `test-support` exports `TestItem` and
   `TestPanel`, `TestStatusItem` and `TestModal` for other crates' `#[gpui::test]`s. Screenshots
-  (`--features screenshot --test screenshot`, nightly): `workspace`, `workspace_modal`. Frame cost of a dock resize and a tab switch:
+  (`--features screenshot --test screenshot`, nightly): `workspace`, `workspace_modal`, `main_window_restoring` (the startup placeholder). Frame cost of a dock resize and a tab switch:
   `cargo run -p oxikube_workspace --features test-support --profile release-fast --example workspace_bench`.
 
 ## Allowed internal dependencies

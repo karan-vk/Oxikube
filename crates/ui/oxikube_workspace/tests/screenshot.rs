@@ -3,6 +3,8 @@
 //! - `workspace` (E05-S04, E05-S10): a left and a bottom dock with panels, the centre split in two
 //!   panes of items with tab bars, the status bar with a left and a right item, and two toasts.
 //! - `workspace_modal` (E05-S10): the same window with a confirmation dialog in the modal layer.
+//! - `main_window_restoring` (E05-S13): the main window behind the startup placeholder, its saved
+//!   layout still being read ("Restoring layout…" in the title bar over the default layout).
 //!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
 //! thread, which libtest worker threads are not. Needs a GPU device (Metal, or Vulkan such as Mesa
@@ -17,7 +19,10 @@
 
 use std::{path::Path, process::ExitCode, sync::Arc};
 
+use async_trait::async_trait;
 use gpui::{AppContext as _, HeadlessAppContext, px, size};
+use oxikube_domain::{OxiResult, audit::AuditRecord};
+use oxikube_ports::{AuditQuery, StateKey, StatePort, StateTable};
 use oxikube_testkit::{
     headless::HEADLESS_SCALE_FACTOR,
     screenshot::{RgbaImage, Tolerance, check_golden, distinct_colors_at_least, golden_path},
@@ -26,18 +31,82 @@ use oxikube_ui::root::new_root;
 use oxikube_workspace::{
     DialogModal, DockPosition, OpenOptions, SplitDirection, StatusSide, Toast, ToastAction,
     Workspace,
+    persistence::{LayoutStore, MAIN_WINDOW_ID},
     test_support::{TestItem, TestPanel, TestStatusItem},
+    window::build_root_with_layout,
 };
+use serde_json::Value;
 
 const WIDTH: f32 = 960.0;
 const HEIGHT: f32 = 600.0;
 
-fn render(with_modal: bool) -> anyhow::Result<RgbaImage> {
+/// A state db whose reads never finish: the restore stays in flight for the picture.
+struct NeverReady;
+
+#[async_trait]
+impl StatePort for NeverReady {
+    async fn kv_get(&self, _: &StateKey) -> OxiResult<Option<Value>> {
+        std::future::pending().await
+    }
+    async fn kv_set(&self, _: &StateKey, _: Value) -> OxiResult<()> {
+        std::future::pending().await
+    }
+    async fn kv_delete(&self, _: &StateKey) -> OxiResult<bool> {
+        std::future::pending().await
+    }
+    async fn kv_list(&self, _: &str) -> OxiResult<Vec<(StateKey, Value)>> {
+        std::future::pending().await
+    }
+    async fn table_get(&self, _: &StateTable, _: &StateKey) -> OxiResult<Option<Value>> {
+        std::future::pending().await
+    }
+    async fn table_put(&self, _: &StateTable, _: &StateKey, _: Value) -> OxiResult<()> {
+        std::future::pending().await
+    }
+    async fn table_delete(&self, _: &StateTable, _: &StateKey) -> OxiResult<bool> {
+        std::future::pending().await
+    }
+    async fn table_list(
+        &self,
+        _: &StateTable,
+        _: Option<usize>,
+    ) -> OxiResult<Vec<(StateKey, Value)>> {
+        std::future::pending().await
+    }
+    async fn append_audit(&self, _: &[AuditRecord]) -> OxiResult<()> {
+        std::future::pending().await
+    }
+    async fn query_audit(&self, _: &AuditQuery) -> OxiResult<Vec<AuditRecord>> {
+        std::future::pending().await
+    }
+}
+
+fn headless() -> HeadlessAppContext {
     let text_system = gpui_platform::current_platform(true).text_system();
-    let mut cx =
-        HeadlessAppContext::with_platform(text_system, Arc::new(oxikube_ui::Assets), || {
-            gpui_platform::current_headless_renderer()
-        });
+    HeadlessAppContext::with_platform(text_system, Arc::new(oxikube_ui::Assets), || {
+        gpui_platform::current_headless_renderer()
+    })
+}
+
+/// The main window as the app opens it, while its saved layout is still being read.
+fn render_restoring() -> anyhow::Result<RgbaImage> {
+    let mut cx = headless();
+    let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
+        oxikube_ui::init(cx);
+        oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
+        cx.set_reduce_motion(true);
+        let store = LayoutStore::new(Arc::new(NeverReady), MAIN_WINDOW_ID)
+            .expect("the main window's key is valid");
+        build_root_with_layout(window, cx, Some(store), |content, _| content)
+    })?;
+    cx.run_until_parked();
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;
+    cx.run_until_parked();
+    cx.capture_screenshot(window.into())
+}
+
+fn render(with_modal: bool) -> anyhow::Result<RgbaImage> {
+    let mut cx = headless();
     let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
         oxikube_ui::init(cx);
         // Pin the appearance: `init` follows the system, which differs between machines.
@@ -90,8 +159,7 @@ fn render(with_modal: bool) -> anyhow::Result<RgbaImage> {
     cx.capture_screenshot(window.into())
 }
 
-fn check(name: &str, with_modal: bool) -> anyhow::Result<()> {
-    let image = render(with_modal)?;
+fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
     let scale = HEADLESS_SCALE_FACTOR;
     anyhow::ensure!(
         image.dimensions() == (WIDTH as u32 * scale, HEIGHT as u32 * scale),
@@ -120,8 +188,9 @@ fn check(name: &str, with_modal: bool) -> anyhow::Result<()> {
 }
 
 fn run() -> anyhow::Result<()> {
-    check("workspace", false)?;
-    check("workspace_modal", true)
+    check("workspace", render(false)?)?;
+    check("workspace_modal", render(true)?)?;
+    check("main_window_restoring", render_restoring()?)
 }
 
 fn main() -> ExitCode {

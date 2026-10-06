@@ -1,5 +1,6 @@
 //! Startup cost of settings: parse `default.json` and a typical user `settings.json`, resolve
-//! every setting, and (separately) one hot reload. Reports the median and worst of 200 runs.
+//! every setting, and (separately) one hot reload, reporting the median and worst of 200 runs;
+//! then the cost of starting the file watcher (50 runs).
 //!
 //! `cargo run --release -p oxikube_settings --example settings_load` (budget: < 30 ms on the
 //! main thread at startup, E05-S13).
@@ -130,4 +131,28 @@ fn main() {
     }
     println!("startup (parse + resolve): {}", stats(startup));
     println!("hot reload (parse + resolve + diff): {}", stats(reload));
+
+    // Starting hot reload: the `notify` watcher (FSEvents on macOS, inotify on Linux) and its
+    // debounce thread. `init` does this on the UI thread at start-up, so it counts towards the
+    // 30 ms settings + keymap + theme budget (E05-S13).
+    let root = std::env::temp_dir().join(format!("settings-load-{}", std::process::id()));
+    let mut watch = Vec::new();
+    for i in 0..50 {
+        let dir = root.join(i.to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        std::fs::write(&path, &user).unwrap();
+        let started = Instant::now();
+        let watcher = oxikube_settings::watcher::SettingsFileWatcher::spawn(
+            path,
+            user.clone(),
+            oxikube_settings::watcher::DEFAULT_DEBOUNCE,
+            |_| true,
+        )
+        .unwrap();
+        watch.push(started.elapsed());
+        drop(watcher);
+    }
+    let _ = std::fs::remove_dir_all(root);
+    println!("starting the file watcher: {}", stats(watch));
 }

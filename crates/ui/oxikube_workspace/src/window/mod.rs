@@ -4,17 +4,23 @@
 //! - [`open_main_window`]: opens the themed window with the platform's title bar. The window
 //!   root is `oxikube_ui`'s `Root`, which renders the dialog, sheet and notification layers
 //!   exactly once above [`MainView`].
+//! - [`open_main_window_restoring`]: the same window, restoring its saved layout in the
+//!   background behind the startup placeholder (E05-S13; see [`MainView`]). The app opens its
+//!   first window this way.
 //! - [`options`]: the per-platform `WindowOptions` and the application id.
 //! - [`menus`]: the macOS app menu and its actions.
 //!
 //! Order in the binary: build the `Application` with `oxikube_ui::Assets`, then in `run`:
-//! `oxikube_ui::init(cx)`, [`init`], [`open_main_window`]. Nothing here reads the disk or the
-//! network, so the first frame does not wait on I/O (docs/PERFORMANCE.md, cold start).
+//! `oxikube_ui::init(cx)`, [`init`], [`open_main_window_restoring`]. Nothing here reads the disk
+//! or the network on the UI thread (the layout is read through the async `StatePort`), so the
+//! first frame does not wait on I/O (docs/PERFORMANCE.md, cold start).
 
 pub mod menus;
 pub mod options;
 mod view;
 
+#[cfg(test)]
+mod restore_tests;
 #[cfg(test)]
 mod tests;
 
@@ -29,9 +35,12 @@ pub use menus::{About, Hide, HideOthers, Minimize, OpenPreferences, ShowAll, Zoo
 pub use options::{
     APP_ID, Chrome, WINDOW_TITLE, main_window_options, main_window_options_for, window_options,
 };
-pub use view::MainView;
+pub use view::{MainView, RESTORING_LABEL};
 
-/// Registers the application menu (`cx.set_menus`), its action handlers and key bindings.
+use crate::persistence::LayoutStore;
+
+/// Registers the application menu's action handlers and key bindings; the menu bar itself is
+/// installed at the end of the first main window's first frame ([`menus::install_once`]).
 /// Idempotent only in effect: call it once, after `oxikube_ui::init`.
 pub fn init(cx: &mut App) {
     menus::register(cx);
@@ -60,13 +69,34 @@ pub fn open_main_window_at(
     bounds: Option<Bounds<Pixels>>,
     wrap: impl FnOnce(AnyView, &mut App) -> AnyView + 'static,
 ) -> Result<WindowHandle<Root>> {
+    open(cx, bounds, None, wrap)
+}
+
+/// Like [`open_main_window_with`], restoring the layout saved in `layout` and saving it from
+/// then on. The window opens at once with the startup placeholder (the default layout, marked
+/// "Restoring layout…") and the saved layout replaces it when the asynchronous read completes; a
+/// failed read leaves the default layout in place and usable.
+pub fn open_main_window_restoring(
+    cx: &mut App,
+    layout: LayoutStore,
+    wrap: impl FnOnce(AnyView, &mut App) -> AnyView + 'static,
+) -> Result<WindowHandle<Root>> {
+    open(cx, None, Some(layout), wrap)
+}
+
+fn open(
+    cx: &mut App,
+    bounds: Option<Bounds<Pixels>>,
+    layout: Option<LayoutStore>,
+    wrap: impl FnOnce(AnyView, &mut App) -> AnyView + 'static,
+) -> Result<WindowHandle<Root>> {
     let mut options = main_window_options(cx);
     if let Some(bounds) = bounds {
         options.window_bounds = Some(WindowBounds::Windowed(bounds));
     }
     cx.open_window(options, move |window, cx| {
         crate::session::windows::install_close_guard(window, cx);
-        build_root(window, cx, wrap)
+        build_root_with_layout(window, cx, layout, wrap)
     })
     .context("opening the main window")
 }
@@ -78,7 +108,23 @@ pub fn build_root(
     cx: &mut App,
     wrap: impl FnOnce(AnyView, &mut App) -> AnyView,
 ) -> Entity<Root> {
-    let content: AnyView = cx.new(|cx| MainView::new(window, cx)).into();
+    build_root_with_layout(window, cx, None, wrap)
+}
+
+/// [`build_root`] whose [`MainView`] restores (and then saves) the layout in `layout`, when given
+/// ([`MainView::restoring`]).
+pub fn build_root_with_layout(
+    window: &mut Window,
+    cx: &mut App,
+    layout: Option<LayoutStore>,
+    wrap: impl FnOnce(AnyView, &mut App) -> AnyView,
+) -> Entity<Root> {
+    let content: AnyView = cx
+        .new(|cx| match layout {
+            Some(store) => MainView::restoring(store, window, cx),
+            None => MainView::new(window, cx),
+        })
+        .into();
     let content = wrap(content, cx);
     new_root(content, window, cx)
 }

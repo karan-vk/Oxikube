@@ -1,7 +1,7 @@
 //! Tests of the layout store and the persistence controller, on `FakeStatePort`.
 
 mod controller;
-mod gated;
+pub(crate) mod gated;
 mod store;
 
 use std::sync::Arc;
@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// A window with a workspace, the test item builder registered.
-pub(super) fn window(cx: &mut TestAppContext) -> (Entity<Workspace>, VisualTestContext) {
+pub(crate) fn window(cx: &mut TestAppContext) -> (Entity<Workspace>, VisualTestContext) {
     cx.update(|cx| {
         oxikube_ui::init(cx);
         crate::actions::register(cx);
@@ -36,7 +36,7 @@ pub(super) fn window(cx: &mut TestAppContext) -> (Entity<Workspace>, VisualTestC
     (workspace.expect("the window was built"), vcx)
 }
 
-pub(super) fn open(ws: &Entity<Workspace>, vcx: &mut VisualTestContext, title: &str) {
+pub(crate) fn open(ws: &Entity<Workspace>, vcx: &mut VisualTestContext, title: &str) {
     let title = title.to_owned();
     vcx.update(|window, cx| {
         let item = TestItem::build(title, cx);
@@ -45,7 +45,7 @@ pub(super) fn open(ws: &Entity<Workspace>, vcx: &mut VisualTestContext, title: &
     vcx.run_until_parked();
 }
 
-pub(super) fn store(state: Arc<dyn oxikube_ports::StatePort>) -> LayoutStore {
+pub(crate) fn store(state: Arc<dyn oxikube_ports::StatePort>) -> LayoutStore {
     LayoutStore::new(state, MAIN_WINDOW_ID).expect("a valid window id")
 }
 

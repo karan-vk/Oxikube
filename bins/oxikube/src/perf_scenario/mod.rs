@@ -8,16 +8,18 @@
 //!
 //! Scenarios whose views do not exist yet report `not_available` (exit 0) with the stories that
 //! enable them, so the harness, the nightly job and the baseline format are in place before them.
+//!
+//! - `startup` ([`startup`]): the real init order, the main window behind the startup
+//!   placeholder, the first interactive frame and the per-stage breakdown (E05-S13).
 
-use anyhow::{Context as _, Result, bail};
-use gpui::{AnyWindowHandle, AppContext as _, Pixels, Size, px, size};
-use oxikube_runtime::perf::harness::{self, metric};
-use oxikube_runtime::perf::{PerfRoot, Recorder, ScenarioSample, Summary, round_ms};
-use oxikube_testkit::headless;
+mod startup;
+
+use anyhow::{Context as _, Result};
+use gpui::{Pixels, Size, px, size};
+use oxikube_runtime::perf::ScenarioSample;
 use std::io::Write as _;
 use std::path::Path;
 use std::process::ExitCode;
-use std::sync::Arc;
 use std::time::Instant;
 
 /// Line printed to stdout (and flushed) the moment the first frame is drawn, so `cargo xtask perf`
@@ -37,7 +39,7 @@ const NEEDS_TEST_APP: &str = "E05-S11 #93";
 /// `not_available`, 1 on failure, 2 for an unknown scenario.
 pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) -> ExitCode {
     let sample = match name {
-        "startup" => startup(launched, probe),
+        "startup" => startup::run(launched, probe),
         "scroll-10k" => Ok(ScenarioSample::not_available(
             name,
             "no pod table yet: scrolling 10k rows under 1 %/5 s churn needs the generic \
@@ -87,69 +89,4 @@ fn write_sample(sample: &ScenarioSample, report: Option<&Path>) -> Result<()> {
         }
         None => writeln!(std::io::stdout().lock(), "{json}").context("writing stdout"),
     }
-}
-
-/// The real main window content, as `oxikube` builds it, in the headless context.
-fn main_window(
-    window: &mut gpui::Window,
-    cx: &mut gpui::App,
-    wrap: impl FnOnce(gpui::AnyView, &mut gpui::App) -> gpui::AnyView,
-) -> gpui::Entity<oxikube_ui::root::Root> {
-    oxikube_ui::init(cx);
-    oxikube_workspace::window::build_root(window, cx, wrap)
-}
-
-/// Cold start to first frame drawn, then `FRAMES` idle redraws of the main view.
-///
-/// `first_frame_ms` runs from the first line of `main` to the end of the window-opening update
-/// (headless context with the platform text system and GPU renderer, window, first draw). Process
-/// exec and dynamic loading before `main` are added from outside by `cargo xtask perf`
-/// (`launch_to_first_frame_ms`).
-fn startup(launched: Instant, probe: bool) -> Result<ScenarioSample> {
-    let recorder = Arc::new(Recorder::new());
-    let mut cx = headless::headless_context();
-    let window: AnyWindowHandle = if probe {
-        let recorder = recorder.clone();
-        cx.open_window(WINDOW_SIZE, move |window, cx| {
-            main_window(window, cx, move |content, cx| {
-                cx.new(|_| PerfRoot::new(content, recorder)).into()
-            })
-        })?
-        .into()
-    } else {
-        cx.open_window(WINDOW_SIZE, |window, cx| {
-            main_window(window, cx, |content, _| content)
-        })?
-        .into()
-    };
-    // A test-mode context draws dirty windows when an update flushes its effects, so the window
-    // has drawn its first frame by the time `open_window` returns.
-    cx.run_until_parked();
-    let first_frame = launched.elapsed();
-    let mut stdout = std::io::stdout().lock();
-    writeln!(stdout, "{FIRST_FRAME_MARKER}")?;
-    stdout.flush()?;
-    drop(stdout);
-    if probe && recorder.frames_recorded() == 0 {
-        bail!("no frame was drawn while opening the window");
-    }
-
-    let mut reader = recorder.reader();
-    reader.drain(&recorder); // the first frame is reported as first_frame_ms, not frame_ms
-    let run = harness::run_frames(
-        &mut cx,
-        window,
-        FRAMES,
-        &recorder,
-        &mut reader,
-        |cx| cx.run_until_parked(),
-        |_, _, _| {},
-    )?;
-    Ok(run.into_sample(
-        "startup",
-        [(
-            metric::FIRST_FRAME_MS.to_owned(),
-            Summary::single(round_ms(first_frame.as_secs_f64() * 1000.0)),
-        )],
-    ))
 }

@@ -38,4 +38,4 @@ pub use report::{RestoreReport, SkipReason, SkippedItem};
 pub use store::{LayoutStore, LoadOutcome};
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

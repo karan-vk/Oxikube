@@ -362,6 +362,7 @@ mod tests {
                             samples: 5,
                             metrics: [("first_frame_ms".to_owned(), pct(*v))].into(),
                             counters: Counters::default(),
+                            launches: BTreeMap::new(),
                         },
                         None => ScenarioResult {
                             status: Status::NotAvailable,
@@ -370,6 +371,7 @@ mod tests {
                             samples: 0,
                             metrics: BTreeMap::new(),
                             counters: Counters::default(),
+                            launches: BTreeMap::new(),
                         },
                     };
                     ((*name).to_owned(), result)

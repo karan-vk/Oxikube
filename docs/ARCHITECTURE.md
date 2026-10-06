@@ -160,6 +160,13 @@ flowchart LR
   start-up budget (`docs/PERFORMANCE.md`, E05-S13).
 - Running `startup::init` twice is rejected (`StartupError::AlreadyInitialised`), and
   `AppState::install` refuses to install out of order.
+- Start-up ends at the main window's first interactive frame (E05-S13; budget 400 ms, ADR 0013):
+  the window opens behind the startup placeholder (default layout, "Restoring layout…") while the
+  saved layout is read through the async `StatePort`, the menu bar follows the first frame, and
+  `oxikube::startup::first_frame` logs the time with every stage's cost and the count of network
+  sockets (none may be open). Heavy services (extension host, discovery, Prometheus detection,
+  agent registry, update checker, kubeconfig parsing) are `oxikube_runtime::LazyService`s started on
+  first use (`oxikube::startup::deferred`), never by an `init`.
 
 ## Error taxonomy and mapping guidelines
 

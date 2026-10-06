@@ -111,6 +111,12 @@ pub struct ScenarioResult {
     /// Counters of the last measured sample (they are deterministic per scenario).
     #[serde(default)]
     pub counters: Counters,
+    /// For metrics observed once per process (`first_frame_ms`, `launch_to_first_frame_ms`, the
+    /// start-up breakdown): the distribution across the samples, i.e. across cold launches
+    /// (nearest-rank p50/p95/p99 and the max). The budgets are checked on these; the baseline gate
+    /// keeps using the medians in `metrics`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub launches: BTreeMap<String, Percentiles>,
 }
 
 /// `cargo xtask perf` output.
@@ -137,7 +143,12 @@ pub fn median(values: &mut [f64]) -> Option<f64> {
     } else {
         (values[mid - 1] + values[mid]) / 2.0
     };
-    Some((m * 1000.0).round() / 1000.0)
+    Some(round3(m))
+}
+
+/// Rounds to three decimals (microsecond resolution for `*_ms`).
+fn round3(x: f64) -> f64 {
+    (x * 1000.0).round() / 1000.0
 }
 
 /// Aggregates measured samples of one scenario: per metric, the median of each statistic across
@@ -174,7 +185,46 @@ pub fn aggregate(samples: &[Sample]) -> ScenarioResult {
         samples: samples.len(),
         metrics,
         counters: samples.last().map(|s| s.counters).unwrap_or_default(),
+        launches: across_launches(samples),
     }
+}
+
+/// Nearest-rank percentile `q` (0..=1) of sorted `values`.
+fn nearest_rank(sorted: &[f64], q: f64) -> f64 {
+    let rank = ((q * sorted.len() as f64).ceil() as usize).clamp(1, sorted.len());
+    sorted[rank - 1]
+}
+
+/// Per single-observation metric (every sample that has it observed it once), its distribution
+/// across the samples.
+fn across_launches(samples: &[Sample]) -> BTreeMap<String, Percentiles> {
+    let mut values: BTreeMap<&String, Vec<f64>> = BTreeMap::new();
+    let mut multi = std::collections::BTreeSet::new();
+    for sample in samples {
+        for (name, stats) in &sample.metrics {
+            if stats.count == 1 {
+                values.entry(name).or_default().push(stats.p50);
+            } else {
+                multi.insert(name);
+            }
+        }
+    }
+    values
+        .into_iter()
+        .filter(|(name, _)| !multi.contains(name))
+        .map(|(name, mut v)| {
+            v.sort_by(f64::total_cmp);
+            (
+                name.clone(),
+                Percentiles {
+                    p50: round3(nearest_rank(&v, 0.50)),
+                    p95: round3(nearest_rank(&v, 0.95)),
+                    p99: round3(nearest_rank(&v, 0.99)),
+                    max: v.last().copied().map(round3),
+                },
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -234,6 +284,35 @@ mod tests {
         .unwrap();
         assert_eq!(s.metrics["rss_mib"].count, 120);
         assert_eq!(s.metrics["peak_rss_mib"].count, 1);
+    }
+
+    fn launch(first_frame: f64) -> Sample {
+        let mut s = sample(1.0, 2.0);
+        s.metrics.insert(
+            "first_frame_ms".to_owned(),
+            SampleStats {
+                count: 1,
+                p50: first_frame,
+                p95: first_frame,
+                p99: first_frame,
+                max: first_frame,
+            },
+        );
+        s
+    }
+
+    #[test]
+    fn single_observation_metrics_get_their_distribution_across_launches() {
+        let samples: Vec<Sample> = (1..=20).map(|i| launch(100.0 + f64::from(i))).collect();
+        let r = aggregate(&samples);
+        let launches = r.launches["first_frame_ms"];
+        assert_eq!(launches.p50, 110.0);
+        assert_eq!(launches.p95, 119.0, "nearest rank: the 19th of 20");
+        assert_eq!(launches.max, Some(120.0));
+        assert!(
+            !r.launches.contains_key("frame_ms"),
+            "per-frame metrics are not per launch"
+        );
     }
 
     #[test]

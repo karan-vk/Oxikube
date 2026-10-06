@@ -7,7 +7,9 @@
 //! logging and the panic hook → assets → runtime → settings → theme → keymap → ui → state db
 //! (opened in the background) → [`oxikube::app_state::AppState`] → workspace → feature crates → keymap
 //! re-bind → open the window. Nothing waits on disk or network before the first frame; each stage
-//! is timed in a `tracing` span.
+//! is timed in a `tracing` span, and the first interactive frame (budget: 400 ms from the first
+//! line of `main`) is logged with the stage breakdown (E05-S13, printed to stderr under `--perf`).
+//! The measured cost of each stage is in the [`oxikube::startup`] docs.
 //!
 //! Hidden tooling flags (`--print-settings-schema`, `--print-settings-crates`) make this binary the
 //! generator behind `cargo xtask gen-settings-schema`: it links every crate that registers
@@ -82,7 +84,7 @@ fn main() -> ExitCode {
 
     // Logging and the panic hook come first, so everything after this can log and a panic leaves
     // a crash file (stage 1 of the init order, `startup`).
-    let boot = startup::boot();
+    let boot = startup::boot(launched);
 
     let perf = if args.perf {
         match perf_mode::start(args.perf_dir.clone()) {
@@ -141,14 +143,16 @@ fn start(
         eprintln!("oxikube: {err}");
         return false;
     }
+    // The window opens behind the startup placeholder (its saved layout is read in the
+    // background) and its first frame ends start-up (`startup::first_frame`).
     let opened = startup::time_after_init(cx, Stage::Window, |cx| match perf {
         Some(recorder) => {
             perf_mode::attach(cx, perf_duration);
-            oxikube_workspace::window::open_main_window_with(cx, move |content, cx| {
+            startup::window::open_main_window(cx, move |content, cx| {
                 cx.new(|_| PerfRoot::new(content, recorder)).into()
             })
         }
-        None => oxikube_workspace::window::open_main_window(cx),
+        None => startup::window::open_main_window(cx, |content, _| content),
     });
     if let Err(err) = opened {
         tracing::error!(%err, "cannot open the main window");
