@@ -3,6 +3,7 @@
 
 mod budget;
 mod counts;
+mod diagnostics;
 mod feeds;
 mod filter;
 mod order;
@@ -22,7 +23,9 @@ use oxikube_domain::Resource;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_domain::session::WatchScope;
 use oxikube_ports::{Delta, DeltaBatch};
-use oxikube_testkit::{FakeClockPort, FakeResourcePort, FakeTableFeedPort, Timeline, pod};
+use oxikube_testkit::{
+    FakeClockPort, FakeResourcePort, FakeTableFeedPort, FakeWarningPort, Timeline, pod,
+};
 use parking_lot::Mutex;
 
 use super::{
@@ -62,6 +65,7 @@ pub(super) struct Harness {
     pub clock: Arc<FakeClockPort>,
     pub resources: Arc<FakeResourcePort>,
     pub tables: Arc<FakeTableFeedPort>,
+    pub warnings: Arc<FakeWarningPort>,
     pub store: ResourceStore,
     exec: Executor,
     pool: LocalPool,
@@ -84,8 +88,9 @@ impl Harness {
         let clock = Arc::new(FakeClockPort::default());
         let resources = Arc::new(FakeResourcePort::with_clock(clock.clone()));
         let tables = Arc::new(FakeTableFeedPort::with_clock(clock.clone()));
+        let warnings = Arc::new(FakeWarningPort::new());
         let exec = Executor::default();
-        let store = ResourceStore::new(
+        let store = ResourceStore::with_warnings(
             ClusterId::new("test", &ContextName::from("kind")),
             StorePorts {
                 resources: resources.clone(),
@@ -96,11 +101,13 @@ impl Harness {
                 clock: clock.clone(),
             },
             options,
+            Some(warnings.clone()),
         );
         Self {
             clock,
             resources,
             tables,
+            warnings,
             store,
             exec,
             pool: LocalPool::new(),

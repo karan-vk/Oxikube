@@ -8,6 +8,7 @@ use oxikube_domain::{Capabilities, Capability, ClusterColour};
 use oxikube_ports::{
     AccessReviewPort, ClusterPorts, ClusterPrefs, DiscoveryPort, ExecInteractivity, ExecPort,
     LogPort, MetricsPort, PortForwardPort, ResourceReader, ResourceWriter, TableFeedPort,
+    WarningPort,
 };
 
 /// One cluster session as the manager saw it when the snapshot was taken.
@@ -128,6 +129,11 @@ impl ClusterSession {
         self.ports
             .as_ref()
             .map(|p| p.resources.clone() as Arc<dyn ResourceReader>)
+    }
+
+    /// The API server's `Warning:` headers (`None` while not connected).
+    pub fn warnings(&self) -> Option<Arc<dyn WarningPort>> {
+        self.ports.as_ref().map(|p| p.warnings.clone())
     }
 
     /// The writer half of the resource port (`None` while not connected).

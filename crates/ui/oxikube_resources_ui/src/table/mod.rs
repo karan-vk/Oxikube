@@ -18,7 +18,7 @@
 //! | `layout` | [`ColumnLayout`]: order, visibility, widths and sort of the columns |
 //! | `prefs` | [`ColumnPrefs`] saved per kind through the `StatePort` (`table.columns.<group>/<Kind>`) |
 //! | `cells` | [`ToneColors`]: a cell's tone to the theme's `oxikube` status colours |
-//! | `empty` | the empty view (loading, none, forbidden) |
+//! | `states` | states and diagnostics (E07-S10): loading / empty / filtered-empty / forbidden / unauthorized / error, the stale badge, retry, API warnings |
 //! | `actions` | the key actions of the `Table` context |
 //! | `row_actions` | the row actions (E07-S08): the targets of a menu or key, the entries the palette lists, running an action, the delete key |
 //! | `runtime` | [`store_runtime`]: where the stores' feed tasks run |
@@ -38,7 +38,6 @@ pub mod actions;
 mod cells;
 mod columns;
 mod delegate;
-mod empty;
 mod feed;
 mod interact;
 mod layout;
@@ -47,6 +46,7 @@ mod render;
 mod row_actions;
 mod runtime;
 mod selection;
+pub mod states;
 mod view;
 
 #[cfg(test)]
@@ -54,9 +54,9 @@ pub(crate) mod tests;
 
 pub use cells::ToneColors;
 pub use delegate::RowsDelegate;
-pub use empty::empty_message;
 pub use layout::ColumnLayout;
 pub use prefs::{ColumnPrefs, ColumnPrefsStore, PREFS_PREFIX, PREFS_VERSION, SavedSort, prefs_key};
 pub use runtime::store_runtime;
 pub use selection::{ClickMode, Selection};
+pub use states::{Stale, StateLabels, TableState};
 pub use view::{ResourceTable, ResourceTableDeps, ResourceTableEvent, item_key, plural_title};

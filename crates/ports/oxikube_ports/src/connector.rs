@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AccessReviewPort, DiscoveryPort, ExecPort, LogPort, MetricsPort, PortForwardPort, ResourcePort,
-    TableFeedPort,
+    TableFeedPort, WarningPort,
 };
 
 /// How interactive an exec credential plugin may be (a per-cluster setting, E06-S08).
@@ -143,6 +143,8 @@ pub struct ClusterPorts {
     pub metrics: Arc<dyn MetricsPort>,
     /// What the user may do here.
     pub access: Arc<dyn AccessReviewPort>,
+    /// The API server's `Warning:` response headers.
+    pub warnings: Arc<dyn WarningPort>,
 }
 
 impl fmt::Debug for ClusterPorts {

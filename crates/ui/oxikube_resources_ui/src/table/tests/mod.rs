@@ -9,6 +9,7 @@ mod selection;
 mod view_columns;
 mod view_rows;
 mod view_select;
+mod view_states;
 mod views;
 
 use std::sync::Arc;

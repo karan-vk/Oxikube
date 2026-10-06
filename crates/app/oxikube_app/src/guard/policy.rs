@@ -72,6 +72,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ClusterSetColour { cluster, .. }
         | Command::ClusterApplyPreset { cluster, .. }
         | Command::ResourceOpenList { cluster, .. }
+        | Command::ResourceRetryFeed { cluster, .. }
         | Command::ResourceSelectAll { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::ResourceOpen { target }

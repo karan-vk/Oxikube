@@ -1,8 +1,8 @@
-//! The table commands on the `CommandBus`: `resource::Open`, `resource::CopyName` and
-//! `resource::SelectAll`.
+//! The table commands on the `CommandBus`: `resource::Open`, `resource::CopyName`,
+//! `resource::RetryFeed` (E07-S10) and `resource::SelectAll`.
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, select
-//! rows, or write the user's clipboard. Each is declared in `oxikube_domain::command`, so it has
+//! rows, restart a feed (a read) or write the user's clipboard. Each is declared in `oxikube_domain::command`, so it has
 //! an MCP tool stub, and [`register_commands`] installs handlers that push a [`ViewRequest`]
 //! into the window's [`ResourceCommandSink`]; [`ResourceViews`] applies it on the UI thread.
 //!
@@ -19,9 +19,10 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 3] = [
+pub const RESOURCE_COMMANDS: [CommandId; 4] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
+    CommandId::RESOURCE_RETRY_FEED,
     CommandId::RESOURCE_SELECT_ALL,
 ];
 
@@ -32,6 +33,13 @@ pub enum ViewRequest {
     Open(ResourceRef),
     /// Copy `target`'s name to the clipboard.
     CopyName(ResourceRef),
+    /// Restart the feed of the tables of `gvk` in `cluster`.
+    RetryFeed {
+        /// The cluster.
+        cluster: ClusterId,
+        /// The kind.
+        gvk: Gvk,
+    },
     /// Select every row of the tables of `gvk` in `cluster`.
     SelectAll {
         /// The cluster.
@@ -64,6 +72,10 @@ impl ResourceCommandSink {
         Some(match command {
             Command::ResourceOpen { target } => ViewRequest::Open(target.clone()),
             Command::ResourceCopyName { target } => ViewRequest::CopyName(target.clone()),
+            Command::ResourceRetryFeed { cluster, gvk } => ViewRequest::RetryFeed {
+                cluster: cluster.clone(),
+                gvk: gvk.clone(),
+            },
             Command::ResourceSelectAll { cluster, gvk } => ViewRequest::SelectAll {
                 cluster: cluster.clone(),
                 gvk: gvk.clone(),

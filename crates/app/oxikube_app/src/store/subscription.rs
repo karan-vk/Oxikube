@@ -123,6 +123,16 @@ impl Subscription {
         }
     }
 
+    /// Restarts the feeds that are not `Ready` (the table's "Retry"): a stopped feed starts
+    /// again, one in a retry backoff reopens at once. The rows already shown stay; the state goes
+    /// back to `Warming` and the next snapshot or ops follow the new list. No-op while every feed
+    /// is ready.
+    pub fn retry(&mut self) {
+        for entry in self.feeds.values() {
+            self.store.retry(entry);
+        }
+    }
+
     fn reseed(&mut self) {
         self.shared
             .reset(self.query.filter.clone(), self.query.sort.clone());

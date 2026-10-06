@@ -11,7 +11,7 @@ use oxikube_ports::{
     ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort, DiscoveryPort,
     ExecPort, FsPort, HelmPort, IntegrationPort, LogPort, MetricsPort, NotifierPort,
     PortForwardPort, PromqlPort, ResourcePort, ResourceReader, ResourceWriter, SecretStorePort,
-    StatePort, TableFeedPort, ToolDef, ToolName, ToolPort, UpdaterPort,
+    StatePort, TableFeedPort, ToolDef, ToolName, ToolPort, UpdaterPort, WarningPort,
 };
 use oxikube_testkit::*;
 
@@ -44,6 +44,7 @@ const FAKES: &[(&str, &str)] = &[
     ("AgentClient", "FakeAgentClient"),
     ("ClusterConnectorPort", "FakeClusterConnectorPort"),
     ("AccessReviewPort", "FakeAccessReviewPort"),
+    ("WarningPort", "FakeWarningPort"),
 ];
 
 /// Traits in `oxikube_ports` that are not ports: blanket combinations, extensions, and
@@ -91,6 +92,7 @@ fn fakes_are_port_trait_objects() {
     let _: Arc<dyn AgentClient> = Arc::new(FakeAgentClient::new());
     let _: Arc<dyn ClusterConnectorPort> = Arc::new(FakeClusterConnectorPort::new());
     let _: Arc<dyn AccessReviewPort> = Arc::new(FakeAccessReviewPort::new());
+    let _: Arc<dyn WarningPort> = Arc::new(FakeWarningPort::new());
 }
 
 /// Every `pub trait` declared in `oxikube_ports/src` is either a port with a listed fake

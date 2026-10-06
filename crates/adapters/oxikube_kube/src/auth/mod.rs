@@ -43,5 +43,5 @@ pub use classify::{
     CredentialRefresh, classify, classify_kubeconfig, classify_tls_setup, classify_with,
 };
 pub(crate) use exec::describe;
-pub use exec::{ExecInteractivePolicy, build_client};
+pub use exec::{ExecInteractivePolicy, build_client, build_client_with_warnings};
 pub use retry::{retry_once, retry_once_kube};

@@ -64,6 +64,7 @@ use crate::pool::{ClientPool, PoolConfig};
 use crate::remote::exec::KubeExec;
 use crate::remote::portforward::KubePortForward;
 use crate::resources::KubeResources;
+use crate::warnings::WarningHub;
 
 /// Tuning for a [`KubeConnector`].
 #[derive(Debug, Clone)]
@@ -247,6 +248,7 @@ impl ClusterConnectorPort for KubeConnector {
             port_forward: Arc::new(KubePortForward::new(client.clone())),
             metrics: Arc::new(KubeMetrics::new(client, request.cluster.clone())),
             access: Arc::new(access),
+            warnings: Arc::new(WarningHub::global().port(&request.context)),
         };
         Ok(ClusterConnection {
             ports,

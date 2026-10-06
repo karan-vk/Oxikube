@@ -21,9 +21,9 @@ use oxikube_ui::table::SortDirection;
 use oxikube_ui::{TableColumn, TableDelegate};
 
 use super::cells::{ToneColors, cell_element};
-use super::empty;
 use super::layout::ColumnLayout;
 use super::selection::Selection;
+use super::states::{StateLabels, TableState, state_view};
 use super::view::ResourceTable;
 use crate::actions::ActionSource;
 
@@ -39,8 +39,12 @@ pub struct RowsDelegate {
     pub(super) selection: Selection,
     /// The feed's state, for the empty view.
     pub(super) state: FeedState,
-    /// What the kind is called, for the empty view ("No pods").
-    pub(super) plural: Arc<str>,
+    /// What the kind is called and where it is listed, for the state views ("No pods in …").
+    pub(super) labels: StateLabels,
+    /// The active in-app filter as the user reads it, for the filtered-empty state.
+    pub(super) filter: Option<String>,
+    /// Whether the failure detail of the state view is expanded.
+    pub(super) details_open: bool,
     /// "Now" for ages, refreshed once per frame by the view.
     pub(super) now: Timestamp,
     /// The tone colours, refreshed once per frame by the view.
@@ -83,6 +87,17 @@ impl RowsDelegate {
     /// The feed's state.
     pub fn state(&self) -> &FeedState {
         &self.state
+    }
+
+    /// What the table shows now: loading, empty, filtered-empty, forbidden, unauthorized, an
+    /// error, or rows (stale or not). See [`states`](super::states).
+    pub fn table_state(&self) -> TableState {
+        TableState::derive(&self.state, self.rows.len(), self.filter.as_deref())
+    }
+
+    /// What the state views name: the kind and where it is listed.
+    pub fn labels(&self) -> &StateLabels {
+        &self.labels
     }
 
     fn colors(&self, cx: &App) -> ToneColors {
@@ -176,7 +191,8 @@ impl TableDelegate for RowsDelegate {
     }
 
     fn render_empty(&mut self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        empty::empty_view(&self.state, &self.plural, cx)
+        let state = self.table_state();
+        state_view(&state, &self.labels, self.details_open, &self.view, cx)
     }
 
     fn row_selected(&self, row_ix: usize, _: &App) -> bool {
