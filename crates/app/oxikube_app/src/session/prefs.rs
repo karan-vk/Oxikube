@@ -80,8 +80,12 @@ impl Entry {
                 SessionChange::DisplayNameChanged(prefs.display_name.clone()),
             );
         }
-        // Read at the next connect; nothing to announce.
-        self.exec_interactivity = prefs.exec_interactivity;
+        // Read at the next connect; nothing to announce. Like the fields above, only applied
+        // when the setting itself changed, so a manual `set_exec_interactivity` survives an
+        // unrelated prefs change.
+        if old.exec_interactivity != prefs.exec_interactivity {
+            self.exec_interactivity = prefs.exec_interactivity;
+        }
         true
     }
 }

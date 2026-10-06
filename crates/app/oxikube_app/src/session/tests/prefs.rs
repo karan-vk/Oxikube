@@ -199,6 +199,32 @@ fn the_exec_policy_applies_on_the_next_connect_not_to_the_current_one() {
 }
 
 #[test]
+fn a_manual_exec_policy_survives_an_unrelated_prefs_change() {
+    let h = Harness::new();
+    h.manager.set_prefs_table(table(ClusterPrefs {
+        exec_interactivity: ExecInteractivity::Never,
+        ..ClusterPrefs::default()
+    }));
+    h.manager.open_configured(&ctx("a"));
+    // A retry after `AuthRequired` allows prompting although the settings say never.
+    h.manager
+        .set_exec_interactivity(&id("a"), ExecInteractivity::IfAvailable)
+        .unwrap();
+
+    // Another field of the same cluster's block changes; the exec setting does not.
+    let changed = h.manager.set_prefs_table(table(ClusterPrefs {
+        exec_interactivity: ExecInteractivity::Never,
+        colour: Some(RED),
+        ..ClusterPrefs::default()
+    }));
+
+    assert_eq!(changed, 1);
+    let a = h.manager.get(&id("a")).unwrap();
+    assert_eq!(a.colour(), Some(RED));
+    assert_eq!(a.exec_interactivity(), ExecInteractivity::IfAvailable);
+}
+
+#[test]
 fn explicit_options_still_open_a_session_as_asked() {
     let h = Harness::new();
     h.manager.set_prefs_table(table(prod_prefs()));
