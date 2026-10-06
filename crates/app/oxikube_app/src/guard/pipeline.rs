@@ -4,11 +4,12 @@ use std::sync::Arc;
 
 use oxikube_domain::audit::{AuditOutcome, AuditRecord};
 use oxikube_domain::command::{Command, CommandMeta};
-use oxikube_domain::ids::{ClusterId, ResourceRef};
+use oxikube_domain::ids::{ClusterId, ContextName, ResourceRef};
 use oxikube_domain::safety::ConfirmTier;
 use oxikube_ports::ResourceWriter;
 
 use super::confirm::{ConfirmationError, ConfirmationRequest, ConfirmationToken, Pending};
+use super::gate::ReadOnlyGate;
 use super::{Mutation, MutationGuard, policy};
 use crate::command_bus::{CommandHandler, DispatchContext, DispatchError, HandlerContext, Outcome};
 
@@ -17,6 +18,7 @@ enum Admission {
     /// Run the handler.
     Proceed {
         cluster: ClusterId,
+        context: ContextName,
         target: ResourceRef,
         writer: Arc<dyn ResourceWriter>,
     },
@@ -38,12 +40,13 @@ impl MutationGuard {
         ctx: DispatchContext,
         handler: Arc<dyn CommandHandler>,
     ) -> Result<Outcome, DispatchError> {
-        let (cluster, target, writer) = match self.admit(meta, &command, &ctx) {
+        let (cluster, context, target, writer) = match self.admit(meta, &command, &ctx) {
             Admission::Proceed {
                 cluster,
+                context,
                 target,
                 writer,
-            } => (cluster, target, writer),
+            } => (cluster, context, target, writer),
             Admission::Confirm(request) => return Ok(Outcome::NeedsConfirmation(request)),
             Admission::Deny { error, record } => {
                 if let Some(record) = record
@@ -73,6 +76,14 @@ impl MutationGuard {
             target,
             ctx.dry_run,
         );
+        // The second read-only check: the writer re-reads the flag before every request, so a
+        // flow that outlives the admission check still stops when read-only mode goes on.
+        let writer = Arc::new(ReadOnlyGate::new(
+            self.sessions.clone(),
+            cluster.clone(),
+            context,
+            writer,
+        ));
         let mutation = Mutation::new(cluster.clone(), writer, ctx.dry_run);
         let cx = HandlerContext::new(
             ctx.initiator,
@@ -195,6 +206,7 @@ impl MutationGuard {
 
         Admission::Proceed {
             cluster,
+            context,
             target,
             writer,
         }

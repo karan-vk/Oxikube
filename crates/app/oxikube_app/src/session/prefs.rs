@@ -11,6 +11,7 @@
 
 use std::sync::Arc;
 
+use oxikube_domain::ids::ClusterId;
 use oxikube_ports::{ClusterContext, ClusterPrefs, ClusterPrefsTable};
 
 use super::entry::Entry;
@@ -49,6 +50,13 @@ impl ClusterSessionManager {
         changed
     }
 
+    /// The settings of `cluster` as last pushed by [`set_prefs_table`](Self::set_prefs_table): its
+    /// own overrides, or the global fallback. Needs no open session, so a command can read the
+    /// read-only flag and colour of a cluster that is only in the catalog.
+    pub fn cluster_prefs(&self, cluster: &ClusterId) -> Arc<ClusterPrefs> {
+        self.shared.prefs.read().get(cluster).clone()
+    }
+
     /// Opens a `Disconnected` session for `context` configured from its settings (see
     /// [`SessionOptions::from_prefs`](super::config::SessionOptions::from_prefs); the kubeconfig context's namespace is the fallback
     /// default namespace), or returns the existing session unchanged.
@@ -65,11 +73,14 @@ impl Entry {
             return false;
         }
         let old = std::mem::replace(&mut self.prefs, prefs.clone());
-        if old.read_only != prefs.read_only {
+        // A field is announced only when the live value really moves: a command that applied the
+        // value to the session before writing it to the settings (read-only mode goes on first)
+        // finds it already in place when the settings echo arrives.
+        if old.read_only != prefs.read_only && self.read_only != prefs.read_only {
             self.read_only = prefs.read_only;
             updates.send(&self.id, SessionChange::ReadOnlyChanged(prefs.read_only));
         }
-        if old.colour != prefs.colour {
+        if old.colour != prefs.colour && self.colour != prefs.colour {
             self.colour = prefs.colour;
             updates.send(&self.id, SessionChange::ColourChanged(prefs.colour));
         }

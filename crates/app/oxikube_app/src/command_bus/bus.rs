@@ -51,8 +51,11 @@ impl CommandBus {
     /// 1. The handler is looked up by [`Command::id`]; an unregistered id is
     ///    [`DispatchError::UnknownCommand`].
     /// 2. A privileged command (read-only toggle) is refused for agents and plugins.
-    /// 3. A read command runs its handler at once, with no [`Mutation`](crate::guard::Mutation).
-    /// 4. A mutating command goes through the [`MutationGuard`] pipeline: read-only
+    /// 3. A posture command (read-only mode, colour, preset) runs the guard's posture
+    ///    pipeline: a simple confirm when it lifts read-only on a production-flagged
+    ///    cluster, then the handler, then an audit record. Read-only mode does not block it.
+    /// 4. A read command runs its handler at once, with no [`Mutation`](crate::guard::Mutation).
+    /// 5. A mutating command goes through the [`MutationGuard`] pipeline: read-only
     ///    check, confirmation (returning [`Outcome::NeedsConfirmation`] without waiting),
     ///    dry-run stage, the handler with a `Mutation`, then the audit record.
     ///
@@ -82,6 +85,15 @@ impl CommandBus {
                 command: id,
                 initiator: ctx.initiator,
             });
+        }
+        if !meta.mutating && policy::is_posture(&command) {
+            // Posture commands (read-only, colour, presets) never touch the cluster, so the
+            // read-only check does not apply, but they confirm and audit like a mutation.
+            return self
+                .inner
+                .guard
+                .run_posture(meta, command, ctx, entry.handler.clone())
+                .await;
         }
         if !meta.mutating {
             let cluster = policy::cluster_of(&command).cloned().or(ctx.cluster);

@@ -38,9 +38,11 @@
 //! is returned before any `.await`.
 
 mod confirm;
+mod gate;
 mod mutation;
 mod pipeline;
 pub mod policy;
+pub mod posture;
 
 #[cfg(test)]
 mod tests;
@@ -54,6 +56,7 @@ pub use confirm::{
     MAX_PENDING_CONFIRMATIONS,
 };
 pub use mutation::Mutation;
+pub use posture::{PrefsPatch, PrefsWriter, register_commands};
 
 use crate::audit::AuditLog;
 use crate::session::ClusterSessionManager;

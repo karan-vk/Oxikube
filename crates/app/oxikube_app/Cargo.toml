@@ -12,6 +12,7 @@ path = "src/oxikube_app.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 jiff.workspace = true
@@ -27,7 +28,6 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-async-trait.workspace = true
 oxikube_testkit.workspace = true
 proptest.workspace = true
 # The kind smoke test (`tests/kind_smoke`, E06-S12) runs the app services over the real adapter.

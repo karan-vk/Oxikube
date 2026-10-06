@@ -26,13 +26,16 @@ fn crates_register_through_install_and_the_owner_is_recorded() {
     for id in READS {
         assert_eq!(h.bus.owner(id), Some("test_views"), "{id}");
     }
-    assert_eq!(
-        h.bus.owner(CommandId::CLUSTER_TOGGLE_READ_ONLY),
-        Some("test_views")
-    );
+    for id in [
+        CommandId::CLUSTER_TOGGLE_READ_ONLY,
+        CommandId::CLUSTER_SET_COLOUR,
+        CommandId::CLUSTER_APPLY_PRESET,
+    ] {
+        assert_eq!(h.bus.owner(id), Some("oxikube_app::posture"), "{id}");
+    }
     assert!(!h.bus.is_registered(CommandId::APP_QUIT));
     let palette: Vec<_> = h.bus.commands().map(|m| m.id).collect();
-    assert_eq!(palette.len(), MUTATING.len() + READS.len() + 1);
+    assert_eq!(palette.len(), MUTATING.len() + READS.len() + 3);
 }
 
 #[test]
@@ -138,7 +141,8 @@ fn every_registered_command_has_a_tool_stub() {
         assert!(tool.description.contains(meta.id.as_str()));
         tool.validate().unwrap();
     }
-    assert_eq!(stubs, MUTATING.len() + READS.len());
+    // The posture commands add two stubs (colour, preset); the privileged toggle has none.
+    assert_eq!(stubs, MUTATING.len() + READS.len() + 2);
     assert_eq!(h.bus.tools().count(), stubs);
     assert_eq!(
         h.bus.tool(CommandId::POD_DELETE).unwrap().name.as_str(),

@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use futures::FutureExt;
-use oxikube_domain::OxiError;
 use oxikube_domain::audit::{AuditOutcome, AuditRecord, Initiator};
 use oxikube_domain::command::{self, Command, CommandId, CommandMeta};
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
@@ -21,8 +20,9 @@ use crate::command_bus::{
     CommandBus, CommandOutput, CommandRegistry, DispatchContext, DispatchError, HandlerContext,
     Outcome, RegisterError,
 };
-use crate::guard::{Confirmation, ConfirmationRequest, MutationGuard};
+use crate::guard::{Confirmation, ConfirmationRequest, MutationGuard, register_commands};
 use crate::session::{ClusterSessionManager, SessionOptions};
+use crate::testing_posture::FakePrefsWriter;
 
 /// The mutating commands the harness registers.
 pub(crate) const MUTATING: [CommandId; 5] = [
@@ -132,11 +132,10 @@ pub(crate) fn register_mutations(
     Ok(())
 }
 
-/// Registers the read test commands and the privileged read-only toggle.
+/// Registers the read test commands.
 pub(crate) fn register_reads(
     reg: &mut CommandRegistry,
     calls: &Calls,
-    manager: &ClusterSessionManager,
 ) -> Result<(), RegisterError> {
     for id in READS {
         let calls = calls.clone();
@@ -145,23 +144,7 @@ pub(crate) fn register_reads(
             async { Ok(CommandOutput::none()) }
         })?;
     }
-    let (calls, manager) = (calls.clone(), manager.clone());
-    reg.register(
-        declared(CommandId::CLUSTER_TOGGLE_READ_ONLY),
-        move |cmd: Command, cx: HandlerContext| {
-            record(&calls, &cx, cmd.id());
-            let result = match cmd {
-                Command::ClusterToggleReadOnly { cluster, read_only } => {
-                    let current = manager.get(&cluster).is_some_and(|s| s.read_only());
-                    manager
-                        .set_read_only(&cluster, read_only.unwrap_or(!current))
-                        .map(|_| CommandOutput::none())
-                }
-                _ => Err(OxiError::internal("wrong command")),
-            };
-            async move { result }
-        },
-    )
+    Ok(())
 }
 
 /// A bus with the test handlers over sessions for contexts `a` and `b`.
@@ -169,20 +152,21 @@ pub(crate) struct Harness {
     pub manager: ClusterSessionManager,
     pub connector: Arc<FakeClusterConnectorPort>,
     pub state: Arc<FakeStatePort>,
+    pub prefs: Arc<FakePrefsWriter>,
     pub bus: CommandBus,
     pub calls: Calls,
 }
 
 impl Harness {
     pub fn new() -> Self {
-        Self::with_extra(|_, _| Ok(()))
+        Self::with_extra(|_, _, _| Ok(()))
     }
 
     /// The standard harness plus `node::Cordon`, whose handler sends its write and
     /// then never finishes (a dispatch that is still in flight when its caller gives
     /// up).
     pub fn with_hanging_cordon() -> Self {
-        Self::with_extra(|reg, calls| {
+        Self::with_extra(|reg, calls, _| {
             let calls = calls.clone();
             reg.register(
                 declared(CommandId::NODE_CORDON),
@@ -208,9 +192,46 @@ impl Harness {
         })
     }
 
+    /// The standard harness with a handler for every other declared command too (each records
+    /// its call; a mutating one writes through its permit), so a test can iterate the whole
+    /// registry.
+    pub fn with_every_command() -> Self {
+        Self::with_extra(|reg, calls, _| {
+            for meta in command::COMMANDS {
+                if reg.contains(meta.id) {
+                    continue;
+                }
+                let calls = calls.clone();
+                reg.register(*meta, move |cmd: Command, cx: HandlerContext| {
+                    record(&calls, &cx, cmd.id());
+                    async move {
+                        if cmd.is_mutating() {
+                            let mutation = cx.require_mutation()?;
+                            mutation
+                                .writer()
+                                .delete(
+                                    &Gvk::new("", "v1", "Pod"),
+                                    Some("default"),
+                                    "x",
+                                    &mutation.delete_options(),
+                                )
+                                .await?;
+                        }
+                        Ok(CommandOutput::none())
+                    }
+                })?;
+            }
+            Ok(())
+        })
+    }
+
     /// The standard harness plus the commands `extra` registers.
-    fn with_extra(
-        extra: impl FnOnce(&mut CommandRegistry, &Calls) -> Result<(), RegisterError>,
+    pub fn with_extra(
+        extra: impl FnOnce(
+            &mut CommandRegistry,
+            &Calls,
+            &ClusterSessionManager,
+        ) -> Result<(), RegisterError>,
     ) -> Self {
         let connector = Arc::new(FakeClusterConnectorPort::new());
         let source = Arc::new(
@@ -227,10 +248,16 @@ impl Harness {
             .install("test_workloads", |reg| register_mutations(reg, &calls))
             .expect("mutations register");
         registry
-            .install("test_views", |reg| register_reads(reg, &calls, &manager))
+            .install("test_views", |reg| register_reads(reg, &calls))
             .expect("reads register");
+        let prefs = Arc::new(FakePrefsWriter::new(manager.clone()));
         registry
-            .install("test_extra", |reg| extra(reg, &calls))
+            .install("oxikube_app::posture", |reg| {
+                register_commands(reg, manager.clone(), prefs.clone())
+            })
+            .expect("posture commands register");
+        registry
+            .install("test_extra", |reg| extra(reg, &calls, &manager))
             .expect("extra commands register");
         let guard = MutationGuard::new(manager.clone(), state.clone(), clock);
         Self {
@@ -238,6 +265,7 @@ impl Harness {
             manager,
             connector,
             state,
+            prefs,
             calls,
         }
     }
@@ -251,6 +279,16 @@ impl Harness {
                 ..SessionOptions::default()
             },
         );
+        self.manager
+            .connect(&id(name))
+            .now_or_never()
+            .expect("connect does not wait")
+            .expect("connect");
+    }
+
+    /// Opens `name` from its settings (see `FakePrefsWriter::seed`) and connects it.
+    pub fn connect_configured(&self, name: &str) {
+        self.manager.open_configured(&cluster_context(name));
         self.manager
             .connect(&id(name))
             .now_or_never()

@@ -15,12 +15,16 @@ use crate::safety::Risk;
 impl CommandId {
     /// `app::Quit`: quit the application (confirms first while operations run).
     pub const APP_QUIT: CommandId = CommandId::new("app::Quit");
+    /// `cluster::ApplyPreset`: give a cluster a prod / staging / dev / none posture.
+    pub const CLUSTER_APPLY_PRESET: CommandId = CommandId::new("cluster::ApplyPreset");
     /// `cluster::Connect`: connect a cluster (open its session).
     pub const CLUSTER_CONNECT: CommandId = CommandId::new("cluster::Connect");
     /// `cluster::Disconnect`: disconnect a cluster or cancel the attempt.
     pub const CLUSTER_DISCONNECT: CommandId = CommandId::new("cluster::Disconnect");
     /// `cluster::Select`: make a cluster the active one.
     pub const CLUSTER_SELECT: CommandId = CommandId::new("cluster::Select");
+    /// `cluster::SetColour`: set or clear a cluster's accent colour.
+    pub const CLUSTER_SET_COLOUR: CommandId = CommandId::new("cluster::SetColour");
     /// `cluster::ToggleFavourite`: mark or unmark a cluster as a favourite.
     pub const CLUSTER_TOGGLE_FAVOURITE: CommandId = CommandId::new("cluster::ToggleFavourite");
     /// `cluster::ToggleReadOnly`: set or toggle a cluster's read-only mode.
@@ -96,6 +100,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     CommandMeta::read(
+        CommandId::CLUSTER_APPLY_PRESET,
+        "Apply Cluster Preset",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::CLUSTER_SELECT,
         "Select Cluster",
         CommandScope::Global,
@@ -106,6 +116,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::CLUSTER_TOGGLE_FAVOURITE,
         "Toggle Favourite Cluster",
         CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLUSTER_SET_COLOUR,
+        "Set Cluster Colour",
+        CommandScope::Cluster,
         NONE,
     ),
     CommandMeta::privileged(

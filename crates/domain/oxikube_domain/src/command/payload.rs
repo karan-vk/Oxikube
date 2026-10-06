@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use super::id::CommandId;
 use super::meta::CommandMeta;
 use super::registry;
+use crate::colour::ClusterColour;
 use crate::ids::{ClusterId, Gvk, ResourceRef};
+use crate::preset::ClusterPreset;
 
 /// How the API server deletes dependents of an object.
 #[derive(
@@ -74,6 +76,27 @@ pub enum Command {
         /// Desired state; `None` flips the current one.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         read_only: Option<bool>,
+    },
+    /// Set (`Some`) or clear (`None`) a cluster's accent colour.
+    ///
+    /// Not a cluster mutation: it only edits the cluster's own settings, so it runs on a
+    /// read-only cluster. It is audited like a posture change.
+    #[serde(rename = "cluster::SetColour")]
+    ClusterSetColour {
+        /// The cluster to change.
+        cluster: ClusterId,
+        /// The colour; `None` clears it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        colour: Option<ClusterColour>,
+    },
+    /// Give a cluster a named posture: its colour and, for production, read-only mode on.
+    /// A preset never lowers protection (see [`ClusterPreset`]).
+    #[serde(rename = "cluster::ApplyPreset")]
+    ClusterApplyPreset {
+        /// The cluster to change.
+        cluster: ClusterId,
+        /// The preset to apply.
+        preset: ClusterPreset,
     },
     /// Choose the namespaces a cluster's session watches.
     #[serde(rename = "namespace::Select")]
@@ -252,6 +275,8 @@ impl Command {
             Command::ClusterSelect { .. } => CommandId::CLUSTER_SELECT,
             Command::ClusterToggleFavourite { .. } => CommandId::CLUSTER_TOGGLE_FAVOURITE,
             Command::ClusterToggleReadOnly { .. } => CommandId::CLUSTER_TOGGLE_READ_ONLY,
+            Command::ClusterSetColour { .. } => CommandId::CLUSTER_SET_COLOUR,
+            Command::ClusterApplyPreset { .. } => CommandId::CLUSTER_APPLY_PRESET,
             Command::NamespaceSelect { .. } => CommandId::NAMESPACE_SELECT,
             Command::NamespaceToggleFavourite { .. } => CommandId::NAMESPACE_TOGGLE_FAVOURITE,
             Command::ViewOpen { .. } => CommandId::VIEW_OPEN,
@@ -365,6 +390,18 @@ mod tests {
             Command::ClusterToggleReadOnly {
                 cluster: cluster(),
                 read_only: Some(true),
+            },
+            Command::ClusterSetColour {
+                cluster: cluster(),
+                colour: Some(ClusterColour::rgb(0xe5, 0x48, 0x4d)),
+            },
+            Command::ClusterSetColour {
+                cluster: cluster(),
+                colour: None,
+            },
+            Command::ClusterApplyPreset {
+                cluster: cluster(),
+                preset: ClusterPreset::Prod,
             },
             Command::NamespaceSelect {
                 cluster: cluster(),
@@ -552,6 +589,8 @@ mod tests {
                     | Command::ResourceOpenList { .. }
                     | Command::ResourceViewYaml { .. }
                     | Command::ClusterToggleReadOnly { .. }
+                    | Command::ClusterSetColour { .. }
+                    | Command::ClusterApplyPreset { .. }
             ) {
                 assert!(!command.is_mutating(), "{}", command.id());
             }

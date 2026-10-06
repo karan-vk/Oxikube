@@ -12,6 +12,7 @@
 //! | [`quantity`], [`age`] | [`Quantity`] parsing/formatting and [`Age`] formatting |
 //! | [`session`] | the cluster session state machine, `NamespaceSelection`, `WatchScope` |
 //! | [`colour`] | [`ClusterColour`], a cluster's `#rrggbb` accent colour |
+//! | [`preset`] | [`ClusterPreset`]: the prod / staging / dev / none postures (colour, read-only) |
 //! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
@@ -44,6 +45,7 @@ pub mod kinds;
 pub mod log;
 pub mod metrics;
 pub mod portforward;
+pub mod preset;
 pub mod quantity;
 pub mod redact;
 pub mod resource;
@@ -59,6 +61,7 @@ pub use command::{
 pub use error::{ErrorKind, OxiError, OxiResult};
 pub use error_details::{ConflictDetails, ConflictReason, FieldCause, ValidationDetails};
 pub use portforward::{ForwardPort, ForwardSpec, ForwardStatus};
+pub use preset::ClusterPreset;
 pub use quantity::{Quantity, QuantityError, QuantityFormat};
 pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError};
 pub use safety::{ConfirmTier, Initiator, Risk};
