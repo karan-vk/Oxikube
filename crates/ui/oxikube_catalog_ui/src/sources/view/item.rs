@@ -7,7 +7,7 @@ use oxikube_workspace::{Item, TabContent};
 use super::SourcesView;
 
 /// The deduplication key of the tab: opening it twice shows the open one.
-const ITEM_KEY: &str = "kubeconfig-sources";
+const ITEM_KEY: &str = crate::sources::SOURCES_VIEW;
 
 impl Item for SourcesView {
     fn tab_content(&self, _: &App) -> TabContent {

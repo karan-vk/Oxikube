@@ -31,3 +31,16 @@ pub fn crash_dir(data_dir: &Path) -> PathBuf {
 pub fn state_db_path(data_dir: &Path) -> PathBuf {
     data_dir.join("state.db")
 }
+
+/// Where pasted kubeconfigs are stored: `<config dir>/kubeconfigs` (ADR 0015). For the embedded
+/// defaults (tests, no config dir) a directory under the system temp dir, which nothing writes to
+/// unless the user pastes a kubeconfig in such a run.
+pub fn kubeconfigs_dir(config: &super::ConfigSource) -> PathBuf {
+    let dir = match config {
+        super::ConfigSource::UserDir => oxikube_settings::paths::config_dir(),
+        super::ConfigSource::Dir(dir) => Some(dir.clone()),
+        super::ConfigSource::Memory => None,
+    };
+    dir.unwrap_or_else(|| std::env::temp_dir().join("oxikube"))
+        .join("kubeconfigs")
+}

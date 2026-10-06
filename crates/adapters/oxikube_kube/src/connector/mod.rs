@@ -27,8 +27,10 @@
 //!   [`ClusterConnection`] stops the liveness loop and the health bridge; feeds stop when the
 //!   registry and every lease on it are gone.
 //!
-//! The kubeconfig is fixed at construction. Hot reload of sources (E03-S02) swaps pools in the
-//! binary's wiring, not here.
+//! The kubeconfig is set at construction. Hot reload of sources (E03-S02) is the wiring's job:
+//! after each reload it hands the new loader result to [`KubeConnector::replace_loaded`], which
+//! passes it to every pool built so far (each drops only the clients of contexts that changed or
+//! vanished) and to every pool built later. Live connections keep the client they connected with.
 //!
 //! Plain Tokio; nothing blocks. Credentials never leave the pool: errors are classified and
 //! redacted by the modules this one calls.
@@ -42,7 +44,7 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use kube::config::Kubeconfig;
 use oxikube_domain::OxiResult;
-use oxikube_domain::ids::ClusterId;
+use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{
     ClusterConnection, ClusterConnectorPort, ClusterPorts, ConnectRequest, ConnectionGuard,
     ExecInteractivity,
@@ -55,6 +57,7 @@ use crate::auth::{CredentialRefresh, ExecInteractivePolicy};
 use crate::budget::{BudgetConfig, FeedRegistry};
 use crate::discovery::KubeDiscovery;
 use crate::health::{DEFAULT_RULES_TTL, LivenessConfig, RulesCache};
+use crate::kubeconfig::LoadedKubeconfig;
 use crate::logs::KubeLogs;
 use crate::metrics::KubeMetrics;
 use crate::pool::{ClientPool, PoolConfig};
@@ -101,6 +104,9 @@ struct Shared {
     rules: Arc<RulesCache>,
     /// The live connection of each cluster, weakly: the connection's guard owns the state.
     live: Mutex<HashMap<ClusterId, Weak<ConnectionState>>>,
+    /// The last kubeconfig handed to [`KubeConnector::replace_loaded`], for pools built after
+    /// it. Locked after `pools`, never before.
+    latest: Mutex<Option<Arc<LoadedKubeconfig>>>,
 }
 
 impl KubeConnector {
@@ -139,6 +145,7 @@ impl KubeConnector {
                 rules: Arc::new(RulesCache::new(config.rules_ttl)),
                 config,
                 live: Mutex::new(HashMap::new()),
+                latest: Mutex::new(None),
             }),
         }
     }
@@ -156,12 +163,39 @@ impl KubeConnector {
         }
     }
 
+    /// Hands a reloaded kubeconfig (a [`KubeconfigSources`](crate::sources::KubeconfigSources)
+    /// reload) to every pool built so far and to every pool built from now on. Each pool drops
+    /// only the clients of contexts whose connection changed or that vanished
+    /// ([`ClientPool::replace_loaded`]); connections already made keep their client. Returns the
+    /// contexts whose pooled clients were dropped, sorted, without duplicates. The kubeconfig
+    /// holds credentials: never log it.
+    pub fn replace_loaded(&self, loaded: Arc<LoadedKubeconfig>) -> Vec<ContextName> {
+        let pools: Vec<Arc<ClientPool>> = {
+            let pools = self.shared.pools.lock();
+            *self.shared.latest.lock() = Some(loaded.clone());
+            pools.values().cloned().collect()
+        };
+        let mut dropped: Vec<ContextName> = pools
+            .iter()
+            .flat_map(|pool| pool.replace_loaded(&loaded))
+            .collect();
+        dropped.sort_unstable_by(|a, b| a.as_str().cmp(b.as_str()));
+        dropped.dedup();
+        dropped
+    }
+
     fn pool(&self, interactivity: ExecInteractivity) -> Arc<ClientPool> {
         self.shared
             .pools
             .lock()
             .entry(interactivity)
-            .or_insert_with(|| Arc::new((self.shared.factory)(interactivity)))
+            .or_insert_with(|| {
+                let pool = (self.shared.factory)(interactivity);
+                if let Some(loaded) = self.shared.latest.lock().as_ref() {
+                    pool.replace_loaded(loaded);
+                }
+                Arc::new(pool)
+            })
             .clone()
     }
 }

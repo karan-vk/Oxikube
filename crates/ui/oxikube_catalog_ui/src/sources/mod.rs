@@ -45,6 +45,9 @@ pub mod test_support;
 #[cfg(test)]
 mod tests;
 
+/// The id of the sources screen in `view::Open` (`Command::ViewOpen { view }`), and its tab key.
+pub const SOURCES_VIEW: &str = "kubeconfig-sources";
+
 pub use backend::{ServiceBackend, SourcesBackend};
 pub use model::{LoadState, Notice, SourcesModel, status_text};
 pub use paste::{PasteDialog, storage_warning};

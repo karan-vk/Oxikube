@@ -35,18 +35,27 @@ fn renders_main_window_at_window_pixel_size() {
     let image = load_png(&out).expect("PNG written");
     assert_eq!(image.dimensions(), EXPECTED_SIZE, "window pixel size");
     assert!(!image.as_raw().is_empty());
-    // Background, title bar, border and the title glyphs: more than a flat fill.
-    assert!(distinct_colors_at_least(&image, 5), "frame looks blank");
-    // The empty body is the dark `background` token (0x1e2127).
+    // The catalog home (E07-S00): rows, badges, the search field, the selected row's highlight.
+    assert!(distinct_colors_at_least(&image, 12), "frame looks blank");
+    // Below the catalog's rows the body is the dark `background` token (0x1e2127).
     let (w, h) = image.dimensions();
+    let body = image.get_pixel(w / 2, h * 3 / 4).0;
     assert_eq!(
-        image.get_pixel(w / 2, h - 10).0,
+        body,
         [0x1e, 0x21, 0x27, 0xff],
         "body is not the background token"
     );
-    // The title bar (34 logical px = 68 device px) is drawn in its own, lighter colour.
-    let bar = image.get_pixel(w / 2, 20).0;
-    assert_ne!(bar, image.get_pixel(w / 2, h - 10).0, "no title bar drawn");
+    // The title bar (34 logical px = 68 device px) and the status bar are drawn in their own,
+    // lighter colour.
+    assert_ne!(image.get_pixel(w / 2, 20).0, body, "no title bar drawn");
+    assert_ne!(
+        image.get_pixel(w / 2, h - 10).0,
+        body,
+        "no status bar drawn"
+    );
+    // The first catalog row is selected: its highlight is neither background nor bar.
+    let first_row = image.get_pixel(w / 2, 338).0;
+    assert_ne!(first_row, body, "no selected catalog row");
 
     // Golden for this OS, when one exists (`OXIKUBE_UPDATE_GOLDENS=1` regenerates it).
     let goldens = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens");

@@ -7,6 +7,15 @@ use oxikube_domain::ids::ClusterId;
 use super::CatalogView;
 
 impl CatalogView {
+    /// Asks for the kubeconfig sources screen: `view::Open` with
+    /// [`SOURCES_VIEW`](crate::sources::SOURCES_VIEW), which the host registers on the bus.
+    pub fn open_sources(&mut self, cx: &mut Context<Self>) {
+        let command = Command::ViewOpen {
+            view: crate::sources::SOURCES_VIEW.to_owned(),
+        };
+        self.deps.dispatcher.clone().dispatch(command, cx);
+    }
+
     /// Moves the keyboard focus to the search field.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search

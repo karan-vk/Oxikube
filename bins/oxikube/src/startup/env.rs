@@ -32,8 +32,10 @@ pub enum RuntimeChoice {
 /// How the ports bundle is built.
 #[derive(Clone)]
 pub enum PortsChoice {
-    /// The SQLite adapter at this path, opened in the background (`:memory:` for a throwaway
-    /// database), and no secret store yet.
+    /// The app's adapters: the SQLite state db at this path, opened in the background
+    /// (`:memory:` for a throwaway database), the kube adapters (`crate::kube_ports`, nothing
+    /// read until first use) and no secret store yet. Needs the Tokio runtime
+    /// ([`RuntimeChoice::Tokio`]).
     Sqlite(PathBuf),
     /// A bundle built by the caller (testkit fakes).
     Provided(AppPorts),
@@ -82,7 +84,7 @@ impl StartupEnv {
 #[cfg(any(test, feature = "test-support"))]
 impl StartupEnv {
     /// Test fakes, no disk, no OS threads: the embedded defaults, the deterministic runtime and a
-    /// `FakeStatePort` / `FakeSecretStorePort` bundle ([`StartupEnv::test_with`] over
+    /// `FakeStatePort` / `FakeSecretStorePort` / fake cluster source and connector bundle ([`StartupEnv::test_with`] over
     /// `TestPorts::seeded()`).
     pub fn test() -> Self {
         Self::test_with(&oxikube_testkit::TestPorts::seeded())
@@ -92,8 +94,9 @@ impl StartupEnv {
     /// bundle, so the test keeps handles to script them and to assert on their recorded calls.
     pub fn test_with(ports: &oxikube_testkit::TestPorts) -> Self {
         use std::sync::Arc;
-        let bundle =
-            AppPorts::new(ports.state.clone()).with_secrets(Arc::clone(&ports.secrets) as _);
+        let clusters = crate::app_state::ClusterAdapters::fakes(ports);
+        let bundle = AppPorts::new(ports.state.clone(), clusters)
+            .with_secrets(Arc::clone(&ports.secrets) as _);
         Self {
             config: ConfigSource::Memory,
             runtime: RuntimeChoice::Deterministic,

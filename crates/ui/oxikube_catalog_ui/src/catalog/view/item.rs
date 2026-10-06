@@ -7,7 +7,7 @@ use oxikube_workspace::{Item, TabContent};
 use super::CatalogView;
 
 /// The deduplication key of the catalog tab: opening it twice shows the open one.
-const ITEM_KEY: &str = "catalog";
+const ITEM_KEY: &str = crate::catalog::CATALOG_VIEW;
 
 impl Item for CatalogView {
     fn tab_content(&self, _: &App) -> TabContent {

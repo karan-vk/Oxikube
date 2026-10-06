@@ -1,7 +1,7 @@
 [alias]
 x = "run --quiet --package xtask --"
 xtask = "run --quiet --package xtask --"
-it = "test -p oxikube_kube -p oxikube_app -p oxikube_testkit --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration --"
+it = "test -p oxikube_kube -p oxikube_app -p oxikube_testkit -p oxikube --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration,oxikube/integration --"
 
 [build]
 # Keep incremental builds fast on Apple silicon; CI overrides as needed.

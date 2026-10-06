@@ -5,9 +5,10 @@ use gpui::{
     div, px, uniform_list,
 };
 use oxikube_keymap::KeyContextual as _;
+use oxikube_ui::button::Button;
 use oxikube_ui::input::Input;
 use oxikube_ui::layout::{h_flex, v_flex};
-use oxikube_ui::{ActiveTokens as _, Icon, IconName, u};
+use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::row::COLUMNS;
 use super::{CatalogView, empty};
@@ -51,7 +52,7 @@ impl Render for CatalogView {
 }
 
 impl CatalogView {
-    fn header(&self, cx: &Context<Self>) -> impl IntoElement {
+    fn header(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let count = self.model.count_label();
@@ -83,6 +84,15 @@ impl CatalogView {
                     Input::new(&self.search)
                         .prefix(Icon::new(IconName::Search).color(colors.text_muted))
                         .cleanable(true),
+                ),
+            )
+            .child(
+                div().debug_selector(|| "catalog-sources".into()).child(
+                    Button::new("catalog-sources")
+                        .small()
+                        .icon(Icon::new(IconName::FileCode).size(u(px(14.))))
+                        .label("Kubeconfig sources")
+                        .on_click(cx.listener(|this, _, _, cx| this.open_sources(cx))),
                 ),
             )
     }

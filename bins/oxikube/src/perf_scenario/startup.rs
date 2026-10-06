@@ -5,7 +5,8 @@
 //! hook) into a scratch data directory, the platform (timed as the `assets` stage, which builds the
 //! `Application` in the app), [`startup::init`] with a scratch config directory (the settings,
 //! keymap and themes files are created and read like a first launch), then the main window behind
-//! the startup placeholder with the first-frame probe. Differences from the app, each because the
+//! the startup placeholder with the cluster UI mounted (catalog home, hotbar, cluster tabs; E07-S00)
+//! and the first-frame probe. Differences from the app, each because the
 //! headless scheduler rejects foreign threads waking its tasks: no settings/keymap file watchers
 //! (`ConfigSource::Dir`), and the state db is an in-memory fake (the SQLite open runs off the UI
 //! thread in the app, so it is not on the path to the first frame; its cost is measured separately
@@ -23,11 +24,11 @@
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
-use gpui::{AnyView, AnyWindowHandle, App, AppContext as _};
-use oxikube::app_state::AppPorts;
+use gpui::{AnyView, AnyWindowHandle, App, AppContext as _, HeadlessAppContext};
+use oxikube::app_state::{AppPorts, ClusterAdapters};
 use oxikube::startup::{
     self, ConfigSource, PortsChoice, RuntimeChoice, Stage, StartupEnv, StartupReport,
 };
@@ -61,12 +62,15 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
     let mut cx = earlier.time(Stage::Assets, || {
         headless::headless_context_with_assets(Arc::new(oxikube_ui::Assets))
     });
+    // The mount's reads run on real Tokio threads (E07-S00), which wake the headless scheduler's
+    // tasks from outside its thread. Without this, each such wake makes the test scheduler record a
+    // symbolised `Backtrace` as a determinism error, which loads the binary's debug info: hundreds
+    // of MiB of RSS on Linux that the app, on the platform dispatcher, never pays.
+    cx.allow_parking();
     let env = StartupEnv {
         config: ConfigSource::Dir(scratch.join("config")),
         runtime: RuntimeChoice::Tokio,
-        ports: PortsChoice::Provided(AppPorts::new(Arc::new(
-            oxikube_testkit::FakeStatePort::new(),
-        ))),
+        ports: PortsChoice::Provided(fake_ports()),
         data_dir: boot.data_dir,
         log: boot.log,
         earlier,
@@ -80,10 +84,12 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
     let opening = Instant::now();
     let window: AnyWindowHandle = cx
         .open_window(WINDOW_SIZE, move |window, cx| {
-            oxikube_workspace::window::build_root_with_layout(
+            // The app's window: the cluster UI mounted before the first frame (E07-S00).
+            oxikube_workspace::window::build_root_mounted(
                 window,
                 cx,
                 Some(layout),
+                oxikube::mount::mount_main_window,
                 move |content, cx| wrap(content, hook, cx),
             )
         })?
@@ -115,7 +121,7 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
         startup::first_frame::summary(&report)
     );
 
-    cx.run_until_parked();
+    settle_kube_tasks(&mut cx)?;
     if probe && recorder.frames_recorded() == 0 {
         bail!("no frame was drawn while opening the window");
     }
@@ -148,6 +154,13 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
     Ok(run.into_sample("startup", extra))
 }
 
+/// The app's ports with in-memory fakes: the state db (see the module docs) and the cluster side
+/// (an empty catalog, so nothing is read or connected).
+fn fake_ports() -> AppPorts {
+    let ports = oxikube_testkit::TestPorts::empty();
+    AppPorts::new(ports.state.clone(), ClusterAdapters::fakes(&ports))
+}
+
 /// The window content as the app wraps it: the `--perf` hook (when probing), then the first-frame
 /// probe.
 fn wrap(content: AnyView, hook: Option<Arc<Recorder>>, cx: &mut App) -> AnyView {
@@ -156,6 +169,32 @@ fn wrap(content: AnyView, hook: Option<Arc<Recorder>>, cx: &mut App) -> AnyView 
         None => content,
     };
     startup::window::probe_first_frame(content, cx)
+}
+
+/// How long [`settle_kube_tasks`] waits for the mount's background reads.
+const SETTLE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Runs the window's tasks until the work the mount queued on the Tokio bridge (the catalog and
+/// hotbar reads, E07-S00) has finished and its results are applied. Those reads finish on Tokio's
+/// own threads at a time the headless scheduler does not control: a result landing inside the
+/// frame loop would redraw the window once more and add an extra frame to `frame_ms`. A Tokio task
+/// wakes its GPUI awaiter before it leaves the alive count, so a count of 0 followed by
+/// `run_until_parked` means every result has been applied.
+fn settle_kube_tasks(cx: &mut HeadlessAppContext) -> Result<()> {
+    let tokio = cx.update(|cx| oxikube_runtime::handle(cx));
+    let started = Instant::now();
+    loop {
+        cx.run_until_parked();
+        let alive = tokio.as_ref().map_or(0, |h| h.metrics().num_alive_tasks());
+        if alive == 0 {
+            cx.run_until_parked();
+            return Ok(());
+        }
+        if started.elapsed() > SETTLE_TIMEOUT {
+            bail!("{alive} Tokio task(s) still running {SETTLE_TIMEOUT:?} after the first frame");
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
 }
 
 /// Fails when a deferred service started before the first frame.

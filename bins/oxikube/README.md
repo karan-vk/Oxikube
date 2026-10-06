@@ -9,8 +9,8 @@ runtime → settings → theme → keymap → ui → state db (background open) 
 feature crates → keymap re-bind → open window. It is the only crate allowed to depend on every
 layer.
 
-The crate is a library (`src/lib.rs`: `startup`, `app_state`) plus the thin `main.rs`, so tests can
-run the real init order. `AppState::test(cx)` (tests, or feature `test-support`) runs it on testkit
+The crate is a library (`src/lib.rs`: `startup`, `app_state`, `kube_ports`, `mount`, `cluster_prefs`)
+plus the thin `main.rs`, so tests can run the real init order. `AppState::test(cx)` (tests, or feature `test-support`) runs it on testkit
 fakes. To add a feature crate's `init(cx)`, add a line to `startup::FEATURES`.
 
 Files the app writes live in the data directory (`$OXIKUBE_DATA_DIR`, else
@@ -19,9 +19,18 @@ Files the app writes live in the data directory (`$OXIKUBE_DATA_DIR`, else
 panic, newest twenty kept; nothing is uploaded) and `state.db`. Settings, keymap and themes are in the
 config directory (`$OXIKUBE_CONFIG_DIR`, else `~/.config/oxikube`).
 
-Today it opens the themed main window (`oxikube_workspace::window`: `Root`, title bar, application
-menu; E05-S03) with an empty body; E05-S04 mounts the workspace in it and E05-S13 holds startup to
-the 400 ms budget (`docs/PERFORMANCE.md`). Linux packaging assets (`.desktop` file, icon) live in
+It opens the themed main window (`oxikube_workspace::window`: `Root`, title bar, application menu;
+E05-S03) and mounts the cluster UI in it before the first frame (`src/mount`, E07-S00): the catalog
+home as the first tab, the hotbar, the cluster tabs (each with its sidebar, connect views and
+namespace selector), the status bar item, session restore, and the command bus with its
+`MutationGuard` (stored in `AppState`). The cluster side runs on `oxikube_kube` (`src/kube_ports`:
+the kubeconfig catalog, built on its first use after the first frame, and the connector);
+E05-S13 holds startup to the 400 ms budget (`docs/PERFORMANCE.md`).
+
+Using it: `cargo run -p oxikube`, pick a context in the catalog (type to search, Enter or click)
+and its cluster tab opens with the sidebar; "Kubeconfig sources" in the catalog header opens the
+sources screen. `cargo test -p oxikube --features integration --test kind_app` (with
+`OXIKUBE_TEST_CONTEXT=kind-oxikube`) runs the same path against the kind cluster. Linux packaging assets (`.desktop` file, icon) live in
 `resources/linux/` and are named after `oxikube_workspace::window::APP_ID`.
 
 ## Flags

@@ -19,9 +19,26 @@ pub struct Feature {
     pub init: fn(&mut App),
 }
 
-/// The feature crates, in the order their `init`s run. Empty until the first feature epic lands
-/// (the palette, resources table and others have no `init` yet).
-pub const FEATURES: &[Feature] = &[];
+/// The feature crates, in the order their `init`s run.
+pub const FEATURES: &[Feature] = &[
+    Feature {
+        name: "oxikube_catalog_ui",
+        init: oxikube_catalog_ui::init,
+    },
+    Feature {
+        name: "cluster_prefs",
+        init: follow_cluster_prefs,
+    },
+];
+
+/// The per-cluster settings (`clusters.<id>`) follow into the session manager for the life of the
+/// app (E06-S08).
+fn follow_cluster_prefs(cx: &mut App) {
+    if let Some(state) = crate::app_state::AppState::try_global(cx) {
+        let sessions = state.services().sessions.clone();
+        crate::cluster_prefs::follow_cluster_settings(cx, sessions).detach();
+    }
+}
 
 /// Runs each of `features` in order, timing the whole stage as [`Stage::Features`] and logging
 /// each crate's own cost.

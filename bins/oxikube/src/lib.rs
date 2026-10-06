@@ -11,10 +11,17 @@
 //!
 //! - [`cluster_prefs`]: pushes the per-cluster settings into the `ClusterSessionManager` and
 //!   keeps them in sync with hot reload (E06-S08).
+//! - [`kube_ports`]: the cluster adapters of the app (`oxikube_kube`: the kubeconfig catalog,
+//!   built on first use, and the connector), the system clock (E07-S00).
+//! - [`mount`]: the cluster UI in the main window: catalog home, hotbar, cluster tabs with their
+//!   sidebar, connect views and namespace selector, the status bar item, the command bus, session
+//!   restore (E07-S00).
 //!
 //! Everything else (command line, `--perf`, screenshot and perf scenarios) stays private to the
 //! binary.
 
 pub mod app_state;
 pub mod cluster_prefs;
+pub mod kube_ports;
+pub mod mount;
 pub mod startup;
