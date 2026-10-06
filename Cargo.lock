@@ -5592,6 +5592,7 @@ dependencies = [
  "oxikube_keymap",
  "oxikube_ports",
  "oxikube_runtime",
+ "oxikube_settings",
  "oxikube_testkit",
  "oxikube_ui",
  "oxikube_workspace",
@@ -5599,6 +5600,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "tempfile",
  "tracing",
 ]
 
@@ -5794,11 +5796,14 @@ name = "oxikube_runtime"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "dirs 7.0.0",
  "futures",
  "gpui-pre",
  "libc",
+ "notify 8.2.0",
  "oxikube_domain",
+ "oxikube_ports",
  "serde",
  "serde_json",
  "tempfile",

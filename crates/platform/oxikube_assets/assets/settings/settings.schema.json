@@ -59,6 +59,9 @@
             "null"
           ]
         },
+        "kubeconfig": {
+          "$ref": "#/$defs/KubeconfigSettingsContent"
+        },
         "log": {
           "$ref": "#/$defs/LogSettingsContent"
         },
@@ -227,6 +230,64 @@
       ],
       "pattern": "^https?://[^\\s@?#/]+(/[^\\s?#]*)?$",
       "type": "string"
+    },
+    "KubeconfigSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about kubeconfig sources.",
+      "properties": {
+        "sources": {
+          "description": "The kubeconfig files and folders to read, in order: the first definition of a context\nname wins. `{ \"kind\": \"default\" }` is `KUBECONFIG`, else `~/.kube/config`;\n`{ \"kind\": \"file\", \"path\": \"...\" }` and `{ \"kind\": \"dir\", \"path\": \"...\" }` add your own.\nThis list replaces the default list as a whole, so keep the `default` entry if you\nstill want kubectl's files.",
+          "items": {
+            "$ref": "#/$defs/KubeconfigSourceEntry"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "KubeconfigSourceEntry": {
+      "additionalProperties": false,
+      "description": "One entry of `kubeconfig.sources`.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/KubeconfigSourceKind",
+          "description": "What the entry is."
+        },
+        "path": {
+          "description": "The file or folder. A leading `~` is your home directory. Not used by `default`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "KubeconfigSourceKind": {
+      "description": "What a list entry points at.",
+      "oneOf": [
+        {
+          "const": "default",
+          "description": "What kubectl reads: `KUBECONFIG`, else `~/.kube/config`. Takes no `path`.",
+          "type": "string"
+        },
+        {
+          "const": "file",
+          "description": "One kubeconfig file, read where it is.",
+          "type": "string"
+        },
+        {
+          "const": "dir",
+          "description": "A folder of kubeconfig files (the files directly inside it).",
+          "type": "string"
+        }
+      ]
     },
     "LogSettingsContent": {
       "additionalProperties": false,
@@ -493,6 +554,9 @@
         "string",
         "null"
       ]
+    },
+    "kubeconfig": {
+      "$ref": "#/$defs/KubeconfigSettingsContent"
     },
     "log": {
       "$ref": "#/$defs/LogSettingsContent"

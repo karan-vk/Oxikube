@@ -7,11 +7,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use futures::stream::BoxStream;
 use futures::{FutureExt, StreamExt};
 use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::secrets::SecretString;
-use oxikube_ports::{SourceId, SourceKind};
+use oxikube_ports::{ClusterContext, ClusterSourcePort, SourceId, SourceKind, SourcesChanged};
 
 use crate::kubeconfig::in_cluster_cluster_id;
 use crate::pool::{

@@ -11,6 +11,8 @@
 //! | `layout` | expands the configured sources into files; directory filtering |
 //! | `snapshot` | the catalog as of one load, and the diff between two |
 //! | `watcher` | `notify` on parent directories, debounce, 60 s poll, abort-on-drop |
+//! | `port` | the [`ClusterSourcePort`] impl: the list, `set_user_sources`, `source_statuses`, `validate_kubeconfig` |
+//! | `status` | how reading each source went (the port's `SourceStatus`, E06-S05) |
 //! | `pasted` | pasted kubeconfigs, stored in the keychain, never in a file |
 //!
 //! # Sources
@@ -31,8 +33,12 @@
 //!    source holding the synthetic `in-cluster` context, only when 1-3 gave no context and no
 //!    file was broken ([`apply_in_cluster_fallback`]).
 //!
-//! The source list is fixed at construction apart from pasted kubeconfigs. Changing the
-//! user-added paths at runtime means building a new adapter (the settings UI is E06).
+//! The user-added paths and the default tier can be replaced at run time with
+//! [`set_user_sources`](ClusterSourcePort::set_user_sources) (the settings key
+//! `kubeconfig.sources`, E06-S05): it stores the new list, reloads, and tells the watcher to
+//! watch the new directories. The sources screen reads
+//! [`source_statuses`](ClusterSourcePort::source_statuses) to show, per source, whether it was
+//! found, how many contexts it gave and why it was skipped.
 //!
 //! # Change detection
 //!
@@ -71,7 +77,9 @@
 mod config;
 mod layout;
 mod pasted;
+mod port;
 mod snapshot;
+mod status;
 mod watcher;
 
 #[cfg(test)]
@@ -82,16 +90,11 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use futures::StreamExt;
 use futures::channel::mpsc;
-use futures::stream::BoxStream;
 use oxikube_domain::ids::ContextName;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::secrets::SecretString;
-use oxikube_ports::{
-    ClusterContext, ClusterSource, ClusterSourcePort, SecretStorePort, SourcesChanged,
-};
+use oxikube_ports::{SecretStorePort, SourcesChanged};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::watch;
 
@@ -104,7 +107,9 @@ pub use self::pasted::PastedDescriptor;
 
 /// Shared state; the watch task holds a [`std::sync::Weak`] to it.
 pub(crate) struct Inner {
-    config: SourcesConfig,
+    /// The configuration. `extra_paths` and `include_default` change at run time
+    /// ([`ClusterSourcePort::set_user_sources`]); the rest is fixed.
+    config: RwLock<SourcesConfig>,
     secrets: Arc<dyn SecretStorePort>,
     pasted: Mutex<Vec<PastedDescriptor>>,
     /// Serialises loads so diffs are computed and emitted in order.
@@ -112,6 +117,8 @@ pub(crate) struct Inner {
     current: RwLock<Option<Arc<Snapshot>>>,
     subscribers: Mutex<Vec<mpsc::UnboundedSender<SourcesChanged>>>,
     watch_status: watch::Sender<WatchStatus>,
+    /// Bumped when the watched directories must be re-registered (the source list changed).
+    rewatch: watch::Sender<u64>,
     /// Directories the watcher could not register (the poll covers them).
     unwatched: Mutex<Vec<PathBuf>>,
     /// Pasted kubeconfig text by descriptor id, read from the keychain once. Reloads are
@@ -121,12 +128,18 @@ pub(crate) struct Inner {
 }
 
 impl Inner {
+    /// A copy of the current configuration.
+    pub(crate) fn config(&self) -> SourcesConfig {
+        self.config.read().clone()
+    }
+
     /// Load every source and build a snapshot. Holds no lock.
     ///
     /// Files first (on the blocking pool), then pasted kubeconfigs, then the in-cluster
     /// fallback, which only applies when neither gave a context and nothing was broken.
     async fn load(&self) -> OxiResult<Snapshot> {
-        let config = self.config.clone();
+        let config = self.config();
+        let config_env = config.env.clone();
         let pasted = self.pasted.lock().clone();
         let (mut layout, mut merge) = tokio::task::spawn_blocking(move || {
             let layout = Layout::resolve(&config);
@@ -147,7 +160,7 @@ impl Inner {
         )
         .await;
         let mut loaded = merge.finish();
-        apply_in_cluster_fallback(&mut loaded, &self.config.env)?;
+        apply_in_cluster_fallback(&mut loaded, &config_env)?;
         if loaded.sources.iter().any(|s| s.is_in_cluster()) {
             layout.push_in_cluster();
         }
@@ -239,17 +252,18 @@ impl KubeconfigSources {
         };
         let inner = Arc::new(Inner {
             pasted: Mutex::new(config.pasted.clone()),
-            config,
+            config: RwLock::new(config),
             secrets,
             reload_lock: tokio::sync::Mutex::new(()),
             current: RwLock::new(None),
             subscribers: Mutex::new(Vec::new()),
             watch_status: watch::channel(initial).0,
+            rewatch: watch::channel(0).0,
             unwatched: Mutex::new(Vec::new()),
             pasted_text: Mutex::new(HashMap::new()),
         });
-        let guard = if inner.config.watch {
-            Some(watcher::spawn(Arc::downgrade(&inner), &inner.config)?)
+        let guard = if inner.config.read().watch {
+            Some(watcher::spawn(Arc::downgrade(&inner), &inner.config())?)
         } else {
             None
         };
@@ -320,23 +334,5 @@ impl KubeconfigSources {
     }
 }
 
-#[async_trait]
-impl ClusterSourcePort for KubeconfigSources {
-    async fn sources(&self) -> OxiResult<Vec<ClusterSource>> {
-        Ok(self.inner.snapshot().await?.sources.clone())
-    }
-
-    async fn contexts(&self) -> OxiResult<Vec<ClusterContext>> {
-        Ok(self.inner.snapshot().await?.contexts())
-    }
-
-    fn subscribe(&self) -> BoxStream<'static, SourcesChanged> {
-        let (tx, rx) = mpsc::unbounded();
-        self.inner.subscribers.lock().push(tx);
-        rx.boxed()
-    }
-
-    async fn reload(&self) -> OxiResult<SourcesChanged> {
-        self.inner.reload().await
-    }
-}
+#[cfg(test)]
+mod user_sources_tests;

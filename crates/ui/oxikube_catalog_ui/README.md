@@ -6,6 +6,10 @@ Cluster catalog home, hotbar, kubeconfig sources management, cloud discovery UI,
 
 ## Modules
 
+- `sources` (E06-S05): the kubeconfig sources screen, `SourcesView`: the list of files and folders the
+  catalog reads with each one's status (errors inline), add file / folder through the platform picker,
+  paste (stored `0600`, ADR 0015), remove and reload, as `kubeconfig::*` commands; `SettingsSourceList`
+  and `follow` keep it in step with `kubeconfig.sources` in `settings.json`. See `src/sources/mod.rs`.
 - `namespaces` (E06-S07): the namespace selector dropdown (All, multi-select, favourites, search,
   `0`-`9` keys). See the module docs in `src/namespaces/mod.rs`.
 

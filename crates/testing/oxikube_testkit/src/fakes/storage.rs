@@ -337,6 +337,10 @@ pub struct FsScripts {
     pub read: Script<Vec<u8>>,
     /// `write`.
     pub write: Script<()>,
+    /// `write_private`.
+    pub write_private: Script<()>,
+    /// `remove`.
+    pub remove: Script<bool>,
     /// `list`.
     pub list: Script<Vec<DirEntry>>,
 }
@@ -348,6 +352,10 @@ pub enum FsCall {
     Read(PathBuf),
     /// `write(path, contents)`.
     Write(PathBuf, Vec<u8>),
+    /// `write_private(path, contents)`.
+    WritePrivate(PathBuf, Vec<u8>),
+    /// `remove(path)`.
+    Remove(PathBuf),
     /// `list(path)`.
     List(PathBuf),
     /// `watch(path)`.
@@ -358,6 +366,8 @@ pub enum FsCall {
 struct FsData {
     files: BTreeMap<PathBuf, Vec<u8>>,
     dirs: BTreeSet<PathBuf>,
+    /// Files written with `write_private`: owner-only, as on a real unix filesystem.
+    private: BTreeSet<PathBuf>,
     watchers: Vec<(PathBuf, mpsc::UnboundedSender<FsEvent>)>,
 }
 
@@ -458,6 +468,11 @@ impl FakeFsPort {
         self.data.lock().files.get(path.as_ref()).cloned()
     }
 
+    /// Whether `path` was last written with `write_private` (mode `0600` on a real filesystem).
+    pub fn is_private(&self, path: impl AsRef<Path>) -> bool {
+        self.data.lock().private.contains(path.as_ref())
+    }
+
     /// Number of `watch` streams still alive.
     pub fn watcher_count(&self) -> usize {
         let mut data = self.data.lock();
@@ -486,6 +501,25 @@ impl FsPort for FakeFsPort {
         self.script.write.next_or_else(|| {
             self.insert(path, contents);
             Ok(())
+        })
+    }
+
+    async fn write_private(&self, path: &Path, contents: &[u8]) -> OxiResult<()> {
+        self.calls
+            .record(FsCall::WritePrivate(path.to_owned(), contents.to_vec()));
+        self.script.write_private.next_or_else(|| {
+            self.insert(path, contents);
+            self.data.lock().private.insert(path.to_owned());
+            Ok(())
+        })
+    }
+
+    async fn remove(&self, path: &Path) -> OxiResult<bool> {
+        self.calls.record(FsCall::Remove(path.to_owned()));
+        self.script.remove.next_or_else(|| {
+            let removed = FakeFsPort::remove(self, path);
+            self.data.lock().private.remove(path);
+            Ok(removed)
         })
     }
 
@@ -731,5 +765,43 @@ mod tests {
         drop(other);
         assert_eq!(fake.watcher_count(), 0);
         assert!(matches!(fake.recorded_calls()[0], FsCall::Read(_)));
+    }
+
+    #[test]
+    fn fs_private_writes_and_removes_are_remembered() {
+        let fake = FakeFsPort::new();
+        let path = Path::new("/config/kubeconfigs/prod.yaml");
+        block_on(fake.write_private(path, b"token: x")).unwrap();
+        assert_eq!(fake.file(path), Some(b"token: x".to_vec()));
+        assert!(fake.is_private(path));
+        assert_eq!(
+            fake.recorded_calls(),
+            vec![FsCall::WritePrivate(path.to_owned(), b"token: x".to_vec())]
+        );
+
+        // A plain write elsewhere is not private.
+        let other = Path::new("/other.txt");
+        block_on(fake.write(other, b"x")).unwrap();
+        assert!(!fake.is_private(other));
+
+        assert!(block_on(FsPort::remove(&fake, path)).unwrap());
+        assert!(
+            !block_on(FsPort::remove(&fake, path)).unwrap(),
+            "already gone"
+        );
+        assert!(fake.file(path).is_none());
+        assert!(!fake.is_private(path));
+
+        fake.script()
+            .remove
+            .push_err(OxiError::forbidden("no permission"));
+        assert_eq!(
+            block_on(FsPort::remove(&fake, other)).unwrap_err().kind(),
+            ErrorKind::Forbidden
+        );
+        assert!(
+            fake.file(other).is_some(),
+            "a scripted failure removes nothing"
+        );
     }
 }

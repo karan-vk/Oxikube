@@ -27,12 +27,14 @@
 
 mod capability;
 mod id;
+mod kubeconfig;
 mod meta;
 mod payload;
 mod registry;
 
 pub use capability::{Capabilities, Capability, UnknownCapability};
 pub use id::{CommandId, UnknownCommandId, is_well_formed};
+pub use kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource, PastedText};
 pub use meta::{CommandMeta, CommandScope};
 pub use payload::{Command, Propagation};
 pub use registry::{COMMANDS, lookup, lookup_str};

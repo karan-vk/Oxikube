@@ -61,7 +61,8 @@ pub struct FsEvent {
 ///
 /// # Effects
 ///
-/// Mutating on the local filesystem only ([`write`](Self::write)); never a cluster mutation.
+/// Mutating on the local filesystem only ([`write`](Self::write),
+/// [`write_private`](Self::write_private), [`remove`](Self::remove)); never a cluster mutation.
 ///
 /// # Errors
 ///
@@ -79,6 +80,16 @@ pub trait FsPort: Send + Sync {
     /// Writes `contents` to `path`, creating parent directories and replacing any
     /// existing file atomically (temp file + rename).
     async fn write(&self, path: &Path, contents: &[u8]) -> OxiResult<()>;
+
+    /// Like [`write`](Self::write) for a file that may hold credentials (a pasted kubeconfig):
+    /// the file is readable and writable by its owner only (mode `0600` on unix; created
+    /// parent directories `0700`), from the moment it exists. Other platforms rely on the
+    /// user profile's own access rules.
+    async fn write_private(&self, path: &Path, contents: &[u8]) -> OxiResult<()>;
+
+    /// Deletes the file at `path` (not a directory). Returns whether there was one: removing a
+    /// path that is already gone is `Ok(false)`, not an error.
+    async fn remove(&self, path: &Path) -> OxiResult<bool>;
 
     /// The entries directly inside the directory `path`, ordered by path.
     async fn list(&self, path: &Path) -> OxiResult<Vec<DirEntry>>;

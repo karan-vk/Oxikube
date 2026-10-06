@@ -28,7 +28,14 @@ pub struct SourcesConfig {
     pub env: Env,
     /// User-added kubeconfig files and directories, from settings. Additive: loaded after the
     /// `KUBECONFIG` or default-path files, not instead of them.
+    ///
+    /// The starting value only: [`set_user_sources`](oxikube_ports::ClusterSourcePort::set_user_sources)
+    /// replaces it at run time (the settings screen, E06-S05).
     pub extra_paths: Vec<PathBuf>,
+    /// Whether to read what kubectl reads (`KUBECONFIG`, else `~/.kube/config`). `true` unless
+    /// the user removed the default entry from their source list. Like
+    /// [`extra_paths`](Self::extra_paths), a starting value.
+    pub include_default: bool,
     /// Pasted kubeconfigs to restore (the descriptors the caller persisted).
     pub pasted: Vec<PastedDescriptor>,
     /// Start the file watcher and the safety poll. Tests set this to `false`.
@@ -47,6 +54,7 @@ impl SourcesConfig {
         Self {
             env,
             extra_paths: Vec::new(),
+            include_default: true,
             pasted: Vec::new(),
             watch: true,
             debounce: Duration::from_millis(300),

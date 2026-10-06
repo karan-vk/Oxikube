@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::id::CommandId;
+use super::kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource};
 use super::meta::CommandMeta;
 use super::registry;
 use crate::colour::ClusterColour;
@@ -133,6 +134,24 @@ pub enum Command {
         /// The namespace to pin or unpin.
         namespace: String,
     },
+    /// Add a kubeconfig source: a file, a directory, the default entry, or pasted text that
+    /// Oxikube stores as its own file. Changes the settings list and local files, never a
+    /// cluster.
+    #[serde(rename = "kubeconfig::AddSource")]
+    KubeconfigAddSource {
+        /// What to add.
+        source: NewKubeconfigSource,
+    },
+    /// Remove a kubeconfig source from the list. A file Oxikube stored itself (pasted) is
+    /// deleted too; a file the user owns stays where it is.
+    #[serde(rename = "kubeconfig::RemoveSource")]
+    KubeconfigRemoveSource {
+        /// Which source.
+        source: KubeconfigSourceRef,
+    },
+    /// Re-read every kubeconfig source now.
+    #[serde(rename = "kubeconfig::Reload")]
+    KubeconfigReload,
     /// Open a registered view (overview, events, ...) by id.
     #[serde(rename = "view::Open")]
     ViewOpen {
@@ -302,6 +321,9 @@ impl Command {
             Command::ClusterApplyPreset { .. } => CommandId::CLUSTER_APPLY_PRESET,
             Command::NamespaceSelect { .. } => CommandId::NAMESPACE_SELECT,
             Command::NamespaceToggleFavourite { .. } => CommandId::NAMESPACE_TOGGLE_FAVOURITE,
+            Command::KubeconfigAddSource { .. } => CommandId::KUBECONFIG_ADD_SOURCE,
+            Command::KubeconfigRemoveSource { .. } => CommandId::KUBECONFIG_REMOVE_SOURCE,
+            Command::KubeconfigReload => CommandId::KUBECONFIG_RELOAD,
             Command::ViewOpen { .. } => CommandId::VIEW_OPEN,
             Command::PaletteToggle => CommandId::PALETTE_TOGGLE,
             Command::AppQuit => CommandId::APP_QUIT,
@@ -368,7 +390,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::command::COMMANDS;
+    use crate::command::{COMMANDS, PastedText};
     use crate::ids::ContextName;
 
     fn cluster() -> ClusterId {
@@ -438,6 +460,23 @@ mod tests {
                 cluster: cluster(),
                 namespace: "kube-system".into(),
             },
+            Command::KubeconfigAddSource {
+                source: NewKubeconfigSource::File {
+                    path: "/work/prod.yaml".into(),
+                },
+            },
+            Command::KubeconfigAddSource {
+                source: NewKubeconfigSource::Pasted {
+                    name: "prod".into(),
+                    text: PastedText::new("apiVersion: v1\nkind: Config\n"),
+                },
+            },
+            Command::KubeconfigRemoveSource {
+                source: KubeconfigSourceRef::Dir {
+                    path: "/work/configs".into(),
+                },
+            },
+            Command::KubeconfigReload,
             Command::ViewOpen {
                 view: "overview".into(),
             },
@@ -625,6 +664,79 @@ mod tests {
             ) {
                 assert!(!command.is_mutating(), "{}", command.id());
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod kubeconfig_tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::command::PastedText;
+
+    #[test]
+    fn kubeconfig_commands_use_flat_json_and_name_their_tools() {
+        let add: Command = serde_json::from_value(json!({
+            "type": "kubeconfig::AddSource",
+            "source": { "kind": "dir", "path": "/work/configs" }
+        }))
+        .unwrap();
+        assert_eq!(
+            add,
+            Command::KubeconfigAddSource {
+                source: NewKubeconfigSource::Dir {
+                    path: "/work/configs".into()
+                }
+            }
+        );
+        assert_eq!(
+            add.id().tool_name(),
+            "app.kubeconfig_add_source",
+            "kubeconfig commands are app-level tools"
+        );
+        assert_eq!(
+            Command::KubeconfigReload.id().tool_name(),
+            "app.kubeconfig_reload"
+        );
+        assert_eq!(
+            serde_json::to_value(Command::KubeconfigReload).unwrap(),
+            json!({ "type": "kubeconfig::Reload" })
+        );
+    }
+
+    #[test]
+    fn pasted_text_travels_as_a_string_but_never_prints() {
+        let secret = "token: s3cr3t-do-not-leak";
+        let command = Command::KubeconfigAddSource {
+            source: NewKubeconfigSource::Pasted {
+                name: "prod".into(),
+                text: PastedText::new(secret),
+            },
+        };
+        let json = serde_json::to_value(&command).unwrap();
+        assert_eq!(json["source"]["text"], secret);
+        let again: Command = serde_json::from_value(json).unwrap();
+        assert_eq!(again, command);
+        let shown = format!("{command:?} {again:#?}");
+        assert!(!shown.contains("s3cr3t"), "{shown}");
+        assert!(shown.contains("bytes"), "{shown}");
+    }
+
+    #[test]
+    fn the_kubeconfig_commands_are_read_class_without_a_guard_tier() {
+        for command in [
+            Command::KubeconfigReload,
+            Command::KubeconfigAddSource {
+                source: NewKubeconfigSource::Default,
+            },
+            Command::KubeconfigRemoveSource {
+                source: KubeconfigSourceRef::Default,
+            },
+        ] {
+            let meta = command.meta();
+            assert!(!meta.mutating && !meta.privileged, "{}", meta.id);
+            assert_eq!(meta.confirm, crate::safety::ConfirmTier::None);
         }
     }
 }

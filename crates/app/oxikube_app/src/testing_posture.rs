@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::future::{BoxFuture, FutureExt};
-use oxikube_domain::command::{Command, CommandId};
+use oxikube_domain::command::{Command, CommandId, KubeconfigSourceRef, NewKubeconfigSource};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::{ClusterColour, ClusterPreset, ErrorKind, OxiError, OxiResult};
 use oxikube_ports::{ClusterPrefs, ClusterPrefsTable};
@@ -130,6 +130,15 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "cluster::ToggleReadOnly" => Command::ClusterToggleReadOnly {
             cluster,
             read_only: None,
+        },
+        "kubeconfig::AddSource" => Command::KubeconfigAddSource {
+            source: NewKubeconfigSource::File {
+                path: "/tmp/kubeconfig".into(),
+            },
+        },
+        "kubeconfig::Reload" => Command::KubeconfigReload,
+        "kubeconfig::RemoveSource" => Command::KubeconfigRemoveSource {
+            source: KubeconfigSourceRef::Default,
         },
         "namespace::Select" => Command::NamespaceSelect {
             cluster,

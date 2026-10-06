@@ -30,6 +30,17 @@
   "log": {
     "filter": "info,hyper=warn,hyper_util=warn,h2=warn,tower=warn,tower_http=warn,rustls=warn"
   },
+  // Where Oxikube reads kubeconfigs from, in order (the first definition of a context name wins):
+  //   { "kind": "default" }                 what kubectl reads: $KUBECONFIG, else ~/.kube/config
+  //   { "kind": "file", "path": "/a/b.yaml" }  one kubeconfig file, read in place
+  //   { "kind": "dir", "path": "~/clusters" }  the files directly inside a folder
+  // A leading ~ is your home directory. Your list replaces this one, so keep the "default" entry
+  // to keep reading kubectl's files. The Kubeconfig sources screen edits this list (pasted
+  // kubeconfigs are stored under <config dir>/kubeconfigs and listed here as files). Paths only:
+  // never put a token or key in this file.
+  "kubeconfig": {
+    "sources": [{ "kind": "default" }]
+  },
   // Per-cluster settings. Each key below is a default for every cluster; write the same key under
   // `clusters.<id>` (below) to override it for one cluster. Layers merge field by field:
   // this file, then your top-level values, then the cluster's own.

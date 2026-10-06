@@ -18,6 +18,8 @@
 //!   in batches.
 //! - [`lazy`]: [`LazyService`], a service started on first use with `ensure_init` instead of at
 //!   start-up (extension host, discovery, agent registry, update checker; E05-S13).
+//! - [`fs`]: [`StdFs`], the `FsPort` over `std::fs` and `notify` (atomic writes, owner-only
+//!   writes for files that may hold credentials; E06-S05).
 //! - [`perf`]: the `--perf` recorder (frame times, feed throughput, `notify` counts), its JSONL
 //!   flusher, the root-view frame hook and (feature `perf-harness`) the scripted headless frame
 //!   driver behind `cargo xtask perf` (E01-S14, ADR 0013).
@@ -69,6 +71,7 @@
 //! [`build_runtime`]) before any crate that spawns Kubernetes work (E05-S09 documents the order).
 
 pub mod channel;
+pub mod fs;
 pub mod gpui_tokio;
 pub mod kube_task;
 pub mod lazy;
@@ -78,6 +81,7 @@ pub mod perf;
 pub use channel::{
     BatchReceiver, BatchSender, DEFAULT_BATCH_LIMIT, DEFAULT_CHANNEL_CAPACITY, batch_channel,
 };
+pub use fs::StdFs;
 pub use gpui_tokio::{
     RuntimeMode, build_runtime, handle, init, init_deterministic, init_from_handle, mode,
 };

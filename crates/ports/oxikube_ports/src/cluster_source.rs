@@ -49,6 +49,88 @@ pub struct ClusterSource {
     pub path: Option<PathBuf>,
 }
 
+/// What kind of entry the user's source list holds (the settings key `kubeconfig.sources`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UserSourceKind {
+    /// What kubectl reads: the files named by `KUBECONFIG`, else `~/.kube/config`. Carries no
+    /// path.
+    Default,
+    /// One kubeconfig file.
+    File,
+    /// A directory of kubeconfig files (not recursive).
+    Dir,
+}
+
+/// One entry of the user's source list: the part of the catalog the user manages (E06-S05).
+///
+/// The list lives in settings (`kubeconfig.sources`); the adapter is told about it with
+/// [`ClusterSourcePort::set_user_sources`] and reads exactly those sources.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UserSource {
+    /// What it is.
+    pub kind: UserSourceKind,
+    /// The file or directory; `None` for [`UserSourceKind::Default`].
+    pub path: Option<PathBuf>,
+}
+
+impl UserSource {
+    /// The `KUBECONFIG` / `~/.kube/config` entry.
+    pub fn default_source() -> Self {
+        Self {
+            kind: UserSourceKind::Default,
+            path: None,
+        }
+    }
+
+    /// A single kubeconfig file.
+    pub fn file(path: impl Into<PathBuf>) -> Self {
+        Self {
+            kind: UserSourceKind::File,
+            path: Some(path.into()),
+        }
+    }
+
+    /// A directory of kubeconfig files.
+    pub fn dir(path: impl Into<PathBuf>) -> Self {
+        Self {
+            kind: UserSourceKind::Dir,
+            path: Some(path.into()),
+        }
+    }
+}
+
+/// How reading one source went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SourceState {
+    /// Read; its contexts are in the catalog (the count may be zero for an empty directory).
+    Found,
+    /// The file is blank: no clusters, users or contexts.
+    Blank,
+    /// The path does not exist.
+    Missing,
+    /// The path exists but could not be read (permissions, not a file, not text).
+    Unreadable,
+    /// Read, but not a valid kubeconfig (or one that cannot be merged with the others).
+    Invalid,
+}
+
+/// The outcome of the last read of one source, for the sources screen.
+///
+/// Carries no file content: `message` is fixed wording that names files, never their text
+/// (parser messages can quote a token, so they are dropped).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceStatus {
+    /// The source this describes.
+    pub source: ClusterSource,
+    /// How the read went.
+    pub state: SourceState,
+    /// How many contexts the source contributed (after first-file-wins deduplication it may be
+    /// fewer than the file defines).
+    pub contexts: usize,
+    /// Why the source is not fully usable, or a note about it. `None` when all is well.
+    pub message: Option<String>,
+}
+
 /// One context of one source: an entry of the cluster catalog.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClusterContext {
@@ -155,6 +237,28 @@ pub trait ClusterSourcePort: Send + Sync {
     /// Re-reads all sources now and returns what changed since the last read. The
     /// same diff is also sent to subscribers.
     async fn reload(&self) -> OxiResult<SourcesChanged>;
+
+    /// Replaces the user's source list (settings `kubeconfig.sources`) and re-reads. The
+    /// [`Default`](UserSourceKind::Default) entry stands for `KUBECONFIG` / `~/.kube/config`;
+    /// without it those are not read. Entries naming the same path count once. Returns what
+    /// changed, as [`reload`](Self::reload) does.
+    ///
+    /// A path that is missing or not a kubeconfig is not an error here: it is listed with its
+    /// problem in [`source_statuses`](Self::source_statuses) and the other sources still load.
+    async fn set_user_sources(&self, sources: &[UserSource]) -> OxiResult<SourcesChanged>;
+
+    /// How the last read of each source went, in source order. Local: no cluster is contacted.
+    async fn source_statuses(&self) -> OxiResult<Vec<SourceStatus>>;
+
+    /// Checks that `text` is a usable kubeconfig, without storing it, merging it or touching
+    /// the network, and returns how many contexts it defines.
+    ///
+    /// # Errors
+    ///
+    /// [`Validation`](oxikube_domain::ErrorKind::Validation) for text that is empty or not a
+    /// kubeconfig. The message is fixed wording and never quotes the text, which may hold
+    /// credentials.
+    async fn validate_kubeconfig(&self, text: &str) -> OxiResult<usize>;
 }
 
 #[cfg(test)]

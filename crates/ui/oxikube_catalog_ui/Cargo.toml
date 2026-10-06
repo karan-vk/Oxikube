@@ -12,16 +12,19 @@ path = "src/oxikube_catalog_ui.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
 futures.workspace = true
 gpui.workspace = true
 indexmap.workspace = true
 jiff.workspace = true
 nucleo-matcher.workspace = true
+parking_lot.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
 oxikube_ports.workspace = true
 oxikube_runtime.workspace = true
+oxikube_settings.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
 schemars.workspace = true
@@ -30,13 +33,12 @@ tracing.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
-parking_lot.workspace = true
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 serde_json.workspace = true
+tempfile.workspace = true
 
 [features]
 default = []
@@ -45,9 +47,9 @@ default = []
 test-support = []
 # Headless GPU screenshots (`tests/screenshot.rs` for the namespace selector,
 # `tests/catalog_screenshot.rs` for the catalog, `tests/cluster_tabs_screenshot.rs` for the hotbar
-# and cluster tabs; harness = false so they run on the process main
+# and cluster tabs, `tests/sources_screenshot.rs` for the sources screen; harness = false so they run on the process main
 # thread). Need Metal / Vulkan, so never part of the default gate; the nightly workflow runs them:
-# `cargo test -p oxikube_catalog_ui --features screenshot --test screenshot --test catalog_screenshot --test cluster_tabs_screenshot`.
+# `cargo test -p oxikube_catalog_ui --features screenshot --test screenshot --test catalog_screenshot --test cluster_tabs_screenshot --test sources_screenshot`.
 screenshot = ["test-support"]
 
 [[test]]
@@ -65,6 +67,12 @@ required-features = ["screenshot"]
 [[test]]
 name = "cluster_tabs_screenshot"
 path = "tests/cluster_tabs_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+[[test]]
+name = "sources_screenshot"
+path = "tests/sources_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
