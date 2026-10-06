@@ -89,15 +89,18 @@ impl Parts {
     }
 }
 
-/// How the session ended: the server's status when it sent one; otherwise a closed
-/// connection, which is a result and not an error unless the websocket task failed.
+/// How the session ended: the server's status when it sent one. The API server sends a status
+/// on every exec and attach that ends (success included), so a connection that ends without
+/// one was dropped (a proxy, the API server or the network closed it) and the process may
+/// still be running: a retryable `Network` error, the cue for a "Reconnect" offer, never an
+/// exit.
 fn outcome(status: Option<Status>, ended: Result<(), String>) -> OxiResult<ExitStatus> {
     match (status, ended) {
         (Some(status), _) => Ok(exit_status(&status)),
-        (None, Ok(())) => Ok(ExitStatus {
-            message: Some("the connection closed without an exit status".into()),
-            ..ExitStatus::default()
-        }),
+        (None, Ok(())) => Err(OxiError::network(
+            "the connection to the container closed without an exit status",
+        )
+        .with_retryable(true)),
         (None, Err(reason)) => Err(OxiError::network(format!(
             "the connection to the container was lost: {reason}"
         ))

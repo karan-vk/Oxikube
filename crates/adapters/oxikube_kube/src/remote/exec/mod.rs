@@ -13,7 +13,8 @@
 //! | Piece | Where |
 //! |---|---|
 //! | `ExecStreamPort` impl, opening the websocket | `mod` (this file) |
-//! | `ExecPort` impl: descriptors to options, sessions to `TerminalBackend`s | `terminal` |
+//! | `ExecPort` impl: descriptors to options, sessions to [`KubeStream`]s | `terminal` |
+//! | [`KubeStream`]: the `TerminalBackend` over a session, with `reconnect` | `kube_stream` |
 //! | `ExecOptions` to `AttachParams`, validation, pipe sizes | `params` |
 //! | kube `AttachedProcess` to [`oxikube_ports::ExecSession`] | `session` |
 //! | stdin as a `Sink`, output as chunk streams, resize as a `Sink` | `stdin`, `output`, `resize` |
@@ -33,10 +34,12 @@
 //!   the websocket task, and the server's flow control slows the container; a producer that
 //!   writes faster than the container reads waits in `poll_ready`.
 //! * **Ending.** `status` resolves when the command ends: [`oxikube_ports::ExitStatus`]
-//!   with the exit code (`NonZeroExitCode` failures included, they are results, not errors). A
-//!   connection that closes without a status is a result with no code; a websocket failure is a
-//!   retryable `Network` error. Nothing reconnects: a closed interactive session is surfaced as
-//!   closed, never silently re-established.
+//!   with the exit code (`NonZeroExitCode` failures included, they are results, not errors).
+//!   The server sends a status for every command that ends, so a connection that closes
+//!   without one, like a websocket failure, is a dropped connection: a retryable `Network`
+//!   error. Nothing reconnects by itself: a dropped interactive session is surfaced as
+//!   dropped, never silently re-established; [`KubeStream::reconnect`] opens the same target
+//!   again when the user asks.
 //! * **Ownership.** The `status` future owns the websocket task. Dropping the session, or just
 //!   its `status`, aborts the task and closes the connection; the streams then end. Keep
 //!   `status` for as long as the streams are in use.
@@ -53,6 +56,7 @@
 
 mod debug;
 mod error;
+mod kube_stream;
 pub mod node_shell;
 mod output;
 mod params;
@@ -81,6 +85,7 @@ use pods::{KubePods, Pods};
 use session::Parts;
 
 pub use debug::DEFAULT_DEBUG_START_TIMEOUT;
+pub use kube_stream::KubeStream;
 pub use node_shell::{NodeShellConfig, NodeShellSession, node_shell_manifest};
 
 /// Exec and attach on one connected cluster. Cheap to clone; clones share the client.

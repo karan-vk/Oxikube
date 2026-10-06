@@ -25,19 +25,20 @@ impl Drop for DropFlag {
 }
 
 /// The remote end of a [`Parts`]: what the websocket task would hold.
-struct Remote {
+pub(super) struct Remote {
     /// What the session wrote to stdin.
-    stdin: DuplexStream,
+    pub(super) stdin: DuplexStream,
     /// Where the process writes stdout.
-    stdout: DuplexStream,
-    resizes: mpsc::Receiver<KubeSize>,
-    status: oneshot::Sender<Option<Status>>,
-    finish: oneshot::Sender<Result<(), String>>,
+    pub(super) stdout: DuplexStream,
+    pub(super) resizes: mpsc::Receiver<KubeSize>,
+    pub(super) status: oneshot::Sender<Option<Status>>,
+    pub(super) finish: oneshot::Sender<Result<(), String>>,
     /// Set when the future that owns the "process" is dropped.
-    process_dropped: Arc<AtomicBool>,
+    pub(super) process_dropped: Arc<AtomicBool>,
 }
 
-fn harness() -> (Parts, Remote) {
+/// A [`Parts`] over in-memory pipes and the [`Remote`] end that drives it.
+pub(super) fn harness() -> (Parts, Remote) {
     let (stdin_w, stdin_r) = tokio::io::duplex(1024);
     let (stdout_w, stdout_r) = tokio::io::duplex(1024);
     let (resize_tx, resizes) = mpsc::channel(4);
@@ -69,7 +70,8 @@ fn harness() -> (Parts, Remote) {
     )
 }
 
-fn failure(code: i32) -> Status {
+/// The status the server sends for a command that exited with `code`.
+pub(super) fn failure(code: i32) -> Status {
     serde_json::from_value(json!({
         "status": "Failure",
         "reason": "NonZeroExitCode",
@@ -173,14 +175,15 @@ fn a_failure_without_an_exit_code_keeps_only_the_message() {
 }
 
 #[tokio::test]
-async fn a_connection_that_closes_without_a_status_has_no_exit_code() {
+async fn a_connection_that_closes_without_a_status_is_a_retryable_drop() {
     let (parts, remote) = harness();
     let session = parts.into_session();
     drop(remote.status);
     remote.finish.send(Ok(())).expect("finish");
-    let status = session.status.await.expect("a result");
-    assert_eq!(status.code, None);
-    assert!(status.message.is_some());
+    let err = session.status.await.expect_err("a drop, not an exit");
+    assert_eq!(err.kind(), ErrorKind::Network);
+    assert!(err.is_retryable());
+    assert!(err.message().contains("without an exit status"), "{err}");
 }
 
 #[tokio::test]

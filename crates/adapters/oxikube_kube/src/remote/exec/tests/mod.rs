@@ -6,6 +6,7 @@
 mod debug;
 mod fakes;
 mod kube_pods;
+mod kube_stream;
 mod node_shell;
 mod open;
 mod pipes;

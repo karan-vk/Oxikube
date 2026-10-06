@@ -61,6 +61,7 @@ logs. Locally, without that variable, a failed test prints its namespace's event
 | `LogPort` | `stream_logs` | `logs_streams` (options, multi-container, selector fan-in, rate), `logs_restart` (restart without dupes or gaps) |
 | `ExecStreamPort` | `exec_session`, `attach_session` | `exec_streams` (echo, large payload, resize, exit status, attach, error kinds), `exec_node_shell` |
 | `ExecPort` | `exec`, `attach`, `create_debug_container`, `node_shell` | `exec_terminal` (TTY echo, resize, exit code, attach and kill, debug container, node shell removed on kill, `NotFound`) |
+| `TerminalBackend` (`KubeStream`) | `write`, `resize`, `output_stream`, `kill`, `reconnect` | `exec_kube_stream` (`interactive_tty` echo, `stty size` after a resize, non-zero exit, missing container, `Forbidden` without `pods/exec`, reconnect to a fresh shell, 50 open/drop cycles leave no task, flood throughput) |
 | `PortForwardPort` | `forward` | `portforward` (pod and service GET, named ports, errors, `Forbidden`), `portforward_restart` |
 | `MetricsPort` | `node_metrics`, `pod_metrics` | `metrics_kind` (present, absent as `Unavailable(NotInstalled)`, `Forbidden`) |
 | `KubeEvents` | `watch` | `events_feed` (merged core and events.k8s.io, per-object feed, capacity) |
