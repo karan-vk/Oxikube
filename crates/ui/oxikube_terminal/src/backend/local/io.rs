@@ -3,6 +3,7 @@
 //! through bounded channels and never touch GPUI.
 
 use std::io::{Read, Write};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -43,7 +44,7 @@ pub(super) struct WriteRequest {
 pub(super) fn spawn_reader(
     mut reader: Box<dyn Read + Send>,
     tx: mpsc::Sender<BackendEvent>,
-    state: std::sync::Arc<ReaderState>,
+    state: Arc<ReaderState>,
 ) -> std::io::Result<()> {
     std::thread::Builder::new()
         .name("oxikube-pty-read".into())

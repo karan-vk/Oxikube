@@ -49,7 +49,7 @@ pub(super) fn wait_for_exit(
 
 /// Whether a process with `pid` exists.
 #[cfg(unix)]
-pub(crate) fn process_exists(pid: u32) -> bool {
+pub(super) fn process_exists(pid: u32) -> bool {
     // SAFETY: signal 0 only checks that the process can be signalled.
     let result = unsafe { libc::kill(pid as libc::pid_t, 0) };
     result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
@@ -91,6 +91,6 @@ pub(super) fn wait_for_exit(
 }
 
 #[cfg(not(unix))]
-pub(crate) fn process_exists(_pid: u32) -> bool {
+pub(super) fn process_exists(_pid: u32) -> bool {
     true
 }

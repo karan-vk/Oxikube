@@ -8,11 +8,11 @@ use serde_json::{Map, Value, json};
 use super::ClusterEnv;
 
 /// The merged document and the namespace the shell starts in.
-pub struct Merged {
+pub(super) struct Merged {
     /// A kubeconfig (JSON, which every kubeconfig reader accepts as YAML) with one context.
-    pub text: String,
+    pub(super) text: String,
     /// The namespace stored in the context (`default` when nothing names one).
-    pub namespace: String,
+    pub(super) namespace: String,
 }
 
 /// One kubeconfig file, parsed. `dir` resolves its relative paths.
@@ -29,7 +29,7 @@ struct Parsed {
 /// # Errors
 ///
 /// See [`ClusterEnv::prepare`].
-pub fn merged_kubeconfig(env: &ClusterEnv) -> OxiResult<Merged> {
+pub(super) fn merged_kubeconfig(env: &ClusterEnv) -> OxiResult<Merged> {
     let files = parse_files(&env.kubeconfig_files);
     let (_, context) = find(&files, "contexts", env.context.as_str())
         .ok_or_else(|| OxiError::not_found("no kubeconfig file defines this context"))?;

@@ -40,7 +40,6 @@ use tokio::sync::mpsc;
 use self::io::{ReaderState, WriteRequest};
 pub use kubeconfig::{
     ClusterEnv, PreparedEnv, TempKubeconfig, cleanup_runtime_dir, files_of_sources,
-    merged_kubeconfig,
 };
 pub use options::{DEFAULT_SIZE, LocalPtyOptions, resolve_shell};
 

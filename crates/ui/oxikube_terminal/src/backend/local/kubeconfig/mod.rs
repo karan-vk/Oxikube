@@ -17,7 +17,7 @@ use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ContextName;
 use oxikube_ports::cluster_source::{ClusterSource, SourceKind};
 
-pub use merge::merged_kubeconfig;
+use merge::merged_kubeconfig;
 pub use runtime_dir::{TempKubeconfig, cleanup_runtime_dir};
 
 /// The cluster a terminal is opened for: what the shell's environment is built from.
