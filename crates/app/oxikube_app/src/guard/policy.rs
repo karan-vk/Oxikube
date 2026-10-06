@@ -27,12 +27,14 @@ pub fn confirm_tier(meta: &CommandMeta) -> ConfirmTier {
 /// The cluster a command names in its payload, if any.
 ///
 /// Resource verbs carry it in their [`ResourceRef`]; cluster verbs carry it directly.
-/// UI-local commands (palette, zoom, windows, namespace selection) name none and act on
+/// UI-local commands (palette, zoom, windows) name none and act on
 /// the active cluster from the dispatch context, if at all.
 pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
     match command {
         Command::ClusterSelect { cluster }
         | Command::ClusterToggleReadOnly { cluster, .. }
+        | Command::NamespaceSelect { cluster, .. }
+        | Command::NamespaceToggleFavourite { cluster, .. }
         | Command::ResourceOpenList { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::ResourceOpen { target }
@@ -47,8 +49,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NodeCordon { target }
         | Command::NodeUncordon { target }
         | Command::NodeDrain { target, .. } => Some(&target.cluster),
-        Command::NamespaceSelect { .. }
-        | Command::ViewOpen { .. }
+        Command::ViewOpen { .. }
         | Command::PaletteToggle
         | Command::AppQuit
         | Command::WindowNew
