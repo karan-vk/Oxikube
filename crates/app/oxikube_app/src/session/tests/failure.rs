@@ -82,6 +82,41 @@ fn exhausted_retries_end_in_error() {
 }
 
 #[test]
+fn persistent_transient_errors_give_up_after_max_attempts() {
+    let mut h = Harness::new();
+    let script = &h.connector.script().connect;
+    // More failures than the default policy's three attempts will consume.
+    for n in 0..5 {
+        script.push_err(OxiError::network(format!("connection refused #{n}")));
+    }
+
+    let a = id("a");
+    let mut connect = h.manager.connect(&a).boxed();
+    assert!((&mut connect).now_or_never().is_none(), "first backoff");
+    h.clock.advance(Duration::from_millis(500));
+    assert!((&mut connect).now_or_never().is_none(), "second backoff");
+    h.clock.advance(Duration::from_secs(1));
+    let state = connect.now_or_never().expect("gave up").unwrap();
+
+    assert_eq!(state.phase(), SessionPhase::Error);
+    assert!(state.reason().unwrap().contains("connection refused #2"));
+    assert_eq!(h.connector.recorded_calls().len(), 3);
+    assert_eq!(h.connector.script().connect.len(), 2, "no fourth attempt");
+    assert_eq!(
+        h.clock.recorded_calls(),
+        [
+            ClockCall::Sleep(Duration::from_millis(500)),
+            ClockCall::Sleep(Duration::from_secs(1))
+        ]
+    );
+    assert_eq!(h.clock.pending_sleepers(), 0, "no further backoff");
+    assert_eq!(
+        h.phases("a"),
+        [SessionPhase::Connecting, SessionPhase::Error]
+    );
+}
+
+#[test]
 fn error_can_be_retried_with_connect_or_reconnect() {
     let h = Harness::new();
     h.connector

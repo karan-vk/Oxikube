@@ -152,6 +152,7 @@ pub enum ConnectorCall {
 #[derive(Default)]
 struct ConnectorState {
     ports: HashMap<ClusterId, FakeClusterPorts>,
+    scripts: HashMap<ClusterId, Arc<Script<()>>>,
     reporters: HashMap<ClusterId, Arc<dyn HealthReporter>>,
     holding: bool,
     held: Vec<oneshot::Sender<()>>,
@@ -161,8 +162,11 @@ struct ConnectorState {
 
 /// Fake `ClusterConnectorPort`.
 ///
-/// Fallback: `connect` succeeds with the cluster's [`FakeClusterPorts`] (created on first
-/// use and reused by later connects; script them through [`ports_for`](Self::ports_for)).
+/// Responses: a connect to a cluster takes the next response from that cluster's
+/// [`connect_script_for`](Self::connect_script_for), then from the shared
+/// [`ConnectorScripts::connect`]. Fallback: `connect` succeeds with the cluster's
+/// [`FakeClusterPorts`] (created on first use and reused by later connects; script them
+/// through [`ports_for`](Self::ports_for)).
 ///
 /// Test controls:
 ///
@@ -205,6 +209,19 @@ impl FakeClusterConnectorPort {
         self.state
             .lock()
             .ports
+            .entry(cluster.clone())
+            .or_default()
+            .clone()
+    }
+
+    /// The connect responses for `cluster` only (created on first use). They are taken
+    /// before the shared [`ConnectorScripts::connect`], when the call reads its response:
+    /// after [`hold`](Self::hold) lets it go, so a held connect to `cluster` gets what is
+    /// queued here at release, whatever other clusters' connects consume meanwhile.
+    pub fn connect_script_for(&self, cluster: &ClusterId) -> Arc<Script<()>> {
+        self.state
+            .lock()
+            .scripts
             .entry(cluster.clone())
             .or_default()
             .clone()
@@ -293,7 +310,9 @@ impl ClusterConnectorPort for FakeClusterConnectorPort {
             exec_interactivity: request.exec_interactivity,
         });
         self.wait_if_held().await;
-        self.script.connect.next_or_else(|| Ok(()))?;
+        let own = self.state.lock().scripts.get(&request.cluster).cloned();
+        own.and_then(|script| script.pop())
+            .unwrap_or_else(|| self.script.connect.next_or_else(|| Ok(())))?;
         let mut state = self.state.lock();
         state
             .reporters
@@ -348,6 +367,27 @@ mod tests {
         drop(conn);
         assert_eq!(fake.live_connections(&req.cluster), 0);
         assert_eq!(fake.recorded_calls().len(), 2);
+    }
+
+    #[test]
+    fn per_cluster_scripts_win_over_the_shared_one_and_apply_at_release() {
+        let fake = FakeClusterConnectorPort::new();
+        let (a, b) = (request("a"), request("b"));
+        fake.script().connect.push_err(OxiError::internal("shared"));
+        fake.hold();
+        let mut held = fake.connect(a.clone()).boxed();
+        assert!((&mut held).now_or_never().is_none());
+        // Scripted after the call started: still read, because the response is taken
+        // only once the hold is released.
+        fake.connect_script_for(&a.cluster)
+            .push_err(OxiError::auth("login needed", false));
+        fake.release();
+        let err = block_on(held).unwrap_err();
+        assert_eq!(err.kind(), oxikube_domain::ErrorKind::Auth);
+        // `b` has no script of its own and takes the shared response; `a` then falls back.
+        let err = block_on(fake.connect(b)).unwrap_err();
+        assert_eq!(err.kind(), oxikube_domain::ErrorKind::Internal);
+        assert!(block_on(fake.connect(a)).is_ok());
     }
 
     #[test]

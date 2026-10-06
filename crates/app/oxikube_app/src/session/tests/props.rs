@@ -75,8 +75,12 @@ fn signal(n: u8) -> HealthSignal {
     }
 }
 
+/// Scripts the outcome of `cluster`'s next connect, replacing an earlier one nothing
+/// consumed. Scripts are per cluster and read when the connector call gets past the hold,
+/// so a held connect fails (or not) as the latest op on its cluster said.
 fn script(h: &Harness, cluster: &ClusterId, outcome: &Outcome) {
-    let connect = &h.connector.script().connect;
+    clear_scripts(h, cluster);
+    let connect = h.connector.connect_script_for(cluster);
     match outcome {
         Outcome::Ok => {}
         Outcome::Auth => {
@@ -94,6 +98,16 @@ fn script(h: &Harness, cluster: &ClusterId, outcome: &Outcome) {
                 .push_err(OxiError::auth("401", true));
         }
     }
+}
+
+fn clear_scripts(h: &Harness, cluster: &ClusterId) {
+    h.connector.connect_script_for(cluster).clear();
+    h.connector
+        .ports_for(cluster)
+        .discovery
+        .script()
+        .discover
+        .clear();
 }
 
 type Pending<'a> = Vec<(usize, BoxFuture<'a, OxiResult<ClusterSessionState>>)>;
@@ -163,65 +177,112 @@ fn check(
     }
 }
 
+/// Applies `ops` in order, checking every invariant after each, then releases and
+/// drains whatever is still in flight. Returns each cluster's final phase (`None` once
+/// closed).
+fn run(ops: &[Op]) -> Vec<Option<SessionPhase>> {
+    let mut h = Harness::new();
+    let ids: Vec<ClusterId> = NAMES.iter().map(|n| id(n)).collect();
+    let manager = h.manager.clone();
+    let mut pending: Pending<'_> = Vec::new();
+    let mut seen = HashMap::new();
+    for op in ops {
+        match op {
+            Op::Connect(c, o) | Op::Reconnect(c, o) => {
+                script(&h, &ids[*c], o);
+                let mut fut = if matches!(op, Op::Connect(..)) {
+                    manager.connect(&ids[*c]).boxed()
+                } else {
+                    manager.reconnect(&ids[*c]).boxed()
+                };
+                if (&mut fut).now_or_never().is_none() {
+                    pending.push((*c, fut));
+                }
+            }
+            Op::Disconnect(c) => {
+                let _ = manager.disconnect(&ids[*c]);
+            }
+            Op::Close(c) => {
+                manager.close(&ids[*c]);
+            }
+            Op::Open(c) => {
+                manager.open(&ctx(NAMES[*c]), SessionOptions::default());
+            }
+            Op::Health(c, s) => {
+                h.connector.report(&ids[*c], signal(*s));
+            }
+            Op::ReportHealth(c, s) => {
+                manager.report_health(&ids[*c], signal(*s));
+            }
+            Op::ReadOnly(c, r) => {
+                let _ = manager.set_read_only(&ids[*c], *r);
+            }
+            Op::Hold => h.connector.hold(),
+            Op::Release => h.connector.release(),
+            Op::DropPending => pending.clear(),
+        }
+        // Wake whatever an abort or a release unblocked, as an executor would.
+        poll_all(&mut pending);
+        // A cluster with nothing in flight drops its unconsumed outcome; one with a held
+        // connect keeps it for the release.
+        for (i, cluster) in ids.iter().enumerate() {
+            if !pending.iter().any(|(c, _)| *c == i) {
+                clear_scripts(&h, cluster);
+            }
+        }
+        check(&mut h, &ids, &pending, &mut seen);
+    }
+    h.connector.release();
+    poll_all(&mut pending);
+    assert!(pending.is_empty(), "a connect never finished");
+    check(&mut h, &ids, &pending, &mut seen);
+    for session in manager.sessions() {
+        assert_ne!(session.phase(), SessionPhase::Connecting);
+    }
+    ids.iter()
+        .map(|cluster| manager.get(cluster).map(|s| s.phase()))
+        .collect()
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
     fn random_operations_keep_every_invariant(ops in proptest::collection::vec(op(), 1..40)) {
-        let mut h = Harness::new();
-        let ids: Vec<ClusterId> = NAMES.iter().map(|n| id(n)).collect();
-        let manager = h.manager.clone();
-        let mut pending: Pending<'_> = Vec::new();
-        let mut seen = HashMap::new();
-        for op in ops {
-            match &op {
-                Op::Connect(c, o) | Op::Reconnect(c, o) => {
-                    script(&h, &ids[*c], o);
-                    let mut fut = if matches!(op, Op::Connect(..)) {
-                        manager.connect(&ids[*c]).boxed()
-                    } else {
-                        manager.reconnect(&ids[*c]).boxed()
-                    };
-                    if (&mut fut).now_or_never().is_none() {
-                        pending.push((*c, fut));
-                    }
-                }
-                Op::Disconnect(c) => {
-                    let _ = manager.disconnect(&ids[*c]);
-                }
-                Op::Close(c) => {
-                    manager.close(&ids[*c]);
-                }
-                Op::Open(c) => {
-                    manager.open(&ctx(NAMES[*c]), SessionOptions::default());
-                }
-                Op::Health(c, s) => {
-                    h.connector.report(&ids[*c], signal(*s));
-                }
-                Op::ReportHealth(c, s) => {
-                    manager.report_health(&ids[*c], signal(*s));
-                }
-                Op::ReadOnly(c, r) => {
-                    let _ = manager.set_read_only(&ids[*c], *r);
-                }
-                Op::Hold => h.connector.hold(),
-                Op::Release => h.connector.release(),
-                Op::DropPending => pending.clear(),
-            }
-            // Wake whatever an abort or a release unblocked, as an executor would.
-            poll_all(&mut pending);
-            h.connector.script().connect.clear();
-            for cluster in &ids {
-                h.connector.ports_for(cluster).discovery.script().discover.clear();
-            }
-            check(&mut h, &ids, &pending, &mut seen);
-        }
-        h.connector.release();
-        poll_all(&mut pending);
-        prop_assert!(pending.is_empty());
-        check(&mut h, &ids, &pending, &mut seen);
-        for session in manager.sessions() {
-            prop_assert_ne!(session.phase(), SessionPhase::Connecting);
-        }
+        run(&ops);
     }
+}
+
+#[test]
+fn a_held_connect_takes_its_scripted_failure_at_release() {
+    use Outcome::*;
+    for (outcome, phase) in [
+        (Auth, SessionPhase::AuthRequired),
+        (DiscoveryAuth, SessionPhase::AuthRequired),
+        (Fatal, SessionPhase::Error),
+        (Ok, SessionPhase::Ready),
+    ] {
+        let ops = [Op::Hold, Op::Connect(0, outcome.clone()), Op::Release];
+        assert_eq!(run(&ops), [Some(phase), None], "{outcome:?}");
+    }
+    // `b`'s held connect, released first, does not take `a`'s outcome.
+    let ops = [
+        Op::Hold,
+        Op::Connect(1, Ok),
+        Op::Connect(0, Fatal),
+        Op::Release,
+    ];
+    assert_eq!(
+        run(&ops),
+        [Some(SessionPhase::Error), Some(SessionPhase::Ready)]
+    );
+    // A cancelled held connect's outcome does not leak into the next connect.
+    let ops = [
+        Op::Hold,
+        Op::Connect(0, Auth),
+        Op::Disconnect(0),
+        Op::Release,
+        Op::Connect(0, Ok),
+    ];
+    assert_eq!(run(&ops), [Some(SessionPhase::Ready), None]);
 }
