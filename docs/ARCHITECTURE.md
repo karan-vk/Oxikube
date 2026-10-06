@@ -96,6 +96,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   abort-on-drop guards; the last subscriber's drop starts a grace timer on the `ClockPort`, after
   which the feed is aborted. `Subscription::rescope` follows a namespace change with the
   `ScopeDelta`, keeping the feeds that stay. `ResourceStores` keeps one store per connected session.
+  Module `columns` (E07-S02): `ColumnProvider`, the one question a table asks of a kind (`columns(kind,
+  caps)` and `cell(object, column, now)`), with two implementations (ADR 0006). `CoreColumns` is a
+  table-driven catalogue of ~40 core kinds (computed `Ready` / `Status` / `Restarts` from the domain
+  view-models, JSON-pointer columns for the rest, CPU/memory as `Cell::Pending` hooks that a
+  `MetricsSource` fills in E13); `TableColumns` maps one Table feed's `columnDefinitions` (priority >
+  0 is the `wide` flag) and rows, recovering typed sort keys from the server's text and substituting
+  generic Name / Namespace / Age for a `TableSource::Objects` feed. A `Cell` carries display text, a
+  typed `CellSort` (number, quantity, age, time, text) and a `Tone`; colours stay in the theme.
   Module `session::restore` (E06-S11): `SessionRestorer` reopens the last session. `prepare` reads
   the saved tabs (`ClusterTabsStore`, moved here from the workspace so the app layer can read what
   the tabs write), matches them against the catalog, opens each cluster as a `Disconnected`

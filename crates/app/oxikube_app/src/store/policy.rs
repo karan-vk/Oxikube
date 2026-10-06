@@ -140,7 +140,46 @@ const CORE: &[(&str, &str, FeedPlan)] = &[
         "Lease",
         FeedPlan::new(Metadata, Normal),
     ),
+    // Cluster-level kinds with core columns (E07-S02): small, rarely churning, and their columns
+    // are computed from `spec`, which the Table API would print differently from our catalogue.
+    (
+        "apiextensions.k8s.io",
+        "CustomResourceDefinition",
+        FeedPlan::new(Full, Normal),
+    ),
+    (
+        "scheduling.k8s.io",
+        "PriorityClass",
+        FeedPlan::new(Full, Normal),
+    ),
+    ("node.k8s.io", "RuntimeClass", FeedPlan::new(Full, Normal)),
+    (
+        "admissionregistration.k8s.io",
+        "MutatingWebhookConfiguration",
+        FeedPlan::new(Full, Normal),
+    ),
+    (
+        "admissionregistration.k8s.io",
+        "ValidatingWebhookConfiguration",
+        FeedPlan::new(Full, Normal),
+    ),
+    (
+        "admissionregistration.k8s.io",
+        "ValidatingAdmissionPolicy",
+        FeedPlan::new(Full, Normal),
+    ),
+    (
+        "admissionregistration.k8s.io",
+        "ValidatingAdmissionPolicyBinding",
+        FeedPlan::new(Full, Normal),
+    ),
 ];
+
+/// The `(group, kind)` of every built-in row, for tests that keep other tables in step.
+#[cfg(test)]
+pub(crate) fn core_kinds() -> impl Iterator<Item = (&'static str, &'static str)> {
+    CORE.iter().map(|(g, k, _)| (*g, *k))
+}
 
 /// The plan for kinds the table does not list: CRDs and unknown kinds read the Table API.
 pub const FALLBACK: FeedPlan = FeedPlan::new(FeedKind::Table, FeedPriority::Low);

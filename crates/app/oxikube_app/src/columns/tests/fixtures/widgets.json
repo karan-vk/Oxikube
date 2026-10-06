@@ -1,0 +1,119 @@
+{
+  "kind": "Table",
+  "apiVersion": "meta.k8s.io/v1",
+  "metadata": {
+    "resourceVersion": "157561"
+  },
+  "columnDefinitions": [
+    {
+      "name": "Name",
+      "type": "string",
+      "format": "name",
+      "description": "Name must be unique within a namespace. Is required when creating resources, although some resources may allow a client to request the generation of an appropriate name automatically. Name is primarily intended for creation idempotence and configuration definition. Cannot be updated. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names",
+      "priority": 0
+    },
+    {
+      "name": "Size",
+      "type": "string",
+      "format": "",
+      "description": "Custom resource definition column (in JSONPath format): .spec.size",
+      "priority": 0
+    },
+    {
+      "name": "Replicas",
+      "type": "integer",
+      "format": "",
+      "description": "Custom resource definition column (in JSONPath format): .spec.replicas",
+      "priority": 0
+    },
+    {
+      "name": "Phase",
+      "type": "string",
+      "format": "",
+      "description": "Custom resource definition column (in JSONPath format): .status.phase",
+      "priority": 0
+    },
+    {
+      "name": "Age",
+      "type": "date",
+      "format": "",
+      "description": "Custom resource definition column (in JSONPath format): .metadata.creationTimestamp",
+      "priority": 0
+    },
+    {
+      "name": "Owner",
+      "type": "string",
+      "format": "",
+      "description": "Custom resource definition column (in JSONPath format): .spec.owner",
+      "priority": 1
+    }
+  ],
+  "rows": [
+    {
+      "cells": [
+        "large",
+        "large",
+        10,
+        null,
+        "15h",
+        "team-a"
+      ],
+      "object": {
+        "kind": "PartialObjectMetadata",
+        "apiVersion": "meta.k8s.io/v1",
+        "metadata": {
+          "name": "large",
+          "namespace": "oxikube-fixtures",
+          "uid": "6e53a984-64c9-47f1-b71a-81c57199fcf6",
+          "resourceVersion": "156691",
+          "generation": 1,
+          "creationTimestamp": "2026-10-03T23:25:40Z"
+        }
+      }
+    },
+    {
+      "cells": [
+        "medium",
+        "medium",
+        3,
+        null,
+        "15h",
+        "team-b"
+      ],
+      "object": {
+        "kind": "PartialObjectMetadata",
+        "apiVersion": "meta.k8s.io/v1",
+        "metadata": {
+          "name": "medium",
+          "namespace": "oxikube-fixtures",
+          "uid": "24d6b754-2ad4-4f4d-822b-7d36548df839",
+          "resourceVersion": "730",
+          "generation": 1,
+          "creationTimestamp": "2026-10-03T23:25:40Z"
+        }
+      }
+    },
+    {
+      "cells": [
+        "small",
+        "small",
+        1,
+        null,
+        "15h",
+        "team-a"
+      ],
+      "object": {
+        "kind": "PartialObjectMetadata",
+        "apiVersion": "meta.k8s.io/v1",
+        "metadata": {
+          "name": "small",
+          "namespace": "oxikube-fixtures",
+          "uid": "8bea2474-6855-4a26-a398-d41ffba1f60b",
+          "resourceVersion": "725",
+          "generation": 1,
+          "creationTimestamp": "2026-10-03T23:25:40Z"
+        }
+      }
+    }
+  ]
+}

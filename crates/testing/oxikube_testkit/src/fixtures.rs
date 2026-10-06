@@ -149,6 +149,13 @@ fixtures! {
     namespace => "core/namespace.json",
     /// Service `web` (ClusterIP).
     service => "core/service.json",
+    /// PersistentVolumeClaim `data-db-0`: `Bound`, 10Gi, `ReadWriteOnce`, class `standard`.
+    pvc => "core/pvc.json",
+    /// Ingress `web` (class `nginx`, one host rule and one hostless rule, TLS, one address).
+    ingress => "networking/ingress.json",
+    /// `autoscaling/v2` HorizontalPodAutoscaler `web` targeting Deployment `web` (cpu 80%
+    /// utilisation, memory 512Mi); only the cpu metric has reported (42%).
+    hpa => "autoscaling/hpa.json",
     /// ConfigMap `web-config`.
     configmap => "core/configmap.json",
     /// Opaque Secret `web-credentials` with dummy values.
