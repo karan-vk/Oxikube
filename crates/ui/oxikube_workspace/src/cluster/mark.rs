@@ -53,9 +53,8 @@ impl BadgeSurface {
     /// `(dot, lock)` edge lengths in unscaled pixels.
     const fn sizes(self) -> (Pixels, Pixels) {
         match self {
-            BadgeSurface::Tab => (px(8.), px(12.)),
+            BadgeSurface::Tab | BadgeSurface::StatusBar => (px(8.), px(12.)),
             BadgeSurface::Hotbar => (px(10.), px(14.)),
-            BadgeSurface::StatusBar => (px(8.), px(12.)),
         }
     }
 }

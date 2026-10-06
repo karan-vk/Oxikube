@@ -107,10 +107,16 @@ impl Posture {
     }
 }
 
-/// The patch a posture command writes; `None` for any other command.
-pub(crate) fn patch_of(command: &Command) -> Option<PrefsPatch> {
+/// The patch a posture command writes on a cluster whose read-only flag is `read_only` now;
+/// `None` for any other command.
+pub(crate) fn patch_of(command: &Command, read_only: bool) -> Option<PrefsPatch> {
     match command {
-        Command::ClusterToggleReadOnly { .. } => None,
+        Command::ClusterToggleReadOnly {
+            read_only: want, ..
+        } => Some(PrefsPatch {
+            read_only: Some(want.unwrap_or(!read_only)),
+            colour: None,
+        }),
         Command::ClusterSetColour { colour, .. } => Some(PrefsPatch {
             read_only: None,
             colour: Some(*colour),
@@ -125,12 +131,8 @@ pub(crate) fn patch_of(command: &Command) -> Option<PrefsPatch> {
 
 /// Whether running `command` on a cluster with `posture` takes read-only mode from on to off.
 pub(crate) fn lowers_protection(command: &Command, posture: &Posture) -> bool {
-    match command {
-        Command::ClusterToggleReadOnly { read_only, .. } => {
-            posture.read_only && !read_only.unwrap_or(!posture.read_only)
-        }
-        _ => false,
-    }
+    posture.read_only
+        && patch_of(command, posture.read_only).is_some_and(|p| p.read_only == Some(false))
 }
 
 /// A shared handle, for the handlers.

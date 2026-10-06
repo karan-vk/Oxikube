@@ -15,7 +15,8 @@ use std::sync::Arc;
 
 use gpui::{App, AppContext as _, Entity, WeakEntity, Window};
 use oxikube_app::{
-    CommandBus, Confirmation, ConfirmationRequest, DispatchContext, DispatchError, Outcome,
+    CommandBus, Confirmation, ConfirmationRequest, ConfirmationToken, DispatchContext,
+    DispatchError, Outcome,
 };
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
@@ -161,7 +162,7 @@ impl ClusterCommandRunner {
     }
 
     /// Tells the guard the user said no, so the refusal is audited.
-    fn decline(&self, token: oxikube_app::ConfirmationToken, cx: &mut App) {
+    fn decline(&self, token: ConfirmationToken, cx: &mut App) {
         let bus = self.bus.clone();
         // Detached: a one-shot whose result only matters to the audit log.
         cx.spawn(async move |cx| {

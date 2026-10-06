@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use oxikube_domain::ids::{ClusterId, ContextName};
+use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_domain::{ErrorKind, OxiError, OxiResult, Resource};
 use oxikube_ports::{
     DeleteCollectionOutcome, DeleteOptions, DeleteOutcome, ListOptions, Patch, ResourceWriter,
@@ -58,7 +58,7 @@ impl ReadOnlyGate {
 impl ResourceWriter for ReadOnlyGate {
     async fn create(
         &self,
-        kind: &oxikube_domain::ids::Gvk,
+        kind: &Gvk,
         namespace: Option<&str>,
         object: &Value,
         options: &WriteOptions,
@@ -69,7 +69,7 @@ impl ResourceWriter for ReadOnlyGate {
 
     async fn replace(
         &self,
-        kind: &oxikube_domain::ids::Gvk,
+        kind: &Gvk,
         namespace: Option<&str>,
         name: &str,
         object: &Value,
@@ -83,7 +83,7 @@ impl ResourceWriter for ReadOnlyGate {
 
     async fn patch(
         &self,
-        kind: &oxikube_domain::ids::Gvk,
+        kind: &Gvk,
         namespace: Option<&str>,
         name: &str,
         patch: &Patch,
@@ -97,7 +97,7 @@ impl ResourceWriter for ReadOnlyGate {
 
     async fn delete(
         &self,
-        kind: &oxikube_domain::ids::Gvk,
+        kind: &Gvk,
         namespace: Option<&str>,
         name: &str,
         options: &DeleteOptions,
@@ -108,7 +108,7 @@ impl ResourceWriter for ReadOnlyGate {
 
     async fn delete_collection(
         &self,
-        kind: &oxikube_domain::ids::Gvk,
+        kind: &Gvk,
         namespace: Option<&str>,
         selection: &ListOptions,
         options: &DeleteOptions,
@@ -121,7 +121,7 @@ impl ResourceWriter for ReadOnlyGate {
 
     async fn scale(
         &self,
-        kind: &oxikube_domain::ids::Gvk,
+        kind: &Gvk,
         namespace: Option<&str>,
         name: &str,
         replicas: i32,
@@ -140,7 +140,7 @@ impl ResourceWriter for ReadOnlyGate {
 
     async fn create_subresource(
         &self,
-        kind: &oxikube_domain::ids::Gvk,
+        kind: &Gvk,
         namespace: Option<&str>,
         name: &str,
         subresource: &Subresource,
@@ -155,7 +155,7 @@ impl ResourceWriter for ReadOnlyGate {
 
     async fn patch_subresource(
         &self,
-        kind: &oxikube_domain::ids::Gvk,
+        kind: &Gvk,
         namespace: Option<&str>,
         name: &str,
         subresource: &Subresource,
@@ -170,7 +170,7 @@ impl ResourceWriter for ReadOnlyGate {
 
     async fn replace_subresource(
         &self,
-        kind: &oxikube_domain::ids::Gvk,
+        kind: &Gvk,
         namespace: Option<&str>,
         name: &str,
         subresource: &Subresource,

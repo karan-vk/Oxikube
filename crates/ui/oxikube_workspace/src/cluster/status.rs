@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use gpui::{
     Animation, AnimationExt as _, App, Context, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, Styled as _, Task, Window, prelude::*,
+    ParentElement as _, Render, SharedString, Styled as _, Task, Window, div, prelude::*,
 };
 use oxikube_app::{ClusterSession, ClusterSessionManager};
 use oxikube_domain::ids::ClusterId;
@@ -147,7 +147,7 @@ impl Render for ClusterStatusItem {
             .child(self.title.clone())
             .when(self.mark.read_only, |this| {
                 this.child(
-                    gpui::div()
+                    div()
                         .debug_selector(|| "status-cluster-read-only".to_owned())
                         .child("Read-only"),
                 )

@@ -9,6 +9,7 @@ use serde_json::json;
 
 use super::{Posture, PrefsPatch, SharedWriter, patch_of};
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
+use crate::guard::policy;
 use crate::session::ClusterSessionManager;
 
 /// Registers `cluster::ToggleReadOnly`, `cluster::SetColour` and `cluster::ApplyPreset`
@@ -49,30 +50,13 @@ struct Service {
 
 impl Service {
     async fn run(&self, command: Command, cx: &HandlerContext) -> OxiResult<CommandOutput> {
-        let (cluster, patch) = match &command {
-            Command::ClusterToggleReadOnly { cluster, read_only } => {
-                let current = Posture::of(&self.sessions, cluster).read_only;
-                let want = read_only.unwrap_or(!current);
-                (
-                    cluster.clone(),
-                    PrefsPatch {
-                        read_only: Some(want),
-                        colour: None,
-                    },
-                )
-            }
-            Command::ClusterSetColour { cluster, .. }
-            | Command::ClusterApplyPreset { cluster, .. } => (
-                cluster.clone(),
-                patch_of(&command).expect("colour and preset commands carry a patch"),
-            ),
-            other => {
-                return Err(OxiError::internal(format!(
-                    "{} is not a posture command",
-                    other.id()
-                )));
-            }
-        };
+        let not_posture =
+            || OxiError::internal(format!("{} is not a posture command", command.id()));
+        let cluster = policy::cluster_of(&command)
+            .ok_or_else(not_posture)?
+            .clone();
+        let read_only = Posture::of(&self.sessions, &cluster).read_only;
+        let patch = patch_of(&command, read_only).ok_or_else(not_posture)?;
         tracing::info!(command = %command.id(), initiator = %cx.initiator(), "posture change");
         self.apply(&cluster, patch).await?;
         let now = Posture::of(&self.sessions, &cluster);

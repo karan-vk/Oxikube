@@ -11,8 +11,8 @@ use std::rc::Rc;
 
 use gpui::{App, Window};
 use oxikube_app::ClusterSession;
+use oxikube_domain::ClusterPreset;
 use oxikube_domain::command::Command;
-use oxikube_domain::{ClusterPreset, ids::ClusterId};
 use oxikube_ui::menu::{PopupMenu, PopupMenuItem};
 
 /// One row of the menu.
@@ -29,15 +29,8 @@ pub struct MenuEntry {
 /// The rows for `session`: "Read-only" (checked when on) and one row per preset, the current
 /// preset checked.
 pub fn cluster_menu_entries(session: &ClusterSession) -> Vec<MenuEntry> {
-    entries(session.id(), session.read_only(), session.colour())
-}
-
-fn entries(
-    cluster: &ClusterId,
-    read_only: bool,
-    colour: Option<oxikube_domain::ClusterColour>,
-) -> Vec<MenuEntry> {
-    let current = ClusterPreset::detect(colour);
+    let (cluster, read_only) = (session.id(), session.read_only());
+    let current = ClusterPreset::detect(session.colour());
     let mut rows = vec![MenuEntry {
         label: "Read-only",
         checked: read_only,
@@ -59,12 +52,11 @@ fn entries(
 
 /// Fills `menu` with the cluster rows. `run` receives the command of the clicked row.
 pub fn cluster_menu(
-    menu: PopupMenu,
+    mut menu: PopupMenu,
     session: &ClusterSession,
     run: Rc<dyn Fn(Command, &mut Window, &mut App)>,
 ) -> PopupMenu {
     let mut rows = cluster_menu_entries(session).into_iter();
-    let mut menu = menu;
     if let Some(toggle) = rows.next() {
         menu = menu.item(item(toggle, &run)).separator().label("Colour");
     }
