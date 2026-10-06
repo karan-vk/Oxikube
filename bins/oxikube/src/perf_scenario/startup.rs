@@ -24,10 +24,10 @@
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
-use gpui::{AnyView, AnyWindowHandle, App, AppContext as _};
+use gpui::{AnyView, AnyWindowHandle, App, AppContext as _, HeadlessAppContext};
 use oxikube::app_state::{AppPorts, ClusterAdapters};
 use oxikube::startup::{
     self, ConfigSource, PortsChoice, RuntimeChoice, Stage, StartupEnv, StartupReport,
@@ -116,7 +116,7 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
         startup::first_frame::summary(&report)
     );
 
-    cx.run_until_parked();
+    settle_kube_tasks(&mut cx)?;
     if probe && recorder.frames_recorded() == 0 {
         bail!("no frame was drawn while opening the window");
     }
@@ -164,6 +164,32 @@ fn wrap(content: AnyView, hook: Option<Arc<Recorder>>, cx: &mut App) -> AnyView 
         None => content,
     };
     startup::window::probe_first_frame(content, cx)
+}
+
+/// How long [`settle_kube_tasks`] waits for the mount's background reads.
+const SETTLE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Runs the window's tasks until the work the mount queued on the Tokio bridge (the catalog and
+/// hotbar reads, E07-S00) has finished and its results are applied. Those reads finish on Tokio's
+/// own threads at a time the headless scheduler does not control: a result landing inside the
+/// frame loop would redraw the window once more and add an extra frame to `frame_ms`. A Tokio task
+/// wakes its GPUI awaiter before it leaves the alive count, so a count of 0 followed by
+/// `run_until_parked` means every result has been applied.
+fn settle_kube_tasks(cx: &mut HeadlessAppContext) -> Result<()> {
+    let tokio = cx.update(|cx| oxikube_runtime::handle(cx));
+    let started = Instant::now();
+    loop {
+        cx.run_until_parked();
+        let alive = tokio.as_ref().map_or(0, |h| h.metrics().num_alive_tasks());
+        if alive == 0 {
+            cx.run_until_parked();
+            return Ok(());
+        }
+        if started.elapsed() > SETTLE_TIMEOUT {
+            bail!("{alive} Tokio task(s) still running {SETTLE_TIMEOUT:?} after the first frame");
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
 }
 
 /// Fails when a deferred service started before the first frame.
