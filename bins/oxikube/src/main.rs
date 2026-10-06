@@ -1,10 +1,13 @@
 //! Oxikube binary. Wires adapters into the app and mounts the UI.
 //!
-//! Opens the themed main window (`oxikube_workspace::window`): the `Root` over a title bar and an
-//! empty workspace, plus the application menu. Init order will follow Zed's `main.rs` pattern
-//! (E05-S09): logging → settings → keymap → theme → AppState → each crate's `init(cx)` →
-//! workspace restore. Today: `oxikube_ui::init`, `oxikube_workspace::init`, open the window; nothing waits on
-//! disk or network before the first frame.
+//! Opens the themed main window (`oxikube_workspace::window`): the `Root` over a title bar and the
+//! workspace, plus the application menu.
+//!
+//! Init order (Zed's `main.rs` pattern, E05-S09), documented stage by stage in [`oxikube::startup`]:
+//! logging and the panic hook → assets → runtime → settings → theme → keymap → ui → state db
+//! (opened in the background) → [`oxikube::app_state::AppState`] → workspace → feature crates → keymap
+//! re-bind → open the window. Nothing waits on disk or network before the first frame; each stage
+//! is timed in a `tracing` span.
 //!
 //! Flags (`oxikube --help`): `--perf` records frame times, feed throughput, notify counts and RSS
 //! (docs/PERFORMANCE.md); `--perf-scenario` runs one headless perf sample (feature
@@ -18,6 +21,7 @@ mod perf_scenario;
 mod screenshot;
 
 use gpui::{App, AppContext as _};
+use oxikube::startup::{self, Stage, StartupEnv};
 use oxikube_runtime::perf::{PerfRoot, Recorder};
 use std::io::Write as _;
 use std::process::ExitCode;
@@ -66,11 +70,16 @@ fn main() -> ExitCode {
         return screenshot::run(path.as_ref());
     }
 
+    // Logging and the panic hook come first, so everything after this can log and a panic leaves
+    // a crash file (stage 1 of the init order, `startup`).
+    let boot = startup::boot();
+
     let perf = if args.perf {
         match perf_mode::start(args.perf_dir.clone()) {
             Ok(recorder) => Some(recorder),
             Err(err) => {
                 eprintln!("oxikube --perf: {err:#}");
+                startup::shutdown();
                 return ExitCode::FAILURE;
             }
         }
@@ -79,37 +88,62 @@ fn main() -> ExitCode {
     };
     let perf_duration = args.perf_duration;
 
-    run_app(perf, perf_duration);
+    run_app(boot, perf, perf_duration);
     // Platforms where `run` returns after quitting (macOS exits from inside it; the quit hook
     // already finished the session there). Idempotent.
     perf_mode::finish();
+    startup::shutdown();
     ExitCode::SUCCESS
 }
 
-/// Runs the GPUI application: registers the assets, initialises the UI stack, opens the main
-/// window. With a `--perf` recorder the frame hook sits between the `Root` and the content (the
-/// `Root` must remain the window's root view for overlays to work); without it nothing is
-/// measured or paid for.
-fn run_app(perf: Option<Arc<Recorder>>, perf_duration: Option<Duration>) {
-    gpui_platform::application()
-        .with_assets(oxikube_ui::Assets)
-        .run(move |cx: &mut App| {
-            oxikube_ui::init(cx);
-            oxikube_workspace::init(cx);
-            let opened = match perf {
-                Some(recorder) => {
-                    perf_mode::attach(cx, perf_duration);
-                    oxikube_workspace::window::open_main_window_with(cx, move |content, cx| {
-                        cx.new(|_| PerfRoot::new(content, recorder)).into()
-                    })
-                }
-                None => oxikube_workspace::window::open_main_window(cx),
-            };
-            if let Err(err) = opened {
-                eprintln!("oxikube: {err:#}");
-                cx.quit();
-                return;
-            }
+/// Runs the GPUI application: registers the assets, runs the init order (`startup::init`), opens
+/// the main window. With a `--perf` recorder the frame hook sits between the `Root` and the
+/// content (the `Root` must remain the window's root view for overlays to work); without it
+/// nothing is measured or paid for.
+fn run_app(mut boot: startup::Boot, perf: Option<Arc<Recorder>>, perf_duration: Option<Duration>) {
+    let application = boot.report.time(Stage::Assets, || {
+        gpui_platform::application().with_assets(oxikube_ui::Assets)
+    });
+    application.run(move |cx: &mut App| {
+        let up = start(cx, boot, perf, perf_duration);
+        // Registered after every other quit observer (the window's persistence controller, the
+        // perf recorder), so the log outlives their quit work; also on the failure paths, which
+        // quit below. macOS exits from inside `run`, so `main` never gets to flush there.
+        startup::flush_log_on_quit(cx);
+        if up {
             cx.activate(true);
-        });
+        } else {
+            cx.quit();
+        }
+    });
+}
+
+/// The body of the `run` callback: the init order, then the main window. Returns whether the app
+/// is up; on failure the error is already logged and printed and the caller quits.
+fn start(
+    cx: &mut App,
+    boot: startup::Boot,
+    perf: Option<Arc<Recorder>>,
+    perf_duration: Option<Duration>,
+) -> bool {
+    if let Err(err) = startup::init(cx, StartupEnv::app(boot)) {
+        tracing::error!(%err, "start-up failed");
+        eprintln!("oxikube: {err}");
+        return false;
+    }
+    let opened = startup::time_after_init(cx, Stage::Window, |cx| match perf {
+        Some(recorder) => {
+            perf_mode::attach(cx, perf_duration);
+            oxikube_workspace::window::open_main_window_with(cx, move |content, cx| {
+                cx.new(|_| PerfRoot::new(content, recorder)).into()
+            })
+        }
+        None => oxikube_workspace::window::open_main_window(cx),
+    });
+    if let Err(err) = opened {
+        tracing::error!(%err, "cannot open the main window");
+        eprintln!("oxikube: {err:#}");
+        return false;
+    }
+    true
 }

@@ -6,6 +6,7 @@
 
 use oxikube_settings::SettingsStore;
 // Linked only for its `register_settings!` (inventory) registrations. See E05-S06b (#454).
+use oxikube_logging as _;
 use oxikube_settings::schema::to_schema_text;
 use oxikube_theme as _;
 use oxikube_workspace as _;

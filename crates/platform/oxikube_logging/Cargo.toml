@@ -12,12 +12,23 @@ path = "src/oxikube_logging.rs"
 doctest = false
 
 [dependencies]
+gpui.workspace = true
+jiff.workspace = true
 oxikube_domain.workspace = true
+oxikube_settings.workspace = true
+schemars.workspace = true
+serde.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
+tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+log.workspace = true
+oxikube_assets.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true
