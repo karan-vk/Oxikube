@@ -73,16 +73,17 @@ fn at(provider: &TableColumns, row: &StoreObject, id: &str) -> String {
 fn a_crd_shows_its_additional_printer_columns() {
     let (_, columns, _) = widgets();
     let titles: Vec<&str> = columns.iter().map(|c| &*c.title).collect();
-    // The server's six columns, plus the synthetic namespace column after Name.
+    // The server's six columns, plus the synthetic namespace column; the wide ones (Namespace,
+    // Owner) come last.
     assert_eq!(
         titles,
         [
             "Name",
-            "Namespace",
             "Size",
             "Replicas",
             "Phase",
             "Age",
+            "Namespace",
             "Owner"
         ]
     );
@@ -91,14 +92,41 @@ fn a_crd_shows_its_additional_printer_columns() {
         ids,
         [
             "name",
-            "namespace",
             "size",
             "replicas",
             "phase",
             "age",
+            "namespace",
             "owner"
         ]
     );
+}
+
+#[test]
+fn default_columns_come_before_wide_ones() {
+    let (_, columns, _) = widgets();
+    let first_wide = columns.iter().position(|c| c.wide).unwrap();
+    assert!(columns[first_wide..].iter().all(|c| c.wide));
+    // A wide server column in the middle of the definitions moves behind the default ones.
+    let def = |name: &str, priority: i32| TableColumn {
+        name: name.to_owned(),
+        column_type: "string".to_owned(),
+        format: if name == "Name" { "name" } else { "" }.to_owned(),
+        description: String::new(),
+        priority,
+    };
+    let defs = [def("Name", 0), def("IP", 1), def("Age", 0)];
+    let provider = TableColumns::new(&defs, TableSource::Server, Scope::Namespaced);
+    let columns = provider.columns(&gvk(), Capabilities::empty());
+    let ids: Vec<&str> = columns.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(ids, ["name", "age", "namespace", "ip"]);
+    // Cells still read the right value after the reorder.
+    let object = StoreObject::Row(TableObject {
+        meta: ObjectMeta::named("n"),
+        cells: vec![Value::from("n"), Value::from("10.0.0.1"), Value::from("5m")],
+        object: None,
+    });
+    assert_eq!(at(&provider, &object, "ip"), "10.0.0.1");
 }
 
 #[test]

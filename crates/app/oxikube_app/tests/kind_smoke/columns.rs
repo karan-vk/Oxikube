@@ -152,14 +152,14 @@ async fn table_columns_show_a_crds_printer_columns() {
         titles,
         [
             "Name",
-            "Namespace",
             "Size",
             "Replicas",
             "Phase",
             "Age",
+            "Namespace",
             "Owner"
         ],
-        "printer columns plus the synthetic namespace column"
+        "printer columns plus the synthetic namespace column, default columns first"
     );
     let wide: Vec<&str> = columns
         .iter()

@@ -10,6 +10,9 @@
 //! When the feed fell back to plain objects ([`TableSource::Objects`]) the server's columns are
 //! the adapter's stand-ins, so the provider substitutes the generic Name / Namespace / Age
 //! columns, which every object can answer from its metadata.
+//!
+//! Columns are listed default first, then wide, as [`ColumnProvider::columns`] promises; the
+//! server's order is kept inside each group.
 
 mod sniff;
 
@@ -64,8 +67,8 @@ impl TableColumns {
     /// A provider for a feed that delivered `definitions` from `source`.
     ///
     /// `scope` says whether the kind is namespaced. The server's table has no namespace column,
-    /// so a namespaced kind gets a synthetic `namespace` column, hidden by default, placed after
-    /// the name; the table shows it when several namespaces are selected.
+    /// so a namespaced kind gets a synthetic `namespace` column, hidden by default, so it is
+    /// the first of the wide columns; the table shows it when several namespaces are selected.
     pub fn new(definitions: &[TableColumn], source: TableSource, scope: Scope) -> Self {
         let (columns, slots) = match source {
             TableSource::Objects => generic(scope),
@@ -167,14 +170,18 @@ fn server(definitions: &[TableColumn], scope: Scope) -> (Vec<Column>, Vec<Slot>)
             age,
             status,
         });
-        // The synthetic namespace column goes right after the name.
+        // The synthetic namespace column is wide, so it lands first among the wide columns.
         if synthesise_namespace && def.format == "name" {
             columns.push(namespace_column(true));
             slots.push(meta_slot());
             used.push(ColumnId::NAMESPACE.to_owned());
         }
     }
-    (columns, slots)
+    // The contract is default columns first, then the wide ones. A stable sort on the flag keeps
+    // the server's order inside each group; `slots` stays parallel to `columns`.
+    let mut pairs: Vec<(Column, Slot)> = columns.into_iter().zip(slots).collect();
+    pairs.sort_by_key(|(column, _)| column.wide);
+    pairs.into_iter().unzip()
 }
 
 fn has_namespace(definitions: &[TableColumn]) -> bool {
