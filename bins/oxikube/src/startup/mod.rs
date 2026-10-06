@@ -2,7 +2,7 @@
 //!
 //! Every crate that needs set-up exposes `pub fn init(cx: &mut App)`; this module is the one
 //! place that decides the order they run in and builds the adapters that become the
-//! [`AppState`](crate::app_state::AppState) ports. The order matters: settings must exist before
+//! [`AppState`] ports. The order matters: settings must exist before
 //! the theme reads the `theme` setting, the keymap and the theme before the component library
 //! consumes them, the runtime before anything spawns Kubernetes work, and the first frame must
 //! not wait for the disk or the network.
@@ -16,7 +16,7 @@
 //! | 5 | `Theme` | `oxikube_theme::init` | reads the `theme` setting and the system appearance |
 //! | 6 | `Keymap` | `oxikube_keymap::init` | binds the layered key bindings; needs settings' config dir |
 //! | 7 | `Ui` | `oxikube_ui::init`, `follow_active_theme` | component library and tokens; consumes the active theme |
-//! | 8 | `StateDb` | build [`LazyState`](state_db::LazyState) and start its open on the background executor | construction is instant; the open (SQLite, migrations) must not block the first frame, so it is not awaited |
+//! | 8 | `StateDb` | build `LazyState` and start its open on the background executor | construction is instant; the open (SQLite, migrations) must not block the first frame, so it is not awaited |
 //! | 9 | `AppState` | `AppState::install` | refuses to install unless the runtime, settings, theme and keymap exist, which is what makes a wrong order an error |
 //! | 10 | `Workspace` | `oxikube_workspace::init` | window menu, workspace actions, session basics |
 //! | 11 | `Features` | [`features::FEATURES`], in order | feature crates register actions, settings, item builders |

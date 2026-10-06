@@ -26,7 +26,7 @@
 //!
 //! `AppState::test(cx)` (test builds and feature `test-support`) runs the real init order with testkit fakes and no OS
 //! threads: an in-memory settings store, the deterministic runtime, no file watchers, a
-//! [`FakeStatePort`](oxikube_testkit::FakeStatePort). It is the same code path as the app
+//! `oxikube_testkit::FakeStatePort`. It is the same code path as the app
 //! (`startup::init`), so a test that calls it exercises the order.
 
 mod ports;

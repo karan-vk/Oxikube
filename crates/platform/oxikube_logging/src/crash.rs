@@ -174,7 +174,7 @@ fn prune(dir: &Path, keep: usize, newest: &Path) {
     }
 }
 
-/// Installs the hook described in the [module docs](self). Returns `false` (and changes nothing)
+/// Installs the hook described in the module docs above. Returns `false` (and changes nothing)
 /// when this process already installed one: install once, early in `main`.
 pub fn install_panic_hook(config: CrashConfig) -> bool {
     if INSTALLED.swap(true, Ordering::SeqCst) {
