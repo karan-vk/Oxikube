@@ -2,15 +2,7 @@
 //!
 //! This is the view the `Root` hosts. The workspace fills the body: docks and centre panes, the
 //! status bar below them, and the toast and modal layers over them (E05-S10).
-//!
-//! # Startup placeholder (E05-S13)
-//!
-//! The window never waits for the disk: [`MainView::restoring`] shows the workspace at once in its
-//! default (empty) layout and reads the saved layout in the background
-//! ([`LayoutPersistence`]). That default layout is the placeholder: it is fully interactive (key
-//! bindings, actions, opening items) and the title bar says "Restoring layout…" until the read
-//! finishes. Then the saved layout replaces it; when the read fails, or nothing was saved, the
-//! placeholder simply stays as the usable default layout and the marker goes away.
+//! The startup placeholder (E05-S13) is described on [`MainView`].
 
 use gpui::{
     App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
@@ -27,6 +19,16 @@ use crate::workspace::Workspace;
 pub const RESTORING_LABEL: &str = "Restoring layout…";
 
 /// Root content view of the main window.
+///
+/// # Startup placeholder (E05-S13)
+///
+/// The window never waits for the disk: [`MainView::restoring`] shows the workspace at once in its
+/// default (empty) layout and reads the saved layout in the background
+/// ([`LayoutPersistence`]). That default layout is the placeholder: it is fully interactive (key
+/// bindings, actions, opening items) and the title bar says "Restoring layout…"
+/// ([`RESTORING_LABEL`]) until the read finishes. Then the saved layout replaces it; when the read
+/// fails, or nothing was saved, the placeholder simply stays as the usable default layout and the
+/// marker goes away.
 pub struct MainView {
     workspace: Entity<Workspace>,
     persistence: Option<Entity<LayoutPersistence>>,
@@ -44,7 +46,7 @@ impl MainView {
     }
 
     /// The title bar over a new workspace whose saved layout `store` restores in the background
-    /// and keeps saved (see the [module docs](self) for the placeholder it shows meanwhile).
+    /// and keeps saved (see the startup placeholder in the [type docs](MainView)).
     pub fn restoring(store: LayoutStore, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let workspace = cx.new(|cx| Workspace::new(window, cx));
         let persistence = LayoutPersistence::start(&workspace, store, window, cx);
