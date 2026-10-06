@@ -18,15 +18,16 @@ use oxikube_ui::menu::{DropdownMenu as _, PopupMenuItem};
 use oxikube_ui::{ActiveTokens as _, Sizable as _, Table, u};
 
 use super::cells::ToneColors;
+use super::states::stale_badge;
 use super::view::ResourceTable;
 
 impl Render for ResourceTable {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = ToneColors::current(cx);
-        let (rows, selected) = self.table.update_quiet(cx, |d| {
+        let (rows, selected, state) = self.table.update_quiet(cx, |d| {
             d.now = Timestamp::now();
             d.colors = Some(colors);
-            (d.rows.len(), d.selection.len())
+            (d.rows.len(), d.selection.len(), d.table_state())
         });
         let tokens = cx.colors();
         let count: SharedString = if selected > 0 {
@@ -34,31 +35,35 @@ impl Render for ResourceTable {
         } else {
             format!("{rows}").into()
         };
-        let toolbar = h_flex()
-            .id("resource-table-toolbar")
-            .flex_none()
-            .w_full()
-            .h(u(px(32.)))
-            .px(u(px(8.)))
-            .gap(u(px(8.)))
-            .items_center()
-            .border_b_1()
-            .border_color(tokens.border_variant)
-            .child(
-                div()
-                    .text_color(tokens.text)
-                    .text_size(u(px(13.)))
-                    .child(self.title.clone()),
-            )
-            .child(
-                div()
-                    .debug_selector(|| "resource-table-count".into())
-                    .text_color(tokens.text_muted)
-                    .text_size(u(px(12.)))
-                    .child(count),
-            )
-            .child(div().flex_1())
-            .child(self.column_picker(cx));
+        let toolbar =
+            h_flex()
+                .id("resource-table-toolbar")
+                .flex_none()
+                .w_full()
+                .h(u(px(32.)))
+                .px(u(px(8.)))
+                .gap(u(px(8.)))
+                .items_center()
+                .border_b_1()
+                .border_color(tokens.border_variant)
+                .child(
+                    div()
+                        .text_color(tokens.text)
+                        .text_size(u(px(13.)))
+                        .child(self.title.clone()),
+                )
+                .child(
+                    div()
+                        .debug_selector(|| "resource-table-count".into())
+                        .text_color(tokens.text_muted)
+                        .text_size(u(px(12.)))
+                        .child(count),
+                )
+                .children(state.stale().map(|stale| {
+                    stale_badge(stale, state.can_retry(), &cx.entity().downgrade(), cx)
+                }))
+                .child(div().flex_1())
+                .child(self.column_picker(cx));
         v_flex()
             .id("resource-table")
             .key_context(self.key_context())

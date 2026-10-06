@@ -77,6 +77,8 @@ impl CommandId {
     pub const RESOURCE_OPEN: CommandId = CommandId::new("resource::Open");
     /// `resource::OpenList`: open the list view of a resource kind.
     pub const RESOURCE_OPEN_LIST: CommandId = CommandId::new("resource::OpenList");
+    /// `resource::RetryFeed`: restart the feed behind a kind's list views.
+    pub const RESOURCE_RETRY_FEED: CommandId = CommandId::new("resource::RetryFeed");
     /// `resource::SelectAll`: select every row of a kind's list views.
     pub const RESOURCE_SELECT_ALL: CommandId = CommandId::new("resource::SelectAll");
     /// `resource::ViewYaml`: open a resource's YAML.
@@ -310,6 +312,12 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::RESOURCE_OPEN_LIST,
         "Open Resource List",
+        CommandScope::ResourceKind,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::RESOURCE_RETRY_FEED,
+        "Retry Resource Feed",
         CommandScope::ResourceKind,
         NONE,
     ),

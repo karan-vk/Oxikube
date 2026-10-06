@@ -188,3 +188,48 @@ fn open_list_without_a_cluster_tab_says_there_is_no_list(cx: &mut TestAppContext
     app.vcx.run_until_parked();
     app.expect_toast("There is no list view for Pod yet.");
 }
+
+#[gpui::test]
+fn a_forbidden_table_offers_retry_and_the_click_reaches_the_feed_through_the_bus(
+    cx: &mut TestAppContext,
+) {
+    use oxikube_domain::OxiError;
+    use oxikube_testkit::ResourceCall;
+
+    let mut app = App::start(cx, TestPorts::seeded());
+    let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
+    app.serve([kind("", "v1", "ConfigMap", "configmaps")]);
+    app.press("enter");
+    app.tick();
+    // ConfigMaps: no sidebar badge watches them, so the table's subscription is the first watch
+    // after the badges' feeds are open, and the fake refuses it.
+    ports.resources.script().watch.push_err(OxiError::forbidden(
+        "configmaps is forbidden: User \"me\" cannot list resource \"configmaps\"",
+    ));
+    app.click("sidebar-entry-config/configmaps");
+    app.tick();
+    assert_eq!(app.tables(), ["ConfigMap"]);
+    assert!(
+        app.drawn("resource-table-state"),
+        "a forbidden table says so instead of staying blank"
+    );
+    let watches = || {
+        ports
+            .resources
+            .recorded_calls()
+            .iter()
+            .filter(
+                |c| matches!(c, ResourceCall::Watch { kind, .. } if kind.kind.as_ref() == "ConfigMap"),
+            )
+            .count()
+    };
+    let before = watches();
+    // The button dispatches `resource::RetryFeed` on the app's bus, whose handler reaches the table.
+    app.click("resource-table-retry");
+    app.tick();
+    assert_eq!(watches(), before + 1, "the feed was reopened");
+    assert!(
+        !app.drawn("resource-table-retry"),
+        "the retry listed (the fake serves an empty list now): no failure left to retry"
+    );
+}

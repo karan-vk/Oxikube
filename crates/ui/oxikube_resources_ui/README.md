@@ -22,11 +22,12 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 - `table` (E07-S03): `ResourceTable`, the generic virtualised table of one kind (store
   subscription, sort through the store, column layout per kind, multi-select, keyboard, context
   menu, status colours from the theme's `oxikube` block).
+- `table::states` (E07-S10): `TableState` (the pure derivation), the state views, the stale badge, Retry and the API server warnings.
 - `views` (E07-S03): `ResourceViews`, which opens tables in cluster tabs from the sidebar and
-  `resource::OpenList`, and runs `resource::Open`, `CopyName` and `SelectAll`.
+  `resource::OpenList`, and runs `resource::Open`, `CopyName`, `SelectAll` and `RetryFeed` (E07-S10).
 
 Bench: `cargo run -p oxikube_resources_ui --profile release-fast --example table_bench`.
-Screenshot: `cargo test -p oxikube_resources_ui --features screenshot --test screenshot`.
+Screenshots: `cargo test -p oxikube_resources_ui --features screenshot --test screenshot` (status tones) and `--test states_screenshot` (the table states, E07-S10).
 
 ## Owning epics
 

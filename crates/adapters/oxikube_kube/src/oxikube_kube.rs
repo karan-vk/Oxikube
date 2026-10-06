@@ -25,6 +25,7 @@
 //! | [`subresource`] | E04-S06 | scale, status, eviction, ephemeral containers and resize as `ResourcePort` methods; [`ResourcePatch`] builders (rollout restart, cordon, uncordon, cronjob suspend) ported from kdash |
 //! | [`algorithms`] | E04-S07 | kubectl-equivalent algorithms over a `ResourcePort`: [`trigger_cronjob`], [`rollout_history`], [`rollout_undo`] and [`drain`] (a progress stream with PodDisruptionBudget retry) |
 //! | [`connector`] | E06-S12 | [`KubeConnector`]: `ClusterConnectorPort` over the [`ClientPool`]: the per-connection `ClusterPorts` bundle, the RBAC `AccessReviewPort`, the liveness bridge to the session manager and a per-connection [`FeedRegistry`] |
+//! | [`warnings`] | E07-S10 | [`WarningLayer`](warnings::WarningLayer) on the client: the API server's `Warning:` headers, redacted, published per context as `WarningPort` |
 //! | [`sources`] | E03-S02 | `ClusterSourcePort` over kubeconfig files, directories and pasted text, with hot reload |
 //! | [`table`] | E04-S04 | `TableFeedPort` on [`KubeResources`]: hand-rolled server Table API list + watch feed with refresh, diffing and plain-JSON fallback |
 
@@ -46,6 +47,7 @@ pub mod resources;
 pub mod sources;
 pub mod subresource;
 pub mod table;
+pub mod warnings;
 
 #[cfg(test)]
 mod fake_api;

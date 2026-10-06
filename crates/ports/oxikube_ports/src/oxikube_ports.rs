@@ -66,6 +66,7 @@
 //! |---|---|
 //! | [`ClusterConnectorPort`], [`ClusterPorts`], [`HealthReporter`] | [`connector`] |
 //! | [`AccessReviewPort`] | [`access`] |
+//! | [`WarningPort`], [`ApiWarning`] (the API server's `Warning:` headers, E07-S10) | [`warnings`] |
 //! | [`ClusterPrefs`], [`ClusterPrefsTable`] (resolved per-cluster settings, E06-S08) | [`cluster_prefs`] |
 //!
 //! # Integration and agent ports (E02-S10)
@@ -111,6 +112,7 @@ pub mod state;
 pub mod table;
 pub mod tool;
 pub mod updater;
+pub mod warnings;
 
 pub use access::AccessReviewPort;
 pub use agent::{
@@ -163,6 +165,7 @@ pub use table::{
 };
 pub use tool::{ToolAnnotations, ToolContext, ToolDef, ToolName, ToolOutput, ToolPort};
 pub use updater::{DownloadedUpdate, UpdateChannel, UpdateInfo, UpdaterPort};
+pub use warnings::{ApiWarning, WarningPort};
 
 #[cfg(test)]
 mod tests {
@@ -190,6 +193,7 @@ mod tests {
         clock: Arc<dyn ClockPort>,
         connector: Arc<dyn ClusterConnectorPort>,
         access: Arc<dyn AccessReviewPort>,
+        warnings: Arc<dyn WarningPort>,
         health: Arc<dyn HealthReporter>,
     }
 

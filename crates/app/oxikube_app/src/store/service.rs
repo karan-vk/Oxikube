@@ -5,8 +5,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use futures::stream::BoxStream;
 use jiff::Timestamp;
 use oxikube_domain::ids::{ClusterId, Gvk};
+use oxikube_ports::{ApiWarning, WarningPort};
 use parking_lot::Mutex;
 
 use super::config::{FeedInfo, StoreOptions, StoreRuntime};
@@ -20,6 +22,7 @@ use super::policy::FeedPlan;
 use super::query::StoreQuery;
 use super::spawn::{TaskGuard, spawn_guarded};
 use super::subscription::Subscription;
+use super::warnings::{WarningLedger, distinct};
 use crate::session::ClusterSession;
 
 /// The app-side cache over one cluster session's feeds (ADR 0006): every table, sidebar count
@@ -49,12 +52,25 @@ impl ResourceStore {
         runtime: StoreRuntime,
         options: StoreOptions,
     ) -> Self {
+        Self::with_warnings(cluster, ports, runtime, options, None)
+    }
+
+    /// A store that also exposes the cluster's `Warning:` headers ([`warnings`](Self::warnings)).
+    pub fn with_warnings(
+        cluster: ClusterId,
+        ports: StorePorts,
+        runtime: StoreRuntime,
+        options: StoreOptions,
+        warnings: Option<Arc<dyn WarningPort>>,
+    ) -> Self {
         Self {
             inner: Arc::new(StoreInner {
                 cluster,
                 ports,
                 runtime,
                 options,
+                warnings,
+                ledger: Arc::new(WarningLedger::default()),
                 entries: Mutex::new(HashMap::new()),
                 next_id: AtomicU64::new(1),
             }),
@@ -71,7 +87,13 @@ impl ResourceStore {
             resources: session.resources()?,
             tables: session.tables()?,
         };
-        Some(Self::new(session.id().clone(), ports, runtime, options))
+        Some(Self::with_warnings(
+            session.id().clone(),
+            ports,
+            runtime,
+            options,
+            session.warnings(),
+        ))
     }
 
     /// Whether `other` is a handle on this same store (not merely one for the same cluster).
@@ -111,6 +133,15 @@ impl ResourceStore {
         Subscription::open(self.inner.clone(), query)
     }
 
+    /// The API server's `Warning:` headers from now on, each distinct one once per store (so once
+    /// per session, however many tables ask): a stream that yields the first of each
+    /// (code, text) and swallows repeats. Empty when the session exposes no warnings.
+    ///
+    /// Subscribe before opening the feeds whose requests may warn: nothing is replayed.
+    pub fn warnings(&self) -> BoxStream<'static, ApiWarning> {
+        distinct(self.inner.warnings.as_ref(), self.inner.ledger.clone())
+    }
+
     /// Every cached feed, sorted by key.
     pub fn feeds(&self) -> Vec<FeedInfo> {
         let entries = self.inner.entries.lock();
@@ -139,6 +170,8 @@ pub(crate) struct StoreInner {
     ports: StorePorts,
     runtime: StoreRuntime,
     pub(super) options: StoreOptions,
+    warnings: Option<Arc<dyn WarningPort>>,
+    ledger: Arc<WarningLedger>,
     entries: Mutex<HashMap<FeedKey, Arc<FeedEntry>>>,
     next_id: AtomicU64,
 }
@@ -196,35 +229,68 @@ impl StoreInner {
         st.grace = None;
         st.idle_since = None;
         if st.admitted && !st.running {
-            st.running = true;
             // A restart after a terminal error or a late admission: subscribers already
             // attached see it warm up.
-            FeedEntry::publish(&mut st, &entry.key, FeedState::Warming);
             let seed_from = if created {
                 seed_from.to_vec()
             } else {
                 Vec::new()
             };
-            let task = drive(
-                Arc::downgrade(&entry),
-                self.ports.clone(),
-                st.request.kind,
-                key,
-                self.runtime.clock.clone(),
-                Backoff::new(
-                    self.options.config.retry_initial,
-                    self.options.config.retry_max,
-                ),
-                seed_from,
-            );
-            st.driver = Some(spawn_guarded(&self.runtime.spawner, task));
-            tracing::debug!(feed = %entry.key, kind = ?st.request.kind, "resource store feed started");
+            self.start_driver(&entry, &mut st, seed_from);
         }
         sub.attach_part(part, &st);
         drop(st);
         drop(entries);
         drop(evicted);
         entry
+    }
+
+    /// Starts `entry`'s driver (replacing, and so aborting, any earlier one): the entry warms up,
+    /// first seeded from `seed_from`. The caller holds the entry lock as `st`.
+    fn start_driver(
+        self: &Arc<Self>,
+        entry: &Arc<FeedEntry>,
+        st: &mut EntryState,
+        seed_from: Vec<Arc<FeedEntry>>,
+    ) {
+        st.running = true;
+        FeedEntry::publish(st, &entry.key, FeedState::Warming);
+        let task = drive(
+            Arc::downgrade(entry),
+            self.ports.clone(),
+            st.request.kind,
+            entry.key.clone(),
+            self.runtime.clock.clone(),
+            Backoff::new(
+                self.options.config.retry_initial,
+                self.options.config.retry_max,
+            ),
+            seed_from,
+        );
+        st.driver = Some(spawn_guarded(&self.runtime.spawner, task));
+        tracing::debug!(feed = %entry.key, kind = ?st.request.kind, "resource store feed started");
+    }
+
+    /// Restarts `entry` now unless it is `Ready`: a feed that stopped (forbidden, unauthorized,
+    /// failed, refused by the budget) starts again, and one waiting out a retry backoff reopens
+    /// at once with a fresh backoff. Its cached rows stay until the new list reconciles them.
+    pub fn retry(self: &Arc<Self>, entry: &Arc<FeedEntry>) {
+        let mut evicted = Vec::new();
+        let mut entries = self.entries.lock();
+        if !entries
+            .get(&entry.key)
+            .is_some_and(|e| Arc::ptr_eq(e, entry))
+        {
+            return;
+        }
+        self.readmit(entry, &mut entries, &mut evicted);
+        let mut st = entry.state.lock();
+        if st.admitted && !st.feed_state.is_ready() {
+            self.start_driver(entry, &mut st, Vec::new());
+        }
+        drop(st);
+        drop(entries);
+        drop(evicted);
     }
 
     /// Removes subscriber `id` from `entry`; the last one starts the grace timer.

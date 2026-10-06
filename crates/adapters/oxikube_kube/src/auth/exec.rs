@@ -26,11 +26,13 @@
 use std::path::Path;
 use std::time::Duration;
 
+use kube::client::ClientBuilder;
 use kube::config::{ExecConfig, ExecInteractiveMode};
 use kube::{Client, Config};
 use oxikube_domain::{OxiError, OxiResult};
 
 use super::classify::{CredentialRefresh, classify_with};
+use crate::warnings::{WarningLayer, WarningSink};
 
 /// How interactive an exec credential plugin is allowed to be.
 ///
@@ -108,10 +110,28 @@ impl ExecInteractivePolicy {
 /// # Errors
 ///
 /// The policy's `Auth` error, or the build failure classified by [`classify_with`].
-pub fn build_client(mut config: Config, policy: ExecInteractivePolicy) -> OxiResult<Client> {
+pub fn build_client(config: Config, policy: ExecInteractivePolicy) -> OxiResult<Client> {
+    build_client_with_warnings(config, policy, None)
+}
+
+/// [`build_client`] with a [`WarningLayer`] on the client's HTTP stack, so the API server's
+/// `Warning:` response headers are published to `warnings` (E07-S10).
+///
+/// # Errors
+///
+/// As [`build_client`].
+pub fn build_client_with_warnings(
+    mut config: Config,
+    policy: ExecInteractivePolicy,
+    warnings: Option<WarningSink>,
+) -> OxiResult<Client> {
     policy.apply_to_config(&mut config)?;
     let refresh = CredentialRefresh::of(&config.auth_info);
-    Client::try_from(config).map_err(|err| classify_with(&err, refresh))
+    let builder = ClientBuilder::try_from(config).map_err(|err| classify_with(&err, refresh))?;
+    Ok(match warnings {
+        Some(sink) => builder.with_layer(&WarningLayer::new(sink)).build(),
+        None => builder.build(),
+    })
 }
 
 /// A deadline as `"30s"` or `"500ms"`, for timeout messages.

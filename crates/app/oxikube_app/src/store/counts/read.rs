@@ -90,7 +90,9 @@ fn parts_of(scope: &WatchScope) -> Vec<FeedScope> {
 /// What the worst feed state and the summed tally say about the count.
 fn resolve(state: FeedState, count: KindCount) -> CountState {
     match state {
-        FeedState::Forbidden { message } => CountState::NoAccess { message },
+        FeedState::Forbidden { message } | FeedState::Unauthorized { message } => {
+            CountState::NoAccess { message }
+        }
         FeedState::Failed {
             kind: ErrorKind::BudgetExceeded,
             message,

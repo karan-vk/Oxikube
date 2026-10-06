@@ -202,6 +202,10 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             gvk: Gvk::new("", "v1", "Pod"),
         },
         "resource::CopyName" => Command::ResourceCopyName { target: target() },
+        "resource::RetryFeed" => Command::ResourceRetryFeed {
+            cluster,
+            gvk: Gvk::new("", "v1", "Pod"),
+        },
         "resource::SelectAll" => Command::ResourceSelectAll {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),

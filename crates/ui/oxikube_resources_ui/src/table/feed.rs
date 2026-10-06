@@ -25,6 +25,7 @@ use oxikube_app::{ColumnProvider, TableColumns};
 use oxikube_domain::ids::ClusterId;
 use oxikube_runtime::notify_coalesced;
 
+use super::states::{poll_warnings, scope_label};
 use super::view::{ResourceTable, ResourceTableDeps};
 
 impl ResourceTable {
@@ -63,6 +64,8 @@ impl ResourceTable {
             return;
         };
         let scope = session.watch_scope(self.kind.scope());
+        let scope_text: Arc<str> = scope_label(&scope, self.kind.namespaced).into();
+        self.table.update_quiet(cx, |d| d.labels.scope = scope_text);
         let same_store = self
             .store
             .as_ref()
@@ -73,8 +76,12 @@ impl ResourceTable {
             }
             return;
         }
-        let query = StoreQuery::new(self.kind.gvk.clone(), scope).with_sort(self.sort_key(cx));
+        let query = StoreQuery::new(self.kind.gvk.clone(), scope)
+            .with_filter(self.filter.clone())
+            .with_sort(self.sort_key(cx));
         let plan = store.plan(&self.kind.gvk).kind;
+        // Before the feed opens: the server's warnings are not replayed.
+        self.warning_task = Some(poll_warnings(store.warnings(), cx));
         self.subscription = Some(store.subscribe(query));
         self.store = Some(store);
         if self.feed_kind != Some(plan) {

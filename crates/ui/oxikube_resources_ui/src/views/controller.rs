@@ -15,7 +15,7 @@ use oxikube_workspace::{ClusterTabs, OpenOptions, Toast, Workspace};
 
 use super::commands::ViewRequest;
 use crate::navigate::{KindViews, OpenKind};
-use crate::table::{ResourceTable, ResourceTableDeps, item_key};
+use crate::table::{ResourceTable, ResourceTableDeps, ResourceTableEvent, item_key};
 
 /// What [`ResourceViews`] needs.
 #[derive(Clone)]
@@ -94,6 +94,11 @@ impl ResourceViews {
             }
             ViewRequest::CopyName(target) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(target.name.to_string()));
+            }
+            ViewRequest::RetryFeed { cluster, gvk } => {
+                for table in self.tables(&cluster, &gvk, cx) {
+                    table.update(cx, |table, cx| table.retry_feed(cx));
+                }
             }
             ViewRequest::SelectAll { cluster, gvk } => {
                 for table in self.tables(&cluster, &gvk, cx) {
@@ -202,6 +207,15 @@ impl ResourceViews {
         let table = cx.new(|cx| ResourceTable::new(cluster, kind, deps, window, cx));
         // The tab's workspace hosts the table's dialogs (delete) and toasts.
         table.update(cx, |table, _| table.set_workspace(workspace.downgrade()));
+        // The API server's warnings reach the user as a toast in this cluster's window.
+        let toasts = workspace.downgrade();
+        cx.subscribe(&table, move |_, _, event: &ResourceTableEvent, cx| {
+            if let ResourceTableEvent::ApiWarning(warning) = event {
+                let toast = warning_toast(warning);
+                toasts.update(cx, |ws, cx| ws.show_toast(toast, cx)).ok();
+            }
+        })
+        .detach();
         let options = OpenOptions {
             focus: true,
             reuse_existing: true,
@@ -308,4 +322,12 @@ pub fn find_kind(kinds: &[ResourceKind], group: &str, plural: &str) -> Option<Re
         .find(|kind| kind.preferred)
         .or_else(|| kinds.iter().find(matches))
         .cloned()
+}
+
+/// The toast for an API server warning: its text, keyed by it so a repeat replaces rather than
+/// stacks. The text was redacted by the adapter.
+fn warning_toast(warning: &oxikube_ports::ApiWarning) -> Toast {
+    Toast::warning(warning.text.clone())
+        .title("API server warning")
+        .key(format!("api-warning/{}/{}", warning.code, warning.text))
 }

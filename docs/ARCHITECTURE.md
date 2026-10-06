@@ -418,6 +418,17 @@ header and re-lists on a refresh interval otherwise; a server that ignores the h
 plain-JSON fallback flagged `TableSource::Objects`, so the `ColumnProvider` substitutes its
 generic NAME / NAMESPACE / AGE columns.
 
+States and diagnostics (E07-S10, `oxikube_resources_ui::table::states`): one pure
+`TableState::derive(feed_state, row_count, filter)` tells loading, empty, filtered-empty,
+forbidden, unauthorized (a `401` or expired credential is `FeedState::Unauthorized`, mapped from the
+error kind, never the message) and error apart; with rows the same derivation only marks them stale
+(a badge) instead of clearing them. Retry is the command `resource::RetryFeed` -> `ResourceTable::retry_feed` ->
+`Subscription::retry`, which reopens the feeds that are not `Ready` (backoff stays in the store's
+driver). The API server's `Warning:` headers are read off every response by `oxikube_kube::warnings`
+(a tower layer on the pooled client, redacted), published through `WarningPort` (a field of
+`ClusterPorts`), de-duplicated per session by `ResourceStore::warnings` (code + text) and shown as one
+toast by `ResourceViews`.
+
 Events (`oxikube_kube::events`) are the exception to the reflector store: `core/v1` and
 `events.k8s.io/v1` are watched together, merged by `metadata.uid` into domain `Event`s and kept in
 a fixed-size ring (oldest `last_seen` evicted, evictions reported as `Deleted` deltas and counted),

@@ -48,5 +48,12 @@ path = "tests/screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# The table's states (loading, empty, forbidden, unauthorized, error, stale rows), E07-S10.
+[[test]]
+name = "states_screenshot"
+path = "tests/states_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 [lints]
 workspace = true

@@ -210,6 +210,15 @@ pub enum Command {
         /// The resource whose name is copied.
         target: ResourceRef,
     },
+    /// Restart the feed behind the open list views of a kind (the "Retry" button of a table that
+    /// cannot list, E07-S10). Read-only: it reads the cluster again.
+    #[serde(rename = "resource::RetryFeed")]
+    ResourceRetryFeed {
+        /// Cluster of the list.
+        cluster: ClusterId,
+        /// The kind listed.
+        gvk: Gvk,
+    },
     /// Select every row of the open list views of a kind (`cmd-a` in a resource table).
     #[serde(rename = "resource::SelectAll")]
     ResourceSelectAll {
@@ -364,6 +373,7 @@ impl Command {
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
             Command::ResourceOpen { .. } => CommandId::RESOURCE_OPEN,
             Command::ResourceCopyName { .. } => CommandId::RESOURCE_COPY_NAME,
+            Command::ResourceRetryFeed { .. } => CommandId::RESOURCE_RETRY_FEED,
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
@@ -527,6 +537,10 @@ mod tests {
             },
             Command::ResourceOpen { target: pod() },
             Command::ResourceCopyName { target: pod() },
+            Command::ResourceRetryFeed {
+                cluster: cluster(),
+                gvk: Gvk::new("", "v1", "Pod"),
+            },
             Command::ResourceSelectAll {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
@@ -700,6 +714,7 @@ mod tests {
                     | Command::ResourceOpen { .. }
                     | Command::ResourceOpenList { .. }
                     | Command::ResourceCopyName { .. }
+                    | Command::ResourceRetryFeed { .. }
                     | Command::ResourceSelectAll { .. }
                     | Command::ResourceViewYaml { .. }
                     | Command::ClusterToggleReadOnly { .. }

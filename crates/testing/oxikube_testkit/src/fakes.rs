@@ -46,6 +46,7 @@
 //! | `AgentClient` | [`FakeAgentClient`] |
 //! | `ClusterConnectorPort` | [`FakeClusterConnectorPort`] (ports bundle: [`FakeClusterPorts`]) |
 //! | `AccessReviewPort` | [`FakeAccessReviewPort`] |
+//! | `WarningPort` | [`FakeWarningPort`] |
 
 /// Implements `script()`, `recorded_calls()` and `clear_calls()` for a fake with fields
 /// `script: $scripts` and `calls: CallLog<$call>`.
@@ -80,6 +81,7 @@ mod resource;
 mod session;
 mod storage;
 mod stream_io;
+mod warnings;
 
 pub use agent::{
     AgentCall, AgentClientCall, AgentClientScripts, AgentScripts, FakeAgentClient, FakeAgentPort,
@@ -116,3 +118,4 @@ pub use stream_io::{
     ExecCall, ExecCapture, ExecScript, ExecScripts, FakeExecPort, FakePortForwardPort,
     ForwardCapture, ForwardScript, PortForwardCall, PortForwardScripts,
 };
+pub use warnings::FakeWarningPort;

@@ -27,6 +27,13 @@ pub enum FeedState {
         /// The server's reason.
         message: String,
     },
+    /// The credentials were rejected or have expired (`401`, an exec plugin that needs a login):
+    /// an auth problem, not a missing permission, and the table says so (k9s #3730). Not retried
+    /// until the view subscribes again (or [`Subscription::retry`](super::Subscription::retry)).
+    Unauthorized {
+        /// What the server or the credential plugin said (already redacted by the adapter).
+        message: String,
+    },
     /// A failure that is not retried until the view subscribes again (unknown kind, refused by
     /// the watch budget, ...).
     Failed {
@@ -43,7 +50,8 @@ impl FeedState {
         let message = error.message().to_owned();
         match (retrying, error.kind()) {
             (true, _) => FeedState::Retrying { message },
-            (false, ErrorKind::Forbidden | ErrorKind::Auth) => FeedState::Forbidden { message },
+            (false, ErrorKind::Forbidden) => FeedState::Forbidden { message },
+            (false, ErrorKind::Auth) => FeedState::Unauthorized { message },
             (false, kind) => FeedState::Failed { kind, message },
         }
     }
@@ -55,7 +63,10 @@ impl FeedState {
 
     /// Whether the feed has stopped and will not recover by itself.
     pub fn is_terminal(&self) -> bool {
-        matches!(self, FeedState::Forbidden { .. } | FeedState::Failed { .. })
+        matches!(
+            self,
+            FeedState::Forbidden { .. } | FeedState::Unauthorized { .. } | FeedState::Failed { .. }
+        )
     }
 
     /// A short label for logs (never the message, which may quote the server).
@@ -65,6 +76,7 @@ impl FeedState {
             FeedState::Ready => "ready",
             FeedState::Retrying { .. } => "retrying",
             FeedState::Forbidden { .. } => "forbidden",
+            FeedState::Unauthorized { .. } => "unauthorized",
             FeedState::Failed { .. } => "failed",
         }
     }
@@ -78,6 +90,7 @@ impl FeedState {
             FeedState::Retrying { .. } => 2,
             FeedState::Failed { .. } => 3,
             FeedState::Forbidden { .. } => 4,
+            FeedState::Unauthorized { .. } => 5,
         }
     }
 }
@@ -173,6 +186,11 @@ mod tests {
         assert!(matches!(
             FeedState::from_error(&forbidden, false),
             FeedState::Forbidden { .. }
+        ));
+        let expired = OxiError::auth("token expired", false);
+        assert!(matches!(
+            FeedState::from_error(&expired, false),
+            FeedState::Unauthorized { .. }
         ));
         let net = OxiError::network("reset");
         assert!(matches!(

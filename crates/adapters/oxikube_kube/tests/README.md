@@ -63,6 +63,7 @@ logs. Locally, without that variable, a failed test prints its namespace's event
 | `PortForwardPort` | `forward` | `portforward` (pod and service GET, named ports, errors, `Forbidden`), `portforward_restart` |
 | `MetricsPort` | `node_metrics`, `pod_metrics` | `metrics_kind` (present, absent as `Unavailable(NotInstalled)`, `Forbidden`) |
 | `KubeEvents` | `watch` | `events_feed` (merged core and events.k8s.io, per-object feed, capacity) |
+| `WarningPort` | `subscribe` | `warnings_kind` (a PodSecurity `Warning:` header from the real API server reaches the port), plus unit tests of the header parser and the layer |
 | `FeedSource` (watch budget) | `open` via `FeedRegistry` | `budget_kind`, `budget_tracing` |
 | algorithms | `trigger_cronjob`, `rollout_history`, `rollout_undo`, `drain` | `algorithms_workloads`, `algorithms_drain` |
 

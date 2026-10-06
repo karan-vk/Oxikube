@@ -171,11 +171,14 @@ fn an_empty_list_says_so(cx: &mut TestAppContext) {
     f.connect_with([]);
     let table = f.open_pods();
     f.vcx.update(|window, cx| window.draw(cx).clear(cx));
-    assert!(f.vcx.debug_bounds("resource-table-empty").is_some());
-    let state = f.vcx.update(|_, cx| {
-        table
-            .read(cx)
-            .read_rows(cx, |d| crate::table::empty_message(d.state(), "pods"))
+    assert!(f.vcx.debug_bounds("resource-table-state").is_some());
+    let (state, title) = f.vcx.update(|_, cx| {
+        table.read(cx).read_rows(cx, |d| {
+            let state = d.table_state();
+            let title = crate::table::states::copy(&state, d.labels()).title;
+            (state, title)
+        })
     });
-    assert_eq!(state, "No pods");
+    assert_eq!(state, crate::table::TableState::Empty);
+    assert_eq!(title, "No pods in all namespaces");
 }

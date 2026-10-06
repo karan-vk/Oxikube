@@ -8,10 +8,13 @@ use gpui::{
     App, Context, EventEmitter, FocusHandle, Focusable, SharedString, Subscription, Task, Window,
 };
 use jiff::Timestamp;
-use oxikube_app::store::{FeedKind, FeedState, ObjectKey, ResourceStore, ResourceStores};
+use oxikube_app::store::{
+    FeedKind, FeedState, ObjectKey, ResourceStore, ResourceStores, StoreFilter,
+};
 use oxikube_app::{ClusterSessionManager, CoreColumns};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::kinds::ResourceKind;
+use oxikube_domain::session::WatchScope;
 use oxikube_keymap::{KeyContextBuilder, KeyContextual, contexts};
 use oxikube_ports::StatePort;
 use oxikube_ui::TableHandle;
@@ -24,6 +27,7 @@ use super::delegate::RowsDelegate;
 use super::layout::ColumnLayout;
 use super::prefs::{ColumnPrefs, PrefsWriter};
 use super::selection::Selection;
+use super::states::{StateLabels, scope_label};
 use crate::actions::{ActionSource, ResourceActions};
 
 /// How often ages are redrawn while the table is shown.
@@ -55,6 +59,11 @@ pub enum ResourceTableEvent {
     OpenDetail(ResourceRef),
     /// The selection changed.
     SelectionChanged,
+    /// The API server sent a `Warning:` header this session has not shown yet (the store
+    /// de-duplicates by code and text). The window shows it as a toast.
+    ApiWarning(oxikube_ports::ApiWarning),
+    /// The "Clear filter" of the empty-because-filtered state ran: the filter bar follows.
+    FilterCleared,
 }
 
 /// The table of one kind in one cluster. See the [`table`](crate::table) module docs.
@@ -70,6 +79,10 @@ pub struct ResourceTable {
     pub(super) subscription: Option<oxikube_app::store::Subscription>,
     /// Polls the subscription; replaced with it.
     pub(super) feed_task: Option<Task<()>>,
+    /// Forwards the store's `Warning:` headers; replaced with the store.
+    pub(super) warning_task: Option<Task<()>>,
+    /// The in-app filter, kept to re-apply after a reconnect.
+    pub(super) filter: StoreFilter,
     /// The feed kind the provider was chosen for.
     pub(super) feed_kind: Option<FeedKind>,
     pub(super) writer: Option<PrefsWriter>,
@@ -110,7 +123,13 @@ impl ResourceTable {
             provider,
             selection: Selection::default(),
             state: FeedState::Warming,
-            plural: Arc::from(title.to_lowercase()),
+            labels: StateLabels::new(
+                &kind.plural,
+                &resource_label(&kind),
+                &scope_label(&WatchScope::Cluster, kind.namespaced),
+            ),
+            filter: None,
+            details_open: false,
             now: Timestamp::now(),
             colors: None,
             view: cx.entity().downgrade(),
@@ -167,6 +186,8 @@ impl ResourceTable {
             store: None,
             subscription: None,
             feed_task: None,
+            warning_task: None,
+            filter: StoreFilter::default(),
             feed_kind: None,
             writer: None,
             prefs_loaded: false,
@@ -240,6 +261,15 @@ impl ResourceTable {
     }
 }
 
+/// How RBAC names `kind`'s resource: `pods`, `deployments.apps`.
+fn resource_label(kind: &ResourceKind) -> String {
+    if kind.gvk.group.is_empty() {
+        kind.plural.clone()
+    } else {
+        format!("{}.{}", kind.plural, kind.gvk.group)
+    }
+}
+
 /// The tab title of `kind`: its plural, spelled like the kind ("Pods", "NetworkPolicies").
 pub fn plural_title(kind: &ResourceKind) -> String {
     let name: &str = &kind.gvk.kind;
@@ -296,6 +326,7 @@ impl Item for ResourceTable {
     fn on_close(&mut self, _: &mut Window, _: &mut Context<Self>) {
         // Releases the store's feed (its grace period starts) and stops polling.
         self.feed_task = None;
+        self.warning_task = None;
         self.subscription = None;
     }
 }
