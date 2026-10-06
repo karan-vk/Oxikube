@@ -1,7 +1,9 @@
 //! Screenshots of the resource views, rendered through `Window::render_to_image`.
 //!
-//! - `pods_table_tones`: running, pending, container-creating, crash-looping, failed, succeeded
-//!   and terminating pods, one row selected; the Status cells in the theme's `oxikube` colours.
+//! - `pods_table_tones`, `pods_table_tones_light`: running, pending, container-creating,
+//!   crash-looping, failed, succeeded and terminating pods, one row selected; the Status cells in
+//!   the theme's `oxikube` colours, in the dark and the light theme (E07-S12, the epic's visual
+//!   baseline).
 //! - `detail_deployment_dark`, `detail_deployment_light` (`detail`): the detail drawer of a
 //!   Deployment in both themes: header with status chip, owner-less metadata, conditions, status.
 //! - `detail_yaml_dark`, `detail_yaml_light`, `detail_describe_dark` (`detail`): the YAML tab (read-only,
@@ -126,14 +128,19 @@ fn fixture() -> (
     (sessions, cluster, state, clock)
 }
 
-/// Renders the table, with `filter` typed in the bar when given.
-fn render(filter: Option<&str>) -> anyhow::Result<RgbaImage> {
+/// Renders the table in the dark or `light` theme, with `filter` typed in the bar when given.
+fn render(filter: Option<&str>, light: bool) -> anyhow::Result<RgbaImage> {
     let (sessions, cluster, state, clock) = fixture();
     let mut cx = headless();
     let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
         oxikube_ui::init(cx);
         // Pin the appearance: `init` follows the system, which differs between machines.
-        oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
+        let tokens = if light {
+            oxikube_ui::Tokens::light()
+        } else {
+            oxikube_ui::Tokens::dark()
+        };
+        oxikube_ui::set_tokens(cx, tokens);
         oxikube_runtime::init_deterministic(cx);
         cx.set_reduce_motion(true);
         let clock: Arc<dyn ClockPort> = clock;
@@ -194,8 +201,9 @@ pub(crate) fn check(name: &str, image: RgbaImage, width: f32, height: f32) -> an
 
 fn main() -> ExitCode {
     let results = [
-        render(None).and_then(|image| check("pods_table_tones", image, WIDTH, HEIGHT)),
-        render(Some("cart|checkout|web"))
+        render(None, false).and_then(|image| check("pods_table_tones", image, WIDTH, HEIGHT)),
+        render(None, true).and_then(|image| check("pods_table_tones_light", image, WIDTH, HEIGHT)),
+        render(Some("cart|checkout|web"), false)
             .and_then(|image| check("pods_table_filtered", image, WIDTH, HEIGHT)),
         detail::run(),
         crd::run(),

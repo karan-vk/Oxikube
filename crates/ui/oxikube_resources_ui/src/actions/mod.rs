@@ -40,7 +40,7 @@ mod menu;
 mod results;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use dialog::{DeleteDialog, Stage};
 pub use host::{ActionEntry, ResourceActions};

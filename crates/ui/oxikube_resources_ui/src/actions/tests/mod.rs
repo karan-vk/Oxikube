@@ -14,7 +14,7 @@ use crate::actions::DeleteDialog;
 use crate::table::tests::fixture::{Fixture, cluster};
 
 /// The nodes kind as discovery serves it (cluster-scoped: deleting one takes the typed name).
-pub(super) fn nodes_kind() -> ResourceKind {
+pub(crate) fn nodes_kind() -> ResourceKind {
     ResourceKind {
         gvk: Gvk::new("", "v1", "Node"),
         preferred: true,
@@ -28,7 +28,7 @@ pub(super) fn nodes_kind() -> ResourceKind {
 }
 
 /// A kind the server cannot delete (events are read-only here).
-pub(super) fn readonly_kind() -> ResourceKind {
+pub(crate) fn readonly_kind() -> ResourceKind {
     ResourceKind {
         gvk: Gvk::new("", "v1", "ComponentStatus"),
         preferred: true,
@@ -42,7 +42,7 @@ pub(super) fn readonly_kind() -> ResourceKind {
 }
 
 /// The delete dialog open in the cluster tab's workspace, if any.
-pub(super) fn dialog(f: &mut Fixture) -> Option<Entity<DeleteDialog>> {
+pub(crate) fn dialog(f: &mut Fixture) -> Option<Entity<DeleteDialog>> {
     let tabs = f.tabs.clone();
     f.vcx.update(|_, cx| {
         let tab = tabs.read(cx).tab(&cluster())?.clone();
@@ -53,7 +53,7 @@ pub(super) fn dialog(f: &mut Fixture) -> Option<Entity<DeleteDialog>> {
 }
 
 /// The toasts of the cluster tab's workspace.
-pub(super) fn toasts(f: &mut Fixture) -> Vec<ToastSummary> {
+pub(crate) fn toasts(f: &mut Fixture) -> Vec<ToastSummary> {
     let tabs = f.tabs.clone();
     f.vcx.update(|_, cx| {
         let Some(tab) = tabs.read(cx).tab(&cluster()).cloned() else {
@@ -66,7 +66,7 @@ pub(super) fn toasts(f: &mut Fixture) -> Vec<ToastSummary> {
 }
 
 /// Right-clicks row `row` and opens its context menu.
-pub(super) fn right_click(f: &mut Fixture, row: usize) {
+pub(crate) fn right_click(f: &mut Fixture, row: usize) {
     f.vcx.update(|window, cx| window.draw(cx).clear(cx));
     let at = f
         .vcx
@@ -82,7 +82,7 @@ pub(super) fn right_click(f: &mut Fixture, row: usize) {
 }
 
 /// Chooses the `entry`-th selectable item of the open menu with the keys.
-pub(super) fn choose(f: &mut Fixture, entry: usize) {
+pub(crate) fn choose(f: &mut Fixture, entry: usize) {
     let keys = std::iter::repeat_n("down", entry + 1)
         .chain(["enter"])
         .collect::<Vec<_>>()
@@ -92,7 +92,7 @@ pub(super) fn choose(f: &mut Fixture, entry: usize) {
 }
 
 /// Runs `f` on the dialog.
-pub(super) fn with_dialog<R>(
+pub(crate) fn with_dialog<R>(
     f: &mut Fixture,
     dialog: &Entity<DeleteDialog>,
     run: impl FnOnce(&mut DeleteDialog, &mut gpui::Window, &mut gpui::Context<DeleteDialog>) -> R,

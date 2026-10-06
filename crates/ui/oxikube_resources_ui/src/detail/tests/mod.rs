@@ -4,7 +4,7 @@
 //! drawer in a cluster tab. No cluster, no disk, no threads.
 
 mod describe;
-mod fixture;
+pub(crate) mod fixture;
 mod meta;
 mod open;
 mod pin;

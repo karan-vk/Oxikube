@@ -215,6 +215,13 @@ Do this instead: make the producer a fake that is driven by the test (`FakeClock
 `Timeline` for streams, a `futures::channel::mpsc` the test sends on from the test thread), then
 `run_until_parked`.
 
+For a view over a live resource feed (a table, a detail) script the feed with
+`oxikube_testkit::ScriptedFeed`: the initial list, then `add` / `modify` / `delete` at ticks, one
+`DeltaBatch` per tick. `feed.install(&ports.resources)` before the cluster connects, then
+`ports.resources.clock().advance(TICK)` and settle per tick; count a view's redraws with
+`cx.observe(&view, ..)` to assert one redraw per batch. The worked examples are the scenarios in
+`crates/ui/oxikube_resources_ui/src/suite/` (`Scripted` is the harness around the table fixture).
+
 ## Where the CI runs them
 
 | Job | What | OS |
