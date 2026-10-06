@@ -1,0 +1,58 @@
+{
+  "apiVersion": "autoscaling/v2",
+  "kind": "HorizontalPodAutoscaler",
+  "metadata": {
+    "name": "web",
+    "namespace": "demo",
+    "uid": "2b9a7a1c-0d4e-5d3c-a3f1-7c3c9a3d9e55",
+    "resourceVersion": "2402",
+    "creationTimestamp": "2026-01-01T00:00:00Z"
+  },
+  "spec": {
+    "scaleTargetRef": {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "name": "web"
+    },
+    "minReplicas": 2,
+    "maxReplicas": 10,
+    "metrics": [
+      {
+        "type": "Resource",
+        "resource": {
+          "name": "cpu",
+          "target": {
+            "type": "Utilization",
+            "averageUtilization": 80
+          }
+        }
+      },
+      {
+        "type": "Resource",
+        "resource": {
+          "name": "memory",
+          "target": {
+            "type": "AverageValue",
+            "averageValue": "512Mi"
+          }
+        }
+      }
+    ]
+  },
+  "status": {
+    "currentReplicas": 3,
+    "desiredReplicas": 3,
+    "currentMetrics": [
+      {
+        "type": "Resource",
+        "resource": {
+          "name": "cpu",
+          "current": {
+            "averageUtilization": 42,
+            "averageValue": "42m"
+          }
+        }
+      }
+    ]
+  }
+}

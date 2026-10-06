@@ -67,7 +67,9 @@ How to read the **Lives in** column:
 | **FeedPolicy / FeedKind** | Which feed serves a kind (ADR 0006): `Full` reflector for core kinds, `Metadata` for bulky or sensitive ones (Secrets, ConfigMaps, Leases), `Table` for CRDs and unknown kinds. Table-driven, with per-kind overrides. | `oxikube_app::store` |
 | **FeedBudget** | The hook a watch budget implements: `admit` (grant, degrade to a cheaper `FeedKind`, refuse) before the store opens a feed, `released` after it stops one. A refusal first evicts idle feeds. | `oxikube_app::store` |
 | **StoreDelta / RowOp** | One item of a `Subscription` stream: the rows' change (a `Snapshot`, or coalesced `RowOp`s `Insert`/`Update`/`Remove` with positions in the subscriber's sorted list), the `FeedState` (`Warming`, `Ready`, `Retrying`, `Forbidden`, `Failed`) and the Table columns when they change. Distinct from the transport `Delta` of `oxikube_ports::feed`. | `oxikube_app::store` |
-| **ColumnProvider** | Produces table columns + cells for a kind (core columns, Table API columns, metrics columns). | `oxikube_app::columns` *(planned)* |
+| **ColumnProvider** | The one trait a table asks for a kind's `Column`s and an object's `Cell` in a column; `CoreColumns` (our catalogue of ~40 core kinds) and `TableColumns` (the server's Table columns) implement it. Cheap, synchronous, memoised per (kind, capabilities). | `oxikube_app::columns` (E07-S02) |
+| **Column / ColumnId** | One table column: a stable `ColumnId` (the key column visibility and order persist under), title, `wide` flag (hidden by default, `kubectl -o wide`; Table `priority > 0`), alignment and `SortKind`. | `oxikube_app::columns` |
+| **Cell / CellSort / Tone** | One table cell: display text, a typed sort key (`Int`, `Float`, `Quantity`, `Age`, `Time`, `Text`) so sorting never reparses text, and a `Tone` (neutral / ok / warn / error) the table maps to theme colours. `Cell::Pending` is a metrics hook with no value yet: shown blank, never `0`. | `oxikube_app::columns` |
 | **KindSpec** | Per-kind registration: columns, detail renderer, actions, templates, sidebar section. | `oxikube_resources_ui::kinds` *(planned)* |
 
 ## Commands and safety

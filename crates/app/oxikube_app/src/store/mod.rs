@@ -92,6 +92,8 @@ pub use config::{DEFAULT_IDLE_GRACE, FeedInfo, StoreConfig, StoreOptions, StoreR
 pub use delta::{FeedState, RowChange, RowOp, StoreDelta};
 pub use feed::{StorePorts, TableColumns};
 pub use object::{FeedKey, FeedScope, ObjectKey, StoreObject, TableObject};
+#[cfg(test)]
+pub(crate) use policy::core_kinds;
 pub use policy::{FALLBACK, FeedKind, FeedPlan, FeedPolicy, FeedPriority};
 pub use query::{SortField, SortKey, StoreFilter, StoreQuery};
 pub use registry::{OptionsFor, ResourceStores};
