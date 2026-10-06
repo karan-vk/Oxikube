@@ -3,7 +3,8 @@
 //! its main window headless (GPUI's test platform, no display), and a user's path through it:
 //! the catalog lists the kind context, searching for it and pressing Enter connects it and opens
 //! its cluster tab with the sidebar; activating the sidebar's Pods entry opens the pods table in
-//! that tab, fed by the cluster (E07-S03); a context whose token the API server rejects opens a
+//! that tab, fed by the cluster (E07-S03); opening a pod's row shows its detail drawer, read from
+//! the cluster: header, conditions and owner (E07-S05); a context whose token the API server rejects opens a
 //! tab that shows `AuthRequired`, not a blank screen.
 //!
 //! `cargo test -p oxikube --features integration --test kind_app` with `OXIKUBE_TEST_CONTEXT`
@@ -28,6 +29,7 @@ use oxikube_catalog_ui::{CatalogView, ConnectView};
 use oxikube_domain::ids::ContextName;
 use oxikube_domain::session::SessionPhase;
 use oxikube_kube::kubeconfig::{Strictness, default_kubeconfig_path, load_local_kubeconfig};
+use oxikube_resources_ui::detail::{DetailDrawer, DetailState};
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::integration::{ensure_kind_context, test_context};
 use oxikube_workspace::sidebar::SidebarPanel;
@@ -101,6 +103,7 @@ fn the_app_connects_kind_from_the_catalog_and_shows_a_bad_context_as_auth_requir
     });
     assert!(sidebar, "the kind tab has its sidebar");
     open_pods_from_sidebar(&mut vcx, &tab);
+    open_first_pod_detail(&mut vcx, &tab);
 
     // Back to the catalog (the first tab) for the second connect.
     let catalog_id = catalog.entity_id();
@@ -172,6 +175,47 @@ fn open_pods_from_sidebar(vcx: &mut VisualTestContext, tab: &Entity<ClusterTab>)
         namespaces.iter().any(|ns| ns == "kube-system"),
         "the pods table lists kind's kube-system pods, got namespaces {namespaces:?}"
     );
+}
+
+/// Opens the detail of one of kind's own control-plane pods (static pods in `kube-system`: always
+/// running, with conditions, never deleted by other agents' tests on the shared cluster), as
+/// Enter does (`resource::Open` on the bus), and waits for the drawer to show the live pod: its
+/// header and its conditions.
+fn open_first_pod_detail(vcx: &mut VisualTestContext, tab: &Entity<ClusterTab>) {
+    let inner = vcx.update(|_, cx| tab.read(cx).workspace().clone());
+    let table = vcx.update(|_, cx| inner.read(cx).items_of_type::<ResourceTable>()[0].clone());
+    let name = vcx.update(|_, cx| {
+        let key = table
+            .read(cx)
+            .read_rows(cx, |d| {
+                d.rows()
+                    .iter()
+                    .find(|row| {
+                        row.namespace() == Some("kube-system")
+                            && ["kube-apiserver", "etcd", "kube-scheduler"]
+                                .iter()
+                                .any(|prefix| row.name().starts_with(prefix))
+                    })
+                    .map(|row| row.key())
+            })
+            .expect("a kube-system control-plane pod row");
+        let name = key.name.to_string();
+        table.update(cx, |table, cx| table.open_object(key, cx));
+        name
+    });
+    wait(vcx, "the detail drawer to show the live pod", |vcx| {
+        vcx.update(|_, cx| {
+            let drawer = inner.read(cx).panel::<DetailDrawer>();
+            let view = drawer.and_then(|drawer| drawer.read(cx).view().cloned());
+            view.is_some_and(|view| {
+                let view = view.read(cx);
+                view.state() == &DetailState::Live
+                    && view.model().is_some_and(|model| {
+                        &*model.header.name == name.as_str() && !model.conditions.is_empty()
+                    })
+            })
+        })
+    });
 }
 
 /// Types `name` into the catalog's search and presses Enter, as a user would.

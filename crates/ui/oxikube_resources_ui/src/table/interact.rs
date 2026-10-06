@@ -165,7 +165,8 @@ impl ResourceTable {
         self.selection_changed(cx);
     }
 
-    /// `resource::Open` ran for `target`, one of this table's rows: tells the detail drawer.
+    /// `resource::Open` ran for `target`, one of this table's rows: emits
+    /// [`ResourceTableEvent::OpenDetail`] (the drawer itself is opened by `ResourceViews`).
     pub fn open_detail(&mut self, target: ResourceRef, cx: &mut Context<Self>) {
         cx.emit(ResourceTableEvent::OpenDetail(target));
     }

@@ -132,6 +132,8 @@ pub(crate) struct Fixture {
     pub(crate) sessions: ClusterSessionManager,
     pub(crate) connector: Arc<FakeClusterConnectorPort>,
     pub(crate) state: Arc<FakeStatePort>,
+    /// The clock of the sessions and the stores (their idle-grace timers run on it).
+    pub(crate) clock: Arc<FakeClockPort>,
     pub(crate) dispatcher: Dispatcher,
     pub(crate) deps: ResourceTableDeps,
     _open_kinds: Task<()>,
@@ -194,7 +196,7 @@ impl Fixture {
                     navigation(tab, session, window, cx);
                 });
         let tabs = vcx.update(|window, cx| ClusterTabs::start(&workspace, tabs_deps, window, cx));
-        let clock_port: Arc<dyn ClockPort> = clock;
+        let clock_port: Arc<dyn ClockPort> = clock.clone();
         // One object at a time: scripted responses then follow the selection's order.
         let actions = with_actions.then(|| {
             actions_rig(&sessions, &state, clock_port.clone(), &dispatcher.sink).with_concurrency(1)
@@ -247,6 +249,7 @@ impl Fixture {
             sessions,
             connector,
             state,
+            clock,
             dispatcher,
             deps,
             _open_kinds: open_kinds,

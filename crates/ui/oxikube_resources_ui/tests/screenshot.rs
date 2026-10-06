@@ -1,7 +1,9 @@
-//! Screenshot of a pods table with every status tone, rendered through `Window::render_to_image`.
+//! Screenshots of the resource views, rendered through `Window::render_to_image`.
 //!
 //! - `pods_table_tones`: running, pending, container-creating, crash-looping, failed, succeeded
 //!   and terminating pods, one row selected; the Status cells in the theme's `oxikube` colours.
+//! - `detail_deployment_dark`, `detail_deployment_light` (`detail`): the detail drawer of a
+//!   Deployment in both themes: header with status chip, owner-less metadata, conditions, status.
 //!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
@@ -33,6 +35,9 @@ use oxikube_testkit::{
 };
 use oxikube_workspace::CommandDispatcher;
 
+#[path = "screenshot/detail.rs"]
+mod detail;
+
 const WIDTH: f32 = 960.0;
 const HEIGHT: f32 = 320.0;
 
@@ -42,7 +47,7 @@ impl CommandDispatcher for Ignore {
     fn dispatch(&self, _: Command, _: &mut App) {}
 }
 
-fn headless() -> HeadlessAppContext {
+pub(crate) fn headless() -> HeadlessAppContext {
     let text_system = gpui_platform::current_platform(true).text_system();
     HeadlessAppContext::with_platform(text_system, Arc::new(oxikube_ui::Assets), || {
         gpui_platform::current_headless_renderer()
@@ -146,10 +151,11 @@ fn render() -> anyhow::Result<RgbaImage> {
     cx.capture_screenshot(window.into())
 }
 
-fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
+/// Checks `image` (a `width` x `height` window) against the golden `name`.
+pub(crate) fn check(name: &str, image: RgbaImage, width: f32, height: f32) -> anyhow::Result<()> {
     let scale = HEADLESS_SCALE_FACTOR;
     anyhow::ensure!(
-        image.dimensions() == (WIDTH as u32 * scale, HEIGHT as u32 * scale),
+        image.dimensions() == (width as u32 * scale, height as u32 * scale),
         "unexpected image size {:?}",
         image.dimensions()
     );
@@ -174,14 +180,21 @@ fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
 }
 
 fn main() -> ExitCode {
-    match render().and_then(|image| check("pods_table_tones", image)) {
-        Ok(()) => {
-            println!("resource table screenshot: ok");
-            ExitCode::SUCCESS
+    let results = [
+        render().and_then(|image| check("pods_table_tones", image, WIDTH, HEIGHT)),
+        detail::run(),
+    ];
+    let mut failed = false;
+    for result in results {
+        if let Err(err) = result {
+            eprintln!("resource screenshot failed: {err:#}");
+            failed = true;
         }
-        Err(err) => {
-            eprintln!("resource table screenshot failed: {err:#}");
-            ExitCode::FAILURE
-        }
+    }
+    if failed {
+        ExitCode::FAILURE
+    } else {
+        println!("resource screenshots: ok");
+        ExitCode::SUCCESS
     }
 }
