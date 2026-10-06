@@ -6,8 +6,8 @@ use oxikube_domain::ids::{ClusterId, ContextName, Scope};
 use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPhase, WatchScope};
 use oxikube_domain::{Capabilities, Capability, ClusterColour};
 use oxikube_ports::{
-    AccessReviewPort, ClusterPorts, DiscoveryPort, ExecInteractivity, ExecPort, LogPort,
-    MetricsPort, PortForwardPort, ResourceReader, TableFeedPort,
+    AccessReviewPort, ClusterPorts, ClusterPrefs, DiscoveryPort, ExecInteractivity, ExecPort,
+    LogPort, MetricsPort, PortForwardPort, ResourceReader, TableFeedPort,
 };
 
 /// One cluster session as the manager saw it when the snapshot was taken.
@@ -30,6 +30,8 @@ pub struct ClusterSession {
     pub(super) read_only: bool,
     pub(super) colour: Option<ClusterColour>,
     pub(super) exec_interactivity: ExecInteractivity,
+    pub(super) display_name: Option<String>,
+    pub(super) prefs: Arc<ClusterPrefs>,
     pub(super) ports: Option<ClusterPorts>,
 }
 
@@ -42,6 +44,26 @@ impl ClusterSession {
     /// The kubeconfig context name.
     pub fn context(&self) -> &ContextName {
         &self.context
+    }
+
+    /// The name the user gave the cluster (`display_name` in its settings), if any.
+    pub fn display_name(&self) -> Option<&str> {
+        self.display_name.as_deref()
+    }
+
+    /// What to call the cluster in the UI: its display name, else the context name.
+    pub fn title(&self) -> &str {
+        self.display_name
+            .as_deref()
+            .unwrap_or_else(|| self.context.as_str())
+    }
+
+    /// The cluster's resolved settings as last pushed (default namespace, terminal directory,
+    /// node shell, Prometheus override, accessible namespaces, ...). `read_only`, the colour,
+    /// the display name and the exec policy are also available as the live fields above,
+    /// which follow these settings and can be moved by the session's own setters.
+    pub fn prefs(&self) -> &ClusterPrefs {
+        &self.prefs
     }
 
     /// The connection state.

@@ -17,6 +17,7 @@
 //! [`update_user_settings`], which rewrites only the changed values of the file.
 //!
 //! Module map:
+//! - [`cluster`]: the per-cluster settings (`clusters.<id>`: name, colour, read-only, ...), E06-S08.
 //! - [`settings`]: the [`Settings`] trait, [`SettingsLocation`], registration.
 //! - [`store`]: [`SettingsStore`], layer merge, per-setting values and change tracking.
 //! - [`global`]: GPUI global, [`init`], startup load, hot reload task, file edits.
@@ -29,6 +30,7 @@
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
+pub mod cluster;
 pub mod diagnostics;
 pub mod global;
 pub mod json_edit;
@@ -42,6 +44,7 @@ mod test_support;
 pub mod update;
 pub mod watcher;
 
+pub use cluster::{ClusterSettings, ClusterSettingsContent};
 pub use diagnostics::SettingsDiagnostic;
 pub use global::{init, init_with_dir, update_user_settings};
 pub use settings::{RegisteredSetting, Settings, SettingsContent, SettingsLocation};

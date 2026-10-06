@@ -68,4 +68,34 @@ mod tests {
             }
         }
     }
+
+    /// `settings.schema.json` is checked in and CI's `gen-settings-schema --check` fails when it
+    /// is stale; this is the same comparison as a unit test, plus the per-cluster block (E06-S08).
+    #[test]
+    fn the_checked_in_schema_is_current_and_documents_the_cluster_block() {
+        let generated = schema_text().unwrap();
+        assert!(
+            generated == oxikube_assets::settings_schema(),
+            "settings.schema.json is stale: run `cargo xtask gen-settings-schema`"
+        );
+        let schema: serde_json::Value = serde_json::from_str(&generated).unwrap();
+        let cluster = &schema["$defs"]["ClusterSettings"]["properties"];
+        for key in [
+            "display_name",
+            "colour",
+            "read_only",
+            "default_namespace",
+            "terminal_cwd",
+            "node_shell_image",
+            "node_shell_pull_secret",
+            "prometheus",
+            "accessible_namespaces",
+            "exec_interactivity",
+        ] {
+            assert!(
+                cluster[key].is_object(),
+                "`{key}` is not in the cluster block"
+            );
+        }
+    }
 }

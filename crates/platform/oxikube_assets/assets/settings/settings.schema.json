@@ -2,8 +2,29 @@
   "$defs": {
     "ClusterSettings": {
       "additionalProperties": false,
-      "description": "Overrides for one cluster; any setting may appear here.",
+      "description": "Overrides for one cluster: the per-cluster settings (display name, colour, read-only, default namespace, terminal directory, node shell, Prometheus, accessible namespaces, exec policy) and any other setting. Layers merge field by field: defaults, then the top-level values, then this block.",
       "properties": {
+        "accessible_namespaces": {
+          "description": "Namespaces to offer in the selector when the user is not allowed to list namespaces\ncluster-wide (RBAC-restricted users). A list in a cluster replaces the one above it.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "colour": {
+          "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb` or `#rgb`.",
+          "examples": [
+            "#e5484d"
+          ],
+          "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "confirm_quit": {
           "description": "Ask before quitting (or closing the last window on Linux and Windows) while exec sessions,\nport-forwards or applies are running.",
           "type": [
@@ -11,8 +32,67 @@
             "null"
           ]
         },
+        "default_namespace": {
+          "description": "The namespace a new session starts in. Unset uses the kubeconfig context's namespace.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "description": "A name to show instead of the kubeconfig context name. Cluster ids are opaque hashes, so\nkeep this next to the id to recognise the entry.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exec_interactivity": {
+          "description": "How interactive exec credential plugins (`aws`, `gke-gcloud-auth-plugin`, ...) may be:\n`never` (no stdin, never prompt; the GUI default), `if_available` or `always`. Read when a\nsession connects: a change takes effect on the next connect.",
+          "enum": [
+            "never",
+            "if_available",
+            "always",
+            null
+          ],
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "log": {
           "$ref": "#/$defs/LogSettingsContent"
+        },
+        "node_shell_image": {
+          "description": "Container image of the node shell pod. Unset uses the built-in image.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "node_shell_pull_secret": {
+          "description": "Name of the image pull Secret (in the node shell's namespace) used to pull\n`node_shell_image` from a private registry. It names a Kubernetes Secret, it is not a\ncredential.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prometheus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PrometheusContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Manual Prometheus location; unset auto-detects. Fields merge across layers."
+        },
+        "read_only": {
+          "description": "Block every mutation (create, edit, delete, scale, exec, node shell) for the cluster.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "reduce_motion": {
           "anyOf": [
@@ -24,6 +104,13 @@
             }
           ],
           "description": "`system` follows the OS reduce-motion preference, `on` and `off` override it."
+        },
+        "terminal_cwd": {
+          "description": "Working directory of terminals opened for the cluster. Unset uses the home directory.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "theme": {
           "$ref": "#/$defs/ThemeSelectionContent"
@@ -39,6 +126,108 @@
       },
       "type": "object"
     },
+    "ClusterSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about a cluster.\n\n`display_name` and `colour` only make sense under `clusters.<id>`; at the top level they act\nas a fallback for every cluster. Changes to `read_only`, `colour` and `display_name` reach\nopen sessions immediately; `exec_interactivity` is read when a session connects, so it takes\neffect on the next connect; `default_namespace` is the namespace a session starts in, so it\ndoes not move a selection the user already made.\n\nExample, in `settings.json`:\n\n```json\n\"clusters\": {\n  \"3f2a9c1b7d4e8a60\": {\n    \"display_name\": \"Production (eu-west)\",\n    \"colour\": \"#e5484d\",\n    \"read_only\": true,\n    \"default_namespace\": \"payments\",\n    \"prometheus\": { \"url\": \"https://prometheus.example.com\", \"auth_secret\": \"prod-prometheus\" }\n  }\n}\n```",
+      "properties": {
+        "accessible_namespaces": {
+          "description": "Namespaces to offer in the selector when the user is not allowed to list namespaces\ncluster-wide (RBAC-restricted users). A list in a cluster replaces the one above it.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "colour": {
+          "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb` or `#rgb`.",
+          "examples": [
+            "#e5484d"
+          ],
+          "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_namespace": {
+          "description": "The namespace a new session starts in. Unset uses the kubeconfig context's namespace.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "description": "A name to show instead of the kubeconfig context name. Cluster ids are opaque hashes, so\nkeep this next to the id to recognise the entry.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exec_interactivity": {
+          "description": "How interactive exec credential plugins (`aws`, `gke-gcloud-auth-plugin`, ...) may be:\n`never` (no stdin, never prompt; the GUI default), `if_available` or `always`. Read when a\nsession connects: a change takes effect on the next connect.",
+          "enum": [
+            "never",
+            "if_available",
+            "always",
+            null
+          ],
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "node_shell_image": {
+          "description": "Container image of the node shell pod. Unset uses the built-in image.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "node_shell_pull_secret": {
+          "description": "Name of the image pull Secret (in the node shell's namespace) used to pull\n`node_shell_image` from a private registry. It names a Kubernetes Secret, it is not a\ncredential.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prometheus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PrometheusContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Manual Prometheus location; unset auto-detects. Fields merge across layers."
+        },
+        "read_only": {
+          "description": "Block every mutation (create, edit, delete, scale, exec, node shell) for the cluster.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "terminal_cwd": {
+          "description": "Working directory of terminals opened for the cluster. Unset uses the home directory.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "HttpUrl": {
+      "description": "An http(s) URL without credentials, query or fragment.",
+      "examples": [
+        "https://prometheus.example.com:9090"
+      ],
+      "pattern": "^https?://[^\\s@?#/]+(/[^\\s?#]*)?$",
+      "type": "string"
+    },
     "LogSettingsContent": {
       "additionalProperties": false,
       "description": "What one settings layer says about logging.",
@@ -49,6 +238,49 @@
             "string",
             "null"
           ]
+        }
+      },
+      "type": "object"
+    },
+    "PrometheusContent": {
+      "additionalProperties": false,
+      "description": "A manual Prometheus location for a cluster (`prometheus` key). Keeps no secret: the bearer\ntoken lives in the OS keychain and `auth_secret` only names its entry.",
+      "properties": {
+        "auth_secret": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name of the keychain entry (namespace `prometheus`) that holds the bearer token. Never\nput the token itself in `settings.json`."
+        },
+        "path": {
+          "description": "`namespace/service:port`, reached through the API server's service proxy.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "description": "`auto` (probe the cluster) or a provider id such as `operator`, `lens`, `helm`,\n`victoria_metrics`, `mimir`. Unset means auto-detect.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HttpUrl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A direct `http(s)` URL, used instead of `path`. No credentials, query or fragment."
         }
       },
       "type": "object"
@@ -72,6 +304,15 @@
           "type": "string"
         }
       ]
+    },
+    "SecretName": {
+      "description": "The name of a keychain entry holding the token. Never the token itself.",
+      "examples": [
+        "prod-prometheus"
+      ],
+      "minLength": 1,
+      "pattern": "^[^/\\p{Cc}]+$",
+      "type": "string"
     },
     "SessionSettingsContent": {
       "additionalProperties": false,
@@ -177,12 +418,47 @@
       "description": "Schema reference for editors.",
       "type": "string"
     },
+    "accessible_namespaces": {
+      "description": "Namespaces to offer in the selector when the user is not allowed to list namespaces\ncluster-wide (RBAC-restricted users). A list in a cluster replaces the one above it.",
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
     "clusters": {
       "additionalProperties": {
         "$ref": "#/$defs/ClusterSettings"
       },
-      "description": "Per-cluster overrides, keyed by cluster id.",
+      "description": "Per-cluster overrides, keyed by cluster id (16 hex characters). Changes to read_only, colour and display_name apply to open sessions at once; exec_interactivity applies on the next connect; default_namespace applies to new sessions.",
+      "examples": [
+        {
+          "3f2a9c1b7d4e8a60": {
+            "colour": "#e5484d",
+            "default_namespace": "payments",
+            "display_name": "Production (eu-west)",
+            "prometheus": {
+              "auth_secret": "prod-prometheus",
+              "url": "https://prometheus.example.com"
+            },
+            "read_only": true
+          }
+        }
+      ],
       "type": "object"
+    },
+    "colour": {
+      "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb` or `#rgb`.",
+      "examples": [
+        "#e5484d"
+      ],
+      "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "confirm_quit": {
       "description": "Ask before quitting (or closing the last window on Linux and Windows) while exec sessions,\nport-forwards or applies are running.",
@@ -191,8 +467,67 @@
         "null"
       ]
     },
+    "default_namespace": {
+      "description": "The namespace a new session starts in. Unset uses the kubeconfig context's namespace.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "display_name": {
+      "description": "A name to show instead of the kubeconfig context name. Cluster ids are opaque hashes, so\nkeep this next to the id to recognise the entry.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "exec_interactivity": {
+      "description": "How interactive exec credential plugins (`aws`, `gke-gcloud-auth-plugin`, ...) may be:\n`never` (no stdin, never prompt; the GUI default), `if_available` or `always`. Read when a\nsession connects: a change takes effect on the next connect.",
+      "enum": [
+        "never",
+        "if_available",
+        "always",
+        null
+      ],
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "log": {
       "$ref": "#/$defs/LogSettingsContent"
+    },
+    "node_shell_image": {
+      "description": "Container image of the node shell pod. Unset uses the built-in image.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "node_shell_pull_secret": {
+      "description": "Name of the image pull Secret (in the node shell's namespace) used to pull\n`node_shell_image` from a private registry. It names a Kubernetes Secret, it is not a\ncredential.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "prometheus": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PrometheusContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Manual Prometheus location; unset auto-detects. Fields merge across layers."
+    },
+    "read_only": {
+      "description": "Block every mutation (create, edit, delete, scale, exec, node shell) for the cluster.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
+      "type": [
+        "boolean",
+        "null"
+      ]
     },
     "reduce_motion": {
       "anyOf": [
@@ -204,6 +539,13 @@
         }
       ],
       "description": "`system` follows the OS reduce-motion preference, `on` and `off` override it."
+    },
+    "terminal_cwd": {
+      "description": "Working directory of terminals opened for the cluster. Unset uses the home directory.",
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "theme": {
       "$ref": "#/$defs/ThemeSelectionContent"

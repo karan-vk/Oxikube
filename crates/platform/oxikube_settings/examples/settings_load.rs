@@ -47,6 +47,8 @@ macro_rules! sections {
     )+
     fn register_all(store: &mut SettingsStore) {
         $(store.register_setting::<$name>();)+
+        // The per-cluster settings (E06-S08) resolve once per cluster with overrides.
+        store.register_setting::<oxikube_settings::ClusterSettings>();
     }
     const KEYS: &[&str] = &[$($key),+];
     };
@@ -85,7 +87,7 @@ fn files() -> (String, String) {
     user.push_str("  \"clusters\": {\n");
     for c in 0..20 {
         user.push_str(&format!(
-            "    \"{c:016x}\": {{ \"terminal\": {{ \"font_size\": {c} }}, \"logs\": {{ \"limit\": 5 }} }},\n"
+            "    \"{c:016x}\": {{ \"terminal\": {{ \"font_size\": {c} }}, \"logs\": {{ \"limit\": 5 }}, \"display_name\": \"cluster {c}\", \"colour\": \"#e5484d\", \"read_only\": true, \"default_namespace\": \"ns-{c}\", \"accessible_namespaces\": [\"a\", \"b\"], \"prometheus\": {{ \"url\": \"https://prom.example.com\", \"auth_secret\": \"p{c}\" }} }},\n"
         ));
     }
     user.push_str("  },\n");

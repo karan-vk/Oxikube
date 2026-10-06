@@ -8,6 +8,7 @@ mod connect;
 mod failure;
 mod health;
 mod multi;
+mod prefs;
 mod props;
 
 use std::sync::Arc;

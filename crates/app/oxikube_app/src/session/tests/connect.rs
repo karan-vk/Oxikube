@@ -110,6 +110,7 @@ fn open_uses_options_and_connect_passes_the_exec_policy() {
         read_only: true,
         colour: Some(ClusterColour::rgb(0xe5, 0x48, 0x4d)),
         exec_interactivity: ExecInteractivity::IfAvailable,
+        ..SessionOptions::default()
     };
     let session = h.manager.open(&ctx("a"), options.clone());
     assert_eq!(session.phase(), SessionPhase::Disconnected);

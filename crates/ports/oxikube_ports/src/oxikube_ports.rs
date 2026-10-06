@@ -66,6 +66,7 @@
 //! |---|---|
 //! | [`ClusterConnectorPort`], [`ClusterPorts`], [`HealthReporter`] | [`connector`] |
 //! | [`AccessReviewPort`] | [`access`] |
+//! | [`ClusterPrefs`], [`ClusterPrefsTable`] (resolved per-cluster settings, E06-S08) | [`cluster_prefs`] |
 //!
 //! # Integration and agent ports (E02-S10)
 //!
@@ -86,6 +87,7 @@ pub mod access;
 pub mod agent;
 pub mod clock;
 pub mod cloud;
+pub mod cluster_prefs;
 pub mod cluster_source;
 pub mod connector;
 pub mod context;
@@ -122,6 +124,7 @@ pub use agent::{
 };
 pub use clock::ClockPort;
 pub use cloud::{CloudDiscoveryPort, CloudProvider, CloudToolStatus, DiscoveredCluster};
+pub use cluster_prefs::{ClusterPrefs, ClusterPrefsTable, PrometheusOverride};
 pub use cluster_source::{
     ClusterContext, ClusterSource, ClusterSourcePort, SourceId, SourceKind, SourcesChanged,
 };

@@ -33,6 +33,8 @@ pub(crate) trait AnySettingValue: Send + Sync {
     fn generation(&self) -> u64;
     /// The value for `location`: the cluster's own value if it has overrides, else global.
     fn value_for(&self, location: Option<SettingsLocation>) -> Option<&dyn Any>;
+    /// Every cluster that has a value of its own, with that value.
+    fn cluster_values(&self) -> Vec<(&str, &dyn Any)>;
     /// Replace the global value (tests, previews); bumps the generation when it differs.
     fn override_global(&mut self, value: Box<dyn Any>);
     /// Re-resolve from `layers`, keeping last good values on type errors.
@@ -126,6 +128,13 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
         cluster
             .or(self.global.as_ref())
             .map(|value| value as &dyn Any)
+    }
+
+    fn cluster_values(&self) -> Vec<(&str, &dyn Any)> {
+        self.clusters
+            .iter()
+            .map(|(id, value)| (id.as_str(), value as &dyn Any))
+            .collect()
     }
 
     fn override_global(&mut self, value: Box<dyn Any>) {

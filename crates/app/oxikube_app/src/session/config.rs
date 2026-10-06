@@ -1,11 +1,12 @@
 //! Tuning for the [`ClusterSessionManager`](super::ClusterSessionManager) and the
 //! per-session options a caller opens a session with.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use oxikube_domain::ClusterColour;
 use oxikube_domain::session::NamespaceSelection;
-use oxikube_ports::ExecInteractivity;
+use oxikube_ports::{ClusterPrefs, ExecInteractivity};
 
 /// How a connect attempt retries transient failures.
 ///
@@ -79,9 +80,9 @@ impl Default for SessionManagerConfig {
     }
 }
 
-/// The user-controlled fields a session starts with (per-cluster settings, E06-S08;
-/// restored state, E06-S11). The defaults are: all namespaces, writable, no colour, exec
-/// plugins may not prompt.
+/// The user-controlled fields a session starts with (per-cluster settings, E06-S08, see
+/// [`SessionOptions::from_prefs`]; restored state, E06-S11). The defaults are: all
+/// namespaces, writable, no colour, no display name, exec plugins may not prompt.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SessionOptions {
     /// Which namespaces the session watches.
@@ -92,6 +93,31 @@ pub struct SessionOptions {
     pub colour: Option<ClusterColour>,
     /// The exec credential plugin policy passed to the connector.
     pub exec_interactivity: ExecInteractivity,
+    /// The name shown instead of the context name.
+    pub display_name: Option<String>,
+    /// The settings these options were derived from; later pushes of a
+    /// [`ClusterPrefsTable`](oxikube_ports::ClusterPrefsTable) are applied relative to them.
+    pub prefs: Arc<ClusterPrefs>,
+}
+
+impl SessionOptions {
+    /// The options a session starts with under `prefs`.
+    ///
+    /// The namespace selection starts at the cluster's `default_namespace`, else at
+    /// `kubeconfig_namespace` (the context's own), else all namespaces.
+    pub fn from_prefs(prefs: &Arc<ClusterPrefs>, kubeconfig_namespace: Option<&str>) -> Self {
+        let namespace = prefs.default_namespace.as_deref().or(kubeconfig_namespace);
+        Self {
+            namespace_selection: namespace
+                .map(NamespaceSelection::single)
+                .unwrap_or_default(),
+            read_only: prefs.read_only,
+            colour: prefs.colour,
+            exec_interactivity: prefs.exec_interactivity,
+            display_name: prefs.display_name.clone(),
+            prefs: prefs.clone(),
+        }
+    }
 }
 
 #[cfg(test)]

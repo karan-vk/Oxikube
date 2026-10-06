@@ -63,7 +63,7 @@ pub(crate) fn assemble(
     definitions.insert(
         CLUSTER_DEF.to_owned(),
         json!({
-            "description": "Overrides for one cluster; any setting may appear here.",
+            "description": "Overrides for one cluster: the per-cluster settings (display name, colour, read-only, default namespace, terminal directory, node shell, Prometheus, accessible namespaces, exec policy) and any other setting. Layers merge field by field: defaults, then the top-level values, then this block.",
             "type": "object",
             "properties": properties.clone(),
         }),
@@ -71,8 +71,20 @@ pub(crate) fn assemble(
     properties.insert(
         CLUSTERS_KEY.to_owned(),
         json!({
-            "description": "Per-cluster overrides, keyed by cluster id.",
+            "description": "Per-cluster overrides, keyed by cluster id (16 hex characters). Changes to read_only, colour and display_name apply to open sessions at once; exec_interactivity applies on the next connect; default_namespace applies to new sessions.",
             "type": "object",
+            "examples": [{
+                "3f2a9c1b7d4e8a60": {
+                    "display_name": "Production (eu-west)",
+                    "colour": "#e5484d",
+                    "read_only": true,
+                    "default_namespace": "payments",
+                    "prometheus": {
+                        "url": "https://prometheus.example.com",
+                        "auth_secret": "prod-prometheus"
+                    }
+                }
+            }],
             "additionalProperties": { "$ref": format!("#/$defs/{CLUSTER_DEF}") },
         }),
     );

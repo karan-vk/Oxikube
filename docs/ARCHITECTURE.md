@@ -58,7 +58,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ClusterPorts` bundle per session, drives `ClusterSessionState` (auth failures to
   `AuthRequired`, transient ones retried with backoff on the `ClockPort`, health reports for
   `Ready` ↔ `Degraded` → `Error`) and broadcasts `SessionUpdate`s; it spawns nothing (callers
-  drive `connect` with `spawn_kube`, dropping it cancels the attempt).
+  drive `connect` with `spawn_kube`, dropping it cancels the attempt). Per-cluster settings
+  (E06-S08): the binary pushes a `ClusterPrefsTable` (`oxikube_ports::cluster_prefs`, resolved by
+  `oxikube_settings::ClusterSettings` from `clusters.<id>`) into `set_prefs_table`; new sessions
+  start from it and open ones follow it live (read-only, colour, display name; exec policy on the
+  next connect), with a `SessionChange` per field for the clusters that changed.
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
   mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
   events).
@@ -102,7 +106,7 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | ACP `terminal/*` passthrough | `TerminalHostPort` | `oxikube_terminal` | `oxikube_acp` |
 | Argo backends reading the cluster | `ResourcePort`, `PortForwardPort`, `ExecPort` | `oxikube_kube` | `oxikube_argocd` |
 | Extensions contributing themes/commands/MCP servers | `ThemeSinkPort`, `CommandSinkPort`, `ContextServerSinkPort` | `oxikube_theme`, `oxikube_app`, `oxikube_mcp` | `oxikube_extension_host` |
-| App reading user settings (aliases, budgets) | plain values pushed in at init / on change | `oxikube_settings` (via bins) | `oxikube_app` |
+| App reading user settings (aliases, budgets, per-cluster read-only / colour / name) | plain values pushed in at init / on change (`ClusterPrefsTable` for `clusters.<id>`, via `bins/oxikube::cluster_prefs`) | `oxikube_settings` (via bins) | `oxikube_app` |
 | Per-cluster ports for a connected context | `ClusterConnectorPort` (returns `ClusterPorts` + `AccessReviewPort`; health via the `HealthReporter` callback) | `oxikube_kube` (wired by `bins/oxikube`) | `oxikube_app::session` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`) | `oxikube_terminal`, `oxikube_kube`, `oxikube_argocd` | `oxikube_terminal` element |
 
