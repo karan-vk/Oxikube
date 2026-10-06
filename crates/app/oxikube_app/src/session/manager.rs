@@ -303,7 +303,8 @@ impl Shared {
             return entry.clone();
         }
         let options = options(&self.prefs.read());
-        let entry = Entry::new(context.cluster.clone(), context.context.clone(), options);
+        let mut entry = Entry::new(context.cluster.clone(), context.context.clone(), options);
+        entry.server = context.server.clone();
         let entry = Arc::new(Mutex::new(entry));
         sessions.insert(context.cluster.clone(), entry.clone());
         self.updates.send(&context.cluster, SessionChange::Opened);

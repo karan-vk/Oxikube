@@ -4,6 +4,9 @@
 //! lifecycle, namespace selector.
 //!
 //! Module map:
+//! - [`connect`] (E06-S06): what a cluster tab shows while its session connects, needs
+//!   credentials, is degraded or failed: [`ConnectView`], [`DegradedBanner`], and the pure
+//!   [`ConnectViewModel`] behind them.
 //! - [`namespaces`] (E06-S07): the namespace selector, a dropdown in the cluster tab toolbar with
 //!   All, multi-select, favourites, search and the `0`-`9` favourite keys.
 //! - [`hotbar`] (E06-S04): [`Hotbar`], the strip at the window's left edge with every connected
@@ -18,11 +21,13 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod catalog;
+pub mod connect;
 pub mod hotbar;
 pub mod namespaces;
 pub mod sources;
 
 pub use catalog::{CatalogDeps, CatalogView, CommandDispatcher, ServiceDispatcher};
+pub use connect::{ConnectDeps, ConnectView, ConnectViewModel, DegradedBanner};
 pub use hotbar::{Hotbar, HotbarDeps};
 pub use sources::{ServiceBackend, SourcesBackend, SourcesDeps, SourcesView};
 

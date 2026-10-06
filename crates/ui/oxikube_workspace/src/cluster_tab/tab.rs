@@ -20,12 +20,12 @@
 //! metrics polling): hidden clusters do not render, and consumers pause what they poll.
 
 use gpui::{
-    App, Context, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement as _,
+    AnyView, App, Context, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
     prelude::FluentBuilder as _, px,
 };
 use oxikube_domain::ids::ClusterId;
-use oxikube_domain::session::ClusterSessionState;
+use oxikube_domain::session::{ClusterSessionState, SessionPhase};
 use oxikube_ui::{ActiveTokens as _, layout::v_flex, u};
 
 use super::colour::cluster_hsla;
@@ -44,8 +44,24 @@ pub struct ClusterTabInfo {
     pub title: SharedString,
     /// The cluster's colour and read-only lock: the tab's dot, lock and stripe.
     pub mark: ClusterMark,
-    /// The session's connection state (the placeholder body reads it, E06-S06 replaces that).
+    /// The session's connection state: the tab shows its [`ConnectUi`] (or, without one, a
+    /// placeholder) while the cluster is not connected.
     pub state: ClusterSessionState,
+}
+
+/// The views a cluster tab shows while its session is connecting or has trouble (the connect
+/// lifecycle, E06-S06). They come from `oxikube_catalog_ui::connect`, which this crate cannot
+/// depend on, so the owner hands them in with [`ClusterTab::set_connect_ui`].
+///
+/// - `body` replaces the tab's content while the session is `Connecting`, `AuthRequired`,
+///   `Error` or `Disconnected`: the cluster's views cannot show anything true then.
+/// - `banner` is drawn above the content while the session is `Degraded`: the content stays.
+#[derive(Clone)]
+pub struct ConnectUi {
+    /// The full-body view of a session that is not connected.
+    pub body: AnyView,
+    /// The banner of a degraded session.
+    pub banner: AnyView,
 }
 
 /// What a cluster tab tells its owner.
@@ -68,6 +84,7 @@ pub struct ClusterTab {
     /// Saves and restores the inner layout; owned by the inner workspace too, held here for
     /// the flush when the tab closes.
     persistence: Option<Entity<LayoutPersistence>>,
+    connect_ui: Option<ConnectUi>,
     active: bool,
     _observe_workspace: Subscription,
 }
@@ -92,6 +109,7 @@ impl ClusterTab {
             info,
             workspace,
             persistence: None,
+            connect_ui: None,
             active: false,
             _observe_workspace: observe,
         }
@@ -125,6 +143,18 @@ impl ClusterTab {
             cx.emit(ItemEvent::UpdateTab);
             cx.notify();
         }
+    }
+
+    /// Shows `ui` for the session's connect lifecycle instead of the placeholder.
+    pub fn set_connect_ui(&mut self, ui: ConnectUi, cx: &mut Context<Self>) {
+        self.connect_ui = Some(ui);
+        cx.notify();
+    }
+
+    /// The connect views the tab shows while its cluster is not connected, if its owner set
+    /// them.
+    pub fn connect_ui(&self) -> Option<&ConnectUi> {
+        self.connect_ui.as_ref()
     }
 
     pub(super) fn set_persistence(&mut self, persistence: Entity<LayoutPersistence>) {
@@ -182,6 +212,33 @@ impl Render for ClusterTab {
         let colors = cx.colors();
         let title = &self.info.title;
         let blank = self.workspace.read(cx).is_blank();
+        let content = {
+            let content = div().flex_1().min_h_0().w_full();
+            if blank {
+                content.child(placeholder(&self.info, cx))
+            } else {
+                content.child(self.workspace.clone())
+            }
+        };
+        let phase = self.info.state.phase();
+        let body = match &self.connect_ui {
+            Some(ui) if !phase.is_connected() => div()
+                .id("cluster-connect")
+                .debug_selector(|| format!("cluster-connect-{title}"))
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .child(ui.body.clone())
+                .into_any_element(),
+            Some(ui) if phase == SessionPhase::Degraded => v_flex()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .child(div().flex_none().w_full().child(ui.banner.clone()))
+                .child(content)
+                .into_any_element(),
+            _ => content.into_any_element(),
+        };
         v_flex()
             .id("cluster-tab")
             .debug_selector(|| format!("cluster-tab-{title}"))
@@ -198,14 +255,7 @@ impl Render for ClusterTab {
                         this.bg(cluster_hsla(colour))
                     }),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    .when(!blank, |this| this.child(self.workspace.clone()))
-                    .when(blank, |this| this.child(placeholder(&self.info, cx))),
-            )
+            .child(body)
     }
 }
 

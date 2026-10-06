@@ -70,7 +70,7 @@ pub use cluster::{
 };
 pub use cluster_tab::{
     ClusterTab, ClusterTabEvent, ClusterTabInfo, ClusterTabs, ClusterTabsDeps, ClusterTabsEvent,
-    CommandDispatcher,
+    CommandDispatcher, ConnectUi,
 };
 pub use dock::Dock;
 pub use item::{

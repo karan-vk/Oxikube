@@ -13,6 +13,9 @@ Cluster catalog home, hotbar, kubeconfig sources management, cloud discovery UI,
 - `namespaces` (E06-S07): the namespace selector dropdown (All, multi-select, favourites, search,
   `0`-`9` keys). See the module docs in `src/namespaces/mod.rs`.
 
+- `connect` (E06-S06): the connect lifecycle of a cluster tab (`ConnectView`, `DegradedBanner`,
+  the pure `ConnectViewModel`). See the module docs in `src/connect/mod.rs`.
+
 ## Allowed internal dependencies
 
 - `oxikube_domain`

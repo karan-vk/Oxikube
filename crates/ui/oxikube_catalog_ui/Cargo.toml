@@ -47,9 +47,10 @@ default = []
 test-support = []
 # Headless GPU screenshots (`tests/screenshot.rs` for the namespace selector,
 # `tests/catalog_screenshot.rs` for the catalog, `tests/cluster_tabs_screenshot.rs` for the hotbar
-# and cluster tabs, `tests/sources_screenshot.rs` for the sources screen; harness = false so they run on the process main
+# and cluster tabs, `tests/sources_screenshot.rs` for the sources screen, `tests/connect_screenshot.rs` for the
+# connect lifecycle; harness = false so they run on the process main
 # thread). Need Metal / Vulkan, so never part of the default gate; the nightly workflow runs them:
-# `cargo test -p oxikube_catalog_ui --features screenshot --test screenshot --test catalog_screenshot --test cluster_tabs_screenshot --test sources_screenshot`.
+# `cargo test -p oxikube_catalog_ui --features screenshot --test screenshot --test catalog_screenshot --test cluster_tabs_screenshot --test sources_screenshot --test connect_screenshot`.
 screenshot = ["test-support"]
 
 [[test]]
@@ -73,6 +74,12 @@ required-features = ["screenshot"]
 [[test]]
 name = "sources_screenshot"
 path = "tests/sources_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+[[test]]
+name = "connect_screenshot"
+path = "tests/connect_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 

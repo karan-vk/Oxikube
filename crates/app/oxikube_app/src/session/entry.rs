@@ -45,6 +45,8 @@ pub(super) struct Entry {
     pub(super) colour: Option<ClusterColour>,
     pub(super) exec_interactivity: ExecInteractivity,
     pub(super) display_name: Option<String>,
+    /// The API server URL the catalog entry names, for the connect view.
+    pub(super) server: Option<String>,
     /// The settings last applied; a new push is applied as a delta against them.
     pub(super) prefs: Arc<ClusterPrefs>,
     pub(super) abort: Option<AbortHandle>,
@@ -64,6 +66,7 @@ impl Entry {
             colour: options.colour,
             exec_interactivity: options.exec_interactivity,
             display_name: options.display_name,
+            server: None,
             prefs: options.prefs,
             abort: None,
         }
@@ -80,6 +83,7 @@ impl Entry {
             colour: self.colour,
             exec_interactivity: self.exec_interactivity,
             display_name: self.display_name.clone(),
+            server: self.server.clone(),
             prefs: self.prefs.clone(),
             ports: self.connection.as_ref().map(|c| c.ports.clone()),
         }

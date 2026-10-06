@@ -17,6 +17,8 @@ impl CommandId {
     pub const APP_QUIT: CommandId = CommandId::new("app::Quit");
     /// `cluster::ApplyPreset`: give a cluster a prod / staging / dev / none posture.
     pub const CLUSTER_APPLY_PRESET: CommandId = CommandId::new("cluster::ApplyPreset");
+    /// `cluster::CancelConnect`: cancel a connection attempt that is still in flight.
+    pub const CLUSTER_CANCEL_CONNECT: CommandId = CommandId::new("cluster::CancelConnect");
     /// `cluster::CloseTab`: close a cluster's tab (disconnects it).
     pub const CLUSTER_CLOSE_TAB: CommandId = CommandId::new("cluster::CloseTab");
     /// `cluster::Connect`: connect a cluster (open its session).
@@ -27,6 +29,8 @@ impl CommandId {
     pub const CLUSTER_NEXT_TAB: CommandId = CommandId::new("cluster::NextTab");
     /// `cluster::PreviousTab`: show the previous cluster tab.
     pub const CLUSTER_PREVIOUS_TAB: CommandId = CommandId::new("cluster::PreviousTab");
+    /// `cluster::Reconnect`: drop a cluster's connection and connect it again (the retry).
+    pub const CLUSTER_RECONNECT: CommandId = CommandId::new("cluster::Reconnect");
     /// `cluster::Select`: make a cluster the active one.
     pub const CLUSTER_SELECT: CommandId = CommandId::new("cluster::Select");
     /// `cluster::SetColour`: set or clear a cluster's accent colour.
@@ -106,6 +110,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Cluster,
         NONE,
     ),
+    // Gives up an attempt in flight; nothing is read or changed in the cluster.
+    CommandMeta::read(
+        CommandId::CLUSTER_CANCEL_CONNECT,
+        "Cancel Connecting",
+        CommandScope::Global,
+        NONE,
+    ),
     // Closing a tab disconnects: it reads nothing and changes nothing in the cluster, so it is no
     // mutation. The confirmation it may show (running operations) is a UI prompt, not a guard tier.
     CommandMeta::read(
@@ -136,6 +147,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::CLUSTER_PREVIOUS_TAB,
         "Previous Cluster Tab",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Retrying a connection reads from the cluster like `cluster::Connect`: no guard tier.
+    CommandMeta::read(
+        CommandId::CLUSTER_RECONNECT,
+        "Reconnect Cluster",
         CommandScope::Global,
         NONE,
     ),
@@ -447,6 +465,11 @@ mod tests {
         for (id, tool) in [
             (CommandId::CLUSTER_CONNECT, "app.cluster_connect"),
             (CommandId::CLUSTER_DISCONNECT, "app.cluster_disconnect"),
+            (CommandId::CLUSTER_RECONNECT, "app.cluster_reconnect"),
+            (
+                CommandId::CLUSTER_CANCEL_CONNECT,
+                "app.cluster_cancel_connect",
+            ),
             (
                 CommandId::CLUSTER_TOGGLE_FAVOURITE,
                 "app.cluster_toggle_favourite",

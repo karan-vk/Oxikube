@@ -31,6 +31,7 @@ pub struct ClusterSession {
     pub(super) colour: Option<ClusterColour>,
     pub(super) exec_interactivity: ExecInteractivity,
     pub(super) display_name: Option<String>,
+    pub(super) server: Option<String>,
     pub(super) prefs: Arc<ClusterPrefs>,
     pub(super) ports: Option<ClusterPorts>,
 }
@@ -49,6 +50,12 @@ impl ClusterSession {
     /// The name the user gave the cluster (`display_name` in its settings), if any.
     pub fn display_name(&self) -> Option<&str> {
         self.display_name.as_deref()
+    }
+
+    /// The API server URL of the catalog entry the session was opened from, if it names one.
+    /// Plain text from the kubeconfig (never a credential); redact it before it is shown.
+    pub fn server(&self) -> Option<&str> {
+        self.server.as_deref()
     }
 
     /// What to call the cluster in the UI: its display name, else the context name.
