@@ -66,7 +66,11 @@ pub(super) fn empty(cx: &App) -> impl IntoElement {
             v_flex()
                 .max_w(u(gpui::px(520.)))
                 .gap(u(tokens.spacing.sm))
-                .children(EMPTY_STEPS.iter().map(|step| div().child(*step))),
+                .children(EMPTY_STEPS.iter().enumerate().map(|(ix, step)| {
+                    div()
+                        .debug_selector(move || format!("catalog-empty-step-{ix}"))
+                        .child(*step)
+                })),
         )
 }
 

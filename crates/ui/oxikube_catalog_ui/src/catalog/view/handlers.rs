@@ -21,11 +21,16 @@ impl CatalogView {
         self.on_query_changed(cx);
     }
 
-    /// The search text changed: refilter and show the best match first.
+    /// The search text changed: refilter, select the best match and show it first.
     pub(super) fn on_query_changed(&mut self, cx: &mut Context<Self>) {
         let query = self.search.read(cx).value();
         if self.model.set_query(&query) {
-            self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+            if self.model.is_searching() {
+                self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+            } else if let Some(ix) = self.model.selected_index() {
+                // Cleared: the selection stays, so keep it in view.
+                self.scroll.scroll_to_item(ix, ScrollStrategy::Nearest);
+            }
         }
         cx.notify();
     }

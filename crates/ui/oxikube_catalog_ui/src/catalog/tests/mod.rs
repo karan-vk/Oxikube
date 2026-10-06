@@ -16,6 +16,7 @@ use async_trait::async_trait;
 use futures::channel::oneshot;
 use futures::stream::BoxStream;
 use gpui::{AppContext as _, Entity, Point, TestAppContext};
+use oxikube_app::session::SessionManagerConfig;
 use oxikube_app::{ClusterCatalog, ClusterCommands, ClusterSessionManager};
 use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ClusterId;
@@ -82,6 +83,7 @@ pub(super) struct Setup {
     dispatch: Dispatch,
     connected: Vec<&'static str>,
     gated: bool,
+    update_capacity: Option<usize>,
     prepare: Option<Box<dyn FnOnce(&Parts)>>,
 }
 
@@ -92,6 +94,7 @@ impl Setup {
             dispatch: Dispatch::Record,
             connected: Vec::new(),
             gated: false,
+            update_capacity: None,
             prepare: None,
         }
     }
@@ -111,6 +114,13 @@ impl Setup {
     /// The first read of the catalog waits for [`Fixture::open_gate`].
     pub(super) fn gated(mut self) -> Self {
         self.gated = true;
+        self
+    }
+
+    /// The session manager keeps only this many updates for a slow subscriber, so a burst
+    /// makes the view's stream lag.
+    pub(super) fn update_capacity(mut self, capacity: usize) -> Self {
+        self.update_capacity = Some(capacity);
         self
     }
 
@@ -185,7 +195,18 @@ impl Fixture {
             (None, source.clone())
         };
         let catalog = ClusterCatalog::new(listed.clone(), state, clock.clone());
-        let sessions = ClusterSessionManager::new(connector.clone(), listed, clock.clone());
+        let sessions = match setup.update_capacity {
+            Some(update_capacity) => ClusterSessionManager::with_config(
+                connector.clone(),
+                listed,
+                clock.clone(),
+                SessionManagerConfig {
+                    update_capacity,
+                    ..Default::default()
+                },
+            ),
+            None => ClusterSessionManager::new(connector.clone(), listed, clock.clone()),
+        };
         for name in &setup.connected {
             // The fake connector answers at once, so no executor is needed.
             futures::executor::block_on(sessions.connect(&id(name))).expect("connect");
@@ -307,6 +328,15 @@ impl Fixture {
 
     pub(super) fn keys(&mut self, keystrokes: &str) {
         self.window.simulate_keystrokes(keystrokes);
+        self.app.run_until_parked();
+    }
+
+    /// Lets a frame's worth of time pass, so a coalesced notify is delivered.
+    pub(super) fn advance_a_frame(&mut self) {
+        self.app
+            .cx()
+            .executor()
+            .advance_clock(oxikube_runtime::FRAME_INTERVAL * 2);
         self.app.run_until_parked();
     }
 

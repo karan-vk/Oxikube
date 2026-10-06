@@ -8,7 +8,7 @@ use serde_json::json;
 use super::{Fixture, Setup, contexts, id, named};
 use crate::catalog::LoadState;
 use crate::catalog::test_support::context;
-use crate::catalog::{EMPTY_STEPS, EMPTY_TITLE, LOADING_TEXT};
+use crate::catalog::{EMPTY_STEPS, LOADING_TEXT};
 
 #[gpui::test]
 fn the_first_frame_is_the_loading_state_and_the_rows_follow(cx: &mut TestAppContext) {
@@ -83,8 +83,20 @@ fn every_context_is_listed_with_its_cluster_user_and_source_file(cx: &mut TestAp
 fn the_count_in_the_header_follows_the_catalog(cx: &mut TestAppContext) {
     let mut f = Fixture::open(cx, contexts(3));
     f.window.draw_frame();
-    assert!(f.is_laid_out("catalog-count"));
-    assert_eq!(f.read(|v| v.model().total()), 3);
+    assert!(f.is_laid_out("catalog-count:3 clusters"));
+
+    f.type_text("ctx-01");
+    f.window.draw_frame();
+    assert!(
+        f.is_laid_out("catalog-count:1 of 3"),
+        "the search narrows it"
+    );
+
+    f.keys("escape");
+    f.source.set_contexts(contexts(1));
+    f.app.run_until_parked();
+    f.window.draw_frame();
+    assert!(f.is_laid_out("catalog-count:1 cluster"));
 }
 
 #[gpui::test]
@@ -97,7 +109,12 @@ fn an_empty_catalog_explains_how_to_add_kubeconfigs(cx: &mut TestAppContext) {
     );
     assert!(!f.is_laid_out("catalog-row-0"));
     assert!(!f.is_laid_out("catalog-loading"));
-    assert_eq!(EMPTY_TITLE, "No clusters yet");
+    for ix in 0..EMPTY_STEPS.len() {
+        assert!(
+            f.is_laid_out(format!("catalog-empty-step-{ix}")),
+            "step {ix} is rendered"
+        );
+    }
     let steps = EMPTY_STEPS.join("\n");
     assert!(steps.contains("~/.kube/config"), "names the default path");
     assert!(

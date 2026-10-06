@@ -13,8 +13,10 @@
 //! # Selection
 //!
 //! The selection is a cluster id, not a row index, so it follows its cluster when a reload, a
-//! favourite or a new query reorders the list. When the selected cluster leaves the visible
-//! list the first visible entry is selected instead. An empty list selects nothing.
+//! favourite reorders the list, or a reload brings the entries again. When the selected cluster
+//! leaves the visible list the first visible entry is selected instead. An empty list selects
+//! nothing. Typing a search is the exception: it selects the best match (the first row), so
+//! Enter connects the row at the top. Clearing the search keeps the selection.
 
 mod matcher;
 mod row;
@@ -106,7 +108,12 @@ impl CatalogModel {
         let before = std::mem::take(&mut self.visible);
         self.visible = self.matcher.rank(&self.query, &self.rows);
         let changed = before != self.visible;
-        self.keep_selection();
+        if self.is_searching() {
+            // The best match is the row at the top: Enter connects what the user sees first.
+            self.selected = self.row(0).map(|row| row.entry().id().clone());
+        } else {
+            self.keep_selection();
+        }
         changed
     }
 
@@ -123,6 +130,17 @@ impl CatalogModel {
     /// How many entries the catalog holds, searched or not.
     pub fn total(&self) -> usize {
         self.rows.len()
+    }
+
+    /// The header text: how many clusters there are, or how many of them match the search.
+    pub fn count_label(&self) -> String {
+        if self.is_searching() {
+            return format!("{} of {}", self.visible_len(), self.total());
+        }
+        match self.total() {
+            1 => "1 cluster".to_owned(),
+            n => format!("{n} clusters"),
+        }
     }
 
     /// How many entries match the query.
@@ -173,6 +191,14 @@ impl CatalogModel {
     /// Forgets the session state of `cluster` (its session closed). Returns whether it changed.
     pub fn clear_state(&mut self, cluster: &ClusterId) -> bool {
         self.states.remove(cluster).is_some()
+    }
+
+    /// Forgets the state of every cluster `keep` rejects (used to resync after missed session
+    /// updates). Returns whether anything was forgotten.
+    pub fn retain_states(&mut self, mut keep: impl FnMut(&ClusterId) -> bool) -> bool {
+        let before = self.states.len();
+        self.states.retain(|cluster, _| keep(cluster));
+        self.states.len() != before
     }
 
     /// Whether the cluster is in the catalog (visible or not).

@@ -171,8 +171,12 @@ impl CatalogView {
     }
 
     fn sync_session_states(&mut self, cx: &mut Context<Self>) {
-        let mut changed = false;
-        for session in self.deps.sessions.sessions() {
+        let sessions = self.deps.sessions.sessions();
+        // A session closed while updates were missed is gone from the list: forget its state.
+        let mut changed = self
+            .model
+            .retain_states(|cluster| sessions.iter().any(|s| s.id() == cluster));
+        for session in sessions {
             changed |= self
                 .model
                 .set_state(session.id().clone(), session.state().clone());

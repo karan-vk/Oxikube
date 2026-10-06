@@ -130,6 +130,15 @@ fn the_selection_follows_its_cluster_through_a_search_and_a_reorder() {
     );
 
     model.set_query("");
+    assert!(model.select(2));
+    model.set_query(" ");
+    assert_eq!(
+        model.selected(),
+        Some(&cluster_id("c")),
+        "a blank search keeps the selection"
+    );
+
+    model.set_query("");
     model.select(1);
     assert!(model.set_favourite(&cluster_id("b"), true));
     assert_eq!(model.visible_names(), ["b", "a", "c"]);
@@ -282,4 +291,42 @@ fn sorting_and_filtering_two_thousand_entries_stays_in_the_budget() {
         "sorting and preparing 2 000 entries took {load_ms:.2} ms"
     );
     eprintln!("2 000 entries: set_entries {load_ms:.2} ms, slowest filter {worst:.2} ms");
+}
+
+#[test]
+fn a_search_selects_its_best_match_even_if_the_old_selection_still_matches() {
+    let mut model = model(&["alpha-prod", "prod"]);
+    assert_eq!(model.selected(), Some(&cluster_id("alpha-prod")));
+    model.set_query("prod");
+    assert_eq!(model.visible_names()[0], "prod");
+    assert_eq!(model.selected(), Some(&cluster_id("prod")));
+    assert_eq!(model.selected_index(), Some(0));
+}
+
+#[test]
+fn states_of_clusters_that_are_gone_can_be_forgotten_in_one_pass() {
+    use oxikube_domain::session::ClusterSessionState;
+    let mut model = model(&["a", "b"]);
+    model.set_state(cluster_id("a"), ClusterSessionState::Ready);
+    model.set_state(cluster_id("b"), ClusterSessionState::Ready);
+    assert!(model.retain_states(|id| id == &cluster_id("b")));
+    assert_eq!(
+        model.state(&cluster_id("a")),
+        &ClusterSessionState::Disconnected
+    );
+    assert_eq!(model.state(&cluster_id("b")), &ClusterSessionState::Ready);
+    assert!(
+        !model.retain_states(|id| id == &cluster_id("b")),
+        "nothing left to forget"
+    );
+}
+
+#[test]
+fn the_count_label_follows_the_search() {
+    let mut model = model(&["a", "b", "c"]);
+    assert_eq!(model.count_label(), "3 clusters");
+    model.set_query("a");
+    assert_eq!(model.count_label(), "1 of 3");
+    let one = self::model(&["a"]);
+    assert_eq!(one.count_label(), "1 cluster");
 }

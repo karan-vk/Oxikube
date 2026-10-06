@@ -105,3 +105,21 @@ fn a_reload_keeps_the_search_and_the_selection(cx: &mut TestAppContext) {
     assert!(f.names().contains(&"new-eu".to_owned()));
     assert_eq!(f.read(|v| v.model().selected().cloned()), selected);
 }
+
+#[gpui::test]
+fn enter_connects_the_top_row_even_when_the_old_selection_still_matches(cx: &mut TestAppContext) {
+    // `alpha-prod` is the default top row, so it starts selected; "prod" matches it too, but
+    // the exact name ranks first.
+    let mut f = Fixture::open(cx, named(&["alpha-prod", "prod"]));
+    assert_eq!(f.names(), ["alpha-prod", "prod"]);
+    f.type_text("prod");
+    assert_eq!(f.names()[0], "prod");
+    assert_eq!(f.read(|v| v.model().selected_index()), Some(0));
+    f.keys("enter");
+    assert_eq!(
+        f.recorder.sent(),
+        [oxikube_domain::command::Command::ClusterConnect {
+            cluster: super::id("prod")
+        }]
+    );
+}

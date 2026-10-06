@@ -54,14 +54,8 @@ impl CatalogView {
     fn header(&self, cx: &Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
-        let count = if self.model.is_searching() {
-            format!("{} of {}", self.model.visible_len(), self.model.total())
-        } else {
-            match self.model.total() {
-                1 => "1 cluster".to_owned(),
-                n => format!("{n} clusters"),
-            }
-        };
+        let count = self.model.count_label();
+        let selector = format!("catalog-count:{count}");
         h_flex()
             .flex_none()
             .gap(u(tokens.spacing.lg))
@@ -79,7 +73,7 @@ impl CatalogView {
             .child(
                 div()
                     .id("catalog-count")
-                    .debug_selector(|| "catalog-count".into())
+                    .debug_selector(move || selector)
                     .text_color(colors.text_muted)
                     .child(count),
             )
