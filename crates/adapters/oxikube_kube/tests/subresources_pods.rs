@@ -16,13 +16,7 @@ use oxikube_testkit::images;
 use serde_json::json;
 
 use common::subresources::{Env, is_ready, live_pod, pod_gvk, running_pod, setup};
-use common::wait_until;
-use std::time::Duration;
-
-/// How long a pod may take to schedule and become Ready. Not a workaround: the pods of the
-/// large-list tests no longer reach the scheduler (`pending_pod`, E04-B01), so a pod schedules in
-/// well under a second and the usual deadline holds.
-const DEADLINE: Duration = common::DEADLINE;
+use common::{DEADLINE, wait_until};
 
 /// Creates pod `name` and waits until it is Ready.
 async fn ready_pod(env: &Env, name: &str, labels: &[(&str, &str)]) {
