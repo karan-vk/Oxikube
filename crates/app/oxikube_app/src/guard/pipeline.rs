@@ -64,6 +64,15 @@ impl MutationGuard {
             .await
             .map_err(DispatchError::AuditUnavailable)?;
 
+        // Armed before the handler: if this future is dropped while the handler runs,
+        // the attempt still lands in the audit backlog (as `Cancelled`).
+        let attempt = self.audit.begin(
+            &ctx.who,
+            ctx.initiator,
+            meta.id.as_str(),
+            target,
+            ctx.dry_run,
+        );
         let mutation = Mutation::new(cluster.clone(), writer, ctx.dry_run);
         let cx = HandlerContext::new(
             ctx.initiator,
@@ -73,20 +82,12 @@ impl MutationGuard {
         );
         let result = handler.handle(command, cx).await;
 
-        let outcome = match result {
+        attempt.finish(match result {
             Ok(_) => AuditOutcome::Succeeded,
             Err(_) => AuditOutcome::Failed,
-        };
-        let record = self.audit.entry(
-            &ctx.who,
-            ctx.initiator,
-            meta.id.as_str(),
-            target,
-            ctx.dry_run,
-            outcome,
-        );
+        });
         self.audit
-            .record(record)
+            .flush()
             .await
             .map_err(DispatchError::AuditFailed)?;
         result

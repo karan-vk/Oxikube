@@ -177,6 +177,43 @@ pub(crate) struct Harness {
 
 impl Harness {
     pub fn new() -> Self {
+        Self::with_extra(|_, _| Ok(()))
+    }
+
+    /// The standard harness plus `node::Cordon`, whose handler sends its write and
+    /// then never finishes (a dispatch that is still in flight when its caller gives
+    /// up).
+    pub fn with_hanging_cordon() -> Self {
+        Self::with_extra(|reg, calls| {
+            let calls = calls.clone();
+            reg.register(
+                declared(CommandId::NODE_CORDON),
+                move |cmd: Command, cx: HandlerContext| {
+                    record(&calls, &cx, cmd.id());
+                    async move {
+                        let mutation = cx.require_mutation()?;
+                        let target = cmd.target().expect("cordon has a target");
+                        mutation
+                            .writer()
+                            .delete(
+                                &target.gvk,
+                                target.namespace(),
+                                &target.name,
+                                &mutation.delete_options(),
+                            )
+                            .await?;
+                        futures::future::pending::<()>().await;
+                        Ok(CommandOutput::none())
+                    }
+                },
+            )
+        })
+    }
+
+    /// The standard harness plus the commands `extra` registers.
+    fn with_extra(
+        extra: impl FnOnce(&mut CommandRegistry, &Calls) -> Result<(), RegisterError>,
+    ) -> Self {
         let connector = Arc::new(FakeClusterConnectorPort::new());
         let source = Arc::new(
             FakeClusterSourcePort::new()
@@ -194,6 +231,9 @@ impl Harness {
         registry
             .install("test_views", |reg| register_reads(reg, &calls, &manager))
             .expect("reads register");
+        registry
+            .install("test_extra", |reg| extra(reg, &calls))
+            .expect("extra commands register");
         let guard = MutationGuard::new(manager.clone(), state.clone(), clock);
         Self {
             bus: CommandBus::new(registry, guard),

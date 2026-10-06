@@ -30,7 +30,9 @@
 //! * **Execute**: the handler gets a [`Mutation`], the only way to a `ResourceWriter`.
 //! * **Audit**: one [`AuditRecord`](oxikube_domain::audit::AuditRecord) per attempt
 //!   (`Succeeded`, `Failed`, `Denied`, `Cancelled`) through [`AuditLog`].
-//!   Failing to audit fails the mutation closed (see [`crate::audit`]).
+//!   Failing to audit fails the mutation closed (see [`crate::audit`]). The record is
+//!   armed before the handler runs, so a dispatch future dropped mid-handler is still
+//!   audited (as `Cancelled`).
 //!
 //! The checks before the handler are synchronous and in memory; a confirmation request
 //! is returned before any `.await`.

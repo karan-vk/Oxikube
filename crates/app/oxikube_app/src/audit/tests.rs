@@ -7,6 +7,7 @@ use oxikube_domain::OxiError;
 use oxikube_domain::audit::{AuditOutcome, AuditRecord, Initiator};
 use oxikube_ports::ClockPort;
 use oxikube_testkit::{FakeClockPort, FakeStatePort, StateCall};
+use std::time::Duration;
 
 use super::{AuditLog, MAX_AUDIT_BACKLOG};
 use crate::testing::pod;
@@ -135,4 +136,52 @@ fn the_backlog_is_bounded() {
         format!("p{extra}"),
         "the oldest were dropped"
     );
+}
+
+fn begin<'a>(log: &'a AuditLog, name: &str) -> super::AuditAttempt<'a> {
+    log.begin(
+        "alice",
+        Initiator::Agent,
+        "pod::Delete",
+        pod("a", name),
+        true,
+    )
+}
+
+#[test]
+fn a_dropped_attempt_is_queued_as_cancelled() {
+    let f = fixture();
+    drop(begin(&f.log, "web-0"));
+    assert_eq!(f.log.backlog_len(), 1, "queued without any await");
+    assert!(f.state.recorded_calls().is_empty());
+
+    f.log.ensure_writable().now_or_never().unwrap().unwrap();
+    let log = f.state.audit_log();
+    assert_eq!(log.len(), 1);
+    assert_eq!(log[0].outcome, AuditOutcome::Cancelled);
+    assert_eq!(log[0].initiator, Initiator::Agent);
+    assert!(log[0].dry_run);
+}
+
+#[test]
+fn a_finished_attempt_carries_its_outcome_and_end_time() {
+    let f = fixture();
+    let attempt = begin(&f.log, "web-0");
+    f.clock.advance(Duration::from_secs(5));
+    attempt.finish(AuditOutcome::Failed);
+    assert_eq!(f.log.backlog_len(), 1);
+    f.log.flush().now_or_never().unwrap().unwrap();
+    let log = f.state.audit_log();
+    assert_eq!(log.len(), 1, "finishing disarms the drop record");
+    assert_eq!(log[0].outcome, AuditOutcome::Failed);
+    assert_eq!(log[0].ts, f.clock.now());
+}
+
+#[test]
+fn a_record_is_queued_even_if_its_write_is_never_polled() {
+    let f = fixture();
+    drop(f.log.record(entry(&f.log, "one")));
+    assert_eq!(f.log.backlog_len(), 1);
+    f.log.ensure_writable().now_or_never().unwrap().unwrap();
+    assert_eq!(f.state.audit_log().len(), 1);
 }

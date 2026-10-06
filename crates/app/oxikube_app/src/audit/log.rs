@@ -1,14 +1,17 @@
 //! [`AuditLog`]: batched, fail-closed appends of [`AuditRecord`]s through `StatePort`.
 
 use std::collections::VecDeque;
+use std::future::Future;
 use std::sync::Arc;
 
-use futures::lock::Mutex;
 use oxikube_domain::OxiResult;
 use oxikube_domain::audit::{AuditOutcome, AuditRecord, Initiator};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::redact::redact;
 use oxikube_ports::{ClockPort, StatePort};
+use parking_lot::Mutex;
+
+use super::attempt::AuditAttempt;
 
 /// Most records kept in memory while the store refuses writes. When the backlog is
 /// full the oldest record is dropped (and logged); mutations are refused all that time,
@@ -17,13 +20,18 @@ pub const MAX_AUDIT_BACKLOG: usize = 1024;
 
 /// The writer of the audit trail. See the [module docs](super).
 ///
-/// Cheap to share behind an `Arc`; writes are serialised by an async lock that is held
-/// across the `append_audit` call, so a flush that is in flight is never mistaken for a
-/// healthy log by a concurrent mutation.
+/// Cheap to share behind an `Arc`. Records are queued in a synchronous backlog the
+/// moment they are handed over (so a record survives its caller being cancelled), and
+/// appends are serialised by an async lock held across the `append_audit` call, so a
+/// flush that is in flight is never mistaken for a healthy log by a concurrent mutation.
 pub struct AuditLog {
     state: Arc<dyn StatePort>,
     clock: Arc<dyn ClockPort>,
+    /// Records accepted but not yet stored, oldest first. Never held across an
+    /// `.await`, so `Drop` code can queue into it.
     backlog: Mutex<VecDeque<AuditRecord>>,
+    /// Serialises appends; held across `append_audit`.
+    writer: futures::lock::Mutex<()>,
 }
 
 impl std::fmt::Debug for AuditLog {
@@ -39,6 +47,7 @@ impl AuditLog {
             state,
             clock,
             backlog: Mutex::new(VecDeque::new()),
+            writer: futures::lock::Mutex::new(()),
         }
     }
 
@@ -63,17 +72,44 @@ impl AuditLog {
         )
     }
 
+    /// Opens the record of a mutation that is about to run. The returned
+    /// [`AuditAttempt`] queues its final record when it is
+    /// [finished](AuditAttempt::finish), or a `Cancelled` record when it is dropped
+    /// first (the caller's future was cancelled while the mutation was in flight).
+    /// Either way the record is in the backlog without any `.await`; write it with
+    /// [`flush`](Self::flush).
+    pub fn begin(
+        &self,
+        who: &str,
+        initiator: Initiator,
+        cmd: &str,
+        target: ResourceRef,
+        dry_run: bool,
+    ) -> AuditAttempt<'_> {
+        let record = self.entry(
+            who,
+            initiator,
+            cmd,
+            target,
+            dry_run,
+            AuditOutcome::Cancelled,
+        );
+        AuditAttempt::new(self, record)
+    }
+
     /// Appends `record` (after any backlog, in order).
+    ///
+    /// The record joins the backlog when this is called, before the returned future is
+    /// first polled, so dropping the future never loses it: the next
+    /// [`flush`](Self::flush) writes it.
     ///
     /// # Errors
     ///
     /// The store's error when the append fails; the record (and the backlog) is kept
-    /// and retried by the next [`record`](Self::record) or
-    /// [`ensure_writable`](Self::ensure_writable).
-    pub async fn record(&self, record: AuditRecord) -> OxiResult<()> {
-        let mut backlog = self.backlog.lock().await;
-        backlog.push_back(record);
-        self.flush_locked(&mut backlog).await
+    /// and retried by the next [`record`](Self::record) or [`flush`](Self::flush).
+    pub fn record(&self, record: AuditRecord) -> impl Future<Output = OxiResult<()>> + '_ {
+        self.enqueue(record);
+        self.flush()
     }
 
     /// Flushes the backlog. `Ok` means the log is writable and a mutation may run.
@@ -83,27 +119,29 @@ impl AuditLog {
     /// The store's error when the backlog could not be written; the caller must not
     /// mutate (fail closed).
     pub async fn ensure_writable(&self) -> OxiResult<()> {
-        let mut backlog = self.backlog.lock().await;
-        self.flush_locked(&mut backlog).await
+        self.flush().await
     }
 
-    /// How many records are waiting for the store to accept writes again (a snapshot for
-    /// status display and tests; reads `0` while a write is in flight).
-    pub fn backlog_len(&self) -> usize {
-        self.backlog.try_lock().map_or(0, |b| b.len())
-    }
-
-    async fn flush_locked(&self, backlog: &mut VecDeque<AuditRecord>) -> OxiResult<()> {
-        if backlog.is_empty() {
+    /// Writes every queued record in one batch.
+    ///
+    /// # Errors
+    ///
+    /// The store's error; the records stay queued (up to [`MAX_AUDIT_BACKLOG`]).
+    pub async fn flush(&self) -> OxiResult<()> {
+        let _writer = self.writer.lock().await;
+        let batch: Vec<AuditRecord> = self.backlog.lock().iter().cloned().collect();
+        if batch.is_empty() {
             return Ok(());
         }
-        let batch = backlog.make_contiguous();
-        match self.state.append_audit(batch).await {
+        match self.state.append_audit(&batch).await {
             Ok(()) => {
-                backlog.clear();
+                // Only the holder of `writer` removes records, and new ones are pushed
+                // at the back, so the batch is still the front of the queue.
+                self.backlog.lock().drain(..batch.len());
                 Ok(())
             }
             Err(err) => {
+                let mut backlog = self.backlog.lock();
                 let excess = backlog.len().saturating_sub(MAX_AUDIT_BACKLOG);
                 if excess > 0 {
                     backlog.drain(..excess);
@@ -116,5 +154,22 @@ impl AuditLog {
                 Err(err)
             }
         }
+    }
+
+    /// How many records are waiting to be written (a snapshot for status display and
+    /// tests; includes a batch whose write is in flight).
+    pub fn backlog_len(&self) -> usize {
+        self.backlog.lock().len()
+    }
+
+    /// Queues `record` behind the backlog without writing it. Synchronous, so it is
+    /// safe from `Drop`.
+    pub(super) fn enqueue(&self, record: AuditRecord) {
+        self.backlog.lock().push_back(record);
+    }
+
+    /// Stamps `record` with the current time (the moment the attempt ended).
+    pub(super) fn stamp(&self, record: &mut AuditRecord) {
+        record.ts = self.clock.now();
     }
 }

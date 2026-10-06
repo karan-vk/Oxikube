@@ -17,15 +17,23 @@
 //!   the backlog first. While that fails the guard refuses the mutation without calling
 //!   any port, so at most the one mutation whose own record failed ever runs unaudited
 //!   on disk, and its record is written as soon as the store recovers.
+//! * a record is queued **synchronously** before anything can cancel it: the guard arms
+//!   an [`AuditAttempt`] before the handler runs, and the attempt queues the handler's
+//!   outcome, or `Cancelled` when the dispatch future is dropped mid-handler (the write
+//!   may already have reached the API server). [`AuditLog::record`] queues its record
+//!   when it is called. A dropped caller therefore never leaves a mutation without a
+//!   record; the next flush writes it.
 //!
 //! # Secrets
 //!
 //! Records carry no bodies by construction. The free-form `who` field is passed through
 //! [`redact`](oxikube_domain::redact::redact) before it is stored (non-negotiable 5).
 
+mod attempt;
 mod log;
 
 #[cfg(test)]
 mod tests;
 
+pub use attempt::AuditAttempt;
 pub use log::{AuditLog, MAX_AUDIT_BACKLOG};
