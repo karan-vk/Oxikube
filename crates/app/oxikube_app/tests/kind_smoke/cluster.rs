@@ -97,13 +97,11 @@ impl Kind {
 
 /// The catalog entry of `context` as a source would list it.
 pub fn catalog_entry(context: &ContextName) -> ClusterContext {
-    ClusterContext {
-        cluster: ClusterId::new("kind-smoke", context),
-        context: context.clone(),
-        source: SourceId("kind-smoke".into()),
-        server: None,
-        default_namespace: None,
-    }
+    ClusterContext::new(
+        ClusterId::new("kind-smoke", context),
+        context.clone(),
+        SourceId("kind-smoke".into()),
+    )
 }
 
 /// A service account in `namespace` that may `get`, `list` and `watch` pods there and nothing
