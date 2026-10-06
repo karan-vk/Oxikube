@@ -122,7 +122,12 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             read_only: None,
         },
         "namespace::Select" => Command::NamespaceSelect {
+            cluster,
             namespaces: vec!["default".into()],
+        },
+        "namespace::ToggleFavourite" => Command::NamespaceToggleFavourite {
+            cluster,
+            namespace: "default".into(),
         },
         "node::Cordon" => Command::NodeCordon {
             target: node(name, "worker-1"),
