@@ -96,6 +96,7 @@ async fn a_label_selector_is_applied_by_the_api_server() {
         StoreRuntime {
             spawner,
             clock: Arc::new(FakeClockPort::default()),
+            probe: None,
         },
         StoreOptions::default(),
     );
