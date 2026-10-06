@@ -15,6 +15,10 @@
 //! cost in the app; the whole-frame figure also holds the headless context's own redraw when the
 //! coalesced notify lands (a test-mode context draws dirty windows as effects flush), so with
 //! churn it counts two draws per frame where the app draws once per vsync.
+//!
+//! `OXIKUBE_BENCH_TYPE=pod-0123` (E07-S04) types that into the filter bar while the feed churns
+//! and the table scrolls: one more character every six frames (the first applies at once, the
+//! rest after the bar's debounce), then back out one character at a time.
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
@@ -61,6 +65,16 @@ fn step() -> usize {
         .and_then(|v| v.parse().ok())
         .unwrap_or(3)
 }
+
+/// The text typed into the filter bar during the run, if any.
+fn typed() -> Option<String> {
+    std::env::var("OXIKUBE_BENCH_TYPE")
+        .ok()
+        .filter(|t| !t.is_empty())
+}
+
+/// How many frames pass between two keystrokes.
+const KEY_EVERY: usize = 6;
 
 fn pod_named(i: usize, version: usize) -> Resource {
     let mut r = pod()
@@ -139,12 +153,33 @@ fn main() {
         .expect("the table");
     let rows = cx.update(|cx| view.read(cx).read_rows(cx, |d| d.rows().len()));
     assert_eq!(rows, PODS, "the store listed every pod");
+    if let Some(text) = typed() {
+        println!("typing {text:?} into the filter bar while the feed churns");
+    }
 
     let recorder = Arc::new(oxikube_runtime::perf::Recorder::new());
     oxikube_runtime::perf::install(recorder.clone());
     let mut frame_ms = Vec::with_capacity(FRAMES);
     let mut draw_ms = Vec::with_capacity(FRAMES);
+    let typing = typed();
     for frame in 0..FRAMES {
+        if let Some(text) = &typing
+            && frame % KEY_EVERY == 0
+        {
+            // Type forward through the text, then back out.
+            let n = frame / KEY_EVERY;
+            let len = text.chars().count();
+            let k = if n <= len {
+                n
+            } else {
+                (2 * len).saturating_sub(n)
+            };
+            let current: String = text.chars().take(k).collect();
+            cx.update_window(window.into(), |_, window, cx| {
+                view.update(cx, |table, cx| table.set_filter_text(&current, window, cx));
+            })
+            .expect("type");
+        }
         let started = Instant::now();
         ports.resources.clock().advance(FRAME);
         cx.run_until_parked();

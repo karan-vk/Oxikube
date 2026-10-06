@@ -29,16 +29,20 @@ use super::states::{poll_warnings, scope_label};
 use super::view::{ResourceTable, ResourceTableDeps};
 
 impl ResourceTable {
-    /// The sort the store keeps the rows in: the layout's column through the provider's typed
-    /// cell keys, or the store's default (namespace, name).
-    pub(super) fn sort_key(&self, cx: &gpui::App) -> SortKey {
-        self.table.read(cx, |d| match d.layout.sort() {
-            None => SortKey::default(),
-            Some((column, descending)) => SortKey {
+    /// The sort the user chose: the layout's column through the provider's typed cell keys.
+    pub(super) fn chosen_sort(&self, cx: &gpui::App) -> Option<SortKey> {
+        self.table.read(cx, |d| {
+            d.layout.sort().map(|(column, descending)| SortKey {
                 field: SortField::Cell(CellSortKey::new(column.clone(), d.provider.clone())),
                 descending: *descending,
-            },
+            })
         })
+    }
+
+    /// The sort the store keeps the rows in: the chosen column, else best match first while a
+    /// fuzzy filter is on, else the store's default (namespace, name).
+    pub(super) fn sort_key(&self, cx: &gpui::App) -> SortKey {
+        self.filter_parts.sort(self.chosen_sort(cx))
     }
 
     /// Hands the layout's sort to the subscription (the store re-sorts off the UI thread and
@@ -77,7 +81,8 @@ impl ResourceTable {
             return;
         }
         let query = StoreQuery::new(self.kind.gvk.clone(), scope)
-            .with_filter(self.filter.clone())
+            .with_filter(self.filter_parts.filter.clone())
+            .with_selector(self.filter_parts.selector.clone())
             .with_sort(self.sort_key(cx));
         let plan = store.plan(&self.kind.gvk).kind;
         // Before the feed opens: the server's warnings are not replayed.
@@ -143,7 +148,15 @@ impl ResourceTable {
             ));
             self.set_provider(provider, cx);
         }
-        let StoreDelta { rows, state, .. } = delta;
+        let StoreDelta {
+            rows,
+            state,
+            len,
+            total,
+            ..
+        } = delta;
+        self.filter
+            .update(cx, |bar, cx| bar.set_counts(len, total, cx));
         let selection_before = self.table.read(cx, |d| d.selection.len());
         let selection_after = self.table.update_quiet(cx, |d| {
             d.state = state;

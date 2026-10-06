@@ -55,7 +55,7 @@ fn ns(name: &str) -> FeedScope {
 
 /// A feed entry for `scope` whose cache holds `objects` (no subscriber registered).
 fn entry(scope: FeedScope, objects: &[(&str, &str)]) -> Arc<FeedEntry> {
-    let key = FeedKey { gvk: pods(), scope };
+    let key = FeedKey::new(pods(), scope);
     let request = FeedRequest {
         key: key.clone(),
         kind: FeedKind::Full,
@@ -76,7 +76,11 @@ fn entry(scope: FeedScope, objects: &[(&str, &str)]) -> Arc<FeedEntry> {
 fn relisted() -> SubShared {
     let shared = SubShared::new(&all(pods()));
     shared.attach_part(&ns("x"), &entry(ns("x"), &[]).state.lock());
-    shared.apply_change(&ns("x"), &upsert(vec![obj("x", "c"), obj("x", "a")], true));
+    shared.apply_change(
+        &ns("x"),
+        &upsert(vec![obj("x", "c"), obj("x", "a")], true),
+        2,
+    );
     assert_eq!(snapshot(&shared), ["x/a", "x/c"]);
     shared
 }
@@ -94,7 +98,7 @@ fn the_ui_polls_without_waiting_while_the_index_is_rebuilt_and_misses_no_change(
     );
     assert_eq!(shared.state(), FeedState::Ready);
     // A change arriving meanwhile is queued, not lost.
-    shared.apply_change(&ns("x"), &upsert(vec![obj("x", "b")], false));
+    shared.apply_change(&ns("x"), &upsert(vec![obj("x", "b")], false), 3);
     assert!(poll(&shared).is_pending());
 
     assert!(shared.check_in(checkout));
@@ -199,5 +203,56 @@ fn rebuilds_racing_live_feeds_on_other_threads_lose_no_change() {
     cached.sort_by_key(|o| o.key());
     let st = shared.inner.lock();
     assert!(st.building.is_none() && st.unseeded.is_empty());
+    assert_eq!(names(&st.index.snapshot()), names(&cached));
+}
+
+#[test]
+fn narrowing_racing_live_feeds_loses_no_change() {
+    use super::super::filter::{NameFilter, NameMatcher, TextPattern};
+    let narrower = StoreFilter {
+        pattern: Some(NameFilter::new(NameMatcher::Text(
+            TextPattern::compile("p0").expect("a substring"),
+        ))),
+        ..StoreFilter::default()
+    };
+    let (x, y) = (entry(ns("x"), &[]), entry(ns("y"), &[]));
+    let shared = Arc::new(SubShared::new(&all(pods())));
+    for (part, e) in [(ns("x"), &x), (ns("y"), &y)] {
+        shared.attach_part(&part, &e.state.lock());
+        e.state.lock().subscribers.push((1, shared.clone()));
+    }
+    let done = Arc::new(AtomicUsize::new(0));
+    let feeds = [
+        churn(x.clone(), "x", done.clone()),
+        churn(y.clone(), "y", done.clone()),
+    ];
+    let parts = || vec![(ns("x"), Arc::downgrade(&x)), (ns("y"), Arc::downgrade(&y))];
+    // The view widens (a reseed) and narrows (in place) while the feeds churn.
+    let mut narrowed = 0;
+    while feeds.iter().any(|f| !f.is_finished()) {
+        if done.load(Ordering::Relaxed) < 2000 {
+            shared.reset(StoreFilter::default(), SortKey::default());
+            block_on(seed(Arc::downgrade(&shared), parts()));
+            if let Some(task) = shared.narrowing(narrower.clone(), SortKey::default()) {
+                block_on(task);
+                narrowed += 1;
+            }
+        }
+        let _ = poll(&shared);
+    }
+    for feed in feeds {
+        feed.join().expect("feed thread");
+    }
+    assert!(narrowed > 0, "the in-place path ran");
+
+    let mut cached: Vec<Arc<StoreObject>> = [&x, &y]
+        .iter()
+        .flat_map(|e| e.state.lock().cache.values().cloned().collect::<Vec<_>>())
+        .collect();
+    cached.sort_by_key(|o| o.key());
+    let st = shared.inner.lock();
+    assert!(st.building.is_none() && st.unseeded.is_empty());
+    let filter = st.index.filter().clone();
+    cached.retain(|o| filter.matches(o));
     assert_eq!(names(&st.index.snapshot()), names(&cached));
 }

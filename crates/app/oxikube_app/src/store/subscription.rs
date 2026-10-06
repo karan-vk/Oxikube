@@ -11,10 +11,12 @@ use oxikube_domain::session::WatchScope;
 
 use super::delta::{FeedState, StoreDelta};
 use super::entry::{FeedEntry, SubId};
+use super::filter::FilterParts;
 use super::mailbox::{SubShared, seed};
 use super::object::FeedScope;
 use super::policy::FeedKind;
 use super::query::{StoreFilter, StoreQuery};
+use super::selector::LabelSelector;
 use super::service::StoreInner;
 use super::sort::SortKey;
 use super::spawn::TaskGuard;
@@ -70,9 +72,14 @@ impl Subscription {
     }
 
     fn attach(&mut self, part: FeedScope, seed_from: &[Arc<FeedEntry>]) {
-        let entry = self
-            .store
-            .attach(&self.query.gvk, &part, self.id, &self.shared, seed_from);
+        let entry = self.store.attach(
+            &self.query.gvk,
+            &part,
+            self.query.selector.as_ref(),
+            self.id,
+            &self.shared,
+            seed_from,
+        );
         self.kind = entry.kind();
         self.feeds.insert(part, entry);
     }
@@ -108,18 +115,58 @@ impl Subscription {
     }
 
     /// Replaces the in-app filter; the next item is a snapshot. No feed restarts.
+    ///
+    /// A filter that [narrows](StoreFilter::narrows) the current one (typing one more character
+    /// of a name) is applied to the rows the subscription already holds instead of the whole
+    /// cache.
     pub fn set_filter(&mut self, filter: StoreFilter) {
-        if self.query.filter != filter {
-            self.query.filter = filter;
-            self.reseed();
-        }
+        let (selector, sort) = (self.query.selector.clone(), self.query.sort.clone());
+        self.update(filter, selector, sort);
     }
 
     /// Replaces the sort order; the next item is a snapshot. No feed restarts.
     pub fn set_sort(&mut self, sort: SortKey) {
-        if self.query.sort != sort {
-            self.query.sort = sort;
-            self.reseed();
+        let (filter, selector) = (self.query.filter.clone(), self.query.selector.clone());
+        self.update(filter, selector, sort);
+    }
+
+    /// Replaces the server-side label selector (`/-l`): the subscription's feeds are re-keyed
+    /// with it, so the API returns only the matching objects. Feeds with the old selector are
+    /// released (and reused if the selector comes back within the store's grace period); the
+    /// new ones are seeded from them (the objects that match) and the next item is a snapshot.
+    /// The scope is untouched, so the selector composes with the namespace selection. An empty
+    /// selector reads every object again.
+    pub fn set_selector(&mut self, selector: Option<LabelSelector>) {
+        let (filter, sort) = (self.query.filter.clone(), self.query.sort.clone());
+        self.update(filter, selector, sort);
+    }
+
+    /// Applies a parsed filter and the sort that goes with it in one step (a fuzzy filter ranks,
+    /// see [`FilterParts::sort`]): one re-seed whatever changed, not one per part.
+    pub fn set_filter_parts(&mut self, parts: FilterParts, sort: SortKey) {
+        self.update(parts.filter, parts.selector, sort);
+    }
+
+    fn update(&mut self, filter: StoreFilter, selector: Option<LabelSelector>, sort: SortKey) {
+        let selector = selector.filter(|s| !s.is_empty());
+        let rekey = self.query.selector != selector;
+        let narrows = !rekey && self.query.filter != filter && filter.narrows(&self.query.filter);
+        if !rekey && self.query.filter == filter && self.query.sort == sort {
+            return;
+        }
+        let narrowing = narrows
+            .then(|| self.shared.narrowing(filter.clone(), sort.clone()))
+            .flatten();
+        self.query.filter = filter;
+        self.query.sort = sort;
+        if let Some(task) = narrowing {
+            self.seeding = Some(self.store.spawn(task));
+            return;
+        }
+        self.reseed();
+        if rekey {
+            self.query.selector = selector;
+            self.rekey();
         }
     }
 
@@ -136,6 +183,22 @@ impl Subscription {
     fn reseed(&mut self) {
         self.shared
             .reset(self.query.filter.clone(), self.query.sort.clone());
+        self.spawn_seed();
+    }
+
+    /// Moves every part to the feed keyed with the query's (new) selector. The caller has reset
+    /// the index; the old feeds are released first, so a swap that fits the watch budget is
+    /// never refused, and stay alive to seed the new ones.
+    fn rekey(&mut self) {
+        let leaving: Vec<Arc<FeedEntry>> = std::mem::take(&mut self.feeds).into_values().collect();
+        for entry in &leaving {
+            self.shared.detach_part(&entry.key.scope);
+            self.store.detach(entry, self.id);
+        }
+        for part in self.query.parts() {
+            self.attach(part, &leaving);
+        }
+        self.shared.hold_until_data();
         self.spawn_seed();
     }
 

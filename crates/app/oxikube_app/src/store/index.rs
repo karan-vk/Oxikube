@@ -19,7 +19,7 @@ use std::sync::Arc;
 use super::delta::RowOp;
 use super::object::{FeedScope, ObjectKey, StoreObject};
 use super::query::StoreFilter;
-use super::sort::{SortKey, SortValue};
+use super::sort::{SortField, SortKey, SortValue};
 
 /// Changes larger than this share of the index (and than [`BULK_MIN`]) are applied in bulk.
 const BULK_DIVISOR: usize = 4;
@@ -72,6 +72,22 @@ impl SortedIndex {
         size > BULK_MIN.max(self.rows.len() / BULK_DIVISOR)
     }
 
+    /// The value `object` is ranked by under this index's sort (and, for [`SortField::Relevance`],
+    /// its filter).
+    fn rank(&self, object: &StoreObject) -> SortValue {
+        if self.sort.field == SortField::Relevance {
+            return self
+                .filter
+                .pattern
+                .as_ref()
+                .and_then(|p| p.score(object.name()))
+                .map_or(SortValue::Missing, |score| {
+                    SortValue::Int(-i64::from(score))
+                });
+        }
+        self.sort.value_of(object)
+    }
+
     fn compare(&self, a: (&SortValue, &ObjectKey), b: (&SortValue, &ObjectKey)) -> Ordering {
         let ord = a.0.cmp(b.0).then_with(|| a.1.cmp(b.1));
         if self.sort.descending {
@@ -120,7 +136,7 @@ impl SortedIndex {
                 leave(self, &key, &mut dropped);
                 continue;
             }
-            let value = self.sort.value_of(object);
+            let value = self.rank(object);
             let member = Member {
                 value: value.clone(),
                 object: object.clone(),
@@ -231,6 +247,31 @@ impl SortedIndex {
     /// An empty index with the same filter and sort.
     pub fn empty_like(&self) -> Self {
         Self::new(self.filter.clone(), self.sort.clone())
+    }
+
+    /// Adopts `filter` (which [narrows](StoreFilter::narrows) the current one) and `sort`, keeping
+    /// only the members that still pass: one pass over the rows already in the index instead of a
+    /// scan of the whole cache. Rows are re-ranked and re-sorted only when the sort changed or
+    /// the filter ranks (a fuzzy query's scores move with the query); otherwise the surviving
+    /// rows keep their order.
+    pub fn narrow(&mut self, filter: StoreFilter, sort: SortKey) {
+        let resort = sort != self.sort || filter.pattern.as_ref().is_some_and(|p| p.ranks());
+        self.filter = filter;
+        self.sort = sort;
+        let mut members = std::mem::take(&mut self.members);
+        members.retain(|_, m| self.filter.matches(&m.object));
+        if resort {
+            for member in members.values_mut() {
+                member.value = self.rank(&member.object);
+            }
+        }
+        self.members = members;
+        if resort {
+            self.resort();
+        } else {
+            let members = &self.members;
+            self.rows.retain(|slot| members.contains_key(&slot.key));
+        }
     }
 
     /// Clears everything and adopts a new filter and sort.

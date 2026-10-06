@@ -246,6 +246,15 @@ pub enum Command {
         /// The kind listed.
         gvk: Gvk,
     },
+    /// Focus the filter bar of a kind's resource table (`/` in a table): the next keys type a
+    /// filter (`/text`, `/!text`, `/-l selector`, `/-f fuzzy`).
+    #[serde(rename = "table::FocusFilter")]
+    TableFocusFilter {
+        /// Cluster of the list.
+        cluster: ClusterId,
+        /// The kind listed.
+        gvk: Gvk,
+    },
     /// Open a resource's YAML.
     #[serde(rename = "resource::ViewYaml")]
     ResourceViewYaml {
@@ -396,6 +405,7 @@ impl Command {
             Command::ResourcePinDetail { .. } => CommandId::RESOURCE_PIN_DETAIL,
             Command::ResourceCopyLabel { .. } => CommandId::RESOURCE_COPY_LABEL,
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
+            Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
             Command::ResourceApply { .. } => CommandId::RESOURCE_APPLY,
@@ -574,6 +584,10 @@ mod tests {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
             },
+            Command::TableFocusFilter {
+                cluster: cluster(),
+                gvk: Gvk::new("", "v1", "Pod"),
+            },
             Command::ResourceViewYaml { target: pod() },
             Command::ResourceDelete {
                 target: deployment(),
@@ -747,6 +761,7 @@ mod tests {
                     | Command::ResourcePinDetail { .. }
                     | Command::ResourceCopyLabel { .. }
                     | Command::ResourceSelectAll { .. }
+                    | Command::TableFocusFilter { .. }
                     | Command::ResourceViewYaml { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }

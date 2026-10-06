@@ -1,7 +1,6 @@
 //! Retry, the filter clear and the details toggle: what the state view's buttons call.
 
-use gpui::Context;
-use oxikube_app::store::StoreFilter;
+use gpui::{Context, Window};
 use oxikube_domain::command::Command;
 
 use crate::table::view::{ResourceTable, ResourceTableEvent};
@@ -29,27 +28,10 @@ impl ResourceTable {
         cx.notify();
     }
 
-    /// Applies an in-app filter to the rows (the filter bar's, E07-S04). `label` is how the
-    /// filter reads in the "no matches" state.
-    pub fn set_filter(
-        &mut self,
-        filter: StoreFilter,
-        label: Option<String>,
-        cx: &mut Context<Self>,
-    ) {
-        let label = label.filter(|_| !filter.is_empty());
-        self.filter = filter.clone();
-        if let Some(subscription) = &mut self.subscription {
-            subscription.set_filter(filter);
-        }
-        self.table.update_quiet(cx, |d| d.filter = label);
-        cx.notify();
-    }
-
-    /// Clears the filter (the state view's "Clear filter"), and tells the owner so the filter bar
-    /// follows.
-    pub fn clear_filter(&mut self, cx: &mut Context<Self>) {
-        self.set_filter(StoreFilter::default(), None, cx);
+    /// Clears the filter (the state view's "Clear filter"): the bar empties, which applies the
+    /// empty filter, and the owner is told.
+    pub fn clear_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.filter.update(cx, |bar, cx| bar.clear(window, cx));
         cx.emit(ResourceTableEvent::FilterCleared);
     }
 

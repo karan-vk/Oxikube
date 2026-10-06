@@ -64,12 +64,18 @@ pub struct ColumnPrefs {
 ///
 /// `Validation` when the kind's name makes an invalid state key.
 pub fn prefs_key(gvk: &Gvk) -> OxiResult<StateKey> {
+    kind_key(PREFS_PREFIX, gvk)
+}
+
+/// The per-kind state key `<prefix><group>/<Kind>` (`core` for the core group); versions of a
+/// kind share it.
+pub(crate) fn kind_key(prefix: &str, gvk: &Gvk) -> OxiResult<StateKey> {
     let group = if gvk.group.is_empty() {
         "core"
     } else {
         &gvk.group
     };
-    StateKey::new(format!("{PREFS_PREFIX}{group}/{}", gvk.kind))
+    StateKey::new(format!("{prefix}{group}/{}", gvk.kind))
 }
 
 /// Reads and writes one kind's [`ColumnPrefs`].

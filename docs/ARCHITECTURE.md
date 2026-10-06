@@ -120,6 +120,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `resource::Delete` per object with per-object `ItemStatus` results and one audit record each. The guard's tier is target
   aware: `Command::effective_risk` raises `resource::Delete` of a Namespace, PersistentVolume, Node or a foreground
   (cascading) delete to type-the-name (`policy::confirm_tier_for`); an ordinary object takes a simple confirm.
+  Module `store::filter` (E07-S04) is the `/` filter's grammar and predicates: `parse` turns
+  `foo`, `!foo`, `-l k=v` and `-f fuzzy` into a `FilterExpr` (pattern compiled once per edit), and
+  `FilterExpr::parts` splits it into a `StoreFilter` (name regex or substring, inverse, fuzzy:
+  applied by the store to its cache) and a label selector. A selector is applied by the server:
+  `Subscription::set_selector` re-keys the subscription's feeds (`FeedKey` carries the selector)
+  without touching its scope, so it composes with the namespace selection. A filter that narrows
+  the previous one (one more character) is applied to the rows the subscription already holds, off
+  the UI thread (`SortedIndex::narrow`); anything else re-seeds from the cache. A fuzzy filter
+  ranks (`SortField::Relevance`, ties on the object key); `StoreDelta::total` is the cache size
+  before the filter, for `123 of 4,812`.
   Module `session::restore` (E06-S11): `SessionRestorer` reopens the last session. `prepare` reads
   the saved tabs (`ClusterTabsStore`, moved here from the workspace so the app layer can read what
   the tabs write), matches them against the catalog, opens each cluster as a `Disconnected`
@@ -422,6 +432,16 @@ Opening a row (`resource::Open`: Enter or double-click) shows the detail drawer
 (`oxikube_resources_ui::detail`, E07-S05) in the cluster tab's right dock. The detail subscribes to
 that one object on the feed the table already holds, so it starts no extra watch; "Pin as tab"
 (`resource::PinDetail`) hands the same entity to the workspace as an `Item`.
+
+The filter bar (E07-S04, `oxikube_resources_ui::filter`) sits in the table's toolbar. `/` is a key
+action that dispatches the `table::FocusFilter` command; the bus hands it back to `ResourceViews`,
+which focuses the bar, so the key, the palette and an agent run one behaviour. The bar parses each
+edit (to show the first error and keep the last good rows), applies the first keystroke at once,
+collapses the rest to one application per ~frame, and waits a quarter second before a label
+selector re-keys the feeds. While it has the focus the table's key context says `Editing`, so bare
+keys are text; `escape` clears and returns to the rows, `enter` returns without clearing. With
+`resource_table.persist_filter` on (default off) the filter text is saved per kind under
+`table.filter.<group>/<Kind>` and restored when the table opens.
 
 Core kinds use typed/metadata reflectors plus our own column definitions; CRDs and unknown kinds
 use the server-side Table API (kubectl-identical columns incl. `additionalPrinterColumns`).

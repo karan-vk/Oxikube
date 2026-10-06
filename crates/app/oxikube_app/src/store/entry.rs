@@ -87,7 +87,9 @@ impl FeedEntry {
                 source
                     .cache
                     .values()
-                    .filter(|o| self.key.scope.covers(o.namespace()))
+                    .filter(|o| {
+                        self.key.scope.covers(o.namespace()) && self.key.selects(&o.meta().labels)
+                    })
                     .map(|o| ObjectDelta::Applied(o.clone())),
             );
         }
@@ -111,10 +113,11 @@ impl FeedEntry {
             st.columns = Some(columns.clone());
         }
         let change = st.cache.apply(batch);
+        let cached = st.cache.len();
         let ready = change.restarted || matches!(st.feed_state, FeedState::Retrying { .. });
         if !change.is_empty() {
             for (_, sub) in &st.subscribers {
-                sub.apply_change(&self.key.scope, &change);
+                sub.apply_change(&self.key.scope, &change, cached);
             }
         }
         if ready && st.feed_state != FeedState::Ready {

@@ -32,6 +32,9 @@ impl Render for ResourceTable {
         let tokens = cx.colors();
         let count: SharedString = if selected > 0 {
             format!("{selected} of {rows} selected").into()
+        } else if !self.filter_parts.is_empty() {
+            // The filter bar says "3 of 7".
+            SharedString::default()
         } else {
             format!("{rows}").into()
         };
@@ -62,6 +65,7 @@ impl Render for ResourceTable {
                 .children(state.stale().map(|stale| {
                     stale_badge(stale, state.can_retry(), &cx.entity().downgrade(), cx)
                 }))
+                .child(self.filter.clone())
                 .child(div().flex_1())
                 .child(self.column_picker(cx));
         v_flex()
@@ -83,6 +87,8 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_select_all))
             .on_action(cx.listener(Self::on_clear))
             .on_action(cx.listener(Self::on_delete))
+            .on_action(cx.listener(Self::on_focus_filter))
+            .on_action(cx.listener(Self::on_clear_filter))
             .child(toolbar)
             .child(
                 div()

@@ -74,6 +74,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceOpenList { cluster, .. }
         | Command::ResourceRetryFeed { cluster, .. }
         | Command::ResourceSelectAll { cluster, .. }
+        | Command::TableFocusFilter { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::ResourceOpen { target }
         | Command::ResourceCopyName { target }

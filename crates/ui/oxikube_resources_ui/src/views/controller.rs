@@ -86,7 +86,8 @@ impl ResourceViews {
     }
 
     /// Applies one request, with the window it opens views in: what [`Self::apply`] does, plus
-    /// opening the detail drawer for `Open` and pinning it for `PinDetail`.
+    /// opening the detail drawer for `Open`, pinning it for `PinDetail` and focusing the filter bar
+    /// for `FocusFilter`.
     pub fn apply_in(&mut self, request: ViewRequest, window: &mut Window, cx: &mut Context<Self>) {
         match request {
             ViewRequest::Open(target) => {
@@ -96,13 +97,19 @@ impl ResourceViews {
             ViewRequest::PinDetail(target) => {
                 self.pin_detail(&target, window, cx);
             }
+            ViewRequest::FocusFilter { cluster, gvk } => {
+                // The tab's active table (a kind has one table per cluster tab).
+                if let Some(table) = self.tables(&cluster, &gvk, cx).into_iter().next() {
+                    table.update(cx, |table, cx| table.focus_filter(window, cx));
+                }
+            }
             other => self.apply(other, cx),
         }
     }
 
     /// Applies one request that needs no window: tells the tables, writes the clipboard.
     /// `Open` only reaches the tables here (their `OpenDetail` event); [`Self::apply_in`] also
-    /// opens the drawer, and `PinDetail` needs it, so it does nothing here.
+    /// opens the drawer, and `PinDetail` and `FocusFilter` need it, so they do nothing here.
     pub fn apply(&mut self, request: ViewRequest, cx: &mut Context<Self>) {
         match request {
             ViewRequest::PinDetail(_) => {}
@@ -130,6 +137,8 @@ impl ResourceViews {
                     table.update(cx, |table, cx| table.select_all(cx));
                 }
             }
+            // Needs the window; see `apply_in`.
+            ViewRequest::FocusFilter { .. } => {}
         }
     }
 

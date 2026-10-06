@@ -35,6 +35,11 @@ pub enum SortField {
     /// One table column of a [`ColumnProvider`], by its cells' typed sort keys (blank and
     /// pending cells last). The column the user clicked in a resource table.
     Cell(CellSortKey),
+    /// How well the name matches the subscription's fuzzy filter (`/-f`), best first when
+    /// ascending; objects the filter does not rank sort last. Ties break on the object key.
+    /// Computed by the subscriber's index from its filter, so [`SortKey::value_of`] alone
+    /// cannot rank by it.
+    Relevance,
 }
 
 /// A column of a [`ColumnProvider`] used as a sort field ([`SortField::Cell`]).
@@ -117,6 +122,8 @@ impl SortKey {
                 .and_then(|cells| cells.get(*i))
                 .map_or(SortValue::Missing, cell_value),
             SortField::Cell(key) => key.value_of(object),
+            // Needs the filter: the subscriber's index ranks (`SortedIndex::rank`).
+            SortField::Relevance => SortValue::Missing,
         }
     }
 }

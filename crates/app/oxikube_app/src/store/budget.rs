@@ -123,10 +123,7 @@ mod tests {
 
     fn request(priority: FeedPriority) -> FeedRequest {
         FeedRequest {
-            key: FeedKey {
-                gvk: Gvk::new("", "v1", "Pod"),
-                scope: FeedScope::Cluster,
-            },
+            key: FeedKey::new(Gvk::new("", "v1", "Pod"), FeedScope::Cluster),
             kind: FeedKind::Full,
             priority,
         }

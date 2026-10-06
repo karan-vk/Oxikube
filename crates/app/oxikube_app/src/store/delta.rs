@@ -163,6 +163,9 @@ pub struct StoreDelta {
     pub columns: Option<TableColumns>,
     /// The number of rows after this item is applied.
     pub len: usize,
+    /// How many objects the feeds hold before the in-app filter (the "of" in `123 of 4,812`).
+    /// Equals `len` without a filter. Maintained from the caches, never from rendering rows.
+    pub total: usize,
 }
 
 impl StoreDelta {

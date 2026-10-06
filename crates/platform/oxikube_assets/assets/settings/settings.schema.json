@@ -108,6 +108,9 @@
           ],
           "description": "`system` follows the OS reduce-motion preference, `on` and `off` override it."
         },
+        "resource_table": {
+          "$ref": "#/$defs/ResourceTableContent"
+        },
         "session": {
           "$ref": "#/$defs/SessionRestoreContent"
         },
@@ -368,6 +371,20 @@
           "type": "string"
         }
       ]
+    },
+    "ResourceTableContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about resource tables: the `resource_table` object of\n`settings.json`.",
+      "properties": {
+        "persist_filter": {
+          "description": "Remember the filter typed in each kind's table (the `/` bar) and restore it the next time\nthat table opens, like Freelens' persistent search. Off by default: a filter you forgot\nabout is a table that looks empty. The filter text is saved per kind (not per cluster).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     },
     "RestoreConnectSetting": {
       "description": "Which restored clusters connect at launch (`session.restore_connect`).",
@@ -646,6 +663,9 @@
         }
       ],
       "description": "`system` follows the OS reduce-motion preference, `on` and `off` override it."
+    },
+    "resource_table": {
+      "$ref": "#/$defs/ResourceTableContent"
     },
     "session": {
       "$ref": "#/$defs/SessionRestoreContent"

@@ -78,9 +78,9 @@ fn copy_name_writes_the_clipboard(cx: &mut TestAppContext) {
     f.connect_with([]);
     let views = f.views.clone();
     let target = ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "x", "web-0");
-    f.vcx.update(|_, cx| {
+    f.vcx.update(|window, cx| {
         views.update(cx, |views, cx| {
-            views.apply(ViewRequest::CopyName(target), cx)
+            views.apply_in(ViewRequest::CopyName(target), window, cx)
         })
     });
     let text = f
@@ -123,6 +123,7 @@ fn the_commands_reach_the_views_through_the_bus() {
     registry
         .install("oxikube_resources_ui", |r| register_commands(r, sink))
         .unwrap();
+    let sessions_handle = sessions.clone();
     let guard = MutationGuard::new(sessions, Arc::new(FakeStatePort::new()), clock);
     let bus = CommandBus::new(registry, guard);
     for id in RESOURCE_COMMANDS {
@@ -199,6 +200,25 @@ fn the_commands_reach_the_views_through_the_bus() {
     assert_eq!(
         requests.try_recv().ok(),
         Some(ViewRequest::SelectAll {
+            cluster: cluster(),
+            gvk: pods.clone(),
+        })
+    );
+    // `table::FocusFilter` moves focus only: no guard tier, so it also runs in read-only mode.
+    sessions_handle
+        .set_read_only(&cluster(), true)
+        .expect("open session");
+    block_on(bus.dispatch(
+        Command::TableFocusFilter {
+            cluster: cluster(),
+            gvk: pods.clone(),
+        },
+        ctx(),
+    ))
+    .unwrap();
+    assert_eq!(
+        requests.try_recv().ok(),
+        Some(ViewRequest::FocusFilter {
             cluster: cluster(),
             gvk: pods,
         })

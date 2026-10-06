@@ -20,6 +20,7 @@ use super::mailbox::SubShared;
 use super::object::{FeedKey, FeedScope};
 use super::policy::FeedPlan;
 use super::query::StoreQuery;
+use super::selector::LabelSelector;
 use super::spawn::{TaskGuard, spawn_guarded};
 use super::subscription::Subscription;
 use super::warnings::{WarningLedger, distinct};
@@ -205,14 +206,12 @@ impl StoreInner {
         self: &Arc<Self>,
         gvk: &Gvk,
         part: &FeedScope,
+        selector: Option<&LabelSelector>,
         id: SubId,
         sub: &Arc<SubShared>,
         seed_from: &[Arc<FeedEntry>],
     ) -> Arc<FeedEntry> {
-        let key = FeedKey {
-            gvk: gvk.clone(),
-            scope: part.clone(),
-        };
+        let key = FeedKey::new(gvk.clone(), part.clone()).with_selector(selector.cloned());
         let mut evicted = Vec::new();
         let mut entries = self.entries.lock();
         let created = !entries.contains_key(&key);

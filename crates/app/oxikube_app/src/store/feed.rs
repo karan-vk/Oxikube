@@ -62,20 +62,25 @@ pub(crate) async fn open(
     key: &FeedKey,
 ) -> OxiResult<NormalisedFeed> {
     let namespace = key.scope.namespace();
+    // The server applies the feed's label selector, so a large cluster ships only the matches.
+    let selector = key.selector.as_ref().map(ToString::to_string);
     Ok(match kind {
         FeedKind::Full | FeedKind::Metadata => {
-            let options = if kind == FeedKind::Metadata {
+            let mut options = if kind == FeedKind::Metadata {
                 WatchOptions::default().metadata_only()
             } else {
                 WatchOptions::default()
             };
+            options.label_selector.clone_from(&selector);
             let feed = ports.resources.watch(&key.gvk, namespace, &options).await?;
             feed.map(|item| item.map(from_resources)).boxed()
         }
         FeedKind::Table => {
+            let mut options = TableOptions::default();
+            options.list.label_selector = selector;
             let feed = ports
                 .tables
-                .table_feed(&key.gvk, namespace, &TableOptions::default())
+                .table_feed(&key.gvk, namespace, &options)
                 .await?;
             feed.map(|item| item.map(from_table)).boxed()
         }

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_domain::session::WatchScope;
 
+use super::filter::NameFilter;
 use super::object::{FeedScope, StoreObject};
 use super::selector::LabelSelector;
 use super::sort::SortKey;
@@ -22,6 +23,10 @@ pub struct StoreQuery {
     pub filter: StoreFilter,
     /// In-app sort order.
     pub sort: SortKey,
+    /// Label selector the server applies (`/-l`): the feeds this query reads are the ones keyed
+    /// with it, so the API returns only the matches. `None` reads every object. Unlike
+    /// [`StoreFilter::labels`], which filters cached objects, this changes what is fetched.
+    pub selector: Option<LabelSelector>,
 }
 
 impl StoreQuery {
@@ -32,6 +37,7 @@ impl StoreQuery {
             scope,
             filter: StoreFilter::default(),
             sort: SortKey::default(),
+            selector: None,
         }
     }
 
@@ -52,6 +58,13 @@ impl StoreQuery {
     #[must_use]
     pub fn with_sort(mut self, sort: SortKey) -> Self {
         self.sort = sort;
+        self
+    }
+
+    /// Sets the server-side label selector (an empty one reads everything).
+    #[must_use]
+    pub fn with_selector(mut self, selector: Option<LabelSelector>) -> Self {
+        self.selector = selector.filter(|s| !s.is_empty());
         self
     }
 
@@ -79,6 +92,8 @@ pub struct StoreFilter {
     pub namespaces: Option<BTreeSet<String>>,
     /// Label selector (`-l`; equality terms answered from the label index).
     pub labels: Option<LabelSelector>,
+    /// The name pattern of the `/` filter: text or regex, inverse, or fuzzy (E07-S04).
+    pub pattern: Option<NameFilter>,
 }
 
 impl StoreFilter {
@@ -104,6 +119,23 @@ impl StoreFilter {
             && self.name.is_none()
             && self.namespaces.is_none()
             && self.labels.as_ref().is_none_or(LabelSelector::is_empty)
+            && self.pattern.as_ref().is_none_or(NameFilter::is_empty)
+    }
+
+    /// Whether every object this filter passes is also passed by `older`, so applying it to
+    /// `older`'s rows gives the rows a full pass over the cache would (the table's "typed one
+    /// more character" case). Conservative: `false` means "recompute from the cache".
+    pub fn narrows(&self, older: &StoreFilter) -> bool {
+        let same_fields = self.text == older.text
+            && self.name == older.name
+            && self.namespaces == older.namespaces
+            && self.labels == older.labels;
+        same_fields
+            && match (&self.pattern, &older.pattern) {
+                (_, None) => true,
+                (None, Some(old)) => old.is_empty(),
+                (Some(new), Some(old)) => new == old || new.narrows(old),
+            }
     }
 
     /// Whether `object` passes.
@@ -119,6 +151,7 @@ impl StoreFilter {
                 .as_ref()
                 .is_none_or(|set| meta.namespace.as_deref().is_some_and(|ns| set.contains(ns)))
             && self.labels.as_ref().is_none_or(|s| s.matches(&meta.labels))
+            && self.pattern.as_ref().is_none_or(|p| p.matches(&meta.name))
     }
 }
 
