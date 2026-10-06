@@ -62,6 +62,11 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
     let mut cx = earlier.time(Stage::Assets, || {
         headless::headless_context_with_assets(Arc::new(oxikube_ui::Assets))
     });
+    // The mount's reads run on real Tokio threads (E07-S00), which wake the headless scheduler's
+    // tasks from outside its thread. Without this, each such wake makes the test scheduler record a
+    // symbolised `Backtrace` as a determinism error, which loads the binary's debug info: hundreds
+    // of MiB of RSS on Linux that the app, on the platform dispatcher, never pays.
+    cx.allow_parking();
     let env = StartupEnv {
         config: ConfigSource::Dir(scratch.join("config")),
         runtime: RuntimeChoice::Tokio,
