@@ -17,14 +17,22 @@ impl CommandId {
     pub const APP_QUIT: CommandId = CommandId::new("app::Quit");
     /// `cluster::ApplyPreset`: give a cluster a prod / staging / dev / none posture.
     pub const CLUSTER_APPLY_PRESET: CommandId = CommandId::new("cluster::ApplyPreset");
+    /// `cluster::CloseTab`: close a cluster's tab (disconnects it).
+    pub const CLUSTER_CLOSE_TAB: CommandId = CommandId::new("cluster::CloseTab");
     /// `cluster::Connect`: connect a cluster (open its session).
     pub const CLUSTER_CONNECT: CommandId = CommandId::new("cluster::Connect");
     /// `cluster::Disconnect`: disconnect a cluster or cancel the attempt.
     pub const CLUSTER_DISCONNECT: CommandId = CommandId::new("cluster::Disconnect");
+    /// `cluster::NextTab`: show the next cluster tab.
+    pub const CLUSTER_NEXT_TAB: CommandId = CommandId::new("cluster::NextTab");
+    /// `cluster::PreviousTab`: show the previous cluster tab.
+    pub const CLUSTER_PREVIOUS_TAB: CommandId = CommandId::new("cluster::PreviousTab");
     /// `cluster::Select`: make a cluster the active one.
     pub const CLUSTER_SELECT: CommandId = CommandId::new("cluster::Select");
     /// `cluster::SetColour`: set or clear a cluster's accent colour.
     pub const CLUSTER_SET_COLOUR: CommandId = CommandId::new("cluster::SetColour");
+    /// `cluster::SwitchTab`: show the nth cluster tab.
+    pub const CLUSTER_SWITCH_TAB: CommandId = CommandId::new("cluster::SwitchTab");
     /// `cluster::ToggleFavourite`: mark or unmark a cluster as a favourite.
     pub const CLUSTER_TOGGLE_FAVOURITE: CommandId = CommandId::new("cluster::ToggleFavourite");
     /// `cluster::ToggleReadOnly`: set or toggle a cluster's read-only mode.
@@ -86,13 +94,21 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
-    // Connecting reads from the cluster and changes nothing in it: not `mutating`, no guard tier.
     CommandMeta::read(
         CommandId::CLUSTER_APPLY_PRESET,
         "Apply Cluster Preset",
         CommandScope::Cluster,
         NONE,
     ),
+    // Closing a tab disconnects: it reads nothing and changes nothing in the cluster, so it is no
+    // mutation. The confirmation it may show (running operations) is a UI prompt, not a guard tier.
+    CommandMeta::read(
+        CommandId::CLUSTER_CLOSE_TAB,
+        "Close Cluster Tab",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Connecting reads from the cluster and changes nothing in it: not `mutating`, no guard tier.
     CommandMeta::read(
         CommandId::CLUSTER_CONNECT,
         "Connect Cluster",
@@ -106,6 +122,18 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     CommandMeta::read(
+        CommandId::CLUSTER_NEXT_TAB,
+        "Next Cluster Tab",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLUSTER_PREVIOUS_TAB,
+        "Previous Cluster Tab",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::CLUSTER_SELECT,
         "Select Cluster",
         CommandScope::Global,
@@ -115,6 +143,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::CLUSTER_SET_COLOUR,
         "Set Cluster Colour",
         CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLUSTER_SWITCH_TAB,
+        "Switch Cluster Tab",
+        CommandScope::Global,
         NONE,
     ),
     // Local catalog preference (StatePort), never a cluster change.

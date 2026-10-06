@@ -26,6 +26,25 @@
     }
   },
   {
+    // Cluster tabs (E06-S04): the nth cluster tab, and cycling through them. `cmd-w` (or
+    // `ctrl-w`) closes the displayed one, through `workspace::CloseActiveItem`.
+    "bindings": {
+      "cmd-1": ["cluster::SwitchTab", { "index": 1 }],
+      "cmd-2": ["cluster::SwitchTab", { "index": 2 }],
+      "cmd-3": ["cluster::SwitchTab", { "index": 3 }],
+      "cmd-4": ["cluster::SwitchTab", { "index": 4 }],
+      "cmd-5": ["cluster::SwitchTab", { "index": 5 }],
+      "cmd-6": ["cluster::SwitchTab", { "index": 6 }],
+      "cmd-7": ["cluster::SwitchTab", { "index": 7 }],
+      "cmd-8": ["cluster::SwitchTab", { "index": 8 }],
+      "cmd-9": ["cluster::SwitchTab", { "index": 9 }],
+      "ctrl-tab": "cluster::NextTab",
+      "ctrl-shift-tab": "cluster::PreviousTab",
+      "cmd-shift-]": "cluster::NextTab",
+      "cmd-shift-[": "cluster::PreviousTab"
+    }
+  },
+  {
     // The cluster catalog home (E06-S03). Up and down also work inside its search field, where
     // the text field would otherwise keep them (`Catalog > Input` is as deep as the field's own
     // bindings, and the later binding wins).

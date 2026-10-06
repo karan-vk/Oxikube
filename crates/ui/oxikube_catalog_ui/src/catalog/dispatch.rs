@@ -1,23 +1,13 @@
-//! [`CommandDispatcher`]: how the catalog sends the commands its keys and clicks stand for.
+//! [`CommandDispatcher`] (defined in `oxikube_workspace` so the cluster tabs and the hotbar share
+//! it) and [`ServiceDispatcher`]: how the catalog sends the commands its keys and clicks stand
+//! for.
 
 use gpui::App;
 use oxikube_app::{ClusterCommandOutcome, ClusterCommands};
 use oxikube_domain::command::Command;
 use oxikube_runtime::spawn_kube;
 
-/// Where a view sends a [`Command`]. The palette, the keymap and the view's own buttons all end
-/// here, so each runs one behaviour (non-negotiable 4).
-///
-/// The production implementation hands the command to the `CommandBus` (E06-S02); until that
-/// lands, [`ServiceDispatcher`] runs the catalog's own commands. Tests record what was sent
-/// (`test_support::RecordingDispatcher`).
-///
-/// `dispatch` returns at once: the work runs off the UI thread and its outcome reaches views
-/// through the session update stream, never through a return value.
-pub trait CommandDispatcher: 'static {
-    /// Sends `command`.
-    fn dispatch(&self, command: Command, cx: &mut App);
-}
+pub use oxikube_workspace::CommandDispatcher;
 
 /// Runs the cluster commands against [`ClusterCommands`] on the Tokio bridge.
 ///

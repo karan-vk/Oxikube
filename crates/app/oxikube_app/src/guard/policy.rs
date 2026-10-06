@@ -47,6 +47,7 @@ pub fn is_posture(command: &Command) -> bool {
 pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
     match command {
         Command::ClusterConnect { cluster }
+        | Command::ClusterCloseTab { cluster }
         | Command::ClusterDisconnect { cluster }
         | Command::ClusterSelect { cluster }
         | Command::ClusterToggleFavourite { cluster, .. }
@@ -69,7 +70,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NodeCordon { target }
         | Command::NodeUncordon { target }
         | Command::NodeDrain { target, .. } => Some(&target.cluster),
-        Command::ViewOpen { .. }
+        Command::ClusterNextTab
+        | Command::ClusterPreviousTab
+        | Command::ClusterSwitchTab { .. }
+        | Command::ViewOpen { .. }
         | Command::PaletteToggle
         | Command::AppQuit
         | Command::WindowNew

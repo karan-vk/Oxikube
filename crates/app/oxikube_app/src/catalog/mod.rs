@@ -43,4 +43,4 @@ mod tests;
 
 pub use commands::{ClusterCommandOutcome, ClusterCommands};
 pub use entry::CatalogEntry;
-pub use service::{CATALOG_TABLE, ClusterCatalog};
+pub use service::{CATALOG_TABLE, ClusterCatalog, FavouriteChanged, FavouritesLagged};

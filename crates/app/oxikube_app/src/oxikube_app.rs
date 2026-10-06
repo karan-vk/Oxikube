@@ -30,7 +30,10 @@ mod testing;
 mod testing_posture;
 
 pub use audit::AuditLog;
-pub use catalog::{CatalogEntry, ClusterCatalog, ClusterCommandOutcome, ClusterCommands};
+pub use catalog::{
+    CatalogEntry, ClusterCatalog, ClusterCommandOutcome, ClusterCommands, FavouriteChanged,
+    FavouritesLagged,
+};
 pub use command_bus::{
     CommandBus, CommandHandler, CommandOutput, CommandRegistry, DispatchContext, DispatchError,
     HandlerContext, Outcome, RegisterError,

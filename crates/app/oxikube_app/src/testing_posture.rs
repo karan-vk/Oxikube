@@ -112,13 +112,17 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             preset: ClusterPreset::Staging,
         },
+        "cluster::CloseTab" => Command::ClusterCloseTab { cluster },
         "cluster::Connect" => Command::ClusterConnect { cluster },
         "cluster::Disconnect" => Command::ClusterDisconnect { cluster },
+        "cluster::NextTab" => Command::ClusterNextTab,
+        "cluster::PreviousTab" => Command::ClusterPreviousTab,
         "cluster::Select" => Command::ClusterSelect { cluster },
         "cluster::SetColour" => Command::ClusterSetColour {
             cluster,
             colour: Some(RED),
         },
+        "cluster::SwitchTab" => Command::ClusterSwitchTab { index: 1 },
         "cluster::ToggleFavourite" => Command::ClusterToggleFavourite {
             cluster,
             favourite: None,

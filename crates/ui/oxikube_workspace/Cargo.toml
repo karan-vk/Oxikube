@@ -15,6 +15,7 @@ doctest = false
 anyhow.workspace = true
 futures.workspace = true
 gpui.workspace = true
+indexmap.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
@@ -64,6 +65,12 @@ required-features = ["screenshot"]
 # `cargo run -p oxikube_workspace --features test-support --profile release-fast --example workspace_bench`
 [[example]]
 name = "workspace_bench"
+required-features = ["test-support"]
+
+# Frame cost of switching between two cluster tabs that each hold a 10 000-row table (test platform):
+# `cargo run -p oxikube_workspace --features test-support --profile release-fast --example cluster_tab_bench`
+[[example]]
+name = "cluster_tab_bench"
 required-features = ["test-support"]
 
 [lints]

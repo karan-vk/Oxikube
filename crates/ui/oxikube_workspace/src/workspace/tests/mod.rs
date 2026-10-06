@@ -1,9 +1,11 @@
 //! `#[gpui::test]`s of the workspace: items, panes and splits, docks and panels, zoom, and tab
 //! drag and drop, all through a real window with the dock area's skin.
 
+mod close_request;
 mod dock_sizes;
 mod docks;
 mod drag;
+mod embedded;
 mod items;
 mod modal;
 mod panes;

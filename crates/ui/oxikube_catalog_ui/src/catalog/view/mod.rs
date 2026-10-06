@@ -18,6 +18,7 @@ mod row;
 pub use empty::{EMPTY_STEPS, EMPTY_TITLE, LOADING_TEXT};
 #[cfg(test)]
 pub(crate) use row::last_used_text;
+pub(crate) use row::tone_colour;
 
 use std::rc::Rc;
 use std::sync::Arc;

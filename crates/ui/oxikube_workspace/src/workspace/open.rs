@@ -221,6 +221,9 @@ impl Workspace {
         );
         let removed = cx.subscribe_in(tab, window, move |this, _, event, window, cx| match event {
             ItemTabEvent::Removed => this.item_tab_removed(item_id, window, cx),
+            ItemTabEvent::CloseRequested => {
+                this.request_close_item(item_id, window, cx);
+            }
         });
         let focused = cx.on_focus_in(&item.focus_handle(cx), window, move |this, _, cx| {
             this.activate_pane_of(item_id, cx);

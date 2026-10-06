@@ -17,7 +17,7 @@ pub use layers::{TestModal, TestStatusItem};
 pub use open::open_workspace;
 
 use crate::{
-    item::{Item, ItemEvent, TabContent, register_item},
+    item::{CloseRequest, Item, ItemEvent, TabContent, register_item},
     panel::{DockPosition, Panel, PanelEvent},
 };
 
@@ -55,6 +55,12 @@ pub struct TestItem {
     pub active: bool,
     /// The cluster badge the tab shows, if any.
     pub cluster: Option<crate::cluster::ClusterMark>,
+    /// Whether [`Item::intercepts_close`] is on.
+    pub intercepts: bool,
+    /// What [`Item::close_requested`] answers: close now, or keep the tab.
+    pub deferred: bool,
+    /// How many times [`Item::close_requested`] ran.
+    pub close_requests: Rc<Cell<usize>>,
 }
 
 impl TestItem {
@@ -75,6 +81,9 @@ impl TestItem {
             closed: Rc::default(),
             active: false,
             cluster: None,
+            intercepts: false,
+            deferred: false,
+            close_requests: Rc::default(),
         }
     }
 
@@ -93,6 +102,14 @@ impl TestItem {
     /// Gives the tab a cluster badge.
     pub fn with_cluster(mut self, mark: crate::cluster::ClusterMark) -> Self {
         self.cluster = Some(mark);
+        self
+    }
+
+    /// Makes the item ask before it closes ([`Item::intercepts_close`]); it keeps its tab
+    /// (`deferred`) or lets itself be closed when asked.
+    pub fn intercepting(mut self, deferred: bool) -> Self {
+        self.intercepts = true;
+        self.deferred = deferred;
         self
     }
 
@@ -154,6 +171,19 @@ impl Item for TestItem {
 
     fn can_close(&self, _: &App) -> bool {
         self.closable
+    }
+
+    fn intercepts_close(&self, _: &App) -> bool {
+        self.intercepts
+    }
+
+    fn close_requested(&mut self, _: &mut Window, _: &mut Context<Self>) -> CloseRequest {
+        self.close_requests.set(self.close_requests.get() + 1);
+        if self.deferred {
+            CloseRequest::Deferred
+        } else {
+            CloseRequest::Close
+        }
     }
 
     fn on_close(&mut self, _: &mut Window, _: &mut Context<Self>) {

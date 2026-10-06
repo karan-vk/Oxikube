@@ -5,7 +5,7 @@ use gpui::{Context, EntityId, Window};
 use super::{OpenItem, OpenOptions, Workspace};
 use crate::{
     closed::ClosedItem,
-    item::{ItemHandle, ItemRegistry},
+    item::{CloseRequest, ItemHandle, ItemRegistry},
     pane::PaneId,
 };
 
@@ -45,10 +45,37 @@ impl Workspace {
         true
     }
 
-    /// Closes the active pane's displayed item. Returns whether an item was closed.
+    /// Closes `item` the way the user asked for it (its close button, `workspace::CloseActiveItem`):
+    /// an item that [intercepts the close](crate::Item::intercepts_close) is asked first and may
+    /// keep its tab while it asks the user ([`CloseRequest::Deferred`]); any other item is closed
+    /// as by [`Self::close_item`]. Returns whether the item was closed or is being asked.
+    pub fn request_close_item(
+        &mut self,
+        item: EntityId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(open) = self.items.get(&item) else {
+            return false;
+        };
+        if !open.handle.can_close(cx) {
+            return false;
+        }
+        if open.handle.intercepts_close(cx) {
+            let handle = open.handle.boxed_clone();
+            return match handle.close_requested(window, cx) {
+                CloseRequest::Close => self.close_item(item, window, cx),
+                CloseRequest::Deferred => true,
+            };
+        }
+        self.close_item(item, window, cx)
+    }
+
+    /// Closes the active pane's displayed item, or asks it to close
+    /// ([`Self::request_close_item`]). Returns whether an item was closed or is being asked.
     pub fn close_active_item(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         match self.active_pane(cx).and_then(|pane| pane.active_item()) {
-            Some(item) => self.close_item(item, window, cx),
+            Some(item) => self.request_close_item(item, window, cx),
             None => false,
         }
     }

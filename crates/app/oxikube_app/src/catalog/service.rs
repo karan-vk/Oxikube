@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use futures::lock::Mutex;
-use futures::stream::BoxStream;
+use futures::stream::{BoxStream, StreamExt as _};
 use jiff::Timestamp;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{ErrorKind, OxiResult};
@@ -13,6 +13,7 @@ use oxikube_ports::{
     StateTable,
 };
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 
 use super::entry::CatalogEntry;
 
@@ -28,6 +29,25 @@ struct Marks {
     last_used: Option<Timestamp>,
 }
 
+/// How many favourite changes a slow subscriber may fall behind by.
+const FAVOURITE_UPDATES: usize = 64;
+
+/// A cluster was marked or unmarked as a favourite.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FavouriteChanged {
+    /// The cluster.
+    pub cluster: ClusterId,
+    /// Whether it is a favourite now.
+    pub favourite: bool,
+}
+
+/// The subscriber fell behind and missed `missed` favourite changes: read the catalog again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FavouritesLagged {
+    /// How many changes were dropped for this subscriber.
+    pub missed: u64,
+}
+
 /// Reads and marks the cluster catalog. See the [module docs](super).
 ///
 /// Cheap to clone; clones share the write lock that keeps two marks on one row from losing
@@ -40,6 +60,7 @@ pub struct ClusterCatalog {
     /// Held across a row's read-modify-write, so a favourite toggle and a last-used stamp on
     /// the same cluster both land.
     write: Arc<Mutex<()>>,
+    favourites: broadcast::Sender<FavouriteChanged>,
 }
 
 impl std::fmt::Debug for ClusterCatalog {
@@ -61,6 +82,7 @@ impl ClusterCatalog {
             state,
             clock,
             write: Arc::default(),
+            favourites: broadcast::channel(FAVOURITE_UPDATES).0,
         }
     }
 
@@ -119,8 +141,27 @@ impl ClusterCatalog {
         self.source.reload().await
     }
 
+    /// Every favourite change made through this catalog (and its clones) from now on, so a view
+    /// that shows favourites (the hotbar) follows a change made anywhere (the catalog's star, a
+    /// command from the palette or an agent).
+    pub fn favourite_changes(
+        &self,
+    ) -> BoxStream<'static, Result<FavouriteChanged, FavouritesLagged>> {
+        futures::stream::unfold(self.favourites.subscribe(), |mut rx| async move {
+            match rx.recv().await {
+                Ok(change) => Some((Ok(change), rx)),
+                Err(broadcast::error::RecvError::Lagged(missed)) => {
+                    Some((Err(FavouritesLagged { missed }), rx))
+                }
+                Err(broadcast::error::RecvError::Closed) => None,
+            }
+        })
+        .boxed()
+    }
+
     /// Marks `cluster` as a favourite (`Some(true)`), clears it (`Some(false)`) or flips it
-    /// (`None`). Returns the new value.
+    /// (`None`). Returns the new value. Announces the change on
+    /// [`favourite_changes`](Self::favourite_changes) once it is stored.
     ///
     /// # Errors
     ///
@@ -134,6 +175,11 @@ impl ClusterCatalog {
         let mut marks = self.read_row(cluster).await?;
         marks.favourite = favourite.unwrap_or(!marks.favourite);
         self.write_row(cluster, &marks).await?;
+        // No subscriber is fine.
+        let _ = self.favourites.send(FavouriteChanged {
+            cluster: cluster.clone(),
+            favourite: marks.favourite,
+        });
         Ok(marks.favourite)
     }
 
