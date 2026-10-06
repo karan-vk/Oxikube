@@ -128,8 +128,8 @@ impl Hotbar {
                     return;
                 };
                 this.update(cx, |this, cx| {
-                    // An order the user changed while this was reading wins.
-                    if this.model.set_order(order) {
+                    // An order the user placed while this was reading wins (the model ignores this one).
+                    if this.model.restore_order(order) {
                         cx.notify_coalesced();
                     }
                 })

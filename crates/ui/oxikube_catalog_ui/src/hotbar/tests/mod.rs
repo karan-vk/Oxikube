@@ -82,6 +82,19 @@ impl Fixture {
         state: Arc<FakeStatePort>,
         prepare: impl FnOnce(&Prepared),
     ) -> Self {
+        let fx = Self::launch(cx, names, dispatch, state, prepare);
+        fx.vcx.run_until_parked();
+        fx
+    }
+
+    /// Like [`Self::start`], but leaves the background reads (catalog, saved order) pending.
+    pub(super) fn launch(
+        cx: &mut TestAppContext,
+        names: &[&str],
+        dispatch: Dispatch,
+        state: Arc<FakeStatePort>,
+        prepare: impl FnOnce(&Prepared),
+    ) -> Self {
         let source = Arc::new(
             FakeClusterSourcePort::new()
                 .with_sources([source()])
@@ -127,7 +140,6 @@ impl Fixture {
             ws.update(cx, |ws, cx| ws.set_strip(Some(hotbar.clone().into()), cx));
             (tabs, hotbar)
         });
-        vcx.run_until_parked();
         Self {
             vcx,
             hotbar,

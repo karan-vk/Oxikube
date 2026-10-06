@@ -57,12 +57,45 @@ fn dragging_a_tile_onto_another_moves_it_there(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_drag_is_not_a_click(cx: &mut TestAppContext) {
     let mut fx = three(cx, Arc::new(FakeStatePort::new()));
+    assert_eq!(fx.active_name().as_deref(), Some("c"));
     drag(&mut fx, "a", "c");
+    assert_eq!(fx.tiles(), ["b", "c", "a"], "the drop did move the tile");
+    // `cluster::Select` is a tab command (the tabs run it, the recorder never sees it): a click
+    // on `a` would have shown its tab.
+    assert_eq!(
+        fx.active_name().as_deref(),
+        Some("c"),
+        "the drag did not select the dragged tile"
+    );
     assert!(
         fx.recorder.sent().is_empty(),
         "reordering sends no command: {:?}",
         fx.recorder.sent()
     );
+}
+
+#[gpui::test]
+fn an_order_read_after_a_drop_does_not_undo_it(cx: &mut TestAppContext) {
+    let state = Arc::new(FakeStatePort::new());
+    {
+        let mut first = three(cx, state.clone());
+        drag(&mut first, "c", "a");
+        assert_eq!(saved(&state), [id("c"), id("a"), id("b")]);
+    }
+    // A second window whose read of the saved order has not come back yet: the user drops `b`
+    // first, and the older saved order must not take it away.
+    let mut second = Fixture::launch(cx, &["a", "b", "c"], Dispatch::Record, state, |p| {
+        p.connect_with_colour("a", None);
+        p.connect_with_colour("b", None);
+        p.connect_with_colour("c", None);
+    });
+    assert_eq!(second.tiles(), ["a", "b", "c"], "the read is still pending");
+    let hotbar = second.hotbar.clone();
+    second
+        .vcx
+        .update(|_, cx| hotbar.update(cx, |hotbar, cx| hotbar.move_to(&id("b"), 0, cx)));
+    second.vcx.run_until_parked();
+    assert_eq!(second.tiles(), ["b", "a", "c"]);
 }
 
 #[gpui::test]

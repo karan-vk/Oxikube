@@ -54,6 +54,9 @@ pub struct HotbarModel {
     sessions: IndexMap<ClusterId, SessionLook>,
     /// The user's order (what they dragged), possibly naming clusters not shown now.
     order: Vec<ClusterId>,
+    /// Whether the user placed a tile in this window: an order read from the store afterwards is
+    /// older than what they see and must not replace it.
+    placed: bool,
     active: Option<ClusterId>,
 }
 
@@ -120,9 +123,11 @@ impl HotbarModel {
         true
     }
 
-    /// Sets the user's order (as saved). Returns whether it changed.
-    pub fn set_order(&mut self, order: Vec<ClusterId>) -> bool {
-        if self.order == order {
+    /// Sets the user's order as read from the store. It is ignored once the user has placed a
+    /// tile ([`move_entry`](Self::move_entry)), since the read started before that drop. Returns
+    /// whether the order changed.
+    pub fn restore_order(&mut self, order: Vec<ClusterId>) -> bool {
+        if self.placed || self.order == order {
             return false;
         }
         self.order = order;
@@ -234,6 +239,7 @@ impl HotbarModel {
         let shown_changed = order != self.shown_order();
         order.extend(hidden);
         self.order = order;
+        self.placed = true;
         shown_changed
     }
 }
@@ -324,10 +330,18 @@ mod tests {
     #[test]
     fn a_placed_order_is_followed_and_new_clusters_join_the_end() {
         let mut model = model();
-        model.set_order(vec![id("zeta"), id("dev"), id("prod")]);
+        model.restore_order(vec![id("zeta"), id("dev"), id("prod")]);
         assert_eq!(names(&model), ["zeta", "dev", "prod", "Alpha"]);
         model.set_session(id("fresh"), look("fresh", ClusterSessionState::Connecting));
         assert_eq!(names(&model), ["zeta", "dev", "prod", "fresh", "Alpha"]);
+    }
+
+    #[test]
+    fn a_saved_order_read_after_a_drop_does_not_undo_it() {
+        let mut model = model();
+        model.move_entry(&id("zeta"), 0);
+        assert!(!model.restore_order(vec![id("dev"), id("prod")]));
+        assert_eq!(names(&model), ["zeta", "prod", "dev", "Alpha"]);
     }
 
     #[test]
