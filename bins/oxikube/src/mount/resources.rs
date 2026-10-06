@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
-use gpui::{App, Entity, Task, Window};
+use gpui::{App, Entity, Task, WeakEntity, Window};
 use oxikube_app::{ClusterSession, ResourceStores};
 use oxikube_ports::ClockPort;
 use oxikube_resources_ui::navigate::{OpenKind, open_kind};
@@ -103,9 +103,12 @@ pub fn install(
 
 /// Applies each `resource::OpenList` request on the UI thread: finds the cluster's tab and asks
 /// the registered kind views to open the list in it; says so when none can.
+///
+/// The task holds the tabs weakly: the window's workspace owns it (through the mount's wiring),
+/// and a strong handle would keep the tabs, and the workspace with them, alive past the window.
 pub fn open_kinds(
     mut requests: UnboundedReceiver<OpenKind>,
-    tabs: Entity<ClusterTabs>,
+    tabs: WeakEntity<ClusterTabs>,
     workspace: &Entity<Workspace>,
     window: &mut Window,
     cx: &mut App,
@@ -113,7 +116,7 @@ pub fn open_kinds(
     let workspace = workspace.downgrade();
     window.spawn(cx, async move |cx| {
         while let Some(request) = requests.next().await {
-            let Some(window_workspace) = workspace.upgrade() else {
+            let (Some(window_workspace), Some(tabs)) = (workspace.upgrade(), tabs.upgrade()) else {
                 break;
             };
             let handled = cx.update(|window, cx| {

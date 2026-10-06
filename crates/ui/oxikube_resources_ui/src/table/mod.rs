@@ -20,6 +20,7 @@
 //! | `layout` | [`ColumnLayout`]: order, visibility, widths and sort of the columns |
 //! | `prefs` | [`ColumnPrefs`] saved per kind through the `StatePort` (`table.columns.<group>/<Kind>`) |
 //! | `cells` | [`ToneColors`]: a cell's tone to the theme's `oxikube` status colours |
+//! | `cell_cache` | the visible cells' text and tone, kept between frames (E07-S09) |
 //! | `states` | states and diagnostics (E07-S10): loading / empty / filtered-empty / forbidden / unauthorized / error, the stale badge, retry, API warnings |
 //! | `actions` | the key actions of the `Table` context |
 //! | `row_actions` | the row actions (E07-S08): the targets of a menu or key, the entries the palette lists, running an action, the delete key |
@@ -30,13 +31,17 @@
 //! Rows are uniform and virtualised: only the rows on screen build elements. The store keeps
 //! them sorted (the table asks for its order with a `SortKey`, by the cells' typed sort keys),
 //! deltas are applied in one update per wake and redrawn at frame cadence, and nothing in
-//! render touches more than the visible cells.
+//! render touches more than the visible cells. Those go to the table as plain text cells
+//! (`oxikube_ui`'s `TextCell` fast path: no extra element, the ellipsis only where the text does
+//! not fit) read from a per-frame cache, so a churning or scrolling frame re-reads only the rows
+//! that changed (E07-S09, docs/PERFORMANCE.md "Resource table").
 //!
 //! [`ResourceStore`]: oxikube_app::store::ResourceStore
 //! [`ColumnProvider`]: oxikube_app::ColumnProvider
 //! [`Table`]: oxikube_ui::Table
 
 pub mod actions;
+mod cell_cache;
 mod cells;
 mod columns;
 mod crd;

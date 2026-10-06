@@ -17,6 +17,8 @@ fn run(scenario: &str) -> (std::process::Output, Option<Value>) {
     let dir = tempfile::tempdir().expect("tempdir");
     let report = dir.path().join("nested/sample.json");
     let out = oxikube()
+        // `scroll-10k` in a debug build: a few frames are enough to check the sample.
+        .env("OXIKUBE_PERF_SCROLL_FRAMES", SCROLL_FRAMES.to_string())
         .args(["--perf-scenario", scenario, "--perf-report"])
         .arg(&report)
         .output()
@@ -63,9 +65,45 @@ fn startup_is_measured_and_prints_the_first_frame_marker() {
     );
 }
 
+/// Scripted frames of the `scroll-10k` smoke run.
+const SCROLL_FRAMES: u64 = 20;
+
+#[test]
+fn scroll_10k_scrolls_the_table_under_churn_with_coalesced_notifies() {
+    for name in ["scroll-10k", "table-scroll-10k"] {
+        let (out, sample) = run(name);
+        assert!(
+            out.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let s = sample.expect("sample written");
+        assert_eq!(s["status"], "ok");
+        assert_eq!(
+            s["scenario"], "scroll-10k",
+            "the alias reports the scenario's name"
+        );
+        // Two frames per scripted frame: the coalesced feed notify's and the scroll's.
+        assert_eq!(s["counters"]["frames"], 2 * SCROLL_FRAMES);
+        assert_eq!(s["metrics"]["draw_ms"]["count"], SCROLL_FRAMES);
+        assert_eq!(
+            s["counters"]["feed_deltas"],
+            10 * SCROLL_FRAMES,
+            "ten events a batch"
+        );
+        assert_eq!(
+            s["counters"]["notifies"], SCROLL_FRAMES,
+            "one notify a batch"
+        );
+        assert_eq!(s["counters"]["max_notifies_per_frame"], 1);
+        let first_rows = s["metrics"]["first_rows_ms"]["p50"].as_f64().unwrap();
+        assert!(first_rows > 0.0, "{first_rows}");
+    }
+}
+
 #[test]
 fn scenarios_without_views_are_not_available_and_exit_0() {
-    for scenario in ["scroll-10k", "palette", "logs-stream", "editor-5mb"] {
+    for scenario in ["palette", "logs-stream", "editor-5mb"] {
         let (out, sample) = run(scenario);
         assert!(out.status.success(), "{scenario}");
         let s = sample.expect("sample written");

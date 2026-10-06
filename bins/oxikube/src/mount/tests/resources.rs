@@ -254,7 +254,7 @@ fn enter_on_a_row_opens_the_detail_drawer_and_pinning_makes_it_a_tab(cx: &mut Te
     assert_eq!(app.tables(), ["Pod"]);
 
     // Select the first row and open it: `resource::Open` on the bus, then the drawer.
-    app.click("cell-0-0");
+    app.click("td-0-0");
     app.press("enter");
     app.tick();
     assert!(app.drawn("detail-view"), "the drawer shows the detail");

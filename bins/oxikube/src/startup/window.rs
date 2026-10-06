@@ -8,7 +8,7 @@
 
 use anyhow::{Context as _, Result};
 use gpui::{AnyView, App, AppContext as _, Entity, Window, WindowHandle};
-use oxikube_runtime::perf::FirstFrameProbe;
+use oxikube_runtime::perf::{FirstFrameProbe, PerfRoot};
 use oxikube_ui::root::Root;
 use oxikube_workspace::persistence::{LayoutStore, MAIN_WINDOW_ID};
 use oxikube_workspace::window::MainView;
@@ -50,8 +50,8 @@ pub fn open_main_window(
     )
 }
 
-/// The [`MainView`] of an app window opened by [`open_main_window`] (under the `Root` and the
-/// first-frame probe), `None` for any other window.
+/// The [`MainView`] of an app window opened by [`open_main_window`] (under the `Root`, the
+/// first-frame probe and, with `--perf`, the frame hook), `None` for any other window.
 pub fn main_view(window: &Window, cx: &App) -> Option<Entity<MainView>> {
     let root = window.root::<Root>().flatten()?;
     let probe = root
@@ -60,6 +60,10 @@ pub fn main_view(window: &Window, cx: &App) -> Option<Entity<MainView>> {
         .clone()
         .downcast::<FirstFrameProbe>()
         .ok()?;
-    let main = probe.read(cx).inner().clone().downcast::<MainView>().ok()?;
-    Some(main)
+    let inner = probe.read(cx).inner().clone();
+    let inner = match inner.clone().downcast::<PerfRoot>() {
+        Ok(hook) => hook.read(cx).inner().clone(),
+        Err(_) => inner,
+    };
+    inner.downcast::<MainView>().ok()
 }

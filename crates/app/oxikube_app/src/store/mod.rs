@@ -16,7 +16,7 @@
 //! | Piece | Where |
 //! |---|---|
 //! | the store, the cache map, grace teardown | [`ResourceStore`] (`service`) |
-//! | its inputs: spawner and clock, policy, budget, tuning | [`StoreRuntime`], [`StoreOptions`], [`StoreConfig`] (`config`) |
+//! | its inputs: spawner, clock and probe, policy, budget, tuning | [`StoreRuntime`], [`StoreProbe`], [`StoreOptions`], [`StoreConfig`] (`config`) |
 //! | one store per connected session | [`ResourceStores`] (`registry`) |
 //! | what a subscriber asks: kind, scope, filter, sort | [`StoreQuery`], [`StoreFilter`] (`query`), [`SortKey`], [`SortField`], [`CellSortKey`] (`sort`), [`LabelSelector`] (`selector`) |
 //! | what it gets: snapshot, then coalesced ops with positions, plus the feed state | [`Subscription`], [`StoreDelta`], [`RowOp`], [`FeedState`] (`subscription`, `mailbox`, `delta`) |
@@ -60,7 +60,8 @@
 //! sorted index by binary search (no re-sort per event, docs/PERFORMANCE.md rule 4). Bursts that
 //! touch a large share of the rows are applied in bulk and delivered as a snapshot. A subscriber
 //! gets everything pending as one [`StoreDelta`] when it polls, so a view that polls once per
-//! frame gets at most one item per frame.
+//! frame gets at most one item per frame. A [`StoreProbe`] on the runtime is told the size of
+//! every batch (the feed throughput of `oxikube --perf`, E07-S09).
 //!
 //! # Secrets
 //!
@@ -95,7 +96,9 @@ mod warnings;
 mod tests;
 
 pub use budget::{Admission, FeedBudget, FeedRequest, MaxFeeds, UnlimitedBudget};
-pub use config::{DEFAULT_IDLE_GRACE, FeedInfo, StoreConfig, StoreOptions, StoreRuntime};
+pub use config::{
+    DEFAULT_IDLE_GRACE, FeedInfo, StoreConfig, StoreOptions, StoreProbe, StoreRuntime,
+};
 pub use counts::{CORE_TARGETS, CoreTarget, CountState, CountTarget, CountsLease, KindCount};
 pub use delta::{FeedState, RowChange, RowOp, StoreDelta};
 pub use feed::{StorePorts, TableColumns};

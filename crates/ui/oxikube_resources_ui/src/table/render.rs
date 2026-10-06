@@ -23,10 +23,15 @@ use super::view::ResourceTable;
 
 impl Render for ResourceTable {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        {
+            self.renders += 1;
+        }
         let colors = ToneColors::current(cx);
         let (rows, selected, state) = self.table.update_quiet(cx, |d| {
             d.now = Timestamp::now();
             d.colors = Some(colors);
+            d.cells.begin_frame(d.now, &d.provider);
             (d.rows.len(), d.selection.len(), d.table_state())
         });
         let tokens = cx.colors();

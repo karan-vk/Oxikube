@@ -103,6 +103,7 @@ impl Fixture {
         let runtime = StoreRuntime {
             spawner: Arc::new(move |task: BoxFuture<'static, ()>| executor.spawn(task).detach()),
             clock: Arc::new(FakeClockPort::default()),
+            probe: None,
         };
         let stores = Arc::new(ResourceStores::with_options(
             runtime,

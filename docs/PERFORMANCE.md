@@ -27,7 +27,9 @@ measured on a mid-range x86 laptop with an integrated GPU.
   `~/Library/Application Support/oxikube/perf` on macOS) and prints p50/p95/p99 on exit (E01-S14);
   see [Perf harness](#perf-harness-oxikube---perf-and-cargo-xtask-perf).
 - `cargo xtask load-pods --count 10000 --churn` seeds the churn scenario on kind (E01-S10); see
-  [Load fixture](#load-fixture-cargo-xtask-load-pods) below.
+  [Load fixture](#load-fixture-cargo-xtask-load-pods) below. `oxikube --perf-table <context>` then
+  connects that context, opens its pods table and scrolls it while `--perf` records (E07-S09); see
+  [Resource table](#resource-table-10-000-pods-under-churn-e07-s09).
 - `cargo xtask perf <scenario>|--all` runs scripted scenarios headless and writes a report; nightly
   CI compares against [`docs/perf/baseline.json`](perf/baseline.json) and fails on > 20 % regression
   (E01-S14).
@@ -80,18 +82,27 @@ second and appends JSONL; the UI thread never touches the file. Lines:
 | `kind` | Fields |
 |---|---|
 | `start` | `schema`, `app_version`, `os`, `arch`, `pid`, `started_unix_ms`, `flush_interval_ms`, `measures` |
-| `tick` (every second) | `t_ms`, `interval_ms`, `frames_us` (every frame in the interval), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `rss_mib`, `peak_rss_mib` (MiB, `null` where the OS has no reader) |
-| `summary` (on exit) | `duration_ms`, `frame_count`, `frames` {`count`, `p50`, `p95`, `p99`, `max`} (ms), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `rss_mib` {`count`, `p50`, `p95`, `p99`, `max`} (MiB, over the per-tick readings), `peak_rss_mib` |
+| `tick` (every second) | `t_ms`, `interval_ms`, `frames_us` (every frame in the interval), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `max_notifies_per_frame`, `rss_mib`, `peak_rss_mib` (MiB, `null` where the OS has no reader) |
+| `summary` (on exit) | `duration_ms`, `frame_count`, `frames` {`count`, `p50`, `p95`, `p99`, `max`} (ms), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `max_notifies_per_frame`, `rss_mib` {`count`, `p50`, `p95`, `p99`, `max`} (MiB, over the per-tick readings), `peak_rss_mib` |
 
 On exit (window closed, `--perf-duration` elapsed, or Ctrl-C) it prints to stderr, for example:
 
 ```
-oxikube --perf: 2 frames in 4.5 s: p50 0.651 ms, p95 6.343 ms, p99 6.343 ms, max 6.343 ms; dropped 0; feed 0 deltas (0.0/s); notify 0 (0.0/s); rss p50 95.3 MiB, p95 95.3 MiB, max 95.3 MiB, peak 95.3 MiB
+oxikube --perf: 2 frames in 4.5 s: p50 0.651 ms, p95 6.343 ms, p99 6.343 ms, max 6.343 ms; dropped 0; feed 0 deltas (0.0/s); notify 0 (0.0/s, at most 0 per frame); rss p50 95.3 MiB, p95 95.3 MiB, max 95.3 MiB, peak 95.3 MiB
 ```
 
 Percentiles are nearest-rank (p99 of fewer than 100 frames is the maximum). Every notification
-`oxikube_runtime::notify_coalesced` delivers is counted (E05-S01); until feeds and views use it
-(E04, E07) the feed and notify counters read 0.
+`oxikube_runtime::notify_coalesced` delivers is counted (E05-S01), and every watch event the
+resource stores apply is a feed delta (E07-S09: the stores' `StoreProbe`, a relist counting each
+object it lists).
+
+`max_notifies_per_frame` is the assertion-style figure (E07-S09): the most coalesced notifies
+delivered between two consecutive frames. A streaming view is coalesced to frame cadence, so it
+adds at most one per frame whatever the event rate; the figure is therefore at most the number of
+streaming views on screen (the pods table, the sidebar's count badges and the Workloads overview's
+tiles under churn: 2 to 3), and 1 in the `scroll-10k` scenario, which has only the table and fails
+otherwise. On a display slower than 120 Hz a view can land two notifies in one frame (the coalescing
+interval is one 120 Hz frame, see `notify_coalesced`); GPUI folds them into one redraw.
 
 Recorder overhead (M-series, release, `cargo run --release -p oxikube_runtime --example
 perf_overhead`): a frame push is about 3 ns and the hook's timing pair about 45 ns; a feed or
@@ -161,7 +172,7 @@ same-runner baseline, never with the absolute budgets above.
 | Scenario | Status | Metrics |
 |---|---|---|
 | `startup` | measured | the real init order to the main window's first interactive frame (E05-S13, see [Startup](#startup-cold-start-to-the-first-interactive-frame)): `first_frame_ms` (first line of `main` to the end of the update that drew the first frame), `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask), `config_load_ms` (settings + theme + keymap on the main thread), `init_<stage>_ms` (every stage of `oxikube::startup`), `state_db_open_ms` (creating and migrating the SQLite state db, off the UI thread in the app); then `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) and `rss_mib` / `peak_rss_mib` (headless resident memory after the redraws, MiB; see [Memory (RSS)](#memory-rss)) |
-| `scroll-10k` | not available: needs E05-S11 #93, E07-S01 #107, E07-S03 #109 | frame time scrolling the 10 k-pod table under churn |
+| `scroll-10k` (alias `table-scroll-10k`) | measured (E07-S09, see [Resource table](#resource-table-10-000-pods-under-churn-e07-s09)) | `first_rows_ms` (table created on a warm feed to the first frame showing all 10 000 pods), `frame_ms` / `draw_ms` scrolling 3 rows a frame while the feed delivers a 10-event batch a frame, `rss_mib` / `peak_rss_mib`; fails unless every batch is counted as feed deltas and `max_notifies_per_frame` ≤ 1 |
 | `palette` | not available: needs E05-S11 #93, E11-S03 #158 | open time, filter of 2 000 entries |
 | `logs-stream` | not available: needs E05-S11 #93, E08-S02 #120 | frame time at 5 000 lines/s |
 | `editor-5mb` | not available: needs E05-S11 #93, E10-S04 #146, E10-S11 #153 | open time, typing latency |
@@ -299,6 +310,118 @@ list is not cached by CoreText, so it cannot be warmed in the background), the w
 draw about 61–65 ms, everything else under 5 ms. The per-stage table is in the module docs of
 `oxikube::startup`.
 
+## Resource table: 10 000 pods under churn (E07-S09)
+
+The epic's exit criterion (E07): 10 000 pods with churn scroll at ≥ 55 fps on the reference machine
+with a frame-time log, first rows < 1 s after the feed is warm, inside the frame budget above.
+
+### Measuring it
+
+Windowed, against kind (the budget measurement):
+
+```
+cargo xtask load-pods --count 10000 --namespaces 8 --namespace oxi-<you>-load --churn  # keep running
+cargo build -p oxikube --profile release-fast
+target/release-fast/oxikube --perf --perf-duration 60 --perf-table kind-oxikube        # --perf-scroll 3
+cargo xtask load-pods --namespace oxi-<you>-load --cleanup
+```
+
+`--perf-table <context>` (implies `--perf`) does what a user does, through the same commands: once
+the catalog lists the context it runs `cluster::Connect` on the command bus (the catalog's Enter),
+waits for the session, runs `resource::OpenList` for pods (the sidebar's Pods entry), waits for
+the table to list, then scrolls it `--perf-scroll` rows (default 3, a fast trackpad fling) every
+8.3 ms, to the end and back, until the session ends. Code: `bins/oxikube/src/perf_mode/drive.rs`.
+It logs each step and how long the table took to list.
+
+Headless, on the fake feed generator (the CI regression gate, no cluster):
+
+```
+cargo xtask perf scroll-10k            # alias: table-scroll-10k
+```
+
+The scenario (`bins/oxikube/src/perf_scenario/scroll_10k.rs`) runs the real store, store runtime
+and `ResourceTable` on testkit fakes: 10 000 pods listed into a warm store, then 120 scripted frames
+(1 s at 120 Hz; each draws twice, once for the feed's coalesced notify and once for the scroll, so
+240 frames are measured) scrolling 3 rows each while the feed delivers one 10-event batch per frame
+(6 modifies, 2 deletes, 2 creates: 1 200 events/s, about twenty times the load-pods churn). It
+fails unless every batch is counted as feed deltas and no frame absorbed more than one coalesced
+notify. Budgets checked by `cargo xtask perf`: `first_rows_ms` < 1 000 and, on macOS, `frame_ms`
+p95 ≤ 18.2 ms (55 fps); being headless they are lower bounds of the windowed figures. The Linux
+runner draws these frames with Mesa's software renderer at about 340 ms each, so the frame budget is
+not checked there (its baseline still gates regressions; why it is that slow is #509).
+
+### Numbers
+
+Reference machine: Apple M5 Max (18 cores), macOS, built-in display, `release-fast`, story branch
+`story/E07-S09-perf-tuning` on `a1d3f1c`; the shared kind cluster (one node, v1.37) with 10 000
+unscheduled (`Pending`) load pods in 8 namespaces and `--churn` running; other builds running on
+the machine (load average 4 to 26), so treat single digits of a percent as noise.
+
+| Run | Frames | p50 | p95 | p99 | max | Other |
+|---|---|---|---|---|---|---|
+| windowed, `--perf-table`, 60 s, scrolling 3 rows / 8.3 ms | 6 019 in 60.3 s (100 fps, paced by the scroll timer) | 3.42 ms | 4.00 ms | 4.26 ms | 7.86 ms | 9 931 pods listed 258 ms after the table opened (a cold list from the API server); feed 11 430 deltas; 691 notifies, at most 3 per frame (table, sidebar badges, overview tiles); dropped 0 |
+| windowed, table still (`--perf-scroll 0`), 25 s | 293 | 3.96 ms | 4.64 ms | 7.22 ms | 8.20 ms | redraws only for churn and ages |
+| headless `scroll-10k`, nightly `macos-latest` (run 37492117478, the committed baseline) | 240 per launch | 3.32 ms | 4.37 ms | 5.03 ms | 5.52 ms | `first_rows_ms` 26.4 (p95 30.7 across launches); RSS 176 MiB |
+| headless `scroll-10k`, nightly `ubuntu-latest` (same run, lavapipe) | 240 per launch | 338 ms | 343 ms | 348 ms | 370 ms | `first_rows_ms` 466 ms; RSS 269 MiB; see #509 |
+| headless `scroll-10k` (`cargo xtask perf scroll-10k --samples 7`), medians | 240 per launch | 1.89 ms | 2.52 ms | 2.97 ms | 3.07 ms | `first_rows_ms` 25.6 (p95 29.5 across launches); 1 200 feed deltas, 120 notifies, at most 1 per frame; RSS 179 MiB |
+
+After rebasing onto the detail drawer, row actions and states stories (`e1ba85b`) the headless
+scenario reads the same (3 launches: `frame_ms` p50 1.99 ms, p95 2.88 ms; `first_rows_ms` 26.0).
+
+So the table holds ≥ 55 fps with a wide margin (the frame p95 of 4 ms would sustain 250 fps), meets
+p95 ≤ 8 ms, p99 ≤ 16 ms and no frame > 50 ms, and shows the first rows well under 1 s even from a
+cold list.
+
+Before and after the tuning below (same binary and scenario, the cell fast path switched off and
+on, two runs each, `/usr/bin/time -l`): instructions retired for the whole `scroll-10k` process
+59.3 G → 48.9 G, about 46 M → 37 M per frame (−20 %); headless `frame_ms` p50 4.2–4.4 → 3.3–3.9 ms
+(machine load average about 20 at the time). The `table_bench` example
+(`cargo run -p oxikube_resources_ui --profile release-fast --example table_bench`, two draws per
+frame) went from 135 M to 108 M instructions per frame.
+
+Store side (`cargo bench -p oxikube_app --bench store_apply`, on the feed's task, never the UI
+thread): a 500-event batch into 10 000 objects with two subscribers, median 1.98 ms, p95 2.31 ms;
+subscribing or re-sorting costs the caller 0.14 ms (median), the seeding task 2.76 ms.
+
+Main thread (macOS `sample`, 8 s of the windowed run while scrolling under churn): 55 % idle, 42 %
+in `Window::draw`, of which about half is laying out the visible rows (gpui-component's per-row
+horizontal virtual list and taffy); the cell path (`TextCell`, `CellCache`, the provider) is about
+6 % of the draw and applying the store's deltas under 0.1 %. No sample waits on a mutex or condvar
+on the main thread: no lock contention.
+
+### What was tuned
+
+1. **Coalesced deltas** (E04-S02, E07-S01): feeds batch watch events, the store applies a batch
+   once and hands each subscriber everything pending as one delta per poll; checked by
+   `store::tests::churn` (500-event batches into 10 000 objects: one item, bounded apply time).
+2. **Incremental sort** (E07-S01): binary-search inserts into each subscriber's sorted index, a
+   bulk change re-sorted off the UI thread; the same test checks the result against a full sort.
+3. **Notify at frame cadence**: the table drains every ready delta in one update and redraws
+   through `notify_coalesced`; `table::tests::coalesce` (1 000 deltas inside one frame: one notify,
+   one render) and `max_notifies_per_frame` check it.
+4. **Cheap rows** (this story): cells go to the table as `oxikube_ui::table::TextCell`s, which the
+   table draws without the delegate's element and with GPUI's ellipsis only when the text does not
+   fit its column (a truncating text re-shapes on every layout pass and cannot reuse its measured
+   size); the fit is checked once per cell through the text system's line layout cache. The
+   visible cells' text and tone are kept between frames in `CellCache` (keyed by object version
+   and column, dropped when the second turns, since ages move) so a frame re-reads only changed
+   rows. A side effect: right-aligned columns (Ready, Restarts) are now right-aligned; the old
+   cell element filled its column, so the alignment never showed.
+5. **No layout-dependent work per row**: none was found; the fit check reads cached line layouts.
+
+### Memory: over budget (follow-up)
+
+The windowed app connected to the cluster with the 10 000 pods listed reads **504 MiB** RSS (idle
+app 117 MiB), over the 400 MB budget for 10 k pods; the headless scenario (testkit pods, one
+store) reads 179 MiB against 45 MiB for `startup`. It does not grow: over the 60 s windowed run RSS
+stayed between 504.0 and 504.2 MiB. The pods are held twice as `serde_json::Value`
+trees (the kube adapter's reflector store and the resource store's cache, each a full `Resource`
+with `managedFields` stripped; a load pod is about 2.1 KB of JSON), and a `Value` tree costs many
+times its JSON. Halving it means sharing one object between the reflector store and the store
+(a port change), and the budget probably needs the store to keep only column-relevant fields hot
+and the JSON compact or lazy. Both are store/adapter changes beyond this story: tracked in
+[#508](https://github.com/karan-vk/Oxikube/issues/508).
+
 ## Load fixture: `cargo xtask load-pods`
 
 The perf fixture for the E07 table/feed stories and the E01-S14 harness. It creates pause pods
@@ -311,12 +434,16 @@ cargo xtask load-pods --count 10000 --namespaces 8 --churn   # the budget scenar
 cargo xtask load-pods --cleanup                              # delete the oxikube-load-* namespaces
 ```
 
+On a cluster other people or tests use (the shared `kind-oxikube` of the agent teams), give the
+load its own prefix (`--namespace oxi-<you>-load`) and clean it up with the same prefix afterwards.
+
 | Flag | Default | Meaning |
 |---|---|---|
 | `--count N` | 1000 | pods to create, named `load-0 .. load-(N-1)` |
 | `--namespaces N` | 4 | spread round-robin over `<prefix>-0 .. <prefix>-(N-1)` |
 | `--namespace PREFIX` | `oxikube-load` | namespace name prefix |
 | `--churn` | off | every 5 s delete and recreate about 1 % of the pods (min 1), cycling through all namespaces, until Ctrl-C |
+| `--schedule` | off | let the cluster's scheduler place the pods; without it they carry `schedulerName: oxikube-load-unscheduled`, which no scheduler runs, so they stay `Pending` and the real scheduler never queues them (E07-S09) |
 | `--cleanup` | | delete the load namespaces (only those labelled `app=oxikube-load` and named `<prefix>-<digits>`) and exit |
 | `--context C` | `kind-oxikube` | kubectl context; anything not starting with `kind-` is refused |
 | `--allow-non-kind` | off | override the guard (you almost certainly do not want this) |
@@ -329,6 +456,10 @@ terminal's SIGINT does not kill an in-flight call); a second Ctrl-C aborts at on
 re-running it with the same flags re-applies the same pods.
 
 ### What kind can actually hold
+
+By default (no `--schedule`) every load pod is `Pending` by design: thousands of pods the scheduler
+cannot place make it minutes late for every other pod on the cluster (#484), which on a shared
+cluster starves everyone's tests. Pass `--schedule` only on a cluster of your own; then:
 
 A default single-node kind cluster allows 110 pods per node. Measured with `--count 2000`: 96
 Running, 1 904 Pending, because the scheduler cannot place the rest. Pending pods are still real

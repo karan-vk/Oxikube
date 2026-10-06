@@ -448,7 +448,11 @@ through `notify_coalesced`; it never sorts itself (the header asks the store for
 `SortField::Cell` order). Its `RowsDelegate` implements `oxikube_ui::TableDelegate`, the only code
 that meets gpui-component's table. Selection is kept by object identity, so deltas that move rows
 keep it; column order, visibility, widths and sort persist per kind in the `StatePort`
-(`table.columns.<group>/<Kind>`).
+(`table.columns.<group>/<Kind>`). Cells reach the table as `oxikube_ui::table::TextCell`s (the
+table draws them itself, the ellipsis only where the text overflows) from a per-frame `CellCache`
+(E07-S09). The store's `StoreProbe` counts every applied watch event as `oxikube --perf` feed
+throughput, and `oxikube --perf --perf-table <context>` / `cargo xtask perf scroll-10k` measure the
+whole path at 10 000 pods (docs/PERFORMANCE.md "Resource table").
 
 Opening a row (`resource::Open`: Enter or double-click) shows the detail drawer
 (`oxikube_resources_ui::detail`, E07-S05) in the cluster tab's right dock. The detail subscribes to

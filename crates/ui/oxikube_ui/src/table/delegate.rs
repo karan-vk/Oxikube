@@ -1,6 +1,7 @@
 //! The data-source trait a table renders from.
 
 use super::column::{SortDirection, TableColumn};
+use super::text_cell::TextCell;
 use crate::menu::PopupMenu;
 use gpui::{App, IntoElement, ParentElement as _, Styled as _, Window, div};
 use std::ops::Range;
@@ -37,6 +38,21 @@ pub trait TableDelegate: 'static {
         window: &mut Window,
         cx: &mut App,
     ) -> impl IntoElement;
+
+    /// The cell at (`row_ix`, `col_ix`) when it is one line of text in one colour: the table
+    /// draws it itself, which is cheaper than an element from [`render_td`](Self::render_td) (one
+    /// element less, and the ellipsis only when the text does not fit its column; see
+    /// [`TextCell`]). `None` (the default) draws the cell with `render_td`. Called for the visible
+    /// cells every frame: hand out cached text.
+    fn text_cell(
+        &mut self,
+        _row_ix: usize,
+        _col_ix: usize,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Option<TextCell> {
+        None
+    }
 
     /// Renders the header cell. Defaults to the column name.
     fn render_th(&mut self, col_ix: usize, _window: &mut Window, cx: &mut App) -> impl IntoElement {

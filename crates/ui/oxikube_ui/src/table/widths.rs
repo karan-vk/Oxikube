@@ -45,6 +45,16 @@ impl ColumnWidths {
         supplied[col_ix] = width;
     }
 
+    /// The on-screen width the library has for `col_ix` (supplied or resized), once it has read
+    /// the column.
+    pub(super) fn supplied(&self, col_ix: usize) -> Option<Pixels> {
+        self.supplied
+            .borrow()
+            .get(col_ix)
+            .copied()
+            .filter(|width| *width > Pixels::ZERO)
+    }
+
     /// The user resized columns: `widths` are on-screen, in column order. Keeps (unscaled) the
     /// columns whose width differs from the last known on-screen width (what was supplied, or what
     /// the previous resize reported), then takes `widths` as the new baseline. Without that, a

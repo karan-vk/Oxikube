@@ -46,7 +46,14 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   "Definitions" entry opens the CRD list (`crd::OpenList`); a kind with several served versions gets a
   switcher in its table; a table whose API ignored the Table `Accept` header says it shows basic columns.
 
-Bench: `cargo run -p oxikube_resources_ui --profile release-fast --example table_bench`.
+Performance (E07-S09): cells go to the table as `TextCell`s from a per-frame `CellCache`; the
+stores' feed tasks report applied events to `oxikube --perf`. Measure with
+`oxikube --perf --perf-table <context>` and `cargo xtask perf scroll-10k` (docs/PERFORMANCE.md
+"Resource table").
+
+Bench: `cargo run -p oxikube_resources_ui --profile release-fast --example table_bench`
+(`OXIKUBE_BENCH_FRAMES`, `OXIKUBE_BENCH_CHURN`, `OXIKUBE_BENCH_STEP` override frames, churn and
+scroll step).
 Screenshots: `cargo test -p oxikube_resources_ui --features screenshot --test screenshot` (status tones, the detail drawer's Overview, YAML and Describe tabs) and `--test states_screenshot` (the table states, E07-S10).
 
 ## Owning epics

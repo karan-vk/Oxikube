@@ -5,6 +5,11 @@
 //! namespace labelled `app=oxikube-load`. `--churn` then deletes and recreates about 1 % of the pods
 //! every 5 seconds until Ctrl-C. `--cleanup` deletes the namespaces again.
 //!
+//! By default the pods name a scheduler nobody runs ([`UNSCHEDULED`]), so they stay `Pending` and
+//! the cluster's kube-scheduler never sees them: thousands of unschedulable pods in its queue make
+//! it minutes late for every other pod on the cluster (#484). `--schedule` hands them to the
+//! default scheduler instead, for a run that needs `Running` pods on a cluster of its own.
+//!
 //! Safety: every kubectl call carries an explicit `--context` (default `kind-oxikube`), and any
 //! context that does not start with `kind-` is refused unless `--allow-non-kind` is given.
 //!
@@ -22,6 +27,8 @@ use std::time::{Duration, Instant};
 pub const LABEL_APP: &str = "oxikube-load";
 /// Pods per `kubectl apply` call; 10 000 documents in one request is slow and can hit size limits.
 pub const APPLY_CHUNK: usize = 500;
+/// The `schedulerName` the pods carry unless `--schedule`: no scheduler of that name runs.
+pub const UNSCHEDULED: &str = "oxikube-load-unscheduled";
 /// Seconds between churn ticks.
 const CHURN_INTERVAL: Duration = Duration::from_secs(5);
 const MAX_NAMESPACES: usize = 1000;
@@ -50,6 +57,17 @@ pub struct Args {
     /// Delete the load namespaces (and every pod in them) and exit.
     #[arg(long)]
     pub cleanup: bool,
+    /// Let the cluster's scheduler place the pods (they may run). Without it they name a
+    /// scheduler nobody runs and stay `Pending`, which keeps a shared cluster's scheduler free.
+    #[arg(long)]
+    pub schedule: bool,
+}
+
+impl Args {
+    /// The `schedulerName` the pods carry: `None` for the default scheduler.
+    pub fn scheduler(&self) -> Option<&'static str> {
+        (!self.schedule).then_some(UNSCHEDULED)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -99,18 +117,28 @@ pub fn namespace_doc(prefix: &str, index: usize) -> String {
     )
 }
 
-/// YAML for one pause pod document (starts with `---`).
-pub fn pod_doc(i: usize, prefix: &str, namespaces: usize) -> String {
+/// YAML for one pause pod document (starts with `---`); `scheduler` sets its `schedulerName`.
+pub fn pod_doc(i: usize, prefix: &str, namespaces: usize, scheduler: Option<&str>) -> String {
     let name = pod_name(i);
     let ns = namespace_name(prefix, namespace_index(i, namespaces));
+    let scheduler = scheduler
+        .map(|s| format!("  schedulerName: {s}\n"))
+        .unwrap_or_default();
     format!(
-        "---\napiVersion: v1\nkind: Pod\nmetadata:\n  name: {name}\n  namespace: {ns}\n  labels:\n    app: {LABEL_APP}\nspec:\n  terminationGracePeriodSeconds: 1\n  containers:\n  - name: pause\n    image: registry.k8s.io/pause:3.10\n    resources:\n      requests:\n        cpu: 1m\n        memory: 1Mi\n"
+        "---\napiVersion: v1\nkind: Pod\nmetadata:\n  name: {name}\n  namespace: {ns}\n  labels:\n    app: {LABEL_APP}\nspec:\n{scheduler}  terminationGracePeriodSeconds: 1\n  containers:\n  - name: pause\n    image: registry.k8s.io/pause:3.10\n    resources:\n      requests:\n        cpu: 1m\n        memory: 1Mi\n"
     )
 }
 
 /// Multi-document manifest for pod indices in `range`.
-pub fn pods_manifest(range: std::ops::Range<usize>, prefix: &str, namespaces: usize) -> String {
-    range.map(|i| pod_doc(i, prefix, namespaces)).collect()
+pub fn pods_manifest(
+    range: std::ops::Range<usize>,
+    prefix: &str,
+    namespaces: usize,
+    scheduler: Option<&str>,
+) -> String {
+    range
+        .map(|i| pod_doc(i, prefix, namespaces, scheduler))
+        .collect()
 }
 
 /// Multi-document manifest for all namespaces.
@@ -241,6 +269,7 @@ pub fn run(args: &Args) -> Result<()> {
         bail!("--count must be at least 1");
     }
     let stop = install_ctrlc()?;
+    let scheduler = args.scheduler();
     let Args {
         count,
         namespaces,
@@ -251,8 +280,12 @@ pub fn run(args: &Args) -> Result<()> {
 
     apply(context, &namespaces_manifest(prefix, *namespaces)).context("create namespaces")?;
     println!(
-        "context {context}: creating {count} pods over {namespaces} namespaces ({})",
-        namespace_name(prefix, 0) + ", ..."
+        "context {context}: creating {count} pods over {namespaces} namespaces ({}), {}",
+        namespace_name(prefix, 0) + ", ...",
+        match scheduler {
+            Some(name) => format!("unscheduled (schedulerName {name}: they stay Pending)"),
+            None => "placed by the default scheduler".to_owned(),
+        }
     );
     let started = Instant::now();
     let mut done = 0;
@@ -262,8 +295,11 @@ pub fn run(args: &Args) -> Result<()> {
             return Ok(());
         }
         let end = (done + APPLY_CHUNK).min(*count);
-        apply(context, &pods_manifest(done..end, prefix, *namespaces))
-            .with_context(|| format!("apply pods {done}..{end}"))?;
+        apply(
+            context,
+            &pods_manifest(done..end, prefix, *namespaces, scheduler),
+        )
+        .with_context(|| format!("apply pods {done}..{end}"))?;
         done = end;
         println!(
             "applied {done}/{count} pods ({:.0}%, {:.1}s)",
@@ -274,7 +310,7 @@ pub fn run(args: &Args) -> Result<()> {
     println!("created {count} pods in {namespaces} namespaces");
 
     if args.churn {
-        churn(context, prefix, *namespaces, *count, &stop)?;
+        churn(context, prefix, *namespaces, *count, scheduler, &stop)?;
     }
     Ok(())
 }
@@ -285,6 +321,7 @@ fn churn(
     prefix: &str,
     namespaces: usize,
     count: usize,
+    scheduler: Option<&str>,
     stop: &AtomicBool,
 ) -> Result<()> {
     let step = churn_step(count);
@@ -318,7 +355,7 @@ fn churn(
         let (first, last) = (window.first().copied().unwrap_or(0), window.len());
         let docs: String = window
             .iter()
-            .map(|&i| pod_doc(i, prefix, namespaces))
+            .map(|&i| pod_doc(i, prefix, namespaces, scheduler))
             .collect();
         if let Err(e) = apply(context, &docs) {
             eprintln!("churn: recreate failed: {e:#}");
@@ -386,7 +423,7 @@ mod tests {
 
     #[test]
     fn pod_manifest_fields() {
-        let doc = pod_doc(7, "oxikube-load", 4);
+        let doc = pod_doc(7, "oxikube-load", 4, None);
         let expected = "---
 apiVersion: v1
 kind: Pod
@@ -413,7 +450,7 @@ spec:
         let (count, ns) = (1003, 4);
         let mut per: HashMap<String, usize> = HashMap::new();
         for i in 0..count {
-            let doc = pod_doc(i, "p", ns);
+            let doc = pod_doc(i, "p", ns, Some(UNSCHEDULED));
             let line = doc.lines().find(|l| l.contains("namespace:")).unwrap();
             *per.entry(line.trim().to_owned()).or_default() += 1;
         }
@@ -425,7 +462,7 @@ spec:
 
     #[test]
     fn names_are_unique_and_documents_counted() {
-        let m = pods_manifest(0..1200, "oxikube-load", 4);
+        let m = pods_manifest(0..1200, "oxikube-load", 4, Some(UNSCHEDULED));
         assert_eq!(m.matches("---\n").count(), 1200);
         let mut names: Vec<&str> = m.lines().filter(|l| l.starts_with("  name: ")).collect();
         assert_eq!(names.len(), 1200);
@@ -434,6 +471,29 @@ spec:
         assert_eq!(names.len(), 1200);
         assert_eq!(m.matches("    app: oxikube-load\n").count(), 1200);
         assert_eq!(m.matches("cpu: 1m").count(), 1200);
+        assert_eq!(
+            m.matches("  schedulerName: oxikube-load-unscheduled\n")
+                .count(),
+            1200
+        );
+    }
+
+    #[test]
+    fn pods_are_unscheduled_unless_asked() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(flatten)]
+            args: Args,
+        }
+        let parse = |argv: &[&str]| Cli::try_parse_from(argv).unwrap().args;
+        assert_eq!(parse(&["load-pods"]).scheduler(), Some(UNSCHEDULED));
+        assert_eq!(parse(&["load-pods", "--schedule"]).scheduler(), None);
+        let doc = pod_doc(0, "p", 1, Some(UNSCHEDULED));
+        assert!(doc.contains(
+            "spec:\n  schedulerName: oxikube-load-unscheduled\n  terminationGracePeriodSeconds: 1\n"
+        ));
+        assert!(!pod_doc(0, "p", 1, None).contains("schedulerName"));
     }
 
     #[test]

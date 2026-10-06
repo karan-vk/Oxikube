@@ -162,6 +162,7 @@ fn a_store_without_a_warning_port_has_no_warnings() {
         StoreRuntime {
             spawner: Executor::default().spawner(),
             clock,
+            probe: None,
         },
         StoreOptions::default(),
     );

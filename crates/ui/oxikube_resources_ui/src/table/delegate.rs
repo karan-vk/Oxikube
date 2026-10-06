@@ -4,7 +4,8 @@
 //! the [`ColumnProvider`] that reads the cells, and the [`Selection`]. The table is virtualised,
 //! so `render_td` runs only for the rows on screen: it reads one cell through the provider
 //! (which borrows from the object) and draws it. Nothing here sorts, filters or allocates per
-//! row beyond the cell's text.
+//! row beyond the cell's text. Cells go to the table as [`TextCell`]s (its fast path) from the
+//! [`CellCache`], so a frame that scrolls or churns re-reads only the rows that changed.
 
 use std::sync::Arc;
 
@@ -18,8 +19,10 @@ use oxikube_app::columns::Align;
 use oxikube_app::store::{FeedState, ObjectKey, StoreObject};
 use oxikube_ui::menu::{PopupMenu, PopupMenuItem};
 use oxikube_ui::table::SortDirection;
+use oxikube_ui::table::TextCell;
 use oxikube_ui::{TableColumn, TableDelegate};
 
+use super::cell_cache::CellCache;
 use super::cells::{ToneColors, cell_element};
 use super::layout::ColumnLayout;
 use super::selection::Selection;
@@ -49,6 +52,8 @@ pub struct RowsDelegate {
     pub(super) now: Timestamp,
     /// The tone colours, refreshed once per frame by the view.
     pub(super) colors: Option<ToneColors>,
+    /// The visible cells' text and tone, kept between frames.
+    pub(super) cells: CellCache,
     /// The view, for the context menu's entries.
     pub(super) view: WeakEntity<ResourceTable>,
     /// The row actions of the context menu (none for a table without them).
@@ -155,6 +160,23 @@ impl TableDelegate for RowsDelegate {
             self.rendered_cells += 1;
         }
         cell_element(&cell, &colors, row_ix, col_ix)
+    }
+
+    fn text_cell(
+        &mut self,
+        row_ix: usize,
+        col_ix: usize,
+        _: &mut Window,
+        cx: &mut App,
+    ) -> Option<TextCell> {
+        let colors = self.colors(cx);
+        let (row, column) = (self.rows.get(row_ix)?, self.layout.visible(col_ix)?);
+        let (text, tone) = self.cells.get(row, &column.id, &*self.provider, self.now);
+        #[cfg(test)]
+        {
+            self.rendered_cells += 1;
+        }
+        Some(TextCell::new(text).color(colors.of(tone)))
     }
 
     fn render_th(&mut self, col_ix: usize, _: &mut Window, _: &mut App) -> impl IntoElement {

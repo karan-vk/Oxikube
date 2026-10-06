@@ -6,6 +6,8 @@
 //! - `handle`: [`TableHandle`] (retained state, selection, scroll) and [`TableOptions`].
 //! - `events`: [`TableEvent`] and [`RowClick`], what the table tells its owner.
 //! - `element`: [`Table`], the element views place in their tree.
+//! - `text_cell`: [`TextCell`], the fast path for plain text cells (no extra element, the
+//!   ellipsis only where the text does not fit).
 //! - `widths` (private): column widths under UI zoom (design-time widths, scaled on read).
 //! - `adapter` (private): forwards our trait to gpui-component's `TableDelegate`.
 //!
@@ -18,6 +20,7 @@ mod delegate;
 mod element;
 mod events;
 mod handle;
+mod text_cell;
 mod widths;
 
 pub use column::{ColumnAlign, SortDirection, TableColumn};
@@ -25,6 +28,7 @@ pub use delegate::TableDelegate;
 pub use element::Table;
 pub use events::{RowClick, TableEvent};
 pub use handle::{TableHandle, TableOptions};
+pub use text_cell::TextCell;
 
 #[cfg(test)]
 mod tests;

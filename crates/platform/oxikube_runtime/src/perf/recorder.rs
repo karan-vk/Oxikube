@@ -1,4 +1,9 @@
 //! The hot-path recorder: frame durations, feed deltas and `notify` counts.
+//!
+//! Besides the totals it keeps one assertion-style figure (E07-S09): the most coalesced notifies
+//! delivered between two consecutive frames. Streams are coalesced to frame cadence, so with one
+//! streaming view on screen it stays at 1 however fast the feed is; more means something notifies
+//! outside `notify_coalesced`, or several streaming views redraw in the same frame.
 
 use super::ring::{FrameRing, RingReader};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -16,6 +21,10 @@ pub struct Recorder {
     frames: FrameRing,
     feed_deltas: AtomicU64,
     notifies: AtomicU64,
+    /// Notifies since the last recorded frame.
+    notifies_since_frame: AtomicU64,
+    /// The most notifies between two frames since the last drain.
+    max_notifies_per_frame: AtomicU64,
 }
 
 impl Default for Recorder {
@@ -36,14 +45,20 @@ impl Recorder {
             frames: FrameRing::with_capacity(capacity),
             feed_deltas: AtomicU64::new(0),
             notifies: AtomicU64::new(0),
+            notifies_since_frame: AtomicU64::new(0),
+            max_notifies_per_frame: AtomicU64::new(0),
         }
     }
 
-    /// Records one frame's duration. UI thread only (single producer).
+    /// Records one frame's duration. UI thread only (single producer). Closes the frame's notify
+    /// count (see the module docs).
     #[inline]
     pub fn record_frame(&self, duration: Duration) {
         self.frames
             .push(u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX));
+        let notifies = self.notifies_since_frame.swap(0, Ordering::Relaxed);
+        self.max_notifies_per_frame
+            .fetch_max(notifies, Ordering::Relaxed);
     }
 
     /// Adds `n` applied feed deltas.
@@ -56,6 +71,7 @@ impl Recorder {
     #[inline]
     pub fn record_notify(&self) {
         self.notifies.fetch_add(1, Ordering::Relaxed);
+        self.notifies_since_frame.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Total frames recorded so far.
@@ -95,6 +111,9 @@ pub struct Tick {
     pub feed_deltas: u64,
     /// Notifies in the interval.
     pub notifies: u64,
+    /// The most notifies delivered between two consecutive frames in the interval (see the module
+    /// docs).
+    pub max_notifies_per_frame: u64,
     /// Wall time covered by this tick.
     pub interval: Duration,
 }
@@ -120,6 +139,7 @@ impl RecorderReader {
             dropped_frames,
             feed_deltas: feed - self.feed_seen,
             notifies: notify - self.notify_seen,
+            max_notifies_per_frame: recorder.max_notifies_per_frame.swap(0, Ordering::Relaxed),
             interval: now - self.last_drain,
         };
         self.feed_seen = feed;
@@ -142,6 +162,10 @@ mod tests {
         recorder.record_feed_deltas(40);
         recorder.record_notify();
         let tick = reader.drain(&recorder);
+        assert_eq!(
+            tick.max_notifies_per_frame, 0,
+            "a notify after the last frame belongs to the next one"
+        );
         assert_eq!(tick.frames_ns, [1_500_000, 2_500_000]);
         assert_eq!(
             (tick.feed_deltas, tick.notifies, tick.dropped_frames),
@@ -154,5 +178,26 @@ mod tests {
         assert_eq!((tick.feed_deltas, tick.notifies), (2, 0));
         assert_eq!(recorder.feed_deltas(), 42);
         assert_eq!(recorder.frames_recorded(), 2);
+    }
+
+    #[test]
+    fn counts_the_most_notifies_between_two_frames() {
+        let recorder = Recorder::with_frame_capacity(8);
+        let mut reader = recorder.reader();
+        recorder.record_notify();
+        recorder.record_frame(Duration::from_millis(1));
+        for _ in 0..3 {
+            recorder.record_notify();
+        }
+        recorder.record_frame(Duration::from_millis(1));
+        recorder.record_frame(Duration::from_millis(1));
+        assert_eq!(reader.drain(&recorder).max_notifies_per_frame, 3);
+        recorder.record_notify();
+        recorder.record_frame(Duration::from_millis(1));
+        assert_eq!(
+            reader.drain(&recorder).max_notifies_per_frame,
+            1,
+            "the maximum is per drain"
+        );
     }
 }

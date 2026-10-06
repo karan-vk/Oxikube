@@ -11,5 +11,5 @@
     "peak_rss_mib": { "count": 1, "p50": 118.5, "p95": 118.5, "p99": 118.5, "max": 118.5 },
     "rss_mib": { "count": 120, "p50": 116.25, "p95": 116.5, "p99": 116.5, "max": 116.5 }
   },
-  "counters": { "frames": 120, "dropped_frames": 0, "feed_deltas": 0, "notifies": 0 }
+  "counters": { "frames": 120, "dropped_frames": 0, "feed_deltas": 0, "notifies": 0, "max_notifies_per_frame": 0 }
 }

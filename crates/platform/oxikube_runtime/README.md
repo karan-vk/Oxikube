@@ -18,7 +18,8 @@ tokio <-> GPUI bridge (gpui_tokio), spawn_kube with abort-on-drop, frame-coalesc
 - The task rules (nothing blocking the UI thread, owned tasks, the self-dropping task pitfall and
   its flag + detach fix) are in the crate docs; `tests/bridge/` demonstrates each one.
 - Bridge micro benchmark: `cargo run --release -p oxikube_runtime --example bridge_bench`.
-- `perf` (E01-S14): the `--perf` recorder (lock-free frame ring buffer, feed and notify counters),
+- `perf` (E01-S14): the `--perf` recorder (lock-free frame ring buffer, feed and notify counters,
+  and the most notifies between two frames, E07-S09),
   the JSONL flush thread (`PerfSession`), the root-view frame hook (`PerfRoot`), the process-wide
   `record_feed_deltas` / `record_notify` helpers, and (feature `perf-harness`) the scripted headless
   frame driver used by `oxikube --perf-scenario` and `cargo xtask perf`. What a frame covers and the

@@ -3,11 +3,38 @@
   "note": "Headless perf baseline for `cargo xtask perf --check` (docs/PERFORMANCE.md, Perf harness). Keyed by OS (`std::env::consts::OS`) then scenario then metric; *_ms metrics (p50/p95/p99) are in milliseconds and *_mib metrics (rss_mib, peak_rss_mib) are in MiB; all are medians across samples. Numbers come from the nightly's own runners (ubuntu-latest, macos-latest): refresh with `cargo xtask perf --from-report <perf-report artifact> --update-baseline`, never by hand.",
   "os": {
     "linux": {
-      "source": "github-actions ubuntu-latest nightly run 37453806221",
+      "source": "github-actions ubuntu-latest nightly run 37453806221 (startup), nightly run 37492117478 (scroll-10k, E07-S09)",
       "updated": "2026-10-06",
       "profile": "release-fast",
       "samples_per_scenario": 7,
       "scenarios": {
+        "scroll-10k": {
+          "draw_ms": {
+            "p50": 334.629,
+            "p95": 339.256,
+            "p99": 342.553
+          },
+          "first_rows_ms": {
+            "p50": 466.068,
+            "p95": 466.068,
+            "p99": 466.068
+          },
+          "frame_ms": {
+            "p50": 337.91,
+            "p95": 343.147,
+            "p99": 348.028
+          },
+          "peak_rss_mib": {
+            "p50": 268.66,
+            "p95": 268.66,
+            "p99": 268.66
+          },
+          "rss_mib": {
+            "p50": 268.656,
+            "p95": 268.656,
+            "p99": 268.66
+          }
+        },
         "startup": {
           "config_load_ms": {
             "p50": 1.369,
@@ -118,11 +145,38 @@
       }
     },
     "macos": {
-      "source": "github-actions macos-latest nightly run 37453806221",
+      "source": "github-actions macos-latest nightly run 37453806221 (startup), nightly run 37492117478 (scroll-10k, E07-S09)",
       "updated": "2026-10-06",
       "profile": "release-fast",
       "samples_per_scenario": 7,
       "scenarios": {
+        "scroll-10k": {
+          "draw_ms": {
+            "p50": 3.326,
+            "p95": 4.647,
+            "p99": 5.382
+          },
+          "first_rows_ms": {
+            "p50": 26.445,
+            "p95": 26.445,
+            "p99": 26.445
+          },
+          "frame_ms": {
+            "p50": 3.323,
+            "p95": 4.368,
+            "p99": 5.033
+          },
+          "peak_rss_mib": {
+            "p50": 176.0,
+            "p95": 176.0,
+            "p99": 176.0
+          },
+          "rss_mib": {
+            "p50": 175.734,
+            "p95": 175.984,
+            "p99": 176.0
+          }
+        },
         "startup": {
           "config_load_ms": {
             "p50": 1.581,

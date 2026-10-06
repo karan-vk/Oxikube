@@ -70,7 +70,7 @@ pub(super) fn right_click(f: &mut Fixture, row: usize) {
     f.vcx.update(|window, cx| window.draw(cx).clear(cx));
     let at = f
         .vcx
-        .debug_bounds(Box::leak(format!("cell-{row}-0").into_boxed_str()))
+        .debug_bounds(Box::leak(format!("td-{row}-0").into_boxed_str()))
         .unwrap_or_else(|| panic!("row {row} was not laid out"))
         .center();
     f.vcx

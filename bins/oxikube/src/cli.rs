@@ -1,4 +1,4 @@
-//! Command-line flags. Hand-rolled (four flags) so the binary does not pull in an argument parser
+//! Command-line flags. Hand-rolled (a handful of flags) so the binary does not pull in an argument parser
 //! and a GUI launch with unexpected platform arguments still starts.
 
 use std::ffi::OsString;
@@ -15,9 +15,12 @@ Options:
                           (data dir: ~/.local/share on Linux, ~/Library/Application Support on macOS)
   --perf-dir <DIR>        Write the --perf JSONL under DIR instead (implies --perf)
   --perf-duration <SECS>  Quit after SECS seconds (implies --perf)
-  --perf-scenario <NAME>  Run a headless perf scenario and exit: startup, scroll-10k, palette,
-                          logs-stream, editor-5mb (needs --features perf-scenarios; use
-                          `cargo xtask perf`)
+  --perf-table <CONTEXT>  Connect CONTEXT, open its pods table and scroll it while recording
+                          (implies --perf; docs/PERFORMANCE.md \"Resource table\")
+  --perf-scroll <ROWS>    Rows --perf-table scrolls per frame (default 3; 0: keep it still)
+  --perf-scenario <NAME>  Run a headless perf scenario and exit: startup, scroll-10k (or
+                          table-scroll-10k), palette, logs-stream, editor-5mb (needs --features
+                          perf-scenarios; use `cargo xtask perf`)
   --perf-report <FILE>    Where --perf-scenario writes its JSON sample (default: stdout)
   --perf-no-probe         Run --perf-scenario without the frame hook (overhead measurement)
   -h, --help              Print this help";
@@ -42,6 +45,8 @@ pub struct Args {
     pub perf_scenario: Option<String>,
     pub perf_report: Option<PathBuf>,
     pub perf_no_probe: bool,
+    pub perf_table: Option<String>,
+    pub perf_scroll: Option<usize>,
 }
 
 /// What `main` should do.
@@ -98,6 +103,17 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
                     })?;
                 out.perf_duration = Some(Duration::from_secs_f64(secs));
             }
+            "--perf-table" => {
+                out.perf = true;
+                out.perf_table = Some(value("--perf-table")?);
+            }
+            "--perf-scroll" => {
+                let v = value("--perf-scroll")?;
+                let rows = v
+                    .parse()
+                    .map_err(|_| format!("--perf-scroll: `{v}` is not a number of rows"))?;
+                out.perf_scroll = Some(rows);
+            }
             "--perf-scenario" => out.perf_scenario = Some(value("--perf-scenario")?),
             "--perf-report" => out.perf_report = Some(value("--perf-report")?.into()),
             other => return Err(format!("unknown argument `{other}`")),
@@ -108,6 +124,9 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
     }
     if out.perf_report.is_some() && out.perf_scenario.is_none() {
         return Err("--perf-report only applies to --perf-scenario".into());
+    }
+    if out.perf_scroll.is_some() && out.perf_table.is_none() {
+        return Err("--perf-scroll only applies to --perf-table".into());
     }
     Ok(Parsed::Run(out))
 }
@@ -152,6 +171,29 @@ mod tests {
         assert_eq!(a.perf_scenario.as_deref(), Some("startup"));
         assert_eq!(a.perf_report, Some(PathBuf::from("out.json")));
         assert!(a.perf_no_probe && !a.perf);
+    }
+
+    #[test]
+    fn table_drive_flags() {
+        let a = run(&["--perf-table", "kind-oxikube", "--perf-scroll=5"]).unwrap();
+        assert!(a.perf, "--perf-table implies --perf");
+        assert_eq!(a.perf_table.as_deref(), Some("kind-oxikube"));
+        assert_eq!(a.perf_scroll, Some(5));
+        assert_eq!(
+            run(&["--perf-table=kind-oxikube"]).unwrap().perf_scroll,
+            None
+        );
+        assert!(
+            run(&["--perf-scroll", "3"])
+                .unwrap_err()
+                .contains("--perf-table")
+        );
+        assert!(
+            run(&["--perf-table", "x", "--perf-scroll", "many"])
+                .unwrap_err()
+                .contains("number of rows")
+        );
+        assert!(USAGE.contains("--perf-table"));
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 mod events;
 mod support;
+mod text_cells;
 
 use self::support::harness;
 use super::*;

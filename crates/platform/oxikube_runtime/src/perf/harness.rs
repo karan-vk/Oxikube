@@ -130,6 +130,7 @@ pub fn run_frames<C: AppContext>(
         dropped_frames: tick.dropped_frames,
         feed_deltas: tick.feed_deltas,
         notifies: tick.notifies,
+        max_notifies_per_frame: tick.max_notifies_per_frame,
     };
     run.frame_ns = tick.frames_ns;
     Ok(run)
@@ -240,6 +241,7 @@ mod tests {
                 dropped_frames: 0,
                 feed_deltas: (FRAMES * BATCH) as u64,
                 notifies: FRAMES as u64,
+                max_notifies_per_frame: 1,
             },
             "one hook frame per scripted draw, every delta and notify counted"
         );

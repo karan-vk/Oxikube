@@ -5,6 +5,9 @@
 //! session ends, printing the summary to stderr, on whichever comes first: the app quitting (last
 //! window closed: `--perf` sets `QuitMode::LastWindowClosed`, also on macOS), `--perf-duration`
 //! elapsing, or Ctrl-C (SIGINT).
+//!
+//! `--perf-table <CONTEXT>` (`oxikube::perf_table`) makes the run a scripted one: it connects the
+//! context, opens its pods table and scrolls it, the way a user would (E07-S09).
 
 use anyhow::{Context as _, Result};
 use gpui::{App, QuitMode};

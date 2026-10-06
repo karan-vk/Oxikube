@@ -37,6 +37,17 @@ impl Default for StoreConfig {
     }
 }
 
+/// Instrumentation hook: what the feeds apply. The binary counts it as the feed throughput of
+/// `oxikube --perf` (docs/PERFORMANCE.md); tests count batches with it.
+///
+/// Called on the feed's task once per batch, before the batch is applied, so keep it to an atomic
+/// add: no lock, no I/O.
+pub trait StoreProbe: Send + Sync {
+    /// A feed is applying a batch of `events` watch events (a relist counts each object it
+    /// lists).
+    fn feed_batch(&self, events: usize);
+}
+
 /// Where the store runs its tasks and measures time.
 #[derive(Clone)]
 pub struct StoreRuntime {
@@ -44,6 +55,8 @@ pub struct StoreRuntime {
     pub spawner: Arc<dyn Spawner>,
     /// Grace timers and retry backoff.
     pub clock: Arc<dyn ClockPort>,
+    /// Told about every batch a feed applies (`None`: nobody is counting).
+    pub probe: Option<Arc<dyn StoreProbe>>,
 }
 
 impl std::fmt::Debug for StoreRuntime {

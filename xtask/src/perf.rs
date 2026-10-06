@@ -15,7 +15,8 @@
 //! 6. `--update-baseline`: writes this run's numbers into the baseline for this OS.
 //! 7. Budgets (always, unless `--skip-budgets`): the absolute limits of ADR 0013 on the p95 across
 //!    the run's cold launches (`budget::BUDGETS`: the first interactive frame ≤ 400 ms, failing
-//!    beyond +20 %; settings + theme + keymap ≤ 30 ms). E05-S13.
+//!    beyond +20 %; settings + theme + keymap ≤ 30 ms, E05-S13; the table's first rows < 1 s and
+//!    its frame under churn ≥ 55 fps, E07-S09).
 //!
 //! Every scenario process runs with `KUBECONFIG` set to the reference fixture: 3 kubeconfigs with
 //! 20 contexts (`fixture`).
@@ -51,6 +52,15 @@ pub const SCENARIOS: [&str; 5] = [
     "editor-5mb",
 ];
 
+/// The name `oxikube --perf-scenario` reports for `name`: `table-scroll-10k` (the story's name
+/// for it, E07-S09) is `scroll-10k`.
+fn canonical_scenario(name: &str) -> &str {
+    match name {
+        "table-scroll-10k" => "scroll-10k",
+        other => other,
+    }
+}
+
 /// Must match `FIRST_FRAME_MARKER` in `bins/oxikube/src/perf_scenario.rs`.
 const FIRST_FRAME_MARKER: &str = "OXIKUBE_PERF_FIRST_FRAME";
 /// Metric added from outside the process.
@@ -58,7 +68,8 @@ const LAUNCH_METRIC: &str = "launch_to_first_frame_ms";
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct Args {
-    /// Scenario to run: startup, scroll-10k, palette, logs-stream, editor-5mb.
+    /// Scenario to run: startup, scroll-10k (alias table-scroll-10k), palette, logs-stream,
+    /// editor-5mb.
     #[arg(required_unless_present_any = ["all", "from_report"], conflicts_with_all = ["all", "from_report"])]
     pub scenario: Option<String>,
     /// Run every scenario.
@@ -196,6 +207,7 @@ fn run_and_write(args: &Args, root: &Path, target: &Path) -> Result<Report> {
     let scenarios: Vec<&str> = match (&args.scenario, args.all) {
         (_, true) => SCENARIOS.to_vec(),
         (Some(s), false) => {
+            let s = canonical_scenario(s);
             let Some(known) = SCENARIOS.iter().find(|k| **k == s) else {
                 bail!("unknown scenario `{s}`; known: {}", SCENARIOS.join(", "));
             };
@@ -389,6 +401,13 @@ mod tests {
     struct Cli {
         #[command(flatten)]
         args: Args,
+    }
+
+    #[test]
+    fn table_scroll_10k_is_scroll_10k() {
+        assert_eq!(canonical_scenario("table-scroll-10k"), "scroll-10k");
+        assert_eq!(canonical_scenario("startup"), "startup");
+        assert!(SCENARIOS.contains(&canonical_scenario("table-scroll-10k")));
     }
 
     #[test]
