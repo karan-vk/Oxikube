@@ -255,6 +255,94 @@ async fn a_failing_store_keeps_the_default_layout_and_saving_resumes(cx: &mut Te
     assert_eq!(written(&fake).len(), 1);
 }
 
+/// A stored layout that cannot be used, in a fake store.
+fn newer_layout_fake() -> Arc<FakeStatePort> {
+    let fake = Arc::new(FakeStatePort::new());
+    block_on(fake.table_put(
+        &StateTable::new(LAYOUT_TABLE).unwrap(),
+        &StateKey::new(MAIN_WINDOW_ID).unwrap(),
+        json!({ "version": 99, "future": true }),
+    ))
+    .unwrap();
+    fake.clear_calls();
+    fake
+}
+
+#[gpui::test]
+async fn quitting_an_untouched_session_keeps_a_discarded_layout(cx: &mut TestAppContext) {
+    let fake = newer_layout_fake();
+    let (ws, mut vcx) = window(cx);
+    let persistence = start(&ws, &mut vcx, fake.clone());
+    vcx.update(|_, cx| {
+        assert!(matches!(
+            persistence.read(cx).status(),
+            RestoreStatus::Discarded(_)
+        ));
+    });
+
+    cx.update(|cx| cx.shutdown());
+    cx.run_until_parked();
+    assert!(
+        written(&fake).is_empty(),
+        "nothing changed, so the stored layout is left alone"
+    );
+}
+
+#[gpui::test]
+async fn quitting_an_untouched_session_keeps_the_layout_after_a_failed_read(
+    cx: &mut TestAppContext,
+) {
+    let fake = Arc::new(FakeStatePort::new());
+    fake.script()
+        .table_get
+        .push_err(OxiError::internal("cannot read"));
+    let (ws, mut vcx) = window(cx);
+    let persistence = start(&ws, &mut vcx, fake.clone());
+    vcx.update(|_, cx| {
+        assert!(matches!(
+            persistence.read(cx).status(),
+            RestoreStatus::Failed(_)
+        ));
+    });
+
+    cx.update(|cx| cx.shutdown());
+    cx.run_until_parked();
+    assert!(written(&fake).is_empty());
+}
+
+#[gpui::test]
+async fn quitting_after_a_change_replaces_a_discarded_layout(cx: &mut TestAppContext) {
+    let fake = newer_layout_fake();
+    let (ws, mut vcx) = window(cx);
+    start(&ws, &mut vcx, fake.clone());
+    open(&ws, &mut vcx, "a");
+
+    cx.update(|cx| cx.shutdown());
+    cx.run_until_parked();
+    let writes = written(&fake);
+    assert_eq!(writes.len(), 1, "the change is written by the quit hook");
+    assert_eq!(saved_titles(&writes[0]), ["a"]);
+}
+
+#[gpui::test]
+async fn quitting_retries_a_write_that_failed_after_a_discarded_layout(cx: &mut TestAppContext) {
+    let fake = newer_layout_fake();
+    let (ws, mut vcx) = window(cx);
+    start(&ws, &mut vcx, fake.clone());
+    fake.script()
+        .table_put
+        .push_err(OxiError::internal("disk full"));
+    open(&ws, &mut vcx, "a");
+    tick(&mut vcx, LONG_ENOUGH);
+    assert_eq!(written(&fake).len(), 1, "attempted, and failed");
+
+    cx.update(|cx| cx.shutdown());
+    cx.run_until_parked();
+    let writes = written(&fake);
+    assert_eq!(writes.len(), 2, "the quit hook tried again");
+    assert_eq!(saved_titles(&writes[1]), ["a"]);
+}
+
 #[gpui::test]
 async fn the_finish_of_a_restore_is_announced(cx: &mut TestAppContext) {
     let fake = Arc::new(FakeStatePort::new());

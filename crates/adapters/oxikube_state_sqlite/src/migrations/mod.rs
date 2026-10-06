@@ -29,7 +29,11 @@ pub const MIGRATIONS: &[Migration] = &[Migration {
 
 /// The schema version a fully migrated database has.
 pub fn latest_version() -> u32 {
-    MIGRATIONS.last().map_or(0, |m| m.version)
+    latest_of(MIGRATIONS)
+}
+
+fn latest_of(migrations: &[Migration]) -> u32 {
+    migrations.last().map_or(0, |m| m.version)
 }
 
 const CREATE_MIGRATIONS_TABLE: &str = "CREATE TABLE IF NOT EXISTS migrations (
@@ -41,19 +45,25 @@ const CREATE_MIGRATIONS_TABLE: &str = "CREATE TABLE IF NOT EXISTS migrations (
 /// Brings `conn` up to [`latest_version`], returning the version it ends at. Idempotent: applied
 /// migrations are skipped, so opening a migrated database changes nothing.
 pub fn apply(conn: &mut Connection) -> Result<u32, StateFailure> {
+    apply_all(conn, MIGRATIONS)
+}
+
+/// [`apply`] over an explicit list, so a test can run a migration that fails.
+fn apply_all(conn: &mut Connection, migrations: &[Migration]) -> Result<u32, StateFailure> {
+    let latest = latest_of(migrations);
     conn.execute_batch(CREATE_MIGRATIONS_TABLE)?;
     let current: u32 = conn.query_row(
         "SELECT COALESCE(MAX(version), 0) FROM migrations",
         [],
         |r| r.get(0),
     )?;
-    if current > latest_version() {
+    if current > latest {
         return Err(StateFailure::Newer {
             found: current,
-            supported: latest_version(),
+            supported: latest,
         });
     }
-    for migration in MIGRATIONS.iter().filter(|m| m.version > current) {
+    for migration in migrations.iter().filter(|m| m.version > current) {
         // IMMEDIATE: take the write lock up front so a concurrent opener waits instead of
         // failing half-way through the script.
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -69,7 +79,7 @@ pub fn apply(conn: &mut Connection) -> Result<u32, StateFailure> {
             "state migration applied"
         );
     }
-    Ok(latest_version())
+    Ok(latest)
 }
 
 #[cfg(test)]
@@ -132,20 +142,39 @@ mod tests {
 
     #[test]
     fn a_failing_migration_rolls_back_and_records_nothing() {
+        // The real first migration, then one whose second statement is invalid: the first
+        // statement of the broken one runs before the failure and must not survive it.
+        let broken = [
+            Migration {
+                version: 1,
+                name: "init",
+                sql: MIGRATIONS[0].sql,
+            },
+            Migration {
+                version: 2,
+                name: "broken",
+                sql: "CREATE TABLE half_applied (a); CREATE TABLE half_applied (a);",
+            },
+        ];
         let mut conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(CREATE_MIGRATIONS_TABLE).unwrap();
-        let tx = conn.transaction().unwrap();
-        let broken = tx.execute_batch("CREATE TABLE ok (a); CREATE TABLE ok (a);");
-        assert!(broken.is_err());
-        drop(tx);
-        let tables: i64 = conn
+        let err = apply_all(&mut conn, &broken).unwrap_err();
+        assert!(matches!(err, StateFailure::Sqlite(_)), "{err:?}");
+
+        assert_eq!(
+            versions(&conn),
+            [1],
+            "only the migration that succeeded is recorded"
+        );
+        let leftover: i64 = conn
             .query_row(
-                "SELECT count(*) FROM sqlite_master WHERE name = 'ok'",
+                "SELECT count(*) FROM sqlite_master WHERE name = 'half_applied'",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(tables, 0);
+        assert_eq!(leftover, 0, "the failed migration left nothing behind");
+        // The connection is usable and the earlier migration is intact.
+        assert_eq!(apply(&mut conn).unwrap(), latest_version());
     }
 
     #[test]

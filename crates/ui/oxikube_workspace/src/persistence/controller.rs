@@ -240,6 +240,16 @@ impl LayoutPersistence {
             .as_ref()
             .is_some_and(|s| self.last_written.as_ref() == Some(&s.to_json()))
             && self.write_task.is_none();
+        // A layout that could not be used (or a store that failed) leaves the default layout in
+        // place and no baseline: only a change since may replace what is stored, so a session in
+        // which nothing happened must not overwrite it with the default layout on quit.
+        let untouched_fallback = !self.dirty
+            && self.last_written.is_none()
+            && matches!(
+                self.status,
+                RestoreStatus::Discarded(_) | RestoreStatus::Failed(_)
+            );
+        let unchanged = unchanged || untouched_fallback;
         let store = self.store.clone();
         async move {
             let Some(snapshot) = snapshot.filter(|_| !unchanged) else {
@@ -269,7 +279,11 @@ impl LayoutPersistence {
             if let Err(error) = store.save(&snapshot).await {
                 tracing::warn!(%error, "saving the layout failed");
                 // Not written: let the next change (or flush) try again.
-                this.update(cx, |this, _| this.last_written = None).ok();
+                this.update(cx, |this, _| {
+                    this.last_written = None;
+                    this.dirty = true;
+                })
+                .ok();
             }
         }))
     }
