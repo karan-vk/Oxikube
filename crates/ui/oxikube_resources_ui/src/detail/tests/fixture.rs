@@ -13,7 +13,7 @@ use crate::detail::{DetailDrawer, DetailView};
 use crate::table::tests::fixture::{Fixture, cluster};
 
 /// A kind as discovery serves it.
-pub(super) fn kind(
+pub(crate) fn kind(
     group: &str,
     version: &str,
     name: &str,
@@ -34,7 +34,7 @@ pub(super) fn kind(
 
 /// The kinds the tests serve: pods, replica sets, deployments, secrets, nodes, the Widget custom
 /// kind and the CRD kind.
-pub(super) fn kinds() -> Vec<ResourceKind> {
+pub(crate) fn kinds() -> Vec<ResourceKind> {
     vec![
         kind("", "v1", "Pod", "pods", true),
         kind("apps", "v1", "ReplicaSet", "replicasets", true),
@@ -53,7 +53,7 @@ pub(super) fn kinds() -> Vec<ResourceKind> {
 }
 
 /// `base` with `edit` applied to its JSON.
-pub(super) fn edited(base: Resource, edit: impl FnOnce(&mut Value)) -> Resource {
+pub(crate) fn edited(base: Resource, edit: impl FnOnce(&mut Value)) -> Resource {
     let mut json = base.json;
     edit(&mut json);
     Resource::from_json(json).expect("still a resource")
@@ -61,7 +61,7 @@ pub(super) fn edited(base: Resource, edit: impl FnOnce(&mut Value)) -> Resource 
 
 /// A pod `shop/web-0` owned by the replica set `web-5d`, with labels, an annotation and
 /// conditions.
-pub(super) fn web_pod() -> Resource {
+pub(crate) fn web_pod() -> Resource {
     edited(
         oxikube_testkit::pod()
             .namespace("shop")
@@ -88,7 +88,7 @@ pub(super) fn web_pod() -> Resource {
 }
 
 /// The replica set that owns [`web_pod`].
-pub(super) fn web_replicaset() -> Resource {
+pub(crate) fn web_replicaset() -> Resource {
     let mut rs = oxikube_testkit::replicaset()
         .namespace("shop")
         .name("web-5d")
@@ -97,18 +97,18 @@ pub(super) fn web_replicaset() -> Resource {
     rs
 }
 
-pub(super) fn pod_ref(name: &str) -> ResourceRef {
+pub(crate) fn pod_ref(name: &str) -> ResourceRef {
     ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "shop", name)
 }
 
 /// One window with a connected cluster `kind`.
-pub(super) struct Detail {
-    pub(super) f: Fixture,
+pub(crate) struct Detail {
+    pub(crate) f: Fixture,
 }
 
 impl Detail {
     /// A window over a cluster that serves [`kinds`] and holds `objects`, connected.
-    pub(super) fn new(
+    pub(crate) fn new(
         cx: &mut TestAppContext,
         objects: impl IntoIterator<Item = Resource>,
     ) -> Self {
@@ -124,7 +124,7 @@ impl Detail {
     }
 
     /// The cluster tab's workspace.
-    pub(super) fn workspace(&mut self) -> Entity<Workspace> {
+    pub(crate) fn workspace(&mut self) -> Entity<Workspace> {
         let tabs = self.f.tabs.clone();
         self.f.vcx.update(|_, cx| {
             let tab = tabs.read(cx).tab(&cluster()).cloned().expect("a tab");
@@ -133,7 +133,7 @@ impl Detail {
     }
 
     /// Opens the detail of `target` as `resource::Open` does.
-    pub(super) fn open(&mut self, target: &ResourceRef) -> Entity<DetailView> {
+    pub(crate) fn open(&mut self, target: &ResourceRef) -> Entity<DetailView> {
         let views = self.f.views.clone();
         let target = target.clone();
         let view = self
@@ -148,7 +148,7 @@ impl Detail {
     }
 
     /// The drawer of the cluster tab.
-    pub(super) fn drawer(&mut self) -> Option<Entity<DetailDrawer>> {
+    pub(crate) fn drawer(&mut self) -> Option<Entity<DetailDrawer>> {
         let workspace = self.workspace();
         self.f
             .vcx
@@ -156,30 +156,30 @@ impl Detail {
     }
 
     /// The detail the drawer shows.
-    pub(super) fn drawer_view(&mut self) -> Option<Entity<DetailView>> {
+    pub(crate) fn drawer_view(&mut self) -> Option<Entity<DetailView>> {
         let drawer = self.drawer()?;
         self.f.vcx.update(|_, cx| drawer.read(cx).view().cloned())
     }
 
     /// Lets feeds, reads and a coalesced redraw land.
-    pub(super) fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.f.settle();
         self.f.settle();
     }
 
     /// Draws a frame.
-    pub(super) fn draw(&mut self) {
+    pub(crate) fn draw(&mut self) {
         self.f.vcx.update(|window, cx| window.draw(cx).clear(cx));
     }
 
     /// Whether the element tagged `selector` is on screen.
-    pub(super) fn shown(&mut self, selector: &'static str) -> bool {
+    pub(crate) fn shown(&mut self, selector: &'static str) -> bool {
         self.draw();
         self.f.vcx.debug_bounds(selector).is_some()
     }
 
     /// Clicks the element tagged `selector` and lets the effects land.
-    pub(super) fn click(&mut self, selector: &'static str) {
+    pub(crate) fn click(&mut self, selector: &'static str) {
         self.draw();
         let bounds = self
             .f
@@ -193,7 +193,7 @@ impl Detail {
     }
 
     /// Runs `f` on `view`.
-    pub(super) fn update<R>(
+    pub(crate) fn update<R>(
         &mut self,
         view: &Entity<DetailView>,
         f: impl FnOnce(&mut DetailView, &mut gpui::Context<DetailView>) -> R,
@@ -204,7 +204,7 @@ impl Detail {
     }
 
     /// Reads `view`.
-    pub(super) fn read<R>(
+    pub(crate) fn read<R>(
         &mut self,
         view: &Entity<DetailView>,
         f: impl FnOnce(&DetailView) -> R,

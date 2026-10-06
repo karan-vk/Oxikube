@@ -23,7 +23,7 @@ use super::selection::ClickMode;
 use super::view::{ResourceTable, ResourceTableEvent};
 
 impl ResourceTable {
-    pub(super) fn on_table_event(&mut self, event: &TableEvent, cx: &mut Context<Self>) {
+    pub(crate) fn on_table_event(&mut self, event: &TableEvent, cx: &mut Context<Self>) {
         match event {
             TableEvent::RowClicked(click) => self.on_row_click(*click, cx),
             TableEvent::RightClickedRow(Some(row)) => {

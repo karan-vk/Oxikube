@@ -60,7 +60,7 @@ mod view;
 mod yaml;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use describe::DescribeState;
 pub use drawer::{DEFAULT_WIDTH, DetailDrawer, ToggleDrawer};

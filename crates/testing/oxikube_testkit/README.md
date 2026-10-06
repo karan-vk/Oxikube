@@ -27,6 +27,10 @@ Port fakes, fixtures, builders, kind helpers, gpui test helpers.
   (items at offsets) replayed on a `FakeClockPort`; the test advances the clock
   (`clock.advance(..)`), so nothing sleeps. Fakes never start OS threads or need tokio, and work
   under GPUI's test scheduler.
+- `ScriptedFeed` scripts a resource feed by tick: the initial list, then objects added, modified
+  and deleted at chosen ticks, as the `DeltaBatch`es a watch delivers (`feed.install(&resources)`,
+  then `resources.clock().advance(TICK)` per tick). The resource browser's end-to-end suite
+  (`oxikube_resources_ui::suite`) is built on it.
 - `tests/port_coverage.rs` fails when a port trait appears in `oxikube_ports` without a fake.
   Add a port method, add it to the fake in the same PR.
 

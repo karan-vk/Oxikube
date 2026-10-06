@@ -16,6 +16,9 @@
 //! | [`table::states`] | E07-S10 | loading / empty / filtered-empty / forbidden / unauthorized / error states, the stale badge, Retry (`resource::RetryFeed`) and the API server's `Warning:` headers as toasts |
 //! | [`views`] | E07-S03 | [`ResourceViews`]: the kind view that opens tables in cluster tabs (sidebar navigation, `resource::OpenList`) and runs the table commands on the UI thread |
 //!
+//! The `suite` module (tests only, E07-S12) is the browser's end-to-end suite: the real views driven
+//! by scripted feeds over testkit fakes. Its pods-table screenshots live in `tests/screenshot.rs`.
+//!
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
@@ -28,6 +31,9 @@ pub mod navigate;
 pub mod overview_lite;
 pub mod table;
 pub mod views;
+
+#[cfg(test)]
+mod suite;
 
 pub use describe_settings::{DescribeBackendSetting, DescribeSettings};
 pub use views::{

@@ -35,7 +35,7 @@ pub struct RowsDelegate {
     /// The rows, in the store's order.
     pub(super) rows: Vec<Arc<StoreObject>>,
     /// The arranged columns.
-    pub(super) layout: ColumnLayout,
+    pub(crate) layout: ColumnLayout,
     /// Reads the cells.
     pub(super) provider: Arc<dyn ColumnProvider>,
     /// The selected rows.

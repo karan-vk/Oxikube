@@ -18,6 +18,8 @@
 //!   points are re-exported here.
 //! - [`images`]: the container images the kind suites run (one list, pre-pulled by `kind-up`).
 //! - [`script`]: the [`Script`] / [`CallLog`] / [`Timeline`] helpers the fakes share.
+//! - [`scripted_feed`]: [`ScriptedFeed`], objects added / modified / deleted at chosen ticks as the
+//!   `DeltaBatch`es a watch delivers (UI and store tests).
 //! - [`test_ports`]: [`TestPorts`], the seeded bundle of fakes an `AppState` is built from.
 //!
 //! # Features
@@ -46,9 +48,11 @@ pub mod integration;
 #[cfg(feature = "screenshot")]
 pub mod screenshot;
 pub mod script;
+pub mod scripted_feed;
 pub mod test_ports;
 
 pub use builders::{daemonset, deployment, job, node, pod, replicaset, resource, statefulset};
 pub use fakes::*;
 pub use script::{CallLog, Script, StreamGauge, Timeline, unscripted};
+pub use scripted_feed::{ScriptedFeed, TICK};
 pub use test_ports::TestPorts;
