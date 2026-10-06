@@ -56,6 +56,17 @@
 //! | [`ExecPort`] | [`exec`] |
 //! | [`PortForwardPort`] | [`portforward`] |
 //!
+//! # Session ports (E06-S01)
+//!
+//! The `ClusterSessionManager` in `oxikube_app::session` connects a context through
+//! [`ClusterConnectorPort`] and gets the data-plane ports above back as one
+//! [`ClusterPorts`] bundle, plus an [`AccessReviewPort`] for the user's capabilities.
+//!
+//! | Port | Module |
+//! |---|---|
+//! | [`ClusterConnectorPort`], [`ClusterPorts`], [`HealthReporter`] | [`connector`] |
+//! | [`AccessReviewPort`] | [`access`] |
+//!
 //! # Integration and agent ports (E02-S10)
 //!
 //! Shaped after MCP tool semantics and the ACP client duties, without
@@ -71,10 +82,12 @@
 
 #![deny(missing_docs)]
 
+pub mod access;
 pub mod agent;
 pub mod clock;
 pub mod cloud;
 pub mod cluster_source;
+pub mod connector;
 pub mod context;
 pub mod crash;
 pub mod describe;
@@ -97,6 +110,7 @@ pub mod table;
 pub mod tool;
 pub mod updater;
 
+pub use access::AccessReviewPort;
 pub use agent::{
     AgentCapabilities, AgentClient, AgentInfo, AgentPort, AgentSessionId, AgentUpdateBatch,
     AgentUpdateStream, AuthMethod, AuthMethodId, ClientCapabilities, ClientInfo, CreateTerminal,
@@ -110,6 +124,10 @@ pub use clock::ClockPort;
 pub use cloud::{CloudDiscoveryPort, CloudProvider, CloudToolStatus, DiscoveredCluster};
 pub use cluster_source::{
     ClusterContext, ClusterSource, ClusterSourcePort, SourceId, SourceKind, SourcesChanged,
+};
+pub use connector::{
+    ClusterConnection, ClusterConnectorPort, ClusterPorts, ConnectRequest, ConnectionGuard,
+    ExecInteractivity, HealthReporter, HealthSignal,
 };
 pub use context::{ContentPart, ContextProviderPort, ContextScope, Mention, MentionPrefix};
 pub use crash::{CrashId, CrashReport, CrashReporterPort};
@@ -166,6 +184,9 @@ mod tests {
         crash: Arc<dyn CrashReporterPort>,
         fs: Arc<dyn FsPort>,
         clock: Arc<dyn ClockPort>,
+        connector: Arc<dyn ClusterConnectorPort>,
+        access: Arc<dyn AccessReviewPort>,
+        health: Arc<dyn HealthReporter>,
     }
 
     /// Ports must be shareable across threads: `Arc<dyn Port>` is `Send + Sync`.
@@ -185,12 +206,16 @@ mod tests {
         assert_send_sync::<dyn CrashReporterPort>();
         assert_send_sync::<dyn FsPort>();
         assert_send_sync::<dyn ClockPort>();
+        assert_send_sync::<dyn ClusterConnectorPort>();
+        assert_send_sync::<dyn AccessReviewPort>();
+        assert_send_sync::<ClusterPorts>();
+        assert_send_sync::<ClusterConnection>();
     }
 
     /// Every port's source file must name the adapter expected to implement it.
     #[test]
     fn every_port_docs_name_an_adapter() {
-        let ports: [(&str, &str, &str); 13] = [
+        let ports: [(&str, &str, &str); 15] = [
             (
                 "cluster_source",
                 include_str!("cluster_source.rs"),
@@ -208,6 +233,8 @@ mod tests {
             ("crash", include_str!("crash.rs"), "oxikube_crash"),
             ("fs", include_str!("fs.rs"), "oxikube_runtime"),
             ("clock", include_str!("clock.rs"), "oxikube_runtime"),
+            ("connector", include_str!("connector.rs"), "oxikube_kube"),
+            ("access", include_str!("access.rs"), "oxikube_kube"),
         ];
         for (module, source, adapter) in ports {
             let docs: String = source

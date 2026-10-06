@@ -53,7 +53,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ScreenshotApp` with golden compare; `docs/testing-gpui.md`).
 - `oxikube_app` — services: `ClusterSessionManager`, `ResourceStore`, `CommandBus`,
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
-  `ContextRegistry`, `AgentSessionManager`. No gpui, no kube.
+  `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `session` (E06-S01):
+  `ClusterSessionManager` connects a context through `ClusterConnectorPort`, holds the returned
+  `ClusterPorts` bundle per session, drives `ClusterSessionState` (auth failures to
+  `AuthRequired`, transient ones retried with backoff on the `ClockPort`, health reports for
+  `Ready` ↔ `Degraded` → `Error`) and broadcasts `SessionUpdate`s; it spawns nothing (callers
+  drive `connect` with `spawn_kube`, dropping it cancels the attempt).
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
   mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
   events).
@@ -98,6 +103,7 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | Argo backends reading the cluster | `ResourcePort`, `PortForwardPort`, `ExecPort` | `oxikube_kube` | `oxikube_argocd` |
 | Extensions contributing themes/commands/MCP servers | `ThemeSinkPort`, `CommandSinkPort`, `ContextServerSinkPort` | `oxikube_theme`, `oxikube_app`, `oxikube_mcp` | `oxikube_extension_host` |
 | App reading user settings (aliases, budgets) | plain values pushed in at init / on change | `oxikube_settings` (via bins) | `oxikube_app` |
+| Per-cluster ports for a connected context | `ClusterConnectorPort` (returns `ClusterPorts` + `AccessReviewPort`; health via the `HealthReporter` callback) | `oxikube_kube` (wired by `bins/oxikube`) | `oxikube_app::session` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`) | `oxikube_terminal`, `oxikube_kube`, `oxikube_argocd` | `oxikube_terminal` element |
 
 If a story's crate list implies a forbidden edge, follow this table and say so in the PR; do not

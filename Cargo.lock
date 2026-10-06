@@ -5529,6 +5529,18 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_app"
 version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "futures",
+ "indexmap",
+ "oxikube_domain",
+ "oxikube_ports",
+ "oxikube_testkit",
+ "parking_lot",
+ "proptest",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "oxikube_argocd"

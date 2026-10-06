@@ -41,7 +41,10 @@ How to read the **Lives in** column:
 
 | Term | Meaning | Lives in |
 |---|---|---|
-| **ClusterSession** | A connected cluster: client pool, discovery, feeds, namespace selection, read-only flag, colour. One workspace tab per session. | `oxikube_app::session` *(planned)* |
+| **ClusterSession** | One open cluster: its `ClusterId` and context, `ClusterSessionState`, the `ClusterPorts` bundle while connected, `Capabilities`, `NamespaceSelection`, read-only flag and `ClusterColour`. One workspace tab per session. Owned by the **ClusterSessionManager** (connect / disconnect / reconnect, `SessionUpdate` stream); `ClusterSession` is a snapshot of it that hands out the read half of the resource port only. | `oxikube_app::session` |
+| **ClusterConnectorPort / ClusterPorts** | The port that turns a context into a live connection, and the per-connection bundle it returns (resources, discovery, tables, logs, exec, port-forward, metrics, `AccessReviewPort`). The adapter reports health through a `HealthReporter` (`HealthSignal`: `Healthy`, `Unhealthy`, `Failed`); dropping the `ClusterConnection` tears its feeds and probe loop down. `ExecInteractivity` is the per-cluster exec-plugin policy passed with each connect. | `oxikube_ports::{connector, access}` |
+| **SessionUpdate** | One change to one session (`Opened`, `StateChanged`, `CapabilitiesChanged`, `NamespaceChanged`, `ReadOnlyChanged`, `ColourChanged`, `Closed`), tagged with its `ClusterId`, on a bounded broadcast; a slow subscriber gets `SessionLagged` and re-reads. Not to be confused with `SessionEvent`, the state machine's input. | `oxikube_app::session` |
+| **ClusterColour** | A cluster's accent colour, sRGB written `#rrggbb` (hotbar dot, tab stripe, badges). | `oxikube_domain::colour` |
 | **ClusterSessionState** | `Disconnected → Connecting → (AuthRequired) → Ready ↔ Degraded → Error`. Advanced by `SessionEvent`s; `SessionPhase` is the payload-free discriminant; a bad pair is an `InvalidTransition`. | `oxikube_domain::session` |
 | **NamespaceSelection** | `All` or a `Set` of namespaces chosen in the UI. `NamespaceFavourites` is the user's pinned list. | `oxikube_domain::session` |
 | **WatchScope** | Derived from a `NamespaceSelection` and a kind's `Scope`: `Cluster` or `Namespaces`; decides whether feeds are cluster- or namespace-scoped. | `oxikube_domain::session` |
