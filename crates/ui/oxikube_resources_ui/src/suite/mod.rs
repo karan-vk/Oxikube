@@ -38,6 +38,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui::{Entity, Subscription, TestAppContext};
+use oxikube_app::ColumnId;
 use oxikube_domain::Resource;
 use oxikube_testkit::{ScriptedFeed, TICK, pod};
 
@@ -54,6 +55,28 @@ pub(super) fn numbered(range: std::ops::Range<u32>) -> Vec<Resource> {
     range
         .map(|i| pod_in("x", &format!("pod-{i:04}"), 0))
         .collect()
+}
+
+/// The display text of `column` in the row of `table` named `name`.
+pub(super) fn cell(
+    f: &mut Fixture,
+    table: &Entity<ResourceTable>,
+    name: &str,
+    column: &str,
+) -> String {
+    f.vcx.update(|_, cx| {
+        table.read(cx).read_rows(cx, |d| {
+            let row = d
+                .rows()
+                .iter()
+                .find(|r| r.name() == name)
+                .unwrap_or_else(|| panic!("{name} is not a row"));
+            d.provider()
+                .cell(row, &ColumnId::new(column), jiff::Timestamp::now())
+                .display()
+                .to_owned()
+        })
+    })
 }
 
 /// A pods table over a [`ScriptedFeed`]: tick 0 (the initial list) has arrived and

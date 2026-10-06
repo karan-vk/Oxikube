@@ -4,15 +4,15 @@
 use std::sync::Arc;
 
 use futures::executor::block_on;
-use gpui::{Entity, TestAppContext};
+use gpui::TestAppContext;
 use oxikube_app::ColumnId;
 use oxikube_domain::ObjectMeta;
 use oxikube_ports::{Delta, DeltaBatch, TableBatch, TableColumn, TableRow, TableSource};
 use oxikube_testkit::{TICK, TableCall, Timeline};
 use serde_json::json;
 
+use super::cell;
 use crate::crds::tests::fixture::{batch, columns, widget_kind};
-use crate::table::ResourceTable;
 use crate::table::tests::fixture::{Fixture, cluster};
 
 fn printer_columns() -> Arc<[TableColumn]> {
@@ -49,22 +49,6 @@ fn rows_only(deltas: Vec<Delta<TableRow>>) -> TableBatch {
         rows: DeltaBatch::from_deltas(deltas),
         source: TableSource::Server,
     }
-}
-
-fn cell(f: &mut Fixture, table: &Entity<ResourceTable>, name: &str, column: &str) -> String {
-    f.vcx.update(|_, cx| {
-        table.read(cx).read_rows(cx, |d| {
-            let row = d
-                .rows()
-                .iter()
-                .find(|r| r.name() == name)
-                .unwrap_or_else(|| panic!("{name} is not a row"));
-            d.provider()
-                .cell(row, &ColumnId::new(column), jiff::Timestamp::now())
-                .display()
-                .to_owned()
-        })
-    })
 }
 
 #[gpui::test]

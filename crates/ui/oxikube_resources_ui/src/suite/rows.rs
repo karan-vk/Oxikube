@@ -5,27 +5,19 @@ use gpui::TestAppContext;
 use oxikube_app::ColumnId;
 use oxikube_testkit::ScriptedFeed;
 
-use super::{Scripted, numbered, pod_in};
+use super::{Scripted, cell, numbered, pod_in};
 
 /// The restart count shown in the Restarts cell of the row named `name` (the cell also says how
 /// long ago the last one was, which moves with the clock).
 fn restarts(s: &mut Scripted, name: &str) -> String {
-    s.f.vcx.update(|_, cx| {
-        s.table.read(cx).read_rows(cx, |d| {
-            let row = d
-                .rows()
-                .iter()
-                .find(|r| r.name() == name)
-                .unwrap_or_else(|| panic!("{name} is not a row"));
-            d.provider()
-                .cell(row, &ColumnId::new("restarts"), jiff::Timestamp::now())
-                .display()
-                .split(' ')
-                .next()
-                .unwrap_or_default()
-                .to_owned()
-        })
-    })
+    let text = cell(&mut s.f, &s.table, name, "restarts");
+    text.split(' ').next().unwrap_or_default().to_owned()
+}
+
+/// The indices of the rows the table has built.
+fn visible(s: &mut Scripted) -> std::ops::Range<usize> {
+    s.f.vcx
+        .update(|_, cx| s.table.read(cx).table().visible_rows(cx))
 }
 
 #[gpui::test]
@@ -37,12 +29,10 @@ fn the_initial_list_is_n_rows_and_only_the_visible_ones_are_built(cx: &mut TestA
     assert_eq!(names.len(), 2_000, "every pod of the first batch is a row");
     assert_eq!(names[0], "pod-0000");
     assert_eq!(names[1_999], "pod-1999");
-    let visible =
-        s.f.vcx
-            .update(|_, cx| s.table.read(cx).table().visible_rows(cx));
+    let built = visible(&mut s);
     assert!(
-        !visible.is_empty() && visible.len() < 100,
-        "built {visible:?} of 2000 rows: the table is not virtualised"
+        !built.is_empty() && built.len() < 100,
+        "built {built:?} of 2000 rows: the table is not virtualised"
     );
 }
 
@@ -63,9 +53,7 @@ fn add_modify_and_delete_while_scrolled_keep_the_viewport(cx: &mut TestAppContex
         handle.scroll_to_row(150, cx);
     });
     s.draw();
-    let before =
-        s.f.vcx
-            .update(|_, cx| s.table.read(cx).table().visible_rows(cx));
+    let before = visible(&mut s);
     assert!(before.contains(&150), "scrolled to row 150: {before:?}");
 
     s.step();
@@ -75,9 +63,7 @@ fn add_modify_and_delete_while_scrolled_keep_the_viewport(cx: &mut TestAppContex
     assert!(names.contains(&"pod-9999".to_owned()));
     assert!(!names.contains(&"pod-0299".to_owned()));
     assert_eq!(restarts(&mut s, "pod-0250"), "7");
-    let after =
-        s.f.vcx
-            .update(|_, cx| s.table.read(cx).table().visible_rows(cx));
+    let after = visible(&mut s);
     assert_eq!(after, before, "changes below the viewport do not move it");
 
     s.step();
@@ -87,9 +73,7 @@ fn add_modify_and_delete_while_scrolled_keep_the_viewport(cx: &mut TestAppContex
         "3",
         "the visible row updated in place"
     );
-    let after =
-        s.f.vcx
-            .update(|_, cx| s.table.read(cx).table().visible_rows(cx));
+    let after = visible(&mut s);
     assert_eq!(
         after, before,
         "an update inside the viewport does not scroll it"

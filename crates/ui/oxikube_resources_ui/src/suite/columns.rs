@@ -20,6 +20,14 @@ fn layout(f: &mut Fixture, table: &gpui::Entity<ResourceTable>) -> ColumnLayout 
         .update(|_, cx| table.read(cx).read_rows(cx, |d| d.layout().clone()))
 }
 
+/// The column preferences saved under `key` in the state store.
+fn saved_prefs(f: &mut Fixture, key: &oxikube_ports::StateKey) -> ColumnPrefs {
+    block_on(f.state.kv_get(key))
+        .expect("state")
+        .map(|v| serde_json::from_value(v).expect("prefs"))
+        .expect("the layout was saved")
+}
+
 #[gpui::test]
 fn hide_reorder_resize_and_sort_persist_across_view_recreation(cx: &mut TestAppContext) {
     let feed = ScriptedFeed::new()
@@ -72,10 +80,7 @@ fn hide_reorder_resize_and_sort_persist_across_view_recreation(cx: &mut TestAppC
         "table.columns.core/Pod",
         "the documented per-kind key: a change loses every user's saved layouts"
     );
-    let saved: ColumnPrefs = block_on(s.f.state.kv_get(&key))
-        .expect("state")
-        .map(|v| serde_json::from_value(v).expect("prefs"))
-        .expect("the layout was saved");
+    let saved = saved_prefs(&mut s.f, &key);
     assert_eq!(saved.visible.get("node"), Some(&false));
     assert_eq!(saved.widths.get("name"), Some(&321.));
 
@@ -117,14 +122,8 @@ fn a_column_shown_and_hidden_again_is_saved_and_then_forgotten(cx: &mut TestAppC
     s.f.update(&s.table, |t, cx| {
         t.set_column_shown(&ColumnId::new("qos"), true, cx)
     });
-    let saved = |s: &mut Scripted| -> ColumnPrefs {
-        block_on(s.f.state.kv_get(&key))
-            .expect("state")
-            .map(|v| serde_json::from_value(v).expect("prefs"))
-            .expect("saved")
-    };
     assert_eq!(
-        saved(&mut s).visible.get("qos"),
+        saved_prefs(&mut s.f, &key).visible.get("qos"),
         Some(&true),
         "a wide column shown"
     );
@@ -132,7 +131,7 @@ fn a_column_shown_and_hidden_again_is_saved_and_then_forgotten(cx: &mut TestAppC
         t.set_column_shown(&ColumnId::new("qos"), false, cx)
     });
     assert_eq!(
-        saved(&mut s).visible.get("qos"),
+        saved_prefs(&mut s.f, &key).visible.get("qos"),
         None,
         "hidden again is the default: the override is gone, not a stale `true`"
     );
