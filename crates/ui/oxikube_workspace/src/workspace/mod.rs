@@ -33,8 +33,8 @@ mod tests;
 use std::{collections::HashMap, rc::Rc};
 
 use gpui::{
-    AnyEntity, App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable,
-    Subscription, Window,
+    AnyEntity, App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle,
+    Focusable, Subscription, Window,
 };
 use oxikube_ui::dock::{DockArea, DockEvent, DockPlacement, DockSkin, PanelId, PanelStyle};
 
