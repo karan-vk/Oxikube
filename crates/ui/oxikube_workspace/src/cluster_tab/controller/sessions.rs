@@ -57,12 +57,24 @@ impl ClusterTabs {
     }
 
     /// Opens the tab of a session that is not disconnected, refreshes it when it exists, closes
-    /// it when the session disconnected.
-    fn follow(&mut self, session: &ClusterSession, window: &mut Window, cx: &mut Context<Self>) {
+    /// it when the session disconnected. A restored placeholder
+    /// ([`is_placeholder`](ClusterTabs::is_placeholder)) is the exception: its session is
+    /// disconnected and its tab stays, until the cluster connects.
+    pub(super) fn follow(
+        &mut self,
+        session: &ClusterSession,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let cluster = session.id().clone();
-        if session.phase() == SessionPhase::Disconnected {
+        if session.phase() != SessionPhase::Disconnected {
+            // Connecting or connected: no longer a placeholder, an ordinary tab.
+            self.pending.remove(&cluster);
+        } else if !self.pending.contains(&cluster) {
             self.close_tab_now(&cluster, window, cx);
-        } else if let Some(entry) = self.tabs.get(&cluster) {
+            return;
+        }
+        if let Some(entry) = self.tabs.get(&cluster) {
             let info = info_of(session);
             entry.tab.update(cx, |tab, cx| tab.set_info(info, cx));
             // The hotbar and the title read the same session: redraw within a frame.
@@ -146,7 +158,10 @@ impl ClusterTabs {
         cx: &mut Context<Self>,
     ) {
         match event {
-            ClusterTabEvent::ActiveChanged(true) => self.set_active(Some(cluster.clone()), cx),
+            ClusterTabEvent::ActiveChanged(true) => {
+                self.set_active(Some(cluster.clone()), cx);
+                self.on_displayed(cluster, cx);
+            }
             ClusterTabEvent::ActiveChanged(false) => {
                 if self.active.as_ref() == Some(cluster) {
                     self.set_active(None, cx);
@@ -158,6 +173,7 @@ impl ClusterTabs {
     }
 
     fn forget(&mut self, cluster: &ClusterId, cx: &mut Context<Self>) {
+        self.pending.remove(cluster);
         if self.tabs.shift_remove(cluster).is_none() {
             return;
         }

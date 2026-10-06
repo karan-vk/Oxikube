@@ -6,6 +6,7 @@ mod bus;
 mod close;
 mod connect_ui;
 mod layout;
+mod restore;
 mod switch;
 mod tabs;
 
@@ -76,8 +77,15 @@ impl Recorder {
 
 impl CommandDispatcher for Recorder {
     fn dispatch(&self, command: Command, _: &mut gpui::App) {
-        if let Command::ClusterDisconnect { cluster } = &command {
-            self.sessions.disconnect(cluster).expect("an open session");
+        match &command {
+            Command::ClusterDisconnect { cluster } => {
+                self.sessions.disconnect(cluster).expect("an open session");
+            }
+            // The fakes answer at once, so the catalog's connect can run in place.
+            Command::ClusterConnect { cluster } => {
+                block_on(self.sessions.connect(cluster)).expect("a catalog cluster");
+            }
+            _ => {}
         }
         self.sent.borrow_mut().push(command);
     }
@@ -106,6 +114,8 @@ pub(super) struct Fixture {
     pub(super) state: Arc<FakeStatePort>,
     pub(super) recorder: Recorder,
     pub(super) connector: Arc<FakeClusterConnectorPort>,
+    pub(super) source: Arc<FakeClusterSourcePort>,
+    pub(super) clock: Arc<FakeClockPort>,
 }
 
 impl Fixture {
@@ -141,7 +151,7 @@ impl Fixture {
             Arc::new(FakeClusterSourcePort::new().with_contexts(names.iter().map(|n| context(n))));
         let clock = Arc::new(FakeClockPort::default());
         let connector = Arc::new(FakeClusterConnectorPort::new());
-        let sessions = ClusterSessionManager::new(connector.clone(), source, clock);
+        let sessions = ClusterSessionManager::new(connector.clone(), source.clone(), clock.clone());
         let (ws, mut vcx) = open_workspace(cx);
         vcx.update(|_, cx| {
             oxikube_runtime::init_deterministic(cx);
@@ -174,6 +184,8 @@ impl Fixture {
             state,
             recorder,
             connector,
+            source,
+            clock,
         }
     }
 

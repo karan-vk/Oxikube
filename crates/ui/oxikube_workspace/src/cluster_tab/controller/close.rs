@@ -28,7 +28,8 @@ impl ClusterTabs {
 
     /// Closes `cluster`'s tab the way the user asked: straight away when nothing of the
     /// cluster is running, otherwise after the confirmation dialog. Either way it sends
-    /// `cluster::Disconnect`, and the tab goes when the session does. Does nothing for a
+    /// `cluster::Disconnect`, and the tab goes when the session does (a restored placeholder, which is not connected, just
+    /// closes). Does nothing for a
     /// cluster without a tab.
     pub fn request_close(
         &mut self,
@@ -39,6 +40,12 @@ impl ClusterTabs {
         let Some(entry) = self.tabs.get(cluster) else {
             return;
         };
+        if self.pending.remove(cluster) {
+            // A restored placeholder: nothing is connected, so there is nothing to disconnect or
+            // to lose. The session stays open (and disconnected) in the catalog.
+            self.close_tab_now(cluster, window, cx);
+            return;
+        }
         let operations = self.running_operations(cluster, cx);
         if operations.is_empty() {
             self.disconnect(cluster, cx);

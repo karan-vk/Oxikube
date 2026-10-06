@@ -41,6 +41,18 @@
   "kubeconfig": {
     "sources": [{ "kind": "default" }]
   },
+  // Session restore: reopen the clusters, tabs and namespaces of your last session at launch.
+  // Off by default. Restoring starts after the window is drawn, so it never delays start-up, and a
+  // cluster that fails or cannot be reached only shows an error in its own tab.
+  "session": {
+    // `true` reopens the saved cluster tabs (clusters no kubeconfig defines any more are dropped,
+    // with a notice).
+    "restore": false,
+    // Which restored clusters connect at launch: "active" (the cluster whose tab was displayed;
+    // the others connect when you open their tab) or "all" (the displayed one first, then two at
+    // a time).
+    "restore_connect": "active"
+  },
   // Per-cluster settings. Each key below is a default for every cluster; write the same key under
   // `clusters.<id>` (below) to override it for one cluster. Layers merge field by field:
   // this file, then your top-level values, then the cluster's own.

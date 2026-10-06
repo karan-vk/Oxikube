@@ -2,10 +2,12 @@
 //! retries for transient failures; and how its outcome lands in the session.
 
 use std::sync::Arc;
+use std::time::Duration;
 
+use futures::FutureExt as _;
 use futures::future::{AbortHandle, Abortable, Aborted};
 use oxikube_domain::session::{ClusterSessionState, SessionEvent, SessionEventKind, SessionPhase};
-use oxikube_domain::{Capabilities, ErrorKind, OxiResult};
+use oxikube_domain::{Capabilities, ErrorKind, OxiError, OxiResult};
 use oxikube_ports::{ClusterConnection, ConnectRequest};
 use parking_lot::Mutex;
 
@@ -25,6 +27,7 @@ impl Shared {
     pub(super) async fn run_connect(
         self: &Arc<Self>,
         entry: Arc<Mutex<Entry>>,
+        deadline: Option<Duration>,
     ) -> ClusterSessionState {
         let (request, registration, generation) = {
             let mut e = entry.lock();
@@ -57,7 +60,7 @@ impl Shared {
             generation,
             armed: true,
         };
-        let outcome = Abortable::new(self.attempt(request), registration).await;
+        let outcome = Abortable::new(self.attempt_within(request, deadline), registration).await;
         guard.armed = false;
         self.finish(&entry, generation, outcome)
     }
@@ -101,6 +104,29 @@ impl Shared {
         // Legal from Connecting by construction; nothing is released on these moves.
         let _ = e.apply(event, &self.updates);
         e.state.clone()
+    }
+
+    /// [`attempt`](Self::attempt) under an optional time limit on the injected clock. The limit
+    /// covers the whole attempt, retries and their backoff included; hitting it drops the attempt
+    /// (the connector's future is cancelled) and fails it with a timeout.
+    async fn attempt_within(
+        &self,
+        request: ConnectRequest,
+        deadline: Option<Duration>,
+    ) -> OxiResult<Established> {
+        let Some(deadline) = deadline else {
+            return self.attempt(request).await;
+        };
+        let attempt = self.attempt(request).fuse();
+        let timer = self.clock.sleep(deadline).fuse();
+        futures::pin_mut!(attempt, timer);
+        futures::select! {
+            result = attempt => result,
+            () = timer => Err(OxiError::timeout(format!(
+                "the cluster did not answer within {} s",
+                deadline.as_secs().max(1)
+            ))),
+        }
     }
 
     /// Tries to connect, retrying transient failures per the retry policy.

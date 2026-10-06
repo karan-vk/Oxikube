@@ -5,6 +5,7 @@
 mod auth;
 mod cancel;
 mod connect;
+mod deadline;
 mod failure;
 mod health;
 mod multi;

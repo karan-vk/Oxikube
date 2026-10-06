@@ -31,8 +31,6 @@
 //! - each cluster's own pane layout: the layout table, keyed `cluster:<id>` (see
 //!   [`cluster_layout_key`]), so closing a cluster and opening it again gives its layout back.
 //!
-//! Reconnecting the saved clusters at launch is session restore (E06-S11).
-//!
 //! # While the cluster is not connected
 //!
 //! A tab opens when its session starts connecting, so it is where the connect lifecycle shows
@@ -41,11 +39,20 @@
 //! the content while the session is connecting, needs credentials or failed, and its banner sits
 //! above the content while the session is degraded. Without one the tab shows a plain
 //! placeholder.
+//!
+//! # Session restore
+//!
+//! With `session.restore` on, [`ClusterTabs::restore_session`] reopens the saved clusters after
+//! the first frame as placeholder tabs and connects the displayed one (`session.restore_connect`
+//! says whether the others connect too, or when their tab is first shown): see the `controller`
+//! module's `restore` file. The decisions (which clusters still exist, namespaces, limits and
+//! timeouts) are `oxikube_app::session::restore`.
 
 pub mod actions;
 mod colour;
 mod controller;
 mod dispatch;
+mod restore_settings;
 mod store;
 mod tab;
 
@@ -55,6 +62,7 @@ mod tests;
 pub use colour::{cluster_hsla, initials};
 pub use controller::{ClusterTabs, ClusterTabsDeps, ClusterTabsEvent, TabSetup, register_commands};
 pub use dispatch::{CommandDispatcher, CommandSink, TabsDispatcher, is_tab_command};
+pub use restore_settings::{RestoreConnectSetting, SessionRestoreContent, SessionRestoreSettings};
 pub use store::{
     CLUSTER_TABS_TABLE, CLUSTER_TABS_VERSION, ClusterTabsStore, SavedTabs, cluster_layout_key,
 };

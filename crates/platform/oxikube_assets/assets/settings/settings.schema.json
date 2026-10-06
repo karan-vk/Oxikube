@@ -108,6 +108,9 @@
           ],
           "description": "`system` follows the OS reduce-motion preference, `on` and `off` override it."
         },
+        "session": {
+          "$ref": "#/$defs/SessionRestoreContent"
+        },
         "terminal_cwd": {
           "description": "Working directory of terminals opened for the cluster. Unset uses the home directory.",
           "type": [
@@ -366,6 +369,21 @@
         }
       ]
     },
+    "RestoreConnectSetting": {
+      "description": "Which restored clusters connect at launch (`session.restore_connect`).",
+      "oneOf": [
+        {
+          "const": "active",
+          "description": "Only the cluster whose tab was displayed; the others connect when their tab is first shown.",
+          "type": "string"
+        },
+        {
+          "const": "all",
+          "description": "Every restored cluster, the displayed one first, two at a time.",
+          "type": "string"
+        }
+      ]
+    },
     "SecretName": {
       "description": "The name of a keychain entry holding the token. Never the token itself.",
       "examples": [
@@ -374,6 +392,31 @@
       "minLength": 1,
       "pattern": "^[^/\\p{Cc}]+$",
       "type": "string"
+    },
+    "SessionRestoreContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about session restore: the `session` object of `settings.json`.",
+      "properties": {
+        "restore": {
+          "description": "Reopen the clusters, tabs and namespaces of the last session at launch. Off by default.\nClusters connect after the window is up, and a cluster that fails or is unreachable only\nshows an error in its own tab.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "restore_connect": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RestoreConnectSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Which restored clusters connect at launch: `active` (the one that was displayed; the others\nconnect when you open their tab) or `all`."
+        }
+      },
+      "type": "object"
     },
     "SessionSettingsContent": {
       "additionalProperties": false,
@@ -603,6 +646,9 @@
         }
       ],
       "description": "`system` follows the OS reduce-motion preference, `on` and `off` override it."
+    },
+    "session": {
+      "$ref": "#/$defs/SessionRestoreContent"
     },
     "terminal_cwd": {
       "description": "Working directory of terminals opened for the cluster. Unset uses the home directory.",
