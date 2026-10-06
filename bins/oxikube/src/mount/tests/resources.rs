@@ -323,7 +323,6 @@ fn slash_in_a_table_focuses_its_filter_through_the_real_bus(cx: &mut TestAppCont
     assert!(!editing(&mut app));
 }
 
-<<<<<<< HEAD
 /// The Widget CRD as the cluster stores it: cluster-scoped object, two versions, `v1` the storage
 /// one.
 fn widget_crd() -> oxikube_domain::Resource {
@@ -457,7 +456,8 @@ fn custom_resources_are_reachable_from_the_sidebar_through_the_crd_list(cx: &mut
         app.drawn("resource-table-version"),
         "two served versions: a switcher"
     );
-=======
+}
+
 #[gpui::test]
 fn the_yaml_and_describe_tabs_of_a_row_show_the_object_and_its_description(
     cx: &mut TestAppContext,
@@ -558,5 +558,4 @@ fn the_describe_setting_reaches_the_adapters_preference_and_follows_edits(cx: &m
     let config = preference.get();
     assert_eq!(config.backend, Backend::Native);
     assert_eq!(config.kubectl_path, None);
->>>>>>> d750dcf (feat(resources_ui): E07-S06 YAML & Describe tabs)
 }
