@@ -112,10 +112,16 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             preset: ClusterPreset::Staging,
         },
+        "cluster::Connect" => Command::ClusterConnect { cluster },
+        "cluster::Disconnect" => Command::ClusterDisconnect { cluster },
         "cluster::Select" => Command::ClusterSelect { cluster },
         "cluster::SetColour" => Command::ClusterSetColour {
             cluster,
             colour: Some(RED),
+        },
+        "cluster::ToggleFavourite" => Command::ClusterToggleFavourite {
+            cluster,
+            favourite: None,
         },
         "cluster::ToggleReadOnly" => Command::ClusterToggleReadOnly {
             cluster,

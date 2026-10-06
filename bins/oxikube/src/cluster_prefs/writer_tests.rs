@@ -37,13 +37,11 @@ struct Fixture {
 }
 
 fn fixture(cx: &mut TestAppContext) -> Fixture {
-    let context = ClusterContext {
-        cluster: id(),
-        context: ContextName::new("prod-eu"),
-        source: SourceId("kubeconfig".into()),
-        server: None,
-        default_namespace: None,
-    };
+    let context = ClusterContext::new(
+        id(),
+        ContextName::new("prod-eu"),
+        SourceId("kubeconfig".into()),
+    );
     let clock = Arc::new(FakeClockPort::default());
     let manager = ClusterSessionManager::new(
         Arc::new(FakeClusterConnectorPort::new()),

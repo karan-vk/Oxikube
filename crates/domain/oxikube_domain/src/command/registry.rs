@@ -88,6 +88,12 @@ pub static COMMANDS: &[CommandMeta] = &[
     ),
     // Connecting reads from the cluster and changes nothing in it: not `mutating`, no guard tier.
     CommandMeta::read(
+        CommandId::CLUSTER_APPLY_PRESET,
+        "Apply Cluster Preset",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::CLUSTER_CONNECT,
         "Connect Cluster",
         CommandScope::Global,
@@ -100,21 +106,8 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     CommandMeta::read(
-        CommandId::CLUSTER_APPLY_PRESET,
-        "Apply Cluster Preset",
-        CommandScope::Cluster,
-        NONE,
-    ),
-    CommandMeta::read(
         CommandId::CLUSTER_SELECT,
         "Select Cluster",
-        CommandScope::Global,
-        NONE,
-    ),
-    // Local catalog preference (StatePort), never a cluster change.
-    CommandMeta::read(
-        CommandId::CLUSTER_TOGGLE_FAVOURITE,
-        "Toggle Favourite Cluster",
         CommandScope::Global,
         NONE,
     ),
@@ -122,6 +115,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::CLUSTER_SET_COLOUR,
         "Set Cluster Colour",
         CommandScope::Cluster,
+        NONE,
+    ),
+    // Local catalog preference (StatePort), never a cluster change.
+    CommandMeta::read(
+        CommandId::CLUSTER_TOGGLE_FAVOURITE,
+        "Toggle Favourite Cluster",
+        CommandScope::Global,
         NONE,
     ),
     CommandMeta::privileged(

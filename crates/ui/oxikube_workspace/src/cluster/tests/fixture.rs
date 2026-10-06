@@ -42,13 +42,11 @@ pub(super) fn id(text: &str) -> ClusterId {
 }
 
 fn context(cluster: &str, name: &str) -> ClusterContext {
-    ClusterContext {
-        cluster: id(cluster),
-        context: ContextName::new(name),
-        source: SourceId("kubeconfig".into()),
-        server: None,
-        default_namespace: None,
-    }
+    ClusterContext::new(
+        id(cluster),
+        ContextName::new(name),
+        SourceId("kubeconfig".into()),
+    )
 }
 
 /// A settings store that keeps what is written and pushes it back into the manager, like the
