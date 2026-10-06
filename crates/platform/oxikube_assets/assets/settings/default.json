@@ -78,6 +78,17 @@
     "backend": "auto",
     "kubectl_path": null
   },
+  // Local terminals (E09). `shell`: the program a terminal runs; null uses $SHELL, then /bin/sh.
+  // `shell_args`: its arguments, e.g. ["-l"] for a login shell (off by default: a login shell
+  // re-reads your profile and slows opening a terminal). A cluster's terminal starts with
+  // KUBECONFIG (a private merged file holding only that cluster's context, removed when the
+  // terminal closes), KUBE_CONTEXT and OXIKUBE_NAMESPACE set; PATH is yours, untouched. Note that
+  // kubectl in the shell is not behind Oxikube's read-only mode or confirmations. Applies to
+  // terminals opened afterwards.
+  "terminal": {
+    "shell": null,
+    "shell_args": []
+  },
   // Per-cluster settings. Each key below is a default for every cluster; write the same key under
   // `clusters.<id>` (below) to override it for one cluster. Layers merge field by field:
   // this file, then your top-level values, then the cluster's own.

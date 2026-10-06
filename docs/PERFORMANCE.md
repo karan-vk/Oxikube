@@ -310,6 +310,28 @@ list is not cached by CoreText, so it cannot be warmed in the background), the w
 draw about 61–65 ms, everything else under 5 ms. The per-stage table is in the module docs of
 `oxikube::startup`.
 
+## Local terminal backend (E09-S02)
+
+`cargo run --release -p oxikube_terminal --example local_pty_bench [-- <shell>]` measures the backend
+alone (no grid, no painting yet). The epic budget is a shell tab with the cluster environment in
+< 150 ms; opening is `LocalPty::spawn` (off the UI thread) plus whatever the shell itself needs to
+print its first prompt.
+
+Reference machine (macOS, release build, 30 opens each, `/bin/sh`; `/bin/zsh` is the author's
+interactive zsh with its own rc files):
+
+| | `spawn` p50 / p95 | open to first output p50 / p95 |
+|---|---|---|
+| `/bin/sh`, plain | 2.2 / 2.4 ms | 9.1 / 11.0 ms |
+| `/bin/sh`, cluster env | 2.6 / 4.7 ms | 9.9 / 15.4 ms |
+| `/bin/zsh`, cluster env | 3.3 / 6.4 ms | 181 / 286 ms (the user's rc files, not the backend) |
+
+Cutting and writing the merged kubeconfig costs about 0.3 ms. Read throughput under `yes` is
+about 110 MiB/s through the bounded queue (32 chunks of at most 16 KiB; macOS returns about 1 KiB
+per read), with one allocation per read and none per byte; the grid coalesces chunks to frame
+cadence. A login shell (`terminal.shell_args: ["-l"]`) re-reads the profile and costs the shell's own
+start time, which is why it is off by default.
+
 ## Resource table: 10 000 pods under churn (E07-S09)
 
 The epic's exit criterion (E07): 10 000 pods with churn scroll at ≥ 55 fps on the reference machine

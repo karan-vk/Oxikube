@@ -4,6 +4,13 @@
 
 alacritty_terminal grid + custom GPUI Element + TerminalBackend (local PTY, kube exec/attach, display-only).
 
+## Status
+
+- `backend::local` (E09-S02): `LocalPty`, the user's shell on a PTY with the cluster environment
+  (`KUBECONFIG`, `KUBE_CONTEXT`, `OXIKUBE_NAMESPACE`). Bench: `cargo run --release -p oxikube_terminal --example local_pty_bench`.
+- Settings: `terminal.shell`, `terminal.shell_args`.
+- Grid, element and view: E09-S04..S07.
+
 ## Allowed internal dependencies
 
 - `oxikube_domain`

@@ -30,6 +30,10 @@ pub const FEATURES: &[Feature] = &[
         init: oxikube_resources_ui::init,
     },
     Feature {
+        name: "oxikube_terminal",
+        init: oxikube_terminal::init,
+    },
+    Feature {
         name: "cluster_prefs",
         init: follow_cluster_prefs,
     },
