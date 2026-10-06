@@ -27,6 +27,7 @@ pub(crate) fn kind(group: &str, version: &str, name: &str, plural: &str) -> Reso
 pub(crate) fn discovery() -> Arc<FakeDiscoveryPort> {
     Arc::new(FakeDiscoveryPort::new().with_kinds([
         kind("", "v1", "Pod", "pods"),
+        kind("", "v1", "Secret", "secrets"),
         kind("apps", "v1", "Deployment", "deployments"),
         kind("test.oxikube.dev", "v1", "Widget", "widgets"),
     ]))

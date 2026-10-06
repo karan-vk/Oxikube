@@ -21,7 +21,8 @@ pub struct YamlOptions {
 ///
 /// * `metadata.managedFields` is removed unless `options.managed_fields`.
 /// * A Secret's `data` and `stringData` values are replaced by [`HIDDEN`] (keys stay, in their
-///   order), and so is the `last-applied-configuration` annotation, which embeds them. This holds
+///   order), and the `last-applied-configuration` annotation, which embeds them, is dropped (it
+///   does not appear at all, not even as a placeholder). This holds
 ///   for whatever the store delivered: a Secret that arrived whole still shows no value.
 ///
 /// Copy and save write exactly this text, so a masked view is saved masked.

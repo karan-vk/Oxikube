@@ -143,3 +143,45 @@ async fn a_custom_resource_gets_the_generic_layout() {
         "/apis/test.oxikube.dev/v1/namespaces/demo/widgets/w1"
     );
 }
+
+#[tokio::test]
+async fn a_service_account_token_secret_is_described_without_its_token() {
+    const TOKEN: &str = "eyJhbGciOiJSUzI1NiJ9.c2VjcmV0.signature";
+    let secret = json!({
+        "apiVersion": "v1", "kind": "Secret", "type": "kubernetes.io/service-account-token",
+        "metadata": {"name": "sa-token", "namespace": "demo", "uid": "u2"},
+        // base64 of the token and of a short CA and namespace
+        "data": {
+            "token": "ZXlKaGJHY2lPaUpTVXpJMU5pSjkuYzJWamNtVjAuc2lnbmF0dXJl",
+            "ca.crt": "Y2E=",
+            "namespace": "ZGVtbw==",
+        },
+    });
+    let client = Client::new(
+        tower::service_fn(move |request: http::Request<Body>| {
+            let body = if request.uri().path().ends_with("/events") {
+                json!({"apiVersion": "v1", "kind": "EventList", "items": []})
+            } else {
+                secret.clone()
+            };
+            async move {
+                Ok::<_, std::convert::Infallible>(
+                    http::Response::builder()
+                        .status(200)
+                        .body(Body::from(body.to_string().into_bytes()))
+                        .unwrap(),
+                )
+            }
+        }),
+        "demo",
+    );
+    let describer = NativeDescribe::new(client, discovery());
+    let target =
+        ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Secret"), "demo", "sa-token");
+    let output = describer.describe(&target).await.unwrap();
+    assert!(output.text.contains("sa-token"), "{}", output.text);
+    assert!(!output.text.contains("eyJhbGci"), "{}", output.text);
+    assert!(!output.text.contains(TOKEN), "{}", output.text);
+    assert!(output.text.contains("(hidden)"), "{}", output.text);
+    assert!(output.text.contains("2 bytes"), "{}", output.text);
+}

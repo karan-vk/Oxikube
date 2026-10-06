@@ -11,6 +11,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{DescribeOutput, DescribePort, DescribeSource, DiscoveryPort};
 
 use crate::errors::classify;
+use crate::mask::mask_secret_text;
 use crate::resolve::resolve_kind;
 
 /// Renders `kubectl describe`-style text in process with deskribe.
@@ -59,6 +60,13 @@ impl DescribePort for NativeDescribe {
         let (_, text) = deskribe::fetch(self.client.clone(), &resource, &selected)
             .await
             .map_err(|message| classify(&message))?;
+        // deskribe prints a service-account token in full; a Secret's text is masked here, so
+        // no caller (the Describe tab, copy) can show it.
+        let text = if target.gvk.group.is_empty() && &*target.gvk.kind == "Secret" {
+            mask_secret_text(&text)
+        } else {
+            text
+        };
         Ok(DescribeOutput {
             text,
             source: DescribeSource::Native,

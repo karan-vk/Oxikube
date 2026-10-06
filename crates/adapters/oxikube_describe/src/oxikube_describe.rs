@@ -10,6 +10,7 @@
 //! | `native` | [`NativeDescribe`]: deskribe over the connection's kube client; resolves the kind's plural through discovery |
 //! | `kubectl` | [`KubectlDescribe`]: `kubectl describe` as a child process, never on the UI thread, killed when dropped |
 //! | `describer` | [`Describer`]: the port the app gets, choosing between the two by the preference |
+//! | `mask` | the one credential deskribe prints (a service-account token) replaced by `(hidden)` in a Secret's text |
 //! | `resolve` | the kind's plural through discovery, shared by both backends |
 //! | `errors` | classification of deskribe's and kubectl's failures into the error taxonomy (redacted) |
 //!
@@ -29,6 +30,7 @@
 mod describer;
 mod errors;
 mod kubectl;
+mod mask;
 mod native;
 mod preference;
 mod resolve;

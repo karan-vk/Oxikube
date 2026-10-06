@@ -39,7 +39,7 @@
 //! # Secrets
 //!
 //! A Secret shows its key names and never a value ([`model::mask_secret`]); its
-//! `last-applied-configuration` annotation, which embeds the data, is hidden too.
+//! `last-applied-configuration` annotation, which embeds the data, is dropped.
 
 mod describe;
 mod drawer;
