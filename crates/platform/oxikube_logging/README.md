@@ -4,7 +4,12 @@
 
 tracing setup, rolling file logs, secret redaction layer, crash log hook.
 
-Today: `RedactingMakeWriter` / `RedactingWriter` (scrub every formatted event with
+`init` / `build` set up the global subscriber (E05-S09): a reloadable `RUST_LOG`-style filter, a
+redacting layer over daily rolling files (`LogConfig`, seven kept, non-blocking writer, `log` crate
+bridged), `LogHandle` to change the filter live and the `log.filter` setting (`follow`).
+`install_panic_hook` writes a redacted crash report file and then calls the previous hook.
+
+Also: `RedactingMakeWriter` / `RedactingWriter` (scrub every formatted event with
 `oxikube_domain::redact`), `RedactingFields` (redact secret-named fields), `redacting_layer` /
 `redacting_json_layer`, and the shipped `default_filter` (info; HTTP stack at warn). The pattern
 list and the rule that new secret-bearing fields must be added to it live in the module docs of

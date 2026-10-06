@@ -8,6 +8,18 @@
 //! | `fields` | [`RedactingFields`]: a `FormatFields` that redacts known field names and scrubs values |
 //! | `layer` | [`redacting_layer`] / [`redacting_json_layer`]: the fmt layers to install |
 //! | `filter` | [`DEFAULT_DIRECTIVES`] / [`default_filter`]: the shipped log filter |
+//! | `init` | [`init`] / [`build`]: the global subscriber with rolling files (E05-S09); [`LogConfig`], [`LogGuard`], [`LogHandle`] (live filter changes) |
+//! | `settings` | [`LogSettings`] / [`follow`]: the `log.filter` setting, hot reloaded |
+//! | `crash` | [`install_panic_hook`]: a redacted crash report file on panic, then the previous hook |
+//!
+//! # Start-up
+//!
+//! `bins/oxikube` does this first, before GPUI exists, so everything after it can log:
+//!
+//! 1. [`init`] with a [`LogConfig`] for `<data dir>/oxikube/logs` (daily files, seven kept, a
+//!    non-blocking writer so no log call waits for the disk), keeping the [`LogGuard`] until exit;
+//! 2. [`install_panic_hook`] for `<data dir>/oxikube/crashes`;
+//! 3. once the settings store is up, [`follow`] with the guard's [`LogHandle`].
 //!
 //! # Secrets never reach a log sink
 //!
@@ -27,6 +39,9 @@
 //!    text patterns catching every sensitive name in `"<name>":<value>` form, which
 //!    `oxikube_domain` tests for every name.
 //!
+//! Crash reports get the same scrub over the whole file (message, backtrace), and nothing is
+//! uploaded anywhere.
+//!
 //! Layers built here format with ANSI off: colour escapes inside a key would hide it from the
 //! scrubber.
 //!
@@ -38,12 +53,21 @@
 
 #![deny(missing_docs)]
 
+mod crash;
 mod fields;
 mod filter;
+mod init;
 mod layer;
+pub mod settings;
 mod writer;
 
+pub use crash::{
+    CrashConfig, PanicReport, install_panic_hook, render_report as render_crash_report,
+    write_report as write_crash_report,
+};
 pub use fields::RedactingFields;
 pub use filter::{DEFAULT_DIRECTIVES, default_filter};
+pub use init::{LogConfig, LogError, LogGuard, LogHandle, SetOutcome, build, init};
 pub use layer::{redacting_json_layer, redacting_layer};
+pub use settings::{LogSettings, LogSettingsContent, follow};
 pub use writer::{RedactingMakeWriter, RedactingWriter};

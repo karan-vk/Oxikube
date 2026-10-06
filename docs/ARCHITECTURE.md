@@ -122,6 +122,43 @@ weaken `cargo xtask lint-deps`.
    selected modules (settings store, keymap, theme loader, picker, terminal element) may be
    vendored with a GPL header and an entry in `THIRD_PARTY_NOTICES.md`.
 
+## App start-up and init order
+
+`bins/oxikube` owns the order in which each crate's `init(cx)` runs (Zed's `main.rs` pattern); the
+stage table with the reasons is in the module docs of `oxikube::startup` (`bins/oxikube/src/startup`).
+In short:
+
+```mermaid
+flowchart LR
+  A1["Logging + panic hook"] --> A2["Runtime bridge"]
+  A2 --> A3["Assets"]
+  A3 --> A4["Settings store"]
+  A4 --> A5["Theme registry"]
+  A4 --> A6["Keymap"]
+  A5 --> A7["oxikube_ui init"]
+  A6 --> A7
+  A7 --> A8["State db: build + background open"]
+  A8 --> A9["AppState install"]
+  A9 --> A10["Workspace + feature crates"]
+  A10 --> A11["Keymap re-bind"]
+  A11 --> A12["Open window"]
+```
+
+- Logging comes first (`oxikube_logging::init`: daily rolling files in `logs/` of the app data directory (`<OS data dir>/oxikube`, or
+  `$OXIKUBE_DATA_DIR`), seven kept, a non-blocking writer, redaction on every event; `log.filter` setting hot reloaded; a valid
+  `RUST_LOG` wins for the run) together with the panic hook, which writes a redacted crash report to
+  `crashes/` there and then calls the previous hook. Nothing is uploaded.
+- `AppState` (a GPUI global) holds the ports bundle (`Arc<dyn StatePort>`, later `SecretStorePort`) and
+  typed accessors over the settings, theme, keymap and runtime globals. Adapters are constructed in
+  `bins/oxikube` only and handed over as port trait objects; `oxikube_app` never imports them. The
+  SQLite state database opens on the background executor behind a `StatePort` that awaits the open,
+  so the first frame never waits for the disk.
+- Settings, theme and keymap load synchronously and stay small (they read config files only); every
+  stage runs in an `init` tracing span and is recorded in the `StartupReport` global for the
+  start-up budget (`docs/PERFORMANCE.md`, E05-S13).
+- Running `startup::init` twice is rejected (`StartupError::AlreadyInitialised`), and
+  `AppState::install` refuses to install out of order.
+
 ## Error taxonomy and mapping guidelines
 
 Every port returns `oxikube_domain::OxiError` (alias `OxiResult<T>`): a struct

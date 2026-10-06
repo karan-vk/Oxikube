@@ -136,6 +136,8 @@ semver = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
+# The `log` facade (GPUI and most dependencies use it); `oxikube_logging` tests its bridge.
+log = "0.4"
 
 # --- persistence / secrets / os ---
 rusqlite = { version = "0.40", features = ["bundled"] }

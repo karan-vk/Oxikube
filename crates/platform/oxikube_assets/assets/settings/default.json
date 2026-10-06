@@ -24,6 +24,12 @@
   "reduce_motion": "system",
   // Ask before quitting while exec sessions, port-forwards or applies are running.
   "confirm_quit": true,
+  // Log filter, `RUST_LOG` syntax. Logs go to rolling files in `<data dir>/oxikube/logs`
+  // (daily, seven kept) with secrets redacted; a `RUST_LOG` set at launch wins for that run.
+  // Keep hyper, h2, tower and rustls at `warn`: at debug and trace they log request headers.
+  "log": {
+    "filter": "info,hyper=warn,hyper_util=warn,h2=warn,tower=warn,tower_http=warn,rustls=warn"
+  },
   // Per-cluster overrides, keyed by cluster id. Each value takes any of the settings above.
   "clusters": {}
 }
