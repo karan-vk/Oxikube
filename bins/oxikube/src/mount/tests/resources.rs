@@ -22,7 +22,7 @@ use super::App;
 use crate::app_state::AppState;
 
 impl App {
-    fn tab_workspace(&mut self) -> gpui::Entity<Workspace> {
+    pub(super) fn tab_workspace(&mut self) -> gpui::Entity<Workspace> {
         let tab: gpui::Entity<ClusterTab> = self.cluster_tabs().remove(0);
         self.vcx.update(|_, cx| tab.read(cx).workspace().clone())
     }
@@ -46,7 +46,7 @@ impl App {
     }
 
     /// Serves `kinds` from the seeded cluster's discovery (before it connects).
-    fn serve(&mut self, kinds: impl IntoIterator<Item = ResourceKind>) {
+    pub(super) fn serve(&mut self, kinds: impl IntoIterator<Item = ResourceKind>) {
         self.ports
             .connector
             .ports_for(&TestPorts::cluster_id())
@@ -54,7 +54,7 @@ impl App {
             .set_kinds(kinds);
     }
 
-    fn toasts(&mut self) -> Vec<String> {
+    pub(super) fn toasts(&mut self) -> Vec<String> {
         let ws = self.workspace();
         self.vcx.update(|_, cx| {
             ws.read(cx)
@@ -67,7 +67,7 @@ impl App {
         })
     }
 
-    fn expect_toast(&mut self, message: &str) {
+    pub(super) fn expect_toast(&mut self, message: &str) {
         let toasts = self.toasts();
         assert!(
             toasts.iter().any(|t| t == message),
@@ -75,7 +75,7 @@ impl App {
         );
     }
 
-    fn tick(&mut self) {
+    pub(super) fn tick(&mut self) {
         self.vcx.executor().advance_clock(Duration::from_secs(1));
         self.vcx.run_until_parked();
     }

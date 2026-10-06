@@ -19,6 +19,7 @@ mod auth_required;
 mod clock;
 mod cluster;
 mod columns;
+mod delete;
 mod scoped_feeds;
 mod two_clusters;
 

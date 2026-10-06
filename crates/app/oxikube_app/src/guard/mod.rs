@@ -18,8 +18,8 @@
 //!   every [`Initiator`](oxikube_domain::audit::Initiator), with
 //!   [`DispatchError::ReadOnly`](crate::command_bus::DispatchError::ReadOnly) naming
 //!   the cluster. A cluster with no open session is refused too (fail closed).
-//! * **Confirmation**: [`policy::confirm_tier`] derives the tier from the command's
-//!   `CommandMeta` and
+//! * **Confirmation**: [`policy::confirm_tier_for`] derives the tier from the command's
+//!   `CommandMeta`, its target (a Namespace, Node, PV or cascading delete is raised) and
 //!   [`Risk`](oxikube_domain::safety::Risk). The guard answers
 //!   [`Outcome::NeedsConfirmation`](crate::command_bus::Outcome::NeedsConfirmation)
 //!   with a single-use [`ConfirmationToken`] and returns; the second dispatch carries the

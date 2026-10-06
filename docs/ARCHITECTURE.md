@@ -110,6 +110,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   typed `CellSort` (number, quantity, age, time, text) and a `Tone`; colours stay in the theme.
   The store sorts by any column through `SortField::Cell(CellSortKey)`: each object ranks by its
   cell's typed sort key, read once per object version from the view's provider (E07-S03).
+  Module `actions` (E07-S08): row actions. `RowActionRegistry` says which bus commands are row actions and for which
+  kinds (`KindFilter`; E12 registers scale, restart, cordon with `register` and touches nothing else); `RowActions::from_bus`
+  joins it with the commands the `CommandBus` really has once, and `actions_for(kind, capabilities)` / `resolve(kind,
+  ActionContext, selected)` filter that snapshot (an action the session lacks the capability for is absent, one blocked by
+  read-only mode is `Disabled(ReadOnly)`; several selected objects keep the bulk actions). `register_commands` installs the
+  `resource::Delete` handler (server dry run, then delete with the chosen propagation, behind the guard's `Mutation`), and
+  `DeleteFlow` plans (`DeletePlan`: tier, risk, phrase to type) and runs a delete of one object or a selection, one guarded
+  `resource::Delete` per object with per-object `ItemStatus` results and one audit record each. The guard's tier is target
+  aware: `Command::effective_risk` raises `resource::Delete` of a Namespace, PersistentVolume, Node or a foreground
+  (cascading) delete to type-the-name (`policy::confirm_tier_for`); an ordinary object takes a simple confirm.
   Module `session::restore` (E06-S11): `SessionRestorer` reopens the last session. `prepare` reads
   the saved tabs (`ClusterTabsStore`, moved here from the workspace so the app layer can read what
   the tabs write), matches them against the catalog, opens each cluster as a `Disconnected`
@@ -123,7 +133,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   read-only on a production-flagged cluster, audited, persisted through the `PrefsWriter` the binary
   implements over `ClusterSettings::update_cluster`), and every `Mutation` writer re-checks the
   read-only flag before each request.
-- `oxikube_resources_ui` — module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
+- `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
   (a workspace `Item`): one `oxikube_ui::tile::StatTile` per `Tile` of the `TileRegistry` (Deployments, StatefulSets,
   DaemonSets, ReplicaSets, Jobs, CronJobs, Pods) with total and healthy from a `CountsLease`, read once a second and redrawn
   coalesced only on change; a click sends `resource::OpenList`. Module `navigate`: the `resource::OpenList` handler and the

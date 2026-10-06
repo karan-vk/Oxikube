@@ -77,6 +77,7 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_copy_name))
             .on_action(cx.listener(Self::on_select_all))
             .on_action(cx.listener(Self::on_clear))
+            .on_action(cx.listener(Self::on_delete))
             .child(toolbar)
             .child(
                 div()

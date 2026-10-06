@@ -41,6 +41,7 @@ use oxikube_app::session::restore::{RestoreConfig, SessionRestorer};
 use oxikube_app::{CommandBus, CoreColumns, KubeconfigSourcesService};
 use oxikube_catalog_ui::sources::{SettingsSourceList, SettingsSourceListHandle};
 use oxikube_catalog_ui::{Hotbar, HotbarDeps};
+use oxikube_resources_ui::actions::ResourceActions;
 use oxikube_resources_ui::table::ResourceTableDeps;
 use oxikube_resources_ui::{
     ResourceCommandSink, ResourceViews, ResourceViewsDeps, ResourceViewsSlot,
@@ -161,6 +162,11 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                 columns: Arc::new(CoreColumns::new()),
                 state: ports.state.clone(),
                 dispatcher: dispatcher.clone(),
+                actions: Some(ResourceActions::new(
+                    &bus,
+                    services.sessions.clone(),
+                    local_user(),
+                )),
             },
             tabs: tabs.downgrade(),
         },

@@ -108,8 +108,9 @@ fn record(calls: &Calls, cx: &HandlerContext, id: CommandId) {
 pub(crate) fn register_mutations(
     reg: &mut CommandRegistry,
     calls: &Calls,
+    skip: &[CommandId],
 ) -> Result<(), RegisterError> {
-    for id in MUTATING {
+    for id in MUTATING.into_iter().filter(|id| !skip.contains(id)) {
         let calls = calls.clone();
         reg.register(declared(id), move |cmd: Command, cx: HandlerContext| {
             record(&calls, &cx, cmd.id());
@@ -233,6 +234,25 @@ impl Harness {
             &ClusterSessionManager,
         ) -> Result<(), RegisterError>,
     ) -> Self {
+        Self::build(&[], extra)
+    }
+
+    /// The standard harness with the real `resource::Delete` handler (E07-S08) in place of the
+    /// recording test one, over the fake resource ports.
+    pub fn with_delete_handler() -> Self {
+        Self::build(&[CommandId::RESOURCE_DELETE], |reg, _, _| {
+            crate::actions::register_commands(reg)
+        })
+    }
+
+    fn build(
+        skip: &[CommandId],
+        extra: impl FnOnce(
+            &mut CommandRegistry,
+            &Calls,
+            &ClusterSessionManager,
+        ) -> Result<(), RegisterError>,
+    ) -> Self {
         let connector = Arc::new(FakeClusterConnectorPort::new());
         let source = Arc::new(
             FakeClusterSourcePort::new()
@@ -245,7 +265,9 @@ impl Harness {
 
         let mut registry = CommandRegistry::new();
         registry
-            .install("test_workloads", |reg| register_mutations(reg, &calls))
+            .install("test_workloads", |reg| {
+                register_mutations(reg, &calls, skip)
+            })
             .expect("mutations register");
         registry
             .install("test_views", |reg| register_reads(reg, &calls))

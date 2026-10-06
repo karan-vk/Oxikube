@@ -60,7 +60,7 @@ impl MutationGuard {
             }
         };
 
-        dry_run_stage(meta);
+        dry_run_stage(command.effective_risk());
 
         self.audit
             .ensure_writable()
@@ -169,7 +169,7 @@ impl MutationGuard {
             );
         };
 
-        let tier = policy::confirm_tier(meta);
+        let tier = policy::confirm_tier_for(meta, command);
         if tier != ConfirmTier::None {
             match &ctx.confirmation {
                 None => {
@@ -187,7 +187,7 @@ impl MutationGuard {
                         token,
                         command: meta.id,
                         tier,
-                        risk: meta.risk,
+                        risk: command.effective_risk(),
                         cluster,
                         summary: policy::summary(meta, command, context.as_str()),
                         expected_name,
@@ -216,8 +216,8 @@ impl MutationGuard {
 /// The dry-run stage. E19 runs a server-side dry run and shows its diff before every
 /// command whose risk [requires it](oxikube_domain::safety::Risk::requires_dry_run_diff);
 /// this story only marks the place in the pipeline.
-fn dry_run_stage(meta: &CommandMeta) {
-    if meta.risk.is_some_and(|r| r.requires_dry_run_diff()) {
-        tracing::debug!(command = %meta.id, "dry-run diff stage is a stub until E19");
+fn dry_run_stage(risk: Option<oxikube_domain::safety::Risk>) {
+    if risk.is_some_and(|r| r.requires_dry_run_diff()) {
+        tracing::debug!("dry-run diff stage is a stub until E19");
     }
 }

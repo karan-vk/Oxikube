@@ -14,10 +14,11 @@
 //! | `oxikube_app::posture` | `cluster::ToggleReadOnly`, `SetColour`, `ApplyPreset` (guarded posture) |
 //! | `oxikube_workspace` | `cluster::Select`, `SwitchTab`, `NextTab`, `PreviousTab`, `CloseTab` |
 //! | `oxikube` | `view::Open` for the catalog home and the kubeconfig sources screen |
+//! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03) |
 //!
-//! None of these mutates a cluster; the posture commands confirm and audit through the
-//! `MutationGuard` the bus owns, and the first mutating commands (E07-S08 delete) join here.
+//! Only `resource::Delete` mutates a cluster; it and the posture commands confirm and audit through
+//! the `MutationGuard` the bus owns, and E12's per-kind actions join here.
 
 use std::cell::OnceCell;
 use std::rc::Rc;
@@ -87,6 +88,10 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         oxikube_workspace::cluster_tab::register_commands(r, parts.tabs)
     })?;
     registry.install("oxikube", |r| register_view_commands(r, parts.views))?;
+    registry.install(
+        "oxikube_app::actions",
+        oxikube_app::actions::register_commands,
+    )?;
     registry.install("oxikube_resources_ui", |r| {
         oxikube_resources_ui::navigate::register_commands(r, parts.kinds)?;
         oxikube_resources_ui::register_commands(r, parts.resources)

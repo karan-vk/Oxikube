@@ -44,7 +44,7 @@ fn duplicate_registration_is_rejected_naming_both_crates() {
     let mut registry = CommandRegistry::new();
     registry
         .install("oxikube_resources_ui", |reg| {
-            register_mutations(reg, &calls)
+            register_mutations(reg, &calls, &[])
         })
         .unwrap();
     let err = registry
@@ -135,7 +135,7 @@ fn every_registered_command_has_a_tool_stub() {
         stubs += 1;
         assert_eq!(tool.name, ToolName::new(&meta.id.tool_name()).unwrap());
         assert_eq!(tool.title.as_deref(), Some(meta.title));
-        assert_eq!(tool.risk, meta.risk, "{}", meta.id);
+        assert_eq!(tool.risk, meta.tool_risk(), "{}", meta.id);
         assert_eq!(tool.is_mutating(), meta.mutating, "{}", meta.id);
         assert_eq!(tool.needs, meta.needs);
         assert!(tool.description.contains(meta.id.as_str()));
