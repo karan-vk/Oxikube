@@ -429,8 +429,8 @@ fn custom_resources_are_reachable_from_the_sidebar_through_the_crd_list(cx: &mut
     // Enter on the CRD row (`crd::OpenResources` on the real bus) opens the Widget table at the
     // storage version, on the Table feed.
     app.tick();
-    assert!(app.drawn("cell-0-0"), "the CRD list has its row");
-    app.click("cell-0-0");
+    assert!(app.drawn("td-0-0"), "the CRD list has its row");
+    app.click("td-0-0");
     app.press("enter");
     app.tick();
     app.tick();
@@ -476,7 +476,7 @@ fn the_yaml_and_describe_tabs_of_a_row_show_the_object_and_its_description(
     app.tick();
     app.click("sidebar-entry-workloads/pods");
     app.tick();
-    app.click("cell-0-0");
+    app.click("td-0-0");
     app.press("enter");
     app.tick();
     assert!(app.drawn("detail-view"), "the drawer shows the detail");
