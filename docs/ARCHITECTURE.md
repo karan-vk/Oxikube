@@ -245,6 +245,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   inherited untouched. The grid, element and view arrive with E09-S04..S07.
 - `oxikube_ui` — the only crate that imports `gpui-component`; exposes tokens and curated
   components to every view.
+- `oxikube_terminal` — the one terminal (epic E09). Module `grid` (E09-S04): `TermGrid`, the only
+  code that names `alacritty_terminal` (pinned `=0.26.0`) types; it owns `Term` plus the `vte`
+  parser and exposes our own `TerminalSnapshot` (visible cells, cursor, modes, scroll offset,
+  selection, title, palette overrides, per-row damage; buffers reused frame to frame), selection
+  (`SelectionKind::{Cell, Word, Line, Block}`, `selection_text`), regex `search` over screen and
+  scrollback (`GridMatch` in `GridPoint` grid coordinates), scrolling, resize with reflow and the
+  scrollback limit, plus `GridEvent`s (replies to the process, title, bell, OSC 52 copy, colour
+  queries). Module `state`: `TerminalState`, the GPUI entity that bridges a `TerminalBackend` to
+  the grid: a pump on tokio (`spawn_kube`) parses output under a short lock (16 KiB slices) and
+  sends one `Changed` per wave of output (wake flag), the UI answers with `notify_coalesced`, so a
+  flood repaints once per frame; a writer task sends input and emulator replies in order and
+  forwards resizes through a latest-value channel (coalesced during a drag). Module `settings`:
+  `terminal.scrollback_lines` (default 10 000, cap 100 000, hot-reloaded into open terminals).
+  Scrollback stays in memory; nothing is persisted or logged.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's

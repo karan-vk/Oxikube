@@ -152,7 +152,8 @@ tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
 openidconnect = "4"
 
 # --- terminal / editor ---
-alacritty_terminal = "0.26"
+# Pinned exactly (E09 risk: API churn); only `oxikube_terminal::grid` touches its API.
+alacritty_terminal = { version = "=0.26.0", default-features = false }
 portable-pty = "0.9"
 # 0.26: gpui-component's editor (`tree-sitter-yaml` feature in oxikube_ui) links tree-sitter ^0.26.13
 # and only one version of the native library may be linked.

@@ -542,6 +542,16 @@
       "additionalProperties": false,
       "description": "What one settings layer says about terminals: the `terminal` object of `settings.json`.",
       "properties": {
+        "scrollback_lines": {
+          "description": "Lines of history each terminal keeps in memory (0 - 100000). Never saved to disk.",
+          "format": "uint",
+          "maximum": 100000,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "shell": {
           "description": "The shell a local terminal runs (a path or a name found on `PATH`). `null` uses the\n`SHELL` environment variable, then `/bin/sh`. Applies to terminals opened afterwards.",
           "type": [
