@@ -52,11 +52,21 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         read_only: Option<bool>,
     },
-    /// Choose the namespaces in view.
+    /// Choose the namespaces a cluster's session watches.
     #[serde(rename = "namespace::Select")]
     NamespaceSelect {
+        /// The cluster whose selection changes.
+        cluster: ClusterId,
         /// Namespace names; empty means all namespaces.
         namespaces: Vec<String>,
+    },
+    /// Add a namespace to a cluster's favourites, or remove it when it is one already.
+    #[serde(rename = "namespace::ToggleFavourite")]
+    NamespaceToggleFavourite {
+        /// The cluster whose favourites change.
+        cluster: ClusterId,
+        /// The namespace to pin or unpin.
+        namespace: String,
     },
     /// Open a registered view (overview, events, ...) by id.
     #[serde(rename = "view::Open")]
@@ -217,6 +227,7 @@ impl Command {
             Command::ClusterSelect { .. } => CommandId::CLUSTER_SELECT,
             Command::ClusterToggleReadOnly { .. } => CommandId::CLUSTER_TOGGLE_READ_ONLY,
             Command::NamespaceSelect { .. } => CommandId::NAMESPACE_SELECT,
+            Command::NamespaceToggleFavourite { .. } => CommandId::NAMESPACE_TOGGLE_FAVOURITE,
             Command::ViewOpen { .. } => CommandId::VIEW_OPEN,
             Command::PaletteToggle => CommandId::PALETTE_TOGGLE,
             Command::AppQuit => CommandId::APP_QUIT,
@@ -320,7 +331,12 @@ mod tests {
                 read_only: Some(true),
             },
             Command::NamespaceSelect {
+                cluster: cluster(),
                 namespaces: vec!["default".into(), "kube-system".into()],
+            },
+            Command::NamespaceToggleFavourite {
+                cluster: cluster(),
+                namespace: "kube-system".into(),
             },
             Command::ViewOpen {
                 view: "overview".into(),
@@ -485,6 +501,7 @@ mod tests {
                 command,
                 Command::ClusterSelect { .. }
                     | Command::NamespaceSelect { .. }
+                    | Command::NamespaceToggleFavourite { .. }
                     | Command::ViewOpen { .. }
                     | Command::PaletteToggle
                     | Command::AppQuit
