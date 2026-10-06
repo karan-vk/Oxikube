@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::executor::block_on;
-use oxikube_domain::ids::Gvk;
+use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::kinds::ResourceKind;
 use oxikube_domain::{ErrorKind, ObjectMeta, OxiError, OxiResult, Resource};
 use oxikube_ports::*;
@@ -185,7 +185,26 @@ impl LogPort for Stub {
 
 #[async_trait]
 impl ExecPort for Stub {
-    async fn exec(
+    async fn exec(&self, _: &ExecTarget) -> OxiResult<Box<dyn TerminalBackend>> {
+        stub()
+    }
+    async fn attach(&self, _: &AttachTarget) -> OxiResult<Box<dyn TerminalBackend>> {
+        stub()
+    }
+    async fn create_debug_container(
+        &self,
+        _: &DebugContainerSpec,
+    ) -> OxiResult<Box<dyn TerminalBackend>> {
+        stub()
+    }
+    async fn node_shell(&self, _: &NodeShellSpec) -> OxiResult<Box<dyn TerminalBackend>> {
+        stub()
+    }
+}
+
+#[async_trait]
+impl ExecStreamPort for Stub {
+    async fn exec_session(
         &self,
         _: &str,
         _: &str,
@@ -194,7 +213,23 @@ impl ExecPort for Stub {
     ) -> OxiResult<ExecSession> {
         stub()
     }
-    async fn attach(&self, _: &str, _: &str, _: &ExecOptions) -> OxiResult<ExecSession> {
+    async fn attach_session(&self, _: &str, _: &str, _: &ExecOptions) -> OxiResult<ExecSession> {
+        stub()
+    }
+}
+
+#[async_trait]
+impl TerminalBackend for Stub {
+    async fn write(&self, _: &[u8]) -> OxiResult<()> {
+        stub()
+    }
+    async fn resize(&self, _: TerminalSize) -> OxiResult<()> {
+        stub()
+    }
+    fn output_stream(&self) -> futures::stream::BoxStream<'static, BackendEvent> {
+        futures::StreamExt::boxed(futures::stream::empty())
+    }
+    async fn kill(&self) -> OxiResult<()> {
         stub()
     }
 }
@@ -221,6 +256,8 @@ fn _borrow_each(
     _: &dyn TableFeedPort,
     _: &dyn LogPort,
     _: &dyn ExecPort,
+    _: &dyn ExecStreamPort,
+    _: &dyn TerminalBackend,
     _: &dyn PortForwardPort,
 ) {
 }
@@ -245,6 +282,9 @@ fn every_port_is_dyn_send_sync() {
     assert_send_sync::<dyn TableFeedPort>();
     assert_send_sync::<dyn LogPort>();
     assert_send_sync::<dyn ExecPort>();
+    assert_send_sync::<dyn ExecStreamPort>();
+    assert_send_sync::<dyn TerminalBackend>();
+    assert_send_sync::<Box<dyn TerminalBackend>>();
     assert_send_sync::<dyn PortForwardPort>();
 }
 
@@ -341,11 +381,39 @@ fn other_ports_are_callable_through_arc_dyn() {
         assert_unsupported(
             assert_send(logs.stream_logs("d", "web-0", &LogOptions::follow())).await,
         );
-        let argv = vec!["sh".to_owned()];
-        assert_unsupported(
-            assert_send(exec.exec("d", "web-0", &argv, &ExecOptions::interactive())).await,
+        let pod = ResourceRef::new(
+            ClusterId::new("kubeconfig", &ContextName::new("kind")),
+            kind.clone(),
+            Some("d".into()),
+            "web-0",
         );
-        assert_unsupported(exec.attach("d", "web-0", &ExecOptions::default()).await);
+        let target = ExecTarget::interactive(pod.clone(), vec!["sh".to_owned()]);
+        assert_unsupported(assert_send(exec.exec(&target)).await);
+        assert_unsupported(exec.attach(&AttachTarget::interactive(pod.clone())).await);
+        assert_unsupported(
+            assert_send(exec.create_debug_container(&DebugContainerSpec::new(pod, "busybox")))
+                .await,
+        );
+        assert_unsupported(assert_send(exec.node_shell(&NodeShellSpec::new("node-1"))).await);
+        let streams: Arc<dyn ExecStreamPort + Send + Sync> = Arc::new(Stub);
+        assert_unsupported(
+            assert_send(streams.exec_session(
+                "d",
+                "web-0",
+                &["sh".to_owned()],
+                &ExecOptions::interactive(),
+            ))
+            .await,
+        );
+        assert_unsupported(
+            streams
+                .attach_session("d", "web-0", &ExecOptions::default())
+                .await,
+        );
+        let backend: Box<dyn TerminalBackend> = Box::new(Stub);
+        assert_unsupported(assert_send(backend.write(b"x")).await);
+        assert_unsupported(backend.resize(TerminalSize::new(80, 24)).await);
+        assert_unsupported(backend.kill().await);
         assert_unsupported(assert_send(forward.forward("d", "web-0", 8080)).await);
     });
 }

@@ -59,7 +59,8 @@ logs. Locally, without that variable, a failed test prints its namespace's event
 | | `replace_subresource` | `subresources_scale::a_crd_with_scale_and_status_subresources_serves_both` |
 | `TableFeedPort` | `list_table`, `table_feed` | `table_feed` (CRD printer columns and pods against `kubectl get`, live create/update/delete, paged lists) |
 | `LogPort` | `stream_logs` | `logs_streams` (options, multi-container, selector fan-in, rate), `logs_restart` (restart without dupes or gaps) |
-| `ExecPort` | `exec`, `attach` | `exec_streams` (echo, large payload, resize, exit status, attach, error kinds), `exec_node_shell` |
+| `ExecStreamPort` | `exec_session`, `attach_session` | `exec_streams` (echo, large payload, resize, exit status, attach, error kinds), `exec_node_shell` |
+| `ExecPort` | `exec`, `attach`, `create_debug_container`, `node_shell` | `exec_terminal` (TTY echo, resize, exit code, attach and kill, debug container, node shell removed on kill, `NotFound`) |
 | `PortForwardPort` | `forward` | `portforward` (pod and service GET, named ports, errors, `Forbidden`), `portforward_restart` |
 | `MetricsPort` | `node_metrics`, `pod_metrics` | `metrics_kind` (present, absent as `Unavailable(NotInstalled)`, `Forbidden`) |
 | `KubeEvents` | `watch` | `events_feed` (merged core and events.k8s.io, per-object feed, capacity) |

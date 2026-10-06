@@ -2,7 +2,7 @@
 //! request that is sent, and how a refusal maps to the error taxonomy.
 
 use oxikube_domain::ErrorKind;
-use oxikube_ports::{ExecOptions, ExecPort};
+use oxikube_ports::{ExecOptions, ExecStreamPort};
 use serde_json::json;
 
 use crate::fake_api::{FakeApi, status_body};
@@ -24,7 +24,7 @@ fn pod(phase: &str, containers: &[&str]) -> serde_json::Value {
 
 async fn exec_error(api: &FakeApi, options: &ExecOptions) -> oxikube_domain::OxiError {
     KubeExec::new(api.client())
-        .exec("default", "p", &argv(&["ls"]), options)
+        .exec_session("default", "p", &argv(&["ls"]), options)
         .await
         .expect_err("the open should fail")
 }
@@ -52,13 +52,13 @@ async fn bad_requests_are_refused_before_any_request() {
         (argv(&["ls"]), ExecOptions::default().container("c?x"), "p"),
     ] {
         let err = exec
-            .exec("default", pod, &command, &options)
+            .exec_session("default", pod, &command, &options)
             .await
             .expect_err("invalid");
         assert_eq!(err.kind(), ErrorKind::Validation, "{err}");
     }
     let err = exec
-        .attach(
+        .attach_session(
             "default",
             "p",
             &ExecOptions {
@@ -79,7 +79,7 @@ async fn the_request_carries_the_command_and_the_stream_choices() {
     api.reply(EXEC, 403, status_body(403, "Forbidden", "no"));
     let options = ExecOptions::interactive().container("app");
     KubeExec::new(api.client())
-        .exec("default", "p", &argv(&["sh", "-c", "echo a b"]), &options)
+        .exec_session("default", "p", &argv(&["sh", "-c", "echo a b"]), &options)
         .await
         .expect_err("refused");
     let request = &api.requests()[0];
@@ -104,7 +104,7 @@ async fn attach_uses_the_attach_route_without_a_command() {
     let api = FakeApi::new();
     api.reply(ATTACH, 403, status_body(403, "Forbidden", "no"));
     let err = KubeExec::new(api.client())
-        .attach("default", "p", &ExecOptions::interactive())
+        .attach_session("default", "p", &ExecOptions::interactive())
         .await
         .expect_err("refused");
     assert_eq!(err.kind(), ErrorKind::Forbidden);

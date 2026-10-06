@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use oxikube_domain::ErrorKind;
 use oxikube_ports::ExecOptions;
-use oxikube_testkit::fakes::{ExecCall, ExecScript, FakeExecPort};
+use oxikube_testkit::fakes::{ExecScript, ExecStreamCall, FakeExecStreamPort};
 
 use super::fakes::{Call, FakePods};
 use crate::remote::exec::debug::attach_debug;
@@ -25,7 +25,7 @@ fn spec() -> EphemeralContainerSpec {
 #[tokio::test]
 async fn it_patches_waits_then_attaches_to_the_new_container() {
     let (pods, _deleted) = FakePods::new();
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     exec.script().attach.push(Ok(ExecScript::new()));
     let session = attach_debug(&exec, &pods, "ns", "p", &spec(), Duration::from_secs(1))
         .await
@@ -47,7 +47,7 @@ async fn it_patches_waits_then_attaches_to_the_new_container() {
             container: Container::Ephemeral("dbg".into())
         }
     );
-    let ExecCall::Attach { options, .. } = &exec.recorded_calls()[0] else {
+    let ExecStreamCall::Attach { options, .. } = &exec.recorded_calls()[0] else {
         panic!("expected an attach");
     };
     assert_eq!(*options, ExecOptions::interactive().container("dbg"));
@@ -56,7 +56,7 @@ async fn it_patches_waits_then_attaches_to_the_new_container() {
 #[tokio::test]
 async fn without_a_tty_stderr_is_attached_separately() {
     let (pods, _deleted) = FakePods::new();
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     exec.script().attach.push(Ok(ExecScript::new()));
     let spec = EphemeralContainerSpec {
         stdin: false,
@@ -66,7 +66,7 @@ async fn without_a_tty_stderr_is_attached_separately() {
     attach_debug(&exec, &pods, "ns", "p", &spec, Duration::from_secs(1))
         .await
         .expect("attached");
-    let ExecCall::Attach { options, .. } = &exec.recorded_calls()[0] else {
+    let ExecStreamCall::Attach { options, .. } = &exec.recorded_calls()[0] else {
         panic!("expected an attach");
     };
     assert!(options.stderr && options.stdout && !options.stdin && !options.tty);
@@ -77,7 +77,7 @@ async fn without_a_tty_stderr_is_attached_separately() {
 async fn a_rejected_patch_stops_before_waiting_or_attaching() {
     let (pods, _deleted) = FakePods::new();
     *pods.patch_error.lock() = Some((ErrorKind::Forbidden, "no"));
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     let err = attach_debug(&exec, &pods, "ns", "p", &spec(), Duration::from_secs(1))
         .await
         .expect_err("refused");
@@ -90,7 +90,7 @@ async fn a_rejected_patch_stops_before_waiting_or_attaching() {
 async fn a_container_that_cannot_start_is_not_attached() {
     let (pods, _deleted) = FakePods::new();
     *pods.wait_error.lock() = Some((ErrorKind::Conflict, "ErrImagePull"));
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     let err = attach_debug(&exec, &pods, "ns", "p", &spec(), Duration::from_secs(1))
         .await
         .expect_err("fails");
@@ -101,7 +101,7 @@ async fn a_container_that_cannot_start_is_not_attached() {
 #[tokio::test]
 async fn an_incomplete_spec_is_refused_before_the_patch() {
     let (pods, _deleted) = FakePods::new();
-    let exec = FakeExecPort::new();
+    let exec = FakeExecStreamPort::new();
     for bad in [
         EphemeralContainerSpec {
             name: String::new(),

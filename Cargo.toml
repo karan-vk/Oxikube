@@ -84,6 +84,8 @@ kopium = "0.24"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util", "net", "fs", "signal"] }
 tokio-util = { version = "0.7", features = ["io", "codec", "compat"] }
 futures = "0.3"
+# Chunk type of terminal output (`oxikube_ports::exec::BackendEvent`); the same major kube uses.
+bytes = "1"
 http = "1"
 # Response-body wrapper of the watch budget's byte counter (`oxikube_kube::budget`).
 http-body = "1"

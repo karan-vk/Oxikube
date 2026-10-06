@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use oxikube_domain::{OxiError, OxiResult};
-use oxikube_ports::{ExecOptions, ExecPort, ExecSession};
+use oxikube_ports::{ExecOptions, ExecSession, ExecStreamPort};
 
 use super::pods::Pods;
 use super::wait::Container;
@@ -45,7 +45,7 @@ pub struct NodeShellSession {
 
 /// Creates the pod, waits for it, opens the shell. Every failure deletes the pod first.
 pub(super) async fn open(
-    exec: &dyn ExecPort,
+    exec: &dyn ExecStreamPort,
     pods: Arc<dyn Pods>,
     node: &str,
     config: &NodeShellConfig,
@@ -65,7 +65,7 @@ pub(super) async fn open(
         )
         .await?;
         let options = ExecOptions::interactive().container(CONTAINER);
-        exec.exec(&namespace, &pod, &exec_command(config), &options)
+        exec.exec_session(&namespace, &pod, &exec_command(config), &options)
             .await
     }
     .await;
