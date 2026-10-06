@@ -44,7 +44,8 @@ use kube::config::Kubeconfig;
 use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::{
-    ClusterConnection, ClusterConnectorPort, ClusterPorts, ConnectRequest, ExecInteractivity,
+    ClusterConnection, ClusterConnectorPort, ClusterPorts, ConnectRequest, ConnectionGuard,
+    ExecInteractivity,
 };
 use parking_lot::Mutex;
 
@@ -215,7 +216,7 @@ impl ClusterConnectorPort for KubeConnector {
         };
         Ok(ClusterConnection {
             ports,
-            guard: oxikube_ports::ConnectionGuard::new(state),
+            guard: ConnectionGuard::new(state),
         })
     }
 }

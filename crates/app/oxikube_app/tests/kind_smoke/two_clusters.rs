@@ -1,6 +1,7 @@
 //! The acceptance scenario: two contexts connect through the real adapter and the app session
 //! service, and changing the namespace selection of one switches its feeds and nothing else.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -26,19 +27,14 @@ const IDLE_GRACE: Duration = Duration::from_secs(2);
 const A_PODS: usize = 3;
 const B_PODS: usize = 2;
 
-fn pods_in(namespace: &TestNamespace, prefix: &str, count: usize) -> Vec<String> {
+fn pods_in(namespace: &TestNamespace, prefix: &str, count: usize) -> BTreeSet<String> {
     (0..count)
         .map(|i| format!("{}/{prefix}-{i}", namespace.name()))
         .collect()
 }
 
-fn sorted(mut pods: Vec<String>) -> Vec<String> {
-    pods.sort();
-    pods
-}
-
 /// Connects `entry` and prints how long it took to reach `Ready`.
-async fn connect(manager: &ClusterSessionManager, entry: &ClusterContext) -> Duration {
+async fn connect(manager: &ClusterSessionManager, entry: &ClusterContext) {
     let started = Instant::now();
     let state = manager.connect(&entry.cluster).await.expect("connect");
     let took = started.elapsed();
@@ -60,7 +56,6 @@ async fn connect(manager: &ClusterSessionManager, entry: &ClusterContext) -> Dur
         "{}: {took:?} to Ready",
         entry.context
     );
-    took
 }
 
 /// Session states and counters of both clusters, for a failed wait.
@@ -158,9 +153,7 @@ async fn two_contexts_connect_and_namespace_scoping_switches_feeds() {
             ..SessionOptions::default()
         },
     );
-    let (admin_took, viewer_took) =
-        tokio::join!(connect(&manager, &admin), connect(&manager, &viewer));
-    eprintln!("connect to Ready: admin {admin_took:?}, viewer {viewer_took:?}");
+    tokio::join!(connect(&manager, &admin), connect(&manager, &viewer));
 
     let session_of = |entry: &ClusterContext| -> ClusterSession {
         manager.get(&entry.cluster).expect("open session")
@@ -224,11 +217,11 @@ async fn two_contexts_connect_and_namespace_scoping_switches_feeds() {
     .await;
 
     // All: one cluster-wide feed yields the pods of both namespaces.
-    let both = sorted([a_pods.clone(), b_pods.clone()].concat());
+    let both: BTreeSet<String> = a_pods.union(&b_pods).cloned().collect();
     eventually(
         "All yields both namespaces",
         || admin_feeds.describe(),
-        || async { sorted(admin_feeds.pods().into_iter().collect()) == both },
+        || async { admin_feeds.pods() == both },
     )
     .await;
     assert_eq!(admin_feeds.feed_keys(), vec![None], "one cluster-wide feed");
@@ -243,7 +236,7 @@ async fn two_contexts_connect_and_namespace_scoping_switches_feeds() {
     eventually(
         "{a} yields only a's pods",
         || admin_feeds.describe(),
-        || async { sorted(admin_feeds.pods().into_iter().collect()) == a_pods },
+        || async { admin_feeds.pods() == a_pods },
     )
     .await;
     assert_eq!(admin_feeds.feed_keys(), vec![Some(a.name().to_owned())]);
@@ -262,7 +255,7 @@ async fn two_contexts_connect_and_namespace_scoping_switches_feeds() {
     eventually(
         "{b} yields only b's pods",
         || admin_feeds.describe(),
-        || async { sorted(admin_feeds.pods().into_iter().collect()) == b_pods },
+        || async { admin_feeds.pods() == b_pods },
     )
     .await;
     assert_eq!(admin_feeds.feed_keys(), vec![Some(b.name().to_owned())]);
@@ -289,7 +282,7 @@ async fn two_contexts_connect_and_namespace_scoping_switches_feeds() {
     eventually(
         "{a, b} yields both",
         || admin_feeds.describe(),
-        || async { sorted(admin_feeds.pods().into_iter().collect()) == both },
+        || async { admin_feeds.pods() == both },
     )
     .await;
     let both_scoped = stats(&connector, &admin_id);
@@ -309,7 +302,7 @@ async fn two_contexts_connect_and_namespace_scoping_switches_feeds() {
     eventually(
         "All yields both again",
         || admin_feeds.describe(),
-        || async { sorted(admin_feeds.pods().into_iter().collect()) == both },
+        || async { admin_feeds.pods() == both },
     )
     .await;
     eventually("the namespaced feeds are torn down", diag, || async {
@@ -322,7 +315,7 @@ async fn two_contexts_connect_and_namespace_scoping_switches_feeds() {
 
     // --- the other session never noticed ------------------------------------------------------
     assert_eq!(session_of(&viewer).namespace_selection(), &viewer_selection);
-    assert_eq!(sorted(viewer_feeds.pods().into_iter().collect()), a_pods);
+    assert_eq!(viewer_feeds.pods(), a_pods);
     let viewer_stats = stats(&connector, &viewer_id);
     assert_eq!(
         (
@@ -347,5 +340,5 @@ async fn two_contexts_connect_and_namespace_scoping_switches_feeds() {
         "{}",
         diag()
     );
-    assert_eq!(sorted(viewer_feeds.pods().into_iter().collect()), a_pods);
+    assert_eq!(viewer_feeds.pods(), a_pods);
 }
