@@ -124,9 +124,9 @@ impl ClusterSessionManager {
     /// `Disconnected` when [`disconnect`](Self::disconnect) cancelled it.
     ///
     /// A session that is not open yet is opened from the cluster source's catalog, with the
-    /// options its settings give ([`open_configured`](Self::open_configured)). When the session is already `Connecting`, `Ready` or
-    /// `Degraded`, nothing starts and the current state is returned; use
-    /// [`reconnect`](Self::reconnect) to force a new connection.
+    /// options its settings give ([`open_configured`](Self::open_configured)). When the session
+    /// is already `Connecting`, `Ready` or `Degraded`, nothing starts and the current state is
+    /// returned; use [`reconnect`](Self::reconnect) to force a new connection.
     ///
     /// Run it off the UI thread (`oxikube_runtime::spawn_kube`). Dropping the future
     /// cancels the attempt and returns the session to `Disconnected`.
@@ -260,9 +260,7 @@ impl ClusterSessionManager {
             .iter()
             .find(|c| &c.cluster == cluster)
             .ok_or_else(|| unknown(cluster))?;
-        Ok(self
-            .shared
-            .open_with(context, |table| options_from(table, context)))
+        Ok(self.shared.open_configured(context))
     }
 }
 
@@ -275,10 +273,19 @@ impl Shared {
         self.open_with(context, |_| options)
     }
 
-    /// Like [`open`](Self::open), with the options made from the current prefs table while the
-    /// session list is locked, so a concurrent `set_prefs_table` either sees the new session
-    /// (and applies to it) or runs first (and the session starts from it).
-    pub(super) fn open_with(
+    /// Opens `context` with the options its settings give. They are made while the session list
+    /// is locked, so a concurrent `set_prefs_table` either sees the new session (and applies to
+    /// it) or runs first (and the session starts from it).
+    pub(super) fn open_configured(&self, context: &ClusterContext) -> Arc<Mutex<Entry>> {
+        self.open_with(context, |table| {
+            SessionOptions::from_prefs(
+                table.get(&context.cluster),
+                context.default_namespace.as_deref(),
+            )
+        })
+    }
+
+    fn open_with(
         &self,
         context: &ClusterContext,
         options: impl FnOnce(&ClusterPrefsTable) -> SessionOptions,
@@ -337,14 +344,6 @@ impl Shared {
         drop(released);
         true
     }
-}
-
-/// The options a session for `context` starts with under `table`.
-pub(super) fn options_from(table: &ClusterPrefsTable, context: &ClusterContext) -> SessionOptions {
-    SessionOptions::from_prefs(
-        table.get(&context.cluster),
-        context.default_namespace.as_deref(),
-    )
 }
 
 /// The error for an unknown session id.

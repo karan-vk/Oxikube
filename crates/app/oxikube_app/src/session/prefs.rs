@@ -13,9 +13,8 @@ use std::sync::Arc;
 
 use oxikube_ports::{ClusterContext, ClusterPrefs, ClusterPrefsTable};
 
-use super::config::SessionOptions;
 use super::entry::Entry;
-use super::manager::{ClusterSessionManager, options_from};
+use super::manager::ClusterSessionManager;
 use super::model::ClusterSession;
 use super::updates::{SessionChange, UpdateSender};
 
@@ -50,25 +49,11 @@ impl ClusterSessionManager {
         changed
     }
 
-    /// The prefs `cluster` would start with: its own when it has overrides, else the global
-    /// fallback.
-    pub fn prefs_for(&self, cluster: &oxikube_domain::ids::ClusterId) -> Arc<ClusterPrefs> {
-        self.shared.prefs.read().get(cluster).clone()
-    }
-
     /// Opens a `Disconnected` session for `context` configured from its settings (see
-    /// [`SessionOptions::from_prefs`]; the kubeconfig context's namespace is the fallback
+    /// [`SessionOptions::from_prefs`](super::config::SessionOptions::from_prefs); the kubeconfig context's namespace is the fallback
     /// default namespace), or returns the existing session unchanged.
     pub fn open_configured(&self, context: &ClusterContext) -> ClusterSession {
-        self.shared
-            .open_with(context, |table| options_from(table, context))
-            .lock()
-            .snapshot()
-    }
-
-    /// The options [`open_configured`](Self::open_configured) would open `context` with now.
-    pub fn options_for(&self, context: &ClusterContext) -> SessionOptions {
-        options_from(&self.shared.prefs.read(), context)
+        self.shared.open_configured(context).lock().snapshot()
     }
 }
 

@@ -10,7 +10,7 @@ use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
 /// Keychain namespace of the secrets the cluster settings refer to.
-pub const PROMETHEUS_SECRET_NAMESPACE: &str = "prometheus";
+const PROMETHEUS_SECRET_NAMESPACE: &str = "prometheus";
 
 /// An `http(s)` URL without credentials, query or fragment.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

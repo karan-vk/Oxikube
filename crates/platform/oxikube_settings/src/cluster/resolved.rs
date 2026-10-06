@@ -113,8 +113,7 @@ impl ClusterSettings {
         Self::get(Some(SettingsLocation { cluster }), cx)
     }
 
-    /// [`ClusterSettings::resolve`], or `None` without a store.
-    pub fn try_resolve<'a>(cluster: &ClusterId, cx: &'a App) -> Option<&'a ClusterSettings> {
+    fn try_resolve<'a>(cluster: &ClusterId, cx: &'a App) -> Option<&'a ClusterSettings> {
         cx.try_global::<SettingsStore>()?
             .try_get(Some(SettingsLocation { cluster }))
     }
@@ -128,12 +127,12 @@ impl ClusterSettings {
         };
         let default = store
             .try_get::<ClusterSettings>(None)
-            .map(|settings| (*settings.prefs).clone())
+            .map(|settings| settings.prefs.clone())
             .unwrap_or_default();
         let mut table = ClusterPrefsTable::new(default);
         for (key, settings) in store.cluster_values::<ClusterSettings>() {
             match key.parse::<ClusterId>() {
-                Ok(id) => table = table.with_cluster(id, (*settings.prefs).clone()),
+                Ok(id) => table = table.with_cluster(id, settings.prefs.clone()),
                 Err(_) => tracing::warn!(key, "`clusters` key is not a cluster id; ignored"),
             }
         }

@@ -76,28 +76,23 @@ pub struct ClusterPrefsTable {
 impl ClusterPrefsTable {
     /// A table whose clusters all read `default` until [`with_cluster`](Self::with_cluster)
     /// adds overrides.
-    pub fn new(default: ClusterPrefs) -> Self {
+    pub fn new(default: impl Into<Arc<ClusterPrefs>>) -> Self {
         Self {
-            default: Arc::new(default),
+            default: default.into(),
             clusters: HashMap::new(),
         }
     }
 
     /// Adds the resolved prefs of a cluster that has `clusters.<id>` overrides.
     #[must_use]
-    pub fn with_cluster(mut self, cluster: ClusterId, prefs: ClusterPrefs) -> Self {
-        self.clusters.insert(cluster, Arc::new(prefs));
+    pub fn with_cluster(mut self, cluster: ClusterId, prefs: impl Into<Arc<ClusterPrefs>>) -> Self {
+        self.clusters.insert(cluster, prefs.into());
         self
     }
 
     /// The prefs of `cluster`: its own when it has overrides, else the global fallback.
     pub fn get(&self, cluster: &ClusterId) -> &Arc<ClusterPrefs> {
         self.clusters.get(cluster).unwrap_or(&self.default)
-    }
-
-    /// The global fallback.
-    pub fn default_prefs(&self) -> &Arc<ClusterPrefs> {
-        &self.default
     }
 
     /// How many clusters have prefs of their own.
