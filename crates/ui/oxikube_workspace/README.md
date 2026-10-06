@@ -45,7 +45,7 @@ workspace.update(cx, |ws, cx| {
   Escape / outside click in `on_before_dismiss`). Escape closes the modal and focus returns to
   the element that had it; Tab stays inside. Toasts dedupe by key, show at most three at once
   and never take focus (`ToastLayer::focus_toasts` is the keyboard way in). Animations are
-  capped at 150 ms and off after `motion::set_reduce_motion(cx, true)`. The layers are not
+  capped at 150 ms and off under reduce-motion (`oxikube_ui::motion::reduce_motion`). The layers are not
   gpui-component's `Root` dialog/notification layers, which keep serving `OverlayExt`.
 - Tabs drag between panes, docks resize, panes and dock groups zoom: the dock area does it.
 - `oxikube_workspace::init(cx)` registers the window menu and the `workspace::*` key bindings.

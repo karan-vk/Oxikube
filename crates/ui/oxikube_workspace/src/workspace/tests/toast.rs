@@ -277,7 +277,7 @@ fn frame_requests(vcx: &mut VisualTestContext) -> usize {
 #[gpui::test]
 fn a_toast_fades_in_within_the_cap(cx: &mut TestAppContext) {
     let (ws, mut vcx) = workspace(cx);
-    vcx.update(|_, cx| crate::motion::set_reduce_motion(cx, false));
+    vcx.update(|_, cx| cx.set_reduce_motion(false));
     let fade = vcx
         .update(|_, cx| ToastLayer::fade_in(cx))
         .expect("a fade when motion is allowed");
@@ -303,7 +303,7 @@ fn a_toast_fades_in_within_the_cap(cx: &mut TestAppContext) {
 #[gpui::test]
 fn no_fade_is_rendered_under_reduce_motion(cx: &mut TestAppContext) {
     let (ws, mut vcx) = workspace(cx);
-    vcx.update(|_, cx| crate::motion::set_reduce_motion(cx, true));
+    vcx.update(|_, cx| cx.set_reduce_motion(true));
     assert!(vcx.update(|_, cx| ToastLayer::fade_in(cx)).is_none());
 
     let id = show(&ws, &mut vcx, Toast::info("still").persistent());

@@ -27,7 +27,7 @@
 //! - [`modal`]: the [`ModalLayer`]: one [`ModalView`] at a time, Escape and outside-click
 //!   dismissal, Tab trapped inside, focus restored on close; [`DialogModal`] for confirmations.
 //! - [`toast`]: the [`ToastLayer`]: queued, deduplicated, auto-dismissing [`Toast`]s with actions.
-//! - [`motion`]: the reduce-motion switch and the 150 ms animation cap the layers follow.
+//! - [`motion`]: the 150 ms animation cap the layers follow (off under reduce-motion).
 //!
 //! Features use the layers through the [`Workspace`]: `register_status_item`, `toggle_modal`,
 //! `show_toast`.

@@ -31,7 +31,7 @@ pub(super) fn workspace(cx: &mut TestAppContext) -> (Entity<Workspace>, VisualTe
         crate::modal::register(cx);
         crate::toast::register(cx);
         // Fades would keep requesting frames while the test clock stands still.
-        crate::motion::set_reduce_motion(cx, true);
+        cx.set_reduce_motion(true);
         register_test_item(cx);
     });
     let mut workspace = None;

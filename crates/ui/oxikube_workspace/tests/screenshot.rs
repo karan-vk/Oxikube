@@ -43,7 +43,7 @@ fn render(with_modal: bool) -> anyhow::Result<RgbaImage> {
         // Pin the appearance: `init` follows the system, which differs between machines.
         oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
         // A fade in flight would make the picture depend on the clock.
-        oxikube_workspace::motion::set_reduce_motion(cx, true);
+        cx.set_reduce_motion(true);
         let workspace = cx.new(|cx| Workspace::new(window, cx));
         let left = TestPanel::build(DockPosition::Left, "Clusters", cx);
         let bottom = TestPanel::build(DockPosition::Bottom, "Logs", cx);
