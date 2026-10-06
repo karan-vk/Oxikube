@@ -27,8 +27,8 @@ use super::delegate::RowsDelegate;
 use super::layout::ColumnLayout;
 use super::prefs::{ColumnPrefs, PrefsWriter};
 use super::selection::Selection;
-use crate::actions::{ActionSource, ResourceActions};
 use super::states::{StateLabels, scope_label};
+use crate::actions::{ActionSource, ResourceActions};
 
 /// How often ages are redrawn while the table is shown.
 const TICK: Duration = Duration::from_secs(1);
