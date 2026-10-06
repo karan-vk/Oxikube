@@ -127,7 +127,7 @@ fn answers_land_on_the_entries_and_single_kind_sections() {
     ));
     assert_eq!(entry(&rows, "workloads/jobs"), None, "no answer, no badge");
     let section_count = |rows: &[Row], id: &str| match rows.iter().find(|r| r.id() == id) {
-        Some(Row::Section(s)) => s.count,
+        Some(Row::Section(s)) => s.count.as_ref().and_then(|c| c.count()).map(|c| c.total),
         other => panic!("{id}: {other:?}"),
     };
     assert_eq!(section_count(&rows, "nodes"), Some(3));
@@ -136,6 +136,29 @@ fn answers_land_on_the_entries_and_single_kind_sections() {
     apply_counts(&mut rows, &plan, &HashMap::new());
     assert_eq!(entry(&rows, "workloads/pods"), None);
     assert_eq!(section_count(&rows, "nodes"), None);
+}
+
+#[test]
+fn a_forbidden_single_kind_section_says_no_access() {
+    let access = all_access();
+    let plan = count_plan(&core_sections(), &access);
+    let mut rows = rows_with(&access);
+    let states: HashMap<KindKey, CountState> = [(
+        key("", "nodes"),
+        CountState::NoAccess {
+            message: "nodes is forbidden".into(),
+        },
+    )]
+    .into();
+    apply_counts(&mut rows, &plan, &states);
+    let Some(Row::Section(nodes)) = rows.iter().find(|r| r.id() == "nodes") else {
+        panic!("no nodes section");
+    };
+    let state = nodes.count.as_ref().expect("the section carries the state");
+    assert!(state.is_no_access());
+    let (text, hover) = badge_text(state).expect("a badge");
+    assert_eq!(text, "no access", "not the not-loaded dash");
+    assert_eq!(hover.as_deref(), Some("nodes is forbidden"));
 }
 
 #[test]

@@ -92,10 +92,7 @@ pub fn apply_counts(rows: &mut [Row], plan: &CountPlan, states: &HashMap<KindKey
                     .iter()
                     .find(|(id, _)| *id == section.id)
                     .map(|(_, key)| key);
-                section.count = key
-                    .and_then(|key| states.get(key))
-                    .and_then(CountState::count)
-                    .map(|c| c.total);
+                section.count = key.and_then(|key| states.get(key)).cloned();
             }
             Row::Group(_) | Row::Notice(_) => {}
         }

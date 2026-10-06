@@ -135,6 +135,29 @@ fn a_forbidden_kind_says_no_access_not_zero(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_forbidden_single_kind_section_says_no_access_too(cx: &mut TestAppContext) {
+    let mut fx = Fixture::open_counted(cx, can_list(&[("", "nodes")]));
+    fx.ports
+        .resources
+        .script()
+        .watch
+        .push_err(OxiError::forbidden("nodes is forbidden: User cannot list"));
+    fx.connect();
+    tick(&mut fx);
+    let section = fx.rows().into_iter().find_map(|row| match row {
+        Row::Section(s) if &*s.id == "nodes" => Some(s),
+        _ => None,
+    });
+    assert!(
+        matches!(
+            section.and_then(|s| s.count),
+            Some(CountState::NoAccess { message }) if message.contains("forbidden")
+        ),
+        "the collapsed Nodes row carries the state, not a bare dash"
+    );
+}
+
+#[gpui::test]
 fn counts_follow_the_namespace_selection(cx: &mut TestAppContext) {
     let mut fx = Fixture::open_counted(cx, AccessRules::all_access());
     for p in pods(&[("a", "p1", true), ("b", "p2", false), ("b", "p3", true)]) {

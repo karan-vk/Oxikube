@@ -60,9 +60,10 @@ pub struct SectionRow {
     pub open: bool,
     /// Whether it has entries to show or hide (a heading without any is one link).
     pub expandable: bool,
-    /// The count badge of a section that is one kind (Nodes, Namespaces, Events); `None` draws
-    /// the placeholder dash.
-    pub count: Option<usize>,
+    /// What the `ResourceStore` says about a section that is one kind (Nodes, Namespaces,
+    /// Events), drawn like an entry's badge ("no access" included); `None` draws the placeholder
+    /// dash. Filled by [`apply_counts`](super::apply_counts).
+    pub count: Option<CountState>,
     /// Where the heading goes when it is not expandable.
     pub target: Option<SidebarTarget>,
 }

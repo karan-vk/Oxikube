@@ -133,7 +133,12 @@ impl SidebarPanel {
                     .font_weight(FontWeight::MEDIUM)
                     .child(row.title.clone()),
             )
-            .child(count_placeholder(&row.id, row.count, cx))
+            .child(
+                match row.count.as_ref().filter(|s| badge_text(s).is_some()) {
+                    Some(state) => count_badge(&row.id, state, cx),
+                    None => count_placeholder(&row.id, None, cx).into_any_element(),
+                },
+            )
             .into_any_element()
     }
 
