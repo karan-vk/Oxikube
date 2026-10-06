@@ -15,7 +15,7 @@ use oxikube_ports::{
 use parking_lot::Mutex;
 
 use super::FakeClockPort;
-use crate::script::{CallLog, Script, Timeline};
+use crate::script::{CallLog, Script, StreamGauge, Timeline};
 
 // --- DiscoveryPort -----------------------------------------------------------------------
 
@@ -163,6 +163,7 @@ pub struct FakeTableFeedPort {
     script: TableScripts,
     calls: CallLog<TableCall>,
     clock: Arc<FakeClockPort>,
+    feeds: StreamGauge,
 }
 
 fake_plumbing!(FakeTableFeedPort, TableScripts, TableCall);
@@ -185,12 +186,18 @@ impl FakeTableFeedPort {
             script: TableScripts::default(),
             calls: CallLog::default(),
             clock,
+            feeds: StreamGauge::default(),
         }
     }
 
     /// The clock feeds are timed on.
     pub fn clock(&self) -> &Arc<FakeClockPort> {
         &self.clock
+    }
+
+    /// Table feeds handed out by `table_feed` that the caller has not dropped yet.
+    pub fn live_feeds(&self) -> usize {
+        self.feeds.live()
     }
 }
 
@@ -228,7 +235,7 @@ impl TableFeedPort for FakeTableFeedPort {
             .table_feed
             .next_or_unscripted("FakeTableFeedPort", "table_feed")?;
         let clock: Arc<dyn ClockPort> = self.clock.clone();
-        Ok(timeline.replay(clock))
+        Ok(self.feeds.track(timeline.replay(clock)))
     }
 }
 

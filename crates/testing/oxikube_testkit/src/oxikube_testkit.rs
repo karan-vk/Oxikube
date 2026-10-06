@@ -50,5 +50,5 @@ pub mod test_ports;
 
 pub use builders::{daemonset, deployment, job, node, pod, replicaset, resource, statefulset};
 pub use fakes::*;
-pub use script::{CallLog, Script, Timeline, unscripted};
+pub use script::{CallLog, Script, StreamGauge, Timeline, unscripted};
 pub use test_ports::TestPorts;
