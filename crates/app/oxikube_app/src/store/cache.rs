@@ -47,6 +47,10 @@ impl ObjectCache {
         self.objects.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.objects.is_empty()
+    }
+
     pub fn values(&self) -> impl Iterator<Item = &Arc<StoreObject>> {
         self.objects.values()
     }

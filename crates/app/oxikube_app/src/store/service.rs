@@ -6,21 +6,20 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use jiff::Timestamp;
-use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::{ClusterId, Gvk};
 use parking_lot::Mutex;
 
-use super::budget::{Admission, FeedRequest};
 use super::config::{FeedInfo, StoreOptions, StoreRuntime};
 use super::delta::FeedState;
 use super::driver::{Backoff, drive};
 use super::entry::{FeedEntry, SubId};
 use super::feed::StorePorts;
+use super::mailbox::SubShared;
 use super::object::{FeedKey, FeedScope};
 use super::policy::FeedPlan;
 use super::query::StoreQuery;
 use super::spawn::{TaskGuard, spawn_guarded};
-use super::subscription::{SubShared, Subscription};
+use super::subscription::Subscription;
 use crate::session::ClusterSession;
 
 /// The app-side cache over one cluster session's feeds (ADR 0006): every table, sidebar count
@@ -106,7 +105,7 @@ impl ResourceStore {
                 let st = e.state.lock();
                 FeedInfo {
                     key: e.key.clone(),
-                    kind: e.request.kind,
+                    kind: st.request.kind,
                     subscribers: st.subscribers.len(),
                     objects: st.cache.len(),
                     state: st.feed_state.clone(),
@@ -119,15 +118,12 @@ impl ResourceStore {
     }
 }
 
-/// The driver and grace-timer guards of a removed entry; dropping them aborts the tasks.
-type Retired = (Option<TaskGuard>, Option<TaskGuard>);
-
 /// The shared state behind [`ResourceStore`] and its subscriptions.
 pub(crate) struct StoreInner {
     cluster: ClusterId,
     ports: StorePorts,
     runtime: StoreRuntime,
-    options: StoreOptions,
+    pub(super) options: StoreOptions,
     entries: Mutex<HashMap<FeedKey, Arc<FeedEntry>>>,
     next_id: AtomicU64,
 }
@@ -141,9 +137,14 @@ impl StoreInner {
         self.options.policy.plan(gvk)
     }
 
+    /// Runs `task` on the store's spawner, abortable through the returned guard.
+    pub fn spawn(&self, task: impl Future<Output = ()> + Send + 'static) -> TaskGuard {
+        spawn_guarded(&self.runtime.spawner, task)
+    }
+
     /// Adds subscriber `id` to the entry for (`gvk`, `part`), creating and starting it when
-    /// needed (a new entry is seeded from `seed_from`'s objects in `part`), and seeds the
-    /// subscriber from it.
+    /// needed (a new entry's driver first seeds it from `seed_from`'s objects in `part`), and
+    /// registers the part with the subscriber. An entry the budget refused asks it again.
     pub fn attach(
         self: &Arc<Self>,
         gvk: &Gvk,
@@ -164,111 +165,43 @@ impl StoreInner {
             entries.insert(key.clone(), entry);
         }
         let entry = entries[&key].clone();
-        let mut st = entry.state.lock();
-        if created {
-            for source in seed_from {
-                let source = source.state.lock();
-                for object in source.cache.values() {
-                    if part.covers(object.namespace()) {
-                        st.cache.upsert(object.key(), object.clone());
-                    }
-                }
-            }
+        if !created {
+            self.readmit(&entry, &mut entries, &mut evicted);
         }
+        let mut st = entry.state.lock();
         st.subscribers.push((id, sub.clone()));
         st.grace = None;
         st.idle_since = None;
-        if entry.admitted && !st.running {
+        if st.admitted && !st.running {
             st.running = true;
-            // A restart after a terminal error: subscribers already attached see it warm up.
+            // A restart after a terminal error or a late admission: subscribers already
+            // attached see it warm up.
             FeedEntry::publish(&mut st, &entry.key, FeedState::Warming);
+            let seed_from = if created {
+                seed_from.to_vec()
+            } else {
+                Vec::new()
+            };
             let task = drive(
                 Arc::downgrade(&entry),
                 self.ports.clone(),
-                entry.request.kind,
+                st.request.kind,
                 key,
                 self.runtime.clock.clone(),
                 Backoff::new(
                     self.options.config.retry_initial,
                     self.options.config.retry_max,
                 ),
+                seed_from,
             );
             st.driver = Some(spawn_guarded(&self.runtime.spawner, task));
-            tracing::debug!(feed = %entry.key, kind = ?entry.request.kind, "resource store feed started");
+            tracing::debug!(feed = %entry.key, kind = ?st.request.kind, "resource store feed started");
         }
         sub.attach_part(part, &st);
         drop(st);
         drop(entries);
         drop(evicted);
         entry
-    }
-
-    /// A new entry, after asking the budget (evicting idle feeds while it refuses).
-    fn create(
-        &self,
-        key: &FeedKey,
-        entries: &mut HashMap<FeedKey, Arc<FeedEntry>>,
-        evicted: &mut Vec<Retired>,
-    ) -> Arc<FeedEntry> {
-        let plan = self.plan(&key.gvk);
-        let mut request = FeedRequest {
-            key: key.clone(),
-            kind: plan.kind,
-            priority: plan.priority,
-        };
-        loop {
-            let running = entries.values().filter(|e| e.admitted).count();
-            match self.options.budget.admit(&request, running) {
-                Admission::Granted => break,
-                Admission::Degraded(kind) => {
-                    request.kind = kind;
-                    break;
-                }
-                Admission::Refused(reason) => {
-                    if let Some(guards) = self.evict_oldest_idle(entries) {
-                        evicted.push(guards);
-                        continue;
-                    }
-                    tracing::info!(feed = %key, "resource store feed refused by the watch budget");
-                    let state = FeedState::Failed {
-                        kind: ErrorKind::BudgetExceeded,
-                        message: reason,
-                    };
-                    return Arc::new(FeedEntry::new(key.clone(), request, false, state));
-                }
-            }
-        }
-        Arc::new(FeedEntry::new(
-            key.clone(),
-            request,
-            true,
-            FeedState::Warming,
-        ))
-    }
-
-    /// Removes the idle entry that has been idle longest; returns its guards to drop.
-    fn evict_oldest_idle(&self, entries: &mut HashMap<FeedKey, Arc<FeedEntry>>) -> Option<Retired> {
-        let oldest = entries
-            .values()
-            .filter_map(|e| {
-                let st = e.state.lock();
-                (st.subscribers.is_empty() && e.admitted)
-                    .then(|| (st.idle_since.unwrap_or(Timestamp::MIN), e.key.clone()))
-            })
-            .min()?;
-        let entry = entries.remove(&oldest.1)?;
-        tracing::debug!(feed = %entry.key, "resource store evicted an idle feed for the budget");
-        Some(self.retire(&entry))
-    }
-
-    /// Releases the budget slot and takes the entry's task guards (dropping them aborts).
-    fn retire(&self, entry: &FeedEntry) -> Retired {
-        let mut st = entry.state.lock();
-        st.running = false;
-        if entry.admitted {
-            self.options.budget.released(&entry.request);
-        }
-        (st.driver.take(), st.grace.take())
     }
 
     /// Removes subscriber `id` from `entry`; the last one starts the grace timer.
@@ -283,7 +216,7 @@ impl StoreInner {
             let now = self.runtime.clock.now();
             st.idle_since = Some(now);
             let grace = self.options.config.idle_grace;
-            if entry.admitted && !grace.is_zero() {
+            if st.admitted && !grace.is_zero() {
                 let store = Arc::downgrade(self);
                 let clock = self.runtime.clock.clone();
                 let (key, generation) = (entry.key.clone(), st.generation);

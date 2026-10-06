@@ -35,6 +35,14 @@ fn fixtures() -> Vec<Resource> {
     ]
 }
 
+/// The re-seed after a filter or sort change runs on the store's spawner, not the caller's
+/// thread: nothing is ready until the spawner runs, and then one snapshot is.
+fn reseeded(h: &mut Harness, sub: &mut Subscription, m: &mut Mirror) {
+    assert!(next(sub).is_none(), "no work on the caller's thread");
+    h.settle();
+    assert_eq!(m.drain(sub), 1);
+}
+
 #[test]
 fn filter_and_sort_apply_in_app_without_restarting_the_feed() {
     let mut h = Harness::with_objects(fixtures());
@@ -46,23 +54,23 @@ fn filter_and_sort_apply_in_app_without_restarting_the_feed() {
     sub.set_filter(StoreFilter::labels(
         LabelSelector::parse("app=web").unwrap(),
     ));
-    m.drain(&mut sub);
+    reseeded(&mut h, &mut sub, &mut m);
     assert_eq!(m.names(), ["x/web-1", "x/web-2", "y/web-3"]);
     assert!(matches!(m.last_rows(), RowChange::Snapshot(_)));
 
     sub.set_sort(SortKey::by(SortField::Created).descending());
-    m.drain(&mut sub);
+    reseeded(&mut h, &mut sub, &mut m);
     assert_eq!(m.names(), ["y/web-3", "x/web-1", "x/web-2"], "newest first");
 
     sub.set_filter(StoreFilter::text("WEB-"));
-    m.drain(&mut sub);
+    reseeded(&mut h, &mut sub, &mut m);
     assert_eq!(m.names(), ["y/web-3", "x/web-1", "x/web-2"]);
 
     sub.set_filter(StoreFilter {
         namespaces: Some(BTreeSet::from(["y".to_owned()])),
         ..StoreFilter::default()
     });
-    m.drain(&mut sub);
+    reseeded(&mut h, &mut sub, &mut m);
     assert_eq!(m.names(), ["y/web-3", "y/db-0"]);
     assert_eq!(
         h.resources.recorded_calls().len(),

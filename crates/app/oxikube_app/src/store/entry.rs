@@ -2,7 +2,8 @@
 //! subscribers, and the abort-on-drop guards of its driver and grace timer.
 //!
 //! Lock order across the store: the store's entry map, then an entry, then a subscriber. The
-//! driver takes an entry then its subscribers; nothing takes them the other way round.
+//! driver takes an entry then its subscribers; nothing takes them the other way round, and
+//! nothing holds two entries at once.
 
 use std::sync::Arc;
 
@@ -12,10 +13,11 @@ use parking_lot::Mutex;
 use super::budget::FeedRequest;
 use super::cache::ObjectCache;
 use super::delta::FeedState;
-use super::feed::{FeedBatch, TableColumns};
+use super::feed::{FeedBatch, ObjectDelta, TableColumns};
+use super::mailbox::SubShared;
 use super::object::FeedKey;
+use super::policy::FeedKind;
 use super::spawn::TaskGuard;
-use super::subscription::SubShared;
 
 /// A subscriber's id within one store.
 pub(crate) type SubId = u64;
@@ -23,15 +25,16 @@ pub(crate) type SubId = u64;
 /// One feed's cache entry.
 pub(crate) struct FeedEntry {
     pub key: FeedKey,
-    /// What was asked of the budget (with the kind it granted).
-    pub request: FeedRequest,
-    /// Whether the budget admitted it (only admitted feeds run and are released).
-    pub admitted: bool,
     pub state: Mutex<EntryState>,
 }
 
 /// The mutable part of a [`FeedEntry`].
 pub(crate) struct EntryState {
+    /// What was asked of the budget (with the kind it granted).
+    pub request: FeedRequest,
+    /// Whether the budget admitted it (only admitted feeds run and are released). A refused
+    /// entry asks again when another subscriber attaches to it.
+    pub admitted: bool,
     pub cache: ObjectCache,
     pub feed_state: FeedState,
     pub columns: Option<TableColumns>,
@@ -52,9 +55,9 @@ impl FeedEntry {
     pub fn new(key: FeedKey, request: FeedRequest, admitted: bool, state: FeedState) -> Self {
         Self {
             key,
-            request,
-            admitted,
             state: Mutex::new(EntryState {
+                request,
+                admitted,
                 cache: ObjectCache::default(),
                 feed_state: state,
                 columns: None,
@@ -65,6 +68,34 @@ impl FeedEntry {
                 generation: 0,
                 idle_since: None,
             }),
+        }
+    }
+
+    /// The feed kind the budget granted (or the policy's, while refused).
+    pub fn kind(&self) -> FeedKind {
+        self.state.lock().request.kind
+    }
+
+    /// Seeds a new entry with the objects in its scope from `sources` (the feeds a rescope left),
+    /// as one batch, so subscribers see those rows before the entry's own feed lists. Runs on the
+    /// driver's task before it opens the feed; the relist then reconciles the seeded rows.
+    pub fn seed_from(&self, sources: &[Arc<FeedEntry>]) {
+        let mut deltas = Vec::new();
+        for source in sources {
+            let source = source.state.lock();
+            deltas.extend(
+                source
+                    .cache
+                    .values()
+                    .filter(|o| self.key.scope.covers(o.namespace()))
+                    .map(|o| ObjectDelta::Applied(o.clone())),
+            );
+        }
+        if !deltas.is_empty() {
+            self.apply(FeedBatch {
+                deltas,
+                columns: None,
+            });
         }
     }
 

@@ -4,12 +4,13 @@ use std::sync::Arc;
 
 use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::Gvk;
+use oxikube_domain::session::WatchScope;
 use oxikube_testkit::ResourceCall;
 use parking_lot::Mutex;
 
 use super::*;
 use crate::store::{
-    Admission, FeedBudget, FeedKind, FeedPriority, FeedRequest, FeedState, MaxFeeds,
+    Admission, FeedBudget, FeedKind, FeedPriority, FeedRequest, FeedScope, FeedState, MaxFeeds,
 };
 
 fn options(budget: Arc<dyn FeedBudget>) -> StoreOptions {
@@ -113,4 +114,72 @@ fn a_degraded_feed_opens_metadata_only_and_is_released_once() {
     let released = budget.released.lock();
     assert_eq!(released.len(), 1);
     assert_eq!(released[0].kind, FeedKind::Metadata);
+}
+
+#[test]
+fn a_refused_feed_is_admitted_when_another_view_subscribes_after_room_freed() {
+    let budget = Arc::new(MaxFeeds::new(1));
+    let mut h = Harness::with_options(StoreOptions {
+        budget: budget.clone(),
+        ..options_with_grace(0)
+    });
+    h.resources.insert(p("x", "a", "1"));
+    let pod_sub = h.subscribe(all(pods()));
+    let mut refused = h.subscribe(all(services()));
+    assert!(matches!(
+        refused.state(),
+        FeedState::Failed {
+            kind: ErrorKind::BudgetExceeded,
+            ..
+        }
+    ));
+    drop(pod_sub);
+    h.settle();
+    assert_eq!(budget.released_count(), 1, "the pod feed freed its slot");
+
+    // A second view of the same kind while the refused one is still alive asks again.
+    let second = h.subscribe(all(services()));
+    assert_eq!(second.state(), FeedState::Ready);
+    assert_eq!(refused.state(), FeedState::Ready, "the first view recovers");
+    assert_eq!(h.resources.live_watches(), 1);
+    let mut m = Mirror::default();
+    m.drain(&mut refused);
+    assert_eq!(m.last.as_ref().unwrap().state, FeedState::Ready);
+}
+
+#[test]
+fn narrowing_at_the_budget_limit_swaps_the_feed_instead_of_refusing() {
+    let budget = Arc::new(MaxFeeds::new(1));
+    let mut h = Harness::with_options(options(budget.clone()));
+    h.resources.insert(p("a", "1", "1"));
+    h.resources.insert(p("b", "2", "1"));
+    let mut sub = h.subscribe(all(pods()));
+
+    sub.rescope(WatchScope::Namespaces(vec!["a".into()]));
+    h.settle();
+    assert_eq!(sub.state(), FeedState::Ready, "not refused by the budget");
+    let mut m = Mirror::default();
+    m.drain(&mut sub);
+    assert_eq!(m.names(), ["a/1"]);
+    assert_eq!(h.resources.live_watches(), 1, "the cluster feed made room");
+    let scopes: Vec<FeedScope> = h.store.feeds().into_iter().map(|f| f.key.scope).collect();
+    assert_eq!(scopes, [FeedScope::Namespace("a".into())]);
+    assert_eq!(budget.released_count(), 1);
+}
+
+#[test]
+fn swapping_namespaces_at_the_budget_limit_keeps_every_part_admitted() {
+    let budget = Arc::new(MaxFeeds::new(2));
+    let mut h = Harness::with_options(options(budget));
+    for (ns, name) in [("a", "1"), ("b", "2"), ("c", "3")] {
+        h.resources.insert(p(ns, name, "1"));
+    }
+    let mut sub = h.subscribe(in_namespaces(pods(), &["a", "b"]));
+    sub.rescope(WatchScope::Namespaces(vec!["b".into(), "c".into()]));
+    h.settle();
+    assert_eq!(sub.state(), FeedState::Ready);
+    let mut m = Mirror::default();
+    m.drain(&mut sub);
+    assert_eq!(m.names(), ["b/2", "c/3"]);
+    assert_eq!(h.resources.live_watches(), 2);
 }

@@ -102,3 +102,30 @@ fn different_scopes_are_different_feeds() {
     assert_eq!(h.resources.live_watches(), 3);
     assert_eq!(h.store.feeds().len(), 3);
 }
+
+#[test]
+fn a_view_joining_a_warm_feed_is_seeded_on_the_spawner_and_misses_no_change() {
+    let mut h = Harness::with_options(options_with_grace(10));
+    h.resources.script().watch.push_ok(timeline(vec![
+        batch(vec![oxikube_ports::Delta::Restarted(vec![
+            p("x", "a", "1"),
+            p("x", "b", "1"),
+        ])]),
+        batch(vec![
+            oxikube_ports::Delta::Applied(p("x", "c", "1")),
+            oxikube_ports::Delta::Deleted(p("x", "a", "1")),
+        ]),
+    ]));
+    let _first = h.subscribe(all(pods()));
+
+    // Joining a warm feed (a tab switch) does no filtering or sorting on the caller's thread.
+    let mut second = h.store.subscribe(all(pods()));
+    assert!(next(&mut second).is_none(), "seeding waits for the spawner");
+    // The feed moves on in the same turn as the seeding task runs.
+    h.clock.advance(std::time::Duration::from_secs(1));
+    h.settle();
+    let mut m = Mirror::default();
+    m.drain(&mut second);
+    assert_eq!(m.names(), ["x/b", "x/c"]);
+    assert_eq!(m.last.as_ref().unwrap().state, FeedState::Ready);
+}

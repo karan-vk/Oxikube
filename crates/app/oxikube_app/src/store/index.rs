@@ -204,11 +204,13 @@ impl SortedIndex {
         self.rows = rows;
     }
 
-    /// Drops every member `part` covers (a feed that left the subscription), without ops;
-    /// call [`resort`](Self::resort) after.
+    /// Drops every member and row `part` covers (a feed that left the subscription), without
+    /// ops, in one pass; the remaining rows keep their order, so no re-sort is needed.
     pub fn remove_part(&mut self, part: &FeedScope) {
         self.members
             .retain(|key, _| !part.covers(key.namespace.as_deref()));
+        self.rows
+            .retain(|slot| !part.covers(slot.key.namespace.as_deref()));
     }
 
     /// Rebuilds the sorted list from the members (after bulk edits).

@@ -65,6 +65,9 @@ fn record_failure(entry: &FeedEntry, error: &OxiError) -> bool {
 }
 
 /// Runs one feed until it fails terminally or the entry is gone (or the task is aborted).
+///
+/// A new entry is first seeded from `seed_from` (the feeds a rescope left), here rather than on
+/// the subscriber's thread, and before the feed opens so its relist reconciles the seed.
 pub(crate) async fn drive(
     entry: Weak<FeedEntry>,
     ports: StorePorts,
@@ -72,7 +75,13 @@ pub(crate) async fn drive(
     key: FeedKey,
     clock: Arc<dyn ClockPort>,
     mut backoff: Backoff,
+    seed_from: Vec<Arc<FeedEntry>>,
 ) {
+    if !seed_from.is_empty() {
+        let Some(live) = entry.upgrade() else { return };
+        live.seed_from(&seed_from);
+    }
+    drop(seed_from);
     loop {
         match open(&ports, kind, &key).await {
             Ok(mut feed) => {
