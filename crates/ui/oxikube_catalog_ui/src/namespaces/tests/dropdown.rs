@@ -197,3 +197,39 @@ fn the_selection_is_remembered_across_restarts(cx: &mut TestAppContext) {
     assert_eq!(window.read_root(|s, _| s.label()), "prod");
     assert_eq!(env.session_selection(), NamespaceSelection::single("prod"));
 }
+
+#[gpui::test]
+fn clicking_the_trigger_again_closes_the_dropdown(cx: &mut TestAppContext) {
+    let env = Env::new(&["dev"]);
+    let mut window = open(cx, &env);
+    window.run_until_parked();
+    open_dropdown(&mut window);
+
+    click(&mut window, "namespace-trigger");
+
+    assert!(
+        !window.read_root(|s, _| s.is_open()),
+        "the press must not close it and the click reopen it"
+    );
+    assert!(window.bounds("namespace-dropdown").is_none());
+}
+
+#[gpui::test]
+fn clicking_outside_the_dropdown_and_trigger_closes_it(cx: &mut TestAppContext) {
+    let env = Env::new(&["dev"]);
+    let mut window = open(cx, &env);
+    window.run_until_parked();
+    open_dropdown(&mut window);
+    let dropdown = window.bounds("namespace-dropdown").expect("drawn");
+
+    window.simulate_click(
+        point(
+            dropdown.right() + gpui::px(40.),
+            dropdown.bottom() + gpui::px(40.),
+        ),
+        gpui::Modifiers::none(),
+    );
+    window.draw_frame();
+
+    assert!(!window.read_root(|s, _| s.is_open()));
+}

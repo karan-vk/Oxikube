@@ -29,6 +29,32 @@ fn a_selection_changed_by_a_command_shows_in_the_trigger(cx: &mut TestAppContext
 }
 
 #[gpui::test]
+fn a_command_during_a_pending_tick_wins_and_the_view_follows(cx: &mut TestAppContext) {
+    let env = Env::new(&["a", "b"]);
+    let mut window = open(cx, &env);
+    window.run_until_parked();
+    open_dropdown(&mut window);
+    click(&mut window, "namespace-row-a");
+    assert_eq!(window.read_root(|s, _| s.label()), "a");
+
+    // An agent selects `b` while the tick of `a` is still waiting for its quiet time.
+    futures::executor::block_on(env.service.execute(&Command::NamespaceSelect {
+        cluster: env.cluster.clone(),
+        namespaces: vec!["b".into()],
+    }))
+    .unwrap();
+    env.settle(&window);
+
+    assert_eq!(env.session_selection(), NamespaceSelection::single("b"));
+    assert_eq!(
+        window.read_root(|s, _| s.selection().clone()),
+        env.session_selection(),
+        "the view shows what the feeds are scoped to"
+    );
+    assert_eq!(window.read_root(|s, _| s.label()), "b");
+}
+
+#[gpui::test]
 fn a_failed_write_is_reported_and_the_view_goes_back(cx: &mut TestAppContext) {
     let env = Env::new(&["dev"]);
     env.remember(&prefs(&[], &["dev"]));

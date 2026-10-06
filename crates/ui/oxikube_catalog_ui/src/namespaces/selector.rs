@@ -1,8 +1,11 @@
 //! [`NamespaceSelector`]: the state and behaviour of the dropdown. Drawing is in `render.rs`.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gpui::{
-    AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, SharedString, Task,
-    UniformListScrollHandle, Window,
+    AppContext as _, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable, Pixels,
+    SharedString, Task, UniformListScrollHandle, Window,
 };
 use oxikube_app::session::namespaces::{
     NamespaceCatalog, NamespacePrefs, NamespaceService, NamespaceSource, slot_selection,
@@ -38,6 +41,8 @@ pub struct NamespaceSelector {
     pub(super) trigger_focus: FocusHandle,
     pub(super) list_focus: FocusHandle,
     pub(super) scroll: UniformListScrollHandle,
+    /// Where the trigger was last drawn (set during prepaint).
+    pub(super) trigger_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The debounced commit of the last tick. Replacing it drops (aborts) the one before, so
     /// only the newest toggle reaches the service; it is never cleared from inside itself.
     pub(super) commit: Option<Task<()>>,
@@ -105,6 +110,7 @@ impl NamespaceSelector {
             trigger_focus: cx.focus_handle().tab_stop(true),
             list_focus: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
+            trigger_bounds: Rc::default(),
             commit: None,
             commit_generation: 0,
             dirty: false,

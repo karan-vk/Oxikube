@@ -2,9 +2,9 @@
 //! list.
 
 use gpui::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _,
-    Render, StatefulInteractiveElement as _, Styled as _, Window, deferred, div,
-    prelude::FluentBuilder as _, px, uniform_list,
+    AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Window, deferred,
+    div, prelude::FluentBuilder as _, px, uniform_list,
 };
 use oxikube_app::session::namespaces::NamespaceSource;
 use oxikube_ui::{
@@ -29,7 +29,15 @@ const WIDTH: f32 = 300.;
 
 impl Render for NamespaceSelector {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // The trigger is the first child: remember where it is, so a press on it is not taken
+        // for a press outside the dropdown.
+        let trigger_bounds = self.trigger_bounds.clone();
         let mut root = div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(trigger) = bounds.first() {
+                    trigger_bounds.set(*trigger);
+                }
+            })
             .id("namespace-selector")
             .relative()
             .on_action(cx.listener(|this, _: &Open, window, cx| this.open(window, cx)))
@@ -140,7 +148,15 @@ impl NamespaceSelector {
             .rounded(u(tokens.radius.lg))
             .shadow_lg()
             .occlude()
-            .on_mouse_down_out(cx.listener(|this, _, window, cx| this.close(window, cx)))
+            .on_mouse_down_out(cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                // A press on the trigger is its click's business (it toggles); closing here
+                // would make the click reopen the dropdown.
+                let on_trigger = event.button == MouseButton::Left
+                    && this.trigger_bounds.get().contains(&event.position);
+                if !on_trigger {
+                    this.close(window, cx);
+                }
+            }))
             .child(
                 div()
                     .key_context(SEARCH_CONTEXT)

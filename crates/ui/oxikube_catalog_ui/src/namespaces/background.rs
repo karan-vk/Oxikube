@@ -39,6 +39,10 @@ impl NamespaceSelector {
             this.update(cx, |this, cx| {
                 if this.commit_generation == generation {
                     this.dirty = false;
+                    // Whatever happened (applied, or superseded by a command or a prune), the
+                    // session is the truth now; `NamespaceChanged`s that came while the tick
+                    // was waiting were ignored.
+                    this.resync_from_session(cx);
                 }
                 if let Err(err) = result {
                     this.failed(err, cx);
@@ -173,6 +177,11 @@ impl NamespaceSelector {
         if self.dirty {
             return;
         }
+        self.resync_from_session(cx);
+    }
+
+    /// Takes the session's selection and redraws if it differs from the view's.
+    fn resync_from_session(&mut self, cx: &mut Context<Self>) {
         let before = self.prefs.selection.clone();
         self.sync_selection_from_session();
         if self.prefs.selection != before {
