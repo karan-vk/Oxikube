@@ -353,9 +353,15 @@ fn nothing_matching_says_so(cx: &mut TestAppContext) {
     type_in_bar(&mut f, &table, "z z z");
     assert!(f.names(&table).is_empty());
     f.vcx.update(|window, cx| window.draw(cx).clear(cx));
-    assert!(f.vcx.debug_bounds("resource-table-empty").is_some());
+    assert!(f.vcx.debug_bounds("resource-table-state").is_some());
+    let state = f
+        .vcx
+        .update(|_, cx| table.read(cx).read_rows(cx, |d| d.table_state()));
     assert_eq!(
-        crate::table::filtered_empty_message(&oxikube_app::store::FeedState::Ready, "pods"),
-        "No pods match the filter"
+        state,
+        crate::table::states::TableState::FilteredEmpty {
+            filter: "zzz".into()
+        },
+        "the state names the filter, not the cluster"
     );
 }

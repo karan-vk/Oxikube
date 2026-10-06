@@ -80,7 +80,7 @@ fn copy_name_writes_the_clipboard(cx: &mut TestAppContext) {
     let target = ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "x", "web-0");
     f.vcx.update(|window, cx| {
         views.update(cx, |views, cx| {
-            views.apply(ViewRequest::CopyName(target), window, cx)
+            views.apply_in(ViewRequest::CopyName(target), window, cx)
         })
     });
     let text = f
