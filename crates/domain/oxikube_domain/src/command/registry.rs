@@ -15,8 +15,14 @@ use crate::safety::Risk;
 impl CommandId {
     /// `app::Quit`: quit the application (confirms first while operations run).
     pub const APP_QUIT: CommandId = CommandId::new("app::Quit");
+    /// `cluster::Connect`: connect a cluster (open its session).
+    pub const CLUSTER_CONNECT: CommandId = CommandId::new("cluster::Connect");
+    /// `cluster::Disconnect`: disconnect a cluster or cancel the attempt.
+    pub const CLUSTER_DISCONNECT: CommandId = CommandId::new("cluster::Disconnect");
     /// `cluster::Select`: make a cluster the active one.
     pub const CLUSTER_SELECT: CommandId = CommandId::new("cluster::Select");
+    /// `cluster::ToggleFavourite`: mark or unmark a cluster as a favourite.
+    pub const CLUSTER_TOGGLE_FAVOURITE: CommandId = CommandId::new("cluster::ToggleFavourite");
     /// `cluster::ToggleReadOnly`: set or toggle a cluster's read-only mode.
     pub const CLUSTER_TOGGLE_READ_ONLY: CommandId = CommandId::new("cluster::ToggleReadOnly");
     /// `namespace::Select`: choose the namespace selection.
@@ -76,9 +82,29 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // Connecting reads from the cluster and changes nothing in it: not `mutating`, no guard tier.
+    CommandMeta::read(
+        CommandId::CLUSTER_CONNECT,
+        "Connect Cluster",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLUSTER_DISCONNECT,
+        "Disconnect Cluster",
+        CommandScope::Global,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::CLUSTER_SELECT,
         "Select Cluster",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Local catalog preference (StatePort), never a cluster change.
+    CommandMeta::read(
+        CommandId::CLUSTER_TOGGLE_FAVOURITE,
+        "Toggle Favourite Cluster",
         CommandScope::Global,
         NONE,
     ),
@@ -335,6 +361,25 @@ mod tests {
         assert_eq!(privileged.len(), 1, "privileged is a reviewed allow-list");
         let delete = lookup(CommandId::POD_DELETE).unwrap();
         assert!(delete.allows(Initiator::Agent));
+    }
+
+    #[test]
+    fn connecting_is_a_read_command_with_a_tool_name() {
+        // Connect and disconnect read from the cluster and change nothing in it (E06-S03): they
+        // stay runnable on a read-only cluster and need no confirmation.
+        for (id, tool) in [
+            (CommandId::CLUSTER_CONNECT, "app.cluster_connect"),
+            (CommandId::CLUSTER_DISCONNECT, "app.cluster_disconnect"),
+            (
+                CommandId::CLUSTER_TOGGLE_FAVOURITE,
+                "app.cluster_toggle_favourite",
+            ),
+        ] {
+            let meta = lookup(id).expect("registered");
+            assert!(!meta.mutating && !meta.privileged, "{id}");
+            assert_eq!(meta.confirm, ConfirmTier::None, "{id}");
+            assert_eq!(id.tool_name(), tool);
+        }
     }
 
     #[test]

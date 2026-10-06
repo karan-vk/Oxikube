@@ -84,6 +84,9 @@ fn main() {
         source: SourceId("bench".into()),
         server: None,
         default_namespace: None,
+        cluster_name: None,
+        user: None,
+        problem: None,
     };
     let clock = Arc::new(FakeClockPort::default());
     let manager = ClusterSessionManager::new(

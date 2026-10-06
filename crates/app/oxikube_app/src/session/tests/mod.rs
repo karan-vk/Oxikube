@@ -32,6 +32,9 @@ fn ctx(name: &str) -> ClusterContext {
         source: SourceId("kubeconfig".into()),
         server: Some(format!("https://{name}.example:6443")),
         default_namespace: None,
+        cluster_name: None,
+        user: None,
+        problem: None,
     }
 }
 

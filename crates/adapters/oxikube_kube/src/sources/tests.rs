@@ -134,6 +134,62 @@ async fn default_path_is_one_source_with_its_contexts() {
 }
 
 #[tokio::test]
+async fn contexts_carry_the_names_of_their_cluster_and_user() {
+    let dir = TempDir::new().unwrap();
+    let path = default_in(dir.path());
+    write(
+        &path,
+        "apiVersion: v1\nkind: Config\n\
+         clusters:\n- name: prod-eu\n  cluster:\n    server: https://eu\n\
+         users:\n- name: alice\n  user:\n    token: s3cr3t-token-do-not-leak\n\
+         contexts:\n- name: eu\n  context:\n    cluster: prod-eu\n    user: alice\n",
+    );
+    let (sources, _) = adapter(config_for(&path));
+    let contexts = sources.contexts().await.unwrap();
+    assert_eq!(contexts[0].cluster_name.as_deref(), Some("prod-eu"));
+    assert_eq!(contexts[0].user.as_deref(), Some("alice"));
+    assert_eq!(contexts[0].problem, None);
+    // Names only: nothing of the credentials reaches the port.
+    assert!(!format!("{contexts:?}").contains("s3cr3t"));
+}
+
+#[tokio::test]
+async fn a_context_naming_a_missing_cluster_or_user_is_kept_and_flagged() {
+    let dir = TempDir::new().unwrap();
+    let path = default_in(dir.path());
+    write(
+        &path,
+        "apiVersion: v1\nkind: Config\n\
+         clusters:\n- name: ok\n  cluster:\n    server: https://ok\n\
+         users:\n- name: bob\n  user:\n    token: t\n\
+         contexts:\n\
+         - name: good\n  context:\n    cluster: ok\n    user: bob\n\
+         - name: no-cluster\n  context:\n    cluster: gone\n    user: bob\n\
+         - name: no-user\n  context:\n    cluster: ok\n    user: nobody\n\
+         - name: anonymous\n  context:\n    cluster: ok\n",
+    );
+    let (sources, _) = adapter(config_for(&path));
+    let contexts = sources.contexts().await.unwrap();
+    let problem = |name: &str| {
+        contexts
+            .iter()
+            .find(|c| c.context.as_str() == name)
+            .unwrap_or_else(|| panic!("{name} is listed"))
+            .problem
+            .clone()
+    };
+    assert_eq!(
+        names(&contexts),
+        ["good", "no-cluster", "no-user", "anonymous"]
+    );
+    assert_eq!(problem("good"), None);
+    assert!(problem("no-cluster").is_some_and(|p| p.contains("\"gone\"")));
+    assert!(problem("no-user").is_some_and(|p| p.contains("\"nobody\"")));
+    // A context without a user is legitimate (anonymous access): not a problem.
+    assert_eq!(problem("anonymous"), None);
+}
+
+#[tokio::test]
 async fn kubeconfig_env_replaces_the_default_path() {
     let dir = TempDir::new().unwrap();
     let default = default_in(dir.path());

@@ -25,6 +25,9 @@ fn context(id: &str, name: &str) -> ClusterContext {
         source: SourceId("kubeconfig".into()),
         server: None,
         default_namespace: None,
+        cluster_name: None,
+        user: None,
+        problem: None,
     }
 }
 

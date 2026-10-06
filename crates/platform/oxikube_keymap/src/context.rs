@@ -17,6 +17,7 @@
 //! | `Editor` | the YAML editor | `mode == yaml\|diff`, `Editing` |
 //! | `Terminal` | a terminal pane | |
 //! | `Logs` | the log viewer | `Editing` while its search field has focus |
+//! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
 //!
 //! Every context built with [`KeyContextBuilder`] also carries `os == macos|linux|windows`, so a
 //! section can be limited to one OS (`"context": "Table && os == macos"`).
@@ -57,6 +58,8 @@ pub mod contexts {
     pub const TERMINAL: &str = "Terminal";
     /// The log viewer.
     pub const LOGS: &str = "Logs";
+    /// The cluster catalog home.
+    pub const CATALOG: &str = "Catalog";
     /// Flag: a text field inside the context has focus, so bare-letter bindings (vim layer)
     /// must not fire.
     pub const EDITING: &str = "Editing";

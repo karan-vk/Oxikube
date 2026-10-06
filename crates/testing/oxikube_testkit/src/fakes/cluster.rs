@@ -264,6 +264,9 @@ mod tests {
             source: SourceId("kubeconfig".into()),
             server: Some("https://127.0.0.1:6443".into()),
             default_namespace: None,
+            cluster_name: None,
+            user: None,
+            problem: None,
         }
     }
 

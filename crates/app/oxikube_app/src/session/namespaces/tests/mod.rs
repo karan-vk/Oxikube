@@ -24,12 +24,10 @@ use crate::session::{ClusterSessionManager, SessionChange, SessionUpdate, Sessio
 
 fn ctx(name: &str) -> ClusterContext {
     let context = ContextName::new(name);
+    let cluster = ClusterId::new("/home/me/.kube/config", &context);
     ClusterContext {
-        cluster: ClusterId::new("/home/me/.kube/config", &context),
-        context,
-        source: SourceId("kubeconfig".into()),
         server: Some(format!("https://{name}.example:6443")),
-        default_namespace: None,
+        ..ClusterContext::new(cluster, context, SourceId("kubeconfig".into()))
     }
 }
 

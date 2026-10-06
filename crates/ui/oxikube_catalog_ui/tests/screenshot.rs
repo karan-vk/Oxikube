@@ -62,6 +62,9 @@ fn service(
         source: SourceId("kubeconfig".into()),
         server: None,
         default_namespace: None,
+        cluster_name: None,
+        user: None,
+        problem: None,
     };
     let connector = Arc::new(FakeClusterConnectorPort::new());
     let ports = connector.ports_for(&cluster);

@@ -63,6 +63,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `oxikube_settings::ClusterSettings` from `clusters.<id>`) into `set_prefs_table`; new sessions
   start from it and open ones follow it live (read-only, colour, display name; exec policy on the
   next connect), with a `SessionChange` per field for the clusters that changed.
+  Module `catalog` (E06-S03):
+  `ClusterCatalog` joins the `ClusterSourcePort` contexts (name, kubeconfig cluster and user,
+  source file, `problem` when the context names a cluster or user the kubeconfig lacks) with the
+  user's favourites and last-used times in the `cluster_catalog` state table; reading it is local,
+  never a network call. `ClusterCommands` runs `cluster::Connect`, `cluster::Disconnect` and
+  `cluster::ToggleFavourite` (reads, so no `MutationGuard`); the `CommandBus` (E06-S02) registers it.
   Module `session::namespaces` (E06-S07): `NamespaceService` sets a session's `NamespaceSelection`
   (one `NamespaceChanged` per change, 150 ms debounce on the `ClockPort`), remembers selection,
   favourites and typed names per cluster in `StatePort` (kv `cluster/<id>/namespaces`), lists
@@ -72,7 +78,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_catalog_ui` — the cluster catalog UI. Module `namespaces` (E06-S07): the
   `NamespaceSelector` dropdown for the cluster tab toolbar (All, multi-select, favourites with
   their digits, local search, virtualised list, the restricted-cluster fallback), a view over
-  `NamespaceService`; it emits `NamespaceSelectorEvent` for the host's toasts.
+  `NamespaceService`; it emits `NamespaceSelectorEvent` for the host's toasts. Module `catalog`
+  (E06-S03): `CatalogView`, the home screen and a workspace
+  `Item`: a virtualised (`uniform_list`) list of every kubeconfig context with cluster, user,
+  source file, status badge from the session update stream, last-used and favourite star, a fuzzy
+  search (`nucleo-matcher`) in a field that has focus on open, Enter or click to connect, an empty
+  state that explains how to add kubeconfigs, and invalid contexts kept with an error badge.
+  `model` is plain Rust (order: favourites, last used, name; with a query: match score), `dispatch`
+  sends the cluster commands through a `CommandDispatcher` (the bus once it lands), keys live in the
+  `Catalog` sections of the default keymaps.
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
   mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
   events).

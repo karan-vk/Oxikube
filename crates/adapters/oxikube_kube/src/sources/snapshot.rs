@@ -193,14 +193,62 @@ fn describe(
     // equal to any other failing entry, which can only hide a change, never invent one.
     let value = slice.and_then(|k| serde_json::to_value(k).ok());
     hash_value(&mut hasher, &value.unwrap_or(Value::Null));
+    let references = references(
+        slice,
+        definition
+            .as_ref()
+            .is_some_and(ContextDefinition::is_in_cluster),
+    );
     let context = ClusterContext {
-        cluster,
-        context: name,
-        source,
         server,
         default_namespace,
+        cluster_name: references.cluster,
+        user: references.user,
+        problem: references.problem,
+        ..ClusterContext::new(cluster, name, source)
     };
     (context, hasher.finalize().into())
+}
+
+/// The cluster and user a context names, and what is wrong with them.
+struct References {
+    cluster: Option<String>,
+    user: Option<String>,
+    problem: Option<String>,
+}
+
+/// Reads the names a context points at out of its one-context `slice` and reports a name the
+/// kubeconfig does not define. The in-cluster context names neither and is never a problem.
+/// Only names leave this function, never the entries behind them.
+fn references(slice: Option<&kube::config::Kubeconfig>, in_cluster: bool) -> References {
+    let named = slice
+        .and_then(|k| k.contexts.first())
+        .and_then(|c| c.context.as_ref());
+    let cluster = named
+        .map(|c| c.cluster.clone())
+        .filter(|name| !name.is_empty());
+    let user = named.and_then(|c| c.user.clone()).filter(|u| !u.is_empty());
+    let problem = if in_cluster {
+        None
+    } else if named.is_none() {
+        Some("the context has no cluster or user".to_owned())
+    } else if cluster.is_none() {
+        Some("the context names no cluster".to_owned())
+    } else if slice.is_some_and(|k| k.clusters.is_empty()) {
+        cluster
+            .as_deref()
+            .map(|name| format!("cluster \"{name}\" is not defined in the kubeconfig"))
+    } else if user.is_some() && slice.is_some_and(|k| k.auth_infos.is_empty()) {
+        user.as_deref()
+            .map(|name| format!("user \"{name}\" is not defined in the kubeconfig"))
+    } else {
+        None
+    };
+    References {
+        cluster,
+        user,
+        problem,
+    }
 }
 
 /// Length-prefix `bytes` into `hasher` so adjacent fields cannot run together.
