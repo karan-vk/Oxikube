@@ -57,7 +57,9 @@ pub fn run(launched: Instant, probe: bool) -> Result<ScenarioSample> {
 fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSample> {
     let boot = startup::boot_in(launched, Some(scratch.join("data")));
     let mut earlier = boot.report;
-    let mut cx = earlier.time(Stage::Assets, headless::headless_context);
+    let mut cx = earlier.time(Stage::Assets, || {
+        headless::headless_context_with_assets(Arc::new(oxikube_ui::Assets))
+    });
     let env = StartupEnv {
         config: ConfigSource::Dir(scratch.join("config")),
         runtime: RuntimeChoice::Tokio,
