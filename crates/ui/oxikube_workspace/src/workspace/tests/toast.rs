@@ -265,30 +265,106 @@ fn toasts_do_not_lay_out_the_window(cx: &mut TestAppContext) {
     assert!(toast.origin.x > bar_before.origin.x + bar_before.size.width / 2.);
 }
 
+/// Draws a frame and returns how many next-frame callbacks it left behind: what a running
+/// animation asks for, and what a still window does not.
+fn frame_requests(vcx: &mut VisualTestContext) -> usize {
+    vcx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        window.simulate_next_frame(cx)
+    })
+}
+
 #[gpui::test]
-fn a_toast_fades_in_within_the_cap_and_not_at_all_under_reduce_motion(cx: &mut TestAppContext) {
+fn a_toast_fades_in_within_the_cap(cx: &mut TestAppContext) {
+    let (ws, mut vcx) = workspace(cx);
+    vcx.update(|_, cx| crate::motion::set_reduce_motion(cx, false));
+    let fade = vcx
+        .update(|_, cx| ToastLayer::fade_in(cx))
+        .expect("a fade when motion is allowed");
+    assert!(fade.duration <= crate::motion::MAX_ANIMATION);
+
+    show(&ws, &mut vcx, Toast::info("animated").persistent());
+    assert!(
+        frame_requests(&mut vcx) > 0,
+        "the card is fading, so it asks for frames"
+    );
+    // The fade runs on the wall clock (GPUI animations use `Instant`), so wait the cap out. A
+    // longer animation than the cap would still be asking for frames.
+    std::thread::sleep(crate::motion::MAX_ANIMATION + Duration::from_millis(30));
+    // The first frame after the wait renders the finished fade; the next has nothing to request.
+    frame_requests(&mut vcx);
+    assert_eq!(
+        frame_requests(&mut vcx),
+        0,
+        "the fade is over within the cap"
+    );
+}
+
+#[gpui::test]
+fn no_fade_is_rendered_under_reduce_motion(cx: &mut TestAppContext) {
+    let (ws, mut vcx) = workspace(cx);
+    vcx.update(|_, cx| crate::motion::set_reduce_motion(cx, true));
+    assert!(vcx.update(|_, cx| ToastLayer::fade_in(cx)).is_none());
+
+    let id = show(&ws, &mut vcx, Toast::info("still").persistent());
+    assert_eq!(frame_requests(&mut vcx), 0, "no animation, no frames");
+    assert!(
+        bounds_named(&mut vcx, format!("toast-{}", id.as_u64())).is_some(),
+        "and the toast is simply there"
+    );
+    assert_eq!(frame_requests(&mut vcx), 0);
+}
+
+#[gpui::test]
+fn an_action_handler_may_use_the_toast_layer(cx: &mut TestAppContext) {
     let (ws, mut vcx) = workspace(cx);
     let layer = layer(&ws, &mut vcx);
-
-    // Reduce-motion off: the toast is drawn from the first frame (fading in) and the clock can
-    // run past the fade without the test platform spinning on animation frames.
-    vcx.update(|_, cx| crate::motion::set_reduce_motion(cx, false));
-    show(&ws, &mut vcx, Toast::info("animated").timeout(secs(1)));
-    assert!(
-        vcx.update(|_, cx| crate::motion::animation_duration(cx, Duration::from_secs(5)))
-            .is_some_and(|d| d <= crate::motion::MAX_ANIMATION)
+    let workspace = ws.clone();
+    let id = show(
+        &ws,
+        &mut vcx,
+        Toast::error("connect failed")
+            .key("connect")
+            .action(ToastAction::new("Retry", move |_, cx| {
+                workspace.update(cx, |ws, cx| ws.show_toast(Toast::info("Retrying..."), cx));
+            })),
     );
-    assert!(bounds(&mut vcx, "toast-layer").is_some());
-    advance(&mut vcx, Duration::from_millis(200));
-    assert_eq!(messages(&layer, &mut vcx), ["animated"]);
-    advance(&mut vcx, secs(1));
-    assert!(messages(&layer, &mut vcx).is_empty());
-
-    vcx.update(|_, cx| crate::motion::set_reduce_motion(cx, true));
+    let button = bounds_named(&mut vcx, format!("toast-{}-action-0", id.as_u64()))
+        .expect("the Retry button is drawn");
+    vcx.simulate_click(center(button), Modifiers::none());
+    vcx.run_until_parked();
     assert_eq!(
-        vcx.update(|_, cx| crate::motion::animation_duration(cx, Duration::from_millis(100))),
-        None
+        messages(&layer, &mut vcx),
+        ["Retrying..."],
+        "the handler showed a toast from inside the click, and the clicked one is gone"
     );
-    show(&ws, &mut vcx, Toast::info("still").timeout(secs(1)));
-    assert!(bounds(&mut vcx, "toast-layer").is_some());
+}
+
+#[gpui::test]
+fn focus_returns_when_a_toasts_button_had_it(cx: &mut TestAppContext) {
+    let (ws, mut vcx) = workspace(cx);
+    let layer = layer(&ws, &mut vcx);
+    let item = open(&ws, &mut vcx, "editor");
+    show(
+        &ws,
+        &mut vcx,
+        Toast::error("boom")
+            .persistent()
+            .action(ToastAction::new("Retry", |_, _| {})),
+    );
+    vcx.update(|window, cx| {
+        layer.update(cx, |layer, cx| layer.focus_toasts(window, cx));
+    });
+    vcx.run_until_parked();
+    // Tab leaves the card for its first button.
+    vcx.simulate_keystrokes("tab");
+    assert!(vcx.update(|window, cx| layer.read(cx).is_focused(window, cx)));
+    assert!(!item_focused(&ws, &mut vcx, item));
+
+    vcx.simulate_keystrokes("escape");
+    assert!(messages(&layer, &mut vcx).is_empty());
+    assert!(
+        item_focused(&ws, &mut vcx, item),
+        "focus does not stay on the removed toast's button"
+    );
 }

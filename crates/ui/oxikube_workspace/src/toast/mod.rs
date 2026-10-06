@@ -8,7 +8,8 @@
 //! - **Auto-dismiss**: each level has a default timeout ([`ToastLevel::default_timeout`]; errors
 //!   stay); [`Toast::timeout`] and [`Toast::persistent`] override. Timers use GPUI's executor
 //!   clock, so tests advance them with `cx.executor().advance_clock(..)`.
-//! - **Actions**: [`ToastAction`] buttons ("Retry"); clicking one runs it and dismisses the toast.
+//! - **Actions**: [`ToastAction`] buttons ("Retry"); clicking one dismisses the toast, then runs
+//!   the handler after the click's update, so the handler may show or dismiss toasts itself.
 //! - **Focus**: showing a toast never moves focus. Keyboard users call
 //!   [`ToastLayer::focus_toasts`], which remembers the element that had focus; Escape on a toast
 //!   dismisses it, and when the focused toast goes away (Escape, click, timeout) focus returns to
@@ -236,7 +237,10 @@ impl ToastLayer {
             window
                 .update(cx, |_, window, cx| {
                     layer.update(cx, |this, cx| {
-                        let lost = removed.iter().any(|handle| handle.is_focused(window));
+                        // Contains, not equals: a card's own buttons are tab stops too.
+                        let lost = removed
+                            .iter()
+                            .any(|handle| handle.contains_focused(window, cx));
                         if !lost {
                             return;
                         }

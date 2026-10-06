@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, Context, InteractiveElement as _, IntoElement,
+    Animation, AnimationExt as _, AnyElement, App, Context, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 use oxikube_ui::{
@@ -26,12 +26,12 @@ const WIDTH: f32 = 340.;
 
 impl Render for ToastLayer {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let fade = motion::animation_duration(cx, FADE_IN);
+        let fade = Self::fade_in(cx);
         let toasts: Vec<_> = self
             .queue
             .visible
             .iter()
-            .map(|entry| self.toast(entry, fade, cx))
+            .map(|entry| self.toast(entry, fade.clone(), cx))
             .collect();
         // Absolutely positioned and only as big as its toasts: no layout of the window, and
         // clicks outside the cards reach whatever is below.
@@ -49,7 +49,12 @@ impl Render for ToastLayer {
 }
 
 impl ToastLayer {
-    fn toast(&self, entry: &Entry, fade: Option<Duration>, cx: &mut Context<Self>) -> AnyElement {
+    /// The fade a new toast plays: at most the motion cap long, none under reduce-motion.
+    pub(crate) fn fade_in(cx: &App) -> Option<Animation> {
+        motion::animation_duration(cx, FADE_IN).map(Animation::new)
+    }
+
+    fn toast(&self, entry: &Entry, fade: Option<Animation>, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let id = entry.id;
@@ -72,8 +77,11 @@ impl ToastLayer {
                 .small()
                 .ghost()
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    handler(window, cx);
                     this.dismiss(id, cx);
+                    // After this update: the handler may reach the layer again (a "Retry" that
+                    // shows a toast), which would panic while the layer is leased to this click.
+                    let handler = handler.clone();
+                    window.defer(cx, move |window, cx| handler(window, cx));
                 }));
             div().debug_selector(move || selector).child(button)
         });
@@ -132,12 +140,10 @@ impl ToastLayer {
             .child(close);
 
         match fade {
-            Some(duration) => card
-                .with_animation(
-                    ("toast-fade", id.0),
-                    Animation::new(duration),
-                    |card, delta| card.opacity(delta),
-                )
+            Some(animation) => card
+                .with_animation(("toast-fade", id.0), animation, |card, delta| {
+                    card.opacity(delta)
+                })
                 .into_any_element(),
             None => card.into_any_element(),
         }
