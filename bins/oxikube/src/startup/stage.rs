@@ -100,11 +100,6 @@ pub struct StartupReport {
 impl Global for StartupReport {}
 
 impl StartupReport {
-    /// A report that already holds `earlier` timings (the stages that ran before GPUI).
-    pub fn starting_with(earlier: Vec<StageTiming>) -> Self {
-        Self { timings: earlier }
-    }
-
     /// The report of this run; `None` before [`crate::startup::init`] finished.
     pub fn get(cx: &App) -> Option<&Self> {
         cx.try_global::<Self>()
@@ -137,10 +132,8 @@ impl StartupReport {
 
     /// Runs `f` as `stage`: inside a tracing span named `init`, timed, and recorded.
     pub fn time<R>(&mut self, stage: Stage, f: impl FnOnce() -> R) -> R {
-        let span = tracing::info_span!("init", stage = stage.name());
-        let _entered = span.enter();
         let started = Instant::now();
-        let result = f();
+        let result = tracing::info_span!("init", stage = stage.name()).in_scope(f);
         self.record(stage, started.elapsed());
         result
     }
@@ -150,11 +143,7 @@ impl StartupReport {
 /// [`crate::startup::init`], such as opening the window). Without a report it just runs `f`.
 pub fn time_after_init<R>(cx: &mut App, stage: Stage, f: impl FnOnce(&mut App) -> R) -> R {
     let started = Instant::now();
-    let result = {
-        let span = tracing::info_span!("init", stage = stage.name());
-        let _entered = span.enter();
-        f(cx)
-    };
+    let result = tracing::info_span!("init", stage = stage.name()).in_scope(|| f(cx));
     if cx.has_global::<StartupReport>() {
         cx.global_mut::<StartupReport>()
             .record(stage, started.elapsed());

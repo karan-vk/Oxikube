@@ -12,7 +12,7 @@ use std::time::Instant;
 use oxikube_logging::{CrashConfig, LogConfig, LogGuard, LogHandle};
 
 use super::paths;
-use super::stage::{Stage, StageTiming};
+use super::stage::{Stage, StartupReport};
 
 /// Keeps file logging alive until [`shutdown`]; a static because the process may exit from inside
 /// GPUI's `run` (macOS), where `main` never regains control to drop it.
@@ -24,8 +24,8 @@ pub struct Boot {
     pub data_dir: Option<PathBuf>,
     /// The log filter handle, when file logging started.
     pub log: Option<LogHandle>,
-    /// What the stages that ran here cost.
-    pub timings: Vec<StageTiming>,
+    /// What the stages that ran before GPUI cost (logging here, assets in `main`).
+    pub report: StartupReport,
 }
 
 /// Sets up logging and the panic hook. Never fails: a problem is printed to stderr and start-up
@@ -62,19 +62,12 @@ pub fn boot() -> Boot {
         data_dir = %files_dir.display(),
         "oxikube starting"
     );
-    let elapsed = started.elapsed();
-    tracing::info!(
-        stage = Stage::Logging.name(),
-        elapsed_us = u64::try_from(elapsed.as_micros()).unwrap_or(u64::MAX),
-        "init stage done"
-    );
+    let mut report = StartupReport::default();
+    report.record(Stage::Logging, started.elapsed());
     Boot {
         data_dir,
         log,
-        timings: vec![StageTiming {
-            stage: Stage::Logging,
-            elapsed,
-        }],
+        report,
     }
 }
 

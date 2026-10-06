@@ -101,11 +101,8 @@ fn main() -> ExitCode {
 /// content (the `Root` must remain the window's root view for overlays to work); without it
 /// nothing is measured or paid for.
 fn run_app(mut boot: startup::Boot, perf: Option<Arc<Recorder>>, perf_duration: Option<Duration>) {
-    let assets = Instant::now();
-    let application = gpui_platform::application().with_assets(oxikube_ui::Assets);
-    boot.timings.push(startup::StageTiming {
-        stage: Stage::Assets,
-        elapsed: assets.elapsed(),
+    let application = boot.report.time(Stage::Assets, || {
+        gpui_platform::application().with_assets(oxikube_ui::Assets)
     });
     application.run(move |cx: &mut App| {
         // Flush the log when the app quits (macOS exits from inside `run`, so `main` never gets

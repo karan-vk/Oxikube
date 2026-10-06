@@ -1,6 +1,6 @@
 //! Where the app keeps its own files.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Overrides the data directory (logs, crash reports, the state database).
 pub const DATA_DIR_ENV: &str = "OXIKUBE_DATA_DIR";
@@ -18,16 +18,16 @@ pub fn data_dir() -> Option<PathBuf> {
 }
 
 /// `<data dir>/logs`.
-pub fn log_dir(data_dir: &std::path::Path) -> PathBuf {
+pub fn log_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("logs")
 }
 
 /// `<data dir>/crashes`.
-pub fn crash_dir(data_dir: &std::path::Path) -> PathBuf {
+pub fn crash_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("crashes")
 }
 
 /// `<data dir>/state.db`.
-pub fn state_db_path(data_dir: &std::path::Path) -> PathBuf {
+pub fn state_db_path(data_dir: &Path) -> PathBuf {
     data_dir.join("state.db")
 }

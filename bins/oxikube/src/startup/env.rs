@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use oxikube_logging::LogHandle;
 
-use super::stage::StageTiming;
+use super::stage::StartupReport;
 use crate::app_state::AppPorts;
 
 /// Where settings, keymap and themes come from.
@@ -53,7 +53,7 @@ pub struct StartupEnv {
     /// The live log filter handle, when logging was set up; the `log.filter` setting follows it.
     pub log: Option<LogHandle>,
     /// Costs of the stages that ran before GPUI (logging, assets).
-    pub earlier: Vec<StageTiming>,
+    pub earlier: StartupReport,
 }
 
 impl StartupEnv {
@@ -74,7 +74,7 @@ impl StartupEnv {
             ports: PortsChoice::Sqlite(state_path),
             data_dir: boot.data_dir,
             log: boot.log,
-            earlier: boot.timings,
+            earlier: boot.report,
         }
     }
 }
@@ -93,7 +93,7 @@ impl StartupEnv {
             ports: PortsChoice::Provided(ports),
             data_dir: None,
             log: None,
-            earlier: Vec::new(),
+            earlier: StartupReport::default(),
         }
     }
 }

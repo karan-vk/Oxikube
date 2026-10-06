@@ -95,7 +95,7 @@ pub fn init(cx: &mut App, env: StartupEnv) -> Result<(), StartupError> {
 }
 
 /// [`init`] with an explicit feature list (tests; the app passes [`FEATURES`]).
-pub fn init_with_features(
+pub(crate) fn init_with_features(
     cx: &mut App,
     env: StartupEnv,
     features: &[Feature],
@@ -104,7 +104,7 @@ pub fn init_with_features(
         return Err(StartupError::AlreadyInitialised);
     }
     cx.set_global(Initialised);
-    let mut report = StartupReport::starting_with(env.earlier.clone());
+    let mut report = env.earlier.clone();
 
     report.time(Stage::Runtime, || match env.runtime {
         RuntimeChoice::Tokio => oxikube_runtime::init(cx).map_err(StartupError::Runtime),

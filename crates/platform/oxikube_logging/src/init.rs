@@ -121,16 +121,14 @@ impl LogHandle {
         if self.pinned {
             return Ok(SetOutcome::PinnedByRustLog);
         }
-        let filter = EnvFilter::try_new(directives).map_err(|err| LogError::Directives {
+        let invalid = |reason: String| LogError::Directives {
             directives: directives.to_owned(),
-            reason: err.to_string(),
-        })?;
+            reason,
+        };
+        let filter = EnvFilter::try_new(directives).map_err(|err| invalid(err.to_string()))?;
         self.reload
             .reload(filter)
-            .map_err(|err| LogError::Directives {
-                directives: directives.to_owned(),
-                reason: err.to_string(),
-            })?;
+            .map_err(|err| invalid(err.to_string()))?;
         *self.current.lock().unwrap_or_else(|e| e.into_inner()) = directives.to_owned();
         Ok(SetOutcome::Applied)
     }

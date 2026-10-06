@@ -1,6 +1,7 @@
 //! The documented order, the globals it leaves behind, and the refusal to run twice.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use gpui::{App, BorrowAppContext as _, TestAppContext};
 use oxikube_keymap::KeymapStore;
@@ -42,7 +43,7 @@ fn the_stages_run_in_the_documented_order(cx: &mut TestAppContext) {
             .filter(|s| INIT_STAGES.contains(s))
             .collect();
         assert_eq!(report.order(), declared);
-        assert!(report.total() > std::time::Duration::ZERO);
+        assert!(report.total() > Duration::ZERO);
     });
 }
 
@@ -50,16 +51,9 @@ fn the_stages_run_in_the_documented_order(cx: &mut TestAppContext) {
 fn earlier_stages_keep_their_place_in_the_report(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let mut env = StartupEnv::test();
-        env.earlier = vec![
-            crate::startup::StageTiming {
-                stage: Stage::Logging,
-                elapsed: std::time::Duration::from_micros(40),
-            },
-            crate::startup::StageTiming {
-                stage: Stage::Assets,
-                elapsed: std::time::Duration::from_micros(10),
-            },
-        ];
+        env.earlier
+            .record(Stage::Logging, Duration::from_micros(40));
+        env.earlier.record(Stage::Assets, Duration::from_micros(10));
         init(cx, env).unwrap();
         let order = StartupReport::get(cx).unwrap().order();
         assert_eq!(&order[..2], [Stage::Logging, Stage::Assets]);
