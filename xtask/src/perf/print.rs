@@ -1,7 +1,7 @@
 //! The tables `cargo xtask perf` prints: the report and the budget check.
 
 use super::budget;
-use super::report::{self, Report, Status};
+use super::report::{self, Percentiles, Report, Status};
 
 /// Prints the budget table; returns whether a budget failed (and failing is on).
 pub fn check_budgets(report: &Report, skip: bool) -> bool {
@@ -38,23 +38,12 @@ pub fn print_report(report: &Report) {
             ),
             Status::Ok => {
                 for (metric, p) in &result.metrics {
-                    println!(
-                        "{name:<12} {:<26} {:>10.3} {:>10.3} {:>10.3} {:>10}",
-                        format!("{metric} [{}]", report::metric_unit(metric)),
-                        p.p50,
-                        p.p95,
-                        p.p99,
-                        p.max.map(|m| format!("{m:.3}")).unwrap_or_default()
-                    );
+                    println!("{}", row(name, metric, p));
                 }
                 for (metric, p) in &result.launches {
                     println!(
-                        "{name:<12} {:<26} {:>10.3} {:>10.3} {:>10.3} {:>10}  across {} launches",
-                        format!("{metric} [{}]", report::metric_unit(metric)),
-                        p.p50,
-                        p.p95,
-                        p.p99,
-                        p.max.map(|m| format!("{m:.3}")).unwrap_or_default(),
+                        "{}  across {} launches",
+                        row(name, metric, p),
                         result.samples
                     );
                 }
@@ -66,4 +55,16 @@ pub fn print_report(report: &Report) {
             }
         }
     }
+}
+
+/// One metric row of the report table.
+fn row(scenario: &str, metric: &str, p: &Percentiles) -> String {
+    format!(
+        "{scenario:<12} {:<26} {:>10.3} {:>10.3} {:>10.3} {:>10}",
+        format!("{metric} [{}]", report::metric_unit(metric)),
+        p.p50,
+        p.p95,
+        p.p99,
+        p.max.map(|m| format!("{m:.3}")).unwrap_or_default()
+    )
 }

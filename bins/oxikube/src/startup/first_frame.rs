@@ -12,7 +12,7 @@ use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
 use gpui::App;
-use oxikube_runtime::perf::sockets;
+use oxikube_runtime::perf::{round_ms, sockets};
 
 use super::stage::{FirstFrame, StartupReport};
 
@@ -123,5 +123,5 @@ pub fn summary(report: &StartupReport) -> String {
 
 /// Milliseconds with microsecond precision.
 pub fn ms(duration: Duration) -> f64 {
-    (duration.as_secs_f64() * 1_000_000.0).round() / 1000.0
+    round_ms(duration.as_secs_f64() * 1000.0)
 }

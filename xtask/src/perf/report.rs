@@ -143,7 +143,12 @@ pub fn median(values: &mut [f64]) -> Option<f64> {
     } else {
         (values[mid - 1] + values[mid]) / 2.0
     };
-    Some((m * 1000.0).round() / 1000.0)
+    Some(round3(m))
+}
+
+/// Rounds to three decimals (microsecond resolution for `*_ms`).
+fn round3(x: f64) -> f64 {
+    (x * 1000.0).round() / 1000.0
 }
 
 /// Aggregates measured samples of one scenario: per metric, the median of each statistic across
@@ -209,14 +214,13 @@ fn across_launches(samples: &[Sample]) -> BTreeMap<String, Percentiles> {
         .filter(|(name, _)| !multi.contains(name))
         .map(|(name, mut v)| {
             v.sort_by(f64::total_cmp);
-            let round = |x: f64| (x * 1000.0).round() / 1000.0;
             (
                 name.clone(),
                 Percentiles {
-                    p50: round(nearest_rank(&v, 0.50)),
-                    p95: round(nearest_rank(&v, 0.95)),
-                    p99: round(nearest_rank(&v, 0.99)),
-                    max: v.last().copied().map(round),
+                    p50: round3(nearest_rank(&v, 0.50)),
+                    p95: round3(nearest_rank(&v, 0.95)),
+                    p99: round3(nearest_rank(&v, 0.99)),
+                    max: v.last().copied().map(round3),
                 },
             )
         })

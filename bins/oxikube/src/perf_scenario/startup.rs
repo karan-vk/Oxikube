@@ -35,6 +35,7 @@ use oxikube_runtime::LazyServices;
 use oxikube_runtime::perf::harness::{self, metric};
 use oxikube_runtime::perf::{PerfRoot, Recorder, ScenarioSample, Summary, round_ms};
 use oxikube_testkit::headless;
+use startup::first_frame::ms;
 
 use super::{FIRST_FRAME_MARKER, FRAMES, WINDOW_SIZE};
 
@@ -131,7 +132,7 @@ fn measure(launched: Instant, probe: bool, scratch: &Path) -> Result<ScenarioSam
     )?;
 
     let mut extra = vec![
-        single(metric::FIRST_FRAME_MS, since_launch.as_secs_f64() * 1000.0),
+        single(metric::FIRST_FRAME_MS, ms(since_launch)),
         single(name::CONFIG_LOAD_MS, ms(report.config_load())),
     ];
     for timing in report.timings() {
@@ -183,10 +184,6 @@ fn state_db_open_ms(path: &Path) -> Result<f64> {
 
 fn single(name: &str, ms: f64) -> (String, Summary) {
     (name.to_owned(), Summary::single(round_ms(ms)))
-}
-
-fn ms(duration: std::time::Duration) -> f64 {
-    duration.as_secs_f64() * 1000.0
 }
 
 /// A scratch directory for this process, removed on drop.

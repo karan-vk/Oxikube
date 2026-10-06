@@ -27,11 +27,6 @@ impl FirstFrameProbe {
     pub fn inner(&self) -> &AnyView {
         &self.inner
     }
-
-    /// Whether the first frame has been drawn (the callback is scheduled or ran).
-    pub fn fired(&self) -> bool {
-        self.on_first_frame.is_none()
-    }
 }
 
 impl Render for FirstFrameProbe {
@@ -70,8 +65,7 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(fired.get(), 1);
         window
-            .update(cx, |probe, window, cx| {
-                assert!(probe.fired());
+            .update(cx, |_, window, cx| {
                 window.refresh();
                 cx.notify();
             })
