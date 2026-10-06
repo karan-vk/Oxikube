@@ -25,6 +25,9 @@
 //! - [`cluster_tab`]: one tab per live cluster session (E06-S04): [`ClusterTab`] hosts the
 //!   cluster's own workspace, [`ClusterTabs`] keeps the tabs in step with the sessions, switches
 //!   (`cmd-1..9`), closes (with the running-operations prompt) and saves the open list.
+//! - [`sidebar`]: the cluster sidebar (E06-S10): [`SidebarPanel`](sidebar::SidebarPanel) in the left dock of a
+//!   cluster tab, its sections registered through [`SidebarRegistry`](sidebar::SidebarRegistry) and
+//!   hidden by what the user may list (`SelfSubjectRulesReview`), integrations' sections appended.
 //! - [`actions`]: `workspace::*` actions and their default key bindings.
 //! - [`session`]: window and session basics (E05-S12): `window::New`, UI zoom (`view::ZoomIn`,
 //!   `view::ZoomOut`, `view::ZoomReset`), reduce-motion, and the quit confirmation while
@@ -56,6 +59,7 @@ pub mod pane;
 pub mod panel;
 pub mod persistence;
 pub mod session;
+pub mod sidebar;
 pub mod status_bar;
 mod tab_label;
 #[cfg(any(test, feature = "test-support"))]
@@ -92,6 +96,7 @@ pub fn init(cx: &mut gpui::App) {
     actions::register(cx);
     session::init(cx);
     cluster_tab::init(cx);
+    sidebar::init(cx);
     modal::register(cx);
     toast::register(cx);
 }

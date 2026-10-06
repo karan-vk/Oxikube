@@ -25,6 +25,7 @@
 //! the empty string. (RBAC has no `pods/*` form.) Non-resource rules (`/healthz`, ...)
 //! never grant a flag here.
 
+use oxikube_domain::access::{AccessRule as DomainRule, AccessRules};
 use oxikube_domain::{Capabilities, Capability};
 
 /// One allow rule, as returned by a rules review (`ResourceRule`).
@@ -53,6 +54,24 @@ pub struct RulesSnapshot {
 }
 
 impl RulesSnapshot {
+    /// The rules as the domain's per-resource [`AccessRules`] (what the sidebar asks).
+    pub fn to_access_rules(&self) -> AccessRules {
+        AccessRules {
+            rules: self
+                .rules
+                .iter()
+                .map(|r| DomainRule {
+                    verbs: r.verbs.clone(),
+                    api_groups: r.api_groups.clone(),
+                    resources: r.resources.clone(),
+                    resource_names: r.resource_names.clone(),
+                })
+                .collect(),
+            partial: self.is_partial(),
+            namespaces_unseen: false,
+        }
+    }
+
     /// True when the rule list may be missing rules.
     pub fn is_partial(&self) -> bool {
         self.incomplete || self.evaluation_error.is_some()

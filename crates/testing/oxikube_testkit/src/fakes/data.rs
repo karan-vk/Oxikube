@@ -85,6 +85,11 @@ impl FakeDiscoveryPort {
         self
     }
 
+    /// Replaces the kinds `discover` and `resolve` serve (a cluster that gains CRDs).
+    pub fn set_kinds(&self, kinds: impl IntoIterator<Item = ResourceKind>) {
+        *self.kinds.lock() = kinds.into_iter().collect();
+    }
+
     /// Sets the version `server_version` reports.
     #[must_use]
     pub fn with_version(self, version: ServerVersion) -> Self {

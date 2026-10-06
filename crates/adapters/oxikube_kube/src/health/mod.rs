@@ -53,5 +53,5 @@ pub use capabilities::{
     AccessLevel, AccessRule, CapabilityReport, RBAC_DERIVED, RulesSnapshot, capabilities_from_rules,
 };
 pub use liveness::{HealthEvent, Liveness, LivenessConfig, MIN_INTERVAL, probe_apiserver_version};
-pub use pooled::{capabilities_for_context, pooled_probe, probe_context};
+pub use pooled::{capabilities_for_context, pooled_probe, probe_context, rules_for_context};
 pub use rules::{DEFAULT_RULES_TTL, RulesCache, fetch_rules, probe_capabilities};

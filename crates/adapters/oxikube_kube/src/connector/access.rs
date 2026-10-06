@@ -3,13 +3,14 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use oxikube_domain::access::AccessRules;
 use oxikube_domain::ids::ContextName;
 use oxikube_domain::{Capabilities, OxiResult};
 use oxikube_ports::AccessReviewPort;
 
 use super::REFRESH;
 use crate::discovery::KubeDiscovery;
-use crate::health::{RulesCache, capabilities_for_context};
+use crate::health::{RulesCache, capabilities_for_context, rules_for_context};
 use crate::pool::ClientPool;
 
 /// The namespace a cluster-wide question is asked in: the rules review needs one, and the
@@ -62,5 +63,10 @@ impl AccessReviewPort for KubeAccess {
             capabilities |= Capabilities::METRICS;
         }
         Ok(capabilities)
+    }
+
+    async fn rules(&self, namespace: Option<&str>) -> OxiResult<AccessRules> {
+        let namespace = namespace.unwrap_or(CLUSTER_WIDE_PROBE_NAMESPACE);
+        rules_for_context(&self.pool, &self.rules, &self.context, namespace, REFRESH).await
     }
 }
