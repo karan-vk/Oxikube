@@ -101,16 +101,25 @@ impl Workspace {
     ) -> RestoreReport {
         let mut report = RestoreReport::default();
         if self.items.is_empty() {
-            if let Some(layout) =
-                self.layout_from_state(&saved.dock_area.center, &mut report, window, cx)
-            {
+            // Per saved pane, in saved order: whether any of its items came back.
+            let mut survived = Vec::new();
+            if let Some(layout) = self.layout_from_state(
+                &saved.dock_area.center,
+                &mut report,
+                &mut survived,
+                window,
+                cx,
+            ) {
                 self.dock_area
                     .update(cx, |area, cx| area.set_center(layout, window, cx));
                 report.centre_restored = true;
                 let group = self.pane_group(cx);
                 let panes = group.panes();
+                // The saved index counts the panes as saved; panes that lost every item are gone.
                 let active = saved
                     .active_pane
+                    .filter(|ix| survived.get(*ix).copied().unwrap_or(false))
+                    .map(|ix| survived[..ix].iter().filter(|s| **s).count())
                     .and_then(|ix| panes.get(ix))
                     .or(panes.first())
                     .map(|pane| pane.id());
@@ -136,11 +145,12 @@ impl Workspace {
     }
 
     /// The layout described by `state`, with the items rebuilt and registered; `None` when no
-    /// item of it can be rebuilt.
+    /// item of it can be rebuilt. `survived` gets one entry per saved pane, in order.
     fn layout_from_state(
         &mut self,
         state: &PanelState,
         report: &mut RestoreReport,
+        survived: &mut Vec<bool>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<DockLayout> {
@@ -152,7 +162,8 @@ impl Workspace {
                 };
                 let mut any = false;
                 for (ix, child) in state.children.iter().enumerate() {
-                    if let Some(child) = self.layout_from_state(child, report, window, cx) {
+                    if let Some(child) = self.layout_from_state(child, report, survived, window, cx)
+                    {
                         // 0 is the dock area's "unconstrained" marker.
                         let size = sizes.get(ix).copied().filter(|s| *s > px(0.));
                         layout = layout.child(child, size);
@@ -170,12 +181,15 @@ impl Workspace {
                         survivors.push(ix);
                     }
                 }
+                survived.push(!survivors.is_empty());
                 (!survivors.is_empty())
                     .then(|| layout.active_index(surviving_active(*active_index, &survivors)))
             }
             // A bare item where a group belongs.
             PanelInfo::Panel(_) => {
-                let tab = self.restore_item(state, report, window, cx)?;
+                let tab = self.restore_item(state, report, window, cx);
+                survived.push(tab.is_some());
+                let tab = tab?;
                 Some(DockLayout::tabs().panel_view(panel_handle(tab), cx))
             }
         }

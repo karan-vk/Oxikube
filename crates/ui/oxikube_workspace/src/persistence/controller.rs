@@ -159,10 +159,13 @@ impl LayoutPersistence {
                 RestoreStatus::Failed(error.to_string())
             }
         };
-        if matches!(&self.status, RestoreStatus::Restored(report) if report.centre_restored) {
+        if matches!(&self.status, RestoreStatus::Restored(report) if !report.centre_kept) {
             // What was just restored is what is stored: the layout events the restore itself
-            // causes must not write it back. (Skipped items thus stay in the store until the user
-            // changes something, so a feature crate that is briefly missing loses nothing.)
+            // causes (dock resizes, window bounds) must not write it back, even when every saved
+            // item was skipped. (Skipped items thus stay in the store until the user changes
+            // something, so a feature crate that is briefly missing loses nothing. When the
+            // user's own items were kept, the layout differs from the stored one on purpose and
+            // is written.)
             self.last_written = self.capture(window, cx).map(|layout| layout.to_json());
         }
         cx.emit(PersistenceEvent::RestoreFinished(self.status.clone()));

@@ -7,12 +7,14 @@ use gpui::TestAppContext;
 use oxikube_domain::OxiError;
 use oxikube_ports::{StateKey, StatePort, StateTable};
 use oxikube_testkit::fakes::FakeStatePort;
+use oxikube_ui::{Unscaled, dock::PanelInfo};
 use serde_json::json;
 
 use super::{gated::GatedState, open, saved_titles, start, store, window, written};
 use crate::persistence::{
     LAYOUT_TABLE, LayoutPersistence, MAIN_WINDOW_ID, PersistenceEvent, RestoreStatus, SAVE_DEBOUNCE,
 };
+use crate::{item::ITEM_PANEL_NAME, panel::DockPosition, test_support::TestPanel};
 
 const LONG_ENOUGH: Duration = Duration::from_millis(600);
 
@@ -279,5 +281,54 @@ async fn the_finish_of_a_restore_is_announced(cx: &mut TestAppContext) {
         [PersistenceEvent::RestoreFinished(
             RestoreStatus::NothingSaved
         )]
+    );
+}
+
+/// Adds a left [`TestPanel`] to `ws`, so the workspace has a dock a saved layout can resize.
+fn add_left_panel(ws: &gpui::Entity<crate::Workspace>, vcx: &mut gpui::VisualTestContext) {
+    vcx.update(|window, cx| {
+        let panel = TestPanel::build(DockPosition::Left, "nav", cx);
+        ws.update(cx, |ws, cx| ws.add_panel(panel, window, cx));
+    });
+    vcx.run_until_parked();
+}
+
+#[gpui::test]
+async fn a_layout_of_only_skipped_items_is_not_overwritten_by_the_restore(cx: &mut TestAppContext) {
+    // Saved with a resized left dock and one item whose kind is no longer registered.
+    let (ws, mut vcx) = window(cx);
+    add_left_panel(&ws, &mut vcx);
+    open(&ws, &mut vcx, "pods");
+    vcx.update(|window, cx| {
+        ws.update(cx, |ws, cx| {
+            ws.resize_dock(DockPosition::Left, Unscaled(333.), window, cx)
+        })
+    });
+    let mut layout = vcx.update(|_, cx| ws.read(cx).serialize_layout(cx));
+    fn rename(state: &mut oxikube_ui::dock::PanelState) {
+        if state.panel_name == ITEM_PANEL_NAME {
+            state.info = PanelInfo::panel(json!({ "kind": "gone::Pods", "state": null }));
+        }
+        state.children.iter_mut().for_each(rename);
+    }
+    rename(&mut layout.dock_area.center);
+    let fake = Arc::new(FakeStatePort::new());
+    block_on(store(fake.clone()).save(&layout)).unwrap();
+    fake.clear_calls();
+
+    let (fresh, mut vcx) = window(cx);
+    add_left_panel(&fresh, &mut vcx);
+    let persistence = start(&fresh, &mut vcx, fake.clone());
+    vcx.update(|_, cx| {
+        assert!(matches!(
+            persistence.read(cx).status(),
+            RestoreStatus::Restored(r) if !r.centre_restored && !r.centre_kept && r.skipped_items.len() == 1
+        ));
+    });
+    // The dock was resized by the restore, which raised a layout event.
+    tick(&mut vcx, LONG_ENOUGH);
+    assert!(
+        written(&fake).is_empty(),
+        "the skipped item stays in the store until the user changes something"
     );
 }

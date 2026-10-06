@@ -238,6 +238,36 @@ fn an_unknown_item_kind_is_skipped_and_the_rest_still_opens(cx: &mut TestAppCont
 }
 
 #[gpui::test]
+fn the_active_pane_follows_its_item_when_earlier_panes_are_skipped(cx: &mut TestAppContext) {
+    let (ws, mut vcx) = workspace(cx);
+    let kind = TestItem::KIND;
+    // Panes A, B (an unregistered kind only) and C, saved with C active.
+    let mut saved = saved_with(&[(kind, json!("a"))], 0);
+    for (kind, title) in [("some_crate::Removed", json!(null)), (kind, json!("c"))] {
+        let mut tabs = PanelState::new("TabPanel");
+        tabs.info = PanelInfo::tabs(0);
+        let mut leaf = PanelState::new(ITEM_PANEL_NAME);
+        leaf.info = PanelInfo::panel(json!({ "kind": kind, "state": title }));
+        tabs.add_child(leaf);
+        saved.dock_area.center.add_child(tabs);
+    }
+    saved.dock_area.center.info = PanelInfo::stack(vec![px(100.); 3], Axis::Horizontal);
+    saved.active_pane = Some(2);
+    let report = restore(&ws, &mut vcx, &saved);
+    assert_eq!(report.restored_items, 2);
+    assert_eq!(shape(&ws, &mut vcx), "([a]*0 [c]*0)");
+    let active = active_pane(&ws, &mut vcx);
+    assert_eq!(titles(&ws, &mut vcx, &active), ["c"]);
+
+    // Skipped panes before the active one shift its index, they do not change which pane it is.
+    let (fresh, mut fresh_vcx) = second_workspace(cx);
+    saved.active_pane = Some(0);
+    restore(&fresh, &mut fresh_vcx, &saved);
+    let active = active_pane(&fresh, &mut fresh_vcx);
+    assert_eq!(titles(&fresh, &mut fresh_vcx, &active), ["a"]);
+}
+
+#[gpui::test]
 fn a_layout_of_only_unknown_items_leaves_the_workspace_as_it_was(cx: &mut TestAppContext) {
     let (ws, mut vcx) = workspace(cx);
     let saved = saved_with(&[("some_crate::Removed", json!(null))], 0);
