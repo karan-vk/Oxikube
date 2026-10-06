@@ -1,6 +1,7 @@
 //! The table and detail commands on the `CommandBus`: `resource::Open`, `resource::CopyName`,
-//! `resource::RetryFeed` (E07-S10), `resource::SelectAll` (E07-S03) and `resource::PinDetail`,
-//! `resource::CopyLabel` (E07-S05) and `table::FocusFilter` (E07-S04).
+//! `resource::RetryFeed` (E07-S10), `resource::SelectAll` (E07-S03), `resource::PinDetail`,
+//! `resource::CopyLabel` (E07-S05), `table::FocusFilter` (E07-S04) and the CRD navigation
+//! `crd::OpenList`, `crd::OpenResources` (E07-S07).
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, pin it
 //! as a tab, select rows, restart a feed (a read) or write the user's clipboard. Each is declared
@@ -21,7 +22,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 7] = [
+pub const RESOURCE_COMMANDS: [CommandId; 9] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -29,6 +30,8 @@ pub const RESOURCE_COMMANDS: [CommandId; 7] = [
     CommandId::RESOURCE_PIN_DETAIL,
     CommandId::RESOURCE_COPY_LABEL,
     CommandId::TABLE_FOCUS_FILTER,
+    CommandId::CRD_OPEN_LIST,
+    CommandId::CRD_OPEN_RESOURCES,
 ];
 
 /// A resource command, resolved, for the UI thread.
@@ -50,6 +53,16 @@ pub enum ViewRequest {
     },
     /// Copy `target`'s name to the clipboard.
     CopyName(ResourceRef),
+    /// Open the list of `cluster`'s CustomResourceDefinitions (`crd::OpenList`, E07-S07).
+    OpenCrdList(ClusterId),
+    /// Open the table of the custom resources the CRD `name` defines, for its served storage
+    /// version (`crd::OpenResources`, E07-S07).
+    OpenCrdResources {
+        /// The cluster the CRD is in.
+        cluster: ClusterId,
+        /// The CRD's name (`widgets.example.com`).
+        name: String,
+    },
     /// Restart the feed of the tables of `gvk` in `cluster`.
     RetryFeed {
         /// The cluster.
@@ -96,6 +109,11 @@ impl ResourceCommandSink {
         Some(match command {
             Command::ResourceOpen { target } => ViewRequest::Open(target.clone()),
             Command::ResourceCopyName { target } => ViewRequest::CopyName(target.clone()),
+            Command::CrdOpenList { cluster } => ViewRequest::OpenCrdList(cluster.clone()),
+            Command::CrdOpenResources { cluster, name } => ViewRequest::OpenCrdResources {
+                cluster: cluster.clone(),
+                name: name.clone(),
+            },
             Command::ResourceRetryFeed { cluster, gvk } => ViewRequest::RetryFeed {
                 cluster: cluster.clone(),
                 gvk: gvk.clone(),

@@ -25,6 +25,7 @@ impl Render for DetailView {
         let body = match self.tab {
             DetailTab::Overview => self.overview_body(cx),
             DetailTab::Events => self.events_body(cx),
+            DetailTab::Schema => self.schema_body(cx),
             tab => self.placeholder_body(tab, cx),
         };
         v_flex()
@@ -184,7 +185,7 @@ impl DetailView {
             .gap(u(tokens.spacing.sm))
             .border_b_1()
             .border_color(colors.border_variant)
-            .children(DetailTab::ALL.into_iter().map(|tab| {
+            .children(DetailTab::for_kind(&self.target.gvk).iter().map(|&tab| {
                 let active = tab == self.tab;
                 div()
                     .id(("detail-tab", tab as usize))

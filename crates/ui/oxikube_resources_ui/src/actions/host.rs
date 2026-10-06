@@ -50,14 +50,20 @@ pub struct ResourceActions {
 }
 
 impl ResourceActions {
-    /// The core row actions (delete) over `bus`, acting as `who` (the local user's name, for the
-    /// audit log).
+    /// The core row actions (delete) and the CRD list's (E07-S07: open its custom resources,
+    /// show its details) over `bus`, acting as `who` (the local user's name, for the audit log).
     pub fn new(
         bus: &CommandBus,
         sessions: ClusterSessionManager,
         who: impl Into<std::sync::Arc<str>>,
     ) -> Self {
-        Self::with_registry(bus, sessions, who, &RowActionRegistry::core())
+        let mut registry = RowActionRegistry::core();
+        for spec in crate::crds::crd_row_actions() {
+            registry
+                .register(spec)
+                .expect("the core registry has no CRD action");
+        }
+        Self::with_registry(bus, sessions, who, &registry)
     }
 
     /// Row actions of `registry` (the core ones plus what other crates registered) over `bus`.

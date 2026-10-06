@@ -71,6 +71,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NamespaceToggleFavourite { cluster, .. }
         | Command::ClusterSetColour { cluster, .. }
         | Command::ClusterApplyPreset { cluster, .. }
+        | Command::CrdOpenList { cluster }
+        | Command::CrdOpenResources { cluster, .. }
         | Command::ResourceOpenList { cluster, .. }
         | Command::ResourceRetryFeed { cluster, .. }
         | Command::ResourceSelectAll { cluster, .. }

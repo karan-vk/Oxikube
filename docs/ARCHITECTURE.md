@@ -156,7 +156,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   coalesced only on change; a click sends `resource::OpenList`. Module `navigate`: the `resource::OpenList` handler and the
   `KindViews` registry the generic table registers its opener in. The sidebar (`oxikube_workspace::sidebar::badges`) shows count
   badges from the same store: it keeps a lease only on the kinds the store counts eagerly (pods, nodes, namespaces,
-  deployments) and reads every other badge off whatever feed is already open.
+  deployments) and reads every other badge off whatever feed is already open. Module `crds` (E07-S07): CRD browsing as plain
+  Rust (`CrdInfo`, `served_versions`, `SchemaTree`, the CRD list's row actions) plus the views over it: the CRD row's `crd::OpenResources`
+  (Enter; `ResourceViews` reads the CRD, takes the storage version if served, asks discovery and opens the table), the table's
+  version switcher and "Basic columns" note (`table::crd`), and the Schema tab of a CRD's detail (`detail::schema_tab`: a lazy,
+  bounded, collapsible `openAPIV3Schema` tree).
 - `oxikube_catalog_ui` — the cluster catalog UI. Module `sources` (E06-S05): `SourcesView`, the
   kubeconfig sources screen (a workspace `Item`): one row per entry of `kubeconfig.sources` with its
   status (found with N contexts, or the error inline next to that one source), add file / add folder
@@ -448,7 +452,19 @@ use the server-side Table API (kubectl-identical columns incl. `additionalPrinte
 The Table feed (`oxikube_kube::table`) watches where the server honours the Table `Accept`
 header and re-lists on a refresh interval otherwise; a server that ignores the header gets a
 plain-JSON fallback flagged `TableSource::Objects`, so the `ColumnProvider` substitutes its
-generic NAME / NAMESPACE / AGE columns.
+generic NAME / NAMESPACE / AGE columns; the table then shows a "Basic columns" note instead of
+looking quietly poorer than `kubectl get` (E07-S07).
+
+CRD browsing (E07-S07, `oxikube_resources_ui::crds`): the sidebar's Custom Resources section lists the
+non-built-in API groups from discovery, collapsed, each with how many kinds it has, after a "Definitions" entry
+(`crd::OpenList`) that opens the CRD list (a reflector feed with Group / Version / Scope / Short Names columns). A CRD row
+opens the table of its custom resources (`crd::OpenResources`), on the Table feed, at the storage version when it is
+served (else the newest served one); a kind with several served versions gets a switcher that opens each version as
+its own tab (`resource::OpenList`). Namespaced kinds follow the namespace selection and cluster-scoped ones ignore it
+(`WatchScope::derive`). Expanding the sidebar starts no feed: a custom kind's badge reads the store's count only while
+a table (or anything else) has its feed open, because counting is a cache read, never a subscription
+(the watch budget stays for tables). The CRD's detail drawer has a Schema tab (`openAPIV3Schema` of the selected version:
+type as `kubectl explain` writes it, required, enum, default, description; only open nodes are walked, depth and rows are bounded).
 
 States and diagnostics (E07-S10, `oxikube_resources_ui::table::states`): one pure
 `TableState::derive(feed_state, row_count, filter)` tells loading, empty, filtered-empty,

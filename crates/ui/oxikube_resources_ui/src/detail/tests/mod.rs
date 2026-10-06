@@ -7,5 +7,6 @@ mod fixture;
 mod meta;
 mod open;
 mod pin;
+mod schema;
 mod secret;
 mod states;

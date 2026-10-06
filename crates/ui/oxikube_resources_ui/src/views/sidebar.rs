@@ -1,12 +1,14 @@
 //! From the cluster sidebar to the tables: [`sidebar_navigation`], the cluster-tab setup hook
 //! that turns the sidebar's `Navigate(Kind { group, resource })` into
-//! [`ResourceViews::navigate`] (discovery, then `resource::OpenList`).
+//! [`ResourceViews::navigate`] (discovery, then `resource::OpenList`), and its "Definitions"
+//! entry (`Navigate(Command(crd::OpenList))`, E07-S07) into that command on the bus.
 
 use std::cell::OnceCell;
 use std::rc::Rc;
 
 use gpui::{App, Entity, WeakEntity, Window};
 use oxikube_app::ClusterSession;
+use oxikube_domain::command::{Command, CommandId};
 use oxikube_workspace::ClusterTab;
 use oxikube_workspace::sidebar::{SidebarEvent, SidebarPanel, SidebarTarget};
 
@@ -50,13 +52,25 @@ pub fn sidebar_navigation(
         let views = views.clone();
         let cluster = session.id().clone();
         cx.subscribe(&panel, move |_, event: &SidebarEvent, cx| {
-            let SidebarEvent::Navigate(SidebarTarget::Kind { group, resource }) = event else {
+            let SidebarEvent::Navigate(target) = event;
+            let Some(views) = views.get() else {
                 return;
             };
-            if let Some(views) = views.get() {
-                views.update(cx, |views, cx| {
-                    views.navigate(&cluster, group, resource, cx)
-                });
+            match target {
+                SidebarTarget::Kind { group, resource } => {
+                    views.update(cx, |views, cx| {
+                        views.navigate(&cluster, group, resource, cx)
+                    });
+                }
+                // The Custom Resources section's "Definitions": the CRD list, as a command.
+                SidebarTarget::Command(id) if *id == CommandId::CRD_OPEN_LIST => {
+                    let command = Command::CrdOpenList {
+                        cluster: cluster.clone(),
+                    };
+                    let dispatcher = views.read(cx).deps.table.dispatcher.clone();
+                    dispatcher.dispatch(command, cx);
+                }
+                SidebarTarget::Command(_) | SidebarTarget::Page(_) => {}
             }
         })
         .detach();

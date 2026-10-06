@@ -27,6 +27,7 @@ How to read the **Lives in** column:
 | **Age** | A non-negative span since a resource was created, formatted `kubectl`-style (`AgeStyle::Kubectl`) or kdash-style (`AgeStyle::Detailed`). | `oxikube_domain::age` |
 | **LogLine** | One line of container output with its kubelet timestamp; over-long lines are cut and flagged. | `oxikube_domain::log` |
 | **Detail drawer / DetailView** | The generic detail of one object (header with status chip, labels and annotations with copy, owner links, finalizers, conditions, `status` summary, Events). One entity with two mounting modes: the right-dock `DetailDrawer` of a cluster tab, or, pinned, a workspace tab. Never shows a Secret value, only key names. | `oxikube_resources_ui::detail` |
+| **CRD browsing / CrdInfo / SchemaTree** | Browsing custom resources: the sidebar's Custom Resources groups (kinds per API group from discovery), the CRD list, the table of a CRD's custom resources on the Table feed (printer columns), its version switcher, and the Schema tab of a CRD's detail. `CrdInfo` is a CRD read for browsing (group, kind, scope, names, versions, the version a table opens); `SchemaTree` is its `openAPIV3Schema` as a lazily built, bounded, collapsible tree. | `oxikube_resources_ui::crds` |
 | **Event** | A Kubernetes Event (`EventType` Normal/Warning, reason, message, the `regarding` object). | `oxikube_domain::event` |
 | **MetricsSample** | One CPU and memory reading for a node, pod or container (`MetricsSubject`); an absent value is `Reading::Missing` with a `MissingReason`. | `oxikube_domain::metrics` |
 

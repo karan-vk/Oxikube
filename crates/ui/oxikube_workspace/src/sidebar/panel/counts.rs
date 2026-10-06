@@ -65,7 +65,7 @@ impl SidebarPanel {
 
     /// The plan for the current sections and access (called while rebuilding the rows).
     pub(super) fn plan_counts(&mut self) {
-        self.counts.plan = count_plan(&self.sections, &self.access);
+        self.counts.plan = count_plan(&self.sections, &self.access, self.custom.as_deref());
     }
 
     /// Writes the current answers onto freshly built rows.

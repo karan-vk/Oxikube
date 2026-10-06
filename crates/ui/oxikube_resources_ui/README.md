@@ -35,6 +35,12 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 - `views` (E07-S03): `ResourceViews`, which opens tables in cluster tabs from the sidebar and
   `resource::OpenList`, and runs `resource::Open` (which opens the detail drawer), `CopyName`,
   `SelectAll`, `PinDetail` and `CopyLabel`.
+- `crds` (E07-S07): CRD browsing. `CrdInfo` (a CRD read for browsing, the version a table opens),
+  `served_versions` (the table's version switcher), `SchemaTree` (a CRD's `openAPIV3Schema` as a lazy,
+  bounded, collapsible tree: the Schema tab of the CRD's detail) and the CRD list's row actions.
+  A CRD row opens its custom resources (`crd::OpenResources`, Enter or the row menu); the sidebar's
+  "Definitions" entry opens the CRD list (`crd::OpenList`); a kind with several served versions gets a
+  switcher in its table; a table whose API ignored the Table `Accept` header says it shows basic columns.
 
 Bench: `cargo run -p oxikube_resources_ui --profile release-fast --example table_bench`.
 Screenshots: `cargo test -p oxikube_resources_ui --features screenshot --test screenshot` (status tones) and `--test states_screenshot` (the table states, E07-S10).

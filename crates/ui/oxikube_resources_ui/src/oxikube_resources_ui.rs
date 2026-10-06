@@ -6,6 +6,7 @@
 //! | Module | Story | Holds |
 //! |---|---|---|
 //! | [`actions`] | E07-S08 | row actions in the table: the context menu and the palette's list from the `CommandBus` registry ([`actions::ResourceActions`]), disabled in read-only mode, the delete key and [`actions::DeleteDialog`] (propagation choice, type-the-name, bulk delete with per-object results) |
+//! | [`crds`] | E07-S07 | CRD browsing: [`crds::CrdInfo`] (a CRD read for browsing, the version a table opens), [`crds::served_versions`] (the version switcher's list), [`crds::SchemaTree`] (the `openAPIV3Schema` as a lazy collapsible tree) and the CRD list's row actions |
 //! | [`detail`] | E07-S05 | [`DetailView`](detail::DetailView): the generic detail of one object (header, metadata, owners, conditions, status, events), as the right-hand [`DetailDrawer`](detail::DetailDrawer) of a cluster tab or, pinned, a workspace tab |
 //! | [`filter`] | E07-S04 | [`FilterBar`](filter::FilterBar): the `/` filter of a table (`/text`, `/!text`, `/-l k=v`, `/-f fuzzy`), its parse error and `123 of 4,812` count, debounce, and the saved filter |
 //! | [`navigate`] | E07-S11 | opening a kind's list: the `resource::OpenList` handler and the registry of kind views ([`navigate::KindViews`]) |
@@ -18,6 +19,7 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod actions;
+pub mod crds;
 pub mod detail;
 pub mod filter;
 pub mod navigate;

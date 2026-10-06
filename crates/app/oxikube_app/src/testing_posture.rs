@@ -201,6 +201,11 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),
         },
+        "crd::OpenList" => Command::CrdOpenList { cluster },
+        "crd::OpenResources" => Command::CrdOpenResources {
+            cluster,
+            name: "widgets.example.com".into(),
+        },
         "resource::CopyLabel" => Command::ResourceCopyLabel {
             target: target(),
             key: "app".into(),

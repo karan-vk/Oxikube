@@ -17,7 +17,7 @@ use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::kinds::ResourceKind;
 use oxikube_domain::session::WatchScope;
 use oxikube_keymap::{KeyContextBuilder, KeyContextual, contexts};
-use oxikube_ports::StatePort;
+use oxikube_ports::{StatePort, TableSource};
 use oxikube_ui::TableHandle;
 use oxikube_ui::table::TableEvent;
 use oxikube_ui::table::TableOptions;
@@ -86,6 +86,11 @@ pub struct ResourceTable {
     pub(super) warning_task: Option<Task<()>>,
     /// The feed kind the provider was chosen for.
     pub(super) feed_kind: Option<FeedKind>,
+    /// The versions of the kind the cluster serves (custom kinds, E07-S07), newest first.
+    pub(super) served: Vec<ResourceKind>,
+    /// Where the columns of the last Table delta came from (`None` for kinds without a Table
+    /// feed, and until the feed answers).
+    pub(super) columns_source: Option<TableSource>,
     pub(super) writer: Option<PrefsWriter>,
     /// Whether the saved layout has been read (until then the defaults show and nothing is
     /// saved over it).
@@ -202,6 +207,8 @@ impl ResourceTable {
             feed_task: None,
             warning_task: None,
             feed_kind: None,
+            served: Vec::new(),
+            columns_source: None,
             writer: None,
             prefs_loaded: false,
             active: false,

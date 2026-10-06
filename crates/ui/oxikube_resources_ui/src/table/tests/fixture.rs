@@ -83,6 +83,9 @@ fn actions_rig(
         .order(100),
     )
     .unwrap();
+    for spec in crate::crds::crd_row_actions() {
+        rows.register(spec).unwrap();
+    }
     ResourceActions::with_registry(&bus, sessions.clone(), "alice", &rows)
 }
 

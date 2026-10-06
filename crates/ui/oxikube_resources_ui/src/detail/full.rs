@@ -62,6 +62,7 @@ impl DetailView {
             }
         }
         self.rebuild(cx);
+        self.rebuild_schema();
     }
 
     /// Asks discovery whether each owner's kind is namespaced (once per kind), so the owner

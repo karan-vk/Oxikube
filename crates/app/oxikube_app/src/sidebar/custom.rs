@@ -4,8 +4,11 @@ use std::collections::BTreeMap;
 
 use oxikube_domain::OxiResult;
 use oxikube_domain::access::{AccessRequirement, is_builtin_api_group};
+use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_domain::kinds::Verb;
 use oxikube_ports::DiscoveryPort;
+
+use crate::store::CountTarget;
 
 /// One custom kind in a [`CustomResourceGroup`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -14,9 +17,25 @@ pub struct CustomKind {
     pub kind: String,
     /// The plural resource name (`applications`).
     pub plural: String,
+    /// The preferred served version (`v1alpha1`): the one the sidebar opens and counts.
+    pub version: String,
+    /// Whether the objects live in a namespace (how the namespace selection applies to them).
+    pub namespaced: bool,
 }
 
-/// The custom kinds of one API group (`argoproj.io`), sorted by kind.
+impl CustomKind {
+    /// The kind as a count target: what the `ResourceStore` reads when a feed for it is open.
+    pub fn count_target(&self, group: &str) -> CountTarget {
+        CountTarget::new(
+            Gvk::new(group, self.version.as_str(), self.kind.as_str()),
+            Scope::from_namespaced(self.namespaced),
+        )
+    }
+}
+
+/// The custom kinds of one API group (`argoproj.io`), sorted by kind. The sidebar's group row
+/// shows how many kinds there are; counting the objects of each is the `ResourceStore`'s job and
+/// only reads feeds that are open already.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomResourceGroup {
     /// The API group.
@@ -63,6 +82,8 @@ pub async fn discover_custom_resources(
                 .push(CustomKind {
                     kind: kind.gvk.kind.to_string(),
                     plural: kind.plural.clone(),
+                    version: kind.gvk.version.to_string(),
+                    namespaced: kind.namespaced,
                 });
         }
     }
