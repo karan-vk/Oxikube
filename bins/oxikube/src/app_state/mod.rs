@@ -9,6 +9,7 @@
 //! | cluster services | the state itself ([`ClusterServices`]: session manager, catalog, namespaces, integrations) | [`AppState::services`] |
 //! | command bus | set once by the main window's mount ([`CommandBus`] with its `MutationGuard`) | [`AppState::command_bus`] |
 //! | resource stores | set once by the main window's mount (`ResourceStores`: one `ResourceStore` per connected cluster) | [`AppState::resource_stores`] |
+//! | log service | set once by the main window's mount (`LogService`: the log sessions of every cluster, bounded by `logs.buffer_lines`) | [`AppState::log_service`] |
 //! | state db | `ports.state`: the SQLite adapter, opened off the UI thread | [`AppState::state`] |
 //! | settings | `oxikube_settings::SettingsStore` global | [`AppState::settings`] |
 //! | theme | `oxikube_theme::ThemeRegistry` + `ActiveTheme` globals | [`AppState::theme_registry`], [`AppState::active_theme`] |
@@ -49,6 +50,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use gpui::{App, Global};
+use oxikube_app::logs::LogService;
 use oxikube_app::{CommandBus, ResourceStores};
 use oxikube_keymap::KeymapStore;
 use oxikube_ports::StatePort;
@@ -76,6 +78,7 @@ pub struct AppState {
     services: ClusterServices,
     bus: OnceLock<CommandBus>,
     stores: OnceLock<Arc<ResourceStores>>,
+    logs: OnceLock<Arc<LogService>>,
     data_dir: Option<PathBuf>,
 }
 
@@ -95,6 +98,7 @@ impl AppState {
             ports,
             bus: OnceLock::new(),
             stores: OnceLock::new(),
+            logs: OnceLock::new(),
             data_dir,
         }
     }
@@ -168,6 +172,17 @@ impl AppState {
     /// Stores the resource stores. The first ones stay: `false` when some were set already.
     pub fn set_resource_stores(&self, stores: Arc<ResourceStores>) -> bool {
         self.stores.set(stores).is_ok()
+    }
+
+    /// The log service behind every log viewer, once the main window has been mounted (`None`
+    /// before). One per app: the sessions of every cluster share the `logs.buffer_lines` bound.
+    pub fn log_service(&self) -> Option<&Arc<LogService>> {
+        self.logs.get()
+    }
+
+    /// Stores the log service. The first one stays: `false` when one was set already.
+    pub fn set_log_service(&self, service: Arc<LogService>) -> bool {
+        self.logs.set(service).is_ok()
     }
 
     /// The state db port (`ports().state`). In the app it is the SQLite adapter, opened in the

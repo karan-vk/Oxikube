@@ -115,4 +115,5 @@ pub use selector::{LabelSelector, LabelTerm, SelectorError};
 pub use service::ResourceStore;
 pub use sort::{CellSortKey, SortField, SortKey};
 pub use spawn::Spawner;
+pub(crate) use spawn::{TaskGuard, spawn_guarded};
 pub use subscription::Subscription;

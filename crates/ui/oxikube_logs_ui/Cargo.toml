@@ -12,6 +12,21 @@ path = "src/oxikube_logs_ui.rs"
 doctest = false
 
 [dependencies]
+gpui.workspace = true
+oxikube_app.workspace = true
+oxikube_ports.workspace = true
+oxikube_runtime.workspace = true
+oxikube_settings.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+futures.workspace = true
+gpui = { workspace = true, features = ["test-support"] }
+oxikube_assets.workspace = true
+oxikube_testkit.workspace = true
+parking_lot.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

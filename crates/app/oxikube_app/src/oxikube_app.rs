@@ -21,6 +21,7 @@
 //! | [`actions`] | E07-S08 | row actions: [`RowActionRegistry`] / [`RowActions`] (the actions a table's context menu and the palette offer per kind, read from the `CommandBus` once), the `resource::Delete` handler, and [`DeleteFlow`] (plan and run a delete of one object or a selection through the guard, with per-object results) |
 //! | [`audit`] | E06-S02 | [`AuditLog`]: redacted, batched, fail-closed audit appends through `StatePort` |
 //! | [`store`] | E07-S01 | [`ResourceStore`]: the per-session cache over reflector, metadata and Table feeds keyed by (gvk, scope), ref-counted feeds with grace teardown and a [`FeedBudget`](store::FeedBudget) hook, in-app sort / filter / name-namespace-label indices, and [`Subscription`](store::Subscription) streams of coalesced [`StoreDelta`](store::StoreDelta)s; [`ResourceStores`] keeps one per connected session |
+//! | [`logs`] | E08-S01 | [`LogService`](logs::LogService): bounded, batched log sessions over the `LogPort` (`LogSession`, `LogBuffer` ring with seq index and a truncated marker, `LogDeltas`, `Connecting` / `Streaming` / `Ended` / `Failed`), cancelled on drop |
 //! | [`columns`] | E07-S02 | [`ColumnProvider`]: table columns and cells per kind. [`CoreColumns`] (a table-driven catalogue of ~40 core kinds; Ready / Status / Restarts from the domain view-models; CPU and memory as pending metrics hooks) and [`TableColumns`] (a Table feed's server columns, `priority > 0` as `wide`); [`Cell`]s carry text, a typed sort key and a tone |
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
@@ -31,6 +32,7 @@ pub mod columns;
 pub mod command_bus;
 pub mod guard;
 pub mod integrations;
+pub mod logs;
 pub mod session;
 pub mod sidebar;
 pub mod sources;

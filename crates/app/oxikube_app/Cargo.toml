@@ -54,6 +54,11 @@ harness = false
 name = "column_cell"
 harness = false
 
+# `cargo bench -p oxikube_app --bench log_ingest` (E08-S01): lines through a LogService session.
+[[bench]]
+name = "log_ingest"
+harness = false
+
 [features]
 default = []
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
