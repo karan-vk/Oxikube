@@ -30,11 +30,18 @@ tracing.workspace = true
 async-trait.workspace = true
 oxikube_testkit.workspace = true
 proptest.workspace = true
+# The kind smoke test (`tests/kind_smoke`, E06-S12) runs the app services over the real adapter.
+# Dev-dependencies are exempt from `lint-deps`; the production graph stays free of adapters.
+jiff.workspace = true
+k8s-openapi.workspace = true
+kube.workspace = true
+oxikube_kube.workspace = true
 
 [features]
 default = []
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
-integration = []
+# Forwards to the testkit helpers (a dev-dependency) that the integration tests import.
+integration = ["oxikube_testkit/integration"]
 
 [lints]
 workspace = true

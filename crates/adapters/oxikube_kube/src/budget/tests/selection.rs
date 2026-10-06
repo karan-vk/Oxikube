@@ -141,3 +141,21 @@ async fn a_refused_namespace_rolls_the_selection_back() {
     let stats = registry.stats();
     assert_eq!((stats.feeds, stats.subscribers), (2, 2));
 }
+
+/// The resource store re-scopes from a task on the runtime (`spawn_kube`): the future of
+/// `reselect` must be `Send` although the leases hold feed streams, which are not `Sync`.
+#[tokio::test(start_paused = true)]
+async fn reselecting_runs_on_a_spawned_task() {
+    let (registry, _source) = registry(roomy());
+    let mut lease = registry
+        .subscribe_selection(template(), Scope::Namespaced, &set(&["a"]))
+        .await
+        .unwrap();
+    let lease = tokio::spawn(async move {
+        lease.reselect(&set(&["b"])).await.unwrap();
+        lease
+    })
+    .await
+    .unwrap();
+    assert_eq!(lease.scope(), WatchScope::Namespaces(vec!["b".into()]));
+}
