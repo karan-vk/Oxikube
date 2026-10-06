@@ -7,26 +7,32 @@
 //! A consumer that falls behind therefore gets one larger batch, and once the pending ops
 //! outgrow the list they collapse into a snapshot, so memory stays bounded.
 //!
-//! Seeding (filling the index from a warm feed's cache on subscribe, and refilling it after a
-//! filter, sort or scope change) costs a pass over the cache and a full sort, so it never runs
-//! on the subscriber's thread: the part is registered as *unseeded* and [`seed`] does the work
-//! on the store's spawner. Until every part is seeded the stream holds its next item back, so a
-//! view keeps showing its previous rows instead of a half-filled list. A driver's change to an
-//! unseeded part is skipped: the cache already holds it when the seeding task reads it.
+//! Nothing that costs a pass over the cache or a full sort runs under the mailbox lock, because
+//! the UI thread takes that lock to poll. Seeding (filling the index from a warm feed's cache on
+//! subscribe, and refilling it after a filter, sort or scope change) and a bulk change (a relist)
+//! check the index out, rebuild it off the lock and check it back in (see `rebuild`). Seeding
+//! runs on the store's spawner, a bulk change on its feed's task. While the index is out, or a
+//! part is still unseeded, the stream holds its next item back, so a view keeps showing its
+//! previous rows instead of a half-filled list.
+
+mod rebuild;
+#[cfg(test)]
+mod tests;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Weak;
 use std::task::{Context, Poll, Waker};
 
 use parking_lot::Mutex;
 
 use super::cache::CacheChange;
 use super::delta::{FeedState, RowChange, RowOp, StoreDelta};
-use super::entry::{EntryState, FeedEntry};
+use super::entry::EntryState;
 use super::feed::TableColumns;
 use super::index::SortedIndex;
 use super::object::FeedScope;
 use super::query::{SortKey, StoreFilter, StoreQuery};
+use rebuild::Replay;
+pub(crate) use rebuild::seed;
 
 /// Pending ops beyond this share of the list (and [`MAX_PENDING_MIN`]) become a snapshot.
 const MAX_PENDING_DIVISOR: usize = 2;
@@ -38,11 +44,18 @@ pub(crate) struct SubShared {
 }
 
 struct SubState {
+    /// The index; an empty stand-in (same filter and sort) while it is checked out.
     index: SortedIndex,
     /// The parts (feeds) this subscriber reads and each one's state.
     parts: BTreeMap<FeedScope, FeedState>,
     /// Parts whose cached objects are not in the index yet (a seeding task is pending).
     unseeded: BTreeSet<FeedScope>,
+    /// Bumped whenever a rebuild is checked out or superseded.
+    generation: u64,
+    /// The generation of the rebuild that has the index checked out, if any.
+    building: Option<u64>,
+    /// Changes to seeded parts that arrived while the index was checked out.
+    replay: Vec<Replay>,
     columns: Option<TableColumns>,
     columns_dirty: bool,
     pending_ops: Vec<RowOp>,
@@ -92,6 +105,9 @@ impl SubShared {
                 index: SortedIndex::new(query.filter.clone(), query.sort.clone()),
                 parts: BTreeMap::new(),
                 unseeded: BTreeSet::new(),
+                generation: 0,
+                building: None,
+                replay: Vec::new(),
                 columns: None,
                 columns_dirty: false,
                 pending_ops: Vec::new(),
@@ -108,17 +124,47 @@ impl SubShared {
         self.inner.lock().state()
     }
 
-    /// A feed applied a batch.
+    /// A feed applied a batch (the caller holds that feed entry's lock).
+    ///
+    /// A small change is applied in place. A bulk change (a relist) checks the index out and
+    /// re-sorts it on this (the feed's) task, off the lock. While the index is out, a change
+    /// is queued for the rebuild to replay.
     pub fn apply_change(&self, part: &FeedScope, change: &CacheChange) {
-        let mut st = self.inner.lock();
-        if !st.parts.contains_key(part) || st.unseeded.contains(part) {
-            return;
-        }
+        let checkout = {
+            let mut st = self.inner.lock();
+            if !st.parts.contains_key(part) || st.unseeded.contains(part) {
+                return;
+            }
+            if st.building.is_some() {
+                st.replay.push(Replay::of(change));
+                return;
+            }
+            if change.restarted || st.index.is_bulk(change.len()) {
+                Self::check_out(&mut st)
+            } else {
+                Self::apply_in_place(&mut st, change);
+                return;
+            }
+        };
+        let mut checkout = checkout;
+        checkout
+            .index
+            .apply(&change.removed, &change.upserted, None);
+        checkout.index.resort();
+        self.check_in(checkout);
+    }
+
+    /// Applies a small change to the (sorted) index and queues its ops.
+    fn apply_in_place(st: &mut SubState, change: &CacheChange) {
         let st = &mut *st;
-        if st.pending_snapshot || change.restarted || st.index.is_bulk(change.len()) {
-            st.index.apply(&change.removed, &change.upserted, None);
-            st.index.resort();
-            st.snapshot_next();
+        if st.pending_snapshot {
+            // A snapshot goes out next anyway: keep the list sorted, drop the ops.
+            let mut ops = Vec::new();
+            st.index
+                .apply(&change.removed, &change.upserted, Some(&mut ops));
+            if !ops.is_empty() {
+                st.wake();
+            }
             return;
         }
         let before = st.pending_ops.len();
@@ -154,6 +200,7 @@ impl SubShared {
     /// cached objects is left for the seeding task.
     pub fn attach_part(&self, part: &FeedScope, entry: &EntryState) {
         let mut st = self.inner.lock();
+        Self::supersede(&mut st);
         st.parts.insert(part.clone(), entry.feed_state.clone());
         if !entry.cache.is_empty() {
             st.unseeded.insert(part.clone());
@@ -167,6 +214,7 @@ impl SubShared {
     /// Stops reading `part`: drops its rows (one pass, no re-sort).
     pub fn detach_part(&self, part: &FeedScope) {
         let mut st = self.inner.lock();
+        Self::supersede(&mut st);
         if st.parts.remove(part).is_some() {
             st.unseeded.remove(part);
             st.index.remove_part(part);
@@ -177,45 +225,20 @@ impl SubShared {
     /// Clears the index for a new filter or sort and leaves every part for the seeding task.
     pub fn reset(&self, filter: StoreFilter, sort: SortKey) {
         let mut st = self.inner.lock();
+        Self::supersede(&mut st);
         st.index.reset(filter, sort);
         st.unseeded = st.parts.keys().cloned().collect();
         st.snapshot_next();
     }
 
-    /// The parts waiting for the seeding task.
-    pub fn unseeded(&self) -> Vec<FeedScope> {
-        self.inner.lock().unseeded.iter().cloned().collect()
-    }
-
-    /// Fills the index with `part`'s cached objects that pass the filter (the caller holds the
-    /// entry's lock; `None` when the entry is gone). The list is re-sorted by [`Self::seeded`].
-    fn seed_part(&self, part: &FeedScope, entry: Option<&EntryState>) {
-        let mut st = self.inner.lock();
-        if !st.unseeded.remove(part) {
-            return;
-        }
-        let Some(entry) = entry else { return };
-        let seed: Vec<_> = entry
-            .cache
-            .matching(st.index.filter())
-            .into_iter()
-            .cloned()
-            .collect();
-        st.index.apply(&[], &seed, None);
-    }
-
-    /// The seeding task is done: sort once and hand out a snapshot.
-    fn seeded(&self) {
-        let mut st = self.inner.lock();
-        if st.unseeded.is_empty() {
-            st.index.resort();
-            st.snapshot_next();
-        }
+    /// Whether a part waits for a seeding task.
+    pub fn needs_seed(&self) -> bool {
+        !self.inner.lock().unseeded.is_empty()
     }
 
     pub fn poll(&self, cx: &mut Context<'_>) -> Poll<Option<StoreDelta>> {
         let mut st = self.inner.lock();
-        if !st.dirty || !st.unseeded.is_empty() {
+        if !st.dirty || !st.unseeded.is_empty() || st.building.is_some() {
             st.waker = Some(cx.waker().clone());
             return Poll::Pending;
         }
@@ -243,19 +266,4 @@ impl SubShared {
             len: st.index.len(),
         }))
     }
-}
-
-/// The seeding task: fills `shared`'s index from `parts`' caches, then sorts it once. It runs on
-/// the store's spawner and never awaits, so it is applied whole or (aborted) not at all.
-pub(crate) async fn seed(shared: Weak<SubShared>, parts: Vec<(FeedScope, Weak<FeedEntry>)>) {
-    let Some(shared) = shared.upgrade() else {
-        return;
-    };
-    for (part, entry) in parts {
-        match entry.upgrade() {
-            Some(entry) => shared.seed_part(&part, Some(&entry.state.lock())),
-            None => shared.seed_part(&part, None),
-        }
-    }
-    shared.seeded();
 }

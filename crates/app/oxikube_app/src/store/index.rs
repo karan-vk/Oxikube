@@ -227,6 +227,11 @@ impl SortedIndex {
         self.rows = rows;
     }
 
+    /// An empty index with the same filter and sort.
+    pub fn empty_like(&self) -> Self {
+        Self::new(self.filter.clone(), self.sort.clone())
+    }
+
     /// Clears everything and adopts a new filter and sort.
     pub fn reset(&mut self, filter: StoreFilter, sort: SortKey) {
         self.filter = filter;

@@ -76,20 +76,19 @@ impl Subscription {
         self.feeds.insert(part, entry);
     }
 
-    /// Hands every unseeded part to a seeding task on the store's spawner (replacing, and so
-    /// aborting, any earlier one: the new task covers its parts too).
+    /// When a part is unseeded, starts a seeding task on the store's spawner (replacing, and so
+    /// aborting, any earlier one). The task gets every part, since a rebuild it supersedes
+    /// leaves every part for it.
     fn spawn_seed(&mut self) {
+        if !self.shared.needs_seed() {
+            return;
+        }
         let parts: Vec<_> = self
-            .shared
-            .unseeded()
-            .into_iter()
-            .filter_map(|part| {
-                let entry = Arc::downgrade(self.feeds.get(&part)?);
-                Some((part, entry))
-            })
+            .feeds
+            .iter()
+            .map(|(part, entry)| (part.clone(), Arc::downgrade(entry)))
             .collect();
-        self.seeding = (!parts.is_empty())
-            .then(|| self.store.spawn(seed(Arc::downgrade(&self.shared), parts)));
+        self.seeding = Some(self.store.spawn(seed(Arc::downgrade(&self.shared), parts)));
     }
 
     /// The query as it stands now (after any filter, sort or scope change).
