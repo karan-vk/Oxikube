@@ -7,6 +7,7 @@ mod close;
 mod connect_ui;
 mod layout;
 mod restore;
+mod restore_races;
 mod switch;
 mod tabs;
 

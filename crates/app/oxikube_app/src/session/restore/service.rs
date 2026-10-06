@@ -12,6 +12,7 @@ use super::config::{RestoreConfig, RestoreConnect};
 use super::plan::RestorePlan;
 use super::report::{ConnectOutcome, RestoreReport};
 use super::saved::ClusterTabsStore;
+use super::skips::RestoreSkips;
 use crate::session::ClusterSessionManager;
 use crate::session::namespaces::NamespaceService;
 
@@ -30,6 +31,7 @@ pub struct SessionRestorer {
     source: Arc<dyn ClusterSourcePort>,
     store: ClusterTabsStore,
     config: RestoreConfig,
+    skips: RestoreSkips,
 }
 
 impl SessionRestorer {
@@ -48,7 +50,15 @@ impl SessionRestorer {
             source,
             store,
             config,
+            skips: RestoreSkips::default(),
         }
+    }
+
+    /// The clusters the restore must leave alone. The window adds a cluster when the user closes
+    /// its placeholder tab while it waits in the queue; without that the restore would connect
+    /// it anyway, and its tab would come back. Shared by every clone of this restorer.
+    pub fn skips(&self) -> RestoreSkips {
+        self.skips.clone()
     }
 
     /// Reads the saved session and reopens its clusters, in tab order, as `Disconnected`
@@ -94,7 +104,8 @@ impl SessionRestorer {
     /// [`concurrency`](RestoreConfig::concurrency) at a time, plus one more for clusters whose
     /// credential plugin may prompt (those connect strictly one after another). Each attempt has
     /// its own timeout and its own outcome: a failing or slow cluster never delays or fails another, and a
-    /// cluster the user already connected is left alone. With [`RestoreConnect::Active`] and no
+    /// cluster the user already connected, or closed
+    /// the placeholder of while it queued ([`skips`](Self::skips)), is left alone. With [`RestoreConnect::Active`] and no
     /// displayed cluster nothing connects.
     ///
     /// Dropping the future cancels the attempts that are still running.
@@ -151,6 +162,11 @@ impl SessionRestorer {
         let Some(session) = self.sessions.get(&cluster) else {
             return skipped(ClusterSessionState::Disconnected);
         };
+        // Checked when the cluster's turn comes, right before the connect starts: the user may
+        // have closed its placeholder while it waited for a slot.
+        if self.skips.is_skipped(&cluster) {
+            return skipped(session.state().clone());
+        }
         if session.phase() != SessionPhase::Disconnected {
             return skipped(session.state().clone());
         }

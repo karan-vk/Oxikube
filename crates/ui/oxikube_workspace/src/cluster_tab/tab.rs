@@ -263,16 +263,8 @@ impl Render for ClusterTab {
 /// is doing. Real content (the sidebar, the first views) replaces it as later stories land.
 fn placeholder(info: &ClusterTabInfo, cx: &App) -> impl IntoElement {
     let colors = cx.colors();
-    let status = match &info.state {
-        ClusterSessionState::Disconnected => "Disconnected".to_owned(),
-        ClusterSessionState::Connecting => "Connecting…".to_owned(),
-        ClusterSessionState::Ready => "Connected".to_owned(),
-        ClusterSessionState::Degraded => "Connected, health checks are failing".to_owned(),
-        ClusterSessionState::AuthRequired { reason } => {
-            format!("Authentication required: {reason}")
-        }
-        ClusterSessionState::Error { reason } => format!("Connection failed: {reason}"),
-    };
+    let status = status_text(&info.state);
+    let phase = format!("{:?}", info.state.phase()).to_lowercase();
     v_flex()
         .id("cluster-placeholder")
         .debug_selector(|| format!("cluster-placeholder-{}", info.title))
@@ -290,6 +282,22 @@ fn placeholder(info: &ClusterTabInfo, cx: &App) -> impl IntoElement {
             div()
                 .text_color(colors.text_muted)
                 .text_size(u(px(13.)))
+                // Keyed by phase, so a test can tell which state the placeholder draws.
+                .debug_selector(|| format!("cluster-placeholder-{phase}-{}", info.title))
                 .child(status),
         )
+}
+
+/// What a placeholder says about the session `state`.
+pub(super) fn status_text(state: &ClusterSessionState) -> String {
+    match state {
+        ClusterSessionState::Disconnected => "Disconnected".to_owned(),
+        ClusterSessionState::Connecting => "Connecting…".to_owned(),
+        ClusterSessionState::Ready => "Connected".to_owned(),
+        ClusterSessionState::Degraded => "Connected, health checks are failing".to_owned(),
+        ClusterSessionState::AuthRequired { reason } => {
+            format!("Authentication required: {reason}")
+        }
+        ClusterSessionState::Error { reason } => format!("Connection failed: {reason}"),
+    }
 }

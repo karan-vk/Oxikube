@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use gpui::TestAppContext;
+use gpui::{Entity, TestAppContext};
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::session::restore::{ClusterTabsStore, RestoreConfig, SavedTabs, SessionRestorer};
 use oxikube_domain::OxiError;
@@ -13,20 +13,20 @@ use oxikube_settings::Settings as _;
 
 use super::*;
 use crate::cluster_tab::{RestoreConnectSetting, SessionRestoreSettings};
-use crate::persistence::{MAIN_WINDOW_ID, SAVE_DEBOUNCE};
+use crate::persistence::{LayoutPersistence, MAIN_WINDOW_ID, SAVE_DEBOUNCE};
 
-const TIMEOUT: Duration = Duration::from_secs(30);
+pub(super) const TIMEOUT: Duration = Duration::from_secs(30);
 
 /// A fixture whose state holds a saved session, with `session.restore` set as asked.
-struct Restore {
-    fx: Fixture,
-    restorer: SessionRestorer,
+pub(super) struct Restore {
+    pub(super) fx: Fixture,
+    pub(super) restorer: SessionRestorer,
     _config: tempfile::TempDir,
 }
 
 impl Restore {
     /// A window over contexts `names` and a saved session `open` with `active` displayed.
-    fn new(
+    pub(super) fn new(
         cx: &mut TestAppContext,
         names: &[&str],
         open: &[&str],
@@ -68,11 +68,16 @@ impl Restore {
     }
 
     /// Starts the restore, as the window does once it is up.
-    fn start(&mut self) {
+    pub(super) fn start(&mut self) {
+        self.start_after(None);
+    }
+
+    /// [`Self::start`] with the layout restore the window would wait for.
+    pub(super) fn start_after(&mut self, layout: Option<Entity<LayoutPersistence>>) {
         let (tabs, restorer) = (self.fx.tabs.clone(), self.restorer.clone());
         self.fx.vcx.update(|window, cx| {
             tabs.update(cx, |tabs, cx| {
-                tabs.restore_session(restorer, None, window, cx)
+                tabs.restore_session(restorer, layout, window, cx)
             })
         });
         // The task runs up to the frame it waits for.
@@ -80,7 +85,7 @@ impl Restore {
     }
 
     /// Draws a frame, then lets everything that was waiting for it run.
-    fn first_frame(&mut self) {
+    pub(super) fn first_frame(&mut self) {
         self.fx.vcx.update(|window, cx| {
             window.draw(cx).clear(cx);
             // Tests have no platform frame loop: deliver the frame the restore waits for.
@@ -89,16 +94,16 @@ impl Restore {
         self.fx.vcx.run_until_parked();
     }
 
-    fn draw(&mut self) {
+    pub(super) fn draw(&mut self) {
         self.fx.vcx.update(|window, cx| window.draw(cx).clear(cx));
     }
 
-    fn start_and_draw(&mut self) {
+    pub(super) fn start_and_draw(&mut self) {
         self.start();
         self.first_frame();
     }
 
-    fn connects(&self) -> Vec<String> {
+    pub(super) fn connects(&self) -> Vec<String> {
         self.fx
             .connector
             .recorded_calls()
@@ -107,25 +112,25 @@ impl Restore {
             .collect()
     }
 
-    fn state_of(&mut self, name: &str) -> ClusterSessionState {
+    pub(super) fn state_of(&mut self, name: &str) -> ClusterSessionState {
         self.fx
             .tab(name)
             .update(&mut self.fx.vcx, |tab, _| tab.info().state.clone())
     }
 
-    fn placeholder(&mut self, name: &str) -> bool {
+    pub(super) fn placeholder(&mut self, name: &str) -> bool {
         let (tabs, cluster) = (self.fx.tabs.clone(), id(name));
         self.fx
             .vcx
             .update(|_, cx| tabs.read(cx).is_placeholder(&cluster))
     }
 
-    fn saved(&self) -> Option<SavedTabs> {
+    pub(super) fn saved(&self) -> Option<SavedTabs> {
         let store = ClusterTabsStore::new(self.fx.state.clone(), MAIN_WINDOW_ID).expect("store");
         block_on(store.load()).expect("load")
     }
 
-    fn toasts(&mut self) -> Vec<String> {
+    pub(super) fn toasts(&mut self) -> Vec<String> {
         let ws = self.fx.ws.clone();
         self.fx.vcx.update(|_, cx| {
             ws.read(cx)
@@ -216,8 +221,17 @@ fn placeholder_tabs_appear_in_order_before_any_connect_completes(cx: &mut TestAp
 
     // The placeholder says so on screen.
     r.draw();
-    let shown = r.fx.vcx.debug_bounds("cluster-placeholder-a").is_some();
-    assert!(shown, "the displayed tab draws its connecting placeholder");
+    let shown = r.fx.vcx.debug_bounds("cluster-placeholder-connecting-a");
+    assert!(
+        shown.is_some(),
+        "the displayed tab draws its connecting state"
+    );
+    assert!(
+        r.fx.vcx
+            .debug_bounds("cluster-placeholder-disconnected-a")
+            .is_none(),
+        "and no other"
+    );
 
     r.fx.connector.release();
     r.fx.vcx.run_until_parked();
@@ -309,8 +323,16 @@ fn a_failed_cluster_shows_its_error_in_its_own_tab_and_the_others_connect(cx: &m
     assert_eq!(r.fx.open_names(), ["a", "b", "c"], "the failed tab stays");
     r.draw();
     assert!(
-        r.fx.vcx.debug_bounds("cluster-placeholder-a").is_some(),
+        r.fx.vcx
+            .debug_bounds("cluster-placeholder-error-a")
+            .is_some(),
         "the failed tab draws its error state"
+    );
+    assert!(
+        r.fx.vcx
+            .debug_bounds("cluster-placeholder-connecting-a")
+            .is_none(),
+        "and not the connecting one"
     );
 }
 

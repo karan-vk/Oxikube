@@ -127,3 +127,29 @@ fn clusters_whose_credentials_may_prompt_connect_one_at_a_time() {
             .all(|n| h.phase(n) == SessionPhase::Ready)
     );
 }
+
+#[test]
+fn a_cluster_dismissed_while_queued_is_never_connected() {
+    let h = Harness::with_config(RestoreConfig {
+        concurrency: 1,
+        ..RestoreConfig::default()
+    });
+    let plan = prepared(&h, &["a", "b", "c"], Some("a"));
+    h.connector.hold();
+
+    // `a` holds the only slot, `b` and `c` wait for it.
+    let mut fut = pin!(h.restorer.connect(&plan, RestoreConnect::All));
+    assert!(!poll_once(&mut fut));
+    assert_eq!(h.connects(), ["a"]);
+
+    // The user closes the placeholder of `b` while it still waits.
+    h.restorer.skips().skip(&id("b"));
+    h.connector.release();
+    let report = block_on(fut);
+
+    assert_eq!(h.connects(), ["a", "c"], "b was never connected");
+    assert_eq!(h.phase("b"), SessionPhase::Disconnected);
+    assert_eq!(h.phase("c"), SessionPhase::Ready);
+    let b = report.outcome(&id("b")).expect("outcome");
+    assert!(!b.attempted && !b.failed());
+}

@@ -18,6 +18,8 @@
 //!    [`RestoreConnect::All`] the others too, two at a time. By default the others stay
 //!    `Disconnected` placeholders and connect when their tab is first shown.
 //!
+//! A cluster the user dismisses while it is still queued ([`RestoreSkips`]) is never connected.
+//!
 //! Failures are isolated per cluster: every connect has its own deadline
 //! ([`ClusterSessionManager::connect_with_deadline`]) and its own outcome, a slow VPN cluster
 //! holds only its own concurrency slot, and a failure is that cluster's `Error` state, shown in
@@ -31,6 +33,7 @@ mod plan;
 mod report;
 mod saved;
 mod service;
+mod skips;
 
 #[cfg(test)]
 mod tests;
@@ -40,3 +43,4 @@ pub use plan::{DroppedCluster, RestorePlan};
 pub use report::{ConnectOutcome, RestoreReport};
 pub use saved::{CLUSTER_TABS_TABLE, CLUSTER_TABS_VERSION, ClusterTabsStore, SavedTabs};
 pub use service::SessionRestorer;
+pub use skips::RestoreSkips;

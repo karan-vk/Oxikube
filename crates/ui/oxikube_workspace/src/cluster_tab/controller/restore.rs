@@ -17,7 +17,9 @@
 //! 5. A cluster that fails shows `Error` (or `AuthRequired`) in its own tab and affects no other.
 //!
 //! A placeholder stays until its cluster connects (then it is an ordinary tab) or the user closes
-//! it (no disconnect to send: it is not connected).
+//! it (no disconnect to send: it is not connected). Closing one that the restore has queued also
+//! tells the restore to skip it ([`RestoreSkips`](oxikube_app::session::restore::RestoreSkips)),
+//! so the cluster is not connected and its tab does not come back.
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -54,6 +56,7 @@ impl ClusterTabs {
         if !SessionRestoreSettings::try_get(cx).is_some_and(|settings| settings.restore) {
             return;
         }
+        self.restore_skips = Some(restorer.skips());
         // Held in a field and only replaced from outside the task, never cleared by it.
         self.restore_task = Some(cx.spawn_in(window, async move |this, cx| {
             // Nothing below runs before the first frame is on screen and the layout is back.

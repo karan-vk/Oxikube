@@ -10,6 +10,7 @@
 use gpui::{AppContext as _, Context, Window};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::session::SessionPhase;
 
 use super::ClusterTabs;
 use crate::{
@@ -39,11 +40,27 @@ impl ClusterTabs {
         let Some(entry) = self.tabs.get(cluster) else {
             return;
         };
-        if self.pending.remove(cluster) {
-            // A restored placeholder: nothing is connected, so there is nothing to disconnect or
-            // to lose. The session stays open (and disconnected) in the catalog.
-            self.close_tab_now(cluster, window, cx);
-            return;
+        if self.pending.contains(cluster) {
+            // A restored placeholder is not connected: nothing to disconnect or to lose. The
+            // restore's queue is told first, so it never connects the cluster the user dismissed
+            // (its session is still `Disconnected` and would be picked up, and `follow` would
+            // reopen the tab).
+            if let Some(skips) = &self.restore_skips {
+                skips.skip(cluster);
+            }
+            // A connect that won the race (the session moved on, its update not applied yet) makes
+            // this an ordinary tab after all: it disconnects below.
+            let still_disconnected = self
+                .deps
+                .sessions
+                .get(cluster)
+                .is_none_or(|session| session.phase() == SessionPhase::Disconnected);
+            self.pending.remove(cluster);
+            if still_disconnected {
+                // The session stays open (and disconnected) in the catalog.
+                self.close_tab_now(cluster, window, cx);
+                return;
+            }
         }
         let operations = self.running_operations(cluster, cx);
         if operations.is_empty() {

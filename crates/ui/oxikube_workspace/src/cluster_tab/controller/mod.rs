@@ -45,6 +45,7 @@ use gpui::{
     Window, WindowId,
 };
 use indexmap::IndexMap;
+use oxikube_app::session::restore::RestoreSkips;
 use oxikube_app::{ClusterSession, ClusterSessionManager};
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::StatePort;
@@ -154,6 +155,8 @@ pub struct ClusterTabs {
     pending: HashSet<ClusterId>,
     /// The cluster the restore itself connects first; its tab is not connected again on display.
     restore_active: Option<ClusterId>,
+    /// Told when a placeholder is closed, so the restore's queue does not connect it anyway.
+    restore_skips: Option<RestoreSkips>,
     /// The restore: held here, replaced only from outside (never cleared by the task itself).
     restore_task: Option<Task<()>>,
     /// Applies session updates. Lives as long as the controller.
@@ -232,6 +235,7 @@ impl ClusterTabs {
                 save: DebouncedSave::default(),
                 pending: HashSet::new(),
                 restore_active: None,
+                restore_skips: None,
                 restore_task: None,
                 _watch_sessions: watch_sessions,
                 _watch_commands: watch_commands,
