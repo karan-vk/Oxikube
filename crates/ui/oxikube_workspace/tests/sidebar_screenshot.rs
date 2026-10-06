@@ -88,6 +88,11 @@ fn render(tokens: Tokens, restricted: bool) -> anyhow::Result<RgbaImage> {
         namespaced: true,
     }]);
     sessions.open(&context, Default::default());
+    // The rules review of All namespaces cannot judge a restricted user, so a namespace is chosen.
+    sessions.set_namespace_selection(
+        &context.cluster,
+        oxikube_domain::session::NamespaceSelection::single("dev"),
+    )?;
     block_on(sessions.connect(&context.cluster))?;
 
     let deps = SidebarDeps {

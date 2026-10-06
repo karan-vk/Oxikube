@@ -1,6 +1,6 @@
 //! Opening and closing groups, the highlight, and activating rows.
 
-use gpui::{AppContext as _, Context, ScrollStrategy, SharedString};
+use gpui::{Context, ScrollStrategy, SharedString};
 
 use super::{SidebarEvent, SidebarPanel};
 use crate::sidebar::rows::Row;
@@ -29,7 +29,7 @@ impl SidebarPanel {
         if self.is_open(id) != open {
             self.open.insert(id.to_owned(), open);
             self.rebuild(cx);
-            self.save(cx);
+            self.save();
         }
         true
     }
@@ -110,18 +110,12 @@ impl SidebarPanel {
         }
     }
 
-    /// Writes the user's open and closed choices, off the UI thread. The write is detached: it
-    /// finishes even when the cluster's tab closes right after the click.
-    fn save(&mut self, cx: &mut Context<Self>) {
-        let Some(store) = self.store.clone() else {
-            return;
-        };
-        let open = self.open.clone();
-        cx.background_spawn(async move {
-            if let Err(error) = store.save(&open).await {
-                tracing::warn!(%error, "saving the sidebar state failed");
-            }
-        })
-        .detach();
+    /// Queues the user's open and closed choices for writing. The writer task is off the UI
+    /// thread, writes in the order of the toggles, and finishes even when the cluster's tab closes
+    /// right after the click.
+    fn save(&mut self) {
+        if let Some(writer) = &self.writer {
+            writer.save(self.open.clone());
+        }
     }
 }

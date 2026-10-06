@@ -6,6 +6,7 @@ mod panel;
 mod registry;
 mod rows;
 mod tabs;
+mod writer;
 
 use std::sync::Arc;
 
@@ -126,6 +127,18 @@ impl Fixture {
             integrations,
             cluster,
         }
+    }
+
+    /// Selects the namespace `name` (the rules review of All namespaces cannot hide anything, so a
+    /// restricted user is only judged precisely once a namespace is chosen).
+    pub(super) fn select_namespace(&mut self, name: &str) {
+        self.sessions
+            .set_namespace_selection(
+                &self.cluster,
+                oxikube_domain::session::NamespaceSelection::single(name),
+            )
+            .expect("open session");
+        self.vcx.run_until_parked();
     }
 
     /// Connects `prod` and lets the sidebar react (reviews, discovery).

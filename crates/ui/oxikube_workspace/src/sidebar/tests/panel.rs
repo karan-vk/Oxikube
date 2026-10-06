@@ -56,6 +56,7 @@ fn before_connecting_only_the_overview_shows(cx: &mut TestAppContext) {
 #[gpui::test]
 fn ready_is_not_delayed_by_the_review_and_visibility_follows_it(cx: &mut TestAppContext) {
     let mut fx = Fixture::open(cx, can_list(&[("", "pods"), ("", "services")]));
+    fx.select_namespace("dev");
     // The connect future resolves (Ready) without the sidebar's review having run.
     futures::executor::block_on(fx.sessions.connect(&fx.cluster)).expect("connect");
     assert!(fx.sessions.get(&fx.cluster).unwrap().is_connected());
@@ -126,9 +127,9 @@ fn changing_the_namespace_selection_recomputes_visibility(cx: &mut TestAppContex
         .set_namespace_rules("ops", can_list(&[("", "secrets")]));
     fx.connect();
     assert_eq!(
-        fx.sections(),
-        ["cluster"],
-        "All namespaces: nothing granted"
+        fx.sections().len(),
+        10,
+        "All namespaces: the review only sees one probe namespace, so nothing is hidden"
     );
 
     let select = |fx: &mut Fixture, names: &[&str]| {
@@ -153,14 +154,15 @@ fn changing_the_namespace_selection_recomputes_visibility(cx: &mut TestAppContex
     select(&mut fx, &["dev", "ops"]);
     assert_eq!(fx.sections(), ["cluster", "workloads", "config", "helm"]);
 
-    // Back to all namespaces.
+    // Back to all namespaces: unknown again, so everything shows.
     select(&mut fx, &[]);
-    assert_eq!(fx.sections(), ["cluster"]);
+    assert_eq!(fx.sections().len(), 10);
 }
 
 #[gpui::test]
 fn a_reconnect_reviews_again(cx: &mut TestAppContext) {
     let mut fx = Fixture::open(cx, can_list(&[("", "pods")]));
+    fx.select_namespace("dev");
     fx.connect();
     assert_eq!(fx.sections(), ["cluster", "workloads"]);
 

@@ -33,6 +33,7 @@ use super::actions::Toggle;
 use super::rows::{AccessState, Row};
 use super::section::{SidebarSection, SidebarTarget};
 use super::store::SidebarStore;
+use super::writer::SidebarWriter;
 use crate::panel::{DockPosition, Panel, PanelEvent};
 
 mod follow;
@@ -81,6 +82,8 @@ pub struct SidebarPanel {
     /// The entry last navigated to.
     selected: Option<SharedString>,
     store: Option<SidebarStore>,
+    /// Writes the open and closed choices in order; `None` when there is no store.
+    writer: Option<SidebarWriter>,
     review_task: Option<Task<()>>,
     discovery_task: Option<Task<()>>,
     load_task: Option<Task<()>>,
@@ -194,6 +197,7 @@ impl SidebarPanel {
                     None
                 }
             };
+            let writer = store.clone().map(|store| SidebarWriter::spawn(store, cx));
             let mut this = Self {
                 cluster,
                 deps,
@@ -208,6 +212,7 @@ impl SidebarPanel {
                 highlighted: None,
                 selected: None,
                 store,
+                writer,
                 review_task: None,
                 discovery_task: None,
                 load_task: None,

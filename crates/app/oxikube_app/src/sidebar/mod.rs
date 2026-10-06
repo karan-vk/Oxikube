@@ -3,7 +3,7 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `review` | [`review_access`]: one rules review per selected namespace, merged; [`AccessOutcome`] |
+//! | `review` | [`review_access`]: one rules review per selected namespace, merged (partial under All); [`AccessOutcome`] |
 //! | `custom` | [`discover_custom_resources`]: CRD kinds from discovery, grouped by API group |
 //!
 //! # Visibility rule
@@ -21,11 +21,12 @@
 //!
 //! # Reviews
 //!
-//! `review_access` asks for the cluster-wide rules (cluster-scoped grants such as `nodes` and
-//! `namespaces` appear in every answer) and, for a selection of named namespaces, for each of
-//! them, and unions the answers: a section is shown if any selected namespace allows it. It is
-//! plain async over the [`AccessReviewPort`]; the caller runs it on the Tokio bridge after the
-//! session is `Ready`, so it never delays connect.
+//! `review_access` asks, for a selection of named namespaces, for each of them (cluster-scoped
+//! grants such as `nodes` and `namespaces` appear in every answer) and unions the answers: a
+//! section is shown if any selected namespace allows it. Under `All` it asks cluster-wide, which
+//! only sees one probe namespace's Roles, so the answer is marked partial and nothing is hidden
+//! that it did not list. It is plain async over the [`AccessReviewPort`]; the caller runs it on
+//! the Tokio bridge after the session is `Ready`, so it never delays connect.
 //!
 //! [`AccessReviewPort`]: oxikube_ports::AccessReviewPort
 

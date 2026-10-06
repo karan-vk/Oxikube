@@ -8,6 +8,7 @@
 //! | `rows` | the flat row list and the visibility rules ([`build_rows`]), pure |
 //! | `panel` | [`SidebarPanel`]: the dock panel that follows the session and draws the rows |
 //! | `store` | [`SidebarStore`]: open and closed groups, saved per cluster in the `StatePort` |
+//! | `writer` | the one task that writes that state, in order |
 //! | `actions` | the panel's key bindings |
 //!
 //! # Sections and visibility
@@ -40,6 +41,7 @@ mod registry;
 mod rows;
 mod section;
 mod store;
+mod writer;
 
 #[cfg(test)]
 mod tests;

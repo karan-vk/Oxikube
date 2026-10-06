@@ -67,6 +67,15 @@ fn every_cluster_tab_gets_its_own_sidebar_with_its_own_permissions(cx: &mut Test
         vcx.run_until_parked();
     }
 
+    // All namespaces cannot judge a restricted user; a chosen namespace can.
+    sessions
+        .set_namespace_selection(
+            &id("prod"),
+            oxikube_domain::session::NamespaceSelection::single("dev"),
+        )
+        .expect("open session");
+    vcx.run_until_parked();
+
     let sections = |name: &str, vcx: &mut gpui::VisualTestContext| -> Vec<String> {
         let tab = vcx.update(|_, cx| tabs.read(cx).tab(&id(name)).cloned().expect("a tab"));
         vcx.update(|_, cx| {

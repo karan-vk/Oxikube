@@ -21,7 +21,7 @@ fn grant_list(group: &str, resource: &str) -> AccessRules {
 #[test]
 fn a_restricted_user_is_offered_only_what_they_may_list() {
     let access = FakeAccessReviewPort::new().with_rules(grant_list("", "pods"));
-    let outcome = block_on(review_access(&access, &NamespaceSelection::All));
+    let outcome = block_on(review_access(&access, &NamespaceSelection::single("dev")));
     assert!(outcome.offers(&list("", "pods")));
     assert!(!outcome.offers(&list("", "secrets")));
     assert!(!outcome.offers(&list("", "nodes")));
@@ -72,7 +72,7 @@ fn a_partial_review_never_hides_what_it_did_not_list() {
 }
 
 #[test]
-fn all_namespaces_asks_once_and_a_set_asks_for_each_namespace_too() {
+fn all_namespaces_asks_once_and_a_set_asks_only_for_its_namespaces() {
     let access = FakeAccessReviewPort::new();
     block_on(review_access(&access, &NamespaceSelection::All));
     assert_eq!(access.recorded_calls(), [AccessCall::Rules(None)]);
@@ -85,11 +85,44 @@ fn all_namespaces_asks_once_and_a_set_asks_for_each_namespace_too() {
     assert_eq!(
         access.recorded_calls(),
         [
-            AccessCall::Rules(None),
             AccessCall::Rules(Some("a".into())),
             AccessCall::Rules(Some("b".into())),
-        ]
+        ],
+        "no cluster-wide ask: it would read the probe namespace's Roles"
     );
+}
+
+#[test]
+fn another_namespaces_grants_do_not_leak_into_the_selection() {
+    // What a cluster-wide ask returns is the probe namespace's (`default`) rules: a Role there
+    // that lists pods. The user selected `team-b`, where they may list nothing.
+    let access = FakeAccessReviewPort::new()
+        .with_rules(grant_list("", "pods"))
+        .with_namespace_rules("team-b", AccessRules::none());
+    let outcome = block_on(review_access(
+        &access,
+        &NamespaceSelection::single("team-b"),
+    ));
+    assert!(
+        !outcome.offers(&list("", "pods")),
+        "default's Role is not team-b's"
+    );
+}
+
+#[test]
+fn all_namespaces_never_hides_what_the_probe_namespace_did_not_grant() {
+    // A Role bound only in `dev`: the cluster-wide review (in `default`) lists nothing.
+    let access = FakeAccessReviewPort::new().with_rules(AccessRules::none());
+    let outcome = block_on(review_access(&access, &NamespaceSelection::All));
+    assert!(matches!(&outcome, AccessOutcome::Reviewed(rules) if rules.partial));
+    assert!(
+        outcome.offers(&list("", "pods")),
+        "unknown is shown, not hidden"
+    );
+    assert!(outcome.offers(&list("apps", "deployments")));
+    // Naming a namespace gives the precise answer.
+    let dev = block_on(review_access(&access, &NamespaceSelection::single("dev")));
+    assert!(!dev.offers(&list("", "pods")));
 }
 
 #[test]
@@ -122,7 +155,10 @@ fn one_failing_namespace_review_fails_open() {
         .script()
         .rules
         .push_err(OxiError::forbidden("rules review denied"));
-    let outcome = block_on(review_access(&access, &NamespaceSelection::single("dev")));
+    let outcome = block_on(review_access(
+        &access,
+        &NamespaceSelection::from_names(["dev", "ops"]),
+    ));
     assert!(outcome.warning().is_some());
     assert!(outcome.offers(&list("", "pods")));
 }
