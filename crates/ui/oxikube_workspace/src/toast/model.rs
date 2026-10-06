@@ -50,11 +50,6 @@ impl ToastAction {
             handler: Rc::new(handler),
         }
     }
-
-    /// The button label.
-    pub fn label(&self) -> &SharedString {
-        &self.label
-    }
 }
 
 /// A message for the toast layer. Build one with [`Toast::info`] and friends.
@@ -132,26 +127,6 @@ impl Toast {
         self.timeout = None;
         self
     }
-
-    /// The deduplication key.
-    pub fn dedup_key(&self) -> Option<&SharedString> {
-        self.key.as_ref()
-    }
-
-    /// The level.
-    pub fn level(&self) -> ToastLevel {
-        self.level
-    }
-
-    /// The message.
-    pub fn message(&self) -> &SharedString {
-        &self.message
-    }
-
-    /// The timeout, `None` for a persistent toast.
-    pub fn timeout_value(&self) -> Option<Duration> {
-        self.timeout
-    }
 }
 
 /// Identifies a toast while it is shown or waiting.
@@ -179,8 +154,6 @@ pub(super) struct Pushed {
     pub(super) id: ToastId,
     /// The toast is on screen now (its timeout should start).
     pub(super) visible: bool,
-    /// An existing toast with the same key was updated.
-    pub(super) replaced: bool,
 }
 
 /// Which toasts are visible (at most `max_visible`, oldest first) and which wait their turn.
@@ -235,7 +208,6 @@ impl ToastQueue {
                 return Pushed {
                     id: entry.id,
                     visible: true,
-                    replaced: true,
                 };
             }
             if let Some(entry) = self
@@ -248,7 +220,6 @@ impl ToastQueue {
                 return Pushed {
                     id: entry.id,
                     visible: false,
-                    replaced: true,
                 };
             }
         }
@@ -266,11 +237,7 @@ impl ToastQueue {
         } else {
             self.pending.push_back(entry);
         }
-        Pushed {
-            id,
-            visible,
-            replaced: false,
-        }
+        Pushed { id, visible }
     }
 
     /// Removes a toast (visible or waiting) and promotes waiting toasts into the free slots.
@@ -295,11 +262,6 @@ impl ToastQueue {
             Some(id) => (Some(id), self.dismiss(id).1),
             None => (None, Vec::new()),
         }
-    }
-
-    pub(super) fn clear(&mut self) {
-        self.visible.clear();
-        self.pending.clear();
     }
 
     /// Changes the visible limit; returns the toasts that became visible.
@@ -374,7 +336,7 @@ mod tests {
         let generation = queue.get(first.id).unwrap().generation;
         let second = queue.push(keyed("k", "two"));
         assert_eq!(second.id, first.id);
-        assert!(second.replaced && second.visible);
+        assert!(second.visible);
         assert_eq!(visible_messages(&queue), ["two"]);
         assert!(queue.get(first.id).unwrap().generation > generation);
     }
@@ -385,7 +347,7 @@ mod tests {
         queue.push(Toast::info("front"));
         let waiting = queue.push(keyed("k", "old"));
         let again = queue.push(keyed("k", "new"));
-        assert!(!waiting.visible && !again.visible && again.replaced);
+        assert!(!waiting.visible && !again.visible);
         assert_eq!(again.id, waiting.id);
         assert_eq!(queue.pending().next().unwrap().toast.message, "new");
         assert_eq!(queue.pending_len(), 1);
@@ -433,11 +395,9 @@ mod tests {
         );
         assert_eq!(ToastLevel::Error.default_timeout(), None);
         assert_eq!(
-            Toast::error("x")
-                .timeout(Duration::from_secs(1))
-                .timeout_value(),
+            Toast::error("x").timeout(Duration::from_secs(1)).timeout,
             Some(Duration::from_secs(1))
         );
-        assert_eq!(Toast::info("x").persistent().timeout_value(), None);
+        assert_eq!(Toast::info("x").persistent().timeout, None);
     }
 }

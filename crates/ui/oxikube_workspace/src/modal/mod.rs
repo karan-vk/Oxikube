@@ -185,6 +185,18 @@ impl ModalLayer {
     pub fn is_focused(&self, window: &Window, cx: &App) -> bool {
         self.active.is_some() && self.focus_handle.contains_focused(window, cx)
     }
+
+    /// Tab / Shift-Tab: stay inside the modal.
+    fn cycle_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(active) = &self.active else {
+            return;
+        };
+        let modal = active.view.focus_handle(cx);
+        if !focus::cycle(&self.focus_handle, forward, window, cx) {
+            // No tab stop in the modal at all: keep focus on the modal itself.
+            modal.focus(window, cx);
+        }
+    }
 }
 
 impl Focusable for ModalLayer {
@@ -222,10 +234,10 @@ impl Render for ModalLayer {
             .on_action(cx.listener(|this, _: &Cancel, window, cx| {
                 this.hide_modal(window, cx);
             }))
-            .on_action(cx.listener(move |this, _: &FocusNext, window, cx| {
+            .on_action(cx.listener(|this, _: &FocusNext, window, cx| {
                 this.cycle_focus(true, window, cx);
             }))
-            .on_action(cx.listener(move |this, _: &FocusPrev, window, cx| {
+            .on_action(cx.listener(|this, _: &FocusPrev, window, cx| {
                 this.cycle_focus(false, window, cx);
             }))
             .child(
@@ -241,19 +253,5 @@ impl Render for ModalLayer {
                     .child(view),
             )
             .into_any_element()
-    }
-}
-
-impl ModalLayer {
-    /// Tab / Shift-Tab: stay inside the modal.
-    fn cycle_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(active) = &self.active else {
-            return;
-        };
-        let modal = active.view.focus_handle(cx);
-        if !focus::cycle(&self.focus_handle, forward, window, cx) {
-            // No tab stop in the modal at all: keep focus on the modal itself.
-            modal.focus(window, cx);
-        }
     }
 }

@@ -96,6 +96,20 @@ impl ToastLayer {
             )
             .child(h_flex().gap(u(tokens.spacing.sm)).children(actions));
 
+        let close = div().debug_selector({
+            let selector = close_selector.clone();
+            move || selector
+        });
+        let close = close.child(
+            Button::new(close_selector)
+                .icon(Icon::new(IconName::X).size(u(px(14.))))
+                .xsmall()
+                .ghost()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.dismiss(id, cx);
+                })),
+        );
+
         let card = h_flex()
             .id(("toast", id.0))
             .debug_selector(move || selector)
@@ -115,17 +129,7 @@ impl ToastLayer {
             }))
             .child(Icon::new(icon).size(u(px(16.))).color(accent))
             .child(body)
-            .child(
-                div().debug_selector(move || close_selector).child(
-                    Button::new(format!("toast-{}-close", id.0))
-                        .icon(Icon::new(IconName::X).size(u(px(14.))))
-                        .xsmall()
-                        .ghost()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.dismiss(id, cx);
-                        })),
-                ),
-            );
+            .child(close);
 
         match fade {
             Some(duration) => card

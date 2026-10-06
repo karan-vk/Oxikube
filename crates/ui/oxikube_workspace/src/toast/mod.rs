@@ -120,21 +120,6 @@ impl ToastLayer {
         existed
     }
 
-    /// Dismisses every toast, visible and waiting.
-    pub fn dismiss_all(&mut self, cx: &mut Context<Self>) {
-        let ids: Vec<_> = self.queue.visible.iter().map(|entry| entry.id).collect();
-        let removed: Vec<_> = ids
-            .iter()
-            .filter_map(|id| self.toast_handles.remove(id))
-            .collect();
-        self.queue.clear();
-        for id in ids {
-            cx.emit(ToastLayerEvent::Dismissed(id));
-        }
-        self.restore_focus_after(removed, cx);
-        cx.notify();
-    }
-
     /// Changes how many toasts are visible at once (at least one).
     pub fn set_max_visible(&mut self, max: usize, cx: &mut Context<Self>) {
         let promoted = self.queue.set_max_visible(max);

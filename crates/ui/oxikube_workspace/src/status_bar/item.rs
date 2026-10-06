@@ -1,6 +1,6 @@
 //! [`StatusItem`]: what a status-bar indicator implements, and its object-safe handle.
 
-use gpui::{AnyView, App, Entity, EntityId, Render};
+use gpui::{AnyView, App, Entity, Render};
 
 /// A status-bar indicator: a small view (read-only badge, connection state, update notice).
 ///
@@ -17,8 +17,6 @@ pub trait StatusItem: Render + 'static {
 
 /// A [`StatusItem`] entity of any type. Implemented for every `Entity<T: StatusItem>`.
 pub trait StatusItemHandle: 'static {
-    /// The item's entity id.
-    fn item_id(&self) -> EntityId;
     /// The item as a view.
     fn to_any_view(&self) -> AnyView;
     /// See [`StatusItem::visible`].
@@ -26,10 +24,6 @@ pub trait StatusItemHandle: 'static {
 }
 
 impl<T: StatusItem> StatusItemHandle for Entity<T> {
-    fn item_id(&self) -> EntityId {
-        self.entity_id()
-    }
-
     fn to_any_view(&self) -> AnyView {
         self.clone().into()
     }

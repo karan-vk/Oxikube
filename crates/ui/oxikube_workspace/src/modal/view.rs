@@ -4,8 +4,7 @@
 use std::any::TypeId;
 
 use gpui::{
-    AnyView, App, DismissEvent, Entity, EntityId, EventEmitter, FocusHandle, Focusable, Render,
-    Window,
+    AnyView, App, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Render, Window,
 };
 
 /// Where the layer puts a modal in the window.
@@ -49,8 +48,6 @@ pub trait ModalView: Focusable + EventEmitter<DismissEvent> + Render + 'static {
 
 /// A [`ModalView`] entity of any type. Implemented for every `Entity<T: ModalView>`.
 pub trait ModalViewHandle: 'static {
-    /// The view's entity id.
-    fn view_id(&self) -> EntityId;
     /// The concrete view type, to tell "the same modal again" from "another modal".
     fn view_type(&self) -> TypeId;
     /// The view as a view.
@@ -68,10 +65,6 @@ pub trait ModalViewHandle: 'static {
 }
 
 impl<T: ModalView> ModalViewHandle for Entity<T> {
-    fn view_id(&self) -> EntityId {
-        self.entity_id()
-    }
-
     fn view_type(&self) -> TypeId {
         TypeId::of::<T>()
     }
