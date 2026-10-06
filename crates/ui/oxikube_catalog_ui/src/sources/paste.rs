@@ -39,6 +39,8 @@ pub struct PasteDialog {
     sources: WeakEntity<SourcesView>,
     name: Entity<InputState>,
     text: Entity<TextareaState>,
+    /// [`storage_warning`] for this backend's directory, built once.
+    warning: SharedString,
     error: Option<SharedString>,
     /// A submit is running. A flag, not a task slot: the task that stores the kubeconfig must
     /// finish even if the dialog is dismissed meanwhile, and does not clear itself.
@@ -80,11 +82,13 @@ impl PasteDialog {
                 .placeholder("Paste the kubeconfig here")
                 .rows(10)
         });
+        let warning = storage_warning(&backend.stored_dir()).into();
         let dialog = Self {
             backend,
             sources,
             name,
             text,
+            warning,
             error: None,
             busy: false,
             focus: cx.focus_handle(),
@@ -177,7 +181,6 @@ impl Render for PasteDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
-        let warning = storage_warning(&self.backend.stored_dir());
         let busy = self.busy;
         v_flex()
             .id("paste-dialog")
@@ -218,7 +221,7 @@ impl Render for PasteDialog {
                                 .color(colors.warning),
                         ),
                     )
-                    .child(div().flex_1().child(warning)),
+                    .child(div().flex_1().child(self.warning.clone())),
             )
             .children(self.error.clone().map(|error| {
                 div()

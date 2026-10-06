@@ -1,11 +1,11 @@
 //! The names and paths of kubeconfigs Oxikube stores itself.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 
 use oxikube_domain::{OxiError, OxiResult};
 
 /// The longest name accepted for a pasted kubeconfig (before `.yaml`).
-pub const MAX_NAME_LEN: usize = 64;
+const MAX_NAME_LEN: usize = 64;
 
 /// Names Windows reserves for devices, whatever the extension.
 const RESERVED: [&str; 22] = [
@@ -74,9 +74,4 @@ pub fn is_stored_in(dir: &Path, path: &Path) -> bool {
         (parts.next(), parts.next()),
         (Some(Component::Normal(_)), None)
     )
-}
-
-/// The path a pasted kubeconfig called `file_name` is stored at.
-pub fn stored_path(dir: &Path, file_name: &str) -> PathBuf {
-    dir.join(file_name)
 }

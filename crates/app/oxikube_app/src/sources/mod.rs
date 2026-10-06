@@ -49,6 +49,6 @@ mod tests;
 
 pub use commands::register_commands;
 pub use list::{MemorySourceList, SourceListStore};
-pub use name::{MAX_NAME_LEN, is_stored_in, pasted_file_name};
+pub use name::{is_stored_in, pasted_file_name};
 pub use row::SourceRow;
 pub use service::{KubeconfigSourcesService, SourceChange};

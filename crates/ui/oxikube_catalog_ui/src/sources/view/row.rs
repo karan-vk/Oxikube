@@ -33,16 +33,14 @@ impl SourcesView {
             return div().into_any_element();
         };
         let status = status_text(row);
+        let is_error = row.is_error();
         let colour = match row.state {
-            Some(SourceState::Missing | SourceState::Unreadable | SourceState::Invalid) => {
-                colors.error
-            }
+            _ if is_error => colors.error,
             Some(SourceState::Blank) => colors.warning,
             // A note on a source that works (a folder with one bad file) is a warning.
             Some(SourceState::Found) if row.message.is_some() => colors.warning,
             _ => colors.text_muted,
         };
-        let is_error = row.is_error();
         let stored = row.stored;
         let label = row.label.clone();
         let icon = kind_icon(row);

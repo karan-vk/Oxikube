@@ -61,7 +61,8 @@ pub struct FsEvent {
 ///
 /// # Effects
 ///
-/// Mutating on the local filesystem only ([`write`](Self::write), [`write_private`](Self::write_private), [`remove`](Self::remove)); never a cluster mutation.
+/// Mutating on the local filesystem only ([`write`](Self::write),
+/// [`write_private`](Self::write_private), [`remove`](Self::remove)); never a cluster mutation.
 ///
 /// # Errors
 ///

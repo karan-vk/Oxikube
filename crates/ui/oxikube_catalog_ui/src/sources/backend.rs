@@ -60,7 +60,8 @@ impl SourcesBackend for ServiceBackend {
         cx.spawn(async move |cx| {
             spawn_kube(&*cx, async move { service.rows().await })
                 .await
-                .unwrap_or_else(|error| Err(task_failed(error)))
+                .map_err(OxiError::from)
+                .and_then(|inner| inner)
         })
     }
 
@@ -71,7 +72,8 @@ impl SourcesBackend for ServiceBackend {
                 service.execute(&command, Initiator::Ui).await
             })
             .await
-            .unwrap_or_else(|error| Err(task_failed(error)))
+            .map_err(OxiError::from)
+            .and_then(|inner| inner)
         })
     }
 
@@ -86,8 +88,4 @@ impl SourcesBackend for ServiceBackend {
     fn changes(&self) -> BoxStream<'static, SourcesChanged> {
         self.service.changes()
     }
-}
-
-fn task_failed(error: oxikube_runtime::KubeTaskError) -> OxiError {
-    OxiError::internal("the kubeconfig task did not finish").with_source(error)
 }

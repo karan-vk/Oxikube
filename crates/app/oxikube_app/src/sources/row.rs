@@ -1,7 +1,5 @@
 //! [`SourceRow`]: one line of the sources screen.
 
-use std::path::Path;
-
 use oxikube_ports::{
     ClusterSource, SourceKind, SourceState, SourceStatus, UserSource, UserSourceKind,
 };
@@ -88,9 +86,4 @@ pub(super) fn build(source: &UserSource, stored: bool, statuses: &[SourceStatus]
         contexts,
         message,
     }
-}
-
-/// The path of a file or directory entry.
-pub(super) fn path_of(source: &UserSource) -> Option<&Path> {
-    source.path.as_deref()
 }

@@ -163,7 +163,7 @@ impl KubeconfigSourcesService {
             NewKubeconfigSource::Pasted { name, text } => {
                 let file_name = name::pasted_file_name(name)?;
                 let contexts = self.source.validate_kubeconfig(text.expose()).await?;
-                let path = name::stored_path(&self.dir, &file_name);
+                let path = self.dir.join(&file_name);
                 self.ensure_free(&file_name).await?;
                 self.fs
                     .write_private(&path, text.expose().as_bytes())
@@ -213,7 +213,7 @@ impl KubeconfigSourcesService {
         };
         let mut change = SourceChange::new(target.clone());
         if self.deletes_file_on_remove(&target)
-            && let Some(path) = row::path_of(&target)
+            && let Some(path) = target.path.as_deref()
         {
             // First, so that a file that cannot be deleted keeps its entry and the user can
             // try again; a file that is already gone is fine.

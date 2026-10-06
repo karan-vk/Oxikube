@@ -72,11 +72,6 @@ impl PastedText {
     pub fn expose(&self) -> &str {
         &self.0
     }
-
-    /// Unwraps the text.
-    pub fn into_inner(self) -> String {
-        self.0
-    }
 }
 
 impl fmt::Debug for PastedText {

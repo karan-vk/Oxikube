@@ -66,6 +66,14 @@ fn file_state(
     }
 }
 
+/// `what`, with the loader's `reason` in parentheses when there is one.
+fn with_reason(what: &str, reason: Option<&str>) -> String {
+    match reason {
+        Some(reason) => format!("{what} ({reason})"),
+        None => what.to_owned(),
+    }
+}
+
 /// The state and message for a file of status `status` at `path`.
 fn describe(
     status: FileStatus,
@@ -78,25 +86,26 @@ fn describe(
         FileStatus::Blank => (SourceState::Blank, Some("File is empty".into())),
         FileStatus::Unreadable => {
             let reason = diagnostics.iter().find_map(|d| match d {
-                Diagnostic::Unreadable { path: p, reason } if p == path => Some(reason.clone()),
+                Diagnostic::Unreadable { path: p, reason } if p == path => Some(reason.as_str()),
                 _ => None,
             });
-            let message = match reason {
-                Some(reason) => format!("Could not be read ({reason})"),
-                None => "Could not be read".to_owned(),
-            };
-            (SourceState::Unreadable, Some(message))
+            (
+                SourceState::Unreadable,
+                Some(with_reason("Could not be read", reason)),
+            )
         }
         FileStatus::Incompatible => {
             let reason = diagnostics.iter().find_map(|d| match d {
-                Diagnostic::Incompatible { path: p, reason } if p == path => Some(reason.clone()),
+                Diagnostic::Incompatible { path: p, reason } if p == path => Some(reason.as_str()),
                 _ => None,
             });
-            let message = match reason {
-                Some(reason) => format!("Cannot be merged with the other kubeconfigs ({reason})"),
-                None => "Cannot be merged with the other kubeconfigs".to_owned(),
-            };
-            (SourceState::Invalid, Some(message))
+            (
+                SourceState::Invalid,
+                Some(with_reason(
+                    "Cannot be merged with the other kubeconfigs",
+                    reason,
+                )),
+            )
         }
         // `Unparsable`, and any status a later loader version adds.
         _ => (SourceState::Invalid, Some("Not a valid kubeconfig".into())),
@@ -154,12 +163,7 @@ fn dir_state(
         "{} of {} files skipped: {}",
         broken.len(),
         entry.files.len(),
-        broken
-            .iter()
-            .take(NAMED_FILES)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("; ")
+        broken[..broken.len().min(NAMED_FILES)].join("; ")
     );
     if broken.len() > NAMED_FILES {
         message.push_str("; ...");

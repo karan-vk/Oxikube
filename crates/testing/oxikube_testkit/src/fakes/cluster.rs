@@ -9,8 +9,7 @@ use futures::stream::BoxStream;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
     CloudDiscoveryPort, CloudProvider, CloudToolStatus, ClusterContext, ClusterSource,
-    ClusterSourcePort, DiscoveredCluster, SourceState as ReadState, SourceStatus, SourcesChanged,
-    UserSource,
+    ClusterSourcePort, DiscoveredCluster, SourceState, SourceStatus, SourcesChanged, UserSource,
 };
 use parking_lot::Mutex;
 
@@ -72,9 +71,10 @@ struct FakeSources {
 /// ([`with_statuses`](Self::with_statuses)) or, when none were set, one `Found` status per
 /// source counting the contexts that name it. `validate_kubeconfig` accepts text with a
 /// `contexts:` line and counts its `- context:` entries; anything else is a `Validation`
-/// error (a stand-in for the real parser, which the adapter tests cover). [`set_contexts`](Self::set_contexts) replaces the contexts and pushes the diff
-/// to every `subscribe` stream; a non-empty scripted `reload` result is pushed the same
-/// way, as a real source would after re-reading its files.
+/// error (a stand-in for the real parser, which the adapter tests cover).
+/// [`set_contexts`](Self::set_contexts) replaces the contexts and pushes the diff to every
+/// `subscribe` stream; a non-empty scripted `reload` result is pushed the same way, as a real
+/// source would after re-reading its files.
 #[derive(Default)]
 pub struct FakeClusterSourcePort {
     script: ClusterSourceScripts,
@@ -225,7 +225,7 @@ impl ClusterSourcePort for FakeClusterSourcePort {
                 .iter()
                 .map(|source| SourceStatus {
                     source: source.clone(),
-                    state: ReadState::Found,
+                    state: SourceState::Found,
                     contexts: state
                         .contexts
                         .iter()
@@ -479,16 +479,16 @@ mod tests {
         // Statuses default to one `Found` per source, counting its contexts.
         let statuses = block_on(fake.source_statuses()).unwrap();
         assert_eq!(statuses.len(), 1);
-        assert_eq!(statuses[0].state, ReadState::Found);
+        assert_eq!(statuses[0].state, SourceState::Found);
         assert_eq!(statuses[0].contexts, 1);
         fake.set_statuses([SourceStatus {
-            state: ReadState::Missing,
+            state: SourceState::Missing,
             message: Some("File not found".into()),
             ..statuses[0].clone()
         }]);
         assert_eq!(
             block_on(fake.source_statuses()).unwrap()[0].state,
-            ReadState::Missing
+            SourceState::Missing
         );
 
         // The list is remembered and recorded; a scripted diff reaches subscribers.
