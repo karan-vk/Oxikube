@@ -24,6 +24,9 @@ app.run(|cx| {
   light/dark flip, hot-reloaded file) through `set_theme`, which maps `ThemeTokens` onto
   gpui-component's `ThemeConfig` (`theme_config`) and our `Tokens`. `set_tokens` /
   `set_token_source` still set plain tokens (no theme).
+- **Code view** (`oxikube_ui::editor`): `read_only_state(ReadOnly::YAML | ReadOnly::TEXT, window, cx)`,
+  `set_text` (keeps the scroll) and `code_view(&state)`: gpui-component's editor, read-only, with
+  tree-sitter YAML highlighting (the detail's YAML tab) or plain text (Describe).
 - **Zoom**: wrap every literal pixel size in `u(px(..))`; persist dock and panel sizes as
   `Unscaled`. `set_ui_scale(cx, UiScale::new(1.25))` changes the zoom. Table column widths are the
   exception: give `TableColumn` design-time widths and the table applies (and re-applies) the zoom

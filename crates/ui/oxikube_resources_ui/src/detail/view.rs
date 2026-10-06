@@ -17,11 +17,13 @@ use oxikube_domain::ids::{Gvk, ResourceRef, Scope};
 use oxikube_ui::IconName;
 use oxikube_workspace::{Item, ItemEvent, TabContent};
 
+use super::describe::DescribeTab;
 use super::events::EventRow;
 use super::model::{DetailModel, OwnerLink, Row};
 use super::schema_tab::SchemaPane;
 use super::state::{DetailDeps, DetailEvent, DetailState, EventsTab, FullState, Mount};
 use super::tabs::DetailTab;
+use super::yaml::YamlTab;
 
 /// How often ages are redrawn while the view is shown.
 const TICK: Duration = Duration::from_secs(1);
@@ -56,6 +58,8 @@ pub struct DetailView {
     /// What discovery said about each owner's scope: a link opens only once it is known.
     pub(super) owner_scopes: HashMap<Gvk, Option<Scope>>,
     pub(super) events: EventsTab,
+    pub(super) yaml: YamlTab,
+    pub(super) describe: DescribeTab,
     pub(super) events_list: ListState,
     /// The Schema tab of a CRD (E07-S07).
     pub(super) schema: SchemaPane,
@@ -120,6 +124,8 @@ impl DetailView {
             expanded: HashSet::new(),
             owner_scopes: HashMap::new(),
             events: EventsTab::default(),
+            yaml: YamlTab::default(),
+            describe: DescribeTab::default(),
             events_list: ListState::new(0, ListAlignment::Top, px(240.)),
             schema: SchemaPane::default(),
             store: None,
@@ -191,8 +197,13 @@ impl DetailView {
             return;
         }
         self.tab = tab;
-        if tab == DetailTab::Events {
-            self.start_events(cx);
+        match tab {
+            DetailTab::Events => self.start_events(cx),
+            DetailTab::Yaml => {
+                self.refresh_yaml();
+            }
+            DetailTab::Describe => self.start_describe(cx),
+            DetailTab::Overview => {}
         }
         cx.notify();
     }
@@ -289,6 +300,7 @@ impl DetailView {
         self.subscription = None;
         self.full_task = None;
         self.owners_task = None;
+        self.describe.task = None;
         self.events.task = None;
         self.events.subscription = None;
     }

@@ -28,7 +28,7 @@ pub use conditions::{ConditionRow, conditions_of};
 pub use header::{Header, StatusChip};
 pub use meta::{COLLAPSED_VALUE_CHARS, MetaEntry, OwnerLink};
 pub use rows::{Row, Section};
-pub use secret::{is_secret, mask_secret};
+pub use secret::{HIDDEN, is_secret, mask_secret, mask_secret_with};
 pub use status::{MAX_DEPTH, MAX_LINES, MAX_VALUE, StatusLine, StatusSummary};
 
 use oxikube_app::store::StoreObject;

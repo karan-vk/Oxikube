@@ -150,7 +150,13 @@ crate's `README.md` for its allowed dependencies. Highlights:
   It follows the object as a one-row `ResourceStore` subscription on the table's own feed, reads the full object once (`spawn_kube`)
   for metadata-only and Table feeds (Secret values removed inside that read), and draws header, labels/annotations (copy through
   `resource::CopyLabel`), owner links (`resource::Open`), finalizers, conditions, the `status` summary and the Events tab
-  (the namespace's `Event` feed, started on first show) in virtualised lists. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
+  (the namespace's `Event` feed, started on first show) in virtualised lists. The YAML tab (E07-S06, `detail::yaml`) shows
+  the complete object as read-only YAML in `oxikube_ui::editor` (gpui-component's editor with tree-sitter YAML): the text is
+  `yaml_text`, a pure function over a copy of the object (`metadata.managedFields` hidden unless `resource::ToggleManagedFields`,
+  a Secret's `data`/`stringData` values and `last-applied-configuration` replaced by `(hidden)`), made once per object version
+  when the tab is shown, never in render; `resource::CopyYaml` and `resource::SaveYaml` (file dialog, then `FsPort::write`) write
+  exactly that text. The Describe tab (`detail::describe`) reads the connection's `DescribePort` on the Tokio bridge on first
+  show (spinner, error with Retry, `resource::RefreshDescribe`), the previous text staying while it refreshes. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
   (a workspace `Item`): one `oxikube_ui::tile::StatTile` per `Tile` of the `TileRegistry` (Deployments, StatefulSets,
   DaemonSets, ReplicaSets, Jobs, CronJobs, Pods) with total and healthy from a `CountsLease`, read once a second and redrawn
   coalesced only on change; a click sends `resource::OpenList`. Module `navigate`: the `resource::OpenList` handler and the
@@ -161,6 +167,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   (Enter; `ResourceViews` reads the CRD, takes the storage version if served, asks discovery and opens the table), the table's
   version switcher and "Basic columns" note (`table::crd`), and the Schema tab of a CRD's detail (`detail::schema_tab`: a lazy,
   bounded, collapsible `openAPIV3Schema` tree).
+- `oxikube_describe` (E07-S06) — the `DescribePort` adapters. `NativeDescribe` renders `kubectl describe`-style text in process
+  with deskribe (a dependency; 36 specialised kinds plus a generic layout for custom resources) over the connection's kube
+  client, finding the kind's plural through discovery; `KubectlDescribe` runs `kubectl --context <ctx> [--kubeconfig <file>]
+  describe <plural[.group]> <name> [-n <ns>]` as a child process (stdin closed, killed on drop or after 30 s, nothing secret on
+  the command line); `Describer` is the port the app gets and picks by the shared `DescribePreference` at each call: `auto`
+  (deskribe, `kubectl` only for a kind deskribe does not cover), `native` or `kubectl` (the `describe.backend` and
+  `describe.kubectl_path` settings, hot reloaded by the binary). `oxikube_kube::KubeConnector::set_describe_factory` hands each
+  connection's client and discovery to the factory the binary supplies (`bins/oxikube::kube_ports::SourcesConnector`), which
+  fills `ClusterPorts::describe` and points `kubectl` at the file that defines the context.
+- `oxikube_ui::editor` (E07-S06) — the read-only code view (`read_only_state`, `set_text`, `code_view`) over gpui-component's
+  editor with the `tree-sitter-yaml` feature; the manifest editor (E10) builds on the same state type. gpui-component links
+  tree-sitter 0.26, so the workspace pins `tree-sitter = "0.26"` (one native library may be linked).
 - `oxikube_catalog_ui` — the cluster catalog UI. Module `sources` (E06-S05): `SourcesView`, the
   kubeconfig sources screen (a workspace `Item`): one row per entry of `kubeconfig.sources` with its
   status (found with N contexts, or the error inline next to that one source), add file / add folder

@@ -18,7 +18,7 @@ use super::view::DetailView;
 use crate::table::ToneColors;
 
 impl Render for DetailView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let deleted = matches!(self.state, DetailState::Deleted);
@@ -26,7 +26,8 @@ impl Render for DetailView {
             DetailTab::Overview => self.overview_body(cx),
             DetailTab::Events => self.events_body(cx),
             DetailTab::Schema => self.schema_body(cx),
-            tab => self.placeholder_body(tab, cx),
+            DetailTab::Yaml => self.yaml_body(window, cx),
+            DetailTab::Describe => self.describe_body(window, cx),
         };
         v_flex()
             .id("detail-view")
@@ -209,15 +210,5 @@ impl DetailView {
                     .on_click(cx.listener(move |this, _, _, cx| this.set_tab(tab, cx)))
                     .child(tab.title())
             }))
-    }
-
-    fn placeholder_body(&self, tab: DetailTab, cx: &mut Context<Self>) -> AnyElement {
-        let tokens = cx.tokens();
-        div()
-            .debug_selector(move || format!("detail-placeholder-{}", tab.id()))
-            .p(u(tokens.spacing.xl))
-            .text_color(tokens.colors.text_muted)
-            .child(tab.placeholder().unwrap_or(""))
-            .into_any_element()
     }
 }

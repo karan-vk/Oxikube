@@ -17,6 +17,7 @@
 //! - [`icon`]: [`IconName`] (Lucide, embedded by `oxikube_assets`) and the [`Icon`] element.
 //! - [`assets`]: [`Assets`], the application asset source to pass to `Application::with_assets`.
 //! - [`table`]: [`Table`] over our own [`TableDelegate`] trait (virtualised, uniform rows).
+//! - [`editor`]: the read-only, tree-sitter highlighted code view the YAML tab shows.
 //! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`chart`], [`markdown`],
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
 //! - [`spinner`]: [`spinner::Spinner`], a loading indicator that stands still under reduce-motion.
@@ -33,6 +34,7 @@ pub mod button;
 pub mod chart;
 pub mod dialog;
 pub mod dock;
+pub mod editor;
 pub mod icon;
 pub mod input;
 pub mod layout;

@@ -3,6 +3,7 @@
 //! session manager and store, a recording dispatcher, and the real `ResourceViews` opening the
 //! drawer in a cluster tab. No cluster, no disk, no threads.
 
+mod describe;
 mod fixture;
 mod meta;
 mod open;
@@ -10,3 +11,4 @@ mod pin;
 mod schema;
 mod secret;
 mod states;
+mod yaml;

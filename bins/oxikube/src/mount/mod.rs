@@ -25,6 +25,7 @@
 //! [`Wiring`] entity the workspace keeps.
 
 pub mod bus;
+mod describe;
 mod resources;
 mod tabs;
 #[cfg(test)]
@@ -91,6 +92,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let persistence = main.read(cx).persistence().cloned();
     let services = state.services().clone();
     let ports = state.ports().clone();
+
+    // The Describe tab's backend follows the `describe` setting (E07-S06).
+    describe::follow_settings(&ports.clusters.describe, cx);
 
     // The views' dispatcher: the bus, once it exists (right after the tabs it routes to).
     let bus_dispatcher = bus::BusDispatcher::new(window.window_handle());
@@ -169,6 +173,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                 )),
             },
             tabs: tabs.downgrade(),
+            fs: ports.clusters.fs.clone(),
         },
         resources_rx,
         window,

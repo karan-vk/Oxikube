@@ -82,6 +82,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceCopyName { target }
         | Command::ResourcePinDetail { target }
         | Command::ResourceCopyLabel { target, .. }
+        | Command::ResourceCopyYaml { target }
+        | Command::ResourceSaveYaml { target }
+        | Command::ResourceToggleManagedFields { target }
+        | Command::ResourceRefreshDescribe { target }
         | Command::ResourceViewYaml { target }
         | Command::ResourceDelete { target, .. }
         | Command::PodDelete { target, .. }

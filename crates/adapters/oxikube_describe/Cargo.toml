@@ -12,6 +12,36 @@ path = "src/oxikube_describe.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
+deskribe.workspace = true
+# kube needs exactly one k8s-openapi version feature enabled (`latest`, set in the workspace).
+k8s-openapi.workspace = true
+kube.workspace = true
+oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+parking_lot.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+http.workspace = true
+oxikube_kube.workspace = true
+oxikube_testkit.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+tower.workspace = true
+
+[features]
+default = []
+# Enables the tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
+integration = ["oxikube_testkit/integration"]
+
+[[test]]
+name = "kind_describe"
+path = "tests/kind_describe.rs"
+required-features = ["integration"]
 
 [lints]
 workspace = true

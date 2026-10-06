@@ -61,7 +61,7 @@ pub use budget::{
     BudgetConfig, ByteCounter, FeedLease, FeedRegistry, FeedRequest, FeedSource, FeedStream,
     ScopeChange, SelectionLease,
 };
-pub use connector::{ConnectorConfig, KubeConnector};
+pub use connector::{ConnectorConfig, DescribeConnection, DescribeFactory, KubeConnector};
 pub use discovery::{
     CrdWatch, CrdWatchConfig, DiscoveryConfig, KindChange, KubeDiscovery, Registry, RegistryDiff,
 };

@@ -39,6 +39,9 @@
             "null"
           ]
         },
+        "describe": {
+          "$ref": "#/$defs/DescribeSettingsContent"
+        },
         "display_name": {
           "description": "A name to show instead of the kubeconfig context name. Cluster ids are opaque hashes, so\nkeep this next to the id to recognise the entry.",
           "type": [
@@ -221,6 +224,51 @@
         },
         "terminal_cwd": {
           "description": "Working directory of terminals opened for the cluster. Unset uses the home directory.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DescribeBackendSetting": {
+      "description": "Which implementation describes an object (`describe.backend`).",
+      "oneOf": [
+        {
+          "const": "auto",
+          "description": "deskribe for every kind it covers, `kubectl describe` for the rest (when installed).",
+          "type": "string"
+        },
+        {
+          "const": "native",
+          "description": "deskribe only: a kind it does not cover is reported as unsupported.",
+          "type": "string"
+        },
+        {
+          "const": "kubectl",
+          "description": "`kubectl describe` only.",
+          "type": "string"
+        }
+      ]
+    },
+    "DescribeSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about describe: the `describe` object of `settings.json`.",
+      "properties": {
+        "backend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DescribeBackendSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`auto` (deskribe, then `kubectl` for a kind it does not cover), `native` or `kubectl`."
+        },
+        "kubectl_path": {
+          "description": "Path of the `kubectl` binary; unset looks `kubectl` up on `PATH`.",
           "type": [
             "string",
             "null"
@@ -594,6 +642,9 @@
         "string",
         "null"
       ]
+    },
+    "describe": {
+      "$ref": "#/$defs/DescribeSettingsContent"
     },
     "display_name": {
       "description": "A name to show instead of the kubeconfig context name. Cluster ids are opaque hashes, so\nkeep this next to the id to recognise the entry.",

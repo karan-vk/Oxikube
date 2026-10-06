@@ -4,7 +4,8 @@
 //! the catalog lists the kind context, searching for it and pressing Enter connects it and opens
 //! its cluster tab with the sidebar; activating the sidebar's Pods entry opens the pods table in
 //! that tab, fed by the cluster (E07-S03); opening a pod's row shows its detail drawer, read from
-//! the cluster: header, conditions and owner (E07-S05); a context whose token the API server rejects opens a
+//! the cluster: header, conditions and owner (E07-S05), its YAML, and its description rendered by
+//! deskribe through the connection's own client (E07-S06); a context whose token the API server rejects opens a
 //! tab that shows `AuthRequired`, not a blank screen.
 //!
 //! `cargo test -p oxikube --features integration --test kind_app` with `OXIKUBE_TEST_CONTEXT`
@@ -29,7 +30,7 @@ use oxikube_catalog_ui::{CatalogView, ConnectView};
 use oxikube_domain::ids::ContextName;
 use oxikube_domain::session::SessionPhase;
 use oxikube_kube::kubeconfig::{Strictness, default_kubeconfig_path, load_local_kubeconfig};
-use oxikube_resources_ui::detail::{DetailDrawer, DetailState};
+use oxikube_resources_ui::detail::{DescribeState, DetailDrawer, DetailState, DetailTab};
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::integration::{ensure_kind_context, test_context};
 use oxikube_workspace::sidebar::SidebarPanel;
@@ -214,6 +215,31 @@ fn open_first_pod_detail(vcx: &mut VisualTestContext, tab: &Entity<ClusterTab>) 
                         &*model.header.name == name.as_str() && !model.conditions.is_empty()
                     })
             })
+        })
+    });
+    // The YAML tab: the pod as read-only YAML; the Describe tab: deskribe's text for it.
+    let view = vcx
+        .update(|_, cx| {
+            let drawer = inner.read(cx).panel::<DetailDrawer>();
+            drawer.and_then(|drawer| drawer.read(cx).view().cloned())
+        })
+        .expect("the drawer's detail");
+    vcx.update(|_, cx| view.update(cx, |view, cx| view.set_tab(DetailTab::Yaml, cx)));
+    wait(vcx, "the YAML tab to show the pod", |vcx| {
+        vcx.update(|_, cx| {
+            view.read(cx)
+                .yaml()
+                .is_some_and(|yaml| yaml.contains(&format!("name: {name}")))
+        })
+    });
+    vcx.update(|_, cx| view.update(cx, |view, cx| view.set_tab(DetailTab::Describe, cx)));
+    wait(vcx, "the Describe tab to show deskribe's text", |vcx| {
+        vcx.update(|_, cx| {
+            let view = view.read(cx);
+            matches!(view.describe_state(), DescribeState::Ready { .. })
+                && view
+                    .describe_text()
+                    .is_some_and(|text| text.contains(&name) && text.contains("Namespace:"))
         })
     });
 }

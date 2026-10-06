@@ -9,6 +9,8 @@
 //! | File | Holds |
 //! |---|---|
 //! | `model` | [`DetailModel`]: header, labels, annotations, owners, finalizers, conditions, the `status` summary and a Secret's key names; plain Rust, no GPUI |
+//! | `yaml` | the YAML tab (E07-S06): [`yaml_text`] (managedFields, Secret masking) as a pure function, the read-only highlighted editor, the toolbar |
+//! | `describe` | the Describe tab (E07-S06): `DescribePort` read on the Tokio bridge, spinner, error with Retry, refresh |
 //! | `events` | [`EventRow`], [`events_about`]: the events of the object from the namespace's `Event` feed |
 //! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, and a CRD's Schema |
 //! | `state` | [`DetailDeps`], [`Mount`], [`DetailState`]: what the view is built over and how the object stands |
@@ -39,6 +41,7 @@
 //! A Secret shows its key names and never a value ([`model::mask_secret`]); its
 //! `last-applied-configuration` annotation, which embeds the data, is hidden too.
 
+mod describe;
 mod drawer;
 mod events;
 mod events_feed;
@@ -54,13 +57,16 @@ mod schema_view;
 mod state;
 mod tabs;
 mod view;
+mod yaml;
 
 #[cfg(test)]
 mod tests;
 
+pub use describe::DescribeState;
 pub use drawer::{DEFAULT_WIDTH, DetailDrawer, ToggleDrawer};
 pub use events::{EventRow, MAX_EVENTS, events_about};
 pub use model::DetailModel;
 pub use state::{DetailDeps, DetailEvent, DetailState, Mount};
 pub use tabs::DetailTab;
 pub use view::{DetailView, item_key};
+pub use yaml::{YamlOptions, has_managed_fields, yaml_text};

@@ -152,7 +152,9 @@ openidconnect = "4"
 # --- terminal / editor ---
 alacritty_terminal = "0.26"
 portable-pty = "0.9"
-tree-sitter = "0.27"
+# 0.26: gpui-component's editor (`tree-sitter-yaml` feature in oxikube_ui) links tree-sitter ^0.26.13
+# and only one version of the native library may be linked.
+tree-sitter = "0.26"
 # JSON grammar for comment-preserving settings.json edits (oxikube_settings::json_edit).
 tree-sitter-json = "0.24"
 ropey = "2.0.0-beta.1"

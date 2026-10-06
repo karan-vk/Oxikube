@@ -4,6 +4,8 @@
 //!   and terminating pods, one row selected; the Status cells in the theme's `oxikube` colours.
 //! - `detail_deployment_dark`, `detail_deployment_light` (`detail`): the detail drawer of a
 //!   Deployment in both themes: header with status chip, owner-less metadata, conditions, status.
+//! - `detail_yaml_dark`, `detail_yaml_light`, `detail_describe_dark` (`detail`): the YAML tab (read-only,
+//!   tree-sitter highlighted) and the Describe tab of the same Deployment (E07-S06).
 //!
 //! - `pods_table_filtered`: the same pods with `cart|checkout|web` typed in the filter bar: three
 //!   rows and the `3 of 7` count (E07-S04).

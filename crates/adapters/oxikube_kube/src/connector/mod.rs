@@ -37,6 +37,7 @@
 
 mod access;
 mod connection;
+mod describe;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
@@ -53,6 +54,7 @@ use parking_lot::Mutex;
 
 use self::access::KubeAccess;
 use self::connection::ConnectionState;
+pub use self::describe::{DescribeConnection, DescribeFactory};
 use crate::auth::{CredentialRefresh, ExecInteractivePolicy};
 use crate::budget::{BudgetConfig, FeedRegistry};
 use crate::discovery::KubeDiscovery;
@@ -108,6 +110,8 @@ struct Shared {
     /// The last kubeconfig handed to [`KubeConnector::replace_loaded`], for pools built after
     /// it. Locked after `pools`, never before.
     latest: Mutex<Option<Arc<LoadedKubeconfig>>>,
+    /// Builds each connection's `DescribePort` (set by [`KubeConnector::set_describe_factory`]).
+    describe: Mutex<Option<Arc<DescribeFactory>>>,
 }
 
 impl KubeConnector {
@@ -147,8 +151,17 @@ impl KubeConnector {
                 config,
                 live: Mutex::new(HashMap::new()),
                 latest: Mutex::new(None),
+                describe: Mutex::new(None),
             }),
         }
+    }
+
+    /// Sets how each new connection gets its `DescribePort`: `factory` is called with the
+    /// connection's client and discovery (see [`DescribeConnection`]). Until it is set a
+    /// connection's describe port answers `Unsupported`. Live connections keep the port they
+    /// were made with.
+    pub fn set_describe_factory(&self, factory: Arc<DescribeFactory>) {
+        *self.shared.describe.lock() = Some(factory);
     }
 
     /// The watch budget of `cluster`'s live connection, or `None` when it is not connected.
@@ -183,6 +196,24 @@ impl KubeConnector {
         dropped.sort_unstable_by(|a, b| a.as_str().cmp(b.as_str()));
         dropped.dedup();
         dropped
+    }
+
+    fn describe_port(
+        &self,
+        request: &ConnectRequest,
+        client: &kube::Client,
+        discovery: &Arc<dyn oxikube_ports::DiscoveryPort>,
+    ) -> Arc<dyn oxikube_ports::DescribePort> {
+        let factory = self.shared.describe.lock().clone();
+        match factory {
+            Some(factory) => factory(DescribeConnection {
+                client: client.clone(),
+                discovery: discovery.clone(),
+                cluster: request.cluster.clone(),
+                context: request.context.clone(),
+            }),
+            None => Arc::new(describe::NoDescribe),
+        }
     }
 
     fn pool(&self, interactivity: ExecInteractivity) -> Arc<ClientPool> {
@@ -239,9 +270,12 @@ impl ClusterConnectorPort for KubeConnector {
             .lock()
             .insert(request.cluster.clone(), Arc::downgrade(&state));
 
+        let discovery: Arc<dyn oxikube_ports::DiscoveryPort> = Arc::new(discovery);
+        let describe = self.describe_port(&request, &client, &discovery);
         let ports = ClusterPorts {
             resources: Arc::new(resources.clone()),
-            discovery: Arc::new(discovery),
+            discovery,
+            describe,
             tables: Arc::new(resources),
             logs: Arc::new(KubeLogs::new(client.clone())),
             exec: Arc::new(KubeExec::new(client.clone())),

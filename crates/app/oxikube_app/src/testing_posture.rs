@@ -212,6 +212,12 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             annotation: false,
         },
         "resource::CopyName" => Command::ResourceCopyName { target: target() },
+        "resource::CopyYaml" => Command::ResourceCopyYaml { target: target() },
+        "resource::RefreshDescribe" => Command::ResourceRefreshDescribe { target: target() },
+        "resource::SaveYaml" => Command::ResourceSaveYaml { target: target() },
+        "resource::ToggleManagedFields" => {
+            Command::ResourceToggleManagedFields { target: target() }
+        }
         "resource::RetryFeed" => Command::ResourceRetryFeed {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),

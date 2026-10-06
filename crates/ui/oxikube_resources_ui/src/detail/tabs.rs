@@ -11,9 +11,9 @@ pub enum DetailTab {
     /// Metadata, owners, conditions and the status summary (built here).
     #[default]
     Overview,
-    /// The object as YAML (a placeholder until E07-S06).
+    /// The object as YAML: read-only, highlighted, secrets masked (E07-S06).
     Yaml,
-    /// `kubectl describe`-style text (a placeholder until E07-S06).
+    /// `kubectl describe`-style text (E07-S06).
     Describe,
     /// The events about the object.
     Events,
@@ -69,15 +69,6 @@ impl DetailTab {
             DetailTab::Describe => "describe",
             DetailTab::Events => "events",
             DetailTab::Schema => "schema",
-        }
-    }
-
-    /// What a placeholder tab says.
-    pub fn placeholder(self) -> Option<&'static str> {
-        match self {
-            DetailTab::Yaml => Some("The YAML view is not available yet."),
-            DetailTab::Describe => Some("The Describe view is not available yet."),
-            DetailTab::Overview | DetailTab::Events | DetailTab::Schema => None,
         }
     }
 }

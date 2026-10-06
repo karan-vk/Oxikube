@@ -10,6 +10,7 @@ use gpui::{App, AppContext as _, ClipboardItem, Context, Entity, Task, WeakEntit
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_domain::kinds::{ResourceKind, Verb};
+use oxikube_ports::FsPort;
 use oxikube_runtime::spawn_kube;
 use oxikube_workspace::{ClusterTabs, OpenOptions, Toast, Workspace};
 
@@ -24,6 +25,8 @@ pub struct ResourceViewsDeps {
     pub table: ResourceTableDeps,
     /// The window's cluster tabs, where the tables open.
     pub tabs: WeakEntity<ClusterTabs>,
+    /// Where "save YAML" writes (the file the user picked in the save dialog).
+    pub fs: Arc<dyn FsPort>,
 }
 
 /// A cluster's discovered kinds, with the discovery port they came from (a reconnect hands out
@@ -45,6 +48,8 @@ pub struct ResourceViews {
     navigate_task: Option<Task<()>>,
     /// The `resource::OpenList` waiting on discovery (a newer one replaces, and so cancels, it).
     open_task: Option<Task<()>>,
+    /// The "save YAML" in flight: the dialog, then the write (a newer one replaces it).
+    pub(super) save_task: Option<Task<()>>,
     _requests: Task<()>,
 }
 
@@ -75,6 +80,7 @@ impl ResourceViews {
                 crds: Default::default(),
                 navigate_task: None,
                 open_task: None,
+                save_task: None,
                 _requests: pump,
             }
         });
@@ -134,6 +140,10 @@ impl ResourceViews {
                     table.update(cx, |table, cx| table.open_detail(target, cx));
                 }
             }
+            tab @ (ViewRequest::CopyYaml(_)
+            | ViewRequest::SaveYaml(_)
+            | ViewRequest::ToggleManagedFields(_)
+            | ViewRequest::RefreshDescribe(_)) => self.apply_tab_request(tab, cx),
             ViewRequest::CopyName(target) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(target.name.to_string()));
             }

@@ -6,8 +6,8 @@ use oxikube_domain::ids::{ClusterId, ContextName, Scope};
 use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPhase, WatchScope};
 use oxikube_domain::{Capabilities, Capability, ClusterColour};
 use oxikube_ports::{
-    AccessReviewPort, ClusterPorts, ClusterPrefs, DiscoveryPort, ExecInteractivity, ExecPort,
-    LogPort, MetricsPort, PortForwardPort, ResourceReader, ResourceWriter, TableFeedPort,
+    AccessReviewPort, ClusterPorts, ClusterPrefs, DescribePort, DiscoveryPort, ExecInteractivity,
+    ExecPort, LogPort, MetricsPort, PortForwardPort, ResourceReader, ResourceWriter, TableFeedPort,
     WarningPort,
 };
 
@@ -176,6 +176,11 @@ impl ClusterSession {
     /// `metrics.k8s.io`.
     pub fn metrics(&self) -> Option<Arc<dyn MetricsPort>> {
         self.ports.as_ref().map(|p| p.metrics.clone())
+    }
+
+    /// `kubectl describe`-style text for one object (`None` while not connected).
+    pub fn describe(&self) -> Option<Arc<dyn DescribePort>> {
+        self.ports.as_ref().map(|p| p.describe.clone())
     }
 
     /// The access review port, to re-probe capabilities for a namespace.

@@ -9,6 +9,7 @@ use oxikube_app::columns::Tone;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_ports::{Delta, DeltaBatch, TableBatch, TableColumn, TableRow, TableSource};
+use oxikube_ports::{DescribeOutput, DescribeSource};
 use oxikube_testkit::Timeline;
 use serde_json::json;
 
@@ -308,9 +309,7 @@ fn opening_a_detail_does_not_block_and_shows_a_skeleton_first(cx: &mut TestAppCo
 }
 
 #[gpui::test]
-fn the_yaml_and_describe_tabs_are_placeholders_and_events_follow_the_object(
-    cx: &mut TestAppContext,
-) {
+fn the_yaml_and_describe_tabs_show_the_object_and_events_follow_it(cx: &mut TestAppContext) {
     let warning = edited(
         oxikube_testkit::resource("v1", "Event")
             .namespace("shop")
@@ -363,9 +362,17 @@ fn the_yaml_and_describe_tabs_are_placeholders_and_events_follow_the_object(
 
     d.click("detail-tab-yaml");
     assert_eq!(d.read(&view, |v| v.tab()), DetailTab::Yaml);
-    assert!(d.shown("detail-placeholder-yaml"));
+    assert!(d.shown("detail-yaml"));
+    d.f.ports()
+        .describe
+        .script()
+        .describe
+        .push_ok(DescribeOutput {
+            text: "Name: web-0".into(),
+            source: DescribeSource::Native,
+        });
     d.click("detail-tab-describe");
-    assert!(d.shown("detail-placeholder-describe"));
+    assert!(d.shown("detail-describe"));
 
     d.click("detail-tab-events");
     d.settle();

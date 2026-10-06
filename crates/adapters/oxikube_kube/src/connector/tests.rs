@@ -124,3 +124,83 @@ async fn a_reloaded_kubeconfig_reaches_pools_built_before_and_after_it() {
         Some(ErrorKind::NotFound)
     );
 }
+
+fn one_context_kubeconfig() -> Kubeconfig {
+    // Building the client reads nothing from the network; the server address is never dialled.
+    Kubeconfig::from_yaml(
+        "apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster: { server: \"https://127.0.0.1:1\" }\n\
+         users:\n- name: u\n  user: { token: \"not-a-real-token\" }\n\
+         contexts:\n- name: only\n  context: { cluster: c, user: u }\ncurrent-context: only\n",
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_connection_without_a_describe_factory_cannot_describe() {
+    let connector = KubeConnector::new(
+        one_context_kubeconfig(),
+        PoolConfig::default(),
+        ConnectorConfig::default(),
+    );
+    let connection = connector
+        .connect(request("only", ExecInteractivity::Never))
+        .await
+        .unwrap();
+    let target = oxikube_domain::ids::ResourceRef::namespaced(
+        ClusterId::new("test", &ContextName::new("only")),
+        oxikube_domain::ids::Gvk::new("", "v1", "Pod"),
+        "default",
+        "p",
+    );
+    let error = connection
+        .ports
+        .describe
+        .describe(&target)
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Unsupported);
+}
+
+#[tokio::test]
+async fn the_describe_factory_gets_the_connections_context_and_its_port_is_used() {
+    use std::sync::Mutex;
+
+    struct Canned;
+    #[async_trait::async_trait]
+    impl oxikube_ports::DescribePort for Canned {
+        async fn describe(
+            &self,
+            _: &oxikube_domain::ids::ResourceRef,
+        ) -> oxikube_domain::OxiResult<oxikube_ports::DescribeOutput> {
+            Ok(oxikube_ports::DescribeOutput {
+                text: "canned".into(),
+                source: oxikube_ports::DescribeSource::Native,
+            })
+        }
+    }
+
+    let connector = KubeConnector::new(
+        one_context_kubeconfig(),
+        PoolConfig::default(),
+        ConnectorConfig::default(),
+    );
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let log = seen.clone();
+    connector.set_describe_factory(Arc::new(move |connection: DescribeConnection| {
+        log.lock().unwrap().push(connection.context.to_string());
+        Arc::new(Canned)
+    }));
+    let connection = connector
+        .connect(request("only", ExecInteractivity::Never))
+        .await
+        .unwrap();
+    assert_eq!(*seen.lock().unwrap(), ["only"]);
+    let target = oxikube_domain::ids::ResourceRef::namespaced(
+        ClusterId::new("test", &ContextName::new("only")),
+        oxikube_domain::ids::Gvk::new("", "v1", "Pod"),
+        "default",
+        "p",
+    );
+    let output = connection.ports.describe.describe(&target).await.unwrap();
+    assert_eq!(output.text, "canned");
+}

@@ -16,8 +16,8 @@ use oxikube_ports::{
 use parking_lot::Mutex;
 
 use super::{
-    FakeDiscoveryPort, FakeExecPort, FakeLogPort, FakeMetricsPort, FakePortForwardPort,
-    FakeResourcePort, FakeTableFeedPort, FakeWarningPort,
+    FakeDescribePort, FakeDiscoveryPort, FakeExecPort, FakeLogPort, FakeMetricsPort,
+    FakePortForwardPort, FakeResourcePort, FakeTableFeedPort, FakeWarningPort,
 };
 use crate::script::{CallLog, Script};
 
@@ -159,6 +159,8 @@ pub struct FakeClusterPorts {
     pub access: Arc<FakeAccessReviewPort>,
     /// `WarningPort`.
     pub warnings: Arc<FakeWarningPort>,
+    /// `DescribePort`.
+    pub describe: Arc<FakeDescribePort>,
 }
 
 impl FakeClusterPorts {
@@ -174,6 +176,7 @@ impl FakeClusterPorts {
             metrics: self.metrics.clone(),
             access: self.access.clone(),
             warnings: self.warnings.clone(),
+            describe: self.describe.clone(),
         }
     }
 }

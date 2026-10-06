@@ -19,7 +19,7 @@ Entries (file → upstream path @ rev):
   `update_value_in_json_text`, `replace_value_in_json_text`, `construct_json_value`,
   `infer_json_indent_size` and `to_pretty_json` from `crates/settings_json/src/settings_json.rs`
   @ a84689073d296dfd39987bc7dd478e43ef76d83a. Array-index (`#N`) key paths not vendored; adapted
-  to tree-sitter 0.27.
+  to tree-sitter 0.26 (the version gpui-component's editor links; `QueryMatch::captures` is a field).
 - `crates/platform/oxikube_settings/src/json_edit/tests.rs`: the `object_replace`,
   `object_replace_escapes_new_key`, `object_remove_and_rename_find_an_escaped_key_by_its_own_range`
   and `test_infer_json_indent_size` tests from the same file @ a84689073d.
@@ -39,6 +39,18 @@ Entries (file → upstream path @ rev):
   and the shutdown-on-drop; `Tokio::spawn`'s abort-on-drop guard is reworked as
   `oxikube_runtime::spawn_kube` in `kube_task.rs`). The `gpui_tokio` crate is not published in the
   `gpui-pre` snapshot family, so it is ported rather than depended on.
+
+## deskribe (Apache-2.0) — https://github.com/nklmilojevic/deskribe
+Copyright 2026 Nikola Milojevic. The native `kubectl describe` renderer behind
+`oxikube_describe::NativeDescribe` (E07-S06). It is used as a crate dependency (`deskribe` in
+`[workspace.dependencies]`), not vendored: no deskribe source is copied into this repository, so
+there is no in-file header to carry. Its own sources keep their SPDX headers and its `NOTICE`
+applies to what it ships: it is an adaptation of Kubernetes code (kubernetes/kubectl
+`pkg/describe` v0.35.1 with v0.37.0 behaviour, kubernetes/apimachinery quantity and duration
+formatting, kubernetes/component-helpers resource accounting), Copyright 2014 and other years
+as noted in its source files, The Kubernetes Authors, licensed under the Apache License 2.0.
+If any deskribe code is ever vendored, the file must keep its Apache-2.0 header and this entry
+must name it.
 
 ## kdash (MIT) — https://github.com/kdash-rs/kdash
 Copyright (c) 2021 Deepu K Sasidharan. Ported functions (tolerant kubeconfig loader, cronjob

@@ -184,11 +184,41 @@ fn the_commands_reach_the_views_through_the_bus() {
     assert_eq!(
         requests.try_recv().ok(),
         Some(ViewRequest::CopyLabel {
-            target,
+            target: target.clone(),
             key: "app".into(),
             annotation: false,
         })
     );
+    // The YAML and Describe tabs' commands (E07-S06).
+    for (command, request) in [
+        (
+            Command::ResourceCopyYaml {
+                target: target.clone(),
+            },
+            ViewRequest::CopyYaml(target.clone()),
+        ),
+        (
+            Command::ResourceSaveYaml {
+                target: target.clone(),
+            },
+            ViewRequest::SaveYaml(target.clone()),
+        ),
+        (
+            Command::ResourceToggleManagedFields {
+                target: target.clone(),
+            },
+            ViewRequest::ToggleManagedFields(target.clone()),
+        ),
+        (
+            Command::ResourceRefreshDescribe {
+                target: target.clone(),
+            },
+            ViewRequest::RefreshDescribe(target),
+        ),
+    ] {
+        block_on(bus.dispatch(command, ctx())).unwrap();
+        assert_eq!(requests.try_recv().ok(), Some(request));
+    }
     block_on(bus.dispatch(
         Command::ResourceSelectAll {
             cluster: cluster(),
