@@ -248,3 +248,42 @@ fn descriptors_without_a_namespace_are_rejected_by_the_helper() {
         ("demo", "web-0")
     );
 }
+
+#[test]
+fn kill_ends_the_stream_even_with_later_scripted_events_pending() {
+    block_on(async {
+        let fake = FakeTerminalBackend::echo().output_at(Duration::from_secs(10), "late");
+        let mut events = fake.output_stream();
+        fake.kill().await.expect("kill");
+        assert!(matches!(events.next().await, Some(BackendEvent::Exited(_))));
+        assert!(events.next().await.is_none(), "no clock advance needed");
+    });
+}
+
+#[test]
+fn a_scripted_exit_ends_the_stream_before_later_scripted_events() {
+    block_on(async {
+        let fake = FakeTerminalBackend::silent()
+            .exit_at(Duration::from_millis(100), ExitStatus::with_code(0))
+            .output_at(Duration::from_millis(500), "late");
+        let mut events = fake.output_stream();
+        fake.clock().advance(Duration::from_millis(100));
+        assert!(matches!(events.next().await, Some(BackendEvent::Exited(_))));
+        assert!(
+            events.next().await.is_none(),
+            "the clock never reaches 500ms"
+        );
+        assert!(fake.is_closed());
+    });
+}
+
+#[test]
+fn a_live_exit_ends_the_stream_before_later_scripted_events() {
+    block_on(async {
+        let fake = FakeTerminalBackend::silent().output_at(Duration::from_secs(5), "late");
+        let mut events = fake.output_stream();
+        assert!(fake.exit(ExitStatus::with_code(2)));
+        assert!(matches!(events.next().await, Some(BackendEvent::Exited(_))));
+        assert!(events.next().await.is_none());
+    });
+}

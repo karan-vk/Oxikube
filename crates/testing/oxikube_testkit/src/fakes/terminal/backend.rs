@@ -1,6 +1,8 @@
 //! [`FakeTerminalBackend`].
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::Poll;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -279,20 +281,27 @@ impl TerminalBackend for FakeTerminalBackend {
             .replay(self.clock())
             .map(|item| item.unwrap_or_else(BackendEvent::Error));
         let inner = self.inner.clone();
+        let ended = Arc::new(AtomicBool::new(false));
+        let seen = ended.clone();
         // The first `Exited` ends the stream and closes the session, wherever it came from.
+        // `take_until` checks the flag before polling, so the stream ends right after the
+        // `Exited` item even while later scripted events are still pending on the clock.
         stream::select(live, timeline)
-            .scan(false, move |ended, event| {
-                if *ended {
-                    return futures::future::ready(None);
-                }
+            .inspect(move |event| {
                 if matches!(event, BackendEvent::Exited(_)) {
-                    *ended = true;
+                    seen.store(true, Ordering::Release);
                     let mut state = inner.state.lock();
                     state.closed = true;
                     state.live = None;
                 }
-                futures::future::ready(Some(event))
             })
+            .take_until(futures::future::poll_fn(move |_| {
+                if ended.load(Ordering::Acquire) {
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            }))
             .boxed()
     }
 

@@ -99,11 +99,13 @@ async fn exec_gives_a_tty_with_resize_and_an_exit_code() {
             .await
             .expect("resize");
         backend
-            .write(format!("echo size=$(stty size)=end{attempts}\n").as_bytes())
+            // The marker is shell-computed (`en$((0))d` prints `en0d`), so the TTY's echo of
+            // this line cannot satisfy the read: only the real `stty` output does.
+            .write(format!("echo size=$(stty size)=en$((0))d{attempts}\n").as_bytes())
             .await
             .expect("write");
-        let text = read_until(&mut events, &format!("=end{attempts}")).await;
-        if text.contains("size=30 100=end") {
+        let text = read_until(&mut events, &format!("=en0d{attempts}")).await;
+        if text.contains("size=30 100=en0d") {
             break;
         }
         assert!(attempts < 10, "the resize was never applied: {text:?}");

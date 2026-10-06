@@ -141,8 +141,12 @@ impl TerminalBackend for SessionBackend {
 
     async fn kill(&self) -> OxiResult<()> {
         self.mark_killed();
-        // Unconsumed events own the status future: dropping them closes the connection.
-        drop(self.events.lock().take());
+        // Unconsumed events own the status future: replacing them closes the connection,
+        // and a consumer that subscribes later still sees the end, like a live one does.
+        if let Some(unconsumed) = self.events.lock().as_mut() {
+            *unconsumed =
+                stream::once(async { BackendEvent::Exited(ExitStatus::killed_by("KILL")) }).boxed();
+        }
         // A write blocked on backpressure holds the lock; it fails once the connection
         // closes, so skip the sink instead of waiting for it.
         if let Some(mut stdin) = self.stdin.try_lock() {

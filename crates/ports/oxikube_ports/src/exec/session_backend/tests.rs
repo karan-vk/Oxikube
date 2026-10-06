@@ -119,8 +119,13 @@ fn kill_before_the_stream_is_taken_still_reports_the_end() {
     block_on(async {
         let (backend, _h) = session(false);
         backend.kill().await.expect("kill");
-        // The stream was dropped with the connection: a late consumer sees it ended.
-        assert!(backend.output_stream().next().await.is_none());
+        // A late consumer still sees the end, with the same event a live one gets.
+        let mut events = backend.output_stream();
+        assert!(matches!(
+            events.next().await,
+            Some(BackendEvent::Exited(status)) if status.signal.as_deref() == Some("KILL")
+        ));
+        assert!(events.next().await.is_none());
     });
 }
 
