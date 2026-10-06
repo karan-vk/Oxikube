@@ -12,7 +12,9 @@
 //! cannot be written:
 //!
 //! * a record that fails to append stays in an in-memory **backlog** (bounded by
-//!   [`MAX_AUDIT_BACKLOG`]) and the mutation that produced it is reported as failed;
+//!   [`MAX_AUDIT_BACKLOG`]; on overflow `Denied` records are dropped before the records
+//!   of mutations that may have run) and the mutation that produced it is reported as
+//!   failed;
 //! * before every mutation the guard calls [`AuditLog::ensure_writable`], which flushes
 //!   the backlog first. While that fails the guard refuses the mutation without calling
 //!   any port, so at most the one mutation whose own record failed ever runs unaudited

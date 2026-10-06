@@ -13,9 +13,13 @@ use parking_lot::Mutex;
 
 use super::attempt::AuditAttempt;
 
-/// Most records kept in memory while the store refuses writes. When the backlog is
-/// full the oldest record is dropped (and logged); mutations are refused all that time,
-/// so only denied and cancelled attempts can pile up.
+/// Most records kept in memory while the store refuses writes.
+///
+/// Mutations are refused all that time, so what piles up is mostly `Denied` records;
+/// when the backlog is full the oldest `Denied` records are dropped first (and logged).
+/// Records of mutations that may have reached the cluster (`Succeeded`, `Failed`,
+/// `Cancelled`), such as the one whose own flush failed, are dropped oldest first only
+/// when nothing else is left to drop.
 pub const MAX_AUDIT_BACKLOG: usize = 1024;
 
 /// The writer of the audit trail. See the [module docs](super).
@@ -142,14 +146,7 @@ impl AuditLog {
             }
             Err(err) => {
                 let mut backlog = self.backlog.lock();
-                let excess = backlog.len().saturating_sub(MAX_AUDIT_BACKLOG);
-                if excess > 0 {
-                    backlog.drain(..excess);
-                    tracing::error!(
-                        dropped = excess,
-                        "audit backlog full; oldest records dropped"
-                    );
-                }
+                trim_backlog(&mut backlog);
                 tracing::warn!(backlog = backlog.len(), error = %err, "audit append failed");
                 Err(err)
             }
@@ -171,5 +168,34 @@ impl AuditLog {
     /// Stamps `record` with the current time (the moment the attempt ended).
     pub(super) fn stamp(&self, record: &mut AuditRecord) {
         record.ts = self.clock.now();
+    }
+}
+
+/// Cuts `backlog` down to [`MAX_AUDIT_BACKLOG`]: the oldest `Denied` records go first,
+/// then (last resort) the oldest of the rest. Logs what it dropped.
+fn trim_backlog(backlog: &mut VecDeque<AuditRecord>) {
+    let excess = backlog.len().saturating_sub(MAX_AUDIT_BACKLOG);
+    if excess == 0 {
+        return;
+    }
+    let mut denied = 0;
+    backlog.retain(|record| {
+        let drop = denied < excess && record.outcome == AuditOutcome::Denied;
+        denied += usize::from(drop);
+        !drop
+    });
+    let mutations = excess - denied;
+    backlog.drain(..mutations);
+    if denied > 0 {
+        tracing::error!(
+            dropped = denied,
+            "audit backlog full; oldest denied records dropped"
+        );
+    }
+    if mutations > 0 {
+        tracing::error!(
+            dropped = mutations,
+            "audit backlog full of mutation records; oldest dropped"
+        );
     }
 }

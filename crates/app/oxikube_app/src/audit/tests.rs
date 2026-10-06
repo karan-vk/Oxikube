@@ -134,7 +134,44 @@ fn the_backlog_is_bounded() {
     assert_eq!(
         log[0].target.name.as_ref(),
         format!("p{extra}"),
-        "the oldest were dropped"
+        "with no denied records to drop, the oldest were dropped"
+    );
+}
+
+#[test]
+fn overflow_drops_denied_records_before_a_mutation_record() {
+    let f = fixture();
+    // The mutation whose own flush failed: its record is the oldest in the backlog.
+    fail_next(&f.state);
+    let _ = f.log.record(entry(&f.log, "ran")).now_or_never().unwrap();
+    // A long outage: many denied dispatches queue behind it.
+    for i in 0..MAX_AUDIT_BACKLOG + 10 {
+        fail_next(&f.state);
+        let denied = f.log.entry(
+            "alice",
+            Initiator::Agent,
+            "pod::Delete",
+            pod("a", &format!("d{i}")),
+            false,
+            AuditOutcome::Denied,
+        );
+        let _ = f.log.record(denied).now_or_never().unwrap();
+    }
+    assert_eq!(f.log.backlog_len(), MAX_AUDIT_BACKLOG);
+
+    f.log.ensure_writable().now_or_never().unwrap().unwrap();
+    let log = f.state.audit_log();
+    assert_eq!(log.len(), MAX_AUDIT_BACKLOG);
+    assert_eq!(
+        log[0].target.name.as_ref(),
+        "ran",
+        "the mutation record survives"
+    );
+    assert_eq!(log[0].outcome, AuditOutcome::Succeeded);
+    assert_eq!(
+        log[1].target.name.as_ref(),
+        "d11",
+        "the oldest denied records were dropped instead"
     );
 }
 
