@@ -1,12 +1,14 @@
 //! `cargo xtask gen-settings-schema [--check]`: write or verify `settings.schema.json`.
 //!
-//! The schema comes from the registered settings types, so it is produced by Rust code that
-//! links them: the `oxikube_settings` example `settings_schema` prints it (xtask does not
-//! depend on the GPUI-based settings crate, which keeps the pre-commit hook fast). The output
-//! is canonical (keys sorted), so `--check` is a byte comparison; CI runs it so a settings
-//! change without a regenerated schema fails. A crate that registers settings but is not linked
-//! into the generator would be missing from the schema in a way `--check` cannot see, so
-//! [`coverage`] fails the command until the generator links it (E05-S06b).
+//! The schema comes from the registered settings types, so it is produced by the app binary,
+//! which links every crate that registers settings: `oxikube --print-settings-schema` prints it
+//! (xtask does not depend on the GPUI-based crates, which keeps the pre-commit hook fast). The
+//! output is canonical (keys sorted), so `--check` is a byte comparison; CI runs it so a
+//! settings change without a regenerated schema fails. A crate that registers settings but is
+//! not linked into the binary would be missing from the schema in a way `--check` cannot see, so
+//! [`coverage`] compares the crates the binary reports (`--print-settings-crates`) with the
+//! crates whose source invokes `register_settings!` and fails the command on any difference
+//! (E05-S06b).
 
 mod coverage;
 
@@ -19,8 +21,14 @@ use anyhow::{Context, Result, bail};
 /// `oxikube_assets::SETTINGS_SCHEMA_PATH`).
 pub const SCHEMA_PATH: &str = "crates/platform/oxikube_assets/assets/settings/settings.schema.json";
 
-/// Package and example that print the schema.
-const GENERATOR: (&str, &str) = ("oxikube_settings", "settings_schema");
+/// The package whose binary prints the schema (`bins/oxikube`).
+const GENERATOR: &str = "oxikube";
+
+/// Hidden `oxikube` flag that prints `settings.schema.json`.
+const SCHEMA_FLAG: &str = "--print-settings-schema";
+
+/// Hidden `oxikube` flag that prints the crates that registered settings, one per line.
+const CRATES_FLAG: &str = "--print-settings-crates";
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -34,9 +42,12 @@ pub fn run(args: &Args) -> Result<()> {
         .no_deps()
         .exec()
         .context("cargo metadata")?;
-    coverage::ensure_generator_links_every_settings_crate(&metadata, GENERATOR.0)?;
     let root = metadata.workspace_root.as_std_path();
-    let generated = generate(root)?;
+    let linked = run_generator(root, CRATES_FLAG)?;
+    coverage::ensure_every_settings_crate_is_linked(&metadata, &linked, GENERATOR)?;
+    let generated = run_generator(root, SCHEMA_FLAG)?;
+    serde_json::from_str::<serde_json::Value>(&generated)
+        .context("generator printed invalid JSON")?;
     let path = root.join(SCHEMA_PATH);
     if args.check {
         let existing = std::fs::read_to_string(&path).ok();
@@ -49,25 +60,22 @@ pub fn run(args: &Args) -> Result<()> {
     Ok(())
 }
 
-/// Run the generator example and return its stdout.
-fn generate(root: &Path) -> Result<String> {
+/// Run the app binary with one of the hidden print flags and return its stdout.
+fn run_generator(root: &Path, flag: &str) -> Result<String> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let (package, example) = GENERATOR;
     let output = Command::new(cargo)
         .current_dir(root)
-        .args(["run", "-q", "-p", package, "--example", example])
+        .args(["run", "-q", "-p", GENERATOR, "--", flag])
         .output()
-        .context("running the settings schema generator")?;
+        .with_context(|| format!("running `oxikube {flag}`"))?;
     if !output.status.success() {
         bail!(
-            "settings schema generator failed ({}):\n{}",
+            "`oxikube {flag}` failed ({}):\n{}",
             output.status,
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    let text = String::from_utf8(output.stdout).context("schema is not UTF-8")?;
-    serde_json::from_str::<serde_json::Value>(&text).context("generator printed invalid JSON")?;
-    Ok(text)
+    String::from_utf8(output.stdout).context("generator output is not UTF-8")
 }
 
 /// The `--check` verdict: the checked-in text must equal the generated text.

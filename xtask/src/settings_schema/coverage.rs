@@ -3,10 +3,13 @@
 //! `inventory` only sees registrations from crates linked into the generator binary, so a
 //! setting registered anywhere else silently never reaches `settings.schema.json` (and the
 //! schema's `additionalProperties: false` then flags the user's key as unknown). `--check`
-//! compares the schema with the generator's own output, so it cannot see that gap; this
-//! guard turns it into a loud failure until the generator links every settings crate (E05-S06b).
+//! compares the schema with the generator's own output, so it cannot see that gap. This guard
+//! finds the crates whose source invokes `register_settings!`, asks the generator which crates
+//! actually registered something, and fails on any crate in the first set but not the second.
+//! Comparing against what the real binary reports (rather than reasoning about the dependency
+//! graph) also catches a crate that is a dependency but never referenced, which the linker drops.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use anyhow::{Result, bail};
@@ -15,9 +18,11 @@ use cargo_metadata::{DependencyKind, Metadata, Package};
 /// The crate that defines `register_settings!`.
 const SETTINGS_CRATE: &str = "oxikube_settings";
 
-/// Fail when a workspace crate registers settings but is not linked into `generator`.
-pub fn ensure_generator_links_every_settings_crate(
+/// Fail when a workspace crate registers settings but `linked` (the generator's own list of
+/// registering crates, one per line) does not contain it.
+pub fn ensure_every_settings_crate_is_linked(
     metadata: &Metadata,
+    linked: &str,
     generator: &str,
 ) -> Result<()> {
     let owners: BTreeSet<String> = metadata
@@ -26,62 +31,27 @@ pub fn ensure_generator_links_every_settings_crate(
         .filter(|pkg| depends_on_settings_crate(pkg) && registers_settings(pkg))
         .map(|pkg| pkg.name.to_string())
         .collect();
-    let missing = unlinked(
-        &owners,
-        &link_closure(&workspace_graph(metadata, generator), generator),
-    );
+    let missing = unlinked(&owners, &parse_linked(linked));
     if missing.is_empty() {
         return Ok(());
     }
     bail!(
         "settings registered by {missing:?} would be missing from settings.schema.json: the \
-         generator `{generator}` does not link them. Move the generator to a target that links \
-         every settings crate (E05-S06b, issue #454) before adding settings there."
+         generator `{generator}` does not link them. Depend on each crate from `{generator}` and \
+         call its `init` (or otherwise reference it) so the linker keeps its registrations."
     )
 }
 
-/// Workspace dependency edges by crate name: normal dependencies for every crate, plus the
-/// dev-dependencies of `generator` itself (an example links its package's dev-dependencies, but
-/// dev-dependencies of its dependencies are not linked).
-fn workspace_graph(metadata: &Metadata, generator: &str) -> BTreeMap<String, Vec<String>> {
-    let members: BTreeSet<&str> = metadata
-        .workspace_packages()
-        .iter()
-        .map(|pkg| pkg.name.as_str())
-        .collect();
-    metadata
-        .workspace_packages()
-        .iter()
-        .map(|pkg| {
-            let deps = pkg
-                .dependencies
-                .iter()
-                .filter(|dep| members.contains(dep.name.as_str()))
-                .filter(|dep| match dep.kind {
-                    DependencyKind::Normal => true,
-                    DependencyKind::Development => pkg.name.as_str() == generator,
-                    _ => false,
-                })
-                .map(|dep| dep.name.clone())
-                .collect();
-            (pkg.name.to_string(), deps)
-        })
+/// The crate names in the generator's `--print-settings-crates` output.
+fn parse_linked(text: &str) -> BTreeSet<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
         .collect()
 }
 
-/// Crates reachable from `root` (inclusive) in `graph`.
-fn link_closure(graph: &BTreeMap<String, Vec<String>>, root: &str) -> BTreeSet<String> {
-    let mut seen = BTreeSet::new();
-    let mut stack = vec![root.to_owned()];
-    while let Some(name) = stack.pop() {
-        if seen.insert(name.clone()) {
-            stack.extend(graph.get(&name).into_iter().flatten().cloned());
-        }
-    }
-    seen
-}
-
-/// The registering crates that are not in the linked set.
+/// The registering crates that the generator did not report.
 fn unlinked(owners: &BTreeSet<String>, linked: &BTreeSet<String>) -> Vec<String> {
     owners.difference(linked).cloned().collect()
 }
@@ -135,45 +105,25 @@ fn source_files(dir: &Path) -> Vec<std::path::PathBuf> {
 mod tests {
     use super::*;
 
-    fn graph(edges: &[(&str, &[&str])]) -> BTreeMap<String, Vec<String>> {
-        edges
-            .iter()
-            .map(|(name, deps)| {
-                (
-                    (*name).to_owned(),
-                    deps.iter().map(|d| (*d).to_owned()).collect(),
-                )
-            })
-            .collect()
-    }
-
     fn set(names: &[&str]) -> BTreeSet<String> {
         names.iter().map(|n| (*n).to_owned()).collect()
     }
 
     #[test]
-    fn a_settings_crate_the_generator_does_not_link_is_reported() {
-        let graph = graph(&[
-            ("oxikube_settings", &["oxikube_assets"]),
-            ("oxikube_theme", &["oxikube_settings"]),
-            ("oxikube_assets", &[]),
-        ]);
-        let linked = link_closure(&graph, "oxikube_settings");
+    fn a_settings_crate_the_generator_does_not_report_is_missing() {
+        let linked = parse_linked("oxikube_logging\noxikube_workspace\n");
         assert_eq!(
-            unlinked(&set(&["oxikube_theme"]), &linked),
+            unlinked(&set(&["oxikube_logging", "oxikube_theme"]), &linked),
             ["oxikube_theme"]
         );
     }
 
     #[test]
-    fn a_settings_crate_linked_directly_or_transitively_passes() {
-        let graph = graph(&[
-            ("generator", &["mid"]),
-            ("mid", &["oxikube_theme"]),
-            ("oxikube_theme", &["generator"]),
-        ]);
-        let linked = link_closure(&graph, "generator");
-        assert!(unlinked(&set(&["oxikube_theme", "mid"]), &linked).is_empty());
+    fn every_reported_settings_crate_passes() {
+        let linked = parse_linked("oxikube_logging\n\n oxikube_theme \n");
+        assert!(unlinked(&set(&["oxikube_logging", "oxikube_theme"]), &linked).is_empty());
+        // Extra crates the sources do not mention (test fixtures, transitive) are fine.
+        assert!(unlinked(&set(&[]), &linked).is_empty());
     }
 
     #[test]
@@ -187,13 +137,26 @@ mod tests {
         assert!(!invokes_register_settings("fn plain() {}"));
     }
 
-    /// The real workspace: every crate that registers a setting is linked into the generator.
+    /// The real workspace: the app binary reports every crate whose source registers a setting,
+    /// and the guard fails when one is withheld from the generator's list.
     #[test]
-    fn the_workspace_generator_links_every_settings_crate() {
+    fn the_app_binary_links_every_settings_crate() {
         let metadata = cargo_metadata::MetadataCommand::new()
             .no_deps()
             .exec()
             .unwrap();
-        ensure_generator_links_every_settings_crate(&metadata, "oxikube_settings").unwrap();
+        let root = metadata.workspace_root.as_std_path();
+        let linked = super::super::run_generator(root, super::super::CRATES_FLAG).unwrap();
+        ensure_every_settings_crate_is_linked(&metadata, &linked, "oxikube").unwrap();
+
+        let without_theme: String = linked
+            .lines()
+            .filter(|line| *line != "oxikube_theme")
+            .map(|line| format!("{line}\n"))
+            .collect();
+        let err = ensure_every_settings_crate_is_linked(&metadata, &without_theme, "oxikube")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("oxikube_theme"), "{err}");
     }
 }

@@ -22,9 +22,20 @@ Options:
   --perf-no-probe         Run --perf-scenario without the frame hook (overhead measurement)
   -h, --help              Print this help";
 
+/// Hidden tooling flags (not in [`USAGE`]): what `cargo xtask gen-settings-schema` runs, because
+/// this binary links every crate that registers settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Print {
+    /// `--print-settings-schema`: the `settings.schema.json` text.
+    SettingsSchema,
+    /// `--print-settings-crates`: the crates that registered settings, one per line.
+    SettingsCrates,
+}
+
 /// Parsed flags.
 #[derive(Debug, Default, PartialEq)]
 pub struct Args {
+    pub print: Option<Print>,
     pub perf: bool,
     pub perf_dir: Option<PathBuf>,
     pub perf_duration: Option<Duration>,
@@ -67,6 +78,8 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
         };
         match flag.as_str() {
             "-h" | "--help" => return Ok(Parsed::Help),
+            "--print-settings-schema" => out.print = Some(Print::SettingsSchema),
+            "--print-settings-crates" => out.print = Some(Print::SettingsCrates),
             "--perf" => out.perf = true,
             "--perf-no-probe" => out.perf_no_probe = true,
             "--perf-dir" => {
@@ -139,6 +152,19 @@ mod tests {
         assert_eq!(a.perf_scenario.as_deref(), Some("startup"));
         assert_eq!(a.perf_report, Some(PathBuf::from("out.json")));
         assert!(a.perf_no_probe && !a.perf);
+    }
+
+    #[test]
+    fn hidden_print_flags_are_accepted_but_not_advertised() {
+        assert_eq!(
+            run(&["--print-settings-schema"]).unwrap().print,
+            Some(Print::SettingsSchema)
+        );
+        assert_eq!(
+            run(&["--print-settings-crates"]).unwrap().print,
+            Some(Print::SettingsCrates)
+        );
+        assert!(!USAGE.contains("--print-settings"));
     }
 
     #[test]
