@@ -15,7 +15,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 
 use super::FakeClockPort;
-use crate::script::{CallLog, Script, Timeline};
+use crate::script::{CallLog, Script, StreamGauge, Timeline};
 
 const PORT: &str = "FakeResourcePort";
 
@@ -310,6 +310,7 @@ pub struct FakeResourcePort {
     calls: CallLog<ResourceCall>,
     store: Mutex<Vec<Resource>>,
     clock: Arc<FakeClockPort>,
+    watches: StreamGauge,
 }
 
 fake_plumbing!(FakeResourcePort, ResourceScripts, ResourceCall);
@@ -342,6 +343,7 @@ impl FakeResourcePort {
             calls: CallLog::default(),
             store: Mutex::new(Vec::new()),
             clock,
+            watches: StreamGauge::default(),
         }
     }
 
@@ -357,6 +359,12 @@ impl FakeResourcePort {
     /// The clock watch replays are timed on; advance it to deliver scripted events.
     pub fn clock(&self) -> &Arc<FakeClockPort> {
         &self.clock
+    }
+
+    /// Watch streams handed out by `watch` that the caller has not dropped yet: opened feeds
+    /// minus stopped ones.
+    pub fn live_watches(&self) -> usize {
+        self.watches.live()
     }
 
     /// Adds `object` to the store, replacing an object with the same kind, namespace and
@@ -615,7 +623,7 @@ impl ResourceReader for FakeResourcePort {
             Ok(Timeline::immediate([batch]).keep_open())
         })?;
         let clock: Arc<dyn ClockPort> = self.clock.clone();
-        Ok(timeline.replay(clock))
+        Ok(self.watches.track(timeline.replay(clock)))
     }
 
     async fn get_scale(&self, kind: &Gvk, namespace: Option<&str>, name: &str) -> OxiResult<Scale> {

@@ -85,6 +85,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   namespaces through `ResourceReader` (a `403` falls back to the typed names), drops stale
   selected names, maps `0`-`9` to All / the first nine favourites, computes a `ScopeDelta` for
   the `ResourceStore`, and runs the `namespace::Select` / `namespace::ToggleFavourite` commands.
+  Module `store` (E07-S01): `ResourceStore`, the per-session cache behind every table, sidebar count
+  and overview tile. Entries are keyed by (gvk, `FeedScope`: the cluster or one namespace); the
+  table-driven `FeedPolicy` picks the port call (reflector or metadata-only `ResourceReader::watch`
+  for core kinds, `TableFeedPort::table_feed` for CRDs and unknown kinds, ADR 0006); a `FeedBudget`
+  hook admits, degrades or refuses new feeds (evicting idle ones first). `subscribe(StoreQuery)`
+  returns a `Subscription` stream of `StoreDelta`s: a snapshot first, then coalesced `RowOp`s with
+  positions in the subscriber's own sorted, filtered index (no re-sort per event), plus the
+  `FeedState`. Feeds run on an injected `Spawner` (the Tokio bridge in the binary) under
+  abort-on-drop guards; the last subscriber's drop starts a grace timer on the `ClockPort`, after
+  which the feed is aborted. `Subscription::rescope` follows a namespace change with the
+  `ScopeDelta`, keeping the feeds that stay. `ResourceStores` keeps one store per connected session.
   Module `session::restore` (E06-S11): `SessionRestorer` reopens the last session. `prepare` reads
   the saved tabs (`ClusterTabsStore`, moved here from the workspace so the app layer can read what
   the tabs write), matches them against the catalog, opens each cluster as a `Disconnected`

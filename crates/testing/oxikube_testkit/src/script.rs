@@ -261,6 +261,41 @@ impl<T: Send + 'static> Timeline<T> {
     }
 }
 
+/// Counts the streams a fake handed out that are still alive: each one decrements the gauge
+/// when it is dropped. Lets a test prove that a consumer stopped (aborted) a feed, not only
+/// that it opened one.
+#[derive(Debug, Clone, Default)]
+pub struct StreamGauge {
+    live: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl StreamGauge {
+    /// Wraps `stream` so it counts as live until dropped.
+    pub fn track<T: Send + 'static>(&self, stream: BoxStream<'static, T>) -> BoxStream<'static, T> {
+        self.live.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let guard = LiveGuard(self.live.clone());
+        stream
+            .map(move |item| {
+                let _alive = &guard;
+                item
+            })
+            .boxed()
+    }
+
+    /// Streams handed out and not yet dropped.
+    pub fn live(&self) -> usize {
+        self.live.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+struct LiveGuard(Arc<std::sync::atomic::AtomicUsize>);
+
+impl Drop for LiveGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,6 +351,17 @@ mod tests {
         assert_eq!(block_on(s.next()).map(Result::ok), Some(Some("late")));
         assert_eq!(block_on(s.next()).map(Result::ok), Some(Some("late-2")));
         assert!(block_on(s.next()).is_none());
+    }
+
+    #[test]
+    fn stream_gauge_counts_until_drop() {
+        let gauge = StreamGauge::default();
+        let mut s = gauge.track(stream::iter([1, 2]).boxed());
+        assert_eq!(gauge.live(), 1);
+        assert_eq!(block_on(s.next()), Some(1));
+        assert_eq!(gauge.live(), 1, "still live while the consumer holds it");
+        drop(s);
+        assert_eq!(gauge.live(), 0);
     }
 
     #[test]

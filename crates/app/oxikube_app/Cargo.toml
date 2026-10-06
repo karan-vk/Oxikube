@@ -37,6 +37,11 @@ k8s-openapi.workspace = true
 kube.workspace = true
 oxikube_kube.workspace = true
 
+# `cargo bench -p oxikube_app --bench store_apply` (E07-S01): a 500-event batch into a 10k cache.
+[[bench]]
+name = "store_apply"
+harness = false
+
 [features]
 default = []
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).

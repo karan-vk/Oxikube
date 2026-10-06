@@ -19,6 +19,7 @@
 //! | [`sidebar`] | E06-S10 | [`review_access`](sidebar::review_access) (the rules reviews the cluster sidebar hides sections by, failing open) and [`discover_custom_resources`](sidebar::discover_custom_resources) |
 //! | [`integrations`] | E06-S10 | [`IntegrationRegistry`] (stub): registered integrations and the sidebar sections they append after the core ones |
 //! | [`audit`] | E06-S02 | [`AuditLog`]: redacted, batched, fail-closed audit appends through `StatePort` |
+//! | [`store`] | E07-S01 | [`ResourceStore`]: the per-session cache over reflector, metadata and Table feeds keyed by (gvk, scope), ref-counted feeds with grace teardown and a [`FeedBudget`](store::FeedBudget) hook, in-app sort / filter / name-namespace-label indices, and [`Subscription`](store::Subscription) streams of coalesced [`StoreDelta`](store::StoreDelta)s; [`ResourceStores`] keeps one per connected session |
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
 pub mod audit;
@@ -29,6 +30,7 @@ pub mod integrations;
 pub mod session;
 pub mod sidebar;
 pub mod sources;
+pub mod store;
 
 #[cfg(test)]
 mod testing;
@@ -54,3 +56,4 @@ pub use session::{
 };
 pub use sidebar::{AccessOutcome, CustomKind, CustomResourceGroup};
 pub use sources::{KubeconfigSourcesService, SourceListStore, SourceRow};
+pub use store::{ResourceStore, ResourceStores, StoreDelta, StoreQuery, Subscription};
