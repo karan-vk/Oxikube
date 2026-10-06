@@ -16,6 +16,8 @@
 //!   times it is called.
 //! - [`channel`]: [`batch_channel`], a bounded tokio channel whose receiver drains into an entity
 //!   in batches.
+//! - [`lazy`]: [`LazyService`], a service started on first use with `ensure_init` instead of at
+//!   start-up (extension host, discovery, agent registry, update checker; E05-S13).
 //! - [`perf`]: the `--perf` recorder (frame times, feed throughput, `notify` counts), its JSONL
 //!   flusher, the root-view frame hook and (feature `perf-harness`) the scripted headless frame
 //!   driver behind `cargo xtask perf` (E01-S14, ADR 0013).
@@ -69,6 +71,7 @@
 pub mod channel;
 pub mod gpui_tokio;
 pub mod kube_task;
+pub mod lazy;
 pub mod notify;
 pub mod perf;
 
@@ -79,4 +82,5 @@ pub use gpui_tokio::{
     RuntimeMode, build_runtime, handle, init, init_deterministic, init_from_handle, mode,
 };
 pub use kube_task::{KubeTask, KubeTaskError, spawn_kube};
+pub use lazy::{LazyService, LazyServices, StartedService};
 pub use notify::{FRAME_INTERVAL, NotifyCoalescedExt, notify_coalesced, notify_pending};

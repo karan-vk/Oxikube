@@ -90,16 +90,70 @@ pub struct StageTiming {
     pub elapsed: Duration,
 }
 
-/// Per-stage costs of this start-up, in the order the stages ran. Read it with
-/// [`StartupReport::get`]; E05-S13 turns it into the budget check.
+/// Per-stage costs of this start-up, in the order the stages ran, and when the first interactive
+/// frame was drawn (E05-S13). Read it with [`StartupReport::get`].
 #[derive(Debug, Clone, Default)]
 pub struct StartupReport {
     timings: Vec<StageTiming>,
+    launched: Option<Instant>,
+    first_frame: Option<FirstFrame>,
+}
+
+/// The end of start-up: the main window's first interactive frame (see
+/// [`crate::startup::first_frame`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FirstFrame {
+    /// From the first line of `main` ([`StartupReport::launched_at`]) to the end of the update
+    /// that drew the first frame; `None` when the launch instant is unknown.
+    pub since_launch: Option<Duration>,
+    /// IPv4/IPv6 sockets the process held at that moment: 0 means no network before the first
+    /// frame. `None` where the OS offers no way to count them.
+    pub inet_sockets: Option<usize>,
 }
 
 impl Global for StartupReport {}
 
 impl StartupReport {
+    /// An empty report for a process launched at `launched` (the first line of `main`).
+    pub fn launched_at(launched: Instant) -> Self {
+        Self {
+            launched: Some(launched),
+            ..Self::default()
+        }
+    }
+
+    /// When the process started, if known.
+    pub fn launched(&self) -> Option<Instant> {
+        self.launched
+    }
+
+    /// The first interactive frame, once it has been drawn.
+    pub fn first_frame(&self) -> Option<FirstFrame> {
+        self.first_frame
+    }
+
+    /// Records the first interactive frame (only the first call counts).
+    pub fn record_first_frame(&mut self, frame: FirstFrame) {
+        self.first_frame.get_or_insert(frame);
+    }
+
+    /// What `stage` cost, when it ran.
+    pub fn elapsed(&self, stage: Stage) -> Option<Duration> {
+        self.timings
+            .iter()
+            .find(|t| t.stage == stage)
+            .map(|t| t.elapsed)
+    }
+
+    /// The main-thread cost of loading the settings, theme and keymap (stages `Settings`, `Theme`
+    /// and `Keymap`): the part of start-up with its own 30 ms budget (docs/PERFORMANCE.md).
+    pub fn config_load(&self) -> Duration {
+        [Stage::Settings, Stage::Theme, Stage::Keymap]
+            .into_iter()
+            .filter_map(|stage| self.elapsed(stage))
+            .sum()
+    }
+
     /// The report of this run; `None` before [`crate::startup::init`] finished.
     pub fn get(cx: &App) -> Option<&Self> {
         cx.try_global::<Self>()

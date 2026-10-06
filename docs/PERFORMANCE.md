@@ -11,7 +11,7 @@ measured on a mid-range x86 laptop with an integrated GPU.
 | Frame time | p95 ≤ 8 ms, p99 ≤ 16 ms, no frame > 50 ms | scrolling a 10 000-row pod table under 1 %/5 s churn; typing in the editor on a 5 MB YAML; resizing panes; streaming logs at 5 000 lines/s |
 | Input latency | ≤ 1 frame to visible change | keystroke in palette/filter/editor; click on a row; tab switch |
 | Palette | open ≤ 1 frame; filter 2 000 entries ≤ 5 ms | command palette, `:` jump, picker |
-| Startup | ≤ 400 ms cold to first interactive frame; catalog before any network | `oxikube` launch with 3 kubeconfigs, 20 contexts |
+| Startup | ≤ 400 ms cold to first interactive frame; catalog before any network; settings + keymap + theme < 30 ms on the main thread | `oxikube` launch with 3 kubeconfigs, 20 contexts ([Startup](#startup-cold-start-to-the-first-interactive-frame)) |
 | Cluster open | tab interactive ≤ 200 ms after connect; first table rows ≤ 1 s after feed warm | 2 000-pod cluster |
 | Main thread | 0 blocking I/O, process spawn, or lock contention > 1 ms | any |
 | Memory | idle < 150 MB (2 clusters); 10 k pods < 400 MB; logs/events ring-buffered | steady state after 10 min |
@@ -160,7 +160,7 @@ same-runner baseline, never with the absolute budgets above.
 
 | Scenario | Status | Metrics |
 |---|---|---|
-| `startup` | measured | `rss_mib` / `peak_rss_mib` (headless resident memory after the 120 redraws, MiB; see [Memory (RSS)](#memory-rss)); `first_frame_ms` (first line of `main` to the end of the update that drew the first frame: headless app context, text system, GPU renderer, window, first draw); `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask); `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) |
+| `startup` | measured | the real init order to the main window's first interactive frame (E05-S13, see [Startup](#startup-cold-start-to-the-first-interactive-frame)): `first_frame_ms` (first line of `main` to the end of the update that drew the first frame), `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask), `config_load_ms` (settings + theme + keymap on the main thread), `init_<stage>_ms` (every stage of `oxikube::startup`), `state_db_open_ms` (creating and migrating the SQLite state db, off the UI thread in the app); then `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) and `rss_mib` / `peak_rss_mib` (headless resident memory after the redraws, MiB; see [Memory (RSS)](#memory-rss)) |
 | `scroll-10k` | not available: needs E05-S11 #93, E07-S01 #107, E07-S03 #109 | frame time scrolling the 10 k-pod table under churn |
 | `palette` | not available: needs E05-S11 #93, E11-S03 #158 | open time, filter of 2 000 entries |
 | `logs-stream` | not available: needs E05-S11 #93, E08-S02 #120 | frame time at 5 000 lines/s |
@@ -215,12 +215,10 @@ the headless figure, which is why the headless number is only a regression signa
 runner's headless figure is about four times the macOS runner's (different renderer and system
 libraries; not investigated further), another reason baselines are per OS.
 
-Since E05-S03 the `startup` scenario opens the real main window (`oxikube_ui::init`, `Root`, title
-bar), so `first_frame_ms` includes the component library's `init` (about 65 ms of the ~120 ms on the
-local M-series laptop, `release-fast`); the committed baselines predate it and are refreshed from
-the nightly artifacts after merge. The rest still mostly measures platform, text-system and renderer
-start-up. The startup budget (≤ 400 ms to the first *interactive* frame with real catalog data) is
-E05-S13's job, built on this harness.
+Since E05-S13 the `startup` scenario runs the real init order (logging, platform, runtime,
+settings, theme, keymap, component library, state db, `AppState`, workspace, features, keymap
+re-bind, window), so `first_frame_ms` is about twice the committed numbers above (139 ms p50 on the
+local M5 Max); the baselines are refreshed from the nightly artifacts (rule 2 below).
 
 Rules for updating the baseline:
 
@@ -232,6 +230,67 @@ Rules for updating the baseline:
 3. Never edit numbers by hand and never refresh the baseline to make a red nightly green without
    explaining the regression.
 
+
+## Startup: cold start to the first interactive frame
+
+Built in E05-S13 (ADR 0013). Budgets: **≤ 400 ms** from launch to the first interactive frame with
+3 kubeconfigs and 20 contexts, **< 30 ms** for loading settings, keymap and theme on the main thread,
+and **no network before the first frame**.
+
+- **The marker.** The main window's content is wrapped in `oxikube_runtime::perf::FirstFrameProbe`,
+  which calls `oxikube::startup::first_frame::mark` at the end of the update that drew the first
+  frame (after `draw` and `present`; from then on the window dispatches input). It records the time
+  since the first line of `main` in the `StartupReport`, counts the process's IPv4/IPv6 sockets
+  (`oxikube_runtime::perf::sockets`: `/proc/self/fd` + `/proc/self/net/*` on Linux, `fstat` +
+  `getsockname` on macOS) and logs `first interactive frame` with both and the config-load cost.
+  `oxikube --perf` also prints it with every stage's cost:
+
+  ```
+  oxikube --perf: first interactive frame after 241.9 ms (budget 400 ms); settings+theme+keymap 3.1 ms (budget 30 ms); network sockets before it: 0; init: logging 0.68 assets 105.06 runtime 0.05 settings 1.28 theme 1.12 keymap 0.65 ui 71.93 state_db 0.01 app_state 0.00 workspace 0.02 features 0.00 keymap_rebind 0.04 other 61.05 ms
+  ```
+
+  (`other`: the platform run loop starting and, on macOS, the window and its first draw, which
+  happen before the window stage is recorded.)
+- **Nothing waits.** The state db opens on the background executor (`LazyState`) and the main
+  window opens at once with the startup placeholder: the workspace's default layout, interactive,
+  marked "Restoring layout…" in the title bar while the saved layout is read through the async
+  `StatePort` (`oxikube_workspace::window::open_main_window_restoring`). The saved layout replaces
+  it when the read completes; a failed read leaves the default layout in place and usable. The menu
+  bar is installed right after the first frame (about 19 ms with AppKit).
+- **Lazy init rule.** An `init(cx)` only registers. The extension host, API and cloud discovery,
+  Prometheus detection, the agent registry, the update checker and kubeconfig parsing start on first
+  use through `oxikube_runtime::LazyService::ensure_init` (list: `oxikube::startup::deferred`), with
+  their heavy part on `spawn_kube` or the background executor. The startup scenario fails if one has
+  started (or a socket is open) at the first frame.
+- **`cargo xtask perf startup`** runs the scenario in fresh processes with `KUBECONFIG` set to the
+  reference fixture (3 kubeconfigs, 20 contexts, written to `<target>/perf/fixture/`), reports each
+  single-observation metric's distribution across the launches (`launches` in the report), and
+  checks the budgets on the p95 across launches: `launch_to_first_frame_ms` ≤ 400 ms (the run fails
+  above +20 %, the nightly tolerance; between the two the row is `OVER`) and `config_load_ms` ≤ 30 ms
+  (strict). `--skip-budgets` reports without failing. Headless numbers are a lower bound of the
+  windowed ones (no present, no GPU), so the real-window figure below is the one the budget is about.
+- **Cold, not warm.** Every sample is a fresh process (no in-process caches; the first launch after a
+  build also pays code-signature checks and dynamic loading). The OS file cache stays warm: clearing
+  it (`sudo purge` on macOS, `echo 3 > /proc/sys/vm/drop_caches` on Linux) needs root and is not part
+  of the harness.
+
+Measured on an Apple M5 Max (`release-fast`, 20 launches each, other builds running on the machine):
+
+| | p50 | p95 | max |
+|---|---|---|---|
+| windowed: process spawn to first interactive frame | 273–280 ms | 311–348 ms | 595–630 ms (the first launch after the build) |
+| windowed: first line of `main` to first interactive frame | 258–265 ms | 282–326 ms | 299–338 ms |
+| windowed: settings + theme + keymap | 3.3–3.6 ms | 4.0–41.9 ms | 4.4–79 ms (two outliers in one batch of 20, load average 12; 12 more launches all 2.9–5.9 ms) |
+| headless (`cargo xtask perf startup --samples 20`): spawn to first frame | 146 ms | 205 ms | 214 ms |
+| headless: settings + theme + keymap | 0.78 ms | 1.17 ms | 1.17 ms |
+| network sockets open at the first frame | 0 in every launch | | |
+
+Where the time goes (windowed p50): the platform (`assets`: app object, GPU device, text system)
+84–108 ms, the component library (`ui`) 72–81 ms of which about 56 ms is gpui-component enumerating
+the installed fonts (it resolves the default UI and monospace families on every launch; the font
+list is not cached by CoreText, so it cannot be warmed in the background), the window and its first
+draw about 61–65 ms, everything else under 5 ms. The per-stage table is in the module docs of
+`oxikube::startup`.
 
 ## Load fixture: `cargo xtask load-pods`
 

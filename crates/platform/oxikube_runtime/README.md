@@ -25,6 +25,12 @@ tokio <-> GPUI bridge (gpui_tokio), spawn_kube with abort-on-drop, frame-coalesc
   file format are in docs/PERFORMANCE.md ("Perf harness"). `perf::memory` (E01-S14b) reads the
   process's RSS and peak per OS for the flush thread and the scenarios.
 - Overhead: `cargo run --release -p oxikube_runtime --example perf_overhead`.
+- `lazy` (E05-S13): `LazyService<T>`, a service started on first use (`ensure_init`) rather than by
+  an `init(cx)`, its cost logged in a `lazy_init` span and listed in the `LazyServices` global (the
+  start-up checks prove none started before the first frame).
+- `perf::FirstFrameProbe` and `perf::sockets` (E05-S13): the first-interactive-frame marker the
+  binary wraps the main window's content in, and the count of the process's IPv4/IPv6 sockets
+  behind the "no network before the first frame" check.
 
 ## Allowed internal dependencies
 

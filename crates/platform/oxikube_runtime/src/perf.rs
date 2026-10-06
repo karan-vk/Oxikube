@@ -14,6 +14,9 @@
 //!   and each call is one atomic load and a branch.
 //! - [`memory`]: the process's resident memory (RSS and peak) per OS. The flush thread reads it
 //!   once per tick; the scripted driver reads it between frames. Never inside a frame.
+//! - [`FirstFrameProbe`]: runs a callback at the end of a window's first frame, the start-up
+//!   marker (E05-S13); [`sockets`]: how many IPv4/IPv6 sockets the process holds, the "no network
+//!   before the first frame" check.
 //! - `harness` (feature `perf-harness`): drives a window frame by frame for scripted headless
 //!   scenarios and builds a [`ScenarioSample`].
 //!
@@ -34,6 +37,7 @@
 //! numbers are CPU, layout and paint-preparation time only. Compare them against a same-runner
 //! baseline, never against the absolute frame budget.
 
+mod first_frame;
 mod frame;
 #[cfg(any(test, feature = "perf-harness"))]
 pub mod harness;
@@ -42,8 +46,10 @@ mod recorder;
 mod report;
 mod ring;
 mod session;
+pub mod sockets;
 mod stats;
 
+pub use first_frame::FirstFrameProbe;
 pub use frame::PerfRoot;
 pub use recorder::{DEFAULT_FRAME_CAPACITY, Recorder, RecorderReader, Tick};
 pub use report::{Counters, REPORT_SCHEMA, ScenarioSample, ScenarioStatus};

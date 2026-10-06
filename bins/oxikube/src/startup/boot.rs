@@ -28,11 +28,17 @@ pub struct Boot {
     pub report: StartupReport,
 }
 
-/// Sets up logging and the panic hook. Never fails: a problem is printed to stderr and start-up
-/// goes on without that piece (the app must open even when the disk is read-only).
-pub fn boot() -> Boot {
+/// Sets up logging and the panic hook for a process launched at `launched` (the first line of
+/// `main`, which the first-frame time is measured from). Never fails: a problem is printed to
+/// stderr and start-up goes on without that piece (the app must open even when the disk is
+/// read-only).
+pub fn boot(launched: Instant) -> Boot {
+    boot_in(launched, paths::data_dir())
+}
+
+/// [`boot`] with the data directory given (the headless startup scenario uses a scratch one).
+pub fn boot_in(launched: Instant, data_dir: Option<PathBuf>) -> Boot {
     let started = Instant::now();
-    let data_dir = paths::data_dir();
     // Logs and crash reports are redacted, so the temp directory is an acceptable last resort.
     let files_dir = data_dir
         .clone()
@@ -62,7 +68,7 @@ pub fn boot() -> Boot {
         data_dir = %files_dir.display(),
         "oxikube starting"
     );
-    let mut report = StartupReport::default();
+    let mut report = StartupReport::launched_at(launched);
     report.record(Stage::Logging, started.elapsed());
     Boot {
         data_dir,

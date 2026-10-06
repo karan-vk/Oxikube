@@ -13,11 +13,20 @@
 //!    (0.25 ms) for `*_ms` metrics, `--noise-floor-mib` (8 MiB) for `*_mib` memory metrics.
 //!    Missing baselines are reported, not fatal; a baselined scenario that stops running is fatal.
 //! 6. `--update-baseline`: writes this run's numbers into the baseline for this OS.
+//! 7. Budgets (always, unless `--skip-budgets`): the absolute limits of ADR 0013 on the p95 across
+//!    the run's cold launches (`budget::BUDGETS`: the first interactive frame ≤ 400 ms, failing
+//!    beyond +20 %; settings + theme + keymap ≤ 30 ms). E05-S13.
+//!
+//! Every scenario process runs with `KUBECONFIG` set to the reference fixture: 3 kubeconfigs with
+//! 20 contexts (`fixture`).
 //!
 //! `--from-report <file>` skips 1-4 and applies `--check` / `--update-baseline` to a saved report
 //! (a nightly `perf-report-<OS>` artifact): that is how the CI-runner baselines are seeded.
 
 mod baseline;
+mod budget;
+mod fixture;
+mod print;
 mod report;
 
 use anyhow::{Context, Result, bail};
@@ -27,6 +36,7 @@ use report::{
     Status, aggregate,
 };
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -95,6 +105,9 @@ pub struct Args {
     /// `local <os>/<arch>`).
     #[arg(long)]
     pub source: Option<String>,
+    /// Report the absolute budgets (ADR 0013) without failing on them (debugging a slow build).
+    #[arg(long)]
+    pub skip_budgets: bool,
 }
 
 pub fn run(args: &Args) -> Result<()> {
@@ -117,11 +130,13 @@ pub fn run(args: &Args) -> Result<()> {
             if report.schema != REPORT_SCHEMA {
                 bail!("report schema {} is not {REPORT_SCHEMA}", report.schema);
             }
-            print_report(&report);
+            print::print_report(&report);
             report
         }
         None => run_and_write(args, &root, &target)?,
     };
+
+    let budgets_failed = print::check_budgets(&report, args.skip_budgets);
 
     let baseline_path = if args.baseline.is_absolute() {
         args.baseline.clone()
@@ -170,6 +185,9 @@ pub fn run(args: &Args) -> Result<()> {
         }
         println!("perf check passed");
     }
+    if budgets_failed {
+        bail!("perf budget exceeded: see FAIL rows in the budget table (ADR 0013)");
+    }
     Ok(())
 }
 
@@ -191,6 +209,7 @@ fn run_and_write(args: &Args, root: &Path, target: &Path) -> Result<Report> {
     };
     let samples_dir = target.join("perf").join("samples");
     std::fs::create_dir_all(&samples_dir)?;
+    let kubeconfig = fixture::write_kubeconfigs(&target.join("perf").join("fixture"))?;
 
     let mut report = Report {
         schema: REPORT_SCHEMA,
@@ -202,7 +221,7 @@ fn run_and_write(args: &Args, root: &Path, target: &Path) -> Result<Report> {
         scenarios: BTreeMap::new(),
     };
     for scenario in &scenarios {
-        let result = run_scenario(&bin, scenario, args.samples, &samples_dir)?;
+        let result = run_scenario(&bin, scenario, args.samples, &samples_dir, &kubeconfig)?;
         report.scenarios.insert((*scenario).to_owned(), result);
     }
 
@@ -216,7 +235,7 @@ fn run_and_write(args: &Args, root: &Path, target: &Path) -> Result<Report> {
     }
     std::fs::write(&out, serde_json::to_string_pretty(&report)? + "\n")
         .with_context(|| format!("writing {}", out.display()))?;
-    print_report(&report);
+    print::print_report(&report);
     println!("\nreport: {}", out.display());
     Ok(report)
 }
@@ -252,9 +271,20 @@ fn build(root: &Path, target: &Path, profile: &str) -> Result<PathBuf> {
 }
 
 /// Warm-up plus `samples` measured runs of one scenario.
-fn run_scenario(bin: &Path, scenario: &str, samples: usize, dir: &Path) -> Result<ScenarioResult> {
+fn run_scenario(
+    bin: &Path,
+    scenario: &str,
+    samples: usize,
+    dir: &Path,
+    kubeconfig: &OsStr,
+) -> Result<ScenarioResult> {
     print!("{scenario}: warm-up");
-    let warm = run_sample(bin, scenario, &dir.join(format!("{scenario}-warmup.json")))?;
+    let warm = run_sample(
+        bin,
+        scenario,
+        &dir.join(format!("{scenario}-warmup.json")),
+        kubeconfig,
+    )?;
     if warm.status == "not_available" {
         println!(" -> not available");
         return Ok(ScenarioResult {
@@ -264,6 +294,7 @@ fn run_scenario(bin: &Path, scenario: &str, samples: usize, dir: &Path) -> Resul
             samples: 0,
             metrics: BTreeMap::new(),
             counters: warm.counters,
+            launches: BTreeMap::new(),
         });
     }
     let mut measured = Vec::with_capacity(samples);
@@ -273,6 +304,7 @@ fn run_scenario(bin: &Path, scenario: &str, samples: usize, dir: &Path) -> Resul
             bin,
             scenario,
             &dir.join(format!("{scenario}-{i}.json")),
+            kubeconfig,
         )?);
     }
     println!();
@@ -280,7 +312,7 @@ fn run_scenario(bin: &Path, scenario: &str, samples: usize, dir: &Path) -> Resul
 }
 
 /// One fresh `oxikube --perf-scenario` process.
-fn run_sample(bin: &Path, scenario: &str, report: &Path) -> Result<Sample> {
+fn run_sample(bin: &Path, scenario: &str, report: &Path, kubeconfig: &OsStr) -> Result<Sample> {
     use std::io::Write as _;
     let _ = std::io::stdout().flush();
     let _ = std::fs::remove_file(report);
@@ -288,6 +320,7 @@ fn run_sample(bin: &Path, scenario: &str, report: &Path) -> Result<Sample> {
     let mut child = Command::new(bin)
         .args(["--perf-scenario", scenario, "--perf-report"])
         .arg(report)
+        .env("KUBECONFIG", kubeconfig)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -330,43 +363,6 @@ fn run_sample(bin: &Path, scenario: &str, report: &Path) -> Result<Sample> {
         );
     }
     Ok(sample)
-}
-
-fn print_report(report: &Report) {
-    println!(
-        "\n{} {} ({}), median of {} samples per scenario. {}",
-        report.os, report.arch, report.profile, report.samples_per_scenario, report.note
-    );
-    println!(
-        "{:<12} {:<26} {:>10} {:>10} {:>10} {:>10}",
-        "scenario", "metric (unit)", "p50", "p95", "p99", "max"
-    );
-    for (name, result) in &report.scenarios {
-        match result.status {
-            Status::NotAvailable => println!(
-                "{name:<12} SKIPPED: not available yet ({}); enabled by {}",
-                result.reason.as_deref().unwrap_or("-"),
-                result.enabled_by.join(", ")
-            ),
-            Status::Ok => {
-                for (metric, p) in &result.metrics {
-                    println!(
-                        "{name:<12} {:<26} {:>10.3} {:>10.3} {:>10.3} {:>10}",
-                        format!("{metric} [{}]", report::metric_unit(metric)),
-                        p.p50,
-                        p.p95,
-                        p.p99,
-                        p.max.map(|m| format!("{m:.3}")).unwrap_or_default()
-                    );
-                }
-                let c = result.counters;
-                println!(
-                    "{name:<12} counters: {} frames, {} dropped, {} feed deltas, {} notifies",
-                    c.frames, c.dropped_frames, c.feed_deltas, c.notifies
-                );
-            }
-        }
-    }
 }
 
 fn default_source() -> String {

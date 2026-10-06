@@ -4,13 +4,18 @@
 //! `set_menus` is a no-op there and the same actions are reached by key binding (the in-window
 //! menu bar arrives with the command palette, E11).
 //!
+//! The menu bar is installed at the end of the first main window's first frame
+//! ([`install_once`], called from `MainView`), not in `init`: building it is the platform's
+//! slowest step after the window itself (about 19 ms with AppKit on an M-series Mac) and nothing
+//! needs it before the window is on screen (E05-S13, cold-start budget).
+//!
 //! The items are placeholders: Quit works, About opens a dialog, Preferences says it is not
 //! there yet. Once the `CommandBus` and keymap core land (E05-S07, E11) they dispatch `Command`s
 //! and the bindings move into `keymap.json`.
 
 use crate::session::{NewWindow, Quit, ZoomIn, ZoomOut, ZoomReset};
 use gpui::{
-    App, KeyBinding, Menu, MenuItem, OsAction, ParentElement as _, SystemMenuType, actions,
+    App, Global, KeyBinding, Menu, MenuItem, OsAction, ParentElement as _, SystemMenuType, actions,
 };
 use oxikube_ui::{
     dialog::{Dialog, OverlayExt as _, Toast},
@@ -105,7 +110,28 @@ pub fn default_bindings(macos: bool) -> Vec<KeyBinding> {
     bindings
 }
 
-/// Registers the action handlers, key bindings and menu bar. Called once from [`super::init`].
+/// Marks that the menu bar is installed.
+struct AppMenusInstalled;
+
+impl Global for AppMenusInstalled {}
+
+/// Whether [`install_once`] has run.
+pub fn installed(cx: &App) -> bool {
+    cx.has_global::<AppMenusInstalled>()
+}
+
+/// Installs the menu bar (`cx.set_menus`) unless it already is. `MainView` calls it, deferred to
+/// the end of its first frame.
+pub fn install_once(cx: &mut App) {
+    if installed(cx) {
+        return;
+    }
+    cx.set_global(AppMenusInstalled);
+    cx.set_menus(app_menus());
+}
+
+/// Registers the action handlers and key bindings. Called once from [`super::init`]; the menu
+/// bar itself follows the first frame ([`install_once`]).
 pub(super) fn register(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| crate::session::request_quit(cx));
     cx.on_action(|_: &Hide, cx| cx.hide());
@@ -123,7 +149,6 @@ pub(super) fn register(cx: &mut App) {
         })
     });
     cx.bind_keys(default_bindings(cfg!(target_os = "macos")));
-    cx.set_menus(app_menus());
 }
 
 /// Runs `f` on the active window after the current update ends. Menu actions reach the global

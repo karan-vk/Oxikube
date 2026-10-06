@@ -42,6 +42,25 @@ fn startup_is_measured_and_prints_the_first_frame_marker() {
     assert_eq!(s["counters"]["frames"], 120);
     assert_eq!(s["metrics"]["frame_ms"]["count"], 120);
     assert!(s["metrics"]["first_frame_ms"]["p50"].as_f64().unwrap() > 0.0);
+    // E05-S13: the start-up breakdown and the budgets' inputs.
+    for metric in [
+        "config_load_ms",
+        "state_db_open_ms",
+        "init_logging_ms",
+        "init_assets_ms",
+        "init_settings_ms",
+        "init_theme_ms",
+        "init_keymap_ms",
+        "init_ui_ms",
+        "init_window_ms",
+    ] {
+        assert_eq!(s["metrics"][metric]["count"], 1, "{metric}");
+    }
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("network sockets before it: 0"),
+        "no network before the first frame: {stderr}"
+    );
 }
 
 #[test]
