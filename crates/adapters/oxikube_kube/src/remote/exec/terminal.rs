@@ -8,7 +8,7 @@
 //! the session's status future, which deletes the helper pod.
 
 use async_trait::async_trait;
-use oxikube_domain::{OxiError, OxiResult};
+use oxikube_domain::OxiResult;
 use oxikube_ports::{
     AttachTarget, DebugContainerSpec, ExecOptions, ExecPort, ExecSession, ExecStreamPort,
     ExecTarget, NodeShellSpec, SessionBackend, TerminalBackend,
@@ -24,9 +24,9 @@ fn boxed(session: ExecSession) -> Box<dyn TerminalBackend> {
 
 /// The server rejects `stderr` with a TTY (a TTY merges both into stdout), so a TTY session
 /// asks for stdout only.
-fn options(container: Option<&String>, tty: bool, stdin: bool) -> ExecOptions {
+fn options(container: Option<&str>, tty: bool, stdin: bool) -> ExecOptions {
     ExecOptions {
-        container: container.cloned(),
+        container: container.map(str::to_owned),
         stdin,
         stdout: true,
         stderr: !tty,
@@ -68,7 +68,7 @@ pub(super) fn node_config(spec: &NodeShellSpec) -> NodeShellConfig {
 impl ExecPort for KubeExec {
     async fn exec(&self, target: &ExecTarget) -> OxiResult<Box<dyn TerminalBackend>> {
         let (namespace, pod) = target.namespaced_pod()?;
-        let options = options(target.container.as_ref(), target.tty, target.stdin);
+        let options = options(target.container.as_deref(), target.tty, target.stdin);
         let session = self
             .exec_session(namespace, pod, &target.command, &options)
             .await?;
@@ -77,7 +77,7 @@ impl ExecPort for KubeExec {
 
     async fn attach(&self, target: &AttachTarget) -> OxiResult<Box<dyn TerminalBackend>> {
         let (namespace, pod) = target.namespaced_pod()?;
-        let options = options(target.container.as_ref(), target.tty, target.stdin);
+        let options = options(target.container.as_deref(), target.tty, target.stdin);
         Ok(boxed(self.attach_session(namespace, pod, &options).await?))
     }
 
@@ -85,15 +85,9 @@ impl ExecPort for KubeExec {
         &self,
         spec: &DebugContainerSpec,
     ) -> OxiResult<Box<dyn TerminalBackend>> {
-        let pod = &spec.pod;
-        let Some(namespace) = pod.namespace.as_deref().filter(|ns| !ns.is_empty()) else {
-            return Err(OxiError::validation(format!(
-                "pod {} has no namespace",
-                pod.name
-            )));
-        };
+        let (namespace, pod) = spec.namespaced_pod()?;
         let session = self
-            .debug_container(namespace, &pod.name, &debug_spec(spec), spec.start_timeout)
+            .debug_container(namespace, pod, &debug_spec(spec), spec.start_timeout)
             .await?;
         Ok(boxed(session))
     }

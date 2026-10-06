@@ -131,6 +131,15 @@ impl DebugContainerSpec {
             start_timeout: Duration::from_secs(60),
         }
     }
+
+    /// `(namespace, pod name)`, or a `Validation` error when the pod has no namespace.
+    ///
+    /// # Errors
+    ///
+    /// `Validation` for a pod reference without a namespace.
+    pub fn namespaced_pod(&self) -> OxiResult<(&str, &str)> {
+        namespaced(&self.pod)
+    }
 }
 
 /// A shell on a node through a privileged helper pod
