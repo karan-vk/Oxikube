@@ -7,7 +7,7 @@ use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPh
 use oxikube_domain::{Capabilities, Capability, ClusterColour};
 use oxikube_ports::{
     AccessReviewPort, ClusterPorts, ClusterPrefs, DiscoveryPort, ExecInteractivity, ExecPort,
-    LogPort, MetricsPort, PortForwardPort, ResourceReader, TableFeedPort,
+    LogPort, MetricsPort, PortForwardPort, ResourceReader, ResourceWriter, TableFeedPort,
 };
 
 /// One cluster session as the manager saw it when the snapshot was taken.
@@ -121,6 +121,18 @@ impl ClusterSession {
         self.ports
             .as_ref()
             .map(|p| p.resources.clone() as Arc<dyn ResourceReader>)
+    }
+
+    /// The writer half of the resource port (`None` while not connected).
+    ///
+    /// Crate-private on purpose: only [`MutationGuard`](crate::guard::MutationGuard) calls
+    /// it, and it hands the writer to a handler inside a
+    /// [`Mutation`](crate::guard::Mutation) only after the read-only check, the
+    /// confirmation and the audit precondition passed (non-negotiable 3).
+    pub(crate) fn writer(&self) -> Option<Arc<dyn ResourceWriter>> {
+        self.ports
+            .as_ref()
+            .map(|p| p.resources.clone() as Arc<dyn ResourceWriter>)
     }
 
     /// API discovery.
