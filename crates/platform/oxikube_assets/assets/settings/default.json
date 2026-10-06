@@ -30,6 +30,46 @@
   "log": {
     "filter": "info,hyper=warn,hyper_util=warn,h2=warn,tower=warn,tower_http=warn,rustls=warn"
   },
-  // Per-cluster overrides, keyed by cluster id. Each value takes any of the settings above.
+  // Per-cluster settings. Each key below is a default for every cluster; write the same key under
+  // `clusters.<id>` (below) to override it for one cluster. Layers merge field by field:
+  // this file, then your top-level values, then the cluster's own.
+  //
+  // A name to show instead of the kubeconfig context name (useful under `clusters.<id>`).
+  "display_name": null,
+  // Accent colour of the cluster's tab, hotbar dot and badges: "#rrggbb" or "#rgb".
+  "colour": null,
+  // Block every mutation. Set `true` under `clusters.<id>` to protect one cluster, or at the top
+  // level to start every cluster read-only and opt individual ones out with `false`.
+  "read_only": false,
+  // The namespace a new session starts in; null uses the kubeconfig context's namespace.
+  "default_namespace": null,
+  // Working directory of terminals opened for the cluster; null uses your home directory.
+  "terminal_cwd": null,
+  // Image and image pull Secret (a Kubernetes Secret name, not a credential) of the node shell
+  // pod; null uses the built-in image.
+  "node_shell_image": null,
+  "node_shell_pull_secret": null,
+  // Manual Prometheus location instead of auto-detection, e.g.
+  // { "url": "https://prometheus.example.com", "auth_secret": "prod-prometheus" }.
+  // `auth_secret` names an OS keychain entry (namespace `prometheus`) holding the bearer token;
+  // never put a token in this file.
+  "prometheus": null,
+  // Namespaces to offer when you may not list namespaces cluster-wide (RBAC-restricted users).
+  "accessible_namespaces": [],
+  // How interactive exec credential plugins (aws, gke-gcloud-auth-plugin, ...) may be: "never"
+  // (no stdin, no prompts), "if_available" or "always". Read when a session connects, so a change
+  // applies on the next connect.
+  "exec_interactivity": "never",
+  // Per-cluster overrides, keyed by cluster id (16 hex characters; the catalog shows it). Each
+  // value takes the per-cluster settings above and any other setting. Edits apply at once, except
+  // `exec_interactivity` (next connect) and `default_namespace` (new sessions). Example:
+  //
+  //   "clusters": {
+  //     "3f2a9c1b7d4e8a60": {
+  //       "display_name": "Production (eu-west)",
+  //       "colour": "#e5484d",
+  //       "read_only": true
+  //     }
+  //   }
   "clusters": {}
 }

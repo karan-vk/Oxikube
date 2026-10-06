@@ -13,6 +13,8 @@
 //! * `generation` changes on every new attempt and whenever a connection is released, so
 //!   late results and health reports of an older connection are recognised and ignored.
 
+use std::sync::Arc;
+
 use futures::future::AbortHandle;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::redact::redact;
@@ -20,7 +22,7 @@ use oxikube_domain::session::{
     ClusterSessionState, InvalidTransition, NamespaceSelection, SessionEvent, SessionPhase,
 };
 use oxikube_domain::{Capabilities, ClusterColour};
-use oxikube_ports::{ClusterConnection, ExecInteractivity};
+use oxikube_ports::{ClusterConnection, ClusterPrefs, ExecInteractivity};
 
 use super::config::SessionOptions;
 use super::model::ClusterSession;
@@ -42,6 +44,9 @@ pub(super) struct Entry {
     pub(super) read_only: bool,
     pub(super) colour: Option<ClusterColour>,
     pub(super) exec_interactivity: ExecInteractivity,
+    pub(super) display_name: Option<String>,
+    /// The settings last applied; a new push is applied as a delta against them.
+    pub(super) prefs: Arc<ClusterPrefs>,
     pub(super) abort: Option<AbortHandle>,
 }
 
@@ -58,6 +63,8 @@ impl Entry {
             read_only: options.read_only,
             colour: options.colour,
             exec_interactivity: options.exec_interactivity,
+            display_name: options.display_name,
+            prefs: options.prefs,
             abort: None,
         }
     }
@@ -72,6 +79,8 @@ impl Entry {
             read_only: self.read_only,
             colour: self.colour,
             exec_interactivity: self.exec_interactivity,
+            display_name: self.display_name.clone(),
+            prefs: self.prefs.clone(),
             ports: self.connection.as_ref().map(|c| c.ports.clone()),
         }
     }

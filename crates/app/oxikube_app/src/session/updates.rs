@@ -46,6 +46,8 @@ pub enum SessionChange {
     ReadOnlyChanged(bool),
     /// The colour changed.
     ColourChanged(Option<ClusterColour>),
+    /// The display name changed (`None`: the context name is shown).
+    DisplayNameChanged(Option<String>),
 }
 
 /// The subscriber fell behind and missed `missed` updates; re-read the sessions.

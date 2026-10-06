@@ -136,6 +136,18 @@ impl SettingsStore {
             .downcast_ref::<T>()
     }
 
+    /// The clusters that have a value of `T` of their own (their `clusters.<id>` block touches
+    /// it), as `(cluster id key, value)`, in no particular order. Every other cluster reads the
+    /// global value.
+    pub fn cluster_values<T: Settings>(&self) -> impl Iterator<Item = (&str, &T)> {
+        self.values
+            .get(&TypeId::of::<T>())
+            .map(|value| value.cluster_values())
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(id, value)| Some((id, value.downcast_ref::<T>()?)))
+    }
+
     /// Replace the global value of `T` until the next reload. Ignored when `T` is not
     /// registered.
     pub fn override_global<T: Settings>(&mut self, value: T) {

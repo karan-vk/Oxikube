@@ -27,6 +27,7 @@ gpui_platform.workspace = true
 # feature crates will wire these through oxikube_ui (E05).
 gpui-component.workspace = true
 # `--perf` recorder and frame hook; `perf-harness` adds the scripted driver for `--perf-scenario`.
+oxikube_app.workspace = true
 oxikube_assets.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true

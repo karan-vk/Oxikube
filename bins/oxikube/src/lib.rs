@@ -9,8 +9,12 @@
 //! - [`app_state`]: [`app_state::AppState`], the typed dependency container (a GPUI global), the
 //!   [`app_state::AppPorts`] bundle and `AppState::test` (feature `test-support`).
 //!
+//! - [`cluster_prefs`]: pushes the per-cluster settings into the `ClusterSessionManager` and
+//!   keeps them in sync with hot reload (E06-S08).
+//!
 //! Everything else (command line, `--perf`, screenshot and perf scenarios) stays private to the
 //! binary.
 
 pub mod app_state;
+pub mod cluster_prefs;
 pub mod startup;

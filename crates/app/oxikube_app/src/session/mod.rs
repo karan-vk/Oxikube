@@ -43,6 +43,14 @@
 //! cancels the attempt. Each session has its own short-lived lock, never held across
 //! an `.await`; updates of one session are sent in order under it.
 //!
+//! # Per-cluster settings
+//!
+//! The binary pushes the resolved per-cluster settings with
+//! [`set_prefs_table`](ClusterSessionManager::set_prefs_table) (E06-S08). New sessions start
+//! from them ([`open_configured`](ClusterSessionManager::open_configured), and `connect` of a
+//! catalog entry); open sessions get the changed fields live, with a [`SessionChange`] per
+//! field and only for the clusters that changed. The exec policy is read at the next connect.
+//!
 //! # Persistence and secrets
 //!
 //! The manager persists nothing. Namespace selection, read-only and colour are set
@@ -56,6 +64,7 @@ mod entry;
 mod health;
 mod manager;
 mod model;
+mod prefs;
 mod updates;
 
 #[cfg(test)]

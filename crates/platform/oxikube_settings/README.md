@@ -30,6 +30,37 @@ react with `MySettings::observe(cx, ..)` / `observe_in` (fires only when the val
 write with `update_user_settings::<MySettings>(cx, None, |content| ..)`. No secrets in settings:
 credentials belong in the keychain.
 
+## Per-cluster settings (E06-S08)
+
+`clusters.<id>` is the override layer; every registered setting may appear in it, merged field by
+field over the user's top-level values and the defaults. `ClusterSettings` (module `cluster`)
+is the first setting that is about clusters: `display_name`, `colour`, `read_only`,
+`default_namespace`, `terminal_cwd`, `node_shell_image`, `node_shell_pull_secret`, `prometheus`
+(`provider`, `path`, `url`, `auth_secret`), `accessible_namespaces` and `exec_interactivity`.
+
+```jsonc
+"clusters": {
+  "3f2a9c1b7d4e8a60": {            // the cluster id (16 hex characters)
+    "display_name": "Production (eu-west)",
+    "colour": "#e5484d",
+    "read_only": true
+  }
+}
+```
+
+- Read: `ClusterSettings::resolve(&id, cx)` (one hash lookup). React: `ClusterSettings::observe_cluster`
+  fires only when that cluster's resolved value changes. Hand to the app layer:
+  `ClusterSettings::table(cx)` (see `bins/oxikube::cluster_prefs`).
+- Write (in-app toggles): `ClusterSettings::update_cluster` / `set_read_only` rewrite one value and
+  keep the user's comments; a new block gets `display_name` from the hint so the id is recognisable.
+- A type error in a cluster's block (a bad colour, a URL with credentials) keeps that cluster's last
+  good block and is reported as a diagnostic naming the field; unknown keys are reported with their
+  path. A block that is wrong on the very first load falls back to the top-level values.
+- `read_only`, `colour` and `display_name` reach open sessions at once; `exec_interactivity` is read
+  when a session connects; `default_namespace` decides where a new session starts.
+- No secrets: `prometheus.url` refuses credentials, queries and fragments, and the bearer token is a
+  keychain entry named by `auth_secret`.
+
 ## Config dir
 
 `$OXIKUBE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/oxikube` or `~/.config/oxikube` (macOS, Linux),

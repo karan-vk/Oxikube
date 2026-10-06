@@ -7,8 +7,8 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPhase};
 use oxikube_domain::{ClusterColour, OxiError, OxiResult};
 use oxikube_ports::{
-    ClockPort, ClusterConnectorPort, ClusterContext, ClusterSourcePort, ExecInteractivity,
-    HealthSignal,
+    ClockPort, ClusterConnectorPort, ClusterContext, ClusterPrefsTable, ClusterSourcePort,
+    ExecInteractivity, HealthSignal,
 };
 use parking_lot::{Mutex, RwLock};
 
@@ -23,7 +23,7 @@ use super::updates::{SessionChange, SessionUpdates, UpdateSender};
 /// Cheap to clone; clones share the sessions.
 #[derive(Clone)]
 pub struct ClusterSessionManager {
-    shared: Arc<Shared>,
+    pub(super) shared: Arc<Shared>,
 }
 
 pub(super) struct Shared {
@@ -33,7 +33,9 @@ pub(super) struct Shared {
     pub(super) config: SessionManagerConfig,
     /// Open order is kept for `sessions()`. Locked only to find or add an entry, never
     /// while an entry is locked by the same code path for longer than a lookup.
-    sessions: RwLock<IndexMap<ClusterId, Arc<Mutex<Entry>>>>,
+    pub(super) sessions: RwLock<IndexMap<ClusterId, Arc<Mutex<Entry>>>>,
+    /// The per-cluster settings pushed by the binary (E06-S08); a lookup index by cluster id.
+    pub(super) prefs: RwLock<Arc<ClusterPrefsTable>>,
     pub(super) updates: UpdateSender,
 }
 
@@ -72,6 +74,7 @@ impl ClusterSessionManager {
                 clock,
                 config,
                 sessions: RwLock::new(IndexMap::new()),
+                prefs: RwLock::new(Arc::new(ClusterPrefsTable::default())),
                 updates: UpdateSender::new(config.update_capacity),
             }),
         }
@@ -120,10 +123,10 @@ impl ClusterSessionManager {
     /// `AuthRequired` (credentials needed; call again to retry), `Error`, or
     /// `Disconnected` when [`disconnect`](Self::disconnect) cancelled it.
     ///
-    /// A session that is not open yet is opened with default options from the cluster
-    /// source's catalog. When the session is already `Connecting`, `Ready` or
-    /// `Degraded`, nothing starts and the current state is returned; use
-    /// [`reconnect`](Self::reconnect) to force a new connection.
+    /// A session that is not open yet is opened from the cluster source's catalog, with the
+    /// options its settings give ([`open_configured`](Self::open_configured)). When the session
+    /// is already `Connecting`, `Ready` or `Degraded`, nothing starts and the current state is
+    /// returned; use [`reconnect`](Self::reconnect) to force a new connection.
     ///
     /// Run it off the UI thread (`oxikube_runtime::spawn_kube`). Dropping the future
     /// cancels the attempt and returns the session to `Disconnected`.
@@ -257,7 +260,7 @@ impl ClusterSessionManager {
             .iter()
             .find(|c| &c.cluster == cluster)
             .ok_or_else(|| unknown(cluster))?;
-        Ok(self.shared.open(context, SessionOptions::default()))
+        Ok(self.shared.open_configured(context))
     }
 }
 
@@ -267,10 +270,31 @@ impl Shared {
     }
 
     fn open(&self, context: &ClusterContext, options: SessionOptions) -> Arc<Mutex<Entry>> {
+        self.open_with(context, |_| options)
+    }
+
+    /// Opens `context` with the options its settings give. They are made while the session list
+    /// is locked, so a concurrent `set_prefs_table` either sees the new session (and applies to
+    /// it) or runs first (and the session starts from it).
+    pub(super) fn open_configured(&self, context: &ClusterContext) -> Arc<Mutex<Entry>> {
+        self.open_with(context, |table| {
+            SessionOptions::from_prefs(
+                table.get(&context.cluster),
+                context.default_namespace.as_deref(),
+            )
+        })
+    }
+
+    fn open_with(
+        &self,
+        context: &ClusterContext,
+        options: impl FnOnce(&ClusterPrefsTable) -> SessionOptions,
+    ) -> Arc<Mutex<Entry>> {
         let mut sessions = self.sessions.write();
         if let Some(entry) = sessions.get(&context.cluster) {
             return entry.clone();
         }
+        let options = options(&self.prefs.read());
         let entry = Entry::new(context.cluster.clone(), context.context.clone(), options);
         let entry = Arc::new(Mutex::new(entry));
         sessions.insert(context.cluster.clone(), entry.clone());
