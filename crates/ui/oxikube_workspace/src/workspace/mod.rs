@@ -14,10 +14,12 @@
 //! - `docks`: dock snapshots and sizes, zoom.
 //! - `layout`: queries on the dock area's layout trees.
 //! - `restore`: capturing the layout for persistence and restoring a saved one (E05-S05).
+//! - `layers`: the status bar, modal layer and toast layer the window draws over the docks.
 //! - `render`: the view and its action handlers.
 
 mod close;
 mod docks;
+mod layers;
 mod layout;
 mod open;
 mod panels;
@@ -31,16 +33,19 @@ mod tests;
 use std::{collections::HashMap, rc::Rc};
 
 use gpui::{
-    AnyEntity, App, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable, Subscription,
-    Window,
+    AnyEntity, App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle,
+    Focusable, Subscription, Window,
 };
 use oxikube_ui::dock::{DockArea, DockEvent, DockPlacement, DockSkin, PanelId, PanelStyle};
 
 use crate::{
     closed::ClosedItemStack,
     item::{ItemHandle, ItemTab},
+    modal::ModalLayer,
     pane::{Pane, PaneGroup, PaneId},
     panel::{DockPosition, PanelHandle},
+    status_bar::StatusBar,
+    toast::ToastLayer,
 };
 
 pub use open::OpenOptions;
@@ -85,6 +90,9 @@ pub struct Workspace {
     panels: Vec<DockedPanel>,
     active_pane: Option<PaneId>,
     closed: ClosedItemStack,
+    status_bar: Entity<StatusBar>,
+    modal_layer: Entity<ModalLayer>,
+    toast_layer: Entity<ToastLayer>,
     focus_handle: FocusHandle,
     /// Entities that live and die with the workspace (the layout persistence controller).
     attached: Vec<AnyEntity>,
@@ -124,6 +132,9 @@ impl Workspace {
             panels: Vec::new(),
             active_pane: None,
             closed: ClosedItemStack::default(),
+            status_bar: cx.new(|_| StatusBar::new()),
+            modal_layer: cx.new(ModalLayer::new),
+            toast_layer: cx.new(|cx| ToastLayer::new(window, cx)),
             focus_handle: cx.focus_handle(),
             attached: Vec::new(),
             _subscriptions: vec![subscription],

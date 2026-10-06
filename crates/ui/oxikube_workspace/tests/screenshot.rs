@@ -1,5 +1,8 @@
-//! Workspace screenshot (E05-S04): a left and a bottom dock with panels, and the centre split in
-//! two panes of items with tab bars, rendered through `Window::render_to_image`.
+//! Workspace screenshots, rendered through `Window::render_to_image`.
+//!
+//! - `workspace` (E05-S04, E05-S10): a left and a bottom dock with panels, the centre split in two
+//!   panes of items with tab bars, the status bar with a left and a right item, and two toasts.
+//! - `workspace_modal` (E05-S10): the same window with a confirmation dialog in the modal layer.
 //!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
 //! thread, which libtest worker threads are not. Needs a GPU device (Metal, or Vulkan such as Mesa
@@ -21,14 +24,15 @@ use oxikube_testkit::{
 };
 use oxikube_ui::root::new_root;
 use oxikube_workspace::{
-    DockPosition, OpenOptions, SplitDirection, Workspace,
-    test_support::{TestItem, TestPanel},
+    DialogModal, DockPosition, OpenOptions, SplitDirection, StatusSide, Toast, ToastAction,
+    Workspace,
+    test_support::{TestItem, TestPanel, TestStatusItem},
 };
 
 const WIDTH: f32 = 960.0;
 const HEIGHT: f32 = 600.0;
 
-fn render() -> anyhow::Result<RgbaImage> {
+fn render(with_modal: bool) -> anyhow::Result<RgbaImage> {
     let text_system = gpui_platform::current_platform(true).text_system();
     let mut cx =
         HeadlessAppContext::with_platform(text_system, Arc::new(oxikube_ui::Assets), || {
@@ -38,6 +42,8 @@ fn render() -> anyhow::Result<RgbaImage> {
         oxikube_ui::init(cx);
         // Pin the appearance: `init` follows the system, which differs between machines.
         oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
+        // A fade in flight would make the picture depend on the clock.
+        cx.set_reduce_motion(true);
         let workspace = cx.new(|cx| Workspace::new(window, cx));
         let left = TestPanel::build(DockPosition::Left, "Clusters", cx);
         let bottom = TestPanel::build(DockPosition::Bottom, "Logs", cx);
@@ -48,7 +54,27 @@ fn render() -> anyhow::Result<RgbaImage> {
             item.dirty = true;
             item
         });
+        let cluster = cx.new(|_| TestStatusItem::new("kind-oxikube"));
+        let read_only = cx.new(|_| TestStatusItem::new("read-only"));
         workspace.update(cx, |ws, cx| {
+            ws.register_status_item(StatusSide::Left, 0, cluster, cx);
+            ws.register_status_item(StatusSide::Right, 0, read_only, cx);
+            ws.show_toast(
+                Toast::error("Could not reach kind-oxikube")
+                    .title("Connection failed")
+                    .action(ToastAction::new("Retry", |_, _| {})),
+                cx,
+            );
+            ws.show_toast(Toast::success("Copied pod name"), cx);
+            if with_modal {
+                let dialog = cx.new(|cx| {
+                    DialogModal::new("Delete pod web-0?", cx)
+                        .message("The pod is recreated by its ReplicaSet.")
+                        .confirm_label("Delete")
+                        .destructive()
+                });
+                ws.show_modal(dialog, window, cx);
+            }
             ws.add_panel(left, window, cx);
             ws.add_panel(bottom, window, cx);
             ws.open_item(pods, window, cx);
@@ -64,23 +90,26 @@ fn render() -> anyhow::Result<RgbaImage> {
     cx.capture_screenshot(window.into())
 }
 
-fn run() -> anyhow::Result<()> {
-    let image = render()?;
+fn check(name: &str, with_modal: bool) -> anyhow::Result<()> {
+    let image = render(with_modal)?;
     let scale = HEADLESS_SCALE_FACTOR;
     anyhow::ensure!(
         image.dimensions() == (WIDTH as u32 * scale, HEIGHT as u32 * scale),
         "unexpected image size {:?}",
         image.dimensions()
     );
-    anyhow::ensure!(distinct_colors_at_least(&image, 8), "frame looks blank");
+    anyhow::ensure!(
+        distinct_colors_at_least(&image, 8),
+        "{name}: frame looks blank"
+    );
 
     let goldens = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens");
-    let golden = golden_path(&goldens, "workspace");
+    let golden = golden_path(&goldens, name);
     let updating =
         std::env::var_os("OXIKUBE_UPDATE_GOLDENS").is_some_and(|v| v != "0" && !v.is_empty());
     if golden.exists() || updating {
         check_golden(&image, &golden, Tolerance::default())?;
-        println!("workspace matches {}", golden.display());
+        println!("{name} matches {}", golden.display());
     } else {
         println!(
             "no golden for {} yet; structural checks only",
@@ -88,6 +117,11 @@ fn run() -> anyhow::Result<()> {
         );
     }
     Ok(())
+}
+
+fn run() -> anyhow::Result<()> {
+    check("workspace", false)?;
+    check("workspace_modal", true)
 }
 
 fn main() -> ExitCode {
