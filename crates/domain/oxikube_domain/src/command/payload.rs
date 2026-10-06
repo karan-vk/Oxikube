@@ -254,6 +254,33 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         annotation: bool,
     },
+    /// Copy the YAML the resource's open detail shows to the clipboard. The text is what the YAML
+    /// tab displays (secret values masked, `managedFields` as the toggle has it), read from the
+    /// open detail: it never travels in the command.
+    #[serde(rename = "resource::CopyYaml")]
+    ResourceCopyYaml {
+        /// The resource whose YAML is copied.
+        target: ResourceRef,
+    },
+    /// Save the YAML the resource's open detail shows to a file the user picks. Writes what is
+    /// displayed, so a Secret's file holds the masked text.
+    #[serde(rename = "resource::SaveYaml")]
+    ResourceSaveYaml {
+        /// The resource whose YAML is saved.
+        target: ResourceRef,
+    },
+    /// Show or hide `metadata.managedFields` in the resource's YAML tab (hidden by default).
+    #[serde(rename = "resource::ToggleManagedFields")]
+    ResourceToggleManagedFields {
+        /// The resource whose YAML tab is changed.
+        target: ResourceRef,
+    },
+    /// Read the resource's describe text again (the Describe tab's refresh).
+    #[serde(rename = "resource::RefreshDescribe")]
+    ResourceRefreshDescribe {
+        /// The resource described.
+        target: ResourceRef,
+    },
     /// Select every row of the open list views of a kind (`cmd-a` in a resource table).
     #[serde(rename = "resource::SelectAll")]
     ResourceSelectAll {
@@ -422,6 +449,12 @@ impl Command {
             Command::ResourceRetryFeed { .. } => CommandId::RESOURCE_RETRY_FEED,
             Command::ResourcePinDetail { .. } => CommandId::RESOURCE_PIN_DETAIL,
             Command::ResourceCopyLabel { .. } => CommandId::RESOURCE_COPY_LABEL,
+            Command::ResourceCopyYaml { .. } => CommandId::RESOURCE_COPY_YAML,
+            Command::ResourceSaveYaml { .. } => CommandId::RESOURCE_SAVE_YAML,
+            Command::ResourceToggleManagedFields { .. } => {
+                CommandId::RESOURCE_TOGGLE_MANAGED_FIELDS
+            }
+            Command::ResourceRefreshDescribe { .. } => CommandId::RESOURCE_REFRESH_DESCRIBE,
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
             Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
@@ -461,6 +494,10 @@ impl Command {
             | Command::ResourceCopyName { target }
             | Command::ResourcePinDetail { target }
             | Command::ResourceCopyLabel { target, .. }
+            | Command::ResourceCopyYaml { target }
+            | Command::ResourceSaveYaml { target }
+            | Command::ResourceToggleManagedFields { target }
+            | Command::ResourceRefreshDescribe { target }
             | Command::ResourceViewYaml { target }
             | Command::ResourceDelete { target, .. }
             | Command::PodDelete { target, .. }
@@ -603,6 +640,10 @@ mod tests {
                 key: "app".into(),
                 annotation: false,
             },
+            Command::ResourceCopyYaml { target: pod() },
+            Command::ResourceSaveYaml { target: pod() },
+            Command::ResourceToggleManagedFields { target: pod() },
+            Command::ResourceRefreshDescribe { target: pod() },
             Command::ResourceSelectAll {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
@@ -785,6 +826,10 @@ mod tests {
                     | Command::ResourceRetryFeed { .. }
                     | Command::ResourcePinDetail { .. }
                     | Command::ResourceCopyLabel { .. }
+                    | Command::ResourceCopyYaml { .. }
+                    | Command::ResourceSaveYaml { .. }
+                    | Command::ResourceToggleManagedFields { .. }
+                    | Command::ResourceRefreshDescribe { .. }
                     | Command::ResourceSelectAll { .. }
                     | Command::TableFocusFilter { .. }
                     | Command::ResourceViewYaml { .. }

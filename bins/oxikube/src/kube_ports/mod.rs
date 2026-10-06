@@ -3,7 +3,7 @@
 //! | File | Holds |
 //! |---|---|
 //! | `sources` | [`LazyKubeSources`]: the kubeconfig catalog (`ClusterSourcePort`), built on first use |
-//! | `connector` | [`SourcesConnector`]: the kube connector (`ClusterConnectorPort`), synced with the catalog |
+//! | `connector` | [`SourcesConnector`]: the kube connector (`ClusterConnectorPort`), synced with the catalog, giving each connection its `DescribePort` (`oxikube_describe`) |
 //! | `clock` | [`SystemClock`]: the wall clock and Tokio's timer (`ClockPort`) |
 //! | `secrets` | [`MemorySecrets`]: an in-process `SecretStorePort` for the source adapter |
 //!
@@ -21,6 +21,7 @@ mod sources;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use oxikube_describe::DescribePreference;
 use oxikube_ports::UserSource;
 use oxikube_runtime::StdFs;
 use tokio::runtime::Handle;
@@ -45,8 +46,10 @@ pub fn kube_adapters(
         Arc::new(MemorySecrets::default()),
         true,
     ));
+    let describe = DescribePreference::default();
     ClusterAdapters {
-        connector: Arc::new(SourcesConnector::new(sources.clone())),
+        connector: Arc::new(SourcesConnector::new(sources.clone(), describe.clone())),
+        describe,
         source: sources,
         clock: Arc::new(SystemClock::new(runtime)),
         fs: Arc::new(StdFs),

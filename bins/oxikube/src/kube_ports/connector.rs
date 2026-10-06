@@ -9,15 +9,24 @@
 //! connector ([`KubeConnector::replace_loaded`]) when it changed since the last connect. A
 //! connect therefore always uses the kubeconfig the catalog showed, and nothing is read before the
 //! first connect.
+//!
+//! Each connection also gets its `DescribePort` here (E07-S06): deskribe over the connection's
+//! client, `kubectl describe` as the fallback (pointed at the kubeconfig file that defines the
+//! context), one [`Describer`] choosing between them by the shared [`DescribePreference`], which
+//! the mount sets from the `describe` setting.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use kube::config::Kubeconfig;
+use oxikube_describe::{
+    DescribePreference, Describer, KubectlDescribe, KubectlTarget, NativeDescribe,
+};
 use oxikube_domain::OxiResult;
 use oxikube_kube::kubeconfig::LoadedKubeconfig;
-use oxikube_kube::{ConnectorConfig, KubeConnector, PoolConfig};
-use oxikube_ports::{ClusterConnection, ClusterConnectorPort, ConnectRequest};
+use oxikube_kube::{ConnectorConfig, DescribeConnection, KubeConnector, PoolConfig};
+use oxikube_ports::{ClusterConnection, ClusterConnectorPort, ConnectRequest, DescribePort};
 use parking_lot::Mutex;
 
 use super::LazyKubeSources;
@@ -26,8 +35,9 @@ use super::LazyKubeSources;
 pub struct SourcesConnector {
     sources: Arc<LazyKubeSources>,
     kube: KubeConnector,
-    /// The loader result the connector's pools hold now.
-    synced: Mutex<Option<Arc<LoadedKubeconfig>>>,
+    /// The loader result the connector's pools hold now (shared with the describe factory, which
+    /// reads the file that defines a context from it).
+    synced: Arc<Mutex<Option<Arc<LoadedKubeconfig>>>>,
 }
 
 impl std::fmt::Debug for SourcesConnector {
@@ -40,17 +50,30 @@ impl std::fmt::Debug for SourcesConnector {
 
 impl SourcesConnector {
     /// A connector for the contexts of `sources`, with the default client and connection
-    /// settings.
-    pub fn new(sources: Arc<LazyKubeSources>) -> Self {
+    /// settings; every connection's describer follows `describe`.
+    pub fn new(sources: Arc<LazyKubeSources>, describe: DescribePreference) -> Self {
+        // Empty until the first connect hands it the catalog.
+        let kube = KubeConnector::new(
+            Kubeconfig::default(),
+            PoolConfig::default(),
+            ConnectorConfig::default(),
+        );
+        let synced: Arc<Mutex<Option<Arc<LoadedKubeconfig>>>> = Arc::default();
+        let origins = synced.clone();
+        kube.set_describe_factory(Arc::new(move |connection: DescribeConnection| {
+            let context = &connection.context;
+            // The in-cluster context has no file `kubectl` could be pointed at.
+            let kubeconfig = origins
+                .lock()
+                .as_ref()
+                .filter(|loaded| !loaded.is_in_cluster(context))
+                .and_then(|loaded| loaded.origin(context).map(Path::to_path_buf));
+            describer(connection, &describe, kubeconfig)
+        }));
         Self {
             sources,
-            // Empty until the first connect hands it the catalog.
-            kube: KubeConnector::new(
-                Kubeconfig::default(),
-                PoolConfig::default(),
-                ConnectorConfig::default(),
-            ),
-            synced: Mutex::new(None),
+            kube,
+            synced,
         }
     }
 
@@ -71,6 +94,28 @@ impl SourcesConnector {
         *synced = Some(loaded);
         Ok(())
     }
+}
+
+/// The `DescribePort` of one connection: deskribe over its client, `kubectl` for the rest.
+fn describer(
+    connection: DescribeConnection,
+    preference: &DescribePreference,
+    kubeconfig: Option<PathBuf>,
+) -> Arc<dyn DescribePort> {
+    let native = NativeDescribe::new(connection.client, connection.discovery.clone());
+    let kubectl = KubectlDescribe::new(
+        connection.discovery,
+        preference.clone(),
+        KubectlTarget {
+            context: connection.context,
+            kubeconfig,
+        },
+    );
+    Arc::new(Describer::new(
+        Arc::new(native),
+        Arc::new(kubectl),
+        preference.clone(),
+    ))
 }
 
 #[async_trait]
@@ -126,7 +171,7 @@ mod tests {
             Arc::new(MemorySecrets::default()),
             false,
         ));
-        let connector = SourcesConnector::new(sources.clone());
+        let connector = SourcesConnector::new(sources.clone(), DescribePreference::default());
         assert!(!sources.is_built(), "nothing read before the first connect");
 
         let missing = connector.connect(request("second")).await.err();

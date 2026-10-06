@@ -77,18 +77,27 @@ impl CommandId {
     pub const RESOURCE_COPY_LABEL: CommandId = CommandId::new("resource::CopyLabel");
     /// `resource::CopyName`: copy a resource's name to the clipboard.
     pub const RESOURCE_COPY_NAME: CommandId = CommandId::new("resource::CopyName");
+    /// `resource::CopyYaml`: copy the YAML a resource's detail shows (secrets masked).
+    pub const RESOURCE_COPY_YAML: CommandId = CommandId::new("resource::CopyYaml");
     /// `resource::Delete`: delete any resource.
     pub const RESOURCE_DELETE: CommandId = CommandId::new("resource::Delete");
     /// `resource::Open`: open a resource's detail view.
     pub const RESOURCE_OPEN: CommandId = CommandId::new("resource::Open");
     /// `resource::OpenList`: open the list view of a resource kind.
     pub const RESOURCE_OPEN_LIST: CommandId = CommandId::new("resource::OpenList");
+    /// `resource::RefreshDescribe`: read a resource's describe text again.
+    pub const RESOURCE_REFRESH_DESCRIBE: CommandId = CommandId::new("resource::RefreshDescribe");
     /// `resource::RetryFeed`: restart the feed behind a kind's list views.
     pub const RESOURCE_RETRY_FEED: CommandId = CommandId::new("resource::RetryFeed");
+    /// `resource::SaveYaml`: save the YAML a resource's detail shows to a file (secrets masked).
+    pub const RESOURCE_SAVE_YAML: CommandId = CommandId::new("resource::SaveYaml");
     /// `resource::PinDetail`: promote a resource's detail drawer to a workspace tab.
     pub const RESOURCE_PIN_DETAIL: CommandId = CommandId::new("resource::PinDetail");
     /// `resource::SelectAll`: select every row of a kind's list views.
     pub const RESOURCE_SELECT_ALL: CommandId = CommandId::new("resource::SelectAll");
+    /// `resource::ToggleManagedFields`: show or hide `metadata.managedFields` in a resource's YAML.
+    pub const RESOURCE_TOGGLE_MANAGED_FIELDS: CommandId =
+        CommandId::new("resource::ToggleManagedFields");
     /// `resource::ViewYaml`: open a resource's YAML.
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
@@ -325,6 +334,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         NONE,
     ),
+    // Writes the user's clipboard, never the cluster: the text is what the YAML tab shows.
+    CommandMeta::read(
+        CommandId::RESOURCE_COPY_YAML,
+        "Copy YAML",
+        CommandScope::Selection,
+        NONE,
+    ),
     CommandMeta::mutation(
         CommandId::RESOURCE_DELETE,
         "Delete Resource",
@@ -353,16 +369,37 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         NONE,
     ),
+    // Reads the object and its events again (`kubectl describe`); changes nothing.
+    CommandMeta::read(
+        CommandId::RESOURCE_REFRESH_DESCRIBE,
+        "Refresh Describe",
+        CommandScope::Selection,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::RESOURCE_RETRY_FEED,
         "Retry Resource Feed",
         CommandScope::ResourceKind,
         NONE,
     ),
+    // Writes a local file the user picks, never the cluster: the text is what the YAML tab shows.
+    CommandMeta::read(
+        CommandId::RESOURCE_SAVE_YAML,
+        "Save YAML as File",
+        CommandScope::Selection,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::RESOURCE_SELECT_ALL,
         "Select All Resources",
         CommandScope::ResourceKind,
+        NONE,
+    ),
+    // A display option of the open YAML tab; changes nothing in the cluster.
+    CommandMeta::read(
+        CommandId::RESOURCE_TOGGLE_MANAGED_FIELDS,
+        "Toggle Managed Fields",
+        CommandScope::Selection,
         NONE,
     ),
     CommandMeta::read(

@@ -60,6 +60,17 @@
     // Saved per kind, not per cluster; only the text you typed is kept.
     "persist_filter": false
   },
+  // The Describe tab of a resource's detail (`kubectl describe`-style text). `backend`:
+  //   "auto"     render in process (deskribe: 36 specialised kinds, a generic layout for custom
+  //              resources), and run the `kubectl` binary for a kind deskribe does not cover
+  //   "native"   deskribe only, never run kubectl
+  //   "kubectl"  always run `kubectl describe`
+  // `kubectl_path`: the binary to run; null looks `kubectl` up on PATH. A change applies to the
+  // next describe.
+  "describe": {
+    "backend": "auto",
+    "kubectl_path": null
+  },
   // Per-cluster settings. Each key below is a default for every cluster; write the same key under
   // `clusters.<id>` (below) to override it for one cluster. Layers merge field by field:
   // this file, then your top-level values, then the cluster's own.

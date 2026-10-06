@@ -41,6 +41,13 @@ pub(super) fn keys(resource: &Resource) -> Vec<String> {
 /// annotation) and returns its key names. A resource that is not a Secret is left alone and
 /// gives no keys.
 pub fn mask_secret(resource: &mut Resource) -> Option<Vec<String>> {
+    mask_secret_with(resource, None)
+}
+
+/// [`mask_secret`] with `placeholder` (a string) standing where each value was, instead of
+/// `null`: the YAML tab shows `key: (hidden)` rather than a bare `null` that reads as an empty
+/// value.
+pub fn mask_secret_with(resource: &mut Resource, placeholder: Option<&str>) -> Option<Vec<String>> {
     if !is_secret(&resource.kind) {
         return None;
     }
@@ -49,7 +56,7 @@ pub fn mask_secret(resource: &mut Resource) -> Option<Vec<String>> {
         for field in ["data", "stringData"] {
             if let Some(map) = object.get_mut(field).and_then(|v| v.as_object_mut()) {
                 for value in map.values_mut() {
-                    *value = serde_json::Value::Null;
+                    *value = placeholder.map_or(serde_json::Value::Null, |text| text.into());
                 }
             }
         }

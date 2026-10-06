@@ -15,8 +15,9 @@
 //! Changes from upstream: the `#N` array-index key paths (`handle_possible_array_value` and
 //! the top-level array helpers, used by Zed's keymap editor) are not vendored, so arrays are
 //! replaced as whole values; `find_value_range_in_json_text` and `parse_json_with_comments`
-//! are not vendored ([`crate::jsonc`] parses); `util::RangeExt` is inlined; tree-sitter 0.27's
-//! `QueryMatch::captures()` accessor replaces the field; panicking `unwrap`s carry the
+//! are not vendored ([`crate::jsonc`] parses); `util::RangeExt` is inlined; tree-sitter stays on
+//! 0.26 (the version gpui-component's editor links), where `QueryMatch::captures` is a field, as
+//! upstream has it; panicking `unwrap`s carry the
 //! invariant that makes them unreachable; a missing key in a member-less object is inserted
 //! inside its braces (upstream rewrote the whole document at the root, moving a header above
 //! `{` inside it and dropping block comments). Formatting helpers live in [`format`].
@@ -148,12 +149,12 @@ pub fn replace_value_in_json_text<T: AsRef<str>>(
 
     let mut matches = cursor.matches(&PAIR_QUERY, syntax_tree.root_node(), text.as_bytes());
     while let Some(mat) = matches.next() {
-        if mat.captures().len() != 2 {
+        if mat.captures.len() != 2 {
             continue;
         }
 
-        let key_range = mat.captures()[0].node.byte_range();
-        let value_range = mat.captures()[1].node.byte_range();
+        let key_range = mat.captures[0].node.byte_range();
+        let value_range = mat.captures[1].node.byte_range();
 
         // Don't enter sub objects until we find an exact
         // match for the current keypath

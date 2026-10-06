@@ -13,7 +13,8 @@ doctest = false
 
 [dependencies]
 gpui.workspace = true
-gpui-component.workspace = true
+# `tree-sitter-yaml`: the YAML grammar of the read-only code view (`editor`), E07-S06.
+gpui-component = { workspace = true, features = ["tree-sitter-yaml"] }
 gpui-kit-assets.workspace = true
 oxikube_assets.workspace = true
 oxikube_theme.workspace = true

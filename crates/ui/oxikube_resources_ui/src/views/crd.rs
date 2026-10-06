@@ -148,7 +148,7 @@ impl ResourceViews {
     }
 
     /// A toast in `cluster`'s tab.
-    fn toast(&self, cluster: &ClusterId, toast: Toast, cx: &mut Context<Self>) {
+    pub(super) fn toast(&self, cluster: &ClusterId, toast: Toast, cx: &mut Context<Self>) {
         if let Some(workspace) = self.tab_workspace(cluster, cx) {
             workspace.update(cx, |ws, cx| ws.show_toast(toast, cx));
         }

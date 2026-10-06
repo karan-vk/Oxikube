@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use oxikube_describe::DescribePreference;
 use oxikube_ports::{
     ClockPort, ClusterConnectorPort, ClusterSourcePort, FsPort, SecretStorePort, StatePort,
 };
@@ -37,6 +38,9 @@ pub struct ClusterAdapters {
     pub fs: Arc<dyn FsPort>,
     /// Where pasted kubeconfigs are stored (`<config dir>/kubeconfigs`, ADR 0015).
     pub kubeconfigs_dir: PathBuf,
+    /// Which describe backend the Describe tab uses (`describe.backend`, E07-S06): shared with
+    /// every connection's describer, and set from the settings by the mount.
+    pub describe: DescribePreference,
 }
 
 impl AppPorts {
@@ -69,6 +73,7 @@ impl ClusterAdapters {
             clock: ports.clock.clone(),
             fs: ports.fs.clone(),
             kubeconfigs_dir: Self::TEST_KUBECONFIGS_DIR.into(),
+            describe: DescribePreference::default(),
         }
     }
 }

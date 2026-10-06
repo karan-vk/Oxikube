@@ -2,7 +2,8 @@
 //! the first screen of a connected cluster, the sidebar shows count badges from the store, and a
 //! tile or sidebar click reaches `resource::OpenList` on the bus, which opens the kind's table
 //! (E07-S03). Enter on a row opens the detail drawer in the cluster tab, and "Pin as tab" makes
-//! it a tab (E07-S05).
+//! it a tab (E07-S05); its YAML and Describe tabs show the object and the describe text read through
+//! the connection's `DescribePort` (E07-S06).
 
 use std::time::Duration;
 
@@ -13,7 +14,8 @@ use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
-use oxikube_resources_ui::detail::{DetailDrawer, DetailView, Mount};
+use oxikube_ports::{DescribeOutput, DescribeSource};
+use oxikube_resources_ui::detail::{DescribeState, DetailDrawer, DetailView, Mount};
 use oxikube_resources_ui::overview_lite::WorkloadsOverview;
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::TestPorts;
@@ -454,4 +456,106 @@ fn custom_resources_are_reachable_from_the_sidebar_through_the_crd_list(cx: &mut
         app.drawn("resource-table-version"),
         "two served versions: a switcher"
     );
+}
+
+#[gpui::test]
+fn the_yaml_and_describe_tabs_of_a_row_show_the_object_and_its_description(
+    cx: &mut TestAppContext,
+) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.serve([kind("", "v1", "Pod", "pods")]);
+    let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
+    ports
+        .resources
+        .insert(oxikube_testkit::fixtures::pod_running());
+    ports.describe.script().describe.push_ok(DescribeOutput {
+        text: "Name:         web-running\nStatus:       Running\n".into(),
+        source: DescribeSource::Native,
+    });
+    app.press("enter");
+    app.tick();
+    app.click("sidebar-entry-workloads/pods");
+    app.tick();
+    app.click("cell-0-0");
+    app.press("enter");
+    app.tick();
+    assert!(app.drawn("detail-view"), "the drawer shows the detail");
+
+    // YAML: the object, read-only, in the highlighted editor.
+    app.click("detail-tab-yaml");
+    app.tick();
+    assert!(app.drawn("detail-yaml-editor"));
+    let ws = app.tab_workspace();
+    let view = app
+        .vcx
+        .update(|_, cx| {
+            ws.read(cx)
+                .panel::<DetailDrawer>()
+                .and_then(|drawer| drawer.read(cx).view().cloned())
+        })
+        .expect("the drawer's detail");
+    let yaml = app
+        .vcx
+        .update(|_, cx| view.read(cx).yaml().map(str::to_owned));
+    assert!(
+        yaml.as_deref()
+            .is_some_and(|y| y.contains("name: web-running")),
+        "{yaml:?}"
+    );
+
+    // Describe: read through the connection's port, shown as text.
+    app.click("detail-tab-describe");
+    app.tick();
+    assert!(app.drawn("detail-describe-text"));
+    let (state, text) = app.vcx.update(|_, cx| {
+        let view = view.read(cx);
+        (
+            view.describe_state().clone(),
+            view.describe_text().map(str::to_owned),
+        )
+    });
+    assert_eq!(
+        state,
+        DescribeState::Ready {
+            source: DescribeSource::Native
+        }
+    );
+    assert!(text.is_some_and(|t| t.contains("Status:       Running")));
+    assert_eq!(ports.describe.recorded_calls().len(), 1);
+}
+
+#[gpui::test]
+fn the_describe_setting_reaches_the_adapters_preference_and_follows_edits(cx: &mut TestAppContext) {
+    use gpui::BorrowAppContext as _;
+    use oxikube_describe::Backend;
+    use oxikube_settings::SettingsStore;
+
+    let mut app = App::start_with(cx, TestPorts::seeded(), |cx| {
+        cx.update_global::<SettingsStore, _>(|store, _| {
+            store
+                .set_user_settings(
+                    r#"{ "describe": { "backend": "kubectl", "kubectl_path": "/opt/bin/kubectl" } }"#,
+                )
+                .expect("valid settings");
+        });
+    });
+    let preference = app
+        .vcx
+        .update(|_, cx| AppState::global(cx).ports().clusters.describe.clone());
+    let config = preference.get();
+    assert_eq!(config.backend, Backend::Kubectl, "read at mount");
+    assert_eq!(config.kubectl_path, Some("/opt/bin/kubectl".into()));
+
+    // A hot reload of settings.json: the next describe uses it, no reconnect.
+    app.vcx.update(|_, cx| {
+        cx.update_global::<SettingsStore, _>(|store, _| {
+            store
+                .set_user_settings(r#"{ "describe": { "backend": "native" } }"#)
+                .expect("valid settings");
+        });
+    });
+    app.vcx.run_until_parked();
+    let config = preference.get();
+    assert_eq!(config.backend, Backend::Native);
+    assert_eq!(config.kubectl_path, None);
 }

@@ -31,6 +31,8 @@ tracing.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
+insta.workspace = true
+serde-saphyr.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }

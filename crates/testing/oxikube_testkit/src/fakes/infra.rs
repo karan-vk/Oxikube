@@ -185,11 +185,22 @@ pub enum DescribeCall {
     Describe(ResourceRef),
 }
 
-/// Fake `DescribePort`. Scripted only.
+/// Fake `DescribePort`. Scripted only; a call with nothing queued fails as the other fakes do.
+///
+/// [`hold`](Self::hold) makes later calls wait until [`release`](Self::release), so a test can
+/// observe a slow describe (the loading state) before its answer arrives; [`held`](Self::held)
+/// counts the calls waiting.
 #[derive(Debug, Default)]
 pub struct FakeDescribePort {
     script: DescribeScripts,
     calls: CallLog<DescribeCall>,
+    gate: Mutex<DescribeGate>,
+}
+
+#[derive(Debug, Default)]
+struct DescribeGate {
+    holding: bool,
+    waiting: Vec<futures::channel::oneshot::Sender<()>>,
 }
 
 fake_plumbing!(FakeDescribePort, DescribeScripts, DescribeCall);
@@ -199,12 +210,47 @@ impl FakeDescribePort {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Makes every later `describe` wait until [`release`](Self::release).
+    pub fn hold(&self) {
+        self.gate.lock().holding = true;
+    }
+
+    /// Stops holding and lets every waiting `describe` continue.
+    pub fn release(&self) {
+        let waiting = {
+            let mut gate = self.gate.lock();
+            gate.holding = false;
+            std::mem::take(&mut gate.waiting)
+        };
+        for waiter in waiting {
+            let _ = waiter.send(());
+        }
+    }
+
+    /// Number of `describe` calls waiting on [`hold`](Self::hold).
+    pub fn held(&self) -> usize {
+        let mut gate = self.gate.lock();
+        gate.waiting.retain(|w| !w.is_canceled());
+        gate.waiting.len()
+    }
 }
 
 #[async_trait]
 impl DescribePort for FakeDescribePort {
     async fn describe(&self, target: &ResourceRef) -> OxiResult<DescribeOutput> {
         self.calls.record(DescribeCall::Describe(target.clone()));
+        let waiter = {
+            let mut gate = self.gate.lock();
+            gate.holding.then(|| {
+                let (tx, rx) = futures::channel::oneshot::channel();
+                gate.waiting.push(tx);
+                rx
+            })
+        };
+        if let Some(waiter) = waiter {
+            let _ = waiter.await;
+        }
         self.script
             .describe
             .next_or_unscripted("FakeDescribePort", "describe")

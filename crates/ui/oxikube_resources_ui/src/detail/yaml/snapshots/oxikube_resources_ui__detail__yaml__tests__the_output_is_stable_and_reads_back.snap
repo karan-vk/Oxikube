@@ -1,0 +1,12 @@
+---
+source: crates/ui/oxikube_resources_ui/src/detail/yaml/tests.rs
+expression: one
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web
+  namespace: shop
+  resourceVersion: "9"
+data:
+  k: v

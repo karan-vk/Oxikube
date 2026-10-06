@@ -35,6 +35,7 @@ oxikube_assets.workspace = true
 oxikube_catalog_ui.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
+oxikube_describe.workspace = true
 oxikube_kube.workspace = true
 oxikube_logging.workspace = true
 oxikube_ports.workspace = true

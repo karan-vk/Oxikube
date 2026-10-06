@@ -1,7 +1,9 @@
 //! The table and detail commands on the `CommandBus`: `resource::Open`, `resource::CopyName`,
 //! `resource::RetryFeed` (E07-S10), `resource::SelectAll` (E07-S03), `resource::PinDetail`,
-//! `resource::CopyLabel` (E07-S05), `table::FocusFilter` (E07-S04) and the CRD navigation
-//! `crd::OpenList`, `crd::OpenResources` (E07-S07).
+//! `resource::CopyLabel` (E07-S05), `table::FocusFilter` (E07-S04), the CRD navigation
+//! `crd::OpenList`, `crd::OpenResources` (E07-S07) and the YAML and Describe tabs'
+//! `resource::CopyYaml`, `resource::SaveYaml`, `resource::ToggleManagedFields`,
+//! `resource::RefreshDescribe` (E07-S06).
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, pin it
 //! as a tab, select rows, restart a feed (a read) or write the user's clipboard. Each is declared
@@ -22,7 +24,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 9] = [
+pub const RESOURCE_COMMANDS: [CommandId; 13] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -32,6 +34,10 @@ pub const RESOURCE_COMMANDS: [CommandId; 9] = [
     CommandId::TABLE_FOCUS_FILTER,
     CommandId::CRD_OPEN_LIST,
     CommandId::CRD_OPEN_RESOURCES,
+    CommandId::RESOURCE_COPY_YAML,
+    CommandId::RESOURCE_SAVE_YAML,
+    CommandId::RESOURCE_TOGGLE_MANAGED_FIELDS,
+    CommandId::RESOURCE_REFRESH_DESCRIBE,
 ];
 
 /// A resource command, resolved, for the UI thread.
@@ -51,6 +57,14 @@ pub enum ViewRequest {
         /// Whether `key` names an annotation.
         annotation: bool,
     },
+    /// Copy the YAML the detail of `target` shows to the clipboard.
+    CopyYaml(ResourceRef),
+    /// Save the YAML the detail of `target` shows to a file the user picks.
+    SaveYaml(ResourceRef),
+    /// Show or hide `managedFields` in the YAML tab of `target`'s detail.
+    ToggleManagedFields(ResourceRef),
+    /// Read the describe text of `target` again.
+    RefreshDescribe(ResourceRef),
     /// Copy `target`'s name to the clipboard.
     CopyName(ResourceRef),
     /// Open the list of `cluster`'s CustomResourceDefinitions (`crd::OpenList`, E07-S07).
@@ -128,6 +142,14 @@ impl ResourceCommandSink {
                 key: key.clone(),
                 annotation: *annotation,
             },
+            Command::ResourceCopyYaml { target } => ViewRequest::CopyYaml(target.clone()),
+            Command::ResourceSaveYaml { target } => ViewRequest::SaveYaml(target.clone()),
+            Command::ResourceToggleManagedFields { target } => {
+                ViewRequest::ToggleManagedFields(target.clone())
+            }
+            Command::ResourceRefreshDescribe { target } => {
+                ViewRequest::RefreshDescribe(target.clone())
+            }
             Command::ResourceSelectAll { cluster, gvk } => ViewRequest::SelectAll {
                 cluster: cluster.clone(),
                 gvk: gvk.clone(),

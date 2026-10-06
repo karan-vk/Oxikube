@@ -271,6 +271,7 @@ impl DetailView {
         self.body = rows;
         self.model = Some(model);
         self.resolve_owners(cx);
+        self.refresh_yaml();
         cx.notify();
     }
 

@@ -24,7 +24,8 @@ use oxikube_domain::kinds::ResourceKind;
 use oxikube_keymap::KeymapOptions;
 use oxikube_ports::{ClockPort, ClusterContext, SourceId};
 use oxikube_testkit::{
-    FakeClockPort, FakeClusterConnectorPort, FakeClusterPorts, FakeClusterSourcePort, FakeStatePort,
+    FakeClockPort, FakeClusterConnectorPort, FakeClusterPorts, FakeClusterSourcePort, FakeFsPort,
+    FakeStatePort,
 };
 use oxikube_workspace::sidebar::{self, SidebarDeps};
 use oxikube_workspace::test_support::open_workspace;
@@ -135,6 +136,8 @@ pub(crate) struct Fixture {
     pub(crate) sessions: ClusterSessionManager,
     pub(crate) connector: Arc<FakeClusterConnectorPort>,
     pub(crate) state: Arc<FakeStatePort>,
+    /// Where "save YAML" writes.
+    pub(crate) fs: Arc<FakeFsPort>,
     /// The clock of the sessions and the stores (their idle-grace timers run on it).
     pub(crate) clock: Arc<FakeClockPort>,
     pub(crate) dispatcher: Dispatcher,
@@ -212,11 +215,13 @@ impl Fixture {
             dispatcher: Rc::new(dispatcher.clone()),
             actions: actions.clone(),
         });
+        let fs = Arc::new(FakeFsPort::new());
         let views = vcx.update(|window, cx| {
             ResourceViews::start(
                 ResourceViewsDeps {
                     table: deps.clone(),
                     tabs: tabs.downgrade(),
+                    fs: fs.clone(),
                 },
                 requests,
                 window,
@@ -252,6 +257,7 @@ impl Fixture {
             sessions,
             connector,
             state,
+            fs,
             clock,
             dispatcher,
             deps,
