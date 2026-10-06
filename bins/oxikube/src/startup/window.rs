@@ -7,10 +7,11 @@
 //! wrapped in the first-frame probe ([`super::first_frame::mark`]).
 
 use anyhow::{Context as _, Result};
-use gpui::{AnyView, App, AppContext as _, WindowHandle};
+use gpui::{AnyView, App, AppContext as _, Entity, Window, WindowHandle};
 use oxikube_runtime::perf::FirstFrameProbe;
 use oxikube_ui::root::Root;
 use oxikube_workspace::persistence::{LayoutStore, MAIN_WINDOW_ID};
+use oxikube_workspace::window::MainView;
 
 use crate::app_state::AppState;
 
@@ -47,4 +48,18 @@ pub fn open_main_window(
             probe_first_frame(content, cx)
         },
     )
+}
+
+/// The [`MainView`] of an app window opened by [`open_main_window`] (under the `Root` and the
+/// first-frame probe), `None` for any other window.
+pub fn main_view(window: &Window, cx: &App) -> Option<Entity<MainView>> {
+    let root = window.root::<Root>().flatten()?;
+    let probe = root
+        .read(cx)
+        .view()
+        .clone()
+        .downcast::<FirstFrameProbe>()
+        .ok()?;
+    let main = probe.read(cx).inner().clone().downcast::<MainView>().ok()?;
+    Some(main)
 }

@@ -238,12 +238,13 @@ impl Render for ClusterTab {
                 content.child(self.workspace.clone())
             }
         };
-        let content = match &self.toolbar {
-            Some(toolbar) if phase.is_connected() => v_flex()
-                .flex_1()
-                .min_h_0()
-                .w_full()
-                .child(
+        let toolbar = self.toolbar.as_ref().filter(|_| phase.is_connected());
+        let content = v_flex()
+            .flex_1()
+            .min_h_0()
+            .w_full()
+            .when_some(toolbar, |this, toolbar| {
+                this.child(
                     div()
                         .id("cluster-toolbar")
                         .debug_selector(|| format!("cluster-toolbar-{title}"))
@@ -253,9 +254,8 @@ impl Render for ClusterTab {
                         .border_color(colors.border_variant)
                         .child(toolbar.clone()),
                 )
-                .child(content),
-            _ => v_flex().flex_1().min_h_0().w_full().child(content),
-        };
+            })
+            .child(content);
         let body = match &self.connect_ui {
             Some(ui) if !phase.is_connected() => div()
                 .id("cluster-connect")

@@ -40,31 +40,30 @@ impl ViewDeps {
     }
 
     /// Shows `view` ([`CATALOG_VIEW`] or [`SOURCES_VIEW`]) in `workspace`: the open tab when there
-    /// is one, else a new one. Returns whether `view` is one of them.
+    /// is one, else a new one. Any other id is ignored (`view::Open` validates it first).
     pub fn open(
         &self,
         view: &str,
         workspace: &Entity<Workspace>,
         window: &mut Window,
         cx: &mut App,
-    ) -> bool {
-        if !matches!(view, CATALOG_VIEW | SOURCES_VIEW) {
-            return false;
-        }
+    ) {
         let key = SharedString::from(view.to_owned());
         let open = workspace.read(cx).find_item_by_key(&key, cx);
         if let Some(item) = open {
             workspace.update(cx, |ws, cx| ws.activate_item(item, true, window, cx));
-            return true;
+            return;
         }
-        let item: Box<dyn oxikube_workspace::ItemHandle> = if view == CATALOG_VIEW {
-            Box::new(self.catalog_view(window, cx))
-        } else {
-            let deps = SourcesDeps {
-                backend: Rc::new(ServiceBackend::new(self.sources.clone())),
-                workspace: Some(workspace.downgrade()),
-            };
-            Box::new(cx.new(|cx| SourcesView::new(deps, cx)))
+        let item: Box<dyn oxikube_workspace::ItemHandle> = match view {
+            CATALOG_VIEW => Box::new(self.catalog_view(window, cx)),
+            SOURCES_VIEW => {
+                let deps = SourcesDeps {
+                    backend: Rc::new(ServiceBackend::new(self.sources.clone())),
+                    workspace: Some(workspace.downgrade()),
+                };
+                Box::new(cx.new(|cx| SourcesView::new(deps, cx)))
+            }
+            _ => return,
         };
         let options = OpenOptions {
             focus: true,
@@ -72,6 +71,5 @@ impl ViewDeps {
             ..OpenOptions::default()
         };
         workspace.update(cx, |ws, cx| ws.open_item_with(item, options, window, cx));
-        true
     }
 }

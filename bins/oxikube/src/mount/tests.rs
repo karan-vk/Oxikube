@@ -11,9 +11,7 @@ use oxikube_domain::OxiError;
 use oxikube_domain::command::CommandId;
 use oxikube_domain::session::SessionPhase;
 use oxikube_testkit::TestPorts;
-use oxikube_ui::root::Root;
 use oxikube_workspace::sidebar::SidebarPanel;
-use oxikube_workspace::window::MainView;
 use oxikube_workspace::{ClusterTab, Workspace};
 
 use crate::app_state::AppState;
@@ -37,29 +35,11 @@ impl App {
         Self { vcx, ports }
     }
 
-    fn main_view(&mut self) -> Entity<MainView> {
-        self.vcx.update(|window, cx| {
-            let probe = window
-                .root::<Root>()
-                .flatten()
-                .expect("the Root")
-                .read(cx)
-                .view()
-                .clone()
-                .downcast::<oxikube_runtime::perf::FirstFrameProbe>()
-                .expect("the first-frame probe");
-            probe
-                .read(cx)
-                .inner()
-                .clone()
-                .downcast::<MainView>()
-                .expect("the main view")
-        })
-    }
-
     fn workspace(&mut self) -> Entity<Workspace> {
-        let main = self.main_view();
-        self.vcx.update(|_, cx| main.read(cx).workspace().clone())
+        self.vcx.update(|window, cx| {
+            let main = window::main_view(window, cx).expect("the app's main view");
+            main.read(cx).workspace().clone()
+        })
     }
 
     fn read<R>(&mut self, f: impl FnOnce(&Workspace, &gpui::App) -> R) -> R {

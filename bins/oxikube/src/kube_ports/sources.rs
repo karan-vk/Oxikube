@@ -63,7 +63,8 @@ impl LazyKubeSources {
     }
 
     /// Whether the adapter was built (a port call ran).
-    pub fn is_built(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_built(&self) -> bool {
         self.adapter.initialized()
     }
 

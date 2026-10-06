@@ -88,8 +88,8 @@ pub fn open_main_window_restoring(
 
 /// Like [`open_main_window_restoring`] (or [`open_main_window_with`] when `layout` is `None`),
 /// with `mount` run on the new [`MainView`] (its workspace and layout persistence) before the
-/// `Root` hosts it, so what it opens (the catalog home, the hotbar) is in the first frame. Items `mount` opens are kept by the layout restore, which
-/// only fills an empty centre.
+/// `Root` hosts it, so what it opens (the catalog home, the hotbar) is in the first frame. Items
+/// `mount` opens are kept by the layout restore, which only fills an empty centre.
 pub fn open_main_window_mounted(
     cx: &mut App,
     layout: Option<LayoutStore>,

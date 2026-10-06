@@ -27,9 +27,7 @@ use oxikube_domain::ids::ContextName;
 use oxikube_domain::session::SessionPhase;
 use oxikube_kube::kubeconfig::{Strictness, default_kubeconfig_path, load_local_kubeconfig};
 use oxikube_testkit::integration::{ensure_kind_context, test_context};
-use oxikube_ui::root::Root;
 use oxikube_workspace::sidebar::SidebarPanel;
-use oxikube_workspace::window::MainView;
 use oxikube_workspace::{ClusterTab, Workspace};
 
 /// The context whose token the API server rejects.
@@ -207,21 +205,7 @@ fn tab_of(
 
 fn workspace(vcx: &mut VisualTestContext) -> Entity<Workspace> {
     vcx.update(|window, cx| {
-        let probe = window
-            .root::<Root>()
-            .flatten()
-            .expect("the Root")
-            .read(cx)
-            .view()
-            .clone()
-            .downcast::<oxikube_runtime::perf::FirstFrameProbe>()
-            .expect("the first-frame probe");
-        let main = probe
-            .read(cx)
-            .inner()
-            .clone()
-            .downcast::<MainView>()
-            .expect("the main view");
+        let main = window::main_view(window, cx).expect("the app's main view");
         main.read(cx).workspace().clone()
     })
 }

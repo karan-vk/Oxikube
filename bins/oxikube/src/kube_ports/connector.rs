@@ -15,9 +15,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use kube::config::Kubeconfig;
 use oxikube_domain::OxiResult;
-use oxikube_domain::ids::ClusterId;
 use oxikube_kube::kubeconfig::LoadedKubeconfig;
-use oxikube_kube::{ConnectorConfig, FeedRegistry, KubeConnector, PoolConfig};
+use oxikube_kube::{ConnectorConfig, KubeConnector, PoolConfig};
 use oxikube_ports::{ClusterConnection, ClusterConnectorPort, ConnectRequest};
 use parking_lot::Mutex;
 
@@ -43,27 +42,16 @@ impl SourcesConnector {
     /// A connector for the contexts of `sources`, with the default client and connection
     /// settings.
     pub fn new(sources: Arc<LazyKubeSources>) -> Self {
-        Self::with_config(sources, PoolConfig::default(), ConnectorConfig::default())
-    }
-
-    /// [`SourcesConnector::new`] with explicit client (`pool`) and connection settings.
-    pub fn with_config(
-        sources: Arc<LazyKubeSources>,
-        pool: PoolConfig,
-        config: ConnectorConfig,
-    ) -> Self {
         Self {
             sources,
             // Empty until the first connect hands it the catalog.
-            kube: KubeConnector::new(Kubeconfig::default(), pool, config),
+            kube: KubeConnector::new(
+                Kubeconfig::default(),
+                PoolConfig::default(),
+                ConnectorConfig::default(),
+            ),
             synced: Mutex::new(None),
         }
-    }
-
-    /// The watch budget of `cluster`'s live connection (`None` when it is not connected): the
-    /// resource store opens its feeds there and reads the counters from it.
-    pub fn feeds(&self, cluster: &ClusterId) -> Option<FeedRegistry> {
-        self.kube.feeds(cluster)
     }
 
     /// Hands the catalog's current kubeconfig to the pools when it changed since the last call.
@@ -96,7 +84,7 @@ impl ClusterConnectorPort for SourcesConnector {
 #[cfg(test)]
 mod tests {
     use oxikube_domain::ErrorKind;
-    use oxikube_domain::ids::ContextName;
+    use oxikube_domain::ids::{ClusterId, ContextName};
     use oxikube_ports::{
         ClusterSourcePort as _, ExecInteractivity, HealthReporter, HealthSignal, UserSource,
     };
