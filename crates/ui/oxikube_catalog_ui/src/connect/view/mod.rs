@@ -68,14 +68,7 @@ impl ConnectView {
             deps,
             cluster,
             state: ClusterSessionState::Disconnected,
-            info: ConnectInfo {
-                title: String::new(),
-                context: String::new(),
-                server: None,
-                exec: Default::default(),
-                terminal: false,
-                sources: false,
-            },
+            info: ConnectInfo::default(),
             model: ConnectViewModel::Content,
             details_open: false,
             focus: cx.focus_handle(),
@@ -93,11 +86,6 @@ impl ConnectView {
     /// What the view shows now.
     pub fn model(&self) -> &ConnectViewModel {
         &self.model
-    }
-
-    /// The session state the view shows.
-    pub fn state(&self) -> &ClusterSessionState {
-        &self.state
     }
 
     /// Whether the error details are expanded.
@@ -191,14 +179,14 @@ impl ConnectView {
 
     /// Opens a terminal on the cluster's context, when the host offers one.
     pub fn open_terminal(&mut self, cx: &mut Context<Self>) {
-        if let Some(open) = self.deps.open_terminal.clone() {
+        if let Some(open) = &self.deps.open_terminal {
             open(&self.cluster, cx);
         }
     }
 
     /// Opens the kubeconfig sources, when the host offers them.
     pub fn open_sources(&mut self, cx: &mut Context<Self>) {
-        if let Some(open) = self.deps.open_sources.clone() {
+        if let Some(open) = &self.deps.open_sources {
             open(cx);
         }
     }
@@ -220,7 +208,7 @@ impl ConnectView {
     }
 
     fn send(&self, command: Command, cx: &mut Context<Self>) {
-        self.deps.dispatcher.clone().dispatch(command, cx);
+        self.deps.dispatcher.dispatch(command, cx);
     }
 }
 

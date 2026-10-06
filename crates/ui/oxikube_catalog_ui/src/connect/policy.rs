@@ -52,7 +52,7 @@ impl ExecPolicy {
     }
 
     /// Whether a plugin may be interactive at all.
-    pub fn allows_interaction(self) -> bool {
+    pub(super) fn allows_interaction(self) -> bool {
         self.setting != ExecInteractivity::Never
     }
 

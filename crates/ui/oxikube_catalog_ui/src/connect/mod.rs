@@ -26,10 +26,11 @@
 //! # Nothing here touches a cluster
 //!
 //! The views read session states from the manager's update stream (a state change redraws at
-//! once, and only the view of the cluster that changed does any work) and turn their buttons into `Command`s sent through the [`CommandDispatcher`]
-//! (`cluster::Reconnect`, `cluster::CancelConnect`, `cluster::Connect`: reads, so no
-//! `MutationGuard`; each has an MCP tool stub, `app.cluster_reconnect` and so on). The work runs
-//! off the UI thread behind the dispatcher, and the result comes back as the next session state.
+//! once, and only the view of the cluster that changed does any work) and turn their buttons into
+//! `Command`s sent through the [`CommandDispatcher`] (`cluster::Reconnect`,
+//! `cluster::CancelConnect`, `cluster::Connect`: reads, so no `MutationGuard`; each has an MCP
+//! tool stub, `app.cluster_reconnect` and so on). The work runs off the UI thread behind the
+//! dispatcher, and the result comes back as the next session state.
 //!
 //! # Error text
 //!

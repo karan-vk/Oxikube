@@ -38,8 +38,6 @@ fn error(reason: &str) -> ClusterSessionState {
 fn ready_shows_the_clusters_own_content_and_nothing_of_ours() {
     let model = ConnectViewModel::of(&ClusterSessionState::Ready, &info());
     assert_eq!(model, ConnectViewModel::Content);
-    assert!(!model.replaces_content());
-    assert!(model.banner().is_none());
 }
 
 #[test]
@@ -54,7 +52,6 @@ fn connecting_names_the_server_and_the_context() {
         connecting.server.as_deref(),
         Some("https://prod.example:6443")
     );
-    assert!(model.replaces_content());
 }
 
 #[test]
@@ -72,7 +69,6 @@ fn auth_required_carries_the_plugin_message_the_policy_and_the_terminal_action()
         "{}",
         auth.instructions
     );
-    assert!(model.replaces_content());
 
     let no_terminal = ConnectInfo {
         terminal: false,
@@ -136,10 +132,9 @@ fn the_policy_follows_the_cluster_into_the_auth_model() {
 #[test]
 fn degraded_is_a_banner_over_the_content_not_a_replacement() {
     let model = ConnectViewModel::of(&ClusterSessionState::Degraded, &info());
-    assert!(!model.replaces_content());
     assert_eq!(
-        model.banner(),
-        Some(&DegradedModel {
+        model,
+        ConnectViewModel::Degraded(DegradedModel {
             title: "prod-eu".into()
         })
     );
@@ -188,7 +183,6 @@ fn error_has_a_summary_details_and_the_way_to_the_sources() {
 fn disconnected_offers_connect() {
     let model = ConnectViewModel::of(&ClusterSessionState::Disconnected, &info());
     assert!(matches!(model, ConnectViewModel::Disconnected(_)));
-    assert!(model.replaces_content());
 }
 
 #[test]

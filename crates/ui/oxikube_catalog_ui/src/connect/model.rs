@@ -10,7 +10,7 @@ use super::text::{DisplayText, scrub};
 
 /// What the view knows about the cluster besides its state. [`ConnectViewModel::of`] redacts every
 /// text in it, so a view never has to remember to.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ConnectInfo {
     /// The cluster's display name, else its context name.
     pub title: String,
@@ -176,19 +176,6 @@ impl ConnectViewModel {
                     sources: info.sources,
                 })
             }
-        }
-    }
-
-    /// Whether the cluster tab shows this instead of the cluster's content.
-    pub fn replaces_content(&self) -> bool {
-        !matches!(self, Self::Content | Self::Degraded(_))
-    }
-
-    /// The banner drawn above the content, if any.
-    pub fn banner(&self) -> Option<&DegradedModel> {
-        match self {
-            Self::Degraded(banner) => Some(banner),
-            _ => None,
         }
     }
 }

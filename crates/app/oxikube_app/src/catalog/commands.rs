@@ -1,6 +1,7 @@
 //! [`ClusterCommands`]: the handler of the cluster commands the catalog dispatches.
 
 use oxikube_domain::command::Command;
+use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::{ClusterSessionState, SessionPhase};
 use oxikube_domain::{OxiError, OxiResult};
 
@@ -65,18 +66,14 @@ impl ClusterCommands {
     pub async fn handle(&self, command: &Command) -> OxiResult<ClusterCommandOutcome> {
         match command {
             Command::ClusterConnect { cluster } => {
-                if let Err(error) = self.catalog.mark_used(cluster).await {
-                    tracing::warn!(%error, %cluster, "could not record the cluster as used");
-                }
+                self.mark_used(cluster).await;
                 self.sessions
                     .connect(cluster)
                     .await
                     .map(ClusterCommandOutcome::Connected)
             }
             Command::ClusterReconnect { cluster } => {
-                if let Err(error) = self.catalog.mark_used(cluster).await {
-                    tracing::warn!(%error, %cluster, "could not record the cluster as used");
-                }
+                self.mark_used(cluster).await;
                 self.sessions
                     .reconnect(cluster)
                     .await
@@ -109,6 +106,14 @@ impl ClusterCommands {
                 "{} is not a cluster catalog command",
                 other.id()
             ))),
+        }
+    }
+
+    /// Stamps `cluster` as used. Best effort: a state db that fails is logged and the connect
+    /// still runs.
+    async fn mark_used(&self, cluster: &ClusterId) {
+        if let Err(error) = self.catalog.mark_used(cluster).await {
+            tracing::warn!(%error, %cluster, "could not record the cluster as used");
         }
     }
 }
