@@ -37,6 +37,8 @@ pub trait PanelHandle: 'static {
     fn set_zoomed(&self, zoomed: bool, window: &mut Window, cx: &mut App);
     /// See [`Panel::serialize`].
     fn serialize(&self, cx: &App) -> Option<serde_json::Value>;
+    /// See [`Panel::restore`].
+    fn restore_state(&self, state: &serde_json::Value, window: &mut Window, cx: &mut App);
     /// The panel's focus handle.
     fn focus_handle(&self, cx: &App) -> FocusHandle;
     /// The panel as a view.
@@ -107,6 +109,10 @@ impl<T: Panel> PanelHandle for Entity<T> {
 
     fn serialize(&self, cx: &App) -> Option<serde_json::Value> {
         self.read(cx).serialize(cx)
+    }
+
+    fn restore_state(&self, state: &serde_json::Value, window: &mut Window, cx: &mut App) {
+        self.update(cx, |panel, cx| panel.restore(state, window, cx));
     }
 
     fn focus_handle(&self, cx: &App) -> FocusHandle {

@@ -8,8 +8,8 @@
 pub use gpui_component::Placement;
 pub use gpui_component::dock::{
     BasePanel as PanelBehavior, BasePanelView as PanelBehaviorView, ClosePanel, DockArea,
-    DockAreaState, DockEvent, DockLayout, DockPlacement, DockSkin, DragPanel, InsertTarget, NodeId,
-    PaneNode, PaneRef, PaneTree, Panel, PanelControl, PanelEvent, PanelHandle, PanelId, PanelInfo,
-    PanelState, PanelStyle, RootKind, TabGroup, TitleStyle, ToggleZoom, panel_handle,
-    register_panel,
+    DockAreaState, DockEvent, DockLayout, DockPlacement, DockSkin, DockState, DragPanel,
+    InsertTarget, NodeId, PaneNode, PaneRef, PaneTree, Panel, PanelControl, PanelEvent,
+    PanelHandle, PanelId, PanelInfo, PanelState, PanelStyle, RootKind, TabGroup, TitleStyle,
+    ToggleZoom, panel_handle, register_panel,
 };

@@ -55,6 +55,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
   mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
   events).
+- `oxikube_state_sqlite` — the `StatePort` adapter (ADR 0010): rusqlite (bundled) on a dedicated
+  thread, embedded ordered migrations, one `kv` table for the kv store and typed tables, the
+  append-only audit log, corrupt-file fallback (`state.db.corrupt-<timestamp>`).
 - `oxikube_ui` — the only crate that imports `gpui-component`; exposes tokens and curated
   components to every view.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
@@ -68,7 +71,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   windows, one `Workspace` each, shared globals), UI zoom (`view::ZoomIn`/`ZoomOut`/`ZoomReset`,
   the `ui_scale` setting), the effective reduce-motion flag (`reduce_motion` setting over the OS
   preference, read by views through `oxikube_ui::motion`), and the quit guard (`app::Quit`:
-  features register providers of running operations; `confirm_quit` setting).
+  features register providers of running operations; `confirm_quit` setting). Module `persistence`
+  (E05-S05): `SerializedWorkspace` (versioned `DockAreaState` + item descriptors + window place),
+  `LayoutStore` over `StatePort`, `LayoutPersistence` (async restore, 500 ms debounced save, flush
+  on quit) and `restore_window_bounds` (fit saved bounds to today's displays).
 
 ## Cross-layer wiring (ports + injection)
 

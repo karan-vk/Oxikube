@@ -175,6 +175,8 @@ pub struct TestPanel {
     pub active: bool,
     /// The last [`Panel::set_zoomed`] value.
     pub zoomed: bool,
+    /// What a layout restore handed to [`Panel::restore`], if it did.
+    pub restored: Option<serde_json::Value>,
 }
 
 impl TestPanel {
@@ -189,6 +191,7 @@ impl TestPanel {
             min_size: None,
             active: false,
             zoomed: false,
+            restored: None,
         })
     }
 
@@ -265,5 +268,13 @@ impl Panel for TestPanel {
 
     fn set_zoomed(&mut self, zoomed: bool, _: &mut Window, _: &mut Context<Self>) {
         self.zoomed = zoomed;
+    }
+
+    fn serialize(&self, _: &App) -> Option<serde_json::Value> {
+        Some(serde_json::json!({ "title": self.title.to_string() }))
+    }
+
+    fn restore(&mut self, state: &serde_json::Value, _: &mut Window, _: &mut Context<Self>) {
+        self.restored = Some(state.clone());
     }
 }

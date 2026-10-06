@@ -12,6 +12,23 @@ path = "src/oxikube_state_sqlite.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
+futures.workspace = true
+jiff.workspace = true
+oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+rusqlite.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+oxikube_testkit.workspace = true
+tempfile.workspace = true
+
+# Open time of a typical database (`docs/PERFORMANCE.md`, cold start):
+# `cargo run -p oxikube_state_sqlite --release --example open_bench`
+[[example]]
+name = "open_bench"
 
 [lints]
 workspace = true

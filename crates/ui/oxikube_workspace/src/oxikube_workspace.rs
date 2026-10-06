@@ -15,6 +15,9 @@
 //! - [`panel`]: the [`Panel`] trait (dockable side panel), [`PanelHandle`], [`DockPosition`].
 //! - [`pane`]: [`PaneGroup`] / [`Pane`] snapshots of the centre splits, [`SplitDirection`].
 //! - [`dock`]: [`Dock`] snapshots of the edge docks.
+//! - [`persistence`]: layout persistence (E05-S05): the versioned saved layout, the `StatePort`-backed
+//!   store, the controller that restores at launch, debounces saves and flushes on quit, and window
+//!   bounds fitted to the displays.
 //! - [`closed`]: the bounded reopen-closed stack.
 //! - [`actions`]: `workspace::*` actions and their default key bindings.
 //! - [`session`]: window and session basics (E05-S12): `window::New`, UI zoom (`view::ZoomIn`,
@@ -33,6 +36,7 @@ pub mod dock;
 pub mod item;
 pub mod pane;
 pub mod panel;
+pub mod persistence;
 pub mod session;
 mod tab_label;
 #[cfg(any(test, feature = "test-support"))]

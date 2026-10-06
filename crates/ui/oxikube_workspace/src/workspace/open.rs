@@ -126,19 +126,8 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> EntityId {
         let item_id = item.item_id();
-        let tab = cx.new(|_| ItemTab::new(item.boxed_clone()));
+        let tab = self.register_item(item, window, cx);
         let panel_id = PanelId::from(tab.entity_id());
-        let subscriptions = self.subscribe_to_item(item.as_ref(), &tab, window, cx);
-        self.items.insert(
-            item_id,
-            OpenItem {
-                handle: item,
-                tab: tab.clone(),
-                panel_id,
-                _subscriptions: subscriptions,
-            },
-        );
-        self.item_panels.insert(panel_id, item_id);
 
         let target = match placement {
             ItemPlacement::InPane(pane, index) => pane
@@ -182,6 +171,31 @@ impl Workspace {
         }
         cx.notify();
         item_id
+    }
+
+    /// Makes the workspace own `item`: wraps it in its dock tab, subscribes to it and records it.
+    /// The tab is not in the dock area yet; the caller places it.
+    pub(super) fn register_item(
+        &mut self,
+        item: Box<dyn ItemHandle>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<ItemTab> {
+        let item_id = item.item_id();
+        let tab = cx.new(|_| ItemTab::new(item.boxed_clone()));
+        let panel_id = PanelId::from(tab.entity_id());
+        let subscriptions = self.subscribe_to_item(item.as_ref(), &tab, window, cx);
+        self.items.insert(
+            item_id,
+            OpenItem {
+                handle: item,
+                tab: tab.clone(),
+                panel_id,
+                _subscriptions: subscriptions,
+            },
+        );
+        self.item_panels.insert(panel_id, item_id);
+        tab
     }
 
     fn subscribe_to_item(
