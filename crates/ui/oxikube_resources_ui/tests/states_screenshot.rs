@@ -193,6 +193,7 @@ fn render(case: Case) -> anyhow::Result<RgbaImage> {
             columns: Arc::new(CoreColumns::new()),
             state: Arc::new(FakeStatePort::new()),
             dispatcher: Rc::new(Ignore),
+            actions: None,
         };
         cx.new(|cx| ResourceTable::new(cluster, kind, deps, window, cx))
     })?;
