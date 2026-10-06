@@ -31,7 +31,10 @@ pub fn confirm_tier(meta: &CommandMeta) -> ConfirmTier {
 /// the active cluster from the dispatch context, if at all.
 pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
     match command {
-        Command::ClusterSelect { cluster }
+        Command::ClusterConnect { cluster }
+        | Command::ClusterDisconnect { cluster }
+        | Command::ClusterSelect { cluster }
+        | Command::ClusterToggleFavourite { cluster, .. }
         | Command::ClusterToggleReadOnly { cluster, .. }
         | Command::NamespaceSelect { cluster, .. }
         | Command::NamespaceToggleFavourite { cluster, .. }

@@ -19,13 +19,11 @@ const PROD: &str = "3f2a9c1b7d4e8a60";
 const LAB: &str = "0011223344556677";
 
 fn context(id: &str, name: &str) -> ClusterContext {
-    ClusterContext {
-        cluster: id.parse().unwrap(),
-        context: ContextName::new(name),
-        source: SourceId("kubeconfig".into()),
-        server: None,
-        default_namespace: None,
-    }
+    ClusterContext::new(
+        id.parse().unwrap(),
+        ContextName::new(name),
+        SourceId("kubeconfig".into()),
+    )
 }
 
 fn id(text: &str) -> ClusterId {

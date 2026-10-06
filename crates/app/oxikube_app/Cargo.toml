@@ -14,6 +14,7 @@ doctest = false
 [dependencies]
 futures.workspace = true
 indexmap.workspace = true
+jiff.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
 parking_lot.workspace = true

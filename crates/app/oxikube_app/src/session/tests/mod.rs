@@ -27,11 +27,12 @@ use super::{
 fn ctx(name: &str) -> ClusterContext {
     let context = ContextName::new(name);
     ClusterContext {
-        cluster: ClusterId::new("/home/me/.kube/config", &context),
-        context,
-        source: SourceId("kubeconfig".into()),
         server: Some(format!("https://{name}.example:6443")),
-        default_namespace: None,
+        ..ClusterContext::new(
+            ClusterId::new("/home/me/.kube/config", &context),
+            context,
+            SourceId("kubeconfig".into()),
+        )
     }
 }
 

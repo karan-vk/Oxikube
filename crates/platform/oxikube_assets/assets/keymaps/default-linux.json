@@ -21,5 +21,35 @@
       "ctrl--": "view::ZoomOut",
       "ctrl-0": "view::ZoomReset"
     }
+  },
+  {
+    // The cluster catalog home (E06-S03). Up and down also work inside its search field, where
+    // the text field would otherwise keep them (`Catalog > Input` is as deep as the field's own
+    // bindings, and the later binding wins).
+    "context": "Catalog",
+    "bindings": {
+      "up": "catalog::SelectPrevious",
+      "down": "catalog::SelectNext",
+      "ctrl-p": "catalog::SelectPrevious",
+      "ctrl-n": "catalog::SelectNext",
+      "ctrl-d": "catalog::ToggleFavouriteSelected",
+      "ctrl-shift-d": "catalog::DisconnectSelected"
+    }
+  },
+  {
+    "context": "Catalog > Input",
+    "bindings": {
+      "up": "catalog::SelectPrevious",
+      "down": "catalog::SelectNext"
+    }
+  },
+  {
+    "context": "Catalog && !Input",
+    "bindings": {
+      "enter": "catalog::ConnectSelected",
+      "home": "catalog::SelectFirst",
+      "end": "catalog::SelectLast",
+      "/": "catalog::FocusSearch"
+    }
   }
 ]

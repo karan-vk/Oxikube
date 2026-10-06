@@ -4893,6 +4893,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nucleo-matcher"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf33f538733d1a5a3494b836ba913207f14d9d4a1d3cd67030c5061bdd2cac85"
+dependencies = [
+ "memchr",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "num"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5534,6 +5544,7 @@ dependencies = [
  "async-trait",
  "futures",
  "indexmap",
+ "jiff",
  "oxikube_domain",
  "oxikube_ports",
  "oxikube_testkit",
@@ -5566,19 +5577,25 @@ name = "oxikube_catalog_ui"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "gpui-pre",
  "gpui-pre-platform",
+ "jiff",
+ "nucleo-matcher",
  "oxikube_app",
  "oxikube_domain",
+ "oxikube_keymap",
  "oxikube_ports",
  "oxikube_runtime",
  "oxikube_testkit",
  "oxikube_ui",
  "oxikube_workspace",
+ "parking_lot",
  "schemars",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

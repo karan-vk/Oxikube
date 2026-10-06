@@ -18,7 +18,15 @@ Cluster catalog home, hotbar, kubeconfig sources management, cloud discovery UI,
 - `oxikube_workspace`
 - `oxikube_palette`
 
+It also uses the platform crates `oxikube_keymap` and `oxikube_runtime` (ui may depend on platform).
+
 See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps` fails CI when this crate depends on anything outside its layer rules.
+
+## Modules
+
+- `catalog` (E06-S03): the catalog home, `CatalogView`. See the module docs for the data flow,
+  `catalog::test_support` (feature `test-support`) for `RecordingDispatcher` and synthetic entries,
+  and `examples/catalog_bench.rs` for the first-paint and filter numbers.
 
 ## Owning epics
 

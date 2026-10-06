@@ -37,11 +37,34 @@ pub enum Propagation {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Command {
+    /// Connect a cluster: open its session and run discovery. Reads from the cluster, never
+    /// changes it. Connecting an already connected cluster is a no-op.
+    #[serde(rename = "cluster::Connect")]
+    ClusterConnect {
+        /// The catalog entry to connect.
+        cluster: ClusterId,
+    },
+    /// Disconnect a cluster: cancel an attempt in flight or close its connection.
+    #[serde(rename = "cluster::Disconnect")]
+    ClusterDisconnect {
+        /// The catalog entry to disconnect.
+        cluster: ClusterId,
+    },
     /// Make a cluster the active one.
     #[serde(rename = "cluster::Select")]
     ClusterSelect {
         /// The cluster to activate.
         cluster: ClusterId,
+    },
+    /// Mark a cluster as a favourite (`Some(true)`), clear it (`Some(false)`) or flip it
+    /// (`None`). A favourite sorts to the top of the catalog; the flag is local state.
+    #[serde(rename = "cluster::ToggleFavourite")]
+    ClusterToggleFavourite {
+        /// The catalog entry to change.
+        cluster: ClusterId,
+        /// Desired state; `None` flips the current one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        favourite: Option<bool>,
     },
     /// Set (`Some`) or toggle (`None`) a cluster's read-only mode.
     #[serde(rename = "cluster::ToggleReadOnly")]
@@ -224,7 +247,10 @@ impl Command {
     /// The command's id (keymap action name, serde `type` tag, tool name source).
     pub const fn id(&self) -> CommandId {
         match self {
+            Command::ClusterConnect { .. } => CommandId::CLUSTER_CONNECT,
+            Command::ClusterDisconnect { .. } => CommandId::CLUSTER_DISCONNECT,
             Command::ClusterSelect { .. } => CommandId::CLUSTER_SELECT,
+            Command::ClusterToggleFavourite { .. } => CommandId::CLUSTER_TOGGLE_FAVOURITE,
             Command::ClusterToggleReadOnly { .. } => CommandId::CLUSTER_TOGGLE_READ_ONLY,
             Command::NamespaceSelect { .. } => CommandId::NAMESPACE_SELECT,
             Command::NamespaceToggleFavourite { .. } => CommandId::NAMESPACE_TOGGLE_FAVOURITE,
@@ -321,7 +347,17 @@ mod tests {
     /// One sample of every variant.
     fn samples() -> Vec<Command> {
         vec![
+            Command::ClusterConnect { cluster: cluster() },
+            Command::ClusterDisconnect { cluster: cluster() },
             Command::ClusterSelect { cluster: cluster() },
+            Command::ClusterToggleFavourite {
+                cluster: cluster(),
+                favourite: None,
+            },
+            Command::ClusterToggleFavourite {
+                cluster: cluster(),
+                favourite: Some(true),
+            },
             Command::ClusterToggleReadOnly {
                 cluster: cluster(),
                 read_only: None,
@@ -499,7 +535,10 @@ mod tests {
         for command in samples() {
             if matches!(
                 command,
-                Command::ClusterSelect { .. }
+                Command::ClusterConnect { .. }
+                    | Command::ClusterDisconnect { .. }
+                    | Command::ClusterToggleFavourite { .. }
+                    | Command::ClusterSelect { .. }
                     | Command::NamespaceSelect { .. }
                     | Command::NamespaceToggleFavourite { .. }
                     | Command::ViewOpen { .. }

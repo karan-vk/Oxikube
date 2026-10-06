@@ -9,6 +9,7 @@
 //!
 //! | Module | Story | Holds |
 //! |---|---|---|
+//! | [`catalog`] | E06-S03 | [`ClusterCatalog`]: the kubeconfig contexts with favourites and last-used, and [`ClusterCommands`], the handler of `cluster::Connect`, `cluster::Disconnect` and `cluster::ToggleFavourite` |
 //! | [`session`] | E06-S01 | [`ClusterSessionManager`]: connect / disconnect / reconnect, the session state machine, capabilities, namespace selection, read-only flag, colour, and the [`SessionUpdates`] stream |
 //! | [`session`] `prefs` | E06-S08 | per-cluster settings: `set_prefs_table` pushes the resolved `clusters.<id>` values; new sessions start from them, open ones follow them live |
 //! | [`command_bus`] | E06-S02 | [`CommandBus`]: dispatch by command id, the per-crate [`CommandRegistry`], MCP tool stubs |
@@ -17,6 +18,7 @@
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
 pub mod audit;
+pub mod catalog;
 pub mod command_bus;
 pub mod guard;
 pub mod session;
@@ -25,6 +27,7 @@ pub mod session;
 mod testing;
 
 pub use audit::AuditLog;
+pub use catalog::{CatalogEntry, ClusterCatalog, ClusterCommandOutcome, ClusterCommands};
 pub use command_bus::{
     CommandBus, CommandHandler, CommandOutput, CommandRegistry, DispatchContext, DispatchError,
     HandlerContext, Outcome, RegisterError,

@@ -62,6 +62,34 @@ pub struct ClusterContext {
     pub server: Option<String>,
     /// The context's default namespace, if set.
     pub default_namespace: Option<String>,
+    /// The name of the kubeconfig `cluster` entry the context points at, if it names one.
+    /// A name only, never the server's credentials.
+    pub cluster_name: Option<String>,
+    /// The name of the kubeconfig `user` entry the context points at, if it names one. A name
+    /// only: tokens, certificates and exec plugins stay inside the adapter.
+    pub user: Option<String>,
+    /// Why the context cannot work as written (it names a cluster or user the kubeconfig does
+    /// not define), or `None` when it looks usable. The catalog keeps such entries and flags
+    /// them instead of hiding them; connecting will fail with the adapter's own error. Plain
+    /// text for display: no secrets.
+    pub problem: Option<String>,
+}
+
+impl ClusterContext {
+    /// A context with just its identity and source: no server, namespace, cluster or user
+    /// names, and no problem. Fill the rest in with struct update syntax.
+    pub fn new(cluster: ClusterId, context: ContextName, source: SourceId) -> Self {
+        Self {
+            cluster,
+            context,
+            source,
+            server: None,
+            default_namespace: None,
+            cluster_name: None,
+            user: None,
+            problem: None,
+        }
+    }
 }
 
 /// The difference between two snapshots of the catalog, keyed by [`ClusterId`].
@@ -136,11 +164,12 @@ mod tests {
     fn ctx(name: &str, server: &str) -> ClusterContext {
         let context = ContextName::new(name);
         ClusterContext {
-            cluster: ClusterId::new("/kube/config", &context),
-            context,
-            source: SourceId("file".into()),
             server: Some(server.into()),
-            default_namespace: None,
+            ..ClusterContext::new(
+                ClusterId::new("/kube/config", &context),
+                context,
+                SourceId("file".into()),
+            )
         }
     }
 
