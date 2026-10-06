@@ -5,14 +5,17 @@ use gpui::{
     Render, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px, uniform_list,
 };
+use oxikube_app::CountState;
 use oxikube_ui::{
     ActiveTokens as _, Icon, IconName,
     layout::{h_flex, v_flex},
+    tooltip::Tooltip,
     u,
 };
 
 use super::SidebarPanel;
 use crate::sidebar::actions::{Activate, Collapse, Expand, MoveDown, MoveUp, SIDEBAR_CONTEXT};
+use crate::sidebar::badges::badge_text;
 use crate::sidebar::rows::{EntryRow, GroupRow, NoticeKind, NoticeRow, Row, SectionRow};
 
 /// Row height in unscaled pixels; the list is uniform.
@@ -130,7 +133,12 @@ impl SidebarPanel {
                     .font_weight(FontWeight::MEDIUM)
                     .child(row.title.clone()),
             )
-            .child(count_placeholder(&row.id, row.count, cx))
+            .child(
+                match row.count.as_ref().filter(|s| badge_text(s).is_some()) {
+                    Some(state) => count_badge(&row.id, state, cx),
+                    None => count_placeholder(&row.id, None, cx).into_any_element(),
+                },
+            )
             .into_any_element()
     }
 
@@ -150,7 +158,43 @@ impl SidebarPanel {
         self.row_frame(ix, &id, indent, cx)
             .debug_selector(move || format!("sidebar-entry-{id}"))
             .child(div().flex_1().truncate().child(row.title.clone()))
+            .when_some(row.count.as_ref(), |entry, state| {
+                entry.child(count_badge(&row.id, state, cx))
+            })
             .into_any_element()
+    }
+}
+
+/// The count badge of an entry (E07-S11): the total, tinted when some are unhealthy; "no access"
+/// when the kind is forbidden; a dash with the reason on hover when it is not counted.
+fn count_badge(
+    id: &SharedString,
+    state: &CountState,
+    cx: &mut Context<SidebarPanel>,
+) -> AnyElement {
+    let Some((text, hover)) = badge_text(state) else {
+        return div().into_any_element();
+    };
+    let tokens = cx.tokens();
+    let unhealthy = state.count().is_some_and(|c| !c.all_healthy());
+    let colour = if unhealthy || state.is_no_access() {
+        tokens.colors.warning
+    } else {
+        tokens.colors.text_muted
+    };
+    let selector = format!("sidebar-badge-{id}");
+    let badge = div()
+        .id(SharedString::from(selector.clone()))
+        .debug_selector(move || selector)
+        .flex_none()
+        .text_size(tokens.font.small)
+        .text_color(colour)
+        .child(text);
+    match hover {
+        Some(hover) => badge
+            .tooltip(move |window, cx| Tooltip::new(hover.clone()).build(window, cx))
+            .into_any_element(),
+        None => badge.into_any_element(),
     }
 }
 

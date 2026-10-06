@@ -20,6 +20,7 @@ impl SidebarPanel {
         self._subscriptions
             .push(cx.observe_global::<SidebarRegistry>(|this, cx| this.rebuild(cx)));
         self.load_saved(cx);
+        self.start_counts(cx);
 
         // Subscribe before reading the session, so no update falls between the two.
         let mut updates = self.deps.sessions.subscribe();
@@ -66,7 +67,10 @@ impl SidebarPanel {
                 self.refresh_custom_resources(cx);
             }
             // Which namespaces are selected decides which rules apply.
-            SessionChange::NamespaceChanged(_) => self.refresh_access(cx),
+            SessionChange::NamespaceChanged(_) => {
+                self.refresh_access(cx);
+                self.rescope_counts(cx);
+            }
             // Integrations' sections depend on what the cluster offers.
             SessionChange::CapabilitiesChanged(_) => self.rebuild(cx),
             _ => {}
@@ -173,17 +177,20 @@ impl SidebarPanel {
             .map(|s| s.capabilities())
             .unwrap_or_default();
         self.integrations = self.deps.integrations.sidebar_sections(capabilities);
-        let rows = build_rows(&RowInputs {
+        self.plan_counts();
+        let mut rows = build_rows(&RowInputs {
             sections: &self.sections,
             integrations: &self.integrations,
             custom: self.custom.as_deref(),
             access: &self.access,
             open: &self.open,
         });
+        self.apply_count_states(&mut rows);
         if rows != self.rows {
             self.rows = rows;
             self.fix_highlight();
             cx.notify();
         }
+        self.sync_counts(cx);
     }
 }

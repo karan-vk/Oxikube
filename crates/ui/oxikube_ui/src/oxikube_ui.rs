@@ -21,6 +21,7 @@
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
 //! - [`spinner`]: [`spinner::Spinner`], a loading indicator that stands still under reduce-motion.
 //! - [`tooltip`]: [`tooltip::Tooltip`], hover text for any element.
+//! - [`tile`]: [`tile::StatTile`], a clickable number with a caption (overview pages).
 //! - [`root`]: the window root, which owns the dialog, sheet and notification layers.
 //! - [`title_bar`]: the window title bar (drag area, window controls, traffic-light inset).
 //!
@@ -46,6 +47,7 @@ pub mod spinner;
 pub mod table;
 pub mod tabs;
 pub mod theme_bridge;
+pub mod tile;
 pub mod title_bar;
 pub mod tokens;
 pub mod tooltip;

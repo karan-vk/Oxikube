@@ -59,4 +59,7 @@ pub use session::{
 };
 pub use sidebar::{AccessOutcome, CustomKind, CustomResourceGroup};
 pub use sources::{KubeconfigSourcesService, SourceListStore, SourceRow};
-pub use store::{ResourceStore, ResourceStores, StoreDelta, StoreQuery, Subscription};
+pub use store::{
+    CountState, CountTarget, CountsLease, KindCount, ResourceStore, ResourceStores, StoreDelta,
+    StoreQuery, Subscription,
+};

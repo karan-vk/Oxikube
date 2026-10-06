@@ -96,6 +96,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   abort-on-drop guards; the last subscriber's drop starts a grace timer on the `ClockPort`, after
   which the feed is aborted. `Subscription::rescope` follows a namespace change with the
   `ScopeDelta`, keeping the feeds that stay. `ResourceStores` keeps one store per connected session.
+  Counts (E07-S11, `store::counts`): `ResourceStore::counts(targets, selection)` answers each kind with a `CountState`
+  from the caches' running health tallies (O(1), no feed started; a kind nobody watches is `NotWatched`), `CountsLease`
+  holds the feeds a view needs through `subscribe` with a filter that matches nothing (no row index), and `health_of`
+  (`oxikube_domain::view`) is the one healthy rule. A forbidden kind is `NoAccess`, a budget refusal `OverBudget`.
   Module `columns` (E07-S02): `ColumnProvider`, the one question a table asks of a kind (`columns(kind,
   caps)` and `cell(object, column, now)`), with two implementations (ADR 0006). `CoreColumns` is a
   table-driven catalogue of ~40 core kinds (computed `Ready` / `Status` / `Restarts` from the domain
@@ -117,6 +121,13 @@ crate's `README.md` for its allowed dependencies. Highlights:
   read-only on a production-flagged cluster, audited, persisted through the `PrefsWriter` the binary
   implements over `ClusterSettings::update_cluster`), and every `Mutation` writer re-checks the
   read-only flag before each request.
+- `oxikube_resources_ui` — module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
+  (a workspace `Item`): one `oxikube_ui::tile::StatTile` per `Tile` of the `TileRegistry` (Deployments, StatefulSets,
+  DaemonSets, ReplicaSets, Jobs, CronJobs, Pods) with total and healthy from a `CountsLease`, read once a second and redrawn
+  coalesced only on change; a click sends `resource::OpenList`. Module `navigate`: the `resource::OpenList` handler and the
+  `KindViews` registry the generic table registers its opener in. The sidebar (`oxikube_workspace::sidebar::badges`) shows count
+  badges from the same store: it keeps a lease only on the kinds the store counts eagerly (pods, nodes, namespaces,
+  deployments) and reads every other badge off whatever feed is already open.
 - `oxikube_catalog_ui` — the cluster catalog UI. Module `sources` (E06-S05): `SourcesView`, the
   kubeconfig sources screen (a workspace `Item`): one row per entry of `kubeconfig.sources` with its
   status (found with N contexts, or the error inline next to that one source), add file / add folder

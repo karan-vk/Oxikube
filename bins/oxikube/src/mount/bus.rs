@@ -13,6 +13,7 @@
 //! | `oxikube_app::sources` | `kubeconfig::AddSource`, `RemoveSource`, `Reload` |
 //! | `oxikube_app::posture` | `cluster::ToggleReadOnly`, `SetColour`, `ApplyPreset` (guarded posture) |
 //! | `oxikube_workspace` | `cluster::Select`, `SwitchTab`, `NextTab`, `PreviousTab`, `CloseTab` |
+//! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list) |
 //! | `oxikube` | `view::Open` for the catalog home and the kubeconfig sources screen |
 //!
 //! None of these mutates a cluster; the posture commands confirm and audit through the
@@ -32,6 +33,7 @@ use oxikube_catalog_ui::catalog::CATALOG_VIEW;
 use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
+use oxikube_resources_ui::navigate::OpenKind;
 use oxikube_workspace::cluster_tab::CommandSink;
 use oxikube_workspace::{ClusterCommandRunner, CommandDispatcher};
 use serde_json::json;
@@ -55,6 +57,8 @@ pub struct BusParts {
     pub tabs: CommandSink,
     /// Where `view::Open` sends the view to open (applied on the UI thread).
     pub views: mpsc::UnboundedSender<String>,
+    /// Where `resource::OpenList` sends the list to open (applied on the UI thread).
+    pub kinds: mpsc::UnboundedSender<OpenKind>,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -80,6 +84,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         oxikube_workspace::cluster_tab::register_commands(r, parts.tabs)
     })?;
     registry.install("oxikube", |r| register_view_commands(r, parts.views))?;
+    registry.install("oxikube_resources_ui", |r| {
+        oxikube_resources_ui::navigate::register_commands(r, parts.kinds)
+    })?;
     Ok(registry)
 }
 

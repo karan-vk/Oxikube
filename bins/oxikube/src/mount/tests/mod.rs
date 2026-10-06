@@ -6,6 +6,7 @@
 //! status bar badge, session restore) is in [`chrome`].
 
 mod chrome;
+mod resources;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use oxikube_catalog_ui::namespaces::NamespaceSelector;
@@ -201,6 +202,7 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::CLUSTER_SET_COLOUR, "oxikube_app::posture"),
         (CommandId::CLUSTER_SELECT, "oxikube_workspace"),
         (CommandId::VIEW_OPEN, "oxikube"),
+        (CommandId::RESOURCE_OPEN_LIST, "oxikube_resources_ui"),
     ] {
         assert_eq!(bus.owner(id), Some(owner), "{id}");
         assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");

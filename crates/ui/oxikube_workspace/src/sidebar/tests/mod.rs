@@ -2,6 +2,8 @@
 //! fakes (`panel`: reviews, namespace changes, reconnects, saved state, keys), and the panel as
 //! hosted by cluster tabs (`tabs`). No cluster, no disk, no threads, no sleeping.
 
+mod badges;
+mod counts;
 mod panel;
 mod registry;
 mod rows;
@@ -11,8 +13,10 @@ mod writer;
 use std::sync::Arc;
 
 use futures::executor::block_on;
+use futures::future::BoxFuture;
 use gpui::{Entity, TestAppContext, VisualTestContext};
-use oxikube_app::{ClusterSessionManager, IntegrationRegistry};
+use oxikube_app::store::StoreRuntime;
+use oxikube_app::{ClusterSessionManager, IntegrationRegistry, ResourceStores};
 use oxikube_domain::access::{AccessRule, AccessRules};
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::kinds::{ResourceKind, Verb, VerbSet};
@@ -70,6 +74,8 @@ pub(super) struct Fixture {
     pub(super) state: Arc<FakeStatePort>,
     pub(super) integrations: IntegrationRegistry,
     pub(super) cluster: ClusterId,
+    /// The stores the badges read, when the fixture was opened with them.
+    pub(super) stores: Option<Arc<ResourceStores>>,
 }
 
 impl Fixture {
@@ -84,6 +90,20 @@ impl Fixture {
         rules: AccessRules,
         state: Arc<FakeStatePort>,
     ) -> Self {
+        Self::open_inner(cx, rules, state, false)
+    }
+
+    /// [`Self::open`] with a `ResourceStores` over the session's fake ports behind the badges.
+    pub(super) fn open_counted(cx: &mut TestAppContext, rules: AccessRules) -> Self {
+        Self::open_inner(cx, rules, Arc::new(FakeStatePort::new()), true)
+    }
+
+    fn open_inner(
+        cx: &mut TestAppContext,
+        rules: AccessRules,
+        state: Arc<FakeStatePort>,
+        counted: bool,
+    ) -> Self {
         let cluster = id("prod");
         let source = Arc::new(FakeClusterSourcePort::new().with_contexts([context("prod")]));
         let connector = Arc::new(FakeClusterConnectorPort::new());
@@ -95,6 +115,16 @@ impl Fixture {
         let ports = connector.ports_for(&cluster);
         ports.access.set_rules(rules);
         let integrations = IntegrationRegistry::new();
+        let stores = counted.then(|| {
+            let executor = cx.executor();
+            let runtime = StoreRuntime {
+                spawner: Arc::new(move |task: BoxFuture<'static, ()>| {
+                    executor.spawn(task).detach();
+                }),
+                clock: Arc::new(FakeClockPort::default()),
+            };
+            Arc::new(ResourceStores::new(runtime))
+        });
 
         let (ws, mut vcx) = open_workspace(cx);
         vcx.update(|_, cx| {
@@ -107,6 +137,7 @@ impl Fixture {
             sessions: sessions.clone(),
             integrations: integrations.clone(),
             state: state.clone(),
+            stores: stores.clone(),
         };
         let panel = vcx.update(|window, cx| {
             let panel = SidebarPanel::build(cluster.clone(), deps, cx);
@@ -126,6 +157,7 @@ impl Fixture {
             state,
             integrations,
             cluster,
+            stores,
         }
     }
 

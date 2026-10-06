@@ -13,7 +13,9 @@
 //!    and the active cluster's status bar item (E06-S09);
 //! 4. the kubeconfig sources (E06-S05): the settings-backed source list, its hot reload into the
 //!    cluster source, and the sources screen behind `view::Open`;
-//! 5. session restore (E06-S11), which waits for the first frame and the layout restore by itself.
+//! 5. session restore (E06-S11), which waits for the first frame and the layout restore by itself;
+//! 6. the resource stores and the resource views of every cluster tab (E07-S11, [`resources`]):
+//!    sidebar count badges, the Workloads overview as the first screen, and `resource::OpenList`.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -21,6 +23,7 @@
 //! [`Wiring`] entity the workspace keeps.
 
 pub mod bus;
+mod resources;
 mod tabs;
 #[cfg(test)]
 mod tests;
@@ -62,6 +65,8 @@ pub struct Wiring {
     _follow_active: Subscription,
     /// Opens the views `view::Open` asks for. Lives as long as the window.
     _open_views: Task<()>,
+    /// Opens the lists `resource::OpenList` asks for. Lives as long as the window.
+    _open_kinds: Task<()>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -89,6 +94,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         state: ports.state.clone(),
         dispatcher: dispatcher.clone(),
         workspace: workspace.downgrade(),
+        stores: resources::stores(&state, ports.clusters.clock.clone(), cx),
     };
     let tabs_deps = ClusterTabsDeps::new(
         services.sessions.clone(),
@@ -110,6 +116,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let follow_sources = oxikube_catalog_ui::sources::follow(sources.clone(), cx);
 
     let (views_tx, views_rx) = mpsc::unbounded();
+    let (kinds_tx, kinds_rx) = mpsc::unbounded();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -118,6 +125,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         prefs: Arc::new(SettingsPrefsWriter::new(cx)),
         tabs: sink.clone(),
         views: views_tx,
+        kinds: kinds_tx,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -181,6 +189,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     });
 
     let open_views = open_views(views_rx, view_deps, &workspace, window, cx);
+    let open_kinds = resources::open_kinds(kinds_rx, tabs.clone(), &workspace, window, cx);
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -188,6 +197,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _follow_sources: follow_sources,
         _follow_active: follow_active,
         _open_views: open_views,
+        _open_kinds: open_kinds,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

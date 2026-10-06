@@ -58,6 +58,7 @@ fn every_cluster_tab_gets_its_own_sidebar_with_its_own_permissions(cx: &mut Test
             sessions: sessions.clone(),
             integrations: IntegrationRegistry::new(),
             state,
+            stores: None,
         }));
     let tabs = vcx.update(|window, cx| ClusterTabs::start(&ws, deps, window, cx));
     vcx.run_until_parked();

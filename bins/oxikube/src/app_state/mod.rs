@@ -8,6 +8,7 @@
 //! | ports bundle | the state itself ([`AppPorts`]: `Arc<dyn Port>`s built by this binary, the cluster adapters among them) | [`AppState::ports`], [`AppState::state`] |
 //! | cluster services | the state itself ([`ClusterServices`]: session manager, catalog, namespaces, integrations) | [`AppState::services`] |
 //! | command bus | set once by the main window's mount ([`CommandBus`] with its `MutationGuard`) | [`AppState::command_bus`] |
+//! | resource stores | set once by the main window's mount (`ResourceStores`: one `ResourceStore` per connected cluster) | [`AppState::resource_stores`] |
 //! | state db | `ports.state`: the SQLite adapter, opened off the UI thread | [`AppState::state`] |
 //! | settings | `oxikube_settings::SettingsStore` global | [`AppState::settings`] |
 //! | theme | `oxikube_theme::ThemeRegistry` + `ActiveTheme` globals | [`AppState::theme_registry`], [`AppState::active_theme`] |
@@ -48,7 +49,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use gpui::{App, Global};
-use oxikube_app::CommandBus;
+use oxikube_app::{CommandBus, ResourceStores};
 use oxikube_keymap::KeymapStore;
 use oxikube_ports::StatePort;
 use oxikube_runtime::RuntimeMode;
@@ -74,6 +75,7 @@ pub struct AppState {
     ports: AppPorts,
     services: ClusterServices,
     bus: OnceLock<CommandBus>,
+    stores: OnceLock<Arc<ResourceStores>>,
     data_dir: Option<PathBuf>,
 }
 
@@ -92,6 +94,7 @@ impl AppState {
             services: ClusterServices::new(&ports),
             ports,
             bus: OnceLock::new(),
+            stores: OnceLock::new(),
             data_dir,
         }
     }
@@ -153,6 +156,18 @@ impl AppState {
     /// set already.
     pub fn set_command_bus(&self, bus: CommandBus) -> bool {
         self.bus.set(bus).is_ok()
+    }
+
+    /// The per-cluster resource stores behind every table, sidebar count and overview tile, once
+    /// the main window has been mounted (`None` before). One per app: the views of every window
+    /// share a cluster's feeds.
+    pub fn resource_stores(&self) -> Option<&Arc<ResourceStores>> {
+        self.stores.get()
+    }
+
+    /// Stores the resource stores. The first ones stay: `false` when some were set already.
+    pub fn set_resource_stores(&self, stores: Arc<ResourceStores>) -> bool {
+        self.stores.set(stores).is_ok()
     }
 
     /// The state db port (`ports().state`). In the app it is the SQLite adapter, opened in the

@@ -1,12 +1,13 @@
 //! What every cluster tab gets when it opens: the sidebar (E06-S10) in its left dock, the connect
-//! lifecycle views (E06-S06), and the namespace selector (E06-S07) in its toolbar.
+//! lifecycle views (E06-S06), the namespace selector (E06-S07) in its toolbar, and the resource
+//! views (E07-S11: the overview and the sidebar's navigation, see `resources`).
 
 use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{App, AppContext as _, Entity, WeakEntity, Window};
 use oxikube_app::session::namespaces::NamespaceService;
-use oxikube_app::{ClusterSession, ClusterSessionManager, IntegrationRegistry};
+use oxikube_app::{ClusterSession, ClusterSessionManager, IntegrationRegistry, ResourceStores};
 use oxikube_catalog_ui::connect::{self, ConnectDeps};
 use oxikube_catalog_ui::namespaces::{
     NamespaceSelector, NamespaceSelectorEvent, stale_dropped_toast,
@@ -32,6 +33,8 @@ pub struct TabDeps {
     pub dispatcher: Rc<dyn CommandDispatcher>,
     /// The window's workspace, for the selector's toasts.
     pub workspace: WeakEntity<Workspace>,
+    /// The resource stores the sidebar's badges and the overview read (E07-S11).
+    pub stores: Arc<ResourceStores>,
 }
 
 /// The `ClusterTabsDeps` setup hook: sidebar, connect views, namespace selector.
@@ -42,6 +45,7 @@ pub fn tab_setup(
         sessions: deps.sessions.clone(),
         integrations: deps.integrations.clone(),
         state: deps.state.clone(),
+        stores: Some(deps.stores.clone()),
     });
     let sources = deps.dispatcher.clone();
     let connect = connect::tab_setup(
@@ -54,6 +58,7 @@ pub fn tab_setup(
         sidebar(tab, session, window, cx);
         connect(tab, session, window, cx);
         install_selector(tab, session, &deps, window, cx);
+        super::resources::install(tab, session, &deps, window, cx);
     }
 }
 

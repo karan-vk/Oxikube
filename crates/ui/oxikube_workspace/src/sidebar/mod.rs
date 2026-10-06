@@ -5,6 +5,7 @@
 //! | `section` | [`SidebarSection`], [`SidebarEntry`], [`SidebarTarget`]: what a feature registers |
 //! | `registry` | [`SidebarRegistry`]: sections come from registration, not from the shell |
 //! | `core` | the eleven core sections as placeholders ([`core_sections`]) |
+//! | `badges` | which entries have a count badge and writing the store's counts onto the rows ([`count_plan`], [`apply_counts`]) |
 //! | `rows` | the flat row list and the visibility rules ([`build_rows`]), pure |
 //! | `panel` | [`SidebarPanel`]: the dock panel that follows the session and draws the rows |
 //! | `store` | [`SidebarStore`]: open and closed groups, saved per cluster in the `StatePort` |
@@ -35,6 +36,7 @@
 //! Section clicks navigate (pure UI, [`SidebarEvent::Navigate`]); nothing here mutates a cluster.
 
 mod actions;
+mod badges;
 mod core;
 mod panel;
 mod registry;
@@ -47,6 +49,7 @@ mod writer;
 mod tests;
 
 pub use actions::{Activate, Collapse, Expand, MoveDown, MoveUp, SIDEBAR_CONTEXT, Toggle};
+pub use badges::{CountPlan, KindKey, apply_counts, badge_text, count_plan};
 pub use core::{ORDER_STEP, core_sections, register_core_sections};
 pub use panel::{DEFAULT_WIDTH, SidebarDeps, SidebarEvent, SidebarPanel};
 pub use registry::SidebarRegistry;

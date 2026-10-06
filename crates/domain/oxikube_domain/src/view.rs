@@ -8,6 +8,8 @@
 //! * [`NodeSummary`] for Nodes.
 //! * [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets and ReplicaSets.
 //! * [`JobSummary`] and [`CronJobSummary`] for batch kinds.
+//! * [`Health`] and [`health_of`]: the one rule for "is this object healthy" behind overview
+//!   tiles and sidebar counts.
 //!
 //! Every constructor reads the raw JSON (ADR 0005: never `k8s-openapi`). Missing or wrongly
 //! typed fields degrade to defaults instead of failing, because old and new API servers both
@@ -32,11 +34,13 @@ use serde_json::Value;
 
 use crate::resource::Resource;
 
+mod health;
 mod job;
 mod node;
 mod pod;
 mod workload;
 
+pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};
 pub use node::NodeSummary;
 pub use pod::{
