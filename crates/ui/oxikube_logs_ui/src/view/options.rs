@@ -48,13 +48,6 @@ impl ViewOptions {
         }
         options
     }
-
-    /// Whether `other` reads a different stream than `self` (so the session must be reopened).
-    pub fn reads_differently(&self, other: &ViewOptions) -> bool {
-        self.range != other.range
-            || self.container != other.container
-            || self.previous != other.previous
-    }
 }
 
 #[cfg(test)]
@@ -104,32 +97,5 @@ mod tests {
         }
         .log_options();
         assert!(options.previous && !options.follow);
-    }
-
-    #[test]
-    fn only_read_options_reopen_the_stream() {
-        let base = ViewOptions::default();
-        let drawn = ViewOptions {
-            wrap: true,
-            timestamps: true,
-            ..base.clone()
-        };
-        assert!(!base.reads_differently(&drawn));
-        for read in [
-            ViewOptions {
-                range: LogRange::Last1m,
-                ..base.clone()
-            },
-            ViewOptions {
-                previous: true,
-                ..base.clone()
-            },
-            ViewOptions {
-                container: Some("init".into()),
-                ..base.clone()
-            },
-        ] {
-            assert!(base.reads_differently(&read), "{read:?}");
-        }
     }
 }

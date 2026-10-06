@@ -50,7 +50,7 @@ impl LogView {
             // the last one, however many batches that was.
             while let Some(delta) = deltas.next().await {
                 if this
-                    .update(cx, |view, cx| view.apply_deltas(vec![delta], cx))
+                    .update(cx, |view, cx| view.apply_delta(&delta, cx))
                     .is_err()
                 {
                     break;
@@ -60,12 +60,10 @@ impl LogView {
         notify_coalesced(cx);
     }
 
-    /// Applies a batch of deltas in one update: the rows, the renderers, autoscroll.
-    pub(crate) fn apply_deltas(&mut self, deltas: Vec<LogDelta>, cx: &mut Context<Self>) {
-        for delta in &deltas {
-            let change = self.window.apply(delta);
-            self.rows_changed(change);
-        }
+    /// Applies one delta: the rows, the renderers, autoscroll.
+    pub(crate) fn apply_delta(&mut self, delta: &LogDelta, cx: &mut Context<Self>) {
+        let change = self.window.apply(delta);
+        self.rows_changed(change);
         self.follow_tail();
         notify_coalesced(cx);
     }

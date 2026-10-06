@@ -91,7 +91,7 @@ impl LogViews {
                 self.open(&target, container, previous, window, cx);
             }
             LogRequest::Change { target, change } => {
-                for view in self.views_of(&target, cx) {
+                if let Some(view) = self.view_of(&target, cx) {
                     view.update(cx, |view, cx| match &change {
                         ViewChange::SetRange(range) => view.set_range(*range, cx),
                         ViewChange::SelectContainer(name) => view.select_container(name, cx),
@@ -153,12 +153,10 @@ impl LogViews {
         Some(view)
     }
 
-    /// The open log views of `target` (in its cluster's tab).
-    pub fn views_of(&self, target: &ResourceRef, cx: &App) -> Vec<Entity<LogView>> {
-        let Some(workspace) = self.deps.host.workspace(&target.cluster, cx) else {
-            return Vec::new();
-        };
-        find(&workspace, target, cx).into_iter().collect()
+    /// The open log view of `target` (in its cluster's tab).
+    pub fn view_of(&self, target: &ResourceRef, cx: &App) -> Option<Entity<LogView>> {
+        let workspace = self.deps.host.workspace(&target.cluster, cx)?;
+        find(&workspace, target, cx)
     }
 }
 

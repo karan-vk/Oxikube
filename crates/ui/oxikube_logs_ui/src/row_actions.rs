@@ -5,7 +5,8 @@
 use oxikube_app::RowActionSpec;
 use oxikube_app::actions::KindFilter;
 use oxikube_domain::command::{Command, CommandId};
-use oxikube_domain::kinds::ResourceKind;
+
+use crate::commands::is_pod_gvk;
 
 /// Where "View Logs" sits in a pod's menu: before the generic actions (delete is 900).
 pub const VIEW_LOGS_ORDER: u16 = 100;
@@ -22,11 +23,7 @@ pub fn log_row_actions() -> Vec<RowActionSpec> {
             tail_lines: None,
         })
         .label("View Logs")
-        .kinds(KindFilter::Matching(is_pod_kind))
+        .kinds(KindFilter::Matching(|kind| is_pod_gvk(&kind.gvk)))
         .order(VIEW_LOGS_ORDER),
     ]
-}
-
-fn is_pod_kind(kind: &ResourceKind) -> bool {
-    kind.gvk.group.is_empty() && &*kind.gvk.kind == "Pod"
 }

@@ -17,8 +17,8 @@
 //!
 //! Flags (`oxikube --help`): `--perf` records frame times, feed throughput, notify counts and RSS
 //! (docs/PERFORMANCE.md), `--perf-table` makes that run connect a context and scroll its pods
-//! table, and `--perf-logs` makes it open a pod's log view; `--perf-scenario` runs one headless perf sample (feature `perf-scenarios`, driven by
-//! `cargo xtask perf`).
+//! table, and `--perf-logs` makes it open a pod's log view; `--perf-scenario` runs one headless
+//! perf sample (feature `perf-scenarios`, driven by `cargo xtask perf`).
 
 mod cli;
 mod perf_mode;

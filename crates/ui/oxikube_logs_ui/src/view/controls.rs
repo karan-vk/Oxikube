@@ -126,8 +126,7 @@ impl LogView {
         self.send(Command::LogsToggleFullscreen { target }, cx);
     }
 
-    /// The pill: follows again at once (a local scroll, nothing to dispatch: autoscroll is off,
-    /// so this is `logs::ToggleAutoscroll`'s "on").
+    /// The pill: follows again, as `logs::ToggleAutoscroll` does while autoscroll is off.
     pub fn jump_to_newest(&mut self, cx: &mut Context<Self>) {
         if !self.follow.is_on() {
             self.request_autoscroll(cx);

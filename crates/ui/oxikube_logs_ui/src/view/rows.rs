@@ -38,7 +38,7 @@ impl LogView {
     ) -> Vec<AnyElement> {
         let rows: Vec<Option<Row>> = range.map(|ix| self.window.row(ix)).collect();
         let data = self.row_data(&rows);
-        self.rows_built.set(self.rows_built.get() + data.len());
+        self.rows_built += data.len();
         data.into_iter()
             .map(|row| self.row_element(row, false, cx))
             .collect()
@@ -47,7 +47,7 @@ impl LogView {
     /// The wrapped row `ix` (the `list`'s request).
     pub(crate) fn render_wrapped(&mut self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let data = self.row_data(&[self.window.row(ix)]);
-        self.rows_built.set(self.rows_built.get() + 1);
+        self.rows_built += 1;
         let row = data.into_iter().next().unwrap_or(RowData::Gone);
         self.row_element(row, true, cx)
     }
@@ -70,7 +70,7 @@ impl LogView {
         let timestamps = self.options.timestamps;
         let wrap = self.options.wrap;
         let capacity = self.deps.service.buffer_lines();
-        let state = self.window.state().clone();
+        let state = self.window.state();
         let line = |entry: Option<&LogEntry>| match entry {
             Some(entry) => RowData::Line {
                 ts: timestamps.then(|| timestamp(entry).into()),
@@ -85,7 +85,7 @@ impl LogView {
                 RowData::Marker(truncated_marker(*dropped, capacity).into())
             }
             Some(Row::State) | None => RowData::State(
-                state_text(&state).into(),
+                state_text(state).into(),
                 matches!(state, LogState::Failed(_)),
             ),
         };
@@ -132,9 +132,14 @@ impl LogView {
                 } else {
                     text.whitespace_nowrap().overflow_hidden()
                 };
-                base.when_some_child(ts, colors.text_muted)
-                    .child(text)
-                    .into_any_element()
+                let ts = ts.map(|ts| {
+                    div()
+                        .flex_none()
+                        .whitespace_nowrap()
+                        .text_color(colors.text_muted)
+                        .child(ts)
+                });
+                base.children(ts).child(text).into_any_element()
             }
             RowData::Gone => base.into_any_element(),
             RowData::Marker(words) => base
@@ -151,26 +156,6 @@ impl LogView {
                 .font_weight(FontWeight::MEDIUM)
                 .child(div().whitespace_nowrap().child(words))
                 .into_any_element(),
-        }
-    }
-}
-
-/// A row that may start with a muted timestamp column.
-trait WithTimestamp {
-    fn when_some_child(self, ts: Option<SharedString>, colour: Hsla) -> Self;
-}
-
-impl WithTimestamp for gpui::Div {
-    fn when_some_child(self, ts: Option<SharedString>, colour: Hsla) -> Self {
-        match ts {
-            Some(ts) => self.child(
-                div()
-                    .flex_none()
-                    .whitespace_nowrap()
-                    .text_color(colour)
-                    .child(ts),
-            ),
-            None => self,
         }
     }
 }

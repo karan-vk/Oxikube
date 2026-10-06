@@ -47,7 +47,6 @@ mod window;
 #[cfg(test)]
 mod tests;
 
-use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -104,7 +103,7 @@ pub struct LogView {
     /// The workspace the view is a tab of (its cluster tab's), for fullscreen.
     pub(crate) workspace: Option<WeakEntity<Workspace>>,
     /// Rows built in the last frame (the test of "only visible rows are built").
-    pub(crate) rows_built: Rc<Cell<usize>>,
+    pub(crate) rows_built: usize,
     /// Polls the session's deltas; replaced (so cancelled) when the session is.
     pub(crate) pump: Option<Task<()>>,
     /// Reads the pod for the container selector.
@@ -137,7 +136,7 @@ impl LogView {
             list: ListState::new(0, ListAlignment::Top, px(400.)),
             focus: cx.focus_handle(),
             workspace: None,
-            rows_built: Rc::default(),
+            rows_built: 0,
             pump: None,
             pod_task: None,
         };
@@ -190,7 +189,7 @@ impl LogView {
 
     /// Rows built in the last frame.
     pub fn rows_built(&self) -> usize {
-        self.rows_built.get()
+        self.rows_built
     }
 
     /// Tells the view which workspace it is a tab of (for fullscreen).

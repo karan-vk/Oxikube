@@ -21,7 +21,7 @@ use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
-use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::log::LogRange;
 
 pub use controller::{LogHost, LogViews, LogViewsDeps};
@@ -131,9 +131,14 @@ impl LogRequest {
     }
 }
 
-/// Whether `target` is a core `v1` Pod.
-pub fn is_pod(target: &ResourceRef) -> bool {
-    target.gvk.group.is_empty() && &*target.gvk.kind == "Pod" && target.namespace.is_some()
+/// Whether `gvk` is the core `v1` Pod.
+pub(crate) fn is_pod_gvk(gvk: &Gvk) -> bool {
+    gvk.group.is_empty() && &*gvk.kind == "Pod"
+}
+
+/// Whether `target` is a pod (they are all namespaced).
+fn is_pod(target: &ResourceRef) -> bool {
+    is_pod_gvk(&target.gvk) && target.namespace.is_some()
 }
 
 /// A handle on a window's log request queue. Cheap to clone; usable from any thread.

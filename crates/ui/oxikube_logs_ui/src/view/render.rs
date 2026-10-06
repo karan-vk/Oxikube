@@ -21,7 +21,7 @@ use super::text::group;
 impl Render for LogView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
-        self.rows_built.set(0);
+        self.rows_built = 0;
         v_flex()
             .id("log-view")
             .debug_selector(|| "log-view".into())
