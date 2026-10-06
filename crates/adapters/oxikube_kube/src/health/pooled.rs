@@ -10,11 +10,12 @@ use std::future::Future;
 use std::sync::Arc;
 
 use oxikube_domain::OxiResult;
+use oxikube_domain::access::AccessRules;
 use oxikube_domain::ids::ContextName;
 
 use super::capabilities::CapabilityReport;
 use super::liveness::probe_apiserver_version;
-use super::rules::{RulesCache, probe_capabilities};
+use super::rules::{RulesCache, fetch_rules, probe_capabilities};
 use crate::auth::{CredentialRefresh, retry_once};
 use crate::pool::ClientPool;
 
@@ -67,6 +68,36 @@ pub async fn capabilities_for_context(
     .await
 }
 
+/// The RBAC rules for `namespace` in `context`, using the pooled client and `cache`, rebuilding
+/// the client once after a retryable auth failure.
+///
+/// # Errors
+///
+/// As [`capabilities_for_context`].
+pub async fn rules_for_context(
+    pool: &ClientPool,
+    cache: &RulesCache,
+    context: &ContextName,
+    namespace: &str,
+    refresh: CredentialRefresh,
+) -> OxiResult<AccessRules> {
+    retry_once(
+        || async {
+            pool.invalidate(context);
+        },
+        || async {
+            let client = pool.get(context).await?;
+            let snapshot = cache
+                .get_or_fetch(context, namespace, || {
+                    fetch_rules(&client, namespace, refresh)
+                })
+                .await?;
+            Ok(snapshot.to_access_rules())
+        },
+    )
+    .await
+}
+
 /// A probe closure for [`Liveness::spawn`](super::Liveness::spawn) that checks `context`
 /// through `pool` on every call.
 pub fn pooled_probe(
@@ -103,6 +134,16 @@ mod tests {
             .unwrap_err();
         assert_eq!(err.kind(), ErrorKind::NotFound);
         let err = capabilities_for_context(
+            &pool,
+            &RulesCache::default(),
+            &ContextName::new("nope"),
+            "default",
+            CredentialRefresh::Unknown,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::NotFound);
+        let err = rules_for_context(
             &pool,
             &RulesCache::default(),
             &ContextName::new("nope"),

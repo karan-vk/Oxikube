@@ -14,6 +14,7 @@
 //! server has the last word on every request.
 
 use async_trait::async_trait;
+use oxikube_domain::access::AccessRules;
 use oxikube_domain::{Capabilities, OxiResult};
 
 /// Probes the current user's permissions on one cluster. Read-only.
@@ -38,4 +39,12 @@ pub trait AccessReviewPort: Send + Sync {
     /// Flags RBAC grants only on named objects (`resourceNames`) are included: the
     /// action is offered and the server decides per object.
     async fn capabilities(&self, namespace: Option<&str>) -> OxiResult<Capabilities>;
+
+    /// The raw RBAC rules the user has in `namespace`, or cluster-wide for `None`, so a view
+    /// can ask per-resource questions ("may I list `deployments.apps`?"), as the cluster
+    /// sidebar does (E06-S10). Cluster-scoped grants appear in every namespace's answer.
+    ///
+    /// A review that is `incomplete` or carries an `evaluationError` is returned with
+    /// [`AccessRules::partial`] set, not as an error. Adapters may cache the answer briefly.
+    async fn rules(&self, namespace: Option<&str>) -> OxiResult<AccessRules>;
 }

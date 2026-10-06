@@ -68,6 +68,13 @@ path = "tests/restore_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# The cluster sidebar for an admin and a restricted user, light and dark (E06-S10); same gate.
+[[test]]
+name = "sidebar_screenshot"
+path = "tests/sidebar_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 # Frame cost of a dock resize and a tab switch with a heavy item mounted (test platform):
 # `cargo run -p oxikube_workspace --features test-support --profile release-fast --example workspace_bench`
 [[example]]

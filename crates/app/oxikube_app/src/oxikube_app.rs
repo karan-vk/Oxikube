@@ -16,6 +16,8 @@
 //! | [`command_bus`] | E06-S02 | [`CommandBus`]: dispatch by command id, the per-crate [`CommandRegistry`], MCP tool stubs |
 //! | [`guard`] | E06-S02 | [`MutationGuard`]: read-only check, confirmation tier and token, dry-run stage (stub), the [`Mutation`] permit, audit |
 //! | [`guard::posture`] | E06-S09 | read-only mode, colour and presets as commands (`cluster::ToggleReadOnly`, `cluster::SetColour`, `cluster::ApplyPreset`): confirm when lifting read-only on a production-flagged cluster, audit, the [`PrefsWriter`] port to the settings; the guard also re-checks the flag right before each request |
+//! | [`sidebar`] | E06-S10 | [`review_access`](sidebar::review_access) (the rules reviews the cluster sidebar hides sections by, failing open) and [`discover_custom_resources`](sidebar::discover_custom_resources) |
+//! | [`integrations`] | E06-S10 | [`IntegrationRegistry`] (stub): registered integrations and the sidebar sections they append after the core ones |
 //! | [`audit`] | E06-S02 | [`AuditLog`]: redacted, batched, fail-closed audit appends through `StatePort` |
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
@@ -23,8 +25,10 @@ pub mod audit;
 pub mod catalog;
 pub mod command_bus;
 pub mod guard;
+pub mod integrations;
 pub mod session;
 pub mod sources;
+pub mod sidebar;
 
 #[cfg(test)]
 mod testing;
@@ -44,7 +48,9 @@ pub use guard::{
     Confirmation, ConfirmationRequest, ConfirmationToken, Mutation, MutationGuard, PrefsPatch,
     PrefsWriter,
 };
+pub use integrations::{IntegrationRegistry, IntegrationSection, RegisterIntegrationError};
 pub use session::{
     ClusterSession, ClusterSessionManager, SessionChange, SessionUpdate, SessionUpdates,
 };
 pub use sources::{KubeconfigSourcesService, SourceListStore, SourceRow};
+pub use sidebar::{AccessOutcome, CustomKind, CustomResourceGroup};

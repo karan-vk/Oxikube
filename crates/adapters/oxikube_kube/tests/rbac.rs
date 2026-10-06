@@ -12,13 +12,14 @@ use k8s_openapi::api::core::v1::{Pod, Secret};
 use k8s_openapi::api::rbac::v1::PolicyRule;
 use kube::api::ListParams;
 use kube::{Api, Client};
+use oxikube_domain::access::{Access, AccessRequirement};
 use oxikube_domain::ids::{ContextName, Gvr};
 use oxikube_domain::{Capability, ErrorKind};
 use oxikube_kube::ClientPool;
 use oxikube_kube::auth::{CredentialRefresh, classify};
 use oxikube_kube::health::{
     AccessLevel, AccessQuery, RBAC_DERIVED, RulesCache, can_i, capabilities_for_context,
-    fetch_rules,
+    fetch_rules, rules_for_context,
 };
 use oxikube_testkit::integration::TestNamespace;
 
@@ -197,4 +198,51 @@ async fn restricted_account_reports_limited_capabilities() {
     .expect("admin capabilities");
     assert_eq!(admin.granted, RBAC_DERIVED, "{admin:?}");
     assert!(admin.denied().is_empty());
+}
+
+/// The rules the sidebar (E06-S10) gates its sections on: the restricted account may list pods
+/// and nothing else of ours, the cluster admin may list everything.
+#[tokio::test]
+async fn restricted_account_rules_answer_per_resource_list_questions() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let restricted = Restricted::create(&kind).await;
+    let ns = restricted.namespace();
+    let refresh = CredentialRefresh::Static;
+    let cache = RulesCache::default();
+
+    let rules = rules_for_context(&restricted.pool, &cache, &restricted.context, ns, refresh)
+        .await
+        .expect("rules through the pool");
+    assert!(!rules.partial, "kind authorizes with RBAC: {rules:?}");
+    let list = |group: &str, resource: &str| rules.check(&AccessRequirement::list(group, resource));
+    assert_eq!(list("", "pods"), Access::Granted);
+    for (group, resource) in [
+        ("", "secrets"),
+        ("", "nodes"),
+        ("apps", "deployments"),
+        ("rbac.authorization.k8s.io", "roles"),
+    ] {
+        assert_eq!(list(group, resource), Access::Denied, "{group}/{resource}");
+    }
+    // A section needing any of several kinds shows when one is listable.
+    assert!(rules.any_offered(&[
+        AccessRequirement::list("", "secrets"),
+        AccessRequirement::list("", "pods"),
+    ]));
+
+    let admin = rules_for_context(
+        &kind.pool(kind.kubeconfig.clone()),
+        &RulesCache::default(),
+        &kind.context,
+        ns,
+        refresh,
+    )
+    .await
+    .expect("admin rules");
+    for (group, resource) in [("", "secrets"), ("", "nodes"), ("apps", "deployments")] {
+        let access = admin.check(&AccessRequirement::list(group, resource));
+        assert_eq!(access, Access::Granted, "{group}/{resource}");
+    }
 }

@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::channel::oneshot;
+use oxikube_domain::access::AccessRules;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::{Capabilities, OxiResult};
 use oxikube_ports::{
@@ -27,6 +28,8 @@ use crate::script::{CallLog, Script};
 pub struct AccessScripts {
     /// `capabilities`.
     pub capabilities: Script<Capabilities>,
+    /// `rules`.
+    pub rules: Script<AccessRules>,
 }
 
 /// One call made on a [`FakeAccessReviewPort`].
@@ -34,17 +37,24 @@ pub struct AccessScripts {
 pub enum AccessCall {
     /// `capabilities(namespace)`.
     Capabilities(Option<String>),
+    /// `rules(namespace)`.
+    Rules(Option<String>),
 }
 
 /// Fake `AccessReviewPort`.
 ///
 /// Fallback: `capabilities` returns the configured set, every flag by default
-/// ([`with_capabilities`](Self::with_capabilities), [`set_capabilities`](Self::set_capabilities)).
+/// ([`with_capabilities`](Self::with_capabilities), [`set_capabilities`](Self::set_capabilities));
+/// `rules` returns the configured rules, cluster admin by default
+/// ([`with_rules`](Self::with_rules), [`set_rules`](Self::set_rules)), or the rules configured for
+/// that namespace ([`with_namespace_rules`](Self::with_namespace_rules), [`set_namespace_rules`](Self::set_namespace_rules)).
 #[derive(Debug)]
 pub struct FakeAccessReviewPort {
     script: AccessScripts,
     calls: CallLog<AccessCall>,
     granted: Mutex<Capabilities>,
+    rules: Mutex<AccessRules>,
+    namespace_rules: Mutex<HashMap<String, AccessRules>>,
 }
 
 fake_plumbing!(FakeAccessReviewPort, AccessScripts, AccessCall);
@@ -55,6 +65,8 @@ impl Default for FakeAccessReviewPort {
             script: AccessScripts::default(),
             calls: CallLog::default(),
             granted: Mutex::new(Capabilities::all()),
+            rules: Mutex::new(AccessRules::all_access()),
+            namespace_rules: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -76,6 +88,32 @@ impl FakeAccessReviewPort {
     pub fn set_capabilities(&self, granted: Capabilities) {
         *self.granted.lock() = granted;
     }
+
+    /// Sets the rules every `rules` call answers with (unless a namespace has its own).
+    #[must_use]
+    pub fn with_rules(self, rules: AccessRules) -> Self {
+        self.set_rules(rules);
+        self
+    }
+
+    /// Replaces the rules every `rules` call answers with.
+    pub fn set_rules(&self, rules: AccessRules) {
+        *self.rules.lock() = rules;
+    }
+
+    /// Sets the rules the review of `namespace` answers with.
+    #[must_use]
+    pub fn with_namespace_rules(self, namespace: &str, rules: AccessRules) -> Self {
+        self.set_namespace_rules(namespace, rules);
+        self
+    }
+
+    /// Replaces the rules the review of `namespace` answers with.
+    pub fn set_namespace_rules(&self, namespace: &str, rules: AccessRules) {
+        self.namespace_rules
+            .lock()
+            .insert(namespace.to_owned(), rules);
+    }
 }
 
 #[async_trait]
@@ -86,6 +124,15 @@ impl AccessReviewPort for FakeAccessReviewPort {
         self.script
             .capabilities
             .next_or_else(|| Ok(*self.granted.lock()))
+    }
+
+    async fn rules(&self, namespace: Option<&str>) -> OxiResult<AccessRules> {
+        self.calls
+            .record(AccessCall::Rules(namespace.map(str::to_owned)));
+        self.script.rules.next_or_else(|| {
+            let own = namespace.and_then(|ns| self.namespace_rules.lock().get(ns).cloned());
+            Ok(own.unwrap_or_else(|| self.rules.lock().clone()))
+        })
     }
 }
 

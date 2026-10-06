@@ -53,7 +53,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ScreenshotApp` with golden compare; `docs/testing-gpui.md`).
 - `oxikube_app` — services: `ClusterSessionManager`, `ResourceStore`, `CommandBus`,
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
-  `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `session` (E06-S01):
+  `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `sidebar` (E06-S10):
+  `review_access` (the rules reviews the cluster sidebar hides sections by; fails open) and
+  `discover_custom_resources`; module `integrations`: the `IntegrationRegistry` stub. Module `session` (E06-S01):
   `ClusterSessionManager` connects a context through `ClusterConnectorPort`, holds the returned
   `ClusterPorts` bundle per session, drives `ClusterSessionState` (auth failures to
   `AuthRequired`, transient ones retried with backoff on the `ClockPort`, health reports for
@@ -160,7 +162,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   session whose tab stays until it connects), and connects a placeholder when its tab is first
   shown; the vanished clusters are named in a toast. `Item::intercepts_close` /
   `close_requested` let an item ask before its tab closes; `Workspace::set_strip` places the
-  hotbar. Module `session` (E05-S12): `window::New`
+  hotbar.
+  Module `sidebar` (E06-S10): `SidebarPanel` is the cluster's left-dock panel (added to each tab by
+  `sidebar::tab_setup`): the eleven Lens-style sections (Cluster, Nodes, Workloads, Config, Network,
+  Storage, Namespaces, Events, Helm, Access Control, Custom Resources) come from `SidebarRegistry`
+  registration (`init(cx)` of the feature crate), draw as one virtualised flat list with collapsible
+  groups and count placeholders, and are hidden for kinds the user cannot `list`
+  (`oxikube_app::sidebar::review_access`: `SelfSubjectRulesReview` per selected namespace through
+  `AccessReviewPort::rules`, run after `Ready`, fail open with a warning); integrations' sections
+  (`IntegrationRegistry`) follow the core ones; open and closed groups are saved per cluster in the
+  `cluster_sidebar` state table. Module `session` (E05-S12): `window::New`
   (several windows, one `Workspace` each, shared globals), UI zoom (`view::ZoomIn`/`ZoomOut`/`ZoomReset`,
   the `ui_scale` setting), the effective reduce-motion flag (`reduce_motion` setting over the OS
   preference, read by views through `oxikube_ui::motion`), and the quit guard (`app::Quit`:

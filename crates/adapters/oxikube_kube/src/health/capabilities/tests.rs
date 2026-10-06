@@ -318,3 +318,25 @@ fn outcome_sets_are_disjoint_for_assorted_inputs() {
         );
     }
 }
+
+#[test]
+fn rules_convert_to_the_domains_per_resource_rules() {
+    use oxikube_domain::access::Access;
+
+    let snapshot = complete(vec![
+        rule(&[""], &["pods"], &["get", "list"]),
+        named(rule(&["apps"], &["deployments"], &["list"]), &["web"]),
+    ]);
+    let rules = snapshot.to_access_rules();
+    assert!(!rules.partial);
+    assert_eq!(rules.level("list", "", "pods"), Access::Granted);
+    assert_eq!(
+        rules.level("list", "apps", "deployments"),
+        Access::Restricted
+    );
+    assert_eq!(rules.level("list", "", "secrets"), Access::Denied);
+    // A partial review never turns an unmatched resource into a denial.
+    let rules = partial(vec![rule(&[""], &["pods"], &["list"])]).to_access_rules();
+    assert!(rules.partial);
+    assert_eq!(rules.level("list", "", "secrets"), Access::Unknown);
+}
