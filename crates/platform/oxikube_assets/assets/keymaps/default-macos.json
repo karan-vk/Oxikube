@@ -26,8 +26,8 @@
     }
   },
   {
-    // Cluster tabs (E06-S04): the nth cluster tab, and cycling through them. `cmd-w` (or
-    // `ctrl-w`) closes the displayed one, through `workspace::CloseActiveItem`.
+    // Cluster tabs (E06-S04): the nth cluster tab, and cycling through them. `cmd-w`
+    // closes the displayed one, through `workspace::CloseActiveItem`.
     "bindings": {
       "cmd-1": ["cluster::SwitchTab", { "index": 1 }],
       "cmd-2": ["cluster::SwitchTab", { "index": 2 }],

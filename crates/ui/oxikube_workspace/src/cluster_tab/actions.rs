@@ -3,8 +3,8 @@
 //! Each action stands for a `Command` (`cluster::SwitchTab`, `cluster::NextTab`,
 //! `cluster::PreviousTab`, same names) and does nothing but send it to the controller of the
 //! window the key was pressed in. The bindings are in the per-OS keymap files of
-//! `oxikube_assets` (`cmd-1` to `cmd-9` on macOS, `ctrl-1` to `ctrl-9` on Linux and Windows,
-//! `ctrl-tab` and `ctrl-shift-tab` everywhere), so users rebind them in `keymap.json` like any
+//! `oxikube_assets` (`cmd-1` to `cmd-9` on macOS, `ctrl-shift-1` to `ctrl-shift-9` on Linux and
+//! Windows, `ctrl-tab` and `ctrl-shift-tab` everywhere), so users rebind them in `keymap.json` like any
 //! other key.
 
 use gpui::{Action, App, Global, actions};
