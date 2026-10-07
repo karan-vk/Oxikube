@@ -54,6 +54,11 @@ impl TerminalState {
         self.grid.lock().modes()
     }
 
+    /// Whether the view is scrolled up into the history.
+    pub fn is_scrolled_back(&self) -> bool {
+        self.grid.lock().display_offset() > 0
+    }
+
     /// The title the process set, if any.
     pub fn title(&self) -> Option<Arc<str>> {
         self.grid.lock().title().cloned()

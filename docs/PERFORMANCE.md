@@ -372,6 +372,20 @@ These are headless numbers: compare them with the same machine, not with the 8 m
 includes GPU time and present). The windowed check is `cargo run -p oxikube_terminal --example
 terminal_preview` (a live `top`).
 
+## Terminal input (E09-S06)
+
+`cargo run --release -p oxikube_terminal --example input_bench` times the mapping layer (Apple
+silicon, release): `to_esc_str` 2 to 5 ns per keystroke (arrow, ctrl-c, ctrl-alt-shift-f5, alt-b,
+and plain text, which maps to nothing), an SGR mouse report 7 ns, a one-line bracketed paste 13 ns.
+The mapping hands out `&'static str`s from tables, so a keypress allocates nothing:
+`tests/no_alloc.rs` runs it under a counting global allocator and asserts zero allocations for
+every key family, modifier and mode, and for mouse reports. The key goes to the writer task through
+an unbounded channel (`TerminalState::input`), never waiting on the grid lock beyond one parse
+slice. Input to pixel is the PTY round trip plus one frame: the `#[gpui::test]`
+`an_echo_is_painted_within_one_frame_of_the_key` sends a key to an echoing fake backend and checks
+the echo is in the frame drawn one frame interval later. Settings read per keystroke
+(`terminal.option_as_meta`) are read by reference, not cloned.
+
 ## Resource table: 10 000 pods under churn (E07-S09)
 
 The epic's exit criterion (E07): 10 000 pods with churn scroll at ≥ 55 fps on the reference machine

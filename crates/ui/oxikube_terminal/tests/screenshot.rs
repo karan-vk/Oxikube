@@ -8,6 +8,9 @@
 //! - `terminal_cursors`: four small terminals: block, beam and underline cursors (focused) and
 //!   the hollow block of an unfocused terminal.
 //!
+//! - `terminal_preedit` (E09-S06): an input method composing four Japanese syllables at the shell
+//!   prompt: the marked text is underlined at the cursor, over the cells after it.
+//!
 //! The byte stream is in this file, so the picture only changes when the element (or the font
 //! the platform ships) does. `harness = false`: on macOS the platform text system can only be
 //! created on the process main thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe
@@ -21,8 +24,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use gpui::{
-    AnyWindowHandle, App, AppContext as _, Context, Entity, FocusHandle, IntoElement, Modifiers,
-    MouseMoveEvent, ParentElement as _, PlatformInput, Render, Styled as _, Window, div, px, size,
+    AnyWindowHandle, App, AppContext as _, Context, Entity, EntityInputHandler as _, FocusHandle,
+    IntoElement, Modifiers, MouseMoveEvent, ParentElement as _, PlatformInput, Render, Styled as _,
+    Window, div, px, size,
 };
 use oxikube_ports::TerminalSize;
 use oxikube_runtime::FRAME_INTERVAL;
@@ -99,6 +103,7 @@ fn render(
     feeds: &[&str],
     hollow_last: bool,
     select: bool,
+    compose: Option<&str>,
 ) -> Result<RgbaImage> {
     let mut app = ScreenshotApp::new();
     let backends: Vec<FakeTerminalBackend> = feeds
@@ -153,6 +158,15 @@ fn render(
         });
         hover_link(&mut app, window)?;
     }
+    if let (Some(text), Some(terminal)) = (compose, terminals.first()) {
+        app.update(|cx| {
+            window.update(cx, |_, window, cx| {
+                terminal.update(cx, |terminal, cx| {
+                    terminal.replace_and_mark_text_in_range(None, text, None, window, cx)
+                })
+            })
+        })?;
+    }
     app.advance_clock(FRAME_INTERVAL);
     app.capture(window)
 }
@@ -178,11 +192,11 @@ fn hover_link(app: &mut ScreenshotApp, window: AnyWindowHandle) -> Result<()> {
 }
 
 fn full_dark() -> Result<RgbaImage> {
-    render(Appearance::Dark, FULL, &[FIXTURE], false, true)
+    render(Appearance::Dark, FULL, &[FIXTURE], false, true, None)
 }
 
 fn full_light() -> Result<RgbaImage> {
-    render(Appearance::Light, FULL, &[FIXTURE], false, true)
+    render(Appearance::Light, FULL, &[FIXTURE], false, true, None)
 }
 
 fn cursors() -> Result<RgbaImage> {
@@ -197,6 +211,18 @@ fn cursors() -> Result<RgbaImage> {
         ],
         true,
         false,
+        None,
+    )
+}
+
+fn preedit() -> Result<RgbaImage> {
+    render(
+        Appearance::Dark,
+        CURSORS,
+        &["$ echo "],
+        false,
+        false,
+        Some("\u{306b}\u{307b}\u{3093}\u{3054}"),
     )
 }
 
@@ -218,6 +244,11 @@ fn main() -> ExitCode {
                 name: "terminal_cursors",
                 size: CURSORS,
                 render: cursors,
+            },
+            GoldenCase {
+                name: "terminal_preedit",
+                size: CURSORS,
+                render: preedit,
             },
         ],
     )

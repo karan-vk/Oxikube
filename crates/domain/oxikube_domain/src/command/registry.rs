@@ -150,8 +150,12 @@ impl CommandId {
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
+    /// `terminal::Copy`: copy the focused terminal's selection to the clipboard.
+    pub const TERMINAL_COPY: CommandId = CommandId::new("terminal::Copy");
     /// `terminal::OpenLink`: open a URL or local path a terminal shows.
     pub const TERMINAL_OPEN_LINK: CommandId = CommandId::new("terminal::OpenLink");
+    /// `terminal::Paste`: paste the clipboard into the focused terminal.
+    pub const TERMINAL_PASTE: CommandId = CommandId::new("terminal::Paste");
     /// `view::Open`: open a registered view by id.
     pub const VIEW_OPEN: CommandId = CommandId::new("view::Open");
     /// `view::ZoomIn`: make the UI one zoom step larger.
@@ -610,10 +614,25 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::ResourceKind,
         NONE,
     ),
+    // Copies text the user sees to the clipboard; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_COPY,
+        "Copy Terminal Selection",
+        CommandScope::Global,
+        NONE,
+    ),
     // Opens the user's browser or file opener; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_OPEN_LINK,
         "Open Terminal Link",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Types the clipboard into the user's own session (a multi-line paste asks first); the
+    // cluster is only touched by what the user's shell then does, outside the guard's reach.
+    CommandMeta::read(
+        CommandId::TERMINAL_PASTE,
+        "Paste into Terminal",
         CommandScope::Global,
         NONE,
     ),

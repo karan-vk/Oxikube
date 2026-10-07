@@ -9,7 +9,11 @@
 //! * **Selection**: a press starts one (double click: words, triple: lines, alt: a block,
 //!   shift: extends the current one), a drag extends it, the release ends the drag.
 //! * **Wheel**: scrolls the view through the history, whole lines at a time. On the alternate
-//!   screen the wheel belongs to the application (mouse reporting is E09-S06).
+//!   screen the wheel belongs to the application.
+//! * **Mouse reporting** (E09-S06, `report`): while the process asked for mouse events everything
+//!   above except with Shift held goes to it instead.
+//! * **Copy on select** (E09-S06): a selection drag that ends copies the selection when
+//!   `terminal.copy_on_select` is on.
 
 use std::rc::Rc;
 
@@ -24,14 +28,16 @@ use oxikube_workspace::CommandDispatcher;
 use super::metrics::CellMetrics;
 use super::{PathLinks, TerminalElement, TerminalElementState, TerminalFrame};
 use super::{hash, links};
-use crate::grid::{GridPoint, SelectionKind, SelectionSide, TerminalModes, TerminalScroll};
+use crate::grid::{GridPoint, SelectionKind, SelectionSide, TerminalScroll};
+use crate::input::clipboard;
+use crate::settings::TerminalSettings;
 use crate::state::TerminalState;
 
 /// What every listener of one frame needs.
-struct Pointer {
-    terminal: Entity<TerminalState>,
-    state: TerminalElementState,
-    focus: FocusHandle,
+pub(super) struct Pointer {
+    pub(super) terminal: Entity<TerminalState>,
+    pub(super) state: TerminalElementState,
+    pub(super) focus: FocusHandle,
     dispatcher: Option<Rc<dyn CommandDispatcher>>,
     paths: PathLinks,
     hitbox: Hitbox,
@@ -67,14 +73,25 @@ pub(super) fn register(element: &TerminalElement, frame: &TerminalFrame, window:
     });
     let p = pointer.clone();
     window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
-        if phase == DispatchPhase::Bubble && event.button == MouseButton::Left {
+        if phase != DispatchPhase::Bubble {
+            return;
+        }
+        if p.hitbox.is_hovered(window) && p.reporting(event.modifiers) {
+            p.report_press(event, window, cx);
+        } else if event.button == MouseButton::Left {
             p.pressed(event, window, cx);
         }
     });
     let p = pointer.clone();
-    window.on_mouse_event(move |event: &MouseUpEvent, phase, _, _| {
-        if phase == DispatchPhase::Bubble && event.button == MouseButton::Left {
-            p.state.0.borrow_mut().dragging = None;
+    window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+        if phase != DispatchPhase::Bubble {
+            return;
+        }
+        if p.report_release(event, cx) {
+            return;
+        }
+        if event.button == MouseButton::Left {
+            p.released(cx);
         }
     });
     let p = pointer.clone();
@@ -91,7 +108,7 @@ pub(super) fn register(element: &TerminalElement, frame: &TerminalFrame, window:
 
 impl Pointer {
     /// The viewport cell under `position`, and the half of it the pointer is on.
-    fn cell(&self, position: Point<Pixels>) -> (usize, usize, SelectionSide) {
+    pub(super) fn cell(&self, position: Point<Pixels>) -> (usize, usize, SelectionSide) {
         let inner = self.state.0.borrow();
         let snapshot = &inner.snapshot;
         self.metrics
@@ -103,7 +120,19 @@ impl Pointer {
         GridPoint::from_viewport(row, column, offset)
     }
 
+    /// The left button came up: the selection drag ends, and with `copy_on_select` it is copied.
+    fn released(&self, cx: &mut App) {
+        if self.state.0.borrow_mut().dragging.take().is_some()
+            && TerminalSettings::copy_on_select(cx)
+        {
+            clipboard::copy_selection(&self.terminal, cx);
+        }
+    }
+
     fn moved(&self, event: &MouseMoveEvent, window: &mut Window, cx: &mut App) {
+        if self.report_move(event, cx) {
+            return;
+        }
         let dragging = self.state.0.borrow().dragging;
         if let Some(last) = dragging
             && event.pressed_button == Some(MouseButton::Left)
@@ -167,7 +196,9 @@ impl Pointer {
             return;
         }
         let point = self.grid_point(row, column);
-        let extend = event.modifiers.shift;
+        // Shift extends the selection there is; with none it starts one (also how a program that
+        // reports the mouse is selected from: Shift-drag).
+        let extend = event.modifiers.shift && self.state.0.borrow().snapshot.selection.is_some();
         let kind = match event.click_count {
             2 => SelectionKind::Word,
             n if n >= 3 => SelectionKind::Line,
@@ -208,15 +239,16 @@ impl Pointer {
         }
         let lines = {
             let mut inner = self.state.0.borrow_mut();
-            if inner.snapshot.modes.contains(TerminalModes::ALT_SCREEN) {
-                return;
-            }
             let line_height = self.metrics.line_height;
             let delta = event.delta.pixel_delta(line_height).y + inner.scroll_remainder;
             let lines = (delta / line_height).trunc();
             inner.scroll_remainder = delta - line_height * lines;
             lines as i32
         };
+        if lines != 0 && self.report_wheel(lines, event.position, event.modifiers, cx) {
+            cx.stop_propagation();
+            return;
+        }
         if lines != 0 {
             self.terminal.update(cx, |terminal, cx| {
                 terminal.scroll(TerminalScroll::Lines(lines), cx)

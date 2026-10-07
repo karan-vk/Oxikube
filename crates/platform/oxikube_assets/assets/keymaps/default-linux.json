@@ -160,5 +160,17 @@
       "alt-i": "log_view::ToggleInverse",
       "alt-f": "log_view::ToggleFilterMode"
     }
+  },
+  {
+    // Terminal (E09-S06): ctrl-shift-c copies the selection, ctrl-shift-v (or shift-insert) pastes
+    // (a multi-line paste asks first, `terminal.confirm_multiline_paste`). ctrl-c is never
+    // bound: it always reaches the process as an interrupt. Every other key goes to the process
+    // (see the mapping in `oxikube_terminal::mappings`).
+    "context": "Terminal",
+    "bindings": {
+      "ctrl-shift-c": "terminal::Copy",
+      "ctrl-shift-v": "terminal::Paste",
+      "shift-insert": "terminal::Paste"
+    }
   }
 ]

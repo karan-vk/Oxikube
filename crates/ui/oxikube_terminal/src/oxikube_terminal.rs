@@ -9,9 +9,11 @@
 //! | [`backend`] | [`TerminalBackend`](oxikube_ports::exec::TerminalBackend) implementations. [`backend::local::LocalPty`] runs the user's shell on a PTY (E09-S02) |
 //! | [`grid`] | [`TermGrid`]: `alacritty_terminal` (pinned `=0.26.0`) behind our own types; the only module that names them. Snapshot, selection, search, scrollback (E09-S04) |
 //! | [`state`] | [`TerminalState`]: the GPUI entity bridging a backend and the grid; tokio pump, writer, frame-coalesced notify (E09-S04) |
+//! | [`mappings`] | [`to_esc_str`](mappings::to_esc_str), [`encode_paste`](mappings::encode_paste), [`encode_mouse`](mappings::encode_mouse): keystrokes, pastes and mouse events as the bytes a terminal program expects; pure and table-tested (E09-S06) |
+//! | [`input`] | what a focused element attaches: the key-down listener, IME composition (`EntityInputHandler` for [`TerminalState`]), copy / paste / copy on select with the multi-line confirmation, the `terminal::Copy` / `terminal::Paste` commands (E09-S06) |
 //! | [`element`] | [`TerminalElement`]: the custom GPUI element painting a terminal (cells, cursor, selection, decorations, links) from theme colours (E09-S05) |
 //! | [`open_link`] | `terminal::OpenLink`: the handler cmd/ctrl-click on a link dispatches to (browser URLs; local files opened only when plain, otherwise revealed) (E09-S05) |
-//! | [`settings`] | [`TerminalSettings`]: the `terminal` block of `settings.json` (`shell`, `shell_args`, `scrollback_lines`) |
+//! | [`settings`] | [`TerminalSettings`]: the `terminal` block of `settings.json` (`shell`, `shell_args`, `scrollback_lines`, `copy_on_select`, `option_as_meta`, `confirm_multiline_paste`) |
 //!
 //! Scrollback is never persisted and terminal bytes are never logged (non-negotiable 5).
 //!
@@ -21,6 +23,8 @@
 pub mod backend;
 pub mod element;
 pub mod grid;
+pub mod input;
+pub mod mappings;
 pub mod open_link;
 mod quit;
 pub mod settings;

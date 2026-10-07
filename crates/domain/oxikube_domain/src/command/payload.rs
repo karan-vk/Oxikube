@@ -196,6 +196,15 @@ pub enum Command {
     /// Set the UI zoom back to 100 %.
     #[serde(rename = "view::ZoomReset")]
     ViewZoomReset,
+    /// Copy the focused terminal's selection to the clipboard (E09-S06). Does nothing without a
+    /// selection. Reads and changes nothing in a cluster.
+    #[serde(rename = "terminal::Copy")]
+    TerminalCopy,
+    /// Paste the clipboard into the focused terminal (E09-S06), as a bracketed paste when the
+    /// process asked for it; text with several lines asks first (setting
+    /// `terminal.confirm_multiline_paste`). Writes only to the user's own session.
+    #[serde(rename = "terminal::Paste")]
+    TerminalPaste,
     /// Open a link a terminal shows (cmd/ctrl-click, E09-S05): an `http`, `https`, `mailto` or
     /// `file` URL in the browser, or an absolute local path (an optional `:line[:column]` suffix
     /// is accepted) with the system's opener. Reads and changes nothing in a cluster.
@@ -641,6 +650,8 @@ impl Command {
             Command::ViewZoomOut => CommandId::VIEW_ZOOM_OUT,
             Command::ViewZoomReset => CommandId::VIEW_ZOOM_RESET,
             Command::TerminalOpenLink { .. } => CommandId::TERMINAL_OPEN_LINK,
+            Command::TerminalCopy => CommandId::TERMINAL_COPY,
+            Command::TerminalPaste => CommandId::TERMINAL_PASTE,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -870,6 +881,8 @@ mod tests {
             Command::TerminalOpenLink {
                 target: "https://kubernetes.io".into(),
             },
+            Command::TerminalCopy,
+            Command::TerminalPaste,
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -1122,6 +1135,8 @@ mod tests {
                     | Command::ViewZoomOut
                     | Command::ViewZoomReset
                     | Command::TerminalOpenLink { .. }
+                    | Command::TerminalCopy
+                    | Command::TerminalPaste
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }

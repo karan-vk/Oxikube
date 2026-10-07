@@ -112,7 +112,15 @@
     "shell_args": [],
     // Lines of history each terminal keeps in memory (0 - 100000). Scrollback is never saved to
     // disk. A change applies to open terminals at once.
-    "scrollback_lines": 10000
+    "scrollback_lines": 10000,
+    // Copy the selection to the clipboard when the mouse button is released. cmd-c (ctrl-shift-c
+    // on Linux and Windows) always copies it; ctrl-c always interrupts the process.
+    "copy_on_select": false,
+    // Alt (Option) sends ESC before the key ("meta": alt-b, alt-f, alt-. in shells and editors).
+    // null: off on macOS, where Option types characters, on elsewhere.
+    "option_as_meta": null,
+    // Ask before pasting text with more than one line (a pasted newline runs the line).
+    "confirm_multiline_paste": true
   },
   // Per-cluster settings. Each key below is a default for every cluster; write the same key under
   // `clusters.<id>` (below) to override it for one cluster. Layers merge field by field:

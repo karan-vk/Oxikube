@@ -45,3 +45,20 @@ fn unsafe_or_missing_links_are_refused(cx: &mut TestAppContext) {
     assert!(!open(&mut app, "relative/path.rs"));
     assert_eq!(app.vcx.opened_url(), None, "nothing reached the platform");
 }
+
+fn run(app: &mut App, command: Command) -> bool {
+    let state = app.vcx.update(|_, cx| AppState::global(cx));
+    let bus = state.command_bus().expect("the bus").clone();
+    let outcome = block_on(bus.dispatch(command, DispatchContext::new(Initiator::Ui, "me")));
+    app.vcx.run_until_parked();
+    outcome.is_ok()
+}
+
+#[gpui::test]
+fn terminal_copy_and_paste_are_bus_commands(cx: &mut TestAppContext) {
+    // E09-S06: both reach the window's focused terminal; with none focused they do nothing, but
+    // the commands exist, pass the guard and are not an error (the palette and agents use them).
+    let mut app = App::start(cx, TestPorts::seeded());
+    assert!(run(&mut app, Command::TerminalCopy));
+    assert!(run(&mut app, Command::TerminalPaste));
+}

@@ -584,6 +584,27 @@
       "additionalProperties": false,
       "description": "What one settings layer says about terminals: the `terminal` object of `settings.json`.",
       "properties": {
+        "confirm_multiline_paste": {
+          "description": "Ask before pasting text with more than one line (default `true`): a pasted newline runs\nthe line. Single-line pastes never ask.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "copy_on_select": {
+          "description": "Copy the selection to the clipboard as soon as the mouse button is released (default\n`false`). `cmd-c` (`ctrl-shift-c` elsewhere) always copies the selection explicitly, and\n`ctrl-c` always reaches the process as an interrupt.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "option_as_meta": {
+          "description": "Whether Alt (Option) sends `ESC` before the key, the \"meta\" prefix shells and editors use\nfor `alt-b`, `alt-f`, `alt-.`. `null` (the default) is `false` on macOS, where Option\ntypes characters (`å`, `∫`), and `true` elsewhere.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "scrollback_lines": {
           "description": "Lines of history each terminal keeps in memory (0 - 100000). Never saved to disk.",
           "format": "uint",
