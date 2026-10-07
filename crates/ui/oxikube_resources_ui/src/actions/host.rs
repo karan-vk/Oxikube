@@ -131,7 +131,7 @@ impl ResourceActions {
 
     /// Whether `command` is a row action of `kind` at all, whatever the session may do: the
     /// difference between "this kind has no such action" and "you are not allowed it here".
-    pub fn offers(&self, kind: &ResourceKind, command: CommandId) -> bool {
+    pub(crate) fn offers(&self, kind: &ResourceKind, command: CommandId) -> bool {
         self.actions
             .actions_for(kind, Capabilities::all())
             .iter()

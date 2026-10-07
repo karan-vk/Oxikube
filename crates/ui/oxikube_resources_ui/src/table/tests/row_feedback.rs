@@ -6,25 +6,11 @@ use oxikube_domain::Resource;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::ids::ResourceRef;
-use oxikube_domain::kinds::{ResourceKind, VerbSet};
 use oxikube_testkit::deployment;
 
 use super::fixture::{Fixture, cluster};
 use super::p;
-use crate::actions::tests::{nodes_kind, readonly_kind, toasts};
-
-fn deployments_kind() -> ResourceKind {
-    ResourceKind {
-        gvk: Gvk::new("apps", "v1", "Deployment"),
-        preferred: true,
-        plural: "deployments".into(),
-        singular: "deployment".into(),
-        short_names: vec!["deploy".into()],
-        categories: vec!["all".into()],
-        verbs: VerbSet::from_names(["get", "list", "watch", "delete"]),
-        namespaced: true,
-    }
-}
+use crate::actions::tests::{deployments_kind, nodes_kind, readonly_kind, toasts};
 
 fn sent_exec(f: &Fixture) -> Vec<Command> {
     f.dispatcher

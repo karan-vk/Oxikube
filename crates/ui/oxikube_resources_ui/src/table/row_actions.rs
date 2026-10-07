@@ -50,7 +50,8 @@ impl ResourceTable {
     /// A disabled action (read-only cluster) says why in a toast instead, and so does an action
     /// this table does not offer (E07-U563: "Shell is available for Pods and Nodes"). Shell,
     /// Attach and Debug take one object: of a selection they act on the cursor row and say so.
-    /// `resource::Delete` opens the [`DeleteDialog`]; another action's command is dispatched for each object, which is the bus's to guard and report.
+    /// `resource::Delete` opens the [`DeleteDialog`]; another action's command is dispatched for
+    /// each object, which is the bus's to guard and report.
     pub fn run_action(
         &mut self,
         command: CommandId,

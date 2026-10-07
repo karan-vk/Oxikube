@@ -7,7 +7,7 @@ use oxikube_domain::safety::ConfirmTier;
 use oxikube_ports::PropagationPolicy;
 use oxikube_testkit::{ResourceCall, node};
 
-use super::{dialog, nodes_kind, toasts, with_dialog};
+use super::{deployments_kind, dialog, nodes_kind, toasts, with_dialog};
 use crate::actions::Stage;
 use crate::table::tests::fixture::Fixture;
 use crate::table::tests::p;
@@ -259,17 +259,4 @@ fn a_deployment_owns_dependents_so_the_dialog_asks_how_to_treat_them(cx: &mut Te
         "a Deployment owns ReplicaSets: the choice is shown"
     );
     with_dialog(&mut f, &d, |d, _, cx| d.cancel(cx));
-}
-
-fn deployments_kind() -> oxikube_domain::kinds::ResourceKind {
-    oxikube_domain::kinds::ResourceKind {
-        gvk: oxikube_domain::ids::Gvk::new("apps", "v1", "Deployment"),
-        preferred: true,
-        plural: "deployments".into(),
-        singular: "deployment".into(),
-        short_names: vec!["deploy".into()],
-        categories: vec!["all".into()],
-        verbs: oxikube_domain::kinds::VerbSet::from_names(["get", "list", "watch", "delete"]),
-        namespaced: true,
-    }
 }
