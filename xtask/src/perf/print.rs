@@ -31,8 +31,8 @@ pub fn print_report(report: &Report) {
     );
     for (name, result) in &report.scenarios {
         match result.status {
-            Status::NotAvailable => println!(
-                "{name:<12} SKIPPED: not available yet ({}); enabled by {}",
+            Status::Unavailable => println!(
+                "{name:<12} UNAVAILABLE: {} (enabled by {})",
                 result.reason.as_deref().unwrap_or("-"),
                 result.enabled_by.join(", ")
             ),

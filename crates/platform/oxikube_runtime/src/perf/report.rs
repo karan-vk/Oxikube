@@ -16,8 +16,8 @@ pub const REPORT_SCHEMA: u32 = 1;
 pub enum ScenarioStatus {
     /// Measured; `metrics` is filled.
     Ok,
-    /// The views it drives do not exist yet; `reason` and `enabled_by` say which stories add them.
-    NotAvailable,
+    /// The view crate or required behavior is not built yet; `reason` and `enabled_by` explain why.
+    Unavailable,
 }
 
 /// Counters observed during the scripted frames.
@@ -80,12 +80,12 @@ impl ScenarioSample {
         }
     }
 
-    /// A scenario whose views are not built yet.
-    pub fn not_available(scenario: &str, reason: &str, enabled_by: &[&str]) -> Self {
+    /// A scenario whose view crate or required behavior is not built yet.
+    pub fn unavailable(scenario: &str, reason: &str, enabled_by: &[&str]) -> Self {
         Self {
             schema: REPORT_SCHEMA,
             scenario: scenario.into(),
-            status: ScenarioStatus::NotAvailable,
+            status: ScenarioStatus::Unavailable,
             reason: Some(reason.into()),
             enabled_by: enabled_by.iter().map(|s| (*s).to_owned()).collect(),
             os: std::env::consts::OS.into(),
@@ -113,10 +113,14 @@ mod tests {
     }
 
     #[test]
-    fn not_available_serialises_reason_and_no_metrics() {
-        let s = ScenarioSample::not_available("palette", "no palette yet", &["E11-S03 #158"]);
+    fn unavailable_serialises_reason_and_no_metrics() {
+        let s = ScenarioSample::unavailable(
+            "palette",
+            "crate not built yet",
+            &["E11-S03 #158"],
+        );
         let v = serde_json::to_value(&s).unwrap();
-        assert_eq!(v["status"], "not_available");
+        assert_eq!(v["status"], "unavailable");
         assert_eq!(v["enabled_by"][0], "E11-S03 #158");
         assert!(v["metrics"].as_object().unwrap().is_empty());
     }

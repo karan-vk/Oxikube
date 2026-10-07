@@ -6,7 +6,7 @@
 //! (`oxikube_testkit::headless`): numbers are CPU, layout and paint preparation, no present and no
 //! GPU time.
 //!
-//! Scenarios whose views do not exist yet report `not_available` (exit 0) with the stories that
+//! Scenarios whose views do not exist yet report `unavailable` (exit 0) with the stories that
 //! enable them, so the harness, the nightly job and the baseline format are in place before them.
 //!
 //! - `startup` ([`startup`]): the real init order, the main window behind the startup
@@ -42,20 +42,20 @@ const FRAMES: usize = 120;
 const NEEDS_TEST_APP: &str = "E05-S11 #93";
 
 /// Runs scenario `name`, writes its sample to `report` (or stdout). Exit 0 on success and for
-/// `not_available`, 1 on failure, 2 for an unknown scenario.
+/// `unavailable`, 1 on failure, 2 for an unknown scenario.
 pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) -> ExitCode {
     let sample = match name {
         "startup" => startup::run(launched, probe),
         scroll_10k::NAME | "table-scroll-10k" => scroll_10k::run(probe),
-        "palette" => Ok(ScenarioSample::not_available(
+        "palette" => Ok(ScenarioSample::unavailable(
             name,
-            "no command palette yet: open <= 1 frame and filter 2 000 entries <= 5 ms",
+            "crate not built yet: oxikube_palette has no command palette view",
             &[NEEDS_TEST_APP, "E11-S03 #158"],
         )),
         logs_stream::NAME => logs_stream::run(probe),
-        "editor-5mb" => Ok(ScenarioSample::not_available(
+        "editor-5mb" => Ok(ScenarioSample::unavailable(
             name,
-            "no manifest editor yet: 5 MB YAML open <= 500 ms and typing",
+            "crate not built yet: oxikube_editor has no manifest editor view",
             &[NEEDS_TEST_APP, "E10-S04 #146", "E10-S11 #153"],
         )),
         other => {

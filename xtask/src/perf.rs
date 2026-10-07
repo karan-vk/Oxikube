@@ -297,10 +297,10 @@ fn run_scenario(
         &dir.join(format!("{scenario}-warmup.json")),
         kubeconfig,
     )?;
-    if warm.status == "not_available" {
+        if warm.status == "unavailable" {
         println!(" -> not available");
         return Ok(ScenarioResult {
-            status: Status::NotAvailable,
+            status: Status::Unavailable,
             reason: warm.reason,
             enabled_by: warm.enabled_by,
             samples: 0,
