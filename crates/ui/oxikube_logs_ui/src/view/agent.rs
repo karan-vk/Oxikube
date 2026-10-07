@@ -15,7 +15,7 @@ use super::LogView;
 use super::text::lines_of;
 
 /// The most a send reads from the buffer; the block is cut to 64 KiB after masking.
-pub const SEND_LIMIT_BYTES: usize = 128 * 1024;
+const SEND_LIMIT_BYTES: usize = 128 * 1024;
 
 impl LogView {
     /// Queues the selected lines (else the lines on screen) for the agent. A toast says how many
@@ -55,15 +55,12 @@ impl LogView {
             lines: usize::try_from(copied.lines).unwrap_or(usize::MAX),
         };
         let item = selection_context(source, &copied.text);
-        let lines = item.source.lines;
+        let lines = lines_of(item.source.lines as u64);
         let toast = match self.deps.agent.send(item) {
-            Sent::Delivered => {
-                Toast::success(format!("Sent {} to the agent", lines_of(lines as u64)))
-            }
+            Sent::Delivered => Toast::success(format!("Sent {lines} to the agent")),
             Sent::Queued(waiting) => Toast::info(format!(
-                "Queued {} for the agent ({waiting} waiting). They are delivered when the agent \
-                 panel opens.",
-                lines_of(lines as u64)
+                "Queued {lines} for the agent ({waiting} waiting). They are delivered when the \
+                 agent panel opens."
             )),
         };
         self.toast(toast.key("logs-send-to-agent"), cx);

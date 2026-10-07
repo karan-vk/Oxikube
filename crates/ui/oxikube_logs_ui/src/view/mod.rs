@@ -97,7 +97,6 @@ pub use actions::{
     ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen, ToggleInverse,
     ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
-pub use agent::SEND_LIMIT_BYTES;
 pub use aggregate::{
     AggregateState, BANNER_LINES, BANNER_SECONDS, Banner, MAX_GUTTER, Prefix, SourceChoice,
     SourceLabels, colour_index, short_names,

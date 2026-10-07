@@ -99,11 +99,7 @@ fn fit(text: &mut String, budget: usize) {
             text.drain(..from);
         }
         None => {
-            let mut end = budget;
-            while !text.is_char_boundary(end) {
-                end -= 1;
-            }
-            text.truncate(end);
+            text.truncate(text.floor_char_boundary(budget));
         }
     }
 }

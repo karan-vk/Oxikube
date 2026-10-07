@@ -57,11 +57,12 @@ impl ToolRegistry {
         if def.is_mutating() {
             return Err(RegisterToolError::Mutating(def.name.clone()));
         }
+        let name = def.name.clone();
         let mut tools = self.tools.write();
-        if tools.contains_key(&def.name) {
-            return Err(RegisterToolError::Duplicate(def.name.clone()));
+        if tools.contains_key(&name) {
+            return Err(RegisterToolError::Duplicate(name));
         }
-        tools.insert(def.name.clone(), tool.clone());
+        tools.insert(name, tool);
         Ok(())
     }
 

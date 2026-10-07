@@ -1,10 +1,12 @@
 //! Writing log text as a [`ContextBlock`] an agent can cite: a `# key: value` header that says
 //! where the lines came from, the notes about what is missing, then the lines.
 
-use jiff::Timestamp;
+use std::fmt::Write as _;
+
 use oxikube_domain::agent::{ContextBlock, MAX_CONTEXT_BLOCK_BYTES};
 
 use crate::context::pending::ContextSource;
+use crate::logs::export::utc_millis;
 
 /// Bytes kept back from the budget for the header and the notes.
 pub(super) const RESERVE_BYTES: usize = 2_048;
@@ -18,26 +20,23 @@ pub(super) fn lines_budget(cap: usize) -> usize {
 /// The header of a block: `# cluster: ...` and the rest of `source`.
 pub(super) fn header(source: &ContextSource) -> String {
     let mut out = String::new();
-    out.push_str(&format!(
-        "# cluster: {} ({})\n",
+    // Writing to a `String` cannot fail.
+    let _ = writeln!(
+        out,
+        "# cluster: {} ({})",
         source.cluster_name, source.cluster
-    ));
-    out.push_str(&format!("# namespace: {}\n", source.namespace));
-    out.push_str(&format!("# source: {}\n", source.subject));
+    );
+    let _ = writeln!(out, "# namespace: {}", source.namespace);
+    let _ = writeln!(out, "# source: {}", source.subject);
     if let Some(container) = &source.container {
-        out.push_str(&format!("# container: {container}\n"));
+        let _ = writeln!(out, "# container: {container}");
     }
     if let Some((first, last)) = source.span {
-        out.push_str(&format!("# time: {} to {}\n", utc(first), utc(last)));
+        let _ = writeln!(out, "# time: {} to {}", utc_millis(first), utc_millis(last));
     }
-    out.push_str(&format!("# lines: {}\n", source.lines));
+    let _ = writeln!(out, "# lines: {}", source.lines);
     out.push_str("# secrets are masked on a best-effort basis\n");
     out
-}
-
-/// `2026-10-07T12:00:00.123Z`.
-fn utc(at: Timestamp) -> String {
-    at.strftime("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 /// A block titled `title` holding `header`, one `# note:` line per note, then `lines`. The block
@@ -52,9 +51,7 @@ pub(super) fn block(
     let mut body = String::with_capacity(header.len() + lines.len() + 256);
     body.push_str(header);
     for note in notes {
-        body.push_str("# note: ");
-        body.push_str(note);
-        body.push('\n');
+        let _ = writeln!(body, "# note: {note}");
     }
     body.push_str(lines);
     let mut block = ContextBlock::bounded(title, "text/plain", body);

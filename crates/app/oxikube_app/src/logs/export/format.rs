@@ -48,7 +48,12 @@ const TIMESTAMP_LEN: usize = 24;
 
 /// The timestamp column: UTC to the millisecond, fixed width (`2026-10-07T12:00:00.123Z`).
 pub fn timestamp(entry: &LogEntry) -> String {
-    entry.ts.strftime("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+    utc_millis(entry.ts)
+}
+
+/// `at` as UTC to the millisecond, fixed width (`2026-10-07T12:00:00.123Z`).
+pub fn utc_millis(at: jiff::Timestamp) -> String {
+    at.strftime("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 /// The note for a save or a copy of a buffer that lost lines: `dropped` older lines no longer

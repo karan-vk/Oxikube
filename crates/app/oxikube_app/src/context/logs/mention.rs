@@ -99,16 +99,9 @@ fn options_of(segments: &[String]) -> OxiResult<Vec<(&str, String)>> {
             .strip_prefix("--")
             .or_else(|| segment.strip_prefix('-'))
         {
-            match rest.split_once('=') {
-                Some((name, value)) => {
-                    out.push((name, value.to_owned()));
-                    open = Some(out.len() - 1);
-                }
-                None => {
-                    out.push((rest, String::new()));
-                    open = Some(out.len() - 1);
-                }
-            }
+            let (name, value) = rest.split_once('=').unwrap_or((rest, ""));
+            out.push((name, value.to_owned()));
+            open = Some(out.len() - 1);
         } else if let Some(ix) = open {
             let value = &mut out[ix].1;
             if !value.is_empty() {

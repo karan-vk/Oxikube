@@ -16,7 +16,7 @@ pub const COPY_LIMIT_BYTES: usize = 5 * 1024 * 1024;
 
 impl LogView {
     /// The seqs a copy takes: the selection, else what is on screen.
-    pub(crate) fn copy_seqs(&self) -> Option<Range<u64>> {
+    pub(super) fn copy_seqs(&self) -> Option<Range<u64>> {
         match self.selection.range() {
             Some(range) => Some(*range.start()..range.end() + 1),
             None => self.viewport_seqs(),

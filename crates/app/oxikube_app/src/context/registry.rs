@@ -129,7 +129,7 @@ fn fit_total(blocks: Vec<ContextBlock>, max: usize) -> Vec<ContextBlock> {
             block = ContextBlock::bounded(
                 block.title,
                 block.mime,
-                &block.body[..floor(&block.body, left)],
+                &block.body[..block.body.floor_char_boundary(left)],
             );
             block.truncated = true;
         }
@@ -137,13 +137,6 @@ fn fit_total(blocks: Vec<ContextBlock>, max: usize) -> Vec<ContextBlock> {
         out.push(block);
     }
     out
-}
-
-fn floor(text: &str, mut at: usize) -> usize {
-    while !text.is_char_boundary(at) {
-        at -= 1;
-    }
-    at
 }
 
 #[cfg(test)]
