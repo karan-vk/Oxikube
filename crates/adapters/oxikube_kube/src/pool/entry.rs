@@ -105,7 +105,7 @@ impl ContextDefinition {
     }
 
     /// The cluster's `server` URL, when it parses.
-    pub(crate) fn server_url(&self) -> Option<url::Url> {
+    pub(super) fn server_url(&self) -> Option<url::Url> {
         let server = self.cluster()?.server.as_ref()?;
         url::Url::parse(server).ok()
     }
