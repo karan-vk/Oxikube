@@ -3,6 +3,7 @@
 
 mod audit;
 mod confirm;
+mod debug;
 mod enforcement;
 mod exec;
 mod policy;

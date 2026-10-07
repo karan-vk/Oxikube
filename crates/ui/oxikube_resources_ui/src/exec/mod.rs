@@ -26,11 +26,13 @@
 //! [`oxikube_terminal`'s `TerminalViews`]: https://github.com/karan-vk/Oxikube/blob/main/docs/ARCHITECTURE.md
 
 mod actions;
+mod debug;
 mod flow;
 mod picker;
 #[cfg(test)]
 mod tests;
 
-pub use actions::{ATTACH_ORDER, SHELL_ORDER, exec_row_actions};
+pub use actions::{ATTACH_ORDER, DEBUG_ORDER, SHELL_ORDER, exec_row_actions};
+pub use debug::{DebugDialog, DebugStage, PERMANENCE_NOTE};
 pub use flow::{ExecFlow, ExecKind};
 pub use picker::ContainerPicker;

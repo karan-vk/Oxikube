@@ -11,6 +11,7 @@ use oxikube_ports::{AttachTarget, ExecPort, ExecTarget, ResourceReader, Terminal
 use parking_lot::Mutex;
 
 use super::containers::{ContainerPlan, PodContainers, container_to_open, plan_container};
+use super::debug::DebugState;
 use super::failure::{explain_open, no_shell};
 use super::notice::{NoticeBackend, notice_line};
 use super::shell::{Probe, probe_shell};
@@ -64,9 +65,12 @@ impl ShellOptions {
 /// `pod::Shell`, `pod::Attach` and `pod::Exec` commands that lead here. It never logs or keeps
 /// what a session sends or receives.
 pub struct ExecService {
-    sessions: ClusterSessionManager,
+    pub(super) sessions: ClusterSessionManager,
     /// The container opened last in each pod this session, to preselect in the picker.
     last: Mutex<HashMap<ResourceRef, Arc<str>>>,
+    /// Debug containers (E09-S10): the last image used per cluster, and the sessions opened and
+    /// not yet claimed by their terminal.
+    pub(super) debug: DebugState,
 }
 
 impl std::fmt::Debug for ExecService {
@@ -81,6 +85,7 @@ impl ExecService {
         Self {
             sessions,
             last: Mutex::new(HashMap::new()),
+            debug: DebugState::default(),
         }
     }
 
@@ -186,6 +191,13 @@ impl ExecService {
     ) -> OxiResult<Box<dyn TerminalBackend>> {
         let (port, reader) = self.ports(&pod.cluster)?;
         let container = self.resolve(&reader, pod, container).await?;
+        // The terminal of a debug container (E09-S10) claims the session that created it.
+        if let Some(opened) = container
+            .as_deref()
+            .and_then(|name| self.debug.claim(pod, name))
+        {
+            return Ok(opened);
+        }
         let mut target = AttachTarget::interactive(pod.clone());
         target.container = container.as_deref().map(str::to_owned);
         let backend = port.attach(&target).await.map_err(explain_open)?;
@@ -221,7 +233,7 @@ impl ExecService {
     }
 
     /// The exec port and the pod reader of `cluster`'s connection.
-    fn ports(
+    pub(super) fn ports(
         &self,
         cluster: &ClusterId,
     ) -> OxiResult<(Arc<dyn ExecPort>, Arc<dyn ResourceReader>)> {
@@ -263,7 +275,10 @@ impl ExecService {
     }
 }
 
-async fn read_pod(reader: &Arc<dyn ResourceReader>, pod: &ResourceRef) -> OxiResult<Resource> {
+pub(super) async fn read_pod(
+    reader: &Arc<dyn ResourceReader>,
+    pod: &ResourceRef,
+) -> OxiResult<Resource> {
     reader.get(&pod.gvk, pod.namespace(), &pod.name).await
 }
 

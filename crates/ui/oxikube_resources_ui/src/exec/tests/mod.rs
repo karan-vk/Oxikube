@@ -2,6 +2,7 @@
 //! one, the default, or a picker) before the command is dispatched, a read-only cluster blocks
 //! them unless it allows them, and nothing is sent when the picker is cancelled.
 
+mod debug;
 mod detail;
 mod menu;
 mod picker;

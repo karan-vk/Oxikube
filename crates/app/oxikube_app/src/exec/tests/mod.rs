@@ -2,6 +2,7 @@
 //! service reaches the `FakeExecPort` and the pod through `ClusterPorts`, like the app does).
 
 mod containers;
+mod debug;
 mod open;
 mod plan;
 mod shell;

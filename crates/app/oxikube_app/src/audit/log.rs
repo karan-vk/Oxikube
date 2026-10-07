@@ -91,6 +91,36 @@ impl AuditLog {
             .with_detail(&redact(detail))
     }
 
+    /// `record` with `detail` (redacted like `who`) when there is one: the way a guarded mutation
+    /// adds what a plain record does not say (the image of a debug container).
+    pub fn describe(record: AuditRecord, detail: Option<&str>) -> AuditRecord {
+        match detail {
+            Some(detail) => record.with_detail(&redact(detail)),
+            None => record,
+        }
+    }
+
+    /// [`begin`](Self::begin) with an optional [`detail`](AuditRecord::detail).
+    pub fn begin_described(
+        &self,
+        who: &str,
+        initiator: Initiator,
+        cmd: &str,
+        target: ResourceRef,
+        dry_run: bool,
+        detail: Option<&str>,
+    ) -> AuditAttempt<'_> {
+        let record = self.entry(
+            who,
+            initiator,
+            cmd,
+            target,
+            dry_run,
+            AuditOutcome::Cancelled,
+        );
+        AuditAttempt::new(self, Self::describe(record, detail))
+    }
+
     /// [`begin`](Self::begin) with a [`detail`](AuditRecord::detail) (redacted like `who`).
     pub fn begin_with_detail(
         &self,

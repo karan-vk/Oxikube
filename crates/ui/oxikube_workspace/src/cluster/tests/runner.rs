@@ -111,6 +111,61 @@ fn a_writable_cluster_asks_to_confirm_a_mutation_instead_of_denying_it(cx: &mut 
 }
 
 #[gpui::test]
+fn a_debug_container_is_confirmed_in_its_own_words_not_as_turning_something_off(
+    cx: &mut TestAppContext,
+) {
+    use crate::modal::DialogModal;
+
+    let mut f = fixture(cx);
+    run(
+        &mut f,
+        Command::PodDebug {
+            target: ResourceRef::namespaced(
+                id(PROD),
+                Gvk::new("", "v1", "Pod"),
+                "default",
+                "web-0",
+            ),
+            image: "busybox".into(),
+            target_container: Some("app".into()),
+            command: Vec::new(),
+            name: None,
+        },
+    );
+    assert!(modal_open(&mut f), "the guard asks first");
+    assert_eq!(*f.debugs.lock(), 0, "nothing ran before the answer");
+    let layer = f.vcx.update(|_, cx| f.ws.read(cx).modal_layer().clone());
+    let (title, message) = f.vcx.update(|_, cx| {
+        let dialog = layer
+            .read(cx)
+            .active_modal::<DialogModal>()
+            .expect("a dialog");
+        let dialog = dialog.read(cx);
+        (
+            dialog.title().to_string(),
+            dialog
+                .message_text()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+        )
+    });
+    assert_eq!(title, "Add a debug container?");
+    for part in ["busybox", "container app", "web-0", "cannot be removed"] {
+        assert!(message.contains(part), "{part}: {message}");
+    }
+    assert!(bounds(&mut f.vcx, "dialog-modal").is_some());
+
+    f.vcx.simulate_keystrokes("enter");
+    f.vcx.run_until_parked();
+    assert_eq!(*f.debugs.lock(), 1, "confirming runs it");
+    assert!(
+        toasts(&mut f)
+            .iter()
+            .any(|(level, m)| *level == ToastLevel::Success && m.contains("debugger-x1y2z"))
+    );
+}
+
+#[gpui::test]
 fn lifting_read_only_on_a_production_cluster_confirms_first(cx: &mut TestAppContext) {
     let mut f = fixture(cx);
     run(

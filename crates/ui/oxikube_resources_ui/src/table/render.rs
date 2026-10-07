@@ -96,6 +96,7 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_delete))
             .on_action(cx.listener(Self::on_shell))
             .on_action(cx.listener(Self::on_attach))
+            .on_action(cx.listener(Self::on_debug))
             .on_action(cx.listener(Self::on_focus_filter))
             .on_action(cx.listener(Self::on_clear_filter))
             .child(toolbar)

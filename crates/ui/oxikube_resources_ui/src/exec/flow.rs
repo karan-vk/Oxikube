@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{App, AppContext as _, Context, Task, WeakEntity, Window};
-use oxikube_app::{ContainerChoices, ContainerPlan, ExecService};
+use oxikube_app::{ContainerChoices, ContainerPlan, DebugRunner, ExecService};
 use oxikube_domain::OxiResult;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::ResourceRef;
@@ -54,9 +54,11 @@ impl ExecKind {
 /// workspace) when the pod has several. Cheap to clone. See the [module docs](super).
 #[derive(Clone)]
 pub struct ExecFlow {
-    service: Arc<ExecService>,
+    pub(in crate::exec) service: Arc<ExecService>,
     dispatcher: Rc<dyn CommandDispatcher>,
-    workspace: WeakEntity<Workspace>,
+    pub(in crate::exec) workspace: WeakEntity<Workspace>,
+    /// Runs `pod::Debug` for the debug dialog (E09-S10); `None`: no "Debug".
+    pub(in crate::exec) debug: Option<DebugRunner>,
 }
 
 impl ExecFlow {
@@ -70,6 +72,7 @@ impl ExecFlow {
             service,
             dispatcher,
             workspace,
+            debug: None,
         }
     }
 

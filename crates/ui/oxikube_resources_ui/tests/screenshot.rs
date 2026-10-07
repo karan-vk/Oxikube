@@ -16,6 +16,9 @@
 //!
 //! - `exec_picker_dark`, `exec_picker_light` (`exec`): the container picker of a pod with three
 //!   containers, the default one selected (E09-S08).
+//! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
+//!   containers, with the defaults (busybox, `sh`) and the note that the container is permanent
+//!   (E09-S10).
 //!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the

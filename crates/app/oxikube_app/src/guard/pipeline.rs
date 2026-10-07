@@ -11,6 +11,7 @@ use oxikube_ports::ResourceWriter;
 use super::confirm::{ConfirmationError, ConfirmationRequest, ConfirmationToken, Pending};
 use super::gate::ReadOnlyGate;
 use super::{Mutation, MutationGuard, policy};
+use crate::audit::AuditLog;
 use crate::command_bus::{CommandHandler, DispatchContext, DispatchError, HandlerContext, Outcome};
 
 /// The result of the synchronous checks.
@@ -69,12 +70,14 @@ impl MutationGuard {
 
         // Armed before the handler: if this future is dropped while the handler runs,
         // the attempt still lands in the audit backlog (as `Cancelled`).
-        let attempt = self.audit.begin(
+        let detail = policy::audit_detail(&command);
+        let attempt = self.audit.begin_described(
             &ctx.who,
             ctx.initiator,
             meta.id.as_str(),
             target,
             ctx.dry_run,
+            detail.as_deref(),
         );
         // The second read-only check: the writer re-reads the flag before every request, so a
         // flow that outlives the admission check still stops when read-only mode goes on.
@@ -113,13 +116,16 @@ impl MutationGuard {
             .take(token)
             .ok_or(ConfirmationError::Unknown)?;
         let target = policy::audit_target(&pending.command, &pending.cluster);
-        let record = self.audit.entry(
-            &pending.who,
-            pending.initiator,
-            pending.command.id().as_str(),
-            target,
-            pending.dry_run,
-            AuditOutcome::Cancelled,
+        let record = AuditLog::describe(
+            self.audit.entry(
+                &pending.who,
+                pending.initiator,
+                pending.command.id().as_str(),
+                target,
+                pending.dry_run,
+                AuditOutcome::Cancelled,
+            ),
+            policy::audit_detail(&pending.command).as_deref(),
         );
         self.audit
             .record(record)
@@ -140,15 +146,19 @@ impl MutationGuard {
             };
         };
         let target = policy::audit_target(command, &cluster);
+        let detail = policy::audit_detail(command);
         let deny = |error: DispatchError, outcome: AuditOutcome| Admission::Deny {
             error,
-            record: Some(self.audit.entry(
-                &ctx.who,
-                ctx.initiator,
-                meta.id.as_str(),
-                target.clone(),
-                ctx.dry_run,
-                outcome,
+            record: Some(AuditLog::describe(
+                self.audit.entry(
+                    &ctx.who,
+                    ctx.initiator,
+                    meta.id.as_str(),
+                    target.clone(),
+                    ctx.dry_run,
+                    outcome,
+                ),
+                detail.as_deref(),
             )),
         };
 

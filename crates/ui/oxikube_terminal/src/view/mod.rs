@@ -19,6 +19,7 @@
 //! | `item` | the `Item` impl: tab title = process or pod name, dirty = a process runs, icon by kind, cluster mark, dockable, split = a fresh copy, close ends the process, saved = the descriptor only |
 //! | `panel` | [`TerminalPanel`]: the bottom-dock panel of a cluster's terminals, and [`ensure_terminal_panel`] |
 //! | `commands` | the bus handlers: [`register_view_commands`] (`terminal::*`) and [`register_pod_commands`] (`pod::Shell`, `pod::Attach`, `pod::Exec`, E09-S08) queue a [`TerminalRequest`] on the window's [`TerminalViewSink`] |
+//! | `debug_command` | [`register_debug_command`]: `pod::Debug` (E09-S10), a guarded mutation: adds the ephemeral container through the `ExecService`, then queues a terminal attached to it |
 //! | `host`, `controller` | [`TerminalViews`]: applies the requests in the shown workspace, through a [`TerminalHost`] ([`ClusterTerminalHost`] in the app) |
 //!
 //! One `TerminalView` per process: moving its tab between panes and the dock moves the entity, so
@@ -30,6 +31,7 @@ mod bell;
 mod cluster_launch;
 mod commands;
 mod controller;
+mod debug_command;
 mod descriptor;
 mod find;
 mod host;
@@ -52,6 +54,7 @@ pub use commands::{
     POD_COMMANDS, TerminalRequest, TerminalViewSink, register_pod_commands, register_view_commands,
 };
 pub use controller::{TerminalViews, TerminalViewsDeps};
+pub use debug_command::register_debug_command;
 pub use descriptor::BackendDescriptor;
 pub use find::REFRESH_DELAY;
 pub use host::{ClusterTerminalHost, TerminalHost};

@@ -37,6 +37,6 @@ pub use capability::{Capabilities, Capability, UnknownCapability};
 pub use id::{CommandId, UnknownCommandId, is_well_formed};
 pub use kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource, PastedText};
 pub use meta::{CommandMeta, CommandScope};
-pub use payload::{Command, Propagation};
+pub use payload::{Command, DEFAULT_DEBUG_COMMAND, DEFAULT_DEBUG_IMAGE, Propagation};
 pub use registry::{COMMANDS, lookup, lookup_str};
 pub use risk::delete_risk;

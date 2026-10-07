@@ -226,6 +226,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   output). Their tool stubs (`k8s.pod_shell`, `k8s.pod_attach`, `k8s.pod_exec`) are `risk: high`, `unsafe`,
   `interactive` and `agent_hidden`: `CommandBus::agent_tools(false)` and `ToolRegistry::visible` leave them out until
   the agent epic turns them on. `ActionContext` greys the row actions out on a read-only cluster with the reason.
+  Debug containers (E09-S10, `exec::debug`): `ExecService::debug_defaults` (the dialog's start: the image last used in
+  this cluster, else `busybox`, `sh`, the containers that can be shared with and the pod's default one),
+  `plan_debug` / `DebugRequest::check_fields` (pure: the image is one word, the target exists (default: the pod's default
+  container), the name is a DNS label not used in the pod, a finished pod is refused, a generated `debugger-xxxxx` name is
+  unique) and `open_debug(&Mutation, &DebugRequest)`, which takes the guard's permit as proof it runs inside `pod::Debug`,
+  re-checks read-only, then calls `ExecPort::create_debug_container` (patch `ephemeralcontainers`, wait for Running with
+  the request's timeout, attach with a TTY) and keeps the attached session until the new tab claims it through
+  `ExecService::attach` (a Reconnect finds nothing kept and attaches to the same container again). `DebugRunner` is the
+  dialog's door: it dispatches `pod::Debug` on the bus as `Initiator::Ui` and answers the guard's simple confirmation once.
+  `pod::Debug` is not exec-class: it is a low-risk **mutation** (`CommandMeta::interactive_mutation`, simple confirm,
+  read-only blocks it for everyone even where `exec_in_read_only` lets a shell through, audit `detail`
+  `session=debug image=busybox target=app program=sh`, a dry-run dispatch stops after planning because the port has no
+  server dry run of the subresource patch); its tool stub `k8s.pod_debug` is `unsafe`, `interactive` and `agent_hidden`
+  (`CommandMeta::interactive` drives the three flags). The confirmation text says the container cannot be removed or edited.
 - `oxikube_app::tools` (E08-S09) — `ToolRegistry`: `register` (validates the `ToolDef`, refuses a mutating tool, which
   belongs behind `MutationGuard` in E26, and duplicates), `defs` / `visible(capabilities)` (a tool's `needs`), and
   `invoke(name, args, &ToolContext)` which checks the arguments against the tool's input schema (`validate_args`, the
@@ -330,7 +344,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   the same container and range) or "Reconnect" (`logs::Reconnect`, `r`: `LogSession::reconnect`, the lines kept; a
   multi-pod view reopens). The multi-pod banner lists the streams that reconnect ("web-7d9/app reconnecting (1/5)").
   `logs.reconnect_retries` is the setting (default.json, schema, hot reload).
-- `oxikube_resources_ui` — module `exec` (E09-S08): `exec_row_actions` ("Shell" and "Attach" on a Pod's context menu and the palette's list, keys `s` / `a`, the pod detail's header buttons), `ExecFlow` (reads the pod through `ExecService::plan` on `spawn_kube`, then dispatches `pod::Shell` / `pod::Attach` with the container chosen, or asks first) and `ContainerPicker` (a workspace modal: up / down, enter or click opens, escape sends nothing, so cancelling leaves no audit record of an open that never happened). Module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
+- `oxikube_resources_ui` — module `exec` (E09-S08): `exec_row_actions` ("Shell" and "Attach" on a Pod's context menu and the palette's list, keys `s` / `a`, the pod detail's header buttons), `ExecFlow` (reads the pod through `ExecService::plan` on `spawn_kube`, then dispatches `pod::Shell` / `pod::Attach` with the container chosen, or asks first) and `ContainerPicker` (a workspace modal: up / down, enter or click opens, escape sends nothing, so cancelling leaves no audit record of an open that never happened). Module `exec::debug` (E09-S10): "Debug" on a Pod's row (order 130, key `shift-d`, the detail header's bug button) opens `DebugDialog` through `ExecFlow::begin_debug` (it reads the pod for the defaults on `spawn_kube`): image, the container to share processes with, command, optional name, the note that the container is permanent; the button runs `DebugRunner` on `spawn_kube`, shows progress while the container starts and an API refusal under the fields, and closes on success (the terminal opens in the bottom dock). Module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
   mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,
   after `resource::PinDetail`, a workspace `Item` that moves between panes with its tab, scroll and expanded values intact.
@@ -476,6 +490,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   in its first frame. A pod session is only ever started by its command: a split, Reconnect and the layout restore
   never start one themselves (a split and Reconnect send the command again so the guard checks and audits it; a pod
   terminal is not saved with the layout and does not clone on split).
+  Debug containers (E09-S10): `register_debug_command` registers `pod::Debug`, a guarded mutation whose handler spends
+  the guard's permit on `ExecService::open_debug` (add the container, wait for it to run, attach) and then queues
+  `TerminalRequest::Pod(BackendDescriptor::Attach { container: Some("debugger-xxxxx") })`: the tab is a plain pod attach
+  that claims the session just opened, so Reconnect attaches to the same container and never adds another. A refused
+  patch or a timeout is the command's error (and a `Failed` audit record); no tab opens.
   Module `view::lifecycle` (E09-S12): `Lifecycle` (Connecting, Running, Disconnected, Exited,
   Failed, Closed) is a small enum fed by the launch result and the session's events, so the banner
   logic runs without a window; `Failure` maps an adapter error kind to a distinct headline and hint
@@ -623,8 +642,8 @@ weaken `cargo xtask lint-deps`.
   `AppState::set_agent_hooks`): the `ContextRegistry` holding `@logs`, the `ToolRegistry` holding `k8s.get_logs`, and the
   `PendingContext` queue the viewer's "Send to agent" fills until the agent panel (E27) attaches.
   The app's one `ExecService` (E09-S08, `mount::exec_service`, stored with `AppState::set_exec_service`) backs the pod
-  actions and the terminal's `ClusterLauncher`; `mount::bus` registers `pod::Shell` / `Attach` / `Exec` under
-  `oxikube_terminal`.
+  actions and the terminal's `ClusterLauncher`; `mount::bus` registers `pod::Shell` / `Attach` / `Exec` and
+  (E09-S10, with the same `ExecService`) `pod::Debug` under `oxikube_terminal`.
   Views dispatch through `mount::bus::BusDispatcher`, which runs each command on the bus through
   the window's `ClusterCommandRunner` (toasts, confirmations, denials).
 

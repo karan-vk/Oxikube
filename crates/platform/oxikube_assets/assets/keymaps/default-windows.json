@@ -102,6 +102,8 @@
       // both unless `exec_in_read_only` is on).
       "s": "resource_table::ShellSelected",
       "a": "resource_table::AttachSelected",
+      // shift-d adds an ephemeral debug container (Pods only; blocked on a read-only cluster).
+      "shift-d": "resource_table::DebugSelected",
       "/": "resource_table::FocusFilter"
     }
   },

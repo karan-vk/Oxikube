@@ -57,6 +57,11 @@ pub struct CommandMeta {
     /// and its MCP tool stub is unsafe, interactive and hidden from agents by default
     /// ([`CommandMeta::tool_risk`]).
     pub exec: bool,
+    /// Ends in an interactive terminal session in a container: every exec-class command, and
+    /// `pod::Debug` (a mutation that adds a debug container and opens a terminal in it). What a
+    /// user types next cannot be described by a schema, so the MCP tool stub is unsafe,
+    /// interactive and hidden from agents by default.
+    pub interactive: bool,
 }
 
 impl CommandMeta {
@@ -77,6 +82,7 @@ impl CommandMeta {
             risk: None,
             privileged: false,
             exec: false,
+            interactive: false,
         }
     }
 
@@ -86,7 +92,25 @@ impl CommandMeta {
     pub const fn exec(id: CommandId, title: &'static str, scope: CommandScope) -> Self {
         Self {
             exec: true,
+            interactive: true,
             ..Self::read(id, title, scope, Capabilities::EXEC)
+        }
+    }
+
+    /// A mutation that ends in an interactive terminal session (`pod::Debug`: it adds an
+    /// ephemeral container to a pod and opens a terminal in it). A [`mutation`](Self::mutation)
+    /// of `risk` that also needs [`Capabilities::EXEC`]; it is not exec-class
+    /// ([`CommandMeta::exec`] stays `false`: the mutation pipeline, with its confirmation, applies),
+    /// but its tool stub is unsafe, interactive and hidden from agents like theirs.
+    pub const fn interactive_mutation(
+        id: CommandId,
+        title: &'static str,
+        scope: CommandScope,
+        risk: Risk,
+    ) -> Self {
+        Self {
+            interactive: true,
+            ..Self::mutation(id, title, scope, risk, Capabilities::EXEC)
         }
     }
 
@@ -131,6 +155,7 @@ impl CommandMeta {
             risk: Some(risk),
             privileged: false,
             exec: false,
+            interactive: false,
         }
     }
 }

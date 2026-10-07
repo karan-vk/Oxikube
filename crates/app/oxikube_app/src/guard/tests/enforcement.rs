@@ -123,11 +123,13 @@ fn tool_call(tool: &str, arguments: Value) -> Command {
 fn mcp_mutation_tools_are_denied_on_a_read_only_cluster() {
     let h = Harness::with_every_command();
     h.connect("a", true);
-    // The exec tools carry a risk too but are not mutations: `exec.rs` covers them.
+    // The exec tools carry a risk too but are not mutations: `exec.rs` covers them. `pod::Debug`
+    // is interactive and a mutation, so it stays in this list.
+    let exec_tool = |name: &str| COMMANDS.iter().any(|m| m.exec && m.id.tool_name() == name);
     let tools: Vec<_> = h
         .bus
         .tools()
-        .filter(|t| t.is_mutating() && !t.annotations.interactive)
+        .filter(|t| t.is_mutating() && !exec_tool(t.name.as_str()))
         .collect();
     assert_eq!(
         tools.len(),

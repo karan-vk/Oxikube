@@ -124,6 +124,8 @@ impl CommandId {
     pub const PALETTE_TOGGLE: CommandId = CommandId::new("palette::Toggle");
     /// `pod::Attach`: attach to a container's main process.
     pub const POD_ATTACH: CommandId = CommandId::new("pod::Attach");
+    /// `pod::Debug`: add an ephemeral debug container to a pod and open a terminal in it.
+    pub const POD_DEBUG: CommandId = CommandId::new("pod::Debug");
     /// `pod::Delete`: delete one pod.
     pub const POD_DELETE: CommandId = CommandId::new("pod::Delete");
     /// `pod::Exec`: run a command (or shell) in a container.
@@ -565,6 +567,17 @@ pub static COMMANDS: &[CommandMeta] = &[
     // The exec class (`CommandMeta::exec`): not mutations, no confirmation, blocked on a
     // read-only cluster unless `exec_in_read_only` allows it, audited on every open.
     CommandMeta::exec(CommandId::POD_ATTACH, "Attach", CommandScope::Selection),
+    // Adds an ephemeral container to the pod (`patch` on `pods/ephemeralcontainers`), which cannot
+    // be removed or edited until the pod is deleted: a mutation, so read-only blocks it, a simple
+    // confirmation names the pod, image and target (low risk, E09-S10), and it is audited. It is
+    // not exec-class: the mutation pipeline applies. Its tool stub is interactive and hidden from
+    // agents by default.
+    CommandMeta::interactive_mutation(
+        CommandId::POD_DEBUG,
+        "Debug",
+        CommandScope::Selection,
+        Risk::Low,
+    ),
     CommandMeta::mutation(
         CommandId::POD_DELETE,
         "Delete Pod",
@@ -1020,6 +1033,17 @@ mod tests {
         assert_eq!(get(CommandId::WORKLOAD_SCALE).confirm, ConfirmTier::Simple);
         assert_eq!(get(CommandId::POD_VIEW_LOGS).needs, Capabilities::LOGS);
         assert!(!get(CommandId::POD_PORT_FORWARD).mutating);
+        // A debug container is a low-risk mutation with a simple confirm that ends in a terminal.
+        let debug = get(CommandId::POD_DEBUG);
+        assert!(debug.mutating && debug.interactive && !debug.exec);
+        assert_eq!(debug.risk, Some(Risk::Low));
+        assert_eq!(debug.confirm, ConfirmTier::Simple);
+        assert!(
+            debug
+                .needs
+                .contains(Capabilities::EXEC | Capabilities::MUTATE)
+        );
+        assert_eq!(CommandId::POD_DEBUG.tool_name(), "k8s.pod_debug");
     }
 
     #[test]

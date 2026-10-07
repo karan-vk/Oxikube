@@ -55,19 +55,17 @@ impl ResourceViews {
         let mut deps = DetailDeps::from(&self.deps.table);
         // A pod's header opens shells and attaches through the same flow as the table's menu,
         // asking in this tab's workspace.
-        deps.exec = self
-            .deps
-            .table
-            .actions
-            .as_ref()
-            .and_then(|actions| actions.exec_service().cloned())
-            .map(|service| {
+        deps.exec = self.deps.table.actions.as_ref().and_then(|actions| {
+            let service = actions.exec_service().cloned()?;
+            Some(
                 ExecFlow::new(
                     service,
                     self.deps.table.dispatcher.clone(),
                     workspace.downgrade(),
                 )
-            });
+                .with_debug(actions.debug_runner()),
+            )
+        });
         let target = target.clone();
         Some(drawer.update(cx, |drawer, cx| drawer.show(target, &deps, cx)))
     }
