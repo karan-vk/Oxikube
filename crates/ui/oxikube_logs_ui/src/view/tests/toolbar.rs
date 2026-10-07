@@ -260,21 +260,38 @@ fn a_healthy_pod_has_no_crash_hint(cx: &mut TestAppContext) {
 fn the_oldest_row_on_screen_is_whole_under_the_toolbar(cx: &mut TestAppContext) {
     let mut fx = Fx::new(cx);
     let view = fx.open(Timeline::immediate(lines(0, 200)).keep_open());
+    let mut slacks = Vec::new();
     for (height, scale) in [(700., 1.0), (713., 1.0), (713., 1.5), (655., 1.25)] {
         fx.vcx.simulate_resize(size(px(1024.), px(height)));
         fx.vcx.update(|_, cx| set_ui_scale(cx, UiScale::new(scale)));
         fx.settle();
         fx.settle();
         fx.draw();
-        let body = bounds(&mut fx, "log-body").size.height;
+        let body = bounds(&mut fx, "log-body");
+        let rows = bounds(&mut fx, "log-rows");
         let row = fx.read(&view, |v| v.row_height());
-        let slack = fx.read(&view, |v| v.snap.slack(200, row));
-        let whole = (body - slack) / row;
+        let whole = rows.size.height / row;
+        let ctx = format!("{height} px at {scale}: body {body:?}, rows {rows:?}, row {row:?}");
+        // The list is a whole number of rows tall and sits flush with the bottom of the body, so
+        // the extra space is above it and the oldest row on screen is never cut by the toolbar.
         assert!(
             (whole - whole.round()).abs() < 0.02,
-            "{height} px at {scale}: the rows get {whole} rows of room (body {body:?}, slack {slack:?})"
+            "list is {whole} rows tall: {ctx}"
         );
-        assert!(slack < row, "less than a row of slack");
+        assert!(
+            (rows.bottom() - body.bottom()).abs() < px(0.5),
+            "the list ends at the body's bottom: {ctx}"
+        );
+        let gap = rows.top() - body.top();
+        assert!(
+            gap >= px(0.) && gap < row,
+            "less than a row of slack above the list: {ctx}"
+        );
+        slacks.push(gap);
     }
+    assert!(
+        slacks.iter().any(|gap| *gap > px(1.)),
+        "the sizes cover a body that is not a whole number of rows: {slacks:?}"
+    );
     fx.vcx.update(|_, cx| set_ui_scale(cx, UiScale::IDENTITY));
 }
