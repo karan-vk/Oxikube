@@ -17,6 +17,9 @@
 //! | `stream` | opening and reopening the session, the delta pump |
 //! | `scroll` | autoscroll, pausing on a scroll up, the anchor line across the wrap toggle |
 //! | `controls` | the view's operations (what the commands do) and the requests that dispatch them |
+//! | `selection` | [`Selection`] (click, shift-click, drag, by seq) and [`Marks`] (k9s `m`, the gutter bar), the pointer handlers |
+//! | `pick`, `copy` | which lines an action takes (on screen, the buffer, the filter) and `logs::Copy` (cap 5 MB) |
+//! | `save`, `clear`, `notice` | `logs::Save` (dialog, panel, streamed write), `logs::Clear`, the toasts of local actions |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
 //! | `render`, `toolbar`, `rows` | drawing: toolbar, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
 //! | `item` | the workspace `Item`, focus and key context |
@@ -32,13 +35,19 @@
 //! key (PERFORMANCE rule 5). Unwrapped rows draw at most [`NOWRAP_CHARS`] bytes of a line.
 
 mod actions;
+mod clear;
 mod containers;
 mod controls;
+mod copy;
 mod item;
+mod notice;
 mod options;
+mod pick;
 mod render;
 mod rows;
+mod save;
 mod scroll;
+mod selection;
 mod stream;
 mod text;
 mod toolbar;
@@ -55,18 +64,23 @@ use gpui::{
     UniformListScrollHandle, WeakEntity, px,
 };
 use oxikube_app::ClusterSessionManager;
+use oxikube_app::logs::export::LineFilter;
 use oxikube_app::logs::{LogService, LogSession};
 use oxikube_domain::ids::ResourceRef;
+use oxikube_ports::FsPort;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
 pub use actions::{
-    Copy, Head, Mark, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll,
-    ToggleFullscreen, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    Clear, ClearSelection, Copy, Head, Mark, SaveAll, SaveVisible, Since1h, Since1m, Since5m,
+    Since15m, Since30m, Tail, ToggleAutoscroll, ToggleFullscreen, TogglePrevious, ToggleTimestamps,
+    ToggleWrap,
 };
 pub use containers::{ContainerChoice, choices_of, default_container};
+pub use copy::COPY_LIMIT_BYTES;
 pub use item::item_key;
 pub use options::{HEAD_LIMIT_BYTES, OpenLogs, TAIL_LINES, ViewOptions};
-pub use text::{Level, level_of};
+pub use selection::{Marks, Selection};
+pub use text::{Level, group, level_of};
 pub use window::{Follow, LineWindow, Row, RowChange};
 
 /// Bytes of a line an unwrapped row draws: more than any screen is wide, and a 16 KiB line costs
@@ -82,6 +96,8 @@ pub struct LogViewDeps {
     pub sessions: ClusterSessionManager,
     /// Where the view's commands go (the bus): `logs::*` from the keys and the toolbar.
     pub dispatcher: Rc<dyn CommandDispatcher>,
+    /// The files `logs::Save` writes (a path the user chose, streamed in chunks).
+    pub fs: Arc<dyn FsPort>,
 }
 
 /// The log of one pod's container. See the [module docs](self).
@@ -98,6 +114,14 @@ pub struct LogView {
     pub(crate) awaiting_pod: bool,
     pub(crate) window: LineWindow,
     pub(crate) follow: Follow,
+    /// The selected lines, by seq (click, shift-click, drag).
+    pub(crate) selection: Selection,
+    /// The marked lines, by seq.
+    pub(crate) marks: Marks,
+    /// What a copy or a save keeps (the search installs its matcher); `None` keeps every line.
+    pub(crate) filter: Option<LineFilter>,
+    /// The running save (dropping it stops the write); replaced by the next one.
+    pub(crate) save_task: Option<Task<()>>,
     /// The unwrapped list's scroll position.
     pub(crate) scroll: UniformListScrollHandle,
     /// The wrapped list's rows and scroll position (kept in step with the window by splices).
@@ -148,6 +172,10 @@ impl LogView {
             awaiting_pod: false,
             window: LineWindow::new(),
             follow: Follow::default(),
+            selection: Selection::default(),
+            marks: Marks::default(),
+            filter: None,
+            save_task: None,
             scroll: UniformListScrollHandle::new(),
             list: ListState::new(0, ListAlignment::Top, px(400.)),
             focus: cx.focus_handle(),

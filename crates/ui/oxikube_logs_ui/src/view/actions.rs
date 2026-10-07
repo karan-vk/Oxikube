@@ -7,8 +7,10 @@
 //! the toolbar, the palette and an agent run one behaviour (non-negotiable 4). Users rebind them
 //! in `keymap.json`.
 //!
-//! `Mark` and `Copy` are bound here so their keys are reserved; what they do arrives with
-//! E08-S06 (export, copy, mark, clear).
+//! `m` marks the focused line, `c` copies the selection (else the lines on screen), `shift-c`
+//! clears the buffer, `ctrl-s` saves the whole buffer and `ctrl-shift-s` the lines on screen to a
+//! file, `escape` drops the selection. Mark, copy, clear and the two saves dispatch their `logs::*`
+//! command like the rest; `escape` only changes the selection, which is a view's own business.
 
 use gpui::actions;
 
@@ -39,9 +41,17 @@ actions!(
         TogglePrevious,
         /// Fill the cluster tab, or not (`f`, `logs::ToggleFullscreen`).
         ToggleFullscreen,
-        /// Mark the current position (`m`; E08-S06).
+        /// Mark the focused line, or unmark it (`m`, `logs::Mark`).
         Mark,
-        /// Copy the lines (`c`; E08-S06).
+        /// Copy the selected lines, else the lines on screen (`c`, `logs::Copy`).
         Copy,
+        /// Empty the local buffer and the view; the stream goes on (`shift-c`, `logs::Clear`).
+        Clear,
+        /// Save everything the buffer holds to a file (`ctrl-s`, `logs::Save` with scope `all`).
+        SaveAll,
+        /// Save the lines on screen to a file (`ctrl-shift-s`, `logs::Save` with scope `visible`).
+        SaveVisible,
+        /// Select nothing (`escape`).
+        ClearSelection,
     ]
 );

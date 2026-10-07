@@ -23,7 +23,7 @@ use oxikube_logs_ui::{
     LogRequest, LogViewDeps, LogViews, LogViewsDeps, LogsSettings, follow_settings,
     log_row_actions, log_runtime,
 };
-use oxikube_ports::ClockPort;
+use oxikube_ports::{ClockPort, FsPort};
 use oxikube_settings::Settings as _;
 use oxikube_workspace::{ClusterTabs, CommandDispatcher};
 
@@ -49,11 +49,12 @@ pub fn install(state: &AppState, clock: Arc<dyn ClockPort>, cx: &mut App) -> Arc
     service
 }
 
-/// Starts the window's log views over the app's `service`: requests from `requests` (the bus's
+/// Starts the window's log views over the app's `service` (saving through `fs`): requests from `requests` (the bus's
 /// log handlers) open views in the cluster tabs of `tabs`.
 pub fn start_views(
     service: Arc<LogService>,
     sessions: ClusterSessionManager,
+    fs: Arc<dyn FsPort>,
     dispatcher: Rc<dyn CommandDispatcher>,
     tabs: WeakEntity<ClusterTabs>,
     requests: UnboundedReceiver<LogRequest>,
@@ -65,6 +66,7 @@ pub fn start_views(
             service,
             sessions,
             dispatcher,
+            fs,
         },
         host: Rc::new(tabs),
     };

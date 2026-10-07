@@ -142,6 +142,13 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "kubeconfig::RemoveSource" => Command::KubeconfigRemoveSource {
             source: KubeconfigSourceRef::Default,
         },
+        "logs::Clear" => Command::LogsClear { target: target() },
+        "logs::Copy" => Command::LogsCopy { target: target() },
+        "logs::Mark" => Command::LogsMark { target: target() },
+        "logs::Save" => Command::LogsSave {
+            target: target(),
+            scope: oxikube_domain::log::LogSaveScope::All,
+        },
         "logs::SelectContainer" => Command::LogsSelectContainer {
             target: target(),
             container: "app".into(),

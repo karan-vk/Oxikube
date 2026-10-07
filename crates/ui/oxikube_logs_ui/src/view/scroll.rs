@@ -25,6 +25,9 @@ impl LogView {
     /// Replaces the rows (a new session): both renderers start over, at the end when following.
     pub(crate) fn reset_rows(&mut self, window: LineWindow) {
         self.window = window;
+        // Selection and marks belong to the lines of the session they were made on.
+        self.selection.clear();
+        self.marks.clear();
         if self.options.wrap {
             self.list.reset(self.window.row_count());
         }

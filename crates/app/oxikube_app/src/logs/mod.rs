@@ -14,6 +14,7 @@
 //! | the ring of lines with seq numbers and O(1) index / range reads | [`LogBuffer`], [`LogEntry`] (`ring`, `entry`) |
 //! | batched change notifications | [`LogDelta`], [`LogDeltas`] (`delta`) |
 //! | `Connecting` / `Streaming` / `Ended` / `Failed` | [`LogState`], [`EndReason`], [`LogFailure`] (`state`) |
+//! | saving and copying lines: the line format, chunked reads, the write | [`export`] |
 //! | the task that reads the stream and commits batches | `driver` |
 //! | runtime, buffer bound, batching, the reconnect seam | [`LogRuntime`], [`LogConfig`], [`ReconnectPolicy`] (`options`) |
 //!
@@ -41,6 +42,7 @@
 mod delta;
 mod driver;
 mod entry;
+pub mod export;
 mod options;
 mod ring;
 mod service;

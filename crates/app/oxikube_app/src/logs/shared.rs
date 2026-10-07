@@ -115,6 +115,18 @@ impl Shared {
         wake(wakers);
     }
 
+    /// Empties the buffer (the user's "clear"): readers see the lines go, new lines keep
+    /// arriving. Returns the seq the next line gets.
+    pub(super) fn clear(&self) -> u64 {
+        let (next, wakers) = {
+            let mut inner = self.inner.lock();
+            inner.buffer.clear();
+            (inner.buffer.next_seq(), std::mem::take(&mut inner.wakers))
+        };
+        wake(wakers);
+        next
+    }
+
     /// The owner dropped the session: cancel what is not finished and end the streams.
     pub(super) fn close(&self) {
         let wakers = {

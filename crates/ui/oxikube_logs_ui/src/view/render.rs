@@ -5,7 +5,7 @@ use gpui::{
     Context, InteractiveElement as _, IntoElement, ParentElement as _, Render, Styled as _, Window,
     div, list, px, uniform_list,
 };
-use oxikube_domain::log::LogRange;
+use oxikube_domain::log::{LogRange, LogSaveScope};
 use oxikube_keymap::KeyContextual as _;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::v_flex;
@@ -13,8 +13,9 @@ use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::LogView;
 use super::actions::{
-    Copy, Head, Mark, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll,
-    ToggleFullscreen, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    Clear, ClearSelection, Copy, Head, Mark, SaveAll, SaveVisible, Since1h, Since1m, Since5m,
+    Since15m, Since30m, Tail, ToggleAutoscroll, ToggleFullscreen, TogglePrevious, ToggleTimestamps,
+    ToggleWrap,
 };
 use super::text::group;
 
@@ -39,8 +40,14 @@ impl Render for LogView {
             .on_action(cx.listener(|v, _: &ToggleTimestamps, _, cx| v.request_timestamps(cx)))
             .on_action(cx.listener(|v, _: &TogglePrevious, _, cx| v.request_previous(cx)))
             .on_action(cx.listener(|v, _: &ToggleFullscreen, _, cx| v.request_fullscreen(cx)))
-            .on_action(cx.listener(|v, _: &Mark, _, cx| v.mark(cx)))
-            .on_action(cx.listener(|v, _: &Copy, _, cx| v.copy(cx)))
+            .on_action(cx.listener(|v, _: &Mark, _, cx| v.request_mark(cx)))
+            .on_action(cx.listener(|v, _: &Copy, _, cx| v.request_copy(cx)))
+            .on_action(cx.listener(|v, _: &Clear, _, cx| v.request_clear(cx)))
+            .on_action(cx.listener(|v, _: &SaveAll, _, cx| v.request_save(LogSaveScope::All, cx)))
+            .on_action(
+                cx.listener(|v, _: &SaveVisible, _, cx| v.request_save(LogSaveScope::Visible, cx)),
+            )
+            .on_action(cx.listener(|v, _: &ClearSelection, _, cx| v.clear_selection(cx)))
             .size_full()
             .bg(tokens.colors.background)
             .text_color(tokens.colors.text)

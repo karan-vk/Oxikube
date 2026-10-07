@@ -6,7 +6,7 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
     div, px,
 };
-use oxikube_domain::log::LogRange;
+use oxikube_domain::log::{LogRange, LogSaveScope};
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{Disableable as _, Selectable as _, h_flex};
 use oxikube_ui::menu::{DropdownMenu as _, PopupMenuItem};
@@ -62,6 +62,24 @@ impl LogView {
                 cx,
                 |view, cx| view.request_autoscroll(cx),
             ))
+            .child(div().w(u(px(8.))))
+            .child(self.toggle(
+                "log-mark",
+                "Mark",
+                self.focused_seq().is_some_and(|seq| self.is_marked(seq)),
+                cx,
+                |view, cx| view.request_mark(cx),
+            ))
+            .child(self.toggle("log-copy", "Copy", false, cx, |view, cx| {
+                view.request_copy(cx)
+            }))
+            .child(self.toggle("log-save", "Save", false, cx, |view, cx| {
+                view.request_save(LogSaveScope::All, cx)
+            }))
+            .child(self.toggle("log-clear", "Clear", false, cx, |view, cx| {
+                view.request_clear(cx)
+            }))
+            .child(div().w(u(px(8.))))
             .child(self.toggle(
                 "log-fullscreen",
                 "Fullscreen",

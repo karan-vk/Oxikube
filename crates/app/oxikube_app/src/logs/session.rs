@@ -103,6 +103,15 @@ impl LogSession {
         }
     }
 
+    /// Empties the buffer at the user's request (the viewer's "clear"): the retained lines go,
+    /// the stream keeps reading, and the readers' next delta shows an empty window that new
+    /// lines then fill. Seqs are not reused, and cleared lines are not "dropped": they leave no
+    /// truncated marker. Only the owner clears; the cluster's logs are untouched. Returns the
+    /// seq of the next line.
+    pub fn clear(&self) -> u64 {
+        self.reader.shared.clear()
+    }
+
     /// A shared read-only view that does not keep the stream open.
     pub fn reader(&self) -> LogReader {
         self.reader.clone()

@@ -8,7 +8,7 @@ use super::meta::CommandMeta;
 use super::registry;
 use crate::colour::ClusterColour;
 use crate::ids::{ClusterId, Gvk, ResourceRef};
-use crate::log::LogRange;
+use crate::log::{LogRange, LogSaveScope};
 use crate::preset::ClusterPreset;
 
 /// How the API server deletes dependents of an object.
@@ -376,6 +376,35 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tail_lines: Option<u32>,
     },
+    /// Empty a log view's local buffer (the cluster's logs are untouched; streaming continues).
+    /// Asks first when the view has marked lines.
+    #[serde(rename = "logs::Clear")]
+    LogsClear {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Copy the selected lines of a log view to the clipboard; with no selection, the lines on
+    /// screen.
+    #[serde(rename = "logs::Copy")]
+    LogsCopy {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Mark or unmark the focused line of a log view.
+    #[serde(rename = "logs::Mark")]
+    LogsMark {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Offer to save a log view's lines to a file: the view shows what would be written and the
+    /// user picks the file, so nothing is written without them.
+    #[serde(rename = "logs::Save")]
+    LogsSave {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// Which lines: the ones on screen, or the whole buffer.
+        scope: LogSaveScope,
+    },
     /// Read another part of a log view's log: the tail, the head or the last minutes
     /// (reopens the stream). `target` is what the view was opened on (a pod).
     #[serde(rename = "logs::SetRange")]
@@ -514,6 +543,10 @@ impl Command {
             Command::PodExec { .. } => CommandId::POD_EXEC,
             Command::PodPortForward { .. } => CommandId::POD_PORT_FORWARD,
             Command::PodViewLogs { .. } => CommandId::POD_VIEW_LOGS,
+            Command::LogsClear { .. } => CommandId::LOGS_CLEAR,
+            Command::LogsCopy { .. } => CommandId::LOGS_COPY,
+            Command::LogsMark { .. } => CommandId::LOGS_MARK,
+            Command::LogsSave { .. } => CommandId::LOGS_SAVE,
             Command::LogsSetRange { .. } => CommandId::LOGS_SET_RANGE,
             Command::LogsSelectContainer { .. } => CommandId::LOGS_SELECT_CONTAINER,
             Command::LogsToggleAutoscroll { .. } => CommandId::LOGS_TOGGLE_AUTOSCROLL,
@@ -561,6 +594,10 @@ impl Command {
             | Command::PodExec { target, .. }
             | Command::PodPortForward { target, .. }
             | Command::PodViewLogs { target, .. }
+            | Command::LogsClear { target }
+            | Command::LogsCopy { target }
+            | Command::LogsMark { target }
+            | Command::LogsSave { target, .. }
             | Command::LogsSetRange { target, .. }
             | Command::LogsSelectContainer { target, .. }
             | Command::LogsToggleAutoscroll { target }
@@ -747,6 +784,13 @@ mod tests {
                 previous: false,
                 tail_lines: Some(500),
             },
+            Command::LogsClear { target: pod() },
+            Command::LogsCopy { target: pod() },
+            Command::LogsMark { target: pod() },
+            Command::LogsSave {
+                target: pod(),
+                scope: LogSaveScope::All,
+            },
             Command::LogsSetRange {
                 target: pod(),
                 range: LogRange::Last15m,
@@ -910,6 +954,10 @@ mod tests {
                     | Command::ResourceSelectAll { .. }
                     | Command::TableFocusFilter { .. }
                     | Command::ResourceViewYaml { .. }
+                    | Command::LogsClear { .. }
+                    | Command::LogsCopy { .. }
+                    | Command::LogsMark { .. }
+                    | Command::LogsSave { .. }
                     | Command::LogsSetRange { .. }
                     | Command::LogsSelectContainer { .. }
                     | Command::LogsToggleAutoscroll { .. }

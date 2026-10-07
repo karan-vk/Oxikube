@@ -21,6 +21,8 @@ pub struct LogBuffer {
     first_seq: u64,
     /// Lines dropped from the front over the buffer's life.
     dropped: u64,
+    /// Lines the user cleared over the buffer's life (not counted in `dropped`).
+    cleared: u64,
 }
 
 impl LogBuffer {
@@ -33,6 +35,7 @@ impl LogBuffer {
             capacity,
             first_seq: 0,
             dropped: 0,
+            cleared: 0,
         }
     }
 
@@ -64,6 +67,12 @@ impl LogBuffer {
     /// Lines dropped from the front so far: the count behind the "truncated" marker.
     pub fn dropped(&self) -> u64 {
         self.dropped
+    }
+
+    /// Lines the user cleared so far ([`clear`](Self::clear)); they were not dropped for space,
+    /// so they are not part of [`dropped`](Self::dropped) and do not make the buffer truncated.
+    pub fn cleared(&self) -> u64 {
+        self.cleared
     }
 
     /// Whether older lines were dropped (show the "truncated" marker above the first line).
@@ -122,6 +131,18 @@ impl LogBuffer {
         }
         self.trim();
         usize::try_from(self.dropped - before).unwrap_or(usize::MAX)
+    }
+
+    /// Empties the buffer at the user's request. Seqs are never reused: the next line gets
+    /// [`next_seq`](Self::next_seq) as before, and [`first_seq`](Self::first_seq) moves up to it.
+    /// Returns how many lines were cleared.
+    pub fn clear(&mut self) -> usize {
+        let cleared = self.lines.len();
+        self.lines.clear();
+        self.lines.shrink_to(1_024);
+        self.first_seq += cleared as u64;
+        self.cleared += cleared as u64;
+        cleared
     }
 
     /// Changes the capacity (at least one), dropping the oldest lines when it shrinks. Returns how

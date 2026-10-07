@@ -55,6 +55,7 @@ impl Item for LogView {
         // Dropping the session aborts its read and closes the connection.
         self.pump = None;
         self.pod_task = None;
+        self.save_task = None;
         self.session = None;
     }
 }

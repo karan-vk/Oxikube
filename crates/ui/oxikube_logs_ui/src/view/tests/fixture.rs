@@ -21,10 +21,10 @@ use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::log::LogLine;
 use oxikube_keymap::KeymapOptions;
-use oxikube_ports::{ClusterContext, LogOptions, SourceId};
+use oxikube_ports::{ClusterContext, FsPort, LogOptions, SourceId};
 use oxikube_testkit::{
-    FakeClockPort, FakeClusterConnectorPort, FakeClusterPorts, FakeClusterSourcePort, LogCall,
-    Timeline,
+    FakeClockPort, FakeClusterConnectorPort, FakeClusterPorts, FakeClusterSourcePort, FakeFsPort,
+    LogCall, Timeline,
 };
 use oxikube_workspace::test_support::open_workspace;
 use oxikube_workspace::{CommandDispatcher, Workspace};
@@ -122,6 +122,7 @@ pub(crate) struct Fx {
     pub(crate) vcx: VisualTestContext,
     pub(crate) workspace: Entity<Workspace>,
     pub(crate) ports: FakeClusterPorts,
+    pub(crate) fs: Arc<FakeFsPort>,
     pub(crate) views: Entity<LogViews>,
     pub(crate) dispatcher: Dispatcher,
 }
@@ -134,6 +135,23 @@ impl Fx {
 
     /// [`Self::new`] with a log service that keeps `buffer_lines` lines per session.
     pub(crate) fn with_buffer(cx: &mut TestAppContext, buffer_lines: usize) -> Self {
+        Self::build(cx, buffer_lines, |fs| fs)
+    }
+
+    /// [`Self::new`] over the file port `wrap` makes of the in-memory one (a test's own fake
+    /// that holds a write back, say).
+    pub(crate) fn with_fs(
+        cx: &mut TestAppContext,
+        wrap: impl FnOnce(Arc<FakeFsPort>) -> Arc<dyn FsPort>,
+    ) -> Self {
+        Self::build(cx, LogConfig::default().buffer_lines, wrap)
+    }
+
+    fn build(
+        cx: &mut TestAppContext,
+        buffer_lines: usize,
+        wrap: impl FnOnce(Arc<FakeFsPort>) -> Arc<dyn FsPort>,
+    ) -> Self {
         let entry = ClusterContext::new(cluster(), ContextName::new("kind"), SourceId("k".into()));
         let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry]));
         let connector = Arc::new(FakeClusterConnectorPort::new());
@@ -157,6 +175,7 @@ impl Fx {
             ..LogConfig::default()
         };
         let service = vcx.update(|_, cx| Arc::new(LogService::new(log_runtime(clock, cx), config)));
+        let fs = Arc::new(FakeFsPort::new());
         let (sink, requests) = LogCommandSink::channel();
         let dispatcher = Dispatcher {
             sent: Rc::default(),
@@ -167,6 +186,7 @@ impl Fx {
                 service,
                 sessions,
                 dispatcher: Rc::new(dispatcher.clone()),
+                fs: wrap(fs.clone()),
             },
             host: Rc::new(Host(workspace.downgrade())),
         };
@@ -176,6 +196,7 @@ impl Fx {
             vcx,
             workspace,
             ports,
+            fs,
             views,
             dispatcher,
         }

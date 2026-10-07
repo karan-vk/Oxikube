@@ -93,8 +93,9 @@ fn pod() -> Resource {
     .expect("a pod")
 }
 
-/// Renders the view, wrapped or not, with or without timestamps, in the dark or `light` theme.
-fn render(wrap: bool, timestamps: bool, light: bool) -> anyhow::Result<RgbaImage> {
+/// Renders the view, wrapped or not, with or without timestamps, in the dark or `light` theme;
+/// `picked` marks the failing line and selects three lines above it (E08-S06).
+fn render(wrap: bool, timestamps: bool, light: bool, picked: bool) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
@@ -137,6 +138,7 @@ fn render(wrap: bool, timestamps: bool, light: bool) -> anyhow::Result<RgbaImage
             service,
             sessions,
             dispatcher: Rc::new(Ignore),
+            fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
         };
         cx.new(|cx| LogView::new(target, None, deps, cx))
     })?;
@@ -149,6 +151,12 @@ fn render(wrap: bool, timestamps: bool, light: bool) -> anyhow::Result<RgbaImage
             }
             if timestamps {
                 view.toggle_timestamps(cx);
+            }
+            if picked {
+                view.click_line(6, false, cx);
+                view.toggle_mark(cx);
+                view.click_line(2, false, cx);
+                view.click_line(4, true, cx);
             }
         });
     })?;
@@ -188,9 +196,10 @@ fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
 
 fn main() -> ExitCode {
     let results = [
-        render(false, true, false).and_then(|image| check("log_view_levels", image)),
-        render(true, false, false).and_then(|image| check("log_view_wrapped", image)),
-        render(false, true, true).and_then(|image| check("log_view_light", image)),
+        render(false, true, false, false).and_then(|image| check("log_view_levels", image)),
+        render(true, false, false, false).and_then(|image| check("log_view_wrapped", image)),
+        render(false, true, true, false).and_then(|image| check("log_view_light", image)),
+        render(false, true, false, true).and_then(|image| check("log_view_selection_marks", image)),
     ];
     let mut failed = false;
     for result in results {

@@ -12,8 +12,13 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
+use futures::StreamExt as _;
 use futures::stream::BoxStream;
 use oxikube_domain::OxiResult;
+
+/// The chunks of a [`FsPort::write_stream`]: each is the next piece of the file, and an `Err`
+/// abandons the write.
+pub type FileChunks = BoxStream<'static, OxiResult<Vec<u8>>>;
 
 /// The type of a directory entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -80,6 +85,21 @@ pub trait FsPort: Send + Sync {
     /// Writes `contents` to `path`, creating parent directories and replacing any
     /// existing file atomically (temp file + rename).
     async fn write(&self, path: &Path, contents: &[u8]) -> OxiResult<()>;
+
+    /// Writes the chunks `chunks` yields, in order, as one file: [`write`](Self::write)'s
+    /// atomic replace, without holding the whole content in memory (a log export of a million
+    /// lines). Nothing appears at `path` until the stream ended without an error; an `Err`
+    /// chunk, or dropping this future, leaves the old file (if any) as it was.
+    ///
+    /// The default collects the chunks and calls `write`, which is right for an in-memory fake;
+    /// a real filesystem overrides it to stream into the temp file.
+    async fn write_stream(&self, path: &Path, mut chunks: FileChunks) -> OxiResult<()> {
+        let mut contents = Vec::new();
+        while let Some(chunk) = chunks.next().await {
+            contents.extend_from_slice(&chunk?);
+        }
+        self.write(path, &contents).await
+    }
 
     /// Like [`write`](Self::write) for a file that may hold credentials (a pasted kubeconfig):
     /// the file is readable and writable by its owner only (mode `0600` on unix; created

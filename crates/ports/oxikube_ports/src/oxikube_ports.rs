@@ -146,7 +146,7 @@ pub use exec::{
 };
 pub use feed::{Delta, DeltaBatch, WatchFeed};
 pub use feed_stats::{FeedStat, FeedStats, FeedVariant};
-pub use fs::{DirEntry, EntryKind, FsEvent, FsEventKind, FsPort};
+pub use fs::{DirEntry, EntryKind, FileChunks, FsEvent, FsEventKind, FsPort};
 pub use helm::{HelmPort, HelmRelease, HelmReleaseRef, HelmReleaseStatus};
 pub use integration::{
     IntegrationPort, IntegrationSession, SidebarItem, SidebarModel, SidebarSection,

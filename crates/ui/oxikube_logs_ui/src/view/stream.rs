@@ -71,6 +71,7 @@ impl LogView {
     pub(crate) fn apply_delta(&mut self, delta: &LogDelta, cx: &mut Context<Self>) {
         let change = self.window.apply(delta);
         self.rows_changed(change);
+        self.forget_dropped();
         self.follow_tail();
         notify_coalesced(cx);
     }

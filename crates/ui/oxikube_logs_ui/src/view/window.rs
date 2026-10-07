@@ -6,7 +6,7 @@
 //! copied per line. The rows are, top to bottom:
 //!
 //! 1. the "truncated" marker, while older lines were dropped to stay within `logs.buffer_lines`
-//!    (the buffer's first seq is above 0);
+//!    (the buffer's first seq is above the point the user last cleared at, 0 if never);
 //! 2. one row per retained line, in stream order;
 //! 3. the state row, while the session is not streaming (connecting, ended or failed).
 
@@ -60,6 +60,8 @@ pub struct LineWindow {
     first_seq: u64,
     next_seq: u64,
     state: LogState,
+    /// The seq the user cleared the view at: lines below it are gone on purpose, not dropped.
+    cleared_to: u64,
 }
 
 impl Default for LineWindow {
@@ -68,6 +70,7 @@ impl Default for LineWindow {
             first_seq: 0,
             next_seq: 0,
             state: LogState::Connecting,
+            cleared_to: 0,
         }
     }
 }
@@ -107,9 +110,10 @@ impl LineWindow {
         usize::try_from(self.next_seq - self.first_seq).unwrap_or(usize::MAX)
     }
 
-    /// Whether the "truncated" marker is shown (older lines were dropped).
+    /// Whether the "truncated" marker is shown: older lines were dropped to stay within the
+    /// buffer (lines the user cleared do not count).
     pub fn is_truncated(&self) -> bool {
-        self.first_seq > 0
+        self.first_seq > self.cleared_to
     }
 
     /// Whether the state row is shown.
@@ -130,7 +134,7 @@ impl LineWindow {
     pub fn row(&self, index: usize) -> Option<Row> {
         let marker = self.marker_rows();
         if index < marker {
-            return Some(Row::Truncated(self.first_seq));
+            return Some(Row::Truncated(self.first_seq - self.cleared_to));
         }
         let line = index - marker;
         if line < self.line_count() {
@@ -154,6 +158,22 @@ impl LineWindow {
         }
         let line = index.saturating_sub(self.marker_rows());
         Some((self.first_seq + line as u64).min(self.next_seq - 1))
+    }
+
+    /// The user cleared the view: every line goes (the session's buffer was emptied, `next_seq`
+    /// is the seq its next line gets) and the lines before it are never "dropped". Says how the
+    /// rows moved; the state row stays.
+    pub fn clear(&mut self, next_seq: u64) -> RowChange {
+        let front_removed = self.marker_rows() + self.line_count();
+        let dropped = self.line_count();
+        self.first_seq = next_seq;
+        self.next_seq = next_seq;
+        self.cleared_to = next_seq;
+        RowChange {
+            front_removed,
+            dropped,
+            ..RowChange::default()
+        }
     }
 
     /// Applies `delta` and says how the rows moved.
@@ -224,6 +244,14 @@ impl Follow {
             0
         } else {
             next_seq.saturating_sub(self.paused_at)
+        }
+    }
+
+    /// The view was cleared and the next line has seq `next_seq`: lines that arrive from now on
+    /// count for the pill, not the ones that were cleared.
+    pub fn clear_to(&mut self, next_seq: u64) {
+        if !self.on {
+            self.paused_at = next_seq;
         }
     }
 
@@ -299,6 +327,43 @@ mod tests {
     }
 
     #[test]
+    fn clearing_removes_the_lines_without_a_marker_and_new_lines_carry_on() {
+        let mut window = LineWindow::new();
+        window.apply(&delta(0..5, 0, 0, LogState::Streaming));
+        let change = window.clear(5);
+        assert_eq!(window.row_count(), 0);
+        assert!(
+            !window.is_truncated(),
+            "cleared lines are not dropped lines"
+        );
+        assert_eq!(
+            (change.front_removed, change.dropped, change.kept),
+            (5, 5, 0)
+        );
+        // The session's next delta still describes the window the view had before the clear.
+        let change = window.apply(&delta(5..7, 5, 5, LogState::Streaming));
+        assert_eq!(window.line_count(), 2);
+        assert_eq!(window.row(0), Some(Row::Line(5)));
+        assert_eq!(
+            (change.front_removed, change.kept, change.tail_inserted),
+            (0, 0, 2)
+        );
+        // Dropping from the ring after the clear is a truncation again, counted from the clear.
+        window.apply(&delta(7..9, 1, 6, LogState::Streaming));
+        assert_eq!(window.row(0), Some(Row::Truncated(1)));
+    }
+
+    #[test]
+    fn clearing_keeps_the_state_row() {
+        let mut window = LineWindow::new();
+        window.apply(&delta(0..2, 0, 0, LogState::Ended(EndReason::StreamClosed)));
+        assert_eq!(window.row_count(), 3);
+        window.clear(2);
+        assert_eq!(window.row_count(), 1);
+        assert_eq!(window.row(0), Some(Row::State));
+    }
+
+    #[test]
     fn an_ended_stream_gets_its_state_row_back() {
         let mut window = LineWindow::new();
         window.apply(&delta(0..2, 0, 0, LogState::Streaming));
@@ -333,6 +398,8 @@ mod tests {
         assert_eq!(follow.new_lines(130), 30);
         // The ring buffer dropped 1 000 old lines meanwhile: the count does not care.
         assert_eq!(follow.new_lines(1_300), 1_200);
+        follow.clear_to(2_000);
+        assert_eq!(follow.new_lines(2_005), 5, "a clear starts the count over");
         follow.resume();
         assert!(follow.is_on());
         assert_eq!(follow.new_lines(2_000), 0);

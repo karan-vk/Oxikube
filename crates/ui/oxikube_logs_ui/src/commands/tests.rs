@@ -10,7 +10,7 @@ use oxikube_app::{ClusterSessionManager, MutationGuard};
 use oxikube_domain::Initiator;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
-use oxikube_domain::log::LogRange;
+use oxikube_domain::log::{LogRange, LogSaveScope};
 use oxikube_testkit::{
     FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeStatePort,
 };
@@ -63,6 +63,14 @@ fn every_log_command_is_a_read_with_an_mcp_tool_stub() {
         "k8s.logs_toggle_wrap"
     );
     assert_eq!(CommandId::POD_VIEW_LOGS.tool_name(), "k8s.pod_view_logs");
+    for (id, name) in [
+        (CommandId::LOGS_SAVE, "k8s.logs_save"),
+        (CommandId::LOGS_COPY, "k8s.logs_copy"),
+        (CommandId::LOGS_MARK, "k8s.logs_mark"),
+        (CommandId::LOGS_CLEAR, "k8s.logs_clear"),
+    ] {
+        assert_eq!(id.tool_name(), name);
+    }
 }
 
 #[test]
@@ -103,6 +111,37 @@ fn the_handlers_queue_the_request_for_the_window() {
             LogRequest::Change {
                 target: pod(),
                 change: ViewChange::ToggleWrap,
+            },
+        ),
+        (
+            Command::LogsMark { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::Mark,
+            },
+        ),
+        (
+            Command::LogsCopy { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::Copy,
+            },
+        ),
+        (
+            Command::LogsClear { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::Clear,
+            },
+        ),
+        (
+            Command::LogsSave {
+                target: pod(),
+                scope: LogSaveScope::Visible,
+            },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::Save(LogSaveScope::Visible),
             },
         ),
         (

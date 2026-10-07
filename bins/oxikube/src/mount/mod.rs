@@ -196,6 +196,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let log_views = logs::start_views(
         log_service,
         services.sessions.clone(),
+        ports.clusters.fs.clone(),
         dispatcher.clone(),
         tabs.downgrade(),
         logs_rx,

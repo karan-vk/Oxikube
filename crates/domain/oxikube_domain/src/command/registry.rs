@@ -51,6 +51,14 @@ impl CommandId {
     pub const KUBECONFIG_RELOAD: CommandId = CommandId::new("kubeconfig::Reload");
     /// `kubeconfig::RemoveSource`: remove a kubeconfig source.
     pub const KUBECONFIG_REMOVE_SOURCE: CommandId = CommandId::new("kubeconfig::RemoveSource");
+    /// `logs::Clear`: empty a log view's local buffer (the cluster's logs are untouched).
+    pub const LOGS_CLEAR: CommandId = CommandId::new("logs::Clear");
+    /// `logs::Copy`: copy the selected lines of a log view (else what is on screen).
+    pub const LOGS_COPY: CommandId = CommandId::new("logs::Copy");
+    /// `logs::Mark`: mark or unmark the focused line of a log view.
+    pub const LOGS_MARK: CommandId = CommandId::new("logs::Mark");
+    /// `logs::Save`: save a log view's lines to a file the user picks.
+    pub const LOGS_SAVE: CommandId = CommandId::new("logs::Save");
     /// `logs::SelectContainer`: show another container of a log view's pod (reopens the stream).
     pub const LOGS_SELECT_CONTAINER: CommandId = CommandId::new("logs::SelectContainer");
     /// `logs::SetRange`: read the tail, the head or the last minutes of a log view's log.
@@ -264,6 +272,32 @@ pub static COMMANDS: &[CommandMeta] = &[
     ),
     // The log view's commands (E08-S02): they change what a view shows or which stream it
     // reads, never the cluster. Reopening a stream reads logs, so those need the logs capability.
+    // Local actions on what a view holds (E08-S06): the buffer is cleared, never the cluster's
+    // logs; a save writes only the file the user picks, so none of them is a mutation.
+    CommandMeta::read(
+        CommandId::LOGS_CLEAR,
+        "Logs: Clear",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_COPY,
+        "Logs: Copy Lines",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_MARK,
+        "Logs: Mark Line",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_SAVE,
+        "Logs: Save to File",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
     CommandMeta::read(
         CommandId::LOGS_SELECT_CONTAINER,
         "Logs: Select Container",

@@ -3,8 +3,10 @@
 
 mod batching;
 mod cancel;
+mod clear;
 mod delta;
 mod errors;
+mod export;
 mod hot_reload;
 mod options;
 mod props;

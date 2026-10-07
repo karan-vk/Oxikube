@@ -1,6 +1,7 @@
 //! The log commands on the `CommandBus` (E08-S02): `pod::ViewLogs` opens a pod's log view, and
 //! the `logs::*` commands change one: `SetRange` (tail, head, since 1m ... 1h), `SelectContainer`,
-//! `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`.
+//! `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`,
+//! and (E08-S06) the local actions on what a view holds: `Mark`, `Copy`, `Clear`, `Save`.
 //!
 //! None changes a cluster (no `MutationGuard` tier; all are allowed on a read-only cluster):
 //! they read logs or change what a view shows. Each is declared in `oxikube_domain::command`, so
@@ -22,14 +23,18 @@ use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, R
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{Gvk, ResourceRef};
-use oxikube_domain::log::LogRange;
+use oxikube_domain::log::{LogRange, LogSaveScope};
 
 use crate::view::OpenLogs;
 pub use controller::{LogHost, LogViews, LogViewsDeps};
 
 /// The commands this crate handles.
-pub const LOG_COMMANDS: [CommandId; 8] = [
+pub const LOG_COMMANDS: [CommandId; 12] = [
     CommandId::POD_VIEW_LOGS,
+    CommandId::LOGS_CLEAR,
+    CommandId::LOGS_COPY,
+    CommandId::LOGS_MARK,
+    CommandId::LOGS_SAVE,
     CommandId::LOGS_SET_RANGE,
     CommandId::LOGS_SELECT_CONTAINER,
     CommandId::LOGS_TOGGLE_AUTOSCROLL,
@@ -42,6 +47,14 @@ pub const LOG_COMMANDS: [CommandId; 8] = [
 /// What a `logs::*` command does to the log views of its target.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ViewChange {
+    /// `logs::Clear`.
+    Clear,
+    /// `logs::Copy`.
+    Copy,
+    /// `logs::Mark`.
+    Mark,
+    /// `logs::Save`: offer to write the lines of this scope to a file.
+    Save(LogSaveScope),
     /// `logs::SetRange`.
     SetRange(LogRange),
     /// `logs::SelectContainer`.
@@ -115,6 +128,10 @@ impl LogRequest {
                     },
                 })
             }
+            Command::LogsClear { target } => change(target, ViewChange::Clear),
+            Command::LogsCopy { target } => change(target, ViewChange::Copy),
+            Command::LogsMark { target } => change(target, ViewChange::Mark),
+            Command::LogsSave { target, scope } => change(target, ViewChange::Save(*scope)),
             Command::LogsSetRange { target, range } => change(target, ViewChange::SetRange(*range)),
             Command::LogsSelectContainer { target, container } => {
                 change(target, ViewChange::SelectContainer(container.clone()))
