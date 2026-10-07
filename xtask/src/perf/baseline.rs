@@ -229,10 +229,26 @@ pub fn regressed(base: f64, current: f64, tolerance: f64, noise_floor: f64) -> b
 /// - scenario not available and not in the baseline: SKIPPED.
 ///
 /// Scenarios not in `report` (not requested on this run) are not compared.
+///
+/// One tolerance for every statistic; the CLI uses [`compare_with_tails`] directly.
+#[cfg(test)]
 pub fn compare(
     report: &Report,
     baseline: &Baseline,
     tolerance: f64,
+    floors: NoiseFloors,
+) -> Comparison {
+    compare_with_tails(report, baseline, tolerance, tolerance, floors)
+}
+
+/// [`compare`] with a separate tolerance for the tail statistics (p95 and p99). Tails are what a
+/// shared CI runner's noisy neighbours move first (a frame p95 doubled between two runs of the
+/// same code), so a hosted-runner gate can hold p50 tighter than the tails.
+pub fn compare_with_tails(
+    report: &Report,
+    baseline: &Baseline,
+    tolerance: f64,
+    tail_tolerance: f64,
     floors: NoiseFloors,
 ) -> Comparison {
     let mut rows = Vec::new();
@@ -290,6 +306,7 @@ pub fn compare(
                         continue;
                     };
                     for stat in STATS {
+                        let tolerance = if stat == "p50" { tolerance } else { tail_tolerance };
                         let (bv, cv) = (b.stat(stat).unwrap_or(0.0), cur.stat(stat).unwrap_or(0.0));
                         rows.push(Row {
                             scenario: scenario.clone(),
@@ -428,6 +445,33 @@ mod tests {
         assert!(c.failed());
         assert!(c.rows.iter().all(|r| r.outcome == Outcome::Regressed));
         assert!(c.rows[0].to_string().starts_with("FAIL"));
+    }
+
+    #[test]
+    fn the_tails_have_their_own_tolerance() {
+        // p50, p95 and p99 are all 40 % over: +30 % on p50 fails, +50 % on the tails passes.
+        let (r, b) = (
+            report(&[("startup", Some(140.0))]),
+            baseline(&[("startup", 100.0)]),
+        );
+        let c = compare_with_tails(&r, &b, 0.30, 0.50, FLOORS);
+        let outcome = |stat: &str| {
+            c.rows
+                .iter()
+                .find(|row| row.stat == stat)
+                .map(|row| row.outcome.clone())
+        };
+        assert_eq!(outcome("p50"), Some(Outcome::Regressed));
+        assert_eq!(outcome("p95"), Some(Outcome::Pass));
+        assert_eq!(outcome("p99"), Some(Outcome::Pass));
+        // A tail beyond its own tolerance still fails.
+        let c = compare_with_tails(&r, &b, 0.50, 0.30, FLOORS);
+        assert!(c.failed());
+        // The same tolerance for both is `compare`.
+        assert_eq!(
+            compare_with_tails(&r, &b, 0.2, 0.2, FLOORS),
+            compare(&r, &b, 0.2, FLOORS)
+        );
     }
 
     #[test]

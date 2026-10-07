@@ -31,7 +31,7 @@ mod print;
 mod report;
 
 use anyhow::{Context, Result, bail};
-use baseline::{Baseline, NoiseFloors, compare};
+use baseline::{Baseline, NoiseFloors, compare_with_tails};
 use report::{
     HEADLESS_NOTE, REPORT_SCHEMA, Report, SAMPLE_SCHEMA, Sample, SampleStats, ScenarioResult,
     Status, aggregate,
@@ -98,6 +98,10 @@ pub struct Args {
     /// Allowed slowdown before `--check` fails (0.20 = +20 %).
     #[arg(long, default_value_t = 0.20)]
     pub tolerance: f64,
+    /// Allowed slowdown of the p95 and p99 before `--check` fails, when it should differ from
+    /// `--tolerance` (default: the same). Hosted CI runners move the tails first.
+    #[arg(long)]
+    pub tail_tolerance: Option<f64>,
     /// Absolute slowdown (ms) a `*_ms` metric must also exceed to fail; absorbs jitter on sub-ms
     /// metrics.
     #[arg(long, default_value_t = 0.25)]
@@ -177,12 +181,15 @@ pub fn run(args: &Args) -> Result<()> {
             ms: args.noise_floor_ms,
             mib: args.noise_floor_mib,
         };
-        let comparison = compare(&report, &baseline, args.tolerance, floors);
+        let tail_tolerance = args.tail_tolerance.unwrap_or(args.tolerance);
+        let comparison =
+            compare_with_tails(&report, &baseline, args.tolerance, tail_tolerance, floors);
         println!(
-            "\ncheck against {} (os `{}`, fail above +{:.0} % and +{} ms / +{} MiB):",
+            "\ncheck against {} (os `{}`, fail above +{:.0} % (p95/p99 +{:.0} %) and +{} ms / +{} MiB):",
             baseline_path.display(),
             report.os,
             args.tolerance * 100.0,
+            tail_tolerance * 100.0,
             floors.ms,
             floors.mib
         );

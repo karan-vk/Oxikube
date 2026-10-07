@@ -32,8 +32,8 @@ measured on a mid-range x86 laptop with an integrated GPU.
   connects that context, opens its pods table and scrolls it while `--perf` records (E07-S09); see
   [Resource table](#resource-table-10-000-pods-under-churn-e07-s09).
 - `cargo xtask perf <scenario>|--all` runs scripted scenarios headless and writes a report; nightly
-  CI compares against [`docs/perf/baseline.json`](perf/baseline.json) and fails on > 20 % regression
-  (E01-S14).
+  CI compares against [`docs/perf/baseline.json`](perf/baseline.json) and fails on > 50 % (p50) or
+  > 150 % (p95/p99) regression on the hosted runners, > 20 % by default (E01-S14, E01-F542).
 - macOS: Instruments (Time Profiler, Metal System Trace) for stalls; Linux: `perf` + `tracy`
   via the `tracy` feature on `oxikube_runtime`.
 - Memory: `oxikube --perf` writes the process's resident memory (RSS, MiB) into every JSONL tick
@@ -188,7 +188,8 @@ A scenario whose view is not built yet writes `status: "unavailable"` and a spec
 laptop are not comparable with a CI VM.
 
 `--check` fails when any p50/p95/p99 of a baselined metric is more than **+20 %** higher
-(`--tolerance`) **and** higher by more than an absolute noise floor in the metric's own unit:
+(`--tolerance`; `--tail-tolerance` sets p95/p99 separately) **and** higher by more than an absolute
+noise floor in the metric's own unit:
 
 - `*_ms` metrics: **0.25 ms** (`--noise-floor-ms`). It stops microsecond jitter on sub-millisecond
   metrics (an idle redraw is about 0.01 ms) from failing the job; it is far below any budget in
@@ -197,6 +198,13 @@ laptop are not comparable with a CI VM.
   does not apply to it (0.25 MiB would fail on allocator noise) and +20 % of a small RSS is only a
   few MiB. The run-to-run spread of the headless startup scenario is about 0.1 to 0.3 MiB on macOS,
   so 8 MiB sits well above jitter and below 6 % of the 150 MB idle budget.
+
+The nightly passes `--tolerance 0.5 --tail-tolerance 1.5` and repeats a failed check once
+(E01-F542): on the hosted runners the same code measured p50 +20 to +30 % and p95/p99 up to
++120 % between two nightlies (macOS `scroll-10k` frame p95 4.4 to 8.6 ms), so +20 % made the gate
+fail on weather. The 20 % default is for a quiet machine compared with itself. The absolute budgets
+above are checked on every run regardless, so a regression the loose gate lets through still has
+to fit them.
 
 While the app is a placeholder this means only `first_frame_ms`,
 `launch_to_first_frame_ms` and the memory metrics effectively gate; the floors are to be re-tuned once real views land (https://github.com/karan-vk/Oxikube/issues/411). A scenario or metric with no baseline is reported as

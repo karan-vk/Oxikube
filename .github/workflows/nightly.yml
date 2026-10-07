@@ -118,7 +118,7 @@ jobs:
 
   # Perf regression gate (E01-S14, ADR 0013): headless scenarios on each OS, median of several
   # fresh-process samples, compared with docs/perf/baseline.json for the same runner OS. Fails above
-  # +20 % (and +0.25 ms) on any p50/p95/p99; the failure feeds `report-failure` below.
+  # +50 % on p50 and +150 % on p95/p99 (and +0.25 ms); the failure feeds `report-failure` below.
   perf:
     name: perf / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -148,14 +148,16 @@ jobs:
       # report and checks it. Headless rendering needs a GPU device: Metal on macOS, Mesa lavapipe
       # on Linux (xvfb only for windowing init, as in the screenshot step).
       #
-      # Shared runners swing by tens of percent between jobs (scroll-10k frame p95 went 4.4 -> 8.6 ms
-      # on `macos-latest` with no code change), so a failed check is repeated once with fresh
-      # processes: a real regression fails both times, a noisy neighbour does not (E01-F542).
+      # Shared runners swing between jobs with no code change: on `macos-latest` p50 moved +20 to
+      # +30 % and p95/p99 up to +120 % (scroll-10k frame p95 4.4 -> 8.6 ms, logs-stream the same
+      # way). The tolerances are therefore +50 % on p50 and +150 % on the tails (the local default
+      # is +20 %, for a quiet machine compared with itself), and a failed check is repeated once
+      # with fresh processes. The absolute budgets (ADR 0013) are checked regardless (E01-F542).
       - name: cargo xtask perf --all --check
         shell: bash
         run: |
           perf_check() {
-            ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo xtask perf --all --check --samples 7 \
+            ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo xtask perf --all --check --samples 7 --tolerance 0.5 --tail-tolerance 1.5 \
               --out perf/report-${{ runner.os }}.json
           }
           if ! perf_check; then
