@@ -42,9 +42,3 @@ pub use containers::{
     container_to_open, plan_container,
 };
 pub use service::{ExecService, ShellOptions};
-
-/// The notice line, for the tests of the escape handling.
-#[cfg(test)]
-pub(crate) fn notice_line_for_tests(text: &str) -> bytes::Bytes {
-    notice::notice_line(text)
-}

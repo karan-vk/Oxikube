@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use oxikube_domain::audit::AuditOutcome;
 use oxikube_domain::command::{Command, CommandMeta};
-use oxikube_ports::ClusterPrefs;
 
 use super::{MutationGuard, policy};
 use crate::command_bus::{CommandHandler, DispatchContext, DispatchError, HandlerContext, Outcome};
@@ -48,11 +47,6 @@ pub(super) fn detail_of(command: &Command) -> String {
         }
         _ => "session=unknown".to_owned(),
     }
-}
-
-/// Whether `prefs` lets an exec-class command run on a read-only cluster.
-fn allowed_read_only(prefs: &ClusterPrefs) -> bool {
-    prefs.exec_in_read_only
 }
 
 impl MutationGuard {
@@ -90,7 +84,7 @@ impl MutationGuard {
                 DispatchError::NoSession(cluster.clone()),
                 AuditOutcome::Denied,
             )),
-            Some(session) if session.read_only() && !allowed_read_only(session.prefs()) => {
+            Some(session) if session.read_only() && !session.prefs().exec_in_read_only => {
                 Some(refused(
                     DispatchError::ReadOnly {
                         cluster: cluster.clone(),

@@ -2,17 +2,14 @@
 
 use oxikube_app::RowActionSpec;
 use oxikube_app::actions::KindFilter;
-use oxikube_domain::command::{Command, CommandId};
-use oxikube_domain::ids::Gvk;
+use oxikube_domain::command::CommandId;
+
+use super::ExecKind;
 
 /// Where "Shell" sits in a pod's menu: after "View Logs" (100), before the generic actions.
 pub const SHELL_ORDER: u16 = 110;
 /// Where "Attach" sits: right after "Shell".
 pub const ATTACH_ORDER: u16 = 120;
-
-fn is_pod(gvk: &Gvk) -> bool {
-    gvk.group.is_empty() && &*gvk.kind == "Pod"
-}
 
 /// The row actions this module adds: `pod::Shell` and `pod::Attach` for pods. Both need the
 /// session's `exec` capability and, on a read-only cluster, are greyed out unless the cluster
@@ -22,19 +19,17 @@ fn is_pod(gvk: &Gvk) -> bool {
 /// before the command is dispatched.
 pub fn exec_row_actions() -> Vec<RowActionSpec> {
     vec![
-        RowActionSpec::new(CommandId::POD_SHELL, |target| Command::PodShell {
-            target: target.clone(),
-            container: None,
+        RowActionSpec::new(CommandId::POD_SHELL, |target| {
+            ExecKind::Shell.command(target.clone(), None)
         })
         .label("Shell")
-        .kinds(KindFilter::Matching(|kind| is_pod(&kind.gvk)))
+        .kinds(KindFilter::Matching(|kind| kind.gvk.is_pod()))
         .order(SHELL_ORDER),
-        RowActionSpec::new(CommandId::POD_ATTACH, |target| Command::PodAttach {
-            target: target.clone(),
-            container: None,
+        RowActionSpec::new(CommandId::POD_ATTACH, |target| {
+            ExecKind::Attach.command(target.clone(), None)
         })
         .label("Attach")
-        .kinds(KindFilter::Matching(|kind| is_pod(&kind.gvk)))
+        .kinds(KindFilter::Matching(|kind| kind.gvk.is_pod()))
         .order(ATTACH_ORDER),
     ]
 }

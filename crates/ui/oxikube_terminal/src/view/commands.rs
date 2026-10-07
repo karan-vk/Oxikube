@@ -156,8 +156,7 @@ fn blank_to_none(container: Option<String>) -> Option<String> {
 }
 
 fn ensure_pod(target: &ResourceRef, command: &str) -> OxiResult<()> {
-    let is_pod = target.gvk.group.is_empty() && &*target.gvk.kind == "Pod";
-    if !is_pod || target.namespace.is_none() {
+    if !target.gvk.is_pod() || target.namespace.is_none() {
         return Err(OxiError::validation(format!(
             "{command} needs a namespaced pod, not a {}",
             target.gvk.kind

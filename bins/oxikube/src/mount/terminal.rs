@@ -31,6 +31,21 @@ use oxikube_terminal::view::{
 };
 use oxikube_workspace::{ClusterTab, ClusterTabs, CommandDispatcher, Workspace};
 
+use crate::app_state::AppState;
+
+/// The app's `ExecService`: the one already set on `state`, else a new one that is set.
+pub fn install_exec_service(state: &AppState, sessions: ClusterSessionManager) -> Arc<ExecService> {
+    if let Some(service) = state.exec_service() {
+        return service.clone();
+    }
+    let service = Arc::new(ExecService::new(sessions));
+    if !state.set_exec_service(service.clone()) {
+        // Another window set one first: use that, so the last choices are shared.
+        return state.exec_service().cloned().unwrap_or(service);
+    }
+    service
+}
+
 /// Installs the app's terminal services (see the [module docs](self)) and returns them. A
 /// launcher installed before the window mounted (the tests' fake) is kept.
 pub fn install_services(

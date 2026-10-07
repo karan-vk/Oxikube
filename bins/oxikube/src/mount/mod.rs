@@ -58,9 +58,7 @@ use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui::{App, AppContext as _, Entity, Subscription, Task, Window};
 use oxikube_app::session::restore::{RestoreConfig, SessionRestorer};
-use oxikube_app::{
-    ClusterSessionManager, CommandBus, CoreColumns, ExecService, KubeconfigSourcesService,
-};
+use oxikube_app::{CommandBus, CoreColumns, KubeconfigSourcesService};
 use oxikube_catalog_ui::sources::{SettingsSourceList, SettingsSourceListHandle};
 use oxikube_catalog_ui::{Hotbar, HotbarDeps};
 use oxikube_resources_ui::actions::ResourceActions;
@@ -142,7 +140,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
 
     // Shells, attaches and commands in pod containers (E09-S08): one service per app, so the
     // container chosen last in a pod is remembered across windows.
-    let exec_service = exec_service(&state, services.sessions.clone());
+    let exec_service = terminal::install_exec_service(&state, services.sessions.clone());
 
     // Before any cluster tab opens: its layout restore rebuilds saved terminal tabs with these.
     let terminal_services = terminal::install_services(
@@ -357,19 +355,6 @@ fn open_views(
             }
         }
     })
-}
-
-/// The app's `ExecService`: the one already set on `state`, else a new one that is set.
-fn exec_service(state: &AppState, sessions: ClusterSessionManager) -> Arc<ExecService> {
-    if let Some(service) = state.exec_service() {
-        return service.clone();
-    }
-    let service = Arc::new(ExecService::new(sessions));
-    if !state.set_exec_service(service.clone()) {
-        // Another window set one first: use that, so the last choices are shared.
-        return state.exec_service().cloned().unwrap_or(service);
-    }
-    service
 }
 
 /// The local user's name, for the audit log's "who".

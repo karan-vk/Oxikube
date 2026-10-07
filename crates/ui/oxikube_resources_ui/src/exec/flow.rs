@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use gpui::{App, AppContext as _, Context, Task, WeakEntity, Window};
 use oxikube_app::{ContainerChoices, ContainerPlan, ExecService};
+use oxikube_domain::OxiResult;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::ResourceRef;
-use oxikube_domain::{OxiError, OxiResult};
 use oxikube_runtime::spawn_kube;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
@@ -93,10 +93,7 @@ impl ExecFlow {
         };
         let flow = self.clone();
         cx.spawn_in(window, async move |_, cx| {
-            let plan = match planned.await {
-                Ok(plan) => plan,
-                Err(error) => Err(OxiError::from(error)),
-            };
+            let plan = planned.await.unwrap_or_else(|error| Err(error.into()));
             cx.update(|window, cx| flow.resolve(kind, target, plan, window, cx))
                 .ok();
         })

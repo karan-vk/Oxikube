@@ -28,16 +28,14 @@ impl ExecContainer {
     /// What a picker shows: the name, with `init`, `sidecar` or `ephemeral` after it, and
     /// `not running` for a container that is not.
     pub fn label(&self) -> String {
-        let mut notes = Vec::new();
-        match self.kind {
-            ContainerKind::Regular => {}
-            ContainerKind::Init => notes.push("init"),
-            ContainerKind::Sidecar => notes.push("sidecar"),
-            ContainerKind::Ephemeral => notes.push("ephemeral"),
-        }
-        if !self.running {
-            notes.push("not running");
-        }
+        let kind = match self.kind {
+            ContainerKind::Regular => None,
+            ContainerKind::Init => Some("init"),
+            ContainerKind::Sidecar => Some("sidecar"),
+            ContainerKind::Ephemeral => Some("ephemeral"),
+        };
+        let state = (!self.running).then_some("not running");
+        let notes: Vec<_> = kind.into_iter().chain(state).collect();
         if notes.is_empty() {
             self.name.to_string()
         } else {

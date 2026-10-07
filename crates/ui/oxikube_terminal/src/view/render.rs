@@ -43,12 +43,10 @@ impl TerminalView {
             .child(text)
             .into_any_element()
     }
-}
 
-impl TerminalView {
     /// The terminal that could not start: why, and a Retry that starts it again (a pod session
     /// is asked for again through its command, so the read-only policy applies to the retry too).
-    fn failed(&self, reason: SharedString, cx: &mut Context<Self>) -> AnyElement {
+    fn failed(&self, reason: &str, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();
         let what = if self.descriptor.is_local() {
             "The terminal could not start".to_owned()
@@ -103,7 +101,7 @@ impl Render for TerminalView {
                 let text = format!("Starting {}…", self.title()).into();
                 self.message("terminal-starting", text, cx)
             }
-            Phase::Failed(reason) => self.failed(reason.clone(), cx),
+            Phase::Failed(reason) => self.failed(reason, cx),
             Phase::Closed => div().into_any_element(),
         };
         let exit = self.exit_status(cx).map(describe_exit);

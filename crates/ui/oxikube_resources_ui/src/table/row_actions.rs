@@ -144,9 +144,7 @@ impl ResourceTable {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::RESOURCE_DELETE, targets, window, cx);
     }
-}
 
-impl ResourceTable {
     pub(super) fn on_shell(
         &mut self,
         _: &ShellSelected,

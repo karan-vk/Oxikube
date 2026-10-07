@@ -11,8 +11,8 @@ use std::sync::Arc;
 
 use gpui::{App, Context, Task};
 use oxikube_app::{ExecService, ShellOptions};
+use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ClusterId;
-use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{TerminalBackend, TerminalSize};
 use oxikube_runtime::spawn_kube;
 use oxikube_workspace::ClusterMark;
@@ -43,10 +43,7 @@ where
     Fut: Future<Output = OxiResult<Box<dyn TerminalBackend>>> + Send + 'static,
 {
     let started = spawn_kube(cx, open);
-    cx.spawn(async move |_| match started.await {
-        Ok(result) => result,
-        Err(error) => Err(OxiError::internal(error.to_string())),
-    })
+    cx.spawn(async move |_| started.await.unwrap_or_else(|error| Err(error.into())))
 }
 
 impl TerminalLauncher for ClusterLauncher {

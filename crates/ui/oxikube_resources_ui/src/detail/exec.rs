@@ -21,8 +21,7 @@ impl DetailView {
     /// the session may not exec), else why they are blocked now, if they are (a read-only cluster
     /// that does not allow them).
     fn exec_state(&self) -> Option<Option<String>> {
-        let is_pod = self.target.gvk.group.is_empty() && &*self.target.gvk.kind == "Pod";
-        if !is_pod || self.deps.exec.is_none() {
+        if !self.target.gvk.is_pod() || self.deps.exec.is_none() {
             return None;
         }
         let session = self.deps.sessions.get(&self.target.cluster)?;

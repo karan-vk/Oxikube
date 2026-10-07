@@ -217,8 +217,7 @@ impl ExecService {
         let container = self.resolve(&reader, pod, container).await?;
         let mut target = ExecTarget::interactive(pod.clone(), command.to_vec());
         target.container = container.as_deref().map(str::to_owned);
-        let backend = port.exec(&target).await.map_err(explain_open)?;
-        Ok(backend)
+        port.exec(&target).await.map_err(explain_open)
     }
 
     /// The exec port and the pod reader of `cluster`'s connection.

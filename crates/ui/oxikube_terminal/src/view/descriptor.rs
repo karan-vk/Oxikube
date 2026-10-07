@@ -159,19 +159,18 @@ impl BackendDescriptor {
                 pod,
                 container,
                 command,
-            } if command.is_empty() => Some(Command::PodShell {
-                target: pod.clone(),
-                container: container.clone(),
-            }),
-            Self::Exec {
-                pod,
-                container,
-                command,
-            } => Some(Command::PodExec {
-                target: pod.clone(),
-                container: container.clone(),
-                command: command.clone(),
-            }),
+            } => {
+                let (target, container) = (pod.clone(), container.clone());
+                Some(if command.is_empty() {
+                    Command::PodShell { target, container }
+                } else {
+                    Command::PodExec {
+                        target,
+                        container,
+                        command: command.clone(),
+                    }
+                })
+            }
             Self::Attach { pod, container } => Some(Command::PodAttach {
                 target: pod.clone(),
                 container: container.clone(),

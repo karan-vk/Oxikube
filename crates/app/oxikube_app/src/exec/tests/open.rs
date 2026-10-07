@@ -6,7 +6,7 @@ use oxikube_ports::BackendEvent;
 use oxikube_testkit::ExecPortCall;
 
 use super::{Fixture, pod_json};
-use crate::exec::notice_line_for_tests;
+use crate::exec::notice::notice_line;
 
 #[tokio::test]
 async fn attach_opens_the_main_process_with_a_notice() {
@@ -108,7 +108,7 @@ async fn permission_and_pod_errors_keep_their_kind_and_name_the_pod() {
 
 #[test]
 fn the_notice_cannot_carry_escape_sequences() {
-    let line = notice_line_for_tests("ba\x1b[31msh\x07 in web-0/app\r\nINJECTED");
+    let line = notice_line("ba\x1b[31msh\x07 in web-0/app\r\nINJECTED");
     let text = String::from_utf8(line.to_vec()).unwrap();
     let inner = text
         .strip_prefix("\x1b[2m")
