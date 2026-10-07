@@ -45,10 +45,12 @@ impl LogView {
             pod: self.target.name.to_string(),
             container: self.options.container.clone(),
         };
-        let session = self
-            .deps
-            .service
-            .open(port, target, self.options.log_options());
+        let session = self.deps.service.open_in(
+            &self.target.cluster,
+            port,
+            target,
+            self.options.log_options(),
+        );
         let mut deltas = session.deltas();
         self.session = Some(session);
         self.reset_rows(LineWindow::new());

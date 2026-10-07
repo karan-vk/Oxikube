@@ -9,6 +9,7 @@
 //! | Piece | Where |
 //! |---|---|
 //! | the service: open sessions, the shared `logs.buffer_lines` bound, the live listing | [`LogService`] (`service`) |
+//! | the default bound and the per-cluster overrides sessions read | `bounds` |
 //! | a session and its read-only view; dropping the session cancels the read | [`LogSession`], [`LogReader`] (`session`) |
 //! | what is read | [`LogTarget`] (`target`), the port's [`LogOptions`](oxikube_ports::LogOptions) |
 //! | the ring of lines with seq numbers and O(1) index / range reads | [`LogBuffer`], [`LogEntry`] (`ring`, `entry`) |
@@ -38,6 +39,7 @@
 //! Lines are the user's data and are shown as written. The service never writes a line's text to
 //! its own logs; a `Failed` state carries the error's kind and its message, redacted.
 
+mod bounds;
 mod delta;
 mod driver;
 mod entry;

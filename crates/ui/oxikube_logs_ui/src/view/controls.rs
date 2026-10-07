@@ -63,7 +63,15 @@ impl LogView {
 
     /// Shows the timestamps, or not.
     pub fn toggle_timestamps(&mut self, cx: &mut Context<Self>) {
-        self.options.timestamps = !self.options.timestamps;
+        self.set_timestamps(!self.options.timestamps, cx);
+    }
+
+    /// Shows the timestamps, or not (what the key and the `logs.timestamps` setting both do).
+    pub(crate) fn set_timestamps(&mut self, show: bool, cx: &mut Context<Self>) {
+        if self.options.timestamps == show {
+            return;
+        }
+        self.options.timestamps = show;
         if self.options.wrap {
             // The rows' heights may change with their text.
             self.list.remeasure();

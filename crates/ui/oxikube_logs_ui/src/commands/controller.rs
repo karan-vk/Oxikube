@@ -10,6 +10,7 @@ use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_workspace::{ClusterTabs, OpenOptions, Workspace};
 
 use super::{LogRequest, ViewChange};
+use crate::LogsSettings;
 use crate::view::{LogView, LogViewDeps, OpenLogs, ViewOptions, item_key};
 
 /// Where a cluster's log views live: the workspace of its tab in this window. The app's is the
@@ -123,7 +124,7 @@ impl LogViews {
         }
         let deps = self.deps.views.clone();
         let target = target.clone();
-        let mut options = ViewOptions::default();
+        let mut options = ViewOptions::from_settings(&LogsSettings::resolve(&target.cluster, cx));
         open.apply(&mut options);
         let view = cx.new(|cx| {
             let mut view = LogView::with_options(target, options, deps, cx);

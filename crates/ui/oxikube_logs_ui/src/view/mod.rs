@@ -15,6 +15,7 @@
 //! | `text` | what a row says: timestamp, level colour, marker and state words |
 //! | `containers` | the container selector's list (init, sidecar, regular, ephemeral) from the pod spec |
 //! | `stream` | opening and reopening the session, the delta pump |
+//! | `settings` | the `logs` settings of the view's cluster: its first options, and `wrap` / `timestamps` / `json_auto_detect` applied live |
 //! | `scroll` | autoscroll, pausing on a scroll up, the anchor line across the wrap toggle |
 //! | `controls` | the view's operations (what the commands do) and the requests that dispatch them |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
@@ -39,6 +40,7 @@ mod options;
 mod render;
 mod rows;
 mod scroll;
+mod settings;
 mod stream;
 mod text;
 mod toolbar;
@@ -51,13 +53,16 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    AppContext as _, Context, Entity, FocusHandle, ListAlignment, ListState, Task,
+    AppContext as _, Context, Entity, FocusHandle, ListAlignment, ListState, Subscription, Task,
     UniformListScrollHandle, WeakEntity, px,
 };
 use oxikube_app::ClusterSessionManager;
 use oxikube_app::logs::{LogService, LogSession};
 use oxikube_domain::ids::ResourceRef;
+use oxikube_settings::Settings as _;
 use oxikube_workspace::{CommandDispatcher, Workspace};
+
+use crate::LogsSettings;
 
 pub use actions::{
     Copy, Head, Mark, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll,
@@ -111,6 +116,10 @@ pub struct LogView {
     pub(crate) pump: Option<Task<()>>,
     /// Reads the pod for the container selector.
     pub(crate) pod_task: Option<Task<()>>,
+    /// The `logs` settings as last applied to the options (a change applies the keys that moved).
+    pub(crate) settings: LogsSettings,
+    /// Applies changes of the `logs` settings; dropped with the view.
+    pub(crate) _settings_subscription: Subscription,
 }
 
 impl LogView {
@@ -125,7 +134,7 @@ impl LogView {
     ) -> Self {
         let options = ViewOptions {
             container,
-            ..ViewOptions::default()
+            ..ViewOptions::from_settings(&LogsSettings::resolve(&target.cluster, cx))
         };
         Self::with_options(target, options, deps, cx)
     }
@@ -138,6 +147,7 @@ impl LogView {
         deps: LogViewDeps,
         cx: &mut Context<Self>,
     ) -> Self {
+        let settings = LogsSettings::resolve(&target.cluster, cx);
         let mut view = Self {
             target,
             deps,
@@ -155,6 +165,8 @@ impl LogView {
             rows_built: 0,
             pump: None,
             pod_task: None,
+            settings,
+            _settings_subscription: LogsSettings::observe_in(cx, Self::settings_changed),
         };
         if view.options.container.is_some() {
             view.open_stream(cx);

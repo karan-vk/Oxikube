@@ -368,11 +368,43 @@
       "description": "What one settings layer says about logs: the `logs` object of `settings.json`.",
       "properties": {
         "buffer_lines": {
-          "description": "Lines each log session keeps in memory (100 to 5 000 000). When a chatty pod writes more,\nthe oldest lines are dropped and the viewer shows a \"truncated\" marker above the first\none. A change applies to open sessions at once.",
-          "format": "uint",
-          "minimum": 0,
+          "description": "Lines each log session keeps in memory (100 to 5,000,000; out of range is clamped). When\na chatty pod writes more, the oldest lines are dropped and the viewer shows a \"truncated\"\nmarker above the first one. A change applies to open sessions at once; set it under\n`clusters.<id>.logs` to give one cluster a different bound.",
+          "format": "int64",
+          "maximum": 5000000,
+          "minimum": 100,
           "type": [
             "integer",
+            "null"
+          ]
+        },
+        "default_tail": {
+          "description": "Lines the tail range (key `0`) reads before it follows (1 to 100,000; out of range is\nclamped). Applies to log views opened afterwards.",
+          "format": "int64",
+          "maximum": 100000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "json_auto_detect": {
+          "description": "Reserved until the JSON log mode lands (E08-S05): the value is stored and reaches open\nviews, but no rendering reads it yet. It will render lines that are JSON objects as\nlevel / time / message columns when the log looks structured.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "timestamps": {
+          "description": "Show each line's server timestamp before its text (key `t` toggles it per view). A change\napplies to open views at once.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "wrap": {
+          "description": "Wrap long lines instead of letting them run off the edge (key `w` toggles it per view).\nA change applies to open views at once.",
+          "type": [
+            "boolean",
             "null"
           ]
         }

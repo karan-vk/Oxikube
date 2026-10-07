@@ -4,7 +4,9 @@
 
 mod containers;
 mod fixture;
+mod keymap;
 mod keys;
 mod open;
 mod scroll;
+mod settings;
 mod stream;

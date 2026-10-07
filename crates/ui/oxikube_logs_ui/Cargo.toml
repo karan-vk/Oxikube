@@ -36,6 +36,7 @@ oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
 serde_json.workspace = true
+tracing-subscriber.workspace = true
 
 [features]
 default = []
