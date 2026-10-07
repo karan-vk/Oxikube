@@ -41,6 +41,23 @@ fn clearing_a_buffer_keeps_the_seqs_and_is_not_a_drop() {
 }
 
 #[test]
+fn only_lines_dropped_since_the_clear_count_as_missing() {
+    let mut buffer = LogBuffer::new(10);
+    buffer.extend((0..25).map(|i| LogEntry::new(line(i))));
+    assert_eq!((buffer.dropped(), buffer.dropped_since_clear()), (15, 15));
+    buffer.clear();
+    assert_eq!(
+        (buffer.dropped(), buffer.dropped_since_clear()),
+        (15, 0),
+        "the lifetime count stays, what is missing before the first line does not"
+    );
+    buffer.extend((25..32).map(|i| LogEntry::new(line(i))));
+    assert_eq!(buffer.dropped_since_clear(), 0, "it still fits");
+    buffer.extend((32..40).map(|i| LogEntry::new(line(i))));
+    assert_eq!((buffer.dropped(), buffer.dropped_since_clear()), (20, 5));
+}
+
+#[test]
 fn a_session_clears_while_streaming_and_the_delta_says_so() {
     let mut h = Harness::new();
     let session = h.follow(

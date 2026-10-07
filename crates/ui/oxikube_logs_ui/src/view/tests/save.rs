@@ -20,6 +20,7 @@ use oxikube_workspace::Workspace;
 use parking_lot::Mutex;
 
 use super::fixture::{Fx, line, lines, pod_ref};
+use super::scroll::{tick, trickle};
 use crate::export::SaveDialog;
 
 const PATH: &str = "/exports/web-0.log";
@@ -221,6 +222,26 @@ fn a_truncated_buffer_is_said_so_in_the_dialog(cx: &mut TestAppContext) {
             .update(|_, cx| dialog.read(cx).note().map(str::to_owned)),
         None
     );
+}
+
+#[gpui::test]
+fn the_dialog_does_not_warn_about_lines_dropped_before_a_clear(cx: &mut TestAppContext) {
+    let mut fx = Fx::with_buffer(cx, 100);
+    let view = fx.open(trickle(100, 40));
+    tick(&mut fx, 5); // seqs 0..5 leave the ring: the view shows its truncated marker
+    assert!(fx.read(&view, |v| v.line_window().is_truncated()));
+    fx.keys("shift-c");
+    tick(&mut fx, 3);
+    fx.read(&view, |v| {
+        assert!(!v.line_window().is_truncated(), "the view shows no marker");
+    });
+    fx.keys("ctrl-s");
+    let dialog = fx.dialog().unwrap();
+    let note = fx
+        .vcx
+        .update(|_, cx| dialog.read(cx).note().map(str::to_owned));
+    assert_eq!(note, None, "so the dialog has no note either");
+    assert_eq!(fx.summary(), "Everything the buffer holds: 3 lines.");
 }
 
 #[gpui::test]

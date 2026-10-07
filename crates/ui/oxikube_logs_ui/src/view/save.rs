@@ -61,7 +61,9 @@ impl LogView {
             self.toast(Toast::info("There is no log to save yet."), cx);
             return;
         };
-        let note = session.read(|buffer, _| truncation_note(buffer.dropped(), buffer.capacity()));
+        // Only lines dropped since a clear: the view shows no marker for what the user cleared.
+        let note = session
+            .read(|buffer, _| truncation_note(buffer.dropped_since_clear(), buffer.capacity()));
         let reader = session.reader();
         let view = cx.entity().downgrade();
         let format = self.export_format();

@@ -23,6 +23,9 @@ pub struct LogBuffer {
     dropped: u64,
     /// Lines the user cleared over the buffer's life (not counted in `dropped`).
     cleared: u64,
+    /// What `dropped` was when the buffer was last cleared: lines dropped before it are gone on
+    /// purpose, so they are no longer a truncation of what the buffer holds.
+    dropped_at_clear: u64,
 }
 
 impl LogBuffer {
@@ -36,6 +39,7 @@ impl LogBuffer {
             first_seq: 0,
             dropped: 0,
             cleared: 0,
+            dropped_at_clear: 0,
         }
     }
 
@@ -67,6 +71,13 @@ impl LogBuffer {
     /// Lines dropped from the front so far: the count behind the "truncated" marker.
     pub fn dropped(&self) -> u64 {
         self.dropped
+    }
+
+    /// Lines dropped from the front since the buffer was last cleared (all of them when it never
+    /// was): what is missing before the first retained line, as the viewer's "truncated" marker
+    /// counts it. Lines the user cleared are not part of it.
+    pub fn dropped_since_clear(&self) -> u64 {
+        self.dropped - self.dropped_at_clear
     }
 
     /// Lines the user cleared so far ([`clear`](Self::clear)); they were not dropped for space,
@@ -142,6 +153,7 @@ impl LogBuffer {
         self.lines.shrink_to(1_024);
         self.first_seq += cleared as u64;
         self.cleared += cleared as u64;
+        self.dropped_at_clear = self.dropped;
         cleared
     }
 
