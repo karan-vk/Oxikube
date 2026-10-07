@@ -134,3 +134,45 @@ fn a_search_longer_than_one_slice_finds_everything(cx: &mut TestAppContext) {
         .read_with(cx, |terminal, _| terminal.snapshot().row_text(2));
     assert_eq!(row, "pod-last Running");
 }
+
+#[gpui::test]
+fn input_stops_when_the_session_ends_or_its_input_is_closed(cx: &mut TestAppContext) {
+    let backend = FakeTerminalBackend::silent();
+    let h = harness(cx, &backend, (40, 5));
+    h.terminal.update(cx, |terminal, _| terminal.input("ls\r"));
+    next_frame(cx);
+    assert_eq!(backend.written(), b"ls\r", "a running session takes input");
+
+    // A dropped connection: the view closes the input, the screen stays.
+    backend.output("kept");
+    next_frame(cx);
+    h.terminal.update(cx, |terminal, _| terminal.close_input());
+    assert!(
+        !h.terminal
+            .read_with(cx, |terminal, _| terminal.accepts_input())
+    );
+    h.terminal
+        .update(cx, |terminal, _| terminal.input("rm -rf /\r"));
+    next_frame(cx);
+    assert_eq!(
+        backend.written(),
+        b"ls\r",
+        "nothing more reaches the process"
+    );
+    assert_eq!(h.row(cx, 0), "kept");
+}
+
+#[gpui::test]
+fn an_ended_session_takes_no_input(cx: &mut TestAppContext) {
+    let backend = FakeTerminalBackend::silent();
+    let h = harness(cx, &backend, (40, 5));
+    backend.exit(ExitStatus::with_code(0));
+    next_frame(cx);
+    assert!(
+        !h.terminal
+            .read_with(cx, |terminal, _| terminal.accepts_input())
+    );
+    h.terminal.update(cx, |terminal, _| terminal.input("x"));
+    next_frame(cx);
+    assert!(backend.written().is_empty());
+}

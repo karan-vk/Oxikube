@@ -142,7 +142,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::TerminalCopy
         | Command::TerminalPaste
         | Command::TerminalSplit
-        | Command::TerminalClose => None,
+        | Command::TerminalClose
+        | Command::TerminalReconnect
+        | Command::TerminalRestart => None,
     }
 }
 

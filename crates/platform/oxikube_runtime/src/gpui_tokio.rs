@@ -26,6 +26,8 @@
 
 use gpui::{App, Global};
 use std::io;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use tokio::runtime::{Builder, Handle, Runtime};
 
 /// Worker threads of the runtime [`init`] builds. Zed uses two so the process does not run two
@@ -57,6 +59,8 @@ pub(crate) enum Backend {
 /// The GPUI global holding the backend.
 pub(crate) struct GlobalTokio {
     pub(crate) backend: Backend,
+    /// How many `spawn_kube` futures of this app are alive (see [`crate::live_tasks`]).
+    pub(crate) live: Arc<AtomicUsize>,
 }
 
 impl Global for GlobalTokio {}
@@ -97,6 +101,7 @@ pub fn init(cx: &mut App) -> io::Result<()> {
             owned_runtime: Some(runtime),
             handle,
         },
+        live: Arc::default(),
     });
     Ok(())
 }
@@ -112,6 +117,7 @@ pub fn init_from_handle(cx: &mut App, handle: Handle) {
             owned_runtime: None,
             handle,
         },
+        live: Arc::default(),
     });
 }
 
@@ -123,6 +129,7 @@ pub fn init_deterministic(cx: &mut App) {
     }
     cx.set_global(GlobalTokio {
         backend: Backend::Deterministic,
+        live: Arc::default(),
     });
 }
 

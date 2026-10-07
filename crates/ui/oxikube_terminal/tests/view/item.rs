@@ -53,7 +53,7 @@ fn the_tab_shows_the_program_then_the_process_title_and_is_dirty_while_running(
     h.backend(0).exit(ExitStatus::with_code(3));
     h.frame();
     assert!(!tab(&mut h, &view).dirty, "nothing runs any more");
-    assert!(h.drawn("terminal-exited"), "the exit line shows");
+    assert!(h.drawn("terminal-banner"), "the exit banner shows");
     let status = h
         .vcx
         .update(|_, cx| view.read(cx).exit_status(cx).cloned())

@@ -10,7 +10,9 @@ tokio <-> GPUI bridge (gpui_tokio), spawn_kube with abort-on-drop, frame-coalesc
   (Apache-2.0). `init` (own 2-worker runtime), `init_from_handle` (binary-owned runtime, see
   `build_runtime`), `init_deterministic` (test mode: no runtime, no OS threads), `handle`, `mode`.
 - `kube_task` (E05-S01): `spawn_kube(cx, fut) -> KubeTask<R>`, a GPUI task that aborts the tokio
-  task when dropped; panics come back as `KubeTaskError::Panicked` (redacted).
+  task when dropped; panics come back as `KubeTaskError::Panicked` (redacted). `live_tasks(cx)`
+  counts this app's `spawn_kube` futures that have not ended (E09-S12): the leak tests assert it
+  returns to its baseline after open/close cycles.
 - `notify` (E05-S01): `notify_coalesced(cx)` / `cx.notify_coalesced()`, one `cx.notify()` per
   `FRAME_INTERVAL` (8.333 ms), counted by `perf::record_notify`.
 - `channel` (E05-S01): `batch_channel(capacity)`, a bounded tokio channel whose receiver drains

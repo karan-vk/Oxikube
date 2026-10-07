@@ -291,6 +291,8 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "terminal::New" => Command::TerminalNew { cluster: None },
         "terminal::Split" => Command::TerminalSplit,
         "terminal::Close" => Command::TerminalClose,
+        "terminal::Reconnect" => Command::TerminalReconnect,
+        "terminal::Restart" => Command::TerminalRestart,
         "terminal::OpenLink" => Command::TerminalOpenLink {
             target: "https://kubernetes.io".into(),
         },

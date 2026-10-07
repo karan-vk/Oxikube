@@ -24,6 +24,13 @@ alacritty_terminal grid + custom GPUI Element + TerminalBackend (local PTY, kube
   `terminal::New` (`ctrl-~`), `terminal::Split` (`cmd-d` / `ctrl-shift-d` in a terminal) and
   `terminal::Close` (`cmd-w` / `ctrl-shift-w` in a terminal) commands; `` ctrl-` `` toggles the panel.
   Screenshot: `terminal_tabs` in `tests/screenshot.rs`.
+- `view::lifecycle` (E09-S12): the terminal's life as a small enum (`Lifecycle`), the error taxonomy
+  (`Failure`: one headline and hint per cause) and the `Banner` above the screen: a dropped pod
+  session offers Reconnect, an exited local shell shows its code with Restart (Close tab first
+  after code 0); the old screen stays, dimmed, and takes no input. `terminal::Reconnect` and
+  `terminal::Restart` (palette, banner buttons, agents' tool stubs) start a new session from the
+  same descriptor. Leak tests: `tests/view/leak.rs` (50 cycles over the fake backend: live tasks,
+  live backends, weak handles) and `tests/pty_leak.rs` (50 real PTYs: descriptors and tasks).
 
 ## Modules
 

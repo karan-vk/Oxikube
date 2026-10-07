@@ -224,6 +224,17 @@ pub enum Command {
     /// focus is elsewhere. Does nothing when neither is a terminal.
     #[serde(rename = "terminal::Close")]
     TerminalClose,
+    /// Open the focused pod terminal's session again after its connection dropped or it ended
+    /// (E09-S12): a new session in the same container (the state of the old shell is gone). Goes
+    /// through the exec service, which re-checks the exec capability. Does nothing for a terminal
+    /// that is running or runs on this machine.
+    #[serde(rename = "terminal::Reconnect")]
+    TerminalReconnect,
+    /// Start a new shell in the focused local terminal whose shell exited (E09-S12), with the same
+    /// program, directory and cluster. Does nothing for a terminal that is running or runs in a
+    /// pod.
+    #[serde(rename = "terminal::Restart")]
+    TerminalRestart,
     /// Open a link a terminal shows (cmd/ctrl-click, E09-S05): an `http`, `https`, `mailto` or
     /// `file` URL in the browser, or an absolute local path (an optional `:line[:column]` suffix
     /// is accepted) with the system's opener. Reads and changes nothing in a cluster.
@@ -697,6 +708,8 @@ impl Command {
             Command::TerminalNew { .. } => CommandId::TERMINAL_NEW,
             Command::TerminalSplit => CommandId::TERMINAL_SPLIT,
             Command::TerminalClose => CommandId::TERMINAL_CLOSE,
+            Command::TerminalReconnect => CommandId::TERMINAL_RECONNECT,
+            Command::TerminalRestart => CommandId::TERMINAL_RESTART,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -940,6 +953,8 @@ mod tests {
             },
             Command::TerminalSplit,
             Command::TerminalClose,
+            Command::TerminalReconnect,
+            Command::TerminalRestart,
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -1200,6 +1215,8 @@ mod tests {
                     | Command::TerminalNew { .. }
                     | Command::TerminalSplit
                     | Command::TerminalClose
+                    | Command::TerminalReconnect
+                    | Command::TerminalRestart
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }

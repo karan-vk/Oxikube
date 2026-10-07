@@ -17,13 +17,41 @@
 
 use crate::gpui_tokio::{Backend, GlobalTokio};
 use futures::FutureExt as _;
-use gpui::{AppContext, Task};
+use gpui::{App, AppContext, Task};
 use oxikube_domain::OxiError;
 use std::any::Any;
 use std::future::Future;
 use std::panic::{AssertUnwindSafe, Location};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::task::{AbortHandle, JoinError};
 use tracing::Instrument as _;
+
+/// How many [`spawn_kube`] futures of this app are alive: started and neither finished nor aborted
+/// (a dropped [`KubeTask`] aborts its future, which ends it). The leak tests read it before and
+/// after a batch of open/close cycles and assert it is back where it started; it is also a cheap
+/// health number for `--perf`. `0` before any `init*` call. Counted per app, so tests running side
+/// by side do not see each other's tasks.
+pub fn live_tasks(cx: &App) -> usize {
+    cx.try_global::<GlobalTokio>()
+        .map_or(0, |global| global.live.load(Ordering::Acquire))
+}
+
+/// Counts one live [`spawn_kube`] future for as long as it exists (finished or dropped).
+struct LiveGuard(Arc<AtomicUsize>);
+
+impl LiveGuard {
+    fn new(live: &Arc<AtomicUsize>) -> Self {
+        live.fetch_add(1, Ordering::AcqRel);
+        Self(live.clone())
+    }
+}
+
+impl Drop for LiveGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
 
 /// The GPUI task [`spawn_kube`] returns: the future's output, or why it never produced one.
 pub type KubeTask<R> = Task<Result<R, KubeTaskError>>;
@@ -86,24 +114,32 @@ where
 {
     let caller = Location::caller();
     let span = tracing::debug_span!("spawn_kube", caller = %caller);
-    cx.read_global(|global: &GlobalTokio, app| match &global.backend {
-        Backend::Tokio { handle, .. } => {
-            let join = handle.spawn(fut.instrument(span));
-            let abort = AbortOnDrop(join.abort_handle());
-            app.background_executor().spawn(async move {
-                let result = join.await;
-                // Disarm only once the tokio task finished; until then, dropping this future (the
-                // GPUI task was dropped) drops `abort`, which aborts the tokio task.
-                drop(abort);
-                result.map_err(KubeTaskError::from)
-            })
+    cx.read_global(|global: &GlobalTokio, app| {
+        // Dropped with the future: when it finishes, panics or is aborted.
+        let live = LiveGuard::new(&global.live);
+        let fut = async move {
+            let _live = live;
+            fut.await
+        };
+        match &global.backend {
+            Backend::Tokio { handle, .. } => {
+                let join = handle.spawn(fut.instrument(span));
+                let abort = AbortOnDrop(join.abort_handle());
+                app.background_executor().spawn(async move {
+                    let result = join.await;
+                    // Disarm only once the tokio task finished; until then, dropping this future (the
+                    // GPUI task was dropped) drops `abort`, which aborts the tokio task.
+                    drop(abort);
+                    result.map_err(KubeTaskError::from)
+                })
+            }
+            Backend::Deterministic => app.background_executor().spawn(async move {
+                AssertUnwindSafe(fut.instrument(span))
+                    .catch_unwind()
+                    .await
+                    .map_err(|payload| KubeTaskError::Panicked(panic_message(payload.as_ref())))
+            }),
         }
-        Backend::Deterministic => app.background_executor().spawn(async move {
-            AssertUnwindSafe(fut.instrument(span))
-                .catch_unwind()
-                .await
-                .map_err(|payload| KubeTaskError::Panicked(panic_message(payload.as_ref())))
-        }),
     })
 }
 
