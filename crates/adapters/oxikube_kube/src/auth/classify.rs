@@ -18,10 +18,12 @@ mod auth_error;
 mod cert_error;
 mod config_error;
 mod text;
+mod upgrade_error;
 use auth_error::classify_auth;
 use cert_error::certificate_rejection;
 pub use config_error::{classify_kubeconfig, classify_tls_setup};
 use text::one_line;
+use upgrade_error::classify_upgrade;
 
 /// Whether the credential in use can be renewed by rebuilding the client.
 ///
@@ -73,7 +75,8 @@ pub(crate) fn redacted_line(text: &str) -> String {
 /// | 401, exec / OIDC / OAuth / token-file failures | `Auth` (see [`classify_with`] for `retryable`) |
 /// | 403 | `Forbidden`, with the server's "who cannot do what" message |
 /// | 404 / 409 (and 410 Gone) / 400, 422 | `NotFound` / `Conflict` / `Validation` |
-/// | 429, 503, 504, connection and TLS failures | `Network` |
+/// | websocket upgrade (exec, attach, port-forward) refused with 401 / 403 / 404 | `Auth` / `Forbidden` / `NotFound` |
+/// | 429, 503, 504, other upgrade failures, connection and TLS failures | `Network` |
 /// | server certificate rejected in the handshake | `Network`, not retryable |
 /// | 408, elapsed deadlines | `Timeout` |
 /// | missing API group, 405/406/415/501 | `Unsupported` |
@@ -110,10 +113,7 @@ pub fn classify_with(err: &kube::Error, refresh: CredentialRefresh) -> OxiError 
         // In-cluster inference is not used by the adapter; keep kube's text out anyway,
         // since it embeds the kubeconfig error too.
         E::InferConfig(_) => OxiError::internal("could not infer a client configuration"),
-        E::UpgradeConnection(e) => OxiError::network(format!(
-            "websocket upgrade failed: {}",
-            one_line(&redact(&e.to_string()))
-        )),
+        E::UpgradeConnection(e) => classify_upgrade(e, refresh),
         E::SerdeError(_) | E::FromUtf8(_) | E::LinesCodecMaxLineLengthExceeded => {
             OxiError::internal("the cluster sent a response that could not be decoded")
         }
