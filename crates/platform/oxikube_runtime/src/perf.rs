@@ -6,8 +6,8 @@
 //!   ring buffer ([`FrameRing`]); feed deltas and `notify` calls are relaxed atomic adds. Nothing
 //!   allocates, locks or does I/O on the UI thread.
 //! - [`PerfSession`]: a background thread that drains the recorder every
-//!   [`DEFAULT_FLUSH_INTERVAL`] and appends JSONL to `<data dir>/oxikube/perf/*.jsonl`
-//!   ([`default_dir`]). [`PerfSession::finish`] returns a [`SessionSummary`] (p50/p95/p99/max).
+//!   [`DEFAULT_FLUSH_INTERVAL`] and appends JSONL to `<dir>/oxikube-perf-*.jsonl`
+//!   (the binary passes `<data dir>/perf`, honouring `OXIKUBE_DATA_DIR`). [`PerfSession::finish`] returns a [`SessionSummary`] (p50/p95/p99/max).
 //! - [`PerfRoot`]: the frame hook. It wraps the window's root view; see "What a frame is" below.
 //! - [`install`] / [`record_notify`] / [`record_feed_deltas`]: a process-wide recorder for code
 //!   far from the window (feeds, `notify_coalesced`). When `--perf` is off nothing is installed
@@ -56,7 +56,6 @@ pub use report::{Counters, REPORT_SCHEMA, ScenarioSample, ScenarioStatus};
 pub use ring::{FrameRing, RingReader};
 pub use session::{
     DEFAULT_FLUSH_INTERVAL, FRAME_MEASURES, Finished, JSONL_SCHEMA, PerfSession, SessionSummary,
-    default_dir,
 };
 pub use stats::{Summary, nanos_to_ms, percentile_sorted, round_ms};
 

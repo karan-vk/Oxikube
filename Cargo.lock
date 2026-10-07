@@ -6027,7 +6027,6 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "dirs 7.0.0",
  "futures",
  "gpui-pre",
  "libc",

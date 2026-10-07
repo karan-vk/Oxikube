@@ -1,8 +1,7 @@
 //! `--perf` session: a background thread drains the [`Recorder`] and appends JSONL.
 //!
-//! File: `<dir>/oxikube-perf-<unix ms>-<pid>.jsonl`, where `<dir>` defaults to [`default_dir`]
-//! (`<data dir>/oxikube/perf`: `~/.local/share/oxikube/perf` on Linux,
-//! `~/Library/Application Support/oxikube/perf` on macOS). One JSON object per line:
+//! File: `<dir>/oxikube-perf-<unix ms>-<pid>.jsonl`, where `<dir>` is chosen by the caller (the
+//! binary defaults to `<data dir>/perf`, honouring `OXIKUBE_DATA_DIR`). One JSON object per line:
 //!
 //! - `{"kind":"start", "schema", "app_version", "os", "arch", "pid", "started_unix_ms", "flush_interval_ms", "measures"}`
 //! - `{"kind":"tick", "t_ms", "interval_ms", "frames_us":[..], "dropped_frames", "feed_deltas", "feed_deltas_per_s", "notifies", "notifies_per_s", "max_notifies_per_frame", "rss_mib", "peak_rss_mib"}`
@@ -37,11 +36,6 @@ pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
 /// What a recorded frame covers (written into the `start` line and the reports).
 pub const FRAME_MEASURES: &str = "root view render start -> end of the GPUI update that drew (and, \
 in the windowed app, presented) the frame; excludes GPU execution and display latency";
-
-/// `<data dir>/oxikube/perf` (`dirs::data_dir`), or `None` when the OS reports no data dir.
-pub fn default_dir() -> Option<PathBuf> {
-    dirs::data_dir().map(|d| d.join("oxikube").join("perf"))
-}
 
 /// Totals for a whole session; printed on exit and written as the final JSONL line.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -519,12 +513,5 @@ mod tests {
         let summary = Accumulator::default().summary(Duration::from_secs(30));
         assert_eq!(summary.frames, None);
         assert!(summary.to_string().starts_with("0 frames in 30.0 s"));
-    }
-
-    #[test]
-    fn default_dir_ends_in_oxikube_perf() {
-        if let Some(dir) = default_dir() {
-            assert!(dir.ends_with("oxikube/perf"));
-        }
     }
 }
