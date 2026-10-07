@@ -17,7 +17,7 @@ pub fn data_dir() -> Option<PathBuf> {
 
 /// [`data_dir`] with the `OXIKUBE_DATA_DIR` value passed in (`None` or empty = unset), so tests do
 /// not mutate the process environment.
-pub(crate) fn data_dir_from(env: Option<OsString>) -> Option<PathBuf> {
+fn data_dir_from(env: Option<OsString>) -> Option<PathBuf> {
     match env.filter(|v| !v.is_empty()) {
         Some(dir) => Some(PathBuf::from(dir)),
         None => dirs::data_dir().map(|d| d.join("oxikube")),

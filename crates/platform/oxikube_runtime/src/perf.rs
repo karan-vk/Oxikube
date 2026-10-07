@@ -7,7 +7,8 @@
 //!   allocates, locks or does I/O on the UI thread.
 //! - [`PerfSession`]: a background thread that drains the recorder every
 //!   [`DEFAULT_FLUSH_INTERVAL`] and appends JSONL to `<dir>/oxikube-perf-*.jsonl`
-//!   (the binary passes `<data dir>/perf`, honouring `OXIKUBE_DATA_DIR`). [`PerfSession::finish`] returns a [`SessionSummary`] (p50/p95/p99/max).
+//!   (the binary passes `<data dir>/perf`, honouring `OXIKUBE_DATA_DIR`).
+//!   [`PerfSession::finish`] returns a [`SessionSummary`] (p50/p95/p99/max).
 //! - [`PerfRoot`]: the frame hook. It wraps the window's root view; see "What a frame is" below.
 //! - [`install`] / [`record_notify`] / [`record_feed_deltas`]: a process-wide recorder for code
 //!   far from the window (feeds, `notify_coalesced`). When `--perf` is off nothing is installed
