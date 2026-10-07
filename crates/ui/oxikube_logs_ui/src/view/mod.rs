@@ -50,7 +50,7 @@ mod autoscroll;
 mod chrome;
 mod clear;
 mod columns;
-pub(crate) mod containers;
+mod containers;
 mod controls;
 mod copy;
 mod detail;

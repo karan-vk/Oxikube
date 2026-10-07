@@ -23,7 +23,6 @@ pub(crate) enum OverflowItem {
     /// An action; `checked` shows a tick for a toggle that is on.
     Entry {
         /// A stable name of the entry (the element id it had as a toolbar button).
-        #[cfg_attr(not(test), allow(dead_code))]
         id: &'static str,
         /// The words of the row.
         label: &'static str,

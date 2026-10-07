@@ -68,7 +68,7 @@ const LABEL_NAME_CHARS: usize = 24;
 
 /// What the toolbar's container picker says: the container read, with its place among the pod's
 /// containers when there are several (`main (1/2)`).
-pub fn container_label(current: Option<&str>, choices: &[ContainerChoice]) -> String {
+pub(super) fn container_label(current: Option<&str>, choices: &[ContainerChoice]) -> String {
     let name = current.map_or_else(|| "default container".to_owned(), shorten);
     if choices.len() < 2 {
         return name;
@@ -110,7 +110,7 @@ pub fn default_container(pod: &Resource, choices: &[ContainerChoice]) -> Option<
 impl LogView {
     /// Whether the container read is crash-looping and its current instance is shown: the strip
     /// under the toolbar then says that "Previous" holds the last crash.
-    pub fn shows_crash_hint(&self) -> bool {
+    pub(crate) fn shows_crash_hint(&self) -> bool {
         self.aggregate.is_none()
             && !self.options.previous
             && self.options.container.as_deref().is_some_and(|name| {

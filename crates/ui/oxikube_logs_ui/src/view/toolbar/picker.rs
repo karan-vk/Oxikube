@@ -56,10 +56,17 @@ impl LogView {
                 .child(label)
                 .into_any_element();
         }
-        let choices: Vec<(String, String, bool)> = self
+        let choices: Vec<(String, String)> = self
             .containers
             .iter()
-            .map(|c| (c.name.to_string(), c.label(), c.crash_looping))
+            .map(|c| {
+                let label = if c.crash_looping {
+                    format!("{} (crash-looping)", c.label())
+                } else {
+                    c.label()
+                };
+                (c.name.to_string(), label)
+            })
             .collect();
         let view = cx.entity().downgrade();
         let button = Button::new("log-container")
@@ -68,16 +75,11 @@ impl LogView {
             .xsmall()
             .dropdown_caret(true)
             .dropdown_menu(move |mut menu, _, _| {
-                for (name, label, crashing) in &choices {
+                for (name, label) in &choices {
                     let (view, name) = (view.clone(), name.clone());
                     let checked = current.as_deref() == Some(name.as_str());
-                    let label = if *crashing {
-                        format!("{label} (crash-looping)")
-                    } else {
-                        label.clone()
-                    };
                     menu = menu.item(
-                        menu_row(format!("log-container:{name}"), label)
+                        menu_row(format!("log-container:{name}"), label.clone())
                             .checked(checked)
                             .on_click(move |_, _, cx| {
                                 view.update(cx, |view, cx| view.request_container(&name, cx))

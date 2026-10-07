@@ -20,14 +20,19 @@ const EPSILON: f32 = 0.5;
 
 /// The empty space above the unwrapped rows, as measured on the last frame.
 #[derive(Clone, Default)]
-pub struct RowSnap(Rc<Cell<Pixels>>, Rc<Cell<Pixels>>);
+pub(crate) struct RowSnap {
+    /// The body's height modulo one row.
+    slack: Rc<Cell<Pixels>>,
+    /// The body's height.
+    height: Rc<Cell<Pixels>>,
+}
 
 impl RowSnap {
     /// The slack to leave above `rows` rows of height `row`: the body's measured slack once the
     /// rows fill the body, none before.
-    pub fn slack(&self, rows: usize, row: Pixels) -> Pixels {
-        if row * rows as f32 > self.1.get() {
-            self.0.get()
+    pub(crate) fn slack(&self, rows: usize, row: Pixels) -> Pixels {
+        if row * rows as f32 > self.height.get() {
+            self.slack.get()
         } else {
             px(0.)
         }
@@ -35,18 +40,18 @@ impl RowSnap {
 
     /// Takes the measurement of a body `height` tall with rows `row` tall; true when the slack
     /// moved (the view then draws once more).
-    pub fn measure(&self, height: Pixels, row: Pixels) -> bool {
+    fn measure(&self, height: Pixels, row: Pixels) -> bool {
         let slack = slack_of(height, row);
-        let moved = (slack - self.0.get()).abs() > px(EPSILON)
-            || (height - self.1.get()).abs() > px(EPSILON);
-        self.0.set(slack);
-        self.1.set(height);
+        let moved = (slack - self.slack.get()).abs() > px(EPSILON)
+            || (height - self.height.get()).abs() > px(EPSILON);
+        self.slack.set(slack);
+        self.height.set(height);
         moved
     }
 }
 
 /// `height` modulo `row` (zero for a degenerate row or height).
-pub fn slack_of(height: Pixels, row: Pixels) -> Pixels {
+fn slack_of(height: Pixels, row: Pixels) -> Pixels {
     if row <= px(0.) || height <= row {
         return px(0.);
     }
