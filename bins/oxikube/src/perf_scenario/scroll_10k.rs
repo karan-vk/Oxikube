@@ -4,7 +4,8 @@
 //! It runs the real pieces behind a cluster tab's pods table on testkit fakes: a
 //! `ClusterSessionManager` connected through the fake connector, the app's `ResourceStores` on
 //! [`store_runtime`] (the probe that feeds `--perf`'s feed counter included) and the
-//! [`ResourceTable`] view, in a headless window wrapped in the `--perf` frame hook. The pods come
+//! [`ResourceTable`] view, in a headless window built as the app builds its own (the window root,
+//! then the `--perf` frame hook: [`window_root`]). The pods come
 //! from the fake feed generator ([`fixture`]): a relist of [`PODS`] pods, then one watch batch per
 //! frame (see [`fixture::churn`] for the mix and how it compares with the load-pods churn).
 //!
@@ -20,28 +21,26 @@
 //!    holds two frames per scripted frame, each the full cost of a frame with new rows on screen;
 //!    `draw_ms` times the scroll draws from outside.
 //!
-//! The sample fails (exit 1) unless every batch was counted as feed deltas and no frame absorbed
+//! The sample fails (exit 1) unless every batch was counted as feed deltas, no frame absorbed
 //! more than one coalesced notify (`max_notifies_per_frame` ≤ 1: the notify path is coalesced to
-//! frame cadence whatever the event rate).
+//! frame cadence whatever the event rate) and the table's text is drawn in a family the machine
+//! has (not GPUI's fallback on every text run, #509).
 
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{Context as _, Result, bail, ensure};
-use gpui::{
-    AnyView, AnyWindowHandle, App, AppContext as _, Context, Entity, HeadlessAppContext,
-    IntoElement, Render, Window,
-};
+use gpui::{AnyWindowHandle, App, AppContext as _, Entity, HeadlessAppContext};
 use oxikube_app::CoreColumns;
 use oxikube_app::store::{ResourceStores, StoreQuery};
 use oxikube_ports::ClockPort;
 use oxikube_resources_ui::table::{ResourceTable, ResourceTableDeps, store_runtime};
 use oxikube_runtime::perf::harness;
-use oxikube_runtime::perf::{PerfRoot, Recorder, ScenarioSample, Summary, round_ms};
+use oxikube_runtime::perf::{Recorder, ScenarioSample, Summary, round_ms};
 use oxikube_testkit::{FakeClockPort, FakeStatePort, headless};
 
-use super::{FRAMES, WINDOW_SIZE};
+use super::{FRAMES, WINDOW_SIZE, window_root};
 
 mod fixture;
 
@@ -115,16 +114,15 @@ pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
     let hook = probe.then(|| recorder.clone());
     let started = Instant::now();
     let mut table: Option<Entity<ResourceTable>> = None;
+    let mut text_font = None;
     let window: AnyWindowHandle = cx
         .open_window(WINDOW_SIZE, |window, cx| {
             let view =
                 cx.new(|cx| ResourceTable::new(fixture.cluster.clone(), kind, deps, window, cx));
             table = Some(view.clone());
-            let content: AnyView = match hook {
-                Some(recorder) => cx.new(|_| PerfRoot::new(view, recorder)).into(),
-                None => view.into(),
-            };
-            cx.new(|_| Root(content))
+            let (root, font) = window_root::mount(view.into(), hook, window, cx);
+            text_font = Some(font);
+            root
         })?
         .into();
     let table = table.context("the table view")?;
@@ -134,6 +132,7 @@ pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
     harness::draw_frame(&mut cx, window, |_, _| {})?;
     let first_rows = started.elapsed();
     drop(warm);
+    cx.update(|cx| text_font.context("the window root")?.check(cx))?;
 
     // 3. Scroll under churn. The driver parks after each draw: that is where the next batch is
     // delivered and its coalesced notify lands (drawing the window, as GPUI's next frame would).
@@ -183,15 +182,6 @@ pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
         NAME,
         [(FIRST_ROWS_MS.to_owned(), Summary::single(first_rows_ms))],
     ))
-}
-
-/// The window's root: the table, behind the frame hook when probing.
-struct Root(AnyView);
-
-impl Render for Root {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        self.0.clone()
-    }
 }
 
 /// The table's row count.

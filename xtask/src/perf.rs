@@ -19,7 +19,7 @@
 //!    its frame under churn ≥ 55 fps, E07-S09).
 //!
 //! Every scenario process runs with `KUBECONFIG` set to the reference fixture: 3 kubeconfigs with
-//! 20 contexts (`fixture`).
+//! 20 contexts (`fixture`), and with `RUST_LIB_BACKTRACE=0` ([`sample_command`]).
 //!
 //! `--from-report <file>` skips 1-4 and applies `--check` / `--update-baseline` to a saved report
 //! (a nightly `perf-report-<OS>` artifact): that is how the CI-runner baselines are seeded.
@@ -336,10 +336,7 @@ fn run_sample(bin: &Path, scenario: &str, report: &Path, kubeconfig: &OsStr) -> 
     let _ = std::io::stdout().flush();
     let _ = std::fs::remove_file(report);
     let spawned = Instant::now();
-    let mut child = Command::new(bin)
-        .args(["--perf-scenario", scenario, "--perf-report"])
-        .arg(report)
-        .env("KUBECONFIG", kubeconfig)
+    let mut child = sample_command(bin, scenario, report, kubeconfig)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -384,6 +381,23 @@ fn run_sample(bin: &Path, scenario: &str, report: &Path, kubeconfig: &OsStr) -> 
     Ok(sample)
 }
 
+/// The command line and environment of one sample process.
+///
+/// `RUST_LIB_BACKTRACE=0`: `cargo xtask` runs with the repository's `RUST_BACKTRACE=1`
+/// (`.cargo/config.toml`), which the process would inherit, and with it every `anyhow` error
+/// captures a stack trace. A hot path that builds errors then measures stack walks: GPUI's font
+/// fallback did, about 300 ms a frame on the Linux runner (#509). Error backtraces off, panic
+/// backtraces (`RUST_BACKTRACE`) kept.
+fn sample_command(bin: &Path, scenario: &str, report: &Path, kubeconfig: &OsStr) -> Command {
+    let mut command = Command::new(bin);
+    command
+        .args(["--perf-scenario", scenario, "--perf-report"])
+        .arg(report)
+        .env("KUBECONFIG", kubeconfig)
+        .env("RUST_LIB_BACKTRACE", "0");
+    command
+}
+
 fn default_source() -> String {
     match (
         std::env::var("GITHUB_ACTIONS").ok(),
@@ -408,6 +422,36 @@ mod tests {
     struct Cli {
         #[command(flatten)]
         args: Args,
+    }
+
+    #[test]
+    fn samples_run_with_error_backtraces_off() {
+        let command = sample_command(
+            Path::new("oxikube"),
+            "scroll-10k",
+            Path::new("sample.json"),
+            OsStr::new("fixture"),
+        );
+        let env: BTreeMap<_, _> = command.get_envs().collect();
+        assert_eq!(
+            env.get(OsStr::new("RUST_LIB_BACKTRACE")),
+            Some(&Some(OsStr::new("0"))),
+            "error backtraces distort hot paths that build errors (#509)"
+        );
+        assert_eq!(
+            env.get(OsStr::new("KUBECONFIG")),
+            Some(&Some(OsStr::new("fixture")))
+        );
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(
+            args,
+            [
+                "--perf-scenario",
+                "scroll-10k",
+                "--perf-report",
+                "sample.json"
+            ]
+        );
     }
 
     #[test]
