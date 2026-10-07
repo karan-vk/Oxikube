@@ -116,25 +116,12 @@ impl ExecInteractivePolicy {
 ///
 /// The policy's `Auth` error, or the build failure classified by [`classify_with`].
 pub fn build_client(config: Config, policy: ExecInteractivePolicy) -> OxiResult<Client> {
-    build_client_with_warnings(config, policy, None)
+    build_client_bounded(config, policy, None, DEFAULT_REFRESH_DEADLINE)
 }
 
 /// [`build_client`] with a [`WarningLayer`] on the client's HTTP stack, so the API server's
-/// `Warning:` response headers are published to `warnings` (E07-S10).
-///
-/// # Errors
-///
-/// As [`build_client`].
-pub fn build_client_with_warnings(
-    config: Config,
-    policy: ExecInteractivePolicy,
-    warnings: Option<WarningSink>,
-) -> OxiResult<Client> {
-    build_client_bounded(config, policy, warnings, DEFAULT_REFRESH_DEADLINE)
-}
-
-/// [`build_client_with_warnings`] with an explicit limit on each credential refresh the
-/// client performs after it was built (`ClientPool` passes
+/// `Warning:` response headers are published to `warnings` (E07-S10), and an explicit limit
+/// on each credential refresh the client performs after it was built (`ClientPool` passes
 /// `PoolConfig::exec_refresh_deadline`).
 ///
 /// A user with an `exec` plugin or an `auth-provider` gets the refresh guard: the plugin

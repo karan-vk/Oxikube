@@ -88,9 +88,7 @@ type Pending = BoxFuture<'static, Result<Response<Request<Body>>, BoxError>>;
 /// Moves kube's auth layer in front of the client stack, bounded by a deadline. See the
 /// module docs.
 pub struct RefreshGuardLayer {
-    authorize: Authorize,
-    deadline: Duration,
-    stalled: Arc<AtomicUsize>,
+    gate: Gate,
 }
 
 impl RefreshGuardLayer {
@@ -98,9 +96,11 @@ impl RefreshGuardLayer {
     /// have no credentials of its own left, or the header is set twice.
     pub fn new(auth: &AuthLayer, deadline: Duration) -> Self {
         Self {
-            authorize: auth.layer(Echo),
-            deadline,
-            stalled: Arc::default(),
+            gate: Gate {
+                authorize: auth.layer(Echo),
+                deadline,
+                stalled: Arc::default(),
+            },
         }
     }
 }
@@ -111,11 +111,7 @@ impl<S> Layer<S> for RefreshGuardLayer {
     fn layer(&self, inner: S) -> RefreshGuard<S> {
         RefreshGuard {
             inner: Arc::new(tokio::sync::Mutex::new(inner)),
-            gate: Gate {
-                authorize: self.authorize.clone(),
-                deadline: self.deadline,
-                stalled: self.stalled.clone(),
-            },
+            gate: self.gate.clone(),
         }
     }
 }
