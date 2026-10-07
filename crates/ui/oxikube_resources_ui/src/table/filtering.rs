@@ -7,7 +7,7 @@
 //! subscription's feeds so the server filters. The scope is never touched, so the filter composes
 //! with the session's namespace selection.
 
-use gpui::{AppContext as _, Context, Entity, Window};
+use gpui::{App, AppContext as _, Context, Entity, Focusable as _, Window};
 use oxikube_app::store::FilterParts;
 use oxikube_domain::command::Command;
 use oxikube_settings::Settings as _;
@@ -32,10 +32,8 @@ impl ResourceTable {
                 self.save_filter(text, cx);
             }
             FilterBarEvent::Returned => window.focus(&self.focus, cx),
-            FilterBarEvent::Editing(editing) => {
-                self.editing = *editing;
-                cx.notify();
-            }
+            // The flag itself is read from the window when the table renders (`filter_focused`).
+            FilterBarEvent::Editing(_) => cx.notify(),
         }
     }
 
@@ -62,20 +60,47 @@ impl ResourceTable {
         self.filter.update(cx, |bar, cx| bar.focus(window, cx));
     }
 
+    /// The `table::FocusFilter` command reached this table: focuses the bar, unless the command
+    /// is the echo of a `/` pressed here, which focused the bar already (and the user may have
+    /// left it again since, with `enter`, before the command came back).
+    pub fn focus_filter_on_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.filter_focus_echoes > 0 {
+            self.filter_focus_echoes -= 1;
+            return;
+        }
+        self.focus_filter(window, cx);
+    }
+
+    /// Whether the filter field has the keyboard focus, read from the window. The key context is
+    /// built from it on every render, and GPUI draws a dirty frame before it dispatches a key, so
+    /// the key right after the focus moved already sees `Editing`. (The bar's focus events come a
+    /// frame later, and not at all while the window is inactive: a key typed in that gap would
+    /// run a table action instead of typing.)
+    pub(super) fn filter_focused(&self, window: &Window, cx: &App) -> bool {
+        self.filter
+            .read(cx)
+            .focus_handle(cx)
+            .contains_focused(window, cx)
+    }
+
     /// Types `text` into the bar and applies it, as a restored filter or a test does.
     pub fn set_filter_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.filter
             .update(cx, |bar, cx| bar.set_text(text, window, cx));
     }
 
-    /// `/`: asks for the filter bar's focus through `table::FocusFilter`, so the key, the
-    /// palette and an agent run one behaviour.
+    /// `/`: focuses the filter bar at once and sends `table::FocusFilter`, so the key, the
+    /// palette and an agent run one command. The focus does not wait for the command's round
+    /// trip through the bus: the keys typed right after `/` are filter text, never table actions
+    /// (`/apple` typed fast must not attach to a pod on its `a`).
     pub(super) fn on_focus_filter(
         &mut self,
         _: &FocusFilter,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.focus_filter(window, cx);
+        self.filter_focus_echoes = self.filter_focus_echoes.saturating_add(1);
         let command = Command::TableFocusFilter {
             cluster: self.cluster.clone(),
             gvk: self.kind.gvk.clone(),

@@ -108,8 +108,12 @@ pub struct ResourceTable {
     pub(super) filter: Entity<FilterBar>,
     /// The filter the subscription runs with: the bar's last good one.
     pub(super) filter_parts: FilterParts,
-    /// Whether the filter field has the focus (mirrored for the key context).
+    /// Whether the filter field has the focus, read from the window on every render (mirrored
+    /// for the key context, which has no `App`).
     pub(super) editing: bool,
+    /// `/` presses whose `table::FocusFilter` command has not come back yet: the key focuses the
+    /// bar at once, so the command's own focus request is only an echo and is skipped.
+    pub(super) filter_focus_echoes: u32,
     /// Saves the filter text while `resource_table.persist_filter` is on (made on first save).
     pub(super) filter_writer: Option<FilterWriter>,
     /// Reads the saved filter when the table opens; replaced, never cleared from inside.
@@ -226,6 +230,7 @@ impl ResourceTable {
             filter,
             filter_parts: FilterParts::default(),
             editing: false,
+            filter_focus_echoes: 0,
             filter_writer: None,
             filter_task: None,
             _session_task: session_task,
@@ -348,7 +353,7 @@ impl KeyContextual for ResourceTable {
             _ => "many",
         };
         context.value("selection", selection);
-        // Bare keys (`j`, `k`, `/`, enter) are text while the filter field has the focus.
+        // Bare keys (`a`, `s`, `j`, `k`, `/`, enter) are text while the filter field has the focus.
         context.flag_if(self.editing, contexts::EDITING);
     }
 }

@@ -10,9 +10,10 @@
 //!
 //! The grammar, the matching and the server-side selector live in
 //! `oxikube_app::store::filter`; the bar only parses (to show errors) and tells the table the
-//! result. Pressing `/` in a table dispatches `table::FocusFilter`, which focuses the bar;
+//! result. Pressing `/` in a table focuses the bar and dispatches `table::FocusFilter`;
 //! `escape` clears it and `enter` returns to the rows. While the field has the focus the table's
-//! key context says `Editing`, so bare keys (`j`, `k`, `/`) are text.
+//! key context says `Editing` (read from the window's focus on every render, so from the first
+//! key on and in an inactive window too), so bare keys (`a`, `s`, `j`, `k`, `/`) are text.
 
 mod actions;
 mod apply;
