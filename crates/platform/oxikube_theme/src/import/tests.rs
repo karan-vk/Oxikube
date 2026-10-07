@@ -105,6 +105,9 @@ fn ayu_imports_with_expected_tokens() {
         color("#5ac1fe3d"),
         "derived from player 0"
     );
+    // The terminal's cursor and selection tokens follow player 0 too (E09-S05).
+    assert_eq!(dark.terminal.cursor, color("#5ac1feff"));
+    assert_eq!(dark.terminal.selection, color("#5ac1fe3d"));
 
     let light = theme(&imported, "Ayu Light");
     assert_eq!(light.appearance, Appearance::Light);
@@ -360,6 +363,21 @@ fn on_accent_contrasts_with_the_accent() {
     };
     assert!(on_accent("#74ade8").l < 0.2, "light accent gets dark ink");
     assert_eq!(on_accent("#0b6678").l, 1.0, "dark accent gets white");
+}
+
+#[test]
+fn terminal_cursor_and_selection_follow_the_interface() {
+    // A theme that sets neither inherits the fallback's players: the terminal draws its cursor and
+    // selection like the rest of the interface does.
+    let text = r##"{ "themes": [{ "name": "T", "appearance": "dark", "style": { "text.accent": "#ff0000" } }] }"##;
+    let tokens = &import(text).family.themes[0];
+    assert_eq!(tokens.terminal.cursor, tokens.players[0].cursor);
+    assert_eq!(tokens.terminal.selection, tokens.colors.selection);
+    let mut bare = tokens.clone();
+    bare.players.clear();
+    crate::tokens::derive_colors(&mut bare);
+    assert_eq!(bare.terminal.cursor, color("#ff0000"));
+    assert_eq!(bare.terminal.selection, color("#ff0000").opacity(0.3));
 }
 
 #[test]

@@ -137,6 +137,7 @@ mod tests {
             container: Arc::from("app"),
             text: Arc::from("hi"),
             truncated: false,
+            level: None,
         };
         assert_eq!(timestamp(&entry), "2026-10-07T12:00:00.123Z");
     }

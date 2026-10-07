@@ -9,6 +9,7 @@ mod actions;
 mod chrome;
 mod logs;
 mod resources;
+mod terminal;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use oxikube_catalog_ui::namespaces::NamespaceSelector;
@@ -215,6 +216,11 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::LOGS_COPY, "oxikube_logs_ui"),
         (CommandId::LOGS_CLEAR, "oxikube_logs_ui"),
         (CommandId::LOGS_SAVE, "oxikube_logs_ui"),
+        (CommandId::LOGS_FIND, "oxikube_logs_ui"),
+        (CommandId::LOGS_NEXT_MATCH, "oxikube_logs_ui"),
+        (CommandId::LOGS_TOGGLE_FILTER_MODE, "oxikube_logs_ui"),
+        (CommandId::LOGS_TOGGLE_JSON_MODE, "oxikube_logs_ui"),
+        (CommandId::LOGS_TOGGLE_LEVEL, "oxikube_logs_ui"),
     ] {
         assert_eq!(bus.owner(id), Some(owner), "{id}");
         assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");

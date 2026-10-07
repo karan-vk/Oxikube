@@ -11,17 +11,20 @@
 //! | File | Holds |
 //! |---|---|
 //! | `options` | [`ViewOptions`]: range (tail / head / since), container, previous, wrap, timestamps; the port's request |
-//! | `window` | [`LineWindow`] (the rows: truncated marker, lines by seq, state row) and [`Follow`] (autoscroll and its "N new lines" count, by seq) |
+//! | `window` | [`LineWindow`] (the rows: truncated marker, lines by seq or the search's matches, state row) |
+//! | `autoscroll` | [`Follow`] (autoscroll and its "N new lines" count, by seq) |
 //! | `text` | what a row says: timestamp, level colour, marker and state words |
 //! | `containers` | the container selector's list (init, sidecar, regular, ephemeral) from the pod spec |
 //! | `stream` | opening and reopening the session, the delta pump |
+//! | `settings` | the `logs` settings of the view's cluster: its first options, and `wrap` / `timestamps` / `json_auto_detect` applied live |
 //! | `scroll` | autoscroll, pausing on a scroll up, the anchor line across the wrap toggle |
 //! | `controls` | the view's operations (what the commands do) and the requests that dispatch them |
-//! | `selection` | [`Selection`] (click, shift-click, drag, by seq) and [`Marks`] (k9s `m`, the gutter bar), the pointer handlers |
+//! | `selection`, `chrome` | [`Selection`] (click, shift-click, drag, by seq) and [`Marks`] (k9s `m`), the pointer handlers; the gutter bar and selection colour a row carries |
 //! | `pick`, `copy` | which lines an action takes (on screen, the buffer, the filter) and `logs::Copy` (cap 5 MB) |
 //! | `save`, `clear`, `notice` | `logs::Save` (dialog, panel, streamed write), `logs::Clear`, the toasts of local actions |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
 //! | `render`, `toolbar`, `rows` | drawing: toolbar, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
+//! | `json`, `columns`, `filter`, `detail` | JSON mode (E08-S05): the parsed columns of a structured line and their caches, the row they draw, the level chips and the filtered row index, the expanded line's pane |
 //! | `item` | the workspace `Item`, focus and key context |
 //!
 //! # Rendering and performance
@@ -35,11 +38,18 @@
 //! key (PERFORMANCE rule 5). Unwrapped rows draw at most [`NOWRAP_CHARS`] bytes of a line.
 
 mod actions;
+mod autoscroll;
+mod chrome;
 mod clear;
+mod columns;
 mod containers;
 mod controls;
 mod copy;
+mod detail;
+mod filter;
+mod highlight;
 mod item;
+mod json;
 mod notice;
 mod options;
 mod pick;
@@ -48,40 +58,49 @@ mod rows;
 mod save;
 mod scroll;
 mod selection;
+mod settings;
 mod stream;
-mod text;
+pub(crate) mod text;
 mod toolbar;
 mod window;
 
 #[cfg(test)]
 mod tests;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    AppContext as _, Context, Entity, FocusHandle, ListAlignment, ListState, Task,
+    AppContext as _, Context, Entity, FocusHandle, ListAlignment, ListState, Subscription, Task,
     UniformListScrollHandle, WeakEntity, px,
 };
 use oxikube_app::ClusterSessionManager;
 use oxikube_app::logs::export::LineFilter;
-use oxikube_app::logs::{LogService, LogSession};
+use oxikube_app::logs::{LevelFilter, LogService, LogSession};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_ports::FsPort;
+use oxikube_settings::Settings as _;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
+use crate::LogsSettings;
+use crate::search::Search;
+
 pub use actions::{
-    Clear, ClearSelection, Copy, Head, Mark, SaveAll, SaveVisible, Since1h, Since1m, Since5m,
-    Since15m, Since30m, Tail, ToggleAutoscroll, ToggleFullscreen, TogglePrevious, ToggleTimestamps,
-    ToggleWrap,
+    Clear, ClearSelection, CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, SaveAll,
+    SaveVisible, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase,
+    ToggleFilterMode, ToggleFullscreen, ToggleInverse, ToggleJsonMode, TogglePrevious,
+    ToggleTimestamps, ToggleWrap,
 };
+pub use autoscroll::Follow;
 pub use containers::{ContainerChoice, choices_of, default_container};
 pub use copy::COPY_LIMIT_BYTES;
 pub use item::item_key;
+pub use json::JsonColumns;
 pub use options::{HEAD_LIMIT_BYTES, OpenLogs, TAIL_LINES, ViewOptions};
 pub use selection::{Marks, Selection};
 pub use text::{Level, group, level_of, lines_of};
-pub use window::{Follow, LineWindow, Row, RowChange};
+pub use window::{LineWindow, Row, RowChange};
 
 /// Bytes of a line an unwrapped row draws: more than any screen is wide, and a 16 KiB line costs
 /// no more to shape than a short one.
@@ -113,6 +132,15 @@ pub struct LogView {
     /// stream: a change of what is read until then is kept in the options and opens with them.
     pub(crate) awaiting_pod: bool,
     pub(crate) window: LineWindow,
+    /// The level chips (JSON mode filters by them; see [`LogView::levels`]).
+    pub(crate) levels: LevelFilter,
+    /// Whether the session has delivered a structured (JSON) line: the JSON controls (the toggle
+    /// and the level chips) appear with the first, so a plain-text log looks as it always did.
+    pub(crate) saw_json: bool,
+    /// The line shown in the detail pane (JSON mode), if any.
+    pub(crate) expanded: Option<detail::Expanded>,
+    /// Columns and pretty text of the JSON lines drawn, by seq (drawing reads it).
+    pub(crate) records: RefCell<json::RecordCache>,
     pub(crate) follow: Follow,
     /// The selected lines, by seq (click, shift-click, drag).
     pub(crate) selection: Selection,
@@ -137,6 +165,12 @@ pub struct LogView {
     pub(crate) pump: Option<Task<()>>,
     /// Reads the pod for the container selector.
     pub(crate) pod_task: Option<Task<()>>,
+    /// The `logs` settings as last applied to the options (a change applies the keys that moved).
+    pub(crate) settings: LogsSettings,
+    /// Applies changes of the `logs` settings; dropped with the view.
+    pub(crate) _settings_subscription: Subscription,
+    /// The search bar's state (E08-S03).
+    pub(crate) search: Search,
 }
 
 impl LogView {
@@ -151,7 +185,7 @@ impl LogView {
     ) -> Self {
         let options = ViewOptions {
             container,
-            ..ViewOptions::default()
+            ..ViewOptions::from_settings(&LogsSettings::resolve(&target.cluster, cx))
         };
         Self::with_options(target, options, deps, cx)
     }
@@ -164,6 +198,7 @@ impl LogView {
         deps: LogViewDeps,
         cx: &mut Context<Self>,
     ) -> Self {
+        let settings = LogsSettings::resolve(&target.cluster, cx);
         let mut view = Self {
             target,
             deps,
@@ -173,6 +208,10 @@ impl LogView {
             started: false,
             awaiting_pod: false,
             window: LineWindow::new(),
+            levels: LevelFilter::all(),
+            saw_json: false,
+            expanded: None,
+            records: RefCell::default(),
             follow: Follow::default(),
             selection: Selection::default(),
             marks: Marks::default(),
@@ -186,6 +225,9 @@ impl LogView {
             rows_built: 0,
             pump: None,
             pod_task: None,
+            settings,
+            _settings_subscription: LogsSettings::observe_in(cx, Self::settings_changed),
+            search: Search::default(),
         };
         if view.options.container.is_some() {
             view.open_stream(cx);

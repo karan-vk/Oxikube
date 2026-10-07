@@ -116,3 +116,93 @@ fn a_commit_never_overwrites_a_newer_bound_with_an_older_one() {
         shared.read(|buffer, _| assert_eq!(buffer.capacity(), 400));
     }
 }
+
+mod per_cluster {
+    use oxikube_domain::ids::{ClusterId, ContextName};
+    use oxikube_ports::LogOptions;
+
+    use super::super::{Harness, burst};
+    use super::with_lines;
+    use crate::logs::{LogSession, LogTarget, MIN_BUFFER_LINES};
+
+    fn cluster(name: &str) -> ClusterId {
+        ClusterId::new("/home/me/.kube/config", &ContextName::new(name))
+    }
+
+    fn open_in(h: &mut Harness, cluster: &ClusterId, lines: usize) -> LogSession {
+        h.port
+            .script()
+            .stream_logs
+            .push_ok(burst(lines).keep_open());
+        let session = h.service.open_in(
+            cluster,
+            h.port.clone(),
+            LogTarget::pod("default", "web-0"),
+            LogOptions::follow(),
+        );
+        h.settle();
+        h.advance(crate::logs::LogConfig::default().flush_interval);
+        session
+    }
+
+    #[test]
+    fn a_cluster_with_its_own_bound_keeps_that_many_lines() {
+        let mut h = with_lines(1_000);
+        let (prod, dev) = (cluster("prod"), cluster("dev"));
+        h.service.set_cluster_buffer_lines([(prod.clone(), 400)]);
+        assert_eq!(h.service.buffer_lines_for(&prod), 400);
+        assert_eq!(h.service.buffer_lines_for(&dev), 1_000);
+        assert_eq!(h.service.buffer_lines(), 1_000);
+
+        let on_prod = open_in(&mut h, &prod, 900);
+        let on_dev = open_in(&mut h, &dev, 900);
+        assert_eq!(on_prod.len(), 400);
+        assert_eq!(on_dev.len(), 900);
+    }
+
+    #[test]
+    fn changing_a_cluster_bound_resizes_its_open_sessions_only() {
+        let mut h = with_lines(1_000);
+        let (prod, dev) = (cluster("prod"), cluster("dev"));
+        let on_prod = open_in(&mut h, &prod, 800);
+        let on_dev = open_in(&mut h, &dev, 800);
+
+        h.service.set_cluster_buffer_lines([(prod.clone(), 300)]);
+        assert_eq!(on_prod.len(), 300, "shrunk at once");
+        assert_eq!(on_dev.len(), 800, "untouched");
+
+        // The default moves: the cluster with its own bound ignores it, the others follow.
+        h.service.set_buffer_lines(500);
+        assert_eq!(on_prod.len(), 300);
+        assert_eq!(on_dev.len(), 500);
+        on_dev.read(|buffer, _| assert_eq!(buffer.capacity(), 500));
+        on_prod.read(|buffer, _| assert_eq!(buffer.capacity(), 300));
+    }
+
+    #[test]
+    fn dropping_the_override_goes_back_to_the_default() {
+        let mut h = with_lines(1_000);
+        let prod = cluster("prod");
+        h.service.set_cluster_buffer_lines([(prod.clone(), 200)]);
+        let on_prod = open_in(&mut h, &prod, 100);
+        on_prod.read(|buffer, _| assert_eq!(buffer.capacity(), 200));
+
+        h.service.set_cluster_buffer_lines([]);
+        assert_eq!(h.service.buffer_lines_for(&prod), 1_000);
+        on_prod.read(|buffer, _| assert_eq!(buffer.capacity(), 1_000));
+
+        // And it follows the default again.
+        h.service.set_buffer_lines(700);
+        on_prod.read(|buffer, _| assert_eq!(buffer.capacity(), 700));
+        let later = open_in(&mut h, &prod, 10);
+        later.read(|buffer, _| assert_eq!(buffer.capacity(), 700));
+    }
+
+    #[test]
+    fn a_cluster_bound_is_clamped() {
+        let h = with_lines(1_000);
+        let prod = cluster("prod");
+        h.service.set_cluster_buffer_lines([(prod.clone(), 2)]);
+        assert_eq!(h.service.buffer_lines_for(&prod), MIN_BUFFER_LINES);
+    }
+}

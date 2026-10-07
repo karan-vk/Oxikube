@@ -19,26 +19,34 @@ bitflags.workspace = true
 bytes.workspace = true
 futures.workspace = true
 gpui.workspace = true
+oxikube_app.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
 oxikube_runtime.workspace = true
 oxikube_settings.workspace = true
+oxikube_theme.workspace = true
+oxikube_ui.workspace = true
+oxikube_workspace.workspace = true
 parking_lot.workspace = true
 portable-pty.workspace = true
+regex.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-saphyr.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+url.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 
 [dev-dependencies]
+anyhow.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
+gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_assets.workspace = true
-oxikube_testkit.workspace = true
+oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 
@@ -47,10 +55,40 @@ tokio = { workspace = true, features = ["test-util"] }
 name = "grid_bench"
 path = "examples/grid_bench.rs"
 
+# Non-gating paint benchmark of the element (headless, real text system):
+# `cargo run --profile release-fast -p oxikube_terminal --example element_bench`.
+[[example]]
+name = "element_bench"
+path = "examples/element_bench.rs"
+
+# A window with the element over a live local PTY (no keyboard input until E09-S06):
+# `cargo run -p oxikube_terminal --example terminal_preview [-- <program> [args...]]`.
+[[example]]
+name = "terminal_preview"
+path = "examples/terminal_preview.rs"
+
 # The backend -> grid -> GPUI bridge under `#[gpui::test]` (one binary, one module per area).
 [[test]]
 name = "state"
 path = "tests/state/main.rs"
+
+# The element under `#[gpui::test]`: layout and resize, the row cache, links and the mouse (E09-S05).
+[[test]]
+name = "element"
+path = "tests/element/main.rs"
+
+[features]
+default = []
+# Headless GPU screenshots of the element (`tests/screenshot.rs`, harness = false so it runs on the
+# process main thread). Needs Metal / Vulkan, so never part of the default gate; the nightly
+# workflow runs it: `cargo test -p oxikube_terminal --features screenshot --test screenshot`.
+screenshot = []
+
+[[test]]
+name = "screenshot"
+path = "tests/screenshot.rs"
+harness = false
+required-features = ["screenshot"]
 
 [lints]
 workspace = true

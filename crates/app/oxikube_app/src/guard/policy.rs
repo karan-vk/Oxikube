@@ -103,6 +103,17 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::LogsTogglePrevious { target }
         | Command::LogsToggleTimestamps { target }
         | Command::LogsToggleWrap { target }
+        | Command::LogsFind { target, .. }
+        | Command::LogsNextMatch { target }
+        | Command::LogsPreviousMatch { target }
+        | Command::LogsToggleCase { target }
+        | Command::LogsToggleInverse { target }
+        | Command::LogsToggleFilterMode { target }
+        | Command::LogsCloseSearch { target }
+        | Command::LogsToggleJsonMode { target }
+        | Command::LogsToggleLevel { target, .. }
+        | Command::LogsToggleLine { target, .. }
+        | Command::LogsCollapseLine { target }
         | Command::WorkloadScale { target, .. }
         | Command::WorkloadRestart { target }
         | Command::NodeCordon { target }
@@ -120,7 +131,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::WindowNew
         | Command::ViewZoomIn
         | Command::ViewZoomOut
-        | Command::ViewZoomReset => None,
+        | Command::ViewZoomReset
+        | Command::TerminalOpenLink { .. } => None,
     }
 }
 

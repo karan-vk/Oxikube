@@ -8,7 +8,7 @@ use alacritty_terminal::term::TermDamage;
 use alacritty_terminal::term::color::COUNT as COLOR_COUNT;
 use bitflags::bitflags;
 
-use super::{GridPoint, TermGrid, convert, selection};
+use super::{GridPoint, TermGrid, convert, hyperlink, selection};
 
 /// An RGB colour.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -151,7 +151,7 @@ pub struct TerminalCursor {
 }
 
 /// One cell of the viewport.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SnapshotCell {
     /// The character (a space for an empty cell). Combining marks are in
     /// [`TerminalSnapshot::zerowidth`].
@@ -226,6 +226,12 @@ pub struct TerminalSnapshot {
     /// Palette entries the process redefined (OSC 4 / 10 / 11), by [`TermColor`] palette index
     /// (`256` foreground, `257` background, `258` cursor).
     pub color_overrides: Vec<(usize, TermRgb)>,
+    /// The OSC 8 hyperlinks on screen, as `(index into cells, index into hyperlink_uris)`, in cell
+    /// order (E09-S05).
+    pub hyperlinks: Vec<(usize, u16)>,
+    /// The URIs [`hyperlinks`](Self::hyperlinks) points into. Kept from frame to frame so a link
+    /// that stays on screen is not copied again; entries no cell points at may linger.
+    pub hyperlink_uris: Vec<Arc<str>>,
     /// What changed since the previous snapshot.
     pub damage: Damage,
 }
@@ -313,6 +319,7 @@ impl TermGrid {
         out.cells.clear();
         out.cells.resize(rows * columns, SnapshotCell::default());
         out.zerowidth.clear();
+        hyperlink::start_frame(out);
         let offset = content.display_offset as i32;
         for indexed in content.display_iter {
             let row = (indexed.point.line.0 + offset) as usize;
@@ -326,6 +333,9 @@ impl TermGrid {
             };
             if let Some(marks) = cell.zerowidth() {
                 out.zerowidth.extend(marks.iter().map(|&c| (index, c)));
+            }
+            if let Some(link) = cell.hyperlink() {
+                hyperlink::record(out, index, link.uri());
             }
         }
 

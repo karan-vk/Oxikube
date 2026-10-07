@@ -49,9 +49,12 @@ impl LogView {
         };
         let next = session.clear();
         let change = self.window.clear(next);
+        // The search starts over on what arrives next (an empty index; the deltas fill it).
+        self.reindex_empty();
         self.rows_changed(change);
         self.selection.clear();
         self.marks.clear();
+        self.expanded = None;
         self.follow.clear_to(next);
         if self.options.wrap {
             self.list.scroll_to(ListOffset {

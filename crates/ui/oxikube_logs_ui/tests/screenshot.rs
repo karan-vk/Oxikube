@@ -4,6 +4,12 @@
 //!   unwrapped, timestamps shown, the "stream ended" state row at the bottom (dark theme).
 //! - `log_view_wrapped`: the same log wrapped, timestamps hidden (dark theme).
 //! - `log_view_light`: the same log unwrapped in the light theme.
+//! - `log_view_search`: the search bar open with `error|warn` (E08-S03): the matches highlighted,
+//!   the current match's row tinted, the count in the bar (dark theme).
+//! - `log_view_filter`: the same search in filter mode: only the matching lines are rows.
+//! - `log_view_json` (E08-S05): a mixed stream of zap, logrus and pino JSON lines and plain text in
+//!   JSON mode: level chips, time and message columns, the level chips with `debug` off, and one
+//!   line expanded into its pretty-printed JSON.
 //!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
 //! thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so it only builds
@@ -26,8 +32,8 @@ use oxikube_app::logs::{LogConfig, LogService};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
-use oxikube_domain::log::LogLine;
-use oxikube_logs_ui::{LogView, LogViewDeps, log_runtime};
+use oxikube_domain::log::{LevelChip, LogLine};
+use oxikube_logs_ui::{LogView, LogViewDeps, SearchMode, log_runtime};
 use oxikube_ports::{ClusterContext, SourceId};
 use oxikube_testkit::headless::HEADLESS_SCALE_FACTOR;
 use oxikube_testkit::screenshot::{
@@ -39,6 +45,8 @@ use serde_json::json;
 
 const WIDTH: f32 = 960.0;
 const HEIGHT: f32 = 360.0;
+/// The JSON scene is taller: the expanded line's pane takes 240 px under the rows.
+const JSON_HEIGHT: f32 = 580.0;
 
 struct Ignore;
 
@@ -51,6 +59,33 @@ fn headless() -> HeadlessAppContext {
     HeadlessAppContext::with_platform(text_system, Arc::new(oxikube_ui::Assets), || {
         gpui_platform::current_headless_renderer()
     })
+}
+
+/// A mixed stream: a plain banner, then JSON lines in the shapes of zap, logrus and pino.
+fn json_log() -> Vec<LogLine> {
+    let texts = [
+        "=== orders-api starting (build 3f9c2ab) ===",
+        r#"{"level":"info","ts":1791105243.12,"caller":"server/main.go:42","msg":"starting server","addr":":8080","version":"1.42.0"}"#,
+        r#"{"level":"debug","ts":1791105243.4,"caller":"cache/lru.go:31","msg":"cache warmed","entries":12480}"#,
+        r#"{"level":"info","msg":"connected to postgres","time":"2026-10-07T09:14:04.5Z","host":"orders-db","port":5432}"#,
+        r#"{"level":"warning","msg":"slow query on orders_by_customer","time":"2026-10-07T09:14:05.2Z","ms":1834,"customer":4410}"#,
+        r#"{"level":30,"time":1791105246000,"pid":1,"hostname":"orders-api-7c9d","req":{"method":"POST","url":"/api/orders"},"res":{"statusCode":201},"msg":"request completed"}"#,
+        "panic: runtime error: index out of range [3] with length 3",
+        r#"{"level":"error","ts":1791105247.9,"caller":"pay/client.go:120","msg":"payments-svc refused the connection","error":"dial tcp 10.96.14.2:443: connect: connection refused"}"#,
+        r#"{"level":"debug","ts":1791105248.1,"caller":"gc/gc.go:9","msg":"gc: heap 182 MiB -> 96 MiB"}"#,
+        r#"{"level":"info","ts":1791105249.3,"msg":"shutting down","signal":"SIGTERM"}"#,
+    ];
+    let start: Timestamp = "2026-10-07T09:14:03.120Z".parse().expect("a timestamp");
+    texts
+        .iter()
+        .enumerate()
+        .map(|(i, text)| {
+            let ts = start
+                .checked_add(jiff::SignedDuration::from_millis(i as i64 * 731))
+                .expect("in range");
+            LogLine::new(ts, "orders-api-7c9d", "app", *text)
+        })
+        .collect()
 }
 
 /// The log: a server starting, a slow request, a failure, debug noise and one long line.
@@ -93,9 +128,24 @@ fn pod() -> Resource {
     .expect("a pod")
 }
 
-/// Renders the view, wrapped or not, with or without timestamps, in the dark or `light` theme;
-/// `picked` marks the failing line and selects three lines above it (E08-S06).
-fn render(wrap: bool, timestamps: bool, light: bool, picked: bool) -> anyhow::Result<RgbaImage> {
+/// Renders the view, wrapped or not, with or without timestamps, in the dark or `light` theme.
+/// With `json` the stream is [`json_log`], the `debug` chip is off and the failure line (seq 7)
+/// is expanded.
+fn render(wrap: bool, timestamps: bool, light: bool, json: bool) -> anyhow::Result<RgbaImage> {
+    render_with(wrap, timestamps, light, json, None, false)
+}
+
+/// [`render`] with the search bar open on `search` (a pattern and the mode), the first match
+/// being the current one; `picked` marks the failing line and selects three lines above it
+/// (E08-S06).
+fn render_with(
+    wrap: bool,
+    timestamps: bool,
+    light: bool,
+    json: bool,
+    search: Option<(&str, SearchMode)>,
+    picked: bool,
+) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
@@ -106,7 +156,7 @@ fn render(wrap: bool, timestamps: bool, light: bool, picked: bool) -> anyhow::Re
         .logs
         .script()
         .stream_logs
-        .push_ok(Timeline::immediate(log()));
+        .push_ok(Timeline::immediate(if json { json_log() } else { log() }));
     let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry]));
     let sessions =
         ClusterSessionManager::new(connector, source, Arc::new(FakeClockPort::default()));
@@ -119,7 +169,7 @@ fn render(wrap: bool, timestamps: bool, light: bool, picked: bool) -> anyhow::Re
     );
 
     let mut cx = headless();
-    let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |_, cx| {
+    let window = cx.open_window(size(px(WIDTH), px(height(json))), |_, cx| {
         oxikube_ui::init(cx);
         // Pin the appearance: `init` follows the system, which differs between machines.
         let tokens = if light {
@@ -143,7 +193,7 @@ fn render(wrap: bool, timestamps: bool, light: bool, picked: bool) -> anyhow::Re
         cx.new(|cx| LogView::new(target, None, deps, cx))
     })?;
     cx.run_until_parked();
-    cx.update_window(window.into(), |view, _, cx| {
+    cx.update_window(window.into(), |view, window, cx| {
         let view = view.downcast::<LogView>().expect("the root view");
         view.update(cx, |view, cx| {
             if wrap {
@@ -151,6 +201,18 @@ fn render(wrap: bool, timestamps: bool, light: bool, picked: bool) -> anyhow::Re
             }
             if timestamps {
                 view.toggle_timestamps(cx);
+            }
+            if json {
+                view.toggle_level(LevelChip::Debug, cx);
+                view.toggle_expanded(7, cx);
+            }
+            if let Some((pattern, mode)) = search {
+                view.find(Some(pattern), window, cx);
+                if mode == SearchMode::Filter {
+                    view.toggle_filter_mode(cx);
+                } else {
+                    view.next_match(cx);
+                }
             }
             if picked {
                 view.click_line(6, false, cx);
@@ -166,11 +228,16 @@ fn render(wrap: bool, timestamps: bool, light: bool, picked: bool) -> anyhow::Re
     cx.capture_screenshot(window.into())
 }
 
+/// The window's height for a scene.
+fn height(json: bool) -> f32 {
+    if json { JSON_HEIGHT } else { HEIGHT }
+}
+
 /// Checks `image` against the golden `name`.
-fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
+fn check(name: &str, json: bool, image: RgbaImage) -> anyhow::Result<()> {
     let scale = HEADLESS_SCALE_FACTOR;
     anyhow::ensure!(
-        image.dimensions() == (WIDTH as u32 * scale, HEIGHT as u32 * scale),
+        image.dimensions() == (WIDTH as u32 * scale, height(json) as u32 * scale),
         "unexpected image size {:?}",
         image.dimensions()
     );
@@ -196,10 +263,30 @@ fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
 
 fn main() -> ExitCode {
     let results = [
-        render(false, true, false, false).and_then(|image| check("log_view_levels", image)),
-        render(true, false, false, false).and_then(|image| check("log_view_wrapped", image)),
-        render(false, true, true, false).and_then(|image| check("log_view_light", image)),
-        render(false, true, false, true).and_then(|image| check("log_view_selection_marks", image)),
+        render(false, true, false, false).and_then(|image| check("log_view_levels", false, image)),
+        render(true, false, false, false).and_then(|image| check("log_view_wrapped", false, image)),
+        render(false, true, true, false).and_then(|image| check("log_view_light", false, image)),
+        render(false, false, false, true).and_then(|image| check("log_view_json", true, image)),
+        render_with(
+            false,
+            true,
+            false,
+            false,
+            Some(("error|warn", SearchMode::Highlight)),
+            false,
+        )
+        .and_then(|image| check("log_view_search", false, image)),
+        render_with(
+            false,
+            true,
+            false,
+            false,
+            Some(("error|warn", SearchMode::Filter)),
+            false,
+        )
+        .and_then(|image| check("log_view_filter", false, image)),
+        render_with(false, true, false, false, None, true)
+            .and_then(|image| check("log_view_selection_marks", false, image)),
     ];
     let mut failed = false;
     for result in results {

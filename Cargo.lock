@@ -5938,6 +5938,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -6080,20 +6081,27 @@ name = "oxikube_terminal"
 version = "0.0.1"
 dependencies = [
  "alacritty_terminal",
+ "anyhow",
  "async-trait",
  "bitflags 2.13.2",
  "bytes",
  "futures",
  "gpui-pre",
+ "gpui-pre-platform",
  "libc",
+ "oxikube_app",
  "oxikube_assets",
  "oxikube_domain",
  "oxikube_ports",
  "oxikube_runtime",
  "oxikube_settings",
  "oxikube_testkit",
+ "oxikube_theme",
+ "oxikube_ui",
+ "oxikube_workspace",
  "parking_lot",
  "portable-pty",
+ "regex",
  "schemars",
  "serde",
  "serde-saphyr 1.3.0",
@@ -6101,6 +6109,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

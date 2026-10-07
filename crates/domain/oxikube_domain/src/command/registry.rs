@@ -51,6 +51,22 @@ impl CommandId {
     pub const KUBECONFIG_RELOAD: CommandId = CommandId::new("kubeconfig::Reload");
     /// `kubeconfig::RemoveSource`: remove a kubeconfig source.
     pub const KUBECONFIG_REMOVE_SOURCE: CommandId = CommandId::new("kubeconfig::RemoveSource");
+    /// `logs::CloseSearch`: close a log view's search bar and clear its highlights and filter.
+    pub const LOGS_CLOSE_SEARCH: CommandId = CommandId::new("logs::CloseSearch");
+    /// `logs::Find`: open a log view's search bar (optionally with a pattern).
+    pub const LOGS_FIND: CommandId = CommandId::new("logs::Find");
+    /// `logs::NextMatch`: go to the next match of a log view's search (wraps around).
+    pub const LOGS_NEXT_MATCH: CommandId = CommandId::new("logs::NextMatch");
+    /// `logs::PreviousMatch`: go to the previous match of a log view's search (wraps around).
+    pub const LOGS_PREVIOUS_MATCH: CommandId = CommandId::new("logs::PreviousMatch");
+    /// `logs::ToggleCase`: make a log view's search case-sensitive, or not.
+    pub const LOGS_TOGGLE_CASE: CommandId = CommandId::new("logs::ToggleCase");
+    /// `logs::ToggleFilterMode`: hide the lines that do not match a log view's search, or show all
+    /// of them with the matches highlighted.
+    pub const LOGS_TOGGLE_FILTER_MODE: CommandId = CommandId::new("logs::ToggleFilterMode");
+    /// `logs::ToggleInverse`: match the lines that do not contain a log view's pattern, or those
+    /// that do.
+    pub const LOGS_TOGGLE_INVERSE: CommandId = CommandId::new("logs::ToggleInverse");
     /// `logs::Clear`: empty a log view's local buffer (the cluster's logs are untouched).
     pub const LOGS_CLEAR: CommandId = CommandId::new("logs::Clear");
     /// `logs::Copy`: copy the selected lines of a log view (else what is on screen).
@@ -65,6 +81,14 @@ impl CommandId {
     pub const LOGS_SET_RANGE: CommandId = CommandId::new("logs::SetRange");
     /// `logs::ToggleAutoscroll`: follow the newest line of a log view, or stop following.
     pub const LOGS_TOGGLE_AUTOSCROLL: CommandId = CommandId::new("logs::ToggleAutoscroll");
+    /// `logs::ToggleJsonMode`: show structured lines as columns, or every line as raw text.
+    pub const LOGS_TOGGLE_JSON_MODE: CommandId = CommandId::new("logs::ToggleJsonMode");
+    /// `logs::ToggleLevel`: show or hide the lines of one level in a log view.
+    pub const LOGS_TOGGLE_LEVEL: CommandId = CommandId::new("logs::ToggleLevel");
+    /// `logs::ToggleLine`: expand a structured line into its pretty-printed pane, or close it.
+    pub const LOGS_TOGGLE_LINE: CommandId = CommandId::new("logs::ToggleLine");
+    /// `logs::CollapseLine`: close the expanded-line pane of a log view.
+    pub const LOGS_COLLAPSE_LINE: CommandId = CommandId::new("logs::CollapseLine");
     /// `logs::ToggleFullscreen`: let a log view fill its cluster tab, or give the space back.
     pub const LOGS_TOGGLE_FULLSCREEN: CommandId = CommandId::new("logs::ToggleFullscreen");
     /// `logs::TogglePrevious`: read the previous (terminated) container instance, or the current.
@@ -124,6 +148,8 @@ impl CommandId {
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
+    /// `terminal::OpenLink`: open a URL or local path a terminal shows.
+    pub const TERMINAL_OPEN_LINK: CommandId = CommandId::new("terminal::OpenLink");
     /// `view::Open`: open a registered view by id.
     pub const VIEW_OPEN: CommandId = CommandId::new("view::Open");
     /// `view::ZoomIn`: make the UI one zoom step larger.
@@ -270,13 +296,26 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
-    // The log view's commands (E08-S02): they change what a view shows or which stream it
-    // reads, never the cluster. Reopening a stream reads logs, so those need the logs capability.
-    // Local actions on what a view holds (E08-S06): the buffer is cleared, never the cluster's
-    // logs; a save writes only the file the user picks, so none of them is a mutation.
+    // The log view's commands (E08-S02, search E08-S03): they change what a view shows or which
+    // stream it reads, never the cluster. Reopening a stream reads logs, so those need the logs
+    // capability. Kept sorted by id (the table is binary-searched). The local actions on what a
+    // view holds (E08-S06) clear the buffer, never the cluster's logs; a save writes only the
+    // file the user picks, so none of them is a mutation.
     CommandMeta::read(
         CommandId::LOGS_CLEAR,
         "Logs: Clear",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_CLOSE_SEARCH,
+        "Logs: Close Search",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_COLLAPSE_LINE,
+        "Logs: Collapse Line",
         CommandScope::Selection,
         NONE,
     ),
@@ -287,8 +326,26 @@ pub static COMMANDS: &[CommandMeta] = &[
         Capabilities::LOGS,
     ),
     CommandMeta::read(
+        CommandId::LOGS_FIND,
+        "Logs: Find",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::LOGS_MARK,
         "Logs: Mark Line",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_NEXT_MATCH,
+        "Logs: Next Match",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_PREVIOUS_MATCH,
+        "Logs: Previous Match",
         CommandScope::Selection,
         NONE,
     ),
@@ -317,8 +374,44 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     CommandMeta::read(
+        CommandId::LOGS_TOGGLE_CASE,
+        "Logs: Toggle Case Sensitivity",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_FILTER_MODE,
+        "Logs: Toggle Filter Mode",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::LOGS_TOGGLE_FULLSCREEN,
         "Logs: Toggle Fullscreen",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_INVERSE,
+        "Logs: Toggle Inverse Match",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_JSON_MODE,
+        "Logs: Toggle JSON Mode",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_LEVEL,
+        "Logs: Toggle Level",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_LINE,
+        "Logs: Expand or Collapse Line",
         CommandScope::Selection,
         NONE,
     ),
@@ -505,6 +598,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::TABLE_FOCUS_FILTER,
         "Focus Table Filter",
         CommandScope::ResourceKind,
+        NONE,
+    ),
+    // Opens the user's browser or file opener; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_OPEN_LINK,
+        "Open Terminal Link",
+        CommandScope::Global,
         NONE,
     ),
     CommandMeta::read(

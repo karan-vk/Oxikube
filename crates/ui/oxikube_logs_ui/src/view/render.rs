@@ -13,14 +13,15 @@ use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::LogView;
 use super::actions::{
-    Clear, ClearSelection, Copy, Head, Mark, SaveAll, SaveVisible, Since1h, Since1m, Since5m,
-    Since15m, Since30m, Tail, ToggleAutoscroll, ToggleFullscreen, TogglePrevious, ToggleTimestamps,
-    ToggleWrap,
+    Clear, ClearSelection, CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, SaveAll,
+    SaveVisible, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase,
+    ToggleFilterMode, ToggleFullscreen, ToggleInverse, ToggleJsonMode, TogglePrevious,
+    ToggleTimestamps, ToggleWrap,
 };
 use super::text::group;
 
 impl Render for LogView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         self.rows_built = 0;
         v_flex()
@@ -38,8 +39,18 @@ impl Render for LogView {
             .on_action(cx.listener(|v, _: &ToggleAutoscroll, _, cx| v.request_autoscroll(cx)))
             .on_action(cx.listener(|v, _: &ToggleWrap, _, cx| v.request_wrap(cx)))
             .on_action(cx.listener(|v, _: &ToggleTimestamps, _, cx| v.request_timestamps(cx)))
+            .on_action(cx.listener(|v, _: &ToggleJsonMode, _, cx| v.request_json_mode(cx)))
             .on_action(cx.listener(|v, _: &TogglePrevious, _, cx| v.request_previous(cx)))
             .on_action(cx.listener(|v, _: &ToggleFullscreen, _, cx| v.request_fullscreen(cx)))
+            .on_action(cx.listener(|v, _: &Find, _, cx| v.request_find(cx)))
+            .on_action(cx.listener(|v, _: &NextMatch, _, cx| v.request_next_match(cx)))
+            .on_action(cx.listener(|v, _: &PreviousMatch, _, cx| v.request_previous_match(cx)))
+            .on_action(cx.listener(|v, _: &ToggleCase, _, cx| v.request_toggle_case(cx)))
+            .on_action(cx.listener(|v, _: &ToggleInverse, _, cx| v.request_toggle_inverse(cx)))
+            .on_action(
+                cx.listener(|v, _: &ToggleFilterMode, _, cx| v.request_toggle_filter_mode(cx)),
+            )
+            .on_action(cx.listener(|v, _: &CloseSearch, _, cx| v.request_close_search(cx)))
             .on_action(cx.listener(|v, _: &Mark, _, cx| v.request_mark(cx)))
             .on_action(cx.listener(|v, _: &Copy, _, cx| v.request_copy(cx)))
             .on_action(cx.listener(|v, _: &Clear, _, cx| v.request_clear(cx)))
@@ -52,7 +63,10 @@ impl Render for LogView {
             .bg(tokens.colors.background)
             .text_color(tokens.colors.text)
             .child(self.toolbar(cx))
+            .children(self.search_bar(window, cx))
+            .children(self.level_bar(cx))
             .child(self.body(cx))
+            .children(self.detail_pane(cx))
     }
 }
 

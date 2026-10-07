@@ -84,7 +84,7 @@ impl CommandId {
     /// | id namespace | tool name | example |
     /// |---|---|---|
     /// | `helm`, `argo` | `<ns>.<verb_snake>` | `helm::Rollback` -> `helm.rollback` |
-    /// | app-level (`cluster`, `namespace`, `kubeconfig`, `view`, `palette`, `settings`, `app`) | `app.<ns>_<verb_snake>` | `cluster::ToggleReadOnly` -> `app.cluster_toggle_read_only` |
+    /// | app-level (`cluster`, `namespace`, `kubeconfig`, `view`, `palette`, `settings`, `app`, `window`, `terminal`) | `app.<ns>_<verb_snake>` | `cluster::ToggleReadOnly` -> `app.cluster_toggle_read_only` |
     /// | everything else (resource verbs) | `k8s.<ns>_<verb_snake>` | `workload::Scale` -> `k8s.workload_scale` |
     ///
     /// Extension tools (`ext.<id>.*`) are not commands and do not go through
@@ -95,7 +95,7 @@ impl CommandId {
         match ns {
             "helm" | "argo" => format!("{ns}.{verb}"),
             "cluster" | "namespace" | "kubeconfig" | "view" | "palette" | "settings" | "app"
-            | "window" => {
+            | "window" | "terminal" => {
                 format!("app.{ns}_{verb}")
             }
             _ => format!("k8s.{ns}_{verb}"),
@@ -209,6 +209,10 @@ mod tests {
         assert_eq!(
             CommandId::new("argo::HardRefresh").tool_name(),
             "argo.hard_refresh"
+        );
+        assert_eq!(
+            CommandId::new("terminal::OpenLink").tool_name(),
+            "app.terminal_open_link"
         );
     }
 

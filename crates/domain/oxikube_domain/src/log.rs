@@ -26,9 +26,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::bounds::truncate_in_place;
 
+mod level;
 mod range;
 mod save;
 
+pub use level::{LevelChip, LogLevel};
 pub use range::LogRange;
 pub use save::LogSaveScope;
 

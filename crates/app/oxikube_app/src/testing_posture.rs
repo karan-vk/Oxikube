@@ -162,6 +162,26 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "logs::TogglePrevious" => Command::LogsTogglePrevious { target: target() },
         "logs::ToggleTimestamps" => Command::LogsToggleTimestamps { target: target() },
         "logs::ToggleWrap" => Command::LogsToggleWrap { target: target() },
+        "logs::CloseSearch" => Command::LogsCloseSearch { target: target() },
+        "logs::Find" => Command::LogsFind {
+            target: target(),
+            pattern: Some("error".into()),
+        },
+        "logs::NextMatch" => Command::LogsNextMatch { target: target() },
+        "logs::PreviousMatch" => Command::LogsPreviousMatch { target: target() },
+        "logs::ToggleCase" => Command::LogsToggleCase { target: target() },
+        "logs::ToggleFilterMode" => Command::LogsToggleFilterMode { target: target() },
+        "logs::ToggleInverse" => Command::LogsToggleInverse { target: target() },
+        "logs::ToggleJsonMode" => Command::LogsToggleJsonMode { target: target() },
+        "logs::ToggleLevel" => Command::LogsToggleLevel {
+            target: target(),
+            level: oxikube_domain::log::LevelChip::Error,
+        },
+        "logs::ToggleLine" => Command::LogsToggleLine {
+            target: target(),
+            seq: 0,
+        },
+        "logs::CollapseLine" => Command::LogsCollapseLine { target: target() },
         "namespace::Select" => Command::NamespaceSelect {
             cluster,
             namespaces: vec!["default".into()],
@@ -258,6 +278,9 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "view::ZoomIn" => Command::ViewZoomIn,
         "view::ZoomOut" => Command::ViewZoomOut,
         "view::ZoomReset" => Command::ViewZoomReset,
+        "terminal::OpenLink" => Command::TerminalOpenLink {
+            target: "https://kubernetes.io".into(),
+        },
         "window::New" => Command::WindowNew,
         "workload::Restart" => Command::WorkloadRestart {
             target: ResourceRef::namespaced(

@@ -17,8 +17,10 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 
 ## Modules
 
+- `settings`, `follow` (E08-S01, S10): the `logs` settings (buffer, default tail, wrap, timestamps, JSON detect; per-cluster overrides) and their hot reload.
 - `view` (E08-S02): `LogView`, a pod's log as a workspace tab.
 - `commands` (E08-S02): `pod::ViewLogs` and `logs::*` on the bus, and `LogViews`, which opens and drives the views.
+- `search` (E08-S03): the `/` bar: regex with case and inverse toggles, highlight or filter mode, next / previous match with a count; the match index is `oxikube_app::logs::MatchIndex`.
 - `row_actions` (E08-S02): "View Logs" on pod rows.
 - `settings`, `runtime`, `follow` (E08-S01): `logs.buffer_lines` and the service's runtime.
 

@@ -67,7 +67,7 @@ impl LogView {
         let reader = session.reader();
         let view = cx.entity().downgrade();
         let format = self.export_format();
-        let filter = self.filter.clone();
+        let filter = self.active_filter();
         let counting: Vec<SaveOffer> = offers
             .iter()
             .filter(|offer| offer.lines.is_none())

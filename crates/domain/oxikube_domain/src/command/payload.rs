@@ -8,7 +8,7 @@ use super::meta::CommandMeta;
 use super::registry;
 use crate::colour::ClusterColour;
 use crate::ids::{ClusterId, Gvk, ResourceRef};
-use crate::log::{LogRange, LogSaveScope};
+use crate::log::{LevelChip, LogRange, LogSaveScope};
 use crate::preset::ClusterPreset;
 
 /// How the API server deletes dependents of an object.
@@ -191,6 +191,14 @@ pub enum Command {
     /// Set the UI zoom back to 100 %.
     #[serde(rename = "view::ZoomReset")]
     ViewZoomReset,
+    /// Open a link a terminal shows (cmd/ctrl-click, E09-S05): an `http`, `https`, `mailto` or
+    /// `file` URL in the browser, or an absolute local path (an optional `:line[:column]` suffix
+    /// is accepted) with the system's opener. Reads and changes nothing in a cluster.
+    #[serde(rename = "terminal::OpenLink")]
+    TerminalOpenLink {
+        /// The URL or absolute path.
+        target: String,
+    },
     /// Open the list of the cluster's CustomResourceDefinitions (the sidebar's "Definitions").
     /// Read-only.
     #[serde(rename = "crd::OpenList")]
@@ -454,6 +462,82 @@ pub enum Command {
         /// The object the log view shows.
         target: ResourceRef,
     },
+    /// Open a log view's search bar, optionally with `pattern` already typed.
+    #[serde(rename = "logs::Find")]
+    LogsFind {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The regular expression to search for; `None` just opens the bar.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pattern: Option<String>,
+    },
+    /// Go to the next match of a log view's search, wrapping from the last to the first.
+    #[serde(rename = "logs::NextMatch")]
+    LogsNextMatch {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Go to the previous match of a log view's search, wrapping from the first to the last.
+    #[serde(rename = "logs::PreviousMatch")]
+    LogsPreviousMatch {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Make a log view's search case-sensitive, or case-insensitive again.
+    #[serde(rename = "logs::ToggleCase")]
+    LogsToggleCase {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Match the lines that do not contain a log view's pattern, or those that do.
+    #[serde(rename = "logs::ToggleInverse")]
+    LogsToggleInverse {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Hide the lines that do not match a log view's search, or show every line with the matches
+    /// highlighted.
+    #[serde(rename = "logs::ToggleFilterMode")]
+    LogsToggleFilterMode {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Close a log view's search bar and clear its highlights and filter.
+    #[serde(rename = "logs::CloseSearch")]
+    LogsCloseSearch {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Show structured (JSON) lines as level, time and message columns with expandable fields,
+    /// or show every line as the raw text it is.
+    #[serde(rename = "logs::ToggleJsonMode")]
+    LogsToggleJsonMode {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Show or hide the lines of one level in a log view (the level chips).
+    #[serde(rename = "logs::ToggleLevel")]
+    LogsToggleLevel {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The chip to flip: a level, or `text` for plain and level-less lines.
+        level: LevelChip,
+    },
+    /// Expand a structured line of a log view into its pretty-printed pane, or close the pane
+    /// when it already shows that line.
+    #[serde(rename = "logs::ToggleLine")]
+    LogsToggleLine {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The line's sequence number in the view (its row's `seq`).
+        seq: u64,
+    },
+    /// Close the expanded-line pane of a log view.
+    #[serde(rename = "logs::CollapseLine")]
+    LogsCollapseLine {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
     /// Set a workload's replica count.
     #[serde(rename = "workload::Scale")]
     WorkloadScale {
@@ -520,6 +604,7 @@ impl Command {
             Command::ViewZoomIn => CommandId::VIEW_ZOOM_IN,
             Command::ViewZoomOut => CommandId::VIEW_ZOOM_OUT,
             Command::ViewZoomReset => CommandId::VIEW_ZOOM_RESET,
+            Command::TerminalOpenLink { .. } => CommandId::TERMINAL_OPEN_LINK,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -554,6 +639,17 @@ impl Command {
             Command::LogsTogglePrevious { .. } => CommandId::LOGS_TOGGLE_PREVIOUS,
             Command::LogsToggleTimestamps { .. } => CommandId::LOGS_TOGGLE_TIMESTAMPS,
             Command::LogsToggleWrap { .. } => CommandId::LOGS_TOGGLE_WRAP,
+            Command::LogsFind { .. } => CommandId::LOGS_FIND,
+            Command::LogsNextMatch { .. } => CommandId::LOGS_NEXT_MATCH,
+            Command::LogsPreviousMatch { .. } => CommandId::LOGS_PREVIOUS_MATCH,
+            Command::LogsToggleCase { .. } => CommandId::LOGS_TOGGLE_CASE,
+            Command::LogsToggleInverse { .. } => CommandId::LOGS_TOGGLE_INVERSE,
+            Command::LogsToggleFilterMode { .. } => CommandId::LOGS_TOGGLE_FILTER_MODE,
+            Command::LogsCloseSearch { .. } => CommandId::LOGS_CLOSE_SEARCH,
+            Command::LogsToggleJsonMode { .. } => CommandId::LOGS_TOGGLE_JSON_MODE,
+            Command::LogsToggleLevel { .. } => CommandId::LOGS_TOGGLE_LEVEL,
+            Command::LogsToggleLine { .. } => CommandId::LOGS_TOGGLE_LINE,
+            Command::LogsCollapseLine { .. } => CommandId::LOGS_COLLAPSE_LINE,
             Command::WorkloadScale { .. } => CommandId::WORKLOAD_SCALE,
             Command::WorkloadRestart { .. } => CommandId::WORKLOAD_RESTART,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
@@ -605,6 +701,17 @@ impl Command {
             | Command::LogsTogglePrevious { target }
             | Command::LogsToggleTimestamps { target }
             | Command::LogsToggleWrap { target }
+            | Command::LogsFind { target, .. }
+            | Command::LogsNextMatch { target }
+            | Command::LogsPreviousMatch { target }
+            | Command::LogsToggleCase { target }
+            | Command::LogsToggleInverse { target }
+            | Command::LogsToggleFilterMode { target }
+            | Command::LogsCloseSearch { target }
+            | Command::LogsToggleJsonMode { target }
+            | Command::LogsToggleLevel { target, .. }
+            | Command::LogsToggleLine { target, .. }
+            | Command::LogsCollapseLine { target }
             | Command::WorkloadScale { target, .. }
             | Command::WorkloadRestart { target }
             | Command::NodeCordon { target }
@@ -720,6 +827,9 @@ mod tests {
             Command::ViewZoomIn,
             Command::ViewZoomOut,
             Command::ViewZoomReset,
+            Command::TerminalOpenLink {
+                target: "https://kubernetes.io".into(),
+            },
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -804,6 +914,26 @@ mod tests {
             Command::LogsTogglePrevious { target: pod() },
             Command::LogsToggleTimestamps { target: pod() },
             Command::LogsToggleWrap { target: pod() },
+            Command::LogsFind {
+                target: pod(),
+                pattern: Some("timeout".into()),
+            },
+            Command::LogsNextMatch { target: pod() },
+            Command::LogsPreviousMatch { target: pod() },
+            Command::LogsToggleCase { target: pod() },
+            Command::LogsToggleInverse { target: pod() },
+            Command::LogsToggleFilterMode { target: pod() },
+            Command::LogsCloseSearch { target: pod() },
+            Command::LogsToggleJsonMode { target: pod() },
+            Command::LogsToggleLevel {
+                target: pod(),
+                level: LevelChip::Warn,
+            },
+            Command::LogsToggleLine {
+                target: pod(),
+                seq: 7,
+            },
+            Command::LogsCollapseLine { target: pod() },
             Command::WorkloadScale {
                 target: deployment(),
                 replicas: 3,
@@ -939,6 +1069,7 @@ mod tests {
                     | Command::ViewZoomIn
                     | Command::ViewZoomOut
                     | Command::ViewZoomReset
+                    | Command::TerminalOpenLink { .. }
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }
@@ -965,6 +1096,17 @@ mod tests {
                     | Command::LogsTogglePrevious { .. }
                     | Command::LogsToggleTimestamps { .. }
                     | Command::LogsToggleWrap { .. }
+                    | Command::LogsFind { .. }
+                    | Command::LogsNextMatch { .. }
+                    | Command::LogsPreviousMatch { .. }
+                    | Command::LogsToggleCase { .. }
+                    | Command::LogsToggleInverse { .. }
+                    | Command::LogsToggleFilterMode { .. }
+                    | Command::LogsCloseSearch { .. }
+                    | Command::LogsToggleJsonMode { .. }
+                    | Command::LogsToggleLevel { .. }
+                    | Command::LogsToggleLine { .. }
+                    | Command::LogsCollapseLine { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterApplyPreset { .. }

@@ -1,0 +1,6 @@
+{"level":"info","ts":1696670400.123456,"caller":"server/main.go:42","msg":"starting server","addr":":8080","version":"1.4.2"}
+{"level":"debug","ts":1696670400.5,"caller":"cache/lru.go:31","msg":"cache warmed","entries":1024}
+{"level":"warn","ts":1696670401.25,"caller":"server/handler.go:88","msg":"slow request","path":"/api/users","duration":1.2}
+{"level":"error","ts":1696670402.000789,"caller":"db/pool.go:120","msg":"connection refused","error":"dial tcp 10.0.0.5:5432: connect: connection refused","stacktrace":"main.connect\n\t/app/db/pool.go:120\nmain.main\n\t/app/main.go:30"}
+{"level":"dpanic","ts":1696670403,"caller":"worker/job.go:7","msg":"invariant violated"}
+{"level":"INFO","ts":"2023-10-07T18:00:04.456+0900","logger":"controller","msg":"Reconciling","namespace":"default","name":"web"}

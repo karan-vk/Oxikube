@@ -61,7 +61,35 @@ fn a_user_setting_bounds_the_service_and_hot_reloads_into_open_sessions(cx: &mut
                 .expect("valid settings");
         });
     });
+    // The resize runs on a background task, off the UI thread.
+    app.vcx.run_until_parked();
     assert_eq!(service.buffer_lines(), 400);
+    session.read(|buffer, _| assert_eq!(buffer.capacity(), 400));
+
+    // A cluster can carry its own bound (`clusters.<id>.logs.buffer_lines`).
+    let cluster = TestPorts::cluster_id();
+    let port = Arc::new(FakeLogPort::new());
+    port.script()
+        .stream_logs
+        .push_ok(Timeline::new().keep_open());
+    let in_cluster = service.open_in(
+        &cluster,
+        port,
+        LogTarget::pod("default", "web-0"),
+        LogOptions::follow(),
+    );
+    let user = format!(
+        r#"{{ "logs": {{ "buffer_lines": 400 }},
+              "clusters": {{ "{}": {{ "logs": {{ "buffer_lines": 9000 }} }} }} }}"#,
+        cluster.as_str()
+    );
+    app.vcx.update(|_, cx| {
+        SettingsStore::update_global(cx, |store, _| {
+            store.set_user_settings(&user).expect("valid settings");
+        });
+    });
+    app.vcx.run_until_parked();
+    in_cluster.read(|buffer, _| assert_eq!(buffer.capacity(), 9_000));
     session.read(|buffer, _| assert_eq!(buffer.capacity(), 400));
 }
 
@@ -128,6 +156,68 @@ fn view_logs_on_a_pod_row_opens_its_log_in_the_cluster_tab(cx: &mut TestAppConte
     assert_eq!(streams.len(), 1);
 }
 
+#[gpui::test]
+fn slash_in_an_open_log_searches_it_through_the_real_bus_and_keymap(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
+    let line = |i: i64, text: &str| {
+        LogLine::new(
+            jiff::Timestamp::from_second(1_791_115_200 + i).unwrap(),
+            "web-running",
+            "app",
+            text.to_owned(),
+        )
+    };
+    ports
+        .logs
+        .script()
+        .stream_logs
+        .push_ok(Timeline::immediate([
+            line(0, "hello 0"),
+            line(1, "boom: it broke"),
+            line(2, "hello 2"),
+            line(3, "BOOM again"),
+        ]));
+    app.open_pods_table();
+    let ws = app.tab_workspace();
+    let table = app
+        .vcx
+        .update(|_, cx| ws.read(cx).items_of_type::<ResourceTable>().remove(0));
+    let targets = app.vcx.update(|_, cx| table.read(cx).action_targets(cx));
+    app.vcx.update(|window, cx| {
+        table.update(cx, |table, cx| {
+            table.run_action(CommandId::POD_VIEW_LOGS, targets, window, cx);
+        });
+    });
+    app.tick();
+    app.tick();
+    let view = app
+        .vcx
+        .update(|_, cx| ws.read(cx).items_of_type::<LogView>().remove(0));
+
+    // `/` is `log_view::Find`, which sends `logs::Find` through the bus to the window's `LogViews`.
+    app.press("/");
+    app.tick();
+    assert!(app.drawn("log-search"), "the search bar opened");
+    app.press("b o o m");
+    app.tick();
+    let (matches, lines) = app.vcx.update(|_, cx| {
+        let counts = view.read(cx).search_counts();
+        (counts.matches, counts.lines)
+    });
+    assert_eq!((matches, lines), (2, 4), "`boom` finds `boom` and `BOOM`");
+
+    // Escape closes the bar and clears the search.
+    app.press("escape");
+    app.tick();
+    assert!(!app.drawn("log-search"));
+    assert_eq!(
+        app.vcx
+            .update(|_, cx| view.read(cx).search_counts().matches),
+        0
+    );
+}
+
 /// The save, copy, mark and clear commands (E08-S06) reach the open log view through the real
 /// bus: the view's keys and toolbar send them, the registered handlers queue them for the window's
 /// `LogViews`, which applies them.
@@ -153,9 +243,9 @@ fn the_local_log_actions_reach_the_view_through_the_bus(cx: &mut TestAppContext)
     let table = app
         .vcx
         .update(|_, cx| ws.read(cx).items_of_type::<ResourceTable>().remove(0));
+    let targets = app.vcx.update(|_, cx| table.read(cx).action_targets(cx));
     app.vcx.update(|window, cx| {
         table.update(cx, |table, cx| {
-            let targets = table.action_targets(cx);
             table.run_action(CommandId::POD_VIEW_LOGS, targets, window, cx);
         });
     });

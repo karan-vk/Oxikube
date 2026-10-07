@@ -9,12 +9,16 @@
 //! | Piece | Where |
 //! |---|---|
 //! | the service: open sessions, the shared `logs.buffer_lines` bound, the live listing | [`LogService`] (`service`) |
+//! | the default bound and the per-cluster overrides sessions read | `bounds` |
 //! | a session and its read-only view; dropping the session cancels the read | [`LogSession`], [`LogReader`] (`session`) |
 //! | what is read | [`LogTarget`] (`target`), the port's [`LogOptions`](oxikube_ports::LogOptions) |
 //! | the ring of lines with seq numbers and O(1) index / range reads | [`LogBuffer`], [`LogEntry`] (`ring`, `entry`) |
+//! | search and filter: the regex predicate, the incremental match index | [`LogFilter`], [`LogMatcher`], [`MatchIndex`] (`filter`) |
 //! | batched change notifications | [`LogDelta`], [`LogDeltas`] (`delta`) |
 //! | `Connecting` / `Streaming` / `Ended` / `Failed` | [`LogState`], [`EndReason`], [`LogFailure`] (`state`) |
 //! | saving and copying lines: the line format, chunked reads, the write | [`export`] |
+//! | JSON structured lines: parsers, field names, normalised levels and times | [`parse`] |
+//! | which levels a view shows (the level chips) | [`LevelFilter`] (`level_filter`) |
 //! | the task that reads the stream and commits batches | `driver` |
 //! | runtime, buffer bound, batching, the reconnect seam | [`LogRuntime`], [`LogConfig`], [`ReconnectPolicy`] (`options`) |
 //!
@@ -39,11 +43,15 @@
 //! Lines are the user's data and are shown as written. The service never writes a line's text to
 //! its own logs; a `Failed` state carries the error's kind and its message, redacted.
 
+mod bounds;
 mod delta;
 mod driver;
 mod entry;
 pub mod export;
+mod filter;
+mod level_filter;
 mod options;
+pub mod parse;
 mod ring;
 mod service;
 mod session;
@@ -55,6 +63,8 @@ mod tests;
 
 pub use delta::{LogDelta, LogDeltas};
 pub use entry::LogEntry;
+pub use filter::{FilterError, IndexChange, LogFilter, LogMatcher, MatchIndex};
+pub use level_filter::LevelFilter;
 pub use options::{
     DEFAULT_BUFFER_LINES, LogConfig, LogRuntime, MAX_BUFFER_LINES, MIN_BUFFER_LINES,
     ReconnectPolicy, clamp_buffer_lines,

@@ -21,6 +21,8 @@
 //! 7. the log service (E08-S01, [`logs`]): the app's one `LogService`, with `logs.buffer_lines`
 //!    following the settings, and the window's log views (E08-S02): "View Logs" on a pod's row
 //!    (`pod::ViewLogs`) opens its log as a tab of the cluster tab.
+//! 8. the opener of terminal links (E09-S05): `terminal::OpenLink` validates a link off the UI
+//!    thread and this window opens it (browser or system opener).
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -51,6 +53,7 @@ use oxikube_resources_ui::table::ResourceTableDeps;
 use oxikube_resources_ui::{
     ResourceCommandSink, ResourceViews, ResourceViewsDeps, ResourceViewsSlot,
 };
+use oxikube_terminal::open_link::{LinkAction, LinkSink};
 use oxikube_workspace::cluster_tab::TabsDispatcher;
 use oxikube_workspace::window::MainView;
 use oxikube_workspace::{
@@ -79,6 +82,8 @@ pub struct Wiring {
     _open_views: Task<()>,
     /// Opens the lists `resource::OpenList` asks for. Lives as long as the window.
     _open_kinds: Task<()>,
+    /// Opens the links `terminal::OpenLink` validated. Lives as long as the window.
+    _open_links: Task<()>,
     /// Opens the resource tables and runs the table commands.
     _resource_views: Entity<ResourceViews>,
     /// Opens the log views and runs the log commands.
@@ -145,6 +150,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (kinds_tx, kinds_rx) = mpsc::unbounded();
     let (resources_sink, resources_rx) = ResourceCommandSink::channel();
     let (logs_sink, logs_rx) = oxikube_logs_ui::LogCommandSink::channel();
+    let (links_sink, links_rx) = LinkSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -156,6 +162,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         kinds: kinds_tx,
         resources: resources_sink,
         logs: logs_sink,
+        links: links_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -254,6 +261,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
 
     let open_views = open_views(views_rx, view_deps, &workspace, window, cx);
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
+    let open_links = open_links(links_rx, cx);
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -262,6 +270,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _follow_active: follow_active,
         _open_views: open_views,
         _open_kinds: open_kinds,
+        _open_links: open_links,
         _resource_views: resource_views,
         _log_views: log_views,
     });
@@ -286,6 +295,16 @@ fn open_views(
             if opened.is_err() {
                 break;
             }
+        }
+    })
+}
+
+/// Runs each link `terminal::OpenLink` validated (the browser for a URL, the system's opener for a
+/// plain file, the file manager for anything else), on the UI thread.
+fn open_links(mut links: mpsc::UnboundedReceiver<LinkAction>, cx: &mut App) -> Task<()> {
+    cx.spawn(async move |cx| {
+        while let Some(link) = links.next().await {
+            cx.update(|cx| oxikube_terminal::open_link::open(&link, cx));
         }
     })
 }

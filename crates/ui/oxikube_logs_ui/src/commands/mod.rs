@@ -1,7 +1,10 @@
 //! The log commands on the `CommandBus` (E08-S02): `pod::ViewLogs` opens a pod's log view, and
 //! the `logs::*` commands change one: `SetRange` (tail, head, since 1m ... 1h), `SelectContainer`,
-//! `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`,
-//! and (E08-S06) the local actions on what a view holds: `Mark`, `Copy`, `Clear`, `Save`.
+//! `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, and
+//! the search's (E08-S03) `Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`,
+//! `ToggleFilterMode`, `CloseSearch`, the JSON mode's (E08-S05) `ToggleJsonMode`,
+//! `ToggleLevel`, `ToggleLine` and `CollapseLine`, and (E08-S06) the local actions on what a
+//! view holds: `Mark`, `Copy`, `Clear`, `Save`.
 //!
 //! None changes a cluster (no `MutationGuard` tier; all are allowed on a read-only cluster):
 //! they read logs or change what a view shows. Each is declared in `oxikube_domain::command`, so
@@ -23,18 +26,25 @@ use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, R
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{Gvk, ResourceRef};
-use oxikube_domain::log::{LogRange, LogSaveScope};
+use oxikube_domain::log::{LevelChip, LogRange, LogSaveScope};
 
 use crate::view::OpenLogs;
 pub use controller::{LogHost, LogViews, LogViewsDeps};
 
 /// The commands this crate handles.
-pub const LOG_COMMANDS: [CommandId; 12] = [
+pub const LOG_COMMANDS: [CommandId; 23] = [
     CommandId::POD_VIEW_LOGS,
     CommandId::LOGS_CLEAR,
     CommandId::LOGS_COPY,
     CommandId::LOGS_MARK,
     CommandId::LOGS_SAVE,
+    CommandId::LOGS_CLOSE_SEARCH,
+    CommandId::LOGS_FIND,
+    CommandId::LOGS_NEXT_MATCH,
+    CommandId::LOGS_PREVIOUS_MATCH,
+    CommandId::LOGS_TOGGLE_CASE,
+    CommandId::LOGS_TOGGLE_FILTER_MODE,
+    CommandId::LOGS_TOGGLE_INVERSE,
     CommandId::LOGS_SET_RANGE,
     CommandId::LOGS_SELECT_CONTAINER,
     CommandId::LOGS_TOGGLE_AUTOSCROLL,
@@ -42,6 +52,10 @@ pub const LOG_COMMANDS: [CommandId; 12] = [
     CommandId::LOGS_TOGGLE_PREVIOUS,
     CommandId::LOGS_TOGGLE_TIMESTAMPS,
     CommandId::LOGS_TOGGLE_WRAP,
+    CommandId::LOGS_TOGGLE_JSON_MODE,
+    CommandId::LOGS_TOGGLE_LEVEL,
+    CommandId::LOGS_TOGGLE_LINE,
+    CommandId::LOGS_COLLAPSE_LINE,
 ];
 
 /// What a `logs::*` command does to the log views of its target.
@@ -69,6 +83,28 @@ pub enum ViewChange {
     ToggleTimestamps,
     /// `logs::ToggleWrap`.
     ToggleWrap,
+    /// `logs::Find`: open the search bar, searching for the pattern when there is one.
+    Find(Option<String>),
+    /// `logs::NextMatch`.
+    NextMatch,
+    /// `logs::PreviousMatch`.
+    PreviousMatch,
+    /// `logs::ToggleCase`.
+    ToggleCase,
+    /// `logs::ToggleInverse`.
+    ToggleInverse,
+    /// `logs::ToggleFilterMode`.
+    ToggleFilterMode,
+    /// `logs::CloseSearch`.
+    CloseSearch,
+    /// `logs::ToggleJsonMode`.
+    ToggleJsonMode,
+    /// `logs::ToggleLevel`.
+    ToggleLevel(LevelChip),
+    /// `logs::ToggleLine`: the line with this seq.
+    ToggleLine(u64),
+    /// `logs::CollapseLine`.
+    CollapseLine,
 }
 
 /// A log command, resolved, for the UI thread.
@@ -147,6 +183,23 @@ impl LogRequest {
                 change(target, ViewChange::ToggleTimestamps)
             }
             Command::LogsToggleWrap { target } => change(target, ViewChange::ToggleWrap),
+            Command::LogsFind { target, pattern } => {
+                change(target, ViewChange::Find(pattern.clone()))
+            }
+            Command::LogsNextMatch { target } => change(target, ViewChange::NextMatch),
+            Command::LogsPreviousMatch { target } => change(target, ViewChange::PreviousMatch),
+            Command::LogsToggleCase { target } => change(target, ViewChange::ToggleCase),
+            Command::LogsToggleInverse { target } => change(target, ViewChange::ToggleInverse),
+            Command::LogsToggleFilterMode { target } => {
+                change(target, ViewChange::ToggleFilterMode)
+            }
+            Command::LogsCloseSearch { target } => change(target, ViewChange::CloseSearch),
+            Command::LogsToggleJsonMode { target } => change(target, ViewChange::ToggleJsonMode),
+            Command::LogsToggleLevel { target, level } => {
+                change(target, ViewChange::ToggleLevel(*level))
+            }
+            Command::LogsToggleLine { target, seq } => change(target, ViewChange::ToggleLine(*seq)),
+            Command::LogsCollapseLine { target } => change(target, ViewChange::CollapseLine),
             _ => None,
         })
     }

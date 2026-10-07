@@ -342,3 +342,50 @@ fn clear_without_marks_does_not_ask(cx: &mut TestAppContext) {
     assert!(!fx.drawn("dialog-modal"));
     assert_eq!(fx.read(&view, |v| v.line_window().line_count()), 0);
 }
+
+/// Opens the search bar on `text` and narrows the rows to the matches (filter mode).
+fn narrow_to(fx: &mut Fx, text: &'static str) {
+    fx.keys("/");
+    fx.vcx.simulate_keystrokes(text);
+    fx.settle();
+    fx.click("log-search-filter");
+    fx.draw();
+}
+
+#[gpui::test]
+fn copy_takes_what_the_search_filter_shows_not_the_lines_hidden_between(cx: &mut TestAppContext) {
+    let mut fx = Fx::new(cx);
+    let view = open(&mut fx, 12);
+    fx.draw();
+    narrow_to(&mut fx, "1");
+    assert_eq!(fx.read(&view, |v| v.line_window().line_count()), 3);
+    fx.vcx
+        .update(|_, cx| view.update(cx, |v, cx| v.copy_lines(cx)));
+    assert_eq!(
+        fx.clipboard().as_deref(),
+        Some("INFO line 1\nINFO line 10\nINFO line 11\n"),
+        "the lines on screen, none of the ones the filter hides"
+    );
+}
+
+#[gpui::test]
+fn clearing_a_narrowed_view_empties_it_and_the_next_matches_fill_it(cx: &mut TestAppContext) {
+    let mut fx = Fx::new(cx);
+    let view = fx.open(trickle(12, 8));
+    fx.draw();
+    narrow_to(&mut fx, "1");
+    assert_eq!(fx.read(&view, |v| v.line_window().line_count()), 3);
+    fx.vcx
+        .update(|_, cx| view.update(cx, |v, cx| v.clear_now(cx)));
+    fx.settle();
+    fx.read(&view, |v| {
+        assert_eq!(v.line_window().line_count(), 0, "the matches went too");
+        assert!(!v.line_window().is_truncated());
+    });
+    tick(&mut fx, 8);
+    // Lines 12..20 arrive: only 12 to 19 containing a `1` match.
+    fx.read(&view, |v| {
+        assert_eq!(v.line_window().line_count(), 8);
+        assert_eq!(v.row_text(0).as_deref(), Some(line(12).text.as_str()));
+    });
+}

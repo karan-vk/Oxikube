@@ -4,9 +4,13 @@
 
 mod containers;
 mod fixture;
+mod json;
+mod keymap;
 mod keys;
 mod local;
 mod open;
 mod save;
 mod scroll;
+mod search;
+mod settings;
 mod stream;

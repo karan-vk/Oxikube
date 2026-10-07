@@ -2,8 +2,10 @@
 //! they are written (as drawn).
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use gpui::Context;
+use oxikube_app::logs::LogEntry;
 use oxikube_app::logs::export::{ExportFormat, ExportSpec, LineFilter};
 
 use super::LogView;
@@ -64,16 +66,39 @@ impl LogView {
         }
     }
 
-    /// Installs (or removes) the filter that copies and saves apply: only the lines it accepts are
-    /// taken ("what you see is what you export"). The search and filter bar installs its matcher
-    /// here; without one every line passes.
+    /// Installs (or removes) an extra filter that copies and saves apply, on top of what the view
+    /// itself hides (see [`active_filter`](Self::active_filter)); without one every line passes.
     pub fn set_line_filter(&mut self, filter: Option<LineFilter>, cx: &mut Context<Self>) {
         self.filter = filter;
         cx.notify();
     }
 
+    /// What a copy or save takes out of a range of seqs, so that what is exported is what the
+    /// rows show: the search's matches while it narrows the rows (filter mode), the lines the
+    /// level chips admit while JSON mode hides some, and any filter installed with
+    /// [`set_line_filter`](Self::set_line_filter). `None` when nothing is hidden.
+    pub(crate) fn active_filter(&self) -> Option<LineFilter> {
+        let search = self
+            .window
+            .is_narrowed()
+            .then(|| self.search.state.matcher().cloned())
+            .flatten();
+        let levels = self.effective_levels();
+        let extra = self.filter.clone();
+        if search.is_none() && levels.is_none() && extra.is_none() {
+            return None;
+        }
+        Some(Arc::new(move |entry: &LogEntry| {
+            search
+                .as_ref()
+                .is_none_or(|matcher| matcher.matches(&entry.text))
+                && levels.is_none_or(|levels| levels.admits(entry))
+                && extra.as_ref().is_none_or(|filter| filter(entry))
+        }))
+    }
+
     /// What to take for `seqs` in `format`: the lines of that range that pass the filter.
     pub(crate) fn spec_for(&self, seqs: Range<u64>, format: ExportFormat) -> ExportSpec {
-        ExportSpec::new(seqs, format).with_filter(self.filter.clone())
+        ExportSpec::new(seqs, format).with_filter(self.active_filter())
     }
 }

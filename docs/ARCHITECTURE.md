@@ -154,13 +154,34 @@ crate's `README.md` for its allowed dependencies. Highlights:
   first_seq, state }` computed at poll time, so a slow consumer gets one larger delta and nothing queues. The
   state machine is `Connecting`, `Streaming`, `Ended(Completed | StreamClosed | Cancelled)` or
   `Failed(LogFailure)` (kind, redacted message, retryable); `ReconnectPolicy` is the seam of E08-S07.
-  `set_buffer_lines` applies a changed setting to open sessions at once. Line text is never logged.
+  `set_buffer_lines` applies a changed setting to open sessions at once; `open_in(cluster, ..)` and
+  `set_cluster_buffer_lines` give a cluster its own bound (`clusters.<id>.logs.buffer_lines`, E08-S10; each
+  cluster's sessions read one shared cell, so open sessions resize when the override changes). Line text is
+  never logged.
   `LogSession::clear` (E08-S06) empties the buffer at the user's request: seqs are not reused and cleared lines are
   not "dropped" (`LogBuffer::cleared`), the stream goes on. Module `logs::export` (E08-S06): `ExportFormat`
   (`[timestamp ][pod/container ]text`), `ExportSpec` (a seq range plus the viewer's `LineFilter`), `chunks` / `save`
   (bounded ~256 KiB chunks read under one short lock, fed to `FsPort::write_stream`) and `copy_text` (capped).
-- `oxikube_logs_ui` — E08-S01: `LogsSettings` (`logs.buffer_lines`, default 50 000, clamped 100 to 5 000 000),
-  `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload into the `LogService`). Module
+  Module `filter` (E08-S03): `LogFilter { pattern, case_sensitive, inverse }` (a regex; the empty pattern matches
+  everything), compiled once per edit to a `LogMatcher` (`matches(&str)`, the predicate the agent's `get_logs`
+  `grep` reuses, and the highlight `spans`; an invalid or oversized pattern is a one-line `FilterError`), and
+  `MatchIndex`, the sorted seqs of the matching lines over a `LogBuffer`: `scan` tests only the lines appended
+  since the last call and drops the matches of lines the ring dropped (a rescan is the same call in chunks),
+  with `next` / `prev` that wrap and skip trimmed lines. A property test pins it to a naive full scan.
+  `logs::parse` (E08-S05, pure): `parse_line(&str) -> Option<LogRecord>` reads a line that is a complete JSON
+  object (per line, so streams mix text and JSON) into a normalised `LogLevel` (trace to fatal, `Unknown`;
+  bunyan and pino decades 10-60, names like `warning` / `dpanic`), a `RecordTime` (RFC 3339, epoch s / ms / us /
+  ns, floats; the original text is kept when unreadable), the message and the remaining fields in source order,
+  under a `FieldMap` of key names (zap, logrus, bunyan, pino and the aliases `severity` / `message` /
+  `timestamp`); `pretty` is the expanded form; lines over 64 KB and lines cut by the per-line cap are text.
+  The service reads each line's level once as it commits it (`LogEntry::level`, `None` for plain text), before the
+  buffer's lock is taken; `LevelFilter` (one byte, a set of level chips) is the predicate a view tests entries with.
+- `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to
+  5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect` (JSON mode's starting value, E08-S05); defaults in
+  `default.json`, schema generated, per-cluster overrides under `clusters.<id>.logs`, out-of-range values clamped
+  with a warning), `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload of
+  `buffer_lines`, global and per cluster, into the `LogService` on a background task; `wrap`, `timestamps` and
+  `json_auto_detect` are applied by each open view, `default_tail` by the next read of the tail). Module
   `view` (E08-S02): `LogView`, a pod's log as a workspace `Item` (tab `pod/container`). It holds one `LogSession`
   (the service owns the abort-on-drop read) and polls its deltas into a `LineWindow` (truncated marker, lines by
   seq, state row for Connecting / Ended / Failed), redrawing through `notify_coalesced`; rows are read from the
@@ -175,10 +196,30 @@ crate's `README.md` for its allowed dependencies. Highlights:
   screen (5 MB cap, toast); `shift-c` clears the buffer (asks when lines are marked); `ctrl-s` / `ctrl-shift-s`
   open the `SaveDialog` (module `export`: scope, line count, timestamp and pod-prefix toggles, the truncation note),
   then the platform's save panel, then the chunked write on the Tokio bridge through `FsPort::write_stream`.
+  Copy and save take what the rows show: the search's matches while filter mode narrows the rows, the lines the level
+  chips admit, and any filter installed with `set_line_filter` (`LogView::active_filter`); structured lines are copied as
+  their raw JSON text. `view::chrome` draws the gutter bar and selection colour on both plain and JSON rows.
   Module `commands`: `pod::ViewLogs` and `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`,
-  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `Mark`, `Copy`, `Clear`, `Save` on the bus (reads, tool stubs), queued to the
+  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (and, E08-S05, `ToggleJsonMode`, `ToggleLevel`, `ToggleLine`, `CollapseLine`; E08-S06, `Mark`, `Copy`, `Clear`, `Save`) on the bus (reads, tool stubs), queued to the
   window's `LogViews`, which opens a view in the pod's cluster tab (one per pod, through a `LogHost`) and applies
   the changes. `row_actions`: "View Logs" on pod rows of the resource tables.
+  Module `search` (E08-S03): the `/` bar under the toolbar (`logs::Find`, also `cmd-f` / `ctrl-f`): a regex over the
+  stored lines with case and inverse toggles, in *highlight* mode (all lines, matches painted, `3 of 41`, enter /
+  shift-enter or `n` / `N` jump and wrap) or *filter* mode (only the matching lines are rows: the `LineWindow` is
+  narrowed to the `MatchIndex`). An invalid pattern shows its reason and the last good one stays. Commands
+  `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (reads,
+  tool stubs). The matching is `oxikube_app::logs::{LogFilter, LogMatcher, MatchIndex}` (below); an index over a
+  buffer of more than 4 000 lines is built in 16 384-line background jobs and published when done, and each delta
+  tests only its new lines. The search is kept per window in `SearchMemory` (not on disk), so reopening the same pod's
+  logs in the same session restores it.
+  JSON mode (E08-S05, `logs.json_auto_detect`, on by default; `j`, `logs::ToggleJsonMode`): a structured line is a row of level chip, time,
+  message and its other fields collapsed to `key=value` (`view::columns`, parsed only for the rows on screen and
+  cached by seq, `view::json`); a click expands it (`logs::ToggleLine`, closed by `logs::CollapseLine`, JSON mode off or a chip hiding the line) into a pane under the rows with its pretty-printed JSON
+  (`view::detail`, rows keep one height); plain-text lines draw as before. Level chips (`logs::ToggleLevel`:
+  trace to fatal, and `text` for plain and level-less lines) hide lines through `LevelFilter`; while one is off the
+  `LineWindow` keeps the seqs of the lines that are rows (`view::filter`, composed with the search: the rows are the
+  matches that also pass the chips), a delta is filtered as it is applied and a changed chip, search or mode is one
+  pass over the window's candidate lines. Raw text is what a copy takes.
 - `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
   mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,
@@ -279,7 +320,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
   flood repaints once per frame; a writer task sends input and emulator replies in order and
   forwards resizes through a latest-value channel (coalesced during a drag). Module `settings`:
   `terminal.scrollback_lines` (default 10 000, cap 100 000, hot-reloaded into open terminals).
-  Scrollback stays in memory; nothing is persisted or logged.
+  Scrollback stays in memory; nothing is persisted or logged. Module `element` (E09-S05):
+  `TerminalElement`, the custom GPUI element (`request_layout` fills the parent; `prepaint`
+  measures the cell from the font, turns the bounds into cols x rows and resizes the
+  `TerminalState` once per change, takes a snapshot without waiting on the grid lock, resolves the
+  palette from `oxikube_theme`'s terminal tokens and brings a row cache keyed by row content up to
+  date; `paint` draws background, cell backgrounds, selection, runs, cursor, decorations and the
+  hovered link), with OSC 8 / URL / path detection on the hovered line and mouse selection and
+  wheel scrolling. Module `open_link`: the `terminal::OpenLink` handler (validated off the UI
+  thread, opened on it; only `http`/`https`/`mailto`/`file` URLs and existing absolute paths).
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's
