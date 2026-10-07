@@ -38,6 +38,7 @@ mod health;
 mod job;
 mod node;
 mod pod;
+mod pod_health;
 mod workload;
 
 pub use health::{Health, has_health_rule, health_of};

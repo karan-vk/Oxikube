@@ -12,6 +12,7 @@ use oxikube_domain::OxiError;
 use oxikube_domain::access::AccessRules;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::session::WatchScope;
+use oxikube_domain::view::PodSummary;
 use oxikube_ports::{Delta, DeltaBatch};
 use oxikube_testkit::{Timeline, pod};
 
@@ -83,6 +84,48 @@ fn the_sidebar_shows_counts_from_the_store(cx: &mut TestAppContext) {
     );
     let leased = fx.panel.read_with(&fx.vcx, |p, _| p.counts_lease_len());
     assert_eq!(leased, 4);
+}
+
+#[gpui::test]
+fn the_pod_badge_matches_the_table_status(cx: &mut TestAppContext) {
+    let mut fx = Fixture::open_counted(cx, AccessRules::all_access());
+    let pods = vec![
+        pod().namespace("a").name("ok").running().build(),
+        pod().namespace("a").name("done").succeeded().build(),
+        pod().namespace("a").name("loop").crash_loop().build(),
+        pod().namespace("a").name("oom").oom_killed().build(),
+        pod()
+            .namespace("a")
+            .name("pull")
+            .image_pull_backoff()
+            .build(),
+        pod()
+            .namespace("a")
+            .name("going")
+            .running()
+            .terminating()
+            .build(),
+    ];
+    // What the table's STATUS column calls fine: `Running` and `Completed`.
+    let healthy = pods
+        .iter()
+        .filter(|p| {
+            let row = PodSummary::from_resource(p).expect("a pod");
+            matches!(&*row.status, "Running" | "Completed")
+        })
+        .count();
+    assert_eq!(healthy, 2);
+    let total = pods.len();
+    for p in pods {
+        fx.ports.resources.insert(p);
+    }
+    fx.connect();
+    tick(&mut fx);
+    assert_eq!(
+        entry_count(&mut fx, "workloads/pods"),
+        Some(counted(total, total, healthy)),
+        "the badge is the table's verdict"
+    );
 }
 
 #[gpui::test]

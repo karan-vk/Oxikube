@@ -111,6 +111,13 @@ fn status_tones_follow_meaning() {
     assert_eq!(tone(&fx::pod_failed()), Tone::Error);
     assert_eq!(tone(&fx::pod_image_pull_backoff()), Tone::Error);
     assert_eq!(tone(&fx::pod_oom_killed()), Tone::Error);
+    let unknown = pod().running().build();
+    let mut json = unknown.json;
+    json["status"]["containerStatuses"][0]["state"] =
+        json!({"terminated": {"reason": "ContainerStatusUnknown", "exitCode": 137}});
+    let unknown = Resource::from_json(json).unwrap();
+    assert_eq!(text(&unknown, "status"), "ContainerStatusUnknown");
+    assert_eq!(tone(&unknown), Tone::Error);
     // Ready: green when complete, amber when short, quiet for a finished pod.
     assert_eq!(cell(&fx::pod_running(), "ready").tone(), Tone::Ok);
     assert_eq!(cell(&fx::pod_pending(), "ready").tone(), Tone::Warn);

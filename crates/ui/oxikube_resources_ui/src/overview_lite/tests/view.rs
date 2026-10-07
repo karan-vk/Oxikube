@@ -10,6 +10,7 @@ use oxikube_domain::OxiError;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::session::NamespaceSelection;
+use oxikube_domain::view::PodSummary;
 use oxikube_testkit::{daemonset, deployment, job, pod};
 
 use super::{Fixture, cluster, no_grace};
@@ -68,6 +69,53 @@ fn tiles_show_total_and_healthy_from_the_store(cx: &mut TestAppContext) {
     assert_eq!(fx.state("statefulsets"), Some(counted(0, 0, 0)));
     assert_eq!(fx.state("cronjobs"), Some(counted(0, 0, 0)));
     assert!(fx.state("daemonsets").is_some_and(|s| s.count().is_some()));
+}
+
+/// Pods in every state the table distinguishes; the tile must rate them as the table's `STATUS`
+/// column reads (`Running` and `Completed` are healthy, everything else is not).
+fn table_pods() -> Vec<oxikube_domain::Resource> {
+    vec![
+        pod().namespace("a").name("ok").running().build(),
+        pod().namespace("a").name("done").succeeded().build(),
+        pod().namespace("a").name("loop").crash_loop().build(),
+        pod().namespace("a").name("oom").oom_killed().build(),
+        pod()
+            .namespace("a")
+            .name("pull")
+            .image_pull_backoff()
+            .build(),
+        pod()
+            .namespace("a")
+            .name("going")
+            .running()
+            .terminating()
+            .build(),
+        pod().namespace("a").name("lost").node_lost().build(),
+    ]
+}
+
+fn table_healthy(pods: &[oxikube_domain::Resource]) -> usize {
+    pods.iter()
+        .filter(|p| {
+            let row = PodSummary::from_resource(p).expect("a pod");
+            matches!(&*row.status, "Running" | "Completed")
+        })
+        .count()
+}
+
+#[gpui::test]
+fn the_pod_tile_matches_the_table_status(cx: &mut TestAppContext) {
+    let pods = table_pods();
+    let healthy = table_healthy(&pods);
+    assert_eq!(healthy, 2, "the table shows two pods as fine");
+    let total = pods.len();
+    let mut fx = Fixture::open_seeded(cx, no_grace(), move |ports| {
+        for p in &pods {
+            ports.resources.insert(p.clone());
+        }
+    });
+    fx.tick();
+    assert_eq!(fx.state("pods"), Some(counted(total, total, healthy)));
 }
 
 #[gpui::test]
