@@ -310,10 +310,34 @@ fn oxikube_status_colours_default_from_the_themes_own_status_colours() {
     // The cluster tab palette cycles through the player cursors.
     assert_eq!(dark.oxikube.cluster_tabs[0], dark.players[0].cursor);
     assert_eq!(dark.oxikube.cluster_tabs[7], dark.players[7].cursor);
-    // The log-source palette is the terminal's ANSI colours, without red.
-    assert_eq!(dark.oxikube.log_sources[0], dark.terminal.ansi.blue);
-    assert_eq!(dark.oxikube.log_sources[5], dark.terminal.bright.blue);
+    // The log-source palette is the terminal's ANSI colours (lightness moved only as far as
+    // AA needs on the log rows), without red.
+    for (slot, ansi) in [(0, dark.terminal.ansi.blue), (5, dark.terminal.bright.blue)] {
+        let source = dark.oxikube.log_sources[slot];
+        assert_eq!((source.h, source.s), (ansi.h, ansi.s));
+    }
     assert!(!dark.oxikube.log_sources.contains(&dark.terminal.ansi.red));
+}
+
+#[test]
+fn log_source_colours_are_readable_on_the_log_rows_of_the_bundled_themes() {
+    for (name, appearance) in [
+        ("One Dark", Appearance::Dark),
+        ("One Light", Appearance::Light),
+    ] {
+        let theme = ThemeTokens::fallback(appearance);
+        let rows = [
+            theme.editor.background,
+            theme.colors.element,
+            theme.colors.element_selected,
+        ];
+        for (slot, source) in theme.oxikube.log_sources.into_iter().enumerate() {
+            for row in rows {
+                let ratio = crate::tokens::contrast_ratio(source, row);
+                assert!(ratio >= 4.5, "{name} log_sources[{slot}] = {ratio:.2}");
+            }
+        }
+    }
 }
 
 #[test]

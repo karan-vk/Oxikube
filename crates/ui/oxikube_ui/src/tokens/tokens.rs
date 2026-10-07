@@ -144,7 +144,8 @@ impl Tokens {
         }
     }
 
-    /// Built-in dark tokens (One-Dark-like).
+    /// Built-in dark tokens (One-Dark-like). Text and status colours are at least 4.5:1 (WCAG AA)
+    /// on every background they are drawn on; `tokens::contrast` tests it.
     pub fn dark() -> Self {
         Self {
             appearance: Appearance::Dark,
@@ -153,7 +154,7 @@ impl Tokens {
                 surface: hex(0x21252b),
                 elevated_surface: hex(0x2b3039),
                 text: hex(0xdce0e5),
-                text_muted: hex(0xa9afbc),
+                text_muted: hex(0xb6bbc6),
                 text_disabled: hex(0x6b727f),
                 border: hex(0x363c46),
                 border_variant: hex(0x2c313a),
@@ -161,13 +162,13 @@ impl Tokens {
                 element: hex(0x2e343e),
                 element_hover: hex(0x363c46),
                 element_active: hex(0x454a56),
-                element_selected: hex(0x2f4b73),
-                accent: hex(0x74ade8),
+                element_selected: hex(0x2a4268),
+                accent: hex(0x7fb4ea),
                 on_accent: hex(0x0f1114),
                 success: hex(0xa1c181),
                 warning: hex(0xdec184),
-                error: hex(0xd07277),
-                info: hex(0x74ade8),
+                error: hex(0xdf9fa3),
+                info: hex(0x7fb4ea),
                 selection: hex_alpha(0x74ade8, 0.3),
             },
             spacing: Spacing::default(),
@@ -176,7 +177,7 @@ impl Tokens {
         }
     }
 
-    /// Built-in light tokens.
+    /// Built-in light tokens. Text and status colours meet WCAG AA like [`Tokens::dark`]'s.
     pub fn light() -> Self {
         Self {
             appearance: Appearance::Light,
@@ -194,12 +195,12 @@ impl Tokens {
                 element_hover: hex(0xdcdcde),
                 element_active: hex(0xcdcdd1),
                 element_selected: hex(0xd1defa),
-                accent: hex(0x3b73d1),
+                accent: hex(0x2a5db3),
                 on_accent: hex(0xffffff),
-                success: hex(0x4f8a3d),
-                warning: hex(0xa97a11),
-                error: hex(0xc2434b),
-                info: hex(0x3b73d1),
+                success: hex(0x3d6a2f),
+                warning: hex(0x7c590d),
+                error: hex(0xaa373f),
+                info: hex(0x2a5db3),
                 selection: hex_alpha(0x3b73d1, 0.25),
             },
             spacing: Spacing::default(),

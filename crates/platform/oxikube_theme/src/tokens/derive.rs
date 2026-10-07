@@ -1,7 +1,8 @@
 //! Colours computed from other colours.
 
+use super::contrast::{luminance, with_min_contrast};
 use super::{OxikubeColors, ThemeTokens};
-use gpui::{Hsla, Rgba, hsla};
+use gpui::{Hsla, hsla};
 
 /// Fills the derived [`super::ThemeColors`] fields: `selection` (the first player's selection,
 /// else the accent at 30 %) and `on_accent` (near-black on a light accent, white on a dark one),
@@ -35,23 +36,13 @@ fn on_accent_for(accent: Hsla) -> Hsla {
     }
 }
 
-/// WCAG relative luminance of `color` (alpha ignored).
-fn luminance(color: Hsla) -> f32 {
-    let Rgba { r, g, b, .. } = Rgba::from(color);
-    let linear = |c: f32| {
-        if c <= 0.03928 {
-            c / 12.92
-        } else {
-            ((c + 0.055) / 1.055).powf(2.4)
-        }
-    };
-    0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
-}
+/// WCAG AA for normal-size text.
+const MIN_TEXT_CONTRAST: f32 = 4.5;
 
 /// The `oxikube` colours a theme gets when its file does not set them: status colours from the
 /// theme's own status colours, cluster tabs cycling through its player colours (or accents, or
 /// the terminal ANSI row when it has neither), and the log-source palette from the terminal's
-/// ANSI colours.
+/// ANSI colours (moved lighter or darker where one is below AA on the log row fills).
 pub(crate) fn derive_oxikube(tokens: &ThemeTokens) -> OxikubeColors {
     let mut palette: Vec<Hsla> = tokens.players.iter().map(|p| p.cursor).collect();
     if palette.is_empty() {
@@ -85,6 +76,14 @@ pub(crate) fn derive_oxikube(tokens: &ThemeTokens) -> OxikubeColors {
         bright.magenta,
         bright.cyan,
     ];
+    // A pod's name is text on the log rows (plain, matched and current-match fills), and ANSI
+    // colours are tuned for a terminal, not for AA on those (One Light's yellow is 1.9:1).
+    let backgrounds = [
+        tokens.editor.background,
+        tokens.colors.element,
+        tokens.colors.element_selected,
+    ];
+    let log_sources = log_sources.map(|c| with_min_contrast(c, &backgrounds, MIN_TEXT_CONTRAST));
     OxikubeColors {
         status_running: tokens.status.success.foreground,
         status_pending: tokens.status.warning.foreground,

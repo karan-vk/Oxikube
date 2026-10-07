@@ -262,11 +262,7 @@ impl LogView {
                     .flex_1()
                     .min_w_0()
                     .text_color(level_colour(level, &colors))
-                    .child(highlighted(
-                        text,
-                        &marks.spans,
-                        colors.warning.opacity(0.45),
-                    ));
+                    .child(highlighted(text, &marks.spans, &colors));
                 let text = if wrap {
                     text
                 } else {
@@ -340,13 +336,14 @@ fn level_colour(level: Level, colors: &Colors) -> Hsla {
     }
 }
 
-/// `text`, with the byte ranges `spans` highlighted in `colour`.
-fn highlighted(text: SharedString, spans: &[Range<usize>], colour: Hsla) -> AnyElement {
+/// `text`, with the byte ranges `spans` drawn as search matches (readable on any level colour).
+fn highlighted(text: SharedString, spans: &[Range<usize>], colors: &Colors) -> AnyElement {
     if spans.is_empty() {
         return text.into_any_element();
     }
     let style = HighlightStyle {
-        background_color: Some(colour),
+        color: Some(colors.search_match_text()),
+        background_color: Some(colors.search_match_fill()),
         ..HighlightStyle::default()
     };
     StyledText::new(text)

@@ -34,7 +34,7 @@ impl LogView {
                 .debug_selector(move || format!("log-mark:{seq}"))
         });
         let row = if selected {
-            row.bg(colors.selection)
+            row.bg(colors.line_selection())
         } else {
             row
         };

@@ -8,10 +8,12 @@
 //! - `colors`: interface, editor, terminal, status and VCS colour groups.
 //! - `syntax`: syntax highlight styles and player colours.
 //! - `oxikube`: the Kubernetes status colours and cluster-tab palette.
+//! - `contrast`: WCAG contrast ratio and the nudge that lifts a colour to a target ratio.
 //! - `derive`: the colours computed from others (selection, text on accent, `oxikube` defaults).
 //! - `fallback`: the tokens a theme falls back to for keys it does not set.
 
 mod colors;
+mod contrast;
 mod derive;
 mod fallback;
 mod macros;
@@ -24,6 +26,7 @@ use gpui::{Hsla, hsla};
 pub use colors::{
     AnsiColors, EditorColors, StatusColor, StatusColors, TerminalColors, ThemeColors, VcsColors,
 };
+pub use contrast::contrast_ratio;
 pub(crate) use derive::{derive_colors, derive_oxikube};
 pub use oxikube::{CLUSTER_TAB_COLORS, LOG_SOURCE_COLORS, OxikubeColors};
 pub use syntax::{FontStyle, PlayerColor, SyntaxStyle, SyntaxTheme};
