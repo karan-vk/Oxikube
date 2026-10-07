@@ -226,6 +226,11 @@ fn a_pod_that_is_gone_offers_close_whether_it_failed_to_start_or_dropped() {
             "the sentence is plain: {}",
             banner.detail
         );
+        assert!(
+            !banner.detail.contains("Reconnect"),
+            "no mention of a button that is not offered: {}",
+            banner.detail
+        );
         assert_eq!(banner.details.as_deref(), Some("pods \"web-0\" not found"));
     }
 }

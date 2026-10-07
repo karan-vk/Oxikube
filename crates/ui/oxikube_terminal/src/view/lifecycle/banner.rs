@@ -76,7 +76,16 @@ impl Banner {
         Self {
             tone: Tone::Warning,
             headline: failure.headline().to_owned(),
-            detail: with_tail(failure, SESSION_GONE),
+            // A pod that is gone offers no Reconnect, so the sentence about reconnecting would
+            // point at a button that is not there.
+            detail: with_tail(
+                failure,
+                if failure.kind() == FailureKind::PodGone {
+                    ""
+                } else {
+                    SESSION_GONE
+                },
+            ),
             details: raw_details(failure),
             actions: recovery_actions(failure, BannerAction::Reconnect),
         }

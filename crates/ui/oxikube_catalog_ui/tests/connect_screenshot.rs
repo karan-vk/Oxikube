@@ -3,7 +3,7 @@
 //!
 //! - `connect_connecting`: spinner (still, reduce-motion is on), the API server and context, Cancel.
 //! - `connect_auth_required`: the plugin's message, how to sign in, an enabled Open terminal and
-//!   Retry; no policy line (a plugin may prompt here).
+//!   Retry; no policy line (the exec policy allows a plugin to prompt here).
 //! - `connect_auth_forbidden`: the same under the `never` policy: the one plain policy line.
 //! - `connect_error`: one human sentence (no `internal error:` label), the raw text open behind
 //!   Details, Copy details, Edit kubeconfig sources, Retry.
@@ -88,10 +88,17 @@ fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
             waiting = Some(connect);
         }
         Scene::AuthRequired | Scene::AuthForbidden => {
-            if matches!(scene, Scene::AuthForbidden) {
-                sessions.open_configured(&context(CLUSTER));
-                sessions.set_exec_interactivity(&cluster, ExecInteractivity::Never)?;
-            }
+            // The default policy is `never`, which shows the policy line; a session that may
+            // prompt shows none.
+            sessions.open_configured(&context(CLUSTER));
+            sessions.set_exec_interactivity(
+                &cluster,
+                if matches!(scene, Scene::AuthForbidden) {
+                    ExecInteractivity::Never
+                } else {
+                    ExecInteractivity::IfAvailable
+                },
+            )?;
             connector
                 .connect_script_for(&cluster)
                 .push_err(OxiError::auth(

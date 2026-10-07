@@ -102,7 +102,13 @@ fn clean(text: &str) -> String {
 
 /// The sentence for an error of `kind` (when known) saying `raw`.
 fn summary_of(kind: Option<ErrorKind>, raw: &str) -> String {
-    if let Some(known) = by_message(raw) {
+    // An explicit kind that says something specific (forbidden, auth, validation...) wins: a
+    // message that merely mentions "certificate" (a pod's name) is not a TLS failure.
+    let message_decides = matches!(
+        kind,
+        None | Some(ErrorKind::Internal | ErrorKind::Network | ErrorKind::Timeout)
+    );
+    if message_decides && let Some(known) = by_message(raw) {
         return known.to_owned();
     }
     match kind {
@@ -112,8 +118,9 @@ fn summary_of(kind: Option<ErrorKind>, raw: &str) -> String {
 }
 
 /// What the message itself says, for the failures that have a well-known cause. Checked before
-/// the kind: an adapter that could not classify an error calls it internal, but a refused
-/// connection is a refused connection.
+/// the kind when the kind is unknown, internal (an adapter that could not classify an error) or a
+/// generic network/timeout one, since a refused connection is a refused connection. Any other
+/// kind is the adapter's explicit verdict and is not overridden by words in the message.
 fn by_message(raw: &str) -> Option<&'static str> {
     let text = raw.to_ascii_lowercase();
     let has = |needle: &str| text.contains(needle);
@@ -241,6 +248,31 @@ mod tests {
                 summary
             );
         }
+    }
+
+    #[test]
+    fn an_explicit_kind_is_not_overridden_by_words_in_the_message() {
+        let forbidden = HumanError::new(
+            ErrorKind::Forbidden,
+            "pods \"certificate-exporter-0\" is forbidden: User cannot get resource pods/log",
+        );
+        assert_eq!(
+            forbidden.summary(),
+            "You do not have permission to do that."
+        );
+        let validation = HumanError::new(ErrorKind::Validation, "timed out waiting: bad spec");
+        assert_eq!(
+            validation.summary(),
+            "The cluster did not accept the request."
+        );
+        let auth = HumanError::from_display("authentication failed: x509 client cert rejected");
+        assert_eq!(auth.kind(), Some(ErrorKind::Auth));
+        assert_eq!(auth.summary(), "The cluster rejected your credentials.");
+        // Network and timeout kinds still take the more specific cause.
+        assert_eq!(
+            HumanError::new(ErrorKind::Network, "no such host").summary(),
+            "The API server's address could not be found."
+        );
     }
 
     #[test]
