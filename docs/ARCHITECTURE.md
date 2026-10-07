@@ -881,8 +881,9 @@ Every feed the app opens goes through it (E04-F543): the connector hands out
 degraded, torn down with their stream), so tables, sidebar counts, detail views and log targets
 are all budgeted. The resource store shares feeds and keeps released ones for the grace period;
 the binary's `kube_ports::WatchBudgets` puts the registry behind the store's `FeedBudget`
-(`FeedRegistry::check` before an open, the store's idle feeds evicted on a refusal and released at
-once, metadata-only past `metadata_above`, the store's grace from the budget), sets each
+(`FeedRegistry::reserve_owned` holds a slot from the store's admission until its port call
+opens it, the store's idle feeds evicted on a refusal and released at once, metadata-only past
+`metadata_above`, the store's grace from the budget), sets each
 connection's limits from the per-cluster `watch_budget` setting (hot reload reaches live
 connections) and prints the counters under `oxikube --perf`.
 

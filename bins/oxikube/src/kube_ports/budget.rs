@@ -9,8 +9,9 @@
 //! * limits: each connection starts with its cluster's `watch_budget`
 //!   ([`KubeConnector::set_budget_for`]), and [`WatchBudgets::apply`] changes them on live
 //!   connections after a settings change (hot reload, no reconnect);
-//! * the resource store asks the registry before it opens a feed ([`RegistryBudget`], the
-//!   store's `FeedBudget`): a refusal makes the store close its own idle feeds first, a full
+//! * the resource store asks the registry before it opens a feed and the registry holds the
+//!   slot until the port call opens it ([`RegistryBudget`], the store's `FeedBudget`): a
+//!   refusal makes the store close its own idle feeds first, a full
 //!   kind past `metadata_above` is opened metadata-only, a released feed stops counting at once,
 //!   and the store's idle grace is the budget's;
 //! * counters: [`WatchBudgets::stats`] snapshots every live connection's `FeedStats` (printed by
@@ -159,10 +160,15 @@ pub fn report_line(name: &str, stats: &FeedStats) -> String {
 /// The resource store's `FeedBudget` over one connection's `FeedRegistry`.
 ///
 /// The store's feeds are owned feeds of the registry (one per store entry). Before the store
-/// opens one it asks [`FeedRegistry::check`]; a refusal makes the store close its own idle
-/// feeds, oldest first, and ask again, and each one it closes is
-/// [released](FeedRegistry::release_owned) at once, so the next check already has the room.
-/// Its final refusals and its degrades are counted in the registry's stats.
+/// opens one it asks [`FeedRegistry::reserve_owned`], which holds the slot from that moment:
+/// the store admits synchronously but its driver reaches the port (`open_owned`, which takes
+/// the slot) later on a task, so a burst of admissions (one subscribe of several scope parts,
+/// several views at once) must each count against the limit before any of them opens, or the
+/// surplus would pass here and be refused at the port without the store evicting anything.
+/// A refusal makes the store close its own idle feeds, oldest first, and ask again; each one it
+/// closes (or gives up before its driver opened it) is [released](FeedRegistry::release_owned)
+/// at once, so the next admission already has the room. Its final refusals and its degrades are
+/// counted in the registry's stats.
 struct RegistryBudget {
     registry: FeedRegistry,
 }
@@ -186,7 +192,7 @@ fn registry_request(request: &StoreRequest) -> FeedRequest {
 
 impl FeedBudget for RegistryBudget {
     fn admit(&self, request: &StoreRequest, _running: usize) -> Admission {
-        match self.registry.check(&registry_request(request)) {
+        match self.registry.reserve_owned(&registry_request(request)) {
             Ok(FeedVariant::Metadata) if request.kind == FeedKind::Full => {
                 self.registry.record_verdict(Verdict::Degraded);
                 Admission::Degraded(FeedKind::Metadata)

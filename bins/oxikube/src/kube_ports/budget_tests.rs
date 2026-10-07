@@ -105,6 +105,60 @@ async fn the_hook_refuses_with_the_registrys_reason_and_frees_a_released_feed() 
     );
 }
 
+/// A view subscribing several feeds at once: the store admits them all under its lock before
+/// any driver reaches the port. Each admission holds its slot, so the surplus is refused here
+/// (where the store evicts its idle feed and asks again), never at the port.
+#[tokio::test]
+async fn a_burst_of_admissions_holds_each_slot_before_any_open() {
+    let registry = registry(BudgetConfig {
+        max_feeds: 3,
+        ..BudgetConfig::default()
+    });
+    let hook = RegistryBudget::new(registry.clone());
+    let idle = store_request(FeedKind::Full, "closed-view");
+    let active = store_request(FeedKind::Full, "open-view");
+    for request in [&idle, &active] {
+        assert_eq!(hook.admit(request, 0), Admission::Granted);
+    }
+    let idle_feed = open(&registry, &idle).await;
+    let _active_feed = open(&registry, &active).await;
+
+    let table = store_request(FeedKind::Table, "new-view");
+    let counts = store_request(FeedKind::Full, "new-view");
+    assert_eq!(hook.admit(&table, 2), Admission::Granted);
+    assert!(
+        matches!(hook.admit(&counts, 3), Admission::Refused(_)),
+        "the table's slot counts before its driver opened it"
+    );
+    // The store evicts its idle feed and asks again.
+    hook.released(&idle);
+    assert_eq!(hook.admit(&counts, 2), Admission::Granted);
+    // Both drivers then open at the port without a refusal.
+    let _table_feed = open(&registry, &table).await;
+    let _counts_feed = open(&registry, &counts).await;
+    drop(idle_feed);
+    let stats = registry.stats();
+    assert_eq!((stats.feeds, stats.refused), (3, 0));
+}
+
+/// The store retires an admitted entry before its driver reached the port: the slot goes.
+#[tokio::test]
+async fn an_admission_given_up_before_its_open_frees_its_slot() {
+    let registry = registry(BudgetConfig {
+        max_feeds: 1,
+        ..BudgetConfig::default()
+    });
+    let hook = RegistryBudget::new(registry.clone());
+    let first = store_request(FeedKind::Full, "a");
+    let second = store_request(FeedKind::Full, "b");
+    assert_eq!(hook.admit(&first, 0), Admission::Granted);
+    assert!(matches!(hook.admit(&second, 1), Admission::Refused(_)));
+    hook.released(&first);
+    assert_eq!(hook.admit(&second, 0), Admission::Granted);
+    let _feed = open(&registry, &second).await;
+    assert_eq!(registry.stats().feeds, 1);
+}
+
 #[tokio::test]
 async fn a_full_kind_past_the_threshold_is_degraded_and_a_table_is_not() {
     let registry = registry(BudgetConfig {

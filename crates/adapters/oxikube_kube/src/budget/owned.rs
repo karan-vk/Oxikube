@@ -10,10 +10,15 @@
 //! dropping the stream tears the feed down at once, under the registry's lock, so the next
 //! admission no longer counts it.
 //!
+//! [`FeedRegistry::reserve_owned`] admits an owned feed before its port call runs: a consumer
+//! that decides now and opens later on a task (the resource store) holds the slot from the
+//! decision, so a burst of decisions cannot all pass against the same headroom and then be
+//! refused at the open. The open of the same request takes the slot without asking again.
+//!
 //! [`FeedRegistry::release_owned`] lets a consumer say a feed is going before its stream is
 //! dropped (the store aborts a feed's task, which drops the stream a moment later on the
-//! runtime): the feed stops counting against the limits immediately, so a store that evicts an
-//! idle feed to make room is admitted at once.
+//! runtime): the feed, or its slot if it never opened, stops counting against the limits
+//! immediately, so a store that evicts an idle feed to make room is admitted at once.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -37,6 +42,8 @@ impl FeedRegistry {
     /// into the counter it is given) once the budget admitted `request`, which names the feed
     /// in the limits and counters. Returns the consumer's end; dropping it tears the feed down.
     ///
+    /// A slot [reserved](Self::reserve_owned) for `request` is taken without admitting again.
+    ///
     /// # Errors
     ///
     /// [`BudgetExceeded`](oxikube_domain::ErrorKind::BudgetExceeded) when a limit refuses the
@@ -50,10 +57,15 @@ impl FeedRegistry {
         let runtime = self.inner.runtime()?;
         let (granted, evicted) = {
             let mut state = self.inner.state.lock();
-            match self.inner.reserve(&mut state, &request, false)? {
-                Reserved::Open(granted, evicted) => (granted, evicted),
-                Reserved::Join(..) => {
-                    unreachable!("an owned feed is never degraded, so never joins")
+            if state.take_reserved(&request) {
+                state.opening += 1;
+                (request, Vec::new())
+            } else {
+                match self.inner.reserve(&mut state, &request, false)? {
+                    Reserved::Open(granted, evicted) => (granted, evicted),
+                    Reserved::Join(..) => {
+                        unreachable!("an owned feed is never degraded, so never joins")
+                    }
                 }
             }
         };
@@ -64,9 +76,45 @@ impl FeedRegistry {
         }
     }
 
-    /// Says that the consumer of an owned feed of `request` is dropping it: the oldest such
-    /// feed not released yet stops counting against the limits now, ahead of its stream's drop.
-    /// Returns whether there was one.
+    /// Admits an owned feed of `request` that the consumer opens later with
+    /// [`open_owned`](Self::open_owned), and holds its slot until then: the verdict of
+    /// [`check`](Self::check) (idle shared feeds it counts as room are torn down now), with the
+    /// slot counted against `max_feeds` from this call. Returns the variant to open; the slot is
+    /// held for `request` with that variant. A consumer that gives the feed up before opening it
+    /// calls [`release_owned`](Self::release_owned). Verdicts are not counted (see
+    /// [`record_verdict`](Self::record_verdict)).
+    ///
+    /// # Errors
+    ///
+    /// [`BudgetExceeded`](oxikube_domain::ErrorKind::BudgetExceeded) with the reason a
+    /// subscribe would get.
+    pub fn reserve_owned(&self, request: &FeedRequest) -> OxiResult<FeedVariant> {
+        let (variant, evicted) = {
+            let mut state = self.inner.state.lock();
+            let (variant, evict) = match state.admit(request, true) {
+                Admission::Open { variant, evict } => (variant, evict),
+                Admission::Refuse(breach) => {
+                    return Err(OxiError::budget_exceeded(
+                        breach.reason(&request.describe()),
+                    ));
+                }
+            };
+            let evicted: Vec<_> = evict
+                .into_iter()
+                .filter_map(|id| state.remove(id, StopReason::Evicted))
+                .collect();
+            state.reserve(request.with_variant(variant));
+            (variant, evicted)
+        };
+        // Dropping the evicted entries aborts their drivers: after the lock, never under it.
+        drop(evicted);
+        Ok(variant)
+    }
+
+    /// Says that the consumer of an owned feed of `request` is dropping it: a slot
+    /// [reserved](Self::reserve_owned) for it and not opened yet is given back, or else the
+    /// oldest such feed not released yet stops counting against the limits now, ahead of its
+    /// stream's drop. Returns whether there was either.
     pub fn release_owned(&self, request: &FeedRequest) -> bool {
         self.inner.state.lock().release_owned(request)
     }
@@ -85,7 +133,8 @@ impl FeedRegistry {
     /// The verdict the budget would give a new feed for `request` now: the variant to
     /// open (the requested one, or [`Metadata`](FeedVariant::Metadata) for a
     /// full request once the open feeds hold `metadata_above` objects), counting idle shared
-    /// feeds as room. Nothing is reserved; the open itself admits again.
+    /// feeds as room. Nothing is reserved; the open itself admits again, so a consumer that
+    /// opens later on a task uses [`reserve_owned`](Self::reserve_owned) instead.
     ///
     /// # Errors
     ///

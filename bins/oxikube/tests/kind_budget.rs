@@ -246,11 +246,13 @@ async fn the_apps_feeds_are_budgeted_per_cluster() {
     .await;
     report("b, defaults", &stats(&budgets, &b_id));
     assert_eq!(stats(&budgets, &b_id).feeds, 3, "b's budget is its own");
-    assert_eq!(
-        stats(&budgets, &b_id).objects,
-        2,
-        "the namespace's ConfigMap and ServiceAccount"
-    );
+    // The namespace's controllers create its ConfigMap and ServiceAccount a moment after it.
+    eventually(
+        "b holds the namespace's ConfigMap and ServiceAccount",
+        diag,
+        || stats(&budgets, &b_id).objects == 2,
+    )
+    .await;
 
     // --- eviction: a closed view's feed makes room ----------------------------------------------
     drop(a_sa);

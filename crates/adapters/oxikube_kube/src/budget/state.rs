@@ -74,6 +74,10 @@ pub(super) struct State {
     by_request: HashMap<FeedRequest, FeedId>,
     /// Feeds admitted and still opening: they count against `max_feeds`.
     pub(super) opening: usize,
+    /// Owned feeds admitted ahead of their open ([`FeedRegistry::reserve_owned`]
+    /// (super::FeedRegistry::reserve_owned)), by request: they count against `max_feeds` until
+    /// an open of the same request takes the slot or a release gives it back.
+    reserved: HashMap<FeedRequest, usize>,
     next_id: FeedId,
     next_epoch: u64,
     /// Counters of feeds already torn down.
@@ -112,7 +116,7 @@ impl State {
     pub(super) fn admit(&self, request: &FeedRequest, degrade: bool) -> Admission {
         let counted = || self.entries.values().filter(|e| !e.closing);
         let usage = Usage {
-            feeds: counted().count() + self.opening,
+            feeds: counted().count() + self.opening + self.reserved.values().sum::<usize>(),
             objects: counted().map(|e| e.counters.objects()).sum(),
         };
         let mut idle: Vec<(u64, IdleFeed)> = self
@@ -137,9 +141,30 @@ impl State {
         admit(&never, usage, &idle, request.variant)
     }
 
-    /// Marks one owned feed of `request` closing (the oldest not marked yet). Returns whether
-    /// there was one.
+    /// Holds a slot for an owned feed of `request` that will open later.
+    pub(super) fn reserve(&mut self, request: FeedRequest) {
+        *self.reserved.entry(request).or_default() += 1;
+    }
+
+    /// Takes one slot reserved for `request`, if there is one.
+    pub(super) fn take_reserved(&mut self, request: &FeedRequest) -> bool {
+        let Some(count) = self.reserved.get_mut(request) else {
+            return false;
+        };
+        *count -= 1;
+        if *count == 0 {
+            self.reserved.remove(request);
+        }
+        true
+    }
+
+    /// Gives back a slot reserved for `request` whose feed never opened or, failing that, marks
+    /// one owned feed of `request` closing (the oldest not marked yet). Returns whether there
+    /// was either.
     pub(super) fn release_owned(&mut self, request: &FeedRequest) -> bool {
+        if self.take_reserved(request) {
+            return true;
+        }
         let oldest = self
             .entries
             .iter_mut()

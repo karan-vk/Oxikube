@@ -50,9 +50,10 @@
 //! `TableFeedPort` (E04-F543), so every feed the app opens through a port is an owned feed of
 //! this registry: admitted against the limits, counted, and torn down with its stream. The
 //! resource store shares feeds among views and keeps a released one for its own grace period;
-//! its budget hook (in the binary) asks [`FeedRegistry::check`] before it opens a feed, evicts
-//! its own idle feeds while that refuses, and calls [`FeedRegistry::release_owned`] when it lets
-//! a feed go.
+//! its budget hook (in the binary) asks [`FeedRegistry::reserve_owned`] when it decides to open
+//! a feed (the slot is held until the port call opens it on the store's task), evicts its own
+//! idle feeds while that refuses, and calls [`FeedRegistry::release_owned`] when it lets a feed
+//! go.
 //!
 //! # Limits
 //!

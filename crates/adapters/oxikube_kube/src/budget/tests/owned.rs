@@ -148,3 +148,83 @@ async fn a_release_marks_the_equal_feed_that_actually_goes() {
         "the kept feed counts again once the released one is gone"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_reserved_slot_counts_before_its_open_and_the_open_takes_it() {
+    let (registry, source) = registry(config_with(2));
+    // Two decisions in a burst, before either port call: the second sees the first's slot.
+    assert_eq!(
+        registry.reserve_owned(&full(pods(), "a")).unwrap(),
+        FeedVariant::Full
+    );
+    assert_eq!(
+        registry.reserve_owned(&full(pods(), "b")).unwrap(),
+        FeedVariant::Full
+    );
+    let err = registry
+        .reserve_owned(&full(config_maps(), "a"))
+        .unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::BudgetExceeded);
+    assert!(err.message().contains("2 of 2 feeds"), "{}", err.message());
+    // The opens take their slots: neither is refused nor counted twice.
+    let _a = owned(&registry, &source, full(pods(), "a")).await.unwrap();
+    let _b = owned(&registry, &source, full(pods(), "b")).await.unwrap();
+    let stats = registry.stats();
+    assert_eq!((stats.feeds, stats.refused), (2, 0));
+    assert_eq!(
+        registry
+            .check(&full(config_maps(), "a"))
+            .unwrap_err()
+            .kind(),
+        ErrorKind::BudgetExceeded
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_slot_given_up_before_its_open_is_released() {
+    let (registry, source) = registry(config_with(1));
+    registry.reserve_owned(&full(pods(), "a")).unwrap();
+    assert!(registry.reserve_owned(&full(pods(), "b")).is_err());
+    assert!(registry.release_owned(&full(pods(), "a")), "the slot goes");
+    assert!(!registry.release_owned(&full(pods(), "a")), "released once");
+    registry.reserve_owned(&full(pods(), "b")).unwrap();
+    // An open with no slot of its own is admitted against the held one.
+    let err = owned(&registry, &source, full(pods(), "a"))
+        .await
+        .err()
+        .expect("refused");
+    assert_eq!(err.kind(), ErrorKind::BudgetExceeded);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_reservation_tears_down_the_idle_shared_feed_it_needs() {
+    let (registry, source) = registry(config_with(1));
+    let lease = registry.subscribe(full(deployments(), "a")).await.unwrap();
+    drop(lease);
+    registry.reserve_owned(&full(pods(), "a")).unwrap();
+    let stats = registry.stats();
+    assert_eq!(
+        (stats.feeds, stats.evicted),
+        (0, 1),
+        "evicted at the reservation"
+    );
+    let _feed = owned(&registry, &source, full(pods(), "a")).await.unwrap();
+    assert_eq!(registry.stats().feeds, 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_degraded_reservation_is_held_for_the_metadata_feed() {
+    let config = BudgetConfig {
+        max_feeds: 1,
+        metadata_above: 0,
+        ..roomy()
+    };
+    let (registry, source) = registry(config);
+    assert_eq!(
+        registry.reserve_owned(&full(pods(), "a")).unwrap(),
+        FeedVariant::Metadata
+    );
+    let metadata = full(pods(), "a").with_variant(FeedVariant::Metadata);
+    let _feed = owned(&registry, &source, metadata).await.unwrap();
+    assert_eq!(registry.stats().feeds, 1, "the open took the slot");
+}
