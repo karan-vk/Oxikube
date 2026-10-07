@@ -126,7 +126,7 @@ pub use agent::{
 };
 pub use clock::ClockPort;
 pub use cloud::{CloudDiscoveryPort, CloudProvider, CloudToolStatus, DiscoveredCluster};
-pub use cluster_prefs::{ClusterPrefs, ClusterPrefsTable, PrometheusOverride};
+pub use cluster_prefs::{ClusterPrefs, ClusterPrefsTable, NodeShellPrefs, PrometheusOverride};
 pub use cluster_source::{
     ClusterContext, ClusterSource, ClusterSourcePort, SourceId, SourceKind, SourceState,
     SourceStatus, SourcesChanged, UserSource, UserSourceKind,
@@ -140,9 +140,11 @@ pub use crash::{CrashId, CrashReport, CrashReporterPort};
 pub use describe::{DescribeOutput, DescribePort, DescribeSource};
 pub use discovery::{DiscoveryPort, ServerVersion};
 pub use exec::{
-    AttachTarget, BackendEvent, DebugContainerSpec, ExecOptions, ExecPort, ExecSession,
-    ExecStreamPort, ExecTarget, ExitStatus, NodeShellSpec, SessionBackend, TerminalBackend,
-    TerminalSize,
+    AttachTarget, BackendEvent, DEFAULT_NODE_SHELL_IMAGE, DEFAULT_NODE_SHELL_NAMESPACE,
+    DEFAULT_NSENTER_ARGS, DebugContainerSpec, ExecOptions, ExecPort, ExecSession, ExecStreamPort,
+    ExecTarget, ExitStatus, HEARTBEAT_ANNOTATION, NODE_ANNOTATION, NODE_SHELL_CONTAINER,
+    NODE_SHELL_LABEL, NodeShellSpec, NodeShellToleration, SessionBackend, TerminalBackend,
+    TerminalSize, node_shell_command, node_shell_manifest,
 };
 pub use feed::{Delta, DeltaBatch, WatchFeed};
 pub use feed_stats::{FeedStat, FeedStats, FeedVariant};

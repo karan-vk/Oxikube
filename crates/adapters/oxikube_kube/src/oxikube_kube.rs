@@ -79,10 +79,7 @@ pub use pool::{
     ClientFactory, ClientPool, Clock, ContextDefinition, EvictionPolicy, KubeClientFactory,
     PoolConfig, ProxyEnv, RetryMode, SystemClock,
 };
-pub use remote::exec::{
-    DEFAULT_DEBUG_START_TIMEOUT, KubeExec, KubeStream, NodeShellConfig, NodeShellSession,
-    node_shell_manifest,
-};
+pub use remote::exec::{DEFAULT_DEBUG_START_TIMEOUT, KubeExec, KubeStream, NodeShellSession};
 pub use remote::portforward::{ForwardHandle, KubePortForward};
 pub use resources::{
     AccessPath, KubeResources, ListExpired, ManagedFields, ResourcesConfig, is_list_expired,

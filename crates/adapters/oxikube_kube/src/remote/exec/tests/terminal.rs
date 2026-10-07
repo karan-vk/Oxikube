@@ -16,8 +16,8 @@ use oxikube_testkit::fakes::{ExecScript, FakeExecStreamPort};
 use super::fakes::FakePods;
 use crate::fake_api::{FakeApi, status_body};
 use crate::remote::exec::node_shell;
-use crate::remote::exec::terminal::{debug_spec, node_config};
-use crate::remote::exec::{DEFAULT_DEBUG_START_TIMEOUT, KubeExec, NodeShellConfig};
+use crate::remote::exec::terminal::debug_spec;
+use crate::remote::exec::{DEFAULT_DEBUG_START_TIMEOUT, KubeExec};
 
 const EXEC: &str = "/api/v1/namespaces/default/pods/p/exec";
 const ATTACH: &str = "/api/v1/namespaces/default/pods/p/attach";
@@ -114,7 +114,7 @@ async fn bad_descriptors_are_refused_before_any_request() {
         .expect("blank image");
     assert_eq!(err.kind(), ErrorKind::Validation);
     let blank_image = NodeShellSpec {
-        image: Some(String::new()),
+        image: String::new(),
         ..NodeShellSpec::new("node-1")
     };
     let err = ExecPort::node_shell(&exec, &blank_image)
@@ -153,29 +153,6 @@ fn a_debug_container_is_interactive_and_named_when_unnamed() {
     assert_eq!(debug_spec(&named).name, "dbg");
 }
 
-#[test]
-fn a_node_shell_spec_overrides_the_defaults() {
-    let defaults = NodeShellConfig::default();
-    let plain = node_config(&NodeShellSpec::new("n"));
-    assert_eq!(plain.namespace, defaults.namespace);
-    assert_eq!(plain.image, defaults.image);
-    assert_eq!(plain.max_lifetime, defaults.max_lifetime);
-
-    let custom = node_config(&NodeShellSpec {
-        image: Some("registry.example/tools:1".into()),
-        namespace: Some("ops".into()),
-        image_pull_secret: Some("pull".into()),
-        shell: vec!["zsh".into()],
-        start_timeout: Duration::from_secs(5),
-        ..NodeShellSpec::new("n")
-    });
-    assert_eq!(custom.namespace, "ops");
-    assert_eq!(custom.image, "registry.example/tools:1");
-    assert_eq!(custom.image_pull_secret.as_deref(), Some("pull"));
-    assert_eq!(custom.shell, ["zsh"]);
-    assert_eq!(custom.start_timeout, Duration::from_secs(5));
-}
-
 /// A node shell as the terminal sees it: the helper pod goes when the user kills the tab, and
 /// when the shell exits by itself, and the stream reports the exit.
 async fn node_backend(
@@ -187,11 +164,12 @@ async fn node_backend(
     let (pods, deleted) = FakePods::new();
     let exec = FakeExecStreamPort::new();
     exec.script().exec.push(Ok(script));
+    let live = Arc::default();
     let shell = node_shell::open(
         &exec,
         Arc::new(pods),
-        "worker-1",
-        &NodeShellConfig::default(),
+        &live,
+        &NodeShellSpec::new("worker-1"),
     )
     .await
     .expect("open");

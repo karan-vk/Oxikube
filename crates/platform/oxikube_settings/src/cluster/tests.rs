@@ -2,7 +2,7 @@
 
 use oxikube_domain::ClusterColour;
 use oxikube_domain::ids::ClusterId;
-use oxikube_ports::{ClusterPrefs, ExecInteractivity};
+use oxikube_ports::{ClusterPrefs, ExecInteractivity, NodeShellSpec};
 use serde_json::{Value, json};
 
 use super::{ClusterSettings, ClusterSettingsContent};
@@ -38,10 +38,122 @@ fn prefs<'a>(store: &'a SettingsStore, cluster: Option<&ClusterId>) -> &'a Clust
 }
 
 #[test]
-fn defaults_leave_everything_unset_and_writable() {
+fn defaults_leave_everything_but_the_node_shell_template_unset_and_writable() {
     let store = store();
-    assert_eq!(prefs(&store, None), &ClusterPrefs::default());
+    let defaults = prefs(&store, None);
+    assert_eq!(
+        defaults,
+        &ClusterPrefs {
+            node_shell_image: defaults.node_shell_image.clone(),
+            node_shell: defaults.node_shell.clone(),
+            ..ClusterPrefs::default()
+        }
+    );
     assert!(store.diagnostics().is_empty(), "{:?}", store.diagnostics());
+}
+
+/// `default.json` and the ports' built-in template are one thing written twice: a shell opened
+/// with no settings at all must be the one the file documents.
+#[test]
+fn the_shipped_node_shell_defaults_are_the_ports_defaults() {
+    let store = store();
+    assert_eq!(
+        NodeShellSpec::for_node("n", prefs(&store, None)),
+        NodeShellSpec::new("n")
+    );
+}
+
+#[test]
+fn the_node_shell_block_merges_field_by_field_and_lists_replace() {
+    let store = load(&format!(
+        r#"{{
+          "node_shell": {{ "namespace": "ops", "labels": {{ "team": "infra" }} }},
+          "clusters": {{ "{PROD}": {{
+            "node_shell_image": "registry.local/tools:1",
+            "node_shell": {{
+              "tolerations": [{{ "key": "gpu", "operator": "Equal", "value": "a100",
+                                 "effect": "NoSchedule" }}],
+              "nsenter_args": ["-t", "1", "-n"],
+              "image_pull_policy": "Never",
+              "max_lifetime_seconds": 600
+            }}
+          }} }}
+        }}"#
+    ));
+    assert!(store.diagnostics().is_empty(), "{:?}", store.diagnostics());
+    let lab = prefs(&store, Some(&id(LAB)));
+    assert_eq!(lab.node_shell.namespace.as_deref(), Some("ops"));
+    assert_eq!(
+        lab.node_shell.tolerations.as_ref().map(Vec::len),
+        Some(1),
+        "the default toleration"
+    );
+
+    let prod = prefs(&store, Some(&id(PROD)));
+    assert_eq!(
+        prod.node_shell_image.as_deref(),
+        Some("registry.local/tools:1")
+    );
+    let shell = &prod.node_shell;
+    assert_eq!(
+        shell.namespace.as_deref(),
+        Some("ops"),
+        "from the user layer"
+    );
+    assert_eq!(shell.labels.get("team").map(String::as_str), Some("infra"));
+    assert_eq!(
+        shell.nsenter_args,
+        ["-t", "1", "-n"],
+        "a list replaces the default"
+    );
+    assert_eq!(shell.image_pull_policy.as_deref(), Some("Never"));
+    assert_eq!(shell.max_lifetime_seconds, Some(600));
+    let tolerations = shell.tolerations.clone().unwrap();
+    assert_eq!(
+        tolerations.len(),
+        1,
+        "the cluster's list replaced the default one"
+    );
+    assert_eq!(tolerations[0].key.as_deref(), Some("gpu"));
+    assert_eq!(tolerations[0].operator.as_deref(), Some("Equal"));
+    assert_eq!(tolerations[0].effect.as_deref(), Some("NoSchedule"));
+
+    let spec = NodeShellSpec::for_node("worker-1", prod);
+    assert_eq!(spec.namespace, "ops");
+    assert_eq!(spec.image, "registry.local/tools:1");
+}
+
+#[test]
+fn a_bad_node_shell_value_is_named_and_keeps_the_last_good_template() {
+    for (bad, needle) in [
+        (
+            json!({"image_pull_policy": "Sometimes"}),
+            "image_pull_policy",
+        ),
+        (json!({"tolerations": [{"operator": "Maybe"}]}), "operator"),
+        (json!({"tolerations": [{"effect": "NoWhere"}]}), "effect"),
+        (json!({"max_lifetime_seconds": -1}), "max_lifetime_seconds"),
+        (json!({"nsenter_args": "-t 1"}), "nsenter_args"),
+    ] {
+        let store = load(&format!(r#"{{ "node_shell": {bad} }}"#));
+        let [SettingsDiagnostic::InvalidValue { message, .. }] = store.diagnostics() else {
+            panic!("{bad}: {:?}", store.diagnostics());
+        };
+        assert!(message.contains(needle), "{bad}: {message}");
+        assert_eq!(
+            prefs(&store, None).node_shell.namespace.as_deref(),
+            Some("kube-system"),
+            "{bad}: the default template stays"
+        );
+    }
+}
+
+#[test]
+fn a_blank_namespace_and_a_zero_lifetime_fall_back_to_the_defaults() {
+    let store = load(r#"{ "node_shell": { "namespace": "  ", "max_lifetime_seconds": 0 } }"#);
+    let spec = NodeShellSpec::for_node("n", prefs(&store, None));
+    assert_eq!(spec.namespace, NodeShellSpec::new("n").namespace);
+    assert_eq!(spec.max_lifetime, NodeShellSpec::new("n").max_lifetime);
 }
 
 /// For each field: the default, then the user's top-level value, then the cluster's own value.

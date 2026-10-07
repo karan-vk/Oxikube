@@ -193,6 +193,8 @@ pub(crate) struct Fixture {
     /// How many times the `pod::Debug` handler ran.
     pub debugs: Arc<Mutex<u32>>,
     pub deletes: Arc<Mutex<usize>>,
+    /// How many `node::Shell` handlers ran.
+    pub node_shells: Arc<Mutex<usize>>,
 }
 
 pub(crate) fn bounds(
@@ -266,6 +268,22 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
             },
         )
         .unwrap();
+    // `node::Shell` (E09-S09): a mutation the runner confirms with its own wording.
+    let node_shells = Arc::new(Mutex::new(0));
+    let counter = node_shells.clone();
+    registry
+        .register(
+            *command::lookup(CommandId::NODE_SHELL).unwrap(),
+            move |_: Command, cx: HandlerContext| {
+                let counter = counter.clone();
+                async move {
+                    cx.require_mutation()?;
+                    *counter.lock() += 1;
+                    Ok(CommandOutput::none())
+                }
+            },
+        )
+        .unwrap();
     let bus = CommandBus::new(
         registry,
         MutationGuard::new(manager.clone(), state.clone(), clock),
@@ -297,5 +315,6 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
         runner,
         deletes,
         debugs,
+        node_shells,
     }
 }

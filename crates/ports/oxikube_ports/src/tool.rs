@@ -624,6 +624,20 @@ mod tests {
         assert!(!debug.read_only_hint());
         let meta = COMMANDS
             .iter()
+            .find(|m| m.id == CommandId::NODE_SHELL)
+            .unwrap();
+        let node = ToolDef::for_command(meta, "Open a node shell", schema()).unwrap();
+        node.validate().unwrap();
+        assert!(node.annotations.interactive && node.annotations.unsafe_);
+        assert!(!node.agent_exposed_by_default());
+        assert_eq!(node.risk, Some(Risk::Medium));
+        assert!(
+            node.needs
+                .contains(Capabilities::MUTATE | Capabilities::EXEC),
+            "a mutation: it creates a pod"
+        );
+        let meta = COMMANDS
+            .iter()
             .find(|m| m.id == CommandId::POD_VIEW_LOGS)
             .unwrap();
         let logs = ToolDef::for_command(meta, "Logs", schema()).unwrap();

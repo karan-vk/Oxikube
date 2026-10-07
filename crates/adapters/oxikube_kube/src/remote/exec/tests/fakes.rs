@@ -17,6 +17,7 @@ pub(super) enum Call {
     Create { namespace: String, manifest: Value },
     Delete { namespace: String, name: String },
     List { selector: String },
+    Heartbeat { pod: String, at: i64 },
     Patch { pod: String, body: Value },
     Wait { pod: String, container: Container },
 }
@@ -42,6 +43,8 @@ pub(super) struct FakePods {
     pub(super) stall_next_delete: std::sync::atomic::AtomicBool,
     /// Pods `list` returns.
     pub(super) listed: Mutex<Vec<PodStamp>>,
+    /// Fails every `heartbeat` when set.
+    pub(super) heartbeat_error: Fail,
     /// Fails `add_ephemeral_container` when set.
     pub(super) patch_error: Fail,
     deleted: mpsc::UnboundedSender<String>,
@@ -58,6 +61,7 @@ impl FakePods {
                 delete_error: Mutex::default(),
                 stall_next_delete: std::sync::atomic::AtomicBool::new(false),
                 listed: Mutex::default(),
+                heartbeat_error: Mutex::default(),
                 patch_error: Mutex::default(),
                 deleted,
             },
@@ -67,6 +71,17 @@ impl FakePods {
 
     pub(super) fn calls(&self) -> Vec<Call> {
         self.calls.lock().clone()
+    }
+
+    /// The `at` of every heartbeat sent so far.
+    pub(super) fn heartbeats(&self) -> Vec<i64> {
+        self.calls()
+            .into_iter()
+            .filter_map(|call| match call {
+                Call::Heartbeat { at, .. } => Some(at),
+                _ => None,
+            })
+            .collect()
     }
 
     pub(super) fn deletions(&self) -> Vec<String> {
@@ -110,6 +125,14 @@ impl Pods for FakePods {
             selector: label_selector.into(),
         });
         Ok(self.listed.lock().clone())
+    }
+
+    async fn heartbeat(&self, _namespace: &str, name: &str, at: i64) -> OxiResult<()> {
+        self.calls.lock().push(Call::Heartbeat {
+            pod: name.into(),
+            at,
+        });
+        fail(&self.heartbeat_error)
     }
 
     async fn shape(&self, _namespace: &str, _name: &str) -> OxiResult<Option<PodShape>> {

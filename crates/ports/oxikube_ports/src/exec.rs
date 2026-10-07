@@ -8,7 +8,8 @@
 //! | Piece | Where |
 //! |---|---|
 //! | [`TerminalBackend`], [`BackendEvent`], [`TerminalSize`], [`ExitStatus`] | `backend` |
-//! | [`ExecTarget`], [`AttachTarget`], [`DebugContainerSpec`], [`NodeShellSpec`] | `target` |
+//! | [`ExecTarget`], [`AttachTarget`], [`DebugContainerSpec`] | `target` |
+//! | [`NodeShellSpec`] and the pod and command it renders to ([`node_shell_manifest`]) | `node_shell` |
 //! | [`ExecStreamPort`]: the lower, stream-level exec ([`ExecSession`], [`ExecOptions`]) | `stream` |
 //! | [`SessionBackend`]: an [`ExecSession`] as a [`TerminalBackend`] | `session_backend` |
 //!
@@ -20,17 +21,25 @@
 //! consumes the backends).
 
 mod backend;
+mod node_shell;
 mod session_backend;
 mod stream;
 mod target;
+
+use std::time::Duration;
 
 use async_trait::async_trait;
 use oxikube_domain::OxiResult;
 
 pub use backend::{BackendEvent, ExitStatus, TerminalBackend, TerminalSize};
+pub use node_shell::{
+    CONTAINER_NAME as NODE_SHELL_CONTAINER, DEFAULT_NODE_SHELL_IMAGE, DEFAULT_NODE_SHELL_NAMESPACE,
+    DEFAULT_NSENTER_ARGS, HEARTBEAT_ANNOTATION, NODE_ANNOTATION, NODE_SHELL_LABEL, NodeShellSpec,
+    NodeShellToleration, node_shell_command, node_shell_manifest,
+};
 pub use session_backend::SessionBackend;
 pub use stream::{ExecOptions, ExecSession, OutputStream, ResizeSink, StdinSink};
-pub use target::{AttachTarget, DebugContainerSpec, ExecTarget, NodeShellSpec};
+pub use target::{AttachTarget, DebugContainerSpec, ExecTarget};
 
 /// Opens terminal sessions into a connected cluster: exec, attach, debug containers and
 /// node shells. Each method returns a boxed [`TerminalBackend`] once the session is
@@ -46,6 +55,8 @@ pub use target::{AttachTarget, DebugContainerSpec, ExecTarget, NodeShellSpec};
 /// | [`attach`](Self::attach) | none on the cluster (privileged: gate on the `exec` capability) |
 /// | [`create_debug_container`](Self::create_debug_container) | **mutates**: patches the pod's `ephemeralcontainers` subresource; the container cannot be removed afterwards |
 /// | [`node_shell`](Self::node_shell) | **mutates**: creates a privileged pod pinned to the node, deleted when the session ends |
+/// | [`sweep_node_shells`](Self::sweep_node_shells) | **mutates**: deletes the node-shell pods whose owner is gone |
+/// | [`release_node_shells`](Self::release_node_shells) | **mutates**: deletes the node-shell pods this port still has open |
 ///
 /// `exec` and `attach` are not `MutationGuard` operations. `create_debug_container` and
 /// `node_shell` are: `ExecService` (E09-S09, E09-S10) routes them through the guard
@@ -85,6 +96,25 @@ pub trait ExecPort: Send + Sync {
     /// session ends, fails to open or the backend is dropped. **Creates a pod** (see the
     /// trait docs).
     async fn node_shell(&self, spec: &NodeShellSpec) -> OxiResult<Box<dyn TerminalBackend>>;
+
+    /// Deletes the node-shell pods of `namespace` whose owner is gone: those with Oxikube's
+    /// node-shell label that nobody has stamped alive (the pod's creation, or the
+    /// [`HEARTBEAT_ANNOTATION`] its owner refreshes while the shell is open) for `older_than`.
+    /// A shell that is open in another window, process or machine keeps stamping its pod, so it
+    /// is spared however long it has been open. Returns the names of the pods that were deleted;
+    /// one that fails to delete is skipped and logged. **Deletes pods** (see the trait docs).
+    async fn sweep_node_shells(
+        &self,
+        namespace: &str,
+        older_than: Duration,
+    ) -> OxiResult<Vec<String>>;
+
+    /// Deletes every node-shell pod this port opened whose shell is still open, and waits for the
+    /// deletes (bounded). For the app's quit, which does not drop the terminals: without it the
+    /// privileged pods would stay until their deadline. Returns how many it deleted; a delete
+    /// that fails is logged, the sweep and the pod's deadline are the backstop. **Deletes pods**
+    /// (see the trait docs).
+    async fn release_node_shells(&self) -> OxiResult<usize>;
 }
 
 /// Stream-level exec and attach: the raw stdin/stdout/stderr/resize streams of a session.

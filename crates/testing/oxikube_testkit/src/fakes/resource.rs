@@ -459,7 +459,16 @@ fn owned(namespace: Option<&str>) -> Option<String> {
 }
 
 fn object_from_body(object: &Value, namespace: Option<&str>) -> OxiResult<Resource> {
-    let mut res = Resource::from_json(object.clone())?;
+    let mut object = object.clone();
+    // The server names an object that carries `generateName` and no name (a node shell's pod).
+    if let Some(meta) = object.get_mut("metadata").and_then(Value::as_object_mut)
+        && !meta.contains_key("name")
+        && let Some(prefix) = meta.get("generateName").and_then(Value::as_str)
+    {
+        let name = format!("{prefix}x7k2p");
+        meta.insert("name".into(), Value::String(name));
+    }
+    let mut res = Resource::from_json(object)?;
     if res.meta.namespace.is_none() {
         if let Some(ns) = namespace {
             res.meta.namespace = Some(Arc::from(ns));

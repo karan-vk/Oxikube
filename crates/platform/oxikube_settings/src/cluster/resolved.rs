@@ -73,6 +73,7 @@ fn prefs_from_content(content: ClusterSettingsContent) -> ClusterPrefs {
         terminal_cwd,
         node_shell_image,
         node_shell_pull_secret,
+        node_shell,
         prometheus,
         accessible_namespaces,
         exec_interactivity,
@@ -93,6 +94,7 @@ fn prefs_from_content(content: ClusterSettingsContent) -> ClusterPrefs {
         terminal_cwd: non_blank(terminal_cwd),
         node_shell_image: non_blank(node_shell_image),
         node_shell_pull_secret: non_blank(node_shell_pull_secret),
+        node_shell: node_shell.map(Into::into).unwrap_or_default(),
         prometheus: prometheus.and_then(prometheus_from_content),
         accessible_namespaces: namespaces,
         exec_interactivity: exec_interactivity.unwrap_or_default(),
@@ -110,7 +112,7 @@ fn prometheus_from_content(content: PrometheusContent) -> Option<PrometheusOverr
     (value != PrometheusOverride::default()).then_some(value)
 }
 
-fn non_blank(value: Option<String>) -> Option<String> {
+pub(super) fn non_blank(value: Option<String>) -> Option<String> {
     value
         .map(|text| text.trim().to_owned())
         .filter(|text| !text.is_empty())

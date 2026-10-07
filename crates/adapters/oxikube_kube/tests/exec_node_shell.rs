@@ -14,9 +14,8 @@ use k8s_openapi::api::core::v1::{Node, Pod};
 use kube::api::PostParams;
 use kube::{Api, Client};
 use oxikube_domain::ErrorKind;
-use oxikube_kube::{
-    EphemeralContainerSpec, KubeExec, NodeShellConfig, NodeShellSession, node_shell_manifest,
-};
+use oxikube_kube::{EphemeralContainerSpec, KubeExec, NodeShellSession};
+use oxikube_ports::{NodeShellSpec, node_shell_manifest};
 use oxikube_testkit::images;
 use oxikube_testkit::integration::TestNamespace;
 
@@ -51,18 +50,18 @@ async fn a_node(client: &Client) -> String {
     nodes.items[0].metadata.name.clone().expect("node name")
 }
 
-fn config(namespace: &str) -> NodeShellConfig {
-    NodeShellConfig {
+fn spec(node: &str, namespace: &str) -> NodeShellSpec {
+    NodeShellSpec {
         namespace: namespace.into(),
         // The shell image is pulled into the node by `cargo xtask kind-up`; the adapter's own
         // start timeout still covers a pull, and `pod_waits.rs` checks the default image is listed.
         image: images::BUSYBOX.into(),
-        ..NodeShellConfig::default()
+        ..NodeShellSpec::new(node)
     }
 }
 
 async fn open_shell(exec: &KubeExec, node: &str, namespace: &str) -> NodeShellSession {
-    exec.node_shell(node, &config(namespace))
+    exec.node_shell(&spec(node, namespace))
         .await
         .expect("open the node shell")
 }
@@ -126,6 +125,25 @@ async fn dropping_the_session_removes_the_pod() {
 }
 
 #[tokio::test]
+async fn releasing_the_open_shells_removes_their_pods_while_the_sessions_live() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let ns = TestNamespace::create(kind.context.as_str()).expect("test namespace");
+    let client = kind.admin_client().await;
+    let node = a_node(&client).await;
+    let exec = KubeExec::new((*client).clone());
+
+    // The app's quit: the tabs are never dropped, the adapter deletes what it still has open.
+    let shell = open_shell(&exec, &node, ns.name()).await;
+    let name = shell.pod.clone();
+    assert!(live(&client, ns.name(), &name).await.is_some());
+    assert_eq!(exec.release_node_shells().await, 1);
+    wait_gone(&client, ns.name(), &name).await;
+    drop(shell);
+}
+
+#[tokio::test]
 async fn aborting_the_task_that_owns_the_session_removes_the_pod() {
     let Some(kind) = common::kind().await else {
         return;
@@ -154,12 +172,12 @@ async fn a_pod_that_cannot_start_is_removed_and_reported() {
     let node = a_node(&client).await;
     let exec = KubeExec::new((*client).clone());
 
-    let config = NodeShellConfig {
+    let bad_image = NodeShellSpec {
         image: "registry.invalid/oxikube/none:0".into(),
-        ..config(ns.name())
+        ..spec(&node, ns.name())
     };
     let err = exec
-        .node_shell(&node, &config)
+        .node_shell(&bad_image)
         .await
         .expect_err("the image cannot be pulled");
     assert_eq!(err.kind(), ErrorKind::Conflict, "{err}");
@@ -188,7 +206,7 @@ async fn the_sweep_removes_leftover_shell_pods() {
     let exec = KubeExec::new((*client).clone());
 
     // What a crashed run leaves behind: a shell pod nobody owns.
-    let manifest = node_shell_manifest(&node, &config(ns.name())).expect("manifest");
+    let manifest = node_shell_manifest(&spec(&node, ns.name())).expect("manifest");
     let leftover: Pod = serde_json::from_value(manifest).expect("pod");
     let pods = Api::<Pod>::namespaced((*client).clone(), ns.name());
     let created = pods
@@ -202,14 +220,14 @@ async fn the_sweep_removes_leftover_shell_pods() {
         .sweep_node_shells(ns.name(), Duration::from_secs(3600))
         .await
         .expect("sweep");
-    assert_eq!(kept, 0);
+    assert!(kept.is_empty(), "{kept:?}");
     assert!(live(&client, ns.name(), &name).await.is_some());
 
     let swept = exec
         .sweep_node_shells(ns.name(), Duration::ZERO)
         .await
         .expect("sweep");
-    assert_eq!(swept, 1);
+    assert_eq!(swept, std::slice::from_ref(&name));
     wait_gone(&client, ns.name(), &name).await;
 }
 

@@ -7,10 +7,10 @@ use oxikube_domain::ErrorKind;
 use serde_json::json;
 
 use crate::fake_api::{FakeApi, status_body};
-use crate::remote::exec::node_shell::{NODE_SHELL_LABEL, NodeShellConfig, node_shell_manifest};
 use crate::remote::exec::pods::{KubePods, PodShape, Pods};
 use crate::remote::exec::wait::Container;
 use crate::subresource::{EphemeralContainerSpec, ephemeral_container_patch};
+use oxikube_ports::{NODE_SHELL_LABEL, NodeShellSpec, node_shell_manifest};
 
 const PODS: &str = "/api/v1/namespaces/ns/pods";
 
@@ -22,7 +22,7 @@ async fn create_posts_the_manifest_and_returns_the_generated_name() {
         201,
         json!({"metadata": {"name": "oxikube-node-shell-x7k2p", "namespace": "ns"}}),
     );
-    let manifest = node_shell_manifest("n1", &NodeShellConfig::default()).expect("manifest");
+    let manifest = node_shell_manifest(&NodeShellSpec::new("n1")).expect("manifest");
     let name = KubePods::new(api.client())
         .create("ns", &manifest)
         .await
@@ -46,7 +46,7 @@ async fn create_refused_by_the_server_keeps_its_kind() {
         403,
         status_body(403, "Forbidden", "pods is forbidden"),
     );
-    let manifest = node_shell_manifest("n1", &NodeShellConfig::default()).expect("manifest");
+    let manifest = node_shell_manifest(&NodeShellSpec::new("n1")).expect("manifest");
     let err = KubePods::new(api.client())
         .create("ns", &manifest)
         .await
@@ -91,8 +91,11 @@ async fn list_selects_by_label_and_reads_names_and_ages() {
         PODS,
         200,
         json!({"metadata": {}, "items": [
-            {"metadata": {"name": "a", "creationTimestamp": "2026-01-01T00:00:00Z"}},
+            {"metadata": {"name": "a", "creationTimestamp": "2026-01-01T00:00:00Z",
+                          "annotations": {"oxikube.dev/node-shell-heartbeat": "1767225900"}}},
             {"metadata": {"name": "b"}},
+            {"metadata": {"name": "c", "creationTimestamp": "2026-01-01T00:00:00Z",
+                          "annotations": {"oxikube.dev/node-shell-heartbeat": "not a number"}}},
         ]}),
     );
     let found = KubePods::new(api.client())
@@ -104,10 +107,41 @@ async fn list_selects_by_label_and_reads_names_and_ages() {
             .query
             .contains("labelSelector=oxikube.dev%2Fnode-shell")
     );
-    assert_eq!(found.len(), 2);
+    assert_eq!(found.len(), 3);
     assert_eq!(found[0].name, "a");
     assert_eq!(found[0].created, 1_767_225_600);
+    assert_eq!(found[0].heartbeat, Some(1_767_225_900));
+    assert_eq!(found[0].last_seen(), 1_767_225_900);
     assert_eq!(found[1].created, 0);
+    assert_eq!(found[1].heartbeat, None);
+    // A stamp that cannot be read counts as none: the pod is judged by its creation.
+    assert_eq!(found[2].heartbeat, None);
+    assert_eq!(found[2].last_seen(), 1_767_225_600);
+}
+
+#[tokio::test]
+async fn heartbeat_merge_patches_the_annotation_on_the_pod() {
+    let api = FakeApi::new();
+    let path = format!("{PODS}/shell");
+    api.reply(&path, 200, json!({"metadata": {"name": "shell"}}));
+    KubePods::new(api.client())
+        .heartbeat("ns", "shell", 1_767_225_900)
+        .await
+        .expect("heartbeat");
+    let request = &api.requests()[0];
+    assert_eq!(request.method, Method::PATCH);
+    assert_eq!(
+        request.body.as_ref().expect("body"),
+        &json!({"metadata": {"annotations": {"oxikube.dev/node-shell-heartbeat": "1767225900"}}})
+    );
+
+    let denied = FakeApi::new();
+    denied.reply(&path, 403, status_body(403, "Forbidden", "no"));
+    let err = KubePods::new(denied.client())
+        .heartbeat("ns", "shell", 1)
+        .await
+        .expect_err("denied");
+    assert_eq!(err.kind(), ErrorKind::Forbidden);
 }
 
 #[tokio::test]

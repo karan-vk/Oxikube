@@ -35,7 +35,7 @@ credentials belong in the keychain.
 `clusters.<id>` is the override layer; every registered setting may appear in it, merged field by
 field over the user's top-level values and the defaults. `ClusterSettings` (module `cluster`)
 is the first setting that is about clusters: `display_name`, `colour`, `read_only`,
-`default_namespace`, `terminal_cwd`, `node_shell_image`, `node_shell_pull_secret`, `prometheus`
+`default_namespace`, `terminal_cwd`, `node_shell_image`, `node_shell_pull_secret`, `node_shell` (the pod template block), `prometheus`
 (`provider`, `path`, `url`, `auth_secret`), `accessible_namespaces` and `exec_interactivity`.
 
 ```jsonc

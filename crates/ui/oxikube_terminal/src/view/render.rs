@@ -69,7 +69,7 @@ impl Render for TerminalView {
                 element.into_any_element()
             }
             Phase::Starting => {
-                let text = format!("Starting {}…", self.title()).into();
+                let text = self.descriptor.starting_text(&self.title()).into();
                 self.message("terminal-starting", text, cx)
             }
             // The banner above says why; the body is only the backdrop.

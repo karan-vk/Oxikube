@@ -46,6 +46,31 @@ pub fn install_exec_service(state: &AppState, sessions: ClusterSessionManager) -
     service
 }
 
+/// Ends the open node shells when the app quits: deletes their privileged pods and writes their
+/// closing audit records and whatever else the audit log still queues.
+///
+/// GPUI does not drop the terminals on quit, so without this the pods of the open tabs would run
+/// until their deadline and the deletions of tabs closed shortly before would never reach the
+/// audit store. The work runs on the Kubernetes runtime inside the quit's bounded wait, so a
+/// slow API server cannot hold the quit: the pods then have their deadline and the next node
+/// shell's sweep. Call once per app.
+pub fn close_node_shells_on_quit(service: Arc<ExecService>, cx: &mut App) {
+    cx.on_app_quit(move |cx| {
+        // No runtime means start-up failed or a test without one: nothing was opened.
+        let task = oxikube_runtime::mode(cx).map(|_| {
+            let service = service.clone();
+            oxikube_runtime::spawn_kube(cx, async move { service.close_node_shells().await })
+        });
+        async move {
+            if let Some(task) = task {
+                // Cancelled or panicked work leaves the deadline and the sweep as backstops.
+                let _ = task.await;
+            }
+        }
+    })
+    .detach();
+}
+
 /// Installs the app's terminal services (see the [module docs](self)) and returns them. A
 /// launcher installed before the window mounted (the tests' fake) is kept.
 pub fn install_services(

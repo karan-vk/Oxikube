@@ -200,6 +200,12 @@ impl ExecPort for Stub {
     async fn node_shell(&self, _: &NodeShellSpec) -> OxiResult<Box<dyn TerminalBackend>> {
         stub()
     }
+    async fn sweep_node_shells(&self, _: &str, _: std::time::Duration) -> OxiResult<Vec<String>> {
+        stub()
+    }
+    async fn release_node_shells(&self) -> OxiResult<usize> {
+        stub()
+    }
 }
 
 #[async_trait]
@@ -395,6 +401,10 @@ fn other_ports_are_callable_through_arc_dyn() {
                 .await,
         );
         assert_unsupported(assert_send(exec.node_shell(&NodeShellSpec::new("node-1"))).await);
+        assert_unsupported(
+            assert_send(exec.sweep_node_shells("kube-system", std::time::Duration::ZERO)).await,
+        );
+        assert_unsupported(assert_send(exec.release_node_shells()).await);
         let streams: Arc<dyn ExecStreamPort + Send + Sync> = Arc::new(Stub);
         assert_unsupported(
             assert_send(streams.exec_session(

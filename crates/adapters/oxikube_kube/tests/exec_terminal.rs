@@ -217,8 +217,8 @@ async fn a_node_shell_through_the_port_removes_its_pod_on_kill() {
     let exec = KubeExec::new((*client).clone());
 
     let spec = NodeShellSpec {
-        namespace: Some(ns.name().into()),
-        image: Some(BUSYBOX.into()),
+        namespace: ns.name().into(),
+        image: BUSYBOX.into(),
         start_timeout: Duration::from_secs(120),
         ..NodeShellSpec::new(&node)
     };

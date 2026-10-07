@@ -41,6 +41,11 @@
 //!     on `shift-d` opens the debug dialog, and `pod::Debug` on the bus (a low-risk guarded
 //!     mutation: read-only blocked, confirmed, audited) adds the ephemeral container and opens a
 //!     terminal attached to it in the same bottom dock.
+//! 12. node shells (E09-S09): "Shell" on a node's context menu, palette list, detail header and
+//!     `s`, and `node::Shell` on the bus (a mutation: blocked read-only, confirmed with the node and
+//!     the image named, the pod dry-run, audited at creation and at deletion) opening a terminal
+//!     in the cluster tab's bottom dock; quitting the app deletes the pods of the shells still
+//!     open and writes their closing records ([`terminal::close_node_shells_on_quit`]).
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -223,6 +228,11 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         }
     };
     let bus = CommandBus::new(registry, services.guard(&ports));
+    // A node shell audits the end of its pod's life (the deletion) on the guard's own log.
+    if exec_service.set_audit(bus.guard().audit_handle()) {
+        // Once per app: the first window to mount sets the log.
+        terminal::close_node_shells_on_quit(exec_service.clone(), cx);
+    }
     if !state.set_command_bus(bus.clone()) {
         tracing::warn!("a command bus was set already: this window uses its own");
     }

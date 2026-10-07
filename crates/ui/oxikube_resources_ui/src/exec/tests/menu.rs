@@ -17,7 +17,9 @@ fn labels(f: &mut Fixture, table: &gpui::Entity<crate::table::ResourceTable>) ->
 }
 
 #[gpui::test]
-fn a_pod_offers_shell_attach_and_debug_after_logs_and_a_node_offers_none(cx: &mut TestAppContext) {
+fn a_pod_offers_shell_attach_and_debug_after_logs_and_a_node_offers_only_its_own_shell(
+    cx: &mut TestAppContext,
+) {
     let mut f = Fixture::with_exec(cx);
     f.connect_with([p("x", "web-0", "1")]);
     let pods = f.open_pods();
@@ -29,8 +31,8 @@ fn a_pod_offers_shell_attach_and_debug_after_logs_and_a_node_offers_none(cx: &mu
     let nodes = f.open(crate::actions::tests::nodes_kind());
     assert_eq!(
         labels(&mut f, &nodes),
-        ["Delete"],
-        "shells and debug containers are for pods"
+        ["Shell", "Delete"],
+        "a node's Shell is `node::Shell`, not a pod's; it has no Attach"
     );
 }
 

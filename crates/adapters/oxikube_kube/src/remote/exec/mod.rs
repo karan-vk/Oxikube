@@ -21,7 +21,7 @@
 //! | the status channel to [`oxikube_ports::ExitStatus`] | `status` |
 //! | error mapping, sharpened by a pod read on the failure path | `error` |
 //! | pod reads and writes behind a test seam, container readiness | `pods`, `wait` |
-//! | privileged node pod: manifest, cleanup guard, leftover sweep | [`node_shell`] |
+//! | privileged node pod: create, wait, exec, cleanup guard, leftover sweep (the template and its manifest are in `oxikube_ports`) | [`node_shell`] |
 //! | ephemeral debug container | `debug` |
 //!
 //! # How a session behaves
@@ -76,23 +76,28 @@ use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Pod;
 use kube::{Api, Client};
 use oxikube_domain::OxiResult;
-use oxikube_ports::{ExecOptions, ExecSession, ExecStreamPort};
+use oxikube_ports::{ExecOptions, ExecSession, ExecStreamPort, NodeShellSpec};
 
 use crate::subresource::EphemeralContainerSpec;
 use error::{Target, open_error, refine};
+use node_shell::LiveShells;
 use params::{attach_params, check_command, check_target};
 use pods::{KubePods, Pods};
 use session::Parts;
 
 pub use debug::DEFAULT_DEBUG_START_TIMEOUT;
 pub use kube_stream::KubeStream;
-pub use node_shell::{NodeShellConfig, NodeShellSession, node_shell_manifest};
+pub use node_shell::NodeShellSession;
 
 /// Exec and attach on one connected cluster. Cheap to clone; clones share the client.
 #[derive(Clone)]
 pub struct KubeExec {
     client: Client,
     pods: Arc<dyn Pods>,
+    /// The node shells open through this adapter and its clones, for [`release_node_shells`].
+    ///
+    /// [`release_node_shells`]: KubeExec::release_node_shells
+    live: Arc<LiveShells>,
 }
 
 impl KubeExec {
@@ -100,6 +105,7 @@ impl KubeExec {
     pub fn new(client: Client) -> Self {
         Self {
             pods: Arc::new(KubePods::new(client.clone())),
+            live: Arc::default(),
             client,
         }
     }
@@ -161,32 +167,38 @@ impl KubeExec {
     /// Opens a shell on `node` through a privileged pod pinned to it, and removes the pod when
     /// the shell ends, fails to open, or the session is dropped. See [`node_shell`].
     ///
-    /// Creating the pod is a mutation (suggested guard tier: High).
+    /// Creating the pod is a mutation: the callers that expose it (`node::Shell`) run it through
+    /// the guard first, which shows and dry-runs [`oxikube_ports::node_shell_manifest`] of the same
+    /// `spec`.
     ///
     /// # Errors
     ///
     /// `Validation` for a bad node or configuration; the usual transport kinds, `Forbidden`
     /// when RBAC refuses the pod or the exec; `Conflict` when the pod cannot start (the image
     /// cannot be pulled, the node refuses it); `Timeout` when it does not start within
-    /// [`NodeShellConfig::start_timeout`]. In every failure the pod is deleted before the
+    /// [`NodeShellSpec::start_timeout`]. In every failure the pod is deleted before the
     /// error returns.
-    pub async fn node_shell(
-        &self,
-        node: &str,
-        config: &NodeShellConfig,
-    ) -> OxiResult<NodeShellSession> {
-        node_shell::open(self, self.pods.clone(), node, config).await
+    pub async fn node_shell(&self, spec: &NodeShellSpec) -> OxiResult<NodeShellSession> {
+        node_shell::open(self, self.pods.clone(), &self.live, spec).await
     }
 
     /// Deletes node-shell pods in `namespace` that an earlier run left behind (it crashed, or
     /// the connection dropped before the cleanup ran): those carrying Oxikube's node-shell
-    /// label and older than `older_than`. Returns how many were deleted. See [`node_shell`].
+    /// label that nobody has stamped alive for `older_than`, so a shell open in another window,
+    /// process or machine is spared however long it has been open. Returns the names of the
+    /// pods deleted. See [`node_shell`].
     pub async fn sweep_node_shells(
         &self,
         namespace: &str,
         older_than: std::time::Duration,
-    ) -> OxiResult<usize> {
+    ) -> OxiResult<Vec<String>> {
         node_shell::sweep(self.pods.as_ref(), namespace, older_than).await
+    }
+
+    /// Deletes the pods of every node shell still open through this adapter, and waits for the
+    /// answers. Returns how many deletes went through. For the app's quit; see [`node_shell`].
+    pub async fn release_node_shells(&self) -> usize {
+        self.live.release(self.pods.as_ref()).await
     }
 
     /// Adds the ephemeral container `spec` to `pod`, waits for it to run and attaches to it

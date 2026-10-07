@@ -159,7 +159,13 @@ impl ResourceTable {
         cx: &mut Context<Self>,
     ) {
         let targets = self.action_targets(cx);
-        self.run_action(CommandId::POD_SHELL, targets, window, cx);
+        // On a node table the same key opens a node shell (`node::Shell`: confirmed, audited).
+        let command = if self.kind.gvk.is_node() {
+            CommandId::NODE_SHELL
+        } else {
+            CommandId::POD_SHELL
+        };
+        self.run_action(command, targets, window, cx);
     }
 
     pub(super) fn on_attach(

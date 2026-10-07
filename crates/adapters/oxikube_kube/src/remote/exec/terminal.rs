@@ -8,6 +8,7 @@
 //! session's status future, which deletes the helper pod.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use oxikube_domain::OxiResult;
@@ -17,8 +18,8 @@ use oxikube_ports::{
 };
 use uuid::Uuid;
 
+use super::KubeExec;
 use super::kube_stream::{KubeStream, Reopen};
-use super::{KubeExec, NodeShellConfig};
 use crate::subresource::EphemeralContainerSpec;
 
 /// The server rejects `stderr` with a TTY (a TTY merges both into stdout), so a TTY session
@@ -47,19 +48,6 @@ pub(super) fn debug_spec(spec: &DebugContainerSpec) -> EphemeralContainerSpec {
         target_container: spec.target_container.clone(),
         stdin: true,
         tty: true,
-    }
-}
-
-/// The node-shell configuration for a request: the spec's choices over the defaults.
-pub(super) fn node_config(spec: &NodeShellSpec) -> NodeShellConfig {
-    let defaults = NodeShellConfig::default();
-    NodeShellConfig {
-        namespace: spec.namespace.clone().unwrap_or(defaults.namespace),
-        image: spec.image.clone().unwrap_or(defaults.image),
-        image_pull_secret: spec.image_pull_secret.clone(),
-        shell: spec.shell.clone(),
-        start_timeout: spec.start_timeout,
-        ..defaults
     }
 }
 
@@ -126,8 +114,20 @@ impl ExecPort for KubeExec {
     }
 
     async fn node_shell(&self, spec: &NodeShellSpec) -> OxiResult<Box<dyn TerminalBackend>> {
-        let shell = KubeExec::node_shell(self, &spec.node, &node_config(spec)).await?;
+        let shell = KubeExec::node_shell(self, spec).await?;
         // The helper pod goes with the session: a reconnect would have nothing to reach.
         Ok(Box::new(KubeStream::new(shell.session, None)))
+    }
+
+    async fn sweep_node_shells(
+        &self,
+        namespace: &str,
+        older_than: Duration,
+    ) -> OxiResult<Vec<String>> {
+        KubeExec::sweep_node_shells(self, namespace, older_than).await
+    }
+
+    async fn release_node_shells(&self) -> OxiResult<usize> {
+        Ok(KubeExec::release_node_shells(self).await)
     }
 }

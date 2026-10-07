@@ -12,8 +12,11 @@
 //! record before the handler here runs (the handler only queues the request), and the terminal
 //! then connects through the launcher, so a failed connection shows in the tab.
 
+use std::sync::Arc;
+
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
+use oxikube_app::exec::NodeShellOpener;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_domain::{OxiError, OxiResult};
@@ -40,10 +43,11 @@ pub enum TerminalRequest {
     Split,
     /// `terminal::Close`: close the focused terminal.
     Close,
-    /// `pod::Shell`, `pod::Attach`, `pod::Exec`, or the terminal of a new debug container
-    /// (`pod::Debug`, E09-S10, as an attach of it): a terminal in a pod's container, in the bottom
-    /// dock of its cluster's tab. The descriptor is [`BackendDescriptor::Exec`] (an empty
-    /// command means the shell chain) or [`BackendDescriptor::Attach`].
+    /// `pod::Shell`, `pod::Attach`, `pod::Exec`, the terminal of a new debug container
+    /// (`pod::Debug`, E09-S10, as an attach of it) or `node::Shell`: a terminal in a pod's
+    /// container or on a node, in the bottom dock of its cluster's tab. The descriptor is
+    /// [`BackendDescriptor::Exec`] (an empty command means the shell chain),
+    /// [`BackendDescriptor::Attach`] or [`BackendDescriptor::NodeShell`].
     Pod(BackendDescriptor),
     /// `terminal::Reconnect`: open the focused pod terminal's session again (E09-S12).
     Reconnect,
@@ -68,6 +72,18 @@ impl TerminalViewSink {
     /// `false` when the window is gone.
     pub fn open(&self, descriptor: BackendDescriptor) -> bool {
         self.send(TerminalRequest::Open { descriptor }).is_ok()
+    }
+
+    /// What the `node::Shell` handler calls once the guard allowed a shell on a node: a terminal
+    /// opens for it in the bottom dock of the node's cluster tab ([`TerminalRequest::Pod`] with a
+    /// [`BackendDescriptor::NodeShell`]). Hand it to `oxikube_app::exec::register_command`.
+    pub fn node_shell_opener(&self) -> NodeShellOpener {
+        let sink = self.clone();
+        Arc::new(move |node: &ResourceRef| {
+            sink.send(TerminalRequest::Pod(BackendDescriptor::NodeShell {
+                node: node.clone(),
+            }))
+        })
     }
 
     pub(super) fn send(&self, request: TerminalRequest) -> OxiResult<()> {

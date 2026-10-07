@@ -1,35 +1,44 @@
 //! Node shells: a shell on a node through a privileged pod (E04-S09).
 //!
-//! The pod ([`node_shell_manifest`]) is created on the target node, the shell is an exec of
-//! `nsenter` into the node's namespaces, and the pod is deleted when the shell exits, when
-//! opening fails at any step, and when the session is dropped or aborted (`guard`). If a run
-//! dies before it can clean up (a crash, a lost connection), `sweep` deletes what it left,
-//! and the pod's `activeDeadlineSeconds` ends it regardless.
+//! The pod ([`node_shell_manifest`](oxikube_ports::node_shell_manifest), rendered from the
+//! [`NodeShellSpec`] in `oxikube_ports`) is created on the target node, the shell is an exec of
+//! `nsenter` into the node's namespaces ([`node_shell_command`]), and the pod is deleted when the
+//! shell exits, when opening fails at any step, and when the session is dropped or aborted
+//! (`guard`), or when the app quits ([`LiveShells`], `release`). While a shell is open its pod
+//! is stamped alive every minute (`heartbeat`). If a run dies before it can clean up (a crash, a
+//! lost connection), `sweep` deletes what it left once nothing has stamped the pod for a while,
+//! which never takes another window's or user's live shell, and the pod's
+//! `activeDeadlineSeconds` ends it regardless.
+//!
+//! The template, its defaults and the manifest live in the ports crate so the app can show and
+//! dry-run exactly the pod this creates (E09-S09); this module owns the cluster side: create,
+//! wait, exec, delete.
 //!
 //! | Piece | Where |
 //! |---|---|
-//! | [`NodeShellConfig`] (image, pull secret, namespace, lifetime) | `config` |
-//! | [`node_shell_manifest`], the exec command | `manifest` |
 //! | cleanup on end, error and drop | `guard` |
+//! | stamping the pod alive while the shell is open | `heartbeat` |
+//! | the shells open now, for the app's quit | `live` |
 //! | `open`, `sweep` | this file |
 
-mod config;
 mod guard;
-mod manifest;
+mod heartbeat;
+mod live;
 
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
-use oxikube_domain::{OxiError, OxiResult};
-use oxikube_ports::{ExecOptions, ExecSession, ExecStreamPort};
+use oxikube_domain::OxiResult;
+use oxikube_ports::{
+    ExecOptions, ExecSession, ExecStreamPort, NODE_SHELL_CONTAINER, NODE_SHELL_LABEL,
+    NodeShellSpec, node_shell_command, node_shell_manifest,
+};
 
 use super::pods::Pods;
 use super::wait::Container;
 use guard::PodCleanup;
-use manifest::{CONTAINER, exec_command};
-
-pub use config::{DEFAULT_IMAGE, DEFAULT_NAMESPACE, NodeShellConfig};
-pub use manifest::{NODE_ANNOTATION, NODE_SHELL_LABEL, node_shell_manifest};
+use heartbeat::now_secs;
+pub(super) use live::LiveShells;
 
 /// A shell on a node.
 #[derive(Debug)]
@@ -47,25 +56,26 @@ pub struct NodeShellSession {
 pub(super) async fn open(
     exec: &dyn ExecStreamPort,
     pods: Arc<dyn Pods>,
-    node: &str,
-    config: &NodeShellConfig,
+    live: &Arc<LiveShells>,
+    spec: &NodeShellSpec,
 ) -> OxiResult<NodeShellSession> {
-    let manifest = node_shell_manifest(node, config)?;
-    let namespace = config.namespace.clone();
+    let manifest = node_shell_manifest(spec)?;
+    let namespace = spec.namespace.clone();
+    let node = spec.node.as_str();
     let pod = pods.create(&namespace, &manifest).await?;
     tracing::info!(node, namespace = %namespace, pod = %pod, "node shell pod created");
-    let cleanup = PodCleanup::new(pods.clone(), &namespace, &pod);
+    let cleanup = PodCleanup::new(pods.clone(), live, &namespace, &pod);
 
     let started = async {
         pods.wait_running(
             &namespace,
             &pod,
-            &Container::Regular(CONTAINER.into()),
-            config.start_timeout,
+            &Container::Regular(NODE_SHELL_CONTAINER.into()),
+            spec.start_timeout,
         )
         .await?;
-        let options = ExecOptions::interactive().container(CONTAINER);
-        exec.exec_session(&namespace, &pod, &exec_command(config), &options)
+        let options = ExecOptions::interactive().container(NODE_SHELL_CONTAINER);
+        exec.exec_session(&namespace, &pod, &node_shell_command(spec), &options)
             .await
     }
     .await;
@@ -104,26 +114,25 @@ pub(super) async fn open(
     })
 }
 
-/// Deletes the node-shell pods of `namespace` that are older than `older_than`. A pod younger
-/// than that may be another window's live shell. A pod that fails to delete is skipped and
-/// logged; the count is of deletions that went through.
+/// Deletes the node-shell pods of `namespace` that nobody has stamped alive for `older_than`
+/// (its newest heartbeat or its creation): a pod whose shell is open keeps its stamp fresh however long
+/// it has lived, so it is another window's or user's live shell that is spared, and only a pod
+/// whose owner stopped is deleted. A pod that fails to delete is skipped and logged. Returns the
+/// names of the pods that were deleted.
 pub(super) async fn sweep(
     pods: &dyn Pods,
     namespace: &str,
     older_than: Duration,
-) -> OxiResult<usize> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| OxiError::internal("the system clock is before 1970"))?
-        .as_secs();
-    let cutoff = i64::try_from(now.saturating_sub(older_than.as_secs())).unwrap_or(i64::MAX);
-    let mut deleted = 0;
+) -> OxiResult<Vec<String>> {
+    let cutoff =
+        now_secs()?.saturating_sub(i64::try_from(older_than.as_secs()).unwrap_or(i64::MAX));
+    let mut deleted = Vec::new();
     for pod in pods.list(namespace, NODE_SHELL_LABEL).await? {
-        if pod.created > cutoff {
+        if pod.last_seen() > cutoff {
             continue;
         }
         match pods.delete(namespace, &pod.name).await {
-            Ok(()) => deleted += 1,
+            Ok(()) => deleted.push(pod.name),
             Err(err) => tracing::warn!(
                 namespace, pod = %pod.name, error = %err,
                 "could not delete a leftover node shell pod"

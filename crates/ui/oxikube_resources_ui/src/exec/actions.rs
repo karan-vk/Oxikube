@@ -13,11 +13,16 @@ pub const ATTACH_ORDER: u16 = 120;
 
 /// Where "Debug" sits: after "Attach".
 pub const DEBUG_ORDER: u16 = 130;
+/// Where a node's "Shell" sits: first (a node has no logs).
+pub const NODE_SHELL_ORDER: u16 = 110;
 
-/// The row actions this module adds: `pod::Shell`, `pod::Attach` and `pod::Debug` for pods. All need
-/// the session's `exec` capability. A shell and an attach are greyed out on a read-only cluster
-/// unless it allows them (`exec_in_read_only`); a debug container patches the pod, so it is greyed
-/// out on every read-only cluster. None is bulk: a selection of several offers none.
+/// The row actions this module adds: `pod::Shell`, `pod::Attach` and `pod::Debug` for pods, and
+/// `node::Shell` for nodes (E09-S09). The pod shell and attach need the session's `exec`
+/// capability and, on a read-only cluster, are greyed out unless the cluster allows them
+/// (`exec_in_read_only`); a debug container patches the pod, so it is greyed out on every
+/// read-only cluster; the node shell creates a privileged pod, so it also needs `create` on pods
+/// and is greyed out on every read-only cluster; the bus then asks for a confirmation naming the
+/// node and the image. None is bulk: a selection of several offers none of them.
 ///
 /// The commands built here name no container; [`ExecFlow`](super::ExecFlow) fills it in (or asks)
 /// before the command is dispatched.
@@ -47,5 +52,11 @@ pub fn exec_row_actions() -> Vec<RowActionSpec> {
         .label("Debug")
         .kinds(KindFilter::Matching(|kind| kind.gvk.is_pod()))
         .order(DEBUG_ORDER),
+        RowActionSpec::new(CommandId::NODE_SHELL, |target| Command::NodeShell {
+            target: target.clone(),
+        })
+        .label("Shell")
+        .kinds(KindFilter::Matching(|kind| kind.gvk.is_node()))
+        .order(NODE_SHELL_ORDER),
     ]
 }

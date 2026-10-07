@@ -283,6 +283,11 @@ impl Gvk {
     pub fn is_pod(&self) -> bool {
         self.is_core() && &*self.kind == "Pod"
     }
+
+    /// Whether this type is the core `v1` Node.
+    pub fn is_node(&self) -> bool {
+        self.is_core() && &*self.kind == "Node"
+    }
 }
 
 impl fmt::Display for Gvk {

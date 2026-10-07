@@ -318,5 +318,7 @@ fn the_exec_tool_stubs_are_unsafe_interactive_and_hidden_from_agents_by_default(
         .collect();
     assert!(opted_in.iter().any(|n| n == "k8s.pod_exec"));
     assert!(opted_in.iter().any(|n| n == "k8s.pod_debug"));
-    assert_eq!(opted_in.len(), default_set.len() + EXEC.len() + 1);
+    // `k8s.node_shell` (E09-S09) is a mutation but as interactive.
+    assert!(opted_in.iter().any(|n| n == "k8s.node_shell"));
+    assert_eq!(opted_in.len(), default_set.len() + EXEC.len() + 2);
 }

@@ -2,7 +2,8 @@
 //!
 //! `pod::Shell`, `pod::Attach` and `pod::Exec` open an interactive session in a container. The
 //! UI wraps the [`TerminalBackend`](oxikube_ports::TerminalBackend) this service returns in a
-//! terminal tab; node shells (E09-S09) and debug containers (E09-S10) reuse the service.
+//! terminal tab; node shells ([`node_shell`](ExecService::open_node_shell)) and debug containers
+//! (E09-S10) reuse the service.
 //!
 //! | Piece | Where |
 //! |---|---|
@@ -11,6 +12,7 @@
 //! | the shell search: a quick `<shell> -c "exit 0"` per shell of the chain | `shell` |
 //! | missing program vs failure, readable open errors, the no-shell advice | `failure` |
 //! | the one-line notice at the top of the terminal | `notice` |
+//! | node shells (E09-S09): the guarded `node::Shell` handler's dry run and permit, the terminal, the audit of its end, the leftover sweep | `node_shell` |
 //!
 //! # Policy
 //!
@@ -32,6 +34,7 @@
 mod containers;
 mod debug;
 mod failure;
+mod node_shell;
 mod notice;
 mod service;
 mod shell;
@@ -46,4 +49,5 @@ pub use debug::{
     DEFAULT_DEBUG_START_TIMEOUT, DebugDefaults, DebugOpened, DebugPlan, DebugReport, DebugRequest,
     DebugRunner, check_name, plan_debug, split_command,
 };
+pub use node_shell::{JANITOR_GRACE, NodeShellOpener, NodeShellPlan, register_command};
 pub use service::{ExecService, ShellOptions};

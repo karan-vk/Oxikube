@@ -1,8 +1,8 @@
 //! [`ExecService`]: opens shells, attaches and commands in pod containers over the session's
 //! [`ExecPort`](oxikube_ports::ExecPort).
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use oxikube_domain::ids::{ClusterId, ResourceRef};
@@ -13,8 +13,10 @@ use parking_lot::Mutex;
 use super::containers::{ContainerPlan, PodContainers, container_to_open, plan_container};
 use super::debug::DebugState;
 use super::failure::{explain_open, no_shell};
+use super::node_shell::{OpenShells, Permits};
 use super::notice::{NoticeBackend, notice_line};
 use super::shell::{Probe, probe_shell};
+use crate::audit::AuditLog;
 use crate::session::ClusterSessionManager;
 
 /// How many pods' last container choice is kept before the oldest are forgotten.
@@ -71,6 +73,14 @@ pub struct ExecService {
     /// Debug containers (E09-S10): the last image used per cluster, and the sessions opened and
     /// not yet claimed by their terminal.
     pub(super) debug: DebugState,
+    /// The guarded `node::Shell` commands waiting for their terminal (E09-S09).
+    pub(super) permits: Permits,
+    /// The (cluster, namespace) pairs whose leftover node shell pods were swept this run.
+    pub(super) swept: Mutex<HashSet<(ClusterId, String)>>,
+    /// The node shells open now, for the app's quit.
+    pub(super) open_shells: OpenShells,
+    /// Where the end of a node shell is audited; `None` writes no second record (tests).
+    pub(super) audit: OnceLock<Arc<AuditLog>>,
 }
 
 impl std::fmt::Debug for ExecService {
@@ -86,7 +96,20 @@ impl ExecService {
             sessions,
             last: Mutex::new(HashMap::new()),
             debug: DebugState::default(),
+            permits: Permits::default(),
+            swept: Mutex::new(HashSet::new()),
+            open_shells: OpenShells::default(),
+            audit: OnceLock::new(),
         }
+    }
+
+    /// Makes the service write the audit record of a node shell's end (the pod's deletion) to
+    /// `audit`, the [`MutationGuard`](crate::MutationGuard)'s log
+    /// ([`audit_handle`](crate::MutationGuard::audit_handle)). Set once, after the bus is built
+    /// (the bus needs this service for its `node::Shell` handler, so the log comes second):
+    /// `false` when one was set already.
+    pub fn set_audit(&self, audit: Arc<AuditLog>) -> bool {
+        self.audit.set(audit).is_ok()
     }
 
     /// Which container opening a session in `pod` uses: the one named (`requested`), the only

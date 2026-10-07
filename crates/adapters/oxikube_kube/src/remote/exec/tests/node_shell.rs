@@ -6,82 +6,20 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use oxikube_domain::{ErrorKind, OxiError};
-use oxikube_ports::{ExecOptions, ExitStatus};
+use oxikube_ports::{ExecOptions, ExitStatus, NODE_SHELL_LABEL, NodeShellSpec};
 use oxikube_testkit::fakes::{ExecScript, ExecStreamCall, FakeExecStreamPort};
 
 use super::fakes::{Call, FakePods};
-use crate::remote::exec::node_shell::{
-    self, NODE_ANNOTATION, NODE_SHELL_LABEL, NodeShellConfig, node_shell_manifest,
-};
+use crate::remote::exec::node_shell;
 use crate::remote::exec::pods::PodStamp;
 use crate::remote::exec::wait::Container;
 
 const POD: &str = "oxikube-node-shell-abc12";
 
-fn config() -> NodeShellConfig {
-    NodeShellConfig {
+fn spec() -> NodeShellSpec {
+    NodeShellSpec {
         namespace: "debug".into(),
-        ..NodeShellConfig::default()
-    }
-}
-
-#[test]
-fn the_manifest_is_a_privileged_host_pod_pinned_to_the_node() {
-    let config = NodeShellConfig {
-        image: "registry.local/tools:1".into(),
-        image_pull_secret: Some("regcred".into()),
-        max_lifetime: Duration::from_secs(600),
-        ..config()
-    };
-    let pod = node_shell_manifest("worker-1", &config).expect("manifest");
-    assert_eq!(pod["metadata"]["generateName"], "oxikube-node-shell-");
-    assert_eq!(pod["metadata"]["namespace"], "debug");
-    assert_eq!(pod["metadata"]["labels"][NODE_SHELL_LABEL], "true");
-    assert_eq!(pod["metadata"]["annotations"][NODE_ANNOTATION], "worker-1");
-    let spec = &pod["spec"];
-    assert_eq!(spec["nodeName"], "worker-1");
-    assert_eq!(spec["hostPID"], true);
-    assert_eq!(spec["hostNetwork"], true);
-    assert_eq!(spec["restartPolicy"], "Never");
-    assert_eq!(spec["activeDeadlineSeconds"], 600);
-    assert_eq!(spec["tolerations"][0]["operator"], "Exists");
-    assert_eq!(spec["imagePullSecrets"][0]["name"], "regcred");
-    let container = &spec["containers"][0];
-    assert_eq!(container["name"], "shell");
-    assert_eq!(container["image"], "registry.local/tools:1");
-    assert_eq!(container["securityContext"]["privileged"], true);
-    assert_eq!(container["command"], serde_json::json!(["sleep", "600"]));
-}
-
-#[test]
-fn the_default_manifest_has_no_pull_secret_and_a_default_image() {
-    let pod = node_shell_manifest("n", &NodeShellConfig::default()).expect("manifest");
-    assert!(pod["spec"].get("imagePullSecrets").is_none());
-    assert_eq!(
-        pod["spec"]["containers"][0]["image"],
-        node_shell::DEFAULT_IMAGE
-    );
-    assert_eq!(pod["metadata"]["namespace"], node_shell::DEFAULT_NAMESPACE);
-}
-
-#[test]
-fn a_bad_node_namespace_or_image_is_refused() {
-    let bad_image = NodeShellConfig {
-        image: " ".into(),
-        ..NodeShellConfig::default()
-    };
-    let bad_namespace = NodeShellConfig {
-        namespace: "a/b".into(),
-        ..NodeShellConfig::default()
-    };
-    for (node, config) in [
-        ("a/b", NodeShellConfig::default()),
-        ("", NodeShellConfig::default()),
-        ("n", bad_image),
-        ("n", bad_namespace),
-    ] {
-        let err = node_shell_manifest(node, &config).expect_err("refused");
-        assert_eq!(err.kind(), ErrorKind::Validation);
+        ..NodeShellSpec::new("worker-1")
     }
 }
 
@@ -89,7 +27,7 @@ async fn open(
     exec: &FakeExecStreamPort,
     pods: &Arc<FakePods>,
 ) -> Result<node_shell::NodeShellSession, OxiError> {
-    node_shell::open(exec, pods.clone(), "worker-1", &config()).await
+    node_shell::open(exec, pods.clone(), &Arc::default(), &spec()).await
 }
 
 #[tokio::test]
@@ -272,9 +210,14 @@ async fn nothing_is_created_for_an_invalid_request() {
     let (pods, _deleted) = FakePods::new();
     let pods = Arc::new(pods);
     let exec = FakeExecStreamPort::new();
-    node_shell::open(&exec, pods.clone(), "a/b", &config())
-        .await
-        .expect_err("invalid node");
+    node_shell::open(
+        &exec,
+        pods.clone(),
+        &Arc::default(),
+        &NodeShellSpec::new("a/b"),
+    )
+    .await
+    .expect_err("invalid node");
     assert!(pods.calls().is_empty());
 }
 
@@ -284,11 +227,11 @@ async fn a_custom_shell_replaces_the_default_login_shell() {
     let pods = Arc::new(pods);
     let exec = FakeExecStreamPort::new();
     exec.script().exec.push(Ok(ExecScript::new()));
-    let config = NodeShellConfig {
+    let spec = NodeShellSpec {
         shell: vec!["zsh".into()],
-        ..config()
+        ..spec()
     };
-    node_shell::open(&exec, pods, "worker-1", &config)
+    node_shell::open(&exec, pods, &Arc::default(), &spec)
         .await
         .expect("open");
     let ExecStreamCall::Exec { command, .. } = &exec.recorded_calls()[0] else {
@@ -297,30 +240,203 @@ async fn a_custom_shell_replaces_the_default_login_shell() {
     assert_eq!(command.last().map(String::as_str), Some("zsh"));
 }
 
-#[tokio::test]
-async fn the_sweep_deletes_only_old_labelled_leftovers() {
-    let (pods, _deleted) = FakePods::new();
-    let now = i64::try_from(
+fn now() -> i64 {
+    i64::try_from(
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("clock")
             .as_secs(),
     )
-    .expect("fits");
+    .expect("fits")
+}
+
+fn stamp(name: &str, created: i64, heartbeat: Option<i64>) -> PodStamp {
+    PodStamp {
+        name: name.into(),
+        created,
+        heartbeat,
+    }
+}
+
+#[tokio::test]
+async fn the_sweep_deletes_only_old_labelled_leftovers() {
+    let (pods, _deleted) = FakePods::new();
+    let now = now();
     *pods.listed.lock() = vec![
-        PodStamp {
-            name: "old".into(),
-            created: now - 3600,
-        },
-        PodStamp {
-            name: "fresh".into(),
-            created: now - 5,
-        },
+        stamp("old", now - 3600, None),
+        stamp("fresh", now - 5, None),
     ];
     let deleted = node_shell::sweep(&pods, "debug", Duration::from_secs(300))
         .await
         .expect("sweep");
-    assert_eq!(deleted, 1);
+    assert_eq!(deleted, ["old"]);
     assert_eq!(pods.deletions(), ["old"]);
     assert!(matches!(&pods.calls()[0], Call::List { selector } if selector == NODE_SHELL_LABEL));
+}
+
+#[tokio::test]
+async fn the_sweep_spares_a_long_open_shell_another_window_keeps_stamping() {
+    let (pods, _deleted) = FakePods::new();
+    let now = now();
+    *pods.listed.lock() = vec![
+        // Open for hours, stamped a minute ago: someone's live shell.
+        stamp("live", now - 4 * 3600, Some(now - 60)),
+        // Its owner stopped stamping long ago: a leftover, however recently it stamped once.
+        stamp("orphan", now - 4 * 3600, Some(now - 3600)),
+        // Never stamped (an owner that died at once) and old.
+        stamp("unstamped", now - 4 * 3600, None),
+    ];
+    let deleted = node_shell::sweep(&pods, "debug", Duration::from_secs(900))
+        .await
+        .expect("sweep");
+    assert_eq!(deleted, ["orphan", "unstamped"]);
+    assert_eq!(pods.deletions(), ["orphan", "unstamped"]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_open_shell_stamps_its_pod_alive_until_it_ends() {
+    let (pods, _deleted) = FakePods::new();
+    let pods = Arc::new(pods);
+    let exec = FakeExecStreamPort::new();
+    exec.script()
+        .exec
+        .push(Ok(ExecScript::new().exit_when_told()));
+    let shell = open(&exec, &pods).await.expect("open");
+    assert!(pods.heartbeats().is_empty(), "the pod was just created");
+
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    assert_eq!(pods.heartbeats().len(), 1, "one stamp a minute");
+    tokio::time::sleep(Duration::from_secs(120)).await;
+    assert_eq!(pods.heartbeats().len(), 3);
+    let at = pods.heartbeats()[0];
+    assert!(
+        (at - now()).abs() < 5,
+        "stamped with the current time: {at}"
+    );
+
+    drop(shell);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let stamped = pods.heartbeats().len();
+    tokio::time::sleep(Duration::from_secs(600)).await;
+    assert_eq!(
+        pods.heartbeats().len(),
+        stamped,
+        "a closed shell stops stamping, so the sweep can take its pod if the delete failed"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_shell_that_cannot_stamp_keeps_working() {
+    let (pods, _deleted) = FakePods::new();
+    *pods.heartbeat_error.lock() = Some((ErrorKind::Forbidden, "cannot patch pods"));
+    let pods = Arc::new(pods);
+    let exec = FakeExecStreamPort::new();
+    exec.script()
+        .exec
+        .push(Ok(ExecScript::new().exit_when_told()));
+    let shell = open(&exec, &pods).await.expect("open");
+    tokio::time::sleep(Duration::from_secs(200)).await;
+    assert_eq!(pods.heartbeats().len(), 3, "it keeps trying");
+    assert!(pods.deletions().is_empty(), "and the shell stays open");
+    drop(shell);
+}
+
+#[tokio::test]
+async fn release_deletes_every_open_shells_pod_and_waits_for_the_answers() {
+    let (pods, _deleted) = FakePods::new();
+    let pods = Arc::new(pods);
+    let live = Arc::<node_shell::LiveShells>::default();
+    let exec = FakeExecStreamPort::new();
+    for _ in 0..2 {
+        exec.script()
+            .exec
+            .push(Ok(ExecScript::new().exit_when_told()));
+    }
+    let first = node_shell::open(&exec, pods.clone(), &live, &spec())
+        .await
+        .expect("open");
+    let second = node_shell::open(&exec, pods.clone(), &live, &spec())
+        .await
+        .expect("open");
+    assert_eq!(live.len(), 2);
+    assert!(pods.deletions().is_empty());
+
+    assert_eq!(live.release(pods.as_ref()).await, 2);
+    assert_eq!(
+        pods.deletions().len(),
+        2,
+        "both deletes were answered before release returned"
+    );
+
+    // Dropping the shells afterwards deletes again (harmless: a gone pod is not an error) and
+    // empties the list.
+    drop((first, second));
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while live.len() > 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the list empties");
+}
+
+#[tokio::test]
+async fn a_shell_that_ended_is_not_released_again() {
+    let (pods, _deleted) = FakePods::new();
+    let pods = Arc::new(pods);
+    let live = Arc::<node_shell::LiveShells>::default();
+    let exec = FakeExecStreamPort::new();
+    exec.script().exec.push(Ok(ExecScript::new()));
+    let shell = node_shell::open(&exec, pods.clone(), &live, &spec())
+        .await
+        .expect("open");
+    shell.session.status.await.expect("status");
+    assert_eq!(live.len(), 0);
+    assert_eq!(live.release(pods.as_ref()).await, 0);
+    assert_eq!(pods.deletions(), [POD], "only the shell's own delete");
+}
+
+#[tokio::test]
+async fn the_settings_template_reaches_the_pod_and_the_command() {
+    let (pods, _deleted) = FakePods::new();
+    let pods = Arc::new(pods);
+    let exec = FakeExecStreamPort::new();
+    exec.script().exec.push(Ok(ExecScript::new()));
+    let spec = NodeShellSpec {
+        image: "registry.local/tools:1".into(),
+        image_pull_policy: Some("Always".into()),
+        nsenter_args: vec!["-t".into(), "1".into(), "-m".into()],
+        labels: [("team".to_owned(), "infra".to_owned())].into(),
+        tolerations: vec![oxikube_ports::NodeShellToleration {
+            key: Some("dedicated".into()),
+            operator: Some("Exists".into()),
+            ..Default::default()
+        }],
+        max_lifetime: Duration::from_secs(900),
+        ..spec()
+    };
+    node_shell::open(&exec, pods.clone(), &Arc::default(), &spec)
+        .await
+        .expect("open");
+
+    let Call::Create {
+        namespace,
+        manifest,
+    } = &pods.calls()[0]
+    else {
+        panic!("expected the create first");
+    };
+    assert_eq!(namespace, "debug");
+    assert_eq!(manifest["metadata"]["labels"]["team"], "infra");
+    assert_eq!(manifest["metadata"]["labels"][NODE_SHELL_LABEL], "true");
+    assert_eq!(manifest["spec"]["activeDeadlineSeconds"], 900);
+    assert_eq!(manifest["spec"]["tolerations"][0]["key"], "dedicated");
+    let container = &manifest["spec"]["containers"][0];
+    assert_eq!(container["image"], "registry.local/tools:1");
+    assert_eq!(container["imagePullPolicy"], "Always");
+
+    let ExecStreamCall::Exec { command, .. } = &exec.recorded_calls()[0] else {
+        panic!("expected an exec");
+    };
+    assert_eq!(&command[..5], ["nsenter", "-t", "1", "-m", "--"]);
 }

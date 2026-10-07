@@ -28,6 +28,7 @@ mod logs_agent;
 mod logs_aggregate;
 mod logs_churn;
 mod logs_search;
+mod node_shell;
 mod scoped_feeds;
 mod two_clusters;
 

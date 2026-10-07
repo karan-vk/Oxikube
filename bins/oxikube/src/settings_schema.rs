@@ -88,6 +88,7 @@ mod tests {
             "terminal_cwd",
             "node_shell_image",
             "node_shell_pull_secret",
+            "node_shell",
             "prometheus",
             "accessible_namespaces",
             "exec_interactivity",

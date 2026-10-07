@@ -42,6 +42,18 @@ pub fn denial_toast(error: &DispatchError) -> Toast {
     }
 }
 
+/// The title, the confirm button and whether it is styled destructive, for the dialog the guard's
+/// request opens. The posture commands (read-only, colour, presets) ask "Are you sure?" and offer
+/// to turn the protection off; a debug container (E09-S10) is an addition that cannot be undone;
+/// a node shell (E09-S09) says what is being opened, because it creates a privileged pod.
+fn confirm_copy(command: &Command) -> (&'static str, &'static str, bool) {
+    match command {
+        Command::PodDebug { .. } => ("Add a debug container?", "Add debug container", false),
+        Command::NodeShell { .. } => ("Open a shell on the node?", "Open shell", true),
+        _ => ("Are you sure?", "Turn off", true),
+    }
+}
+
 /// Dispatches commands from views. See the [module docs](self).
 #[derive(Clone)]
 pub struct ClusterCommandRunner {
@@ -138,22 +150,19 @@ impl ClusterCommandRunner {
         cx: &mut App,
     ) {
         let token = request.token;
+        let (title, confirm_label, destructive) = confirm_copy(&command);
         let (on_confirm, on_decline) = (self.clone(), self.clone());
         self.workspace
             .update(cx, |workspace, cx| {
-                // The posture commands lower protection (a destructive "Turn off"); a debug
-                // container (E09-S10) is an addition that cannot be undone, with its own wording.
-                let adds = matches!(command, Command::PodDebug { .. });
-                let (title, confirm) = if adds {
-                    ("Add a debug container?", "Add debug container")
-                } else {
-                    ("Are you sure?", "Turn off")
-                };
                 let dialog = cx.new(|cx| {
                     let modal = DialogModal::new(title, cx)
                         .message(request.summary)
-                        .confirm_label(confirm);
-                    let modal = if adds { modal } else { modal.destructive() };
+                        .confirm_label(confirm_label);
+                    let modal = if destructive {
+                        modal.destructive()
+                    } else {
+                        modal
+                    };
                     modal
                         .on_confirm(move |window, cx| {
                             on_confirm.dispatch(

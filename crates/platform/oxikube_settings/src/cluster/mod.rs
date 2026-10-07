@@ -1,6 +1,6 @@
 //! The per-cluster settings layer (E06-S08): `clusters.<id>` overrides for display name, colour,
-//! read-only, default namespace, terminal working directory, node shell image and pull secret,
-//! Prometheus location, accessible namespaces and the exec plugin policy.
+//! read-only, default namespace, terminal working directory, the node shell pod template (image,
+//! pull secret, and the `node_shell` block: E09-S09), Prometheus location, accessible namespaces and the exec plugin policy.
 //!
 //! The layer mechanics (default.json, then the user's top-level values, then `clusters.<id>`,
 //! merged field by field, a type error keeping the previous value, unknown keys reported) belong
@@ -22,9 +22,13 @@
 mod content;
 mod edit;
 pub mod fields;
+mod node_shell;
 mod resolved;
 #[cfg(test)]
 mod tests;
 
 pub use content::{ClusterSettingsContent, PrometheusContent};
+pub use node_shell::{
+    ImagePullPolicy, NodeShellContent, TaintEffect, TolerationContent, TolerationOperator,
+};
 pub use resolved::ClusterSettings;

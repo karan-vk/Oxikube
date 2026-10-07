@@ -114,11 +114,7 @@ mod tests {
 
     #[test]
     fn unavailable_serialises_reason_and_no_metrics() {
-        let s = ScenarioSample::unavailable(
-            "palette",
-            "crate not built yet",
-            &["E11-S03 #158"],
-        );
+        let s = ScenarioSample::unavailable("palette", "crate not built yet", &["E11-S03 #158"]);
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(v["status"], "unavailable");
         assert_eq!(v["enabled_by"][0], "E11-S03 #158");

@@ -11,6 +11,7 @@ mod find;
 mod item;
 mod leak;
 mod lifecycle;
+mod node;
 mod persist;
 mod pod;
 mod settings;

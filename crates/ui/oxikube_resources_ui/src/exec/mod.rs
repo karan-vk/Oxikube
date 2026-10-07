@@ -3,7 +3,7 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `actions` | [`exec_row_actions`]: "Shell" and "Attach" on a Pod's context menu and in the palette's list for the selection |
+//! | `actions` | [`exec_row_actions`]: "Shell" and "Attach" on a Pod's context menu and in the palette's list for the selection, and "Shell" (`node::Shell`) on a Node |
 //! | `flow` | [`ExecFlow`]: reads the pod, then either dispatches the command at once (one container, or the default) or opens the picker; [`ExecKind`] |
 //! | `picker` | [`ContainerPicker`]: the modal that asks which container, the default (or the last choice for this pod) preselected |
 //!
@@ -15,6 +15,10 @@
 //! `pod::Shell` / `pod::Attach` work from the palette and from agents. A pod with several
 //! containers asks which one first; the terminal then opens in the bottom dock of the cluster's
 //! tab ([`oxikube_terminal`'s `TerminalViews`]).
+//!
+//! A **Node** row offers **Shell** the same way (context menu, palette, `s`, and a button in the
+//! detail header): it dispatches `node::Shell`, which confirms with the node and the image named
+//! (a privileged pod is created on the node) and is greyed out on a read-only cluster.
 //!
 //! # What the picker is for
 //!
@@ -32,7 +36,7 @@ mod picker;
 #[cfg(test)]
 mod tests;
 
-pub use actions::{ATTACH_ORDER, DEBUG_ORDER, SHELL_ORDER, exec_row_actions};
+pub use actions::{ATTACH_ORDER, DEBUG_ORDER, NODE_SHELL_ORDER, SHELL_ORDER, exec_row_actions};
 pub use debug::{DebugDialog, DebugStage, PERMANENCE_NOTE};
 pub use flow::{ExecFlow, ExecKind};
 pub use picker::ContainerPicker;
