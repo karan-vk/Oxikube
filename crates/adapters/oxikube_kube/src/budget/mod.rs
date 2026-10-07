@@ -30,6 +30,9 @@
 //! | object, event, restart and byte counters | `counters` |
 //! | the byte-counting client | `transport` |
 //! | opening a feed on kube | [`FeedSource`] for [`KubeResources`](crate::KubeResources) (`source`) |
+//! | admission and registration of a new feed | `open` |
+//! | a feed of one port consumer: never shared, gone with its stream | [`FeedRegistry::open_owned`] (`owned`) |
+//! | the connection's ports with every feed through the budget | [`BudgetedResources`] (`port`) |
 //!
 //! # Sharing and idle teardown
 //!
@@ -40,6 +43,17 @@
 //! (30 s by default) and is then torn down: its driver task is aborted, which drops the
 //! feed (abort on drop) and ends the consumer's stream. Subscribing again within the grace
 //! period reuses the running feed, so a tab switch costs no relist.
+//!
+//! # The app's feeds
+//!
+//! The connector hands out [`BudgetedResources`] as the connection's `ResourcePort` and
+//! `TableFeedPort` (E04-F543), so every feed the app opens through a port is an owned feed of
+//! this registry: admitted against the limits, counted, and torn down with its stream. The
+//! resource store shares feeds among views and keeps a released one for its own grace period;
+//! its budget hook (in the binary) asks [`FeedRegistry::reserve_owned`] when it decides to open
+//! a feed (the slot is held until the port call opens it on the store's task), evicts its own
+//! idle feeds while that refuses, and calls [`FeedRegistry::release_owned`] when it lets a feed
+//! go.
 //!
 //! # Limits
 //!
@@ -63,7 +77,10 @@ mod config;
 mod counters;
 mod driver;
 mod lease;
+mod open;
+mod owned;
 mod policy;
+mod port;
 mod registry;
 mod request;
 mod selection;
@@ -79,7 +96,9 @@ pub use config::{
 };
 pub use counters::ByteCounter;
 pub use lease::FeedLease;
+pub use owned::Verdict;
 pub use policy::ScopeChange;
+pub use port::BudgetedResources;
 pub use registry::FeedRegistry;
 pub use request::FeedRequest;
 pub use selection::SelectionLease;

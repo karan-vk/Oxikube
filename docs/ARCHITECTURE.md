@@ -875,6 +875,18 @@ within it reuses the feed), a namespace set is one namespaced feed per namespace
 feed and object caps evict idle feeds, then degrade a full feed to metadata-only, then refuse
 with `BudgetExceeded`. Its counters reach the app as the `oxikube_ports::FeedStats` snapshot.
 
+Every feed the app opens goes through it (E04-F543): the connector hands out
+`oxikube_kube::BudgetedResources` as the connection's `ResourcePort` and `TableFeedPort`, whose
+`watch` and `table_feed` are *owned* feeds of the registry (admitted and counted, never shared or
+degraded, torn down with their stream), so tables, sidebar counts, detail views and log targets
+are all budgeted. The resource store shares feeds and keeps released ones for the grace period;
+the binary's `kube_ports::WatchBudgets` puts the registry behind the store's `FeedBudget`
+(`FeedRegistry::reserve_owned` holds a slot from the store's admission until its port call
+opens it, the store's idle feeds evicted on a refusal and released at once, metadata-only past
+`metadata_above`, the store's grace from the budget), sets each
+connection's limits from the per-cluster `watch_budget` setting (hot reload reaches live
+connections) and prints the counters under `oxikube --perf`.
+
 ## Integrations
 
 Optional integrations (Argo CD first; Flux later) implement `IntegrationPort`: detect → sidebar

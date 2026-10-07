@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::fields::{HttpUrl, SecretName, colour_schema, exec_interactivity_schema};
 use super::node_shell::NodeShellContent;
+use super::watch_budget::WatchBudgetContent;
 
 /// A manual Prometheus location for a cluster (`prometheus` key). Keeps no secret: the bearer
 /// token lives in the OS keychain and `auth_secret` only names its entry.
@@ -108,4 +109,9 @@ pub struct ClusterSettingsContent {
     /// read-only cluster keep its shells.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exec_in_read_only: Option<bool>,
+    /// Limits on the feeds the app opens on the cluster: feeds, objects, when to fall back to
+    /// metadata-only feeds, and how long a feed nobody looks at keeps running. Fields merge
+    /// across layers; a change applies to the next feed opened, without reconnecting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watch_budget: Option<WatchBudgetContent>,
 }

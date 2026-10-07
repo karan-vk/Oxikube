@@ -22,10 +22,14 @@
 //!   connection and reports through the request's [`HealthReporter`](oxikube_ports::HealthReporter). The manager ignores
 //!   signals until the session is `Ready`.
 //! * Each connection owns a [`FeedRegistry`] (the watch budget, E04-S13), reachable with
-//!   [`KubeConnector::feeds`] for as long as the connection lives: the resource store opens its
-//!   feeds there and reads the counters with [`FeedRegistry::stats`]. Dropping the
-//!   [`ClusterConnection`] stops the liveness loop and the health bridge; feeds stop when the
-//!   registry and every lease on it are gone.
+//!   [`KubeConnector::feeds`] for as long as the connection lives. The bundle's `resources` and
+//!   `tables` are a [`BudgetedResources`] over it (E04-F543): every `watch` and `table_feed` the
+//!   app makes is a feed of that registry, so the limits hold for tables, sidebar counts, detail
+//!   views and log targets alike, and [`FeedRegistry::stats`] counts them. Its limits come from
+//!   [`KubeConnector::set_budget_for`] (the per-cluster settings, in the app) or else
+//!   [`ConnectorConfig::budget`]; the wiring changes them on live connections through
+//!   [`KubeConnector::registries`]. Dropping the [`ClusterConnection`] stops the liveness loop
+//!   and the health bridge; a feed stops when its consumer drops its stream.
 //!
 //! The kubeconfig is set at construction. Hot reload of sources (E03-S02) is the wiring's job:
 //! after each reload it hands the new loader result to [`KubeConnector::replace_loaded`], which
@@ -56,7 +60,7 @@ use self::access::KubeAccess;
 use self::connection::ConnectionState;
 pub use self::describe::{DescribeConnection, DescribeFactory};
 use crate::auth::{CredentialRefresh, ExecInteractivePolicy};
-use crate::budget::{BudgetConfig, FeedRegistry};
+use crate::budget::{BudgetConfig, BudgetedResources, FeedRegistry};
 use crate::discovery::KubeDiscovery;
 use crate::health::{DEFAULT_RULES_TTL, LivenessConfig, RulesCache};
 use crate::kubeconfig::LoadedKubeconfig;
@@ -91,6 +95,9 @@ impl Default for ConnectorConfig {
 
 type PoolFactory = dyn Fn(ExecInteractivity) -> ClientPool + Send + Sync;
 
+/// The watch budget a new connection to a cluster gets (see [`KubeConnector::set_budget_for`]).
+pub type BudgetFor = dyn Fn(&ClusterId) -> BudgetConfig + Send + Sync;
+
 /// Connects kubeconfig contexts for the session manager. See the [module docs](self).
 ///
 /// Cheap to clone; clones share the pools and the live connections.
@@ -112,6 +119,8 @@ struct Shared {
     latest: Mutex<Option<Arc<LoadedKubeconfig>>>,
     /// Builds each connection's `DescribePort` (set by [`KubeConnector::set_describe_factory`]).
     describe: Mutex<Option<Arc<DescribeFactory>>>,
+    /// Each new connection's watch budget (set by [`KubeConnector::set_budget_for`]).
+    budget: Mutex<Option<Arc<BudgetFor>>>,
 }
 
 impl KubeConnector {
@@ -152,6 +161,7 @@ impl KubeConnector {
                 live: Mutex::new(HashMap::new()),
                 latest: Mutex::new(None),
                 describe: Mutex::new(None),
+                budget: Mutex::new(None),
             }),
         }
     }
@@ -162,6 +172,23 @@ impl KubeConnector {
     /// were made with.
     pub fn set_describe_factory(&self, factory: Arc<DescribeFactory>) {
         *self.shared.describe.lock() = Some(factory);
+    }
+
+    /// Sets the watch budget each new connection starts with: `budget` is called with the
+    /// cluster at connect. Until it is set, every connection gets [`ConnectorConfig::budget`].
+    /// Live connections keep theirs; change them through [`registries`](Self::registries).
+    pub fn set_budget_for(&self, budget: Arc<BudgetFor>) {
+        *self.shared.budget.lock() = Some(budget);
+    }
+
+    /// The watch budgets of every live connection.
+    pub fn registries(&self) -> Vec<FeedRegistry> {
+        let mut live = self.shared.live.lock();
+        live.retain(|_, state| state.strong_count() > 0);
+        live.values()
+            .filter_map(Weak::upgrade)
+            .map(|state| state.registry.clone())
+            .collect()
     }
 
     /// The watch budget of `cluster`'s live connection, or `None` when it is not connected.
@@ -254,11 +281,14 @@ impl ClusterConnectorPort for KubeConnector {
             request.context.clone(),
             discovery.clone(),
         );
-        let registry = FeedRegistry::for_resources(
-            request.cluster.clone(),
-            resources.clone(),
-            self.shared.config.budget.clone(),
+        let budget = self.shared.budget.lock().clone();
+        let budget = budget.map_or_else(
+            || self.shared.config.budget.clone(),
+            |budget| budget(&request.cluster),
         );
+        let registry =
+            FeedRegistry::for_resources(request.cluster.clone(), resources.clone(), budget);
+        let budgeted = Arc::new(BudgetedResources::new(resources, registry.clone()));
         let state = Arc::new(ConnectionState::start(
             registry,
             self.shared.config.liveness,
@@ -273,10 +303,10 @@ impl ClusterConnectorPort for KubeConnector {
         let discovery: Arc<dyn DiscoveryPort> = Arc::new(discovery);
         let describe = self.describe_port(&request, &client, &discovery);
         let ports = ClusterPorts {
-            resources: Arc::new(resources.clone()),
+            resources: budgeted.clone(),
             discovery,
             describe,
-            tables: Arc::new(resources),
+            tables: budgeted,
             logs: Arc::new(KubeLogs::new(client.clone())),
             exec: Arc::new(KubeExec::new(client.clone())),
             port_forward: Arc::new(KubePortForward::new(client.clone())),

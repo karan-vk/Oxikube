@@ -8,6 +8,8 @@ use oxikube_ports::{
     ClockPort, ClusterConnectorPort, ClusterSourcePort, FsPort, SecretStorePort, StatePort,
 };
 
+use crate::kube_ports::WatchBudgets;
+
 /// The ports `bins/oxikube` constructs at start-up and hands to everything else as trait
 /// objects. Per-cluster ports (resources, discovery, feeds, logs, exec) are not here: the
 /// `ClusterSessionManager` gets them per connection from [`ClusterAdapters::connector`].
@@ -32,6 +34,10 @@ pub struct ClusterAdapters {
     pub source: Arc<dyn ClusterSourcePort>,
     /// Connects a context and returns its ports bundle (`oxikube_kube::KubeConnector`).
     pub connector: Arc<dyn ClusterConnectorPort>,
+    /// The connector's per-connection watch budgets (E04-F543): their limits follow the
+    /// `watch_budget` setting, the resource stores ask them before opening a feed, and
+    /// `--perf` prints their counters. Disabled over a fake connector.
+    pub budgets: WatchBudgets,
     /// The wall clock and timers (backoff, debounce, last-used times).
     pub clock: Arc<dyn ClockPort>,
     /// Local files by path (pasted kubeconfigs, owner-only).
@@ -70,6 +76,7 @@ impl ClusterAdapters {
         Self {
             source: ports.clusters.clone(),
             connector: ports.connector.clone(),
+            budgets: WatchBudgets::disabled(),
             clock: ports.clock.clone(),
             fs: ports.fs.clone(),
             kubeconfigs_dir: Self::TEST_KUBECONFIGS_DIR.into(),

@@ -11,7 +11,7 @@
 //! |---|---|---|
 //! | [`kubeconfig`] | E03-S01 | tolerant `KUBECONFIG` splitting, loading and merging with per-context origins and diagnostics |
 //! | [`health`] | E03-S05 | liveness probe loop with backoff, RBAC rules review cache, capability reduction, `can_i` |
-//! | [`budget`] | E04-S13 | [`FeedRegistry`]: the per-cluster watch budget. Shared, ref-counted feeds with idle teardown, feed and object caps (evict idle, degrade to metadata, refuse), per-namespace feeds for a namespace set, tracing spans and [`FeedStats`](oxikube_ports::FeedStats) counters |
+//! | [`budget`] | E04-S13 | [`FeedRegistry`]: the per-cluster watch budget. Shared, ref-counted feeds with idle teardown, feed and object caps (evict idle, degrade to metadata, refuse), per-namespace feeds for a namespace set, tracing spans and [`FeedStats`](oxikube_ports::FeedStats) counters; [`BudgetedResources`], the connection ports that open every feed through it (E04-F543) |
 //! | [`auth`] | E03-S04 | `kube::Error` classification, exec-plugin interactivity policy, deadline-bounded client build, retry-once helper |
 //! | [`feed`] | E04-S02 | [`ReflectorFeed`]: `watcher` + reflector store per (cluster, gvk, scope), coalesced delta batches on a bounded channel, relist diffs, backoff and [`FeedState`] |
 //! | [`events`] | E04-S12 | [`KubeEvents`]: `core/v1` and `events.k8s.io/v1` events merged and de-duplicated into domain `Event`s in a fixed-size ring, with per-object (UID) feeds |
@@ -58,10 +58,12 @@ pub use algorithms::{
     rollout_undo, trigger_cronjob,
 };
 pub use budget::{
-    BudgetConfig, ByteCounter, FeedLease, FeedRegistry, FeedRequest, FeedSource, FeedStream,
-    ScopeChange, SelectionLease,
+    BudgetConfig, BudgetedResources, ByteCounter, FeedLease, FeedRegistry, FeedRequest, FeedSource,
+    FeedStream, ScopeChange, SelectionLease, Verdict,
 };
-pub use connector::{ConnectorConfig, DescribeConnection, DescribeFactory, KubeConnector};
+pub use connector::{
+    BudgetFor, ConnectorConfig, DescribeConnection, DescribeFactory, KubeConnector,
+};
 pub use discovery::{
     CrdWatch, CrdWatchConfig, DiscoveryConfig, KindChange, KubeDiscovery, Registry, RegistryDiff,
 };

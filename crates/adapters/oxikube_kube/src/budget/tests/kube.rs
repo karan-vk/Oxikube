@@ -11,10 +11,10 @@ use crate::fake_api::FakeApi;
 use crate::feed::{FeedConfig, StreamingLists};
 use crate::resources::KubeResources;
 
-const PODS: &str = "/api/v1/namespaces/default/pods";
+pub(super) const PODS: &str = "/api/v1/namespaces/default/pods";
 
 /// A server with legacy discovery for `Pod`.
-fn server() -> FakeApi {
+pub(super) fn server() -> FakeApi {
     let api = FakeApi::new();
     api.reply(
         "/api",
@@ -33,7 +33,7 @@ fn server() -> FakeApi {
     api
 }
 
-fn resources(api: &FakeApi) -> KubeResources {
+pub(super) fn resources(api: &FakeApi) -> KubeResources {
     let discovery = KubeDiscovery::with_config(
         api.client(),
         DiscoveryConfig {
@@ -47,7 +47,7 @@ fn resources(api: &FakeApi) -> KubeResources {
     })
 }
 
-fn pod_item(name: &str, rv: &str) -> Value {
+pub(super) fn pod_item(name: &str, rv: &str) -> Value {
     json!({
         "apiVersion": "v1", "kind": "Pod",
         "metadata": {"name": name, "namespace": "default", "uid": format!("u-{name}"),
@@ -56,7 +56,7 @@ fn pod_item(name: &str, rv: &str) -> Value {
     })
 }
 
-fn pod_list(items: Vec<Value>) -> Value {
+pub(super) fn pod_list(items: Vec<Value>) -> Value {
     json!({"kind": "PodList", "apiVersion": "v1", "metadata": {"resourceVersion": "10"},
            "items": items})
 }

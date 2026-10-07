@@ -6,6 +6,10 @@
 //! window closed: `--perf` sets `QuitMode::LastWindowClosed`, also on macOS), `--perf-duration`
 //! elapsing, or Ctrl-C (SIGINT).
 //!
+//! The summary ends with one line per connected cluster: its watch budget's counters (feeds,
+//! objects, events, bytes, degrades, refusals, evictions; E04-F543), read from
+//! `oxikube::kube_ports::WatchBudgets` when the session ends.
+//!
 //! `--perf-table <CONTEXT>` (`oxikube::perf_table`) makes the run a scripted one: it connects the
 //! context, opens its pods table and scrolls it, the way a user would (E07-S09).
 
@@ -17,6 +21,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 static SESSION: Mutex<Option<PerfSession>> = Mutex::new(None);
+
+/// The watch-budget lines printed with the summary (set by [`attach`] once the app state exists).
+type FeedReport = Box<dyn Fn() -> Vec<String> + Send>;
+static FEEDS: Mutex<Option<FeedReport>> = Mutex::new(None);
 
 /// Exit status after Ctrl-C (128 + SIGINT), as a shell would report it.
 const SIGINT_EXIT: i32 = 130;
@@ -44,6 +52,7 @@ pub fn start(dir: Option<PathBuf>) -> Result<Arc<Recorder>> {
 /// Hooks the session end into the app: quit when the window closes, finish on quit, and quit
 /// after `duration` if given.
 pub fn attach(cx: &mut App, duration: Option<Duration>) {
+    report_feeds(cx);
     cx.set_quit_mode(QuitMode::LastWindowClosed);
     cx.on_app_quit(|_| {
         finish();
@@ -66,10 +75,38 @@ pub fn finish() {
     };
     let finished = session.finish();
     eprintln!("oxikube --perf: {}", finished.summary);
+    if let Some(report) = FEEDS.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        for line in report() {
+            eprintln!("oxikube --perf: {line}");
+        }
+    }
     eprintln!("oxikube --perf: wrote {}", finished.path.display());
     if let Some(err) = finished.error {
         eprintln!("oxikube --perf: the log is incomplete: {err}");
     }
+}
+
+/// Sets up the watch-budget lines of the summary: every connected cluster's counters, named by
+/// its session title.
+fn report_feeds(cx: &App) {
+    let Some(state) = oxikube::app_state::AppState::try_global(cx) else {
+        return;
+    };
+    let budgets = state.ports().clusters.budgets.clone();
+    let sessions = state.services().sessions.clone();
+    let report: FeedReport = Box::new(move || {
+        budgets
+            .stats()
+            .iter()
+            .map(|stats| {
+                let name = sessions
+                    .get(&stats.cluster)
+                    .map_or_else(|| stats.cluster.to_string(), |s| s.title().to_owned());
+                oxikube::kube_ports::report_line(&name, stats)
+            })
+            .collect()
+    });
+    *FEEDS.lock().unwrap_or_else(|e| e.into_inner()) = Some(report);
 }
 
 /// Ctrl-C would otherwise kill the process without a summary. A dedicated thread with a

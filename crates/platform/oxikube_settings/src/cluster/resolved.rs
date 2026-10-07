@@ -78,6 +78,7 @@ fn prefs_from_content(content: ClusterSettingsContent) -> ClusterPrefs {
         accessible_namespaces,
         exec_interactivity,
         exec_in_read_only,
+        watch_budget,
     } = content;
     let mut namespaces: Vec<String> = Vec::new();
     for name in accessible_namespaces.unwrap_or_default() {
@@ -99,6 +100,7 @@ fn prefs_from_content(content: ClusterSettingsContent) -> ClusterPrefs {
         accessible_namespaces: namespaces,
         exec_interactivity: exec_interactivity.unwrap_or_default(),
         exec_in_read_only: exec_in_read_only.unwrap_or(false),
+        watch_budget: watch_budget.map(Into::into).unwrap_or_default(),
     }
 }
 

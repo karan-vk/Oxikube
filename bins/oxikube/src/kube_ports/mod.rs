@@ -4,6 +4,7 @@
 //! |---|---|
 //! | `sources` | [`LazyKubeSources`]: the kubeconfig catalog (`ClusterSourcePort`), built on first use |
 //! | `connector` | [`SourcesConnector`]: the kube connector (`ClusterConnectorPort`), synced with the catalog, giving each connection its `DescribePort` (`oxikube_describe`) |
+//! | `budget` | [`WatchBudgets`]: each connection's watch budget from the `watch_budget` setting, behind the resource stores' budget hook, with its counters (E04-F543) |
 //! | `clock` | [`SystemClock`]: the wall clock and Tokio's timer (`ClockPort`) |
 //! | `secrets` | [`MemorySecrets`]: an in-process `SecretStorePort` for the source adapter |
 //!
@@ -13,6 +14,7 @@
 //! (discovery, resources, Table feeds, health, logs, exec, metrics, access review) come from the
 //! connector, one bundle per connection, through `oxikube_app::ClusterSessionManager`.
 
+mod budget;
 mod clock;
 mod connector;
 mod secrets;
@@ -26,6 +28,7 @@ use oxikube_ports::UserSource;
 use oxikube_runtime::StdFs;
 use tokio::runtime::Handle;
 
+pub use budget::{WatchBudgets, report_line};
 pub use clock::SystemClock;
 pub use connector::SourcesConnector;
 pub use secrets::MemorySecrets;
@@ -47,8 +50,11 @@ pub fn kube_adapters(
         true,
     ));
     let describe = DescribePreference::default();
+    let connector = SourcesConnector::new(sources.clone(), describe.clone());
+    let budgets = WatchBudgets::new(connector.kube());
     ClusterAdapters {
-        connector: Arc::new(SourcesConnector::new(sources.clone(), describe.clone())),
+        connector: Arc::new(connector),
+        budgets,
         describe,
         source: sources,
         clock: Arc::new(SystemClock::new(runtime)),

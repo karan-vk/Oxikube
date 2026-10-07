@@ -4,8 +4,10 @@
 
 mod counters;
 mod kube;
+mod owned;
 mod perf;
 mod policy;
+mod port;
 mod registry;
 mod selection;
 

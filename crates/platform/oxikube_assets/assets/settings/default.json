@@ -201,6 +201,22 @@
   // shell can change anything the container's user can, so a read-only cluster blocks it unless
   // you set this to true, at the top level or under `clusters.<id>`. Applies at once.
   "exec_in_read_only": false,
+  // The watch budget: limits on the live feeds (tables, sidebar counts, detail views, log
+  // targets) the app keeps open on a cluster, so a very large cluster cannot exhaust memory.
+  //   max_feeds: feeds open at once (each namespace of a multi-namespace selection is one).
+  //   max_objects: no new feed opens while the open feeds hold this many objects.
+  //   metadata_above: past this many objects, kinds that would get whole objects get
+  //     metadata-only feeds (names, labels, ages) instead.
+  //   idle_grace_seconds: how long a feed of a closed view keeps running, so going back is
+  //     instant; at the limit such feeds are closed first.
+  // Fields merge across layers; a change applies to the next feed opened, without reconnecting.
+  // `oxikube --perf` prints each connected cluster's counters on exit.
+  "watch_budget": {
+    "max_feeds": 64,
+    "max_objects": 100000,
+    "metadata_above": 25000,
+    "idle_grace_seconds": 30
+  },
   // Per-cluster overrides, keyed by cluster id (16 hex characters; the catalog shows it). Each
   // value takes the per-cluster settings above and any other setting. Edits apply at once, except
   // `exec_interactivity` (next connect) and `default_namespace` (new sessions). Example:

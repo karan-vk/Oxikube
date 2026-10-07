@@ -204,3 +204,56 @@ async fn the_describe_factory_gets_the_connections_context_and_its_port_is_used(
     let output = connection.ports.describe.describe(&target).await.unwrap();
     assert_eq!(output.text, "canned");
 }
+
+#[tokio::test]
+async fn a_connections_feeds_go_through_its_watch_budget_set_per_cluster() {
+    let connector = empty_connector();
+    connector.replace_loaded(loaded_with("budgeted"));
+    let req = request("budgeted", ExecInteractivity::Never);
+    let cluster = req.cluster.clone();
+    let budgeted = cluster.clone();
+    connector.set_budget_for(Arc::new(move |cluster: &ClusterId| BudgetConfig {
+        // No feed fits, so a watch that reaches the budget is refused before any request.
+        max_feeds: if *cluster == budgeted { 0 } else { 64 },
+        ..BudgetConfig::default()
+    }));
+    let connection = connector
+        .connect(req)
+        .await
+        .expect("connects without a request");
+
+    let registry = connector.feeds(&cluster).expect("a live budget");
+    assert_eq!(registry.config().max_feeds, 0, "from set_budget_for");
+    assert_eq!(connector.registries().len(), 1);
+    let gvk = oxikube_domain::ids::Gvk::new("", "v1", "Pod");
+    let watch = connection
+        .ports
+        .resources
+        .watch(
+            &gvk,
+            Some("default"),
+            &oxikube_ports::WatchOptions::default(),
+        )
+        .await;
+    assert_eq!(
+        watch.err().map(|e| e.kind()),
+        Some(ErrorKind::BudgetExceeded),
+        "the port's watch is a feed of the budget"
+    );
+    let table = connection
+        .ports
+        .tables
+        .table_feed(&gvk, None, &oxikube_ports::TableOptions::default())
+        .await;
+    assert_eq!(
+        table.err().map(|e| e.kind()),
+        Some(ErrorKind::BudgetExceeded)
+    );
+    assert_eq!(registry.stats().refused, 2);
+
+    drop(connection);
+    assert!(
+        connector.registries().is_empty(),
+        "gone with the connection"
+    );
+}

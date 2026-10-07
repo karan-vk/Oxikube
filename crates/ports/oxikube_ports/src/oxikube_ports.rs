@@ -67,7 +67,7 @@
 //! | [`ClusterConnectorPort`], [`ClusterPorts`], [`HealthReporter`] | [`connector`] |
 //! | [`AccessReviewPort`] | [`access`] |
 //! | [`WarningPort`], [`ApiWarning`] (the API server's `Warning:` headers, E07-S10) | [`warnings`] |
-//! | [`ClusterPrefs`], [`ClusterPrefsTable`] (resolved per-cluster settings, E06-S08) | [`cluster_prefs`] |
+//! | [`ClusterPrefs`], [`ClusterPrefsTable`], [`WatchBudgetPrefs`] (resolved per-cluster settings, E06-S08; the watch budget, E04-F543) | [`cluster_prefs`] |
 //!
 //! # Integration and agent ports (E02-S10)
 //!
@@ -126,7 +126,9 @@ pub use agent::{
 };
 pub use clock::ClockPort;
 pub use cloud::{CloudDiscoveryPort, CloudProvider, CloudToolStatus, DiscoveredCluster};
-pub use cluster_prefs::{ClusterPrefs, ClusterPrefsTable, NodeShellPrefs, PrometheusOverride};
+pub use cluster_prefs::{
+    ClusterPrefs, ClusterPrefsTable, NodeShellPrefs, PrometheusOverride, WatchBudgetPrefs,
+};
 pub use cluster_source::{
     ClusterContext, ClusterSource, ClusterSourcePort, DiagnosticSeverity, SourceDiagnostic,
     SourceId, SourceKind, SourceState, SourceStatus, SourcesChanged, UserSource, UserSourceKind,

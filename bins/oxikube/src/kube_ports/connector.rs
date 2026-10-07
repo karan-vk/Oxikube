@@ -77,6 +77,11 @@ impl SourcesConnector {
         }
     }
 
+    /// The kube connector behind this one (its watch budgets, `super::WatchBudgets`).
+    pub fn kube(&self) -> &KubeConnector {
+        &self.kube
+    }
+
     /// Hands the catalog's current kubeconfig to the pools when it changed since the last call.
     async fn sync(&self) -> OxiResult<()> {
         let loaded = self.sources.loaded().await?;

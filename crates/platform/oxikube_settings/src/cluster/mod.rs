@@ -1,6 +1,7 @@
 //! The per-cluster settings layer (E06-S08): `clusters.<id>` overrides for display name, colour,
 //! read-only, default namespace, terminal working directory, the node shell pod template (image,
-//! pull secret, and the `node_shell` block: E09-S09), Prometheus location, accessible namespaces and the exec plugin policy.
+//! pull secret, and the `node_shell` block: E09-S09), Prometheus location, accessible namespaces, the exec plugin policy
+//! and the watch budget (the `watch_budget` block: E04-F543).
 //!
 //! The layer mechanics (default.json, then the user's top-level values, then `clusters.<id>`,
 //! merged field by field, a type error keeping the previous value, unknown keys reported) belong
@@ -26,9 +27,11 @@ mod node_shell;
 mod resolved;
 #[cfg(test)]
 mod tests;
+mod watch_budget;
 
 pub use content::{ClusterSettingsContent, PrometheusContent};
 pub use node_shell::{
     ImagePullPolicy, NodeShellContent, TaintEffect, TolerationContent, TolerationOperator,
 };
 pub use resolved::ClusterSettings;
+pub use watch_budget::WatchBudgetContent;

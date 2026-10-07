@@ -55,6 +55,13 @@ pub(super) struct Entry {
     pub(super) counters: Arc<FeedCounters>,
     pub(super) span: Span,
     pub(super) idle: Option<Idle>,
+    /// Opened by [`FeedRegistry::open_owned`](super::FeedRegistry::open_owned): never shared,
+    /// torn down with its consumer's stream.
+    pub(super) owned: bool,
+    /// An owned feed its consumer released ([`FeedRegistry::release_owned`]
+    /// (super::FeedRegistry::release_owned)) and is about to drop: it no longer counts against
+    /// the limits.
+    pub(super) closing: bool,
     /// The driver task; dropping the entry aborts it, which stops the feed.
     pub(super) _driver: AbortOnDrop,
 }
@@ -67,6 +74,10 @@ pub(super) struct State {
     by_request: HashMap<FeedRequest, FeedId>,
     /// Feeds admitted and still opening: they count against `max_feeds`.
     pub(super) opening: usize,
+    /// Owned feeds admitted ahead of their open ([`FeedRegistry::reserve_owned`]
+    /// (super::FeedRegistry::reserve_owned)), by request: they count against `max_feeds` until
+    /// an open of the same request takes the slot or a release gives it back.
+    reserved: HashMap<FeedRequest, usize>,
     next_id: FeedId,
     next_epoch: u64,
     /// Counters of feeds already torn down.
@@ -100,15 +111,18 @@ impl State {
         Some(id)
     }
 
-    /// The budget's verdict on a new feed for `request`.
-    pub(super) fn admit(&self, request: &FeedRequest) -> Admission {
+    /// The budget's verdict on a new feed for `request`; `degrade` allows granting a full
+    /// request metadata-only. Feeds that are closing do not count.
+    pub(super) fn admit(&self, request: &FeedRequest, degrade: bool) -> Admission {
+        let counted = || self.entries.values().filter(|e| !e.closing);
         let usage = Usage {
-            feeds: self.entries.len() + self.opening,
-            objects: self.entries.values().map(|e| e.counters.objects()).sum(),
+            feeds: counted().count() + self.opening + self.reserved.values().sum::<usize>(),
+            objects: counted().map(|e| e.counters.objects()).sum(),
         };
         let mut idle: Vec<(u64, IdleFeed)> = self
             .entries
             .iter()
+            .filter(|(_, entry)| !entry.closing)
             .filter_map(|(&id, entry)| {
                 let idle = entry.idle.as_ref()?;
                 let objects = entry.counters.objects();
@@ -117,13 +131,60 @@ impl State {
             .collect();
         idle.sort_unstable_by_key(|(epoch, _)| *epoch);
         let idle: Vec<IdleFeed> = idle.into_iter().map(|(_, feed)| feed).collect();
-        admit(&self.config, usage, &idle, request.variant)
+        if degrade {
+            return admit(&self.config, usage, &idle, request.variant);
+        }
+        let never = BudgetConfig {
+            metadata_above: u64::MAX,
+            ..self.config.clone()
+        };
+        admit(&never, usage, &idle, request.variant)
+    }
+
+    /// Holds a slot for an owned feed of `request` that will open later.
+    pub(super) fn reserve(&mut self, request: FeedRequest) {
+        *self.reserved.entry(request).or_default() += 1;
+    }
+
+    /// Takes one slot reserved for `request`, if there is one.
+    pub(super) fn take_reserved(&mut self, request: &FeedRequest) -> bool {
+        let Some(count) = self.reserved.get_mut(request) else {
+            return false;
+        };
+        *count -= 1;
+        if *count == 0 {
+            self.reserved.remove(request);
+        }
+        true
+    }
+
+    /// Gives back a slot reserved for `request` whose feed never opened or, failing that, marks
+    /// one owned feed of `request` closing (the oldest not marked yet). Returns whether there
+    /// was either.
+    pub(super) fn release_owned(&mut self, request: &FeedRequest) -> bool {
+        if self.take_reserved(request) {
+            return true;
+        }
+        let oldest = self
+            .entries
+            .iter_mut()
+            .filter(|(_, e)| e.owned && !e.closing && &e.request == request)
+            .min_by_key(|(id, _)| **id);
+        match oldest {
+            Some((_, entry)) => {
+                entry.closing = true;
+                true
+            }
+            None => false,
+        }
     }
 
     /// Registers a newly opened feed with one subscriber.
     pub(super) fn insert(&mut self, id: FeedId, entry: Entry) {
         entry.span.in_scope(|| debug!("feed started"));
-        self.by_request.insert(entry.request.clone(), id);
+        if !entry.owned {
+            self.by_request.insert(entry.request.clone(), id);
+        }
         self.entries.insert(id, entry);
         self.started += 1;
     }
@@ -146,6 +207,16 @@ impl State {
         let entry = self.entries.remove(&id)?;
         if self.by_request.get(&entry.request) == Some(&id) {
             self.by_request.remove(&entry.request);
+        }
+        if entry.owned && !entry.closing {
+            // A release marked an equal feed (the oldest) for this one: it is this one that went.
+            let marked = self
+                .entries
+                .values_mut()
+                .find(|e| e.owned && e.closing && e.request == entry.request);
+            if let Some(other) = marked {
+                other.closing = false;
+            }
         }
         self.retired += entry.counters.totals();
         self.stopped += 1;

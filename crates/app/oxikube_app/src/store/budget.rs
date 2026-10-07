@@ -7,10 +7,12 @@
 //! [`FeedState::Failed`](super::FeedState::Failed) with
 //! [`ErrorKind::BudgetExceeded`](oxikube_domain::ErrorKind::BudgetExceeded) and the budget's
 //! reason. [`released`](FeedBudget::released) is called exactly once per admitted feed, when the
-//! store aborts it. E04's per-cluster `FeedRegistry` limits can sit behind this trait in the
-//! binary; [`UnlimitedBudget`] and [`MaxFeeds`] are the in-app implementations.
+//! store aborts it. The binary puts E04's per-cluster `FeedRegistry` behind this trait (its
+//! limits and idle grace come from the cluster's `watch_budget` setting, E04-F543);
+//! [`UnlimitedBudget`] and [`MaxFeeds`] are the in-app implementations.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use super::object::FeedKey;
 use super::policy::{FeedKind, FeedPriority};
@@ -44,6 +46,17 @@ pub trait FeedBudget: Send + Sync {
 
     /// An admitted feed stopped.
     fn released(&self, request: &FeedRequest);
+
+    /// The store gave `request` up: the budget still refused it with no idle feed left to
+    /// close (counters; the default does nothing).
+    fn refused(&self, _request: &FeedRequest) {}
+
+    /// How long a feed outlives its last subscriber, read each time a feed goes idle, so a
+    /// budget whose settings change at run time changes it too. `None` (the default) keeps
+    /// [`StoreConfig::idle_grace`](super::StoreConfig::idle_grace).
+    fn idle_grace(&self) -> Option<Duration> {
+        None
+    }
 }
 
 /// Admits everything (the default when the binary plugs in no budget).
