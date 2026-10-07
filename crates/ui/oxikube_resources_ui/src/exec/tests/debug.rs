@@ -279,9 +279,25 @@ fn the_pod_detail_header_has_a_debug_button(cx: &mut TestAppContext) {
         "the dialog opens in the tab's workspace"
     );
 
-    // A read-only cluster disables it, with the reason.
+    // A read-only cluster disables it: patching the pod is a mutation. Close the dialog first
+    // and queue the read the dialog needs, so a click that got through would open a fresh one.
+    d.f.vcx.simulate_keystrokes("escape");
+    d.settle();
+    assert!(super::debug::dialog(&mut d.f).is_none(), "closed again");
     d.f.sessions.set_read_only(&cluster(), true).unwrap();
     d.settle();
+    d.f.ports()
+        .resources
+        .script()
+        .get
+        .push_ok(crate::detail::tests::fixture::web_pod());
     d.f.vcx.update(|window, cx| window.draw(cx).clear(cx));
     assert!(d.shown("detail-debug"), "still there, greyed out");
+    d.click("detail-debug");
+    d.settle();
+    assert!(
+        super::debug::dialog(&mut d.f).is_none(),
+        "a disabled button opens nothing"
+    );
+    assert!(d.f.state.audit_log().is_empty(), "and nothing was recorded");
 }
