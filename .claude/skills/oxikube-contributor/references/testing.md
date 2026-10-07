@@ -47,6 +47,36 @@ Integration tests must create their own namespace (`oxi-test-<rand>`) and delete
 run in CI only for PRs touching `crates/adapters/**`, `crates/ports/**`, `xtask/**`, plus
 nightly for everything.
 
+## Terminal suite (E09)
+
+The terminal stack is tested at four levels; the map from each acceptance item to its test is the
+"Epic E09" table in `crates/adapters/oxikube_kube/tests/README.md`.
+
+```
+# recorded vim / less / tmux through the grid (no cluster): cell-by-cell asserts, chunking, resize
+cargo test -p oxikube_terminal --test captures
+# the kube adapter and the app services against kind (exec, resize, attach, node shell, debug, guard)
+cargo xtask kind-up && cargo it
+# the app end to end: pod shell from the table, vi/top/flood in a pod, resize, data dir scan
+OXIKUBE_TEST_CONTEXT=kind-oxikube cargo test -p oxikube --features integration --test kind_exec --test kind_terminal --test kind_terminal_data
+# golden screenshots (needs a GPU: Metal here; the nightly job runs them on macOS and Linux)
+cargo test -p oxikube_terminal --features screenshot --test screenshot --test screenshot_programs
+```
+
+- Pods: `oxikube_testkit::integration::pods` (`sleeper`, `cat`, `logger`, `shell_less`). A node-shell or
+  debug test creates only a short-lived pod it deletes; it never cordons, taints or drains the real node.
+- Recorded programs live in `crates/ui/oxikube_terminal/tests/captures/*.vt`; `record.py` (Python 3, the
+  program installed) re-records them. A recording has no host name, user name, clock or path in it.
+- Goldens: `OXIKUBE_UPDATE_GOLDENS=1` regenerates `tests/goldens/macos/*.png` (pinned theme, platform
+  monospace font); CI compares on macOS only and uploads `*.actual.png` / `*.diff.png` when one differs.
+- Flake control: waits poll a condition with a deadline, never a fixed sleep before an assertion; a
+  retry belongs to cluster readiness and the kubelet applying a resize, not to the assertion.
+- Never persist or upload scrollback: the `kind_terminal_data` test scans the state db, its WAL and
+  the settings for what was typed and printed; CI artifacts of the terminal job hold perf numbers
+  (`terminal-perf.jsonl`), pods and events only.
+- `integration.yml` has two jobs: `kind` (kube, app, testkit suites) and `terminal` (this section's
+  app-level suite, GPUI build dependencies, no display).
+
 ## GPUI test determinism (hard rules)
 
 - Never start OS threads (notify watchers, timers) in tests: use `init_with_dir` style

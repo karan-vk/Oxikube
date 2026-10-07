@@ -1,0 +1,43 @@
+[?1049h[>4;2m[?1h=[?2004h[?1004h[1;24r[?12h[?12l[22;2t[22;1t[27m[23m[29m[m[H[2J[?25l[24;1H"sample.rs" 16L, 382B[2;1H▽[6n[2;1H  [3;1HPzz\[0%m[6n[3;1H           [1;1H[>c[1;1H//! A small sample for the capture.
+use std::collections::HashMap;[2;31H[K[3;1H[K[4;1H/// Counts words.
+fn count(text: &str) -> HashMap<&str, usize> {
+    let mut seen = HashMap::new();
+    for word in text.split_whitespace() {[8;9H*seen.entry(word).or_insert(0) += 1;
+    }
+    seen
+}
+
+fn main() {
+    let words = count("to be or not to be");
+    println!("{:?}", words.get("be")); // Some(2)
+}
+[94m~                                                                               [18;1H~                                                                               [19;1H~                                                                               [20;1H~                                                                               [21;1H~                                                                               [22;1H~                                                                               [23;1H~                                                                               [1;1H[?25h[?4m[?25l[m[24;1H[K[24;1H:syntax on[1;1H[35m//! A small sample for the capture.[m
+[38;5;130muse[m [35mstd[m[35m::[m[35mcollections[m[35m::
+
+/// Counts words.[m
+[38;5;130mfn[m [36mcount[m[7C[32m&str[m) [38;5;130m->[8C<[m[32m&str[m, [32musize[m[38;5;130m>
+[m    [38;5;130mlet[m [32mmut[m seen [38;5;130m=[m [35mHashMap[m[35m::[m[36mnew[m
+    [38;5;130mfor[m word [38;5;130min[m text.[36msplit_whitespace[m[8;9H[32m*[mseen.[36mentry[7Cor_insert[m([31m0[m) [38;5;130m+=[m [31m1[m[13;1H[38;5;130mfn[m [36mmain[m
+    [38;5;130mlet[7C=[m [36mcount[m([31m"to be or not to be"[m
+    [35mprintln![m([31m"{:?}"[m[8C[36mget[m([31m"be"[m)); [34m// Some(2)[1;1H[?25h[?25l[m[24;1H[K[24;1H:set number[1;1H[38;5;130m  1 [m[35m//! A small sample for the capture.[m
+[38;5;130m  2 use[m [35mstd[m[35m::[m[35mcollections[m[35m::[mHashMap;
+[38;5;130m  3 
+  4 [m[35m/// Counts words.[m
+[38;5;130m  5 fn[m [36mcount[m(text: [32m&str[m) [38;5;130m->[m HashMap[38;5;130m<[m[32m&str[m, [32musize[m[38;5;130m>[m {
+[38;5;130m  6 [m    [38;5;130mlet[m [32mmut[m seen [38;5;130m=[m [35mHashMap[m[35m::[m[36mnew[m();
+[38;5;130m  7 [m    [38;5;130mfor[m word [38;5;130min[m text.[36msplit_whitespace[m() {
+[38;5;130m  8 [m        [32m*[mseen.[36mentry[m(word).[36mor_insert[m([31m0[m) [38;5;130m+=[m [31m1[m;
+[38;5;130m  9 [m    }
+[38;5;130m 10 [m    seen
+[38;5;130m 11 [m}
+[38;5;130m 12 
+ 13 fn[m [36mmain[m() {
+[38;5;130m 14 [m    [38;5;130mlet[m words [38;5;130m=[m [36mcount[m([31m"to be or not to be"[m);
+[38;5;130m 15 [m    [35mprintln![m([31m"{:?}"[m, words.[36mget[m([31m"be"[m)); [34m// Some(2)[m
+[38;5;130m 16 [m}[1;5H[?25h[?25l[24;1H[K[24;1H/entry[8;19H[?25h[9;9H[10;12H[?25l[24;70Hdd[10;12H[24;70H  [10;5H[10;23r[23;1H
+[1;24r[10;3H[38;5;130m0
+ 11
+ 12
+ 13
+ 14
+ 15[m[23;1H[94m~                                                                               [m[24;1H[K[10;5H[?25h

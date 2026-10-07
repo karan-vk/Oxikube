@@ -10,6 +10,14 @@ name: integration
 # port method and epic acceptance item to the test that exercises it. The nightly run executes the
 # whole suite twice on the same cluster as a flake check: a test that passes once and fails once is
 # a flake to fix, not to retry.
+#
+# The `terminal` job (E09-S13) is the terminal stack end to end on the same kind cluster: the app
+# (`bins/oxikube/tests/kind_exec`, `kind_terminal`, `kind_terminal_data`) opens pod shells, debug containers and local
+# shells, runs busybox `vi` and `top` through the websocket and the grid, resizes, floods, and scans
+# the app's data dir for terminal content. The per-port exec, attach, node shell and debug
+# scenarios (`oxikube_kube/tests/exec_*`, `oxikube_app/tests/kind_smoke/{exec,debug,node_shell}`)
+# run in the `kind` job with everything else. The macOS golden screenshots of the terminal
+# element are the nightly job's (`nightly.yml`).
 on:
   pull_request:
     paths:
@@ -17,6 +25,8 @@ on:
       - "crates/ports/**"
       - "crates/app/**"
       - "crates/testing/**"
+      - "crates/ui/oxikube_terminal/**"
+      - "bins/oxikube/**"
       - "xtask/**"
       - ".github/workflows/integration.yml"
   schedule:
@@ -92,6 +102,73 @@ jobs:
         with:
           name: integration-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Teardown
+        if: always()
+        run: cargo run -q -p xtask -- kind-down --name oxikube || true
+
+  # The terminal end to end (E09-S13). Linux only: the app under test is GPUI's headless test
+  # platform, so the job needs the GPUI build dependencies but no display and no GPU.
+  terminal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TERMINAL_SUITE: >-
+        cargo test -p oxikube --features integration --test kind_exec --test kind_terminal --test kind_terminal_data
+        --no-fail-fast
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: integration-terminal
+          cache-on-failure: true
+      - name: Linux system dependencies (GPUI)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libfontconfig-dev libfreetype-dev libglib2.0-dev libssl-dev \
+            libvulkan1 libvulkan-dev libwayland-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: oxikube
+          wait: 120s
+      - name: Test images and cluster fixtures
+        run: cargo run -q -p xtask -- kind-up --name oxikube
+      # Recorded vim, less and tmux through the grid: no cluster, no GPU.
+      - name: Recorded programs through the grid
+        run: cargo test -p oxikube_terminal --test captures
+      - name: Build the suite
+        run: $TERMINAL_SUITE --no-run
+      # The perf line of each run (`perf-jsonl {...}`) is kept as terminal-perf.jsonl: numbers
+      # only, no terminal content.
+      - name: Terminal integration tests
+        run: |
+          set -o pipefail
+          $TERMINAL_SUITE -- --nocapture 2>&1 | tee terminal-suite.log
+      - name: Terminal integration tests (flake check, second run)
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          set -o pipefail
+          $TERMINAL_SUITE -- --nocapture 2>&1 | tee -a terminal-suite.log
+      - name: Collect perf records
+        if: ${{ always() }}
+        run: |
+          mkdir -p terminal-artifacts
+          sed -n 's/^perf-jsonl //p' terminal-suite.log > terminal-artifacts/terminal-perf.jsonl || true
+          kubectl --context kind-oxikube get pods -A -o wide > terminal-artifacts/pods.txt || true
+          kubectl --context kind-oxikube get events -A -o wide \
+            --sort-by=.metadata.creationTimestamp > terminal-artifacts/events.txt || true
+      # Never terminal content: the suite prints perf numbers and test names, and the artifacts
+      # are those numbers plus cluster pods and events (no logs of the terminal, no scrollback).
+      - name: Upload terminal artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-integration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: terminal-artifacts/
           if-no-files-found: ignore
           retention-days: 7
       - name: Teardown
