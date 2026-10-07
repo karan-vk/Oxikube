@@ -386,7 +386,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   a Secret's `data`/`stringData` values and `last-applied-configuration` replaced by `(hidden)`), made once per object version
   when the tab is shown, never in render; `resource::CopyYaml` and `resource::SaveYaml` (file dialog, then `FsPort::write`) write
   exactly that text. The Describe tab (`detail::describe`) reads the connection's `DescribePort` on the Tokio bridge on first
-  show (spinner, error with Retry, `resource::RefreshDescribe`), the previous text staying while it refreshes. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
+  show (spinner, error with Retry, `resource::RefreshDescribe`), the previous text staying while it refreshes. The view carries the `Detail` key context (E07-U559, `detail::keys`, `mount == drawer|tab`): `escape` closes the drawer and the workspace refocuses the table, `j` / `k` and the arrows call `ResourceTable::step_detail` on the table it was opened from (the cursor moves and `resource::Open` shows the new object), `1`-`5` switch tabs; conditions are two lines (type, status, age; then the muted reason and message) and label, annotation and status keys are cut with a tooltip. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
   (a workspace `Item`): one `oxikube_ui::tile::StatTile` per `Tile` of the `TileRegistry` (Deployments, StatefulSets,
   DaemonSets, ReplicaSets, Jobs, CronJobs, Pods) with total and healthy from a `CountsLease`, read once a second and redrawn
   coalesced only on change; a click sends `resource::OpenList`. Module `navigate`: the `resource::OpenList` handler and the

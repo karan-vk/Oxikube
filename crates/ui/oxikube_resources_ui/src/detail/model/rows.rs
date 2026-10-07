@@ -19,8 +19,6 @@ pub enum Row {
     Owner(usize),
     /// Finalizer `n`.
     Finalizer(usize),
-    /// The column headings of the conditions table.
-    ConditionHead,
     /// Condition `n`.
     Condition(usize),
     /// Status line `n`.
@@ -117,7 +115,6 @@ pub(super) fn flatten(model: &DetailModel) -> Vec<Row> {
     if model.conditions.is_empty() {
         rows.push(Row::Empty(Section::Conditions));
     } else {
-        rows.push(Row::ConditionHead);
         rows.extend((0..model.conditions.len()).map(Row::Condition));
     }
     let lines = model.status.lines.len();

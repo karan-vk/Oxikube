@@ -14,6 +14,7 @@
 //! | `feed` | the store subscription: deltas applied in one update, coalesced redraws, rescoping on a namespace change, re-subscribing on a reconnect |
 //! | `filtering` | the filter bar's side: applying a parsed filter to the subscription, `/` focus, saving and restoring the text |
 //! | `interact` | clicks, keys, column picker, and the commands they dispatch |
+//! | `step` | [`ResourceTable::step_detail`]: the detail drawer's `j` / `k` moving the selection |
 //! | `render` | the toolbar and the table element |
 //! | `delegate` | [`RowsDelegate`]: rows, layout, provider and selection behind `TableDelegate` |
 //! | `selection` | [`Selection`]: multi-select by object identity (click, shift-range, cmd/ctrl toggle, select all) |
@@ -56,6 +57,7 @@ mod row_actions;
 mod runtime;
 mod selection;
 pub mod states;
+mod step;
 mod view;
 
 #[cfg(test)]

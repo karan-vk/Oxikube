@@ -2,10 +2,12 @@
 //! `status` lines, as free functions over the model's data.
 
 use gpui::{
-    AnyElement, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _, div, px,
+    AnyElement, Div, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    Stateful, StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use jiff::Timestamp;
 use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
+use oxikube_ui::tooltip::Tooltip;
 use oxikube_ui::{Tokens, u};
 
 use super::model::{ConditionRow, Section, StatusLine};
@@ -46,38 +48,10 @@ pub(super) fn section_heading(tokens: &Tokens, section: Section, count: usize) -
         .into_any_element()
 }
 
-/// The conditions table's column widths, in percent of the row: type, status, reason, message,
-/// last transition (the rest is the gaps).
-const CONDITION_COLUMNS: [f32; 5] = [19., 9., 21., 32., 12.];
-
-fn cell(percent: f32, child: impl IntoElement) -> impl IntoElement {
-    div()
-        .flex_none()
-        .min_w_0()
-        .w(gpui::relative(percent / 100.))
-        .child(child)
-}
-
-pub(super) fn condition_head(tokens: &Tokens) -> AnyElement {
-    let titles = ["Type", "Status", "Reason", "Message", "Changed"];
-    h_flex()
-        .debug_selector(|| "detail-condition-head".to_owned())
-        .gap(u(tokens.spacing.md))
-        .px(u(tokens.spacing.lg))
-        .py(u(px(2.)))
-        .text_size(u(tokens.font.small))
-        .text_color(tokens.colors.text_muted)
-        .border_b_1()
-        .border_color(tokens.colors.border_variant)
-        .children(
-            titles
-                .into_iter()
-                .zip(CONDITION_COLUMNS)
-                .map(|(title, weight)| cell(weight, title)),
-        )
-        .into_any_element()
-}
-
+/// One condition as two lines: the type, its status and how long ago it changed; then, muted and
+/// wrapped at word boundaries, the reason and the message. The type never wraps (it is cut with
+/// an ellipsis and a tooltip when the drawer is too narrow); the second line is left out when the
+/// condition has neither.
 pub(super) fn condition_row(
     tokens: &Tokens,
     tones: &ToneColors,
@@ -89,27 +63,79 @@ pub(super) fn condition_row(
         .transition
         .map(|at| oxikube_domain::Age::between(at, now).to_kubectl_string())
         .unwrap_or_default();
-    h_flex()
-        .debug_selector(move || format!("detail-condition-{index}"))
-        .items_start()
+    let detail = match (row.reason.is_empty(), row.message.is_empty()) {
+        (true, true) => None,
+        (false, true) => Some(row.reason.clone()),
+        (true, false) => Some(row.message.clone()),
+        (false, false) => Some(format!("{}: {}", row.reason, row.message)),
+    };
+    let first = h_flex()
+        .items_center()
         .gap(u(tokens.spacing.md))
-        .px(u(tokens.spacing.lg))
-        .py(u(px(2.)))
-        .child(cell(CONDITION_COLUMNS[0], row.kind.clone()))
-        .child(cell(
-            CONDITION_COLUMNS[1],
+        .child(
+            truncated(
+                ("detail-condition-type", index),
+                move || format!("detail-condition-type-{index}"),
+                row.kind.clone(),
+            )
+            .flex_1(),
+        )
+        .child(
             div()
+                .debug_selector(move || format!("detail-condition-status-{index}"))
+                .flex_none()
+                .w(u(px(64.)))
                 .text_color(tones.of(row.tone))
                 .child(row.status.clone()),
-        ))
-        .child(cell(CONDITION_COLUMNS[2], row.reason.clone()))
-        .child(cell(
-            CONDITION_COLUMNS[3],
-            div().whitespace_normal().child(row.message.clone()),
-        ))
-        .child(cell(CONDITION_COLUMNS[4], changed))
+        )
+        .child(
+            div()
+                .debug_selector(move || format!("detail-condition-age-{index}"))
+                .flex_none()
+                .w(u(px(48.)))
+                .text_right()
+                .text_color(tokens.colors.text_muted)
+                .text_size(u(tokens.font.small))
+                .child(changed),
+        );
+    v_flex()
+        .debug_selector(move || format!("detail-condition-{index}"))
+        .px(u(tokens.spacing.lg))
+        .py(u(px(3.)))
+        .child(first)
+        .children(detail.map(|text| {
+            div()
+                .debug_selector(move || format!("detail-condition-detail-{index}"))
+                .w_full()
+                .whitespace_normal()
+                .text_color(tokens.colors.text_muted)
+                .text_size(u(tokens.font.small))
+                .child(text)
+        }))
         .into_any_element()
 }
+
+/// One line of text cut with an ellipsis where it does not fit, with the whole text as a tooltip.
+/// The caller gives it its width (`flex_1`, or a fixed one).
+pub(super) fn truncated(
+    id: (&'static str, usize),
+    selector: impl Fn() -> String + 'static,
+    text: impl Into<SharedString>,
+) -> Stateful<Div> {
+    let text: SharedString = text.into();
+    let tip = text.clone();
+    div()
+        .id(id)
+        .debug_selector(selector)
+        .min_w_0()
+        .truncate()
+        .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+        .child(text)
+}
+
+/// The width the keys of the Overview's metadata and status rows share, unscaled pixels: the
+/// values then start in one column.
+pub(super) const KEY_WIDTH: f32 = 150.;
 
 pub(super) fn status_line(tokens: &Tokens, line: &StatusLine, index: usize) -> AnyElement {
     let indent = f32::from(line.depth) * 12.;
@@ -117,14 +143,18 @@ pub(super) fn status_line(tokens: &Tokens, line: &StatusLine, index: usize) -> A
         .debug_selector(move || format!("detail-status-{index}"))
         .items_start()
         .gap(u(tokens.spacing.md))
-        .pl(u(px(12. + indent)))
+        .pl(u(tokens.spacing.lg) + u(px(indent)))
         .pr(u(tokens.spacing.lg))
         .py(u(px(1.)))
         .child(
-            div()
-                .flex_none()
-                .text_color(tokens.colors.text_muted)
-                .child(line.key.clone()),
+            truncated(
+                ("detail-status-key", index),
+                move || format!("detail-status-key-{index}"),
+                line.key.clone(),
+            )
+            .flex_none()
+            .w(u(px((KEY_WIDTH - indent).max(48.))))
+            .text_color(tokens.colors.text_muted),
         )
         .children(line.value.clone().map(|value| {
             div()

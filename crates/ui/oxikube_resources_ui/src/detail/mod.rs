@@ -14,6 +14,7 @@
 //! | `events` | [`EventRow`], [`events_about`]: the events of the object from the namespace's `Event` feed |
 //! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, and a CRD's Schema |
 //! | `state` | [`DetailDeps`], [`Mount`], [`DetailState`]: what the view is built over and how the object stands |
+//! | `keys` | the `Detail` key context and its actions (E07-U559): close, step the table, switch tab |
 //! | `view` | [`DetailView`]: the entity and its commands |
 //! | `follow` | the store subscription (one row on the table's own feed), the model and the list's rows kept in step |
 //! | `full` | the full read for metadata-only and Table feeds, and the owners' scopes from discovery |
@@ -50,6 +51,7 @@ mod events_tab;
 mod exec;
 mod follow;
 mod full;
+mod keys;
 pub mod model;
 mod overview;
 mod parts;
@@ -67,6 +69,7 @@ pub(crate) mod tests;
 pub use describe::DescribeState;
 pub use drawer::{DEFAULT_WIDTH, DetailDrawer, ToggleDrawer};
 pub use events::{EventRow, MAX_EVENTS, events_about};
+pub use keys::{Close, SelectNext, SelectPrevious, ShowTab};
 pub use model::DetailModel;
 pub use state::{DetailDeps, DetailEvent, DetailState, Mount};
 pub use tabs::DetailTab;

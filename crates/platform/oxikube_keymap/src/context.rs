@@ -18,6 +18,7 @@
 //! | `Terminal` | a terminal pane | |
 //! | `LogView` | the log viewer (E08-S02) | `Editing` while its search field has focus, `wrap`, `autoscroll` |
 //! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
+//! | `Detail` | the resource detail drawer or its pinned tab (E07-U559) | `mount == drawer\|tab` |
 //!
 //! A terminal in focus gets every plain `ctrl-` chord (`ctrl-w`, `ctrl-k`, `ctrl-q`, ...): GPUI
 //! matches bindings before the focused element sees the key, so a binding in `Workspace` or with
@@ -68,6 +69,8 @@ pub mod contexts {
     pub const LOGS: &str = "LogView";
     /// The cluster catalog home.
     pub const CATALOG: &str = "Catalog";
+    /// The resource detail view: the drawer of a cluster tab, or its pinned tab.
+    pub const DETAIL: &str = "Detail";
     /// Flag: a text field inside the context has focus, so bare-letter bindings (vim layer)
     /// must not fire.
     pub const EDITING: &str = "Editing";
