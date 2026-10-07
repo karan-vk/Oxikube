@@ -33,6 +33,7 @@ pub struct MainView {
     workspace: Entity<Workspace>,
     persistence: Option<Entity<LayoutPersistence>>,
     _observe_restore: Option<Subscription>,
+    _background: Subscription,
 }
 
 impl MainView {
@@ -42,6 +43,7 @@ impl MainView {
             workspace: cx.new(|cx| Workspace::new(window, cx)),
             persistence: None,
             _observe_restore: None,
+            _background: super::background::follow(window, cx),
         }
     }
 
@@ -56,6 +58,7 @@ impl MainView {
             workspace,
             persistence: Some(persistence),
             _observe_restore: Some(observe),
+            _background: super::background::follow(window, cx),
         }
     }
 

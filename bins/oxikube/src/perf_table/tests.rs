@@ -73,6 +73,7 @@ fn it_connects_the_context_opens_its_pods_table_and_scrolls_it(cx: &mut TestAppC
     let drive = TableDrive {
         context: TestPorts::CONTEXT.to_owned(),
         scroll: 10,
+        also: Vec::new(),
     };
     vcx.update(|_, cx| start(drive, handle.into(), cx));
 
@@ -125,6 +126,7 @@ fn an_unknown_context_leaves_the_app_as_it_was(cx: &mut TestAppContext) {
     let drive = TableDrive {
         context: "no-such-context".to_owned(),
         scroll: 3,
+        also: Vec::new(),
     };
     vcx.update(|_, cx| start(drive, handle.into(), cx));
     vcx.executor().advance_clock(Duration::from_secs(1));
@@ -134,5 +136,31 @@ fn an_unknown_context_leaves_the_app_as_it_was(cx: &mut TestAppContext) {
     assert!(
         state.services().sessions.sessions().is_empty(),
         "nothing connected"
+    );
+}
+
+#[gpui::test]
+fn an_unknown_also_context_stops_before_anything_connects(cx: &mut TestAppContext) {
+    let ports = TestPorts::seeded();
+    cx.update(|cx| init(cx, StartupEnv::test_with(&ports)))
+        .expect("the init order runs");
+    let handle = cx
+        .update(|cx| window::open_main_window(cx, |content, _| content))
+        .expect("the main window opens");
+    let mut vcx = VisualTestContext::from_window(handle.into(), cx);
+    vcx.run_until_parked();
+    let drive = TableDrive {
+        context: TestPorts::CONTEXT.to_owned(),
+        scroll: 0,
+        also: vec!["no-such-context".to_owned()],
+    };
+    vcx.update(|_, cx| start(drive, handle.into(), cx));
+    vcx.executor().advance_clock(Duration::from_secs(1));
+    vcx.run_until_parked();
+    assert!(pods_table(&mut vcx).is_none());
+    let state = vcx.update(|_, cx| AppState::global(cx));
+    assert!(
+        state.services().sessions.sessions().is_empty(),
+        "the main context was not connected either: the run is mis-specified"
     );
 }

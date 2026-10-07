@@ -9,7 +9,6 @@ use gpui::{
     Context, InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
     Styled as _, Window, div, px,
 };
-use jiff::Timestamp;
 use oxikube_app::ColumnId;
 use oxikube_keymap::KeyContextual as _;
 use oxikube_ui::button::{Button, ButtonVariants as _};
@@ -30,8 +29,9 @@ impl Render for ResourceTable {
         // Before the key context below: `Editing` turns the bare-key bindings off.
         self.editing = self.filter_focused(window, cx);
         let colors = ToneColors::current(cx);
+        let now = self.now();
         let (rows, selected, state) = self.table.update_quiet(cx, |d| {
-            d.now = Timestamp::now();
+            d.now = now;
             d.colors = Some(colors);
             d.cells.begin_frame(d.now, &d.provider);
             (d.rows.len(), d.selection.len(), d.table_state())

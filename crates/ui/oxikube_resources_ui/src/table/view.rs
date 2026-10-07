@@ -33,8 +33,9 @@ use super::states::{StateLabels, scope_label};
 use crate::actions::{ActionSource, ResourceActions};
 use crate::filter::{FilterBar, FilterWriter};
 
-/// How often ages are redrawn while the table is shown.
-const TICK: Duration = Duration::from_secs(1);
+/// How often the table checks whether a visible age moved while it is shown. The check redraws
+/// only when one did (see [`CellCache::ages_moved`]), so a still table is not redrawn at this rate.
+pub(super) const TICK: Duration = Duration::from_secs(1);
 
 /// What a [`ResourceTable`] is built over. Cheap to clone.
 #[derive(Clone)]
@@ -125,6 +126,9 @@ pub struct ResourceTable {
     /// How many times the view rendered (coalescing tests).
     #[cfg(test)]
     pub(super) renders: usize,
+    /// Added to the clock (age tests).
+    #[cfg(test)]
+    pub(super) skew: jiff::SignedDuration,
 }
 
 impl EventEmitter<ItemEvent> for ResourceTable {}
@@ -197,7 +201,7 @@ impl ResourceTable {
             loop {
                 cx.background_executor().timer(TICK).await;
                 let alive = this.update(cx, |view, cx| {
-                    if view.active {
+                    if view.active && view.ages_moved(cx) {
                         cx.notify();
                     }
                 });
@@ -239,6 +243,8 @@ impl ResourceTable {
             _subscriptions: vec![events, refocus, filter_events],
             #[cfg(test)]
             renders: 0,
+            #[cfg(test)]
+            skew: jiff::SignedDuration::ZERO,
         };
         this.load_prefs(cx);
         this.load_filter(window, cx);
@@ -259,6 +265,25 @@ impl ResourceTable {
     /// The kind's type.
     pub fn gvk(&self) -> &Gvk {
         &self.kind.gvk
+    }
+
+    /// Whether a cell on screen would read differently now (an age crossed into its next unit).
+    fn ages_moved(&self, cx: &App) -> bool {
+        let now = self.now();
+        self.table
+            .read(cx, |d| d.cells.ages_moved(&*d.provider, now))
+    }
+
+    /// "Now" for ages: the clock (tests skew it to move ages without waiting).
+    pub(super) fn now(&self) -> Timestamp {
+        #[cfg(test)]
+        {
+            Timestamp::now() + self.skew
+        }
+        #[cfg(not(test))]
+        {
+            Timestamp::now()
+        }
     }
 
     /// The filter bar (E07-S04): its text, error and count.

@@ -814,7 +814,9 @@ that meets gpui-component's table. Selection is kept by object identity, so delt
 keep it; column order, visibility, widths and sort persist per kind in the `StatePort`
 (`table.columns.<group>/<Kind>`). Cells reach the table as `oxikube_ui::table::TextCell`s (the
 table draws them itself, the ellipsis only where the text overflows) from a per-frame `CellCache`
-(E07-S09). The store's `StoreProbe` counts every applied watch event as `oxikube --perf` feed
+(E07-S09). A once-a-second tick redraws the table only when `CellCache::ages_moved` finds a drawn
+cell that would read differently now (an age crossing into its next unit), so a still table costs no
+frames (E07-F512). The store's `StoreProbe` counts every applied watch event as `oxikube --perf` feed
 throughput, and `oxikube --perf --perf-table <context>` / `cargo xtask perf scroll-10k` measure the
 whole path at 10 000 pods (docs/PERFORMANCE.md "Resource table").
 

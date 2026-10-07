@@ -18,6 +18,8 @@ Options:
   --perf-table <CONTEXT>  Connect CONTEXT, open its pods table and scroll it while recording
                           (implies --perf; docs/PERFORMANCE.md \"Resource table\")
   --perf-scroll <ROWS>    Rows --perf-table scrolls per frame (default 3; 0: keep it still)
+  --perf-also <CONTEXT>   With --perf-table: also connect CONTEXT and open its pods table, left
+                          still, before the main one (repeatable: measures several clusters)
   --perf-logs <CONTEXT>/<NAMESPACE>/<POD>
                           Connect CONTEXT and open the pod's log view while recording
                           (implies --perf; docs/PERFORMANCE.md \"Log viewer\")
@@ -54,6 +56,7 @@ pub struct Args {
     pub perf_no_probe: bool,
     pub perf_table: Option<String>,
     pub perf_scroll: Option<usize>,
+    pub perf_also: Vec<String>,
     pub perf_logs: Option<String>,
     pub perf_logs_wrap: bool,
     pub perf_logs_paused: bool,
@@ -125,6 +128,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
                     .map_err(|_| format!("--perf-scroll: `{v}` is not a number of rows"))?;
                 out.perf_scroll = Some(rows);
             }
+            "--perf-also" => out.perf_also.push(value("--perf-also")?),
             "--perf-logs" => {
                 out.perf = true;
                 out.perf_logs = Some(value("--perf-logs")?);
@@ -145,6 +149,9 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
     }
     if out.perf_scroll.is_some() && out.perf_table.is_none() {
         return Err("--perf-scroll only applies to --perf-table".into());
+    }
+    if !out.perf_also.is_empty() && out.perf_table.is_none() {
+        return Err("--perf-also only applies to --perf-table".into());
     }
     if (out.perf_logs_wrap || out.perf_logs_paused || out.perf_logs_workload)
         && out.perf_logs.is_none()
@@ -197,6 +204,26 @@ mod tests {
     }
 
     #[test]
+    fn perf_also_adds_contexts_to_the_table_run() {
+        let a = run(&[
+            "--perf-table",
+            "a",
+            "--perf-also",
+            "b",
+            "--perf-also=c",
+            "--perf-scroll=0",
+        ])
+        .unwrap();
+        assert_eq!(a.perf_also, ["b", "c"]);
+        assert!(
+            run(&["--perf-also", "b"])
+                .unwrap_err()
+                .contains("--perf-table")
+        );
+        assert!(run(&["--perf-table", "a", "--perf-also"]).is_err());
+    }
+
+    #[test]
     fn scenario_flags() {
         let a = run(&[
             "--perf-scenario",
@@ -232,6 +259,7 @@ mod tests {
                 .contains("number of rows")
         );
         assert!(USAGE.contains("--perf-table"));
+        assert!(USAGE.contains("--perf-also"));
     }
 
     #[test]
