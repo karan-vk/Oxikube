@@ -27,7 +27,7 @@ const MAX_ROWS: usize = 1024;
 /// One row's cells, by column.
 struct RowCells {
     /// The object the cells were read from (kept so its address cannot be reused meanwhile).
-    _object: Arc<StoreObject>,
+    object: Arc<StoreObject>,
     cells: Vec<(ColumnId, SharedString, Tone)>,
     /// The frame that last drew this row.
     frame: u64,
@@ -83,7 +83,7 @@ impl CellCache {
             .rows
             .entry(address(object))
             .or_insert_with(|| RowCells {
-                _object: object.clone(),
+                object: object.clone(),
                 cells: Vec::new(),
                 frame,
             });
@@ -113,7 +113,7 @@ impl CellCache {
             .filter(|row| row.frame == self.frame)
             .any(|row| {
                 row.cells.iter().any(|(column, text, tone)| {
-                    let cell = provider.cell(&row._object, column, now);
+                    let cell = provider.cell(&row.object, column, now);
                     cell.display() != text.as_ref() || cell.tone() != *tone
                 })
             })

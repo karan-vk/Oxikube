@@ -18,7 +18,7 @@ use gpui::{Context, Subscription, WeakFocusHandle, Window};
 
 /// Parks the window's focus while it is inactive, for as long as the returned subscription
 /// lives. Install it once per window, from the view that owns the window's content.
-pub fn follow<V: 'static>(window: &mut Window, cx: &mut Context<V>) -> Subscription {
+pub(super) fn follow<V: 'static>(window: &mut Window, cx: &mut Context<V>) -> Subscription {
     let parked: Rc<RefCell<Option<WeakFocusHandle>>> = Rc::default();
     cx.observe_window_activation(window, move |_, window, cx| {
         if window.is_window_active() {

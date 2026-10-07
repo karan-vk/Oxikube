@@ -9,7 +9,7 @@
 //! - [`open_main_window_mounted`]: the same, with a mount hook that fills the new window before
 //!   its first frame (the binary puts the catalog home, the hotbar and the cluster tabs there,
 //!   E07-S00). The app opens its first window this way.
-//! - [`background`]: an inactive window parks its focus so no caret blinks in the background.
+//! - `background`: an inactive window parks its focus so no caret blinks in the background.
 //! - [`options`]: the per-platform `WindowOptions` and the application id.
 //! - [`menus`]: the macOS app menu and its actions.
 //!
@@ -18,7 +18,7 @@
 //! or the network on the UI thread (the layout is read through the async `StatePort`), so the
 //! first frame does not wait on I/O (docs/PERFORMANCE.md, cold start).
 
-pub mod background;
+mod background;
 pub mod menus;
 pub mod options;
 mod view;
