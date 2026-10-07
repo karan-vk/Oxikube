@@ -22,7 +22,9 @@
 //!    following the settings, and the window's log views (E08-S02): "View Logs" on a pod's row
 //!    (`pod::ViewLogs`) opens its log as a tab of the cluster tab.
 //! 8. the opener of terminal links (E09-S05): `terminal::OpenLink` validates a link off the UI
-//!    thread and this window opens it (browser or system opener).
+//!    thread and this window opens it (browser or system opener); and the terminal's copy / paste
+//!    commands (E09-S06): `terminal::Copy` / `terminal::Paste` are dispatched to the window's
+//!    focused terminal.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -53,6 +55,7 @@ use oxikube_resources_ui::table::ResourceTableDeps;
 use oxikube_resources_ui::{
     ResourceCommandSink, ResourceViews, ResourceViewsDeps, ResourceViewsSlot,
 };
+use oxikube_terminal::input::{TerminalInputCommand, TerminalInputSink};
 use oxikube_terminal::open_link::{LinkAction, LinkSink};
 use oxikube_workspace::cluster_tab::TabsDispatcher;
 use oxikube_workspace::window::MainView;
@@ -84,6 +87,9 @@ pub struct Wiring {
     _open_kinds: Task<()>,
     /// Opens the links `terminal::OpenLink` validated. Lives as long as the window.
     _open_links: Task<()>,
+    /// Runs `terminal::Copy` / `terminal::Paste` on the focused terminal. Lives as long as the
+    /// window.
+    _terminal_input: Task<()>,
     /// Opens the resource tables and runs the table commands.
     _resource_views: Entity<ResourceViews>,
     /// Opens the log views and runs the log commands.
@@ -151,6 +157,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (resources_sink, resources_rx) = ResourceCommandSink::channel();
     let (logs_sink, logs_rx) = oxikube_logs_ui::LogCommandSink::channel();
     let (links_sink, links_rx) = LinkSink::channel();
+    let (terminal_input_sink, terminal_input_rx) = TerminalInputSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -163,6 +170,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         resources: resources_sink,
         logs: logs_sink,
         links: links_sink,
+        terminal_input: terminal_input_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -262,6 +270,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let open_views = open_views(views_rx, view_deps, &workspace, window, cx);
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
     let open_links = open_links(links_rx, cx);
+    let terminal_input = terminal_input(terminal_input_rx, window, cx);
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -271,6 +280,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _open_views: open_views,
         _open_kinds: open_kinds,
         _open_links: open_links,
+        _terminal_input: terminal_input,
         _resource_views: resource_views,
         _log_views: log_views,
     });
@@ -305,6 +315,23 @@ fn open_links(mut links: mpsc::UnboundedReceiver<LinkAction>, cx: &mut App) -> T
     cx.spawn(async move |cx| {
         while let Some(link) = links.next().await {
             cx.update(|cx| oxikube_terminal::open_link::open(&link, cx));
+        }
+    })
+}
+
+/// Runs each `terminal::Copy` / `terminal::Paste` on the window's focused terminal, on the UI
+/// thread (a palette that asked has closed and handed focus back by then).
+fn terminal_input(
+    mut commands: mpsc::UnboundedReceiver<TerminalInputCommand>,
+    window: &mut Window,
+    cx: &mut App,
+) -> Task<()> {
+    window.spawn(cx, async move |cx| {
+        while let Some(command) = commands.next().await {
+            let ran = cx.update(|window, cx| oxikube_terminal::input::run(command, window, cx));
+            if ran.is_err() {
+                break;
+            }
         }
     })
 }

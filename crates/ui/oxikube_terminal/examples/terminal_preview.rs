@@ -1,5 +1,6 @@
-//! A window with one `TerminalElement` over a real local PTY (E09-S05), to see the element paint
-//! a live program before the terminal tab exists (E09-S07) or takes keyboard input (E09-S06).
+//! A window with one `TerminalElement` over a real local PTY (E09-S05, E09-S06), to see the element
+//! paint a live program and take keyboard, IME and mouse input before the terminal tab exists
+//! (E09-S07).
 //!
 //! `cargo run -p oxikube_terminal --example terminal_preview [-- <program> [args...]]`
 //!
@@ -8,6 +9,12 @@
 //! reflows and the program gets the new size. Drag to select, double-click a word, scroll the
 //! history with the wheel, hold cmd (ctrl on Linux) over a URL or path to see it underlined;
 //! clicking it prints the `terminal::OpenLink` command it would dispatch.
+//!
+//! Type into it: arrows, function keys, Ctrl-letters and (on Linux, or with
+//! `"terminal": {"option_as_meta": true}` elsewhere) Alt-as-meta go to the program; cmd-c / cmd-v
+//! (ctrl-shift-c / ctrl-shift-v on Linux and Windows) copy and paste; an input method composes
+//! inline at the cursor; `htop`, `vim` or `less` get mouse reports (Shift-drag selects instead).
+//! The preview has no workspace, so a multi-line paste is not asked about.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::rc::Rc;
@@ -18,6 +25,7 @@ use gpui::{
 };
 use oxikube_domain::command::Command;
 use oxikube_terminal::backend::local::{LocalPty, LocalPtyOptions};
+use oxikube_terminal::input::{Copy, Paste};
 use oxikube_terminal::{PathLinks, TerminalElement, TerminalElementState, TerminalState};
 use oxikube_workspace::CommandDispatcher;
 
@@ -82,6 +90,15 @@ fn main() {
             }
             oxikube_ui::init(cx);
             oxikube_theme::init_with_dir(None, cx);
+            let (copy, paste) = if cfg!(target_os = "macos") {
+                ("cmd-c", "cmd-v")
+            } else {
+                ("ctrl-shift-c", "ctrl-shift-v")
+            };
+            cx.bind_keys([
+                gpui::KeyBinding::new(copy, Copy, Some("Terminal")),
+                gpui::KeyBinding::new(paste, Paste, Some("Terminal")),
+            ]);
             let bounds = Bounds::centered(None, size(px(900.), px(560.)), cx);
             let opened = cx.open_window(
                 WindowOptions {

@@ -283,6 +283,8 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "view::ZoomIn" => Command::ViewZoomIn,
         "view::ZoomOut" => Command::ViewZoomOut,
         "view::ZoomReset" => Command::ViewZoomReset,
+        "terminal::Copy" => Command::TerminalCopy,
+        "terminal::Paste" => Command::TerminalPaste,
         "terminal::OpenLink" => Command::TerminalOpenLink {
             target: "https://kubernetes.io".into(),
         },

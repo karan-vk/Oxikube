@@ -1,12 +1,17 @@
 //! `#[gpui::test]` suite for `TerminalElement` (E09-S05): layout and resize, the shaped-row cache,
 //! links (cmd/ctrl-click dispatches `terminal::OpenLink`) and the mouse, on the deterministic
 //! runtime with `FakeTerminalBackend` and GPUI's test text system (cells 0.6 x font size wide,
-//! rows 1.3 x font size tall).
+//! rows 1.3 x font size tall). E09-S06 adds the keyboard, IME, clipboard and mouse reporting.
 
 mod cache;
+mod clipboard;
+mod dialog;
+mod ime;
+mod keys;
 mod layout;
 mod links;
 mod mouse;
+mod report;
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -19,6 +24,7 @@ use gpui::{
 use oxikube_domain::command::Command;
 use oxikube_ports::TerminalSize;
 use oxikube_runtime::FRAME_INTERVAL;
+use oxikube_terminal::input::PasteConfirm;
 use oxikube_terminal::{
     PathLinks, TerminalElement, TerminalElementState, TerminalFont, TerminalState,
 };
@@ -49,16 +55,19 @@ struct Host {
     font: TerminalFont,
     recorder: Rc<Recorder>,
     paths: PathLinks,
+    confirm: Option<Rc<dyn PasteConfirm>>,
 }
 
 impl Render for Host {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().child(
-            TerminalElement::new(&self.terminal, &self.state, &self.focus)
-                .font(self.font.clone())
-                .dispatcher(self.recorder.clone())
-                .path_links(self.paths.clone()),
-        )
+        let mut element = TerminalElement::new(&self.terminal, &self.state, &self.focus)
+            .font(self.font.clone())
+            .dispatcher(self.recorder.clone())
+            .path_links(self.paths.clone());
+        if let Some(confirm) = &self.confirm {
+            element = element.paste_confirm(confirm.clone());
+        }
+        div().size_full().child(element)
     }
 }
 
@@ -72,8 +81,37 @@ struct Harness {
 
 /// A `width` x `height` px window showing a terminal (started at 80 x 24) at `font_size`.
 fn harness(cx: &mut TestAppContext, width: f32, height: f32, font_size: f32) -> Harness {
+    harness_with(cx, width, height, font_size, None)
+}
+
+/// [`harness`] with a paste confirmation hook.
+fn harness_with(
+    cx: &mut TestAppContext,
+    width: f32,
+    height: f32,
+    font_size: f32,
+    confirm: Option<Rc<dyn PasteConfirm>>,
+) -> Harness {
+    harness_on(
+        cx,
+        width,
+        height,
+        font_size,
+        confirm,
+        FakeTerminalBackend::silent(),
+    )
+}
+
+/// [`harness_with`] over a given backend (an echoing one, for input-to-pixel).
+fn harness_on(
+    cx: &mut TestAppContext,
+    width: f32,
+    height: f32,
+    font_size: f32,
+    confirm: Option<Rc<dyn PasteConfirm>>,
+    backend: FakeTerminalBackend,
+) -> Harness {
     cx.update(oxikube_runtime::init_deterministic);
-    let backend = FakeTerminalBackend::silent();
     let boxed = Box::new(backend.clone());
     let terminal = cx.new(|cx| TerminalState::new(boxed, TerminalSize::new(80, 24), cx));
     let state = TerminalElementState::new();
@@ -96,6 +134,7 @@ fn harness(cx: &mut TestAppContext, width: f32, height: f32, font_size: f32) -> 
             paths: PathLinks::Local {
                 base: Some(PathBuf::from("/work")),
             },
+            confirm,
         }
     });
     window.simulate_resize(size(px(width), px(height)));
@@ -138,9 +177,32 @@ impl Harness {
         )
     }
 
+    /// Everything the process received so far, after letting the writer task run.
+    fn written(&mut self) -> Vec<u8> {
+        self.window.run_until_parked();
+        self.backend.written()
+    }
+
     fn commands(&self) -> Vec<Command> {
         self.recorder.0.borrow().clone()
     }
+}
+
+/// Installs a settings store with `user` (a JSON object of the user's settings) on top of the
+/// shipped defaults, so the terminal input settings can be changed.
+fn configure(cx: &mut TestAppContext, user: &str) {
+    use gpui::UpdateGlobal as _;
+    cx.update(|cx| {
+        if !cx.has_global::<oxikube_settings::SettingsStore>() {
+            let store = oxikube_settings::SettingsStore::new(oxikube_assets::default_settings())
+                .expect("the shipped defaults parse");
+            cx.set_global(store);
+            oxikube_terminal::init(cx);
+        }
+        oxikube_settings::SettingsStore::update_global(cx, |store, _| {
+            store.set_user_settings(user).expect("valid settings")
+        });
+    });
 }
 
 /// The platform modifier (cmd on macOS, ctrl elsewhere).

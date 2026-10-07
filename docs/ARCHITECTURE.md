@@ -353,6 +353,19 @@ crate's `README.md` for its allowed dependencies. Highlights:
   hovered link), with OSC 8 / URL / path detection on the hovered line and mouse selection and
   wheel scrolling. Module `open_link`: the `terminal::OpenLink` handler (validated off the UI
   thread, opened on it; only `http`/`https`/`mailto`/`file` URLs and existing absolute paths).
+  Module `mappings` (E09-S06, pure and table-tested, written from the xterm docs): `to_esc_str`
+  (keystroke + `KeyMode` -> `&'static str` sequence: arrows, home/end, paging, insert/delete,
+  F1-F12, tab, enter, escape, backspace, Ctrl-letter codes, `CSI 1;m X` modifier variants, DECCKM,
+  alt as meta; no allocation per keypress), `encode_paste` (bracketed paste, embedded end marker
+  stripped), `encode_mouse` (SGR / UTF-8 / legacy reports). Module `input`: what a focused element
+  attaches (`element::attach`): the `Terminal` key context, the key-down listener, `EntityInputHandler`
+  for `TerminalState` (IME composition painted inline by `element::preedit`, committed text as
+  UTF-8, `bounds_for_range` for the candidate window), `terminal::Copy` / `terminal::Paste` actions
+  (copy on select, the multi-line paste confirmation through a host-supplied `PasteConfirm`, a
+  `DialogModal` on the workspace via `WorkspacePasteConfirm`) and the bus handlers
+  (`register_input_commands`) that dispatch those actions to the focused terminal; mouse
+  reporting is `element::report`. Settings `terminal.copy_on_select`, `terminal.option_as_meta`,
+  `terminal.confirm_multiline_paste`.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's

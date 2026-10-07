@@ -15,6 +15,7 @@ use super::cache::RowCache;
 use super::layout::{DecorationKind, DecorationSpan, selected_columns};
 use super::metrics::CellMetrics;
 use super::palette::TerminalPalette;
+use super::preedit;
 use super::{Inner, TerminalElementState, TerminalFrame};
 use crate::grid::{CellFlags, CursorShape, TerminalSnapshot};
 
@@ -39,6 +40,7 @@ pub(super) fn paint(
         cache,
         palette,
         hovered,
+        metrics: font_memo,
         ..
     } = &mut *inner;
     let Some(palette) = palette.as_ref().map(|memo| &memo.palette) else {
@@ -87,6 +89,18 @@ pub(super) fn paint(
         }
     }
     paint_scroll_thumb(snapshot, bounds, window, cx);
+    if let (Some(text), Some((font, _))) = (frame.preedit.as_deref(), font_memo.as_ref()) {
+        preedit::paint(
+            text,
+            snapshot.cursor,
+            origin,
+            font,
+            metrics,
+            palette,
+            window,
+            cx,
+        );
+    }
 }
 
 /// The cursor: a block (with the glyph under it redrawn in the cell's background colour), a beam,

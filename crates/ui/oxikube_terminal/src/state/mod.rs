@@ -26,7 +26,7 @@
 //!   the scrollback lives in the grid, in memory (non-negotiable 5).
 //!
 //! The operations the element and keymap use (snapshot, resize, scroll, selection, search, input)
-//! are in `ops`.
+//! are in `ops`; typing, paste and the IME handler (E09-S06) are in [`crate::input`].
 
 mod ops;
 pub(crate) mod pump;
@@ -84,6 +84,8 @@ pub struct TerminalState {
     wake: Arc<AtomicBool>,
     exit: Option<ExitStatus>,
     last_error: Option<Arc<OxiError>>,
+    /// The input method's composition and the cursor anchor for its candidate window (E09-S06).
+    pub(crate) ime: crate::input::ime::ImeState,
     _pump: KubeTask<()>,
     _writer: KubeTask<()>,
     _drain: Task<()>,
@@ -153,6 +155,7 @@ impl TerminalState {
             wake,
             exit: None,
             last_error: None,
+            ime: Default::default(),
             _pump: pump,
             _writer: writer,
             _drain: drain,

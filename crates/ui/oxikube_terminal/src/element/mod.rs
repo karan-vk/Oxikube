@@ -19,9 +19,18 @@
 //! | `links` | OSC 8, URL and path detection on the hovered line |
 //! | `mouse` | hover, cmd/ctrl-click (dispatches `terminal::OpenLink`), selection drags, wheel scrolling |
 //!
-//! Keyboard input, IME and mouse reporting to the process are E09-S06; the view that hosts the
-//! element in a workspace tab is E09-S07.
+//! Keyboard input, IME and mouse reporting (E09-S06) are attached in the same paint:
+//!
+//! | Module | What |
+//! |---|---|
+//! | `attach` | the `Terminal` key context, the input handler (`EntityInputHandler` of the state), the key-down listener and the copy / paste actions ([`crate::input`]) |
+//! | `preedit` | the IME composition painted inline at the cursor |
+//! | `prepare` | per-frame upkeep of the state in prepaint: stale link hover, palette rebuild |
+//! | `report` | mouse reporting to the process (SGR / UTF-8 / legacy; click, drag, motion, wheel; Shift bypasses) and alternate scroll |
+//!
+//! The view that hosts the element in a workspace tab is E09-S07.
 
+mod attach;
 mod cache;
 mod hash;
 mod layout;
@@ -30,23 +39,26 @@ pub mod metrics;
 mod mouse;
 mod paint;
 pub mod palette;
+mod preedit;
+mod prepare;
+mod report;
 #[cfg(test)]
 mod tests;
 
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use gpui::{
     App, Bounds, Element, ElementId, Entity, FocusHandle, GlobalElementId, Hitbox, HitboxBehavior,
     InspectorElementId, IntoElement, LayoutId, Pixels, Point, Style, Window, relative,
 };
 use oxikube_ports::TerminalSize;
-use oxikube_theme::{ActiveTheme, ThemeTokens};
+use oxikube_theme::ActiveTheme;
 use oxikube_workspace::CommandDispatcher;
 
-use crate::grid::{SelectionSide, TermRgb, TerminalSnapshot};
+use crate::grid::{SelectionSide, TerminalSnapshot};
+use crate::input::{ImeAnchor, PasteConfirm};
 use crate::state::TerminalState;
 
 pub use cache::CacheStats;
@@ -83,7 +95,7 @@ struct Inner {
     /// The size the element last asked the terminal for.
     requested: Option<TerminalSize>,
     metrics: Option<(TerminalFont, CellMetrics)>,
-    palette: Option<PaletteMemo>,
+    palette: Option<prepare::PaletteMemo>,
     hovered: Option<TerminalLink>,
     /// The content hash of each row the hovered link is on, when it was found.
     hover_rows: Vec<(usize, u64)>,
@@ -93,13 +105,10 @@ struct Inner {
     dragging: Option<(usize, usize, SelectionSide)>,
     /// Wheel movement not yet worth a whole line.
     scroll_remainder: Pixels,
-}
-
-/// The palette and what it was built from.
-struct PaletteMemo {
-    theme: Arc<ThemeTokens>,
-    overrides: Vec<(usize, TermRgb)>,
-    palette: TerminalPalette,
+    /// The button whose press was reported to the process (mouse reporting, E09-S06).
+    reported: Option<crate::mappings::mouse::MouseButton>,
+    /// The cell the last mouse report named (a report is sent once per cell).
+    report_cell: Option<(usize, usize)>,
 }
 
 impl std::fmt::Debug for TerminalElementState {
@@ -142,6 +151,7 @@ pub struct TerminalElement {
     font: Option<TerminalFont>,
     dispatcher: Option<Rc<dyn CommandDispatcher>>,
     paths: PathLinks,
+    confirm: Option<Rc<dyn PasteConfirm>>,
 }
 
 impl TerminalElement {
@@ -159,7 +169,17 @@ impl TerminalElement {
             font: None,
             dispatcher: None,
             paths: PathLinks::Off,
+            confirm: None,
         }
+    }
+
+    /// Where a multi-line paste asks for confirmation (`terminal.confirm_multiline_paste`).
+    /// Without one the paste goes ahead unasked, so a host that wants the safety net sets it
+    /// (for example [`WorkspacePasteConfirm`](crate::input::WorkspacePasteConfirm)).
+    #[must_use]
+    pub fn paste_confirm(mut self, confirm: Rc<dyn PasteConfirm>) -> Self {
+        self.confirm = Some(confirm);
+        self
     }
 
     /// Draws with `font` instead of the theme's monospace font.
@@ -191,6 +211,8 @@ pub struct TerminalFrame {
     origin: Point<Pixels>,
     metrics: CellMetrics,
     focused: bool,
+    /// The IME composition to paint at the cursor, if one is in progress.
+    preedit: Option<String>,
 }
 
 impl IntoElement for TerminalElement {
@@ -261,13 +283,29 @@ impl Element for TerminalElement {
             .read(cx)
             .try_snapshot_into(&mut inner.snapshot)
         {
-            forget_stale_hover(&mut inner);
+            prepare::forget_stale_hover(&mut inner);
         } else {
             // The grid is busy with a parse or search slice: paint the last frame, try again.
             window.request_animation_frame();
         }
 
-        refresh_palette(&mut inner, ActiveTheme::get(cx));
+        // Tell the state where the cursor is (the IME candidate window goes there), and fetch the
+        // composition to paint. Neither notifies: nothing here changes what is painted.
+        let anchor = ImeAnchor {
+            cell: gpui::size(metrics.cell_width, metrics.line_height),
+            row: inner.snapshot.cursor.row,
+            column: inner.snapshot.cursor.column,
+        };
+        let preedit = self.terminal.update(cx, |terminal, _| {
+            if terminal.ime_anchor() != Some(anchor) {
+                terminal.set_ime_anchor(anchor);
+            }
+            terminal
+                .composition()
+                .map(|composition| composition.text.clone())
+        });
+
+        prepare::refresh_palette(&mut inner, ActiveTheme::get(cx));
         let Inner {
             snapshot,
             cache,
@@ -293,6 +331,7 @@ impl Element for TerminalElement {
             origin: bounds.origin,
             metrics,
             focused: self.focus.is_focused(window),
+            preedit,
         }
     }
 
@@ -309,41 +348,7 @@ impl Element for TerminalElement {
         window.with_content_mask(Some(gpui::ContentMask { bounds }), |window| {
             paint::paint(&self.state, frame, bounds, window, cx);
         });
+        attach::register(self, bounds, window, cx);
         mouse::register(self, frame, window);
-    }
-}
-
-/// Drops the hovered link when a row it is on shows something else (output, scrolling): the next
-/// pointer move finds it again. Detection itself never runs per frame.
-fn forget_stale_hover(inner: &mut Inner) {
-    if inner.hovered.is_none() {
-        return;
-    }
-    let snapshot = &inner.snapshot;
-    let changed = inner
-        .hover_rows
-        .iter()
-        .any(|&(row, hash)| row >= snapshot.rows || hash::row_hash(snapshot, row) != hash);
-    if changed {
-        inner.hovered = None;
-        inner.hover_cell = None;
-        inner.hover_rows.clear();
-    }
-}
-
-/// Rebuilds the palette when the theme's terminal colours or the snapshot's overrides changed.
-fn refresh_palette(inner: &mut Inner, theme: Arc<ThemeTokens>) {
-    let overrides = &inner.snapshot.color_overrides;
-    let fresh = inner.palette.as_ref().is_some_and(|memo| {
-        (Arc::ptr_eq(&memo.theme, &theme) || memo.theme.terminal == theme.terminal)
-            && memo.overrides == *overrides
-    });
-    if !fresh {
-        let palette = TerminalPalette::new(&theme.terminal).with_overrides(overrides);
-        inner.palette = Some(PaletteMemo {
-            theme,
-            overrides: overrides.clone(),
-            palette,
-        });
     }
 }

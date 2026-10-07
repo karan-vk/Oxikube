@@ -166,5 +166,16 @@
       "alt-i": "log_view::ToggleInverse",
       "alt-f": "log_view::ToggleFilterMode"
     }
+  },
+  {
+    // Terminal (E09-S06): cmd-c copies the selection, cmd-v pastes (a multi-line paste asks
+    // first, `terminal.confirm_multiline_paste`). ctrl-c is never bound: it always reaches the
+    // process as an interrupt. Every other key goes to the process (see the mapping in
+    // `oxikube_terminal::mappings`); cmd-<key> shortcuts stay the application's.
+    "context": "Terminal",
+    "bindings": {
+      "cmd-c": "terminal::Copy",
+      "cmd-v": "terminal::Paste"
+    }
   }
 ]

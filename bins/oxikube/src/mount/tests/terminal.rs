@@ -45,3 +45,35 @@ fn unsafe_or_missing_links_are_refused(cx: &mut TestAppContext) {
     assert!(!open(&mut app, "relative/path.rs"));
     assert_eq!(app.vcx.opened_url(), None, "nothing reached the platform");
 }
+
+fn run(app: &mut App, command: Command) -> bool {
+    let state = app.vcx.update(|_, cx| AppState::global(cx));
+    let bus = state.command_bus().expect("the bus").clone();
+    let outcome = block_on(bus.dispatch(command, DispatchContext::new(Initiator::Ui, "me")));
+    app.vcx.run_until_parked();
+    outcome.is_ok()
+}
+
+#[gpui::test]
+fn terminal_copy_and_paste_reach_the_window(cx: &mut TestAppContext) {
+    // E09-S06: both are queued by the bus handlers, drained by the window's `terminal_input` task
+    // and dispatched as the `terminal::Copy` / `terminal::Paste` actions (to the focused terminal;
+    // no terminal is mounted in the app yet, so a global listener stands in for it). Without the
+    // drain the bus call still succeeds, so the actions are what the test looks at.
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use oxikube_terminal::input::{Copy, Paste};
+
+    let mut app = App::start(cx, TestPorts::seeded());
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    app.vcx.update(|_, cx| {
+        let log = seen.clone();
+        cx.on_action(move |_: &Copy, _| log.borrow_mut().push("copy"));
+        let log = seen.clone();
+        cx.on_action(move |_: &Paste, _| log.borrow_mut().push("paste"));
+    });
+    assert!(run(&mut app, Command::TerminalCopy));
+    assert!(run(&mut app, Command::TerminalPaste));
+    assert_eq!(*seen.borrow(), ["copy", "paste"]);
+}

@@ -134,7 +134,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ViewZoomIn
         | Command::ViewZoomOut
         | Command::ViewZoomReset
-        | Command::TerminalOpenLink { .. } => None,
+        | Command::TerminalOpenLink { .. }
+        | Command::TerminalCopy
+        | Command::TerminalPaste => None,
     }
 }
 
