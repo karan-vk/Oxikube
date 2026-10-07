@@ -93,11 +93,6 @@ impl TerminalView {
         }
     }
 
-    /// Whether the process is still being started.
-    pub fn is_starting(&self) -> bool {
-        matches!(self.phase, Phase::Starting)
-    }
-
     /// Why the process could not start, if it could not.
     pub fn failure(&self) -> Option<&SharedString> {
         match &self.phase {
@@ -127,13 +122,8 @@ impl TerminalView {
             .unwrap_or_else(|| self.default_title.clone())
     }
 
-    /// The cluster mark drawn on the tab.
-    pub fn cluster_mark(&self) -> Option<ClusterMark> {
-        self.mark
-    }
-
     /// A new terminal running the same descriptor (a fresh process): the split of this one.
-    pub fn duplicate(&self, cx: &mut Context<Self>) -> Entity<Self> {
+    pub(super) fn duplicate(&self, cx: &mut Context<Self>) -> Entity<Self> {
         let descriptor = self.descriptor.clone();
         let services = self.services.clone();
         cx.new(|cx| Self::new(descriptor, services, cx))

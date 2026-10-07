@@ -73,34 +73,31 @@ impl TerminalViews {
     /// Applies `request` on the next turn (see the [module docs](self)).
     pub fn apply(&mut self, request: TerminalRequest, window: &mut Window, cx: &mut Context<Self>) {
         cx.defer_in(window, move |this, window, cx| match request {
-            TerminalRequest::New { cluster } => {
-                this.open_new(cluster, window, cx);
-            }
-            TerminalRequest::Split => {
-                this.split(window, cx);
-            }
-            TerminalRequest::Close => {
-                this.close_focused(window, cx);
-            }
+            TerminalRequest::New { cluster } => this.open_new(cluster, window, cx),
+            TerminalRequest::Split => this.split(window, cx),
+            TerminalRequest::Close => this.close_focused(window, cx),
         });
     }
 
     /// Opens a new local shell for `cluster` (the shown cluster when `None`): see the
-    /// [module docs](self). `None` when the cluster has no tab in this window.
-    pub fn open_new(
+    /// [module docs](self). Does nothing when the cluster has no tab in this window.
+    fn open_new(
         &mut self,
         cluster: Option<ClusterId>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Option<Entity<TerminalView>> {
+    ) {
         let cluster = cluster.or_else(|| self.deps.host.active_cluster(cx));
         let Some(cluster) = cluster else {
-            let workspace = self.deps.window_workspace.upgrade()?;
-            let view = self.build(BackendDescriptor::local(None), cx);
-            workspace.update(cx, |ws, cx| ws.open_item(view.clone(), window, cx));
-            return Some(view);
+            if let Some(workspace) = self.deps.window_workspace.upgrade() {
+                let view = self.build(BackendDescriptor::local(None), cx);
+                workspace.update(cx, |ws, cx| ws.open_item(view, window, cx));
+            }
+            return;
         };
-        let workspace = self.deps.host.workspace(&cluster, cx)?;
+        let Some(workspace) = self.deps.host.workspace(&cluster, cx) else {
+            return;
+        };
         self.deps.host.show(&cluster, window, cx);
         let namespace = self.deps.host.namespace(&cluster, cx);
         let descriptor = BackendDescriptor::local(Some(cluster.clone())).in_namespace(namespace);
@@ -116,19 +113,16 @@ impl TerminalViews {
                 cx,
             );
             if docked.is_none() {
-                ws.open_item(view.clone(), window, cx);
+                ws.open_item(view, window, cx);
             }
         });
-        Some(view)
     }
 
     /// Opens a terminal in a new pane: see the [module docs](self).
-    pub fn split(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Entity<TerminalView>> {
-        let (cluster, workspace) = self.shown_workspace(cx)?;
+    fn split(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((cluster, workspace)) = self.shown_workspace(cx) else {
+            return;
+        };
         let focused = focused_terminal(&workspace, window, cx);
         let descriptor = match &focused {
             Some(view) => view.read(cx).descriptor().clone(),
@@ -149,21 +143,14 @@ impl TerminalViews {
                         .cloned()
                 })
                 .map(|pane| pane.id());
-            ws.open_item_in_split(
-                Box::new(view.clone()),
-                pane,
-                SplitDirection::Right,
-                window,
-                cx,
-            );
+            ws.open_item_in_split(Box::new(view), pane, SplitDirection::Right, window, cx);
         });
-        Some(view)
     }
 
-    /// Closes the focused terminal, else the active pane's terminal. Returns whether one closed.
-    pub fn close_focused(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    /// Closes the focused terminal, else the active pane's terminal.
+    fn close_focused(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((_, workspace)) = self.shown_workspace(cx) else {
-            return false;
+            return;
         };
         let target = focused_terminal(&workspace, window, cx)
             .map(|view| view.entity_id())
@@ -171,10 +158,9 @@ impl TerminalViews {
                 let item = workspace.read(cx).active_item(cx)?;
                 item.downcast::<TerminalView>().map(|view| view.entity_id())
             });
-        let Some(target) = target else {
-            return false;
-        };
-        workspace.update(cx, |ws, cx| ws.close_item(target, window, cx))
+        if let Some(target) = target {
+            workspace.update(cx, |ws, cx| ws.close_item(target, window, cx));
+        }
     }
 
     /// The workspace on screen: the shown cluster's, else the window's.

@@ -33,13 +33,13 @@ mod terminal_view;
 use gpui::{App, actions};
 use oxikube_domain::command::Command;
 
-pub use commands::{TerminalRequest, TerminalViewSink, register_view_commands, request_of};
+pub use commands::{TerminalRequest, TerminalViewSink, register_view_commands};
 pub use controller::{TerminalViews, TerminalViewsDeps};
-pub use descriptor::{BackendDescriptor, DESCRIPTOR_VERSION};
+pub use descriptor::BackendDescriptor;
 pub use host::{ClusterTerminalHost, TerminalHost};
 pub use item::TERMINAL_ITEM_KIND;
 pub use launch::{Launch, LocalLauncher, TerminalLauncher};
-pub use panel::{PANEL_HINT, TerminalPanel, ensure_terminal_panel};
+pub use panel::{TerminalPanel, ensure_terminal_panel};
 pub use render::describe_exit;
 pub use services::TerminalServices;
 pub use terminal_view::TerminalView;

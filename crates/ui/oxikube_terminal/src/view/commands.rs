@@ -47,7 +47,7 @@ impl TerminalViewSink {
 }
 
 /// The request a terminal command asks for; `None` for any other command.
-pub fn request_of(command: Command) -> Option<TerminalRequest> {
+fn request_of(command: Command) -> Option<TerminalRequest> {
     match command {
         Command::TerminalNew { cluster } => Some(TerminalRequest::New { cluster }),
         Command::TerminalSplit => Some(TerminalRequest::Split),

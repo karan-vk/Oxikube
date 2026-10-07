@@ -20,7 +20,7 @@ use oxikube_workspace::{CommandDispatcher, DockPosition, Panel, PanelEvent, Work
 use super::TogglePanel;
 
 /// What the empty panel says.
-pub const PANEL_HINT: &str = "Terminals of this cluster open here with its kubeconfig, context and namespace set. Drag a \
+const PANEL_HINT: &str = "Terminals of this cluster open here with its kubeconfig, context and namespace set. Drag a \
      terminal tab to a pane, or back here to dock it.";
 
 /// The bottom-dock panel of a cluster's terminals. See the [module docs](self).
@@ -43,11 +43,6 @@ impl TerminalPanel {
             cluster,
             dispatcher,
         }
-    }
-
-    /// The cluster whose terminals the panel hosts.
-    pub fn cluster(&self) -> Option<&ClusterId> {
-        self.cluster.as_ref()
     }
 
     fn new_terminal(&mut self, cx: &mut Context<Self>) {

@@ -16,7 +16,7 @@ use crate::backend::local::resolve_shell;
 
 /// The version of the saved shape ([`BackendDescriptor::to_state`]). A saved tab of another
 /// version is not restored.
-pub const DESCRIPTOR_VERSION: u32 = 1;
+const DESCRIPTOR_VERSION: u32 = 1;
 
 /// Longest tab title, in characters; a longer process title is cut with an ellipsis.
 const MAX_TITLE_CHARS: usize = 48;
