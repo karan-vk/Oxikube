@@ -19,13 +19,6 @@ pub struct IndexChange {
     pub tested: u64,
 }
 
-impl IndexChange {
-    /// Whether the set of matches stayed as it was.
-    pub fn is_empty(&self) -> bool {
-        self.dropped_front == 0 && self.appended == 0
-    }
-}
-
 /// The matching lines of one session, by seq, oldest first. See the [module docs](super).
 #[derive(Clone, Debug)]
 pub struct MatchIndex {
@@ -43,11 +36,6 @@ impl MatchIndex {
             matches: VecDeque::new(),
             scanned_to: 0,
         }
-    }
-
-    /// The matcher the index answers for.
-    pub fn matcher(&self) -> &Arc<LogMatcher> {
-        &self.matcher
     }
 
     /// Matching lines retained.

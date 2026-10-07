@@ -120,19 +120,22 @@ impl LineWindow {
         usize::try_from(self.next_seq - self.first_seq).unwrap_or(usize::MAX)
     }
 
+    /// The carried index while the rows are its matches (filter mode).
+    fn narrowing(&self) -> Option<&MatchIndex> {
+        self.index.as_ref().filter(|_| self.narrowed)
+    }
+
     /// Lines shown: the retained ones, or the matching ones while narrowed.
     pub fn line_count(&self) -> usize {
-        match &self.index {
-            Some(index) if self.narrowed => index.len(),
-            _ => self.retained_count(),
-        }
+        self.narrowing()
+            .map_or_else(|| self.retained_count(), MatchIndex::len)
     }
 
     /// The seq of the `line`th line shown.
     fn line_at(&self, line: usize) -> Option<u64> {
-        match &self.index {
-            Some(index) if self.narrowed => index.get(line),
-            _ => (line < self.retained_count()).then(|| self.first_seq + line as u64),
+        match self.narrowing() {
+            Some(index) => index.get(line),
+            None => (line < self.retained_count()).then(|| self.first_seq + line as u64),
         }
     }
 
@@ -170,9 +173,9 @@ impl LineWindow {
 
     /// The row index of the line with `seq`, if it is shown.
     pub fn index_of(&self, seq: u64) -> Option<usize> {
-        let line = match &self.index {
-            Some(index) if self.narrowed => index.position(seq)?,
-            _ => (self.first_seq..self.next_seq)
+        let line = match self.narrowing() {
+            Some(index) => index.position(seq)?,
+            None => (self.first_seq..self.next_seq)
                 .contains(&seq)
                 .then(|| usize::try_from(seq - self.first_seq).unwrap_or(0))?,
         };
@@ -186,9 +189,9 @@ impl LineWindow {
         if count == 0 {
             return None;
         }
-        let line = match &self.index {
-            Some(index) if self.narrowed => index.rank(seq),
-            _ => usize::try_from(seq.saturating_sub(self.first_seq)).unwrap_or(usize::MAX),
+        let line = match self.narrowing() {
+            Some(index) => index.rank(seq),
+            None => usize::try_from(seq.saturating_sub(self.first_seq)).unwrap_or(usize::MAX),
         };
         Some(self.marker_rows() + line.min(count - 1))
     }
@@ -210,7 +213,7 @@ impl LineWindow {
 
     /// Whether only the matching lines are rows (filter mode).
     pub fn is_narrowed(&self) -> bool {
-        self.narrowed && self.index.is_some()
+        self.narrowing().is_some()
     }
 
     /// Carries `index` (the search's matches) from now on; `narrowed` makes its lines the rows.

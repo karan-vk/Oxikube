@@ -97,8 +97,8 @@ pub const BUDGETS: &[Budget] = &[
     ),
 ];
 
-/// A `logs-stream` frame budget (E08-S02, the search modes E08-S03): p95 <= 8 ms. macOS only, as the table's (#509): the
-/// Linux runner's software renderer says nothing about the app on a GPU.
+/// A `logs-stream` frame budget (E08-S02, the search modes E08-S03): p95 <= 8 ms. macOS only, as
+/// the table's (#509): the Linux runner's software renderer says nothing about the app on a GPU.
 const fn logs_frame(metric: &'static str, what: &'static str) -> Budget {
     Budget {
         scenario: "logs-stream",

@@ -42,8 +42,6 @@ fn inverse_keeps_the_lines_without_the_pattern() {
     let m = matcher("health", false, true);
     assert!(!m.matches("GET /healthz 200"));
     assert!(m.matches("POST /orders 201"));
-    // `contains` ignores the inverse: it is what is highlighted.
-    assert!(m.contains("GET /healthz 200"));
 }
 
 #[test]

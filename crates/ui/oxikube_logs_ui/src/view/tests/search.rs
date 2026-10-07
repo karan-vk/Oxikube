@@ -9,7 +9,7 @@ use oxikube_domain::log::LogLine;
 use oxikube_testkit::Timeline;
 
 use super::fixture::{Fx, line, lines, pod_ref};
-use crate::search::SearchMode;
+use crate::search::{SearchMode, status_text};
 
 /// `n` lines, then one more every second: `line(i)` is an error when `i % 5 == 4`.
 fn trickle(first: usize, more: usize) -> Timeline<LogLine> {
@@ -49,7 +49,7 @@ fn tick(fx: &mut Fx, seconds: u64) {
 }
 
 fn status(fx: &mut Fx, view: &gpui::Entity<crate::LogView>) -> String {
-    fx.read(view, |v| v.search_state().status_for(v.search_counts()))
+    fx.read(view, |v| status_text(v.search_state(), v.search_counts()))
 }
 
 #[gpui::test]

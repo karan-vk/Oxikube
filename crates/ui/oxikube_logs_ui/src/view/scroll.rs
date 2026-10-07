@@ -93,11 +93,8 @@ impl LogView {
         self.window.seq_near(self.top_row())
     }
 
-    /// Puts the line `seq` at the top of the screen (when it is still retained).
-    pub(crate) fn scroll_to_seq(&mut self, seq: u64) {
-        let Some(index) = self.window.index_of(seq) else {
-            return;
-        };
+    /// Puts row `index` at the top of the screen.
+    fn scroll_to_row(&mut self, index: usize) {
         if self.options.wrap {
             self.list.scroll_to(ListOffset {
                 item_ix: index,
@@ -109,20 +106,18 @@ impl LogView {
         }
     }
 
+    /// Puts the line `seq` at the top of the screen (when it is still retained).
+    pub(crate) fn scroll_to_seq(&mut self, seq: u64) {
+        if let Some(index) = self.window.index_of(seq) {
+            self.scroll_to_row(index);
+        }
+    }
+
     /// Puts the line `seq` a few rows below the top of the screen (a search match, with some of
     /// the lines before it for context). Does nothing when it is not a row.
     pub(crate) fn reveal_seq(&mut self, seq: u64) {
-        let Some(index) = self.window.index_of(seq) else {
-            return;
-        };
-        let top = index.saturating_sub(REVEAL_CONTEXT);
-        if self.options.wrap {
-            self.list.scroll_to(ListOffset {
-                item_ix: top,
-                offset_in_item: px(0.),
-            });
-        } else {
-            self.scroll.scroll_to_item_strict(top, ScrollStrategy::Top);
+        if let Some(index) = self.window.index_of(seq) {
+            self.scroll_to_row(index.saturating_sub(REVEAL_CONTEXT));
         }
     }
 
@@ -136,14 +131,7 @@ impl LogView {
         if self.follow.is_on() {
             self.follow_tail();
         } else if let Some(row) = anchor.and_then(|seq| self.window.row_near_seq(seq)) {
-            if self.options.wrap {
-                self.list.scroll_to(ListOffset {
-                    item_ix: row,
-                    offset_in_item: px(0.),
-                });
-            } else {
-                self.scroll.scroll_to_item_strict(row, ScrollStrategy::Top);
-            }
+            self.scroll_to_row(row);
         }
     }
 

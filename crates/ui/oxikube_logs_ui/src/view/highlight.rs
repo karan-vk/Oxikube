@@ -31,7 +31,8 @@ pub(super) struct LineMarks {
 impl LogView {
     /// The byte ranges of row `index`'s drawn text (without its timestamp) that the search
     /// highlights.
-    pub fn row_highlights(&self, index: usize) -> Vec<Range<usize>> {
+    #[cfg(test)]
+    pub(crate) fn row_highlights(&self, index: usize) -> Vec<Range<usize>> {
         let Some(super::window::Row::Line(seq)) = self.window.row(index) else {
             return Vec::new();
         };

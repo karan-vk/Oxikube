@@ -88,11 +88,6 @@ impl SearchState {
         state
     }
 
-    /// The words next to the field for `counts`.
-    pub fn status_for(&self, counts: super::Counts) -> String {
-        super::status_text(self, counts)
-    }
-
     /// What to keep for the next time the target is opened.
     pub fn saved(&self) -> SavedSearch {
         SavedSearch {
@@ -139,6 +134,11 @@ impl SearchState {
     /// Highlight or filter.
     pub fn mode(&self) -> SearchMode {
         self.mode
+    }
+
+    /// Whether only the matching lines are shown.
+    pub fn is_filtering(&self) -> bool {
+        self.mode == SearchMode::Filter
     }
 
     /// The pattern in effect: the last one that compiled, `None` for an empty text.

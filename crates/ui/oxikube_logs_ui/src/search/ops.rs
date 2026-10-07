@@ -9,8 +9,10 @@
 
 use gpui::{Context, Window};
 use oxikube_domain::command::Command;
+use oxikube_domain::ids::ResourceRef;
 
-use super::state::Edit;
+use super::state::{Edit, SavedSearch, SearchState};
+use super::{Counts, SearchMemory};
 use crate::LogView;
 
 impl LogView {
@@ -132,26 +134,26 @@ impl LogView {
 
     /// Where the search is kept for the session; the controller gives every view of its window
     /// the same memory.
-    pub fn set_search_memory(&mut self, memory: super::SearchMemory) {
+    pub fn set_search_memory(&mut self, memory: SearchMemory) {
         self.search.memory = Some(memory);
     }
 
     /// Puts back a search the session remembered for this target.
-    pub fn restore_search(&mut self, saved: &super::SavedSearch, cx: &mut Context<Self>) {
-        self.search.state = super::SearchState::restored(saved);
+    pub fn restore_search(&mut self, saved: &SavedSearch, cx: &mut Context<Self>) {
+        self.search.state = SearchState::restored(saved);
         self.rematch(cx);
         cx.notify();
     }
 
     /// The state of the search.
-    pub fn search_state(&self) -> &super::SearchState {
+    pub fn search_state(&self) -> &SearchState {
         &self.search.state
     }
 
     /// The numbers behind the status words.
-    pub fn search_counts(&self) -> super::Counts {
+    pub fn search_counts(&self) -> Counts {
         let index = self.window.index();
-        super::Counts {
+        Counts {
             matches: index.map_or(0, |index| index.len()),
             ordinal: self
                 .search
@@ -169,11 +171,16 @@ impl LogView {
         self.search.editing
     }
 
+    /// Sends the command `make` builds for this view's target.
+    fn request(&mut self, make: impl FnOnce(ResourceRef) -> Command, cx: &mut Context<Self>) {
+        let command = make(self.target.clone());
+        self.send(command, cx);
+    }
+
     /// Asks to open the search bar (`logs::Find`).
     pub fn request_find(&mut self, cx: &mut Context<Self>) {
-        let target = self.target.clone();
-        self.send(
-            Command::LogsFind {
+        self.request(
+            |target| Command::LogsFind {
                 target,
                 pattern: None,
             },
@@ -183,37 +190,31 @@ impl LogView {
 
     /// Asks for the next match (`logs::NextMatch`).
     pub fn request_next_match(&mut self, cx: &mut Context<Self>) {
-        let target = self.target.clone();
-        self.send(Command::LogsNextMatch { target }, cx);
+        self.request(|target| Command::LogsNextMatch { target }, cx);
     }
 
     /// Asks for the previous match (`logs::PreviousMatch`).
     pub fn request_previous_match(&mut self, cx: &mut Context<Self>) {
-        let target = self.target.clone();
-        self.send(Command::LogsPreviousMatch { target }, cx);
+        self.request(|target| Command::LogsPreviousMatch { target }, cx);
     }
 
     /// Asks to toggle case sensitivity (`logs::ToggleCase`).
     pub fn request_toggle_case(&mut self, cx: &mut Context<Self>) {
-        let target = self.target.clone();
-        self.send(Command::LogsToggleCase { target }, cx);
+        self.request(|target| Command::LogsToggleCase { target }, cx);
     }
 
     /// Asks to toggle the inverse match (`logs::ToggleInverse`).
     pub fn request_toggle_inverse(&mut self, cx: &mut Context<Self>) {
-        let target = self.target.clone();
-        self.send(Command::LogsToggleInverse { target }, cx);
+        self.request(|target| Command::LogsToggleInverse { target }, cx);
     }
 
     /// Asks to toggle between highlighting and filtering (`logs::ToggleFilterMode`).
     pub fn request_toggle_filter_mode(&mut self, cx: &mut Context<Self>) {
-        let target = self.target.clone();
-        self.send(Command::LogsToggleFilterMode { target }, cx);
+        self.request(|target| Command::LogsToggleFilterMode { target }, cx);
     }
 
     /// Asks to close the search bar (`logs::CloseSearch`).
     pub fn request_close_search(&mut self, cx: &mut Context<Self>) {
-        let target = self.target.clone();
-        self.send(Command::LogsCloseSearch { target }, cx);
+        self.request(|target| Command::LogsCloseSearch { target }, cx);
     }
 }

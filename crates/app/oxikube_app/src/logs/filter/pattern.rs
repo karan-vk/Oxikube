@@ -117,13 +117,6 @@ impl LogMatcher {
         }
     }
 
-    /// Whether `text` contains the pattern, whatever the inverse flag says.
-    pub fn contains(&self, text: &str) -> bool {
-        self.regex
-            .as_ref()
-            .is_some_and(|regex| regex.is_match(text))
-    }
-
     /// The byte ranges of the pattern's occurrences in `text` (never empty ranges), at most
     /// `limit` of them: what the viewer highlights. Empty for the empty pattern.
     pub fn spans(&self, text: &str, limit: usize) -> Vec<Range<usize>> {

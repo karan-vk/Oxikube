@@ -6,14 +6,11 @@
 //! only while it tests its chunk. The finished index is published in one update, caught up to the
 //! lines that arrived meanwhile. Until then the previous index keeps serving.
 
-use std::sync::Arc;
-
 use gpui::{AppContext as _, Context};
-use oxikube_app::logs::{LogMatcher, MatchIndex};
+use oxikube_app::logs::MatchIndex;
 use oxikube_runtime::notify_coalesced;
 
 use crate::LogView;
-use crate::search::SearchMode;
 
 /// Lines tested on the UI thread without a background job: about 0.2 ms of regex at typical
 /// line lengths.
@@ -83,9 +80,9 @@ impl LogView {
     /// renderers keep per row, keeping the line at the top of the screen where it is.
     pub(crate) fn install_index(&mut self, index: Option<MatchIndex>, cx: &mut Context<Self>) {
         self.search.scanning = false;
-        let narrowed = self.search.state.mode() == SearchMode::Filter;
         let anchor = self.top_seq();
-        self.window.set_index(index, narrowed);
+        self.window
+            .set_index(index, self.search.state.is_filtering());
         self.rows_rebuilt(anchor);
         notify_coalesced(cx);
     }
@@ -98,8 +95,7 @@ impl LogView {
             return;
         }
         let anchor = self.top_seq();
-        let narrowed = self.search.state.mode() == SearchMode::Filter;
-        self.window.set_narrowed(narrowed);
+        self.window.set_narrowed(self.search.state.is_filtering());
         self.rows_rebuilt(anchor);
         notify_coalesced(cx);
     }
@@ -108,10 +104,11 @@ impl LogView {
     pub(crate) fn reindex_empty(&mut self) {
         self.search.scan = None;
         self.search.scanning = false;
-        let matcher: Option<Arc<LogMatcher>> = self.search.state.matcher().cloned();
-        let narrowed = self.search.state.mode() == SearchMode::Filter;
-        self.window
-            .set_index(matcher.map(MatchIndex::new), narrowed);
+        let matcher = self.search.state.matcher().cloned();
+        self.window.set_index(
+            matcher.map(MatchIndex::new),
+            self.search.state.is_filtering(),
+        );
         self.search.state.set_current(None);
     }
 }

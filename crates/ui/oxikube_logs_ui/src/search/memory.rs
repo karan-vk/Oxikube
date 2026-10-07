@@ -37,14 +37,4 @@ impl SearchMemory {
     pub fn forget(&self, target: &ResourceRef) {
         self.searches.borrow_mut().remove(target);
     }
-
-    /// Targets with a remembered search.
-    pub fn len(&self) -> usize {
-        self.searches.borrow().len()
-    }
-
-    /// Whether nothing is remembered.
-    pub fn is_empty(&self) -> bool {
-        self.searches.borrow().is_empty()
-    }
 }
