@@ -1,0 +1,12 @@
+# pod <TAB> arrival (ms after the stream opened) <TAB> kubelet timestamp <TAB> text
+# api-c runs on a node whose clock is two seconds behind; api-b's clock steps back once (b3); a3, a4
+# and b2 are stamped the same instant (.700) so the tiebreak decides.
+api-a	0	2026-10-07T09:14:03.100000000Z	a1 listening on :8080
+api-a	0	2026-10-07T09:14:03.400000000Z	a2 GET /healthz 200
+api-a	150	2026-10-07T09:14:03.700000000Z	a3 GET /orders 200
+api-a	150	2026-10-07T09:14:03.700000000Z	a4 GET /orders/1 200
+api-b	90	2026-10-07T09:14:03.200000000Z	b1 connected to db
+api-b	90	2026-10-07T09:14:03.700000000Z	b2 GET /orders 200
+api-b	120	2026-10-07T09:14:03.500000000Z	b3 clock stepped back
+api-c	60	2026-10-07T09:14:01.150000000Z	c1 starting (node clock is behind)
+api-c	60	2026-10-07T09:14:01.450000000Z	c2 listening on :8080

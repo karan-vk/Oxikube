@@ -5,7 +5,10 @@ use gpui::Hsla;
 /// How many cluster tab colours a theme provides.
 pub const CLUSTER_TAB_COLORS: usize = 8;
 
-/// Kubernetes status colours and the cluster-tab palette.
+/// How many pod colours a theme provides for the multi-pod log view.
+pub const LOG_SOURCE_COLORS: usize = 10;
+
+/// Kubernetes status colours and the cluster-tab and log-source palettes.
 ///
 /// A theme file may carry an optional `oxikube` object next to `style` (keys listed in
 /// `import::table`); anything it leaves out is derived from the theme's own status colours, so
@@ -27,6 +30,11 @@ pub struct OxikubeColors {
     /// The palette a cluster tab can be coloured with, so production and staging tabs differ at
     /// a glance (default: the theme's player colours).
     pub cluster_tabs: [Hsla; CLUSTER_TAB_COLORS],
+    /// The palette the multi-pod log view colours each pod's prefix with: a pod takes the colour
+    /// its name hashes to, so it keeps it across reopens (default: the terminal's ANSI blue,
+    /// green, yellow, magenta and cyan, then their bright variants; never red, which is the error
+    /// level's).
+    pub log_sources: [Hsla; LOG_SOURCE_COLORS],
 }
 
 impl OxikubeColors {
@@ -39,6 +47,7 @@ impl OxikubeColors {
             status_terminating: color,
             status_unknown: color,
             cluster_tabs: [color; CLUSTER_TAB_COLORS],
+            log_sources: [color; LOG_SOURCE_COLORS],
         }
     }
 }

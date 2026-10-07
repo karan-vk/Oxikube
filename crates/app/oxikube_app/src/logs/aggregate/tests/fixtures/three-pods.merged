@@ -1,0 +1,11 @@
+# The merged order of three-pods.log: by server timestamp (api-c's are the oldest), equal
+# timestamps by stream (api-a, api-b, api-c), and b3 stays after b2 (a pod never reorders).
+c1 starting (node clock is behind)
+c2 listening on :8080
+a1 listening on :8080
+b1 connected to db
+a2 GET /healthz 200
+a3 GET /orders 200
+a4 GET /orders/1 200
+b2 GET /orders 200
+b3 clock stepped back

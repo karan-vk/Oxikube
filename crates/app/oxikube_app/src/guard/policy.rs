@@ -102,6 +102,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::LogsToggleFullscreen { target }
         | Command::LogsTogglePrevious { target }
         | Command::LogsToggleTimestamps { target }
+        | Command::LogsToggleSource { target, .. }
         | Command::LogsToggleWrap { target }
         | Command::LogsFind { target, .. }
         | Command::LogsNextMatch { target }
@@ -116,6 +117,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::LogsCollapseLine { target }
         | Command::WorkloadScale { target, .. }
         | Command::WorkloadRestart { target }
+        | Command::WorkloadViewLogs { target, .. }
         | Command::NodeCordon { target }
         | Command::NodeUncordon { target }
         | Command::NodeDrain { target, .. } => Some(&target.cluster),

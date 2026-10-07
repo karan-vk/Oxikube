@@ -160,6 +160,11 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "logs::ToggleAutoscroll" => Command::LogsToggleAutoscroll { target: target() },
         "logs::ToggleFullscreen" => Command::LogsToggleFullscreen { target: target() },
         "logs::TogglePrevious" => Command::LogsTogglePrevious { target: target() },
+        "logs::ToggleSource" => Command::LogsToggleSource {
+            target: target(),
+            pod: "web-0".into(),
+            container: None,
+        },
         "logs::ToggleTimestamps" => Command::LogsToggleTimestamps { target: target() },
         "logs::ToggleWrap" => Command::LogsToggleWrap { target: target() },
         "logs::CloseSearch" => Command::LogsCloseSearch { target: target() },
@@ -298,6 +303,18 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
                 "api",
             ),
             replicas: 3,
+        },
+        "workload::ViewLogs" => Command::WorkloadViewLogs {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("apps", "v1", "Deployment"),
+                "default",
+                "api",
+            ),
+            selector: None,
+            container: None,
+            follow: true,
+            tail_lines: None,
         },
         other => panic!(
             "no sample for the declared command {other}: add one to testing_posture::sample; the \

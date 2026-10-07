@@ -2,7 +2,7 @@
 
 use super::report::ImportReport;
 use super::syntax::{accents, color_at, players, syntax};
-use super::table::{OXIKUBE, cluster_tab_index, color_slot};
+use super::table::{OXIKUBE, cluster_tab_index, color_slot, log_source_index};
 use crate::appearance::Appearance;
 use crate::tokens::{ThemeTokens, derive_colors, derive_oxikube};
 use serde_json::{Map, Value};
@@ -78,6 +78,10 @@ fn apply_oxikube_block(
         } else if let Some(index) = cluster_tab_index(key) {
             if let Some(color) = color_at(value, theme, &key_path, report) {
                 tokens.oxikube.cluster_tabs[index] = color;
+            }
+        } else if let Some(index) = log_source_index(key) {
+            if let Some(color) = color_at(value, theme, &key_path, report) {
+                tokens.oxikube.log_sources[index] = color;
             }
         } else {
             tracing::debug!(theme, key, "ignoring unknown oxikube key");

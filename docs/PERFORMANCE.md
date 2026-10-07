@@ -174,7 +174,7 @@ same-runner baseline, never with the absolute budgets above.
 | `startup` | measured | the real init order to the main window's first interactive frame (E05-S13, see [Startup](#startup-cold-start-to-the-first-interactive-frame)): `first_frame_ms` (first line of `main` to the end of the update that drew the first frame), `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask), `config_load_ms` (settings + theme + keymap on the main thread), `init_<stage>_ms` (every stage of `oxikube::startup`), `state_db_open_ms` (creating and migrating the SQLite state db, off the UI thread in the app); then `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) and `rss_mib` / `peak_rss_mib` (headless resident memory after the redraws, MiB; see [Memory (RSS)](#memory-rss)) |
 | `scroll-10k` (alias `table-scroll-10k`) | measured (E07-S09, see [Resource table](#resource-table-10-000-pods-under-churn-e07-s09)) | `first_rows_ms` (table created on a warm feed to the first frame showing all 10 000 pods), `frame_ms` / `draw_ms` scrolling 3 rows a frame while the feed delivers a 10-event batch a frame, `rss_mib` / `peak_rss_mib`; fails unless every batch is counted as feed deltas and `max_notifies_per_frame` ≤ 1 |
 | `palette` | not available: needs E05-S11 #93, E11-S03 #158 | open time, filter of 2 000 entries |
-| `logs-stream` | measured (E08-S02, see [Log viewer](#log-viewer-streaming-5-000-liness-e08-s02)) | the log view streaming 5 000 lines/s after a 1 000-line tail, 120 scripted frames per mode: `frame_ms` / `draw_ms` (wrap off, following), `paused_*`, `wrap_*`, `wrap_paused_*`, `search_*` / `filter_*` (E08-S03: a regex search highlighting / filtering while it streams), `rss_mib` / `peak_rss_mib`; fails unless every mode receives the lines at that rate and `max_notifies_per_frame` ≤ 1 |
+| `logs-stream` | measured (E08-S02, see [Log viewer](#log-viewer-streaming-5-000-liness-e08-s02)) | the log view streaming 5 000 lines/s after a 1 000-line tail, 120 scripted frames per mode: `frame_ms` / `draw_ms` (wrap off, following), `paused_*`, `wrap_*`, `wrap_paused_*`, `search_*` / `filter_*` (E08-S03: a regex search highlighting / filtering while it streams), `merged_*`, `merged_wrap_*` (E08-S04: the same lines merged from 10 pods of a Deployment), `rss_mib` / `peak_rss_mib`; fails unless every mode receives the lines at that rate and `max_notifies_per_frame` ≤ 1 |
 | `editor-5mb` | not available: needs E05-S11 #93, E10-S04 #146, E10-S11 #153 | open time, typing latency |
 
 A scenario that is not available yet prints `SKIPPED` with the stories that enable it and exits 0.
@@ -622,6 +622,7 @@ second of 5 000 lines.
 Against a live stream (kind): `cargo test -p oxikube_app --features integration --test kind_smoke
 logs_search` follows a pod writing 20 lines/s into a 100-line ring and checks the index equals a
 naive scan of what the ring holds.
+
 ## Log JSON structured mode (E08-S05)
 
 A line that is a JSON object is drawn as level chip, time, message and collapsed fields; the level
@@ -657,6 +658,61 @@ The search modes of E08-S03 run over the same JSON-heavy stream with JSON mode o
 compose with the search: while narrowed, the rows are the matches that also pass the chips, and a
 delta tests only its new matches against the chips): search highlighting p95 2.12 ms, search
 filtering p95 2.26 ms (same run, headless frames as above, 8 modes, peak RSS 82 MiB).
+
+## Multi-pod aggregation (E08-S04)
+
+Budget: the lines of all the pods of a Deployment, merged, at 5 000 lines/s in total: p95 frame
+≤ 8 ms, memory bounded by `logs.buffer_lines` (one merged ring, not one per pod).
+
+How it stays inside it (`oxikube_app::logs::aggregate`): every container is read by its own task
+with the single session's batching (2 048 lines or one 32 ms tick) and hands whole batches to one
+coordinator over a bounded queue (a few batches per stream: a coordinator that falls behind pushes
+back on the connection instead of queueing lines in memory). The coordinator merges them in a
+min-heap (`merge.rs`: server timestamp, stream id, position; a line waits one 300 ms reorder
+window; the heap is capped at `logs.buffer_lines`, also while the start-up barrier holds the
+window) and commits what is due to the one ring buffer in one short critical section per flush.
+So the memory is the ring plus at most as many lines again in the merge, whatever the number of
+pods. The view is the pod's view plus a gutter per row (a hash lookup per
+visible row) and, with sources switched off, a seq index in the window.
+
+Headless (`cargo xtask perf logs-stream`, the `merged_*` modes: the same 5 000 lines/s dealt to the
+10 pods of a Deployment, merged through the aggregate session, 120 frames per mode, median of 5
+fresh processes, release-fast, M-series laptop under the load of other builds; budget 8 ms p95 on
+macOS in `xtask/src/perf/budget.rs`):
+
+| Mode | lines/s received | p50 | p95 | p99 | max |
+|---|---|---|---|---|---|
+| one pod, wrap off, following (`frame_ms`, for comparison) | 5 000 | 0.73 ms | 1.36 ms | 1.81 ms | 1.94 ms |
+| 10 pods merged, wrap off, following (`merged_frame_ms`) | 5 000 | 1.05 ms | 1.87 ms | 2.12 ms | 2.18 ms |
+| 10 pods merged, wrapped, following (`merged_wrap_frame_ms`) | 5 000 | 0.98 ms | 1.82 ms | 2.37 ms | 3.09 ms |
+
+Every mode keeps at most one coalesced notify between two frames. The merge adds the reorder
+window (300 ms) between a line being written and being shown.
+
+Throughput of the merge itself (`cargo bench -p oxikube_app --bench log_merge`, release, always-ready
+synthetic streams, virtual clock; 100-byte lines): 10 pods x 30 000 lines through a 50 000-line ring
+in 90 ms (3.3 M lines/s, 667x the budget), 20 pods x 15 000 lines in 138 ms (2.2 M lines/s), 5 pods x
+10 000 lines into a 1 000 000-line ring in 14 ms, 10 pods x 30 000 lines through a 5 000-line ring in
+58 ms (5.2 M lines/s). None of the kept lines is out of timestamp order. Memory (a counting
+allocator: the peak heap the run held; a single session through a 50 000-line ring holds 18 MB in
+`log_ingest`): 40.6 MB for 10 pods and a 50 000-line ring, 40.8 MB for 20 pods (flat in the number of
+pods), 8.4 MB for a 5 000-line ring; resident memory for the 300 000-line run goes from 3 to 53 MB.
+
+Against kind, windowed (`oxikube --perf-logs kind-oxikube/<ns>/firehose --perf-logs-workload
+--perf-duration 40`, release-fast, a Deployment of 10 busybox pods each printing 50 lines every
+100 ms): the view received about 4 900 lines/s merged (`oxikube --perf-logs` prints it every 5 s),
+RSS 168 MiB p50 / 173 MiB peak with the 50 000-line ring full. As with the single-pod runs, the
+window was not in front, so macOS drew 22 frames in the 40 s (p50 2.3 ms, p95 7.0 ms and max 8.6
+ms, the first draw included): this run shows the stream keeping up and the memory bounded, and
+does not by itself prove the 8 ms p95. The headless scenario above is the measurement of the frames.
+
+```
+kubectl --context kind-oxikube create namespace <ns>
+kubectl --context kind-oxikube -n <ns> create deployment firehose --replicas=10 \
+  --image=registry.k8s.io/e2e-test-images/busybox:1.36.1-1 -- sh -c \
+  'while true; do seq 1 50 | sed "s/^/INFO fast line /"; sleep 0.1; done'
+target/release-fast/oxikube --perf-logs kind-oxikube/<ns>/firehose --perf-logs-workload --perf-duration 40
+```
 
 ## Load fixture: `cargo xtask load-pods`
 

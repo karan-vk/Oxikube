@@ -394,6 +394,16 @@
             "null"
           ]
         },
+        "max_streams": {
+          "description": "Containers a multi-pod log (a Deployment, StatefulSet, DaemonSet, Job or Service) reads at\nonce (1 to 200). When more match, the first are read in name order and the view says how\nmany pods were left out. A change applies to open views at once: a higher value starts\nthe pods that were left out.",
+          "format": "int64",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "timestamps": {
           "description": "Show each line's server timestamp before its text (key `t` toggles it per view). A change\napplies to open views at once.",
           "type": [

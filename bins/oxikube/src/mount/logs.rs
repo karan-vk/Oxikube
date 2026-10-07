@@ -8,8 +8,9 @@
 //!
 //! [`start_views`] starts the window's [`LogViews`]: `pod::ViewLogs` (the "View Logs" row action
 //! of a pod, the palette, an agent's `k8s.pod_view_logs`) opens a log view as a tab of the pod's
-//! cluster tab, and the `logs::*` commands drive it. [`row_actions`] is the tables' row action
-//! registry with "View Logs" in it.
+//! cluster tab, `workload::ViewLogs` (the same row action on a Deployment, StatefulSet, DaemonSet,
+//! ReplicaSet, Job or Service) opens the merged log of its pods, and the `logs::*` commands drive
+//! them. [`row_actions`] is the tables' row action registry with "View Logs" in it.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -74,7 +75,7 @@ pub fn start_views(
 }
 
 /// The resource tables' row actions: the core ones (delete), the CRD list's (E07-S07) and "View
-/// Logs" on pods (E08-S02).
+/// Logs" on pods (E08-S02) and on workloads and Services (E08-S04).
 pub fn row_actions() -> RowActionRegistry {
     let mut registry = RowActionRegistry::core();
     let specs = oxikube_resources_ui::crds::crd_row_actions()

@@ -8,7 +8,7 @@
 
 use futures::StreamExt as _;
 use gpui::Context;
-use oxikube_app::logs::{LogDelta, LogFailure, LogState, LogTarget};
+use oxikube_app::logs::{LogDelta, LogFailure, LogSession, LogState, LogTarget};
 use oxikube_domain::ErrorKind;
 use oxikube_runtime::notify_coalesced;
 
@@ -30,6 +30,10 @@ impl LogView {
         self.session = None;
         self.started = true;
         self.follow.restart();
+        if self.aggregate.is_some() {
+            self.open_aggregate_stream(cx);
+            return;
+        }
         let port = self
             .deps
             .sessions
@@ -51,6 +55,12 @@ impl LogView {
             target,
             self.options.log_options(),
         );
+        self.start_session(session, cx);
+    }
+
+    /// Takes `session` as the one the view reads: the rows start over and one pump applies its
+    /// deltas (replacing, so cancelling, the previous pump).
+    pub(crate) fn start_session(&mut self, session: LogSession, cx: &mut Context<Self>) {
         let mut deltas = session.deltas();
         self.session = Some(session);
         self.reset_rows(LineWindow::new());
@@ -69,20 +79,22 @@ impl LogView {
         notify_coalesced(cx);
     }
 
-    /// Applies one delta: the rows, the renderers, autoscroll.
+    /// Applies one delta: the rows, the renderers, autoscroll. A multi-pod view that switched
+    /// sources off keeps only the lines of the sources still on.
     pub(crate) fn apply_delta(&mut self, delta: &LogDelta, cx: &mut Context<Self>) {
-        let filter = self.levels;
+        let filter = self.effective_filter();
         let change = match &self.session {
-            // The level chips may hide some lines: only the delta's candidates are tested.
+            // The level chips and the hidden sources may hide some lines: only the delta's candidates
+            // are tested.
             Some(session) => session.read(|buffer, _| {
                 self.window
                     .apply_filtered(delta, Some(buffer), |candidates| {
                         candidates
                             .into_iter()
                             .filter(|seq| {
-                                buffer
-                                    .get_seq(*seq)
-                                    .is_some_and(|entry| filter.admits(entry))
+                                buffer.get_seq(*seq).is_some_and(|entry| {
+                                    filter.as_ref().is_none_or(|filter| filter.admits(entry))
+                                })
                             })
                             .collect()
                     })
@@ -115,7 +127,7 @@ impl LogView {
 }
 
 /// The state row of a view whose cluster has no connection (or whose target names no pod).
-fn not_connected() -> LogState {
+pub(super) fn not_connected() -> LogState {
     LogState::Failed(LogFailure {
         kind: ErrorKind::Network,
         message: "the cluster is not connected".to_owned(),

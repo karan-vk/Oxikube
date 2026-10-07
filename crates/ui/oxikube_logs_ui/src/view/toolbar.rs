@@ -32,7 +32,11 @@ impl LogView {
                     .text_size(u(tokens.font.small))
                     .child(self.title()),
             )
-            .child(self.container_selector(cx))
+            .child(if self.aggregate.is_some() {
+                self.sources_menu(cx)
+            } else {
+                self.container_selector(cx)
+            })
             .child(div().w(u(px(8.))))
             .children(LogRange::ALL.map(|range| self.range_button(range, cx)))
             .child(div().flex_1())
@@ -156,11 +160,12 @@ impl LogView {
         )
     }
 
-    /// `namespace/pod`.
+    /// `namespace/pod`, or `namespace/deployment/web` for a multi-pod view.
     fn title(&self) -> String {
+        let name = self.subject();
         match &self.target.namespace {
-            Some(namespace) => format!("{namespace}/{}", self.target.name),
-            None => self.target.name.to_string(),
+            Some(namespace) => format!("{namespace}/{name}"),
+            None => name,
         }
     }
 

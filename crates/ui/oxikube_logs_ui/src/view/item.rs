@@ -39,7 +39,7 @@ impl KeyContextual for LogView {
 impl Item for LogView {
     /// `pod/container`, with `(previous)` while the previous instance is read.
     fn tab_content(&self, _: &App) -> TabContent {
-        let mut title = self.target.name.to_string();
+        let mut title = self.subject();
         if let Some(container) = &self.options.container {
             title.push('/');
             title.push_str(container);
@@ -56,6 +56,9 @@ impl Item for LogView {
 
     fn on_close(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         // Dropping the session aborts its read and closes the connection.
+        if let Some(state) = self.aggregate.as_mut() {
+            state.restart();
+        }
         self.pump = None;
         self.pod_task = None;
         self.stop_save(cx);

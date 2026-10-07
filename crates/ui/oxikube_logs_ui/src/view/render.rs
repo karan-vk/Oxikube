@@ -63,6 +63,7 @@ impl Render for LogView {
             .bg(tokens.colors.background)
             .text_color(tokens.colors.text)
             .child(self.toolbar(cx))
+            .children(self.banner(cx))
             .children(self.search_bar(window, cx))
             .children(self.level_bar(cx))
             .child(self.body(cx))

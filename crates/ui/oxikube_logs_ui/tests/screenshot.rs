@@ -10,6 +10,8 @@
 //! - `log_view_json` (E08-S05): a mixed stream of zap, logrus and pino JSON lines and plain text in
 //!   JSON mode: level chips, time and message columns, the level chips with `debug` off, and one
 //!   line expanded into its pretty-printed JSON.
+//! - `log_view_merged`: a Deployment's three pods merged by timestamp (E08-S04): the pod gutters in
+//!   the theme's `log_sources` colours, and the "pod ... added" banner (dark theme).
 //!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
 //! thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so it only builds
@@ -233,6 +235,134 @@ fn height(json: bool) -> f32 {
     if json { JSON_HEIGHT } else { HEIGHT }
 }
 
+/// The Deployment `shop/orders-api` and its pods.
+fn deployment() -> Resource {
+    Resource::from_json(json!({
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": {"name": "orders-api", "namespace": "shop"},
+        "spec": {"selector": {"matchLabels": {"app": "orders-api"}}}
+    }))
+    .expect("a deployment")
+}
+
+fn merged_pod(name: &str) -> Resource {
+    Resource::from_json(json!({
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {"name": name, "namespace": "shop", "uid": format!("uid-{name}"),
+            "labels": {"app": "orders-api"}},
+        "spec": {"containers": [{"name": "app"}]},
+        "status": {"phase": "Running", "containerStatuses": [
+            {"name": "app", "state": {"running": {}}}
+        ]}
+    }))
+    .expect("a pod")
+}
+
+/// Pods of the merged screenshot, in name order.
+const MERGED_PODS: [&str; 3] = [
+    "orders-api-7c9d4b5f6-4kx2p",
+    "orders-api-7c9d4b5f6-9mq7z",
+    "orders-api-7c9d4b5f6-xl5tw",
+];
+
+/// The merged log: the `log()` lines dealt to the three pods in turn, with the stamps of
+/// `log()` (so the merge interleaves them back into the story).
+fn merged_logs() -> Vec<Vec<LogLine>> {
+    let mut per_pod: Vec<Vec<LogLine>> = vec![Vec::new(); MERGED_PODS.len()];
+    for (i, line) in log().into_iter().enumerate() {
+        let p = i % MERGED_PODS.len();
+        per_pod[p].push(LogLine::new(line.ts, MERGED_PODS[p], "app", line.text));
+    }
+    per_pod
+}
+
+/// Renders the merged view of the Deployment: a fourth pod joins after the first frame, so the
+/// banner says so.
+fn render_merged() -> anyhow::Result<RgbaImage> {
+    let context = ContextName::new("kind-oxikube");
+    let cluster = ClusterId::new("/home/me/.kube/config", &context);
+    let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
+    let connector = Arc::new(FakeClusterConnectorPort::new());
+    let ports = connector.ports_for(&cluster);
+    ports.resources.insert(deployment());
+    oxikube_testkit::ScriptedFeed::new()
+        .initial(MERGED_PODS.iter().map(|name| merged_pod(name)))
+        .add(1, merged_pod("orders-api-7c9d4b5f6-zz8vb"))
+        .install(&ports.resources);
+    for lines in merged_logs() {
+        ports
+            .logs
+            .script()
+            .stream_logs
+            .push_ok(Timeline::immediate(lines).keep_open());
+    }
+    ports
+        .logs
+        .script()
+        .stream_logs
+        .push_ok(Timeline::new().keep_open());
+    let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry]));
+    let sessions =
+        ClusterSessionManager::new(connector, source, Arc::new(FakeClockPort::default()));
+    futures::executor::block_on(sessions.connect(&cluster)).expect("connect");
+    let target = ResourceRef::namespaced(
+        cluster,
+        Gvk::new("apps", "v1", "Deployment"),
+        "shop",
+        "orders-api",
+    );
+
+    let log_clock = ports.logs.clock().clone();
+    let mut cx = headless();
+    let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |_, cx| {
+        oxikube_ui::init(cx);
+        oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
+        // The pods' colours come from the theme's palette.
+        let theme = oxikube_theme::ThemeTokens::fallback(oxikube_theme::Appearance::Dark).clone();
+        cx.set_global(oxikube_theme::ActiveTheme(Arc::new(theme)));
+        oxikube_runtime::init_deterministic(cx);
+        cx.set_reduce_motion(true);
+        let service = Arc::new(LogService::new(
+            log_runtime(log_clock.clone(), cx),
+            LogConfig::default(),
+        ));
+        let deps = LogViewDeps {
+            service,
+            sessions,
+            dispatcher: Rc::new(Ignore),
+            fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
+        };
+        cx.new(|cx| {
+            LogView::workload(
+                target,
+                oxikube_logs_ui::view::ViewOptions::default(),
+                deps,
+                cx,
+            )
+        })
+    })?;
+    cx.run_until_parked();
+    // The start-up barrier and the 300 ms reorder window, then the fourth pod's tick.
+    for _ in 0..40 {
+        log_clock.advance(std::time::Duration::from_millis(20));
+        cx.run_until_parked();
+    }
+    ports.resources.clock().advance(oxikube_testkit::TICK);
+    cx.run_until_parked();
+    cx.advance_clock(std::time::Duration::from_millis(50));
+    cx.run_until_parked();
+    cx.update_window(window.into(), |view, _, cx| {
+        let view = view.downcast::<LogView>().expect("the root view");
+        view.update(cx, |view, cx| view.toggle_timestamps(cx));
+    })?;
+    cx.run_until_parked();
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;
+    cx.run_until_parked();
+    cx.capture_screenshot(window.into())
+}
+
 /// Checks `image` against the golden `name`.
 fn check(name: &str, json: bool, image: RgbaImage) -> anyhow::Result<()> {
     let scale = HEADLESS_SCALE_FACTOR;
@@ -287,6 +417,7 @@ fn main() -> ExitCode {
         .and_then(|image| check("log_view_filter", false, image)),
         render_with(false, true, false, false, None, true)
             .and_then(|image| check("log_view_selection_marks", false, image)),
+        render_merged().and_then(|image| check("log_view_merged", false, image)),
     ];
     let mut failed = false;
     for result in results {

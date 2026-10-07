@@ -7,7 +7,8 @@
 //!   "default_tail": 1000,
 //!   "wrap": false,
 //!   "timestamps": false,
-//!   "json_auto_detect": true
+//!   "json_auto_detect": true,
+//!   "max_streams": 20
 //! }
 //! ```
 //!
@@ -23,6 +24,7 @@
 //! |---|---|
 //! | `buffer_lines` | at once to every open session ([`follow_settings`](crate::follow_settings)) |
 //! | `wrap`, `timestamps`, `json_auto_detect` | at once to the open views, without reopening the stream |
+//! | `max_streams` | at once to the open multi-pod views (a higher value starts the pods that were left out) |
 //! | `default_tail` | to the views opened afterwards (changing it must not reopen what is being read) |
 //!
 //! k9s's `logger` keys that Oxikube's viewer does not have (`sinceSeconds` as a setting,
@@ -34,7 +36,9 @@ mod clamp;
 mod tests;
 
 use gpui::App;
-use oxikube_app::logs::{DEFAULT_BUFFER_LINES, MAX_BUFFER_LINES, MIN_BUFFER_LINES};
+use oxikube_app::logs::{
+    DEFAULT_BUFFER_LINES, DEFAULT_MAX_STREAMS, MAX_BUFFER_LINES, MAX_MAX_STREAMS, MIN_BUFFER_LINES,
+};
 use oxikube_domain::ids::ClusterId;
 use oxikube_settings::{Settings, SettingsLocation, SettingsStore};
 use schemars::JsonSchema;
@@ -74,6 +78,13 @@ pub struct LogsContent {
     /// as they are. A change applies to open views at once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub json_auto_detect: Option<bool>,
+    /// Containers a multi-pod log (a Deployment, StatefulSet, DaemonSet, Job or Service) reads at
+    /// once (1 to 200). When more match, the first are read in name order and the view says how
+    /// many pods were left out. A change applies to open views at once: a higher value starts
+    /// the pods that were left out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 1, max = 200))]
+    pub max_streams: Option<i64>,
 }
 
 /// The resolved `logs` settings.
@@ -89,6 +100,8 @@ pub struct LogsSettings {
     pub timestamps: bool,
     /// JSON mode: render JSON-object lines as columns with expandable fields (E08-S05).
     pub json_auto_detect: bool,
+    /// Containers a multi-pod log reads at once, already clamped (E08-S04).
+    pub max_streams: usize,
 }
 
 impl Settings for LogsSettings {
@@ -114,6 +127,13 @@ impl Settings for LogsSettings {
             wrap: content.wrap.unwrap_or(false),
             timestamps: content.timestamps.unwrap_or(false),
             json_auto_detect: content.json_auto_detect.unwrap_or(true),
+            max_streams: clamp(
+                "logs.max_streams",
+                content.max_streams,
+                DEFAULT_MAX_STREAMS as i64,
+                1,
+                MAX_MAX_STREAMS as i64,
+            ) as usize,
         }
     }
 }

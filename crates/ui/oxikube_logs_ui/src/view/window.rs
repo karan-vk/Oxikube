@@ -163,7 +163,8 @@ impl LineWindow {
         }
     }
 
-    /// Whether the level chips hide some lines (the rows are the lines that pass them).
+    /// Whether the level chips or the hidden sources of a multi-pod view (E08-S04) hide some lines
+    /// (the rows are the lines that pass them).
     pub fn is_level_filtered(&self) -> bool {
         self.visible.is_some()
     }

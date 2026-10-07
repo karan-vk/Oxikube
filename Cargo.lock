@@ -5931,6 +5931,7 @@ dependencies = [
  "oxikube_runtime",
  "oxikube_settings",
  "oxikube_testkit",
+ "oxikube_theme",
  "oxikube_ui",
  "oxikube_workspace",
  "parking_lot",

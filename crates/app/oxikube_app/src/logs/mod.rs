@@ -19,7 +19,8 @@
 //! | saving and copying lines: the line format, chunked reads, the write | [`export`] |
 //! | JSON structured lines: parsers, field names, normalised levels and times | [`parse`] |
 //! | which levels a view shows (the level chips) | [`LevelFilter`] (`level_filter`) |
-//! | the task that reads the stream and commits batches | `driver` |
+//! | the task that reads the stream and commits batches | `driver`, `batcher` |
+//! | the logs of every pod a workload, Service or selector picks, merged by server timestamp (E08-S04) | [`AggregateSession`], [`AggregateSpec`] (`aggregate`) |
 //! | runtime, buffer bound, batching, the reconnect seam | [`LogRuntime`], [`LogConfig`], [`ReconnectPolicy`] (`options`) |
 //!
 //! # Data flow
@@ -43,6 +44,8 @@
 //! Lines are the user's data and are shown as written. The service never writes a line's text to
 //! its own logs; a `Failed` state carries the error's kind and its message, redacted.
 
+mod aggregate;
+mod batcher;
 mod bounds;
 mod delta;
 mod driver;
@@ -61,13 +64,18 @@ mod target;
 #[cfg(test)]
 mod tests;
 
+pub use aggregate::{
+    AggregateChanges, AggregatePorts, AggregateSession, AggregateSource, AggregateSpec,
+    AggregateView, HiddenSources, PodChange, PodEvent, SourceId, SourceInfo, SourceState,
+    and_selectors, is_aggregate_kind, selector_of,
+};
 pub use delta::{LogDelta, LogDeltas};
 pub use entry::LogEntry;
 pub use filter::{FilterError, IndexChange, LogFilter, LogMatcher, MatchIndex};
 pub use level_filter::LevelFilter;
 pub use options::{
-    DEFAULT_BUFFER_LINES, LogConfig, LogRuntime, MAX_BUFFER_LINES, MIN_BUFFER_LINES,
-    ReconnectPolicy, clamp_buffer_lines,
+    DEFAULT_BUFFER_LINES, DEFAULT_MAX_STREAMS, LogConfig, LogRuntime, MAX_BUFFER_LINES,
+    MAX_MAX_STREAMS, MIN_BUFFER_LINES, ReconnectPolicy, clamp_buffer_lines, clamp_max_streams,
 };
 pub use ring::LogBuffer;
 pub use service::LogService;

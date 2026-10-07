@@ -94,6 +94,31 @@ fn a_user_setting_bounds_the_service_and_hot_reloads_into_open_sessions(cx: &mut
 }
 
 #[gpui::test]
+fn the_stream_cap_of_multi_pod_logs_is_a_setting_that_hot_reloads(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    let service = app
+        .vcx
+        .update(|_, cx| AppState::global(cx).log_service().cloned())
+        .expect("the log service");
+    assert_eq!(
+        service.max_streams(),
+        oxikube_app::logs::DEFAULT_MAX_STREAMS
+    );
+    for cap in [3, 7] {
+        app.vcx.update(|_, cx| {
+            SettingsStore::update_global(cx, |store, _| {
+                store
+                    .set_user_settings(&format!(r#"{{ "logs": {{ "max_streams": {cap} }} }}"#))
+                    .expect("valid settings");
+            });
+        });
+        // The settings are followed on a background task, off the UI thread.
+        app.vcx.run_until_parked();
+        assert_eq!(service.max_streams(), cap, "followed the edit");
+    }
+}
+
+#[gpui::test]
 fn view_logs_on_a_pod_row_opens_its_log_in_the_cluster_tab(cx: &mut TestAppContext) {
     let mut app = App::start(cx, TestPorts::seeded());
     let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
@@ -154,6 +179,80 @@ fn view_logs_on_a_pod_row_opens_its_log_in_the_cluster_tab(cx: &mut TestAppConte
     assert_eq!(title.as_ref(), "web-running/app");
     let streams = ports.logs.recorded_calls();
     assert_eq!(streams.len(), 1);
+}
+
+#[gpui::test]
+fn view_logs_on_a_deployment_row_opens_the_merged_log_of_its_pods(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
+    let line = |i: i64| {
+        LogLine::new(
+            jiff::Timestamp::from_second(1_791_115_200 + i).unwrap(),
+            "web-running",
+            "app",
+            format!("merged {i}"),
+        )
+    };
+    ports
+        .logs
+        .script()
+        .stream_logs
+        .push_ok(Timeline::immediate((0..3).map(line)).keep_open());
+    app.open_deployments_table();
+
+    // The row's actions offer "View Logs" for a Deployment too (the workloads' and Services').
+    let ws = app.tab_workspace();
+    let table = app
+        .vcx
+        .update(|_, cx| ws.read(cx).items_of_type::<ResourceTable>().remove(0));
+    let (entry, targets) = app.vcx.update(|_, cx| {
+        let table = table.read(cx);
+        let entry = table
+            .action_entries(cx)
+            .into_iter()
+            .find(|entry| entry.command() == CommandId::WORKLOAD_VIEW_LOGS);
+        (entry, table.action_targets(cx))
+    });
+    let entry = entry.expect("deployments offer View Logs");
+    assert_eq!(entry.label, "View Logs");
+    assert!(entry.is_enabled());
+    app.vcx.update(|window, cx| {
+        table.update(cx, |table, cx| {
+            table.run_action(CommandId::WORKLOAD_VIEW_LOGS, targets, window, cx);
+        });
+    });
+    // The merged log shows its first lines after the start-up barrier and the reorder window
+    // (300 ms of the app's virtual clock).
+    for _ in 0..40 {
+        app.ports
+            .clock
+            .advance(std::time::Duration::from_millis(20));
+        app.vcx.run_until_parked();
+    }
+    app.tick();
+
+    let views = app
+        .vcx
+        .update(|_, cx| ws.read(cx).items_of_type::<LogView>());
+    assert_eq!(views.len(), 1, "a merged log tab opened in the cluster tab");
+    let (aggregate, lines, first, title) = app.vcx.update(|_, cx| {
+        let view = views[0].read(cx);
+        (
+            view.is_aggregate(),
+            view.line_window().line_count(),
+            view.row_text(0),
+            oxikube_workspace::Item::tab_content(view, cx).title,
+        )
+    });
+    assert!(aggregate);
+    assert_eq!(title.as_ref(), "deployment/web");
+    assert_eq!(
+        lines, 3,
+        "the deployment's pod was found by its selector and streamed"
+    );
+    assert_eq!(first.as_deref(), Some("running merged 0"));
+    let streams = ports.logs.recorded_calls();
+    assert_eq!(streams.len(), 1, "one stream: the pod's only container");
 }
 
 #[gpui::test]

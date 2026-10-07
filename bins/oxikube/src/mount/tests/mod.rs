@@ -210,6 +210,8 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::CRD_OPEN_RESOURCES, "oxikube_resources_ui"),
         (CommandId::RESOURCE_DELETE, "oxikube_app::actions"),
         (CommandId::POD_VIEW_LOGS, "oxikube_logs_ui"),
+        (CommandId::WORKLOAD_VIEW_LOGS, "oxikube_logs_ui"),
+        (CommandId::LOGS_TOGGLE_SOURCE, "oxikube_logs_ui"),
         (CommandId::LOGS_TOGGLE_WRAP, "oxikube_logs_ui"),
         (CommandId::LOGS_SET_RANGE, "oxikube_logs_ui"),
         (CommandId::LOGS_MARK, "oxikube_logs_ui"),

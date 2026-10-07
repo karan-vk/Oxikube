@@ -51,7 +51,9 @@ impl LogView {
         if before.container != self.options.container || before.previous != self.options.previous {
             cx.emit(ItemEvent::UpdateTab);
         }
-        if before.log_options() != self.options.log_options() {
+        if before.log_options() != self.options.log_options()
+            || before.selector != self.options.selector
+        {
             self.open_stream(cx);
         }
     }
@@ -122,6 +124,26 @@ impl LogView {
         let target = self.target.clone();
         let container = container.to_owned();
         self.send(Command::LogsSelectContainer { target, container }, cx);
+    }
+
+    /// Asks to switch `container` of `pod` (the whole pod when `None`) off or on in a multi-pod
+    /// view (`logs::ToggleSource`).
+    pub fn request_toggle_source(
+        &mut self,
+        pod: &str,
+        container: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let target = self.target.clone();
+        let (pod, container) = (pod.to_owned(), container.map(str::to_owned));
+        self.send(
+            Command::LogsToggleSource {
+                target,
+                pod,
+                container,
+            },
+            cx,
+        );
     }
 
     /// Asks to toggle the previous instance (`logs::TogglePrevious`).

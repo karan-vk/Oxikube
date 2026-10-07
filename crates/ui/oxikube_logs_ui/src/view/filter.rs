@@ -10,12 +10,44 @@
 //! or mode is one pass over the window's candidate lines ([`LogView::relevel`]).
 
 use gpui::Context;
-use oxikube_app::logs::{LevelFilter, LogSession};
+use oxikube_app::logs::{HiddenSources, LevelFilter, LogEntry, LogSession};
 use oxikube_domain::log::LevelChip;
 
 use super::LogView;
 
+/// What hides lines besides the search: the level chips (JSON mode) and the sources a multi-pod
+/// view switched off (E08-S04). A line is a row when it passes both.
+#[derive(Clone)]
+pub(crate) struct RowFilter {
+    levels: Option<LevelFilter>,
+    hidden: Option<HiddenSources>,
+}
+
+impl RowFilter {
+    /// Whether `entry` passes the chips and is not from a hidden source.
+    pub(crate) fn admits(&self, entry: &LogEntry) -> bool {
+        self.levels.is_none_or(|levels| levels.admits(entry))
+            && self
+                .hidden
+                .as_ref()
+                .is_none_or(|hidden| !hidden.is_hidden(&entry.pod, &entry.container))
+    }
+}
+
 impl LogView {
+    /// The lines the chips and the hidden sources take out of the rows, `None` while they hide
+    /// nothing (every line is a row).
+    pub(crate) fn effective_filter(&self) -> Option<RowFilter> {
+        let levels = self.effective_levels();
+        let hidden = self
+            .aggregate
+            .as_ref()
+            .map(|state| &state.hidden)
+            .filter(|hidden| !hidden.is_empty())
+            .cloned();
+        (levels.is_some() || hidden.is_some()).then_some(RowFilter { levels, hidden })
+    }
+
     /// The filter in effect: `Some` while JSON mode is on and a chip is off, else `None` (every
     /// line is a row).
     pub(crate) fn effective_levels(&self) -> Option<LevelFilter> {
@@ -59,7 +91,7 @@ impl LogView {
 
     /// Rebuilds which lines are rows after the filter changed, keeping the line at the top of the
     /// screen (or the first one after it, when it was hidden), or the tail when following.
-    fn refilter(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn refilter(&mut self, cx: &mut Context<Self>) {
         let anchor = self.top_seq();
         self.relevel();
         // The pane belongs to a shown structured line: raw text mode has none, and a chip may
@@ -88,7 +120,7 @@ impl LogView {
     /// renderers.
     pub(crate) fn relevel(&mut self) {
         let visible = self
-            .effective_levels()
+            .effective_filter()
             .map(|filter| admitted(self.session.as_ref(), filter, self.window.candidate_seqs()));
         self.window.set_visible(visible);
     }
@@ -98,7 +130,7 @@ impl LogView {
 /// the buffer no longer holds is not admitted).
 pub(super) fn admitted<C: FromIterator<u64> + Default>(
     session: Option<&LogSession>,
-    filter: LevelFilter,
+    filter: RowFilter,
     seqs: impl Iterator<Item = u64>,
 ) -> C {
     session.map_or_else(C::default, |session| {

@@ -19,6 +19,16 @@ pub const MIN_BUFFER_LINES: usize = 100;
 /// Most lines a buffer may be set to (memory stays bounded whatever the settings file says).
 pub const MAX_BUFFER_LINES: usize = 5_000_000;
 
+/// Streams an aggregate reads at once when the setting says nothing (`logs.max_streams`).
+pub const DEFAULT_MAX_STREAMS: usize = 20;
+/// Most streams an aggregate may be set to read at once.
+pub const MAX_MAX_STREAMS: usize = 200;
+
+/// Clamps a `logs.max_streams` value to `1..=`[`MAX_MAX_STREAMS`].
+pub fn clamp_max_streams(streams: usize) -> usize {
+    streams.clamp(1, MAX_MAX_STREAMS)
+}
+
 /// Clamps a `logs.buffer_lines` value to [`MIN_BUFFER_LINES`]..=[`MAX_BUFFER_LINES`].
 pub fn clamp_buffer_lines(lines: usize) -> usize {
     lines.clamp(MIN_BUFFER_LINES, MAX_BUFFER_LINES)
@@ -66,6 +76,16 @@ pub struct LogConfig {
     pub max_batch: usize,
     /// What a session does when its stream ends.
     pub reconnect: ReconnectPolicy,
+    /// Streams an aggregate (E08-S04) reads at once (`logs.max_streams`); the pods left out are
+    /// counted, not read. Clamped by [`clamp_max_streams`].
+    pub max_streams: usize,
+    /// How long an aggregate holds a line before it commits it, so the lines of a slower stream
+    /// can slot in before it (the merge by server timestamp). See `aggregate` in the module
+    /// docs.
+    pub reorder_window: Duration,
+    /// The longest an aggregate waits, at its start, for every stream of the first group to open
+    /// before it commits anything.
+    pub startup_wait: Duration,
 }
 
 impl Default for LogConfig {
@@ -75,6 +95,9 @@ impl Default for LogConfig {
             flush_interval: Duration::from_millis(32),
             max_batch: 2_048,
             reconnect: ReconnectPolicy::Never,
+            max_streams: DEFAULT_MAX_STREAMS,
+            reorder_window: Duration::from_millis(300),
+            startup_wait: Duration::from_secs(2),
         }
     }
 }

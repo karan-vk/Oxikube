@@ -93,6 +93,8 @@ impl CommandId {
     pub const LOGS_TOGGLE_FULLSCREEN: CommandId = CommandId::new("logs::ToggleFullscreen");
     /// `logs::TogglePrevious`: read the previous (terminated) container instance, or the current.
     pub const LOGS_TOGGLE_PREVIOUS: CommandId = CommandId::new("logs::TogglePrevious");
+    /// `logs::ToggleSource`: show or hide one pod's (or container's) lines in a multi-pod log view.
+    pub const LOGS_TOGGLE_SOURCE: CommandId = CommandId::new("logs::ToggleSource");
     /// `logs::ToggleTimestamps`: show or hide the server timestamps of a log view.
     pub const LOGS_TOGGLE_TIMESTAMPS: CommandId = CommandId::new("logs::ToggleTimestamps");
     /// `logs::ToggleWrap`: wrap a log view's long lines, or let them run off the edge.
@@ -164,6 +166,8 @@ impl CommandId {
     pub const WORKLOAD_RESTART: CommandId = CommandId::new("workload::Restart");
     /// `workload::Scale`: set a workload's replica count.
     pub const WORKLOAD_SCALE: CommandId = CommandId::new("workload::Scale");
+    /// `workload::ViewLogs`: open the merged logs of a workload's or a Service's pods.
+    pub const WORKLOAD_VIEW_LOGS: CommandId = CommandId::new("workload::ViewLogs");
 }
 
 const NONE: Capabilities = Capabilities::empty();
@@ -422,6 +426,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         Capabilities::LOGS,
     ),
     CommandMeta::read(
+        CommandId::LOGS_TOGGLE_SOURCE,
+        "Logs: Toggle Source",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::LOGS_TOGGLE_TIMESTAMPS,
         "Logs: Toggle Timestamps",
         CommandScope::Selection,
@@ -650,6 +660,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         Risk::Medium,
         NONE,
+    ),
+    CommandMeta::read(
+        CommandId::WORKLOAD_VIEW_LOGS,
+        "View Logs",
+        CommandScope::Selection,
+        Capabilities::LOGS,
     ),
 ];
 

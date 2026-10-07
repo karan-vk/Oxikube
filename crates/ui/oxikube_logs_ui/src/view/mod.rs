@@ -10,6 +10,7 @@
 //!
 //! | File | Holds |
 //! |---|---|
+//! | `aggregate` | a workload or Service as one merged log (E08-S04): pod colours and gutters, the banner, switching sources off |
 //! | `options` | [`ViewOptions`]: range (tail / head / since), container, previous, wrap, timestamps; the port's request |
 //! | `window` | [`LineWindow`] (the rows: truncated marker, lines by seq or the search's matches, state row) |
 //! | `autoscroll` | [`Follow`] (autoscroll and its "N new lines" count, by seq) |
@@ -38,6 +39,7 @@
 //! key (PERFORMANCE rule 5). Unwrapped rows draw at most [`NOWRAP_CHARS`] bytes of a line.
 
 mod actions;
+mod aggregate;
 mod autoscroll;
 mod chrome;
 mod clear;
@@ -77,7 +79,7 @@ use gpui::{
 };
 use oxikube_app::ClusterSessionManager;
 use oxikube_app::logs::export::LineFilter;
-use oxikube_app::logs::{LevelFilter, LogService, LogSession};
+use oxikube_app::logs::{AggregateSpec, LevelFilter, LogService, LogSession};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_ports::FsPort;
 use oxikube_settings::Settings as _;
@@ -91,6 +93,10 @@ pub use actions::{
     SaveVisible, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase,
     ToggleFilterMode, ToggleFullscreen, ToggleInverse, ToggleJsonMode, TogglePrevious,
     ToggleTimestamps, ToggleWrap,
+};
+pub use aggregate::{
+    AggregateState, BANNER_LINES, BANNER_SECONDS, Banner, MAX_GUTTER, Prefix, SourceChoice,
+    SourceLabels, colour_index, short_names,
 };
 pub use autoscroll::Follow;
 pub use containers::{ContainerChoice, choices_of, default_container};
@@ -171,6 +177,8 @@ pub struct LogView {
     pub(crate) _settings_subscription: Subscription,
     /// The search bar's state (E08-S03).
     pub(crate) search: Search,
+    /// Set when the view shows a workload or Service (several pods merged), not one pod.
+    pub(crate) aggregate: Option<AggregateState>,
 }
 
 impl LogView {
@@ -198,8 +206,23 @@ impl LogView {
         deps: LogViewDeps,
         cx: &mut Context<Self>,
     ) -> Self {
+        let mut view = Self::blank(target, options, deps, cx);
+        if view.options.container.is_some() {
+            view.open_stream(cx);
+        }
+        view.load_pod(cx);
+        view
+    }
+
+    /// A view that reads nothing yet.
+    fn blank(
+        target: ResourceRef,
+        options: ViewOptions,
+        deps: LogViewDeps,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let settings = LogsSettings::resolve(&target.cluster, cx);
-        let mut view = Self {
+        Self {
             target,
             deps,
             options,
@@ -228,11 +251,28 @@ impl LogView {
             settings,
             _settings_subscription: LogsSettings::observe_in(cx, Self::settings_changed),
             search: Search::default(),
-        };
-        if view.options.container.is_some() {
-            view.open_stream(cx);
+            aggregate: None,
         }
-        view.load_pod(cx);
+    }
+
+    /// A view of the logs of every pod `target` (a Deployment, StatefulSet, DaemonSet,
+    /// ReplicaSet, Job or Service) selects, merged by server timestamp, one colour per pod. The
+    /// options' `container` (when set) reads only the containers of that name and `selector`
+    /// narrows the pods. The stream opens at once on the service's runtime.
+    ///
+    /// # Panics
+    ///
+    /// When `target` is not such an object: check [`AggregateSpec::of`] first.
+    pub fn workload(
+        target: ResourceRef,
+        options: ViewOptions,
+        deps: LogViewDeps,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let spec = AggregateSpec::of(&target).expect("a workload or Service of a namespace");
+        let mut view = Self::blank(target, options, deps, cx);
+        view.aggregate = Some(AggregateState::new(spec));
+        view.open_stream(cx);
         view
     }
 
