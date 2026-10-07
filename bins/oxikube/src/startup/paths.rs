@@ -29,7 +29,7 @@ pub fn perf_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("perf")
 }
 
-/// The default `--perf` directory: [`perf_dir`] of [`data_dir`], so `OXIKUBE_DATA_DIR` isolates
+/// The default `--perf` directory: `perf_dir` of `data_dir`, so `OXIKUBE_DATA_DIR` isolates
 /// perf logs together with the logs, crash reports and state database. `None` when the OS
 /// reports no data directory.
 pub fn default_perf_dir() -> Option<PathBuf> {
