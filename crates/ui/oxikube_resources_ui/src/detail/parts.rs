@@ -72,14 +72,7 @@ pub(super) fn condition_row(
     let first = h_flex()
         .items_center()
         .gap(u(tokens.spacing.md))
-        .child(
-            truncated(
-                ("detail-condition-type", index),
-                move || format!("detail-condition-type-{index}"),
-                row.kind.clone(),
-            )
-            .flex_1(),
-        )
+        .child(truncated("detail-condition-type", index, row.kind.clone()).flex_1())
         .child(
             div()
                 .debug_selector(move || format!("detail-condition-status-{index}"))
@@ -116,17 +109,18 @@ pub(super) fn condition_row(
 }
 
 /// One line of text cut with an ellipsis where it does not fit, with the whole text as a tooltip.
-/// The caller gives it its width (`flex_1`, or a fixed one).
+/// The caller gives it its width (`flex_1`, or a fixed one). `name` and `index` make its element
+/// id and its test selector (`{name}-{index}`).
 pub(super) fn truncated(
-    id: (&'static str, usize),
-    selector: impl Fn() -> String + 'static,
+    name: &'static str,
+    index: usize,
     text: impl Into<SharedString>,
 ) -> Stateful<Div> {
     let text: SharedString = text.into();
     let tip = text.clone();
     div()
-        .id(id)
-        .debug_selector(selector)
+        .id((name, index))
+        .debug_selector(move || format!("{name}-{index}"))
         .min_w_0()
         .truncate()
         .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
@@ -147,14 +141,10 @@ pub(super) fn status_line(tokens: &Tokens, line: &StatusLine, index: usize) -> A
         .pr(u(tokens.spacing.lg))
         .py(u(px(1.)))
         .child(
-            truncated(
-                ("detail-status-key", index),
-                move || format!("detail-status-key-{index}"),
-                line.key.clone(),
-            )
-            .flex_none()
-            .w(u(px((KEY_WIDTH - indent).max(48.))))
-            .text_color(tokens.colors.text_muted),
+            truncated("detail-status-key", index, line.key.clone())
+                .flex_none()
+                .w(u(px((KEY_WIDTH - indent).max(48.))))
+                .text_color(tokens.colors.text_muted),
         )
         .children(line.value.clone().map(|value| {
             div()

@@ -16,7 +16,7 @@ impl ResourceTable {
         let before = self.cursor_row(cx);
         self.move_cursor(delta, false, cx);
         let after = self.cursor_row(cx);
-        if after.is_none() || after == before {
+        if after == before {
             return;
         }
         if let Some(key) = after.and_then(|row| self.row_key(row, cx)) {

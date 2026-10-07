@@ -133,10 +133,10 @@ impl DetailView {
         } else {
             entry.collapsed()
         };
-        let (prefix, expand_id, copy_id, key_id) = if annotation {
-            ("annotation", "expand-a", "copy-a", "key-a")
+        let (prefix, expand_id, copy_id, key_name) = if annotation {
+            ("annotation", "expand-a", "copy-a", "detail-annotation-key")
         } else {
-            ("label", "expand-l", "copy-l", "key-l")
+            ("label", "expand-l", "copy-l", "detail-label-key")
         };
         let (copy_key, expand_key) = (entry.key.clone(), entry.key.clone());
         let expandable = entry.expandable();
@@ -149,14 +149,10 @@ impl DetailView {
             .px(u(tokens.spacing.lg))
             .py(u(px(2.)))
             .child(
-                truncated(
-                    (key_id, index),
-                    move || format!("detail-{prefix}-key-{index}"),
-                    entry.key.to_string(),
-                )
-                .flex_none()
-                .w(u(px(KEY_WIDTH)))
-                .text_color(colors.text_muted),
+                truncated(key_name, index, entry.key.to_string())
+                    .flex_none()
+                    .w(u(px(KEY_WIDTH)))
+                    .text_color(colors.text_muted),
             )
             .child(
                 div()

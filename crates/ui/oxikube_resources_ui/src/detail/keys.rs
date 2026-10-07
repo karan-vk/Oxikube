@@ -9,7 +9,7 @@
 //! These are view-local moves like the table's own cursor keys and the close button; what they
 //! open (the next object) is the `resource::Open` command through the usual dispatcher.
 
-use gpui::{Action, Context, Window, actions};
+use gpui::{Action, Context, WeakEntity, Window, actions};
 use oxikube_keymap::{KeyContextBuilder, KeyContextual, contexts};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -92,7 +92,7 @@ impl DetailView {
         if self.mount != Mount::Drawer {
             return;
         }
-        if let Some(table) = self.origin.as_ref().and_then(|table| table.upgrade()) {
+        if let Some(table) = self.origin.as_ref().and_then(WeakEntity::upgrade) {
             table.update(cx, |table, cx| table.step_detail(delta, cx));
         }
     }

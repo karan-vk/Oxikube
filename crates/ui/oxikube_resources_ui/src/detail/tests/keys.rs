@@ -86,8 +86,6 @@ fn number_keys_switch_the_tabs(cx: &mut TestAppContext) {
         DetailTab::Overview,
         "a pod has no fifth tab"
     );
-    // The selection stays on the object while the tab changes, and stepping keeps the tab of the
-    // new detail at its own default.
     press(&mut d, "3");
     assert_eq!(shown_name(&mut d), "b");
 }
