@@ -10,6 +10,8 @@
 //! - `open`: open-or-activate, placing a new item's tab.
 //! - `close`: closing items, the reopen-closed stack.
 //! - `split`: moving items between panes, splitting panes, returning item tabs dropped on a dock.
+//! - `dock_items`: [dockable](crate::Item::can_dock) items in a dock (the terminal in the bottom
+//!   dock): opening one there, moving one there, which dock holds an item.
 //! - `panels`: side panels, toggling a panel or a dock.
 //! - `docks`: dock snapshots and sizes, zoom.
 //! - `layout`: queries on the dock area's layout trees.
@@ -19,6 +21,7 @@
 //! - `render`: the view and its action handlers.
 
 mod close;
+mod dock_items;
 mod docks;
 mod layers;
 mod layout;
@@ -26,6 +29,7 @@ mod open;
 mod panels;
 mod render;
 mod restore;
+mod restore_dock;
 mod split;
 
 #[cfg(test)]

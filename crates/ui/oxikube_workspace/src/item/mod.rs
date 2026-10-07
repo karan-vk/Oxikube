@@ -136,6 +136,16 @@ pub trait Item: Focusable + EventEmitter<ItemEvent> + Render + Sized {
     /// items keep their state but are not rendered.
     fn set_active(&mut self, active: bool, window: &mut Window, cx: &mut Context<Self>) {}
 
+    /// Whether the item may live in a dock as well as in the centre panes (Zed's terminal: a tab
+    /// that moves between the panes and the bottom dock). The default `false` keeps the item in
+    /// the centre: a tab of it dropped on a dock goes back to its pane. A dockable item opens in
+    /// a dock with [`Workspace::open_item_in_dock`](crate::Workspace::open_item_in_dock), moves
+    /// there with [`Workspace::move_item_to_dock`](crate::Workspace::move_item_to_dock) or a
+    /// drag, and is saved and restored with the dock's layout.
+    fn can_dock(&self, cx: &App) -> bool {
+        false
+    }
+
     /// A copy of this item for the new pane of a split. `None` (the default) moves the item into
     /// the new pane instead, when its pane has another item to keep.
     fn clone_on_split(&self, window: &mut Window, cx: &mut Context<Self>) -> Option<Entity<Self>> {

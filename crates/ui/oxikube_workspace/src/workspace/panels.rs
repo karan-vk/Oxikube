@@ -145,8 +145,9 @@ impl Workspace {
         true
     }
 
-    /// Opens or closes the dock at `position`. Opening focuses the panel it displays; closing
-    /// gives focus back to the active pane when it was inside the dock. Returns whether the dock
+    /// Opens or closes the dock at `position`. Opening focuses the panel (or
+    /// [docked item](crate::Item::can_dock)) it displays; closing gives focus back to the active
+    /// pane when it was inside the dock. Returns whether the dock
     /// is open afterwards.
     pub fn toggle_dock(
         &mut self,
@@ -164,6 +165,8 @@ impl Workspace {
         if open {
             if let Some(panel) = self.active_dock_panel(position, cx) {
                 self.focus_panel(panel, window, cx);
+            } else if let Some(item) = self.active_dock_item(position, cx) {
+                self.focus_item(item, window, cx);
             }
         } else if had_focus {
             self.focus_active_item(window, cx);
@@ -234,9 +237,14 @@ impl Workspace {
     }
 
     fn dock_has_focus(&self, placement: DockPlacement, window: &Window, cx: &gpui::App) -> bool {
-        self.panels.iter().any(|p| {
+        let panel_focused = self.panels.iter().any(|p| {
             self.placement_of(p.panel_id, cx) == Some(placement)
                 && p.handle.focus_handle(cx).contains_focused(window, cx)
-        })
+        });
+        panel_focused
+            || self.items.values().any(|open| {
+                self.placement_of(open.panel_id, cx) == Some(placement)
+                    && open.handle.focus_handle(cx).contains_focused(window, cx)
+            })
     }
 }

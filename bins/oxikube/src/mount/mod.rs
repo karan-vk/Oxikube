@@ -27,7 +27,10 @@
 //! 8. the opener of terminal links (E09-S05): `terminal::OpenLink` validates a link off the UI
 //!    thread and this window opens it (browser or system opener); and the terminal's copy / paste
 //!    commands (E09-S06): `terminal::Copy` / `terminal::Paste` are dispatched to the window's
-//!    focused terminal.
+//!    focused terminal;
+//! 9. the terminal tabs (E09-S07, [`terminal`]): the terminal services (local shells with the
+//!    cluster's environment), the terminal panel in every cluster tab's bottom dock, and the
+//!    window's `TerminalViews` behind `terminal::New` / `Split` / `Close`.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -39,6 +42,7 @@ mod describe;
 mod logs;
 mod resources;
 mod tabs;
+mod terminal;
 #[cfg(test)]
 mod tests;
 mod views;
@@ -58,8 +62,9 @@ use oxikube_resources_ui::table::ResourceTableDeps;
 use oxikube_resources_ui::{
     ResourceCommandSink, ResourceViews, ResourceViewsDeps, ResourceViewsSlot,
 };
-use oxikube_terminal::input::{TerminalInputCommand, TerminalInputSink};
-use oxikube_terminal::open_link::{LinkAction, LinkSink};
+use oxikube_terminal::input::TerminalInputSink;
+use oxikube_terminal::open_link::LinkSink;
+use oxikube_terminal::view::{TerminalViewSink, TerminalViews};
 use oxikube_workspace::cluster_tab::TabsDispatcher;
 use oxikube_workspace::window::MainView;
 use oxikube_workspace::{
@@ -97,6 +102,8 @@ pub struct Wiring {
     _resource_views: Entity<ResourceViews>,
     /// Opens the log views and runs the log commands.
     _log_views: Entity<oxikube_logs_ui::LogViews>,
+    /// Opens, splits and closes the terminals.
+    _terminal_views: Entity<TerminalViews>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -126,6 +133,15 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // What hosted agents read: `@logs` and `k8s.get_logs` (E08-S09), and the queue "Send to agent"
     // fills.
     let agent = logs::install_agent_hooks(&state, services.sessions.clone(), log_service.clone());
+
+    // Before any cluster tab opens: its layout restore rebuilds saved terminal tabs with these.
+    let terminal_services = terminal::install_services(
+        services.sessions.clone(),
+        ports.clusters.source.clone(),
+        dispatcher.clone(),
+        &workspace,
+        cx,
+    );
 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
@@ -164,6 +180,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (logs_sink, logs_rx) = oxikube_logs_ui::LogCommandSink::channel();
     let (links_sink, links_rx) = LinkSink::channel();
     let (terminal_input_sink, terminal_input_rx) = TerminalInputSink::channel();
+    let (terminal_views_sink, terminal_views_rx) = TerminalViewSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -177,6 +194,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         logs: logs_sink,
         links: links_sink,
         terminal_input: terminal_input_sink,
+        terminal_views: terminal_views_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -222,6 +240,16 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         dispatcher.clone(),
         tabs.downgrade(),
         logs_rx,
+        window,
+        cx,
+    );
+
+    let terminal_views = terminal::start_views(
+        terminal_services,
+        services.sessions.clone(),
+        tabs.downgrade(),
+        &workspace,
+        terminal_views_rx,
         window,
         cx,
     );
@@ -276,8 +304,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
 
     let open_views = open_views(views_rx, view_deps, &workspace, window, cx);
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
-    let open_links = open_links(links_rx, cx);
-    let terminal_input = terminal_input(terminal_input_rx, window, cx);
+    let open_links = terminal::open_links(links_rx, cx);
+    let terminal_input = terminal::terminal_input(terminal_input_rx, window, cx);
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -290,6 +318,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _terminal_input: terminal_input,
         _resource_views: resource_views,
         _log_views: log_views,
+        _terminal_views: terminal_views,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }
@@ -310,33 +339,6 @@ fn open_views(
             };
             let opened = cx.update(|window, cx| deps.open(&view, &workspace, window, cx));
             if opened.is_err() {
-                break;
-            }
-        }
-    })
-}
-
-/// Runs each link `terminal::OpenLink` validated (the browser for a URL, the system's opener for a
-/// plain file, the file manager for anything else), on the UI thread.
-fn open_links(mut links: mpsc::UnboundedReceiver<LinkAction>, cx: &mut App) -> Task<()> {
-    cx.spawn(async move |cx| {
-        while let Some(link) = links.next().await {
-            cx.update(|cx| oxikube_terminal::open_link::open(&link, cx));
-        }
-    })
-}
-
-/// Runs each `terminal::Copy` / `terminal::Paste` on the window's focused terminal, on the UI
-/// thread (a palette that asked has closed and handed focus back by then).
-fn terminal_input(
-    mut commands: mpsc::UnboundedReceiver<TerminalInputCommand>,
-    window: &mut Window,
-    cx: &mut App,
-) -> Task<()> {
-    window.spawn(cx, async move |cx| {
-        while let Some(command) = commands.next().await {
-            let ran = cx.update(|window, cx| oxikube_terminal::input::run(command, window, cx));
-            if ran.is_err() {
                 break;
             }
         }

@@ -78,6 +78,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceSelectAll { cluster, .. }
         | Command::TableFocusFilter { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
+        Command::TerminalNew { cluster } => cluster.as_ref(),
         Command::ResourceOpen { target }
         | Command::ResourceCopyName { target }
         | Command::ResourcePinDetail { target }
@@ -139,7 +140,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ViewZoomReset
         | Command::TerminalOpenLink { .. }
         | Command::TerminalCopy
-        | Command::TerminalPaste => None,
+        | Command::TerminalPaste
+        | Command::TerminalSplit
+        | Command::TerminalClose => None,
     }
 }
 

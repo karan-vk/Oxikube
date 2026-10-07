@@ -416,13 +416,30 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `DialogModal` on the workspace via `WorkspacePasteConfirm`) and the bus handlers
   (`register_input_commands`) that dispatch those actions to the focused terminal; mouse
   reporting is `element::report`. Settings `terminal.copy_on_select`, `terminal.option_as_meta`,
-  `terminal.confirm_multiline_paste`.
+  `terminal.confirm_multiline_paste`. Module `view` (E09-S07): `TerminalView`, the terminal as a
+  workspace `Item` that owns its `TerminalState` for the tab's life (tab title = the process's
+  title, else the program or pod name; dirty while a process runs; icon by backend kind; the
+  cluster's mark; dockable; split = a fresh process from the same descriptor; closing kills the
+  process and drops the tasks); `BackendDescriptor` (kind `local` / `exec` / `attach`, program,
+  directory, cluster and namespace, or pod and container) is the tab's whole saved state, so a
+  restored tab is a fresh process and nothing on screen or in the environment is persisted;
+  `TerminalLauncher` starts a descriptor off the UI thread (`LocalLauncher`: a local shell, with
+  the cluster's kubeconfig cut again at every start from the session's context and the catalog's
+  sources); `TerminalServices` (launcher, dispatcher, paste confirmation) is an app global so the
+  `ItemRegistry` builder rebuilds saved tabs; `TerminalPanel` anchors a cluster tab's bottom dock
+  (added by the tab setup, closed until a terminal opens; terminal tabs share its tab group and
+  move between it and the panes); `TerminalViews` applies `terminal::New` (a shell in the shown
+  cluster's bottom dock with its selected namespace, a plain shell tab in the window without
+  one), `terminal::Split` and `terminal::Close` through a `TerminalHost` (`ClusterTerminalHost`).
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's
   `DockArea` (via `oxikube_ui::dock`): centre panes of `Item`s (`open_item`, split, move, close,
   reopen-closed, drag-drop tabs, zoom) and side `Panel`s in left/bottom/right docks
-  (`toggle_panel`, `toggle_dock`); `item`, `panel`, `pane` (`PaneGroup`/`Pane` snapshots), `dock`,
+  (`toggle_panel`, `toggle_dock`); items that `can_dock` (the terminal, E09-S07) also live in a
+  dock (`open_item_in_dock`, `move_item_to_dock`, `item_dock`, dragging their tab), are saved with
+  the dock's layout and rebuilt into it on restore; any other item tab dropped on a dock goes back
+  to its pane; `item`, `panel`, `pane` (`PaneGroup`/`Pane` snapshots), `dock`,
   `closed`, `actions` (`workspace::*` actions and bindings), `test_support` (feature
   `test-support`: `TestItem`, `TestPanel`, `TestStatusItem`, `TestModal`). Module `cluster_tab`
   (E06-S04): `ClusterTab` is an `Item` that hosts a `Workspace` of its own, embedded in the window's

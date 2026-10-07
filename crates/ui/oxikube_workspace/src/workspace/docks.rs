@@ -22,6 +22,8 @@ impl Workspace {
                 .filter_map(|panel| self.panel_entity(panel))
                 .collect(),
             active_panel: self.active_dock_panel(position, cx),
+            items: self.dock_items(position, cx),
+            active_item: self.active_dock_item(position, cx),
         })
     }
 

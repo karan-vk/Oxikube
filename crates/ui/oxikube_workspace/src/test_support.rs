@@ -61,6 +61,8 @@ pub struct TestItem {
     pub deferred: bool,
     /// How many times [`Item::close_requested`] ran.
     pub close_requests: Rc<Cell<usize>>,
+    /// Whether [`Item::can_dock`] lets the item live in a dock.
+    pub dockable: bool,
 }
 
 impl TestItem {
@@ -84,6 +86,7 @@ impl TestItem {
             intercepts: false,
             deferred: false,
             close_requests: Rc::default(),
+            dockable: false,
         }
     }
 
@@ -113,6 +116,12 @@ impl TestItem {
         self
     }
 
+    /// Lets the item live in a dock ([`Item::can_dock`]); it is saved and rebuilt as dockable.
+    pub fn dockable(mut self) -> Self {
+        self.dockable = true;
+        self
+    }
+
     /// Makes [`Item::clone_on_split`] copy the item.
     pub fn cloneable(mut self) -> Self {
         self.cloneable = true;
@@ -126,11 +135,15 @@ impl TestItem {
     }
 }
 
-/// Registers the [`TestItem`] builder so closed test items can be reopened.
+/// Registers the [`TestItem`] builder so closed test items can be reopened. The state is the
+/// title, or `{ "title", "dockable": true }` for a [dockable](TestItem::dockable) item.
 pub fn register_test_item(cx: &mut App) {
     register_item::<TestItem>(cx, |state, _, cx| {
-        let title = state.as_str()?.to_owned();
-        Some(TestItem::build(title, cx))
+        if let Some(title) = state.as_str() {
+            return Some(TestItem::build(title.to_owned(), cx));
+        }
+        let title = state.get("title")?.as_str()?.to_owned();
+        Some(cx.new(|cx| TestItem::new(title, cx).dockable()))
     });
 }
 
@@ -194,6 +207,10 @@ impl Item for TestItem {
         self.active = active;
     }
 
+    fn can_dock(&self, _: &App) -> bool {
+        self.dockable
+    }
+
     fn clone_on_split(&self, _: &mut Window, cx: &mut Context<Self>) -> Option<Entity<Self>> {
         if !self.cloneable {
             return None;
@@ -207,7 +224,11 @@ impl Item for TestItem {
     }
 
     fn serialize(&self, _: &App) -> Option<serde_json::Value> {
-        Some(serde_json::Value::String(self.title.to_string()))
+        Some(if self.dockable {
+            serde_json::json!({ "title": self.title.to_string(), "dockable": true })
+        } else {
+            serde_json::Value::String(self.title.to_string())
+        })
     }
 }
 

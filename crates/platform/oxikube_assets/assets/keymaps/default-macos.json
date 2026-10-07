@@ -173,6 +173,15 @@
     }
   },
   {
+    // Terminals (E09-S07): ctrl-` shows (and focuses) the shown cluster's terminal panel in the
+    // bottom dock or hides it; ctrl-~ opens a new shell there (a plain shell tab when no cluster
+    // tab is shown).
+    "bindings": {
+      "ctrl-`": "terminal_panel::TogglePanel",
+      "ctrl-~": "terminal::New"
+    }
+  },
+  {
     // Terminal (E09-S06): cmd-c copies the selection, cmd-v pastes (a multi-line paste asks
     // first, `terminal.confirm_multiline_paste`). ctrl-c is never bound: it always reaches the
     // process as an interrupt. Every other key goes to the process (see the mapping in
@@ -180,7 +189,11 @@
     "context": "Terminal",
     "bindings": {
       "cmd-c": "terminal::Copy",
-      "cmd-v": "terminal::Paste"
+      "cmd-v": "terminal::Paste",
+      // E09-S07: cmd-w closes the focused terminal (in a pane or the bottom dock), cmd-d opens a
+      // terminal running the same shell in a new pane to the right.
+      "cmd-w": "terminal::Close",
+      "cmd-d": "terminal::Split"
     }
   }
 ]

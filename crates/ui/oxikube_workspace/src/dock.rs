@@ -17,6 +17,8 @@ pub struct Dock {
     pub(crate) size: Unscaled,
     pub(crate) panels: Vec<EntityId>,
     pub(crate) active_panel: Option<EntityId>,
+    pub(crate) items: Vec<EntityId>,
+    pub(crate) active_item: Option<EntityId>,
 }
 
 impl Dock {
@@ -44,5 +46,15 @@ impl Dock {
     /// The panel displayed by the dock's first group.
     pub fn active_panel(&self) -> Option<EntityId> {
         self.active_panel
+    }
+
+    /// The [dockable](crate::Item::can_dock) items in the dock, in tab order.
+    pub fn items(&self) -> &[EntityId] {
+        &self.items
+    }
+
+    /// The item displayed by the dock's first group, when an item (not a panel) is displayed.
+    pub fn active_item(&self) -> Option<EntityId> {
+        self.active_item
     }
 }

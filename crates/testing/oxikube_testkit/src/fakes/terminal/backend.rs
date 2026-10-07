@@ -1,5 +1,6 @@
 //! [`FakeTerminalBackend`].
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
@@ -40,6 +41,8 @@ struct State {
     live_rx: Option<mpsc::UnboundedReceiver<BackendEvent>>,
     scripted: Option<Timeline<BackendEvent>>,
     fail_writes: Option<OxiError>,
+    /// What `working_directory` reports while the session runs.
+    working_directory: Option<PathBuf>,
 }
 
 struct Inner {
@@ -60,6 +63,8 @@ struct Inner {
 /// * **Ending**: an `Exited` event (scripted or live) or [`kill`](TerminalBackend::kill)
 ///   ends the output stream and makes later writes fail with `Conflict`. `kill` is
 ///   idempotent and emits `Exited` (signal `KILL`) when no exit was seen.
+/// * **Working directory**: [`set_working_directory`](Self::set_working_directory) sets what
+///   `working_directory` reports while the session runs (`None` once it ended).
 /// * **Recording**: [`calls`](Self::calls), [`writes`](Self::writes),
 ///   [`resizes`](Self::resizes), [`kill_count`](Self::kill_count).
 ///
@@ -100,6 +105,7 @@ impl FakeTerminalBackend {
                     live_rx: Some(rx),
                     scripted: None,
                     fail_writes: None,
+                    working_directory: None,
                 }),
                 clock: Mutex::new(clock),
             }),
@@ -160,6 +166,11 @@ impl FakeTerminalBackend {
     /// succeed again).
     pub fn fail_next_write(&self, error: OxiError) {
         self.inner.state.lock().fail_writes = Some(error);
+    }
+
+    /// Makes `working_directory` report `dir` while the session runs (the shell `cd`ed there).
+    pub fn set_working_directory(&self, dir: impl Into<PathBuf>) {
+        self.inner.state.lock().working_directory = Some(dir.into());
     }
 
     fn push(&self, event: BackendEvent) -> bool {
@@ -315,5 +326,13 @@ impl TerminalBackend for FakeTerminalBackend {
             }
         }
         Ok(())
+    }
+
+    fn working_directory(&self) -> Option<PathBuf> {
+        let state = self.inner.state.lock();
+        if state.closed {
+            return None;
+        }
+        state.working_directory.clone()
     }
 }

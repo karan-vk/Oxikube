@@ -6,14 +6,14 @@
 //! items dropped. Restore rebuilds each saved item through the [`ItemRegistry`] and installs the
 //! saved split and tab tree around them, so an unknown or declined item is skipped and the rest
 //! still opens. Side panels belong to their feature crates and are added at startup, so restore
-//! applies the saved size, visibility, displayed tab and panel state to the docks that exist.
+//! applies the saved size, visibility, displayed tab and panel state to the docks that exist, and
+//! rebuilds the [dockable](crate::Item::can_dock) items saved in them (`restore_dock`).
 
 use gpui::{App, Context, Window, px};
 use oxikube_ui::{
     UiScale, Unscaled,
-    dock::{DockLayout, DockPlacement, DockState, PanelId, PanelInfo, PanelState, panel_handle},
+    dock::{DockLayout, DockState, PanelInfo, PanelState, panel_handle},
 };
-use serde_json::Value;
 
 use super::Workspace;
 use crate::{
@@ -24,10 +24,6 @@ use crate::{
         item_descriptor, prune, surviving_active,
     },
 };
-
-/// The largest share of the window a restored dock may take, so a layout saved on a big display
-/// cannot bury the centre on a small one.
-const MAX_DOCK_SHARE: f32 = 0.8;
 
 impl Workspace {
     /// The layout as it is now, ready to store. [`SerializedWorkspace::window`] is left `None`:
@@ -44,12 +40,14 @@ impl Workspace {
             if let Some(saved) = dock.take() {
                 // Stored unscaled so a layout saved at 150 % zoom restores right at 100 %.
                 let size = px(Unscaled::from_scaled(saved.size(), scale).0);
-                *dock = Some(DockState::new(
-                    saved.panel().clone(),
-                    saved.placement(),
-                    size,
-                    saved.open(),
-                ));
+                // Docked items that cannot be rebuilt are dropped; side panels stay.
+                let mut panel = saved.panel().clone();
+                let kept = prune(&mut panel, &mut |leaf| {
+                    leaf.panel_name != ITEM_PANEL_NAME || item_descriptor(leaf).is_some()
+                });
+                if kept {
+                    *dock = Some(DockState::new(panel, saved.placement(), size, saved.open()));
+                }
             }
         }
         prune(&mut state.center, &mut |leaf| {
@@ -135,7 +133,7 @@ impl Workspace {
             (DockPosition::Right, &saved.dock_area.right_dock),
         ] {
             if let Some(dock) = dock
-                && self.restore_dock(position, dock, window, cx)
+                && self.restore_dock(position, dock, &mut report, window, cx)
             {
                 report.docks_restored.push(position);
             }
@@ -196,7 +194,7 @@ impl Workspace {
     }
 
     /// Rebuilds one saved item tab and registers it; skips and reports it when it cannot.
-    fn restore_item(
+    pub(super) fn restore_item(
         &mut self,
         leaf: &PanelState,
         report: &mut RestoreReport,
@@ -234,102 +232,10 @@ impl Workspace {
         }
     }
 
-    /// Applies one saved dock to the dock of the same position. Returns whether the dock exists
-    /// (a panel was added to it).
-    fn restore_dock(
-        &mut self,
-        position: DockPosition,
-        saved: &DockState,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let placement = position.placement();
-        if !self.dock_area.read(cx).has_dock(placement) {
-            return false;
-        }
-        let size = f32::from(saved.size());
-        if size.is_finite() && size > 0. {
-            let scale = UiScale::get(cx).factor();
-            let viewport = window.viewport_size();
-            let extent = match placement {
-                DockPlacement::Bottom => viewport.height,
-                _ => viewport.width,
-            };
-            let max = f32::from(extent) / scale * MAX_DOCK_SHARE;
-            let clamped = if max >= 1. { size.min(max) } else { size };
-            self.resize_dock(position, Unscaled(clamped), window, cx);
-        }
-        if self.dock_area.read(cx).is_dock_open(placement) != saved.open() {
-            self.toggle_dock_area(placement, window, cx);
-        }
-        self.restore_dock_panels(placement, saved.panel(), window, cx);
-        true
-    }
-
-    /// Selects each saved group's displayed panel and hands every panel its saved state.
-    fn restore_dock_panels(
-        &mut self,
-        placement: DockPlacement,
-        saved: &PanelState,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let mut leaves = Vec::new();
-        collect_panel_leaves(saved, &mut leaves);
-        let mut used: Vec<PanelId> = Vec::new();
-        for (name, state, displayed) in leaves {
-            // The first live panel of this name in this dock that no saved leaf claimed yet.
-            let Some((panel_id, handle)) = self
-                .panels
-                .iter()
-                .filter(|p| {
-                    p.handle.persistent_name() == name
-                        && !used.contains(&p.panel_id)
-                        && self.placement_of(p.panel_id, cx) == Some(placement)
-                })
-                .map(|p| (p.panel_id, p.handle.boxed_clone()))
-                .next()
-            else {
-                continue;
-            };
-            used.push(panel_id);
-            if let Some(state) = &state {
-                handle.restore_state(state, window, cx);
-            }
-            if displayed {
-                self.dock_area
-                    .update(cx, |area, cx| area.select_panel(panel_id, window, cx));
-            }
-        }
-    }
-
     /// A dock's size in unscaled pixels, for tests.
     #[cfg(test)]
     pub(crate) fn dock_size_unscaled(&self, position: DockPosition, cx: &App) -> Option<f32> {
         let size = self.dock_area.read(cx).dock_size(position.placement())?;
         Some(Unscaled::from_scaled(size, UiScale::get(cx)).0)
-    }
-}
-
-/// Every side-panel leaf under `state` as `(name, saved panel state, displayed in its group)`.
-fn collect_panel_leaves(state: &PanelState, out: &mut Vec<(String, Option<Value>, bool)>) {
-    match &state.info {
-        PanelInfo::Stack { .. } => {
-            for child in &state.children {
-                collect_panel_leaves(child, out);
-            }
-        }
-        PanelInfo::Tabs { active_index } => {
-            for (ix, leaf) in state.children.iter().enumerate() {
-                let saved = match &leaf.info {
-                    PanelInfo::Panel(info) => info.get("state").cloned(),
-                    _ => None,
-                };
-                out.push((leaf.panel_name.clone(), saved, ix == *active_index));
-            }
-        }
-        PanelInfo::Panel(info) => {
-            out.push((state.panel_name.clone(), info.get("state").cloned(), true))
-        }
     }
 }

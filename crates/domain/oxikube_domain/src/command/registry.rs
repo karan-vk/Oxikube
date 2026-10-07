@@ -158,12 +158,18 @@ impl CommandId {
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
+    /// `terminal::Close`: close the focused terminal, ending its process.
+    pub const TERMINAL_CLOSE: CommandId = CommandId::new("terminal::Close");
     /// `terminal::Copy`: copy the focused terminal's selection to the clipboard.
     pub const TERMINAL_COPY: CommandId = CommandId::new("terminal::Copy");
+    /// `terminal::New`: open a local shell in a new terminal of the (displayed) cluster's tab.
+    pub const TERMINAL_NEW: CommandId = CommandId::new("terminal::New");
     /// `terminal::OpenLink`: open a URL or local path a terminal shows.
     pub const TERMINAL_OPEN_LINK: CommandId = CommandId::new("terminal::OpenLink");
     /// `terminal::Paste`: paste the clipboard into the focused terminal.
     pub const TERMINAL_PASTE: CommandId = CommandId::new("terminal::Paste");
+    /// `terminal::Split`: open a new terminal in a new pane beside the active one.
+    pub const TERMINAL_SPLIT: CommandId = CommandId::new("terminal::Split");
     /// `view::Open`: open a registered view by id.
     pub const VIEW_OPEN: CommandId = CommandId::new("view::Open");
     /// `view::ZoomIn`: make the UI one zoom step larger.
@@ -642,10 +648,25 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::ResourceKind,
         NONE,
     ),
+    // Ends a shell on this machine the user opened; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_CLOSE,
+        "Close Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
     // Copies text the user sees to the clipboard; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_COPY,
         "Copy Terminal Selection",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Starts the user's own shell on this machine (with the cluster's kubeconfig in its
+    // environment); the cluster is only touched by what the user then types, outside the guard.
+    CommandMeta::read(
+        CommandId::TERMINAL_NEW,
+        "New Terminal",
         CommandScope::Global,
         NONE,
     ),
@@ -661,6 +682,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::TERMINAL_PASTE,
         "Paste into Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Starts another shell on this machine beside the active pane; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SPLIT,
+        "Split Terminal",
         CommandScope::Global,
         NONE,
     ),
