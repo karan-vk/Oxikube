@@ -29,21 +29,21 @@ pub(super) fn pod_is_healthy(res: &Resource) -> bool {
 
 fn containers_ready(spec: &Value, status: &Value) -> bool {
     let statuses = arr_of(status, "containerStatuses");
-    if statuses.len() < arr_of(spec, "containers").len() {
+    if statuses.len() < arr_of(spec, "containers").len() || !statuses.iter().all(ready_or_completed)
+    {
         return false;
     }
-    if !statuses.iter().all(ready_or_completed) {
-        return false;
-    }
-    let init_specs = arr_of(spec, "initContainers");
-    let sidecars = init_specs.iter().filter(|c| is_restartable(c));
-    sidecars.into_iter().all(|sidecar| {
-        let name = str_of(sidecar, "name");
-        arr_of(status, "initContainerStatuses")
-            .iter()
-            .find(|s| str_of(s, "name") == name)
-            .is_some_and(ready_or_completed)
-    })
+    let sidecar_statuses = arr_of(status, "initContainerStatuses");
+    arr_of(spec, "initContainers")
+        .iter()
+        .filter(|c| is_restartable(c))
+        .all(|sidecar| {
+            let name = str_of(sidecar, "name");
+            sidecar_statuses
+                .iter()
+                .find(|s| str_of(s, "name") == name)
+                .is_some_and(ready_or_completed)
+        })
 }
 
 /// A container status that is ready, or terminated with exit code 0.

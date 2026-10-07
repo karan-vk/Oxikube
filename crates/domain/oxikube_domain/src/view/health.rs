@@ -62,10 +62,8 @@ pub fn health_of(res: &Resource) -> Option<Health> {
         return None;
     }
     let healthy = match (&*res.kind.group, &*res.kind.kind) {
-        ("", "Pod") => {
-            // Read the JSON directly: building the whole summary would allocate per pod.
-            pod_is_healthy(res)
-        }
+        // Reads the JSON directly: building the whole summary would allocate per pod.
+        ("", "Pod") => pod_is_healthy(res),
         ("", "Node") => NodeSummary::from_resource(res).ok()?.is_ready(),
         ("batch", "Job") => !matches!(
             JobSummary::from_resource(res).ok()?.status,
