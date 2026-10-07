@@ -141,6 +141,8 @@
       "m": "log_view::Mark",
       "c": "log_view::Copy",
       "a": "log_view::SendToAgent",
+      // E08-S08: kubectl logs -f for this view in a terminal tab (needs kubectl on this machine).
+      "shift-t": "log_view::TailInTerminal",
       "shift-c": "log_view::Clear",
       "ctrl-s": "log_view::SaveAll",
       "ctrl-shift-s": "log_view::SaveVisible",

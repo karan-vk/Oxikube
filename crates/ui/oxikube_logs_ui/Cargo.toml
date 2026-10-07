@@ -21,6 +21,7 @@ oxikube_keymap.workspace = true
 oxikube_ports.workspace = true
 oxikube_runtime.workspace = true
 oxikube_settings.workspace = true
+oxikube_terminal.workspace = true
 oxikube_theme.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
@@ -38,6 +39,8 @@ oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
 serde_json.workspace = true
+# The kind test (`tests/kubectl_kind.rs`) reads a real PTY.
+tokio.workspace = true
 tracing-subscriber.workspace = true
 
 [features]
@@ -47,6 +50,13 @@ default = []
 # the default gate; the nightly workflow runs it:
 # `cargo test -p oxikube_logs_ui --features screenshot --test screenshot`.
 screenshot = []
+
+# `kubectl logs -f` as the viewer's "Tail in terminal" builds it, run for real against the kind
+# cluster (skips without `OXIKUBE_TEST_CONTEXT` or kubectl): `OXIKUBE_TEST_CONTEXT=kind-oxikube
+# cargo test -p oxikube_logs_ui --test kubectl_kind`.
+[[test]]
+name = "kubectl_kind"
+path = "tests/kubectl_kind.rs"
 
 [[test]]
 name = "screenshot"

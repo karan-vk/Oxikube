@@ -235,6 +235,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   otherwise only a pod newer than the gone one, the newest running first; `None` until it exists, never a sibling). `LogSession::reconnect` restarts a failed or ended session in place: the lines stay
   and the new stream continues after them. An aggregate reads a pod that joins after the view opened from its first
   line (no tail, no since).
+  Module `logs::kubectl` (E08-S08): `KubectlTail` builds the argv of `kubectl logs -f` for a pod or a label selector
+  (`--context=`, `--namespace=`, `--container=`, `--previous`, `--timestamps`, `--since=`, `--tail=`, `--limit-bytes=`;
+  a selector adds `--prefix`, `--all-containers` and `--max-log-requests`), values glued to their flag and a pod name
+  that starts with `-` refused, never a shell string; `Kubectl` is the cached answer to "is kubectl installed?"
+  (`KubectlLookup`, `PathLookup`: `PATH` plus the install folders a GUI launch lacks; refreshed by the caller on a
+  background task, "not known yet" reads as "not installed").
 - `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to
   5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect` (JSON mode's starting value, E08-S05); defaults in
   `default.json`, schema generated, per-cluster overrides under `clusters.<id>.logs`, out-of-range values clamped
@@ -259,10 +265,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   chips admit, and any filter installed with `set_line_filter` (`LogView::active_filter`); structured lines are copied as
   their raw JSON text. `view::chrome` draws the gutter bar and selection colour on both plain and JSON rows.
   Module `commands`: `pod::ViewLogs` and `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`,
-  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (and, E08-S05, `ToggleJsonMode`, `ToggleLevel`, `ToggleLine`, `CollapseLine`; E08-S06, `Mark`, `Copy`, `Clear`, `Save`; E08-S09, `SendToAgent`) on the bus (reads, tool stubs), queued to the
+  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (and, E08-S05, `ToggleJsonMode`, `ToggleLevel`, `ToggleLine`, `CollapseLine`; E08-S06, `Mark`, `Copy`, `Clear`, `Save`; E08-S09, `SendToAgent`; E08-S08, `TailInTerminal`) on the bus (reads, tool stubs), queued to the
   window's `LogViews`, which opens a view in the pod's cluster tab (one per pod, through a `LogHost`) and applies
   the changes. `row_actions`: "View Logs" on pod rows of the resource tables, and on Deployment, StatefulSet,
   DaemonSet, ReplicaSet, Job and Service rows (`workload::ViewLogs`).
+  Tail in terminal (E08-S08; `view::tail`, `kubectl`): the toolbar's "Tail in terminal (kubectl)" and `shift-t`
+  (`logs::TailInTerminal`) ask the window's `TerminalViews` (through `TerminalViewSink::open`) for a terminal tab of the
+  view's cluster that runs `kubectl logs -f` for what the view shows: the program is the kubectl that was found (absolute
+  path), the arguments come from the view's own options (`KubectlTail`), the tab is a local `BackendDescriptor` of the
+  cluster and namespace titled `logs <pod>/<container>`, so the cluster's kubeconfig, context and namespace reach it as
+  for `terminal::New` (no second env injection, nothing secret in the descriptor or the argv) and nothing on its screen
+  is saved. The action is hidden, not disabled, when kubectl is not installed: `follow_kubectl` looks it up on a
+  background task at start-up, on a settings change and every minute (`Kubectl`, never a process on the UI thread);
+  the key and the palette's command say "kubectl was not found" instead. A workload view uses its resolved selector
+  (`--selector=... --prefix`); before the selector is read the action says to try again.
   Module `search` (E08-S03): the `/` bar under the toolbar (`logs::Find`, also `cmd-f` / `ctrl-f`): a regex over the
   stored lines with case and inverse toggles, in *highlight* mode (all lines, matches painted, `3 of 41`, enter /
   shift-enter or `n` / `N` jump and wrap) or *filter* mode (only the matching lines are rows: the `LineWindow` is
@@ -430,7 +446,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   (added by the tab setup, closed until a terminal opens; terminal tabs share its tab group and
   move between it and the panes); `TerminalViews` applies `terminal::New` (a shell in the shown
   cluster's bottom dock with its selected namespace, a plain shell tab in the window without
-  one), `terminal::Split` and `terminal::Close` through a `TerminalHost` (`ClusterTerminalHost`).
+  one), `terminal::Split` and `terminal::Close` through a `TerminalHost` (`ClusterTerminalHost`), and
+  `TerminalRequest::Open { descriptor }` (E08-S08, `TerminalViewSink::open`): another view's process in
+  its cluster's bottom dock, e.g. the log viewer's `kubectl logs -f` (`BackendDescriptor::titled` names the tab; a
+  local descriptor with `shell` and `args` runs that program directly, not through the user's shell).
   Module `view::lifecycle` (E09-S12): `Lifecycle` (Connecting, Running, Disconnected, Exited,
   Failed, Closed) is a small enum fed by the launch result and the session's events, so the banner
   logic runs without a window; `Failure` maps an adapter error kind to a distinct headline and hint

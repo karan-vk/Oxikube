@@ -72,6 +72,9 @@ actions!(
         /// Queue the selected lines (else the lines on screen) as context for the hosted agent
         /// (`a`, `logs::SendToAgent`).
         SendToAgent,
+        /// Run `kubectl logs -f` for this view in a terminal tab (`shift-t`,
+        /// `logs::TailInTerminal`); does nothing when kubectl is not installed.
+        TailInTerminal,
         /// Empty the local buffer and the view; the stream goes on (`shift-c`, `logs::Clear`).
         Clear,
         /// Save everything the buffer holds to a file (`ctrl-s`, `logs::Save` with scope `all`).

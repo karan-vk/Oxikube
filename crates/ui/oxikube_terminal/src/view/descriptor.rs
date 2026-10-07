@@ -46,6 +46,10 @@ pub enum BackendDescriptor {
         /// ([`TerminalView::live_descriptor`](super::TerminalView::live_descriptor)).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         cwd: Option<PathBuf>,
+        /// The tab's title until the process sets one; `None` names the program. A command run
+        /// instead of a shell (`kubectl logs -f ...`) says what it is for here.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
     },
     /// A command run in a container (`kubectl exec -it`).
     Exec {
@@ -83,6 +87,7 @@ impl BackendDescriptor {
             shell: None,
             args: Vec::new(),
             cwd: None,
+            title: None,
         }
     }
 
@@ -124,6 +129,15 @@ impl BackendDescriptor {
         self
     }
 
+    /// Names the tab until the process sets its own title (no effect on other kinds).
+    #[must_use]
+    pub fn titled(mut self, name: impl Into<String>) -> Self {
+        if let Self::Local { title, .. } = &mut self {
+            *title = Some(name.into());
+        }
+        self
+    }
+
     /// The cluster the terminal belongs to: the local shell's, or the pod's.
     pub fn cluster(&self) -> Option<&ClusterId> {
         match self {
@@ -150,6 +164,9 @@ impl BackendDescriptor {
     /// (and container) for a pod terminal.
     pub fn default_title(&self, setting_shell: Option<&str>) -> String {
         match self {
+            Self::Local {
+                title: Some(title), ..
+            } => tab_title(title),
             Self::Local { shell, .. } => {
                 let env = std::env::var("SHELL").ok();
                 let program = resolve_shell(shell.as_deref().or(setting_shell), env.as_deref());
@@ -301,6 +318,28 @@ mod tests {
         assert_eq!(exec.icon(), IconName::Container);
         assert_eq!(shell.icon(), IconName::Terminal);
         assert_eq!(exec.cluster(), Some(&cluster()));
+    }
+
+    #[test]
+    fn a_command_names_its_tab_and_saves_its_program_and_arguments() {
+        let descriptor = BackendDescriptor::local(Some(cluster()))
+            .in_namespace(Some("shop".into()))
+            .with_shell(
+                "/usr/local/bin/kubectl",
+                vec!["logs".into(), "-f".into(), "web-0".into()],
+            )
+            .titled("logs web-0");
+        assert_eq!(descriptor.default_title(Some("/bin/zsh")), "logs web-0");
+        let state = descriptor.to_state();
+        assert_eq!(state["backend"]["title"], "logs web-0");
+        assert_eq!(state["backend"]["args"], json!(["logs", "-f", "web-0"]));
+        assert_eq!(BackendDescriptor::from_state(&state), Some(descriptor));
+        // A shell has no title field at all.
+        assert!(
+            BackendDescriptor::local(None).to_state()["backend"]
+                .get("title")
+                .is_none()
+        );
     }
 
     #[test]
