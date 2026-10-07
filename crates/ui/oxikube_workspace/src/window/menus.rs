@@ -83,14 +83,14 @@ pub fn app_menus() -> Vec<Menu> {
 
 /// The context of the zoom bindings off macOS: everywhere except a focused terminal, whose shell
 /// owns the plain `ctrl-` chords (`ctrl--` is readline's undo). The menu items still zoom there.
-pub const ZOOM_KEY_CONTEXT: &str = "!Terminal";
+const ZOOM_KEY_CONTEXT: &str = "!Terminal";
 
 /// Default key bindings of the menu actions (shown next to the items by macOS), including the
 /// session shortcuts: zoom in (`=` and `+`), out and actual size, and New Window.
 ///
 /// Off macOS none of them may shadow a key a focused terminal sends to its shell: quit and New
 /// Window are `ctrl-shift-q` / `ctrl-shift-n` (the application namespace), and the plain `ctrl-`
-/// zoom chords are scoped [`ZOOM_KEY_CONTEXT`]. See the `keymap_shadowing` terminal test.
+/// zoom chords are scoped `!Terminal`. See the `keymap_shadowing` terminal test.
 ///
 /// The binary does not load the keymap files of `oxikube_assets` yet (E05-S07/S09), so these
 /// interim bindings are what makes the shortcuts work; the files carry the same keys for when it

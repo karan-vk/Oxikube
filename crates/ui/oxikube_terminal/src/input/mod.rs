@@ -34,8 +34,9 @@
 //! zoom chords (`ctrl-=`, `ctrl--`, `ctrl-0`) are scoped `!Terminal`. `ctrl--` is readline's
 //! undo (`0x1f`). The `keymap_shadowing` test (`tests/element`) sweeps every key
 //! [`to_esc_str`](crate::mappings::to_esc_str) encodes against the keymap an off-macOS build
-//! installs and fails when a binding shadows one, so a new global shortcut cannot regress this. The scroll keys are the terminal's only on the primary
-//! screen; a full-screen program (vim, htop, less) on the alternate screen receives them.
+//! installs and fails when a binding shadows one, so a new global shortcut cannot regress this.
+//!
+//! The scroll keys are the terminal's only on the primary screen; a full-screen program (vim, htop, less) on the alternate screen receives them.
 //!
 //! Everything a user types or pastes goes to the process only: never to a log, the audit trail
 //! or disk (non-negotiable 5).

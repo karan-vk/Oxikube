@@ -91,7 +91,11 @@ fn terminal_stacks(os: &str) -> Vec<(&'static str, Vec<KeyContext>)> {
 
 /// Every keystroke a terminal encodes for its process: plain ctrl chords, ctrl+alt chords and
 /// (with `option_as_meta`) alt chords, over the printable keys and the named ones.
-fn forwarded_keystrokes(mode: KeyMode) -> Vec<Keystroke> {
+fn forwarded_keystrokes() -> Vec<Keystroke> {
+    let mode = KeyMode {
+        app_cursor: false,
+        option_as_meta: true,
+    };
     let printable = (0x21u8..=0x7e).map(|b| (b as char).to_string());
     let named = [
         "space",
@@ -147,11 +151,7 @@ fn describe(binding: &KeyBinding) -> String {
 
 #[test]
 fn no_binding_shadows_a_key_the_terminal_forwards() {
-    let mode = KeyMode {
-        app_cursor: false,
-        option_as_meta: true,
-    };
-    let forwarded = forwarded_keystrokes(mode);
+    let forwarded = forwarded_keystrokes();
     assert!(
         forwarded.len() > 100,
         "the sweep covers the mapping table ({} keystrokes)",
@@ -200,11 +200,7 @@ fn the_sweep_catches_the_old_bindings() {
         KeyBinding::new("ctrl--", OldProbe, None),
     ];
     let keymap = Keymap::new(old.to_vec());
-    let mode = KeyMode {
-        app_cursor: false,
-        option_as_meta: true,
-    };
-    let forwarded = forwarded_keystrokes(mode);
+    let forwarded = forwarded_keystrokes();
     let (_, stack) = terminal_stacks("linux").remove(0);
     let caught = |keys: &str| {
         let keystroke = Keystroke::parse(keys).unwrap();
