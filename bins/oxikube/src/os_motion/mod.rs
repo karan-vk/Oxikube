@@ -8,8 +8,8 @@
 //!
 //! | Platform | Source | Changes |
 //! |---|---|---|
-//! | macOS | `NSWorkspace.accessibilityDisplayShouldReduceMotion` ([`macos`]) | `NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification` |
-//! | Linux | GNOME `org.gnome.desktop.interface enable-animations` through `gsettings` ([`gsettings`]) | `gsettings monitor` |
+//! | macOS | `NSWorkspace.accessibilityDisplayShouldReduceMotion` (`macos` module) | `NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification` |
+//! | Linux | GNOME `org.gnome.desktop.interface enable-animations` through `gsettings` (`gsettings` module) | `gsettings monitor` |
 //! | other | none: the OS value stays `false`, only the `on` override works | none |
 //!
 //! # Cost

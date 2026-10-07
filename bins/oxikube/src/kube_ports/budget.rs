@@ -38,7 +38,7 @@ fn budget_config(prefs: &WatchBudgetPrefs) -> BudgetConfig {
     }
 }
 
-/// The watch budgets of the app's connections. See the [module docs](self).
+/// The watch budgets of the app's connections. See the module docs above.
 ///
 /// Cheap to clone. [`WatchBudgets::disabled`] (the test bundle over fake connectors) has no
 /// registries: stores open feeds unlimited and there are no counters.

@@ -8,8 +8,12 @@
 //! - `terminal_cursors`: four small terminals: block, beam and underline cursors (focused) and
 //!   the hollow block of an unfocused terminal.
 //!
-//! - `terminal_preedit` (E09-S06): an input method composing four Japanese syllables at the shell
-//!   prompt: the marked text is underlined at the cursor, over the cells after it.
+//! - `terminal_preedit` (E09-S06): an input method composing a pinyin syllable run at the shell
+//!   prompt: the marked text is underlined at the cursor, over the cells after it. The preedit is
+//!   ASCII on purpose: a CJK preedit is drawn with whichever fallback font the host has, which
+//!   differs between a developer's macOS and the runner's (768 px of the golden), while the
+//!   underline and placement this case pins do not depend on it. Wide-cell preedit is covered by
+//!   `tests/element/ime.rs`.
 //! - `terminal_tabs` (E09-S07): terminal tabs in a workspace: one in the centre pane (its title
 //!   set by the process, the dirty dot of a running process), one in the bottom dock beside the
 //!   terminal panel, carrying a read-only cluster's mark, and the exit line of an ended one.
@@ -233,7 +237,7 @@ fn preedit() -> Result<RgbaImage> {
         &["$ echo "],
         false,
         false,
-        Some("\u{306b}\u{307b}\u{3093}\u{3054}"),
+        Some("ni'hao'ma"),
     )
 }
 

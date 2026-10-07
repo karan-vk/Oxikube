@@ -23,7 +23,7 @@ use super::request::FeedRequest;
 use crate::resources::KubeResources;
 
 /// The data-plane ports of one connection behind its watch budget. See the
-/// [module docs](self).
+/// module docs above.
 ///
 /// Cheap to clone; clones share the client and the registry.
 #[derive(Clone)]

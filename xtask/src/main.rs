@@ -18,6 +18,8 @@ mod load_pods;
 mod perf;
 mod settings_schema;
 mod setup;
+#[cfg(test)]
+mod workflows;
 
 use clap::{Parser, Subcommand};
 

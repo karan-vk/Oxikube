@@ -160,19 +160,25 @@ fn check_case(goldens: &Path, case: &GoldenCase, tolerance: Tolerance) -> Result
 }
 
 /// The `main` of a screenshot test (`[[test]] harness = false`): runs every case, prints one line
-/// each, and exits non-zero on the first failure. `crate_dir` is `env!("CARGO_MANIFEST_DIR")`;
+/// each, and exits non-zero when any failed. A failing case does not stop the others, so one run
+/// (a nightly leg) reports every broken golden. `crate_dir` is `env!("CARGO_MANIFEST_DIR")`;
 /// goldens live in `<crate_dir>/tests/goldens/<os>/`.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 pub fn run_golden_cases(crate_dir: &str, cases: &[GoldenCase]) -> ExitCode {
     let goldens = Path::new(crate_dir).join("tests/goldens");
+    let mut failed = 0;
     for case in cases {
         match check_case(&goldens, case, Tolerance::default()) {
             Ok(line) => println!("{line}"),
             Err(err) => {
                 eprintln!("screenshot case `{}` failed: {err:#}", case.name);
-                return ExitCode::FAILURE;
+                failed += 1;
             }
         }
+    }
+    if failed > 0 {
+        eprintln!("{failed} of {} screenshot case(s) failed", cases.len());
+        return ExitCode::FAILURE;
     }
     println!("{} screenshot case(s): ok", cases.len());
     ExitCode::SUCCESS

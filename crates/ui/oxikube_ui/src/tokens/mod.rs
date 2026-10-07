@@ -2,7 +2,7 @@
 //!
 //! - `tokens`: the value types ([`Tokens`], [`Colors`], [`Spacing`], [`Radius`], [`FontSizes`]).
 //! - `source`: the [`TokenSource`] adapter trait and the built-in [`DefaultTokens`].
-//! - `fills`: the translucent highlight fills ([`Colors::line_selection`], [`Colors::search_match`]).
+//! - `fills`: the translucent highlight fills ([`Colors::line_selection`], [`Colors::search_match_fill`]).
 //! - `from_theme`: `ThemeTokens` (from `oxikube_theme`) -> [`Tokens`].
 //! - `contrast`: the WCAG AA test over every text token (tests only).
 //! - `active`: the global plus the [`ActiveTokens`] accessor (`cx.tokens()`, `cx.colors()`).

@@ -1,0 +1,16 @@
+name: setup-rust
+description: >-
+  Install the Rust toolchain pinned in rust-toolchain.toml (channel, components, targets), so CI
+  builds with exactly the toolchain a local checkout uses. Run after actions/checkout.
+
+runs:
+  using: composite
+  steps:
+    - name: Install the toolchain pinned in rust-toolchain.toml
+      shell: bash
+      # `rustup toolchain install` with no argument reads rust-toolchain.toml (rustup >= 1.28 no
+      # longer installs it implicitly on the first cargo call). It is a no-op when already present.
+      run: |
+        rustup toolchain install --no-self-update
+        rustup show active-toolchain
+        rustc -vV

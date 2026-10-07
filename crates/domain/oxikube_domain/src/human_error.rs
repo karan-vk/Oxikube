@@ -41,7 +41,7 @@ impl HumanError {
     }
 
     /// An error that crossed a boundary as text: an [`OxiError`]'s `Display` (`"<label>:
-    /// <message>"`, see [`ErrorKind::from_label`]) or any other message. The labels are taken
+    /// <message>"`, see `ErrorKind::from_label`) or any other message. The labels are taken
     /// off the raw text, and the first one names the kind.
     pub fn from_display(text: &str) -> Self {
         let mut rest = text.trim();

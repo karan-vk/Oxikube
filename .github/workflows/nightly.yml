@@ -43,7 +43,7 @@ jobs:
       CARGO_PROFILE: ${{ matrix.profile == 'release' && 'release-fast' || 'dev' }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@v2
         with:
           # Distinct per profile so the dev and release legs never evict each other.
@@ -118,7 +118,8 @@ jobs:
 
   # Perf regression gate (E01-S14, ADR 0013): headless scenarios on each OS, median of several
   # fresh-process samples, compared with docs/perf/baseline.json for the same runner OS. Fails above
-  # +20 % (and +0.25 ms) on any p50/p95/p99; the failure feeds `report-failure` below.
+  # +50 % on p50 and +150 % on p95/p99 (and +0.25 ms); the failure feeds `report-failure` below.
+  # Blocking on Linux; advisory on macOS, whose hosted runners are too noisy to gate (see below).
   perf:
     name: perf / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -129,7 +130,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@v2
         with:
           key: perf
@@ -147,10 +148,29 @@ jobs:
       # Builds `oxikube --features perf-scenarios` (release-fast), runs every scenario, writes the
       # report and checks it. Headless rendering needs a GPU device: Metal on macOS, Mesa lavapipe
       # on Linux (xvfb only for windowing init, as in the screenshot step).
+      #
+      # Hosted runners swing between jobs with no code change (`macos-latest` moved p50 +20 to +90 %
+      # and p95/p99 up to +280 % across nightlies of the same code), so the tolerances are loose
+      # (+50 % p50, +150 % tails; the local default is +20 %), a failed check is repeated once with
+      # fresh processes, and on macOS the result is advisory: the report is still uploaded and a
+      # warning annotation says so. Rationale and numbers: docs/PERFORMANCE.md (E01-F542).
       - name: cargo xtask perf --all --check
+        id: perf
+        # A macOS regression is read from the annotation and the uploaded report, not from a red job.
+        continue-on-error: ${{ runner.os == 'macOS' }}
+        shell: bash
         run: |
-          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo xtask perf --all --check --samples 7 \
-            --out perf/report-${{ runner.os }}.json
+          perf_check() {
+            ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo xtask perf --all --check --samples 7 --tolerance 0.5 --tail-tolerance 1.5 \
+              --out perf/report-${{ runner.os }}.json
+          }
+          if ! perf_check; then
+            echo "::warning::perf check failed; repeating once to rule out runner noise"
+            perf_check
+          fi
+      - name: Perf check is advisory on macOS
+        if: ${{ runner.os == 'macOS' && steps.perf.outcome == 'failure' }}
+        run: echo "::warning title=macOS perf check failed (advisory)::Hosted macOS runners are too noisy to gate on; compare the uploaded perf-report-macOS artifact with docs/perf/baseline.json before trusting a regression."
       - name: Upload perf report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
