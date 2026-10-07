@@ -222,3 +222,62 @@ fn a_session_reconnected_by_hand_continues_after_the_lines_it_kept() {
     drop(session);
     assert!(reader.state().is_terminal());
 }
+
+/// A line `text` of `web-0` stamped `at_ms` milliseconds in.
+fn stamped(at_ms: i64, text: &str) -> oxikube_domain::log::LogLine {
+    oxikube_domain::log::LogLine::new(ts(at_ms), "web-0", "app", text)
+}
+
+/// The server timestamps of the buffer, in milliseconds into the fixture's hour, oldest first.
+fn stamps(session: &crate::logs::LogSession) -> Vec<i64> {
+    session.read(|buffer, _| {
+        buffer
+            .iter()
+            .map(|e| e.ts.as_millisecond() - ts(0).as_millisecond())
+            .collect()
+    })
+}
+
+/// The dedupe rule end to end: a line the reopened stream delivers again (same server timestamp,
+/// same text) appears once, a line an application repeats (same text, other timestamp) is kept,
+/// and two identical lines the server really sent twice are both kept the first time round.
+#[test]
+fn identical_text_at_other_timestamps_is_kept_and_only_a_true_replay_is_dropped() {
+    let mut h = Harness::new();
+    h.script(
+        Timeline::new()
+            .ok_at(Duration::ZERO, stamped(1_000, "tick"))
+            .ok_at(Duration::ZERO, stamped(2_000, "tick"))
+            .ok_at(Duration::ZERO, stamped(3_000, "tick"))
+            // The same line twice from the server: a real repeat, not a replay.
+            .ok_at(Duration::ZERO, stamped(3_000, "tick"))
+            .ok_at(Duration::ZERO, stamped(4_000, "tick"))
+            .err_at(ms(100), OxiError::network("connection reset by peer")),
+    );
+    // Reopened `since` 2 s before the last line: the server replays 2000..=4000 again, with a
+    // line the first stream never had inside that window, then goes on.
+    h.script(
+        Timeline::new()
+            .ok_at(Duration::ZERO, stamped(2_000, "tick"))
+            .ok_at(Duration::ZERO, stamped(2_500, "tick"))
+            .ok_at(Duration::ZERO, stamped(3_000, "tick"))
+            .ok_at(Duration::ZERO, stamped(3_000, "tick"))
+            .ok_at(Duration::ZERO, stamped(4_000, "tick"))
+            .ok_at(Duration::ZERO, stamped(4_500, "tick"))
+            .ok_at(Duration::ZERO, stamped(5_000, "tick"))
+            .keep_open(),
+    );
+    let session = h.open_plain(LogOptions::follow().tail_lines(100));
+    h.run_for(ms(150));
+    assert_eq!(stamps(&session), [1_000, 2_000, 3_000, 3_000, 4_000]);
+
+    h.run_for(ms(700));
+    assert_eq!(session.state(), LogState::Streaming);
+    assert_eq!(
+        stamps(&session),
+        [1_000, 2_000, 3_000, 3_000, 4_000, 2_500, 4_500, 5_000],
+        "the replayed 2000, 3000, 3000 and 4000 are gone once; the unseen 2500 and the new \
+         4500 and 5000 are kept although every line says `tick`"
+    );
+    assert!(texts(&session).iter().all(|t| t == "tick"));
+}
