@@ -96,3 +96,38 @@ async fn a_rejected_streaming_list_falls_back_to_paged_lists() {
     assert_eq!(server.list_hits(PODS), 1);
     assert!(server.queries(PODS)[0].contains("sendInitialEvents=true"));
 }
+
+/// The streaming list is served from the API server's watch cache (kube sends
+/// `resourceVersion=0`), which can trail etcd under load: a pod created just before the feed
+/// opened may be missing from the opening list. It then arrives as a live event, so the
+/// consumer still converges, with no relist.
+#[tokio::test(start_paused = true)]
+async fn a_lagging_opening_list_catches_up_through_live_events() {
+    let server = FeedServer::new(34);
+    server.watch(
+        PODS,
+        Reply::Events(vec![
+            event("ADDED", pod("a", "ua", "5")),
+            initial_events_end("6"),
+            event("ADDED", pod("b", "ub", "7")),
+            event("ADDED", pod("c", "uc", "8")),
+        ]),
+    );
+    let mut feed = open(&server, auto()).await;
+
+    let mut folded = Folded::default();
+    let opening = next_batch(&mut feed).await;
+    assert_eq!(labels(&opening), vec!["restart[a]"], "the lagging list");
+    folded.apply(opening);
+    while folded.0.len() < 3 {
+        let batch = next_batch(&mut feed).await;
+        assert!(
+            batch.deltas.iter().all(|d| matches!(d, Delta::Applied(_))),
+            "later batches are live changes, not another restart: {:?}",
+            labels(&batch)
+        );
+        folded.apply(batch);
+    }
+    assert_eq!(folded, Folded::of(&[("a", "5"), ("b", "7"), ("c", "8")]));
+    assert_eq!(server.list_hits(PODS), 0, "no LIST request");
+}

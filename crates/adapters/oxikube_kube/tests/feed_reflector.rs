@@ -103,6 +103,20 @@ async fn drain(feed: &mut ReflectorFeed, folded: &mut Folded, quiet: Duration) {
     }
 }
 
+/// Folds until the consumer holds `count` objects, or fails after 30 s: the opening list
+/// may lag the creates that preceded it, and the missing objects arrive as deltas.
+async fn caught_up(feed: &mut ReflectorFeed, folded: &mut Folded, count: usize) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while folded.objects.len() < count {
+        assert!(
+            Instant::now() < deadline,
+            "the feed never delivered all {count} pods: {} folded",
+            folded.objects.len()
+        );
+        drain(feed, folded, Duration::from_millis(500)).await;
+    }
+}
+
 /// Folds until the consumer's state equals a fresh list, or fails after `deadline`.
 /// Kubernetes keeps touching pods (scheduler conditions), so the two are compared repeatedly.
 async fn converge(
@@ -225,10 +239,18 @@ async fn a_namespace_feed_under_churn_folds_to_a_fresh_list() {
         &WatchOptions::default(),
     )
     .await;
+    // The opening list comes from the API server's watch cache, which can trail the creates
+    // above (issue #541: 17 of 30 pods): it never holds more than was created, and the rest
+    // arrives as live `Applied` deltas.
+    let opening = folded.objects.len();
+    assert!(
+        opening <= INITIAL_PODS,
+        "the opening list holds {opening} pods"
+    );
+    caught_up(&mut feed, &mut folded, INITIAL_PODS).await;
     assert_eq!(
-        folded.objects.len(),
-        INITIAL_PODS,
-        "the opening list holds every pod"
+        folded.restarts, 1,
+        "the late pods came as deltas, not a relist"
     );
     let state = feed.state();
 
@@ -277,11 +299,8 @@ async fn a_cluster_feed_with_a_selector_and_paged_lists_folds_to_a_fresh_list() 
     let selector = format!("feed-run={run}");
     let options = WatchOptions::default().labels(selector.clone());
     let (mut feed, mut folded) = open(&client, config, &WatchScope::Cluster, &options).await;
-    assert_eq!(
-        folded.objects.len(),
-        INITIAL_PODS,
-        "paged list, selected pods only"
-    );
+    // A paged list is served from the watch cache too (`resourceVersion=0`).
+    caught_up(&mut feed, &mut folded, INITIAL_PODS).await;
 
     let consumer = async {
         drain(&mut feed, &mut folded, Duration::from_secs(3)).await;
@@ -297,4 +316,82 @@ async fn a_cluster_feed_with_a_selector_and_paged_lists_folds_to_a_fresh_list() 
     )
     .await;
     assert!(!folded.objects.keys().any(|k| k.ends_with("/unselected")));
+}
+
+/// Keeps the API server busy in its own namespace until dropped: batches of pending pods
+/// created and deleted, which is what lets the watch cache trail etcd.
+struct ApiLoad {
+    task: tokio::task::JoinHandle<()>,
+    _ns: TestNamespace,
+}
+
+impl ApiLoad {
+    fn start(context: &str, client: &Client) -> Self {
+        let ns = TestNamespace::create(context).expect("load namespace");
+        let api = Api::<Pod>::namespaced(client.clone(), ns.name());
+        let task = tokio::spawn(async move {
+            for batch in 0..=u32::MAX {
+                let names: Vec<String> = (0..200).map(|i| format!("load-{batch}-{i}")).collect();
+                let creates = stream::iter(names.clone()).for_each_concurrent(64, |name| {
+                    let api = api.clone();
+                    async move {
+                        let _ = api
+                            .create(&PostParams::default(), &pending_pod(&name, &[]))
+                            .await;
+                    }
+                });
+                creates.await;
+                let deletes = stream::iter(names).for_each_concurrent(64, |name| {
+                    let api = api.clone();
+                    async move {
+                        let _ = api
+                            .delete(&name, &DeleteParams::default().grace_period(0))
+                            .await;
+                    }
+                });
+                deletes.await;
+            }
+        });
+        Self { task, _ns: ns }
+    }
+}
+
+impl Drop for ApiLoad {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+/// Regression for #541. Feeds opened right after the creates, while the API server is busy,
+/// may get a short opening list (the watch cache trails etcd); every pod must still arrive,
+/// as `Applied` deltas on the same watch, never as a second `Restarted`.
+#[tokio::test]
+async fn a_feed_opened_under_api_load_catches_up_to_every_pod() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let client = kind.admin_client().await;
+    let _load = ApiLoad::start(kind.context.as_str(), &client);
+    let mut lagged = 0;
+    for round in 0..16 {
+        let ns = TestNamespace::create(kind.context.as_str()).expect("test namespace");
+        let pods = (0..INITIAL_PODS)
+            .map(|i| pending_pod(&format!("load-{i}"), &[("app", "feed-load")]))
+            .collect();
+        create_pods(&client, ns.name(), pods).await;
+        let scope = WatchScope::Namespaces(vec![ns.name().to_owned()]);
+        let (mut feed, mut folded) = open(
+            &client,
+            FeedConfig::default(),
+            &scope,
+            &WatchOptions::default(),
+        )
+        .await;
+        let opening = folded.objects.len();
+        assert!(opening <= INITIAL_PODS, "round {round}: opening {opening}");
+        lagged += usize::from(opening < INITIAL_PODS);
+        caught_up(&mut feed, &mut folded, INITIAL_PODS).await;
+        assert_eq!(folded.restarts, 1, "round {round}: no second Restarted");
+    }
+    eprintln!("feed under load: {lagged} of 16 opening lists lagged");
 }

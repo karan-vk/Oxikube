@@ -39,6 +39,16 @@
 //! watch events, WatchList), older servers paged lists. A server that refuses the streaming
 //! request (400/422, feature gate off) makes that watch fall back to paged lists.
 //!
+//! The opening list is eventually consistent, not a consistent read: kube's watcher asks the
+//! server for `resourceVersion=0`, which the API server answers from its watch cache (paged
+//! lists use the same `resourceVersion=0`). Under load the cache can trail etcd, so an object
+//! created just before the feed opened may be missing from the opening `Restarted` (a kind
+//! cluster under churn returned 17 of 30 pods, and sometimes none). Nothing is lost: the
+//! watch continues from the list's resource version and delivers the rest as ordinary
+//! `Applied` deltas, never as a second `Restarted`. A consumer folds deltas, so it converges;
+//! one that needs a point in time (a test, a wait) must wait for the state it expects instead of
+//! reading the opening batch.
+//!
 //! # Scope
 //!
 //! A [`WatchScope::Cluster`] feed is one watch (`Api::all_with`). A
