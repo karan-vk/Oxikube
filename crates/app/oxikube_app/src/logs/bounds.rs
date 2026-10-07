@@ -3,8 +3,8 @@
 //!
 //! Every session reads its bound from one shared cell at each commit, so a change is stored in
 //! the cells first and then applied to the open buffers (a commit never writes an older bound
-//! over a newer one). Each cluster that has had a session or an override has a cell of its own; sessions outside any
-//! cluster share the default cell.
+//! over a newer one). Each cluster that has had a session or an override has a cell of its own;
+//! sessions outside any cluster share the default cell.
 
 use std::collections::HashMap;
 use std::sync::Arc;

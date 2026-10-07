@@ -19,8 +19,9 @@
 //! A user reaches a log view from a pod's row in a resource table: its context menu (or the
 //! palette's list for the selection) offers "View Logs", which sends `pod::ViewLogs`; the
 //! handler hands the request to the window's [`LogViews`], which opens the view as a tab of the
-//! pod's cluster tab. The viewer's keys are data in the keymap files (context `LogView`, rebindable in
-//! `keymap.json`) and its defaults are the `logs` settings. An agent calling the `k8s.pod_view_logs` tool lands in the same place.
+//! pod's cluster tab. The viewer's keys are data in the keymap files (context `LogView`,
+//! rebindable in `keymap.json`) and its defaults are the `logs` settings. An agent calling the
+//! `k8s.pod_view_logs` tool lands in the same place.
 
 pub mod commands;
 pub mod follow;
