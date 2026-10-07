@@ -4,8 +4,9 @@
 //! - **New** opens a local shell for a cluster in the bottom dock of its tab (adding the
 //!   [`TerminalPanel`](super::TerminalPanel) when the tab has none), with the cluster's selected
 //!   namespace; with no cluster tab shown, a plain shell tab in the window's own workspace.
-//! - **Split** opens a terminal running what the focused one runs (the shown cluster's shell
-//!   otherwise) in a new pane right of the focused terminal's pane, else of the active pane.
+//! - **Split** opens a terminal running what the focused one runs, in the directory its shell is
+//!   in now (the shown cluster's shell otherwise), in a new pane right of the focused terminal's
+//!   pane, else of the active pane.
 //! - **Close** closes the focused terminal, else the active pane's item when it is a terminal.
 //!
 //! Each request waits one turn first, so a palette that just closed has handed the focus back to
@@ -125,7 +126,7 @@ impl TerminalViews {
         };
         let focused = focused_terminal(&workspace, window, cx);
         let descriptor = match &focused {
-            Some(view) => view.read(cx).descriptor().clone(),
+            Some(view) => view.read(cx).live_descriptor(cx),
             None => {
                 let namespace = cluster
                     .as_ref()

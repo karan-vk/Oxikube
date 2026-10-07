@@ -214,3 +214,22 @@ fn splitting_a_terminal_starts_a_fresh_one_beside_it(cx: &mut TestAppContext) {
     assert_eq!(terminals.len(), 2);
     assert!(terminals.contains(&view), "the original stays");
 }
+
+#[gpui::test]
+fn a_pane_split_copies_the_directory_the_shell_is_in_now(cx: &mut TestAppContext) {
+    let mut h = harness(cx);
+    let descriptor = BackendDescriptor::local(None).in_dir("/work");
+    h.open(descriptor.clone());
+    h.backend(0).set_working_directory("/work/api");
+    let ws = h.ws.clone();
+    h.vcx.update(|window, cx| {
+        ws.update(cx, |ws, cx| {
+            ws.split_active_pane(SplitDirection::Right, window, cx)
+        })
+    });
+    h.frame();
+    assert_eq!(
+        h.launches(),
+        [descriptor.clone(), descriptor.in_dir("/work/api")]
+    );
+}

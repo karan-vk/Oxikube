@@ -200,6 +200,15 @@ impl TerminalState {
         self.exit.as_ref()
     }
 
+    /// The directory the process works in now (a local shell after a `cd`), when the backend
+    /// can tell; `None` once it exited. See [`TerminalBackend::working_directory`].
+    pub fn working_directory(&self) -> Option<std::path::PathBuf> {
+        if self.exit.is_some() {
+            return None;
+        }
+        self.backend.working_directory()
+    }
+
     /// The last transport error, if any.
     pub fn last_error(&self) -> Option<&OxiError> {
         self.last_error.as_deref()

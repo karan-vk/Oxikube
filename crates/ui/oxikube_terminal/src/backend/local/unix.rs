@@ -1,6 +1,8 @@
 //! The few POSIX calls the local PTY needs: signalling a process group, reaping the child with
-//! its exact exit status, and probing whether a pid is alive. Other platforms get stand-ins
-//! (ConPTY is E28-S04).
+//! its exact exit status, probing whether a pid is alive, and reading the directory a process
+//! works in. Other platforms get stand-ins (ConPTY is E28-S04).
+
+use std::path::PathBuf;
 
 use oxikube_ports::exec::ExitStatus;
 
@@ -74,6 +76,71 @@ fn signal_name(signal: i32) -> String {
         other => return format!("SIG{other}"),
     };
     name.to_owned()
+}
+
+/// The foreground process group of the terminal `master` drives (what the shell runs, or the
+/// shell itself at its prompt): its leader's pid.
+#[cfg(unix)]
+pub(super) fn foreground_group(master: &dyn portable_pty::MasterPty) -> Option<u32> {
+    master
+        .process_group_leader()
+        .and_then(|pid| u32::try_from(pid).ok())
+}
+
+/// The directory process `pid` works in (`/proc/<pid>/cwd`).
+#[cfg(target_os = "linux")]
+pub(super) fn working_directory(pid: u32) -> Option<PathBuf> {
+    std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
+}
+
+/// The directory process `pid` works in (`proc_pidinfo(PROC_PIDVNODEPATHINFO)`).
+#[cfg(target_os = "macos")]
+pub(super) fn working_directory(pid: u32) -> Option<PathBuf> {
+    use std::os::unix::ffi::OsStrExt as _;
+
+    let pid = libc::c_int::try_from(pid).ok()?;
+    let mut info = std::mem::MaybeUninit::<libc::proc_vnodepathinfo>::zeroed();
+    let size = libc::c_int::try_from(std::mem::size_of::<libc::proc_vnodepathinfo>()).ok()?;
+    // SAFETY: `info` is a writable buffer of exactly `size` bytes; the kernel fills at most that.
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid,
+            libc::PROC_PIDVNODEPATHINFO,
+            0,
+            info.as_mut_ptr().cast(),
+            size,
+        )
+    };
+    if written != size {
+        return None;
+    }
+    // SAFETY: zero-initialised, then filled in full by the call above.
+    let info = unsafe { info.assume_init() };
+    // `vip_path` is a NUL-terminated `char[MAXPATHLEN]`, split in rows by `libc`.
+    let bytes: Vec<u8> = info
+        .pvi_cdir
+        .vip_path
+        .iter()
+        .flatten()
+        .map(|&c| c as u8)
+        .take_while(|&b| b != 0)
+        .collect();
+    (!bytes.is_empty()).then(|| PathBuf::from(std::ffi::OsStr::from_bytes(&bytes)))
+}
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
+pub(super) fn working_directory(_pid: u32) -> Option<PathBuf> {
+    None
+}
+
+#[cfg(not(unix))]
+pub(super) fn working_directory(_pid: u32) -> Option<PathBuf> {
+    None
+}
+
+#[cfg(not(unix))]
+pub(super) fn foreground_group(_master: &dyn portable_pty::MasterPty) -> Option<u32> {
+    None
 }
 
 #[cfg(not(unix))]

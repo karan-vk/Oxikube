@@ -1,12 +1,17 @@
 //! The terminal tab: title from the program, then from the process; dirty while it runs; the
 //! cluster's mark; the exit line; a failed start; closing ends the process and releases it.
 
+use std::sync::Arc;
+
 use gpui::{Entity, EntityId};
-use oxikube_domain::OxiError;
+use oxikube_app::ClusterSessionManager;
+use oxikube_app::session::SessionOptions;
 use oxikube_domain::ids::{Gvk, ResourceRef};
-use oxikube_ports::ExitStatus;
+use oxikube_domain::{ClusterPreset, OxiError};
+use oxikube_ports::{ClusterContext, ExitStatus, SourceId};
 use oxikube_terminal::TerminalState;
-use oxikube_terminal::view::{BackendDescriptor, TerminalView};
+use oxikube_terminal::view::{BackendDescriptor, LocalLauncher, TerminalView};
+use oxikube_testkit::{FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort};
 use oxikube_ui::IconName;
 use oxikube_workspace::{ClusterMark, TabContent};
 
@@ -85,6 +90,76 @@ fn a_cluster_or_pod_terminal_carries_the_cluster_mark_and_its_name(cx: &mut Test
     assert_eq!(content.title.as_ref(), "web-0/app", "the pod's name");
     assert_eq!(content.icon, Some(IconName::Container));
     assert_eq!(content.cluster, Some(mark));
+}
+
+/// The app's launcher over a session manager with `cluster()` open: the tab's mark comes from
+/// the session and follows its read-only flag and colour after the terminal opened.
+#[gpui::test]
+fn the_cluster_mark_follows_the_session_after_the_terminal_opened(cx: &mut TestAppContext) {
+    let mut h = harness(cx);
+    let clock = Arc::new(FakeClockPort::default());
+    let source = Arc::new(FakeClusterSourcePort::new());
+    let sessions = ClusterSessionManager::new(
+        Arc::new(FakeClusterConnectorPort::new()),
+        source.clone(),
+        clock,
+    );
+    let context = ClusterContext::new(
+        cluster(),
+        ContextName::new("kind-dev"),
+        SourceId("kubeconfig".into()),
+    );
+    sessions.open(&context, SessionOptions::default());
+    let services = TerminalServices::new(Rc::new(LocalLauncher::new(sessions.clone(), source)));
+    // A pod terminal: this launcher does not start those (no process in this test), but its tab
+    // still carries the pod's cluster mark.
+    let pod = ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "shop", "web-0");
+    let descriptor = BackendDescriptor::Attach {
+        pod,
+        container: None,
+    };
+    let view = h
+        .vcx
+        .update(|_, cx| cx.new(|cx| TerminalView::new(descriptor, services, cx)));
+    h.vcx.run_until_parked();
+    assert_eq!(
+        tab(&mut h, &view).cluster,
+        Some(ClusterMark::default()),
+        "writable, no colour"
+    );
+
+    sessions.set_read_only(&cluster(), true).expect("open");
+    h.vcx.run_until_parked();
+    assert_eq!(
+        tab(&mut h, &view).cluster,
+        Some(ClusterMark {
+            colour: None,
+            read_only: true
+        }),
+        "the lock shows once the cluster turned read-only"
+    );
+
+    sessions
+        .set_colour(&cluster(), Some(ClusterPreset::PROD_COLOUR))
+        .expect("open");
+    sessions.set_read_only(&cluster(), false).expect("open");
+    h.vcx.run_until_parked();
+    assert_eq!(
+        tab(&mut h, &view).cluster,
+        Some(ClusterMark {
+            colour: Some(ClusterPreset::PROD_COLOUR),
+            read_only: false
+        }),
+        "the new colour, and the lock gone"
+    );
+
+    sessions.close(&cluster());
+    h.vcx.run_until_parked();
+    assert_eq!(
+        tab(&mut h, &view).cluster,
+        None,
+        "a closed session, no mark"
+    );
 }
 
 #[gpui::test]

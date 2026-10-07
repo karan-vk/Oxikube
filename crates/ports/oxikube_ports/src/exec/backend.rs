@@ -1,5 +1,7 @@
 //! The byte-stream contract the terminal element drives: [`TerminalBackend`].
 
+use std::path::PathBuf;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::BoxStream;
@@ -149,6 +151,17 @@ pub trait TerminalBackend: Send + Sync {
     /// the child). Idempotent: killing a dead or already killed backend succeeds. The
     /// output stream then ends, with [`BackendEvent::Exited`] when no exit was seen yet.
     async fn kill(&self) -> OxiResult<()>;
+
+    /// The directory the session's foreground process works in right now, when the backend
+    /// can tell: a local PTY reports its shell's directory after a `cd` (or the directory of
+    /// what the shell runs). `None` for a session that cannot say (a pod exec or attach) or
+    /// that has ended. The default is `None`.
+    ///
+    /// A split or a saved terminal tab starts its new shell there. The lookup is a couple of
+    /// non-blocking syscalls, cheap enough for the UI thread on a user action.
+    fn working_directory(&self) -> Option<PathBuf> {
+        None
+    }
 }
 
 #[cfg(test)]

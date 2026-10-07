@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use futures::executor::block_on;
-use oxikube_ports::StatePort;
+use oxikube_ports::{ExitStatus, StatePort};
 use oxikube_terminal::view::{
     BackendDescriptor, TERMINAL_ITEM_KIND, TerminalView, ensure_terminal_panel,
 };
@@ -118,6 +118,31 @@ fn restoring_starts_a_fresh_process_from_the_descriptor_in_the_dock(cx: &mut Tes
     });
     assert_eq!(first_row, "", "a fresh screen: nothing is replayed");
     assert_eq!(h.launcher.backends.borrow().len(), 2, "a new backend");
+}
+
+#[gpui::test]
+fn the_saved_directory_is_where_the_shell_is_now(cx: &mut TestAppContext) {
+    let mut h = harness(cx);
+    let view = docked_terminal(&mut h, cluster_shell());
+    h.backend(0).set_working_directory("/work/shop");
+    let saved_state = h.vcx.update(|_, cx| {
+        use oxikube_workspace::Item as _;
+        view.read(cx).serialize(cx).expect("a state")
+    });
+    assert_eq!(
+        saved_state,
+        cluster_shell().in_dir("/work/shop").to_state(),
+        "restored, it starts where the user `cd`ed"
+    );
+
+    // Once the shell exited its directory is unknown: the one it started in is kept.
+    h.backend(0).exit(ExitStatus::success());
+    h.frame();
+    let saved_state = h.vcx.update(|_, cx| {
+        use oxikube_workspace::Item as _;
+        view.read(cx).serialize(cx).expect("a state")
+    });
+    assert_eq!(saved_state, cluster_shell().to_state());
 }
 
 #[gpui::test]

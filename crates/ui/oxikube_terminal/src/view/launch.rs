@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use gpui::{App, Task};
+use gpui::{App, Context, Task};
 use oxikube_app::ClusterSessionManager;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{OxiError, OxiResult};
@@ -15,7 +15,9 @@ use oxikube_ports::cluster_source::ClusterSourcePort;
 use oxikube_ports::{TerminalBackend, TerminalSize};
 use oxikube_runtime::spawn_kube;
 use oxikube_workspace::ClusterMark;
+use oxikube_workspace::cluster::follow_session;
 
+use super::TerminalView;
 use super::descriptor::BackendDescriptor;
 use crate::backend::local::{ClusterEnv, LocalPty, LocalPtyOptions, files_of_sources};
 use crate::settings::TerminalSettings;
@@ -32,6 +34,15 @@ pub trait TerminalLauncher: 'static {
     /// The colour and read-only mark of `cluster`'s tab, shown on its terminals' tabs. `None`
     /// draws nothing.
     fn cluster_mark(&self, cluster: &ClusterId, cx: &App) -> Option<ClusterMark> {
+        let _ = (cluster, cx);
+        None
+    }
+
+    /// Keeps the mark on a terminal's tab current: a task that calls
+    /// [`TerminalView::set_cluster_mark`] whenever `cluster`'s read-only flag or colour changes
+    /// (or its session closes). The view keeps the task; dropping it stops following. `None`
+    /// (the default) when marks never change.
+    fn follow_mark(&self, cluster: &ClusterId, cx: &mut Context<TerminalView>) -> Option<Task<()>> {
         let _ = (cluster, cx);
         None
     }
@@ -130,5 +141,17 @@ impl TerminalLauncher for LocalLauncher {
         self.sessions
             .get(cluster)
             .map(|session| ClusterMark::of(&session))
+    }
+
+    fn follow_mark(&self, cluster: &ClusterId, cx: &mut Context<TerminalView>) -> Option<Task<()>> {
+        let cluster = cluster.clone();
+        Some(follow_session(
+            &self.sessions,
+            cx,
+            move |_| Some(cluster.clone()),
+            |view, session, cx| {
+                view.set_cluster_mark(session.as_ref().map(ClusterMark::of), cx);
+            },
+        ))
     }
 }

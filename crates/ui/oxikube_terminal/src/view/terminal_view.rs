@@ -39,6 +39,8 @@ pub struct TerminalView {
     /// The title the process set, cleaned and cut.
     process_title: Option<SharedString>,
     pub(super) mark: Option<ClusterMark>,
+    /// Keeps `mark` current as the cluster's read-only flag and colour change.
+    _follow_mark: Option<Task<()>>,
     /// Starts the process. Never cleared from inside itself; dropped (cancelling a launch in
     /// flight) when the tab closes.
     launch: Option<Task<()>>,
@@ -56,9 +58,13 @@ impl TerminalView {
     ) -> Self {
         let setting_shell = TerminalSettings::current(cx).shell;
         let default_title = descriptor.default_title(setting_shell.as_deref()).into();
-        let mark = descriptor
-            .cluster()
-            .and_then(|cluster| services.launcher().cluster_mark(cluster, cx));
+        let (mark, follow_mark) = match descriptor.cluster() {
+            Some(cluster) => (
+                services.launcher().cluster_mark(cluster, cx),
+                services.launcher().follow_mark(cluster, cx),
+            ),
+            None => (None, None),
+        };
         let started = services.launcher().launch(&descriptor, DEFAULT_SIZE, cx);
         let launch = cx.spawn(async move |this, cx| {
             let result = started.await;
@@ -75,14 +81,25 @@ impl TerminalView {
             default_title,
             process_title: None,
             mark,
+            _follow_mark: follow_mark,
             launch: Some(launch),
             subscriptions: Vec::new(),
         }
     }
 
-    /// What this terminal runs (and what its tab saves).
+    /// What this terminal was started from.
     pub fn descriptor(&self) -> &BackendDescriptor {
         &self.descriptor
+    }
+
+    /// What a copy of this terminal runs, and what its tab saves: the
+    /// [`descriptor`](Self::descriptor) with the directory the shell works in now (after a
+    /// `cd`), when the backend can tell. A split and a restored tab start there.
+    pub fn live_descriptor(&self, cx: &gpui::App) -> BackendDescriptor {
+        let live = self
+            .terminal()
+            .and_then(|state| state.read(cx).working_directory());
+        self.descriptor.clone().in_dir_if_known(live)
     }
 
     /// The session, once the process started.
@@ -122,9 +139,21 @@ impl TerminalView {
             .unwrap_or_else(|| self.default_title.clone())
     }
 
-    /// A new terminal running the same descriptor (a fresh process): the split of this one.
+    /// Shows `mark` (the cluster's colour and read-only flag; `None` draws nothing) on the tab,
+    /// redrawing it when it changed. Called by the launcher's
+    /// [`follow_mark`](super::TerminalLauncher::follow_mark).
+    pub fn set_cluster_mark(&mut self, mark: Option<ClusterMark>, cx: &mut Context<Self>) {
+        if self.mark != mark {
+            self.mark = mark;
+            cx.emit(ItemEvent::UpdateTab);
+            cx.notify();
+        }
+    }
+
+    /// A new terminal running the same thing in the same directory (a fresh process): the split
+    /// of this one.
     pub(super) fn duplicate(&self, cx: &mut Context<Self>) -> Entity<Self> {
-        let descriptor = self.descriptor.clone();
+        let descriptor = self.live_descriptor(cx);
         let services = self.services.clone();
         cx.new(|cx| Self::new(descriptor, services, cx))
     }

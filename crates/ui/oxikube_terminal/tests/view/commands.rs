@@ -173,6 +173,23 @@ fn new_opens_a_cluster_shell_in_the_bottom_dock_split_and_close_follow_the_focus
 }
 
 #[gpui::test]
+fn split_starts_in_the_directory_the_focused_shell_is_in_now(cx: &mut TestAppContext) {
+    let mut h = harness(cx);
+    let views = views(&mut h, Some(cluster()));
+    apply(&mut h, &views, TerminalRequest::New { cluster: None });
+    let shell = BackendDescriptor::local(Some(cluster())).in_namespace(Some("shop".into()));
+    // The user `cd`s in the first terminal.
+    h.backend(0).set_working_directory("/home/me/projects/shop");
+
+    apply(&mut h, &views, TerminalRequest::Split);
+    assert_eq!(
+        h.launches(),
+        [shell.clone(), shell.in_dir("/home/me/projects/shop")],
+        "same shell and cluster, in the shell's directory now"
+    );
+}
+
+#[gpui::test]
 fn with_no_cluster_shown_new_opens_a_plain_shell_in_the_window(cx: &mut TestAppContext) {
     let mut h = harness(cx);
     let views = views(&mut h, None);

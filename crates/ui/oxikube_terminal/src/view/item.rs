@@ -47,9 +47,10 @@ impl Item for TerminalView {
         Some(TERMINAL_ITEM_KIND)
     }
 
-    /// The descriptor only: never the scrollback, the title the process set or the environment.
-    fn serialize(&self, _: &App) -> Option<serde_json::Value> {
-        Some(self.descriptor.to_state())
+    /// The descriptor only (with the shell's directory now): never the scrollback, the title the
+    /// process set or the environment.
+    fn serialize(&self, cx: &App) -> Option<serde_json::Value> {
+        Some(self.live_descriptor(cx).to_state())
     }
 }
 

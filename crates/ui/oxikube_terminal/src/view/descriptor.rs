@@ -41,7 +41,9 @@ pub enum BackendDescriptor {
         /// Its arguments when `shell` is set (`terminal.shell_args` otherwise).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         args: Vec<String>,
-        /// The directory it starts in; `None` for the user's home.
+        /// The directory it starts in; `None` for the user's home. A split or a saved tab
+        /// carries the shell's directory at that moment
+        /// ([`TerminalView::live_descriptor`](super::TerminalView::live_descriptor)).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         cwd: Option<PathBuf>,
     },
@@ -100,6 +102,15 @@ impl BackendDescriptor {
             *cwd = Some(dir.into());
         }
         self
+    }
+
+    /// [`in_dir`](Self::in_dir) when `dir` is known; unchanged otherwise.
+    #[must_use]
+    pub fn in_dir_if_known(self, dir: Option<PathBuf>) -> Self {
+        match dir {
+            Some(dir) => self.in_dir(dir),
+            None => self,
+        }
     }
 
     /// Runs `program` with `program_args` instead of the configured shell (no effect on other
