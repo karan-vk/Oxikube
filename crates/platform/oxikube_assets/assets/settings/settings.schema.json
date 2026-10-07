@@ -49,6 +49,13 @@
             "null"
           ]
         },
+        "exec_in_read_only": {
+          "description": "Allow a shell, attach or exec into a pod (`pod::Shell`, `pod::Attach`) while `read_only`\nis on. Off by default: a shell can change anything the container's user can, so a\nread-only cluster blocks it. Takes effect at once. Set it under `clusters.<id>` to let one\nread-only cluster keep its shells.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "exec_interactivity": {
           "description": "How interactive exec credential plugins (`aws`, `gke-gcloud-auth-plugin`, ...) may be:\n`never` (no stdin, never prompt; the GUI default), `if_available` or `always`. Read when a\nsession connects: a change takes effect on the next connect.",
           "enum": [
@@ -97,7 +104,7 @@
           "description": "Manual Prometheus location; unset auto-detects. Fields merge across layers."
         },
         "read_only": {
-          "description": "Block every mutation (create, edit, delete, scale, exec, node shell) for the cluster.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
+          "description": "Block every mutation (create, edit, delete, scale, node shell) for the cluster, and shells and\nattaches into pods unless `exec_in_read_only` allows them.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
           "type": [
             "boolean",
             "null"
@@ -183,6 +190,13 @@
             "null"
           ]
         },
+        "exec_in_read_only": {
+          "description": "Allow a shell, attach or exec into a pod (`pod::Shell`, `pod::Attach`) while `read_only`\nis on. Off by default: a shell can change anything the container's user can, so a\nread-only cluster blocks it. Takes effect at once. Set it under `clusters.<id>` to let one\nread-only cluster keep its shells.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "exec_interactivity": {
           "description": "How interactive exec credential plugins (`aws`, `gke-gcloud-auth-plugin`, ...) may be:\n`never` (no stdin, never prompt; the GUI default), `if_available` or `always`. Read when a\nsession connects: a change takes effect on the next connect.",
           "enum": [
@@ -222,7 +236,7 @@
           "description": "Manual Prometheus location; unset auto-detects. Fields merge across layers."
         },
         "read_only": {
-          "description": "Block every mutation (create, edit, delete, scale, exec, node shell) for the cluster.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
+          "description": "Block every mutation (create, edit, delete, scale, node shell) for the cluster, and shells and\nattaches into pods unless `exec_in_read_only` allows them.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
           "type": [
             "boolean",
             "null"
@@ -608,6 +622,16 @@
             "null"
           ]
         },
+        "exec_shells": {
+          "description": "The shells `pod::Shell` tries in a container, first to last, each probed with a quick\nexec; the first one the container has is opened (default `[\"bash\", \"sh\"]`, like Lens).\nA name or an absolute path. An empty list uses the default. Applies to shells opened\nafterwards.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "option_as_meta": {
           "description": "Whether Alt (Option) sends `ESC` before the key, the \"meta\" prefix shells and editors use\nfor `alt-b`, `alt-f`, `alt-.`. `null` (the default) is `false` on macOS, where Option\ntypes characters (`å`, `∫`), and `true` elsewhere.",
           "type": [
@@ -782,6 +806,13 @@
         "null"
       ]
     },
+    "exec_in_read_only": {
+      "description": "Allow a shell, attach or exec into a pod (`pod::Shell`, `pod::Attach`) while `read_only`\nis on. Off by default: a shell can change anything the container's user can, so a\nread-only cluster blocks it. Takes effect at once. Set it under `clusters.<id>` to let one\nread-only cluster keep its shells.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
     "exec_interactivity": {
       "description": "How interactive exec credential plugins (`aws`, `gke-gcloud-auth-plugin`, ...) may be:\n`never` (no stdin, never prompt; the GUI default), `if_available` or `always`. Read when a\nsession connects: a change takes effect on the next connect.",
       "enum": [
@@ -830,7 +861,7 @@
       "description": "Manual Prometheus location; unset auto-detects. Fields merge across layers."
     },
     "read_only": {
-      "description": "Block every mutation (create, edit, delete, scale, exec, node shell) for the cluster.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
+      "description": "Block every mutation (create, edit, delete, scale, node shell) for the cluster, and shells and\nattaches into pods unless `exec_in_read_only` allows them.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
       "type": [
         "boolean",
         "null"

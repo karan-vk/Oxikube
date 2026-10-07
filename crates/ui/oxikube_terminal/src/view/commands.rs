@@ -1,16 +1,24 @@
-//! `terminal::New`, `terminal::Split` and `terminal::Close` on the command bus.
+//! `terminal::New`, `terminal::Split` and `terminal::Close` on the command bus, and the pod
+//! commands `pod::Shell`, `pod::Attach` and `pod::Exec` (E09-S08) that open a terminal in a
+//! container.
 //!
 //! The keymap (through the GPUI actions of the same names), the terminal panel's button, the
 //! palette and agents (`app.terminal_new`, ...) all dispatch the bus command. Its handler queues
 //! a [`TerminalRequest`] on the window's [`TerminalViewSink`]; the window's
 //! [`TerminalViews`](super::TerminalViews) applies it on the UI thread. Nothing here reads or
 //! changes a cluster: no `MutationGuard` tier (a cluster shell's commands are the user's own).
+//!
+//! The pod commands are exec-class: the bus's guard applies the read-only block and the audit
+//! record before the handler here runs (the handler only queues the request), and the terminal
+//! then connects through the launcher, so a failed connection shows in the tab.
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use oxikube_domain::command::{self, Command, CommandId};
-use oxikube_domain::ids::ClusterId;
+use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_domain::{OxiError, OxiResult};
+
+use super::BackendDescriptor;
 
 /// What the window's terminal views should do.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +32,10 @@ pub enum TerminalRequest {
     Split,
     /// `terminal::Close`: close the focused terminal.
     Close,
+    /// `pod::Shell`, `pod::Attach` or `pod::Exec`: a terminal in a pod's container, in the bottom
+    /// dock of its cluster's tab. The descriptor is [`BackendDescriptor::Exec`] (an empty
+    /// command means the shell chain) or [`BackendDescriptor::Attach`].
+    Pod(BackendDescriptor),
 }
 
 /// A handle on a window's terminal request queue. Cheap to clone; usable from any thread.
@@ -81,6 +93,99 @@ pub fn register_view_commands(
                     .ok_or_else(|| OxiError::validation("not a terminal view command"))?;
                 sink.send(request)?;
                 Ok(CommandOutput::none())
+            }
+        })?;
+    }
+    Ok(())
+}
+
+/// The commands [`register_pod_commands`] handles.
+pub const POD_COMMANDS: [CommandId; 3] = [
+    CommandId::POD_SHELL,
+    CommandId::POD_ATTACH,
+    CommandId::POD_EXEC,
+];
+
+/// The terminal a pod command asks for.
+///
+/// # Errors
+///
+/// `Validation` when the target is not a pod, or for an empty program in `pod::Exec`'s argv.
+fn pod_request(command: Command) -> OxiResult<TerminalRequest> {
+    let descriptor = match command {
+        Command::PodShell { target, container } => {
+            ensure_pod(&target, "pod::Shell")?;
+            BackendDescriptor::Exec {
+                pod: target,
+                container: blank_to_none(container),
+                command: Vec::new(),
+            }
+        }
+        Command::PodAttach { target, container } => {
+            ensure_pod(&target, "pod::Attach")?;
+            BackendDescriptor::Attach {
+                pod: target,
+                container: blank_to_none(container),
+            }
+        }
+        Command::PodExec {
+            target,
+            container,
+            command,
+        } => {
+            ensure_pod(&target, "pod::Exec")?;
+            if command
+                .first()
+                .is_some_and(|program| program.trim().is_empty())
+            {
+                return Err(OxiError::validation("pod::Exec needs a program to run"));
+            }
+            BackendDescriptor::Exec {
+                pod: target,
+                container: blank_to_none(container),
+                command,
+            }
+        }
+        _ => return Err(OxiError::validation("not a pod terminal command")),
+    };
+    Ok(TerminalRequest::Pod(descriptor))
+}
+
+fn blank_to_none(container: Option<String>) -> Option<String> {
+    container.filter(|name| !name.trim().is_empty())
+}
+
+fn ensure_pod(target: &ResourceRef, command: &str) -> OxiResult<()> {
+    let is_pod = target.gvk.group.is_empty() && &*target.gvk.kind == "Pod";
+    if !is_pod || target.namespace.is_none() {
+        return Err(OxiError::validation(format!(
+            "{command} needs a namespaced pod, not a {}",
+            target.gvk.kind
+        )));
+    }
+    Ok(())
+}
+
+/// Registers `pod::Shell`, `pod::Attach` and `pod::Exec` on `registry` (each with its MCP tool
+/// stub: unsafe, interactive, hidden from agents by default). Each handler queues a
+/// [`TerminalRequest::Pod`] on `sink`; the window's [`TerminalViews`](super::TerminalViews) opens
+/// the terminal. Call it with the same sink as [`register_view_commands`].
+///
+/// # Errors
+///
+/// A [`RegisterError`] when an id is registered twice (a wiring bug).
+pub fn register_pod_commands(
+    registry: &mut CommandRegistry,
+    sink: TerminalViewSink,
+) -> Result<(), RegisterError> {
+    for id in POD_COMMANDS {
+        let meta = *command::lookup(id).ok_or(RegisterError::Undeclared(id))?;
+        let sink = sink.clone();
+        registry.register(meta, move |command: Command, _: HandlerContext| {
+            let sink = sink.clone();
+            async move {
+                sink.send(pod_request(command)?)?;
+                Ok(CommandOutput::message("opening the terminal"))
             }
         })?;
     }

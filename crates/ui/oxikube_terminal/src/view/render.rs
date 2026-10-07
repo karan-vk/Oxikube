@@ -6,7 +6,9 @@ use gpui::{
     SharedString, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 use oxikube_ports::ExitStatus;
-use oxikube_ui::{ActiveTokens as _, u};
+use oxikube_ui::button::Button;
+use oxikube_ui::layout::v_flex;
+use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
 
 use super::TerminalView;
 use super::terminal_view::Phase;
@@ -43,6 +45,36 @@ impl TerminalView {
     }
 }
 
+impl TerminalView {
+    /// The terminal that could not start: why, and a Retry that starts it again (a pod session
+    /// is asked for again through its command, so the read-only policy applies to the retry too).
+    fn failed(&self, reason: SharedString, cx: &mut Context<Self>) -> AnyElement {
+        let tokens = cx.tokens();
+        let what = if self.descriptor.is_local() {
+            "The terminal could not start".to_owned()
+        } else {
+            format!("Could not open a session in {}", self.title())
+        };
+        v_flex()
+            .debug_selector(|| "terminal-failed".into())
+            .size_full()
+            .gap(u(tokens.spacing.md))
+            .p(u(tokens.spacing.md))
+            .bg(tokens.colors.background)
+            .text_color(tokens.colors.text_muted)
+            .child(div().child(format!("{what}: {reason}")))
+            .child(
+                div().debug_selector(|| "terminal-retry".into()).child(
+                    Button::new("terminal-retry")
+                        .small()
+                        .label("Retry")
+                        .on_click(cx.listener(|this, _, _, cx| this.retry(cx))),
+                ),
+            )
+            .into_any_element()
+    }
+}
+
 /// The line under a terminal whose process ended.
 pub fn describe_exit(status: &ExitStatus) -> String {
     match (&status.code, &status.signal) {
@@ -71,10 +103,7 @@ impl Render for TerminalView {
                 let text = format!("Starting {}…", self.title()).into();
                 self.message("terminal-starting", text, cx)
             }
-            Phase::Failed(reason) => {
-                let text = format!("The terminal could not start: {reason}").into();
-                self.message("terminal-failed", text, cx)
-            }
+            Phase::Failed(reason) => self.failed(reason.clone(), cx),
             Phase::Closed => div().into_any_element(),
         };
         let exit = self.exit_status(cx).map(describe_exit);

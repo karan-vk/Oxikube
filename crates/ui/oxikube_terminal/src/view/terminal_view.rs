@@ -70,13 +70,7 @@ impl TerminalView {
             ),
             None => (None, None),
         };
-        let started = services.launcher().launch(&descriptor, DEFAULT_SIZE, cx);
-        let launch = cx.spawn(async move |this, cx| {
-            let result = started.await;
-            // The view may be gone (its tab closed while starting): the backend is dropped here,
-            // which ends the process.
-            this.update(cx, |this, cx| this.started(result, cx)).ok();
-        });
+        let launch = Self::start_launch(&descriptor, &services, cx);
         Self {
             descriptor,
             services,
@@ -91,6 +85,45 @@ impl TerminalView {
             launch: Some(launch),
             subscriptions: Vec::new(),
         }
+    }
+
+    /// Asks the launcher to start `descriptor`'s process and delivers the result to the view.
+    /// The task is the view's to keep: dropping it (the tab closes, or another launch replaces
+    /// it) cancels a launch in flight.
+    fn start_launch(
+        descriptor: &BackendDescriptor,
+        services: &TerminalServices,
+        cx: &mut Context<Self>,
+    ) -> Task<()> {
+        let started = services.launcher().launch(descriptor, DEFAULT_SIZE, cx);
+        cx.spawn(async move |this, cx| {
+            let result = started.await;
+            // The view may be gone (its tab closed while starting): the backend is dropped here,
+            // which ends the process.
+            this.update(cx, |this, cx| this.started(result, cx)).ok();
+        })
+    }
+
+    /// Starts the terminal again after it failed to start (the failed tab's Retry).
+    ///
+    /// A local shell starts again in place. A pod session is started only by its command, so the
+    /// guard applies the read-only policy and audits this open too: the command is sent again and
+    /// this failed tab closes (the new terminal opens in the dock). Does nothing unless the
+    /// terminal failed to start.
+    pub fn retry(&mut self, cx: &mut Context<Self>) {
+        if !matches!(self.phase, Phase::Failed(_)) {
+            return;
+        }
+        if let Some(command) = self.descriptor.pod_command() {
+            self.services.dispatch(command, cx);
+            cx.emit(ItemEvent::CloseItem);
+            return;
+        }
+        self.phase = Phase::Starting;
+        // Replaces the finished launch task; never cleared from inside itself.
+        self.launch = Some(Self::start_launch(&self.descriptor, &self.services, cx));
+        cx.emit(ItemEvent::UpdateTab);
+        cx.notify();
     }
 
     /// What this terminal was started from.

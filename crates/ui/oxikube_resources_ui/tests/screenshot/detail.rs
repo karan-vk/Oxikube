@@ -93,6 +93,7 @@ fn render(light: bool, tab: DetailTab) -> anyhow::Result<RgbaImage> {
             stores: Arc::new(ResourceStores::new(store_runtime(clock, cx))),
             columns: Arc::new(CoreColumns::new()),
             dispatcher: Rc::new(Ignore),
+            exec: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

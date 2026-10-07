@@ -10,7 +10,8 @@
 //! of a pod, the palette, an agent's `k8s.pod_view_logs`) opens a log view as a tab of the pod's
 //! cluster tab, `workload::ViewLogs` (the same row action on a Deployment, StatefulSet, DaemonSet,
 //! ReplicaSet, Job or Service) opens the merged log of its pods, and the `logs::*` commands drive
-//! them. [`row_actions`] is the tables' row action registry with "View Logs" in it.
+//! them. [`row_actions`] is the tables' row action registry with "View Logs" in it, and (E09-S08)
+//! "Shell" and "Attach" on pods.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -106,13 +107,15 @@ pub fn start_views(
     LogViews::start(deps, requests, window, cx)
 }
 
-/// The resource tables' row actions: the core ones (delete), the CRD list's (E07-S07) and "View
-/// Logs" on pods (E08-S02) and on workloads and Services (E08-S04).
+/// The resource tables' row actions: the core ones (delete), the CRD list's (E07-S07), "View
+/// Logs" on pods (E08-S02) and on workloads and Services (E08-S04), and "Shell" and "Attach" on
+/// pods (E09-S08).
 pub fn row_actions() -> RowActionRegistry {
     let mut registry = RowActionRegistry::core();
     let specs = oxikube_resources_ui::crds::crd_row_actions()
         .into_iter()
-        .chain(log_row_actions());
+        .chain(log_row_actions())
+        .chain(oxikube_resources_ui::exec::exec_row_actions());
     for spec in specs {
         if let Err(error) = registry.register(spec) {
             // A wiring bug (one command offered twice); the tests catch it.

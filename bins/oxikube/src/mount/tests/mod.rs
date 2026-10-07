@@ -8,6 +8,7 @@
 mod actions;
 mod agent;
 mod chrome;
+mod exec;
 mod logs;
 mod resources;
 mod terminal;

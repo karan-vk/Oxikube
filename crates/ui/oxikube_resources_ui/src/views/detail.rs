@@ -16,6 +16,7 @@ use oxikube_workspace::{OpenOptions, Toast, Workspace};
 
 use super::controller::ResourceViews;
 use crate::detail::{DetailDeps, DetailDrawer, DetailView, item_key};
+use crate::exec::ExecFlow;
 
 impl ResourceViews {
     /// The workspace of `cluster`'s tab.
@@ -51,7 +52,22 @@ impl ResourceViews {
                 drawer
             }
         };
-        let deps = DetailDeps::from(&self.deps.table);
+        let mut deps = DetailDeps::from(&self.deps.table);
+        // A pod's header opens shells and attaches through the same flow as the table's menu,
+        // asking in this tab's workspace.
+        deps.exec = self
+            .deps
+            .table
+            .actions
+            .as_ref()
+            .and_then(|actions| actions.exec_service().cloned())
+            .map(|service| {
+                ExecFlow::new(
+                    service,
+                    self.deps.table.dispatcher.clone(),
+                    workspace.downgrade(),
+                )
+            });
         let target = target.clone();
         Some(drawer.update(cx, |drawer, cx| drawer.show(target, &deps, cx)))
     }

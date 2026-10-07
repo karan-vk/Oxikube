@@ -183,3 +183,76 @@ fn registering_a_command_twice_is_refused() {
     );
     assert_eq!(registry.specs().len(), 1);
 }
+
+fn shell_spec() -> RowActionSpec {
+    RowActionSpec::new(CommandId::POD_SHELL, |target| Command::PodShell {
+        target: target.clone(),
+        container: None,
+    })
+    .label("Shell")
+    .kinds(KindFilter::Matching(|kind| &*kind.gvk.kind == "Pod"))
+}
+
+#[test]
+fn a_shell_needs_exec_and_is_disabled_on_a_read_only_cluster_unless_allowed() {
+    // The Harness bus has no exec handler: register the spec against a bus that has one.
+    let h = Harness::with_extra(|reg, _, _| {
+        reg.register(
+            crate::testing::declared(CommandId::POD_SHELL),
+            |_: Command, _: crate::command_bus::HandlerContext| async {
+                Ok(crate::command_bus::CommandOutput::none())
+            },
+        )
+    });
+    let mut registry = RowActionRegistry::new();
+    registry.register(shell_spec()).unwrap();
+    let actions = RowActions::from_bus(&h.bus, &registry);
+
+    // Hidden without the exec capability, shown with it.
+    assert!(
+        actions
+            .actions_for(&pods(), Capabilities::MUTATE | Capabilities::LOGS)
+            .is_empty()
+    );
+    assert_eq!(
+        titles(&actions.actions_for(&pods(), Capabilities::EXEC)),
+        ["Shell"]
+    );
+    // Not offered for a kind that is not a pod.
+    assert!(actions.actions_for(&crd(), Capabilities::EXEC).is_empty());
+
+    let ctx = ActionContext::new(Capabilities::EXEC);
+    assert!(actions.resolve(&pods(), &ctx, 1)[0].state.is_enabled());
+    // Not a bulk action: a selection of several offers none.
+    assert!(actions.resolve(&pods(), &ctx, 3).is_empty());
+
+    let read_only = ctx.read_only(true);
+    let resolved = actions.resolve(&pods(), &read_only, 1);
+    assert_eq!(resolved.len(), 1, "shown greyed out, with the reason");
+    assert_eq!(
+        resolved[0].state,
+        ActionState::Disabled(DisabledReason::ExecReadOnly)
+    );
+    let reason = resolved[0].state.reason().unwrap().to_string();
+    assert!(reason.contains("exec_in_read_only"), "{reason}");
+
+    let allowed = read_only.exec_in_read_only(true);
+    assert!(actions.resolve(&pods(), &allowed, 1)[0].state.is_enabled());
+}
+
+#[test]
+fn a_session_reports_whether_it_lets_a_shell_open_when_read_only() {
+    let h = Harness::new();
+    h.prefs.seed(
+        &crate::testing::id("a"),
+        oxikube_ports::ClusterPrefs {
+            read_only: true,
+            exec_in_read_only: true,
+            ..Default::default()
+        },
+    );
+    h.connect_configured("a");
+    let session = h.manager.get(&crate::testing::id("a")).unwrap();
+    let ctx = ActionContext::of(&session);
+    assert!(ctx.read_only && ctx.exec_in_read_only);
+}

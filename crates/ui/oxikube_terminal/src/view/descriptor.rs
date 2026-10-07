@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
+use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_ui::IconName;
 use serde::{Deserialize, Serialize};
@@ -145,6 +146,39 @@ impl BackendDescriptor {
         matches!(self, Self::Local { .. })
     }
 
+    /// The bus command that opens this pod terminal again (`pod::Shell` for an exec without a
+    /// command, `pod::Exec`, `pod::Attach`); `None` for a local shell.
+    ///
+    /// A pod session is only ever started by its command, so the guard applies the read-only
+    /// policy and the audit record: a split, a retry or a reopen sends this instead of starting
+    /// another process itself.
+    pub fn pod_command(&self) -> Option<Command> {
+        match self {
+            Self::Local { .. } => None,
+            Self::Exec {
+                pod,
+                container,
+                command,
+            } if command.is_empty() => Some(Command::PodShell {
+                target: pod.clone(),
+                container: container.clone(),
+            }),
+            Self::Exec {
+                pod,
+                container,
+                command,
+            } => Some(Command::PodExec {
+                target: pod.clone(),
+                container: container.clone(),
+                command: command.clone(),
+            }),
+            Self::Attach { pod, container } => Some(Command::PodAttach {
+                target: pod.clone(),
+                container: container.clone(),
+            }),
+        }
+    }
+
     /// The tab title before the process sets one: the program's name for a local shell
     /// (`setting_shell` is the `terminal.shell` setting, used when no shell is named), the pod
     /// (and container) for a pod terminal.
@@ -258,6 +292,37 @@ mod tests {
             let state = descriptor.to_state();
             assert_eq!(BackendDescriptor::from_state(&state), Some(descriptor));
         }
+    }
+
+    #[test]
+    fn a_pod_terminal_is_reopened_by_its_command() {
+        let shell = BackendDescriptor::Exec {
+            pod: pod(),
+            container: Some("app".into()),
+            command: Vec::new(),
+        };
+        assert_eq!(
+            shell.pod_command(),
+            Some(Command::PodShell {
+                target: pod(),
+                container: Some("app".into())
+            })
+        );
+        let exec = BackendDescriptor::Exec {
+            pod: pod(),
+            container: None,
+            command: vec!["psql".into()],
+        };
+        assert!(matches!(exec.pod_command(), Some(Command::PodExec { .. })));
+        let attach = BackendDescriptor::Attach {
+            pod: pod(),
+            container: None,
+        };
+        assert!(matches!(
+            attach.pod_command(),
+            Some(Command::PodAttach { .. })
+        ));
+        assert_eq!(BackendDescriptor::local(None).pod_command(), None);
     }
 
     #[test]

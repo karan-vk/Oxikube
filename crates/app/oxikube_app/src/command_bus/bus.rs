@@ -55,7 +55,10 @@ impl CommandBus {
     ///    pipeline: a simple confirm when it lifts read-only on a production-flagged
     ///    cluster, then the handler, then an audit record. Read-only mode does not block it.
     /// 4. A read command runs its handler at once, with no [`Mutation`](crate::guard::Mutation).
-    /// 5. A mutating command goes through the [`MutationGuard`] pipeline: read-only
+    /// 5. An exec-class command (`pod::Shell`, `pod::Attach`, `pod::Exec`) takes the guard's exec
+    ///    policy: read-only block unless the cluster allows it, then an audit record; no
+    ///    confirmation.
+    /// 6. A mutating command goes through the [`MutationGuard`] pipeline: read-only
     ///    check, confirmation (returning [`Outcome::NeedsConfirmation`] without waiting),
     ///    dry-run stage, the handler with a `Mutation`, then the audit record.
     ///
@@ -85,6 +88,15 @@ impl CommandBus {
                 command: id,
                 initiator: ctx.initiator,
             });
+        }
+        if meta.exec {
+            // A shell, attach or exec in a container: read-only block (unless the cluster allows
+            // it) and an audit record, no confirmation and no write permit.
+            return self
+                .inner
+                .guard
+                .run_exec(meta, command, ctx, entry.handler.clone())
+                .await;
         }
         if !meta.mutating && policy::is_posture(&command) {
             // Posture commands (read-only, colour, presets) never touch the cluster, so the
@@ -145,6 +157,15 @@ impl CommandBus {
     /// Every registered tool stub, for the `ToolRegistry` (agent phase).
     pub fn tools(&self) -> impl Iterator<Item = &ToolDef> {
         self.inner.entries.values().filter_map(|e| e.tool.as_ref())
+    }
+
+    /// The tool stubs agents are offered: every one, except those hidden from agents by default
+    /// (the exec tools: `k8s.pod_shell`, `k8s.pod_attach`, `k8s.pod_exec`, unsafe and
+    /// interactive) unless `include_hidden` is set, which the agent epic wires to the user's
+    /// opt-in setting.
+    pub fn agent_tools(&self, include_hidden: bool) -> impl Iterator<Item = &ToolDef> {
+        self.tools()
+            .filter(move |tool| include_hidden || tool.agent_exposed_by_default())
     }
 
     /// The guard, for its state (pending confirmations, audit backlog).

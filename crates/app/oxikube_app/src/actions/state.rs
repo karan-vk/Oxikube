@@ -15,6 +15,9 @@ pub struct ActionContext {
     pub capabilities: Capabilities,
     /// Whether the cluster refuses every mutation.
     pub read_only: bool,
+    /// Whether a shell, attach or exec still opens on a read-only cluster (the cluster's
+    /// `exec_in_read_only` setting).
+    pub exec_in_read_only: bool,
 }
 
 impl ActionContext {
@@ -23,6 +26,7 @@ impl ActionContext {
         Self {
             capabilities,
             read_only: false,
+            exec_in_read_only: false,
         }
     }
 
@@ -31,6 +35,7 @@ impl ActionContext {
         Self {
             capabilities: session.capabilities(),
             read_only: session.read_only(),
+            exec_in_read_only: session.prefs().exec_in_read_only,
         }
     }
 
@@ -41,10 +46,20 @@ impl ActionContext {
         self
     }
 
-    /// Whether an action described by `meta` can run here.
+    /// The same context with `exec_in_read_only` set.
+    #[must_use]
+    pub fn exec_in_read_only(mut self, allowed: bool) -> Self {
+        self.exec_in_read_only = allowed;
+        self
+    }
+
+    /// Whether an action described by `meta` can run here: a mutation and, unless the cluster
+    /// allows it, an exec-class command (a shell, an attach) are off on a read-only cluster.
     pub fn state_of(&self, meta: &CommandMeta) -> ActionState {
         if meta.mutating && self.read_only {
             ActionState::Disabled(DisabledReason::ReadOnly)
+        } else if meta.exec && self.read_only && !self.exec_in_read_only {
+            ActionState::Disabled(DisabledReason::ExecReadOnly)
         } else {
             ActionState::Enabled
         }
@@ -80,12 +95,18 @@ impl ActionState {
 pub enum DisabledReason {
     /// The cluster is in read-only mode.
     ReadOnly,
+    /// The cluster is read-only and shells into pods are not allowed there
+    /// (`exec_in_read_only`).
+    ExecReadOnly,
 }
 
 impl fmt::Display for DisabledReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DisabledReason::ReadOnly => f.write_str("This cluster is read-only"),
+            DisabledReason::ExecReadOnly => f.write_str(
+                "This cluster is read-only: shells are blocked (set exec_in_read_only to allow them)",
+            ),
         }
     }
 }

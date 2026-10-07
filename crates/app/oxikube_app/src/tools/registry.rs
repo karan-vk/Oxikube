@@ -81,13 +81,26 @@ impl ToolRegistry {
             .collect()
     }
 
-    /// The definitions of the tools a session with `capabilities` may use, sorted by name.
+    /// The definitions of the tools a session with `capabilities` may use and agents are offered
+    /// by default, sorted by name: a tool hidden from agents ([`ToolDef::agent_exposed_by_default`],
+    /// the unsafe interactive ones) is left out.
     pub fn visible(&self, capabilities: Capabilities) -> Vec<ToolDef> {
+        self.visible_with_hidden(capabilities, false)
+    }
+
+    /// [`visible`](Self::visible), with the tools hidden from agents too when `include_hidden`
+    /// (the user turned them on in the settings).
+    pub fn visible_with_hidden(
+        &self,
+        capabilities: Capabilities,
+        include_hidden: bool,
+    ) -> Vec<ToolDef> {
         self.tools
             .read()
             .values()
             .map(|t| t.def())
             .filter(|def| capabilities.contains(def.needs))
+            .filter(|def| include_hidden || def.agent_exposed_by_default())
             .cloned()
             .collect()
     }
@@ -213,5 +226,30 @@ mod tests {
             .unwrap();
         assert_eq!(registry.visible(Capabilities::empty()).len(), 1);
         assert_eq!(registry.visible(Capabilities::LOGS).len(), 2);
+    }
+
+    #[test]
+    fn a_tool_hidden_from_agents_is_listed_only_when_asked_for() {
+        let registry = ToolRegistry::new();
+        registry.register(echo("app.open")).unwrap();
+        let hidden = ToolDef::read_only(
+            ToolName::new("app.hidden").unwrap(),
+            "hidden by default",
+            schema(),
+        )
+        .with_annotations(oxikube_ports::ToolAnnotations {
+            agent_hidden: true,
+            ..Default::default()
+        });
+        registry.register(Arc::new(Echo(hidden))).unwrap();
+        let names = |defs: Vec<ToolDef>| -> Vec<String> {
+            defs.iter().map(|d| d.name.to_string()).collect()
+        };
+        assert_eq!(names(registry.visible(Capabilities::all())), ["app.open"]);
+        assert_eq!(
+            names(registry.visible_with_hidden(Capabilities::all(), true)),
+            ["app.hidden", "app.open"]
+        );
+        assert_eq!(registry.defs().len(), 2, "registered, just not offered");
     }
 }

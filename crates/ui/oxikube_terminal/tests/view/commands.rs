@@ -90,7 +90,7 @@ impl TerminalHost for TestHost {
     }
 }
 
-fn views(h: &mut Harness, cluster: Option<ClusterId>) -> Entity<TerminalViews> {
+pub(super) fn views(h: &mut Harness, cluster: Option<ClusterId>) -> Entity<TerminalViews> {
     let (_sink, requests) = TerminalViewSink::channel();
     let deps = TerminalViewsDeps {
         host: Rc::new(TestHost {
@@ -107,13 +107,13 @@ fn views(h: &mut Harness, cluster: Option<ClusterId>) -> Entity<TerminalViews> {
     views
 }
 
-fn apply(h: &mut Harness, views: &Entity<TerminalViews>, request: TerminalRequest) {
+pub(super) fn apply(h: &mut Harness, views: &Entity<TerminalViews>, request: TerminalRequest) {
     h.vcx
         .update(|window, cx| views.update(cx, |views, cx| views.apply(request, window, cx)));
     h.frame();
 }
 
-fn terminals(h: &mut Harness) -> Vec<Entity<TerminalView>> {
+pub(super) fn terminals(h: &mut Harness) -> Vec<Entity<TerminalView>> {
     let ws = h.ws.clone();
     h.vcx
         .update(|_, cx| ws.read(cx).items_of_type::<TerminalView>())

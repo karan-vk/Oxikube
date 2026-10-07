@@ -8,6 +8,7 @@ mod commands;
 mod dock;
 mod item;
 mod persist;
+mod pod;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -31,11 +32,21 @@ struct FakeLauncher {
     backends: RefCell<Vec<FakeTerminalBackend>>,
     fail_next: RefCell<Option<OxiError>>,
     mark: Option<ClusterMark>,
+    /// Never finish starting: the tab stays in its "Starting" state.
+    hang: bool,
 }
 
 impl TerminalLauncher for FakeLauncher {
-    fn launch(&self, descriptor: &BackendDescriptor, _: TerminalSize, _: &mut gpui::App) -> Launch {
+    fn launch(
+        &self,
+        descriptor: &BackendDescriptor,
+        _: TerminalSize,
+        cx: &mut gpui::App,
+    ) -> Launch {
         self.launches.borrow_mut().push(descriptor.clone());
+        if self.hang {
+            return cx.spawn(async move |_| std::future::pending().await);
+        }
         if let Some(error) = self.fail_next.borrow_mut().take() {
             return Task::ready(Err(error));
         }

@@ -5,13 +5,14 @@
 //! | Module | What |
 //! |---|---|
 //! | `descriptor` | [`BackendDescriptor`]: what a terminal runs (kind, program, directory, cluster or pod); the tab's whole saved state |
-//! | `launch` | [`TerminalLauncher`]: starts the process a descriptor describes, off the UI thread; [`LocalLauncher`], the app's (local shells with the cluster environment) |
+//! | `launch` | [`TerminalLauncher`]: starts the process a descriptor describes, off the UI thread; [`LocalLauncher`] (local shells with the cluster environment) |
+//! | `cluster_launch` | [`ClusterLauncher`], the app's launcher: [`LocalLauncher`] plus pod sessions through the app's `ExecService` (E09-S08) |
 //! | `services` | [`TerminalServices`]: launcher, command dispatcher, paste confirmation; an app global so the layout restore builds terminals too |
 //! | `terminal_view` | [`TerminalView`]: owns the [`TerminalState`](crate::TerminalState) (grid, backend, tasks) for the tab's life; title from the process |
 //! | `render` | the element, the starting / failed line, the exit line |
 //! | `item` | the `Item` impl: tab title = process or pod name, dirty = a process runs, icon by kind, cluster mark, dockable, split = a fresh copy, close ends the process, saved = the descriptor only |
 //! | `panel` | [`TerminalPanel`]: the bottom-dock panel of a cluster's terminals, and [`ensure_terminal_panel`] |
-//! | `commands` | the bus handlers: [`register_view_commands`] queues a [`TerminalRequest`] on the window's [`TerminalViewSink`] |
+//! | `commands` | the bus handlers: [`register_view_commands`] (`terminal::*`) and [`register_pod_commands`] (`pod::Shell`, `pod::Attach`, `pod::Exec`, E09-S08) queue a [`TerminalRequest`] on the window's [`TerminalViewSink`] |
 //! | `host`, `controller` | [`TerminalViews`]: applies the requests in the shown workspace, through a [`TerminalHost`] ([`ClusterTerminalHost`] in the app) |
 //!
 //! One `TerminalView` per process: moving its tab between panes and the dock moves the entity, so
@@ -19,6 +20,7 @@
 //! tasks (abort on drop). A restored tab starts a fresh process from its descriptor; the
 //! scrollback is never saved (non-negotiable 5).
 
+mod cluster_launch;
 mod commands;
 mod controller;
 mod descriptor;
@@ -33,7 +35,10 @@ mod terminal_view;
 use gpui::{App, actions};
 use oxikube_domain::command::Command;
 
-pub use commands::{TerminalRequest, TerminalViewSink, register_view_commands};
+pub use cluster_launch::ClusterLauncher;
+pub use commands::{
+    POD_COMMANDS, TerminalRequest, TerminalViewSink, register_pod_commands, register_view_commands,
+};
 pub use controller::{TerminalViews, TerminalViewsDeps};
 pub use descriptor::BackendDescriptor;
 pub use host::{ClusterTerminalHost, TerminalHost};

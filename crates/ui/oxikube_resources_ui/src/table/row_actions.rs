@@ -12,9 +12,10 @@ use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::{Toast, Workspace};
 
-use super::actions::DeleteSelected;
+use super::actions::{AttachSelected, DeleteSelected, ShellSelected};
 use super::view::ResourceTable;
 use crate::actions::{ActionEntry, DeleteDialog, ResourceActions};
+use crate::exec::{ExecFlow, ExecKind};
 
 impl ResourceTable {
     /// Tells the table which workspace hosts its dialogs and toasts (its cluster tab's).
@@ -75,6 +76,19 @@ impl ResourceTable {
         }
         if command == CommandId::RESOURCE_DELETE {
             self.begin_delete(&actions, targets, window, cx);
+        } else if let (Some(kind), Some(service)) =
+            (ExecKind::of(command), actions.exec_service().cloned())
+        {
+            // A shell or an attach: the pod is read first, so the container is chosen (or
+            // asked for) before the command is dispatched and audited.
+            let workspace = self
+                .workspace
+                .clone()
+                .unwrap_or_else(gpui::WeakEntity::new_invalid);
+            let flow = ExecFlow::new(service, self.deps.dispatcher.clone(), workspace);
+            if let Some(target) = targets.into_iter().next() {
+                self.exec_task = Some(flow.begin(kind, target, window, cx));
+            }
         } else {
             for target in &targets {
                 let command = entry.action.command_for(target);
@@ -129,5 +143,27 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::RESOURCE_DELETE, targets, window, cx);
+    }
+}
+
+impl ResourceTable {
+    pub(super) fn on_shell(
+        &mut self,
+        _: &ShellSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::POD_SHELL, targets, window, cx);
+    }
+
+    pub(super) fn on_attach(
+        &mut self,
+        _: &AttachSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::POD_ATTACH, targets, window, cx);
     }
 }

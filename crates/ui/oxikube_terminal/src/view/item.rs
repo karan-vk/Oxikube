@@ -39,8 +39,11 @@ impl Item for TerminalView {
         self.shut_down(cx);
     }
 
+    /// A local shell splits into a fresh shell in the same directory. A pod terminal does not
+    /// clone: another session in the container is a new `pod::Shell`, which the guard checks and
+    /// audits (the controller's split sends it).
     fn clone_on_split(&self, _: &mut Window, cx: &mut Context<Self>) -> Option<Entity<Self>> {
-        Some(self.duplicate(cx))
+        self.descriptor.is_local().then(|| self.duplicate(cx))
     }
 
     fn serialized_kind() -> Option<&'static str> {
@@ -48,9 +51,13 @@ impl Item for TerminalView {
     }
 
     /// The descriptor only (with the shell's directory now): never the scrollback, the title the
-    /// process set or the environment.
+    /// process set or the environment. A pod terminal is not saved: restoring it would open a
+    /// session in the container at launch with nobody asking, around the guard's read-only block
+    /// and audit; `pod: shell` opens a new one.
     fn serialize(&self, cx: &App) -> Option<serde_json::Value> {
-        Some(self.live_descriptor(cx).to_state())
+        self.descriptor
+            .is_local()
+            .then(|| self.live_descriptor(cx).to_state())
     }
 }
 

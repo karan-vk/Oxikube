@@ -30,7 +30,11 @@
 //!    focused terminal;
 //! 9. the terminal tabs (E09-S07, [`terminal`]): the terminal services (local shells with the
 //!    cluster's environment), the terminal panel in every cluster tab's bottom dock, and the
-//!    window's `TerminalViews` behind `terminal::New` / `Split` / `Close`.
+//!    window's `TerminalViews` behind `terminal::New` / `Split` / `Close`;
+//! 10. shells in pods (E09-S08): the app's one `ExecService`, "Shell" and "Attach" in a pod's
+//!     context menu, palette list, detail header and on `s` / `a`, and `pod::Shell` /
+//!     `pod::Attach` / `pod::Exec` on the bus (read-only blocked unless `exec_in_read_only`,
+//!     audited, never confirmed) opening a terminal in the cluster tab's bottom dock.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -54,7 +58,9 @@ use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui::{App, AppContext as _, Entity, Subscription, Task, Window};
 use oxikube_app::session::restore::{RestoreConfig, SessionRestorer};
-use oxikube_app::{CommandBus, CoreColumns, KubeconfigSourcesService};
+use oxikube_app::{
+    ClusterSessionManager, CommandBus, CoreColumns, ExecService, KubeconfigSourcesService,
+};
 use oxikube_catalog_ui::sources::{SettingsSourceList, SettingsSourceListHandle};
 use oxikube_catalog_ui::{Hotbar, HotbarDeps};
 use oxikube_resources_ui::actions::ResourceActions;
@@ -134,10 +140,15 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // fills.
     let agent = logs::install_agent_hooks(&state, services.sessions.clone(), log_service.clone());
 
+    // Shells, attaches and commands in pod containers (E09-S08): one service per app, so the
+    // container chosen last in a pod is remembered across windows.
+    let exec_service = exec_service(&state, services.sessions.clone());
+
     // Before any cluster tab opens: its layout restore rebuilds saved terminal tabs with these.
     let terminal_services = terminal::install_services(
         services.sessions.clone(),
         ports.clusters.source.clone(),
+        exec_service.clone(),
         dispatcher.clone(),
         &workspace,
         cx,
@@ -217,12 +228,15 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                 columns: Arc::new(CoreColumns::new()),
                 state: ports.state.clone(),
                 dispatcher: dispatcher.clone(),
-                actions: Some(ResourceActions::with_registry(
-                    &bus,
-                    services.sessions.clone(),
-                    local_user(),
-                    &logs::row_actions(),
-                )),
+                actions: Some(
+                    ResourceActions::with_registry(
+                        &bus,
+                        services.sessions.clone(),
+                        local_user(),
+                        &logs::row_actions(),
+                    )
+                    .with_exec(exec_service),
+                ),
             },
             tabs: tabs.downgrade(),
             fs: ports.clusters.fs.clone(),
@@ -343,6 +357,19 @@ fn open_views(
             }
         }
     })
+}
+
+/// The app's `ExecService`: the one already set on `state`, else a new one that is set.
+fn exec_service(state: &AppState, sessions: ClusterSessionManager) -> Arc<ExecService> {
+    if let Some(service) = state.exec_service() {
+        return service.clone();
+    }
+    let service = Arc::new(ExecService::new(sessions));
+    if !state.set_exec_service(service.clone()) {
+        // Another window set one first: use that, so the last choices are shared.
+        return state.exec_service().cloned().unwrap_or(service);
+    }
+    service
 }
 
 /// The local user's name, for the audit log's "who".

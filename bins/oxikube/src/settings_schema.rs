@@ -91,6 +91,7 @@ mod tests {
             "prometheus",
             "accessible_namespaces",
             "exec_interactivity",
+            "exec_in_read_only",
         ] {
             assert!(
                 cluster[key].is_object(),

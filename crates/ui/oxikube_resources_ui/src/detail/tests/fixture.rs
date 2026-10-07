@@ -112,7 +112,18 @@ impl Detail {
         cx: &mut TestAppContext,
         objects: impl IntoIterator<Item = Resource>,
     ) -> Self {
-        let f = Fixture::new(cx);
+        Self::over(Fixture::new(cx), objects)
+    }
+
+    /// [`Self::new`] over the fixture with the exec row actions (E09-S08).
+    pub(crate) fn with_exec(
+        cx: &mut TestAppContext,
+        objects: impl IntoIterator<Item = Resource>,
+    ) -> Self {
+        Self::over(Fixture::with_exec(cx), objects)
+    }
+
+    fn over(f: Fixture, objects: impl IntoIterator<Item = Resource>) -> Self {
         let ports = f.ports();
         ports.discovery.set_kinds(kinds());
         for object in objects {

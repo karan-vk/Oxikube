@@ -119,12 +119,16 @@ impl CommandId {
     pub const NODE_UNCORDON: CommandId = CommandId::new("node::Uncordon");
     /// `palette::Toggle`: show or hide the command palette.
     pub const PALETTE_TOGGLE: CommandId = CommandId::new("palette::Toggle");
+    /// `pod::Attach`: attach to a container's main process.
+    pub const POD_ATTACH: CommandId = CommandId::new("pod::Attach");
     /// `pod::Delete`: delete one pod.
     pub const POD_DELETE: CommandId = CommandId::new("pod::Delete");
     /// `pod::Exec`: run a command (or shell) in a container.
     pub const POD_EXEC: CommandId = CommandId::new("pod::Exec");
     /// `pod::PortForward`: forward a local port to a pod port.
     pub const POD_PORT_FORWARD: CommandId = CommandId::new("pod::PortForward");
+    /// `pod::Shell`: open an interactive shell in a container (`bash`, else `sh`).
+    pub const POD_SHELL: CommandId = CommandId::new("pod::Shell");
     /// `pod::ViewLogs`: open a pod's logs.
     pub const POD_VIEW_LOGS: CommandId = CommandId::new("pod::ViewLogs");
     /// `resource::Apply`: apply a manifest.
@@ -520,6 +524,9 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // The exec class (`CommandMeta::exec`): not mutations, no confirmation, blocked on a
+    // read-only cluster unless `exec_in_read_only` allows it, audited on every open.
+    CommandMeta::exec(CommandId::POD_ATTACH, "Attach", CommandScope::Selection),
     CommandMeta::mutation(
         CommandId::POD_DELETE,
         "Delete Pod",
@@ -527,12 +534,10 @@ pub static COMMANDS: &[CommandMeta] = &[
         Risk::Medium,
         NONE,
     ),
-    CommandMeta::mutation(
+    CommandMeta::exec(
         CommandId::POD_EXEC,
         "Exec into Container",
         CommandScope::Selection,
-        Risk::Medium,
-        Capabilities::EXEC,
     ),
     CommandMeta::read(
         CommandId::POD_PORT_FORWARD,
@@ -540,6 +545,7 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         Capabilities::PORTFORWARD,
     ),
+    CommandMeta::exec(CommandId::POD_SHELL, "Shell", CommandScope::Selection),
     CommandMeta::read(
         CommandId::POD_VIEW_LOGS,
         "View Logs",
@@ -890,10 +896,37 @@ mod tests {
         assert_eq!(get(CommandId::NODE_DRAIN).confirm, ConfirmTier::TypeName);
         assert_eq!(get(CommandId::WORKLOAD_SCALE).confirm, ConfirmTier::Simple);
         assert_eq!(get(CommandId::POD_VIEW_LOGS).needs, Capabilities::LOGS);
-        assert_eq!(
-            get(CommandId::POD_EXEC).needs,
-            Capabilities::EXEC | Capabilities::MUTATE
-        );
         assert!(!get(CommandId::POD_PORT_FORWARD).mutating);
+    }
+
+    #[test]
+    fn exec_commands_are_their_own_class() {
+        let exec: Vec<_> = COMMANDS.iter().filter(|m| m.exec).map(|m| m.id).collect();
+        assert_eq!(
+            exec,
+            [
+                CommandId::POD_ATTACH,
+                CommandId::POD_EXEC,
+                CommandId::POD_SHELL
+            ],
+            "the exec class is a reviewed allow-list"
+        );
+        for meta in COMMANDS.iter().filter(|m| m.exec) {
+            // Not a mutation (no object changes, no confirmation) and not privileged (an agent
+            // may ask; the tool stub is hidden from agents by default instead).
+            assert!(!meta.mutating && !meta.privileged, "{}", meta.id);
+            assert_eq!(meta.confirm, ConfirmTier::None, "{}", meta.id);
+            assert_eq!(meta.risk, None, "{}", meta.id);
+            assert_eq!(meta.needs, Capabilities::EXEC, "{}", meta.id);
+            assert_eq!(meta.tool_risk(), Some(Risk::High), "{}", meta.id);
+            assert!(meta.id.tool_name().starts_with("k8s.pod_"), "{}", meta.id);
+        }
+        assert_eq!(CommandId::POD_EXEC.tool_name(), "k8s.pod_exec");
+        assert!(
+            COMMANDS
+                .iter()
+                .filter(|m| !m.exec)
+                .all(|m| m.tool_risk() == m.risk || m.id == CommandId::RESOURCE_DELETE)
+        );
     }
 }

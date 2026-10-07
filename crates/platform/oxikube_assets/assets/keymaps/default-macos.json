@@ -104,6 +104,10 @@
       "cmd-backspace": "resource_table::DeleteSelected",
       // k9s: ctrl-d deletes the selection (the same delete dialog, never a silent delete).
       "ctrl-d": "resource_table::DeleteSelected",
+      // k9s: s opens a shell in the pod, a attaches to it (Pods only; a read-only cluster blocks
+      // both unless `exec_in_read_only` is on).
+      "s": "resource_table::ShellSelected",
+      "a": "resource_table::AttachSelected",
       "/": "resource_table::FocusFilter"
     }
   },

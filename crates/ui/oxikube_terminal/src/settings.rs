@@ -4,7 +4,8 @@
 //! ```json
 //! "terminal": {
 //!   "shell": null, "shell_args": [], "scrollback_lines": 10000,
-//!   "copy_on_select": false, "option_as_meta": null, "confirm_multiline_paste": true
+//!   "copy_on_select": false, "option_as_meta": null, "confirm_multiline_paste": true,
+//!   "exec_shells": ["bash", "sh"]
 //! }
 //! ```
 //!
@@ -28,6 +29,8 @@ const DEFAULT_OPTION_AS_META: bool = !cfg!(target_os = "macos");
 const DEFAULT_COPY_ON_SELECT: bool = false;
 /// `terminal.confirm_multiline_paste` default.
 const DEFAULT_CONFIRM_MULTILINE_PASTE: bool = true;
+/// `terminal.exec_shells` default: the shell fallback chain of `pod::Shell`.
+pub const DEFAULT_EXEC_SHELLS: [&str; 2] = ["bash", "sh"];
 
 /// What one settings layer says about terminals: the `terminal` object of `settings.json`.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
@@ -59,6 +62,12 @@ pub struct TerminalContent {
     /// the line. Single-line pastes never ask.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirm_multiline_paste: Option<bool>,
+    /// The shells `pod::Shell` tries in a container, first to last, each probed with a quick
+    /// exec; the first one the container has is opened (default `["bash", "sh"]`, like Lens).
+    /// A name or an absolute path. An empty list uses the default. Applies to shells opened
+    /// afterwards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exec_shells: Option<Vec<String>>,
 }
 
 /// The resolved `terminal` settings.
@@ -77,6 +86,8 @@ pub struct TerminalSettings {
     pub option_as_meta: bool,
     /// Ask before pasting several lines.
     pub confirm_multiline_paste: bool,
+    /// The shell chain of `pod::Shell` (never empty).
+    pub exec_shells: Vec<String>,
 }
 
 impl Default for TerminalSettings {
@@ -105,11 +116,28 @@ impl Settings for TerminalSettings {
             confirm_multiline_paste: content
                 .confirm_multiline_paste
                 .unwrap_or(DEFAULT_CONFIRM_MULTILINE_PASTE),
+            exec_shells: exec_shells(content.exec_shells),
         }
     }
 }
 
 oxikube_settings::register_settings!(TerminalSettings);
+
+/// The chain from the setting: names trimmed, blanks and repeats dropped; the default when none
+/// is left.
+fn exec_shells(configured: Option<Vec<String>>) -> Vec<String> {
+    let mut chain: Vec<String> = Vec::new();
+    for shell in configured.unwrap_or_default() {
+        let shell = shell.trim();
+        if !shell.is_empty() && !chain.iter().any(|seen| seen == shell) {
+            chain.push(shell.to_owned());
+        }
+    }
+    if chain.is_empty() {
+        chain = DEFAULT_EXEC_SHELLS.map(str::to_owned).to_vec();
+    }
+    chain
+}
 
 impl TerminalSettings {
     /// The global value, or the defaults when no settings store exists (tests, previews).
@@ -193,7 +221,25 @@ mod tests {
         assert!(settings.shell_args.is_empty());
         assert!(!settings.copy_on_select);
         assert!(settings.confirm_multiline_paste);
+        assert_eq!(settings.exec_shells, ["bash", "sh"]);
         assert_eq!(settings, &TerminalSettings::default());
+    }
+
+    #[test]
+    fn the_exec_shell_chain_defaults_to_bash_then_sh_and_is_cleaned() {
+        assert_eq!(TerminalSettings::default().exec_shells, ["bash", "sh"]);
+        let content: TerminalContent =
+            serde_json::from_str(r#"{"exec_shells": [" zsh ", "", "sh", "zsh"]}"#).unwrap();
+        assert_eq!(
+            TerminalSettings::from_content(content).exec_shells,
+            ["zsh", "sh"]
+        );
+        let empty: TerminalContent = serde_json::from_str(r#"{"exec_shells": []}"#).unwrap();
+        assert_eq!(
+            TerminalSettings::from_content(empty).exec_shells,
+            ["bash", "sh"],
+            "an empty list falls back to the default instead of disabling shells"
+        );
     }
 
     #[test]

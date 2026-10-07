@@ -9,7 +9,8 @@
 //! The default bindings live in the per-OS keymap files of `oxikube_assets`, in the sections
 //! for the `Table` key context (`oxikube_keymap::contexts::TABLE`): `j` / `k` and the arrows
 //! move, shift extends, `enter` opens, `escape` clears, `cmd-a` / `ctrl-a` selects all,
-//! `cmd-c` / `ctrl-c` copies the name, `delete` (and k9s's `ctrl-d`) opens the delete dialog.
+//! `cmd-c` / `ctrl-c` copies the name, `delete` (and k9s's `ctrl-d`) opens the delete dialog,
+//! `s` opens a shell in the pod and `a` attaches to it (E09-S08).
 //! Users rebind them in `keymap.json`.
 
 use gpui::actions;
@@ -44,5 +45,10 @@ actions!(
         /// Delete the selected rows, or the cursor row (`resource::Delete` through the delete
         /// dialog).
         DeleteSelected,
+        /// Open a shell in the cursor row's pod (`pod::Shell`; k9s's `s`). Does nothing for a
+        /// kind that is not a pod, or on a read-only cluster that does not allow shells.
+        ShellSelected,
+        /// Attach to the cursor row's pod (`pod::Attach`; k9s's `a`).
+        AttachSelected,
     ]
 );

@@ -99,6 +99,9 @@ pub struct ResourceTable {
     pub(super) active: bool,
     /// The cluster tab's workspace, which hosts the delete dialog and the toasts.
     pub(super) workspace: Option<gpui::WeakEntity<Workspace>>,
+    /// The shell or attach being set up (the pod read, then the command or the picker); a newer
+    /// one replaces, and so cancels, it.
+    pub(super) exec_task: Option<Task<()>>,
     /// How many rows are selected (mirrored for the key context, which has no `App`).
     pub(super) selected: usize,
     /// The `/` filter bar in the toolbar (E07-S04).
@@ -218,6 +221,7 @@ impl ResourceTable {
             prefs_loaded: false,
             active: false,
             workspace: None,
+            exec_task: None,
             selected: 0,
             filter,
             filter_parts: FilterParts::default(),

@@ -91,7 +91,7 @@ fn read_commands_still_run_on_a_read_only_cluster() {
     h.connect("a", true);
     let reads: Vec<_> = COMMANDS
         .iter()
-        .filter(|m| !m.mutating && !is_posture(m))
+        .filter(|m| !m.mutating && !m.exec && !is_posture(m))
         .collect();
     assert!(reads.len() >= 10, "{} read commands", reads.len());
     for meta in &reads {
@@ -123,7 +123,12 @@ fn tool_call(tool: &str, arguments: Value) -> Command {
 fn mcp_mutation_tools_are_denied_on_a_read_only_cluster() {
     let h = Harness::with_every_command();
     h.connect("a", true);
-    let tools: Vec<_> = h.bus.tools().filter(|t| t.is_mutating()).collect();
+    // The exec tools carry a risk too but are not mutations: `exec.rs` covers them.
+    let tools: Vec<_> = h
+        .bus
+        .tools()
+        .filter(|t| t.is_mutating() && !t.annotations.interactive)
+        .collect();
     assert_eq!(
         tools.len(),
         mutating().len(),

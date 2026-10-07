@@ -70,6 +70,8 @@ pub struct DetailView {
     pub(super) feed_task: Option<Task<()>>,
     pub(super) full_task: Option<Task<()>>,
     pub(super) owners_task: Option<Task<()>>,
+    /// The shell or attach being set up from the header; a newer one replaces, and so cancels, it.
+    pub(super) exec_task: Option<Task<()>>,
     /// How many Overview rows were built (virtualisation tests).
     #[cfg(test)]
     pub(super) rendered_rows: usize,
@@ -134,6 +136,7 @@ impl DetailView {
             feed_task: None,
             full_task: None,
             owners_task: None,
+            exec_task: None,
             #[cfg(test)]
             rendered_rows: 0,
             _session_task: session_task,

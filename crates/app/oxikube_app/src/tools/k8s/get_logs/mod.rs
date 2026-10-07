@@ -191,7 +191,7 @@ fn definition() -> ToolDef {
     .with_needs(Capabilities::LOGS)
     .with_annotations(ToolAnnotations {
         idempotent: true,
-        open_world: false,
+        ..ToolAnnotations::default()
     })
     .with_output_schema(json!({
         "type": "object",
