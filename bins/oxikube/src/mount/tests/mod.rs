@@ -212,6 +212,9 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::POD_VIEW_LOGS, "oxikube_logs_ui"),
         (CommandId::LOGS_TOGGLE_WRAP, "oxikube_logs_ui"),
         (CommandId::LOGS_SET_RANGE, "oxikube_logs_ui"),
+        (CommandId::LOGS_FIND, "oxikube_logs_ui"),
+        (CommandId::LOGS_NEXT_MATCH, "oxikube_logs_ui"),
+        (CommandId::LOGS_TOGGLE_FILTER_MODE, "oxikube_logs_ui"),
     ] {
         assert_eq!(bus.owner(id), Some(owner), "{id}");
         assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");

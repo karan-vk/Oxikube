@@ -10,9 +10,12 @@
 //!
 //! 1. **Tail**: the view opens (reading the pod for its default container, then the stream) and
 //!    the clocks run a frame at a time until the tail is on screen.
-//! 2. **Four modes**, [`FRAMES`] scripted frames each, in one process and one stream: wrap off
+//! 2. **Six modes**, [`FRAMES`] scripted frames each, in one process and one stream: wrap off
 //!    and following (the budget's mode: `frame_ms` / `draw_ms`), then autoscroll paused
-//!    (`paused_*`), wrapped and following (`wrap_*`), wrapped and paused (`wrap_paused_*`).
+//!    (`paused_*`), wrapped and following (`wrap_*`), wrapped and paused (`wrap_paused_*`), and
+//!    with a search (E08-S03, [`PATTERN`], wrap off and following): highlighting (`search_*`)
+//!    and filtering (`filter_*`), where every delta also tests its new lines against the
+//!    pattern, and the filtered rows are the matches only.
 //!    Before each frame the log clock advances a frame (that frame's lines arrive; the service
 //!    commits a batch on its tick), the view's pump applies the delta and its coalesced notify
 //!    lands (drawing the window, as GPUI's next frame would); then the frame draws. Both draws go
@@ -30,7 +33,7 @@ use gpui::{
     Render, Window,
 };
 use oxikube_app::logs::{LogConfig, LogService};
-use oxikube_logs_ui::{LogView, LogViewDeps, log_runtime};
+use oxikube_logs_ui::{LogView, LogViewDeps, SearchMode, log_runtime};
 use oxikube_runtime::perf::harness::{self, metric};
 use oxikube_runtime::perf::{PerfRoot, Recorder, ScenarioSample, Summary};
 use oxikube_testkit::headless;
@@ -51,34 +54,55 @@ const FRAMES_ENV: &str = "OXIKUBE_PERF_LOGS_FRAMES";
 /// Upper bound on the frames the tail may take to show.
 const MAX_TURNS: usize = 240;
 
-/// One measured mode: the prefix of its metrics, wrap, autoscroll.
+/// The search of the `search_` and `filter_` modes: the fixture's warnings and errors (about one
+/// line in six), a regex with an alternation.
+const PATTERN: &str = "WARN|ERROR";
+
+/// One measured mode: the prefix of its metrics, wrap, autoscroll, and the search it runs with.
 struct Mode {
     prefix: &'static str,
     wrap: bool,
     follow: bool,
+    search: Option<SearchMode>,
 }
 
 /// The modes, in run order; the first is the budget's (no prefix).
-const MODES: [Mode; 4] = [
+const MODES: [Mode; 6] = [
     Mode {
         prefix: "",
         wrap: false,
         follow: true,
+        search: None,
     },
     Mode {
         prefix: "paused_",
         wrap: false,
         follow: false,
+        search: None,
     },
     Mode {
         prefix: "wrap_",
         wrap: true,
         follow: true,
+        search: None,
     },
     Mode {
         prefix: "wrap_paused_",
         wrap: true,
         follow: false,
+        search: None,
+    },
+    Mode {
+        prefix: "search_",
+        wrap: false,
+        follow: true,
+        search: Some(SearchMode::Highlight),
+    },
+    Mode {
+        prefix: "filter_",
+        wrap: false,
+        follow: true,
+        search: Some(SearchMode::Filter),
     },
 ];
 
@@ -149,7 +173,7 @@ pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
     let mut main = None;
     let mut extra = Vec::new();
     for mode in &MODES {
-        harness::draw_frame(&mut cx, window, |_, cx| {
+        harness::draw_frame(&mut cx, window, |window, cx| {
             view.update(cx, |v, cx| {
                 if v.options().wrap != mode.wrap {
                     v.toggle_wrap(cx);
@@ -157,12 +181,24 @@ pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
                 if v.autoscroll() != mode.follow {
                     v.toggle_autoscroll(cx);
                 }
+                if let Some(search) = mode.search {
+                    if !v.search_state().is_open() {
+                        v.find(Some(PATTERN), window, cx);
+                    }
+                    if v.search_state().mode() != search {
+                        v.toggle_filter_mode(cx);
+                    }
+                }
             });
         })?;
         park(&cx);
         ensure!(
             read(&view, &mut cx, |v| v.options().wrap == mode.wrap
-                && v.autoscroll() == mode.follow),
+                && v.autoscroll() == mode.follow
+                && mode
+                    .search
+                    .is_none_or(|search| v.search_state().mode() == search
+                        && v.line_window().index().is_some())),
             "the view did not switch to mode `{}`",
             mode.prefix
         );

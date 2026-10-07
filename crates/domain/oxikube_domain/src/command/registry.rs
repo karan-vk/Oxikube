@@ -51,6 +51,22 @@ impl CommandId {
     pub const KUBECONFIG_RELOAD: CommandId = CommandId::new("kubeconfig::Reload");
     /// `kubeconfig::RemoveSource`: remove a kubeconfig source.
     pub const KUBECONFIG_REMOVE_SOURCE: CommandId = CommandId::new("kubeconfig::RemoveSource");
+    /// `logs::CloseSearch`: close a log view's search bar and clear its highlights and filter.
+    pub const LOGS_CLOSE_SEARCH: CommandId = CommandId::new("logs::CloseSearch");
+    /// `logs::Find`: open a log view's search bar (optionally with a pattern).
+    pub const LOGS_FIND: CommandId = CommandId::new("logs::Find");
+    /// `logs::NextMatch`: go to the next match of a log view's search (wraps around).
+    pub const LOGS_NEXT_MATCH: CommandId = CommandId::new("logs::NextMatch");
+    /// `logs::PreviousMatch`: go to the previous match of a log view's search (wraps around).
+    pub const LOGS_PREVIOUS_MATCH: CommandId = CommandId::new("logs::PreviousMatch");
+    /// `logs::ToggleCase`: make a log view's search case-sensitive, or not.
+    pub const LOGS_TOGGLE_CASE: CommandId = CommandId::new("logs::ToggleCase");
+    /// `logs::ToggleFilterMode`: hide the lines that do not match a log view's search, or show all
+    /// of them with the matches highlighted.
+    pub const LOGS_TOGGLE_FILTER_MODE: CommandId = CommandId::new("logs::ToggleFilterMode");
+    /// `logs::ToggleInverse`: match the lines that do not contain a log view's pattern, or those
+    /// that do.
+    pub const LOGS_TOGGLE_INVERSE: CommandId = CommandId::new("logs::ToggleInverse");
     /// `logs::SelectContainer`: show another container of a log view's pod (reopens the stream).
     pub const LOGS_SELECT_CONTAINER: CommandId = CommandId::new("logs::SelectContainer");
     /// `logs::SetRange`: read the tail, the head or the last minutes of a log view's log.
@@ -264,8 +280,33 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
-    // The log view's commands (E08-S02): they change what a view shows or which stream it
-    // reads, never the cluster. Reopening a stream reads logs, so those need the logs capability.
+    // The log view's commands (E08-S02, search E08-S03): they change what a view shows or which
+    // stream it reads, never the cluster. Reopening a stream reads logs, so those need the logs
+    // capability. Kept sorted by id (the table is binary-searched).
+    CommandMeta::read(
+        CommandId::LOGS_CLOSE_SEARCH,
+        "Logs: Close Search",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_FIND,
+        "Logs: Find",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_NEXT_MATCH,
+        "Logs: Next Match",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_PREVIOUS_MATCH,
+        "Logs: Previous Match",
+        CommandScope::Selection,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::LOGS_SELECT_CONTAINER,
         "Logs: Select Container",
@@ -285,8 +326,26 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     CommandMeta::read(
+        CommandId::LOGS_TOGGLE_CASE,
+        "Logs: Toggle Case Sensitivity",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_FILTER_MODE,
+        "Logs: Toggle Filter Mode",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::LOGS_TOGGLE_FULLSCREEN,
         "Logs: Toggle Fullscreen",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_INVERSE,
+        "Logs: Toggle Inverse Match",
         CommandScope::Selection,
         NONE,
     ),

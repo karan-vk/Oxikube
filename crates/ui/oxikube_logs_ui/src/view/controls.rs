@@ -107,7 +107,7 @@ impl LogView {
             .is_some_and(|ws| ws.read(cx).is_zoomed(cx))
     }
 
-    fn send(&self, command: Command, cx: &mut Context<Self>) {
+    pub(crate) fn send(&self, command: Command, cx: &mut Context<Self>) {
         self.deps.dispatcher.dispatch(command, cx);
     }
 

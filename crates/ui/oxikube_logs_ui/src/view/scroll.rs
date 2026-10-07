@@ -16,6 +16,9 @@ use super::window::{LineWindow, RowChange};
 /// The height of an unwrapped row at 100 % zoom: one line of monospace text and its padding.
 pub const LINE_HEIGHT: Pixels = px(20.);
 
+/// Rows of context kept above a match that a search jump scrolls to.
+const REVEAL_CONTEXT: usize = 3;
+
 impl LogView {
     /// The height of an unwrapped row now (zoom applied).
     pub(crate) fn row_height(&self) -> Pixels {
@@ -25,6 +28,8 @@ impl LogView {
     /// Replaces the rows (a new session): both renderers start over, at the end when following.
     pub(crate) fn reset_rows(&mut self, window: LineWindow) {
         self.window = window;
+        // A new stream numbers its lines from 0: the search starts over on it.
+        self.reindex_empty();
         if self.options.wrap {
             self.list.reset(self.window.row_count());
         }
@@ -88,11 +93,8 @@ impl LogView {
         self.window.seq_near(self.top_row())
     }
 
-    /// Puts the line `seq` at the top of the screen (when it is still retained).
-    pub(crate) fn scroll_to_seq(&mut self, seq: u64) {
-        let Some(index) = self.window.index_of(seq) else {
-            return;
-        };
+    /// Puts row `index` at the top of the screen.
+    fn scroll_to_row(&mut self, index: usize) {
         if self.options.wrap {
             self.list.scroll_to(ListOffset {
                 item_ix: index,
@@ -101,6 +103,35 @@ impl LogView {
         } else {
             self.scroll
                 .scroll_to_item_strict(index, ScrollStrategy::Top);
+        }
+    }
+
+    /// Puts the line `seq` at the top of the screen (when it is still retained).
+    pub(crate) fn scroll_to_seq(&mut self, seq: u64) {
+        if let Some(index) = self.window.index_of(seq) {
+            self.scroll_to_row(index);
+        }
+    }
+
+    /// Puts the line `seq` a few rows below the top of the screen (a search match, with some of
+    /// the lines before it for context). Does nothing when it is not a row.
+    pub(crate) fn reveal_seq(&mut self, seq: u64) {
+        if let Some(index) = self.window.index_of(seq) {
+            self.scroll_to_row(index.saturating_sub(REVEAL_CONTEXT));
+        }
+    }
+
+    /// The rows were replaced wholesale (a search started, stopped or changed mode): the wrapped
+    /// list starts over, and the screen shows the newest line when following, else the line that
+    /// was at the top (or the nearest one still shown).
+    pub(crate) fn rows_rebuilt(&mut self, anchor: Option<u64>) {
+        if self.options.wrap {
+            self.list.reset(self.window.row_count());
+        }
+        if self.follow.is_on() {
+            self.follow_tail();
+        } else if let Some(row) = anchor.and_then(|seq| self.window.row_near_seq(seq)) {
+            self.scroll_to_row(row);
         }
     }
 

@@ -129,7 +129,29 @@
       "p": "log_view::TogglePrevious",
       "f": "log_view::ToggleFullscreen",
       "m": "log_view::Mark",
-      "c": "log_view::Copy"
+      "c": "log_view::Copy",
+      // Search (E08-S03): `/` opens the bar (k9s), `n` / `N` step through the matches.
+      "/": "log_view::Find",
+      "n": "log_view::NextMatch",
+      "shift-n": "log_view::PreviousMatch"
+    }
+  },
+  {
+    // Open the search from anywhere in the log view, the field included.
+    "context": "LogView",
+    "bindings": {
+      "ctrl-f": "log_view::Find"
+    }
+  },
+  {
+    // While the bar is open (enter / shift-enter step through the matches in the field itself):
+    // escape closes it, and alt-c / alt-i / alt-f toggle case, inverse and filter mode.
+    "context": "LogView && searching",
+    "bindings": {
+      "escape": "log_view::CloseSearch",
+      "alt-c": "log_view::ToggleCase",
+      "alt-i": "log_view::ToggleInverse",
+      "alt-f": "log_view::ToggleFilterMode"
     }
   }
 ]

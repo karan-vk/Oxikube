@@ -11,7 +11,8 @@
 //! | File | Holds |
 //! |---|---|
 //! | `options` | [`ViewOptions`]: range (tail / head / since), container, previous, wrap, timestamps; the port's request |
-//! | `window` | [`LineWindow`] (the rows: truncated marker, lines by seq, state row) and [`Follow`] (autoscroll and its "N new lines" count, by seq) |
+//! | `window` | [`LineWindow`] (the rows: truncated marker, lines by seq or the search's matches, state row) |
+//! | `autoscroll` | [`Follow`] (autoscroll and its "N new lines" count, by seq) |
 //! | `text` | what a row says: timestamp, level colour, marker and state words |
 //! | `containers` | the container selector's list (init, sidecar, regular, ephemeral) from the pod spec |
 //! | `stream` | opening and reopening the session, the delta pump |
@@ -33,8 +34,10 @@
 //! key (PERFORMANCE rule 5). Unwrapped rows draw at most [`NOWRAP_CHARS`] bytes of a line.
 
 mod actions;
+mod autoscroll;
 mod containers;
 mod controls;
+mod highlight;
 mod item;
 mod options;
 mod render;
@@ -42,7 +45,7 @@ mod rows;
 mod scroll;
 mod settings;
 mod stream;
-mod text;
+pub(crate) mod text;
 mod toolbar;
 mod window;
 
@@ -63,16 +66,19 @@ use oxikube_settings::Settings as _;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
 use crate::LogsSettings;
+use crate::search::Search;
 
 pub use actions::{
-    Copy, Head, Mark, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll,
-    ToggleFullscreen, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, Since1h, Since1m, Since5m,
+    Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen,
+    ToggleInverse, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
+pub use autoscroll::Follow;
 pub use containers::{ContainerChoice, choices_of, default_container};
 pub use item::item_key;
 pub use options::{HEAD_LIMIT_BYTES, OpenLogs, TAIL_LINES, ViewOptions};
 pub use text::{Level, level_of};
-pub use window::{Follow, LineWindow, Row, RowChange};
+pub use window::{LineWindow, Row, RowChange};
 
 /// Bytes of a line an unwrapped row draws: more than any screen is wide, and a 16 KiB line costs
 /// no more to shape than a short one.
@@ -120,6 +126,8 @@ pub struct LogView {
     pub(crate) settings: LogsSettings,
     /// Applies changes of the `logs` settings; dropped with the view.
     pub(crate) _settings_subscription: Subscription,
+    /// The search bar's state (E08-S03).
+    pub(crate) search: Search,
 }
 
 impl LogView {
@@ -167,6 +175,7 @@ impl LogView {
             pod_task: None,
             settings,
             _settings_subscription: LogsSettings::observe_in(cx, Self::settings_changed),
+            search: Search::default(),
         };
         if view.options.container.is_some() {
             view.open_stream(cx);

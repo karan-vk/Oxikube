@@ -14,6 +14,7 @@
 //! | [`follow`] | E08-S01, S10 | [`follow_settings`]: a changed `logs.buffer_lines` (global or a cluster's) reaches the open sessions at once, off the UI thread |
 //! | [`view`] | E08-S02 | [`LogView`]: a pod's log as a workspace tab (virtualised rows, wrap, timestamps, autoscroll with the "N new lines" pill, container selector, previous instance, tail / head / since presets, the `LogView` key context) |
 //! | [`commands`] | E08-S02 | `pod::ViewLogs` and the `logs::*` commands on the bus, and [`LogViews`], which opens and drives the views of a window |
+//! | [`search`] | E08-S03 | the search bar: regex with case and inverse toggles, highlight or filter mode, next / previous match with a count, the incremental match index over the ring buffer, and the per-session [`SearchMemory`] |
 //! | [`row_actions`] | E08-S02 | "View Logs" on a pod's row in the resource tables |
 //!
 //! A user reaches a log view from a pod's row in a resource table: its context menu (or the
@@ -27,6 +28,7 @@ pub mod commands;
 pub mod follow;
 pub mod row_actions;
 pub mod runtime;
+pub mod search;
 pub mod settings;
 pub mod view;
 
@@ -40,5 +42,6 @@ pub use commands::{
 pub use follow::follow_settings;
 pub use row_actions::log_row_actions;
 pub use runtime::log_runtime;
+pub use search::{SearchMemory, SearchMode, SearchState};
 pub use settings::{LogsContent, LogsSettings};
 pub use view::{LogView, LogViewDeps, OpenLogs};

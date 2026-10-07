@@ -158,6 +158,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `set_cluster_buffer_lines` give a cluster its own bound (`clusters.<id>.logs.buffer_lines`, E08-S10; each
   cluster's sessions read one shared cell, so open sessions resize when the override changes). Line text is
   never logged.
+  Module `filter` (E08-S03): `LogFilter { pattern, case_sensitive, inverse }` (a regex; the empty pattern matches
+  everything), compiled once per edit to a `LogMatcher` (`matches(&str)`, the predicate the agent's `get_logs`
+  `grep` reuses, and the highlight `spans`; an invalid or oversized pattern is a one-line `FilterError`), and
+  `MatchIndex`, the sorted seqs of the matching lines over a `LogBuffer`: `scan` tests only the lines appended
+  since the last call and drops the matches of lines the ring dropped (a rescan is the same call in chunks),
+  with `next` / `prev` that wrap and skip trimmed lines. A property test pins it to a naive full scan.
 - `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to
   5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect` (reserved: stored and hot-reloaded, read by nothing until the JSON mode of E08-S05); defaults in
   `default.json`, schema generated, per-cluster overrides under `clusters.<id>.logs`, out-of-range values clamped
@@ -177,6 +183,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` on the bus (reads, tool stubs), queued to the
   window's `LogViews`, which opens a view in the pod's cluster tab (one per pod, through a `LogHost`) and applies
   the changes. `row_actions`: "View Logs" on pod rows of the resource tables.
+  Module `search` (E08-S03): the `/` bar under the toolbar (`logs::Find`, also `cmd-f` / `ctrl-f`): a regex over the
+  stored lines with case and inverse toggles, in *highlight* mode (all lines, matches painted, `3 of 41`, enter /
+  shift-enter or `n` / `N` jump and wrap) or *filter* mode (only the matching lines are rows: the `LineWindow` is
+  narrowed to the `MatchIndex`). An invalid pattern shows its reason and the last good one stays. Commands
+  `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (reads,
+  tool stubs). The matching is `oxikube_app::logs::{LogFilter, LogMatcher, MatchIndex}` (below); an index over a
+  buffer of more than 4 000 lines is built in 16 384-line background jobs and published when done, and each delta
+  tests only its new lines. The search is kept per window in `SearchMemory` (not on disk), so reopening the same pod's
+  logs in the same session restores it.
 - `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
   mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,

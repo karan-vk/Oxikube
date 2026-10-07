@@ -30,6 +30,8 @@ impl KeyContextual for LogView {
     fn extend_key_context(&self, context: &mut KeyContextBuilder) {
         context.flag_if(self.options.wrap, "wrap");
         context.flag_if(self.follow.is_on(), "autoscroll");
+        context.flag_if(self.search.state.is_open(), "searching");
+        context.flag_if(self.search.editing, contexts::EDITING);
     }
 }
 
@@ -55,6 +57,7 @@ impl Item for LogView {
         // Dropping the session aborts its read and closes the connection.
         self.pump = None;
         self.pod_task = None;
+        self.search.scan = None;
         self.session = None;
     }
 }

@@ -8,5 +8,6 @@ mod keymap;
 mod keys;
 mod open;
 mod scroll;
+mod search;
 mod settings;
 mod stream;

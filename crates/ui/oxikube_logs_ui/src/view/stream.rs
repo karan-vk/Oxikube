@@ -71,7 +71,10 @@ impl LogView {
 
     /// Applies one delta: the rows, the renderers, autoscroll.
     pub(crate) fn apply_delta(&mut self, delta: &LogDelta, cx: &mut Context<Self>) {
-        let change = self.window.apply(delta);
+        let change = match &self.session {
+            Some(session) => session.read(|buffer, _| self.window.apply(delta, Some(buffer))),
+            None => self.window.apply(delta, None),
+        };
         self.rows_changed(change);
         self.follow_tail();
         notify_coalesced(cx);

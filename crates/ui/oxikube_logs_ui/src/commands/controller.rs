@@ -11,6 +11,7 @@ use oxikube_workspace::{ClusterTabs, OpenOptions, Workspace};
 
 use super::{LogRequest, ViewChange};
 use crate::LogsSettings;
+use crate::search::SearchMemory;
 use crate::view::{LogView, LogViewDeps, OpenLogs, ViewOptions, item_key};
 
 /// Where a cluster's log views live: the workspace of its tab in this window. The app's is the
@@ -51,6 +52,8 @@ pub struct LogViewsDeps {
 /// Opens and drives the log views of one window. See the [module docs](self).
 pub struct LogViews {
     deps: LogViewsDeps,
+    /// The searches of this window's log views, kept for the session.
+    searches: SearchMemory,
     _requests: Task<()>,
 }
 
@@ -76,6 +79,7 @@ impl LogViews {
             });
             Self {
                 deps,
+                searches: SearchMemory::new(),
                 _requests: pump,
             }
         })
@@ -97,6 +101,13 @@ impl LogViews {
                         ViewChange::TogglePrevious => view.toggle_previous(cx),
                         ViewChange::ToggleTimestamps => view.toggle_timestamps(cx),
                         ViewChange::ToggleWrap => view.toggle_wrap(cx),
+                        ViewChange::Find(pattern) => view.find(pattern.as_deref(), window, cx),
+                        ViewChange::NextMatch => view.next_match(cx),
+                        ViewChange::PreviousMatch => view.previous_match(cx),
+                        ViewChange::ToggleCase => view.toggle_case(cx),
+                        ViewChange::ToggleInverse => view.toggle_inverse(cx),
+                        ViewChange::ToggleFilterMode => view.toggle_filter_mode(cx),
+                        ViewChange::CloseSearch => view.close_search(window, cx),
                     });
                 }
             }
@@ -126,9 +137,16 @@ impl LogViews {
         let target = target.clone();
         let mut options = ViewOptions::from_settings(&LogsSettings::resolve(&target.cluster, cx));
         open.apply(&mut options);
+        let searches = self.searches.clone();
         let view = cx.new(|cx| {
+            let saved = searches.get(&target);
             let mut view = LogView::with_options(target, options, deps, cx);
             view.set_workspace(workspace.downgrade());
+            view.set_search_memory(searches);
+            // The same pod's logs opened again in this session: the search as it was.
+            if let Some(saved) = saved {
+                view.restore_search(&saved, cx);
+            }
             view
         });
         let options = OpenOptions {

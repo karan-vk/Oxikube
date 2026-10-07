@@ -433,6 +433,52 @@ pub enum Command {
         /// The object the log view shows.
         target: ResourceRef,
     },
+    /// Open a log view's search bar, optionally with `pattern` already typed.
+    #[serde(rename = "logs::Find")]
+    LogsFind {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The regular expression to search for; `None` just opens the bar.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pattern: Option<String>,
+    },
+    /// Go to the next match of a log view's search, wrapping from the last to the first.
+    #[serde(rename = "logs::NextMatch")]
+    LogsNextMatch {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Go to the previous match of a log view's search, wrapping from the first to the last.
+    #[serde(rename = "logs::PreviousMatch")]
+    LogsPreviousMatch {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Make a log view's search case-sensitive, or case-insensitive again.
+    #[serde(rename = "logs::ToggleCase")]
+    LogsToggleCase {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Match the lines that do not contain a log view's pattern, or those that do.
+    #[serde(rename = "logs::ToggleInverse")]
+    LogsToggleInverse {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Hide the lines that do not match a log view's search, or show every line with the matches
+    /// highlighted.
+    #[serde(rename = "logs::ToggleFilterMode")]
+    LogsToggleFilterMode {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Close a log view's search bar and clear its highlights and filter.
+    #[serde(rename = "logs::CloseSearch")]
+    LogsCloseSearch {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
     /// Set a workload's replica count.
     #[serde(rename = "workload::Scale")]
     WorkloadScale {
@@ -530,6 +576,13 @@ impl Command {
             Command::LogsTogglePrevious { .. } => CommandId::LOGS_TOGGLE_PREVIOUS,
             Command::LogsToggleTimestamps { .. } => CommandId::LOGS_TOGGLE_TIMESTAMPS,
             Command::LogsToggleWrap { .. } => CommandId::LOGS_TOGGLE_WRAP,
+            Command::LogsFind { .. } => CommandId::LOGS_FIND,
+            Command::LogsNextMatch { .. } => CommandId::LOGS_NEXT_MATCH,
+            Command::LogsPreviousMatch { .. } => CommandId::LOGS_PREVIOUS_MATCH,
+            Command::LogsToggleCase { .. } => CommandId::LOGS_TOGGLE_CASE,
+            Command::LogsToggleInverse { .. } => CommandId::LOGS_TOGGLE_INVERSE,
+            Command::LogsToggleFilterMode { .. } => CommandId::LOGS_TOGGLE_FILTER_MODE,
+            Command::LogsCloseSearch { .. } => CommandId::LOGS_CLOSE_SEARCH,
             Command::WorkloadScale { .. } => CommandId::WORKLOAD_SCALE,
             Command::WorkloadRestart { .. } => CommandId::WORKLOAD_RESTART,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
@@ -577,6 +630,13 @@ impl Command {
             | Command::LogsTogglePrevious { target }
             | Command::LogsToggleTimestamps { target }
             | Command::LogsToggleWrap { target }
+            | Command::LogsFind { target, .. }
+            | Command::LogsNextMatch { target }
+            | Command::LogsPreviousMatch { target }
+            | Command::LogsToggleCase { target }
+            | Command::LogsToggleInverse { target }
+            | Command::LogsToggleFilterMode { target }
+            | Command::LogsCloseSearch { target }
             | Command::WorkloadScale { target, .. }
             | Command::WorkloadRestart { target }
             | Command::NodeCordon { target }
@@ -772,6 +832,16 @@ mod tests {
             Command::LogsTogglePrevious { target: pod() },
             Command::LogsToggleTimestamps { target: pod() },
             Command::LogsToggleWrap { target: pod() },
+            Command::LogsFind {
+                target: pod(),
+                pattern: Some("timeout".into()),
+            },
+            Command::LogsNextMatch { target: pod() },
+            Command::LogsPreviousMatch { target: pod() },
+            Command::LogsToggleCase { target: pod() },
+            Command::LogsToggleInverse { target: pod() },
+            Command::LogsToggleFilterMode { target: pod() },
+            Command::LogsCloseSearch { target: pod() },
             Command::WorkloadScale {
                 target: deployment(),
                 replicas: 3,
@@ -930,6 +1000,13 @@ mod tests {
                     | Command::LogsTogglePrevious { .. }
                     | Command::LogsToggleTimestamps { .. }
                     | Command::LogsToggleWrap { .. }
+                    | Command::LogsFind { .. }
+                    | Command::LogsNextMatch { .. }
+                    | Command::LogsPreviousMatch { .. }
+                    | Command::LogsToggleCase { .. }
+                    | Command::LogsToggleInverse { .. }
+                    | Command::LogsToggleFilterMode { .. }
+                    | Command::LogsCloseSearch { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterApplyPreset { .. }
