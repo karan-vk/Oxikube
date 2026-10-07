@@ -79,7 +79,9 @@ impl TerminalViews {
     pub fn apply(&mut self, request: TerminalRequest, window: &mut Window, cx: &mut Context<Self>) {
         cx.defer_in(window, move |this, window, cx| match request {
             TerminalRequest::New { cluster } => this.open_new(cluster, window, cx),
-            TerminalRequest::Open { descriptor } => this.open_descriptor(descriptor, window, cx),
+            TerminalRequest::Open { descriptor } => {
+                this.open_in(descriptor.cluster().cloned(), descriptor, window, cx);
+            }
             TerminalRequest::Split => this.split(window, cx),
             TerminalRequest::Close => this.close_focused(window, cx),
             TerminalRequest::Reconnect => this.recover(true, window, cx),
@@ -109,16 +111,6 @@ impl TerminalViews {
     /// Opens a terminal running `descriptor` where its cluster's terminals go (see
     /// [`open_new`](Self::open_new)); a descriptor without a cluster opens in the window's own
     /// workspace, never in the shown cluster's.
-    fn open_descriptor(
-        &mut self,
-        descriptor: BackendDescriptor,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let cluster = descriptor.cluster().cloned();
-        self.open_in(cluster, descriptor, window, cx);
-    }
-
     fn open_in(
         &mut self,
         cluster: Option<ClusterId>,

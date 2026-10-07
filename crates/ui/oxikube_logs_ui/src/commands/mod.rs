@@ -6,8 +6,9 @@
 //! the search's (E08-S03) `Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`,
 //! `ToggleFilterMode`, `CloseSearch`, the JSON mode's (E08-S05) `ToggleJsonMode`,
 //! `ToggleLevel`, `ToggleLine` and `CollapseLine`, (E08-S06) the local actions on what a
-//! view holds: `Mark`, `Copy`, `Clear`, `Save`, (E08-S08) `TailInTerminal` (`kubectl logs -f` in a terminal tab), and (E08-S07) what follows a stream that stopped:
-//! `Reconnect` and `FollowReplacement` (switch to the pod that replaced a gone one).
+//! view holds: `Mark`, `Copy`, `Clear`, `Save`, (E08-S08) `TailInTerminal` (`kubectl logs -f` in a
+//! terminal tab), and (E08-S07) what follows a stream that stopped: `Reconnect` and
+//! `FollowReplacement` (switch to the pod that replaced a gone one).
 //!
 //! None changes a cluster (no `MutationGuard` tier; all are allowed on a read-only cluster):
 //! they read logs or change what a view shows. Each is declared in `oxikube_domain::command`, so

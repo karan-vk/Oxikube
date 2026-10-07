@@ -69,18 +69,15 @@ impl LogView {
         };
         let target = match &self.aggregate {
             None => TailTarget::Pod(self.target.name.to_string()),
-            Some(aggregate) => {
-                let selector = aggregate.session.as_ref().and_then(|s| s.selector());
-                match selector {
-                    Some(selector) => TailTarget::Selector(selector),
-                    None => {
-                        return Err(
-                            "The pods of this view are still being looked up; try again in a moment."
-                                .to_owned(),
-                        );
-                    }
-                }
-            }
+            Some(aggregate) => aggregate
+                .session
+                .as_ref()
+                .and_then(|session| session.selector())
+                .map(TailTarget::Selector)
+                .ok_or_else(|| {
+                    "The pods of this view are still being looked up; try again in a moment."
+                        .to_owned()
+                })?,
         };
         let request = KubectlTail {
             context: session.context().as_str().to_owned(),
