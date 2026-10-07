@@ -1,7 +1,7 @@
 //! `Ready` ↔ `Degraded`, `Failed` → `Error`, and stale reports.
 
 use oxikube_domain::session::{ClusterSessionState, SessionPhase};
-use oxikube_domain::{Capabilities, OxiError};
+use oxikube_domain::{Capabilities, ErrorKind, OxiError};
 use oxikube_ports::HealthSignal;
 
 use super::{Harness, id};
@@ -37,6 +37,8 @@ fn giving_up_moves_to_error_and_drops_the_connection() {
         &a,
         HealthSignal::Failed {
             reason: "3 probes failed".into(),
+            kind: ErrorKind::Network,
+            retryable: true,
         },
     );
     let session = h.manager.get(&a).unwrap();
@@ -147,6 +149,8 @@ fn teardown_that_reports_health_does_not_deadlock() {
         &a,
         HealthSignal::Failed {
             reason: "gone".into(),
+            kind: ErrorKind::Network,
+            retryable: true,
         },
     );
     assert_eq!(manager.get(&a).unwrap().phase(), SessionPhase::Error);

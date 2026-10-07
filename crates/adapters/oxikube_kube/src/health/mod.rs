@@ -21,7 +21,9 @@
 //! expired, wrong name). Other non-retryable kinds, such as a 403 on
 //! `/version` from a hardened cluster, count toward the threshold. After `Failed` the loop
 //! stops: there is no `Error` -> `Healthy` transition, so recovery is a reconnect
-//! (`Connect`) by the session manager, which then restarts the loop.
+//! (`Connect`) by the session manager, which then restarts the loop. The manager makes that
+//! reconnect by itself, with backoff, when the failure's cause is transient (E06-F440); the
+//! connector drops the context's pooled client first, so the reconnect builds a fresh one.
 //!
 //! # `MutationGuard` does not apply here
 //!

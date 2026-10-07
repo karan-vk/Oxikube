@@ -12,6 +12,7 @@ mod kinds;
 mod multi;
 mod prefs;
 mod props;
+mod reconnect;
 
 use std::sync::Arc;
 

@@ -8,6 +8,8 @@
 //! - `connect_error`: one human sentence (no `internal error:` label), the raw text open behind
 //!   Details, Copy details, Edit kubeconfig sources, Retry.
 //! - `connect_degraded`: the banner above the cluster's own content.
+//! - `connect_error_reconnecting`: a connection lost to the network (E06-F440): "Lost the
+//!   connection", the line saying Oxikube reconnects automatically, and Retry.
 //!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
 //! thread, which libtest worker threads are not. Needs a GPU device (Metal, or Vulkan such as Mesa
@@ -55,6 +57,7 @@ enum Scene {
     AuthForbidden,
     Error,
     Degraded,
+    Reconnecting,
 }
 
 fn headless() -> HeadlessAppContext {
@@ -75,6 +78,7 @@ fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
     let connector = Arc::new(FakeClusterConnectorPort::new());
     let sessions = ClusterSessionManager::new(connector.clone(), source, clock);
     let cluster = id(CLUSTER);
+    let runtime = tokio::runtime::Builder::new_current_thread().build()?;
 
     // Drive the session into the scene's state before the window opens: the tab opens on it.
     let mut waiting = None;
@@ -121,6 +125,19 @@ fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
             futures::executor::block_on(sessions.connect(&cluster))?;
             connector.report(&cluster, HealthSignal::Unhealthy);
         }
+        Scene::Reconnecting => {
+            futures::executor::block_on(sessions.connect(&cluster))?;
+            connector.report(&cluster, HealthSignal::Unhealthy);
+            // The reconnect is scheduled on the runtime the report comes from; never driven
+            // here, so the card shows the first attempt as planned.
+            let _inside = runtime.enter();
+            connector.report(
+                &cluster,
+                HealthSignal::failed(&OxiError::network(
+                    "error trying to connect: tcp connect error: Network is unreachable",
+                )),
+            );
+        }
     }
 
     let mut cx = headless();
@@ -157,6 +174,7 @@ fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
     cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;
     let image = cx.capture_screenshot(window.into())?;
     drop(waiting);
+    drop(runtime);
     Ok(image)
 }
 
@@ -223,7 +241,12 @@ fn run() -> anyhow::Result<()> {
         render(Scene::AuthForbidden)?,
     )?;
     check("connect_error", colors.error, render(Scene::Error)?)?;
-    check("connect_degraded", colors.warning, render(Scene::Degraded)?)
+    check("connect_degraded", colors.warning, render(Scene::Degraded)?)?;
+    check(
+        "connect_error_reconnecting",
+        colors.error,
+        render(Scene::Reconnecting)?,
+    )
 }
 
 fn main() -> ExitCode {

@@ -54,6 +54,20 @@ impl RetryPolicy {
             .min(self.max_delay)
     }
 
+    /// The automatic reconnect after a transient connection failure (E06-F440): first attempt
+    /// 1 s after the failure, then 2, 4, 8 and 16 s, then every 30 s until the cluster answers
+    /// again, the credentials are rejected, the failure turns permanent or the user steps in.
+    /// 30 s matches the healthy probe interval, so a laptop that wakes from sleep is back
+    /// within one probe interval of its network.
+    pub fn auto_reconnect() -> Self {
+        Self {
+            max_attempts: u32::MAX,
+            initial_delay: Duration::from_secs(1),
+            max_delay: Duration::from_secs(30),
+            factor: 2,
+        }
+    }
+
     /// Whether another attempt follows `failed` failed attempts.
     pub(super) fn retries_after(&self, failed: u32) -> bool {
         failed < self.max_attempts.max(1)
@@ -65,6 +79,12 @@ impl RetryPolicy {
 pub struct SessionManagerConfig {
     /// Retry policy for connect attempts.
     pub retry: RetryPolicy,
+    /// The automatic reconnect after the connection failed for a transient reason (a
+    /// `Network`, `Timeout` or retryable `Auth` health failure, E06-F440): `max_attempts`
+    /// counts automatic reconnects (each an ordinary connect with its own `retry`), the delays
+    /// are slept on the injected clock. `None` leaves the session in `Error` until the user
+    /// retries.
+    pub auto_reconnect: Option<RetryPolicy>,
     /// Capacity of the update broadcast. A subscriber that falls this far behind gets
     /// a [`SessionLagged`](super::SessionLagged) and should re-read
     /// [`sessions`](super::ClusterSessionManager::sessions).
@@ -75,6 +95,7 @@ impl Default for SessionManagerConfig {
     fn default() -> Self {
         Self {
             retry: RetryPolicy::default(),
+            auto_reconnect: Some(RetryPolicy::auto_reconnect()),
             update_capacity: 256,
         }
     }
@@ -132,6 +153,15 @@ mod tests {
         assert_eq!(policy.delay(3), Duration::from_secs(2));
         assert_eq!(policy.delay(10), Duration::from_secs(8));
         assert_eq!(policy.delay(u32::MAX), Duration::from_secs(8));
+    }
+
+    #[test]
+    fn auto_reconnect_backs_off_to_the_probe_interval_and_keeps_going() {
+        let policy = RetryPolicy::auto_reconnect();
+        let delays: Vec<u64> = (1..=7).map(|n| policy.delay(n).as_secs()).collect();
+        assert_eq!(delays, [1, 2, 4, 8, 16, 30, 30]);
+        assert!(policy.retries_after(10_000));
+        assert_eq!(SessionManagerConfig::default().auto_reconnect, Some(policy));
     }
 
     #[test]

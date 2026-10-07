@@ -1,5 +1,8 @@
 //! The view model and the text helpers: every state's content, redaction, truncation. No window.
 
+use std::time::Duration;
+
+use oxikube_app::session::AutoReconnect;
 use oxikube_domain::session::ClusterSessionState;
 use oxikube_ports::ExecInteractivity;
 
@@ -19,6 +22,7 @@ fn info() -> ConnectInfo {
         exec: ExecInteractivity::Never,
         terminal: true,
         sources: true,
+        auto_reconnect: None,
     }
 }
 
@@ -212,6 +216,26 @@ fn error_has_a_summary_details_and_the_way_to_the_sources() {
         panic!("error");
     };
     assert!(!error.sources, "no sources page, no link");
+    assert_eq!(error.reconnect, None, "no schedule, no promise");
+}
+
+#[test]
+fn error_says_when_oxikube_reconnects_by_itself() {
+    let scheduled = ConnectInfo {
+        auto_reconnect: Some(AutoReconnect {
+            attempt: 3,
+            delay: Duration::from_secs(4),
+        }),
+        ..info()
+    };
+    let model = ConnectViewModel::of(&error("network error: connection reset"), &scheduled);
+    let ConnectViewModel::Error(error) = &model else {
+        panic!("{model:?}");
+    };
+    let line = error.reconnect.as_deref().expect("a reconnect line");
+    assert!(line.starts_with("Reconnecting automatically"), "{line}");
+    assert!(line.contains("attempt 3, 4 s after the failure"), "{line}");
+    assert!(line.contains("Retry"), "{line}");
 }
 
 #[test]

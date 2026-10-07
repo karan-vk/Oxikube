@@ -200,10 +200,17 @@ impl ConnectView {
             "connect-error",
             IconName::CircleAlert,
             colors.error,
-            format!("Could not connect to {}", model.title),
+            if model.reconnect.is_some() {
+                format!("Lost the connection to {}", model.title)
+            } else {
+                format!("Could not connect to {}", model.title)
+            },
             cx,
         )
         .child(note("connect-error-summary", summary, cx).text_color(colors.text))
+        .when_some(model.reconnect.clone(), |card, line| {
+            card.child(note("connect-error-reconnect", line, cx))
+        })
         .child(self.details_controls(model.message.truncated, true, cx))
         .when(open && model.message.truncated, |card| {
             card.child(details_box(

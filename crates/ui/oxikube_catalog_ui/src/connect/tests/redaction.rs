@@ -2,7 +2,7 @@
 //! the details, or the clipboard.
 
 use gpui::TestAppContext;
-use oxikube_domain::OxiError;
+use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::HealthSignal;
 
 use super::fixture::Fixture;
@@ -68,8 +68,14 @@ fn a_token_in_a_connection_error_is_never_shown_or_copied(cx: &mut TestAppContex
 fn a_token_in_a_health_failure_is_never_shown(cx: &mut TestAppContext) {
     let mut fx = Fixture::open(cx, &["prod-eu"]);
     fx.connect("prod-eu");
-    fx.connector
-        .report(&id("prod-eu"), HealthSignal::Failed { reason: leaky() });
+    fx.connector.report(
+        &id("prod-eu"),
+        HealthSignal::Failed {
+            reason: leaky(),
+            kind: ErrorKind::Network,
+            retryable: true,
+        },
+    );
     fx.vcx.run_until_parked();
     let model = shown(&mut fx, "prod-eu");
     assert!(!model.contains(TOKEN), "{model}");

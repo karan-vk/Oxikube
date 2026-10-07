@@ -32,15 +32,21 @@
 //!   the adapter's feeds and health loop.
 //! * Health: the adapter reports through the
 //!   [`HealthReporter`](oxikube_ports::HealthReporter) it was given (`Ready` ↔ `Degraded`,
-//!   `Failed` → `Error`); other services can report too
-//!   ([`report_health`](ClusterSessionManager::report_health)). Reports about a
-//!   connection that is no longer current are ignored.
+//!   `Failed` → `Error`, or `AuthRequired` when the credentials were rejected for good); other
+//!   services can report too ([`report_health`](ClusterSessionManager::report_health)). Reports
+//!   about a connection that is no longer current are ignored.
+//! * Automatic reconnect (E06-F440): a `Failed` with a transient cause (`Network`, `Timeout`,
+//!   retryable `Auth`) is followed by reconnects on the
+//!   [`auto_reconnect`](SessionManagerConfig::auto_reconnect) backoff until the cluster answers,
+//!   the failure turns permanent, or the user connects, disconnects or closes the session;
+//!   [`ClusterSession::auto_reconnect`] says what is planned.
 //!
 //! # Threading
 //!
-//! Plain async Rust: no gpui, no kube. The manager spawns one thing: the per-connection forwarder
-//! of the adapter's kind events (`kinds`), owned by the session entry and aborted when the
-//! connection is released. Callers drive `connect` on the Tokio bridge
+//! Plain async Rust: no gpui, no kube. The manager spawns two things, each owned by the session
+//! entry: the per-connection forwarder of the adapter's kind events (`kinds`), aborted when the
+//! connection is released, and the automatic reconnect schedule (`reconnect`), aborted when the
+//! user takes over. Callers drive `connect` on the Tokio bridge
 //! (`oxikube_runtime::spawn_kube`); dropping that task cancels the attempt. Each session has its own short-lived lock, never held across
 //! an `.await`; updates of one session are sent in order under it.
 //!
@@ -70,6 +76,7 @@ mod manager;
 mod model;
 pub mod namespaces;
 mod prefs;
+mod reconnect;
 pub mod restore;
 mod updates;
 
@@ -79,4 +86,5 @@ mod tests;
 pub use config::{RetryPolicy, SessionManagerConfig, SessionOptions};
 pub use manager::ClusterSessionManager;
 pub use model::ClusterSession;
+pub use reconnect::AutoReconnect;
 pub use updates::{SessionChange, SessionLagged, SessionUpdate, SessionUpdates};
