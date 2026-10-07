@@ -169,6 +169,7 @@ fn ctrl_letters_are_control_codes() {
     assert_eq!(map("ctrl-space", plain()).as_deref(), Some("\x00"));
     assert_eq!(map("ctrl-@", plain()).as_deref(), Some("\x00"));
     assert_eq!(map("ctrl-/", plain()).as_deref(), Some("\x1f"));
+    assert_eq!(map("ctrl--", plain()).as_deref(), Some("\x1f"), "undo");
     assert_eq!(map("ctrl-?", plain()).as_deref(), Some("\x7f"));
     assert_eq!(map("ctrl-1", plain()), None, "no control code");
 }

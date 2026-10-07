@@ -183,7 +183,8 @@ fn meta(byte: u8) -> Option<&'static str> {
     std::str::from_utf8(META.get(usize::from(byte))?).ok()
 }
 
-/// The C0 control code Ctrl + `key` types (`ctrl-a` is 1, `ctrl-[` is ESC, `ctrl-?` is DEL).
+/// The C0 control code Ctrl + `key` types (`ctrl-a` is 1, `ctrl-[` is ESC, `ctrl-?` is DEL, and
+/// `ctrl--`, like `ctrl-/`, is 0x1f: readline's undo).
 fn control_code(key: char) -> Option<u8> {
     Some(match key.to_ascii_lowercase() {
         c @ 'a'..='z' => c as u8 - b'a' + 1,
@@ -192,7 +193,7 @@ fn control_code(key: char) -> Option<u8> {
         '\\' | '4' => 0x1c,
         ']' | '5' => 0x1d,
         '^' | '6' => 0x1e,
-        '_' | '/' | '7' => 0x1f,
+        '_' | '-' | '/' | '7' => 0x1f,
         '?' | '8' => 0x7f,
         _ => return None,
     })

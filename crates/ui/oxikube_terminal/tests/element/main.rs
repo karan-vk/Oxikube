@@ -7,6 +7,7 @@ mod cache;
 mod clipboard;
 mod dialog;
 mod ime;
+mod keymap_shadowing;
 mod keys;
 mod layout;
 mod links;
@@ -20,8 +21,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use gpui::{
-    AppContext as _, Context, Entity, FocusHandle, IntoElement, Modifiers, ParentElement as _,
-    Pixels, Point, Render, Styled as _, TestAppContext, Window, div, point, px, size,
+    AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement, Modifiers,
+    ParentElement as _, Pixels, Point, Render, Styled as _, TestAppContext, Window, div, point, px,
+    size,
 };
 use oxikube_domain::command::Command;
 use oxikube_ports::TerminalSize;
@@ -73,7 +75,8 @@ impl Render for Host {
         if let Some(confirm) = &self.confirm {
             element = element.paste_confirm(confirm.clone());
         }
-        div().size_full().child(element)
+        // Under the workspace's key context, as in the app, so its bindings apply around the terminal.
+        div().key_context("Workspace").size_full().child(element)
     }
 }
 

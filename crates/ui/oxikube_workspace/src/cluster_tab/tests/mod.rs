@@ -46,12 +46,13 @@ pub(super) fn context(name: &str) -> ClusterContext {
     )
 }
 
-/// The `Ctrl` or `Cmd` modifier the shipped keymap of this OS uses.
+/// The modifier of the cluster tab chords in the shipped keymap of this OS: `cmd`, or
+/// `ctrl-shift` (the plain `ctrl-` chords belong to a focused terminal's shell).
 pub(super) fn modifier() -> &'static str {
     if cfg!(target_os = "macos") {
         "cmd"
     } else {
-        "ctrl"
+        "ctrl-shift"
     }
 }
 
