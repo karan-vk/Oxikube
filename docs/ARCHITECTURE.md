@@ -458,6 +458,22 @@ crate's `README.md` for its allowed dependencies. Highlights:
   with its exit code, Close tab first after code 0). `terminal::Reconnect` / `terminal::Restart`
   re-launch the focused terminal's descriptor through its launcher (so `ExecService` re-checks
   policy); a dropped session's input is closed (`TerminalState::close_input`).
+  Terminal settings and keymap (E09-S11): `settings` is a directory module (`content`, `resolved`):
+  `terminal.{shell, shell_args, font_family, font_size, line_height, cursor_shape, cursor_blink,
+  bell, scrollback_lines, copy_on_select, option_as_meta, confirm_multiline_paste}` with defaults in
+  `default.json`, a schema entry and hot reload (font settings re-lay every open terminal out once,
+  cursor and scrollback reach the grid at once, a changed shell applies to terminals opened
+  afterwards only); out-of-range numbers are clamped with a log warning; `clusters.<id>.terminal.shell`
+  and `shell_args` override the shell for one cluster's terminals (`TerminalSettings::for_cluster`;
+  the look and input settings are read from the top-level block only). The `Terminal` key
+  context (set by the element; `searching` is added while the find bar is open) carries the
+  default bindings of every platform (cmd-based on macOS, ctrl-shift-based on Linux and Windows
+  so `ctrl-c` and the plain control chords reach the process) for `terminal::Copy`, `Paste`,
+  `SelectAll`, `Clear`, `Search`, `SearchNext`, `SearchPrevious`, `New`, `Split`, `Close` and the
+  scroll commands; each is a `Command` with an MCP tool stub (all reads: no `MutationGuard` tier).
+  Find in scrollback is `view::find` (bar, matches painted by `element::highlight`, regex scan
+  from `TerminalState::search`); the cursor's blink clock and the bell (`terminal.bell`) are
+  `view::bell`.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's

@@ -111,13 +111,28 @@
   // re-reads your profile and slows opening a terminal). A cluster's terminal starts with
   // KUBECONFIG (a private merged file holding only that cluster's context, removed when the
   // terminal closes), KUBE_CONTEXT and OXIKUBE_NAMESPACE set; PATH is yours, untouched. Note that
-  // kubectl in the shell is not behind Oxikube's read-only mode or confirmations. Applies to
-  // terminals opened afterwards.
+  // kubectl in the shell is not behind Oxikube's read-only mode or confirmations. A new shell
+  // applies to terminals opened afterwards; a running one keeps its shell. `shell` and
+  // `shell_args` can also be set under `clusters.<id>.terminal` for one cluster's terminals; the
+  // other keys are read from this block only.
   "terminal": {
     "shell": null,
     "shell_args": [],
+    // Font of the terminal text. null: the platform's monospace font (Menlo, Consolas, DejaVu
+    // Sans Mono) at the theme's monospace size. font_size is in points (6 - 72), line_height a
+    // multiple of it (1.0 - 2.5); values outside are clamped. Changes repaint open terminals.
+    "font_family": null,
+    "font_size": null,
+    "line_height": 1.3,
+    // The cursor until the process sets its own: "block", "bar" or "underline"; cursor_blink
+    // makes it blink.
+    "cursor_shape": "block",
+    "cursor_blink": false,
+    // What a bell from the process does: "none", "visual" (a brief flash) or "audible" (the
+    // system alert sound).
+    "bell": "visual",
     // Lines of history each terminal keeps in memory (0 - 100000). Scrollback is never saved to
-    // disk. A change applies to open terminals at once.
+    // disk. A change applies to open terminals at once (a smaller value drops the oldest lines).
     "scrollback_lines": 10000,
     // Copy the selection to the clipboard when the mouse button is released. cmd-c (ctrl-shift-c
     // on Linux and Windows) always copies it; ctrl-c always interrupts the process.

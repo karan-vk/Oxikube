@@ -11,11 +11,13 @@
 //!
 //! | Module | What |
 //! |---|---|
+//! | `state` | [`TerminalElementState`]: the snapshot buffers, shaped rows, metrics, hover, drag and blink phase kept between frames |
 //! | `metrics` | [`TerminalFont`], [`CellMetrics`]: cell size, pixels <-> cells |
 //! | `palette` | [`TerminalPalette`]: theme terminal tokens -> cell colours (16 ANSI, 256, truecolour, dim, bold, inverse, hidden) |
 //! | `layout` | a row as background spans, style runs and decoration spans (pure) |
 //! | `cache` | the shaped rows of the previous frame, reused for rows whose content hash did not change, and the block cursor's glyph |
 //! | `paint` | the paint passes |
+//! | `highlight`, `blink` | search matches as row spans painted over the cells; the cursor's blink phase and its clock (E09-S11) |
 //! | `links` | OSC 8, URL and path detection on the hovered line |
 //! | `mouse` | hover, cmd/ctrl-click (dispatches `terminal::OpenLink`), selection drags, wheel scrolling |
 //!
@@ -23,7 +25,7 @@
 //!
 //! | Module | What |
 //! |---|---|
-//! | `attach` | the `Terminal` key context, the input handler (`EntityInputHandler` of the state), the key-down listener and the copy / paste actions ([`crate::input`]) |
+//! | `attach` | the `Terminal` key context, the input handler (`EntityInputHandler` of the state), the key-down listener and the copy / paste / select all / clear / scroll actions ([`crate::input`]) |
 //! | `preedit` | the IME composition painted inline at the cursor |
 //! | `prepare` | per-frame upkeep of the state in prepaint: stale link hover, palette rebuild |
 //! | `report` | mouse reporting to the process (SGR / UTF-8 / legacy; click, drag, motion, wheel; Shift bypasses) and alternate scroll |
@@ -31,8 +33,10 @@
 //! The view that hosts the element in a workspace tab is E09-S07.
 
 mod attach;
+mod blink;
 mod cache;
 mod hash;
+mod highlight;
 mod layout;
 pub mod links;
 pub mod metrics;
@@ -42,10 +46,10 @@ pub mod palette;
 mod preedit;
 mod prepare;
 mod report;
+mod state;
 #[cfg(test)]
 mod tests;
 
-use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -53,20 +57,21 @@ use gpui::{
     App, Bounds, Element, ElementId, Entity, FocusHandle, GlobalElementId, Hitbox, HitboxBehavior,
     InspectorElementId, IntoElement, LayoutId, Pixels, Point, Style, Window, relative,
 };
-use oxikube_ports::TerminalSize;
 use oxikube_theme::ActiveTheme;
 use oxikube_workspace::CommandDispatcher;
 
-use crate::grid::{SelectionSide, TerminalSnapshot};
 use crate::input::{ImeAnchor, PasteConfirm};
 use crate::state::TerminalState;
 
+pub use blink::BLINK_INTERVAL;
 pub use cache::CacheStats;
+pub use highlight::SearchHighlights;
 pub use links::{LinkKind, TerminalLink};
 pub use metrics::{CellMetrics, TerminalFont};
 pub use palette::TerminalPalette;
 
-use cache::RowCache;
+use state::Inner;
+pub use state::TerminalElementState;
 
 /// Whether file paths in the output are links, and what relative ones are relative to.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -80,61 +85,6 @@ pub enum PathLinks {
         /// The directory relative paths resolve against (the shell's working directory).
         base: Option<PathBuf>,
     },
-}
-
-/// What the element keeps between frames: the snapshot buffers, the shaped rows, the palette and
-/// metrics it last used, and the hover and drag state. The host view creates one per terminal
-/// and passes it to every [`TerminalElement`] it renders. Cheap to clone (a shared handle).
-#[derive(Clone, Default)]
-pub struct TerminalElementState(Rc<RefCell<Inner>>);
-
-#[derive(Default)]
-struct Inner {
-    snapshot: TerminalSnapshot,
-    cache: RowCache,
-    /// The size the element last asked the terminal for.
-    requested: Option<TerminalSize>,
-    metrics: Option<(TerminalFont, CellMetrics)>,
-    palette: Option<prepare::PaletteMemo>,
-    hovered: Option<TerminalLink>,
-    /// The content hash of each row the hovered link is on, when it was found.
-    hover_rows: Vec<(usize, u64)>,
-    /// The cell the pointer was last over (link detection runs when it changes).
-    hover_cell: Option<(usize, usize)>,
-    /// The cell a selection drag last reached; `None` when no drag is in progress.
-    dragging: Option<(usize, usize, SelectionSide)>,
-    /// Wheel movement not yet worth a whole line.
-    scroll_remainder: Pixels,
-    /// The button whose press was reported to the process (mouse reporting, E09-S06).
-    reported: Option<crate::mappings::mouse::MouseButton>,
-    /// The cell the last mouse report named (a report is sent once per cell).
-    report_cell: Option<(usize, usize)>,
-}
-
-impl std::fmt::Debug for TerminalElementState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Never the snapshot: it holds what is on screen.
-        f.debug_struct("TerminalElementState")
-            .field("cache", &self.cache_stats())
-            .finish_non_exhaustive()
-    }
-}
-
-impl TerminalElementState {
-    /// Fresh state: the first frame lays out and shapes every row.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// The row cache's counters (tests and `--perf`).
-    pub fn cache_stats(&self) -> CacheStats {
-        self.0.borrow().cache.stats()
-    }
-
-    /// The link under the pointer while the platform modifier is held.
-    pub fn hovered_link(&self) -> Option<TerminalLink> {
-        self.0.borrow().hovered.clone()
-    }
 }
 
 /// Paints a [`TerminalState`]. See the [module docs](self).
@@ -152,6 +102,8 @@ pub struct TerminalElement {
     dispatcher: Option<Rc<dyn CommandDispatcher>>,
     paths: PathLinks,
     confirm: Option<Rc<dyn PasteConfirm>>,
+    highlights: Option<SearchHighlights>,
+    searching: bool,
 }
 
 impl TerminalElement {
@@ -170,7 +122,25 @@ impl TerminalElement {
             dispatcher: None,
             paths: PathLinks::Off,
             confirm: None,
+            highlights: None,
+            searching: false,
         }
+    }
+
+    /// Paints the matches of a search over the cells, the current one in its own colour
+    /// (`search_match` and `search_active_match` of the theme).
+    #[must_use]
+    pub fn highlights(mut self, highlights: SearchHighlights) -> Self {
+        self.highlights = Some(highlights);
+        self
+    }
+
+    /// Whether the terminal's search bar is open: the key context then also says `searching`,
+    /// where the keymap binds the next / previous match keys.
+    #[must_use]
+    pub fn searching(mut self, searching: bool) -> Self {
+        self.searching = searching;
+        self
     }
 
     /// Where a multi-line paste asks for confirmation (`terminal.confirm_multiline_paste`).
@@ -182,7 +152,7 @@ impl TerminalElement {
         self
     }
 
-    /// Draws with `font` instead of the theme's monospace font.
+    /// Draws with `font` instead of the one the `terminal` font settings describe.
     #[must_use]
     pub fn font(mut self, font: TerminalFont) -> Self {
         self.font = Some(font);
@@ -260,7 +230,7 @@ impl Element for TerminalElement {
         let font = self
             .font
             .clone()
-            .unwrap_or_else(|| TerminalFont::from_theme(cx));
+            .unwrap_or_else(|| TerminalFont::from_settings(cx));
         let mut inner = self.state.0.borrow_mut();
         let metrics = match &inner.metrics {
             Some((measured, metrics)) if *measured == font => *metrics,
@@ -305,6 +275,14 @@ impl Element for TerminalElement {
                 .map(|composition| composition.text.clone())
         });
 
+        {
+            let Inner {
+                highlight_spans,
+                snapshot,
+                ..
+            } = &mut *inner;
+            highlight::spans_into(highlight_spans, self.highlights.as_ref(), snapshot);
+        }
         prepare::refresh_palette(&mut inner, ActiveTheme::get(cx));
         let Inner {
             snapshot,
@@ -326,11 +304,17 @@ impl Element for TerminalElement {
         // The element is the focus target: modifier changes (link hover) and, from E09-S06, keys
         // reach it while its handle is focused.
         window.set_focus_handle(&self.focus, cx);
+        let focused = self.focus.is_focused(window);
+        {
+            let mut inner = self.state.0.borrow_mut();
+            let blinking = focused && inner.snapshot.cursor.blinking;
+            inner.blink.painted(blinking);
+        }
         TerminalFrame {
             hitbox: window.insert_hitbox(bounds, HitboxBehavior::Normal),
             origin: bounds.origin,
             metrics,
-            focused: self.focus.is_focused(window),
+            focused,
             preedit,
         }
     }

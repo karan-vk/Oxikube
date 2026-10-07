@@ -324,10 +324,34 @@ fn the_shipped_keymaps_bind_the_terminal_commands(cx: &mut TestAppContext) {
 
     let h = harness(cx);
     let mut vcx = h.vcx;
-    for (platform, close, split) in [
-        (KeymapPlatform::MacOs, "cmd-w", "cmd-d"),
-        (KeymapPlatform::Linux, "ctrl-shift-w", "ctrl-shift-d"),
-        (KeymapPlatform::Windows, "ctrl-shift-w", "ctrl-shift-d"),
+    for (platform, close, split, new, search, select_all, clear) in [
+        (
+            KeymapPlatform::MacOs,
+            "cmd-w",
+            "cmd-d",
+            "cmd-t",
+            "cmd-f",
+            "cmd-a",
+            "cmd-k",
+        ),
+        (
+            KeymapPlatform::Linux,
+            "ctrl-shift-w",
+            "ctrl-shift-d",
+            "ctrl-shift-t",
+            "ctrl-shift-f",
+            "ctrl-shift-a",
+            "ctrl-shift-k",
+        ),
+        (
+            KeymapPlatform::Windows,
+            "ctrl-shift-w",
+            "ctrl-shift-d",
+            "ctrl-shift-t",
+            "ctrl-shift-f",
+            "ctrl-shift-a",
+            "ctrl-shift-k",
+        ),
     ] {
         let parsed =
             parse_keymap(default_keymap(platform), KeymapLayer::Default).expect("a keymap");
@@ -359,6 +383,47 @@ fn the_shipped_keymaps_bind_the_terminal_commands(cx: &mut TestAppContext) {
                 split.to_owned(),
                 "terminal::Split".to_owned(),
                 terminal.clone(),
+            ),
+            (new.to_owned(), "terminal::New".to_owned(), terminal.clone()),
+            (
+                search.to_owned(),
+                "terminal::Search".to_owned(),
+                terminal.clone(),
+            ),
+            (
+                select_all.to_owned(),
+                "terminal::SelectAll".to_owned(),
+                terminal.clone(),
+            ),
+            (
+                clear.to_owned(),
+                "terminal::Clear".to_owned(),
+                terminal.clone(),
+            ),
+            (
+                "shift-pageup".to_owned(),
+                "terminal::ScrollPageUp".to_owned(),
+                terminal.clone(),
+            ),
+            (
+                "shift-down".to_owned(),
+                "terminal::ScrollLineDown".to_owned(),
+                terminal.clone(),
+            ),
+            (
+                "escape".to_owned(),
+                "terminal::SearchClose".to_owned(),
+                Some("TerminalSearch > Input".to_owned()),
+            ),
+            (
+                (if platform == KeymapPlatform::MacOs {
+                    "cmd-g"
+                } else {
+                    "f3"
+                })
+                .to_owned(),
+                "terminal::SearchNext".to_owned(),
+                Some("Terminal && searching".to_owned()),
             ),
         ] {
             assert!(
@@ -419,4 +484,79 @@ fn restart_and_reconnect_start_a_new_session_in_the_matching_focused_terminal(
         .vcx
         .update(|_, cx| matches!(view.read(cx).lifecycle(), view::Lifecycle::Running));
     assert!(running);
+}
+
+/// Every command of the terminal's input family (copy, paste, select all, clear, scrolling, search)
+/// is a read with an MCP tool stub, and each one queues the request the window runs.
+#[test]
+fn the_input_commands_are_reads_with_tool_stubs_that_become_requests() {
+    use futures::StreamExt as _;
+    use oxikube_terminal::input::{
+        TerminalInputCommand, TerminalInputSink, register_input_commands,
+    };
+
+    let (sink, mut requests) = TerminalInputSink::channel();
+    let mut registry = CommandRegistry::new();
+    registry
+        .install("oxikube_terminal", |r| register_input_commands(r, sink))
+        .expect("registered");
+    let clock = Arc::new(FakeClockPort::default());
+    let sessions = ClusterSessionManager::new(
+        Arc::new(FakeClusterConnectorPort::new()),
+        Arc::new(FakeClusterSourcePort::new()),
+        clock.clone(),
+    );
+    let guard = MutationGuard::new(sessions, Arc::new(FakeStatePort::new()), clock);
+    let bus = CommandBus::new(registry, guard);
+    let commands = [
+        (Command::TerminalCopy, TerminalInputCommand::Copy),
+        (Command::TerminalPaste, TerminalInputCommand::Paste),
+        (Command::TerminalSelectAll, TerminalInputCommand::SelectAll),
+        (Command::TerminalClear, TerminalInputCommand::Clear),
+        (
+            Command::TerminalScrollPageUp,
+            TerminalInputCommand::ScrollPageUp,
+        ),
+        (
+            Command::TerminalScrollPageDown,
+            TerminalInputCommand::ScrollPageDown,
+        ),
+        (
+            Command::TerminalScrollLineUp,
+            TerminalInputCommand::ScrollLineUp,
+        ),
+        (
+            Command::TerminalScrollLineDown,
+            TerminalInputCommand::ScrollLineDown,
+        ),
+        (Command::TerminalSearch, TerminalInputCommand::Search),
+        (
+            Command::TerminalSearchNext,
+            TerminalInputCommand::SearchNext,
+        ),
+        (
+            Command::TerminalSearchPrevious,
+            TerminalInputCommand::SearchPrevious,
+        ),
+        (
+            Command::TerminalSearchClose,
+            TerminalInputCommand::SearchClose,
+        ),
+    ];
+    assert_eq!(commands.len(), TerminalInputCommand::ALL.len());
+    for (command, request) in commands {
+        let id = command.id();
+        assert_eq!(request.id(), id, "the request names its command");
+        assert_eq!(TerminalInputCommand::of(&command), Some(request));
+        let meta = bus
+            .commands()
+            .find(|meta| meta.id == id)
+            .expect("registered");
+        assert!(!meta.mutating, "{id} changes nothing in a cluster");
+        assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");
+        block_on(bus.dispatch(command, DispatchContext::new(Initiator::Ui, "me")))
+            .unwrap_or_else(|error| panic!("{id}: {error:?}"));
+        assert_eq!(block_on(requests.next()), Some(request));
+    }
+    assert_eq!(TerminalInputCommand::of(&Command::TerminalSplit), None);
 }

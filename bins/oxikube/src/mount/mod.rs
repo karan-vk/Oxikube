@@ -27,9 +27,9 @@
 //!    view's toolbar when kubectl is installed (`oxikube_logs_ui::follow_kubectl` looks it up off
 //!    the UI thread); it asks the window's `TerminalViews` for a kubectl tab.
 //! 8. the opener of terminal links (E09-S05): `terminal::OpenLink` validates a link off the UI
-//!    thread and this window opens it (browser or system opener); and the terminal's copy / paste
-//!    commands (E09-S06): `terminal::Copy` / `terminal::Paste` are dispatched to the window's
-//!    focused terminal;
+//!    thread and this window opens it (browser or system opener); and the terminal's own
+//!    commands (E09-S06, E09-S11): `terminal::Copy` / `Paste` / `SelectAll` / `Clear`, the scroll
+//!    commands and `terminal::Search*` are dispatched to the window's focused terminal;
 //! 9. the terminal tabs (E09-S07, [`terminal`]): the terminal services (local shells with the
 //!    cluster's environment), the terminal panel in every cluster tab's bottom dock, and the
 //!    window's `TerminalViews` behind `terminal::New` / `Split` / `Close`.

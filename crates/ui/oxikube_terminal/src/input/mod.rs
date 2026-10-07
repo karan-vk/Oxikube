@@ -1,4 +1,4 @@
-//! Keyboard, IME, clipboard and the input commands of a terminal (E09-S06).
+//! Keyboard, IME, clipboard and the input commands of a terminal (E09-S06, E09-S11).
 //!
 //! The pieces the [`TerminalElement`](crate::TerminalElement) attaches while it is focused:
 //!
@@ -7,7 +7,25 @@
 //! | [`keyboard`] | the key-down listener: [`to_esc_str`](crate::mappings::to_esc_str) over the process's modes and the `terminal.option_as_meta` setting; Shift-PageUp/PageDown/Home/End scroll the history; anything that is plain text falls through to the IME handler |
 //! | [`ime`] | `EntityInputHandler` for [`TerminalState`]: composition (marked text) shown inline at the cursor, committed text sent as UTF-8, `bounds_for_range` for the candidate window |
 //! | [`clipboard`] | `terminal::Copy` / `terminal::Paste`, copy on select, the multi-line paste confirmation ([`PasteConfirm`]) |
-//! | [`commands`] | the `terminal::Copy` / `terminal::Paste` bus handlers: palette and agents reach the focused terminal through the window |
+//! | [`commands`] | the bus handlers of the terminal's own commands (copy, paste, select all, clear, scroll, search): palette and agents reach the focused terminal through the window (E09-S11 added all but copy and paste) |
+//!
+//! # Which keys the terminal swallows and which it forwards
+//!
+//! A terminal in focus sends every keystroke to its process except these (the defaults of
+//! `keymap.json`'s `Terminal` context; rebind them there):
+//!
+//! | | macOS | Linux / Windows |
+//! |---|---|---|
+//! | copy / paste | `cmd-c`, `cmd-v` | `ctrl-shift-c`, `ctrl-shift-v` (`shift-insert` pastes) |
+//! | select all | `cmd-a` | `ctrl-shift-a` |
+//! | search; next / previous match | `cmd-f`; `cmd-g`, `cmd-shift-g` | `ctrl-shift-f`; `f3`, `shift-f3` (while the search bar is open) |
+//! | clear | `cmd-k` | `ctrl-shift-k` |
+//! | new, split, close | `cmd-t`, `cmd-d`, `cmd-w` | `ctrl-shift-t`, `ctrl-shift-d`, `ctrl-shift-w` |
+//! | scroll history | `shift-pageup`, `shift-pagedown`, `shift-up`, `shift-down`, `shift-home`, `shift-end` | the same |
+//!
+//! `ctrl-c`, `ctrl-d`, `ctrl-z`, `ctrl-r`, `ctrl-a` and every other plain `ctrl-` chord reach the
+//! process: nothing here binds them. The scroll keys are the terminal's only on the primary
+//! screen; a full-screen program (vim, htop, less) on the alternate screen receives them.
 //!
 //! Everything a user types or pastes goes to the process only: never to a log, the audit trail
 //! or disk (non-negotiable 5).
@@ -42,6 +60,26 @@ actions!(
         Copy,
         /// Paste the clipboard (`cmd-v`, `ctrl-shift-v`).
         Paste,
+        /// Select the whole screen and scrollback (`cmd-a`, `ctrl-shift-a`).
+        SelectAll,
+        /// Clear the scrollback and the screen above the cursor (`cmd-k`, `ctrl-shift-k`).
+        Clear,
+        /// Scroll the history one screen up (`shift-pageup`).
+        ScrollPageUp,
+        /// Scroll the history one screen down (`shift-pagedown`).
+        ScrollPageDown,
+        /// Scroll the history one line up (`shift-up`).
+        ScrollLineUp,
+        /// Scroll the history one line down (`shift-down`).
+        ScrollLineDown,
+        /// Open the search bar (`cmd-f`, `ctrl-shift-f`).
+        Search,
+        /// Jump to the next search match.
+        SearchNext,
+        /// Jump to the previous search match.
+        SearchPrevious,
+        /// Close the search bar.
+        SearchClose,
     ]
 );
 

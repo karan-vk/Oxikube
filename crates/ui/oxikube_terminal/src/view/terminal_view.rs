@@ -9,7 +9,9 @@ use oxikube_domain::OxiResult;
 use oxikube_ports::{ExitStatus, TerminalBackend};
 use oxikube_workspace::{ClusterMark, ItemEvent};
 
+use super::bell::Bell;
 use super::descriptor::{BackendDescriptor, tab_title};
+use super::find::Find;
 use super::lifecycle::{Failure, Lifecycle, Signal};
 use super::services::TerminalServices;
 use crate::backend::local::DEFAULT_SIZE;
@@ -45,6 +47,10 @@ pub struct TerminalView {
     /// The title the process set, cleaned and cut.
     pub(super) process_title: Option<SharedString>,
     pub(super) mark: Option<ClusterMark>,
+    /// Find in scrollback (E09-S11).
+    pub(super) find: Find,
+    /// The bell's flash and the cursor's blink clock (E09-S11).
+    pub(super) bell: Bell,
     /// The directory the shell was in when the tab closed. The tab's own close button ends the
     /// session before the workspace saves the reopen-closed entry, so the entry reads it here.
     closed_dir: Option<PathBuf>,
@@ -65,7 +71,7 @@ impl TerminalView {
         services: TerminalServices,
         cx: &mut Context<Self>,
     ) -> Self {
-        let setting_shell = TerminalSettings::current(cx).shell;
+        let setting_shell = TerminalSettings::for_cluster(cx, descriptor.cluster()).shell;
         let default_title = descriptor.default_title(setting_shell.as_deref()).into();
         let (mark, follow_mark) = match descriptor.cluster() {
             Some(cluster) => (
@@ -85,6 +91,8 @@ impl TerminalView {
             default_title,
             process_title: None,
             mark,
+            find: Find::default(),
+            bell: Bell::default(),
             closed_dir: None,
             _follow_mark: follow_mark,
             launch: Some(launch),
@@ -195,9 +203,13 @@ impl TerminalView {
         match result {
             Ok(backend) => {
                 let state = cx.new(|cx| TerminalState::new(backend, DEFAULT_SIZE, cx));
-                // The state notifies at most once a frame (coalesced); repaint with it.
-                self.subscriptions
-                    .push(cx.observe(&state, |_, _, cx| cx.notify()));
+                // The state notifies at most once a frame (coalesced); repaint with it, and look
+                // an open search's matches up again after new output.
+                self.subscriptions.push(cx.observe(&state, |this, _, cx| {
+                    this.find_on_terminal_change(cx);
+                    cx.notify();
+                }));
+                self.bell.start_blink(cx);
                 self.subscriptions.push(
                     cx.subscribe(&state, |this, _, event: &TerminalEvent, cx| {
                         this.on_terminal_event(event, cx)
@@ -250,9 +262,8 @@ impl TerminalView {
                 cx.emit(ItemEvent::UpdateTab);
                 cx.notify();
             }
-            TerminalEvent::Bell
-            | TerminalEvent::ClipboardStore(_)
-            | TerminalEvent::ColorRequest(_) => {}
+            TerminalEvent::Bell => self.ring_bell(cx),
+            TerminalEvent::ClipboardStore(_) | TerminalEvent::ColorRequest(_) => {}
         }
     }
 
@@ -270,5 +281,7 @@ impl TerminalView {
         }
         self.phase = Phase::Closed;
         self.subscriptions.clear();
+        self.find = Find::default();
+        self.bell = Bell::default();
     }
 }

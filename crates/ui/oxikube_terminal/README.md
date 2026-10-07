@@ -38,8 +38,32 @@ alacritty_terminal grid + custom GPUI Element + TerminalBackend (local PTY, kube
   names its types): parse, snapshot, selection, search, scrollback, resize.
 - `state` (E09-S04): `TerminalState`, the GPUI entity bridging a `TerminalBackend` and the grid
   (tokio pump and writer, frame-coalesced notify).
-- `settings`: the `terminal` block of `settings.json` (`shell`, `shell_args`, `scrollback_lines`,
-  `copy_on_select`, `option_as_meta`, `confirm_multiline_paste`).
+- `settings` (E09-S11): the `terminal` block of `settings.json` (`shell`, `shell_args`,
+  `font_family`, `font_size`, `line_height`, `cursor_shape`, `cursor_blink`, `bell`,
+  `scrollback_lines`, `copy_on_select`, `option_as_meta`, `confirm_multiline_paste`); layers
+  `default.json` -> `settings.json` -> `clusters.<id>.terminal` (a cluster's block sets the shell
+  and its arguments for that cluster's terminals; everything else is read from the top level).
+
+## Keys the terminal takes and keys it forwards (E09-S11)
+
+The `Terminal` key context (`keymap.json`, rebindable) binds only these; every other key goes to
+the process, so `ctrl-c`, `ctrl-d`, `ctrl-z`, `ctrl-r` and the other plain control chords are the
+shell's:
+
+| | macOS | Linux / Windows |
+|---|---|---|
+| copy, paste | `cmd-c`, `cmd-v` | `ctrl-shift-c`, `ctrl-shift-v` (`shift-insert` pastes) |
+| select all | `cmd-a` | `ctrl-shift-a` |
+| find; next, previous match | `cmd-f`; `cmd-g`, `cmd-shift-g` | `ctrl-shift-f`; `f3`, `shift-f3` |
+| clear scrollback | `cmd-k` | `ctrl-shift-k` |
+| new, split, close | `cmd-t`, `cmd-d`, `cmd-w` | `ctrl-shift-t`, `ctrl-shift-d`, `ctrl-shift-w` |
+| scroll | `shift-pageup/pagedown` (screen), `shift-up/down` (line), `shift-home/end` | the same |
+
+The scroll keys belong to the terminal on the primary screen only: on the alternate screen (vim,
+htop, less) they are sent to the program. In the find bar `escape` closes it and `enter` /
+`shift-enter` step through the matches. Every one of these is a `Command` (`terminal::Copy`,
+`terminal::SelectAll`, `terminal::Search`, ...) so the palette and agents reach the same
+behaviour.
 
 ## Manual input checks (IME, Linux, Windows)
 
