@@ -81,8 +81,8 @@ fn terminal_copy_and_paste_reach_the_window(cx: &mut TestAppContext) {
 /// Starts a `FakeTerminalBackend` for each launch and keeps what it was asked (no process, no OS
 /// thread in a GPUI test).
 #[derive(Default)]
-struct FakeLauncher {
-    launches: std::cell::RefCell<Vec<oxikube_terminal::view::BackendDescriptor>>,
+pub(super) struct FakeLauncher {
+    pub(super) launches: std::cell::RefCell<Vec<oxikube_terminal::view::BackendDescriptor>>,
     backends: std::cell::RefCell<Vec<oxikube_testkit::fakes::FakeTerminalBackend>>,
 }
 

@@ -4,6 +4,8 @@
 //! - **New** opens a local shell for a cluster in the bottom dock of its tab (adding the
 //!   [`TerminalPanel`](super::TerminalPanel) when the tab has none), with the cluster's selected
 //!   namespace; with no cluster tab shown, a plain shell tab in the window's own workspace.
+//! - **Open** (E08-S08) opens a terminal running a given descriptor the same way (the log viewer's
+//!   `kubectl logs -f`), in the dock of the descriptor's own cluster, with exactly that descriptor.
 //! - **Split** opens a terminal running what the focused one runs, in the directory its shell is
 //!   in now (the shown cluster's shell otherwise), in a new pane right of the focused terminal's
 //!   pane, else of the active pane. For a pod terminal it sends the pod command again instead (a
@@ -81,9 +83,11 @@ impl TerminalViews {
     pub fn apply(&mut self, request: TerminalRequest, window: &mut Window, cx: &mut Context<Self>) {
         cx.defer_in(window, move |this, window, cx| match request {
             TerminalRequest::New { cluster } => this.open_new(cluster, window, cx),
+            TerminalRequest::Open { descriptor } | TerminalRequest::Pod(descriptor) => {
+                this.open_in(descriptor.cluster().cloned(), descriptor, window, cx);
+            }
             TerminalRequest::Split => this.split(window, cx),
             TerminalRequest::Close => this.close_focused(window, cx),
-            TerminalRequest::Pod(descriptor) => this.open_pod(descriptor, window, cx),
             TerminalRequest::Reconnect => this.recover(true, window, cx),
             TerminalRequest::Restart => this.recover(false, window, cx),
         });
@@ -98,9 +102,29 @@ impl TerminalViews {
         cx: &mut Context<Self>,
     ) {
         let cluster = cluster.or_else(|| self.deps.host.active_cluster(cx));
+        let descriptor = match &cluster {
+            Some(cluster) => {
+                let namespace = self.deps.host.namespace(cluster, cx);
+                BackendDescriptor::local(Some(cluster.clone())).in_namespace(namespace)
+            }
+            None => BackendDescriptor::local(None),
+        };
+        self.open_in(cluster, descriptor, window, cx);
+    }
+
+    /// Opens a terminal running `descriptor` where its cluster's terminals go (see
+    /// [`open_new`](Self::open_new)); a descriptor without a cluster opens in the window's own
+    /// workspace, never in the shown cluster's.
+    fn open_in(
+        &mut self,
+        cluster: Option<ClusterId>,
+        descriptor: BackendDescriptor,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(cluster) = cluster else {
             if let Some(workspace) = self.deps.window_workspace.upgrade() {
-                let view = self.build(BackendDescriptor::local(None), cx);
+                let view = self.build(descriptor, cx);
                 workspace.update(cx, |ws, cx| ws.open_item(view, window, cx));
             }
             return;
@@ -108,39 +132,6 @@ impl TerminalViews {
         let Some(workspace) = self.deps.host.workspace(&cluster, cx) else {
             return;
         };
-        let namespace = self.deps.host.namespace(&cluster, cx);
-        let descriptor = BackendDescriptor::local(Some(cluster.clone())).in_namespace(namespace);
-        self.open_docked(cluster, workspace, descriptor, window, cx);
-    }
-
-    /// Opens the pod terminal `descriptor` describes in the bottom dock of its cluster's tab.
-    /// Does nothing when the cluster has no tab in this window.
-    fn open_pod(
-        &mut self,
-        descriptor: BackendDescriptor,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(cluster) = descriptor.cluster().cloned() else {
-            return;
-        };
-        let Some(workspace) = self.deps.host.workspace(&cluster, cx) else {
-            tracing::warn!("a pod terminal was asked for in a cluster without a tab");
-            return;
-        };
-        self.open_docked(cluster, workspace, descriptor, window, cx);
-    }
-
-    /// Shows `cluster`'s tab and opens a terminal for `descriptor` in the bottom dock of its
-    /// `workspace` (adding the panel when the tab has none).
-    fn open_docked(
-        &mut self,
-        cluster: ClusterId,
-        workspace: Entity<Workspace>,
-        descriptor: BackendDescriptor,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
         self.deps.host.show(&cluster, window, cx);
         let dispatcher = self.deps.services.dispatcher().cloned();
         ensure_terminal_panel(&workspace, Some(cluster), dispatcher, window, cx);

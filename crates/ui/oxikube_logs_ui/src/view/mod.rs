@@ -24,6 +24,7 @@
 //! | `agent` | `logs::SendToAgent`: the selection (else the lines on screen) as agent context, with its source |
 //! | `pick`, `copy` | which lines an action takes (on screen, the buffer, the filter) and `logs::Copy` (cap 5 MB) |
 //! | `save`, `clear`, `notice` | `logs::Save` (dialog, panel, streamed write), `logs::Clear`, the toasts of local actions |
+//! | `tail` | `logs::TailInTerminal` (E08-S08): `kubectl logs -f` for what the view shows, in a terminal tab; the toolbar offers it only when kubectl is installed |
 //! | `recovery` | after the stream stopped (E08-S07): `logs::FollowReplacement` (switch to the pod that replaced a gone one), `logs::Reconnect`, the strip offering them |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
 //! | `render`, `toolbar`, `rows` | drawing: toolbar, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
@@ -66,6 +67,7 @@ mod scroll;
 mod selection;
 mod settings;
 mod stream;
+mod tail;
 pub(crate) mod text;
 mod toolbar;
 mod window;
@@ -84,10 +86,12 @@ use gpui::{
 use oxikube_app::ClusterSessionManager;
 use oxikube_app::context::PendingContext;
 use oxikube_app::logs::export::LineFilter;
+use oxikube_app::logs::kubectl::Kubectl;
 use oxikube_app::logs::{AggregateSpec, LevelFilter, LogService, LogSession};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_ports::FsPort;
 use oxikube_settings::Settings as _;
+use oxikube_terminal::view::TerminalViewSink;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
 use crate::LogsSettings;
@@ -96,8 +100,8 @@ use crate::search::Search;
 pub use actions::{
     Clear, ClearSelection, CloseSearch, Copy, Find, FollowReplacement, Head, Mark, NextMatch,
     PreviousMatch, Reconnect, SaveAll, SaveVisible, SendToAgent, Since1h, Since1m, Since5m,
-    Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen,
-    ToggleInverse, ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    Since15m, Since30m, Tail, TailInTerminal, ToggleAutoscroll, ToggleCase, ToggleFilterMode,
+    ToggleFullscreen, ToggleInverse, ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
 pub use aggregate::{
     AggregateState, BANNER_LINES, BANNER_SECONDS, Banner, MAX_GUTTER, Prefix, SourceChoice,
@@ -131,6 +135,11 @@ pub struct LogViewDeps {
     pub fs: Arc<dyn FsPort>,
     /// Where `logs::SendToAgent` queues the selected lines until the agent panel takes them.
     pub agent: PendingContext,
+    /// Whether kubectl is installed (the "Tail in terminal" action is hidden without it); the
+    /// binary keeps the answer fresh on a background task.
+    pub kubectl: Kubectl,
+    /// Where "Tail in terminal" asks for its terminal tab.
+    pub terminal: TerminalViewSink,
 }
 
 /// The log of one pod's container. See the [module docs](self).

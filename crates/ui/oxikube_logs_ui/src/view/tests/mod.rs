@@ -17,3 +17,4 @@ mod scroll;
 mod search;
 mod settings;
 mod stream;
+mod tail;

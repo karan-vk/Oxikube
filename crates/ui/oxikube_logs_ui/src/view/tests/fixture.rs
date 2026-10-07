@@ -4,10 +4,12 @@
 //! bus does with the log commands (records them, then queues them for the controller).
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::channel::mpsc::UnboundedReceiver;
 use futures::executor::block_on;
 use gpui::{
     Entity, Modifiers, ScrollDelta, ScrollWheelEvent, TestAppContext, TouchPhase,
@@ -16,6 +18,7 @@ use gpui::{
 use jiff::Timestamp;
 use oxikube_app::ClusterSessionManager;
 use oxikube_app::context::PendingContext;
+use oxikube_app::logs::kubectl::Kubectl;
 use oxikube_app::logs::{LogConfig, LogService};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
@@ -23,6 +26,7 @@ use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::log::LogLine;
 use oxikube_keymap::KeymapOptions;
 use oxikube_ports::{ClusterContext, FsPort, LogOptions, SourceId};
+use oxikube_terminal::view::{TerminalRequest, TerminalViewSink};
 use oxikube_testkit::{
     FakeClockPort, FakeClusterConnectorPort, FakeClusterPorts, FakeClusterSourcePort, FakeFsPort,
     LogCall, Timeline,
@@ -161,7 +165,17 @@ pub(crate) struct Fx {
     pub(crate) agent: PendingContext,
     pub(crate) views: Entity<LogViews>,
     pub(crate) dispatcher: Dispatcher,
+    /// Whether kubectl is installed (E08-S08): found at [`KUBECTL`] unless the window was built
+    /// [`without_kubectl`](Self::without_kubectl).
+    pub(crate) kubectl: Kubectl,
+    /// Where the fake lookup finds kubectl: a test installs it by setting this.
+    pub(crate) installed: Arc<parking_lot::Mutex<Option<PathBuf>>>,
+    /// What the views asked the window's terminals for.
+    pub(crate) terminal_requests: UnboundedReceiver<TerminalRequest>,
 }
+
+/// Where the tests' kubectl is.
+pub(crate) const KUBECTL: &str = "/opt/tools/bin/kubectl";
 
 impl Fx {
     /// A window with the cluster connected and `shop/web-0` readable.
@@ -194,10 +208,24 @@ impl Fx {
         Self::build(cx, config, |fs| fs)
     }
 
+    /// [`Self::new`] on a machine without kubectl.
+    pub(crate) fn without_kubectl(cx: &mut TestAppContext) -> Self {
+        Self::build_with(cx, LogConfig::default(), |fs| fs, None)
+    }
+
     fn build(
         cx: &mut TestAppContext,
         config: LogConfig,
         wrap: impl FnOnce(Arc<FakeFsPort>) -> Arc<dyn FsPort>,
+    ) -> Self {
+        Self::build_with(cx, config, wrap, Some(PathBuf::from(KUBECTL)))
+    }
+
+    fn build_with(
+        cx: &mut TestAppContext,
+        config: LogConfig,
+        wrap: impl FnOnce(Arc<FakeFsPort>) -> Arc<dyn FsPort>,
+        kubectl_at: Option<PathBuf>,
     ) -> Self {
         let entry = ClusterContext::new(cluster(), ContextName::new("kind"), SourceId("k".into()));
         let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry]));
@@ -225,6 +253,12 @@ impl Fx {
             sent: Rc::default(),
             sink,
         };
+        let installed = Arc::new(parking_lot::Mutex::new(kubectl_at));
+        let lookup = installed.clone();
+        let kubectl = Kubectl::new(move || lookup.lock().clone());
+        // The binary refreshes it on a background task at start-up; here it is known at once.
+        kubectl.refresh();
+        let (terminal, terminal_requests) = TerminalViewSink::channel();
         let deps = LogViewsDeps {
             views: LogViewDeps {
                 service,
@@ -232,6 +266,8 @@ impl Fx {
                 dispatcher: Rc::new(dispatcher.clone()),
                 fs: wrap(fs.clone()),
                 agent: agent.clone(),
+                kubectl: kubectl.clone(),
+                terminal,
             },
             host: Rc::new(Host(workspace.downgrade())),
         };
@@ -245,6 +281,9 @@ impl Fx {
             agent,
             views,
             dispatcher,
+            kubectl,
+            installed,
+            terminal_requests,
         }
     }
 

@@ -238,6 +238,9 @@ impl Stage {
             dispatcher: Rc::new(fixture::Ignore),
             fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
             agent: oxikube_app::context::PendingContext::new(),
+            // Not found: the toolbar is the one the goldens show.
+            kubectl: oxikube_app::logs::kubectl::Kubectl::new(|| None),
+            terminal: oxikube_terminal::view::TerminalViewSink::channel().0,
         };
         let hook = probe.then(|| recorder.clone());
         let target = fixture.target.clone();

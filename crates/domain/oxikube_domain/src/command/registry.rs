@@ -75,6 +75,9 @@ impl CommandId {
     pub const LOGS_MARK: CommandId = CommandId::new("logs::Mark");
     /// `logs::SendToAgent`: queue the selected lines of a log view as context for the hosted agent.
     pub const LOGS_SEND_TO_AGENT: CommandId = CommandId::new("logs::SendToAgent");
+    /// `logs::TailInTerminal`: run `kubectl logs -f` for a log view's pod or workload in a terminal
+    /// tab of the cluster (the power-user fallback; needs kubectl on this machine).
+    pub const LOGS_TAIL_IN_TERMINAL: CommandId = CommandId::new("logs::TailInTerminal");
     /// `logs::Save`: save a log view's lines to a file the user picks.
     pub const LOGS_SAVE: CommandId = CommandId::new("logs::Save");
     /// `logs::FollowReplacement`: switch a log view whose pod was replaced (a rollout, a
@@ -417,6 +420,16 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Logs: Set Range",
         CommandScope::Selection,
         Capabilities::LOGS,
+    ),
+    // Starts kubectl on this machine in a terminal tab, with the cluster's kubeconfig in its
+    // environment; `kubectl logs` only reads. It is an interactive action: it has a tool stub like
+    // every command, but no agent runs processes on the user's machine until the agent phase
+    // decides how (the guard's initiator rules are the place for that).
+    CommandMeta::read(
+        CommandId::LOGS_TAIL_IN_TERMINAL,
+        "Logs: Tail in Terminal (kubectl)",
+        CommandScope::Selection,
+        NONE,
     ),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_AUTOSCROLL,

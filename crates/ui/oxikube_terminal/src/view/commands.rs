@@ -28,6 +28,14 @@ pub enum TerminalRequest {
         /// The cluster whose tab gets the terminal.
         cluster: Option<ClusterId>,
     },
+    /// A terminal running `descriptor` in the bottom dock of its cluster's tab (the window's
+    /// own workspace without a cluster): what another view asks for when it wants a process in a
+    /// terminal, such as the log viewer's "Tail in terminal" (`logs::TailInTerminal`). Not a
+    /// command of its own: the asking view has the command.
+    Open {
+        /// What to run.
+        descriptor: BackendDescriptor,
+    },
     /// `terminal::Split`: a new terminal in a pane beside the active one.
     Split,
     /// `terminal::Close`: close the focused terminal.
@@ -53,6 +61,12 @@ impl TerminalViewSink {
     pub fn channel() -> (Self, UnboundedReceiver<TerminalRequest>) {
         let (tx, rx) = unbounded();
         (Self { tx }, rx)
+    }
+
+    /// Asks the window to open a terminal running `descriptor` ([`TerminalRequest::Open`]).
+    /// `false` when the window is gone.
+    pub fn open(&self, descriptor: BackendDescriptor) -> bool {
+        self.send(TerminalRequest::Open { descriptor }).is_ok()
     }
 
     fn send(&self, request: TerminalRequest) -> OxiResult<()> {

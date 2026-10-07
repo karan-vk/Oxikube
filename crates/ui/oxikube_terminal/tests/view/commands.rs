@@ -214,6 +214,89 @@ fn with_no_cluster_shown_new_opens_a_plain_shell_in_the_window(cx: &mut TestAppC
     assert!(terminals(&mut h).is_empty());
 }
 
+/// A command run instead of a shell (the log viewer's `kubectl logs -f`).
+fn kubectl_tail() -> BackendDescriptor {
+    BackendDescriptor::local(Some(cluster()))
+        .in_namespace(Some("payments".into()))
+        .with_shell(
+            "/usr/local/bin/kubectl",
+            vec!["logs".into(), "-f".into(), "web-0".into()],
+        )
+        .titled("logs web-0")
+}
+
+#[gpui::test]
+fn open_runs_the_descriptor_in_its_clusters_bottom_dock(cx: &mut TestAppContext) {
+    let mut h = harness(cx);
+    let views = views(&mut h, Some(cluster()));
+    let ws = h.ws.clone();
+
+    apply(
+        &mut h,
+        &views,
+        TerminalRequest::Open {
+            descriptor: kubectl_tail(),
+        },
+    );
+    assert_eq!(
+        h.launches(),
+        [kubectl_tail()],
+        "exactly the descriptor: the program, its arguments and the cluster, not the shown namespace"
+    );
+    let view = terminals(&mut h).pop().expect("a terminal");
+    assert_eq!(
+        view.read_with(&h.vcx, |v, _| v.descriptor().clone()),
+        kubectl_tail()
+    );
+    let docked = h
+        .vcx
+        .update(|_, cx| ws.read(cx).item_dock(view.entity_id(), cx));
+    assert_eq!(docked, Some(DockPosition::Bottom));
+
+    // Nothing of the process or its environment is in what a restored tab starts from.
+    let saved = kubectl_tail().to_state().to_string();
+    for secret in ["KUBECONFIG", "KUBE_CONTEXT", "token", "password"] {
+        assert!(!saved.contains(secret), "{secret} in {saved}");
+    }
+    assert_eq!(
+        BackendDescriptor::from_state(&kubectl_tail().to_state()),
+        Some(kubectl_tail())
+    );
+}
+
+#[gpui::test]
+fn open_without_a_cluster_goes_to_the_windows_own_workspace(cx: &mut TestAppContext) {
+    let mut h = harness(cx);
+    let views = views(&mut h, Some(cluster()));
+    let plain = BackendDescriptor::local(None).with_shell("/bin/echo", vec!["hi".into()]);
+    apply(
+        &mut h,
+        &views,
+        TerminalRequest::Open {
+            descriptor: plain.clone(),
+        },
+    );
+    assert_eq!(
+        h.launches(),
+        [plain],
+        "never given the shown cluster's environment"
+    );
+}
+
+#[test]
+fn the_sink_opens_a_descriptor_until_the_window_is_gone() {
+    let (sink, mut requests) = TerminalViewSink::channel();
+    assert!(sink.open(kubectl_tail()));
+    assert_eq!(
+        block_on(requests.next()),
+        Some(TerminalRequest::Open {
+            descriptor: kubectl_tail()
+        })
+    );
+    drop(requests);
+    assert!(!sink.open(kubectl_tail()), "nobody to open it");
+}
+
 #[gpui::test]
 fn the_keymap_actions_send_the_bus_commands(cx: &mut TestAppContext) {
     let mut h = harness(cx);

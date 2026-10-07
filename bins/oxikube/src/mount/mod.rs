@@ -23,7 +23,9 @@
 //!    (`pod::ViewLogs`) opens its log as a tab of the cluster tab.
 //!    The agent hooks (E08-S09, `AppState::agent_hooks`) are built here too: `@logs` in the context
 //!    registry, `k8s.get_logs` in the tool registry, and the queue the viewer's "Send to agent"
-//!    fills until the agent panel exists.
+//!    fills until the agent panel exists. "Tail in terminal (kubectl)" (E08-S08) is in the log
+//!    view's toolbar when kubectl is installed (`oxikube_logs_ui::follow_kubectl` looks it up off
+//!    the UI thread); it asks the window's `TerminalViews` for a kubectl tab.
 //! 8. the opener of terminal links (E09-S05): `terminal::OpenLink` validates a link off the UI
 //!    thread and this window opens it (browser or system opener); and the terminal's copy / paste
 //!    commands (E09-S06): `terminal::Copy` / `terminal::Paste` are dispatched to the window's
@@ -106,6 +108,8 @@ pub struct Wiring {
     _resource_views: Entity<ResourceViews>,
     /// Opens the log views and runs the log commands.
     _log_views: Entity<oxikube_logs_ui::LogViews>,
+    /// Keeps the answer to "is kubectl installed?" fresh (E08-S08).
+    _follow_kubectl: oxikube_logs_ui::KubectlFollow,
     /// Opens, splits and closes the terminals.
     _terminal_views: Entity<TerminalViews>,
 }
@@ -203,7 +207,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         logs: logs_sink,
         links: links_sink,
         terminal_input: terminal_input_sink,
-        terminal_views: terminal_views_sink,
+        terminal_views: terminal_views_sink.clone(),
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -244,11 +248,17 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         cx,
     );
     resources_slot.set(&resource_views);
+    // Is kubectl installed? "Tail in terminal" (E08-S08) is offered only if it is; looked up off the
+    // UI thread now, on a settings change and every minute.
+    let kubectl = logs::kubectl(cx);
+    let follow_kubectl = oxikube_logs_ui::follow_kubectl(&kubectl, cx);
     let log_views = logs::start_views(
         log_service,
         services.sessions.clone(),
         ports.clusters.fs.clone(),
         agent.pending,
+        kubectl,
+        terminal_views_sink,
         dispatcher.clone(),
         tabs.downgrade(),
         logs_rx,
@@ -330,6 +340,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _terminal_input: terminal_input,
         _resource_views: resource_views,
         _log_views: log_views,
+        _follow_kubectl: follow_kubectl,
         _terminal_views: terminal_views,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
