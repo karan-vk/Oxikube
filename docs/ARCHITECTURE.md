@@ -231,8 +231,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   container), `PodReplaced` (deleted, terminating or recreated, with a controller) or `PodDeleted` (no controller); a
   container between restarts (`CrashLoopBackOff`) is waited for with growing pauses and no retry counted; still
   running is a dropped connection. `find_replacement(resources, &identity)` names the pod that took over (the Deployment's
-  selector for a ReplicaSet's pod, the same name for a StatefulSet's, the same node for a DaemonSet's; the newest
-  running candidate otherwise). `LogSession::reconnect` restarts a failed or ended session in place: the lines stay
+  selector for a ReplicaSet's pod; only the namesake for a StatefulSet's, only a pod on the same node for a DaemonSet's,
+  otherwise only a pod newer than the gone one, the newest running first; `None` until it exists, never a sibling). `LogSession::reconnect` restarts a failed or ended session in place: the lines stay
   and the new stream continues after them. An aggregate reads a pod that joins after the view opened from its first
   line (no tail, no since).
 - `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to

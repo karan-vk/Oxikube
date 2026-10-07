@@ -8,7 +8,7 @@
 //! | the read loop: reopen from the last line minus the overlap, retry a container that is still starting, give up after the cap | `resume` |
 //! | why a followed pod's stream ended: finished, replaced, deleted | [`PodIdentity`], `probe` |
 //! | the followed container in a pod that runs on: finished for good, or between restarts | `container` |
-//! | the pod that took over from a gone one (owner, selector, same name / node, newest) | [`find_replacement`] (`replacement`) |
+//! | the pod that took over from a gone one (owner, selector; namesake / same node / newer, never a sibling) | [`find_replacement`] (`replacement`) |
 //!
 //! # Single-pod sessions
 //!

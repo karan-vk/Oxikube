@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use jiff::Timestamp;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::view::PodPhase;
 use oxikube_domain::{OwnerRef, OxiResult, Resource};
@@ -31,6 +32,9 @@ pub struct PodIdentity {
     pub controller: Option<OwnerRef>,
     /// `spec.nodeName`: a DaemonSet's replacement runs on the same node.
     pub node: Option<String>,
+    /// `metadata.creationTimestamp`: a replacement made by a ReplicaSet or Job is newer than the
+    /// pod it replaced (an older sibling is not one).
+    pub created: Option<Timestamp>,
 }
 
 impl PodIdentity {
@@ -42,6 +46,7 @@ impl PodIdentity {
             uid: pod.meta.uid.clone(),
             controller: pod.meta.controller_ref().cloned(),
             node: pod.get_str("/spec/nodeName").map(str::to_owned),
+            created: pod.meta.creation,
         }
     }
 

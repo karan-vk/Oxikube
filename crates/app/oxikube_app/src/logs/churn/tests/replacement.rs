@@ -108,8 +108,8 @@ fn a_statefulset_pod_is_followed_to_its_namesake() {
     cluster.insert(resource(pod("web-1", "u7", owner, "2026-10-07T12:00:09Z")));
     assert_eq!(
         find(&cluster, &gone),
-        Some("web-1".to_owned()),
-        "before the namesake exists, the newest pod"
+        None,
+        "before the namesake exists, a sibling ordinal is not its replacement"
     );
     cluster.insert(resource(pod("web-0", "u2", owner, "2026-10-07T12:00:00Z")));
     assert_eq!(find(&cluster, &gone).as_deref(), Some("web-0"));
@@ -131,12 +131,17 @@ fn a_daemonset_pod_is_followed_on_its_node() {
     ds["metadata"]["uid"] = json!("uid-agent");
     cluster.insert(resource(ds));
     cluster.insert(resource(on_node(
-        pod("agent-a2", "u2", owner, "2026-10-07T12:00:00Z"),
-        "node-a",
-    )));
-    cluster.insert(resource(on_node(
         pod("agent-b9", "u3", owner, "2026-10-07T12:00:30Z"),
         "node-b",
+    )));
+    assert_eq!(
+        find(&cluster, &gone),
+        None,
+        "before the node has its new pod, a pod on another node is not its replacement"
+    );
+    cluster.insert(resource(on_node(
+        pod("agent-a2", "u2", owner, "2026-10-07T12:00:00Z"),
+        "node-a",
     )));
     assert_eq!(find(&cluster, &gone).as_deref(), Some("agent-a2"));
 }
@@ -186,4 +191,83 @@ fn a_replica_set_without_a_deployment_uses_its_own_selector() {
         "2026-10-07T12:00:00Z",
     )));
     assert_eq!(find(&cluster, &gone).as_deref(), Some("web-5d8-b"));
+}
+
+#[test]
+fn a_replica_left_after_a_scale_down_is_not_a_replacement() {
+    let cluster = FakeResourcePort::new();
+    let owner = ("ReplicaSet", "web-5d8");
+    let gone = PodIdentity::of(&resource(pod(
+        "web-5d8-c",
+        "u3",
+        owner,
+        "2026-10-07T11:00:05Z",
+    )));
+    cluster.insert(
+        deployment()
+            .name("web")
+            .namespace("default")
+            .label("app", "web")
+            .build(),
+    );
+    cluster.insert(web_rs("web-5d8"));
+    // The survivors of the scale-down are older than the gone pod (or as old): siblings.
+    cluster.insert(resource(pod(
+        "web-5d8-a",
+        "u1",
+        owner,
+        "2026-10-07T11:00:00Z",
+    )));
+    cluster.insert(resource(pod(
+        "web-5d8-b",
+        "u2",
+        owner,
+        "2026-10-07T11:00:05Z",
+    )));
+    assert_eq!(find(&cluster, &gone), None);
+    // A pod the ReplicaSet makes after it is one.
+    cluster.insert(resource(pod(
+        "web-5d8-d",
+        "u4",
+        owner,
+        "2026-10-07T12:00:00Z",
+    )));
+    assert_eq!(find(&cluster, &gone).as_deref(), Some("web-5d8-d"));
+}
+
+#[test]
+fn a_job_retry_is_the_newer_pod_of_the_job() {
+    let cluster = FakeResourcePort::new();
+    let owner = ("Job", "batch");
+    let gone = PodIdentity::of(&resource(pod(
+        "batch-a",
+        "u1",
+        owner,
+        "2026-10-07T11:00:00Z",
+    )));
+    let mut job = oxikube_testkit::job()
+        .name("batch")
+        .namespace("default")
+        .label("app", "web")
+        .json();
+    job["metadata"]["uid"] = json!("uid-batch");
+    cluster.insert(resource(job));
+    cluster.insert(resource(pod(
+        "batch-b",
+        "u2",
+        owner,
+        "2026-10-07T10:59:00Z",
+    )));
+    assert_eq!(
+        find(&cluster, &gone),
+        None,
+        "an older parallel pod is not the retry"
+    );
+    cluster.insert(resource(pod(
+        "batch-c",
+        "u3",
+        owner,
+        "2026-10-07T11:00:40Z",
+    )));
+    assert_eq!(find(&cluster, &gone).as_deref(), Some("batch-c"));
 }

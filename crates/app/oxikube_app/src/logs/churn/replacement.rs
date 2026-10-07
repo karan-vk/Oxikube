@@ -6,8 +6,9 @@
 //! finds the new pod); a StatefulSet recreates the pod under the same name; a DaemonSet's
 //! replacement runs on the same node; a Job's retry is a new pod of the Job. The candidates are
 //! the pods the controller's selector matches now, minus the gone pod and pods that are going
-//! too; the best is the same name, then (DaemonSet) the same node, then one still running, then
-//! the newest.
+//! too, and only those that can have replaced it: a StatefulSet's namesake, a DaemonSet's pod on
+//! the same node, otherwise a pod made after the gone one (an older sibling, such as a replica
+//! left after a scale-down, is not a replacement). Of those, one still running, then the newest.
 
 use std::cmp::Reverse;
 
@@ -52,20 +53,12 @@ pub async fn find_replacement(
                 .collect(),
         },
     };
-    let daemon = &*owner.kind == "DaemonSet";
     Ok(pods
         .iter()
-        .filter(|pod| is_candidate(pod, gone))
+        .filter(|pod| is_candidate(pod, gone) && replaces(pod, gone, owner))
         .max_by_key(|pod| {
             let running = !PodPhase::parse(pod.get_str("/status/phase")).is_terminal();
-            let same_node = daemon && gone.node.as_deref() == pod.get_str("/spec/nodeName");
-            (
-                pod.name() == gone.name,
-                same_node,
-                running,
-                pod.meta.creation,
-                Reverse(pod.name().to_owned()),
-            )
+            (running, pod.meta.creation, Reverse(pod.name().to_owned()))
         })
         .map(|pod| pod.name().to_owned()))
 }
@@ -74,6 +67,24 @@ pub async fn find_replacement(
 /// going away itself.
 fn is_candidate(pod: &Resource, gone: &PodIdentity) -> bool {
     !gone.is(pod) && !pod.meta.is_terminating()
+}
+
+/// Whether `owner` (the gone pod's controller) made `pod` in place of `gone`, rather than it being
+/// a sibling that was already there: a StatefulSet recreates the same name, a DaemonSet runs the
+/// new pod on the same node, any other controller makes a pod newer than the gone one. A fact the
+/// gone pod did not record (its node, its creation time) does not rule a pod out.
+fn replaces(pod: &Resource, gone: &PodIdentity, owner: &OwnerRef) -> bool {
+    match &*owner.kind {
+        "StatefulSet" => pod.name() == gone.name,
+        "DaemonSet" => gone
+            .node
+            .as_deref()
+            .is_none_or(|node| pod.get_str("/spec/nodeName") == Some(node)),
+        _ => match (gone.created, pod.meta.creation) {
+            (Some(gone), Some(created)) => created > gone,
+            _ => true,
+        },
+    }
 }
 
 /// The object whose selector finds the replacement: the Deployment of a ReplicaSet that has one,
