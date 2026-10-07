@@ -142,6 +142,19 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "kubeconfig::RemoveSource" => Command::KubeconfigRemoveSource {
             source: KubeconfigSourceRef::Default,
         },
+        "logs::SelectContainer" => Command::LogsSelectContainer {
+            target: target(),
+            container: "app".into(),
+        },
+        "logs::SetRange" => Command::LogsSetRange {
+            target: target(),
+            range: oxikube_domain::log::LogRange::Last5m,
+        },
+        "logs::ToggleAutoscroll" => Command::LogsToggleAutoscroll { target: target() },
+        "logs::ToggleFullscreen" => Command::LogsToggleFullscreen { target: target() },
+        "logs::TogglePrevious" => Command::LogsTogglePrevious { target: target() },
+        "logs::ToggleTimestamps" => Command::LogsToggleTimestamps { target: target() },
+        "logs::ToggleWrap" => Command::LogsToggleWrap { target: target() },
         "namespace::Select" => Command::NamespaceSelect {
             cluster,
             namespaces: vec!["default".into()],

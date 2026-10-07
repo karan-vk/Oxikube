@@ -8,6 +8,7 @@ use super::meta::CommandMeta;
 use super::registry;
 use crate::colour::ClusterColour;
 use crate::ids::{ClusterId, Gvk, ResourceRef};
+use crate::log::LogRange;
 use crate::preset::ClusterPreset;
 
 /// How the API server deletes dependents of an object.
@@ -375,6 +376,55 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tail_lines: Option<u32>,
     },
+    /// Read another part of a log view's log: the tail, the head or the last minutes
+    /// (reopens the stream). `target` is what the view was opened on (a pod).
+    #[serde(rename = "logs::SetRange")]
+    LogsSetRange {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The part of the log to read.
+        range: LogRange,
+    },
+    /// Show another container (regular, init or ephemeral) of a log view's pod (reopens the
+    /// stream).
+    #[serde(rename = "logs::SelectContainer")]
+    LogsSelectContainer {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The container's name.
+        container: String,
+    },
+    /// Follow a log view's newest line, or stop following it.
+    #[serde(rename = "logs::ToggleAutoscroll")]
+    LogsToggleAutoscroll {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Let a log view fill its cluster tab, or give the space back.
+    #[serde(rename = "logs::ToggleFullscreen")]
+    LogsToggleFullscreen {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Read the previous (terminated) instance of a log view's container, or the current one
+    /// (reopens the stream).
+    #[serde(rename = "logs::TogglePrevious")]
+    LogsTogglePrevious {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Show or hide a log view's server timestamps.
+    #[serde(rename = "logs::ToggleTimestamps")]
+    LogsToggleTimestamps {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Wrap a log view's long lines, or let them run off the edge.
+    #[serde(rename = "logs::ToggleWrap")]
+    LogsToggleWrap {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
     /// Set a workload's replica count.
     #[serde(rename = "workload::Scale")]
     WorkloadScale {
@@ -464,6 +514,13 @@ impl Command {
             Command::PodExec { .. } => CommandId::POD_EXEC,
             Command::PodPortForward { .. } => CommandId::POD_PORT_FORWARD,
             Command::PodViewLogs { .. } => CommandId::POD_VIEW_LOGS,
+            Command::LogsSetRange { .. } => CommandId::LOGS_SET_RANGE,
+            Command::LogsSelectContainer { .. } => CommandId::LOGS_SELECT_CONTAINER,
+            Command::LogsToggleAutoscroll { .. } => CommandId::LOGS_TOGGLE_AUTOSCROLL,
+            Command::LogsToggleFullscreen { .. } => CommandId::LOGS_TOGGLE_FULLSCREEN,
+            Command::LogsTogglePrevious { .. } => CommandId::LOGS_TOGGLE_PREVIOUS,
+            Command::LogsToggleTimestamps { .. } => CommandId::LOGS_TOGGLE_TIMESTAMPS,
+            Command::LogsToggleWrap { .. } => CommandId::LOGS_TOGGLE_WRAP,
             Command::WorkloadScale { .. } => CommandId::WORKLOAD_SCALE,
             Command::WorkloadRestart { .. } => CommandId::WORKLOAD_RESTART,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
@@ -504,6 +561,13 @@ impl Command {
             | Command::PodExec { target, .. }
             | Command::PodPortForward { target, .. }
             | Command::PodViewLogs { target, .. }
+            | Command::LogsSetRange { target, .. }
+            | Command::LogsSelectContainer { target, .. }
+            | Command::LogsToggleAutoscroll { target }
+            | Command::LogsToggleFullscreen { target }
+            | Command::LogsTogglePrevious { target }
+            | Command::LogsToggleTimestamps { target }
+            | Command::LogsToggleWrap { target }
             | Command::WorkloadScale { target, .. }
             | Command::WorkloadRestart { target }
             | Command::NodeCordon { target }
@@ -683,6 +747,19 @@ mod tests {
                 previous: false,
                 tail_lines: Some(500),
             },
+            Command::LogsSetRange {
+                target: pod(),
+                range: LogRange::Last15m,
+            },
+            Command::LogsSelectContainer {
+                target: pod(),
+                container: "init-db".into(),
+            },
+            Command::LogsToggleAutoscroll { target: pod() },
+            Command::LogsToggleFullscreen { target: pod() },
+            Command::LogsTogglePrevious { target: pod() },
+            Command::LogsToggleTimestamps { target: pod() },
+            Command::LogsToggleWrap { target: pod() },
             Command::WorkloadScale {
                 target: deployment(),
                 replicas: 3,
@@ -833,6 +910,13 @@ mod tests {
                     | Command::ResourceSelectAll { .. }
                     | Command::TableFocusFilter { .. }
                     | Command::ResourceViewYaml { .. }
+                    | Command::LogsSetRange { .. }
+                    | Command::LogsSelectContainer { .. }
+                    | Command::LogsToggleAutoscroll { .. }
+                    | Command::LogsToggleFullscreen { .. }
+                    | Command::LogsTogglePrevious { .. }
+                    | Command::LogsToggleTimestamps { .. }
+                    | Command::LogsToggleWrap { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterApplyPreset { .. }

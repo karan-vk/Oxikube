@@ -30,7 +30,7 @@ fn pods_kind() -> ResourceKind {
 
 impl App {
     /// A pods table in the connected cluster's tab, the first row under the cursor.
-    fn open_pods_table(&mut self) {
+    pub(super) fn open_pods_table(&mut self) {
         self.serve([pods_kind()]);
         // The pods the cluster's connection serves (the seeded ones are the ports' own copy).
         self.ports

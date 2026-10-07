@@ -19,6 +19,8 @@ fn run(scenario: &str) -> (std::process::Output, Option<Value>) {
     let out = oxikube()
         // `scroll-10k` in a debug build: a few frames are enough to check the sample.
         .env("OXIKUBE_PERF_SCROLL_FRAMES", SCROLL_FRAMES.to_string())
+        // `logs-stream` likewise.
+        .env("OXIKUBE_PERF_LOGS_FRAMES", LOGS_FRAMES.to_string())
         .args(["--perf-scenario", scenario, "--perf-report"])
         .arg(&report)
         .output()
@@ -101,9 +103,40 @@ fn scroll_10k_scrolls_the_table_under_churn_with_coalesced_notifies() {
     }
 }
 
+/// Scripted frames per mode of the `logs-stream` smoke run.
+const LOGS_FRAMES: u64 = 10;
+
+#[test]
+fn logs_stream_measures_four_modes_with_coalesced_notifies() {
+    let (out, sample) = run("logs-stream");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let s = sample.expect("sample written");
+    assert_eq!(s["status"], "ok");
+    assert_eq!(s["scenario"], "logs-stream");
+    assert_eq!(s["metrics"]["draw_ms"]["count"], LOGS_FRAMES);
+    for prefix in ["", "paused_", "wrap_", "wrap_paused_"] {
+        let frames = s["metrics"][format!("{prefix}frame_ms")]["count"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("{prefix}frame_ms"));
+        // A frame per scripted frame, and one more for each delta's coalesced notify.
+        assert!(frames >= LOGS_FRAMES, "{prefix}frame_ms: {frames}");
+    }
+    assert!(
+        s["counters"]["notifies"].as_u64().unwrap() > 0,
+        "the deltas redrew"
+    );
+    assert_eq!(s["counters"]["max_notifies_per_frame"], 1);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("lines/s"), "{stderr}");
+}
+
 #[test]
 fn scenarios_without_views_are_not_available_and_exit_0() {
-    for scenario in ["palette", "logs-stream", "editor-5mb"] {
+    for scenario in ["palette", "editor-5mb"] {
         let (out, sample) = run(scenario);
         assert!(out.status.success(), "{scenario}");
         let s = sample.expect("sample written");

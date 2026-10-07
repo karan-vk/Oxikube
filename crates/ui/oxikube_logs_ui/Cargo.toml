@@ -12,21 +12,44 @@ path = "src/oxikube_logs_ui.rs"
 doctest = false
 
 [dependencies]
+futures.workspace = true
 gpui.workspace = true
+jiff.workspace = true
 oxikube_app.workspace = true
+oxikube_domain.workspace = true
+oxikube_keymap.workspace = true
 oxikube_ports.workspace = true
 oxikube_runtime.workspace = true
 oxikube_settings.workspace = true
+oxikube_ui.workspace = true
+oxikube_workspace.workspace = true
 schemars.workspace = true
 serde.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
-futures.workspace = true
+anyhow.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
+gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_assets.workspace = true
-oxikube_testkit.workspace = true
+oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
+oxikube_workspace = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
 serde_json.workspace = true
+
+[features]
+default = []
+# Headless GPU screenshot of a log view with mixed levels, wrap off and on (`tests/screenshot.rs`,
+# harness = false so it runs on the process main thread). Needs Metal / Vulkan, so never part of
+# the default gate; the nightly workflow runs it:
+# `cargo test -p oxikube_logs_ui --features screenshot --test screenshot`.
+screenshot = []
+
+[[test]]
+name = "screenshot"
+path = "tests/screenshot.rs"
+harness = false
+required-features = ["screenshot"]
 
 [lints]
 workspace = true

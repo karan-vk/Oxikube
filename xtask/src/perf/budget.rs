@@ -71,7 +71,36 @@ pub const BUDGETS: &[Budget] = &[
         // catches a regression there.
         os: Some("macos"),
     },
+    logs_frame(
+        "frame_ms",
+        "streaming 5 000 lines/s, wrap off, following (headless frame, p95)",
+    ),
+    logs_frame(
+        "paused_frame_ms",
+        "streaming 5 000 lines/s, wrap off, autoscroll paused (headless frame, p95)",
+    ),
+    logs_frame(
+        "wrap_frame_ms",
+        "streaming 5 000 lines/s, wrapped, following (headless frame, p95)",
+    ),
+    logs_frame(
+        "wrap_paused_frame_ms",
+        "streaming 5 000 lines/s, wrapped, autoscroll paused (headless frame, p95)",
+    ),
 ];
+
+/// A `logs-stream` frame budget (E08-S02): p95 <= 8 ms. macOS only, as the table's (#509): the
+/// Linux runner's software renderer says nothing about the app on a GPU.
+const fn logs_frame(metric: &'static str, what: &'static str) -> Budget {
+    Budget {
+        scenario: "logs-stream",
+        metric,
+        limit: 8.0,
+        tolerance: 0.0,
+        what,
+        os: Some("macos"),
+    }
+}
 
 /// How a budget fared.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -238,6 +267,36 @@ mod tests {
         // The frame budget is macOS only (#509).
         r.os = "linux".into();
         assert_eq!(verdicts(&r)[2..], [Verdict::Fail]);
+    }
+
+    #[test]
+    fn the_log_budgets_hold_every_mode_to_an_8_ms_p95() {
+        let mut r = report(Some(100.0), 1.0);
+        let modes = [
+            "frame_ms",
+            "paused_frame_ms",
+            "wrap_frame_ms",
+            "wrap_paused_frame_ms",
+        ];
+        let metrics = modes.iter().map(|m| ((*m).to_owned(), pct(4.0))).collect();
+        r.scenarios.insert(
+            "logs-stream".to_owned(),
+            ScenarioResult {
+                status: Status::Ok,
+                reason: None,
+                enabled_by: vec![],
+                samples: 5,
+                metrics,
+                counters: Counters::default(),
+                launches: BTreeMap::new(),
+            },
+        );
+        assert_eq!(verdicts(&r)[2..], [Verdict::Within; 4]);
+        let logs = r.scenarios.get_mut("logs-stream").unwrap();
+        logs.metrics.insert("wrap_frame_ms".to_owned(), pct(8.1));
+        assert_eq!(verdicts(&r)[4], Verdict::Fail);
+        r.os = "linux".into();
+        assert_eq!(verdicts(&r).len(), 2, "macOS only");
     }
 
     #[test]

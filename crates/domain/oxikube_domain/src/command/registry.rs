@@ -51,6 +51,20 @@ impl CommandId {
     pub const KUBECONFIG_RELOAD: CommandId = CommandId::new("kubeconfig::Reload");
     /// `kubeconfig::RemoveSource`: remove a kubeconfig source.
     pub const KUBECONFIG_REMOVE_SOURCE: CommandId = CommandId::new("kubeconfig::RemoveSource");
+    /// `logs::SelectContainer`: show another container of a log view's pod (reopens the stream).
+    pub const LOGS_SELECT_CONTAINER: CommandId = CommandId::new("logs::SelectContainer");
+    /// `logs::SetRange`: read the tail, the head or the last minutes of a log view's log.
+    pub const LOGS_SET_RANGE: CommandId = CommandId::new("logs::SetRange");
+    /// `logs::ToggleAutoscroll`: follow the newest line of a log view, or stop following.
+    pub const LOGS_TOGGLE_AUTOSCROLL: CommandId = CommandId::new("logs::ToggleAutoscroll");
+    /// `logs::ToggleFullscreen`: let a log view fill its cluster tab, or give the space back.
+    pub const LOGS_TOGGLE_FULLSCREEN: CommandId = CommandId::new("logs::ToggleFullscreen");
+    /// `logs::TogglePrevious`: read the previous (terminated) container instance, or the current.
+    pub const LOGS_TOGGLE_PREVIOUS: CommandId = CommandId::new("logs::TogglePrevious");
+    /// `logs::ToggleTimestamps`: show or hide the server timestamps of a log view.
+    pub const LOGS_TOGGLE_TIMESTAMPS: CommandId = CommandId::new("logs::ToggleTimestamps");
+    /// `logs::ToggleWrap`: wrap a log view's long lines, or let them run off the edge.
+    pub const LOGS_TOGGLE_WRAP: CommandId = CommandId::new("logs::ToggleWrap");
     /// `namespace::Select`: choose the namespace selection.
     pub const NAMESPACE_SELECT: CommandId = CommandId::new("namespace::Select");
     /// `namespace::ToggleFavourite`: pin or unpin a namespace as a favourite.
@@ -246,6 +260,50 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::KUBECONFIG_REMOVE_SOURCE,
         "Remove Kubeconfig Source",
         CommandScope::Global,
+        NONE,
+    ),
+    // The log view's commands (E08-S02): they change what a view shows or which stream it
+    // reads, never the cluster. Reopening a stream reads logs, so those need the logs capability.
+    CommandMeta::read(
+        CommandId::LOGS_SELECT_CONTAINER,
+        "Logs: Select Container",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_SET_RANGE,
+        "Logs: Set Range",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_AUTOSCROLL,
+        "Logs: Toggle Autoscroll",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_FULLSCREEN,
+        "Logs: Toggle Fullscreen",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_PREVIOUS,
+        "Logs: Toggle Previous Container",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_TIMESTAMPS,
+        "Logs: Toggle Timestamps",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_WRAP,
+        "Logs: Toggle Wrap",
+        CommandScope::Selection,
         NONE,
     ),
     CommandMeta::read(

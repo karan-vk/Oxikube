@@ -18,6 +18,11 @@ Options:
   --perf-table <CONTEXT>  Connect CONTEXT, open its pods table and scroll it while recording
                           (implies --perf; docs/PERFORMANCE.md \"Resource table\")
   --perf-scroll <ROWS>    Rows --perf-table scrolls per frame (default 3; 0: keep it still)
+  --perf-logs <CONTEXT>/<NAMESPACE>/<POD>
+                          Connect CONTEXT and open the pod's log view while recording
+                          (implies --perf; docs/PERFORMANCE.md \"Log viewer\")
+  --perf-logs-wrap        Wrap the lines of --perf-logs
+  --perf-logs-paused      Pause --perf-logs's autoscroll (the lines arrive off screen)
   --perf-scenario <NAME>  Run a headless perf scenario and exit: startup, scroll-10k (or
                           table-scroll-10k), palette, logs-stream, editor-5mb (needs --features
                           perf-scenarios; use `cargo xtask perf`)
@@ -47,6 +52,9 @@ pub struct Args {
     pub perf_no_probe: bool,
     pub perf_table: Option<String>,
     pub perf_scroll: Option<usize>,
+    pub perf_logs: Option<String>,
+    pub perf_logs_wrap: bool,
+    pub perf_logs_paused: bool,
 }
 
 /// What `main` should do.
@@ -114,6 +122,12 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
                     .map_err(|_| format!("--perf-scroll: `{v}` is not a number of rows"))?;
                 out.perf_scroll = Some(rows);
             }
+            "--perf-logs" => {
+                out.perf = true;
+                out.perf_logs = Some(value("--perf-logs")?);
+            }
+            "--perf-logs-wrap" => out.perf_logs_wrap = true,
+            "--perf-logs-paused" => out.perf_logs_paused = true,
             "--perf-scenario" => out.perf_scenario = Some(value("--perf-scenario")?),
             "--perf-report" => out.perf_report = Some(value("--perf-report")?.into()),
             other => return Err(format!("unknown argument `{other}`")),
@@ -127,6 +141,20 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
     }
     if out.perf_scroll.is_some() && out.perf_table.is_none() {
         return Err("--perf-scroll only applies to --perf-table".into());
+    }
+    if (out.perf_logs_wrap || out.perf_logs_paused) && out.perf_logs.is_none() {
+        return Err("--perf-logs-wrap and --perf-logs-paused only apply to --perf-logs".into());
+    }
+    if let Some(value) = &out.perf_logs
+        && value
+            .rsplitn(3, '/')
+            .filter(|part| !part.is_empty())
+            .count()
+            < 3
+    {
+        return Err(format!(
+            "--perf-logs: `{value}` is not CONTEXT/NAMESPACE/POD"
+        ));
     }
     Ok(Parsed::Run(out))
 }
@@ -194,6 +222,25 @@ mod tests {
                 .contains("number of rows")
         );
         assert!(USAGE.contains("--perf-table"));
+    }
+
+    #[test]
+    fn logs_drive_flags() {
+        let a = run(&["--perf-logs", "kind-oxikube/shop/web-0", "--perf-logs-wrap"]).unwrap();
+        assert!(a.perf, "--perf-logs implies --perf");
+        assert_eq!(a.perf_logs.as_deref(), Some("kind-oxikube/shop/web-0"));
+        assert!(a.perf_logs_wrap && !a.perf_logs_paused);
+        assert!(
+            run(&["--perf-logs-paused"])
+                .unwrap_err()
+                .contains("--perf-logs")
+        );
+        assert!(
+            run(&["--perf-logs", "web-0"])
+                .unwrap_err()
+                .contains("CONTEXT/NAMESPACE/POD")
+        );
+        assert!(USAGE.contains("--perf-logs"));
     }
 
     #[test]

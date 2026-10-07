@@ -19,7 +19,8 @@
 //!    the [`ResourceViews`] controller (E07-S03) opens a kind's table in its cluster's tab when
 //!    the sidebar or `resource::OpenList` asks;
 //! 7. the log service (E08-S01, [`logs`]): the app's one `LogService`, with `logs.buffer_lines`
-//!    following the settings.
+//!    following the settings, and the window's log views (E08-S02): "View Logs" on a pod's row
+//!    (`pod::ViewLogs`) opens its log as a tab of the cluster tab.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -80,6 +81,8 @@ pub struct Wiring {
     _open_kinds: Task<()>,
     /// Opens the resource tables and runs the table commands.
     _resource_views: Entity<ResourceViews>,
+    /// Opens the log views and runs the log commands.
+    _log_views: Entity<oxikube_logs_ui::LogViews>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -105,7 +108,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
-    logs::install(&state, ports.clusters.clock.clone(), cx);
+    let log_service = logs::install(&state, ports.clusters.clock.clone(), cx);
 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
@@ -141,6 +144,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (views_tx, views_rx) = mpsc::unbounded();
     let (kinds_tx, kinds_rx) = mpsc::unbounded();
     let (resources_sink, resources_rx) = ResourceCommandSink::channel();
+    let (logs_sink, logs_rx) = oxikube_logs_ui::LogCommandSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -151,6 +155,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         views: views_tx,
         kinds: kinds_tx,
         resources: resources_sink,
+        logs: logs_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -173,10 +178,11 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                 columns: Arc::new(CoreColumns::new()),
                 state: ports.state.clone(),
                 dispatcher: dispatcher.clone(),
-                actions: Some(ResourceActions::new(
+                actions: Some(ResourceActions::with_registry(
                     &bus,
                     services.sessions.clone(),
                     local_user(),
+                    &logs::row_actions(),
                 )),
             },
             tabs: tabs.downgrade(),
@@ -187,6 +193,15 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         cx,
     );
     resources_slot.set(&resource_views);
+    let log_views = logs::start_views(
+        log_service,
+        services.sessions.clone(),
+        dispatcher.clone(),
+        tabs.downgrade(),
+        logs_rx,
+        window,
+        cx,
+    );
 
     let status = cx.new(|cx| ClusterStatusItem::new(services.sessions.clone(), cx));
     workspace.update(cx, |ws, cx| {
@@ -247,6 +262,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _open_views: open_views,
         _open_kinds: open_kinds,
         _resource_views: resource_views,
+        _log_views: log_views,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

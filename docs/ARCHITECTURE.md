@@ -156,8 +156,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `Failed(LogFailure)` (kind, redacted message, retryable); `ReconnectPolicy` is the seam of E08-S07.
   `set_buffer_lines` applies a changed setting to open sessions at once. Line text is never logged.
 - `oxikube_logs_ui` — E08-S01: `LogsSettings` (`logs.buffer_lines`, default 50 000, clamped 100 to 5 000 000),
-  `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload into the `LogService`). The log
-  viewer item arrives with E08-S02.
+  `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload into the `LogService`). Module
+  `view` (E08-S02): `LogView`, a pod's log as a workspace `Item` (tab `pod/container`). It holds one `LogSession`
+  (the service owns the abort-on-drop read) and polls its deltas into a `LineWindow` (truncated marker, lines by
+  seq, state row for Connecting / Ended / Failed), redrawing through `notify_coalesced`; rows are read from the
+  ring buffer only for the screen (`uniform_list` unwrapped, `list` over a spliced `ListState` wrapped, the top
+  line anchored across the toggle). Autoscroll pauses on a scroll up and the "N new lines" pill counts by seq.
+  Options: range (tail 1 000 lines / head 1 MiB / since 1m-1h), container (init, sidecar, regular, ephemeral from
+  the pod spec; a pod of several containers is read on its `default-container` or first regular one), previous
+  instance, wrap, timestamps, fullscreen (the cluster tab's pane zoom); a change of what is read reopens the
+  session. Keys in the `LogView` context (k9s: `0`-`6`, `s`, `w`, `t`, `p`, `f`; `m`, `c` reserved for E08-S06).
+  Module `commands`: `pod::ViewLogs` and `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`,
+  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` on the bus (reads, tool stubs), queued to the
+  window's `LogViews`, which opens a view in the pod's cluster tab (one per pod, through a `LogHost`) and applies
+  the changes. `row_actions`: "View Logs" on pod rows of the resource tables.
 - `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
   mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,
@@ -373,7 +385,7 @@ weaken `cargo xtask lint-deps`.
   home as the first tab, the hotbar strip, the active cluster's status item, the kubeconfig
   sources (settings list, hot reload, the sources screen behind `view::Open`), session restore and the app's
   one `LogService` (`mount::logs`, stored with `AppState::set_log_service`; `logs.buffer_lines` follows the
-  settings).
+  settings) with the window's `LogViews` and the tables' row actions ("View Logs" on pods, E08-S02).
   Views dispatch through `mount::bus::BusDispatcher`, which runs each command on the bus through
   the window's `ClusterCommandRunner` (toasts, confirmations, denials).
 
