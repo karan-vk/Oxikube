@@ -155,3 +155,30 @@ fn a_saved_terminal_of_another_version_is_skipped(cx: &mut TestAppContext) {
     });
     assert!(!built);
 }
+
+#[gpui::test]
+fn a_tab_closed_by_its_own_button_still_saves_where_the_shell_was(cx: &mut TestAppContext) {
+    let mut h = harness(cx);
+    let view = docked_terminal(&mut h, cluster_shell());
+    h.backend(0).set_working_directory("/work/shop");
+
+    // The dock tab's close button ends the session (`on_close`) before the workspace saves the
+    // reopen-closed entry (`serialize`).
+    let saved_state = h.vcx.update(|window, cx| {
+        use oxikube_workspace::Item as _;
+        view.update(cx, |view, cx| view.on_close(window, cx));
+        view.read(cx).serialize(cx).expect("a state")
+    });
+    h.frame();
+
+    assert!(
+        h.vcx.update(|_, cx| view.read(cx).terminal().is_none()),
+        "closed"
+    );
+    assert_eq!(h.backend(0).kill_count(), 1, "the process was ended");
+    assert_eq!(
+        saved_state,
+        cluster_shell().in_dir("/work/shop").to_state(),
+        "reopened, it starts where the user `cd`ed"
+    );
+}

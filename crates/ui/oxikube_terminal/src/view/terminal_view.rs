@@ -2,6 +2,8 @@
 //! tasks) for as long as its tab lives. Moving the tab between panes and the dock moves this
 //! entity: the backend and the grid are never recreated.
 
+use std::path::PathBuf;
+
 use gpui::{AppContext as _, Context, Entity, FocusHandle, SharedString, Subscription, Task};
 use oxikube_domain::OxiResult;
 use oxikube_ports::{ExitStatus, TerminalBackend};
@@ -39,6 +41,9 @@ pub struct TerminalView {
     /// The title the process set, cleaned and cut.
     process_title: Option<SharedString>,
     pub(super) mark: Option<ClusterMark>,
+    /// The directory the shell was in when the tab closed. The tab's own close button ends the
+    /// session before the workspace saves the reopen-closed entry, so the entry reads it here.
+    closed_dir: Option<PathBuf>,
     /// Keeps `mark` current as the cluster's read-only flag and colour change.
     _follow_mark: Option<Task<()>>,
     /// Starts the process. Never cleared from inside itself; dropped (cancelling a launch in
@@ -81,6 +86,7 @@ impl TerminalView {
             default_title,
             process_title: None,
             mark,
+            closed_dir: None,
             _follow_mark: follow_mark,
             launch: Some(launch),
             subscriptions: Vec::new(),
@@ -94,11 +100,14 @@ impl TerminalView {
 
     /// What a copy of this terminal runs, and what its tab saves: the
     /// [`descriptor`](Self::descriptor) with the directory the shell works in now (after a
-    /// `cd`), when the backend can tell. A split and a restored tab start there.
+    /// `cd`), when the backend can tell. A split and a restored tab start there; so does a
+    /// reopened one, which keeps the directory the shell was in when its tab closed.
     pub fn live_descriptor(&self, cx: &gpui::App) -> BackendDescriptor {
-        let live = self
-            .terminal()
-            .and_then(|state| state.read(cx).working_directory());
+        let live = match &self.phase {
+            Phase::Running(state) => state.read(cx).working_directory(),
+            Phase::Closed => self.closed_dir.clone(),
+            Phase::Starting | Phase::Failed(_) => None,
+        };
         self.descriptor.clone().in_dir_if_known(live)
     }
 
@@ -216,6 +225,8 @@ impl TerminalView {
         // Cancels a launch still in flight; a backend it already made is dropped with it.
         self.launch = None;
         if let Phase::Running(state) = &self.phase {
+            // Read before the kill: the reopen-closed entry may be saved after this.
+            self.closed_dir = state.read(cx).working_directory();
             // The kill runs on the tokio bridge; dropping the state below aborts the pump and
             // writer, and the backend goes with the last of them.
             state.update(cx, |state, cx| state.kill(cx)).detach();
