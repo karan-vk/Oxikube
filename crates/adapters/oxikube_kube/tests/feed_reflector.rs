@@ -332,24 +332,21 @@ impl ApiLoad {
         let task = tokio::spawn(async move {
             for batch in 0..=u32::MAX {
                 let names: Vec<String> = (0..200).map(|i| format!("load-{batch}-{i}")).collect();
-                let creates = stream::iter(names.clone()).for_each_concurrent(64, |name| {
-                    let api = api.clone();
-                    async move {
+                // Errors are ignored: the load only has to keep the API server busy.
+                stream::iter(&names)
+                    .for_each_concurrent(64, |name| async {
                         let _ = api
-                            .create(&PostParams::default(), &pending_pod(&name, &[]))
+                            .create(&PostParams::default(), &pending_pod(name, &[]))
                             .await;
-                    }
-                });
-                creates.await;
-                let deletes = stream::iter(names).for_each_concurrent(64, |name| {
-                    let api = api.clone();
-                    async move {
+                    })
+                    .await;
+                stream::iter(&names)
+                    .for_each_concurrent(64, |name| async {
                         let _ = api
-                            .delete(&name, &DeleteParams::default().grace_period(0))
+                            .delete(name, &DeleteParams::default().grace_period(0))
                             .await;
-                    }
-                });
-                deletes.await;
+                    })
+                    .await;
             }
         });
         Self { task, _ns: ns }
