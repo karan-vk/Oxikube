@@ -27,7 +27,7 @@ impl LogView {
 
     /// Replaces the rows (a new session): both renderers start over, at the end when following.
     pub(crate) fn reset_rows(&mut self, mut window: LineWindow) {
-        if self.effective_levels().is_some() {
+        if self.effective_filter().is_some() {
             window.set_visible(Some(std::collections::VecDeque::new()));
         }
         // The new session's seqs start at 0 again: nothing parsed or expanded carries over.

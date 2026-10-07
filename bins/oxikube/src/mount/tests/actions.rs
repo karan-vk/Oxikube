@@ -28,7 +28,47 @@ fn pods_kind() -> ResourceKind {
     }
 }
 
+fn deployments_kind() -> ResourceKind {
+    ResourceKind {
+        gvk: Gvk::new("apps", "v1", "Deployment"),
+        preferred: true,
+        plural: "deployments".into(),
+        singular: "deployment".into(),
+        short_names: vec!["deploy".into()],
+        categories: Vec::new(),
+        verbs: VerbSet::from_names(["get", "list", "watch", "delete"]),
+        namespaced: true,
+    }
+}
+
 impl App {
+    /// A deployments table in the connected cluster's tab, the first row under the cursor. The
+    /// cluster's connection serves the `web` deployment and its pod `web-running`.
+    pub(super) fn open_deployments_table(&mut self) {
+        self.serve([deployments_kind()]);
+        let resources = self
+            .ports
+            .connector
+            .ports_for(&TestPorts::cluster_id())
+            .resources;
+        resources.insert(oxikube_testkit::fixtures::deployment_ready());
+        resources.insert(oxikube_testkit::fixtures::pod_running());
+        self.press("enter");
+        self.tick();
+        self.click("sidebar-entry-workloads/deployments");
+        self.tick();
+        let ws = self.tab_workspace();
+        let table = self
+            .vcx
+            .update(|_, cx| ws.read(cx).items_of_type::<ResourceTable>().remove(0));
+        self.vcx.update(|window, cx| {
+            let focus = gpui::Focusable::focus_handle(table.read(cx), cx);
+            window.focus(&focus, cx);
+        });
+        self.vcx.run_until_parked();
+        self.press("down");
+    }
+
     /// A pods table in the connected cluster's tab, the first row under the cursor.
     pub(super) fn open_pods_table(&mut self) {
         self.serve([pods_kind()]);

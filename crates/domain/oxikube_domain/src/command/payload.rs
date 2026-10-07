@@ -26,6 +26,11 @@ pub enum Propagation {
     Orphan,
 }
 
+/// `true`: the serde default of flags that are on unless the caller says otherwise.
+fn default_follow() -> bool {
+    true
+}
+
 /// A user or agent action as plain data.
 ///
 /// Serialised as JSON with a `type` tag equal to the command id
@@ -456,6 +461,18 @@ pub enum Command {
         /// The object the log view shows.
         target: ResourceRef,
     },
+    /// Show or hide the lines of one pod (or one of its containers) in a multi-pod log view.
+    /// The source keeps streaming while hidden.
+    #[serde(rename = "logs::ToggleSource")]
+    LogsToggleSource {
+        /// The workload or Service the log view shows.
+        target: ResourceRef,
+        /// The pod's name.
+        pod: String,
+        /// The container's name; `None` toggles every container of the pod.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+    },
     /// Wrap a log view's long lines, or let them run off the edge.
     #[serde(rename = "logs::ToggleWrap")]
     LogsToggleWrap {
@@ -552,6 +569,25 @@ pub enum Command {
         /// The workload to restart.
         target: ResourceRef,
     },
+    /// Open the logs of every pod of a workload or Service merged by time, one colour per pod
+    /// (stern-style). The pods are the ones the object's selector matches.
+    #[serde(rename = "workload::ViewLogs")]
+    WorkloadViewLogs {
+        /// The Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or Service to read.
+        target: ResourceRef,
+        /// A further label selector (`app=web,tier!=db`) the pods must match too.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+        /// Read only the containers of this name; `None` reads every container.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+        /// Keep streaming new lines (default `true`).
+        #[serde(default = "default_follow")]
+        follow: bool,
+        /// Only the last N lines of every pod.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tail_lines: Option<u32>,
+    },
     /// Mark a node unschedulable.
     #[serde(rename = "node::Cordon")]
     NodeCordon {
@@ -638,6 +674,7 @@ impl Command {
             Command::LogsToggleFullscreen { .. } => CommandId::LOGS_TOGGLE_FULLSCREEN,
             Command::LogsTogglePrevious { .. } => CommandId::LOGS_TOGGLE_PREVIOUS,
             Command::LogsToggleTimestamps { .. } => CommandId::LOGS_TOGGLE_TIMESTAMPS,
+            Command::LogsToggleSource { .. } => CommandId::LOGS_TOGGLE_SOURCE,
             Command::LogsToggleWrap { .. } => CommandId::LOGS_TOGGLE_WRAP,
             Command::LogsFind { .. } => CommandId::LOGS_FIND,
             Command::LogsNextMatch { .. } => CommandId::LOGS_NEXT_MATCH,
@@ -652,6 +689,7 @@ impl Command {
             Command::LogsCollapseLine { .. } => CommandId::LOGS_COLLAPSE_LINE,
             Command::WorkloadScale { .. } => CommandId::WORKLOAD_SCALE,
             Command::WorkloadRestart { .. } => CommandId::WORKLOAD_RESTART,
+            Command::WorkloadViewLogs { .. } => CommandId::WORKLOAD_VIEW_LOGS,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
             Command::NodeUncordon { .. } => CommandId::NODE_UNCORDON,
             Command::NodeDrain { .. } => CommandId::NODE_DRAIN,
@@ -700,6 +738,7 @@ impl Command {
             | Command::LogsToggleFullscreen { target }
             | Command::LogsTogglePrevious { target }
             | Command::LogsToggleTimestamps { target }
+            | Command::LogsToggleSource { target, .. }
             | Command::LogsToggleWrap { target }
             | Command::LogsFind { target, .. }
             | Command::LogsNextMatch { target }
@@ -714,6 +753,7 @@ impl Command {
             | Command::LogsCollapseLine { target }
             | Command::WorkloadScale { target, .. }
             | Command::WorkloadRestart { target }
+            | Command::WorkloadViewLogs { target, .. }
             | Command::NodeCordon { target }
             | Command::NodeUncordon { target }
             | Command::NodeDrain { target, .. } => Some(target),
@@ -913,6 +953,11 @@ mod tests {
             Command::LogsToggleFullscreen { target: pod() },
             Command::LogsTogglePrevious { target: pod() },
             Command::LogsToggleTimestamps { target: pod() },
+            Command::LogsToggleSource {
+                target: deployment(),
+                pod: "web-7d9".into(),
+                container: Some("app".into()),
+            },
             Command::LogsToggleWrap { target: pod() },
             Command::LogsFind {
                 target: pod(),
@@ -934,6 +979,13 @@ mod tests {
                 seq: 7,
             },
             Command::LogsCollapseLine { target: pod() },
+            Command::WorkloadViewLogs {
+                target: deployment(),
+                selector: Some("tier=api".into()),
+                container: None,
+                follow: true,
+                tail_lines: Some(200),
+            },
             Command::WorkloadScale {
                 target: deployment(),
                 replicas: 3,
@@ -1095,6 +1147,7 @@ mod tests {
                     | Command::LogsToggleFullscreen { .. }
                     | Command::LogsTogglePrevious { .. }
                     | Command::LogsToggleTimestamps { .. }
+                    | Command::LogsToggleSource { .. }
                     | Command::LogsToggleWrap { .. }
                     | Command::LogsFind { .. }
                     | Command::LogsNextMatch { .. }
@@ -1107,6 +1160,7 @@ mod tests {
                     | Command::LogsToggleLevel { .. }
                     | Command::LogsToggleLine { .. }
                     | Command::LogsCollapseLine { .. }
+                    | Command::WorkloadViewLogs { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterApplyPreset { .. }

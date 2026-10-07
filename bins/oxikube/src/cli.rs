@@ -23,6 +23,8 @@ Options:
                           (implies --perf; docs/PERFORMANCE.md \"Log viewer\")
   --perf-logs-wrap        Wrap the lines of --perf-logs
   --perf-logs-paused      Pause --perf-logs's autoscroll (the lines arrive off screen)
+  --perf-logs-workload    Treat the last part of --perf-logs as a Deployment: open the merged log
+                          of its pods (workload::ViewLogs) instead of one pod's
   --perf-scenario <NAME>  Run a headless perf scenario and exit: startup, scroll-10k (or
                           table-scroll-10k), palette, logs-stream, editor-5mb (needs --features
                           perf-scenarios; use `cargo xtask perf`)
@@ -55,6 +57,7 @@ pub struct Args {
     pub perf_logs: Option<String>,
     pub perf_logs_wrap: bool,
     pub perf_logs_paused: bool,
+    pub perf_logs_workload: bool,
 }
 
 /// What `main` should do.
@@ -128,6 +131,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
             }
             "--perf-logs-wrap" => out.perf_logs_wrap = true,
             "--perf-logs-paused" => out.perf_logs_paused = true,
+            "--perf-logs-workload" => out.perf_logs_workload = true,
             "--perf-scenario" => out.perf_scenario = Some(value("--perf-scenario")?),
             "--perf-report" => out.perf_report = Some(value("--perf-report")?.into()),
             other => return Err(format!("unknown argument `{other}`")),
@@ -142,8 +146,14 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
     if out.perf_scroll.is_some() && out.perf_table.is_none() {
         return Err("--perf-scroll only applies to --perf-table".into());
     }
-    if (out.perf_logs_wrap || out.perf_logs_paused) && out.perf_logs.is_none() {
-        return Err("--perf-logs-wrap and --perf-logs-paused only apply to --perf-logs".into());
+    if (out.perf_logs_wrap || out.perf_logs_paused || out.perf_logs_workload)
+        && out.perf_logs.is_none()
+    {
+        return Err(
+            "--perf-logs-wrap, --perf-logs-paused and --perf-logs-workload only apply to \
+             --perf-logs"
+                .into(),
+        );
     }
     if let Some(value) = &out.perf_logs
         && value
@@ -229,7 +239,15 @@ mod tests {
         let a = run(&["--perf-logs", "kind-oxikube/shop/web-0", "--perf-logs-wrap"]).unwrap();
         assert!(a.perf, "--perf-logs implies --perf");
         assert_eq!(a.perf_logs.as_deref(), Some("kind-oxikube/shop/web-0"));
-        assert!(a.perf_logs_wrap && !a.perf_logs_paused);
+        assert!(a.perf_logs_wrap && !a.perf_logs_paused && !a.perf_logs_workload);
+        let w = run(&[
+            "--perf-logs",
+            "kind-oxikube/shop/web",
+            "--perf-logs-workload",
+        ])
+        .unwrap();
+        assert!(w.perf_logs_workload);
+        assert!(run(&["--perf-logs-workload"]).is_err(), "needs --perf-logs");
         assert!(
             run(&["--perf-logs-paused"])
                 .unwrap_err()

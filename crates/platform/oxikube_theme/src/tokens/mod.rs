@@ -25,7 +25,7 @@ pub use colors::{
     AnsiColors, EditorColors, StatusColor, StatusColors, TerminalColors, ThemeColors, VcsColors,
 };
 pub(crate) use derive::{derive_colors, derive_oxikube};
-pub use oxikube::{CLUSTER_TAB_COLORS, OxikubeColors};
+pub use oxikube::{CLUSTER_TAB_COLORS, LOG_SOURCE_COLORS, OxikubeColors};
 pub use syntax::{FontStyle, PlayerColor, SyntaxStyle, SyntaxTheme};
 
 /// One theme, resolved: every colour Oxikube draws with.

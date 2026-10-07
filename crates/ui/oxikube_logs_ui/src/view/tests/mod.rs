@@ -2,6 +2,7 @@
 //! scripted timelines on a fake clock, the app's `LogService` on the deterministic runtime, and a
 //! dispatcher that does what the bus does. No cluster, no threads, no sleeping.
 
+mod aggregate;
 mod containers;
 mod fixture;
 mod json;

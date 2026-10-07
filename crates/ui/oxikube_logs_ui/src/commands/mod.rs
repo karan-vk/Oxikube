@@ -1,6 +1,8 @@
-//! The log commands on the `CommandBus` (E08-S02): `pod::ViewLogs` opens a pod's log view, and
-//! the `logs::*` commands change one: `SetRange` (tail, head, since 1m ... 1h), `SelectContainer`,
-//! `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, and
+//! The log commands on the `CommandBus` (E08-S02): `pod::ViewLogs` opens a pod's log view,
+//! `workload::ViewLogs` (E08-S04) opens the merged log of a workload's or Service's pods, and the
+//! `logs::*` commands change one: `SetRange` (tail, head, since 1m ... 1h), `SelectContainer`,
+//! `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`,
+//! `ToggleSource` (E08-S04: switch one pod or container of a merged log off or on), and
 //! the search's (E08-S03) `Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`,
 //! `ToggleFilterMode`, `CloseSearch`, the JSON mode's (E08-S05) `ToggleJsonMode`,
 //! `ToggleLevel`, `ToggleLine` and `CollapseLine`, and (E08-S06) the local actions on what a
@@ -23,6 +25,7 @@ mod tests;
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
+use oxikube_app::logs::is_aggregate_kind;
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{Gvk, ResourceRef};
@@ -32,8 +35,10 @@ use crate::view::OpenLogs;
 pub use controller::{LogHost, LogViews, LogViewsDeps};
 
 /// The commands this crate handles.
-pub const LOG_COMMANDS: [CommandId; 23] = [
+pub const LOG_COMMANDS: [CommandId; 25] = [
     CommandId::POD_VIEW_LOGS,
+    CommandId::WORKLOAD_VIEW_LOGS,
+    CommandId::LOGS_TOGGLE_SOURCE,
     CommandId::LOGS_CLEAR,
     CommandId::LOGS_COPY,
     CommandId::LOGS_MARK,
@@ -105,12 +110,20 @@ pub enum ViewChange {
     ToggleLine(u64),
     /// `logs::CollapseLine`.
     CollapseLine,
+    /// `logs::ToggleSource`: switch a pod (or one of its containers) of a merged log off or on.
+    ToggleSource {
+        /// The pod.
+        pod: String,
+        /// The container; `None` for the whole pod.
+        container: Option<String>,
+    },
 }
 
 /// A log command, resolved, for the UI thread.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LogRequest {
-    /// Open (or show) the log view of the pod `target` (`pod::ViewLogs`).
+    /// Open (or show) the log view of the pod `target` (`pod::ViewLogs`), or of the workload or
+    /// Service `target` (`workload::ViewLogs`): its pods merged.
     Open {
         /// The pod.
         target: ResourceRef,
@@ -131,8 +144,9 @@ impl LogRequest {
     ///
     /// # Errors
     ///
-    /// A validation error for `pod::ViewLogs` of something that is not a pod: the logs of a
-    /// workload (its pods merged) arrive with E08-S04.
+    /// A validation error for `pod::ViewLogs` of something that is not a pod (a workload's logs
+    /// are `workload::ViewLogs`), and for `workload::ViewLogs` of something that is not a
+    /// Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or Service.
     pub fn of(command: &Command) -> Result<Option<Self>, OxiError> {
         let change = |target: &ResourceRef, change| {
             Some(LogRequest::Change {
@@ -149,8 +163,13 @@ impl LogRequest {
                 tail_lines,
             } => {
                 if !is_pod(target) {
+                    let hint = if is_aggregate_kind(&target.gvk) {
+                        " (use workload::ViewLogs for its pods)"
+                    } else {
+                        ""
+                    };
                     return Err(OxiError::validation(format!(
-                        "pod::ViewLogs needs a pod, not a {}",
+                        "pod::ViewLogs needs a pod, not a {}{hint}",
                         target.gvk.kind
                     )));
                 }
@@ -161,6 +180,7 @@ impl LogRequest {
                         previous: *previous,
                         follow: *follow,
                         tail_lines: *tail_lines,
+                        selector: None,
                     },
                 })
             }
@@ -168,6 +188,42 @@ impl LogRequest {
             Command::LogsCopy { target } => change(target, ViewChange::Copy),
             Command::LogsMark { target } => change(target, ViewChange::Mark),
             Command::LogsSave { target, scope } => change(target, ViewChange::Save(*scope)),
+            Command::WorkloadViewLogs {
+                target,
+                selector,
+                container,
+                follow,
+                tail_lines,
+            } => {
+                if !is_aggregate_kind(&target.gvk) || target.namespace.is_none() {
+                    return Err(OxiError::validation(format!(
+                        "workload::ViewLogs needs a Deployment, StatefulSet, DaemonSet, \
+                         ReplicaSet, Job or Service, not a {}",
+                        target.gvk.kind
+                    )));
+                }
+                Some(LogRequest::Open {
+                    target: target.clone(),
+                    open: OpenLogs {
+                        container: container.clone(),
+                        previous: false,
+                        follow: *follow,
+                        tail_lines: *tail_lines,
+                        selector: selector.clone().filter(|s| !s.trim().is_empty()),
+                    },
+                })
+            }
+            Command::LogsToggleSource {
+                target,
+                pod,
+                container,
+            } => change(
+                target,
+                ViewChange::ToggleSource {
+                    pod: pod.clone(),
+                    container: container.clone(),
+                },
+            ),
             Command::LogsSetRange { target, range } => change(target, ViewChange::SetRange(*range)),
             Command::LogsSelectContainer { target, container } => {
                 change(target, ViewChange::SelectContainer(container.clone()))

@@ -1,5 +1,7 @@
-//! `oxikube --perf-logs <CONTEXT>/<NAMESPACE>/<POD> [--perf-logs-wrap] [--perf-logs-paused]`: the
-//! windowed measurement of the log viewer (E08-S02, docs/PERFORMANCE.md "Log viewer").
+//! `oxikube --perf-logs <CONTEXT>/<NAMESPACE>/<POD> [--perf-logs-wrap] [--perf-logs-paused]
+//! [--perf-logs-workload]`: the windowed measurement of the log viewer (E08-S02,
+//! docs/PERFORMANCE.md "Log viewer"). With `--perf-logs-workload` the last part names a
+//! Deployment and the view is the merged log of its pods (E08-S04, `workload::ViewLogs`).
 //!
 //! After the main window opens, this does what a user does, through the same commands: it waits
 //! for the catalog to list `CONTEXT`, runs `cluster::Connect` (the cluster tab opens and
@@ -42,12 +44,14 @@ pub struct LogsDrive {
     pub wrap: bool,
     /// Pause autoscroll (the view stays put while lines arrive).
     pub paused: bool,
+    /// `pod` names a Deployment: open the merged log of its pods.
+    pub workload: bool,
 }
 
 impl LogsDrive {
     /// Parses `CONTEXT/NAMESPACE/POD` (the context may itself hold slashes: the last two parts
     /// are the namespace and the pod).
-    pub fn parse(value: &str, wrap: bool, paused: bool) -> Option<Self> {
+    pub fn parse(value: &str, wrap: bool, paused: bool, workload: bool) -> Option<Self> {
         let mut parts = value.rsplitn(3, '/');
         let pod = parts.next().filter(|s| !s.is_empty())?;
         let namespace = parts.next().filter(|s| !s.is_empty())?;
@@ -58,6 +62,7 @@ impl LogsDrive {
             pod: pod.to_owned(),
             wrap,
             paused,
+            workload,
         })
     }
 }
@@ -104,9 +109,14 @@ async fn run(drive: &LogsDrive, window: AnyWindowHandle, cx: &mut AsyncApp) -> R
     })
     .await?;
 
+    let gvk = if drive.workload {
+        Gvk::new("apps", "v1", "Deployment")
+    } else {
+        Gvk::new("", "v1", "Pod")
+    };
     let target = ResourceRef::namespaced(
         cluster.clone(),
-        Gvk::new("", "v1", "Pod"),
+        gvk,
         drive.namespace.as_str(),
         drive.pod.as_str(),
     );
@@ -114,12 +124,22 @@ async fn run(drive: &LogsDrive, window: AnyWindowHandle, cx: &mut AsyncApp) -> R
         "oxikube --perf-logs: opening the logs of {}/{}",
         drive.namespace, drive.pod
     );
-    let open = Command::PodViewLogs {
-        target: target.clone(),
-        container: None,
-        follow: true,
-        previous: false,
-        tail_lines: None,
+    let open = if drive.workload {
+        Command::WorkloadViewLogs {
+            target: target.clone(),
+            selector: None,
+            container: None,
+            follow: true,
+            tail_lines: None,
+        }
+    } else {
+        Command::PodViewLogs {
+            target: target.clone(),
+            container: None,
+            follow: true,
+            previous: false,
+            tail_lines: None,
+        }
     };
     run_command(&state, &workspace, window, open, cx)?;
     let mut view = None;
@@ -189,16 +209,18 @@ mod tests {
 
     #[test]
     fn parses_context_namespace_and_pod() {
-        let drive = LogsDrive::parse("kind-oxikube/shop/web-0", true, false).unwrap();
+        let drive = LogsDrive::parse("kind-oxikube/shop/web-0", true, false, false).unwrap();
         assert_eq!(drive.context, "kind-oxikube");
         assert_eq!(
             (drive.namespace.as_str(), drive.pod.as_str()),
             ("shop", "web-0")
         );
-        assert!(drive.wrap && !drive.paused);
-        let arn = LogsDrive::parse("arn:aws:eks:eu/cluster/prod/shop/web-0", false, true).unwrap();
+        assert!(drive.wrap && !drive.paused && !drive.workload);
+        let arn =
+            LogsDrive::parse("arn:aws:eks:eu/cluster/prod/shop/web-0", false, true, true).unwrap();
+        assert!(arn.workload);
         assert_eq!(arn.context, "arn:aws:eks:eu/cluster/prod");
-        assert!(LogsDrive::parse("shop/web-0", false, false).is_none());
-        assert!(LogsDrive::parse("ctx//web-0", false, false).is_none());
+        assert!(LogsDrive::parse("shop/web-0", false, false, false).is_none());
+        assert!(LogsDrive::parse("ctx//web-0", false, false, false).is_none());
     }
 }

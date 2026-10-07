@@ -6,6 +6,7 @@ use std::rc::Rc;
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{App, AppContext as _, Context, Entity, SharedString, Task, WeakEntity, Window};
+use oxikube_app::logs::AggregateSpec;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_workspace::{ClusterTabs, OpenOptions, Workspace};
 
@@ -116,15 +117,18 @@ impl LogViews {
                         ViewChange::ToggleLevel(chip) => view.toggle_level(*chip, cx),
                         ViewChange::ToggleLine(seq) => view.toggle_expanded(*seq, cx),
                         ViewChange::CollapseLine => view.collapse(cx),
+                        ViewChange::ToggleSource { pod, container } => {
+                            view.toggle_source(pod, container.as_deref());
+                        }
                     });
                 }
             }
         }
     }
 
-    /// Shows the log view of `target` in its cluster's tab, reading what `open` asks: the open
-    /// one (switched to it), else a new tab, focused so its keys work. `None` when the cluster
-    /// has no tab here.
+    /// Shows the log view of `target` (a pod, or a workload or Service whose pods are merged) in
+    /// its cluster's tab, reading what `open` asks: the open one (switched to it), else a new tab,
+    /// focused so its keys work. `None` when the cluster has no tab here.
     pub fn open(
         &mut self,
         target: &ResourceRef,
@@ -132,6 +136,10 @@ impl LogViews {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Entity<LogView>> {
+        // A pod, or an object whose pods are merged; nothing else has logs to open.
+        if !super::is_pod(target) && AggregateSpec::of(target).is_none() {
+            return None;
+        }
         let workspace = self.deps.host.workspace(&target.cluster, cx)?;
         self.deps.host.show(&target.cluster, window, cx);
         let key = SharedString::from(item_key(target));
@@ -148,7 +156,11 @@ impl LogViews {
         let searches = self.searches.clone();
         let view = cx.new(|cx| {
             let saved = searches.get(&target);
-            let mut view = LogView::with_options(target, options, deps, cx);
+            let mut view = if super::is_pod(&target) {
+                LogView::with_options(target, options, deps, cx)
+            } else {
+                LogView::workload(target, options, deps, cx)
+            };
             view.set_workspace(workspace.downgrade());
             view.set_search_memory(searches);
             // The same pod's logs opened again in this session: the search as it was.

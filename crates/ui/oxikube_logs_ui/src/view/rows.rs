@@ -14,6 +14,7 @@ use oxikube_domain::log::LogLevel;
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, Colors, u};
 
+use super::aggregate::gutter;
 use super::highlight::{LineMarks, Mark};
 use super::json::JsonColumns;
 use super::text::{Level, level_of, state_text, timestamp, truncated_marker};
@@ -24,6 +25,8 @@ use super::{LogView, NOWRAP_CHARS};
 enum RowData {
     Line {
         seq: u64,
+        /// The pod gutter of a multi-pod view: its text and palette slot.
+        prefix: Option<(SharedString, usize)>,
         ts: Option<SharedString>,
         text: SharedString,
         level: Level,
@@ -36,6 +39,8 @@ enum RowData {
     },
     /// A structured line in JSON mode: columns instead of text.
     Json {
+        /// The pod gutter of a multi-pod view (see `Line`).
+        prefix: Option<(SharedString, usize)>,
         seq: u64,
         ts: Option<SharedString>,
         record: Arc<JsonColumns>,
@@ -79,12 +84,22 @@ impl LogView {
         let data = self.row_data(&[Some(row)]).into_iter().next()?;
         Some(match data {
             RowData::Line {
-                ts: Some(ts), text, ..
-            } => format!("{ts} {text}"),
-            RowData::Line { ts: None, text, .. } => text.to_string(),
-            RowData::Json { ts, record, .. } => {
+                prefix, ts, text, ..
+            } => {
+                let mut copied = String::new();
+                for part in prefix.map(|(prefix, _)| prefix).into_iter().chain(ts) {
+                    copied.push_str(&part);
+                    copied.push(' ');
+                }
+                copied.push_str(&text);
+                copied
+            }
+            RowData::Json {
+                prefix, ts, record, ..
+            } => {
                 let level = record.level.label().to_uppercase();
                 let parts = [
+                    prefix.as_ref().map_or("", |(prefix, _)| prefix.as_ref()),
                     ts.as_deref().unwrap_or(""),
                     &level,
                     &record.time,
@@ -150,8 +165,12 @@ impl LogView {
         let state = self.window.state();
         let json = self.options.json;
         let expanded = self.expanded.as_ref().map(|e| e.seq);
+        let labels = self.aggregate.as_ref().map(|state| &state.labels);
         let line = |entry: Option<&LogEntry>| match entry {
             Some(entry) => {
+                let prefix = labels
+                    .and_then(|labels| labels.prefix(&entry.pod, &entry.container))
+                    .map(|p| (SharedString::from(p.text.clone()), p.colour));
                 let ts = timestamps.then(|| SharedString::from(timestamp(entry)));
                 let record = (json && entry.level.is_some())
                     .then(|| self.records.borrow_mut().row(entry.seq, &entry.text))
@@ -160,6 +179,7 @@ impl LogView {
                 let selected = self.selection.contains(entry.seq);
                 match record {
                     Some(record) => RowData::Json {
+                        prefix,
                         seq: entry.seq,
                         ts,
                         record,
@@ -168,6 +188,7 @@ impl LogView {
                         selected,
                     },
                     None => RowData::Line {
+                        prefix,
                         seq: entry.seq,
                         ts,
                         level: level_of(&entry.text),
@@ -223,6 +244,7 @@ impl LogView {
         };
         match row {
             RowData::Line {
+                prefix,
                 seq,
                 ts,
                 text,
@@ -258,11 +280,13 @@ impl LogView {
                         .child(ts)
                 });
                 self.row_chrome(base, seq, marked, selected, cx)
+                    .children(gutter(prefix, cx))
                     .children(ts)
                     .child(text)
                     .into_any_element()
             }
             RowData::Json {
+                prefix,
                 seq,
                 ts,
                 record,
@@ -270,7 +294,9 @@ impl LogView {
                 marked,
                 selected,
             } => {
-                let base = self.row_chrome(base, seq, marked, selected, cx);
+                let base = self
+                    .row_chrome(base, seq, marked, selected, cx)
+                    .children(gutter(prefix, cx));
                 self.json_row(base, seq, ts, &record, expanded, wrap, cx)
             }
             RowData::Gone => base.into_any_element(),

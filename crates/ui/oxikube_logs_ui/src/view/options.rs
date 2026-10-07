@@ -45,6 +45,9 @@ pub struct ViewOptions {
     /// columns with its other fields collapsed, expands to pretty-printed JSON, and the level
     /// chips filter lines; plain-text lines are drawn as they are. Off, every line is raw text.
     pub json: bool,
+    /// A further label selector the pods of a workload or Service view must match too
+    /// (`workload::ViewLogs { selector }`); `None` for a pod's view.
+    pub selector: Option<String>,
 }
 
 impl Default for ViewOptions {
@@ -67,6 +70,7 @@ impl ViewOptions {
             wrap: settings.wrap,
             timestamps: settings.timestamps,
             json: settings.json_auto_detect,
+            selector: None,
         }
     }
 
@@ -106,6 +110,9 @@ pub struct OpenLogs {
     pub follow: bool,
     /// Read the last N lines (the tail range); `None` keeps the view's range.
     pub tail_lines: Option<u32>,
+    /// A further label selector for the pods of a workload or Service view
+    /// (`workload::ViewLogs`); `None` reads all of them.
+    pub selector: Option<String>,
 }
 
 impl Default for OpenLogs {
@@ -115,6 +122,7 @@ impl Default for OpenLogs {
             previous: false,
             follow: true,
             tail_lines: None,
+            selector: None,
         }
     }
 }
@@ -127,6 +135,7 @@ impl OpenLogs {
         }
         options.previous = self.previous;
         options.follow = self.follow;
+        options.selector.clone_from(&self.selector);
         if let Some(lines) = self.tail_lines {
             options.range = LogRange::Tail;
             options.tail_lines = Some(lines);

@@ -27,6 +27,15 @@ fn pod() -> ResourceRef {
     ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "shop", "web-0")
 }
 
+fn deployment() -> ResourceRef {
+    ResourceRef::namespaced(
+        cluster(),
+        Gvk::new("apps", "v1", "Deployment"),
+        "shop",
+        "web",
+    )
+}
+
 fn bus() -> (
     CommandBus,
     futures::channel::mpsc::UnboundedReceiver<LogRequest>,
@@ -93,6 +102,40 @@ fn the_handlers_queue_the_request_for_the_window() {
                     previous: true,
                     follow: true,
                     tail_lines: Some(10),
+                    selector: None,
+                },
+            },
+        ),
+        (
+            Command::WorkloadViewLogs {
+                target: deployment(),
+                selector: Some("tier=api".into()),
+                container: Some("app".into()),
+                follow: false,
+                tail_lines: Some(20),
+            },
+            LogRequest::Open {
+                target: deployment(),
+                open: OpenLogs {
+                    container: Some("app".into()),
+                    previous: false,
+                    follow: false,
+                    tail_lines: Some(20),
+                    selector: Some("tier=api".into()),
+                },
+            },
+        ),
+        (
+            Command::LogsToggleSource {
+                target: deployment(),
+                pod: "web-7d9".into(),
+                container: Some("proxy".into()),
+            },
+            LogRequest::Change {
+                target: deployment(),
+                change: ViewChange::ToggleSource {
+                    pod: "web-7d9".into(),
+                    container: Some("proxy".into()),
                 },
             },
         ),
@@ -215,16 +258,10 @@ fn the_handlers_queue_the_request_for_the_window() {
 }
 
 #[test]
-fn view_logs_of_a_workload_is_refused_until_multi_pod_logs_exist() {
+fn pod_view_logs_of_a_workload_points_at_the_workload_command() {
     let (bus, _requests) = bus();
-    let deployment = ResourceRef::namespaced(
-        cluster(),
-        Gvk::new("apps", "v1", "Deployment"),
-        "shop",
-        "web",
-    );
     let command = Command::PodViewLogs {
-        target: deployment,
+        target: deployment(),
         container: None,
         follow: true,
         previous: false,
@@ -232,7 +269,64 @@ fn view_logs_of_a_workload_is_refused_until_multi_pod_logs_exist() {
     };
     let error = block_on(bus.dispatch(command, DispatchContext::new(Initiator::Ui, "me")))
         .expect_err("not a pod");
-    assert!(error.to_string().contains("needs a pod"), "{error}");
+    let message = error.to_string();
+    assert!(message.contains("needs a pod"), "{message}");
+    assert!(message.contains("workload::ViewLogs"), "{message}");
+}
+
+#[test]
+fn workload_view_logs_needs_a_workload_or_a_service() {
+    let (bus, _requests) = bus();
+    let command = |target| Command::WorkloadViewLogs {
+        target,
+        selector: None,
+        container: None,
+        follow: true,
+        tail_lines: None,
+    };
+    for target in [
+        pod(),
+        ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "ConfigMap"), "shop", "cfg"),
+        ResourceRef::cluster_scoped(cluster(), Gvk::new("", "v1", "Node"), "n1"),
+    ] {
+        let kind = target.gvk.kind.to_string();
+        let error =
+            block_on(bus.dispatch(command(target), DispatchContext::new(Initiator::Ui, "me")))
+                .expect_err(&kind);
+        assert!(
+            error.to_string().contains("needs a Deployment"),
+            "{kind}: {error}"
+        );
+    }
+    for kind in [
+        ("apps", "StatefulSet"),
+        ("apps", "DaemonSet"),
+        ("apps", "ReplicaSet"),
+        ("batch", "Job"),
+        ("", "Service"),
+    ] {
+        let target =
+            ResourceRef::namespaced(cluster(), Gvk::new(kind.0, "v1", kind.1), "shop", "x");
+        assert!(
+            LogRequest::of(&command(target)).unwrap().is_some(),
+            "{kind:?}"
+        );
+    }
+}
+
+#[test]
+fn a_blank_narrowing_selector_is_no_selector() {
+    let command = Command::WorkloadViewLogs {
+        target: deployment(),
+        selector: Some("  ".into()),
+        container: None,
+        follow: true,
+        tail_lines: None,
+    };
+    let Some(LogRequest::Open { open, .. }) = LogRequest::of(&command).unwrap() else {
+        panic!("an open request");
+    };
+    assert_eq!(open.selector, None);
 }
 
 #[test]

@@ -1,12 +1,13 @@
-//! `logs.buffer_lines` through the real settings store: the default in `default.json` and a hot
-//! reload, global and per cluster, into a `LogService` with open sessions.
+//! `logs.buffer_lines` and `logs.max_streams` through the real settings store: the default in
+//! `default.json` and a hot reload, global and per cluster, into a `LogService` with open sessions.
 
 use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use gpui::{TestAppContext, UpdateGlobal as _};
 use oxikube_app::logs::{
-    DEFAULT_BUFFER_LINES, LogConfig, LogRuntime, LogService, LogTarget, MIN_BUFFER_LINES,
+    DEFAULT_BUFFER_LINES, DEFAULT_MAX_STREAMS, LogConfig, LogRuntime, LogService, LogTarget,
+    MAX_MAX_STREAMS, MIN_BUFFER_LINES,
 };
 use oxikube_app::store::Spawner;
 use oxikube_domain::ids::{ClusterId, ContextName};
@@ -42,6 +43,34 @@ fn the_default_json_holds_the_services_default(cx: &mut TestAppContext) {
             DEFAULT_BUFFER_LINES,
             "assets/settings/default.json and oxikube_app::logs::DEFAULT_BUFFER_LINES disagree"
         );
+    });
+}
+
+/// The number after `"key":` in the embedded `default.json` (JSON with comments), read from the
+/// text so a missing or misspelled key is not hidden by the setting's own fallback.
+fn default_json_number(key: &str) -> usize {
+    let text = oxikube_assets::default_settings();
+    let at = text
+        .find(&format!("\"{key}\":"))
+        .unwrap_or_else(|| panic!("default.json has no \"{key}\""));
+    let rest = text[at..].split_once(':').unwrap().1.trim_start();
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().expect("a number")
+}
+
+#[gpui::test]
+fn the_default_json_holds_the_max_streams_default(cx: &mut TestAppContext) {
+    assert_eq!(
+        default_json_number("max_streams"),
+        DEFAULT_MAX_STREAMS,
+        "assets/settings/default.json and oxikube_app::logs::DEFAULT_MAX_STREAMS disagree"
+    );
+    cx.set_global(store());
+    cx.update(|cx| {
+        assert_eq!(
+            LogsSettings::get_global(cx).max_streams,
+            DEFAULT_MAX_STREAMS
+        )
     });
 }
 
@@ -163,4 +192,33 @@ fn a_cluster_override_resizes_that_clusters_sessions_only(cx: &mut TestAppContex
     // Removing the override puts the cluster back on the default.
     set_user(cx, r#"{ "logs": { "buffer_lines": 5000 } }"#);
     on_prod.read(|buffer, _| assert_eq!(buffer.capacity(), 5_000));
+}
+
+#[gpui::test]
+fn editing_max_streams_reaches_the_service(cx: &mut TestAppContext) {
+    cx.set_global(store());
+    let service = service();
+    cx.update(|cx| follow_settings(&service, cx));
+    assert_eq!(service.max_streams(), DEFAULT_MAX_STREAMS);
+
+    let edit = |cx: &mut TestAppContext, json: &str| {
+        cx.update(|cx| {
+            SettingsStore::update_global(cx, |store, _| {
+                store.set_user_settings(json).expect("valid settings");
+            });
+        });
+        cx.run_until_parked();
+    };
+    edit(cx, r#"{ "logs": { "max_streams": 5 } }"#);
+    assert_eq!(service.max_streams(), 5);
+
+    // A silly value is clamped, not applied raw.
+    edit(cx, r#"{ "logs": { "max_streams": 100000 } }"#);
+    assert_eq!(service.max_streams(), MAX_MAX_STREAMS);
+    edit(cx, r#"{ "logs": { "max_streams": 0 } }"#);
+    assert_eq!(service.max_streams(), 1);
+
+    // Removing the override returns to the default.
+    edit(cx, r#"{ "ui_scale": 1.25 }"#);
+    assert_eq!(service.max_streams(), DEFAULT_MAX_STREAMS);
 }

@@ -1,15 +1,18 @@
 //! [`LogService`]: opens log sessions over a `LogPort` and keeps their memory bounded.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::{LogOptions, LogPort};
 use parking_lot::Mutex;
 
+use super::aggregate::{
+    AggShared, AggregatePorts, AggregateSession, AggregateSpec, AggregateView, Coordinator,
+};
 use super::bounds::{BoundCell, Bounds};
 use super::driver::Driver;
-use super::options::{LogConfig, LogRuntime};
+use super::options::{LogConfig, LogRuntime, clamp_max_streams};
 use super::session::{LogReader, LogSession};
 use super::shared::Shared;
 use super::target::LogTarget;
@@ -24,6 +27,7 @@ pub struct LogService {
     runtime: LogRuntime,
     config: LogConfig,
     bounds: Mutex<Bounds>,
+    max_streams: Arc<AtomicUsize>,
     next_id: AtomicU64,
     sessions: Mutex<Vec<Tracked>>,
 }
@@ -41,6 +45,7 @@ impl LogService {
         Self {
             runtime,
             bounds: Mutex::new(Bounds::new(config.buffer_lines)),
+            max_streams: Arc::new(AtomicUsize::new(clamp_max_streams(config.max_streams))),
             config,
             next_id: AtomicU64::new(1),
             sessions: Mutex::new(Vec::new()),
@@ -107,6 +112,88 @@ impl LogService {
         };
         let task = spawn_guarded(&self.runtime.spawner, driver.run());
         LogSession::new(shared, task)
+    }
+
+    /// Opens an aggregate session reading the pods `spec` picks (a workload, a Service or a label
+    /// selector) over `ports`, their lines merged by server timestamp into one buffer, and returns
+    /// at once: the selector is resolved, the pods watched and the streams opened on the runtime.
+    /// An object that does not exist, has no selector or cannot be read is the session's `Failed`
+    /// state, not an error here. `options` apply to every pod's stream (`options.container` is
+    /// ignored: the spec names the container; `timestamps` is always on, the merge needs it).
+    ///
+    /// The merged buffer is bounded by `logs.buffer_lines` like any session's, and at most
+    /// `logs.max_streams` containers are read at once. See [`AggregateSession`].
+    pub fn open_aggregate(
+        &self,
+        ports: AggregatePorts,
+        spec: AggregateSpec,
+        options: LogOptions,
+    ) -> AggregateSession {
+        let bound = self.bounds.lock().default_cell();
+        self.open_aggregate_bounded(bound, ports, spec, options)
+    }
+
+    /// [`LogService::open_aggregate`] for a view of `cluster`: the merged buffer keeps the
+    /// cluster's own `buffer_lines` ([`LogService::set_cluster_buffer_lines`]) when it has one.
+    pub fn open_aggregate_in(
+        &self,
+        cluster: &ClusterId,
+        ports: AggregatePorts,
+        spec: AggregateSpec,
+        options: LogOptions,
+    ) -> AggregateSession {
+        let bound = self.bounds.lock().cell_for(cluster);
+        self.open_aggregate_bounded(bound, ports, spec, options)
+    }
+
+    fn open_aggregate_bounded(
+        &self,
+        bound: BoundCell,
+        ports: AggregatePorts,
+        spec: AggregateSpec,
+        mut options: LogOptions,
+    ) -> AggregateSession {
+        options.container = spec.container.clone();
+        options.timestamps = true;
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let target = LogTarget::aggregate(&spec.namespace, spec.label());
+        let capacity = bound.load(Ordering::Acquire);
+        let shared = Arc::new(Shared::new(id, target, options.clone(), capacity));
+        let agg = Arc::new(AggShared::new(spec.label()));
+        {
+            let mut sessions = self.sessions.lock();
+            sessions.retain(|s| s.shared.strong_count() > 0);
+            sessions.push(Tracked {
+                shared: Arc::downgrade(&shared),
+                bound: bound.clone(),
+            });
+        }
+        let coordinator = Coordinator {
+            ports,
+            spec,
+            options,
+            shared: shared.clone(),
+            agg: agg.clone(),
+            runtime: self.runtime.clone(),
+            config: self.config.clone(),
+            buffer_lines: bound,
+            max_streams: self.max_streams.clone(),
+        };
+        let task = spawn_guarded(&self.runtime.spawner, coordinator.run());
+        AggregateSession::new(LogSession::new(shared, task), AggregateView::new(agg))
+    }
+
+    /// Streams an aggregate reads at once (`logs.max_streams`).
+    pub fn max_streams(&self) -> usize {
+        self.max_streams.load(Ordering::Acquire)
+    }
+
+    /// Applies a new `logs.max_streams` (clamped) to every open aggregate and to the ones opened
+    /// later: a higher value starts the pods that were left out, a lower one lets running
+    /// streams finish and opens no new ones until there is room.
+    pub fn set_max_streams(&self, streams: usize) {
+        self.max_streams
+            .store(clamp_max_streams(streams), Ordering::Release);
     }
 
     /// Lines a session keeps by default (`logs.buffer_lines`).

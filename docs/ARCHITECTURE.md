@@ -176,6 +176,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `timestamp`); `pretty` is the expanded form; lines over 64 KB and lines cut by the per-line cap are text.
   The service reads each line's level once as it commits it (`LogEntry::level`, `None` for plain text), before the
   buffer's lock is taken; `LevelFilter` (one byte, a set of level chips) is the predicate a view tests entries with.
+  Module `aggregate` (E08-S04): `open_aggregate(ports, spec, options)` returns an `AggregateSession`, the logs of
+  every pod a Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or Service (its `spec.selector`) or a typed label
+  selector picks, merged into one `LogSession` (one ring bounded by `logs.buffer_lines`, not one per pod). One
+  coordinator task (abort-on-drop) reads the object through the `ResourceReader`, watches the matching pods and opens
+  one stream task per streamable container (regular and sidecar containers; at most `logs.max_streams` at once, default
+  20, the pods left out counted for the "N more pods not streamed" notice); each stream batches like a single session
+  and hands its batches to the coordinator over a bounded queue (a slow coordinator pushes back on the connection); the lines waiting in the merge are capped at `logs.buffer_lines` too, so the memory is the ring plus at most as many lines again, whatever the number of pods.
+  Lines are merged by server timestamp (`timestamps=true`), then stream id, then position in the stream, through a
+  300 ms reorder window (`LogConfig::reorder_window`), never reordering within one pod whatever the clock skew; nothing
+  is committed until the first group of streams answered (`startup_wait`, 2 s at most) plus one window; a line that
+  arrives later than the window goes in at once after what is there. The `AggregateView` says which streams exist
+  (`SourceInfo`), what changed in the pod set (`PodEvent` `Added` / `Ended`, the hook E08-S07 follows replacements
+  from; the first list is the baseline), the pods the cap left out, and which pods and containers the user switched off
+  (`HiddenSources`; they keep streaming, the viewer filters).
 - `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to
   5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect` (JSON mode's starting value, E08-S05); defaults in
   `default.json`, schema generated, per-cluster overrides under `clusters.<id>.logs`, out-of-range values clamped
@@ -202,7 +216,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   Module `commands`: `pod::ViewLogs` and `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`,
   `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (and, E08-S05, `ToggleJsonMode`, `ToggleLevel`, `ToggleLine`, `CollapseLine`; E08-S06, `Mark`, `Copy`, `Clear`, `Save`) on the bus (reads, tool stubs), queued to the
   window's `LogViews`, which opens a view in the pod's cluster tab (one per pod, through a `LogHost`) and applies
-  the changes. `row_actions`: "View Logs" on pod rows of the resource tables.
+  the changes. `row_actions`: "View Logs" on pod rows of the resource tables, and on Deployment, StatefulSet,
+  DaemonSet, ReplicaSet, Job and Service rows (`workload::ViewLogs`).
   Module `search` (E08-S03): the `/` bar under the toolbar (`logs::Find`, also `cmd-f` / `ctrl-f`): a regex over the
   stored lines with case and inverse toggles, in *highlight* mode (all lines, matches painted, `3 of 41`, enter /
   shift-enter or `n` / `N` jump and wrap) or *filter* mode (only the matching lines are rows: the `LineWindow` is
@@ -220,6 +235,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `LineWindow` keeps the seqs of the lines that are rows (`view::filter`, composed with the search: the rows are the
   matches that also pass the chips), a delta is filtered as it is applied and a changed chip, search or mode is one
   pass over the window's candidate lines. Raw text is what a copy takes.
+  Multi-pod (E08-S04): `LogView::workload` is the same tab over an `AggregateSession` (tab `deployment/web`; one tab
+  per object; `workload::ViewLogs` takes an optional further label `selector` and container). Module `view::aggregate`:
+  each line is led by a fixed-width gutter with the pod's short name (the part of the name its siblings do not share,
+  plus `/container` when the pods have several) in a colour hashed from the pod name into the theme's
+  `oxikube.log_sources` palette (`log.source.1` .. `10` in a theme's `oxikube` block, derived from the terminal ANSI
+  colours by default); a non-modal banner under the toolbar shows "pod web-7d9 added" / "pod web-4c1 ended" (cleared
+  after 8 s or dismissed), "N more pods not streamed" and "No pods match app=web"; the toolbar's Sources menu
+  (`logs::ToggleSource`) switches pods and containers off and on, which `LineWindow` applies as a filter over seqs
+  (hidden lines stay in the ring buffer). `logs.max_streams` is the setting (default.json, schema, hot reload).
 - `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
   mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,
@@ -443,7 +467,8 @@ weaken `cargo xtask lint-deps`.
   home as the first tab, the hotbar strip, the active cluster's status item, the kubeconfig
   sources (settings list, hot reload, the sources screen behind `view::Open`), session restore and the app's
   one `LogService` (`mount::logs`, stored with `AppState::set_log_service`; `logs.buffer_lines` follows the
-  settings) with the window's `LogViews` and the tables' row actions ("View Logs" on pods, E08-S02).
+  settings) with the window's `LogViews` and the tables' row actions ("View Logs" on pods, E08-S02, and on
+  workloads and Services, E08-S04).
   Views dispatch through `mount::bus::BusDispatcher`, which runs each command on the bus through
   the window's `ClusterCommandRunner` (toasts, confirmations, denials).
 

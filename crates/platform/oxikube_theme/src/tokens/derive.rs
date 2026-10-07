@@ -50,7 +50,8 @@ fn luminance(color: Hsla) -> f32 {
 
 /// The `oxikube` colours a theme gets when its file does not set them: status colours from the
 /// theme's own status colours, cluster tabs cycling through its player colours (or accents, or
-/// the terminal ANSI row when it has neither).
+/// the terminal ANSI row when it has neither), and the log-source palette from the terminal's
+/// ANSI colours.
 pub(crate) fn derive_oxikube(tokens: &ThemeTokens) -> OxikubeColors {
     let mut palette: Vec<Hsla> = tokens.players.iter().map(|p| p.cursor).collect();
     if palette.is_empty() {
@@ -71,6 +72,19 @@ pub(crate) fn derive_oxikube(tokens: &ThemeTokens) -> OxikubeColors {
     for (slot, color) in cluster_tabs.iter_mut().zip(palette.iter().cycle()) {
         *slot = *color;
     }
+    let (ansi, bright) = (tokens.terminal.ansi, tokens.terminal.bright);
+    let log_sources = [
+        ansi.blue,
+        ansi.green,
+        ansi.yellow,
+        ansi.magenta,
+        ansi.cyan,
+        bright.blue,
+        bright.green,
+        bright.yellow,
+        bright.magenta,
+        bright.cyan,
+    ];
     OxikubeColors {
         status_running: tokens.status.success.foreground,
         status_pending: tokens.status.warning.foreground,
@@ -79,5 +93,6 @@ pub(crate) fn derive_oxikube(tokens: &ThemeTokens) -> OxikubeColors {
         status_terminating: tokens.status.hidden.foreground,
         status_unknown: tokens.colors.text_muted,
         cluster_tabs,
+        log_sources,
     }
 }

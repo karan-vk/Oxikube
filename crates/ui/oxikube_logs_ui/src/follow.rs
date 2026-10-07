@@ -1,5 +1,5 @@
-//! [`follow_settings`]: `logs.buffer_lines` (global and per cluster) into the running
-//! `LogService`, off the UI thread.
+//! [`follow_settings`]: `logs.buffer_lines` (global and per cluster) and `logs.max_streams` into the
+//! running `LogService`, off the UI thread.
 
 use std::sync::Arc;
 
@@ -12,9 +12,10 @@ use oxikube_settings::{Settings as _, SettingsStore};
 
 use crate::LogsSettings;
 
-/// The buffer bounds the settings say: the default and the clusters' own.
+/// The bounds the settings say: the buffer's default and the clusters' own, and the stream cap.
 struct Bounds {
     default: usize,
+    max_streams: usize,
     clusters: Vec<(ClusterId, usize)>,
 }
 
@@ -36,6 +37,7 @@ pub fn follow_settings(service: &Arc<LogService>, cx: &mut App) {
                 bounds = newer;
             }
             service.set_buffer_lines(bounds.default);
+            service.set_max_streams(bounds.max_streams);
             service.set_cluster_buffer_lines(bounds.clusters);
         }
     })
@@ -58,6 +60,7 @@ fn send(tx: &UnboundedSender<Bounds>, cx: &App) {
     // The task is gone only when the app is shutting down.
     let _ = tx.unbounded_send(Bounds {
         default: global.buffer_lines,
+        max_streams: global.max_streams,
         clusters,
     });
 }

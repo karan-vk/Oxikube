@@ -72,6 +72,10 @@
   //                     it for one view). Applies to open views at once.
   //   timestamps        show each line's server timestamp before its text (key t toggles it for
   //                     one view). Applies to open views at once.
+  //   max_streams       containers a multi-pod log (a Deployment, StatefulSet, DaemonSet, Job or
+  //                     Service) reads at once (1 to 200). When more match, the first are read in
+  //                     name order and the view says how many pods were left out. Applies to
+  //                     open views at once.
   //   json_auto_detect  JSON mode: lines that are JSON objects show as level / time / message
   //                     columns with the other fields collapsed (click to expand), with level
   //                     chips; plain-text lines stay as they are (key j toggles it for one view).
@@ -82,7 +86,8 @@
     "default_tail": 1000,
     "wrap": false,
     "timestamps": false,
-    "json_auto_detect": true
+    "json_auto_detect": true,
+    "max_streams": 20
   },
   // The Describe tab of a resource's detail (`kubectl describe`-style text). `backend`:
   //   "auto"     render in process (deskribe: 36 specialised kinds, a generic layout for custom

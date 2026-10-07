@@ -58,11 +58,11 @@ impl LogView {
     }
 
     /// How saved and copied lines are written by default: as the view draws them (the timestamp
-    /// when it is shown), without a pod prefix (a single pod's view has one pod).
+    /// when it is shown), with the pod and container prefix in a multi-pod view (a single pod's view has one pod).
     pub fn export_format(&self) -> ExportFormat {
         ExportFormat {
             timestamps: self.options.timestamps,
-            pod_prefix: false,
+            pod_prefix: self.aggregate.is_some(),
         }
     }
 
@@ -75,7 +75,7 @@ impl LogView {
 
     /// What a copy or save takes out of a range of seqs, so that what is exported is what the
     /// rows show: the search's matches while it narrows the rows (filter mode), the lines the
-    /// level chips admit while JSON mode hides some, and any filter installed with
+    /// level chips admit while JSON mode hides some, the lines of the sources a multi-pod view switched off are left out, and any filter installed with
     /// [`set_line_filter`](Self::set_line_filter). `None` when nothing is hidden.
     pub(crate) fn active_filter(&self) -> Option<LineFilter> {
         let search = self
@@ -83,16 +83,16 @@ impl LogView {
             .is_narrowed()
             .then(|| self.search.state.matcher().cloned())
             .flatten();
-        let levels = self.effective_levels();
+        let rows = self.effective_filter();
         let extra = self.filter.clone();
-        if search.is_none() && levels.is_none() && extra.is_none() {
+        if search.is_none() && rows.is_none() && extra.is_none() {
             return None;
         }
         Some(Arc::new(move |entry: &LogEntry| {
             search
                 .as_ref()
                 .is_none_or(|matcher| matcher.matches(&entry.text))
-                && levels.is_none_or(|levels| levels.admits(entry))
+                && rows.as_ref().is_none_or(|rows| rows.admits(entry))
                 && extra.as_ref().is_none_or(|filter| filter(entry))
         }))
     }

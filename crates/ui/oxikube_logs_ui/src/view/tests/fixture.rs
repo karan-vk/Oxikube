@@ -62,9 +62,42 @@ pub(crate) fn pod() -> Resource {
     .expect("a pod")
 }
 
+/// The Deployment `shop/web`.
+pub(crate) fn deployment_ref() -> ResourceRef {
+    ResourceRef::namespaced(
+        cluster(),
+        Gvk::new("apps", "v1", "Deployment"),
+        "shop",
+        "web",
+    )
+}
+
+/// The Deployment `shop/web` (selector `app=web`).
+pub(crate) fn deployment() -> Resource {
+    oxikube_testkit::deployment()
+        .name("web")
+        .namespace("shop")
+        .build()
+}
+
+/// A running pod of the `web` deployment: one container `app`.
+pub(crate) fn web_pod(name: &str) -> Resource {
+    oxikube_testkit::pod()
+        .name(name)
+        .namespace("shop")
+        .uid(format!("uid-{name}"))
+        .label("app", "web")
+        .build()
+}
+
 /// The server timestamp of line `i`: one second apart.
 pub(crate) fn ts(i: usize) -> Timestamp {
     Timestamp::from_second(1_791_115_200 + i as i64).unwrap()
+}
+
+/// Line `i` of container `app` of pod `pod`, stamped `i` seconds.
+pub(crate) fn pod_line(pod: &str, i: usize) -> LogLine {
+    LogLine::new(ts(i), pod, "app", format!("INFO {pod} line {i}"))
 }
 
 /// Line `i`: every fifth an error, every seventh a warning.
@@ -135,7 +168,13 @@ impl Fx {
 
     /// [`Self::new`] with a log service that keeps `buffer_lines` lines per session.
     pub(crate) fn with_buffer(cx: &mut TestAppContext, buffer_lines: usize) -> Self {
-        Self::build(cx, buffer_lines, |fs| fs)
+        Self::with_config(
+            cx,
+            LogConfig {
+                buffer_lines,
+                ..LogConfig::default()
+            },
+        )
     }
 
     /// [`Self::new`] over the file port `wrap` makes of the in-memory one (a test's own fake
@@ -144,12 +183,17 @@ impl Fx {
         cx: &mut TestAppContext,
         wrap: impl FnOnce(Arc<FakeFsPort>) -> Arc<dyn FsPort>,
     ) -> Self {
-        Self::build(cx, LogConfig::default().buffer_lines, wrap)
+        Self::build(cx, LogConfig::default(), wrap)
+    }
+
+    /// [`Self::new`] with a log service built from `config`.
+    pub(crate) fn with_config(cx: &mut TestAppContext, config: LogConfig) -> Self {
+        Self::build(cx, config, |fs| fs)
     }
 
     fn build(
         cx: &mut TestAppContext,
-        buffer_lines: usize,
+        config: LogConfig,
         wrap: impl FnOnce(Arc<FakeFsPort>) -> Arc<dyn FsPort>,
     ) -> Self {
         let entry = ClusterContext::new(cluster(), ContextName::new("kind"), SourceId("k".into()));
@@ -170,10 +214,6 @@ impl Fx {
         block_on(sessions.connect(&cluster())).expect("connect");
 
         let clock: Arc<FakeClockPort> = ports.logs.clock().clone();
-        let config = LogConfig {
-            buffer_lines,
-            ..LogConfig::default()
-        };
         let service = vcx.update(|_, cx| Arc::new(LogService::new(log_runtime(clock, cx), config)));
         let fs = Arc::new(FakeFsPort::new());
         let (sink, requests) = LogCommandSink::channel();
@@ -202,9 +242,54 @@ impl Fx {
         }
     }
 
+    /// A window for the multi-pod tests: [`Self::open_web`] lets the merge's reorder window pass.
+    pub(crate) fn merged(cx: &mut TestAppContext) -> Self {
+        Self::new(cx)
+    }
+
+    /// Lets `total` of fake time pass on the log port's clock (the streams, the merge's window),
+    /// in steps finer than the window, then a frame.
+    pub(crate) fn pass(&mut self, total: Duration) {
+        let step = Duration::from_millis(20);
+        let mut left = total;
+        while !left.is_zero() {
+            let by = left.min(step);
+            self.ports.logs.clock().advance(by);
+            self.vcx.run_until_parked();
+            left -= by;
+        }
+        self.vcx.executor().advance_clock(Duration::from_millis(20));
+        self.vcx.run_until_parked();
+    }
+
     /// Queues `timeline` as the next log stream the port hands out.
     pub(crate) fn script(&self, timeline: Timeline<LogLine>) {
         self.ports.logs.script().stream_logs.push_ok(timeline);
+    }
+
+    /// Seeds the cluster with the `web` deployment and one pod per name, and queues a stream per
+    /// pod (in name order, the order the aggregate opens them) from `timelines`.
+    pub(crate) fn seed_web(&mut self, mut pods: Vec<(&str, Timeline<LogLine>)>) {
+        self.ports.resources.insert(deployment());
+        pods.sort_by_key(|(name, _)| *name);
+        for (name, timeline) in pods {
+            self.ports.resources.insert(web_pod(name));
+            self.script(timeline);
+        }
+    }
+
+    /// Opens the merged log of the `web` deployment as `workload::ViewLogs` does, settled.
+    pub(crate) fn open_web(&mut self) -> Entity<LogView> {
+        let views = self.views.clone();
+        let view = self.vcx.update(|window, cx| {
+            views.update(cx, |views, cx| {
+                views.open(&deployment_ref(), &OpenLogs::default(), window, cx)
+            })
+        });
+        self.settle();
+        // The start-up barrier and the reorder window (300 ms) before the first lines are shown.
+        self.pass(Duration::from_millis(800));
+        view.expect("the cluster has a tab")
     }
 
     /// Opens the log view of `shop/web-0` as `pod::ViewLogs` does, over `timeline`, settled.

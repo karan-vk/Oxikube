@@ -41,6 +41,7 @@ fn default_json_spells_out_every_default() {
             wrap: false,
             timestamps: false,
             json_auto_detect: true,
+            max_streams: DEFAULT_MAX_STREAMS,
         },
         "assets/settings/default.json and the code's defaults disagree"
     );
@@ -54,6 +55,7 @@ fn default_json_spells_out_every_default() {
         "wrap",
         "timestamps",
         "json_auto_detect",
+        "max_streams",
     ] {
         assert!(logs.contains_key(key), "default.json has no logs.{key}");
     }
@@ -211,6 +213,7 @@ fn the_schema_documents_every_key_with_its_range() {
         "wrap",
         "timestamps",
         "json_auto_detect",
+        "max_streams",
     ] {
         let description = defs[key]["description"].as_str();
         assert!(
@@ -237,4 +240,6 @@ fn the_schema_documents_every_key_with_its_range() {
     assert_eq!(defs["buffer_lines"]["maximum"], 5_000_000);
     assert_eq!(defs["default_tail"]["minimum"], 1);
     assert_eq!(defs["default_tail"]["maximum"], 100_000);
+    assert_eq!(defs["max_streams"]["minimum"], 1);
+    assert_eq!(defs["max_streams"]["maximum"], 200);
 }

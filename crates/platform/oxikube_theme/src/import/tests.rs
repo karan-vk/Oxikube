@@ -310,13 +310,18 @@ fn oxikube_status_colours_default_from_the_themes_own_status_colours() {
     // The cluster tab palette cycles through the player cursors.
     assert_eq!(dark.oxikube.cluster_tabs[0], dark.players[0].cursor);
     assert_eq!(dark.oxikube.cluster_tabs[7], dark.players[7].cursor);
+    // The log-source palette is the terminal's ANSI colours, without red.
+    assert_eq!(dark.oxikube.log_sources[0], dark.terminal.ansi.blue);
+    assert_eq!(dark.oxikube.log_sources[5], dark.terminal.bright.blue);
+    assert!(!dark.oxikube.log_sources.contains(&dark.terminal.ansi.red));
 }
 
 #[test]
 fn oxikube_block_overrides_defaults() {
     let text = r##"{ "name": "O", "themes": [{ "name": "O", "appearance": "dark", "style": {},
         "oxikube": { "status.running": "#00ff00", "status.failed": "#ff0000cc",
-                     "cluster.tab.2": "#123456", "cluster.tab.9": "#ffffff", "status.bogus": "#fff",
+                     "cluster.tab.2": "#123456", "cluster.tab.9": "#ffffff", "log.source.3": "#abcdef",
+                     "log.source.11": "#ffffff", "status.bogus": "#fff",
                      "status.pending": "nope" } }] }"##;
     let imported = import(text);
     let tokens = &imported.family.themes[0];
@@ -328,6 +333,8 @@ fn oxikube_block_overrides_defaults() {
     assert_eq!(tokens.oxikube.status_failed, color("#ff0000cc"));
     assert_eq!(tokens.oxikube.cluster_tabs[1], color("#123456ff"));
     assert_eq!(tokens.oxikube.cluster_tabs[0], default.cluster_tabs[0]);
+    assert_eq!(tokens.oxikube.log_sources[2], color("#abcdefff"));
+    assert_eq!(tokens.oxikube.log_sources[0], default.log_sources[0]);
     assert_eq!(
         tokens.oxikube.status_pending, default.status_pending,
         "invalid override keeps the default"
