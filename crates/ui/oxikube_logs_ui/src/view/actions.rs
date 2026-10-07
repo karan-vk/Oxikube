@@ -15,6 +15,9 @@
 //! clears the buffer, `ctrl-s` saves the whole buffer and `ctrl-shift-s` the lines on screen to a
 //! file, `escape` drops the selection. Mark, copy, clear and the two saves dispatch their `logs::*`
 //! command like the rest; `escape` only changes the selection, which is a view's own business.
+//!
+//! After the stream stopped (E08-S07): `r` reconnects (`logs::Reconnect`) and `shift-r` follows
+//! the pod that replaced this one (`logs::FollowReplacement`).
 
 use gpui::actions;
 
@@ -77,5 +80,9 @@ actions!(
         SaveVisible,
         /// Select nothing (`escape`).
         ClearSelection,
+        /// Open the stream again after it failed or ended (`r`, `logs::Reconnect`).
+        Reconnect,
+        /// Switch to the pod that replaced this one (`shift-r`, `logs::FollowReplacement`).
+        FollowReplacement,
     ]
 );

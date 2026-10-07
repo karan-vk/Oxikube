@@ -116,8 +116,10 @@ impl Fleet {
                 self.deleted(&state.name.clone(), agg);
                 self.added(state, agg);
             }
-            Some(_) => {
-                self.pods.insert(state.name.clone(), state);
+            Some(known) => {
+                let joined = known.joined;
+                self.pods
+                    .insert(state.name.clone(), PodState { joined, ..state });
             }
             None => self.added(state, agg),
         }
@@ -127,7 +129,9 @@ impl Fleet {
         if self.baseline {
             agg.push_event(state.name.clone(), PodChange::Added);
         }
-        self.pods.insert(state.name.clone(), state);
+        let joined = self.baseline;
+        self.pods
+            .insert(state.name.clone(), PodState { joined, ..state });
     }
 
     fn deleted(&mut self, name: &str, agg: &AggShared) {

@@ -145,6 +145,9 @@
       "ctrl-s": "log_view::SaveAll",
       "ctrl-shift-s": "log_view::SaveVisible",
       "escape": "log_view::ClearSelection",
+      // After the stream stopped (E08-S07): reconnect, or follow the pod that replaced this one.
+      "r": "log_view::Reconnect",
+      "shift-r": "log_view::FollowReplacement",
       // Search (E08-S03): `/` opens the bar (k9s), `n` / `N` step through the matches.
       "/": "log_view::Find",
       "n": "log_view::NextMatch",

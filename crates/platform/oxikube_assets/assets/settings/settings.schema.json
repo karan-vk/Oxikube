@@ -404,6 +404,16 @@
             "null"
           ]
         },
+        "reconnect_retries": {
+          "description": "Times in a row a log stream that broke while its pod runs (a dropped connection, an API\nserver timeout) is reopened before the view shows it failed, with a pause that doubles\neach time (0 to 50; 0 never reconnects). A stream that delivers a line starts the count\nagain; a failed view reconnects with `r`. A change applies at once.",
+          "format": "int64",
+          "maximum": 50,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "timestamps": {
           "description": "Show each line's server timestamp before its text (key `t` toggles it per view). A change\napplies to open views at once.",
           "type": [

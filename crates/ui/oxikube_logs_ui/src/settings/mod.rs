@@ -8,7 +8,8 @@
 //!   "wrap": false,
 //!   "timestamps": false,
 //!   "json_auto_detect": true,
-//!   "max_streams": 20
+//!   "max_streams": 20,
+//!   "reconnect_retries": 5
 //! }
 //! ```
 //!
@@ -25,6 +26,7 @@
 //! | `buffer_lines` | at once to every open session ([`follow_settings`](crate::follow_settings)) |
 //! | `wrap`, `timestamps`, `json_auto_detect` | at once to the open views, without reopening the stream |
 //! | `max_streams` | at once to the open multi-pod views (a higher value starts the pods that were left out) |
+//! | `reconnect_retries` | at once to every open stream: the next failure counts against it (E08-S07) |
 //! | `default_tail` | to the views opened afterwards (changing it must not reopen what is being read) |
 //!
 //! k9s's `logger` keys that Oxikube's viewer does not have (`sinceSeconds` as a setting,
@@ -37,7 +39,8 @@ mod tests;
 
 use gpui::App;
 use oxikube_app::logs::{
-    DEFAULT_BUFFER_LINES, DEFAULT_MAX_STREAMS, MAX_BUFFER_LINES, MAX_MAX_STREAMS, MIN_BUFFER_LINES,
+    DEFAULT_BUFFER_LINES, DEFAULT_MAX_STREAMS, DEFAULT_RECONNECT_RETRIES, MAX_BUFFER_LINES,
+    MAX_MAX_STREAMS, MAX_RECONNECT_RETRIES, MIN_BUFFER_LINES,
 };
 use oxikube_domain::ids::ClusterId;
 use oxikube_settings::{Settings, SettingsLocation, SettingsStore};
@@ -85,6 +88,13 @@ pub struct LogsContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(range(min = 1, max = 200))]
     pub max_streams: Option<i64>,
+    /// Times in a row a log stream that broke while its pod runs (a dropped connection, an API
+    /// server timeout) is reopened before the view shows it failed, with a pause that doubles
+    /// each time (0 to 50; 0 never reconnects). A stream that delivers a line starts the count
+    /// again; a failed view reconnects with `r`. A change applies at once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0, max = 50))]
+    pub reconnect_retries: Option<i64>,
 }
 
 /// The resolved `logs` settings.
@@ -102,6 +112,8 @@ pub struct LogsSettings {
     pub json_auto_detect: bool,
     /// Containers a multi-pod log reads at once, already clamped (E08-S04).
     pub max_streams: usize,
+    /// Reconnects of a broken stream in a row, already clamped (E08-S07).
+    pub reconnect_retries: u32,
 }
 
 impl Settings for LogsSettings {
@@ -134,6 +146,13 @@ impl Settings for LogsSettings {
                 1,
                 MAX_MAX_STREAMS as i64,
             ) as usize,
+            reconnect_retries: clamp(
+                "logs.reconnect_retries",
+                content.reconnect_retries,
+                i64::from(DEFAULT_RECONNECT_RETRIES),
+                0,
+                i64::from(MAX_RECONNECT_RETRIES),
+            ) as u32,
         }
     }
 }

@@ -728,6 +728,27 @@ kubectl --context kind-oxikube -n <ns> create deployment firehose --replicas=10 
 target/release-fast/oxikube --perf-logs kind-oxikube/<ns>/firehose --perf-logs-workload --perf-duration 40
 ```
 
+## Reconnect and churn following (E08-S07)
+
+Budget: a rollout restart (or a reconnect storm) must not spike CPU above the streaming baseline
+(idle cost of reconnect bookkeeping ≤ 1 %); dedupe cost bounded per line.
+
+How (`oxikube_app::logs::churn`): the reconnect pauses back off (500 ms doubling to 30 s, plus a
+hashed jitter of up to a quarter so streams that broke together do not reopen together) and stop
+after `logs.reconnect_retries` failures in a row; a pod that is gone ends its stream instead of
+retrying. Dedupe is one hash of the line's text and one set insert per line, over the last 512 lines
+of each stream (about 30 KB per stream), whatever the buffer holds.
+
+Measured (M-series laptop, release-fast, shared kind cluster): a 20-replica Deployment writing 10
+lines/s per pod, opened with `oxikube --perf --perf-logs kind-oxikube/<ns>/fleet
+--perf-logs-workload --perf-duration 75`, `kubectl rollout restart deployment/fleet` 15 s in. The view
+followed all 20 new pods (Sources 40: 20 ended, 20 new) at ~197 lines/s throughout; `--perf`: 2 854
+frames, p50 2.40 ms, p95 2.78 ms, p99 3.03 ms, max 8.69 ms, 0 dropped, at most 3 notifies per frame,
+RSS 157-159 MiB. Process CPU (`ps %cpu`, 1 s samples) was 13-18 % while streaming before the
+restart and 5-18 % during it (it dips while the old pods stop): no reconnect spike. The headless
+`cargo xtask perf logs-stream` scenario stays inside its budgets with the dedupe on the hot path
+(p95 `frame_ms` 3.3 ms, `merged_frame_ms` 4.2 ms on a machine busy with other builds).
+
 ## Load fixture: `cargo xtask load-pods`
 
 The perf fixture for the E07 table/feed stories and the E01-S14 harness. It creates pause pods

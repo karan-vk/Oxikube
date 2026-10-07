@@ -69,6 +69,22 @@ pub fn state_text(state: &LogState) -> String {
             "Stream ended: the container stopped or the connection closed".to_owned()
         }
         LogState::Ended(EndReason::Cancelled) => "Stopped".to_owned(),
+        LogState::Ended(EndReason::PodFinished) => {
+            "Pod finished: its containers ran to completion".to_owned()
+        }
+        LogState::Ended(EndReason::PodReplaced) => {
+            "Pod replaced (deleted or recreated by its controller): follow the replacement to keep \
+             reading"
+                .to_owned()
+        }
+        LogState::Ended(EndReason::PodDeleted) => {
+            "Pod deleted: nothing owns it, so no pod replaces it".to_owned()
+        }
+        LogState::Reconnecting {
+            attempt,
+            max,
+            failure,
+        } => format!("Reconnecting ({attempt}/{max}): {}", failure.message),
         LogState::Failed(failure) => {
             let what = match failure.kind {
                 ErrorKind::NotFound => "Not found",

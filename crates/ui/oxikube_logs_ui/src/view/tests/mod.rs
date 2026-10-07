@@ -4,6 +4,7 @@
 
 mod agent;
 mod aggregate;
+mod churn;
 mod containers;
 mod fixture;
 mod json;

@@ -24,6 +24,7 @@
 //! | `agent` | `logs::SendToAgent`: the selection (else the lines on screen) as agent context, with its source |
 //! | `pick`, `copy` | which lines an action takes (on screen, the buffer, the filter) and `logs::Copy` (cap 5 MB) |
 //! | `save`, `clear`, `notice` | `logs::Save` (dialog, panel, streamed write), `logs::Clear`, the toasts of local actions |
+//! | `recovery` | after the stream stopped (E08-S07): `logs::FollowReplacement` (switch to the pod that replaced a gone one), `logs::Reconnect`, the strip offering them |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
 //! | `render`, `toolbar`, `rows` | drawing: toolbar, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
 //! | `json`, `columns`, `filter`, `detail` | JSON mode (E08-S05): the parsed columns of a structured line and their caches, the row they draw, the level chips and the filtered row index, the expanded line's pane |
@@ -57,6 +58,7 @@ mod json;
 mod notice;
 mod options;
 mod pick;
+mod recovery;
 mod render;
 mod rows;
 mod save;
@@ -92,10 +94,10 @@ use crate::LogsSettings;
 use crate::search::Search;
 
 pub use actions::{
-    Clear, ClearSelection, CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, SaveAll,
-    SaveVisible, SendToAgent, Since1h, Since1m, Since5m, Since15m, Since30m, Tail,
-    ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen, ToggleInverse,
-    ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    Clear, ClearSelection, CloseSearch, Copy, Find, FollowReplacement, Head, Mark, NextMatch,
+    PreviousMatch, Reconnect, SaveAll, SaveVisible, SendToAgent, Since1h, Since1m, Since5m,
+    Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen,
+    ToggleInverse, ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
 pub use aggregate::{
     AggregateState, BANNER_LINES, BANNER_SECONDS, Banner, MAX_GUTTER, Prefix, SourceChoice,
@@ -107,6 +109,7 @@ pub use copy::COPY_LIMIT_BYTES;
 pub use item::item_key;
 pub use json::JsonColumns;
 pub use options::{HEAD_LIMIT_BYTES, OpenLogs, TAIL_LINES, ViewOptions};
+pub use recovery::Recovery;
 pub use selection::{Marks, Selection};
 pub use text::{Level, group, level_of, lines_of};
 pub use window::{LineWindow, Row, RowChange};
@@ -176,6 +179,8 @@ pub struct LogView {
     pub(crate) pump: Option<Task<()>>,
     /// Reads the pod for the container selector.
     pub(crate) pod_task: Option<Task<()>>,
+    /// Looks for the pod that replaced this one (`logs::FollowReplacement`).
+    pub(crate) replacement_task: Option<Task<()>>,
     /// The `logs` settings as last applied to the options (a change applies the keys that moved).
     pub(crate) settings: LogsSettings,
     /// Applies changes of the `logs` settings; dropped with the view.
@@ -253,6 +258,7 @@ impl LogView {
             rows_built: 0,
             pump: None,
             pod_task: None,
+            replacement_task: None,
             settings,
             _settings_subscription: LogsSettings::observe_in(cx, Self::settings_changed),
             search: Search::default(),

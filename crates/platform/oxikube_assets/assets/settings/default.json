@@ -80,6 +80,11 @@
   //                     columns with the other fields collapsed (click to expand), with level
   //                     chips; plain-text lines stay as they are (key j toggles it for one view).
   //                     Applies to open views at once.
+  //   reconnect_retries times in a row a log stream that broke while its pod runs (a dropped
+  //                     connection, an API server timeout) is reopened, after a pause that
+  //                     doubles each time, before the view shows it failed (0 to 50; 0 never
+  //                     reconnects). The overlap is never shown twice; a failed view reconnects
+  //                     with key r. Applies to open views at once.
   // The keys of the log view are in the keymap (context "LogView"); rebind them in keymap.json.
   "logs": {
     "buffer_lines": 50000,
@@ -87,7 +92,8 @@
     "wrap": false,
     "timestamps": false,
     "json_auto_detect": true,
-    "max_streams": 20
+    "max_streams": 20,
+    "reconnect_retries": 5
   },
   // The Describe tab of a resource's detail (`kubectl describe`-style text). `backend`:
   //   "auto"     render in process (deskribe: 36 specialised kinds, a generic layout for custom

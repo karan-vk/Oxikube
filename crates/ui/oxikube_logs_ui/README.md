@@ -17,8 +17,9 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 
 ## Modules
 
-- `settings`, `follow` (E08-S01, S10, S04): the `logs` settings (buffer, default tail, wrap, timestamps, JSON detect, max streams; per-cluster overrides) and their hot reload.
+- `settings`, `follow` (E08-S01, S10, S04, S07): the `logs` settings (buffer, default tail, wrap, timestamps, JSON detect, max streams, reconnect retries; per-cluster overrides) and their hot reload.
 - `view` (E08-S02): `LogView`, a pod's log as a workspace tab.
+- `view::recovery` (E08-S07): after the stream stopped, "Follow replacement" (`logs::FollowReplacement`, `shift-r`) and "Reconnect" (`logs::Reconnect`, `r`).
 - `view::aggregate` (E08-S04): `LogView::workload`, a workload's or Service's pods merged: pod gutters and colours, the banner, the Sources menu.
 - `commands` (E08-S02, E08-S04): `pod::ViewLogs`, `workload::ViewLogs` and `logs::*` on the bus, and `LogViews`, which opens and drives the views.
 - `search` (E08-S03): the `/` bar: regex with case and inverse toggles, highlight or filter mode, next / previous match with a count; the match index is `oxikube_app::logs::MatchIndex`.

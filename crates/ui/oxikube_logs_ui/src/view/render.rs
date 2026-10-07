@@ -13,10 +13,10 @@ use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::LogView;
 use super::actions::{
-    Clear, ClearSelection, CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, SaveAll,
-    SaveVisible, SendToAgent, Since1h, Since1m, Since5m, Since15m, Since30m, Tail,
-    ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen, ToggleInverse,
-    ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    Clear, ClearSelection, CloseSearch, Copy, Find, FollowReplacement, Head, Mark, NextMatch,
+    PreviousMatch, Reconnect, SaveAll, SaveVisible, SendToAgent, Since1h, Since1m, Since5m,
+    Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen,
+    ToggleInverse, ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
 use super::text::group;
 
@@ -60,10 +60,15 @@ impl Render for LogView {
                 cx.listener(|v, _: &SaveVisible, _, cx| v.request_save(LogSaveScope::Visible, cx)),
             )
             .on_action(cx.listener(|v, _: &ClearSelection, _, cx| v.clear_selection(cx)))
+            .on_action(cx.listener(|v, _: &Reconnect, _, cx| v.request_reconnect(cx)))
+            .on_action(
+                cx.listener(|v, _: &FollowReplacement, _, cx| v.request_follow_replacement(cx)),
+            )
             .size_full()
             .bg(tokens.colors.background)
             .text_color(tokens.colors.text)
             .child(self.toolbar(cx))
+            .children(self.recovery_strip(cx))
             .children(self.banner(cx))
             .children(self.search_bar(window, cx))
             .children(self.level_bar(cx))

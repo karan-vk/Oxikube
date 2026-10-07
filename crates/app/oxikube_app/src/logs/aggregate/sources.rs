@@ -15,6 +15,13 @@ pub type SourceId = u32;
 pub enum SourceState {
     /// Being read.
     Streaming,
+    /// The stream broke while its pod runs: reconnect `attempt` of `max` is due (E08-S07).
+    Reconnecting {
+        /// Which attempt (1 for the first).
+        attempt: u32,
+        /// Attempts before the stream is `Failed` (`logs.reconnect_retries`).
+        max: u32,
+    },
     /// The server closed it: the container stopped, the pod went away, or the read was complete.
     Ended,
     /// It could not be opened or broke. Other streams are not affected.
@@ -22,9 +29,9 @@ pub enum SourceState {
 }
 
 impl SourceState {
-    /// Whether the stream is still being read.
+    /// Whether the stream is still being read (or reconnecting).
     pub fn is_live(&self) -> bool {
-        matches!(self, Self::Streaming)
+        matches!(self, Self::Streaming | Self::Reconnecting { .. })
     }
 }
 

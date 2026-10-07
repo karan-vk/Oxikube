@@ -42,6 +42,7 @@ fn default_json_spells_out_every_default() {
             timestamps: false,
             json_auto_detect: true,
             max_streams: DEFAULT_MAX_STREAMS,
+            reconnect_retries: DEFAULT_RECONNECT_RETRIES,
         },
         "assets/settings/default.json and the code's defaults disagree"
     );
@@ -56,6 +57,7 @@ fn default_json_spells_out_every_default() {
         "timestamps",
         "json_auto_detect",
         "max_streams",
+        "reconnect_retries",
     ] {
         assert!(logs.contains_key(key), "default.json has no logs.{key}");
     }
@@ -90,6 +92,17 @@ fn out_of_range_values_are_clamped() {
         MAX_DEFAULT_TAIL
     );
     assert_eq!(content(None, None).buffer_lines, DEFAULT_BUFFER_LINES);
+    let retries = |n| {
+        LogsSettings::from_content(LogsContent {
+            reconnect_retries: Some(n),
+            ..LogsContent::default()
+        })
+        .reconnect_retries
+    };
+    assert_eq!(retries(0), 0, "0 never reconnects");
+    assert_eq!(retries(-3), 0);
+    assert_eq!(retries(7), 7);
+    assert_eq!(retries(1_000), MAX_RECONNECT_RETRIES);
 }
 
 #[test]
@@ -214,6 +227,7 @@ fn the_schema_documents_every_key_with_its_range() {
         "timestamps",
         "json_auto_detect",
         "max_streams",
+        "reconnect_retries",
     ] {
         let description = defs[key]["description"].as_str();
         assert!(

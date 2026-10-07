@@ -216,6 +216,22 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `tail` over the cap and an unparsable `since` or `grep` are a failed call (`Err`), a missing pod or a denied
   `pods/log` is a tool error the model sees. The name is the acceptance's `get_logs` in the `k8s.` namespace
   `ToolName` requires (E26-S04's `k8s.logs` can alias it).
+  Module `churn` (E08-S07, reconnect and churn following): every followed stream (a session's, an aggregate's)
+  reads through `Resumable`, which reopens a stream that broke while its pod runs after a backoff with deterministic
+  jitter (`ReconnectPolicy::Backoff`: 500 ms doubling to 30 s; `logs.reconnect_retries`, default 5, failures in a row,
+  hot-reloaded through `LogService::set_reconnect_retries`; a stream that delivers a line starts the count again),
+  from `sinceTime` = last line - 2 s with the replayed overlap dropped by (server timestamp, text hash) over the last
+  512 lines (`Overlap`); state `LogState::Reconnecting { attempt, max, failure }` (aggregate:
+  `SourceState::Reconnecting`), then `Failed` after the cap. A container still waiting to start (a rollout's new pod)
+  is retried every second, not failed. `open_following_in(cluster, ports, target, options)` gives a single-pod session
+  the `ResourceReader` too: it records the pod's `PodIdentity` (uid, controller `OwnerRef`, node) as the stream opens
+  and, when it ends, reads the pod again to say why: `EndReason::PodFinished` (`Succeeded`/`Failed`),
+  `PodReplaced` (deleted, terminating or recreated, with a controller) or `PodDeleted` (no controller); still running
+  is a dropped connection. `find_replacement(resources, &identity)` names the pod that took over (the Deployment's
+  selector for a ReplicaSet's pod, the same name for a StatefulSet's, the same node for a DaemonSet's; the newest
+  running candidate otherwise). `LogSession::reconnect` restarts a failed or ended session in place: the lines stay
+  and the new stream continues after them. An aggregate reads a pod that joins after the view opened from its first
+  line (no tail, no since).
 - `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to
   5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect` (JSON mode's starting value, E08-S05); defaults in
   `default.json`, schema generated, per-cluster overrides under `clusters.<id>.logs`, out-of-range values clamped
@@ -270,6 +286,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   after 8 s or dismissed), "N more pods not streamed" and "No pods match app=web"; the toolbar's Sources menu
   (`logs::ToggleSource`) switches pods and containers off and on, which `LineWindow` applies as a filter over seqs
   (hidden lines stay in the ring buffer). `logs.max_streams` is the setting (default.json, schema, hot reload).
+  After the stream stopped (E08-S07, `view::recovery`): the state row says why ("Reconnecting (1/5): ...", "Pod
+  finished", "Pod replaced", "Pod deleted"), and a strip under the toolbar offers "Follow replacement"
+  (`logs::FollowReplacement`, `shift-r`: `find_replacement` on `spawn_kube`, then the tab switches to the new pod with
+  the same container and range) or "Reconnect" (`logs::Reconnect`, `r`: `LogSession::reconnect`, the lines kept; a
+  multi-pod view reopens). The multi-pod banner lists the streams that reconnect ("web-7d9/app reconnecting (1/5)").
+  `logs.reconnect_retries` is the setting (default.json, schema, hot reload).
 - `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
   mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,

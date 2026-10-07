@@ -5,8 +5,9 @@
 //! `ToggleSource` (E08-S04: switch one pod or container of a merged log off or on), and
 //! the search's (E08-S03) `Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`,
 //! `ToggleFilterMode`, `CloseSearch`, the JSON mode's (E08-S05) `ToggleJsonMode`,
-//! `ToggleLevel`, `ToggleLine` and `CollapseLine`, and (E08-S06) the local actions on what a
-//! view holds: `Mark`, `Copy`, `Clear`, `Save`.
+//! `ToggleLevel`, `ToggleLine` and `CollapseLine`, (E08-S06) the local actions on what a
+//! view holds: `Mark`, `Copy`, `Clear`, `Save`, and (E08-S07) what follows a stream that stopped:
+//! `Reconnect` and `FollowReplacement` (switch to the pod that replaced a gone one).
 //!
 //! None changes a cluster (no `MutationGuard` tier; all are allowed on a read-only cluster):
 //! they read logs or change what a view shows. Each is declared in `oxikube_domain::command`, so
@@ -35,9 +36,11 @@ use crate::view::OpenLogs;
 pub use controller::{LogHost, LogViews, LogViewsDeps};
 
 /// The commands this crate handles.
-pub const LOG_COMMANDS: [CommandId; 26] = [
+pub const LOG_COMMANDS: [CommandId; 28] = [
     CommandId::POD_VIEW_LOGS,
     CommandId::WORKLOAD_VIEW_LOGS,
+    CommandId::LOGS_FOLLOW_REPLACEMENT,
+    CommandId::LOGS_RECONNECT,
     CommandId::LOGS_TOGGLE_SOURCE,
     CommandId::LOGS_CLEAR,
     CommandId::LOGS_COPY,
@@ -113,6 +116,10 @@ pub enum ViewChange {
     ToggleLine(u64),
     /// `logs::CollapseLine`.
     CollapseLine,
+    /// `logs::Reconnect`.
+    Reconnect,
+    /// `logs::FollowReplacement`.
+    FollowReplacement,
     /// `logs::ToggleSource`: switch a pod (or one of its containers) of a merged log off or on.
     ToggleSource {
         /// The pod.
@@ -191,6 +198,10 @@ impl LogRequest {
             Command::LogsCopy { target } => change(target, ViewChange::Copy),
             Command::LogsMark { target } => change(target, ViewChange::Mark),
             Command::LogsSendToAgent { target } => change(target, ViewChange::SendToAgent),
+            Command::LogsReconnect { target } => change(target, ViewChange::Reconnect),
+            Command::LogsFollowReplacement { target } => {
+                change(target, ViewChange::FollowReplacement)
+            }
             Command::LogsSave { target, scope } => change(target, ViewChange::Save(*scope)),
             Command::WorkloadViewLogs {
                 target,
