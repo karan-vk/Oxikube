@@ -9,7 +9,8 @@ use crate::columns::Cell;
 /// Supplies the CPU and memory cells of core columns once metrics exist (E13).
 ///
 /// Until a source is registered with [`CoreColumns::with_metrics`](super::CoreColumns::with_metrics),
-/// and for any object it has no sample for, those cells are [`Cell::Pending`]: blank, never `0`.
+/// the CPU and Memory columns are not offered. For an object the source has no sample for, the
+/// cell is [`Cell::Pending`]: blank, never `0`.
 pub trait MetricsSource: Send + Sync {
     /// The cell of `metric` for `object`, or `None` when there is no sample (yet).
     fn cell(&self, object: &Resource, metric: Metric, now: Timestamp) -> Option<Cell<'static>>;

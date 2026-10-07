@@ -124,7 +124,8 @@ pub(crate) const LABELS: ColumnDef = ColumnDef::new("labels", "Labels", Src::Lab
 /// What an unknown kind gets: the columns every object has.
 pub(crate) const GENERIC: &[ColumnDef] = &[NAME, NAMESPACE, AGE, LABELS];
 
-/// CPU and memory usage hooks (shown only with the `METRICS` capability; E13 supplies values).
+/// CPU and memory usage hooks (offered only with the `METRICS` capability and a registered
+/// [`MetricsSource`](super::MetricsSource); E13 supplies values).
 pub(crate) const CPU: ColumnDef = ColumnDef::new("cpu", "CPU", Src::Metric(Metric::Cpu)).quantity();
 /// See [`CPU`].
 pub(crate) const MEMORY: ColumnDef =

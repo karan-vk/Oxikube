@@ -8,6 +8,7 @@
 //! - `element`: [`Table`], the element views place in their tree.
 //! - `text_cell`: [`TextCell`], the fast path for plain text cells (no extra element, the
 //!   ellipsis only where the text does not fit).
+//! - `overflow` (private): the fade the table draws where columns continue past the view.
 //! - `widths` (private): column widths under UI zoom (design-time widths, scaled on read).
 //! - `adapter` (private): forwards our trait to gpui-component's `TableDelegate`.
 //!
@@ -20,6 +21,7 @@ mod delegate;
 mod element;
 mod events;
 mod handle;
+mod overflow;
 mod text_cell;
 mod widths;
 

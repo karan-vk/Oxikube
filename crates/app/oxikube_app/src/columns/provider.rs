@@ -23,7 +23,7 @@ use crate::store::StoreObject;
 pub trait ColumnProvider: Send + Sync {
     /// The columns of `kind` for a session with `caps`, in display order: default columns first,
     /// then the [`wide`](Column::wide) ones. Metrics columns appear only when `caps` has
-    /// [`Capabilities::METRICS`].
+    /// [`Capabilities::METRICS`] and the provider has a metrics source to read them from.
     fn columns(&self, kind: &Gvk, caps: Capabilities) -> Arc<[Column]>;
 
     /// The cell of `object` in column `column`, as of `now` (ages are relative to it). A column

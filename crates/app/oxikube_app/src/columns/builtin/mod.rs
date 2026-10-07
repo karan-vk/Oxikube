@@ -66,8 +66,8 @@ impl CoreColumns {
         }
     }
 
-    /// Registers the source of CPU and memory cells (E13). Without one, those cells are
-    /// [`Cell::Pending`].
+    /// Registers the source of CPU and memory cells (E13). Without one, the CPU and Memory
+    /// columns are not offered at all (they would only ever be empty).
     #[must_use]
     pub fn with_metrics(mut self, source: Arc<dyn MetricsSource>) -> Self {
         self.metrics = Some(source);
@@ -135,7 +135,9 @@ impl ColumnProvider for CoreColumns {
         if let Some(hit) = self.memo.lock().get(&key) {
             return hit.clone();
         }
-        let with_metrics = caps.contains(Capabilities::METRICS);
+        // Metrics columns need both the cluster to serve metrics and a source to read them
+        // from: without a source every cell would be blank.
+        let with_metrics = caps.contains(Capabilities::METRICS) && self.metrics.is_some();
         let built: Arc<[Column]> = self
             .defs(&kind.group, &kind.kind)
             .iter()
