@@ -168,6 +168,11 @@ impl CommandId {
     pub const TERMINAL_OPEN_LINK: CommandId = CommandId::new("terminal::OpenLink");
     /// `terminal::Paste`: paste the clipboard into the focused terminal.
     pub const TERMINAL_PASTE: CommandId = CommandId::new("terminal::Paste");
+    /// `terminal::Reconnect`: open the focused pod terminal's session again after the connection
+    /// dropped (a new session in the same container).
+    pub const TERMINAL_RECONNECT: CommandId = CommandId::new("terminal::Reconnect");
+    /// `terminal::Restart`: start a new shell in the focused local terminal after its shell exited.
+    pub const TERMINAL_RESTART: CommandId = CommandId::new("terminal::Restart");
     /// `terminal::Split`: open a new terminal in a new pane beside the active one.
     pub const TERMINAL_SPLIT: CommandId = CommandId::new("terminal::Split");
     /// `view::Open`: open a registered view by id.
@@ -682,6 +687,21 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::TERMINAL_PASTE,
         "Paste into Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Opens the pod session again through the exec service, which re-checks read-only mode and
+    // the exec capability itself; the command only asks the terminal to start over.
+    CommandMeta::read(
+        CommandId::TERMINAL_RECONNECT,
+        "Reconnect Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Starts the user's own shell on this machine again; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_RESTART,
+        "Restart Terminal",
         CommandScope::Global,
         NONE,
     ),

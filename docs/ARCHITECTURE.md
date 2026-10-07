@@ -431,6 +431,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   move between it and the panes); `TerminalViews` applies `terminal::New` (a shell in the shown
   cluster's bottom dock with its selected namespace, a plain shell tab in the window without
   one), `terminal::Split` and `terminal::Close` through a `TerminalHost` (`ClusterTerminalHost`).
+  Module `view::lifecycle` (E09-S12): `Lifecycle` (Connecting, Running, Disconnected, Exited,
+  Failed, Closed) is a small enum fed by the launch result and the session's events, so the banner
+  logic runs without a window; `Failure` maps an adapter error kind to a distinct headline and hint
+  (expired login, forbidden, pod gone, container stopped, connection lost, ...); `Banner` is the
+  text and buttons shown above the kept, dimmed screen (a pod's Reconnect, a local shell's Restart
+  with its exit code, Close tab first after code 0). `terminal::Reconnect` / `terminal::Restart`
+  re-launch the focused terminal's descriptor through its launcher (so `ExecService` re-checks
+  policy); a dropped session's input is closed (`TerminalState::close_input`).
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's

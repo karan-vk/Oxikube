@@ -83,6 +83,7 @@ fn terminal_copy_and_paste_reach_the_window(cx: &mut TestAppContext) {
 #[derive(Default)]
 struct FakeLauncher {
     launches: std::cell::RefCell<Vec<oxikube_terminal::view::BackendDescriptor>>,
+    backends: std::cell::RefCell<Vec<oxikube_testkit::fakes::FakeTerminalBackend>>,
 }
 
 impl oxikube_terminal::view::TerminalLauncher for FakeLauncher {
@@ -94,6 +95,7 @@ impl oxikube_terminal::view::TerminalLauncher for FakeLauncher {
     ) -> oxikube_terminal::view::Launch {
         self.launches.borrow_mut().push(descriptor.clone());
         let backend = oxikube_testkit::fakes::FakeTerminalBackend::silent();
+        self.backends.borrow_mut().push(backend.clone());
         gpui::Task::ready(Ok(Box::new(backend)))
     }
 }
@@ -120,6 +122,8 @@ fn the_terminal_commands_are_on_the_bus(cx: &mut TestAppContext) {
         CommandId::TERMINAL_NEW,
         CommandId::TERMINAL_SPLIT,
         CommandId::TERMINAL_CLOSE,
+        CommandId::TERMINAL_RECONNECT,
+        CommandId::TERMINAL_RESTART,
     ] {
         assert_eq!(bus.owner(id), Some("oxikube_terminal"), "{id}");
         assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");
@@ -176,4 +180,58 @@ fn terminal_new_opens_a_cluster_shell_in_the_cluster_tab_s_bottom_dock(cx: &mut 
         .vcx
         .update(|_, cx| workspace.read(cx).items_of_type::<TerminalView>().len());
     assert_eq!(left, 0);
+}
+
+/// E09-S12: a shell that exited shows its banner, and `terminal::Restart` (what the banner's button
+/// and the palette send) starts a fresh shell of the same descriptor in the same tab.
+#[gpui::test]
+fn terminal_restart_on_the_bus_starts_the_exited_shell_again(cx: &mut TestAppContext) {
+    use oxikube_ports::ExitStatus;
+    use oxikube_terminal::view::{BackendDescriptor, Lifecycle, TerminalView};
+
+    let (mut app, launcher) = connected_with_fake_launcher(cx);
+    let tab = app.cluster_tabs().pop().expect("the cluster tab");
+    let workspace = app.vcx.update(|_, cx| tab.read(cx).workspace().clone());
+    assert!(run(&mut app, Command::TerminalNew { cluster: None }));
+    let view = app
+        .vcx
+        .update(|_, cx| workspace.read(cx).items_of_type::<TerminalView>().pop())
+        .expect("a terminal");
+
+    // Running: the commands change nothing.
+    assert!(run(&mut app, Command::TerminalRestart));
+    assert!(run(&mut app, Command::TerminalReconnect));
+    assert_eq!(launcher.launches.borrow().len(), 1);
+
+    launcher.backends.borrow()[0].exit(ExitStatus::with_code(1));
+    app.vcx.run_until_parked();
+    app.vcx
+        .executor()
+        .advance_clock(oxikube_runtime::FRAME_INTERVAL);
+    app.vcx.run_until_parked();
+    let banner = app
+        .vcx
+        .update(|_, cx| view.read(cx).banner())
+        .expect("the exit banner");
+    assert_eq!(banner.headline, "Shell exited with code 1");
+
+    assert!(
+        run(&mut app, Command::TerminalReconnect),
+        "a no-op for a shell"
+    );
+    assert_eq!(launcher.launches.borrow().len(), 1);
+    assert!(run(&mut app, Command::TerminalRestart));
+    let cluster = TestPorts::cluster_id();
+    assert_eq!(
+        *launcher.launches.borrow(),
+        [
+            BackendDescriptor::local(Some(cluster.clone())),
+            BackendDescriptor::local(Some(cluster))
+        ],
+        "the same shell again"
+    );
+    let running = app
+        .vcx
+        .update(|_, cx| matches!(view.read(cx).lifecycle(), Lifecycle::Running));
+    assert!(running);
 }

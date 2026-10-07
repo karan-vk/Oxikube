@@ -8,7 +8,9 @@
 //! | `launch` | [`TerminalLauncher`]: starts the process a descriptor describes, off the UI thread; [`LocalLauncher`], the app's (local shells with the cluster environment) |
 //! | `services` | [`TerminalServices`]: launcher, command dispatcher, paste confirmation; an app global so the layout restore builds terminals too |
 //! | `terminal_view` | [`TerminalView`]: owns the [`TerminalState`](crate::TerminalState) (grid, backend, tasks) for the tab's life; title from the process |
-//! | `render` | the element, the starting / failed line, the exit line |
+//! | `render` | the element, the starting line, the banner and the dimming of a session that cannot take input |
+//! | `lifecycle` | [`Lifecycle`]: connecting / running / disconnected / exited / failed / closed as a small enum, the error taxonomy ([`Failure`]) and the [`Banner`] text (E09-S12) |
+//! | `recover`, `strip` | Reconnect (pod) and Restart (local shell) from the same descriptor, and the banner strip with its buttons |
 //! | `item` | the `Item` impl: tab title = process or pod name, dirty = a process runs, icon by kind, cluster mark, dockable, split = a fresh copy, close ends the process, saved = the descriptor only |
 //! | `panel` | [`TerminalPanel`]: the bottom-dock panel of a cluster's terminals, and [`ensure_terminal_panel`] |
 //! | `commands` | the bus handlers: [`register_view_commands`] queues a [`TerminalRequest`] on the window's [`TerminalViewSink`] |
@@ -25,9 +27,12 @@ mod descriptor;
 mod host;
 mod item;
 mod launch;
+pub mod lifecycle;
 mod panel;
+mod recover;
 mod render;
 mod services;
+mod strip;
 mod terminal_view;
 
 use gpui::{App, actions};
@@ -39,8 +44,8 @@ pub use descriptor::BackendDescriptor;
 pub use host::{ClusterTerminalHost, TerminalHost};
 pub use item::TERMINAL_ITEM_KIND;
 pub use launch::{Launch, LocalLauncher, TerminalLauncher};
+pub use lifecycle::{Banner, BannerAction, Failure, FailureKind, Lifecycle, Tone};
 pub use panel::{TerminalPanel, ensure_terminal_panel};
-pub use render::describe_exit;
 pub use services::TerminalServices;
 pub use terminal_view::TerminalView;
 

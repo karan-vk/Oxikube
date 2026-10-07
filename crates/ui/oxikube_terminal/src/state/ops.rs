@@ -81,7 +81,11 @@ impl TerminalState {
     }
 
     /// Sends `bytes` (encoded keystrokes, a paste) to the process, after anything sent before.
+    /// Dropped once the session ended or its connection dropped ([`close_input`](Self::close_input)).
     pub fn input(&self, bytes: impl Into<Bytes>) {
+        if !self.accepts_input {
+            return;
+        }
         // Closed only once the entity is gone.
         let _ = self.input.unbounded_send(bytes.into());
     }

@@ -10,6 +10,7 @@ use oxikube_ports::{ExitStatus, TerminalBackend};
 use oxikube_workspace::{ClusterMark, ItemEvent};
 
 use super::descriptor::{BackendDescriptor, tab_title};
+use super::lifecycle::{Failure, Lifecycle, Signal};
 use super::services::TerminalServices;
 use crate::backend::local::DEFAULT_SIZE;
 use crate::element::TerminalElementState;
@@ -34,12 +35,15 @@ pub struct TerminalView {
     pub(super) descriptor: BackendDescriptor,
     pub(super) services: TerminalServices,
     pub(super) phase: Phase,
+    /// What the user sees of the process's life (running, disconnected, exited): drives the
+    /// banner and whether input is dimmed. `phase` owns the resources, this the meaning.
+    pub(super) lifecycle: Lifecycle,
     pub(super) element: TerminalElementState,
     pub(super) focus: FocusHandle,
     /// The title before the process sets one (the program or the pod).
     default_title: SharedString,
     /// The title the process set, cleaned and cut.
-    process_title: Option<SharedString>,
+    pub(super) process_title: Option<SharedString>,
     pub(super) mark: Option<ClusterMark>,
     /// The directory the shell was in when the tab closed. The tab's own close button ends the
     /// session before the workspace saves the reopen-closed entry, so the entry reads it here.
@@ -48,8 +52,8 @@ pub struct TerminalView {
     _follow_mark: Option<Task<()>>,
     /// Starts the process. Never cleared from inside itself; dropped (cancelling a launch in
     /// flight) when the tab closes.
-    launch: Option<Task<()>>,
-    subscriptions: Vec<Subscription>,
+    pub(super) launch: Option<Task<()>>,
+    pub(super) subscriptions: Vec<Subscription>,
 }
 
 impl TerminalView {
@@ -70,17 +74,12 @@ impl TerminalView {
             ),
             None => (None, None),
         };
-        let started = services.launcher().launch(&descriptor, DEFAULT_SIZE, cx);
-        let launch = cx.spawn(async move |this, cx| {
-            let result = started.await;
-            // The view may be gone (its tab closed while starting): the backend is dropped here,
-            // which ends the process.
-            this.update(cx, |this, cx| this.started(result, cx)).ok();
-        });
+        let launch = Self::start(&descriptor, &services, cx);
         Self {
             descriptor,
             services,
             phase: Phase::Starting,
+            lifecycle: Lifecycle::Connecting,
             element: TerminalElementState::new(),
             focus: cx.focus_handle(),
             default_title,
@@ -91,6 +90,23 @@ impl TerminalView {
             launch: Some(launch),
             subscriptions: Vec::new(),
         }
+    }
+
+    /// Starts the process `descriptor` describes (off the UI thread) and hands the result to
+    /// [`started`](Self::started). The returned task is the launch: keep it in `launch`; dropping
+    /// it abandons a start still in flight.
+    pub(super) fn start(
+        descriptor: &BackendDescriptor,
+        services: &TerminalServices,
+        cx: &mut Context<Self>,
+    ) -> Task<()> {
+        let started = services.launcher().launch(descriptor, DEFAULT_SIZE, cx);
+        cx.spawn(async move |this, cx| {
+            let result = started.await;
+            // The view may be gone (its tab closed while starting): the backend is dropped here,
+            // which ends the process.
+            this.update(cx, |this, cx| this.started(result, cx)).ok();
+        })
     }
 
     /// What this terminal was started from.
@@ -167,7 +183,11 @@ impl TerminalView {
         cx.new(|cx| Self::new(descriptor, services, cx))
     }
 
-    fn started(&mut self, result: OxiResult<Box<dyn TerminalBackend>>, cx: &mut Context<Self>) {
+    pub(super) fn started(
+        &mut self,
+        result: OxiResult<Box<dyn TerminalBackend>>,
+        cx: &mut Context<Self>,
+    ) {
         if !matches!(self.phase, Phase::Starting) {
             // Closed meanwhile: dropping the backend ends the process.
             return;
@@ -184,11 +204,18 @@ impl TerminalView {
                     }),
                 );
                 self.phase = Phase::Running(state);
+                self.signal(Signal::Started);
             }
             Err(error) => {
                 // The kind only: a message may name paths of the user's machine.
                 tracing::warn!(kind = ?error.kind(), "a terminal could not start");
                 self.phase = Phase::Failed(error.to_string().into());
+                let failure = if self.descriptor.is_local() {
+                    Failure::local_start(&error)
+                } else {
+                    Failure::from_error(&error)
+                };
+                self.signal(Signal::StartFailed(failure));
             }
         }
         cx.emit(ItemEvent::UpdateTab);
@@ -208,12 +235,21 @@ impl TerminalView {
                     cx.emit(ItemEvent::UpdateTab);
                 }
             }
-            TerminalEvent::Exited(_) => {
-                // The dirty dot goes, the exit line shows.
+            TerminalEvent::Exited(status) => {
+                // The dirty dot goes, the banner shows.
+                self.signal(Signal::Exited(status.clone()));
+                self.stop_input_unless_running(cx);
                 cx.emit(ItemEvent::UpdateTab);
                 cx.notify();
             }
-            TerminalEvent::Error(_) => cx.notify(),
+            TerminalEvent::Error(error) => {
+                // Only the kind and the (redacted) message: never output or credentials.
+                tracing::debug!(kind = ?error.kind(), "a terminal's transport failed");
+                self.signal(Signal::Transport(Failure::from_error(error)));
+                self.stop_input_unless_running(cx);
+                cx.emit(ItemEvent::UpdateTab);
+                cx.notify();
+            }
             TerminalEvent::Bell
             | TerminalEvent::ClipboardStore(_)
             | TerminalEvent::ColorRequest(_) => {}
@@ -222,6 +258,7 @@ impl TerminalView {
 
     /// Ends the process and releases the session (the tab closed). Idempotent.
     pub(super) fn shut_down(&mut self, cx: &mut Context<Self>) {
+        self.signal(Signal::Close);
         // Cancels a launch still in flight; a backend it already made is dropped with it.
         self.launch = None;
         if let Phase::Running(state) = &self.phase {

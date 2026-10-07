@@ -84,6 +84,8 @@ pub struct TerminalState {
     wake: Arc<AtomicBool>,
     exit: Option<ExitStatus>,
     last_error: Option<Arc<OxiError>>,
+    /// Off once the session ended or its connection dropped: keystrokes then go nowhere.
+    accepts_input: bool,
     /// The input method's composition and the cursor anchor for its candidate window (E09-S06).
     pub(crate) ime: crate::input::ime::ImeState,
     _pump: KubeTask<()>,
@@ -155,6 +157,7 @@ impl TerminalState {
             wake,
             exit: None,
             last_error: None,
+            accepts_input: true,
             ime: Default::default(),
             _pump: pump,
             _writer: writer,
@@ -188,6 +191,7 @@ impl TerminalState {
                 cx.notify();
             }
             GridUpdate::Exited(status) => {
+                self.accepts_input = false;
                 self.exit = Some(status.clone());
                 cx.emit(TerminalEvent::Exited(status));
                 cx.notify();
@@ -207,6 +211,18 @@ impl TerminalState {
             return None;
         }
         self.backend.working_directory()
+    }
+
+    /// Stops sending input to the process (its connection dropped): typing, paste and the
+    /// emulator's replies are dropped from now on. The screen stays readable and selectable. An
+    /// ended session does this by itself.
+    pub fn close_input(&mut self) {
+        self.accepts_input = false;
+    }
+
+    /// Whether typing reaches the process: not once it exited or the view closed its input.
+    pub fn accepts_input(&self) -> bool {
+        self.accepts_input
     }
 
     /// The last transport error, if any.

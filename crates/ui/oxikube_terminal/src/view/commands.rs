@@ -1,4 +1,5 @@
-//! `terminal::New`, `terminal::Split` and `terminal::Close` on the command bus.
+//! `terminal::New`, `terminal::Split`, `terminal::Close`, `terminal::Reconnect` and
+//! `terminal::Restart` on the command bus.
 //!
 //! The keymap (through the GPUI actions of the same names), the terminal panel's button, the
 //! palette and agents (`app.terminal_new`, ...) all dispatch the bus command. Its handler queues
@@ -24,6 +25,10 @@ pub enum TerminalRequest {
     Split,
     /// `terminal::Close`: close the focused terminal.
     Close,
+    /// `terminal::Reconnect`: open the focused pod terminal's session again (E09-S12).
+    Reconnect,
+    /// `terminal::Restart`: start a fresh shell in the focused local terminal (E09-S12).
+    Restart,
 }
 
 /// A handle on a window's terminal request queue. Cheap to clone; usable from any thread.
@@ -52,11 +57,13 @@ fn request_of(command: Command) -> Option<TerminalRequest> {
         Command::TerminalNew { cluster } => Some(TerminalRequest::New { cluster }),
         Command::TerminalSplit => Some(TerminalRequest::Split),
         Command::TerminalClose => Some(TerminalRequest::Close),
+        Command::TerminalReconnect => Some(TerminalRequest::Reconnect),
+        Command::TerminalRestart => Some(TerminalRequest::Restart),
         _ => None,
     }
 }
 
-/// Registers `terminal::New`, `terminal::Split` and `terminal::Close` on `registry` (each with
+/// Registers `terminal::New`, `Split`, `Close`, `Reconnect` and `Restart` on `registry` (each with
 /// its MCP tool stub). Call it from the binary's command setup:
 /// `registry.install("oxikube_terminal", |r| register_view_commands(r, sink))`.
 ///
@@ -71,6 +78,8 @@ pub fn register_view_commands(
         CommandId::TERMINAL_NEW,
         CommandId::TERMINAL_SPLIT,
         CommandId::TERMINAL_CLOSE,
+        CommandId::TERMINAL_RECONNECT,
+        CommandId::TERMINAL_RESTART,
     ] {
         let meta = *command::lookup(id).ok_or(RegisterError::Undeclared(id))?;
         let sink = sink.clone();

@@ -85,6 +85,6 @@ pub use fs::StdFs;
 pub use gpui_tokio::{
     RuntimeMode, build_runtime, handle, init, init_deterministic, init_from_handle, mode,
 };
-pub use kube_task::{KubeTask, KubeTaskError, spawn_kube};
+pub use kube_task::{KubeTask, KubeTaskError, live_tasks, spawn_kube};
 pub use lazy::{LazyService, LazyServices, StartedService};
 pub use notify::{FRAME_INTERVAL, NotifyCoalescedExt, notify_coalesced, notify_pending};
