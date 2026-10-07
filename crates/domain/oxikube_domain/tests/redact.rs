@@ -574,6 +574,99 @@ fn secret_data_blocks() {
 }
 
 #[test]
+fn secret_data_block_scalar_lines_are_redacted_whole() {
+    // The issue's example: only the `|` indicator used to be replaced.
+    let out = assert_scrubbed(
+        "stringData:\n  config.yaml: |\n    password-ish line1\n    line2\n  j: v\n",
+        &["password-ish", "line1", "line2", ": v\n"],
+    );
+    assert_eq!(
+        out,
+        "stringData:\n  config.yaml: [redacted]\n    [redacted]\n    [redacted]\n  j: [redacted]\n"
+    );
+
+    // Every indicator, a blank line inside the scalar, CRLF, and what follows the block.
+    for indicator in ["|", "|-", "|+", ">", ">-", "|2"] {
+        let manifest = format!(
+            "data:\r\n  a: {indicator}\r\n    first\r\n\r\n      deeper: x\r\n  b: v\r\ntype: Opaque\r\n"
+        );
+        let out = assert_scrubbed(&manifest, &["first", "deeper", "x\r", ": v\r"]);
+        assert!(out.contains("\r\n\r\n"), "blank line kept: {out:?}");
+        assert!(out.contains("      [redacted]\r\n"), "indent kept: {out:?}");
+        assert!(out.ends_with("type: Opaque\r\n"), "{out:?}");
+    }
+
+    // A PEM written as a block scalar (BEGIN line included), then a plain multi-line value.
+    let manifest = "stringData:\n  tls.key: |\n    PEMLINE1\n    PEMLINE2\n  note: first\n    second\n    third\nkind: Secret\n";
+    let out = assert_scrubbed(manifest, &["PEMLINE", "first", "second", "third"]);
+    assert!(out.ends_with("kind: Secret\n"), "{out}");
+
+    // A multi-line double-quoted scalar keeps its continuation out of the output too.
+    let out = assert_scrubbed(
+        "data:\n  q: \"one\n    two\"\n  r: v\n",
+        &["one", "two", ": v"],
+    );
+    assert!(out.contains("  r: [redacted]\n"), "{out}");
+
+    // Entries shallower than the continuation, and non-secret text outside the block, stay.
+    let out = assert_scrubbed(
+        "metadata:\n  name: db\n    stray: kept\nstringData:\n  a: |\n    s3cret\n",
+        &["s3cret"],
+    );
+    assert!(out.contains("  name: db\n    stray: kept\n"), "{out}");
+}
+
+#[test]
+fn secret_data_block_scalar_lines_in_escaped_text() {
+    let manifest = "kind: Secret\nstringData:\n  config.yaml: |\n    password-ish line1\n    line2\n  j: v\ntype: Opaque\n";
+    let secrets = ["password-ish", "line1", "line2", ": v"];
+
+    // JSON log line (`\n`), `Debug`-quoted `&str` (`\n`), both inside one more string (`\\n`).
+    let json = serde_json::json!({ "manifest": manifest, "target": "app::sync" }).to_string();
+    let out = assert_scrubbed(&json, &secrets);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("still valid JSON");
+    assert_eq!(
+        parsed["manifest"],
+        "kind: Secret\nstringData:\n  config.yaml: [redacted]\n    [redacted]\n    [redacted]\n  j: [redacted]\ntype: Opaque\n"
+    );
+    assert_eq!(parsed["target"], "app::sync");
+
+    let debug = format!("manifest={manifest:?} target=\"app::sync\"");
+    let out = assert_scrubbed(&debug, &secrets);
+    assert!(out.contains("target=\"app::sync\""), "{out}");
+    assert!(
+        out.contains(r"\n    [redacted]\n  j: [redacted]\ntype: Opaque\n"),
+        "{out}"
+    );
+
+    let twice = serde_json::json!({ "line": json }).to_string();
+    assert_scrubbed(&twice, &secrets);
+    let twice = serde_json::json!({ "line": debug }).to_string();
+    assert_scrubbed(&twice, &secrets);
+
+    // A block scalar whose last line is the end of the quoted string.
+    let tail = serde_json::json!({ "m": "data:\n  k: |\n    LASTLINE" }).to_string();
+    let out = assert_scrubbed(&tail, &["LASTLINE"]);
+    assert!(out.ends_with(r#"    [redacted]"}"#), "{out}");
+}
+
+#[test]
+fn secret_data_block_scalar_in_pretty_json_string() {
+    let manifest = "data:\n  config.yaml: |\n    BLOCKSECRET\n  user: YWRtaW4=\n";
+    let pretty = serde_json::to_string_pretty(&serde_json::json!({
+        "spec": { "manifest": manifest, "replicas": 2 },
+    }))
+    .expect("serialise");
+    let out = assert_scrubbed(&pretty, &["BLOCKSECRET", "YWRtaW4="]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("still valid JSON");
+    assert_eq!(
+        parsed["spec"]["manifest"],
+        "data:\n  config.yaml: [redacted]\n    [redacted]\n  user: [redacted]\n"
+    );
+    assert_eq!(parsed["spec"]["replicas"], 2);
+}
+
+#[test]
 fn ordinary_text_is_untouched_and_borrowed() {
     for text in [
         "Starting watcher for context prod-eu in namespace kube-system",
@@ -728,6 +821,9 @@ fn fragment() -> impl Strategy<Value = String> {
         Just("stringData:\n  k: \"a\\nb\"".to_owned()),
         Just("\\\\n".to_owned()),
         Just("    \"m\": \"data:\\n".to_owned()),
+        Just("stringData:\n  c: |\n    l1\n    l2\n  j: v\n".to_owned()),
+        Just("data:\\n  c: >-\\n    l1\\n    l2\\n  j: v".to_owned()),
+        Just("\n    l3".to_owned()),
         prop::sample::select(vec![
             ": ", "=", " ", "\n", "\r\n", "\"", "'", "\\\"", "{", "}", "[", "]", "(", ")", ",",
             ";", "  ", "\t",

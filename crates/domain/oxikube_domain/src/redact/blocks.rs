@@ -10,15 +10,18 @@
 //! and a header on the string's first line is indented from the string's opening quote, not
 //! from the outer line that frames it (see [`header_indent`]).
 
+use super::patterns::MARKER;
 use super::scrubber::{DATA_HEADER, DATA_PAIR};
 use super::values::{Cut, replace_values};
 use std::borrow::Cow;
 
-/// An open block: the header's indent and the escape level of its line breaks.
+/// An open block: the header's indent, the escape level of its line breaks, and the indent of
+/// its entries (fixed by the first non-blank line under the header).
 #[derive(Debug, Clone, Copy)]
 struct Block {
     indent: usize,
     level: u32,
+    entry: Option<usize>,
 }
 
 /// One line: its content, the break that ended it (`""` at the end of the text or at a closing
@@ -46,9 +49,10 @@ pub(super) fn scrub_data_blocks(input: &str) -> Cow<'_, str> {
     let mut block: Option<Block> = None;
     while !rest.is_empty() {
         let line = next_line(rest, block.map(|b| b.level));
-        if let Some(open) = block {
+        if let Some(open) = block.as_mut() {
             let blank = line.content.trim().is_empty();
-            if !blank && indent(line.content) <= open.indent {
+            let depth = indent(line.content);
+            if !blank && depth <= open.indent {
                 // Back at the header's indent: the block is over. Scan this line again as
                 // ordinary text, splitting at every break, since it may open another block.
                 block = None;
@@ -56,6 +60,11 @@ pub(super) fn scrub_data_blocks(input: &str) -> Cow<'_, str> {
             }
             if blank {
                 out.push_str(line.content);
+            } else if depth > *open.entry.get_or_insert(depth) {
+                // Deeper than the entries: the continuation of a block scalar (`|`, `>`) or of
+                // a multi-line plain or quoted scalar. It has no `key:` to match, so the whole
+                // line is the value.
+                out.push_str(&redact_continuation(line.content, depth));
             } else {
                 out.push_str(&replace_values(
                     &DATA_PAIR,
@@ -72,6 +81,7 @@ pub(super) fn scrub_data_blocks(input: &str) -> Cow<'_, str> {
             block = Some(Block {
                 indent: header_indent(line.content, level),
                 level,
+                entry: None,
             });
             out.push_str(line.content);
         } else {
@@ -89,6 +99,18 @@ pub(super) fn scrub_data_blocks(input: &str) -> Cow<'_, str> {
 
 fn indent(content: &str) -> usize {
     content.len() - content.trim_start().len()
+}
+
+/// A continuation line with its text (everything after the first `depth` bytes of indent)
+/// replaced by [`MARKER`]; the indent stays. Already-redacted lines are left as they are, so
+/// the stage is idempotent.
+fn redact_continuation(content: &str, depth: usize) -> Cow<'_, str> {
+    let (lead, text) = content.split_at(depth);
+    if text.trim_end() == MARKER {
+        Cow::Borrowed(content)
+    } else {
+        Cow::Owned(format!("{lead}{MARKER}"))
+    }
 }
 
 /// The indent a header at escape `level` gives its block: an entry must be deeper to belong.

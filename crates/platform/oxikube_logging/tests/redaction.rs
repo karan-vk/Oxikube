@@ -383,6 +383,44 @@ fn json_layer_keeps_a_block_open_across_an_escaped_newline_in_a_quoted_value() {
     }
 }
 
+/// A `stringData` block holding a config file as a YAML block scalar: its lines have no `key:`.
+const BLOCK_SCALAR_MANIFEST: &str = "stringData:\n  config.yaml: |\n    password-ish BLOCKLINE1\n    BLOCKLINE2\n  tls.key: SECRETVALUE5\n";
+
+fn log_block_scalar_manifest() {
+    tracing::info!("manifest:\n{BLOCK_SCALAR_MANIFEST}");
+    tracing::info!(manifest = BLOCK_SCALAR_MANIFEST, "as str");
+    tracing::info!(manifest = ?BLOCK_SCALAR_MANIFEST, "as debug");
+}
+
+fn assert_block_scalar_manifest_redacted(out: &str) {
+    for leaked in ["BLOCKLINE1", "BLOCKLINE2", "password-ish", "SECRETVALUE5"] {
+        assert!(!out.contains(leaked), "{leaked} survived in {out}");
+    }
+    assert_eq!(out.matches("config.yaml: [redacted]").count(), 3, "{out}");
+    assert_eq!(out.matches("tls.key: [redacted]").count(), 3, "{out}");
+}
+
+#[test]
+fn text_layer_redacts_block_scalar_lines_under_string_data() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_layer(capture.clone()));
+    tracing::subscriber::with_default(subscriber, log_block_scalar_manifest);
+    assert_block_scalar_manifest_redacted(&capture.text());
+}
+
+#[test]
+fn json_layer_redacts_block_scalar_lines_under_string_data() {
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::registry().with(redacting_json_layer(capture.clone()));
+    tracing::subscriber::with_default(subscriber, log_block_scalar_manifest);
+    let out = capture.text();
+    assert_block_scalar_manifest_redacted(&out);
+    assert_eq!(out.lines().count(), 3, "{out}");
+    for line in out.lines() {
+        serde_json::from_str::<serde_json::Value>(line).expect("valid JSON after scrubbing");
+    }
+}
+
 /// What a `{:#?}` dump of an object holding a Secret manifest would print.
 #[derive(Debug)]
 #[allow(dead_code)]
