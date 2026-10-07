@@ -219,15 +219,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   Module `churn` (E08-S07, reconnect and churn following): every followed stream (a session's, an aggregate's)
   reads through `Resumable`, which reopens a stream that broke while its pod runs after a backoff with deterministic
   jitter (`ReconnectPolicy::Backoff`: 500 ms doubling to 30 s; `logs.reconnect_retries`, default 5, failures in a row,
-  hot-reloaded through `LogService::set_reconnect_retries`; a stream that delivers a line starts the count again),
+  hot-reloaded through `LogService::set_reconnect_retries`; a stream that delivers a line, or stays open 10 s
+  (`Backoff::stable`: a quiet pod behind a proxy that closes idle streams), starts the count again),
   from `sinceTime` = last line - 2 s with the replayed overlap dropped by (server timestamp, text hash) over the last
   512 lines (`Overlap`); state `LogState::Reconnecting { attempt, max, failure }` (aggregate:
   `SourceState::Reconnecting`), then `Failed` after the cap. A container still waiting to start (a rollout's new pod)
   is retried every second, not failed. `open_following_in(cluster, ports, target, options)` gives a single-pod session
   the `ResourceReader` too: it records the pod's `PodIdentity` (uid, controller `OwnerRef`, node) as the stream opens
   and, when it ends, reads the pod again to say why: `EndReason::PodFinished` (`Succeeded`/`Failed`),
-  `PodReplaced` (deleted, terminating or recreated, with a controller) or `PodDeleted` (no controller); still running
-  is a dropped connection. `find_replacement(resources, &identity)` names the pod that took over (the Deployment's
+  `ContainerFinished` (the followed container exited and will not restart while the pod runs on: a completed init
+  container), `PodReplaced` (deleted, terminating or recreated, with a controller) or `PodDeleted` (no controller); a
+  container between restarts (`CrashLoopBackOff`) is waited for with growing pauses and no retry counted; still
+  running is a dropped connection. `find_replacement(resources, &identity)` names the pod that took over (the Deployment's
   selector for a ReplicaSet's pod, the same name for a StatefulSet's, the same node for a DaemonSet's; the newest
   running candidate otherwise). `LogSession::reconnect` restarts a failed or ended session in place: the lines stay
   and the new stream continues after them. An aggregate reads a pod that joins after the view opened from its first

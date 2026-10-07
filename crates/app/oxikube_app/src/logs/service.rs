@@ -93,6 +93,7 @@ impl LogService {
     /// [`LogService::open_in`] for a session that follows its pod's life (E08-S07): it reads the
     /// pod through `ports.resources` as the stream opens and again when the stream ends, so the
     /// session says why it ended ([`EndReason::PodFinished`](super::EndReason),
+    /// [`ContainerFinished`](super::EndReason::ContainerFinished),
     /// [`PodReplaced`](super::EndReason::PodReplaced), [`PodDeleted`](super::EndReason::PodDeleted))
     /// and reconnects when the pod still runs. What the viewer opens.
     pub fn open_following_in(

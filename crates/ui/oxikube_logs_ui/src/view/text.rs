@@ -72,6 +72,9 @@ pub fn state_text(state: &LogState) -> String {
         LogState::Ended(EndReason::PodFinished) => {
             "Pod finished: its containers ran to completion".to_owned()
         }
+        LogState::Ended(EndReason::ContainerFinished) => {
+            "Container finished: it exited and will not restart".to_owned()
+        }
         LogState::Ended(EndReason::PodReplaced) => {
             "Pod replaced (deleted or recreated by its controller): follow the replacement to keep \
              reading"
@@ -164,6 +167,10 @@ mod tests {
         assert_eq!(group(12), "12");
         assert!(truncated_marker(1_500, 50_000).starts_with("1,500 older lines dropped"));
         assert_eq!(state_text(&LogState::Connecting), "Connecting…");
+        assert_eq!(
+            state_text(&LogState::Ended(EndReason::ContainerFinished)),
+            "Container finished: it exited and will not restart"
+        );
         let failed = LogState::Failed(LogFailure {
             kind: ErrorKind::Forbidden,
             message: "pods/log is forbidden".into(),

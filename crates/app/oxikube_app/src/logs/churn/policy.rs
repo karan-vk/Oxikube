@@ -47,7 +47,8 @@ impl ReconnectPolicy {
 pub struct Backoff {
     /// Failures in a row before the session gives up (`logs.reconnect_retries`; the service's
     /// [`set_reconnect_retries`](crate::logs::LogService::set_reconnect_retries) changes it for
-    /// open sessions). A stream that delivers a line starts the count again.
+    /// open sessions). A stream that delivers a line, or stays open for [`stable`](Self::stable),
+    /// starts the count again.
     pub max_retries: u32,
     /// The pause before the first reconnect.
     pub initial: Duration,
@@ -61,6 +62,10 @@ pub struct Backoff {
     pub start_wait: Duration,
     /// Attempts to open a container that is waiting to start before the session gives up.
     pub start_attempts: u32,
+    /// How long a stream must stay open to count as healthy even when it brought no new line (a
+    /// quiet pod behind a proxy or an API server that closes idle streams): its close then starts
+    /// the failure count again rather than adding to it.
+    pub stable: Duration,
 }
 
 impl Default for Backoff {
@@ -72,6 +77,7 @@ impl Default for Backoff {
             overlap: Duration::from_secs(2),
             start_wait: Duration::from_secs(1),
             start_attempts: 120,
+            stable: Duration::from_secs(10),
         }
     }
 }

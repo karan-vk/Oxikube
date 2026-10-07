@@ -2,6 +2,7 @@
 //! deterministic executor and the fake clock (no runtime, no threads, no sleeps).
 
 mod fate;
+mod quiet;
 mod reconnect;
 mod replacement;
 

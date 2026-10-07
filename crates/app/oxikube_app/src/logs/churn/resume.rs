@@ -5,13 +5,17 @@
 //!   ^ |                                                      | pod running, retryable
 //!   | +-- container waiting to start: short pauses           v
 //!   +--------------- pause (backoff + jitter), since = last line - overlap
-//!                    retries exhausted --> Failed      pod finished / gone --> Ended
+//!   |                retries exhausted --> Failed      pod / container finished, pod gone --> Ended
+//!   +--------------- container between restarts: growing pause, no retry counted
 //! ```
 //!
 //! The adapter already rides out short blips inside the stream it returns (E04-S08); this loop is
 //! what the app does when that stream ends or fails anyway, whatever the adapter: an API server
-//! that stayed away, a `LogPort` without its own reconnects. A stream that delivers a line starts
-//! the failure count again, so only failures in a row count towards `logs.reconnect_retries`.
+//! that stayed away, a `LogPort` without its own reconnects. A stream that delivers a line, or
+//! stays open for [`Backoff::stable`](super::Backoff::stable) (a quiet pod behind a proxy that
+//! closes idle connections), starts the failure count again, so only failures in a row count
+//! towards `logs.reconnect_retries`. A container between restarts (`CrashLoopBackOff`) is not a
+//! failure: the loop waits for its next instance, with pauses that grow to the backoff's longest.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -85,6 +89,16 @@ enum Broke {
     Error(OxiError),
 }
 
+/// What the end of one stream means for the loop.
+enum Verdict {
+    /// The session is over.
+    Over(Finish),
+    /// A dropped connection (or a read that does not follow): reconnect, counting a failure.
+    Reconnect,
+    /// The container is between restarts: wait for its next instance, counting no failure.
+    Restart,
+}
+
 impl Resumable {
     /// Reads until the stream ends for good. `phase` is told every change of [`Phase`]; `commit`
     /// gets each batch of new lines (the replayed overlap removed, never empty).
@@ -98,6 +112,7 @@ impl Resumable {
         let policy = self.config.reconnect.backoff();
         let backoff = policy.filter(|_| self.resumes());
         let mut failures = 0u32;
+        let mut restarts = 0u32;
         let mut starts = 0u32;
         let mut opened = false;
         let span = policy.unwrap_or_default().overlap;
@@ -112,6 +127,7 @@ impl Resumable {
                 Ok(stream) => {
                     opened = true;
                     phase(Phase::Streaming).await;
+                    let open_at = self.clock.now();
                     let mut delivered = false;
                     let overlap = &mut self.overlap;
                     let stop = pump(stream, &self.clock, &self.config, |mut batch| {
@@ -125,8 +141,13 @@ impl Resumable {
                         }
                     })
                     .await;
-                    if delivered {
+                    let stayed = self.clock.now().duration_since(open_at);
+                    let stable = backoff.is_some_and(|b| {
+                        SignedDuration::try_from(b.stable).is_ok_and(|stable| stayed >= stable)
+                    });
+                    if delivered || stable {
                         failures = 0;
+                        restarts = 0;
                     }
                     match stop {
                         Stop::Closed => Broke::Closed,
@@ -152,13 +173,23 @@ impl Resumable {
                     Broke::Error(error)
                 }
             };
-            if let Some(reason) = self.ended(&broke, opened).await {
-                return reason;
-            }
+            let restart = match self.ended(&broke, opened).await {
+                Verdict::Over(finish) => return finish,
+                Verdict::Reconnect => false,
+                Verdict::Restart => true,
+            };
             let Some(backoff) = backoff else {
                 // No reconnects (the policy, or a read that does not follow).
                 return finish(broke);
             };
+            if restart {
+                restarts += 1;
+                tracing::debug!(pod = %self.pod, restarts, "container between restarts; waiting");
+                phase(Phase::Waiting).await;
+                self.clock.sleep(backoff.delay(restarts, self.salt)).await;
+                options = self.resume_options(backoff.overlap);
+                continue;
+            }
             let error = match broke {
                 Broke::Error(error) if !error.is_retryable() => return Finish::Failed(error),
                 Broke::Error(error) => error,
@@ -191,12 +222,13 @@ impl Resumable {
         self.options.follow && !self.options.previous && self.options.limit_bytes.is_none()
     }
 
-    /// The end of the read when the stream stopped for a reason a reconnect will not change: a
-    /// read that does not follow reached its end, or the pod finished or went away.
-    async fn ended(&self, broke: &Broke, opened: bool) -> Option<Finish> {
+    /// What the end of a stream means: over when a reconnect will not change it (a read that
+    /// does not follow reached its end, the pod or the followed container finished, the pod went
+    /// away), a restart to wait for, or a connection to reopen.
+    async fn ended(&self, broke: &Broke, opened: bool) -> Verdict {
         if !self.resumes() {
             // A read that does not follow ends with its stream; `finish` says how.
-            return None;
+            return Verdict::Reconnect;
         }
         let Some(probe) = self.probe.as_ref() else {
             // Nobody to ask about the pod (an aggregate's stream: its pod watch tells): a stream
@@ -205,11 +237,15 @@ impl Resumable {
                 Broke::Closed => true,
                 Broke::Error(error) => opened && error.kind() == ErrorKind::NotFound,
             };
-            return gone.then_some(Finish::Closed(None));
+            return if gone {
+                Verdict::Over(Finish::Closed(None))
+            } else {
+                Verdict::Reconnect
+            };
         };
         if matches!(broke, Broke::Error(_)) && !opened {
             // Never opened: a retryable failure to open says nothing about the pod.
-            return None;
+            return Verdict::Reconnect;
         }
         let identity = probe.identity.lock().clone();
         let fate = fate(
@@ -217,13 +253,19 @@ impl Resumable {
             &self.namespace,
             &self.pod,
             identity.as_ref(),
+            self.options.container.as_deref(),
         )
         .await;
+        let closed = matches!(broke, Broke::Closed);
         match fate {
-            Ok(PodFate::Running) => None,
-            Ok(fate) => Some(Finish::Closed(fate.end_reason(identity.as_ref()))),
+            // A closed stream of a container between restarts waits for its next instance; an
+            // error is judged as one (a denied read stays final).
+            Ok(PodFate::Restarting) if closed => Verdict::Restart,
+            Ok(PodFate::Running | PodFate::Restarting) => Verdict::Reconnect,
+            Ok(fate) => Verdict::Over(Finish::Closed(fate.end_reason(identity.as_ref()))),
             // The pod cannot be read: a closed stream ends unexplained, an error retries.
-            Err(_) => matches!(broke, Broke::Closed).then_some(Finish::Closed(None)),
+            Err(_) if closed => Verdict::Over(Finish::Closed(None)),
+            Err(_) => Verdict::Reconnect,
         }
     }
 

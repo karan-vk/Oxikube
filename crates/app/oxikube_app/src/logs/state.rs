@@ -14,6 +14,9 @@ pub enum EndReason {
     Cancelled,
     /// The pod ran to its end (`Succeeded` or `Failed`): nothing more will be written.
     PodFinished,
+    /// The followed container exited and will not run again while its pod runs on (a completed
+    /// init container, a container that finished next to a sidecar): its log is complete.
+    ContainerFinished,
     /// The pod was deleted (or is terminating, or was recreated under its name) and a controller
     /// owns it: a new pod takes over, and the viewer offers to follow it
     /// ([`find_replacement`](super::find_replacement)).

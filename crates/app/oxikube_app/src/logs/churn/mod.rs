@@ -7,6 +7,7 @@
 //! | dropping the lines a reopened stream replays: (server timestamp, text hash) over the last 512 lines | `overlap` |
 //! | the read loop: reopen from the last line minus the overlap, retry a container that is still starting, give up after the cap | `resume` |
 //! | why a followed pod's stream ended: finished, replaced, deleted | [`PodIdentity`], `probe` |
+//! | the followed container in a pod that runs on: finished for good, or between restarts | `container` |
 //! | the pod that took over from a gone one (owner, selector, same name / node, newest) | [`find_replacement`] (`replacement`) |
 //!
 //! # Single-pod sessions
@@ -14,7 +15,10 @@
 //! A session opened with [`LogService::open_following_in`](super::LogService::open_following_in)
 //! reads its pod's [`PodIdentity`] next to the stream. When the stream ends it reads the pod again:
 //! still running is a dropped connection (`Reconnecting n/m`, then `Streaming` again with the
-//! overlap removed); `Succeeded`/`Failed` is [`EndReason::PodFinished`](super::EndReason); deleted,
+//! overlap removed); `Succeeded`/`Failed` is [`EndReason::PodFinished`](super::EndReason); a
+//! followed container that exited for good in a pod that runs on (a completed init container) is
+//! [`EndReason::ContainerFinished`](super::EndReason), and one between restarts
+//! (`CrashLoopBackOff`) is waited for (`Connecting`, pauses that grow, no retry counted); deleted,
 //! terminating or recreated under its name is [`EndReason::PodReplaced`](super::EndReason) when a
 //! controller owns it (the viewer offers "follow replacement", which [`find_replacement`] answers)
 //! and [`EndReason::PodDeleted`](super::EndReason) otherwise. A denied read is `Failed` at once;
@@ -29,6 +33,7 @@
 //! single session's (`SourceState::Reconnecting`), so a rollout restart keeps the view following
 //! the new pods with no line twice.
 
+mod container;
 mod overlap;
 mod policy;
 mod probe;

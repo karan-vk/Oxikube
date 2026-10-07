@@ -8,6 +8,7 @@ use oxikube_domain::view::PodPhase;
 use oxikube_domain::{OwnerRef, OxiResult, Resource};
 use oxikube_ports::ResourceReader;
 
+use super::container::{ContainerFate, container_fate};
 use crate::logs::EndReason;
 
 /// The `v1` Pod kind.
@@ -57,6 +58,11 @@ pub(crate) enum PodFate {
     Running,
     /// It ran to its end (`Succeeded` or `Failed`).
     Finished,
+    /// It runs, but the followed container exited and will not run again (a completed init
+    /// container, a container that finished next to a sidecar).
+    ContainerFinished,
+    /// It runs, and the followed container is between restarts (`CrashLoopBackOff`).
+    Restarting,
     /// It is gone or going: deleted, terminating, or replaced by a pod of the same name.
     Gone,
 }
@@ -65,8 +71,9 @@ impl PodFate {
     /// The end reason of a pod's session for this fate (`None` while it runs).
     pub(crate) fn end_reason(self, identity: Option<&PodIdentity>) -> Option<EndReason> {
         match self {
-            Self::Running => None,
+            Self::Running | Self::Restarting => None,
             Self::Finished => Some(EndReason::PodFinished),
+            Self::ContainerFinished => Some(EndReason::ContainerFinished),
             Self::Gone if identity.is_some_and(|i| i.controller.is_some()) => {
                 Some(EndReason::PodReplaced)
             }
@@ -84,29 +91,39 @@ pub(crate) async fn read_pod(
     resources.get_opt(&pod_kind(), Some(namespace), name).await
 }
 
-/// What became of the pod `identity` names (`name` alone when its identity was never read).
+/// What became of the pod `identity` names (`name` alone when its identity was never read) and
+/// of its followed `container` (`None`: the default one).
 pub(crate) async fn fate(
     resources: &dyn ResourceReader,
     namespace: &str,
     name: &str,
     identity: Option<&PodIdentity>,
+    container: Option<&str>,
 ) -> OxiResult<PodFate> {
     let Some(pod) = read_pod(resources, namespace, name).await? else {
         return Ok(PodFate::Gone);
     };
-    Ok(fate_of(&pod, identity))
+    Ok(fate_of(&pod, identity, container))
 }
 
-/// What `pod` (the object now under the followed pod's name) says became of it.
-pub(crate) fn fate_of(pod: &Resource, identity: Option<&PodIdentity>) -> PodFate {
+/// What `pod` (the object now under the followed pod's name) says became of it and of its
+/// followed `container`.
+pub(crate) fn fate_of(
+    pod: &Resource,
+    identity: Option<&PodIdentity>,
+    container: Option<&str>,
+) -> PodFate {
     if identity.is_some_and(|i| !i.is(pod)) || pod.meta.is_terminating() {
         return PodFate::Gone;
     }
     let phase = PodPhase::parse(pod.get_str("/status/phase"));
     if phase.is_terminal() {
-        PodFate::Finished
-    } else {
-        PodFate::Running
+        return PodFate::Finished;
+    }
+    match container_fate(pod, container) {
+        ContainerFate::Running => PodFate::Running,
+        ContainerFate::Finished => PodFate::ContainerFinished,
+        ContainerFate::Restarting => PodFate::Restarting,
     }
 }
 
@@ -140,18 +157,21 @@ mod tests {
     #[test]
     fn running_finished_terminating_and_recreated_pods() {
         let identity = PodIdentity::of(&owned("u1"));
-        assert_eq!(fate_of(&owned("u1"), Some(&identity)), PodFate::Running);
         assert_eq!(
-            fate_of(&owned("u2"), Some(&identity)),
+            fate_of(&owned("u1"), Some(&identity), None),
+            PodFate::Running
+        );
+        assert_eq!(
+            fate_of(&owned("u2"), Some(&identity), None),
             PodFate::Gone,
             "a new uid"
         );
         let done = pod().name("web-0").uid("u1").succeeded().build();
-        assert_eq!(fate_of(&done, Some(&identity)), PodFate::Finished);
+        assert_eq!(fate_of(&done, Some(&identity), None), PodFate::Finished);
         let crashed = pod().name("web-0").uid("u1").failed().build();
-        assert_eq!(fate_of(&crashed, None), PodFate::Finished);
+        assert_eq!(fate_of(&crashed, None, None), PodFate::Finished);
         let going = pod().name("web-0").uid("u1").terminating().build();
-        assert_eq!(fate_of(&going, Some(&identity)), PodFate::Gone);
+        assert_eq!(fate_of(&going, Some(&identity), None), PodFate::Gone);
     }
 
     #[test]
@@ -172,5 +192,10 @@ mod tests {
             Some(EndReason::PodFinished)
         );
         assert_eq!(PodFate::Running.end_reason(Some(&owned)), None);
+        assert_eq!(
+            PodFate::ContainerFinished.end_reason(Some(&owned)),
+            Some(EndReason::ContainerFinished)
+        );
+        assert_eq!(PodFate::Restarting.end_reason(Some(&owned)), None);
     }
 }

@@ -735,8 +735,9 @@ Budget: a rollout restart (or a reconnect storm) must not spike CPU above the st
 
 How (`oxikube_app::logs::churn`): the reconnect pauses back off (500 ms doubling to 30 s, plus a
 hashed jitter of up to a quarter so streams that broke together do not reopen together) and stop
-after `logs.reconnect_retries` failures in a row; a pod that is gone ends its stream instead of
-retrying. Dedupe is one hash of the line's text and one set insert per line, over the last 512 lines
+after `logs.reconnect_retries` failures in a row; a pod that is gone, or a followed container that
+finished for good, ends its stream instead of retrying, and a container between restarts is waited
+for with the same growing pauses. Dedupe is one hash of the line's text and one set insert per line, over the last 512 lines
 of each stream (about 30 KB per stream), whatever the buffer holds.
 
 Measured (M-series laptop, release-fast, shared kind cluster): a 20-replica Deployment writing 10
