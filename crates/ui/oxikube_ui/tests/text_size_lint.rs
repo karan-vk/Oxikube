@@ -127,4 +127,6 @@ fn the_lint_accepts_scaled_and_exempt_sizes() {
         violations("// ui-scale: exempt (absolute points)\ndiv().text_size(px(13.))").is_empty()
     );
     assert!(violations("div().text_size(px(13.)) // ui-scale: exempt").is_empty());
+    // A rem shorthand is allowed where the window rem size already carries the zoom (title bar).
+    assert!(violations("// ui-scale: exempt (rem)\n    .text_sm()").is_empty());
 }
