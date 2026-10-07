@@ -4,7 +4,8 @@
 //!
 //! * [`stores`] builds the app's one `ResourceStores` on first use: feeds run on the Tokio bridge
 //!   (on GPUI's background executor in the deterministic test runtime), grace timers and
-//!   back-off on the app clock.
+//!   back-off on the app clock; each store asks its connection's watch budget before it opens a
+//!   feed (`kube_ports::WatchBudgets`, E04-F543).
 //! * [`install`] runs for every cluster tab: it opens the [`WorkloadsOverview`] as the tab's first
 //!   screen once the cluster is connected (when nothing else is open), and routes the sidebar's
 //!   "Cluster" section to the overview. A kind entry is the resource views' (E07-S03,
@@ -40,7 +41,8 @@ pub fn stores(state: &AppState, clock: Arc<dyn ClockPort>, cx: &App) -> Arc<Reso
         return stores.clone();
     }
     let runtime = oxikube_resources_ui::table::store_runtime(clock, cx);
-    let stores = Arc::new(ResourceStores::new(runtime));
+    let options = state.ports().clusters.budgets.store_options();
+    let stores = Arc::new(ResourceStores::with_options(runtime, options));
     if !state.set_resource_stores(stores.clone()) {
         // Another window set them first: use those so every window shares the feeds.
         return state.resource_stores().cloned().unwrap_or(stores);

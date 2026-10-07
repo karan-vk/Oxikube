@@ -585,3 +585,37 @@ fn the_documented_example_validates_against_the_content_type() {
     let store = load(&text);
     assert!(store.diagnostics().is_empty(), "{:?}", store.diagnostics());
 }
+
+/// `default.json` and the ports' built-in budget are one thing written twice (E04-F543).
+#[test]
+fn the_shipped_watch_budget_is_the_ports_default() {
+    let store = store();
+    assert_eq!(
+        prefs(&store, None).watch_budget,
+        oxikube_ports::WatchBudgetPrefs::default()
+    );
+}
+
+#[test]
+fn the_watch_budget_merges_field_by_field_per_cluster() {
+    let store = load(&format!(
+        r#"{{
+          "watch_budget": {{ "idle_grace_seconds": 5 }},
+          "clusters": {{ "{PROD}": {{ "watch_budget": {{ "max_feeds": 8, "max_objects": 0 }} }} }}
+        }}"#
+    ));
+    let lab = &prefs(&store, Some(&id(LAB))).watch_budget;
+    assert_eq!(lab.idle_grace, std::time::Duration::from_secs(5));
+    assert_eq!(lab.max_feeds, 64, "the default");
+    let prod = &prefs(&store, Some(&id(PROD))).watch_budget;
+    assert_eq!(
+        (prod.max_feeds, prod.max_objects, prod.metadata_above),
+        (8, 1, 25_000),
+        "a zero limit reads as one"
+    );
+    assert_eq!(
+        prod.idle_grace,
+        std::time::Duration::from_secs(5),
+        "from the user layer"
+    );
+}

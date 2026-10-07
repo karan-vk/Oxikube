@@ -303,7 +303,11 @@ impl StoreInner {
             st.generation += 1;
             let now = self.runtime.clock.now();
             st.idle_since = Some(now);
-            let grace = self.options.config.idle_grace;
+            let grace = self
+                .options
+                .budget
+                .idle_grace()
+                .unwrap_or(self.options.config.idle_grace);
             if st.admitted && !grace.is_zero() {
                 let store = Arc::downgrade(self);
                 let clock = self.runtime.clock.clone();

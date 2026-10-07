@@ -93,6 +93,7 @@ mod tests {
             "accessible_namespaces",
             "exec_interactivity",
             "exec_in_read_only",
+            "watch_budget",
         ] {
             assert!(
                 cluster[key].is_object(),

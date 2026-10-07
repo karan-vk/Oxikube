@@ -183,3 +183,79 @@ fn swapping_namespaces_at_the_budget_limit_keeps_every_part_admitted() {
     assert_eq!(m.names(), ["b/2", "c/3"]);
     assert_eq!(h.resources.live_watches(), 2);
 }
+
+/// A budget whose idle grace changes at run time (a settings hot reload, E04-F543).
+struct Grace(Mutex<u64>);
+
+impl FeedBudget for Grace {
+    fn admit(&self, _: &FeedRequest, _: usize) -> Admission {
+        Admission::Granted
+    }
+
+    fn released(&self, _: &FeedRequest) {}
+
+    fn idle_grace(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(*self.0.lock()))
+    }
+}
+
+#[test]
+fn the_budgets_idle_grace_is_read_each_time_a_feed_goes_idle() {
+    let budget = Arc::new(Grace(Mutex::new(5)));
+    let mut h = Harness::with_options(options(budget.clone()));
+    drop(h.subscribe(all(pods())));
+    h.advance(4);
+    assert_eq!(
+        h.resources.live_watches(),
+        1,
+        "within the budget's 5 s, not the store's 30 s"
+    );
+    h.advance(2);
+    assert_eq!(
+        h.resources.live_watches(),
+        0,
+        "torn down after the budget's grace"
+    );
+
+    *budget.0.lock() = 60;
+    drop(h.subscribe(all(pods())));
+    h.advance(45);
+    assert_eq!(
+        h.resources.live_watches(),
+        1,
+        "the new grace applies to the next idle feed"
+    );
+    h.advance(20);
+    assert_eq!(h.resources.live_watches(), 0);
+}
+
+/// Refuses everything and counts what the store gave up.
+#[derive(Default)]
+struct Refusing(Mutex<Vec<Gvk>>);
+
+impl FeedBudget for Refusing {
+    fn admit(&self, _: &FeedRequest, _: usize) -> Admission {
+        Admission::Refused("full".into())
+    }
+
+    fn released(&self, _: &FeedRequest) {}
+
+    fn refused(&self, request: &FeedRequest) {
+        self.0.lock().push(request.key.gvk.clone());
+    }
+}
+
+#[test]
+fn the_budget_is_told_once_when_the_store_gives_a_feed_up() {
+    let budget = Arc::new(Refusing::default());
+    let mut h = Harness::with_options(options(budget.clone()));
+    let sub = h.subscribe(all(pods()));
+    assert!(matches!(
+        sub.state(),
+        FeedState::Failed {
+            kind: ErrorKind::BudgetExceeded,
+            ..
+        }
+    ));
+    assert_eq!(*budget.0.lock(), [pods()]);
+}

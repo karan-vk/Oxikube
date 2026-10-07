@@ -87,6 +87,7 @@ impl StoreInner {
                         continue;
                     }
                     tracing::info!(feed = %request.key, "resource store feed refused by the watch budget");
+                    self.options.budget.refused(&request);
                     return Err(FeedState::Failed {
                         kind: ErrorKind::BudgetExceeded,
                         message: reason,

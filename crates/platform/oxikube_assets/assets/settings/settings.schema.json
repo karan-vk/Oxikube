@@ -178,6 +178,17 @@
             "number",
             "null"
           ]
+        },
+        "watch_budget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WatchBudgetContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Limits on the feeds the app opens on the cluster: feeds, objects, when to fall back to\nmetadata-only feeds, and how long a feed nobody looks at keeps running. Fields merge\nacross layers; a change applies to the next feed opened, without reconnecting."
         }
       },
       "type": "object"
@@ -290,6 +301,17 @@
             "string",
             "null"
           ]
+        },
+        "watch_budget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WatchBudgetContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Limits on the feeds the app opens on the cluster: feeds, objects, when to fall back to\nmetadata-only feeds, and how long a feed nobody looks at keeps running. Fields merge\nacross layers; a change applies to the next feed opened, without reconnecting."
         }
       },
       "type": "object"
@@ -1027,6 +1049,49 @@
           "type": "string"
         }
       ]
+    },
+    "WatchBudgetContent": {
+      "additionalProperties": false,
+      "description": "The watch budget, as one settings layer writes it. Every field is optional so a layer sets\nany subset; unset fields keep the built-in defaults.\n\nExample, a tighter budget for one very large cluster:\n\n```json\n\"clusters\": {\n  \"3f2a9c1b7d4e8a60\": { \"watch_budget\": { \"max_feeds\": 24, \"max_objects\": 50000 } }\n}\n```",
+      "properties": {
+        "idle_grace_seconds": {
+          "description": "How long a feed nobody looks at keeps running, in seconds, so switching back to a view\nis instant. `0` stops it at once.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_feeds": {
+          "description": "Most feeds open at once on the cluster. Each namespace of a multi-namespace selection is\nits own feed. At the limit, feeds of views closed less than `idle_grace_seconds` ago\nare closed first; then the new view says the budget is full.",
+          "format": "uint",
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_objects": {
+          "description": "No new feed opens while the open feeds hold this many objects in total.",
+          "format": "uint64",
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "metadata_above": {
+          "description": "While the open feeds hold this many objects, a kind that would get whole objects gets a\nmetadata-only feed instead (names, labels and ages, no spec or status). Set it to\n`max_objects` or more to never do that.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2019-09/schema",
@@ -1213,6 +1278,17 @@
         "number",
         "null"
       ]
+    },
+    "watch_budget": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WatchBudgetContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Limits on the feeds the app opens on the cluster: feeds, objects, when to fall back to\nmetadata-only feeds, and how long a feed nobody looks at keeps running. Fields merge\nacross layers; a change applies to the next feed opened, without reconnecting."
     }
   },
   "title": "Oxikube settings",

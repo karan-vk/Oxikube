@@ -39,12 +39,14 @@ pub const FEATURES: &[Feature] = &[
     },
 ];
 
-/// The per-cluster settings (`clusters.<id>`) follow into the session manager for the life of the
-/// app (E06-S08).
+/// The per-cluster settings (`clusters.<id>`) follow into the session manager (E06-S08) and the
+/// connections' watch budgets (E04-F543) for the life of the app.
 fn follow_cluster_prefs(cx: &mut App) {
     if let Some(state) = crate::app_state::AppState::try_global(cx) {
         let sessions = state.services().sessions.clone();
         crate::cluster_prefs::follow_cluster_settings(cx, sessions).detach();
+        let budgets = state.ports().clusters.budgets.clone();
+        crate::cluster_prefs::follow_watch_budgets(cx, budgets).detach();
     }
 }
 

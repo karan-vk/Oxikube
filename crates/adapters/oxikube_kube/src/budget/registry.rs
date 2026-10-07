@@ -8,16 +8,16 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{FeedStats, FeedVariant};
 use parking_lot::Mutex;
 use tokio::runtime::Handle;
-use tracing::{debug, info, info_span};
+use tracing::debug;
 
 use super::config::BudgetConfig;
-use super::counters::FeedCounters;
-use super::driver::{self, AbortOnDrop, DriverEnd};
+use super::driver::{AbortOnDrop, DriverEnd};
 use super::lease::FeedLease;
-use super::policy::{Admission, FeedId};
+use super::open::{Opened, Reserved};
+use super::policy::FeedId;
 use super::request::FeedRequest;
 use super::source::{FeedSource, FeedStream};
-use super::state::{Entry, Idle, State, StopReason};
+use super::state::{Idle, State, StopReason};
 use crate::resources::KubeResources;
 
 /// The watch budget of one cluster: every feed of the cluster is opened through it.
@@ -38,9 +38,9 @@ pub struct FeedRegistry {
 
 /// The shared part of a [`FeedRegistry`].
 pub(super) struct Inner {
-    cluster: ClusterId,
-    source: Arc<dyn FeedSource>,
-    state: Mutex<State>,
+    pub(super) cluster: ClusterId,
+    pub(super) source: Arc<dyn FeedSource>,
+    pub(super) state: Mutex<State>,
     /// The runtime the first `subscribe` ran on: drivers and idle timers are spawned there,
     /// also when a lease is dropped on a thread outside it (the UI thread).
     runtime: OnceLock<Handle>,
@@ -110,82 +110,25 @@ impl FeedRegistry {
             if let Some(id) = state.join(&request) {
                 return Ok(self.lease(id, request, requested, None));
             }
-            let (variant, evict) = match state.admit(&request) {
-                Admission::Open { variant, evict } => (variant, evict),
-                Admission::Refuse(breach) => {
-                    state.refused += 1;
-                    let reason = breach.reason(&request.describe());
-                    info!(cluster = %self.inner.cluster, kind = %request.gvk, %reason, "watch budget refused a feed");
-                    return Err(OxiError::budget_exceeded(reason));
-                }
-            };
-            let granted = request.with_variant(variant);
-            if variant != requested {
-                state.degraded += 1;
-                info!(cluster = %self.inner.cluster, kind = %request.gvk, "watch budget: opening metadata-only instead of full objects");
-                if let Some(id) = state.join(&granted) {
+            match self.inner.reserve(&mut state, &request, true)? {
+                Reserved::Join(id, granted) => {
                     return Ok(self.lease(id, granted, requested, None));
                 }
+                Reserved::Open(granted, evicted) => (granted, evicted),
             }
-            let evicted: Vec<Entry> = evict
-                .into_iter()
-                .filter_map(|id| state.remove(id, StopReason::Evicted))
-                .collect();
-            state.opening += 1;
-            (granted, evicted)
         };
         drop(evicted);
-        let mut reservation = Reservation {
-            inner: &self.inner,
-            held: true,
-        };
-
-        let counters = Arc::new(FeedCounters::default());
+        let source = self.inner.source.clone();
+        let opening = granted.clone();
         let opened = self
-            .inner
-            .source
-            .open(&granted, counters.bytes.clone())
-            .await;
-        let mut state = self.inner.state.lock();
-        state.opening -= 1;
-        reservation.held = false;
-        let source = opened?;
-        if let Some(id) = state.join(&granted) {
-            // Another subscriber opened the same feed meanwhile: use that one.
-            drop(state);
-            drop(source);
-            return Ok(self.lease(id, granted, requested, None));
-        }
-        let id = state.next_id();
-        let span = info_span!(
-            "feed",
-            cluster = %self.inner.cluster,
-            kind = %granted.gvk,
-            namespace = granted.namespace.as_deref().unwrap_or("*"),
-            variant = granted.variant.as_str(),
-            id,
-        );
-        let weak = Arc::downgrade(&self.inner);
-        let (task, consumer) = driver::spawn(
-            &runtime,
-            source,
-            counters.clone(),
-            span.clone(),
-            move |end| ended(&weak, id, end),
-        );
-        state.insert(
-            id,
-            Entry {
-                request: granted.clone(),
-                subscribers: 1,
-                counters,
-                span,
-                idle: None,
-                _driver: task,
-            },
-        );
-        drop(state);
-        Ok(self.lease(id, granted, requested, Some(consumer)))
+            .open_new(&runtime, granted.clone(), false, move |bytes| async move {
+                source.open(&opening, bytes).await
+            })
+            .await?;
+        Ok(match opened {
+            Opened::Joined(id) => self.lease(id, granted, requested, None),
+            Opened::New(id, consumer) => self.lease(id, granted, requested, Some(consumer)),
+        })
     }
 
     fn lease(
@@ -199,25 +142,9 @@ impl FeedRegistry {
     }
 }
 
-/// A feed admitted and still opening: it counts against `max_feeds` until the open finishes,
-/// and also when the subscribing future is dropped half-way.
-struct Reservation<'a> {
-    inner: &'a Inner,
-    /// Cleared once the count was given back under the lock.
-    held: bool,
-}
-
-impl Drop for Reservation<'_> {
-    fn drop(&mut self) {
-        if self.held {
-            self.inner.state.lock().opening -= 1;
-        }
-    }
-}
-
 impl Inner {
     /// The runtime to spawn on, recorded by the first call (which runs inside it).
-    fn runtime(&self) -> OxiResult<Handle> {
+    pub(super) fn runtime(&self) -> OxiResult<Handle> {
         if let Some(handle) = self.runtime.get() {
             return Ok(handle.clone());
         }
@@ -284,7 +211,7 @@ impl Inner {
 }
 
 /// A driver stopped on its own: the feed is of no further use.
-fn ended(inner: &Weak<Inner>, id: FeedId, end: DriverEnd) {
+pub(super) fn ended(inner: &Weak<Inner>, id: FeedId, end: DriverEnd) {
     let Some(inner) = inner.upgrade() else {
         return;
     };

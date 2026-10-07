@@ -10,6 +10,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use std::time::Duration;
 
 use oxikube_domain::ClusterColour;
 use oxikube_domain::ids::ClusterId;
@@ -57,6 +58,37 @@ pub struct NodeShellPrefs {
     pub max_lifetime_seconds: Option<u64>,
 }
 
+/// The watch budget of a cluster (`watch_budget`, E04-F543): how many feeds and objects the
+/// app may hold open on it, and how long an unobserved feed lingers.
+///
+/// The binary applies it to the kube adapter's per-connection `FeedRegistry` (every feed the
+/// app opens goes through it) and to the resource store's idle teardown; a change applies to
+/// the next feed opened and the next feed to go idle, without reconnecting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WatchBudgetPrefs {
+    /// Most feeds open at once on the cluster (each namespace of a namespace set is one).
+    pub max_feeds: usize,
+    /// No new feed opens while the open feeds hold this many objects.
+    pub max_objects: u64,
+    /// While the open feeds hold this many objects, a kind that would get full objects gets a
+    /// metadata-only feed instead.
+    pub metadata_above: u64,
+    /// How long a feed nobody looks at keeps running, so switching back to a view is instant.
+    pub idle_grace: Duration,
+}
+
+impl Default for WatchBudgetPrefs {
+    /// The adapter's defaults: 64 feeds, 100 000 objects, metadata-only above 25 000, 30 s.
+    fn default() -> Self {
+        Self {
+            max_feeds: 64,
+            max_objects: 100_000,
+            metadata_above: 25_000,
+            idle_grace: Duration::from_secs(30),
+        }
+    }
+}
+
 /// The per-cluster settings, resolved: defaults, then the user's global values, then
 /// `clusters.<id>`, field by field.
 ///
@@ -94,6 +126,8 @@ pub struct ClusterPrefs {
     /// change anything the container's user can. Read by the guard on every open, so a change
     /// applies at once.
     pub exec_in_read_only: bool,
+    /// Limits on the feeds the app opens on the cluster.
+    pub watch_budget: WatchBudgetPrefs,
 }
 
 /// The resolved prefs of every cluster: a global fallback and a lookup index of the clusters
