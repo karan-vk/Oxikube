@@ -4,33 +4,20 @@
 //! focus when it renders, not from the bar's focus events, which an inactive window never sends).
 //! Escape still clears the filter and returns to the rows.
 
-use gpui::{Entity, KeyContext, TestAppContext};
-use oxikube_domain::Resource;
+use gpui::{Entity, Focusable as _, KeyContext, TestAppContext};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::Gvk;
 use oxikube_workspace::CommandDispatcher as _;
-use serde_json::{Value, json};
 
 use super::fixture::{Fixture, cluster};
+use super::p;
 use crate::table::ResourceTable;
-
-/// `ns/name` with one running container, so `s` (shell) and `a` (attach) have a target.
-fn pod(ns: &str, name: &str) -> Resource {
-    let mut json = oxikube_testkit::pod().namespace(ns).name(name).build().json;
-    json["spec"]["containers"] = json!([{"name": "app", "image": "busybox"}]);
-    json["status"]["containerStatuses"] = json!([{
-        "name": "app", "ready": true, "restartCount": 0, "image": "busybox",
-        "state": {"running": {"startedAt": "2026-01-01T00:00:00Z"}}
-    }]);
-    json["metadata"]["resourceVersion"] = Value::from("1");
-    Resource::from_json(json).expect("a pod")
-}
 
 /// The pods table with the exec actions and its first row selected, so every row key (`a`, `s`,
 /// `d`, enter, `j`) would act on something if it ran.
 fn open(cx: &mut TestAppContext) -> (Fixture, Entity<ResourceTable>) {
     let mut f = Fixture::with_exec(cx);
-    f.connect_with([pod("x", "apple-1"), pod("x", "web-1")]);
+    f.connect_with([p("x", "apple-1", "1"), p("x", "web-1", "1")]);
     let table = f.open_pods();
     f.update(&table, |t, cx| t.move_cursor(1, false, cx));
     assert_eq!(f.selected(&table), ["apple-1"]);
@@ -45,14 +32,14 @@ fn bar_text(f: &mut Fixture, table: &Entity<ResourceTable>) -> String {
 
 fn bar_focused(f: &mut Fixture, table: &Entity<ResourceTable>) -> bool {
     f.vcx.update(|window, cx| {
-        let bar = table.read(cx).filter().clone();
-        gpui::Focusable::focus_handle(bar.read(cx), cx).contains_focused(window, cx)
+        let bar = table.read(cx).filter().read(cx);
+        bar.focus_handle(cx).contains_focused(window, cx)
     })
 }
 
 fn table_focused(f: &mut Fixture, table: &Entity<ResourceTable>) -> bool {
     f.vcx
-        .update(|window, cx| gpui::Focusable::focus_handle(table.read(cx), cx).is_focused(window))
+        .update(|window, cx| table.read(cx).focus_handle(cx).is_focused(window))
 }
 
 /// The table's entry in the key context stack of the focused element, as the keymap sees it.
