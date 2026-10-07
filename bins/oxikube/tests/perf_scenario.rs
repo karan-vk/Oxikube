@@ -162,3 +162,24 @@ fn unknown_scenario_exits_2() {
     assert_eq!(out.status.code(), Some(2));
     assert!(sample.is_none());
 }
+
+/// Error backtraces on (`cargo` sets `RUST_BACKTRACE=1` through `.cargo/config.toml`) make every
+/// error a hot path builds walk the stack, which made the Linux runner's frames ~300 ms (#509): a
+/// sample says so on stderr; with `RUST_LIB_BACKTRACE=0` (what `cargo xtask perf` sets) it does not.
+#[test]
+fn a_sample_warns_when_error_backtraces_are_on() {
+    const WARNING: &str = "error backtraces are on";
+    let stderr_with = |value: &str| {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let out = oxikube()
+            .env("RUST_LIB_BACKTRACE", value)
+            .args(["--perf-scenario", "palette", "--perf-report"])
+            .arg(dir.path().join("sample.json"))
+            .output()
+            .expect("run oxikube");
+        assert!(out.status.success());
+        String::from_utf8_lossy(&out.stderr).into_owned()
+    };
+    assert!(stderr_with("1").contains(WARNING));
+    assert!(!stderr_with("0").contains(WARNING));
+}

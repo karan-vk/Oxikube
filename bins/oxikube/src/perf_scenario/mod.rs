@@ -51,7 +51,6 @@ const NEEDS_TEST_APP: &str = "E05-S11 #93";
 /// Runs scenario `name`, writes its sample to `report` (or stdout). Exit 0 on success and for
 /// `unavailable`, 1 on failure, 2 for an unknown scenario.
 pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) -> ExitCode {
-    warn_if_errors_capture_backtraces();
     let sample = match name {
         "startup" => startup::run(launched, probe),
         scroll_10k::NAME | "table-scroll-10k" => scroll_10k::run(probe),
@@ -74,6 +73,8 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
             return ExitCode::from(2);
         }
     };
+    // After the sample, so the check's own stack walk is not in it.
+    warn_if_errors_capture_backtraces();
     match sample.and_then(|s| write_sample(&s, report)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {

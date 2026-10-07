@@ -3,7 +3,7 @@
   "note": "Headless perf baseline for `cargo xtask perf --check` (docs/PERFORMANCE.md, Perf harness). Keyed by OS (`std::env::consts::OS`) then scenario then metric; *_ms metrics (p50/p95/p99) are in milliseconds and *_mib metrics (rss_mib, peak_rss_mib) are in MiB; all are medians across samples. Numbers come from the nightly's own runners (ubuntu-latest, macos-latest): refresh with `cargo xtask perf --from-report <perf-report artifact> --update-baseline`, never by hand.",
   "os": {
     "linux": {
-      "source": "github-actions ubuntu-latest nightly run 37647964174 (all scenarios, E01-F542 re-seed)",
+      "source": "github-actions ubuntu-latest nightly run 37647964174 (logs-stream, startup: E01-F542 re-seed), run 37694476864 (scroll-10k, E07-F509: the nightly's perf job on the story branch)",
       "updated": "2026-10-07",
       "profile": "release-fast",
       "samples_per_scenario": 7,
@@ -122,29 +122,29 @@
         },
         "scroll-10k": {
           "draw_ms": {
-            "p50": 333.413,
-            "p95": 337.264,
-            "p99": 339.381
+            "p50": 3.16,
+            "p95": 3.535,
+            "p99": 3.706
           },
           "first_rows_ms": {
-            "p50": 468.185,
-            "p95": 468.185,
-            "p99": 468.185
+            "p50": 87.944,
+            "p95": 87.944,
+            "p99": 87.944
           },
           "frame_ms": {
-            "p50": 336.67,
-            "p95": 342.447,
-            "p99": 344.228
+            "p50": 3.173,
+            "p95": 3.429,
+            "p99": 3.628
           },
           "peak_rss_mib": {
-            "p50": 274.238,
-            "p95": 274.238,
-            "p99": 274.238
+            "p50": 272.035,
+            "p95": 272.035,
+            "p99": 272.035
           },
           "rss_mib": {
-            "p50": 274.238,
-            "p95": 274.238,
-            "p99": 274.238
+            "p50": 272.035,
+            "p95": 272.035,
+            "p99": 272.035
           }
         },
         "startup": {

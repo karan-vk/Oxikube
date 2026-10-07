@@ -66,10 +66,9 @@ pub const BUDGETS: &[Budget] = &[
         limit: 1000.0 / 55.0,
         tolerance: 0.0,
         what: ">= 55 fps scrolling 10 000 pods under churn (headless frame, p95)",
-        // macOS only: the Linux runner draws these frames with Mesa's software renderer, about
-        // 340 ms each, which says nothing about the app on a GPU (#509). The baseline gate still
-        // catches a regression there.
-        os: Some("macos"),
+        // Every OS: the Linux runner's 340 ms frames were the scenario's font fallback with error
+        // backtraces on, not its software renderer (#509); about 3.4 ms p95 there since.
+        os: None,
     },
     logs_frame(
         "frame_ms",
@@ -114,8 +113,8 @@ pub const BUDGETS: &[Budget] = &[
 ];
 
 /// A `logs-stream` frame budget (E08-S02, the JSON modes E08-S05, the search modes E08-S03, the merged modes E08-S04):
-/// p95 <= 8 ms. macOS only, as the table's (#509): the Linux runner's software renderer says
-/// nothing about the app on a GPU.
+/// p95 <= 8 ms, on every OS (the Linux runner's slow frames were #509's font fallback, not its
+/// software renderer).
 const fn logs_frame(metric: &'static str, what: &'static str) -> Budget {
     Budget {
         scenario: "logs-stream",
@@ -123,7 +122,7 @@ const fn logs_frame(metric: &'static str, what: &'static str) -> Budget {
         limit: 8.0,
         tolerance: 0.0,
         what,
-        os: Some("macos"),
+        os: None,
     }
 }
 
@@ -289,9 +288,21 @@ mod tests {
             .insert("first_rows_ms".to_owned(), pct(1000.5));
         scroll.metrics.insert("frame_ms".to_owned(), pct(18.5));
         assert_eq!(verdicts(&r)[2..], [Verdict::Fail, Verdict::Fail]);
-        // The frame budget is macOS only (#509).
+        // Checked on Linux too since #509: its slow frames were the scenario, not the runner.
         r.os = "linux".into();
-        assert_eq!(verdicts(&r)[2..], [Verdict::Fail]);
+        assert_eq!(verdicts(&r)[2..], [Verdict::Fail, Verdict::Fail]);
+    }
+
+    #[test]
+    fn a_budget_for_one_os_is_not_checked_on_another() {
+        let only_macos = [Budget {
+            os: Some("macos"),
+            ..BUDGETS[0]
+        }];
+        let mut r = report(Some(100.0), 1.0);
+        assert_eq!(check(&r, &only_macos).len(), 1);
+        r.os = "linux".into();
+        assert!(check(&r, &only_macos).is_empty());
     }
 
     #[test]
@@ -327,7 +338,7 @@ mod tests {
         logs.metrics.insert("wrap_frame_ms".to_owned(), pct(8.1));
         assert_eq!(verdicts(&r)[4], Verdict::Fail);
         r.os = "linux".into();
-        assert_eq!(verdicts(&r).len(), 2, "macOS only");
+        assert_eq!(verdicts(&r)[4], Verdict::Fail, "every OS since #509");
     }
 
     #[test]
