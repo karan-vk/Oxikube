@@ -180,7 +180,7 @@ impl Render for WorkloadsOverview {
             .gap(u(tokens.spacing.lg))
             .child(
                 div()
-                    .text_size(tokens.font.heading)
+                    .text_size(u(tokens.font.heading))
                     .font_semibold()
                     .child("Workloads"),
             )
@@ -193,7 +193,7 @@ impl Render for WorkloadsOverview {
             } else {
                 div()
                     .debug_selector(|| "overview-not-connected".to_owned())
-                    .text_size(tokens.font.body)
+                    .text_size(u(tokens.font.body))
                     .text_color(colors.text_muted)
                     .child("Not connected")
                     .into_any_element()

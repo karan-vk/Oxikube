@@ -101,7 +101,7 @@ impl SidebarPanel {
             .gap(u(tokens.spacing.sm))
             .items_center()
             .cursor_pointer()
-            .text_size(tokens.font.body)
+            .text_size(u(tokens.font.body))
             .when(highlighted, |row| row.bg(colors.element_hover))
             .when(selected, |row| row.bg(colors.element_selected))
             .on_hover(cx.listener(move |this, hovered, _, cx| {
@@ -187,7 +187,7 @@ fn count_badge(
         .id(SharedString::from(selector.clone()))
         .debug_selector(move || selector)
         .flex_none()
-        .text_size(tokens.font.small)
+        .text_size(u(tokens.font.small))
         .text_color(colour)
         .child(text);
     match hover {
@@ -226,7 +226,7 @@ fn count_placeholder(
     div()
         .flex_none()
         .debug_selector(move || format!("sidebar-count-{id}"))
-        .text_size(tokens.font.small)
+        .text_size(u(tokens.font.small))
         .text_color(tokens.colors.text_disabled)
         .child(match count {
             Some(count) => count.to_string(),
@@ -248,7 +248,7 @@ fn render_notice(ix: usize, row: &NoticeRow, cx: &mut Context<SidebarPanel>) -> 
         .h(u(px(ROW_HEIGHT)))
         .px(u(tokens.spacing.md))
         .items_center()
-        .text_size(tokens.font.small)
+        .text_size(u(tokens.font.small))
         .text_color(colour)
         .child(div().truncate().child(row.text.clone()))
         .into_any_element()

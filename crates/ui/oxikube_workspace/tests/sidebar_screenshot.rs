@@ -26,7 +26,7 @@ use oxikube_testkit::{
     headless::HEADLESS_SCALE_FACTOR,
     screenshot::{RgbaImage, Tolerance, check_golden, distinct_colors_at_least, golden_path},
 };
-use oxikube_ui::{Tokens, root::new_root};
+use oxikube_ui::{Tokens, UiScale, root::new_root, set_ui_scale};
 use oxikube_workspace::sidebar::{SidebarDeps, SidebarPanel};
 
 const WIDTH: f32 = 280.0;
@@ -63,7 +63,7 @@ fn rules_for(restricted: bool) -> AccessRules {
     }
 }
 
-fn render(tokens: Tokens, restricted: bool) -> anyhow::Result<RgbaImage> {
+fn render(tokens: Tokens, restricted: bool, zoom: f32) -> anyhow::Result<RgbaImage> {
     let context = ClusterContext::new(
         CLUSTER.parse()?,
         ContextName::new("prod-eu"),
@@ -103,10 +103,12 @@ fn render(tokens: Tokens, restricted: bool) -> anyhow::Result<RgbaImage> {
     };
     let mut cx = headless();
     let mut shown = None;
-    let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
+    // The window grows with the zoom so the same content fits, as a user would size it.
+    let window = cx.open_window(size(px(WIDTH * zoom), px(HEIGHT * zoom)), |window, cx| {
         oxikube_ui::init(cx);
         // Pin the appearance: `init` follows the system, which differs between machines.
         oxikube_ui::set_tokens(cx, tokens);
+        set_ui_scale(cx, UiScale::new(zoom));
         cx.set_reduce_motion(true);
         oxikube_runtime::init_deterministic(cx);
         oxikube_workspace::sidebar::init(cx);
@@ -130,10 +132,14 @@ fn render(tokens: Tokens, restricted: bool) -> anyhow::Result<RgbaImage> {
     cx.capture_screenshot(window.into())
 }
 
-fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
+fn check(name: &str, image: RgbaImage, zoom: f32) -> anyhow::Result<()> {
     let scale = HEADLESS_SCALE_FACTOR;
     anyhow::ensure!(
-        image.dimensions() == (WIDTH as u32 * scale, HEIGHT as u32 * scale),
+        image.dimensions()
+            == (
+                (WIDTH * zoom) as u32 * scale,
+                (HEIGHT * zoom) as u32 * scale
+            ),
         "unexpected image size {:?}",
         image.dimensions()
     );
@@ -158,10 +164,32 @@ fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
 }
 
 fn run() -> anyhow::Result<()> {
-    check("sidebar_admin_dark", render(Tokens::dark(), false)?)?;
-    check("sidebar_admin_light", render(Tokens::light(), false)?)?;
-    check("sidebar_restricted_dark", render(Tokens::dark(), true)?)?;
-    check("sidebar_restricted_light", render(Tokens::light(), true)?)
+    check(
+        "sidebar_admin_dark",
+        render(Tokens::dark(), false, 1.0)?,
+        1.0,
+    )?;
+    check(
+        "sidebar_admin_light",
+        render(Tokens::light(), false, 1.0)?,
+        1.0,
+    )?;
+    check(
+        "sidebar_restricted_dark",
+        render(Tokens::dark(), true, 1.0)?,
+        1.0,
+    )?;
+    check(
+        "sidebar_restricted_light",
+        render(Tokens::light(), true, 1.0)?,
+        1.0,
+    )?;
+    // ui_scale 1.5 (E05-U557): labels, count badges and rows all grow together.
+    check(
+        "sidebar_admin_dark_scale1_5",
+        render(Tokens::dark(), false, 1.5)?,
+        1.5,
+    )
 }
 
 fn main() -> ExitCode {

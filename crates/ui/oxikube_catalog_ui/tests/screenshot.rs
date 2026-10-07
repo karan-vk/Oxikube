@@ -94,12 +94,14 @@ fn service(
     (NamespaceService::new(manager, state, clock), cluster)
 }
 
-fn render(service: NamespaceService, cluster: ClusterId) -> anyhow::Result<RgbaImage> {
+fn render(service: NamespaceService, cluster: ClusterId, zoom: f32) -> anyhow::Result<RgbaImage> {
     let mut cx = headless();
-    let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
+    // The window grows with the zoom so the same content fits, as a user would size it.
+    let window = cx.open_window(size(px(WIDTH * zoom), px(HEIGHT * zoom)), |window, cx| {
         oxikube_ui::init(cx);
         // Pin the appearance: `init` follows the system, which differs between machines.
         oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
+        oxikube_ui::set_ui_scale(cx, oxikube_ui::UiScale::new(zoom));
         oxikube_runtime::init_deterministic(cx);
         cx.set_reduce_motion(true);
         oxikube_catalog_ui::init(cx);
@@ -116,10 +118,14 @@ fn render(service: NamespaceService, cluster: ClusterId) -> anyhow::Result<RgbaI
     cx.capture_screenshot(window.into())
 }
 
-fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
+fn check(name: &str, image: RgbaImage, zoom: f32) -> anyhow::Result<()> {
     let scale = HEADLESS_SCALE_FACTOR;
     anyhow::ensure!(
-        image.dimensions() == (WIDTH as u32 * scale, HEIGHT as u32 * scale),
+        image.dimensions()
+            == (
+                (WIDTH * zoom) as u32 * scale,
+                (HEIGHT * zoom) as u32 * scale
+            ),
         "unexpected image size {:?}",
         image.dimensions()
     );
@@ -144,16 +150,21 @@ fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
 }
 
 fn run() -> anyhow::Result<()> {
-    let (open, cluster) = service(
-        &["default", "dev", "kube-system", "prod", "stage"],
-        false,
-        &NamespacePrefs {
-            selection: NamespaceSelection::from_names(["dev", "prod"]),
-            favourites: ["prod", "kube-system"].into_iter().collect(),
-            typed: Vec::new(),
-        },
-    );
-    check("namespace_selector_open", render(open, cluster)?)?;
+    let open_prefs = || NamespacePrefs {
+        selection: NamespaceSelection::from_names(["dev", "prod"]),
+        favourites: ["prod", "kube-system"].into_iter().collect(),
+        typed: Vec::new(),
+    };
+    let names = ["default", "dev", "kube-system", "prod", "stage"];
+    let (open, cluster) = service(&names, false, &open_prefs());
+    check("namespace_selector_open", render(open, cluster, 1.0)?, 1.0)?;
+    // ui_scale 1.5 (E05-U557): row text, digits and badges grow with the rows.
+    let (open, cluster) = service(&names, false, &open_prefs());
+    check(
+        "namespace_selector_open_scale1_5",
+        render(open, cluster, 1.5)?,
+        1.5,
+    )?;
 
     let (restricted, cluster) = service(
         &[],
@@ -166,7 +177,8 @@ fn run() -> anyhow::Result<()> {
     );
     check(
         "namespace_selector_restricted",
-        render(restricted, cluster)?,
+        render(restricted, cluster, 1.0)?,
+        1.0,
     )
 }
 
