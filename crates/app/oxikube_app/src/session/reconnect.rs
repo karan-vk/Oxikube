@@ -112,22 +112,21 @@ impl Entry {
 
     /// The delay before the next attempt of schedule `epoch`, if it goes on.
     fn next_delay(&self, epoch: u64) -> Option<Duration> {
-        self.is_due(epoch)
-            .then(|| self.reconnecting.as_ref().map(|r| r.plan.delay))
-            .flatten()
+        let scheduled = self.reconnecting.as_ref().filter(|r| r.epoch == epoch)?;
+        (self.phase() == SessionPhase::Error).then_some(scheduled.plan.delay)
     }
 }
 
 impl Shared {
-    /// Starts reconnecting `e` (just moved to `Error` by a transient failure). Returns whether a
-    /// schedule started: not when automatic reconnects are off or no Tokio runtime is running.
-    pub(super) fn schedule_reconnect(self: &Arc<Self>, e: &mut Entry) -> bool {
+    /// Starts reconnecting `e` (just moved to `Error` by a transient failure). Does nothing when
+    /// automatic reconnects are off or no Tokio runtime is running.
+    pub(super) fn schedule_reconnect(self: &Arc<Self>, e: &mut Entry) {
         let Some(policy) = self.config.auto_reconnect else {
-            return false;
+            return;
         };
         let Ok(handle) = Handle::try_current() else {
             tracing::debug!(cluster = %e.id, "no runtime; the session stays in Error");
-            return false;
+            return;
         };
         let plan = AutoReconnect {
             attempt: 1,
@@ -148,7 +147,6 @@ impl Shared {
             epoch,
             _task: ReconnectTask(task),
         });
-        true
     }
 }
 
