@@ -76,6 +76,35 @@ impl AuditLog {
         )
     }
 
+    /// [`entry`](Self::entry) with a [`detail`](AuditRecord::detail) (redacted like `who`): the
+    /// container and program of a session opened in a pod.
+    pub fn entry_with_detail(
+        &self,
+        who: &str,
+        initiator: Initiator,
+        cmd: &str,
+        target: ResourceRef,
+        detail: &str,
+        outcome: AuditOutcome,
+    ) -> AuditRecord {
+        self.entry(who, initiator, cmd, target, false, outcome)
+            .with_detail(&redact(detail))
+    }
+
+    /// [`begin`](Self::begin) with a [`detail`](AuditRecord::detail) (redacted like `who`).
+    pub fn begin_with_detail(
+        &self,
+        who: &str,
+        initiator: Initiator,
+        cmd: &str,
+        target: ResourceRef,
+        detail: &str,
+    ) -> AuditAttempt<'_> {
+        let record =
+            self.entry_with_detail(who, initiator, cmd, target, detail, AuditOutcome::Cancelled);
+        AuditAttempt::new(self, record)
+    }
+
     /// Opens the record of a mutation that is about to run. The returned
     /// [`AuditAttempt`] queues its final record when it is
     /// [finished](AuditAttempt::finish), or a `Cancelled` record when it is dropped

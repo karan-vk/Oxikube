@@ -32,7 +32,11 @@
 //!    commands and `terminal::Search*` are dispatched to the window's focused terminal;
 //! 9. the terminal tabs (E09-S07, [`terminal`]): the terminal services (local shells with the
 //!    cluster's environment), the terminal panel in every cluster tab's bottom dock, and the
-//!    window's `TerminalViews` behind `terminal::New` / `Split` / `Close`.
+//!    window's `TerminalViews` behind `terminal::New` / `Split` / `Close`;
+//! 10. shells in pods (E09-S08): the app's one `ExecService`, "Shell" and "Attach" in a pod's
+//!     context menu, palette list, detail header and on `s` / `a`, and `pod::Shell` /
+//!     `pod::Attach` / `pod::Exec` on the bus (read-only blocked unless `exec_in_read_only`,
+//!     audited, never confirmed) opening a terminal in the cluster tab's bottom dock.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -138,10 +142,15 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // fills.
     let agent = logs::install_agent_hooks(&state, services.sessions.clone(), log_service.clone());
 
+    // Shells, attaches and commands in pod containers (E09-S08): one service per app, so the
+    // container chosen last in a pod is remembered across windows.
+    let exec_service = terminal::install_exec_service(&state, services.sessions.clone());
+
     // Before any cluster tab opens: its layout restore rebuilds saved terminal tabs with these.
     let terminal_services = terminal::install_services(
         services.sessions.clone(),
         ports.clusters.source.clone(),
+        exec_service.clone(),
         dispatcher.clone(),
         &workspace,
         cx,
@@ -221,12 +230,15 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                 columns: Arc::new(CoreColumns::new()),
                 state: ports.state.clone(),
                 dispatcher: dispatcher.clone(),
-                actions: Some(ResourceActions::with_registry(
-                    &bus,
-                    services.sessions.clone(),
-                    local_user(),
-                    &logs::row_actions(),
-                )),
+                actions: Some(
+                    ResourceActions::with_registry(
+                        &bus,
+                        services.sessions.clone(),
+                        local_user(),
+                        &logs::row_actions(),
+                    )
+                    .with_exec(exec_service),
+                ),
             },
             tabs: tabs.downgrade(),
             fs: ports.clusters.fs.clone(),

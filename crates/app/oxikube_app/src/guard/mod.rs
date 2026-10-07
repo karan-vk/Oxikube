@@ -36,8 +36,14 @@
 //!
 //! The checks before the handler are synchronous and in memory; a confirmation request
 //! is returned before any `.await`.
+//!
+//! Commands of the *exec class* (`pod::Shell`, `pod::Attach`, `pod::Exec`: a session in a
+//! container) are not mutations and take no confirmation, but they take the read-only block
+//! (unless the cluster's `exec_in_read_only` setting allows them) and the audit record; see the
+//! `exec` module of this one.
 
 mod confirm;
+mod exec;
 mod gate;
 mod mutation;
 mod pipeline;

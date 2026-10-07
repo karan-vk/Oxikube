@@ -24,6 +24,8 @@ const DEFAULT_OPTION_AS_META: bool = !cfg!(target_os = "macos");
 const DEFAULT_COPY_ON_SELECT: bool = false;
 /// `terminal.confirm_multiline_paste` default.
 const DEFAULT_CONFIRM_MULTILINE_PASTE: bool = true;
+/// `terminal.exec_shells` default: the shell fallback chain of `pod::Shell`.
+pub const DEFAULT_EXEC_SHELLS: [&str; 2] = ["bash", "sh"];
 
 /// The resolved `terminal` settings.
 #[derive(Clone, Debug, PartialEq)]
@@ -55,6 +57,8 @@ pub struct TerminalSettings {
     pub option_as_meta: bool,
     /// Ask before pasting several lines.
     pub confirm_multiline_paste: bool,
+    /// The shell chain of `pod::Shell` (never empty).
+    pub exec_shells: Vec<String>,
 }
 
 impl Default for TerminalSettings {
@@ -118,6 +122,7 @@ impl Settings for TerminalSettings {
             confirm_multiline_paste: content
                 .confirm_multiline_paste
                 .unwrap_or(DEFAULT_CONFIRM_MULTILINE_PASTE),
+            exec_shells: exec_shells(content.exec_shells),
         }
     }
 }
@@ -126,6 +131,22 @@ impl Settings for TerminalSettings {
 fn non_blank(text: Option<String>) -> Option<String> {
     text.map(|text| text.trim().to_owned())
         .filter(|text| !text.is_empty())
+}
+
+/// The chain from the setting: names trimmed, blanks and repeats dropped; the default when none
+/// is left.
+fn exec_shells(configured: Option<Vec<String>>) -> Vec<String> {
+    let mut chain: Vec<String> = Vec::new();
+    for shell in configured.unwrap_or_default() {
+        let shell = shell.trim();
+        if !shell.is_empty() && !chain.iter().any(|seen| seen == shell) {
+            chain.push(shell.to_owned());
+        }
+    }
+    if chain.is_empty() {
+        chain = DEFAULT_EXEC_SHELLS.map(str::to_owned).to_vec();
+    }
+    chain
 }
 
 oxikube_settings::register_settings!(TerminalSettings);

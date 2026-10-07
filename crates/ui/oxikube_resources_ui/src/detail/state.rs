@@ -11,6 +11,7 @@ use oxikube_domain::Resource;
 use oxikube_workspace::CommandDispatcher;
 
 use super::events::EventRow;
+use crate::exec::ExecFlow;
 use crate::table::ResourceTableDeps;
 
 /// What a [`DetailView`] is built over. Cheap to clone.
@@ -25,6 +26,9 @@ pub struct DetailDeps {
     /// Where the view's commands go (`resource::Open` for an owner, `resource::PinDetail`,
     /// `resource::CopyLabel`).
     pub dispatcher: Rc<dyn CommandDispatcher>,
+    /// Opens a shell or an attach from a pod's header (E09-S08): the pod's cluster tab's
+    /// workspace asks which container. `None`: the header has no such buttons.
+    pub exec: Option<ExecFlow>,
 }
 
 impl From<&ResourceTableDeps> for DetailDeps {
@@ -34,6 +38,7 @@ impl From<&ResourceTableDeps> for DetailDeps {
             stores: deps.stores.clone(),
             columns: deps.columns.clone(),
             dispatcher: deps.dispatcher.clone(),
+            exec: None,
         }
     }
 }

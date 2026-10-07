@@ -119,6 +119,23 @@ fn cursor_and_bell_choices_parse_by_name() {
 }
 
 #[test]
+fn the_exec_shell_chain_defaults_to_bash_then_sh_and_is_cleaned() {
+    assert_eq!(TerminalSettings::default().exec_shells, ["bash", "sh"]);
+    let content: TerminalContent =
+        serde_json::from_str(r#"{"exec_shells": [" zsh ", "", "sh", "zsh"]}"#).unwrap();
+    assert_eq!(
+        TerminalSettings::from_content(content).exec_shells,
+        ["zsh", "sh"]
+    );
+    let empty: TerminalContent = serde_json::from_str(r#"{"exec_shells": []}"#).unwrap();
+    assert_eq!(
+        TerminalSettings::from_content(empty).exec_shells,
+        ["bash", "sh"],
+        "an empty list falls back to the default instead of disabling shells"
+    );
+}
+
+#[test]
 fn the_input_settings_default_and_override() {
     let settings = TerminalSettings::default();
     assert!(!settings.copy_on_select);

@@ -50,6 +50,13 @@ pub struct CommandMeta {
     /// Such a command is not `mutating` (it must stay runnable on a read-only
     /// cluster) but only a human may run it: see [`CommandMeta::allows`].
     pub privileged: bool,
+    /// Opens an interactive session in a container (`pod::Shell`, `pod::Attach`, `pod::Exec`):
+    /// an *exec-class* command. It is not `mutating` (it asks for no confirmation and names no
+    /// risk), but it is as dangerous as a shell is, so the guard blocks it on a read-only
+    /// cluster unless the cluster's `exec_in_read_only` setting allows it, audits every open,
+    /// and its MCP tool stub is unsafe, interactive and hidden from agents by default
+    /// ([`CommandMeta::tool_risk`]).
+    pub exec: bool,
 }
 
 impl CommandMeta {
@@ -69,6 +76,17 @@ impl CommandMeta {
             needs,
             risk: None,
             privileged: false,
+            exec: false,
+        }
+    }
+
+    /// An exec-class command: it opens a shell, an attach or a command in a container. It
+    /// needs [`Capabilities::EXEC`], asks no confirmation, and is not `mutating` (it changes no
+    /// object), but the guard treats it as its own class (see [`CommandMeta::exec`]).
+    pub const fn exec(id: CommandId, title: &'static str, scope: CommandScope) -> Self {
+        Self {
+            exec: true,
+            ..Self::read(id, title, scope, Capabilities::EXEC)
         }
     }
 
@@ -112,6 +130,7 @@ impl CommandMeta {
             needs: needs.union(Capabilities::MUTATE),
             risk: Some(risk),
             privileged: false,
+            exec: false,
         }
     }
 }

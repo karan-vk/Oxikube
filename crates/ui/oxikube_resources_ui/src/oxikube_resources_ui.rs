@@ -9,6 +9,7 @@
 //! | [`crds`] | E07-S07 | CRD browsing: [`crds::CrdInfo`] (a CRD read for browsing, the version a table opens), [`crds::served_versions`] (the version switcher's list), [`crds::SchemaTree`] (the `openAPIV3Schema` as a lazy collapsible tree) and the CRD list's row actions |
 //! | [`describe_settings`] | E07-S06 | the `describe` setting: which backend renders the Describe tab (`auto`, `native`, `kubectl`) and where `kubectl` is |
 //! | [`detail`] | E07-S05 | [`DetailView`](detail::DetailView): the generic detail of one object (header, metadata, owners, conditions, status, YAML and Describe tabs (E07-S06), events), as the right-hand [`DetailDrawer`](detail::DetailDrawer) of a cluster tab or, pinned, a workspace tab |
+//! | [`exec`] | E09-S08 | "Shell" and "Attach" on a pod's row and detail: [`exec::exec_row_actions`], the [`exec::ContainerPicker`] for a pod with several containers (the default container, or the last choice for the pod, preselected) and [`exec::ExecFlow`], which reads the pod off the UI thread and dispatches `pod::Shell` / `pod::Attach` with the container chosen |
 //! | [`filter`] | E07-S04 | [`FilterBar`](filter::FilterBar): the `/` filter of a table (`/text`, `/!text`, `/-l k=v`, `/-f fuzzy`), its parse error and `123 of 4,812` count, debounce, and the saved filter |
 //! | [`navigate`] | E07-S11 | opening a kind's list: the `resource::OpenList` handler and the registry of kind views ([`navigate::KindViews`]) |
 //! | [`overview_lite`] | E07-S11 | the Workloads overview (store-only counts and health tiles) |
@@ -26,6 +27,7 @@ pub mod actions;
 pub mod crds;
 pub mod describe_settings;
 pub mod detail;
+pub mod exec;
 pub mod filter;
 pub mod navigate;
 pub mod overview_lite;

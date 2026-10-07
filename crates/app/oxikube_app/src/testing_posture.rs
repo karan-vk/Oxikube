@@ -214,6 +214,14 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             target: target(),
             grace_period_seconds: None,
         },
+        "pod::Attach" => Command::PodAttach {
+            target: target(),
+            container: None,
+        },
+        "pod::Shell" => Command::PodShell {
+            target: target(),
+            container: None,
+        },
         "pod::Exec" => Command::PodExec {
             target: target(),
             container: None,

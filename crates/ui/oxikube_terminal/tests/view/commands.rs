@@ -94,7 +94,7 @@ impl TerminalHost for TestHost {
     }
 }
 
-fn views(h: &mut Harness, cluster: Option<ClusterId>) -> Entity<TerminalViews> {
+pub(super) fn views(h: &mut Harness, cluster: Option<ClusterId>) -> Entity<TerminalViews> {
     let (_sink, requests) = TerminalViewSink::channel();
     let deps = TerminalViewsDeps {
         host: Rc::new(TestHost {
@@ -111,13 +111,13 @@ fn views(h: &mut Harness, cluster: Option<ClusterId>) -> Entity<TerminalViews> {
     views
 }
 
-fn apply(h: &mut Harness, views: &Entity<TerminalViews>, request: TerminalRequest) {
+pub(super) fn apply(h: &mut Harness, views: &Entity<TerminalViews>, request: TerminalRequest) {
     h.vcx
         .update(|window, cx| views.update(cx, |views, cx| views.apply(request, window, cx)));
     h.frame();
 }
 
-fn terminals(h: &mut Harness) -> Vec<Entity<TerminalView>> {
+pub(super) fn terminals(h: &mut Harness) -> Vec<Entity<TerminalView>> {
     let ws = h.ws.clone();
     h.vcx
         .update(|_, cx| ws.read(cx).items_of_type::<TerminalView>())
@@ -440,7 +440,7 @@ fn the_shipped_keymaps_bind_the_terminal_commands(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn restart_and_reconnect_start_a_new_session_in_the_matching_focused_terminal(
+fn restart_starts_a_local_shell_and_reconnect_asks_the_bus_for_a_pod_session(
     cx: &mut TestAppContext,
 ) {
     use oxikube_ports::ExitStatus;
@@ -462,9 +462,9 @@ fn restart_and_reconnect_start_a_new_session_in_the_matching_focused_terminal(
     apply(&mut h, &views, TerminalRequest::Restart);
     assert_eq!(h.launches(), [shell.clone(), shell], "the same shell again");
 
-    // A pod terminal whose connection dropped: Reconnect opens it again, Restart does not.
+    // A pod terminal whose connection dropped: Reconnect asks for it again, Restart does not.
     let pod = super::lifecycle::pod_shell();
-    let view = h.open(pod.clone());
+    let view = h.open(pod);
     h.frame();
     let second = h.launches().len() - 1;
     h.backend(second)
@@ -478,12 +478,17 @@ fn restart_and_reconnect_start_a_new_session_in_the_matching_focused_terminal(
         "a pod session does not restart"
     );
     apply(&mut h, &views, TerminalRequest::Reconnect);
-    assert_eq!(h.launches().len(), second + 2);
-    assert_eq!(h.launches().last(), Some(&pod));
-    let running = h
+    // A pod session starts only through its command, which the guard checks and audits: the
+    // terminal sent it and launched nothing itself.
+    assert_eq!(h.launches().len(), second + 1);
+    assert_eq!(
+        *h.recorder.0.borrow(),
+        [super::lifecycle::pod_shell_command()]
+    );
+    let disconnected = h
         .vcx
-        .update(|_, cx| matches!(view.read(cx).lifecycle(), view::Lifecycle::Running));
-    assert!(running);
+        .update(|_, cx| matches!(view.read(cx).lifecycle(), view::Lifecycle::Disconnected(_)));
+    assert!(disconnected, "the old tab keeps its screen");
 }
 
 /// Every command of the terminal's input family (copy, paste, select all, clear, scrolling, search)

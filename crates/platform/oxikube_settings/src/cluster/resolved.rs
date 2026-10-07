@@ -76,6 +76,7 @@ fn prefs_from_content(content: ClusterSettingsContent) -> ClusterPrefs {
         prometheus,
         accessible_namespaces,
         exec_interactivity,
+        exec_in_read_only,
     } = content;
     let mut namespaces: Vec<String> = Vec::new();
     for name in accessible_namespaces.unwrap_or_default() {
@@ -95,6 +96,7 @@ fn prefs_from_content(content: ClusterSettingsContent) -> ClusterPrefs {
         prometheus: prometheus.and_then(prometheus_from_content),
         accessible_namespaces: namespaces,
         exec_interactivity: exec_interactivity.unwrap_or_default(),
+        exec_in_read_only: exec_in_read_only.unwrap_or(false),
     }
 }
 

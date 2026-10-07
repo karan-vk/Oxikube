@@ -53,9 +53,14 @@ impl CommandMeta {
     /// The risk the MCP tool stub advertises: the worst case over every target the command can
     /// name. A tool is one static entry that cannot vary by target, so it must not understate
     /// what `resource.delete` does to a Namespace or PersistentVolume; for every other command
-    /// it is the declared [`CommandMeta::risk`]. The guard still decides per target
+    /// it is the declared [`CommandMeta::risk`]. An exec-class command ([`CommandMeta::exec`])
+    /// declares no risk (it changes no object), but a shell can do anything the container's user
+    /// can, so its tool stub advertises [`Risk::High`]. The guard still decides per target
     /// ([`Command::effective_risk`]).
     pub fn tool_risk(&self) -> Option<Risk> {
+        if self.exec {
+            return Some(Risk::High);
+        }
         let declared = self.risk?;
         Some(if self.id == CommandId::RESOURCE_DELETE {
             declared.max(Risk::Irreversible)

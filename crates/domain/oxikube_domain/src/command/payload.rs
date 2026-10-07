@@ -417,7 +417,30 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         grace_period_seconds: Option<u32>,
     },
-    /// Run a command (or an interactive shell) in a container.
+    /// Open an interactive shell in a container: `bash`, else `sh` (the `terminal.exec_shells`
+    /// chain), probed with a quick exec. An exec-class command: blocked on a read-only cluster
+    /// unless `exec_in_read_only` allows it, never confirmed, audited on every open.
+    #[serde(rename = "pod::Shell")]
+    PodShell {
+        /// The pod to open a shell in.
+        target: ResourceRef,
+        /// Container name; `None` picks the default one (the `kubectl.kubernetes.io/
+        /// default-container` annotation, else the first container).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+    },
+    /// Attach to the main process of a container (`kubectl attach -it`). An exec-class command
+    /// like [`Command::PodShell`].
+    #[serde(rename = "pod::Attach")]
+    PodAttach {
+        /// The pod to attach to.
+        target: ResourceRef,
+        /// Container name; `None` picks the default one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+    },
+    /// Run a command (or an interactive shell) in a container. An exec-class command like
+    /// [`Command::PodShell`].
     #[serde(rename = "pod::Exec")]
     PodExec {
         /// The pod to exec into.
@@ -780,6 +803,8 @@ impl Command {
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
             Command::ResourceApply { .. } => CommandId::RESOURCE_APPLY,
             Command::PodDelete { .. } => CommandId::POD_DELETE,
+            Command::PodShell { .. } => CommandId::POD_SHELL,
+            Command::PodAttach { .. } => CommandId::POD_ATTACH,
             Command::PodExec { .. } => CommandId::POD_EXEC,
             Command::PodPortForward { .. } => CommandId::POD_PORT_FORWARD,
             Command::PodViewLogs { .. } => CommandId::POD_VIEW_LOGS,
@@ -834,6 +859,12 @@ impl Command {
         self.meta().mutating
     }
 
+    /// Whether this command opens an interactive session in a container (the exec class: see
+    /// [`CommandMeta::exec`]).
+    pub fn is_exec(&self) -> bool {
+        self.meta().exec
+    }
+
     /// The resource this command targets, if it acts on a single selection.
     pub fn target(&self) -> Option<&ResourceRef> {
         match self {
@@ -848,6 +879,8 @@ impl Command {
             | Command::ResourceViewYaml { target }
             | Command::ResourceDelete { target, .. }
             | Command::PodDelete { target, .. }
+            | Command::PodShell { target, .. }
+            | Command::PodAttach { target, .. }
             | Command::PodExec { target, .. }
             | Command::PodPortForward { target, .. }
             | Command::PodViewLogs { target, .. }
@@ -1064,6 +1097,14 @@ mod tests {
                 target: pod(),
                 grace_period_seconds: Some(0),
             },
+            Command::PodShell {
+                target: pod(),
+                container: Some("app".into()),
+            },
+            Command::PodAttach {
+                target: pod(),
+                container: None,
+            },
             Command::PodExec {
                 target: pod(),
                 container: Some("app".into()),
@@ -1201,6 +1242,31 @@ mod tests {
         );
         assert!(command.is_mutating());
         assert_eq!(command.target(), Some(&deployment()));
+    }
+
+    #[test]
+    fn exec_commands_parse_from_tool_arguments_and_are_exec_class() {
+        let shell: Command = serde_json::from_value(json!({
+            "type": "pod::Shell",
+            "target": pod(),
+        }))
+        .unwrap();
+        assert_eq!(
+            shell,
+            Command::PodShell {
+                target: pod(),
+                container: None
+            }
+        );
+        assert!(shell.is_exec() && !shell.is_mutating());
+        assert_eq!(shell.effective_risk(), None, "a shell is not a mutation");
+        for command in samples() {
+            let exec = matches!(
+                command,
+                Command::PodShell { .. } | Command::PodAttach { .. } | Command::PodExec { .. }
+            );
+            assert_eq!(command.is_exec(), exec, "{}", command.id());
+        }
     }
 
     #[test]

@@ -90,6 +90,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceViewYaml { target }
         | Command::ResourceDelete { target, .. }
         | Command::PodDelete { target, .. }
+        | Command::PodShell { target, .. }
+        | Command::PodAttach { target, .. }
         | Command::PodExec { target, .. }
         | Command::PodPortForward { target, .. }
         | Command::PodViewLogs { target, .. }

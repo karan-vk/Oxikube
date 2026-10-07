@@ -14,6 +14,9 @@
 //! - `detail_crd_schema_dark`, `detail_crd_schema_light` (`crd`): the Schema tab of a CRD's detail
 //!   (E07-S07) with `spec` and `spec.containers` open.
 //!
+//! - `exec_picker_dark`, `exec_picker_light` (`exec`): the container picker of a pod with three
+//!   containers, the default one selected (E09-S08).
+//!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
 //! process main thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so
@@ -48,6 +51,8 @@ use oxikube_workspace::CommandDispatcher;
 mod crd;
 #[path = "screenshot/detail.rs"]
 mod detail;
+#[path = "screenshot/exec.rs"]
+mod exec;
 
 const WIDTH: f32 = 960.0;
 const HEIGHT: f32 = 320.0;
@@ -207,6 +212,7 @@ fn main() -> ExitCode {
             .and_then(|image| check("pods_table_filtered", image, WIDTH, HEIGHT)),
         detail::run(),
         crd::run(),
+        exec::run(),
     ];
     let mut failed = false;
     for result in results {

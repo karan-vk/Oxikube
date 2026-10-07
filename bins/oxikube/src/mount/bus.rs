@@ -116,7 +116,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_terminal", |r| {
         oxikube_terminal::open_link::register_commands(r, parts.links)?;
         oxikube_terminal::input::register_input_commands(r, parts.terminal_input)?;
-        oxikube_terminal::view::register_view_commands(r, parts.terminal_views)
+        oxikube_terminal::view::register_view_commands(r, parts.terminal_views.clone())?;
+        // `pod::Shell`, `pod::Attach`, `pod::Exec` (E09-S08): exec class, guarded and audited.
+        oxikube_terminal::view::register_pod_commands(r, parts.terminal_views)
     })?;
     Ok(registry)
 }

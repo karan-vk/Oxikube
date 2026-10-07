@@ -21,6 +21,15 @@ pub(super) fn pod_shell() -> BackendDescriptor {
     }
 }
 
+/// The command `pod_shell()` is opened with.
+pub(super) fn pod_shell_command() -> Command {
+    Command::PodExec {
+        target: ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "shop", "web-0"),
+        container: Some("app".into()),
+        command: vec!["/bin/sh".into()],
+    }
+}
+
 fn local_shell() -> BackendDescriptor {
     BackendDescriptor::local(None).with_shell("/bin/zsh", vec!["-l".into()])
 }
@@ -122,30 +131,28 @@ fn a_dropped_connection_shows_a_banner_over_the_kept_screen_and_reconnect_starts
     assert_eq!(h.launches().len(), 1, "the command alone started nothing");
     assert!(h.reconnect(&view), "a dropped pod session reconnects");
 
+    // A pod session is only started by its command: the guard checks read-only mode and audits
+    // it, so the view sends `pod::Exec` again and starts nothing around the bus.
     assert_eq!(
-        h.launches(),
-        [pod_shell(), pod_shell()],
-        "the same target again"
+        h.commands(),
+        [Command::TerminalReconnect, pod_shell_command()],
+        "the same target again, as its command"
     );
-    assert_eq!(h.lifecycle(&view), Lifecycle::Running);
+    assert_eq!(
+        h.launches().len(),
+        1,
+        "no launch around the guard (the command's terminal opens the new session)"
+    );
     assert!(
         h.backend(0).kill_count() >= 1,
         "the old session was torn down"
     );
     h.frame();
-    assert!(!h.drawn("terminal-banner") && !h.drawn("terminal-dimmed"));
-    assert_eq!(
-        h.row(&view, 0),
-        "",
-        "a new session: the old shell's state is gone"
+    assert!(
+        h.drawn("terminal-banner") && h.drawn("terminal-dimmed"),
+        "the old tab keeps its screen, in case the guard refuses"
     );
-    h.vcx.simulate_keystrokes("l s enter");
-    h.vcx.run_until_parked();
-    assert_eq!(
-        h.backend(1).written(),
-        b"ls\r",
-        "input reaches the new session"
-    );
+    assert_eq!(h.row(&view, 0), "hello from the pod");
 }
 
 #[gpui::test]
@@ -249,10 +256,33 @@ fn a_pod_that_cannot_be_opened_says_why_and_reconnect_retries(cx: &mut TestAppCo
     assert!(h.drawn("terminal-banner-Reconnect"));
     assert!(h.drawn("terminal-failed"), "the backdrop stays");
 
-    // The user's role was fixed: Reconnect goes through the launcher (and its policy) again.
+    // The user's role was fixed: Reconnect asks for the session through its command again (the
+    // guard applies its policy and audits it); the failed tab, with no screen to keep, closes.
     assert!(h.reconnect(&view));
-    assert_eq!(h.launches().len(), 2);
-    assert_eq!(h.lifecycle(&view), Lifecycle::Running);
+    assert_eq!(h.commands(), [pod_shell_command()]);
+    assert_eq!(h.launches().len(), 1, "no launch around the guard");
+    assert!(
+        super::commands::terminals(&mut h).is_empty(),
+        "the failed tab closed"
+    );
+}
+
+#[gpui::test]
+fn a_pod_terminal_without_a_command_dispatcher_does_not_reconnect(cx: &mut TestAppContext) {
+    let launcher = FakeLauncher::default();
+    *launcher.fail_next.borrow_mut() = Some(OxiError::network("connection reset"));
+    let mut h = harness_with(cx, launcher);
+    // A bare view: no bus behind it, so nothing could check the policy or audit an open.
+    let services = TerminalServices::new(h.launcher.clone());
+    let view = h
+        .vcx
+        .update(|_, cx| cx.new(|cx| TerminalView::new(pod_shell(), services, cx)));
+    h.vcx.run_until_parked();
+    assert!(
+        !h.reconnect(&view),
+        "a session is never opened around the bus"
+    );
+    assert_eq!(h.launches().len(), 1);
 }
 
 /// The kinds the banner distinguishes, from a failed pod start.

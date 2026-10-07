@@ -8,8 +8,12 @@
 //!   `kubectl logs -f`), in the dock of the descriptor's own cluster, with exactly that descriptor.
 //! - **Split** opens a terminal running what the focused one runs, in the directory its shell is
 //!   in now (the shown cluster's shell otherwise), in a new pane right of the focused terminal's
-//!   pane, else of the active pane.
+//!   pane, else of the active pane. For a pod terminal it sends the pod command again instead (a
+//!   new session in the bottom dock, which the guard checks and audits).
 //! - **Close** closes the focused terminal, else the active pane's item when it is a terminal.
+//! - **Pod** (`pod::Shell`, `pod::Attach`, `pod::Exec`, E09-S08) opens a terminal in a pod's
+//!   container in the bottom dock of the pod's cluster tab, which it shows; the terminal starts in
+//!   its "Starting" state at once and connects off the UI thread.
 //! - **Reconnect** and **Restart** (E09-S12) start a new session in the same terminal (a pod's, a
 //!   local shell's): the focused one, else the active pane's.
 //!
@@ -79,7 +83,7 @@ impl TerminalViews {
     pub fn apply(&mut self, request: TerminalRequest, window: &mut Window, cx: &mut Context<Self>) {
         cx.defer_in(window, move |this, window, cx| match request {
             TerminalRequest::New { cluster } => this.open_new(cluster, window, cx),
-            TerminalRequest::Open { descriptor } => {
+            TerminalRequest::Open { descriptor } | TerminalRequest::Pod(descriptor) => {
                 this.open_in(descriptor.cluster().cloned(), descriptor, window, cx);
             }
             TerminalRequest::Split => this.split(window, cx),
@@ -152,6 +156,14 @@ impl TerminalViews {
             return;
         };
         let focused = focused_terminal(&workspace, window, cx);
+        // Another session in a container is its command again: the guard checks and audits it.
+        if let Some(command) = focused
+            .as_ref()
+            .and_then(|view| view.read(cx).descriptor().pod_command())
+        {
+            self.deps.services.dispatch(command, cx);
+            return;
+        }
         let descriptor = match &focused {
             Some(view) => view.read(cx).live_descriptor(cx),
             None => {

@@ -87,4 +87,10 @@ pub struct TerminalContent {
     /// the line. Single-line pastes never ask.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirm_multiline_paste: Option<bool>,
+    /// The shells `pod::Shell` tries in a container, first to last, each probed with a quick
+    /// exec; the first one the container has is opened (default `["bash", "sh"]`, like Lens).
+    /// A name or an absolute path. An empty list uses the default. Applies to shells opened
+    /// afterwards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exec_shells: Option<Vec<String>>,
 }

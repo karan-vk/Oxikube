@@ -63,6 +63,11 @@ pub struct ClusterPrefs {
     pub accessible_namespaces: Vec<String>,
     /// How interactive exec credential plugins may be; read at connect time.
     pub exec_interactivity: ExecInteractivity,
+    /// Whether a shell, attach or exec into a pod (`pod::Shell`, `pod::Attach`, `pod::Exec`) is
+    /// allowed while `read_only` is on. `false` (the default) blocks them, since a shell can
+    /// change anything the container's user can. Read by the guard on every open, so a change
+    /// applies at once.
+    pub exec_in_read_only: bool,
 }
 
 /// The resolved prefs of every cluster: a global fallback and a lookup index of the clusters

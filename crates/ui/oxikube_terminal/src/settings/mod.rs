@@ -7,7 +7,8 @@
 //!   "font_family": null, "font_size": null, "line_height": 1.3,
 //!   "cursor_shape": "block", "cursor_blink": false, "bell": "visual",
 //!   "scrollback_lines": 10000, "copy_on_select": false,
-//!   "option_as_meta": null, "confirm_multiline_paste": true
+//!   "option_as_meta": null, "confirm_multiline_paste": true,
+//!   "exec_shells": ["bash", "sh"]
 //! }
 //! ```
 //!
@@ -27,6 +28,7 @@
 //! | `bell` | read when the next bell rings |
 //! | `scrollback_lines` | the grid's history is trimmed or allowed to grow at once |
 //! | `copy_on_select`, `option_as_meta`, `confirm_multiline_paste` | the next selection, keystroke or paste |
+//! | `exec_shells` | pod shells opened afterwards |
 //!
 //! Scrollback is never written to disk, whatever `scrollback_lines` says (non-negotiable 5).
 
@@ -37,5 +39,6 @@ mod tests;
 
 pub use content::{BellSetting, CursorShapeSetting, TerminalContent};
 pub use resolved::{
-    MAX_FONT_SIZE, MAX_LINE_HEIGHT, MIN_FONT_SIZE, MIN_LINE_HEIGHT, TerminalSettings,
+    DEFAULT_EXEC_SHELLS, MAX_FONT_SIZE, MAX_LINE_HEIGHT, MIN_FONT_SIZE, MIN_LINE_HEIGHT,
+    TerminalSettings,
 };

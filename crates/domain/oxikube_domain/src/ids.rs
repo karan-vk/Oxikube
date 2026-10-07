@@ -278,6 +278,11 @@ impl Gvk {
     pub fn is_core(&self) -> bool {
         self.group.is_empty()
     }
+
+    /// Whether this type is the core `v1` Pod.
+    pub fn is_pod(&self) -> bool {
+        self.is_core() && &*self.kind == "Pod"
+    }
 }
 
 impl fmt::Display for Gvk {
@@ -762,6 +767,13 @@ mod tests {
     fn gvk_deserializes_without_group() {
         let gvk: Gvk = serde_json::from_str(r#"{"version":"v1","kind":"Pod"}"#).unwrap();
         assert!(gvk.is_core());
+    }
+
+    #[test]
+    fn gvk_is_pod_is_the_core_pod_only() {
+        assert!(Gvk::new("", "v1", "Pod").is_pod());
+        assert!(!Gvk::new("metrics.k8s.io", "v1beta1", "Pod").is_pod());
+        assert!(!Gvk::new("", "v1", "Node").is_pod());
     }
 
     proptest! {
