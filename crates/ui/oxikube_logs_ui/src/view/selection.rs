@@ -106,7 +106,9 @@ impl Marks {
     /// Forgets the marks on lines the buffer no longer holds (`seq < first_seq`): a mark lives
     /// only as long as its line.
     pub fn retain_from(&mut self, first_seq: u64) {
-        self.0 = self.0.split_off(&first_seq);
+        if self.0.first().is_some_and(|&first| first < first_seq) {
+            self.0 = self.0.split_off(&first_seq);
+        }
     }
 
     /// Removes every mark.

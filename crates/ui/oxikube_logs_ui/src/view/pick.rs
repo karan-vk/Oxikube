@@ -64,14 +64,9 @@ impl LogView {
         }
     }
 
-    /// The filter a copy or a save applies: only the lines it accepts are taken ("what you see is
-    /// what you export"). The search and filter bar installs its matcher here; without one every
-    /// line passes.
-    pub fn line_filter(&self) -> Option<&LineFilter> {
-        self.filter.as_ref()
-    }
-
-    /// Installs (or removes) the filter that copies and saves apply.
+    /// Installs (or removes) the filter that copies and saves apply: only the lines it accepts are
+    /// taken ("what you see is what you export"). The search and filter bar installs its matcher
+    /// here; without one every line passes.
     pub fn set_line_filter(&mut self, filter: Option<LineFilter>, cx: &mut Context<Self>) {
         self.filter = filter;
         cx.notify();

@@ -18,17 +18,14 @@ impl LogView {
             return;
         };
         let view = cx.entity().downgrade();
-        let message = if marks == 1 {
-            "1 marked line will go with the buffer. The cluster's logs are not touched and the \
-             stream keeps reading."
-                .to_owned()
-        } else {
-            format!(
-                "{} marked lines will go with the buffer. The cluster's logs are not touched and \
-                 the stream keeps reading.",
-                group(marks as u64)
-            )
+        let marked = match marks {
+            1 => "1 marked line will".to_owned(),
+            n => format!("{} marked lines will", group(n as u64)),
         };
+        let message = format!(
+            "{marked} go with the buffer. The cluster's logs are not touched and the stream keeps \
+             reading."
+        );
         workspace.update(cx, |workspace, cx| {
             let dialog = cx.new(|cx| {
                 DialogModal::new("Clear the log?", cx)

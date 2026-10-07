@@ -95,6 +95,15 @@ pub fn group(n: u64) -> String {
     out
 }
 
+/// `1 line` or `12,345 lines`.
+pub fn lines_of(n: u64) -> String {
+    if n == 1 {
+        "1 line".to_owned()
+    } else {
+        format!("{} lines", group(n))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;

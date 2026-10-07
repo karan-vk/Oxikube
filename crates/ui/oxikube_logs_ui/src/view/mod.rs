@@ -80,7 +80,7 @@ pub use copy::COPY_LIMIT_BYTES;
 pub use item::item_key;
 pub use options::{HEAD_LIMIT_BYTES, OpenLogs, TAIL_LINES, ViewOptions};
 pub use selection::{Marks, Selection};
-pub use text::{Level, group, level_of};
+pub use text::{Level, group, level_of, lines_of};
 pub use window::{Follow, LineWindow, Row, RowChange};
 
 /// Bytes of a line an unwrapped row draws: more than any screen is wide, and a 16 KiB line costs

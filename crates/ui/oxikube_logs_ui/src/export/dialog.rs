@@ -16,7 +16,7 @@ use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
 use oxikube_workspace::ModalView;
 use oxikube_workspace::modal::ModalPlacement;
 
-use crate::view::{LogView, group};
+use crate::view::{LogView, group, lines_of};
 
 /// What one scope would write: its seqs and how many lines pass the filter (`None` while they are
 /// being counted, which only a filter makes slow).
@@ -34,8 +34,6 @@ pub struct SaveOffer {
 /// What the dialog hands the view when the user goes on to choose a file.
 #[derive(Clone)]
 pub struct SaveRequest {
-    /// Which lines.
-    pub scope: LogSaveScope,
     /// What to read and how to write it.
     pub spec: ExportSpec,
     /// Lines the file will hold, when known (for the progress).
@@ -76,23 +74,12 @@ impl SaveDialog {
         }
     }
 
-    /// The chosen scope.
-    pub fn scope(&self) -> LogSaveScope {
-        self.scope
-    }
-
-    /// The format toggles as they are now.
-    pub fn format(&self) -> ExportFormat {
-        self.format
-    }
-
-    /// What the dialog offers for `scope`.
-    pub fn offer(&self, scope: LogSaveScope) -> Option<&SaveOffer> {
+    fn offer(&self, scope: LogSaveScope) -> Option<&SaveOffer> {
         self.offers.iter().find(|offer| offer.scope == scope)
     }
 
     /// Lines the chosen scope would write (`None` while counting).
-    pub fn lines(&self) -> Option<u64> {
+    fn lines(&self) -> Option<u64> {
         self.offer(self.scope).and_then(|offer| offer.lines)
     }
 
@@ -111,11 +98,9 @@ impl SaveDialog {
 
     /// The words under the title: which lines, how many, filtered or not.
     pub fn summary(&self) -> String {
-        let lines = match self.lines() {
-            Some(1) => "1 line".to_owned(),
-            Some(n) => format!("{} lines", group(n)),
-            None => "counting the lines".to_owned(),
-        };
+        let lines = self
+            .lines()
+            .map_or_else(|| "counting the lines".to_owned(), lines_of);
         let which = match self.scope {
             LogSaveScope::Visible => "The lines on screen",
             LogSaveScope::All => "Everything the buffer holds",
@@ -132,7 +117,6 @@ impl SaveDialog {
     pub fn request(&self) -> Option<SaveRequest> {
         let offer = self.offer(self.scope)?;
         Some(SaveRequest {
-            scope: self.scope,
             spec: ExportSpec::new(offer.seqs.clone(), self.format).with_filter(self.filter.clone()),
             lines: offer.lines,
         })

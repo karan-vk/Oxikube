@@ -7,7 +7,7 @@ use oxikube_app::logs::export::copy_text;
 use oxikube_workspace::Toast;
 
 use super::LogView;
-use super::text::group;
+use super::text::{group, lines_of};
 
 /// The most a copy puts on the clipboard: building and handing over more than this does not fit
 /// a frame. A bigger selection copies its first lines and says so; saving it to a file has no
@@ -45,10 +45,8 @@ impl LogView {
                 "Copied the first {} lines: a copy is limited to 5 MB. Save to a file to keep the rest.",
                 group(lines)
             ))
-        } else if lines == 1 {
-            Toast::success("Copied 1 line")
         } else {
-            Toast::success(format!("Copied {} lines", group(lines)))
+            Toast::success(format!("Copied {}", lines_of(lines)))
         };
         self.toast(toast.key("logs-copy"), cx);
     }
