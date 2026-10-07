@@ -101,15 +101,13 @@ impl ContextDefinition {
 
     /// Host of the cluster's `server` URL, when it parses. Safe to log.
     pub fn server_host(&self) -> Option<String> {
-        let server = self
-            .kubeconfig
-            .clusters
-            .first()?
-            .cluster
-            .as_ref()?
-            .server
-            .as_ref()?;
-        url::Url::parse(server).ok()?.host_str().map(str::to_owned)
+        self.server_url()?.host_str().map(str::to_owned)
+    }
+
+    /// The cluster's `server` URL, when it parses.
+    pub(super) fn server_url(&self) -> Option<url::Url> {
+        let server = self.cluster()?.server.as_ref()?;
+        url::Url::parse(server).ok()
     }
 
     /// Whether `other` describes the same connection: same context, cluster and

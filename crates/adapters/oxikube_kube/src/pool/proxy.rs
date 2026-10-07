@@ -3,7 +3,8 @@
 //! # Precedence (highest first)
 //!
 //! 1. the cluster's `proxy-url` in the kubeconfig;
-//! 2. the environment fallback captured in [`ProxyEnv`]: `HTTPS_PROXY`, then `https_proxy`;
+//! 2. the environment fallback captured in [`ProxyEnv`]: `HTTPS_PROXY`, then `https_proxy`,
+//!    unless the cluster's `server` host matches `NO_PROXY` / `no_proxy` (see below);
 //! 3. no proxy.
 //!
 //! An empty value counts as unset at every step.
@@ -41,17 +42,21 @@
 //!
 //! # `NO_PROXY`
 //!
-//! Not honoured, and deliberately not part of this story: kube ignores it, and it only
-//! matters for the environment fallback (an explicit kubeconfig `proxy-url` is a
-//! per-cluster choice). Until it is supported, a cluster that must bypass `HTTPS_PROXY`
-//! needs the variable unset. Follow-up: match `NO_PROXY` (hosts, domain suffixes, CIDRs,
-//! `*`) against the cluster server for the environment fallback only.
+//! `NO_PROXY`, then `no_proxy`, is captured in [`ProxyEnv`] next to `HTTPS_PROXY` (so tests
+//! never read process environment) and consulted for the environment fallback only: a
+//! kubeconfig `proxy-url` is an explicit per-cluster choice and is used even when the
+//! cluster's host is listed. When the `server` host matches, the environment proxy is
+//! skipped (and not even validated) and the cluster connects directly. The list syntax
+//! (hosts, domain suffixes with or without a leading dot, IPs, CIDRs, `*`, optional
+//! ports) and its matching rules are documented in `pool::no_proxy`. A `server` URL that
+//! does not parse never matches, so it keeps the environment proxy.
 
 use kube::config::KubeconfigError;
 use oxikube_domain::OxiError;
 
 use super::build::ProxyEnv;
 use super::entry::ContextDefinition;
+use super::no_proxy::Target;
 use crate::auth::classify_kubeconfig;
 
 /// The proxy URL to use for `definition`, validated, or `None`.
@@ -65,6 +70,7 @@ pub(super) fn resolve(
         .filter(|url| !url.is_empty());
     let raw = match (from_cluster, env.https_proxy()) {
         (Some(url), _) => normalize_scheme(url),
+        (None, Some(_)) if bypassed_by_no_proxy(definition, env) => return Ok(None),
         (None, Some(url)) => normalize_scheme(&with_default_scheme(url)),
         (None, None) => return Ok(None),
     };
@@ -96,6 +102,17 @@ pub(super) fn resolve(
         return Err(OxiError::validation("the proxy URL has no host"));
     }
     Ok(Some(uri))
+}
+
+/// Whether the cluster's `server` host is listed in `NO_PROXY`.
+fn bypassed_by_no_proxy(definition: &ContextDefinition, env: &ProxyEnv) -> bool {
+    let Some(url) = definition.server_url() else {
+        return false;
+    };
+    let (Some(host), Some(port)) = (Target::from_url(&url), url.port_or_known_default()) else {
+        return false;
+    };
+    env.no_proxy().matches(&host, port)
 }
 
 /// client-go's leniency for the environment proxy: a value without `://` is read as

@@ -19,6 +19,7 @@ use oxikube_domain::OxiError;
 
 use super::config::PoolConfig;
 use super::entry::ContextDefinition;
+use super::no_proxy::NoProxy;
 use super::{proxy, tls};
 use crate::auth::{build_client_bounded, classify_kubeconfig};
 use crate::kubeconfig::in_cluster_config_fixups;
@@ -42,7 +43,8 @@ pub struct KubeClientFactory {
 }
 
 impl KubeClientFactory {
-    /// A factory that falls back to the process's `HTTPS_PROXY` / `https_proxy`.
+    /// A factory that falls back to the process's `HTTPS_PROXY` / `https_proxy`, honouring
+    /// `NO_PROXY` / `no_proxy` for it.
     pub fn from_process_env() -> Self {
         Self::new(ProxyEnv::from_process())
     }
@@ -82,26 +84,41 @@ impl ClientFactory for KubeClientFactory {
 /// without a scheme is read as `http://` (`pool::proxy`). kube still consults the process
 /// environment first, though: an unparseable `HTTPS_PROXY` there fails the build
 /// before the override runs (reported as an invalid proxy URL, see
-/// [`build_config`]). `NO_PROXY` is not honoured (kube does not either); see E03-S07.
+/// [`build_config`]).
+///
+/// `NO_PROXY` / `no_proxy` is captured too and applies to the environment fallback only:
+/// a cluster whose `server` host matches it gets no proxy from the environment, while a
+/// kubeconfig `proxy-url` is always used (matching rules in `pool::no_proxy`).
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct ProxyEnv {
     https_proxy: Option<String>,
+    no_proxy: NoProxy,
 }
 
 impl ProxyEnv {
-    /// Reads `HTTPS_PROXY`, then `https_proxy`. Empty values count as unset.
+    /// Reads `HTTPS_PROXY` (then `https_proxy`) and `NO_PROXY` (then `no_proxy`). Empty
+    /// values count as unset.
     pub fn from_process() -> Self {
         let read = |key| std::env::var(key).ok().filter(|v: &String| !v.is_empty());
-        Self {
-            https_proxy: read("HTTPS_PROXY").or_else(|| read("https_proxy")),
-        }
+        Self::with_https_proxy(read("HTTPS_PROXY").or_else(|| read("https_proxy")))
+            .with_no_proxy(read("NO_PROXY").or_else(|| read("no_proxy")))
     }
 
     /// An explicit fallback proxy URL, or `None` for no fallback.
     pub fn with_https_proxy(https_proxy: Option<String>) -> Self {
         Self {
             https_proxy: https_proxy.filter(|v| !v.is_empty()),
+            no_proxy: NoProxy::default(),
         }
+    }
+
+    /// Sets the `NO_PROXY` list (comma-separated hosts, domain suffixes, IPs, CIDRs, `*`,
+    /// each with an optional port), or clears it with `None`. It only ever suppresses the
+    /// environment fallback, never a kubeconfig `proxy-url`.
+    #[must_use]
+    pub fn with_no_proxy(mut self, no_proxy: Option<String>) -> Self {
+        self.no_proxy = no_proxy.as_deref().map(NoProxy::parse).unwrap_or_default();
+        self
     }
 }
 
@@ -110,6 +127,11 @@ impl ProxyEnv {
     pub(super) fn https_proxy(&self) -> Option<&str> {
         self.https_proxy.as_deref()
     }
+
+    /// The parsed `NO_PROXY` list.
+    pub(super) fn no_proxy(&self) -> &NoProxy {
+        &self.no_proxy
+    }
 }
 
 impl std::fmt::Debug for ProxyEnv {
@@ -117,6 +139,7 @@ impl std::fmt::Debug for ProxyEnv {
         // A proxy URL can carry `user:password@`; print only whether one is set.
         f.debug_struct("ProxyEnv")
             .field("https_proxy_set", &self.https_proxy.is_some())
+            .field("no_proxy_set", &!self.no_proxy.is_empty())
             .finish()
     }
 }
