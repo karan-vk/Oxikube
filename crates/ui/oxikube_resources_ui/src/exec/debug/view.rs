@@ -1,7 +1,7 @@
 //! Drawing the debug dialog: what it does, the fields, the target choice, the progress.
 
 use gpui::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
+    AnyElement, Context, Div, InteractiveElement as _, IntoElement, ParentElement as _, Render,
     SharedString, Styled as _, Window, div, px,
 };
 use oxikube_ui::button::{Button, ButtonVariants as _};
@@ -19,6 +19,24 @@ pub const PERMANENCE_NOTE: &str = "An ephemeral container cannot be removed or e
      name cannot be reused, until the pod is deleted. Closing the terminal ends only your \
      session; exiting the shell ends the container's main process.";
 
+/// `field` under a small muted `label`.
+fn field_with_label(
+    label: &'static str,
+    field: impl IntoElement,
+    cx: &mut Context<DebugDialog>,
+) -> Div {
+    let colors = cx.colors();
+    v_flex()
+        .gap(u(px(4.)))
+        .child(
+            div()
+                .text_size(u(px(12.)))
+                .text_color(colors.text_muted)
+                .child(label),
+        )
+        .child(field)
+}
+
 impl DebugDialog {
     fn title(&self) -> SharedString {
         format!("Debug {}", self.defaults.pod.name).into()
@@ -31,22 +49,16 @@ impl DebugDialog {
         field: AnyElement,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let colors = cx.colors();
-        v_flex()
-            .gap(u(px(4.)))
-            .child(
-                div()
-                    .text_size(u(px(12.)))
-                    .text_color(colors.text_muted)
-                    .child(label),
-            )
-            .child(div().debug_selector(move || id.into()).child(field))
+        field_with_label(
+            label,
+            div().debug_selector(move || id.into()).child(field),
+            cx,
+        )
     }
 
     /// The containers the debug container can share processes with: a choice for several, a
     /// line for one.
     fn target_row(&self, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.colors();
         let targets = &self.defaults.targets;
         let field =
             if let [only] = targets.as_slice() {
@@ -73,16 +85,7 @@ impl DebugDialog {
                     }))
                     .into_any_element()
             };
-        v_flex()
-            .gap(u(px(4.)))
-            .child(
-                div()
-                    .text_size(u(px(12.)))
-                    .text_color(colors.text_muted)
-                    .child("Share the processes of"),
-            )
-            .child(field)
-            .into_any_element()
+        field_with_label("Share the processes of", field, cx).into_any_element()
     }
 
     fn editing_body(&self, cx: &mut Context<Self>) -> AnyElement {

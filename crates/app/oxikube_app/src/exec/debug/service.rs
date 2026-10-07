@@ -1,14 +1,13 @@
 //! The debug-container half of [`ExecService`]: defaults for the dialog, planning, and opening.
 
-use std::sync::Arc;
-
 use oxikube_domain::command::{DEFAULT_DEBUG_COMMAND, DEFAULT_DEBUG_IMAGE};
 use oxikube_domain::ids::ResourceRef;
-use oxikube_domain::view::ContainerKind;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::DebugContainerSpec;
 
-use super::request::{DebugPlan, DebugRequest, plan_debug};
+use super::request::{
+    DebugPlan, DebugRequest, debug_targets, default_target, no_target, plan_debug,
+};
 use crate::exec::containers::{ExecContainer, PodContainers};
 use crate::exec::notice::{NoticeBackend, notice_line};
 use crate::exec::service::{ExecService, read_pod};
@@ -49,21 +48,10 @@ impl ExecService {
         let (_, reader) = self.ports(&pod.cluster)?;
         let resource = read_pod(&reader, pod).await?;
         let containers = PodContainers::of(&resource);
-        let targets: Vec<ExecContainer> = containers
-            .containers()
-            .iter()
-            .filter(|c| c.kind != ContainerKind::Ephemeral)
-            .cloned()
-            .collect();
-        let default = containers
-            .default_container()
+        let targets: Vec<ExecContainer> = debug_targets(&containers).cloned().collect();
+        let default = default_target(&containers)
             .and_then(|d| targets.iter().position(|c| c.name == d.name))
-            .unwrap_or(0);
-        if targets.is_empty() {
-            return Err(OxiError::validation(
-                "the pod has no container to share processes with",
-            ));
-        }
+            .ok_or_else(no_target)?;
         Ok(DebugDefaults {
             pod: pod.clone(),
             image: self
@@ -153,11 +141,6 @@ impl ExecService {
     /// it: for a terminal that could not be opened. The container stays in the pod.
     pub fn discard_debug(&self, pod: &ResourceRef, container: &str) {
         drop(self.debug.claim(pod, container));
-    }
-
-    /// The image last used for a debug container in `cluster`'s pods this session.
-    pub fn last_debug_image(&self, cluster: &oxikube_domain::ids::ClusterId) -> Option<Arc<str>> {
-        self.debug.last_image(cluster)
     }
 
     /// How many opened debug sessions wait for their terminal.

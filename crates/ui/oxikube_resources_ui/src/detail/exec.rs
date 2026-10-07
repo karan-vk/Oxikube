@@ -1,4 +1,4 @@
-//! "Shell" and "Attach" in a pod's header (E09-S08): the same flow as the table's row actions
+//! "Shell", "Attach" and "Debug" in a pod's header (E09-S08, E09-S10): the same flow as the table's row actions
 //! ([`ExecFlow`](crate::exec::ExecFlow)), so a pod with several containers asks first and the
 //! command carries the container that opens.
 
@@ -17,18 +17,17 @@ use super::view::DetailView;
 use crate::exec::{ExecFlow, ExecKind};
 
 impl DetailView {
-    /// What the header does about shells: `None` when it offers none (not a pod, no flow wired,
-    /// the session may not exec), else why they are blocked now, if they are (a read-only cluster
-    /// that does not allow them).
-    fn exec_state(&self) -> Option<Option<String>> {
-        if !self.target.gvk.is_pod() || self.deps.exec.is_none() {
+    /// What the header does about `command`: `None` when it offers none (not a pod, the session
+    /// may not exec), else why it is blocked now, if it is (a read-only cluster).
+    fn command_state(&self, command: CommandId) -> Option<Option<String>> {
+        if !self.target.gvk.is_pod() {
             return None;
         }
         let session = self.deps.sessions.get(&self.target.cluster)?;
         if !session.capabilities().contains(Capabilities::EXEC) {
             return None;
         }
-        let meta = command::lookup(CommandId::POD_SHELL)?;
+        let meta = command::lookup(command)?;
         Some(
             ActionContext::of(&session)
                 .state_of(meta)
@@ -37,24 +36,21 @@ impl DetailView {
         )
     }
 
-    /// What the header does about debug containers: `None` when it offers none (not a pod, no
-    /// debug flow wired, the session may not exec), else why it is blocked now, if it is (a
-    /// read-only cluster: patching the pod is a mutation).
+    /// What the header does about shells: `None` when it offers none (no flow wired, see
+    /// [`command_state`](Self::command_state)).
+    fn exec_state(&self) -> Option<Option<String>> {
+        self.deps.exec.as_ref()?;
+        self.command_state(CommandId::POD_SHELL)
+    }
+
+    /// What the header does about debug containers: `None` when it offers none (no debug flow
+    /// wired), else why it is blocked now (a read-only cluster blocks it: patching the pod is a
+    /// mutation).
     fn debug_state(&self) -> Option<Option<String>> {
-        if !self.target.gvk.is_pod() || !self.deps.exec.as_ref().is_some_and(ExecFlow::can_debug) {
+        if !self.deps.exec.as_ref().is_some_and(ExecFlow::can_debug) {
             return None;
         }
-        let session = self.deps.sessions.get(&self.target.cluster)?;
-        if !session.capabilities().contains(Capabilities::EXEC) {
-            return None;
-        }
-        let meta = command::lookup(CommandId::POD_DEBUG)?;
-        Some(
-            ActionContext::of(&session)
-                .state_of(meta)
-                .reason()
-                .map(|reason| reason.to_string()),
-        )
+        self.command_state(CommandId::POD_DEBUG)
     }
 
     /// Opens the debug dialog for this pod: reads the pod for its containers, then asks for the

@@ -76,10 +76,11 @@ impl ResourceTable {
         }
         if command == CommandId::RESOURCE_DELETE {
             self.begin_delete(&actions, targets, window, cx);
-        } else if let (true, Some(service)) = (
-            ExecKind::of(command).is_some() || command == CommandId::POD_DEBUG,
-            actions.exec_service().cloned(),
-        ) {
+        } else if let Some(service) = actions
+            .exec_service()
+            .filter(|_| ExecKind::of(command).is_some() || command == CommandId::POD_DEBUG)
+            .cloned()
+        {
             // A shell, an attach or a debug container: the pod is read first, so the container is
             // chosen (or asked for, or the dialog filled in) before the command is dispatched and
             // audited.

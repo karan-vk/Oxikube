@@ -10,7 +10,7 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::view::{ContainerKind, ContainerSummary};
 use oxikube_domain::{OxiError, OxiResult, Resource};
 
-use crate::exec::containers::PodContainers;
+use crate::exec::containers::{ExecContainer, PodContainers};
 
 /// How long to wait for a debug container to start when nobody chose: long enough for an image
 /// pull, short enough that a rejected or stuck one is reported.
@@ -211,15 +211,8 @@ pub fn plan_debug(request: &DebugRequest, pod: &Resource) -> OxiResult<DebugPlan
 /// The container to share processes with: the one asked for, else the pod's default.
 fn target_of(request: &DebugRequest, pod: &Resource) -> OxiResult<Arc<str>> {
     let containers = PodContainers::of(pod);
-    // An ephemeral container is no target: it cannot be shared with.
-    let candidates = || {
-        containers
-            .containers()
-            .iter()
-            .filter(|c| c.kind != ContainerKind::Ephemeral)
-    };
     if let Some(name) = request.target_container.as_deref().map(str::trim) {
-        return candidates()
+        return debug_targets(&containers)
             .find(|c| &*c.name == name)
             .map(|c| c.name.clone())
             .ok_or_else(|| {
@@ -229,12 +222,31 @@ fn target_of(request: &DebugRequest, pod: &Resource) -> OxiResult<Arc<str>> {
                 ))
             });
     }
+    default_target(&containers)
+        .map(|c| c.name.clone())
+        .ok_or_else(no_target)
+}
+
+/// The containers a debug container can share processes with, in the pod's order. An ephemeral
+/// container is no target: it cannot be shared with.
+pub(super) fn debug_targets(containers: &PodContainers) -> impl Iterator<Item = &ExecContainer> {
+    containers
+        .containers()
+        .iter()
+        .filter(|c| c.kind != ContainerKind::Ephemeral)
+}
+
+/// The pod's default container when it is a target, else its first target.
+pub(super) fn default_target(containers: &PodContainers) -> Option<&ExecContainer> {
     containers
         .default_container()
         .filter(|c| c.kind != ContainerKind::Ephemeral)
-        .or_else(|| candidates().next())
-        .map(|c| c.name.clone())
-        .ok_or_else(|| OxiError::validation("the pod has no container to share processes with"))
+        .or_else(|| debug_targets(containers).next())
+}
+
+/// The error for a pod with nothing to share processes with.
+pub(super) fn no_target() -> OxiError {
+    OxiError::validation("the pod has no container to share processes with")
 }
 
 /// `debugger-` and five random lowercase letters or digits, not in `taken`.

@@ -100,7 +100,20 @@ impl AuditLog {
         }
     }
 
-    /// [`begin`](Self::begin) with an optional [`detail`](AuditRecord::detail).
+    /// [`begin`](Self::begin) with a [`detail`](AuditRecord::detail) (redacted like `who`).
+    pub fn begin_with_detail(
+        &self,
+        who: &str,
+        initiator: Initiator,
+        cmd: &str,
+        target: ResourceRef,
+        detail: &str,
+    ) -> AuditAttempt<'_> {
+        self.begin_described(who, initiator, cmd, target, false, Some(detail))
+    }
+
+    /// [`begin`](Self::begin) with an optional [`detail`](AuditRecord::detail): the one the other
+    /// `begin`s are built on.
     pub fn begin_described(
         &self,
         who: &str,
@@ -121,20 +134,6 @@ impl AuditLog {
         AuditAttempt::new(self, Self::describe(record, detail))
     }
 
-    /// [`begin`](Self::begin) with a [`detail`](AuditRecord::detail) (redacted like `who`).
-    pub fn begin_with_detail(
-        &self,
-        who: &str,
-        initiator: Initiator,
-        cmd: &str,
-        target: ResourceRef,
-        detail: &str,
-    ) -> AuditAttempt<'_> {
-        let record =
-            self.entry_with_detail(who, initiator, cmd, target, detail, AuditOutcome::Cancelled);
-        AuditAttempt::new(self, record)
-    }
-
     /// Opens the record of a mutation that is about to run. The returned
     /// [`AuditAttempt`] queues its final record when it is
     /// [finished](AuditAttempt::finish), or a `Cancelled` record when it is dropped
@@ -149,15 +148,7 @@ impl AuditLog {
         target: ResourceRef,
         dry_run: bool,
     ) -> AuditAttempt<'_> {
-        let record = self.entry(
-            who,
-            initiator,
-            cmd,
-            target,
-            dry_run,
-            AuditOutcome::Cancelled,
-        );
-        AuditAttempt::new(self, record)
+        self.begin_described(who, initiator, cmd, target, dry_run, None)
     }
 
     /// Appends `record` (after any backlog, in order).

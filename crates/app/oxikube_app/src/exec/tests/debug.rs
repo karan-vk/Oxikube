@@ -185,7 +185,7 @@ async fn the_dialog_starts_with_the_pods_containers_and_the_last_image_of_the_cl
     let defaults = f.service.debug_defaults(&f.pod()).await.unwrap();
     assert_eq!(defaults.image, "nicolaka/netshoot");
     assert_eq!(
-        f.service.last_debug_image(&f.pod().cluster).as_deref(),
+        f.service.debug.last_image(&f.pod().cluster).as_deref(),
         Some("nicolaka/netshoot")
     );
 }
@@ -291,7 +291,7 @@ async fn a_rejected_patch_says_why_and_a_container_that_never_starts_times_out()
         "nothing waits for a terminal"
     );
     assert!(
-        f.service.last_debug_image(&f.pod().cluster).is_none(),
+        f.service.debug.last_image(&f.pod().cluster).is_none(),
         "a failure remembers nothing"
     );
 }

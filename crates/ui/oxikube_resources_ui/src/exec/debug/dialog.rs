@@ -227,10 +227,10 @@ impl DebugDialog {
     }
 
     fn finished(&mut self, result: &Result<DebugReport, String>, cx: &mut Context<Self>) {
+        // Done either way: the dialog may close again (`on_before_dismiss` holds it while starting).
+        self.stage = DebugStage::Editing;
         match result {
             Ok(report) => {
-                // Done: the dialog may close again (`on_before_dismiss` holds it while starting).
-                self.stage = DebugStage::Editing;
                 self.workspace
                     .update(cx, |workspace, cx| {
                         workspace.show_toast(Toast::success(report.message.clone()), cx);
@@ -239,7 +239,6 @@ impl DebugDialog {
                 cx.emit(DismissEvent);
             }
             Err(message) => {
-                self.stage = DebugStage::Editing;
                 self.error = Some(message.clone().into());
                 cx.notify();
             }

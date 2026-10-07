@@ -207,7 +207,7 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
 /// The confirmation text of `pod::Debug`: the pod, the image and the target container, and that the
 /// container stays in the pod for good (an ephemeral container can be neither removed nor edited
 /// until the pod is deleted).
-pub fn debug_summary(
+fn debug_summary(
     pod: &ResourceRef,
     image: &str,
     target_container: Option<&str>,
