@@ -12,13 +12,13 @@ use jiff::Timestamp;
 use oxikube_app::store::ResourceStores;
 use oxikube_app::{ClusterSessionManager, CoreColumns};
 use oxikube_domain::Resource;
-use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
+use oxikube_domain::ids::{ClusterId, ContextName, ResourceRef};
 use oxikube_ports::{ClockPort, ClusterContext, SourceId};
 use oxikube_ports::{DescribeOutput, DescribeSource};
 use oxikube_resources_ui::detail::{DetailDeps, DetailTab, DetailView, Mount};
 use oxikube_resources_ui::table::store_runtime;
 use oxikube_testkit::{
-    FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, deployment,
+    FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, deployment, pod,
     screenshot::RgbaImage,
 };
 use serde_json::json;
@@ -54,16 +54,49 @@ fn web_deployment() -> Resource {
     Resource::from_json(json).expect("a deployment")
 }
 
+/// A pod with the audit's problem cases: a condition type too long for a column, a long
+/// condition message, and a label and an annotation key longer than the key column.
+fn crashing_pod() -> Resource {
+    let mut json = pod()
+        .namespace("shop")
+        .name("web-imagepull")
+        .label("app", "web")
+        .label("app.kubernetes.io/a-very-long-label-key-name", "frontend")
+        .annotation(
+            "kubectl.kubernetes.io/last-applied-configuration-key",
+            "{\"apiVersion\":\"v1\"}",
+        )
+        .created("2026-01-01T00:00:00Z")
+        .json();
+    json["metadata"]["resourceVersion"] = json!("7");
+    json["status"]["conditions"] = json!([
+        {"type": "PodReadyToStartContainers", "status": "True",
+         "lastTransitionTime": "2026-01-01T00:00:10Z"},
+        {"type": "Ready", "status": "False", "reason": "ContainersNotReady",
+         "message": "containers with unready status: [web sidecar] after a long wait",
+         "lastTransitionTime": "2026-01-01T00:00:20Z"},
+        {"type": "ContainersReady", "status": "False", "reason": "ContainersNotReady",
+         "lastTransitionTime": "2026-01-01T00:00:20Z"}
+    ]);
+    Resource::from_json(json).expect("a pod")
+}
+
 /// What `kubectl describe deployment web` prints, as the tab shows it.
 const DESCRIBE: &str = "Name:                   web\nNamespace:              shop\nLabels:                 app=web\n                        tier=frontend\nAnnotations:            deployment.kubernetes.io/revision: 7\nReplicas:               3 desired | 3 updated | 3 total | 3 available | 0 unavailable\nStrategyType:           RollingUpdate\nConditions:\n  Type           Status  Reason\n  ----           ------  ------\n  Available      True    MinimumReplicasAvailable\n  Progressing    True    NewReplicaSetAvailable\nEvents:                 <none>\n";
 
 fn render(light: bool, tab: DetailTab) -> anyhow::Result<RgbaImage> {
+    render_of(web_deployment(), light, tab)
+}
+
+fn render_of(object: Resource, light: bool, tab: DetailTab) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
     let connector = Arc::new(FakeClusterConnectorPort::new());
     let ports = connector.ports_for(&cluster);
-    ports.resources.insert(web_deployment());
+    let gvk = object.kind.clone();
+    let name = object.meta.name.to_string();
+    ports.resources.insert(object);
     ports.describe.script().describe.push_ok(DescribeOutput {
         text: DESCRIBE.to_owned(),
         source: DescribeSource::Native,
@@ -73,8 +106,7 @@ fn render(light: bool, tab: DetailTab) -> anyhow::Result<RgbaImage> {
     let sessions = ClusterSessionManager::new(connector, source, clock.clone());
     futures::executor::block_on(sessions.connect(&cluster))?;
 
-    let target =
-        ResourceRef::namespaced(cluster, Gvk::new("apps", "v1", "Deployment"), "shop", "web");
+    let target = ResourceRef::namespaced(cluster, gvk, "shop", name);
     let mut cx = headless();
     let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |_, cx| {
         oxikube_ui::init(cx);
@@ -144,6 +176,18 @@ pub(crate) fn run() -> anyhow::Result<()> {
     check(
         "detail_describe_dark",
         render(false, DetailTab::Describe)?,
+        WIDTH,
+        HEIGHT,
+    )?;
+    check(
+        "detail_pod_conditions_dark",
+        render_of(crashing_pod(), false, DetailTab::Overview)?,
+        WIDTH,
+        HEIGHT,
+    )?;
+    check(
+        "detail_pod_conditions_light",
+        render_of(crashing_pod(), true, DetailTab::Overview)?,
         WIDTH,
         HEIGHT,
     )

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use gpui::{
     App, Context, EventEmitter, FocusHandle, Focusable, ListAlignment, ListState, SharedString,
-    Task, Window, px,
+    Task, WeakEntity, Window, px,
 };
 use jiff::Timestamp;
 use oxikube_app::ColumnProvider;
@@ -24,6 +24,7 @@ use super::schema_tab::SchemaPane;
 use super::state::{DetailDeps, DetailEvent, DetailState, EventsTab, FullState, Mount};
 use super::tabs::DetailTab;
 use super::yaml::YamlTab;
+use crate::table::ResourceTable;
 
 /// How often ages are redrawn while the view is shown.
 const TICK: Duration = Duration::from_secs(1);
@@ -34,6 +35,8 @@ pub struct DetailView {
     pub(super) deps: DetailDeps,
     pub(super) mount: Mount,
     pub(super) focus: FocusHandle,
+    /// The table the drawer was opened from, which `j` / `k` step through.
+    pub(super) origin: Option<WeakEntity<ResourceTable>>,
     pub(super) tab: DetailTab,
     /// Whether the view is on screen (ages tick only then).
     pub(super) shown: bool,
@@ -111,6 +114,7 @@ impl DetailView {
             deps,
             mount,
             focus: cx.focus_handle(),
+            origin: None,
             tab: DetailTab::Overview,
             shown: true,
             now_override: None,
@@ -144,6 +148,11 @@ impl DetailView {
         };
         this.resubscribe(cx);
         this
+    }
+
+    /// Sets the table `j` / `k` step through: the one the detail was opened from.
+    pub fn set_origin(&mut self, table: Option<WeakEntity<ResourceTable>>) {
+        self.origin = table;
     }
 
     /// The object shown.

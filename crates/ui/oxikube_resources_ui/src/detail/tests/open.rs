@@ -73,7 +73,6 @@ fn a_pod_opens_in_the_drawer_with_header_labels_owner_and_conditions(cx: &mut Te
         "detail-annotation-0",
         "detail-owner-0",
         "detail-finalizer-0",
-        "detail-condition-head",
         "detail-condition-0",
         "detail-condition-1",
     ] {

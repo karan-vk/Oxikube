@@ -67,7 +67,15 @@ impl ResourceViews {
             )
         });
         let target = target.clone();
-        Some(drawer.update(cx, |drawer, cx| drawer.show(target, &deps, cx)))
+        let origin = self
+            .tables(&target.cluster, &target.gvk, cx)
+            .into_iter()
+            .next()
+            .map(|table| table.downgrade());
+        let view = drawer.update(cx, |drawer, cx| drawer.show(target, &deps, cx));
+        // `j` / `k` in the drawer step the table this was opened from.
+        view.update(cx, |view, _| view.set_origin(origin));
+        Some(view)
     }
 
     /// Pins the drawer's detail of `target` as a tab: the same entity moves from the drawer to

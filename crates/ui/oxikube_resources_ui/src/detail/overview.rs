@@ -14,7 +14,8 @@ use oxikube_ui::{ActiveTokens as _, Icon, IconName, Tokens, u};
 
 use super::model::{DetailModel, MetaEntry, Row};
 use super::parts::{
-    condition_head, condition_row, empty, full_width, muted, section_heading, skeleton, status_line,
+    KEY_WIDTH, condition_row, empty, full_width, muted, section_heading, skeleton, status_line,
+    truncated,
 };
 use super::state::FullState;
 use super::view::DetailView;
@@ -85,7 +86,6 @@ impl DetailView {
                     .child(model.finalizers.get(i).cloned().unwrap_or_default())
                     .into_any_element(),
             ),
-            Row::ConditionHead => condition_head(&tokens),
             Row::Condition(i) => model
                 .conditions
                 .get(i)
@@ -133,10 +133,10 @@ impl DetailView {
         } else {
             entry.collapsed()
         };
-        let (prefix, expand_id, copy_id) = if annotation {
-            ("annotation", "expand-a", "copy-a")
+        let (prefix, expand_id, copy_id, key_name) = if annotation {
+            ("annotation", "expand-a", "copy-a", "detail-annotation-key")
         } else {
-            ("label", "expand-l", "copy-l")
+            ("label", "expand-l", "copy-l", "detail-label-key")
         };
         let (copy_key, expand_key) = (entry.key.clone(), entry.key.clone());
         let expandable = entry.expandable();
@@ -149,11 +149,10 @@ impl DetailView {
             .px(u(tokens.spacing.lg))
             .py(u(px(2.)))
             .child(
-                div()
+                truncated(key_name, index, entry.key.to_string())
                     .flex_none()
-                    .w(u(px(150.)))
-                    .text_color(colors.text_muted)
-                    .child(entry.key.to_string()),
+                    .w(u(px(KEY_WIDTH)))
+                    .text_color(colors.text_muted),
             )
             .child(
                 div()

@@ -8,6 +8,7 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
+use oxikube_keymap::KeyContextual as _;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
@@ -32,7 +33,12 @@ impl Render for DetailView {
         v_flex()
             .id("detail-view")
             .debug_selector(|| "detail-view".to_owned())
+            .key_context(self.key_context())
             .track_focus(&self.focus)
+            .on_action(cx.listener(Self::on_close_action))
+            .on_action(cx.listener(Self::on_select_next))
+            .on_action(cx.listener(Self::on_select_previous))
+            .on_action(cx.listener(Self::on_show_tab))
             .size_full()
             .overflow_hidden()
             .bg(colors.surface)

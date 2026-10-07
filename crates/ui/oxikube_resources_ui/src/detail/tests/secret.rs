@@ -75,7 +75,7 @@ fn a_secret_shows_key_names_and_no_value_in_what_is_drawn(cx: &mut TestAppContex
     assert!(d.shown("detail-secret-key-2"));
     assert!(!d.shown("detail-secret-key-3"));
     assert!(
-        !d.shown("detail-condition-head"),
+        !d.shown("detail-condition-0"),
         "a secret has no conditions table"
     );
 

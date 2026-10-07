@@ -247,7 +247,7 @@ fn rows_flatten_every_section_in_order() {
         ["Owned by", "Labels", "Annotations", "Conditions", "Status"],
         "no finalizers section when there are none"
     );
-    assert!(rows.contains(&Row::ConditionHead));
+    assert!(rows.contains(&Row::Condition(0)));
     assert!(rows.contains(&Row::Label(0)));
     assert!(rows.contains(&Row::Owner(0)));
 }
@@ -328,7 +328,7 @@ fn a_secret_shows_key_names_and_no_value_anywhere() {
     assert!(
         !rows
             .iter()
-            .any(|r| matches!(r, Row::Status(_) | Row::ConditionHead))
+            .any(|r| matches!(r, Row::Status(_) | Row::Condition(_)))
     );
 }
 
