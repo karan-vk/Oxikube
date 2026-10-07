@@ -217,11 +217,12 @@ fn a_copy_is_capped_at_whole_lines_and_says_so() {
     let (_h, session) = session(100);
     let spec = ExportSpec::new(10..20, ExportFormat::default());
     let all = crate::logs::export::copy_text(&session, &spec, usize::MAX);
-    assert_eq!((all.lines, all.truncated), (10, false));
+    assert_eq!((all.lines, all.truncated, all.left_out), (10, false, 0));
     assert!(all.text.starts_with("line 10\n") && all.text.ends_with("line 19\n"));
     // "line 10\n" is 8 bytes: a limit of 20 holds two lines, never a cut one.
     let capped = crate::logs::export::copy_text(&session, &spec, 20);
     assert_eq!((capped.lines, capped.truncated), (2, true));
+    assert_eq!(capped.left_out, 8, "the rest of the selection is counted");
     assert_eq!(capped.text, "line 10\nline 11\n");
     let odd: LineFilter = Arc::new(|e: &LogEntry| e.seq % 2 == 1);
     let filtered = crate::logs::export::copy_text(&session, &spec.with_filter(Some(odd)), 1_000);

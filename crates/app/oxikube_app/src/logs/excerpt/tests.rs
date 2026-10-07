@@ -320,3 +320,30 @@ fn a_pod_that_cannot_be_read_is_noted_and_the_others_are_returned() {
             .any(|n| n.starts_with("Could not read web-b/app"))
     );
 }
+
+#[test]
+fn a_workload_read_opens_at_most_max_streams_containers_in_all() {
+    let mut env = Env::new();
+    env.service.set_max_streams(2);
+    for name in ["web-a", "web-b", "web-c", "web-d", "web-e"] {
+        env.resources.insert(web_pod(name));
+        env.script(Timeline::immediate([line(name, 1, "hello")]));
+    }
+    let request = ExcerptRequest::new(ExcerptSource::Workload(AggregateSpec::selector(
+        "default", "app=web",
+    )));
+    let excerpt = read(&mut env, &request).unwrap();
+    assert_eq!(
+        env.logs.recorded_calls().len(),
+        2,
+        "a stream that ends must not free a slot for a pod the cap left out"
+    );
+    assert_eq!(excerpt.streams, 2);
+    assert_eq!(excerpt.matched_pods, Some(5));
+    assert_eq!(excerpt.skipped_pods, 3);
+    assert!(
+        excerpt.notes().iter().any(|n| n.contains('3')),
+        "{:?}",
+        excerpt.notes()
+    );
+}

@@ -169,6 +169,7 @@ impl Coordinator {
         let mut fleet = Fleet::new(Reading {
             container: self.spec.container.clone(),
             previous: self.options.previous,
+            finite: !self.options.follow,
         });
         let mut merger = Merger::new(self.config.reorder_window);
         let mut feed = Some(feed);

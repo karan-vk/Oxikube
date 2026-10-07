@@ -122,7 +122,8 @@ impl LogService {
     /// ignored: the spec names the container; `timestamps` is always on, the merge needs it).
     ///
     /// The merged buffer is bounded by `logs.buffer_lines` like any session's, and at most
-    /// `logs.max_streams` containers are read at once. See [`AggregateSession`].
+    /// `logs.max_streams` containers are read at once (a session that does not follow reads at
+    /// most that many in all: a stream that ends frees no slot). See [`AggregateSession`].
     pub fn open_aggregate(
         &self,
         ports: AggregatePorts,

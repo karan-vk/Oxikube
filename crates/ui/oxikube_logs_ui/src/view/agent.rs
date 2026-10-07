@@ -54,7 +54,11 @@ impl LogView {
             span: copied.span,
             lines: usize::try_from(copied.lines).unwrap_or(usize::MAX),
         };
-        let item = selection_context(source, &copied.text);
+        let item = selection_context(
+            source,
+            &copied.text,
+            usize::try_from(copied.left_out).unwrap_or(usize::MAX),
+        );
         let lines = lines_of(item.source.lines as u64);
         let toast = match self.deps.agent.send(item) {
             Sent::Delivered => Toast::success(format!("Sent {lines} to the agent")),

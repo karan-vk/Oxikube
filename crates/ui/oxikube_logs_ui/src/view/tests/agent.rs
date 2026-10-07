@@ -193,7 +193,13 @@ fn an_oversized_selection_is_cut_with_a_note(cx: &mut TestAppContext) {
         body.contains(&format!("{:0>200}", 0)),
         "the first lines are kept"
     );
-    assert!(item.source.lines < 1_500);
+    // Every selected line is either in the block or counted in the note, including the ones the
+    // 128 KiB read stopped before.
+    let kept = item.source.lines;
+    assert!(kept < 600, "{kept}");
+    let note = format!("{} further selected lines were left out", 1_500 - kept);
+    assert!(body.contains(&note), "{note}\n{}", &body[..400]);
+    assert!(item.block.title.contains(&format!("({kept} lines)")));
 }
 
 #[gpui::test]

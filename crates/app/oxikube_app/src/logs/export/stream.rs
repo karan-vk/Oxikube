@@ -103,13 +103,16 @@ pub struct CopiedText {
     pub lines: u64,
     /// Whether more lines matched but would have taken `text` past the limit.
     pub truncated: bool,
+    /// How many matching lines `text` leaves out because of the limit (0 unless `truncated`).
+    pub left_out: u64,
     /// The server time of the first and last line copied; `None` for an empty copy.
     pub span: Option<(jiff::Timestamp, jiff::Timestamp)>,
 }
 
 /// The lines of `spec`, as one string of at most `limit_bytes` (a whole line is always kept or
 /// left out): what a copy puts on the clipboard. Reads under one lock, so the limit (a few MB)
-/// keeps it within a frame.
+/// keeps it within a frame. Lines past the limit are counted ([`CopiedText::left_out`]), not
+/// copied: the extra pass over the selection happens only when the limit was reached.
 pub fn copy_text(reader: &LogReader, spec: &ExportSpec, limit_bytes: usize) -> CopiedText {
     reader.read(|buffer, _| {
         let start = spec.seqs.start.max(buffer.first_seq());
@@ -118,6 +121,7 @@ pub fn copy_text(reader: &LogReader, spec: &ExportSpec, limit_bytes: usize) -> C
             text: String::new(),
             lines: 0,
             truncated: false,
+            left_out: 0,
             span: None,
         };
         if start >= end {
@@ -127,9 +131,11 @@ pub fn copy_text(reader: &LogReader, spec: &ExportSpec, limit_bytes: usize) -> C
             if !spec.matches(entry) {
                 continue;
             }
-            if copied.text.len() + spec.format.line_len(entry) > limit_bytes {
+            if copied.truncated || copied.text.len() + spec.format.line_len(entry) > limit_bytes {
+                // Past the limit: the rest is only counted, so a note can say how much it is.
                 copied.truncated = true;
-                break;
+                copied.left_out += 1;
+                continue;
             }
             spec.format.write_line(entry, &mut copied.text);
             copied.lines += 1;

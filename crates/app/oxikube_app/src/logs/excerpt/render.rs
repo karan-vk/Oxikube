@@ -75,7 +75,8 @@ pub(super) fn render(entries: &[LogEntry], format: ExportFormat, budget: usize) 
         budget_cut = true;
         fit(&mut text, budget);
     }
-    let lines = text.bytes().filter(|b| *b == b'\n').count();
+    // `lines()` also counts a last line cut short by the budget (it has no newline any more).
+    let lines = text.lines().count();
     Rendered {
         text,
         lines,
@@ -178,5 +179,6 @@ mod tests {
         assert!(rendered.budget_cut);
         assert!(rendered.text.len() <= 11);
         assert!(rendered.text.chars().all(|c| c == 'é'));
+        assert_eq!(rendered.lines, 1, "the partial line is a line, not nothing");
     }
 }

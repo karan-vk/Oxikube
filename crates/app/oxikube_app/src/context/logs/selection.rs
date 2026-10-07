@@ -12,10 +12,14 @@ use crate::context::pending::{ContextSource, QueuedContext};
 /// The text is masked of secrets here, so what reaches the agent is not what a file save or a copy
 /// would hold (those are the user's own, unmasked). Over the block budget the first lines are kept
 /// and the rest is counted in a note.
-pub fn selection_context(mut source: ContextSource, text: &str) -> QueuedContext {
+///
+/// `source.lines` is the number of lines in `text`; `unread` is how many more lines were selected
+/// but never made it into `text` (the caller's read limit), so the note counts them too.
+pub fn selection_context(mut source: ContextSource, text: &str, unread: usize) -> QueuedContext {
     let masked = redact(text);
     let budget = lines_budget(MAX_CONTEXT_BLOCK_BYTES);
-    let (kept, left_out) = head_lines(&masked, budget);
+    let (kept, cut) = head_lines(&masked, budget);
+    let left_out = cut.saturating_add(unread);
     let notes: Vec<String> = (left_out > 0)
         .then(|| {
             format!(
@@ -25,7 +29,7 @@ pub fn selection_context(mut source: ContextSource, text: &str) -> QueuedContext
         })
         .into_iter()
         .collect();
-    source.lines = source.lines.saturating_sub(left_out);
+    source.lines = source.lines.saturating_sub(cut);
     let title = format!(
         "Logs {}/{} ({} lines)",
         source.namespace, source.subject, source.lines
@@ -71,7 +75,7 @@ mod tests {
 
     #[test]
     fn the_block_carries_the_source_the_agent_can_cite() {
-        let item = selection_context(source(2), "a\nb\n");
+        let item = selection_context(source(2), "a\nb\n", 0);
         let body = &item.block.body;
         for needle in [
             "# cluster: kind (",
@@ -94,6 +98,7 @@ mod tests {
         let item = selection_context(
             source(1),
             "token=abcdef0123456789 Bearer s3cr3tvalue123456\n",
+            0,
         );
         assert!(!item.block.body.contains("abcdef0123456789"));
         assert!(!item.block.body.contains("s3cr3tvalue123456"));
@@ -102,7 +107,7 @@ mod tests {
     #[test]
     fn an_oversized_selection_keeps_its_first_lines_and_says_so() {
         let text: String = (0..2_000).map(|i| format!("{i:0>100}\n")).collect();
-        let item = selection_context(source(2_000), &text);
+        let item = selection_context(source(2_000), &text, 0);
         assert!(item.block.body.len() <= MAX_CONTEXT_BLOCK_BYTES);
         assert!(item.block.truncated);
         assert!(
@@ -113,5 +118,29 @@ mod tests {
         assert!(item.block.body.contains(&format!("{:0>100}\n", 0)));
         assert!(!item.block.body.contains(&format!("{:0>100}\n", 1_999)));
         assert!(item.source.lines < 2_000);
+    }
+
+    #[test]
+    fn lines_the_caller_never_read_are_counted_in_the_note() {
+        let item = selection_context(source(2), "a\nb\n", 1_230);
+        assert!(
+            item.block
+                .body
+                .contains("1230 further selected lines were left out"),
+            "{}",
+            item.block.body
+        );
+        assert!(item.block.truncated);
+        assert_eq!(item.source.lines, 2, "the lines the block holds");
+        assert!(item.block.title.contains("(2 lines)"));
+    }
+
+    #[test]
+    fn the_note_adds_the_unread_lines_to_the_ones_cut_for_the_budget() {
+        let text: String = (0..2_000).map(|i| format!("{i:0>100}\n")).collect();
+        let item = selection_context(source(2_000), &text, 500);
+        let kept = item.source.lines;
+        let expected = format!("{} further selected lines", 2_000 - kept + 500);
+        assert!(item.block.body.contains(&expected), "{expected}");
     }
 }
