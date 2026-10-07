@@ -92,7 +92,7 @@ jobs:
         run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo run -p oxikube --features screenshot --profile "$CARGO_PROFILE"
       - name: Upload screenshot
         if: ${{ !cancelled() && steps.capture.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screenshot-${{ runner.os }}-${{ matrix.profile }}
           path: screenshots/*.png
@@ -100,7 +100,7 @@ jobs:
       - name: Upload golden-compare failures
         # testkit writes `*.actual.png` / `*.diff.png` next to the golden when a comparison fails.
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: golden-diffs-${{ runner.os }}-${{ matrix.profile }}
           path: |
@@ -152,7 +152,7 @@ jobs:
             --out perf/report-${{ runner.os }}.json
       - name: Upload perf report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-report-${{ runner.os }}
           path: perf/report-*.json
