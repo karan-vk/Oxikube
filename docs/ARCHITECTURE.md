@@ -50,7 +50,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   exchange (`Delta`, `Table`, `ToolDef`, …). One module per port; each names its adapter.
 - `oxikube_testkit` — a `Fake*` for every port, fixtures and builders, `TestPorts` (the seeded fakes
   `AppState::test` is built from), and the GPUI test harness (`gpui_test::TestApp` / `TestWindow`,
-  `ScreenshotApp` with golden compare; `docs/testing-gpui.md`).
+  `ScreenshotApp` with golden compare; `docs/testing-gpui.md`; the logs test matrix is `docs/testing-logs.md`).
 - `oxikube_app` — services: `ClusterSessionManager`, `ResourceStore`, `CommandBus`,
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
   `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `sidebar` (E06-S10):

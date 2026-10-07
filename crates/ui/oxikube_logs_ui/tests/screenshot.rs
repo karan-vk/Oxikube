@@ -1,7 +1,7 @@
 //! Screenshots of the log view (E08-S02), rendered through `Window::render_to_image`.
 //!
 //! - `log_view_levels`: a pod's log with info, warning, error and debug lines and one long line,
-//!   unwrapped, timestamps shown, the "stream ended" state row at the bottom (dark theme).
+//!   unwrapped, timestamps shown, the "pod finished" state row at the bottom (dark theme).
 //! - `log_view_wrapped`: the same log wrapped, timestamps hidden (dark theme).
 //! - `log_view_light`: the same log unwrapped in the light theme.
 //! - `log_view_search`: the search bar open with `error|warn` (E08-S03): the matches highlighted,
@@ -12,6 +12,9 @@
 //!   line expanded into its pretty-printed JSON.
 //! - `log_view_merged`: a Deployment's three pods merged by timestamp (E08-S04): the pod gutters in
 //!   the theme's `log_sources` colours, and the "pod ... added" banner (dark theme).
+//! - `log_view_overview` (E08-S11): the suite's one picture of the whole view: a Deployment's three
+//!   pods merged, JSON mode with level chips and columns, the failing line expanded and a search
+//!   highlighting `orders|panic` (dark theme).
 //!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
 //! thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so it only builds
@@ -125,7 +128,11 @@ fn pod() -> Resource {
         "kind": "Pod",
         "metadata": {"name": "orders-api-7c9d", "namespace": "shop"},
         "spec": {"containers": [{"name": "app"}]},
-        "status": {"phase": "Running"}
+        // Ran to its end: since E08-S07 a stream that closes under a running pod is reconnected,
+        // and these pictures show the "stream ended" row.
+        "status": {"phase": "Succeeded", "containerStatuses": [
+            {"name": "app", "state": {"terminated": {"exitCode": 0, "reason": "Completed"}}}
+        ]}
     }))
     .expect("a pod")
 }
@@ -270,9 +277,9 @@ const MERGED_PODS: [&str; 3] = [
 
 /// The merged log: the `log()` lines dealt to the three pods in turn, with the stamps of
 /// `log()` (so the merge interleaves them back into the story).
-fn merged_logs() -> Vec<Vec<LogLine>> {
+fn merged_logs(lines: Vec<LogLine>) -> Vec<Vec<LogLine>> {
     let mut per_pod: Vec<Vec<LogLine>> = vec![Vec::new(); MERGED_PODS.len()];
-    for (i, line) in log().into_iter().enumerate() {
+    for (i, line) in lines.into_iter().enumerate() {
         let p = i % MERGED_PODS.len();
         per_pod[p].push(LogLine::new(line.ts, MERGED_PODS[p], "app", line.text));
     }
@@ -280,30 +287,38 @@ fn merged_logs() -> Vec<Vec<LogLine>> {
 }
 
 /// Renders the merged view of the Deployment: a fourth pod joins after the first frame, so the
-/// banner says so.
-fn render_merged() -> anyhow::Result<RgbaImage> {
+/// banner says so. With `overview` the pods write [`json_log`] instead, nobody joins, and the
+/// view is switched to the state the epic's picture shows: the failing line expanded and a
+/// search highlighting `orders|panic`.
+fn render_merged(overview: bool) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
     let connector = Arc::new(FakeClusterConnectorPort::new());
     let ports = connector.ports_for(&cluster);
     ports.resources.insert(deployment());
-    oxikube_testkit::ScriptedFeed::new()
-        .initial(MERGED_PODS.iter().map(|name| merged_pod(name)))
-        .add(1, merged_pod("orders-api-7c9d4b5f6-zz8vb"))
-        .install(&ports.resources);
-    for lines in merged_logs() {
+    let feed = oxikube_testkit::ScriptedFeed::new()
+        .initial(MERGED_PODS.iter().map(|name| merged_pod(name)));
+    if overview {
+        feed.install(&ports.resources);
+    } else {
+        feed.add(1, merged_pod("orders-api-7c9d4b5f6-zz8vb"))
+            .install(&ports.resources);
+    }
+    for lines in merged_logs(if overview { json_log() } else { log() }) {
         ports
             .logs
             .script()
             .stream_logs
             .push_ok(Timeline::immediate(lines).keep_open());
     }
-    ports
-        .logs
-        .script()
-        .stream_logs
-        .push_ok(Timeline::new().keep_open());
+    if !overview {
+        ports
+            .logs
+            .script()
+            .stream_logs
+            .push_ok(Timeline::new().keep_open());
+    }
     let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry]));
     let sessions =
         ClusterSessionManager::new(connector, source, Arc::new(FakeClockPort::default()));
@@ -317,7 +332,7 @@ fn render_merged() -> anyhow::Result<RgbaImage> {
 
     let log_clock = ports.logs.clock().clone();
     let mut cx = headless();
-    let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |_, cx| {
+    let window = cx.open_window(size(px(WIDTH), px(height(overview))), |_, cx| {
         oxikube_ui::init(cx);
         oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
         // The pods' colours come from the theme's palette.
@@ -355,9 +370,18 @@ fn render_merged() -> anyhow::Result<RgbaImage> {
     cx.run_until_parked();
     cx.advance_clock(std::time::Duration::from_millis(50));
     cx.run_until_parked();
-    cx.update_window(window.into(), |view, _, cx| {
+    cx.update_window(window.into(), |view, window, cx| {
         let view = view.downcast::<LogView>().expect("the root view");
-        view.update(cx, |view, cx| view.toggle_timestamps(cx));
+        view.update(cx, |view, cx| {
+            if overview {
+                // The failing line is the 8th of the merge (seq 7).
+                view.toggle_expanded(7, cx);
+                view.find(Some("orders|panic"), window, cx);
+                view.next_match(cx);
+            } else {
+                view.toggle_timestamps(cx);
+            }
+        });
     })?;
     cx.run_until_parked();
     cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;
@@ -419,7 +443,8 @@ fn main() -> ExitCode {
         .and_then(|image| check("log_view_filter", false, image)),
         render_with(false, true, false, false, None, true)
             .and_then(|image| check("log_view_selection_marks", false, image)),
-        render_merged().and_then(|image| check("log_view_merged", false, image)),
+        render_merged(false).and_then(|image| check("log_view_merged", false, image)),
+        render_merged(true).and_then(|image| check("log_view_overview", true, image)),
     ];
     let mut failed = false;
     for result in results {

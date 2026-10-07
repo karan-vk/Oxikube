@@ -1,0 +1,156 @@
+[
+  {
+    "kind": "record",
+    "level": "Info",
+    "time": {
+      "instant": "2023-10-07T09:20:00.123Z",
+      "text": "1696670400123",
+      "display": "09:20:00.123"
+    },
+    "message": "server started",
+    "fields": {
+      "pid": 1,
+      "hostname": "web-0",
+      "port": 3000
+    },
+    "field_order": [
+      "pid",
+      "hostname",
+      "port"
+    ],
+    "summary": "pid=1 hostname=web-0 port=3000"
+  },
+  {
+    "kind": "record",
+    "level": "Debug",
+    "time": {
+      "instant": "2023-10-07T09:20:00.456Z",
+      "text": "1696670400456",
+      "display": "09:20:00.456"
+    },
+    "message": "config loaded",
+    "fields": {
+      "pid": 1,
+      "hostname": "web-0"
+    },
+    "field_order": [
+      "pid",
+      "hostname"
+    ],
+    "summary": "pid=1 hostname=web-0"
+  },
+  {
+    "kind": "record",
+    "level": "Info",
+    "time": {
+      "instant": "2023-10-07T09:20:01.789Z",
+      "text": "1696670401789",
+      "display": "09:20:01.789"
+    },
+    "message": "request completed",
+    "fields": {
+      "pid": 1,
+      "hostname": "web-0",
+      "req": {
+        "id": 7,
+        "method": "GET",
+        "url": "/health"
+      },
+      "res": {
+        "statusCode": 200
+      },
+      "responseTime": 3
+    },
+    "field_order": [
+      "pid",
+      "hostname",
+      "req",
+      "res",
+      "responseTime"
+    ],
+    "summary": "pid=1 hostname=web-0 req={\"id\":7,\"method\":\"GET\",\"url\":\"/health\"} res={\"statusCode\":200} responseTime=3"
+  },
+  {
+    "kind": "record",
+    "level": "Warn",
+    "time": {
+      "instant": "2023-10-07T09:20:02Z",
+      "text": "1696670402000",
+      "display": "09:20:02.000"
+    },
+    "message": "deprecated header",
+    "fields": {
+      "pid": 1,
+      "hostname": "web-0",
+      "header": "x-old"
+    },
+    "field_order": [
+      "pid",
+      "hostname",
+      "header"
+    ],
+    "summary": "pid=1 hostname=web-0 header=x-old"
+  },
+  {
+    "kind": "record",
+    "level": "Error",
+    "time": {
+      "instant": "2023-10-07T09:20:03Z",
+      "text": "1696670403000",
+      "display": "09:20:03.000"
+    },
+    "message": "proxy failed",
+    "fields": {
+      "pid": 1,
+      "hostname": "web-0",
+      "err": {
+        "type": "Error",
+        "message": "upstream down"
+      }
+    },
+    "field_order": [
+      "pid",
+      "hostname",
+      "err"
+    ],
+    "summary": "pid=1 hostname=web-0 err={\"type\":\"Error\",\"message\":\"upstream down\"}"
+  },
+  {
+    "kind": "record",
+    "level": "Fatal",
+    "time": {
+      "instant": "2023-10-07T09:20:04Z",
+      "text": "1696670404000",
+      "display": "09:20:04.000"
+    },
+    "message": "shutting down",
+    "fields": {
+      "pid": 1,
+      "hostname": "web-0"
+    },
+    "field_order": [
+      "pid",
+      "hostname"
+    ],
+    "summary": "pid=1 hostname=web-0"
+  },
+  {
+    "kind": "record",
+    "level": "Trace",
+    "time": {
+      "instant": "2023-10-07T09:20:05Z",
+      "text": "1696670405000",
+      "display": "09:20:05.000"
+    },
+    "message": "gc",
+    "fields": {
+      "pid": 1,
+      "hostname": "web-0"
+    },
+    "field_order": [
+      "pid",
+      "hostname"
+    ],
+    "summary": "pid=1 hostname=web-0"
+  }
+]
