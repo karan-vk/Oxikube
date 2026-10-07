@@ -436,7 +436,7 @@ the machine (load average 4 to 26), so treat single digits of a percent as noise
 |---|---|---|---|---|---|---|
 | windowed, `--perf-table`, 60 s, scrolling 3 rows / 8.3 ms | 6 019 in 60.3 s (100 fps, paced by the scroll timer) | 3.42 ms | 4.00 ms | 4.26 ms | 7.86 ms | 9 931 pods listed 258 ms after the table opened (a cold list from the API server); feed 11 430 deltas; 691 notifies, at most 3 per frame (table, sidebar badges, overview tiles); dropped 0 |
 | windowed, table still (`--perf-scroll 0`), 25 s | 293 | 3.96 ms | 4.64 ms | 7.22 ms | 8.20 ms | redraws only for churn and ages |
-| headless `scroll-10k`, nightly `macos-latest` (run 37492117478, the committed baseline) | 240 per launch | 3.32 ms | 4.37 ms | 5.03 ms | 5.52 ms | `first_rows_ms` 26.4 (p95 30.7 across launches); RSS 176 MiB |
+| headless `scroll-10k`, nightly `macos-latest` (run 37492117478, the baseline until E01-F542; a later run of the same code measured 4.04 / 8.58 ms, p50 / p95, and 43 ms to first rows, so the baseline was re-seeded from run 37647964174: shared-runner variance, not a regression) | 240 per launch | 3.32 ms | 4.37 ms | 5.03 ms | 5.52 ms | `first_rows_ms` 26.4 (p95 30.7 across launches); RSS 176 MiB |
 | headless `scroll-10k`, nightly `ubuntu-latest` (same run, lavapipe) | 240 per launch | 338 ms | 343 ms | 348 ms | 370 ms | `first_rows_ms` 466 ms; RSS 269 MiB; see #509 |
 | headless `scroll-10k` (`cargo xtask perf scroll-10k --samples 7`), medians | 240 per launch | 1.89 ms | 2.52 ms | 2.97 ms | 3.07 ms | `first_rows_ms` 25.6 (p95 29.5 across launches); 1 200 feed deltas, 120 notifies, at most 1 per frame; RSS 179 MiB |
 

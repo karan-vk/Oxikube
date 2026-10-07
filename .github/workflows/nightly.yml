@@ -147,10 +147,21 @@ jobs:
       # Builds `oxikube --features perf-scenarios` (release-fast), runs every scenario, writes the
       # report and checks it. Headless rendering needs a GPU device: Metal on macOS, Mesa lavapipe
       # on Linux (xvfb only for windowing init, as in the screenshot step).
+      #
+      # Shared runners swing by tens of percent between jobs (scroll-10k frame p95 went 4.4 -> 8.6 ms
+      # on `macos-latest` with no code change), so a failed check is repeated once with fresh
+      # processes: a real regression fails both times, a noisy neighbour does not (E01-F542).
       - name: cargo xtask perf --all --check
+        shell: bash
         run: |
-          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo xtask perf --all --check --samples 7 \
-            --out perf/report-${{ runner.os }}.json
+          perf_check() {
+            ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo xtask perf --all --check --samples 7 \
+              --out perf/report-${{ runner.os }}.json
+          }
+          if ! perf_check; then
+            echo "::warning::perf check failed; repeating once to rule out runner noise"
+            perf_check
+          fi
       - name: Upload perf report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7

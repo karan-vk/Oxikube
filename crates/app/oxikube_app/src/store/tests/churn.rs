@@ -14,10 +14,12 @@ const OBJECTS: usize = 10_000;
 const BATCH: usize = 500;
 const ROUNDS: usize = 6;
 /// Apply (feed to both subscribers' pending ops) and poll bounds, generous for unoptimised test
-/// builds on a loaded CI runner; the optimised figures are in `benches/store_apply` and
-/// docs/PERFORMANCE.md.
+/// builds on a loaded CI runner (a poll took 60 ms on `macos-latest` against a 50 ms bound while
+/// the whole workspace's tests ran beside it); they only catch an accidental full rebuild per
+/// batch. What the batch must contain is asserted exactly below, and the optimised figures are in
+/// `benches/store_apply` and docs/PERFORMANCE.md.
 const APPLY_BOUND: Duration = Duration::from_millis(500);
-const POLL_BOUND: Duration = Duration::from_millis(50);
+const POLL_BOUND: Duration = Duration::from_millis(250);
 
 #[derive(Default)]
 struct Counting {
