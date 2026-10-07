@@ -9,6 +9,7 @@ mod layout;
 mod prefs;
 mod selection;
 mod view_columns;
+mod view_default_columns;
 mod view_filter;
 mod view_filter_keys;
 mod view_filter_saved;

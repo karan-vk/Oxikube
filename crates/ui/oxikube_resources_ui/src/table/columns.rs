@@ -5,10 +5,11 @@ use std::sync::Arc;
 
 use gpui::{App, AppContext as _, Context};
 use oxikube_app::store::FeedKind;
-use oxikube_app::{ColumnProvider, TableColumns};
+use oxikube_app::{Column, ColumnId, ColumnProvider, TableColumns};
 use oxikube_domain::Capabilities;
-use oxikube_domain::ids::ClusterId;
+use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_domain::kinds::ResourceKind;
+use oxikube_domain::session::WatchScope;
 use oxikube_ports::TableSource;
 
 use super::layout::ColumnLayout;
@@ -43,10 +44,10 @@ impl ResourceTable {
     /// Applies the saved layout (once, when it has been read).
     fn apply_prefs(&mut self, prefs: &ColumnPrefs, cx: &mut Context<Self>) {
         self.prefs_loaded = true;
-        let caps = session_capabilities(&self.deps, &self.cluster);
+        let scope = ColumnScope::of(&self.deps, &self.cluster, &self.kind);
         let gvk = self.kind.gvk.clone();
         self.table.update(cx, |d| {
-            d.layout = ColumnLayout::new(d.provider.columns(&gvk, caps), prefs);
+            d.layout = ColumnLayout::new(scope.columns(&*d.provider, &gvk), prefs);
         });
         self.table.refresh(cx);
         self.apply_sort(cx);
@@ -82,14 +83,14 @@ impl ResourceTable {
         provider: Option<Arc<dyn ColumnProvider>>,
         cx: &mut Context<Self>,
     ) {
-        let caps = session_capabilities(&self.deps, &self.cluster);
+        let scope = ColumnScope::of(&self.deps, &self.cluster, &self.kind);
         let gvk = self.kind.gvk.clone();
         let changed = self.table.update_quiet(cx, |d| {
             let swapped = provider.is_some();
             if let Some(provider) = provider {
                 d.provider = provider;
             }
-            let next = ColumnLayout::new(d.provider.columns(&gvk, caps), &d.layout.prefs());
+            let next = ColumnLayout::new(scope.columns(&*d.provider, &gvk), &d.layout.prefs());
             let changed = swapped || next != d.layout;
             d.layout = next;
             changed
@@ -120,11 +121,42 @@ pub(super) fn initial_provider(
     }
 }
 
-/// What the cluster's session serves (metrics columns come and go with it); none while it has no
-/// session.
-pub(super) fn session_capabilities(deps: &ResourceTableDeps, cluster: &ClusterId) -> Capabilities {
-    deps.sessions
-        .get(cluster)
-        .map(|s| s.capabilities())
-        .unwrap_or_default()
+/// What decides which of the provider's columns the table offers right now: what the session
+/// serves (metrics columns come and go with it) and whether the list is scoped to one namespace
+/// (the Namespace column would repeat that one name on every row, so it is not offered).
+///
+/// The column is left out of the layout, not hidden in it: a layout saved with the Namespace
+/// column keeps its place, width and visibility and applies again when the scope widens.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct ColumnScope {
+    caps: Capabilities,
+    one_namespace: bool,
+}
+
+impl ColumnScope {
+    /// The scope of `kind` in `cluster`'s session (none while it has no session).
+    pub(super) fn of(deps: &ResourceTableDeps, cluster: &ClusterId, kind: &ResourceKind) -> Self {
+        let Some(session) = deps.sessions.get(cluster) else {
+            return Self::default();
+        };
+        Self {
+            caps: session.capabilities(),
+            one_namespace: matches!(
+                session.watch_scope(kind.scope()),
+                WatchScope::Namespaces(names) if names.len() == 1
+            ),
+        }
+    }
+
+    /// `provider`'s columns of `gvk` that this scope offers.
+    pub(super) fn columns(&self, provider: &dyn ColumnProvider, gvk: &Gvk) -> Arc<[Column]> {
+        let all = provider.columns(gvk, self.caps);
+        if !self.one_namespace || !all.iter().any(|c| c.id == ColumnId::NAMESPACE) {
+            return all;
+        }
+        all.iter()
+            .filter(|c| c.id != ColumnId::NAMESPACE)
+            .cloned()
+            .collect()
+    }
 }

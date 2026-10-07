@@ -9,6 +9,9 @@
 //! cache, which keeps the previous frame's lines) and only a cell that does not fit gets the
 //! ellipsis box; one that fits is a bare styled text, one element less and measured once.
 //!
+//! A cell that does take the ellipsis path is cut, so it carries a tooltip with its full text
+//! (shown after a short hover). A cell that fits has none: it would only repeat what is on screen.
+//!
 //! The decision keeps a small margin ([`FIT_SLACK`]), so a text that fits only by a fraction of a
 //! pixel takes the ellipsis path and is drawn exactly as before: either way it shows the same
 //! glyphs.
@@ -20,12 +23,14 @@
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, App, CursorStyle, HighlightStyle, Hsla, InteractiveElement as _, IntoElement as _,
-    ParentElement as _, Pixels, SharedString, Styled as _, StyledText, Window, div, px,
+    AnyElement, App, CursorStyle, ElementId, HighlightStyle, Hsla, InteractiveElement as _,
+    IntoElement as _, ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _,
+    Styled as _, StyledText, Window, div, px,
 };
 
 use super::column::ColumnAlign;
 use crate::size::ControlSize;
+use crate::tooltip::Tooltip;
 
 /// A cell that is one line of text, optionally coloured. Returned by
 /// [`TableDelegate::text_cell`](super::TableDelegate::text_cell).
@@ -91,6 +96,16 @@ pub(super) fn fits(cell: &TextCell, column_width: Pixels, window: &Window) -> bo
     room > Pixels::ZERO && text_width(&cell.text, window) <= room
 }
 
+/// The tooltip of a cut cell: its full text, in a box tagged `td-tooltip` (debug builds only).
+fn cut_tooltip(text: &SharedString) -> Tooltip {
+    let text = text.clone();
+    Tooltip::element(move |_, _| {
+        div()
+            .debug_selector(|| "td-tooltip".into())
+            .child(text.clone())
+    })
+}
+
 /// The element of a text cell at (`row`, `col`) in a column `column_width` wide (unknown before
 /// the library first read the column, or while it is being resized: the ellipsis path, which is
 /// always correct). Tagged `td-<row>-<col>` for test bounds, and the ellipsis box
@@ -119,12 +134,18 @@ pub(super) fn text_cell(
             .with_highlights(highlight)
             .into_any_element()
     } else {
+        let full = cell.text.clone();
         div()
+            .id(ElementId::NamedInteger(
+                "td-cut".into(),
+                ((row as u64) << 24) | col as u64,
+            ))
             .debug_selector(move || format!("td-ellipsis-{row}-{col}"))
             .w_full()
             .text_ellipsis()
             .when_some(cell.color, |d, color| d.text_color(color))
             .child(cell.text)
+            .tooltip(move |window, cx| cut_tooltip(&full).build(window, cx))
             .into_any_element()
     };
     super::adapter::aligned(align, body)

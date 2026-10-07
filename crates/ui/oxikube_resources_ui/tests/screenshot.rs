@@ -11,6 +11,9 @@
 //!
 //! - `pods_table_filtered`: the same pods with `cart|checkout|web` typed in the filter bar: three
 //!   rows and the `3 of 7` count (E07-S04).
+//! - `pods_table_one_namespace`: the same pods with the namespace `shop` selected in a window too
+//!   narrow for every default column: no Namespace column, Status before Ready, and the fade at
+//!   the right edge that says Node and IP continue past the view (E07-U561).
 //! - `detail_crd_schema_dark`, `detail_crd_schema_light` (`crd`): the Schema tab of a CRD's detail
 //!   (E07-S07) with `spec` and `spec.containers` open.
 //!
@@ -38,6 +41,7 @@ use oxikube_app::{ClusterSessionManager, CoreColumns};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
+use oxikube_domain::session::NamespaceSelection;
 use oxikube_ports::{ClockPort, ClusterContext, SourceId, StatePort as _};
 use oxikube_resources_ui::table::{
     ColumnPrefs, ResourceTable, ResourceTableDeps, prefs_key, store_runtime,
@@ -58,6 +62,8 @@ mod detail;
 mod exec;
 
 const WIDTH: f32 = 960.0;
+/// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
+const NARROW: f32 = 600.0;
 const HEIGHT: f32 = 320.0;
 
 struct Ignore;
@@ -138,9 +144,24 @@ fn fixture() -> (
 
 /// Renders the table in the dark or `light` theme, with `filter` typed in the bar when given.
 fn render(filter: Option<&str>, light: bool) -> anyhow::Result<RgbaImage> {
+    render_at(filter, light, WIDTH, None)
+}
+
+/// [`render`] in a window `width` wide, with `namespace` selected when given.
+fn render_at(
+    filter: Option<&str>,
+    light: bool,
+    width: f32,
+    namespace: Option<&str>,
+) -> anyhow::Result<RgbaImage> {
     let (sessions, cluster, state, clock) = fixture();
+    if let Some(namespace) = namespace {
+        sessions
+            .set_namespace_selection(&cluster, NamespaceSelection::single(namespace))
+            .expect("open session");
+    }
     let mut cx = headless();
-    let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
+    let window = cx.open_window(size(px(width), px(HEIGHT)), |window, cx| {
         oxikube_ui::init(cx);
         // Pin the appearance: `init` follows the system, which differs between machines.
         let tokens = if light {
@@ -213,6 +234,8 @@ fn main() -> ExitCode {
         render(None, true).and_then(|image| check("pods_table_tones_light", image, WIDTH, HEIGHT)),
         render(Some("cart|checkout|web"), false)
             .and_then(|image| check("pods_table_filtered", image, WIDTH, HEIGHT)),
+        render_at(None, false, NARROW, Some("shop"))
+            .and_then(|image| check("pods_table_one_namespace", image, NARROW, HEIGHT)),
         detail::run(),
         crd::run(),
         exec::run(),

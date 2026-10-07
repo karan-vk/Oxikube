@@ -1,6 +1,7 @@
 //! Table tests: virtualisation, delegate forwarding, events.
 
 mod events;
+mod overflow;
 mod support;
 mod text_cells;
 

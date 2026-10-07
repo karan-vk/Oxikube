@@ -2,6 +2,8 @@
 //! only a text too wide for its column (or any text while a column is being resized) takes the
 //! ellipsis box.
 
+use std::time::Duration;
+
 use crate::size::ControlSize;
 use crate::table::text_cell::{FIT_SLACK, fits};
 use crate::table::{Table, TableColumn, TableDelegate, TableHandle, TextCell};
@@ -202,4 +204,33 @@ fn a_text_cell_carries_its_text_and_colour() {
     assert_eq!(cell.text.as_ref(), "Running");
     assert_eq!(cell.color, Some(red));
     assert_eq!(TextCell::new("x").color, None);
+}
+
+#[gpui::test]
+fn a_cut_text_shows_its_full_text_in_a_tooltip_and_a_fitting_one_has_none(cx: &mut TestAppContext) {
+    let (_view, cx) = open(cx);
+    draw(cx);
+    assert!(cx.debug_bounds("td-tooltip").is_none(), "nothing hovered");
+
+    // Hover a text that fits: it is all on screen already, so nothing to add.
+    let fitting = cell_bounds(cx, 0, 0);
+    cx.simulate_mouse_move(fitting.center(), None, Modifiers::default());
+    cx.executor().advance_clock(Duration::from_secs(2));
+    draw(cx);
+    assert!(
+        cx.debug_bounds("td-tooltip").is_none(),
+        "a cell that fits has no tooltip"
+    );
+
+    // Hover the cut one: the tooltip carries the whole text.
+    let cut = cell_bounds(cx, 1, 0);
+    cx.simulate_mouse_move(cut.center(), None, Modifiers::default());
+    cx.executor().advance_clock(Duration::from_secs(2));
+    draw(cx);
+    cx.executor().advance_clock(Duration::from_secs(2));
+    draw(cx);
+    assert!(
+        cx.debug_bounds("td-tooltip").is_some(),
+        "a cut cell shows a tooltip on hover"
+    );
 }

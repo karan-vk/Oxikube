@@ -93,6 +93,49 @@ fn wide_flags_follow_kubectl_wide() {
 }
 
 #[test]
+fn pods_default_to_the_columns_that_matter_first_and_node_and_ip_last() {
+    let ids = |provider: &CoreColumns, caps| -> Vec<String> {
+        provider
+            .columns(&gvk("", "Pod"), caps)
+            .iter()
+            .filter(|c| c.is_default())
+            .map(|c| c.id.to_string())
+            .collect()
+    };
+    // Namespace sits after the name for an all-namespaces list; the table drops it for one.
+    let plain = CoreColumns::new();
+    assert_eq!(
+        ids(&plain, Capabilities::METRICS),
+        [
+            "name",
+            "namespace",
+            "status",
+            "ready",
+            "restarts",
+            "age",
+            "node",
+            "ip"
+        ]
+    );
+    let metered = CoreColumns::new().with_metrics(Arc::new(FixedMetrics));
+    assert_eq!(
+        ids(&metered, Capabilities::METRICS),
+        [
+            "name",
+            "namespace",
+            "status",
+            "ready",
+            "restarts",
+            "cpu",
+            "memory",
+            "age",
+            "node",
+            "ip"
+        ]
+    );
+}
+
+#[test]
 fn the_catalogue_and_the_feed_policy_agree() {
     let provider = CoreColumns::new();
     let policy = FeedPolicy::new();
@@ -113,7 +156,7 @@ fn the_catalogue_and_the_feed_policy_agree() {
 
 #[test]
 fn metrics_columns_need_the_metrics_capability() {
-    let provider = CoreColumns::new();
+    let provider = CoreColumns::new().with_metrics(Arc::new(FixedMetrics));
     let ids = |caps| -> Vec<String> {
         provider
             .columns(&gvk("", "Pod"), caps)
@@ -132,6 +175,22 @@ fn metrics_columns_need_the_metrics_capability() {
             .iter()
             .any(|c| c.id == *"cpu")
     );
+}
+
+#[test]
+fn metrics_columns_are_absent_without_a_registered_source_even_with_the_capability() {
+    let provider = CoreColumns::new();
+    for kind in ["Pod", "Node"] {
+        let ids: Vec<String> = provider
+            .columns(&gvk("", kind), Capabilities::METRICS)
+            .iter()
+            .map(|c| c.id.to_string())
+            .collect();
+        assert!(
+            !ids.contains(&"cpu".to_owned()) && !ids.contains(&"memory".to_owned()),
+            "{kind}: {ids:?}"
+        );
+    }
 }
 
 #[test]

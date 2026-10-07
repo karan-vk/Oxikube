@@ -11,15 +11,17 @@ use super::super::funcs as f;
 
 const POD: &[ColumnDef] = &[
     NAME,
+    // Hidden by the table when the scope is one namespace (it would repeat on every row).
     NAMESPACE,
-    ColumnDef::new("ready", "Ready", Func(f::pod_ready)).number(),
     ColumnDef::new("status", "Status", Func(f::pod_status)),
+    ColumnDef::new("ready", "Ready", Func(f::pod_ready)).number(),
     ColumnDef::new("restarts", "Restarts", Func(f::pod_restarts)).number(),
+    // Offered only with a metrics source (see `CoreColumns::columns`).
     CPU,
     MEMORY,
+    AGE,
     ColumnDef::new("node", "Node", Text("/spec/nodeName")),
     ColumnDef::new("ip", "IP", Func(f::pod_ip)),
-    AGE,
     ColumnDef::new("qos", "QoS", Text("/status/qosClass")).wide(),
     ColumnDef::new("controlled-by", "Controlled By", Func(f::controlled_by)).wide(),
     ColumnDef::new(

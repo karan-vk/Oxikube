@@ -189,14 +189,25 @@ impl ColumnLayout {
     }
 
     /// The width a column starts at, unscaled, when the user has not resized it.
+    ///
+    /// Sized to the longest value the column usually holds, so the default pod columns (Name,
+    /// Status, Ready, Restarts, Age, Node, IP) fit a 1280 px window with the sidebar open
+    /// (`default_pod_columns_fit_1280px_with_the_sidebar_open`).
     pub fn default_width(column: &Column) -> f32 {
         match (column.id.as_str(), column.sort, column.align) {
             (ColumnId::NAME, _, _) => 260.,
             (ColumnId::NAMESPACE, _, _) => 150.,
             (ColumnId::LABELS, _, _) => 240.,
             // Long phases: `ContainerCreating`, `CrashLoopBackOff`.
-            ("status", _, _) => 180.,
-            (_, SortKind::Age, _) => 80.,
+            ("status", _, _) => 170.,
+            // `12 (279d ago)`: the count and the age of the last restart.
+            ("restarts", _, _) => 130.,
+            ("ready", _, _) => 70.,
+            // `kind-control-plane`, `ip-10-0-123-45.eu-west-1.compute.internal` (truncated).
+            ("node", _, _) => 140.,
+            // An IPv4 address; an IPv6 one truncates to a tooltip.
+            ("ip", _, _) => 110.,
+            (_, SortKind::Age, _) => 70.,
             (_, SortKind::Number | SortKind::Quantity, _) | (_, _, Align::Right) => 90.,
             _ => 140.,
         }

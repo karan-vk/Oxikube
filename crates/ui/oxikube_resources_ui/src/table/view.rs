@@ -24,7 +24,7 @@ use oxikube_ui::table::TableOptions;
 use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent, Workspace};
 
 use super::cell_cache::CellCache;
-use super::columns::{initial_provider, session_capabilities};
+use super::columns::{ColumnScope, initial_provider};
 use super::delegate::RowsDelegate;
 use super::layout::ColumnLayout;
 use super::prefs::{ColumnPrefs, PrefsWriter};
@@ -146,8 +146,11 @@ impl ResourceTable {
     ) -> Self {
         let title: SharedString = plural_title(&kind).into();
         let provider = initial_provider(&cluster, &kind, &deps);
-        let caps = session_capabilities(&deps, &cluster);
-        let layout = ColumnLayout::new(provider.columns(&kind.gvk, caps), &ColumnPrefs::default());
+        let scope = ColumnScope::of(&deps, &cluster, &kind);
+        let layout = ColumnLayout::new(
+            scope.columns(&*provider, &kind.gvk),
+            &ColumnPrefs::default(),
+        );
         let delegate = RowsDelegate {
             rows: Vec::new(),
             layout,
