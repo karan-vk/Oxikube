@@ -8,7 +8,7 @@
 
 use gpui::Context;
 use oxikube_domain::command::Command;
-use oxikube_domain::log::{LevelChip, LogRange};
+use oxikube_domain::log::{LevelChip, LogRange, LogSaveScope};
 use oxikube_workspace::ItemEvent;
 
 use super::LogView;
@@ -185,13 +185,27 @@ impl LogView {
         }
     }
 
-    /// `m`: marks are E08-S06's. The key is bound so it stays reserved.
-    pub(crate) fn mark(&mut self, _: &mut Context<Self>) {
-        tracing::debug!(target = %self.target, "log marks arrive with E08-S06");
+    /// Asks to mark or unmark the focused line (`logs::Mark`).
+    pub fn request_mark(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsMark { target }, cx);
     }
 
-    /// `c`: copying lines is E08-S06's. The key is bound so it stays reserved.
-    pub(crate) fn copy(&mut self, _: &mut Context<Self>) {
-        tracing::debug!(target = %self.target, "copying log lines arrives with E08-S06");
+    /// Asks to copy the selection, else the lines on screen (`logs::Copy`).
+    pub fn request_copy(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsCopy { target }, cx);
+    }
+
+    /// Asks to clear the buffer and the view (`logs::Clear`).
+    pub fn request_clear(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsClear { target }, cx);
+    }
+
+    /// Asks to save the lines of `scope` to a file (`logs::Save`).
+    pub fn request_save(&mut self, scope: LogSaveScope, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsSave { target, scope }, cx);
     }
 }

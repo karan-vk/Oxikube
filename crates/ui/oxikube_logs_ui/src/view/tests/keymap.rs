@@ -14,7 +14,7 @@ use oxikube_testkit::Timeline;
 const CONTEXT: &str = "LogView && !Editing";
 
 /// k9s's keys, as the shipped keymap binds them.
-const DEFAULTS: [(&str, &str); 18] = [
+const DEFAULTS: [(&str, &str); 22] = [
     ("0", "log_view::Tail"),
     ("1", "log_view::Head"),
     ("2", "log_view::Since1m"),
@@ -30,6 +30,10 @@ const DEFAULTS: [(&str, &str); 18] = [
     ("f", "log_view::ToggleFullscreen"),
     ("m", "log_view::Mark"),
     ("c", "log_view::Copy"),
+    ("shift-c", "log_view::Clear"),
+    ("ctrl-s", "log_view::SaveAll"),
+    ("ctrl-shift-s", "log_view::SaveVisible"),
+    ("escape", "log_view::ClearSelection"),
     ("/", "log_view::Find"),
     ("n", "log_view::NextMatch"),
     ("shift-n", "log_view::PreviousMatch"),

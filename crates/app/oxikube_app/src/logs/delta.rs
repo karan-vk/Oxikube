@@ -31,8 +31,9 @@ pub struct LogDelta {
     /// `logs.buffer_lines`).
     pub dropped_front: usize,
     /// Seq of the oldest line retained after this delta. Lines are numbered from 0 and dropped
-    /// oldest first, so it is also how many lines were dropped over the session's life: above 0
-    /// is the "truncated" marker.
+    /// oldest first, so it is also how many lines were dropped or cleared over the session's
+    /// life (a viewer that never clears shows the "truncated" marker above 0; one that clears
+    /// remembers the seq it cleared at, see [`LogSession::clear`](super::LogSession::clear)).
     pub first_seq: u64,
     /// The session's state after this delta.
     pub state: LogState,

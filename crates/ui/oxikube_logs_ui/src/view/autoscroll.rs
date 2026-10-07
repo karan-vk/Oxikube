@@ -47,6 +47,14 @@ impl Follow {
         }
     }
 
+    /// The view was cleared and the next line has seq `next_seq`: lines that arrive from now on
+    /// count for the pill, not the ones that were cleared.
+    pub fn clear_to(&mut self, next_seq: u64) {
+        if !self.on {
+            self.paused_at = next_seq;
+        }
+    }
+
     /// Starts over for a new stream (its seqs start at 0 again), keeping on or off.
     pub fn restart(&mut self) {
         self.paused_at = 0;
@@ -66,6 +74,8 @@ mod tests {
         assert_eq!(follow.new_lines(130), 30);
         // The ring buffer dropped 1 000 old lines meanwhile: the count does not care.
         assert_eq!(follow.new_lines(1_300), 1_200);
+        follow.clear_to(2_000);
+        assert_eq!(follow.new_lines(2_005), 5, "a clear starts the count over");
         follow.resume();
         assert!(follow.is_on());
         assert_eq!(follow.new_lines(2_000), 0);

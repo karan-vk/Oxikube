@@ -217,3 +217,88 @@ fn slash_in_an_open_log_searches_it_through_the_real_bus_and_keymap(cx: &mut Tes
         0
     );
 }
+
+/// The save, copy, mark and clear commands (E08-S06) reach the open log view through the real
+/// bus: the view's keys and toolbar send them, the registered handlers queue them for the window's
+/// `LogViews`, which applies them.
+#[gpui::test]
+fn the_local_log_actions_reach_the_view_through_the_bus(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
+    let line = |i: i64| {
+        LogLine::new(
+            jiff::Timestamp::from_second(1_791_115_200 + i).unwrap(),
+            "web-running",
+            "app",
+            format!("hello {i}"),
+        )
+    };
+    ports
+        .logs
+        .script()
+        .stream_logs
+        .push_ok(Timeline::immediate((0..3).map(line)));
+    app.open_pods_table();
+    let ws = app.tab_workspace();
+    let table = app
+        .vcx
+        .update(|_, cx| ws.read(cx).items_of_type::<ResourceTable>().remove(0));
+    let targets = app.vcx.update(|_, cx| table.read(cx).action_targets(cx));
+    app.vcx.update(|window, cx| {
+        table.update(cx, |table, cx| {
+            table.run_action(CommandId::POD_VIEW_LOGS, targets, window, cx);
+        });
+    });
+    app.tick();
+    app.tick();
+    let view = app
+        .vcx
+        .update(|_, cx| ws.read(cx).items_of_type::<LogView>().remove(0));
+    let marked = |app: &mut App| app.vcx.update(|_, cx| view.read(cx).marked());
+
+    // Mark: the line on top (nothing was clicked).
+    app.vcx
+        .update(|_, cx| view.update(cx, |view, cx| view.request_mark(cx)));
+    app.tick();
+    assert_eq!(marked(&mut app), [0], "logs::Mark reached the view");
+
+    // Copy: what is on screen goes to the clipboard.
+    app.vcx
+        .update(|_, cx| view.update(cx, |view, cx| view.request_copy(cx)));
+    app.tick();
+    let copied = app.vcx.read_from_clipboard().and_then(|item| item.text());
+    assert_eq!(copied.as_deref(), Some("hello 0\nhello 1\nhello 2\n"));
+
+    // Save: the dialog says what would be written; nothing is written before a file is chosen.
+    app.vcx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.request_save(oxikube_domain::log::LogSaveScope::All, cx)
+        })
+    });
+    app.tick();
+    let summary = app.vcx.update(|_, cx| {
+        ws.read(cx)
+            .modal_layer()
+            .read(cx)
+            .active_modal::<oxikube_logs_ui::SaveDialog>()
+            .map(|dialog| dialog.read(cx).summary())
+    });
+    assert_eq!(
+        summary.as_deref(),
+        Some("Everything the buffer holds: 3 lines.")
+    );
+    assert!(app.ports.fs.recorded_calls().is_empty());
+
+    // Clear: a marked line makes it ask first (the save dialog gives way to the confirmation).
+    app.vcx
+        .update(|_, cx| view.update(cx, |view, cx| view.request_clear(cx)));
+    app.tick();
+    let asked = app.vcx.update(|_, cx| {
+        ws.read(cx)
+            .modal_layer()
+            .read(cx)
+            .active_modal::<oxikube_workspace::DialogModal>()
+            .is_some()
+    });
+    assert!(asked, "clearing with a mark asks first");
+}

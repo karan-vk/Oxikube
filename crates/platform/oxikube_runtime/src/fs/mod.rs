@@ -8,6 +8,7 @@
 //! |---|---|
 //! | `read` | the whole file; `NotFound` when absent |
 //! | `write` | temp file next to the target, `fsync`, rename over it: readers see the old or the new file, never half |
+//! | `write_stream` | the same, fed chunk by chunk from a stream (a log export): the file never sits in memory, and an error or a dropped call removes the temp file |
 //! | `write_private` | the same, with the file created `0600` (and new parent directories `0700`) on unix, so the content is never readable by others, not even for a moment |
 //! | `remove` | deletes a file; a path that is already gone is `Ok(false)` |
 //! | `list` | direct children, ordered by path, symlinks reported as such |
@@ -23,12 +24,13 @@ mod watch;
 use std::fs;
 use std::io::{ErrorKind as IoErrorKind, Write as _};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use async_trait::async_trait;
+use futures::StreamExt as _;
 use futures::stream::BoxStream;
 use oxikube_domain::{OxiError, OxiResult};
-use oxikube_ports::{DirEntry, EntryKind, FsEvent, FsPort};
+use oxikube_ports::{DirEntry, EntryKind, FileChunks, FsEvent, FsPort};
 
 /// The [`FsPort`] on the real filesystem. Stateless and free to copy.
 #[derive(Debug, Clone, Copy, Default)]
@@ -85,8 +87,9 @@ fn create_parents(dir: &Path, private: bool) -> OxiResult<()> {
         .map_err(|error| map_io("create", dir, error))
 }
 
-/// Replaces `path` with `contents` atomically; `private` creates the file `0600` on unix.
-fn write_atomically(path: &Path, contents: &[u8], private: bool) -> OxiResult<()> {
+/// The temp file next to `path` that a write fills before it renames it over `path`: validates
+/// the path and creates the parent directories.
+fn temp_beside(path: &Path, private: bool) -> OxiResult<PathBuf> {
     let Some(name) = path.file_name() else {
         return Err(OxiError::validation(format!(
             "{} is not a file path",
@@ -98,12 +101,16 @@ fn write_atomically(path: &Path, contents: &[u8], private: bool) -> OxiResult<()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
     create_parents(dir, private)?;
-    let temp = dir.join(format!(
+    Ok(dir.join(format!(
         ".{}.tmp-{}-{}",
         name.to_string_lossy(),
         std::process::id(),
         TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
+    )))
+}
+
+/// Creates `temp` (new, `0600` when `private` on unix).
+fn create_temp(temp: &Path, private: bool) -> std::io::Result<fs::File> {
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -111,8 +118,15 @@ fn write_atomically(path: &Path, contents: &[u8], private: bool) -> OxiResult<()
         use std::os::unix::fs::OpenOptionsExt as _;
         options.mode(0o600);
     }
-    let written = options
-        .open(&temp)
+    #[cfg(not(unix))]
+    let _ = private;
+    options.open(temp)
+}
+
+/// Replaces `path` with `contents` atomically; `private` creates the file `0600` on unix.
+fn write_atomically(path: &Path, contents: &[u8], private: bool) -> OxiResult<()> {
+    let temp = temp_beside(path, private)?;
+    let written = create_temp(&temp, private)
         .and_then(|mut file| {
             file.write_all(contents)?;
             file.sync_all()
@@ -125,6 +139,50 @@ fn write_atomically(path: &Path, contents: &[u8], private: bool) -> OxiResult<()
     Ok(())
 }
 
+/// [`write_atomically`] for chunks pulled from `chunks` on this (blocking-pool) thread: `runtime`
+/// drives the stream, and `cancelled` (set when the caller dropped the write) is looked at between
+/// chunks. Any failure removes the temp file; the old file stays.
+fn write_chunks_atomically(
+    path: &Path,
+    mut chunks: FileChunks,
+    runtime: &tokio::runtime::Handle,
+    cancelled: &AtomicBool,
+) -> OxiResult<()> {
+    let temp = temp_beside(path, false)?;
+    let mut file = create_temp(&temp, false).map_err(|error| map_io("write", path, error))?;
+    let result = (|| -> OxiResult<()> {
+        while let Some(chunk) = runtime.block_on(chunks.next()) {
+            if cancelled.load(Ordering::Acquire) {
+                return Err(OxiError::internal(format!(
+                    "writing {} was cancelled",
+                    path.display()
+                )));
+            }
+            file.write_all(&chunk?)
+                .map_err(|error| map_io("write", path, error))?;
+        }
+        file.sync_all()
+            .map_err(|error| map_io("write", path, error))
+    })();
+    drop(file);
+    let result =
+        result.and_then(|()| fs::rename(&temp, path).map_err(|e| map_io("write", path, e)));
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
+}
+
+/// Sets its flag when dropped: the blocking thread of a `write_stream` whose future was dropped
+/// notices at its next chunk.
+struct CancelOnDrop(std::sync::Arc<AtomicBool>);
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
+}
+
 #[async_trait]
 impl FsPort for StdFs {
     async fn read(&self, path: &Path) -> OxiResult<Vec<u8>> {
@@ -135,6 +193,14 @@ impl FsPort for StdFs {
     async fn write(&self, path: &Path, contents: &[u8]) -> OxiResult<()> {
         let (path, contents) = (path.to_owned(), contents.to_vec());
         blocking(move || write_atomically(&path, &contents, false)).await
+    }
+
+    async fn write_stream(&self, path: &Path, chunks: FileChunks) -> OxiResult<()> {
+        let path = path.to_owned();
+        let runtime = tokio::runtime::Handle::current();
+        let cancelled = std::sync::Arc::new(AtomicBool::new(false));
+        let _on_drop = CancelOnDrop(cancelled.clone());
+        blocking(move || write_chunks_atomically(&path, chunks, &runtime, &cancelled)).await
     }
 
     async fn write_private(&self, path: &Path, contents: &[u8]) -> OxiResult<()> {

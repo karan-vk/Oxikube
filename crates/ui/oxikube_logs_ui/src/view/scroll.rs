@@ -35,6 +35,9 @@ impl LogView {
         self.expanded = None;
         self.saw_json = false;
         self.window = window;
+        // Selection and marks belong to the lines of the session they were made on.
+        self.selection.clear();
+        self.marks.clear();
         // A new stream numbers its lines from 0: the search starts over on it.
         self.reindex_empty();
         if self.options.wrap {

@@ -67,6 +67,14 @@ impl CommandId {
     /// `logs::ToggleInverse`: match the lines that do not contain a log view's pattern, or those
     /// that do.
     pub const LOGS_TOGGLE_INVERSE: CommandId = CommandId::new("logs::ToggleInverse");
+    /// `logs::Clear`: empty a log view's local buffer (the cluster's logs are untouched).
+    pub const LOGS_CLEAR: CommandId = CommandId::new("logs::Clear");
+    /// `logs::Copy`: copy the selected lines of a log view (else what is on screen).
+    pub const LOGS_COPY: CommandId = CommandId::new("logs::Copy");
+    /// `logs::Mark`: mark or unmark the focused line of a log view.
+    pub const LOGS_MARK: CommandId = CommandId::new("logs::Mark");
+    /// `logs::Save`: save a log view's lines to a file the user picks.
+    pub const LOGS_SAVE: CommandId = CommandId::new("logs::Save");
     /// `logs::SelectContainer`: show another container of a log view's pod (reopens the stream).
     pub const LOGS_SELECT_CONTAINER: CommandId = CommandId::new("logs::SelectContainer");
     /// `logs::SetRange`: read the tail, the head or the last minutes of a log view's log.
@@ -290,7 +298,15 @@ pub static COMMANDS: &[CommandMeta] = &[
     ),
     // The log view's commands (E08-S02, search E08-S03): they change what a view shows or which
     // stream it reads, never the cluster. Reopening a stream reads logs, so those need the logs
-    // capability. Kept sorted by id (the table is binary-searched).
+    // capability. Kept sorted by id (the table is binary-searched). The local actions on what a
+    // view holds (E08-S06) clear the buffer, never the cluster's logs; a save writes only the
+    // file the user picks, so none of them is a mutation.
+    CommandMeta::read(
+        CommandId::LOGS_CLEAR,
+        "Logs: Clear",
+        CommandScope::Selection,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::LOGS_CLOSE_SEARCH,
         "Logs: Close Search",
@@ -304,8 +320,20 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     CommandMeta::read(
+        CommandId::LOGS_COPY,
+        "Logs: Copy Lines",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
+    CommandMeta::read(
         CommandId::LOGS_FIND,
         "Logs: Find",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_MARK,
+        "Logs: Mark Line",
         CommandScope::Selection,
         NONE,
     ),
@@ -320,6 +348,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Logs: Previous Match",
         CommandScope::Selection,
         NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_SAVE,
+        "Logs: Save to File",
+        CommandScope::Selection,
+        Capabilities::LOGS,
     ),
     CommandMeta::read(
         CommandId::LOGS_SELECT_CONTAINER,

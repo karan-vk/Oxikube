@@ -117,9 +117,11 @@
   },
   {
     // Log views (E08-S02), k9s's keys: 0 tail, 1 head, 2-6 since 1m / 5m / 15m / 30m / 1h,
-    // s autoscroll, w wrap, t timestamps, j JSON mode (E08-S05), p previous container, f fullscreen, m mark, c copy.
-    // Bare keys stay off while a text field inside the view has the focus. Rebind in keymap.json,
-    // e.g. { "context": "LogView && !Editing", "bindings": { "w": null, "x": "log_view::ToggleWrap" } }.
+    // s autoscroll, w wrap, t timestamps, j JSON mode (E08-S05), p previous container, f fullscreen,
+    // m mark, c copy (the selected lines, else the lines on screen), shift-c clear, ctrl-s save the
+    // whole buffer to a file, ctrl-shift-s save the lines on screen, escape drops the selection
+    // (E08-S06). Bare keys stay off while a text field inside the view has the focus. Rebind in
+    // keymap.json, e.g. { "context": "LogView && !Editing", "bindings": { "w": null, "x": "log_view::ToggleWrap" } }.
     "context": "LogView && !Editing",
     "bindings": {
       "0": "log_view::Tail",
@@ -137,6 +139,10 @@
       "f": "log_view::ToggleFullscreen",
       "m": "log_view::Mark",
       "c": "log_view::Copy",
+      "shift-c": "log_view::Clear",
+      "ctrl-s": "log_view::SaveAll",
+      "ctrl-shift-s": "log_view::SaveVisible",
+      "escape": "log_view::ClearSelection",
       // Search (E08-S03): `/` opens the bar (k9s), `n` / `N` step through the matches.
       "/": "log_view::Find",
       "n": "log_view::NextMatch",

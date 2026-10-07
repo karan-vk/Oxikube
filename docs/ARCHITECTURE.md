@@ -158,6 +158,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `set_cluster_buffer_lines` give a cluster its own bound (`clusters.<id>.logs.buffer_lines`, E08-S10; each
   cluster's sessions read one shared cell, so open sessions resize when the override changes). Line text is
   never logged.
+  `LogSession::clear` (E08-S06) empties the buffer at the user's request: seqs are not reused and cleared lines are
+  not "dropped" (`LogBuffer::cleared`), the stream goes on. Module `logs::export` (E08-S06): `ExportFormat`
+  (`[timestamp ][pod/container ]text`), `ExportSpec` (a seq range plus the viewer's `LineFilter`), `chunks` / `save`
+  (bounded ~256 KiB chunks read under one short lock, fed to `FsPort::write_stream`) and `copy_text` (capped).
   Module `filter` (E08-S03): `LogFilter { pattern, case_sensitive, inverse }` (a regex; the empty pattern matches
   everything), compiled once per edit to a `LogMatcher` (`matches(&str)`, the predicate the agent's `get_logs`
   `grep` reuses, and the highlight `spans`; an invalid or oversized pattern is a one-line `FilterError`), and
@@ -186,9 +190,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   Options: range (tail 1 000 lines / head 1 MiB / since 1m-1h), container (init, sidecar, regular, ephemeral from
   the pod spec; a pod of several containers is read on its `default-container` or first regular one), previous
   instance, wrap, timestamps, fullscreen (the cluster tab's pane zoom); a change of what is read reopens the
-  session. Keys in the `LogView` context (k9s: `0`-`6`, `s`, `w`, `t`, `p`, `f`; `m`, `c` reserved for E08-S06).
+  session. Keys in the `LogView` context (k9s: `0`-`6`, `s`, `w`, `t`, `p`, `f`, `m`, `c`, `shift-c`, `ctrl-s`).
+  E08-S06: lines are selected by click, shift-click or drag (by seq, so scrolling and the ring never move a
+  selection); `m` marks the focused line (gutter bar, dropped with its line); `c` copies the selection or the
+  screen (5 MB cap, toast); `shift-c` clears the buffer (asks when lines are marked); `ctrl-s` / `ctrl-shift-s`
+  open the `SaveDialog` (module `export`: scope, line count, timestamp and pod-prefix toggles, the truncation note),
+  then the platform's save panel, then the chunked write on the Tokio bridge through `FsPort::write_stream`.
+  Copy and save take what the rows show: the search's matches while filter mode narrows the rows, the lines the level
+  chips admit, and any filter installed with `set_line_filter` (`LogView::active_filter`); structured lines are copied as
+  their raw JSON text. `view::chrome` draws the gutter bar and selection colour on both plain and JSON rows.
   Module `commands`: `pod::ViewLogs` and `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`,
-  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (and, E08-S05, `ToggleJsonMode`, `ToggleLevel`, `ToggleLine`, `CollapseLine`) on the bus (reads, tool stubs), queued to the
+  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (and, E08-S05, `ToggleJsonMode`, `ToggleLevel`, `ToggleLine`, `CollapseLine`; E08-S06, `Mark`, `Copy`, `Clear`, `Save`) on the bus (reads, tool stubs), queued to the
   window's `LogViews`, which opens a view in the pod's cluster tab (one per pod, through a `LogHost`) and applies
   the changes. `row_actions`: "View Logs" on pod rows of the resource tables.
   Module `search` (E08-S03): the `/` bar under the toolbar (`logs::Find`, also `cmd-f` / `ctrl-f`): a regex over the
@@ -383,7 +395,7 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | App reading user settings (aliases, budgets, per-cluster read-only / colour / name) | plain values pushed in at init / on change (`ClusterPrefsTable` for `clusters.<id>`, via `bins/oxikube::cluster_prefs`) | `oxikube_settings` (via bins) | `oxikube_app` |
 | App writing per-cluster read-only / colour back to `settings.json` | `oxikube_app::PrefsWriter` (a trait of the app crate, not a port: it carries no cluster I/O) | `bins/oxikube::cluster_prefs::SettingsPrefsWriter` over `ClusterSettings::update_cluster` | `oxikube_app::guard::posture` |
 | App editing the user's kubeconfig source list (`kubeconfig.sources`) | `SourceListStore` (a trait in `oxikube_app::sources`, async `load` / `save`) | `oxikube_catalog_ui::sources::SettingsSourceList` over `oxikube_settings::update_user_settings` | `oxikube_app::sources::KubeconfigSourcesService` |
-| Local files by path (pasted kubeconfigs: owner-only write, delete) | `FsPort` | `oxikube_runtime::StdFs` (tests: `FakeFsPort`) | `oxikube_app::sources` |
+| Local files by path (pasted kubeconfigs: owner-only write, delete; streamed chunked writes for log exports) | `FsPort` | `oxikube_runtime::StdFs` (tests: `FakeFsPort`) | `oxikube_app::sources` |
 | Per-cluster ports for a connected context | `ClusterConnectorPort` (returns `ClusterPorts` + `AccessReviewPort`; health via the `HealthReporter` callback) | `oxikube_kube` (wired by `bins/oxikube`) | `oxikube_app::session` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`), opened by `ExecPort` (`exec`, `attach`, `create_debug_container`, `node_shell`) | `oxikube_terminal` (local PTY), `oxikube_kube` (`KubeExec` handing out `KubeStream`), `oxikube_argocd` | `oxikube_terminal` element, `oxikube_app` `ExecService` |
 

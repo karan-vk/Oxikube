@@ -132,17 +132,19 @@ fn pod() -> Resource {
 /// With `json` the stream is [`json_log`], the `debug` chip is off and the failure line (seq 7)
 /// is expanded.
 fn render(wrap: bool, timestamps: bool, light: bool, json: bool) -> anyhow::Result<RgbaImage> {
-    render_with(wrap, timestamps, light, json, None)
+    render_with(wrap, timestamps, light, json, None, false)
 }
 
 /// [`render`] with the search bar open on `search` (a pattern and the mode), the first match
-/// being the current one.
+/// being the current one; `picked` marks the failing line and selects three lines above it
+/// (E08-S06).
 fn render_with(
     wrap: bool,
     timestamps: bool,
     light: bool,
     json: bool,
     search: Option<(&str, SearchMode)>,
+    picked: bool,
 ) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
@@ -186,6 +188,7 @@ fn render_with(
             service,
             sessions,
             dispatcher: Rc::new(Ignore),
+            fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
         };
         cx.new(|cx| LogView::new(target, None, deps, cx))
     })?;
@@ -210,6 +213,12 @@ fn render_with(
                 } else {
                     view.next_match(cx);
                 }
+            }
+            if picked {
+                view.click_line(6, false, cx);
+                view.toggle_mark(cx);
+                view.click_line(2, false, cx);
+                view.click_line(4, true, cx);
             }
         });
     })?;
@@ -264,6 +273,7 @@ fn main() -> ExitCode {
             false,
             false,
             Some(("error|warn", SearchMode::Highlight)),
+            false,
         )
         .and_then(|image| check("log_view_search", false, image)),
         render_with(
@@ -272,8 +282,11 @@ fn main() -> ExitCode {
             false,
             false,
             Some(("error|warn", SearchMode::Filter)),
+            false,
         )
         .and_then(|image| check("log_view_filter", false, image)),
+        render_with(false, true, false, false, None, true)
+            .and_then(|image| check("log_view_selection_marks", false, image)),
     ];
     let mut failed = false;
     for result in results {

@@ -29,6 +29,10 @@ enum RowData {
         level: Level,
         /// How the search marks the row, and the byte ranges of its matches to highlight.
         marks: LineMarks,
+        /// Whether the user marked the line (`m`): the gutter bar.
+        marked: bool,
+        /// Whether the line is in the selection.
+        selected: bool,
     },
     /// A structured line in JSON mode: columns instead of text.
     Json {
@@ -36,6 +40,8 @@ enum RowData {
         ts: Option<SharedString>,
         record: Arc<JsonColumns>,
         expanded: bool,
+        marked: bool,
+        selected: bool,
     },
     /// A line the buffer dropped since the last delta (drawn empty for that frame).
     Gone,
@@ -150,12 +156,16 @@ impl LogView {
                 let record = (json && entry.level.is_some())
                     .then(|| self.records.borrow_mut().row(entry.seq, &entry.text))
                     .flatten();
+                let marked = self.marks.contains(entry.seq);
+                let selected = self.selection.contains(entry.seq);
                 match record {
                     Some(record) => RowData::Json {
                         seq: entry.seq,
                         ts,
                         record,
                         expanded: expanded == Some(entry.seq),
+                        marked,
+                        selected,
                     },
                     None => RowData::Line {
                         seq: entry.seq,
@@ -163,6 +173,8 @@ impl LogView {
                         level: level_of(&entry.text),
                         text: line_text(entry, wrap),
                         marks: LineMarks::default(),
+                        marked,
+                        selected,
                     },
                 }
             }
@@ -211,11 +223,13 @@ impl LogView {
         };
         match row {
             RowData::Line {
+                seq,
                 ts,
                 text,
                 level,
                 marks,
-                ..
+                marked,
+                selected,
             } => {
                 let base = match marks.mark {
                     Mark::None => base,
@@ -243,14 +257,22 @@ impl LogView {
                         .text_color(colors.text_muted)
                         .child(ts)
                 });
-                base.children(ts).child(text).into_any_element()
+                self.row_chrome(base, seq, marked, selected, cx)
+                    .children(ts)
+                    .child(text)
+                    .into_any_element()
             }
             RowData::Json {
                 seq,
                 ts,
                 record,
                 expanded,
-            } => self.json_row(base, seq, ts, &record, expanded, wrap, cx),
+                marked,
+                selected,
+            } => {
+                let base = self.row_chrome(base, seq, marked, selected, cx);
+                self.json_row(base, seq, ts, &record, expanded, wrap, cx)
+            }
             RowData::Gone => base.into_any_element(),
             RowData::Marker(words) => base
                 .bg(colors.surface)

@@ -19,6 +19,9 @@
 //! | `settings` | the `logs` settings of the view's cluster: its first options, and `wrap` / `timestamps` / `json_auto_detect` applied live |
 //! | `scroll` | autoscroll, pausing on a scroll up, the anchor line across the wrap toggle |
 //! | `controls` | the view's operations (what the commands do) and the requests that dispatch them |
+//! | `selection`, `chrome` | [`Selection`] (click, shift-click, drag, by seq) and [`Marks`] (k9s `m`), the pointer handlers; the gutter bar and selection colour a row carries |
+//! | `pick`, `copy` | which lines an action takes (on screen, the buffer, the filter) and `logs::Copy` (cap 5 MB) |
+//! | `save`, `clear`, `notice` | `logs::Save` (dialog, panel, streamed write), `logs::Clear`, the toasts of local actions |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
 //! | `render`, `toolbar`, `rows` | drawing: toolbar, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
 //! | `json`, `columns`, `filter`, `detail` | JSON mode (E08-S05): the parsed columns of a structured line and their caches, the row they draw, the level chips and the filtered row index, the expanded line's pane |
@@ -36,18 +39,25 @@
 
 mod actions;
 mod autoscroll;
+mod chrome;
+mod clear;
 mod columns;
 mod containers;
 mod controls;
+mod copy;
 mod detail;
 mod filter;
 mod highlight;
 mod item;
 mod json;
+mod notice;
 mod options;
+mod pick;
 mod render;
 mod rows;
+mod save;
 mod scroll;
+mod selection;
 mod settings;
 mod stream;
 pub(crate) mod text;
@@ -66,8 +76,10 @@ use gpui::{
     UniformListScrollHandle, WeakEntity, px,
 };
 use oxikube_app::ClusterSessionManager;
+use oxikube_app::logs::export::LineFilter;
 use oxikube_app::logs::{LevelFilter, LogService, LogSession};
 use oxikube_domain::ids::ResourceRef;
+use oxikube_ports::FsPort;
 use oxikube_settings::Settings as _;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
@@ -75,16 +87,19 @@ use crate::LogsSettings;
 use crate::search::Search;
 
 pub use actions::{
-    CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, Since1h, Since1m, Since5m,
-    Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen,
-    ToggleInverse, ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    Clear, ClearSelection, CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, SaveAll,
+    SaveVisible, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase,
+    ToggleFilterMode, ToggleFullscreen, ToggleInverse, ToggleJsonMode, TogglePrevious,
+    ToggleTimestamps, ToggleWrap,
 };
 pub use autoscroll::Follow;
 pub use containers::{ContainerChoice, choices_of, default_container};
+pub use copy::COPY_LIMIT_BYTES;
 pub use item::item_key;
 pub use json::JsonColumns;
 pub use options::{HEAD_LIMIT_BYTES, OpenLogs, TAIL_LINES, ViewOptions};
-pub use text::{Level, level_of};
+pub use selection::{Marks, Selection};
+pub use text::{Level, group, level_of, lines_of};
 pub use window::{LineWindow, Row, RowChange};
 
 /// Bytes of a line an unwrapped row draws: more than any screen is wide, and a 16 KiB line costs
@@ -100,6 +115,8 @@ pub struct LogViewDeps {
     pub sessions: ClusterSessionManager,
     /// Where the view's commands go (the bus): `logs::*` from the keys and the toolbar.
     pub dispatcher: Rc<dyn CommandDispatcher>,
+    /// The files `logs::Save` writes (a path the user chose, streamed in chunks).
+    pub fs: Arc<dyn FsPort>,
 }
 
 /// The log of one pod's container. See the [module docs](self).
@@ -125,6 +142,16 @@ pub struct LogView {
     /// Columns and pretty text of the JSON lines drawn, by seq (drawing reads it).
     pub(crate) records: RefCell<json::RecordCache>,
     pub(crate) follow: Follow,
+    /// The selected lines, by seq (click, shift-click, drag).
+    pub(crate) selection: Selection,
+    /// The marked lines, by seq.
+    pub(crate) marks: Marks,
+    /// What a copy or a save keeps (the search installs its matcher); `None` keeps every line.
+    pub(crate) filter: Option<LineFilter>,
+    /// The save panel being answered (dropping it forgets the question).
+    pub(crate) save_prompt: Option<Task<()>>,
+    /// The running save; [`stop_save`](LogView::stop_save) ends it and tells the user.
+    pub(crate) save_job: Option<save::SaveJob>,
     /// The unwrapped list's scroll position.
     pub(crate) scroll: UniformListScrollHandle,
     /// The wrapped list's rows and scroll position (kept in step with the window by splices).
@@ -186,6 +213,11 @@ impl LogView {
             expanded: None,
             records: RefCell::default(),
             follow: Follow::default(),
+            selection: Selection::default(),
+            marks: Marks::default(),
+            filter: None,
+            save_prompt: None,
+            save_job: None,
             scroll: UniformListScrollHandle::new(),
             list: ListState::new(0, ListAlignment::Top, px(400.)),
             focus: cx.focus_handle(),

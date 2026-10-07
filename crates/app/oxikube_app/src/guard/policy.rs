@@ -92,6 +92,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PodExec { target, .. }
         | Command::PodPortForward { target, .. }
         | Command::PodViewLogs { target, .. }
+        | Command::LogsClear { target }
+        | Command::LogsCopy { target }
+        | Command::LogsMark { target }
+        | Command::LogsSave { target, .. }
         | Command::LogsSetRange { target, .. }
         | Command::LogsSelectContainer { target, .. }
         | Command::LogsToggleAutoscroll { target }

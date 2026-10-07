@@ -16,6 +16,7 @@
 //! | search and filter: the regex predicate, the incremental match index | [`LogFilter`], [`LogMatcher`], [`MatchIndex`] (`filter`) |
 //! | batched change notifications | [`LogDelta`], [`LogDeltas`] (`delta`) |
 //! | `Connecting` / `Streaming` / `Ended` / `Failed` | [`LogState`], [`EndReason`], [`LogFailure`] (`state`) |
+//! | saving and copying lines: the line format, chunked reads, the write | [`export`] |
 //! | JSON structured lines: parsers, field names, normalised levels and times | [`parse`] |
 //! | which levels a view shows (the level chips) | [`LevelFilter`] (`level_filter`) |
 //! | the task that reads the stream and commits batches | `driver` |
@@ -46,6 +47,7 @@ mod bounds;
 mod delta;
 mod driver;
 mod entry;
+pub mod export;
 mod filter;
 mod level_filter;
 mod options;

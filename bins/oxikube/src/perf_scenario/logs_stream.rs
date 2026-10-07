@@ -143,6 +143,7 @@ pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
         service,
         sessions: fixture.sessions.clone(),
         dispatcher: Rc::new(fixture::Ignore),
+        fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
     };
 
     // 1. The tail.

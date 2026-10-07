@@ -446,3 +446,28 @@ fn the_level_chips_compose_with_the_searchs_filter_mode(cx: &mut TestAppContext)
     fx.click("log-level-debug");
     assert_eq!(line_count(&mut fx), 6, "the two debug lines are hidden");
 }
+
+/// A structured line is selected and marked like any other (E08-S06): its row carries the
+/// gutter bar, and a copy takes its raw JSON text, not the columns.
+#[gpui::test]
+fn a_structured_line_can_be_selected_marked_and_copied(cx: &mut TestAppContext) {
+    let mut fx = Fx::new(cx);
+    let view = open_mixed(&mut fx);
+    fx.draw();
+    fx.vcx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            v.click_line(1, false, cx);
+            v.toggle_mark(cx);
+        })
+    });
+    fx.draw();
+    assert_eq!(fx.read(&view, |v| v.marked()), [1]);
+    assert!(fx.drawn("log-mark:1"), "the gutter bar is on the JSON row");
+    fx.vcx
+        .update(|_, cx| view.update(cx, |v, cx| v.copy_lines(cx)));
+    let copied = fx.vcx.read_from_clipboard().and_then(|item| item.text());
+    assert_eq!(
+        copied.as_deref(),
+        Some(format!("{}\n", mixed()[1].text).as_str())
+    );
+}

@@ -44,9 +44,10 @@ pub fn level_of(text: &str) -> Level {
     Level::Plain
 }
 
-/// The timestamp column: UTC to the millisecond, fixed width (`2026-10-07T12:00:00.123Z`).
+/// The timestamp column: UTC to the millisecond, fixed width (`2026-10-07T12:00:00.123Z`). The
+/// same text a save or a copy writes, so a file matches the screen.
 pub fn timestamp(entry: &LogEntry) -> String {
-    entry.ts.strftime("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+    oxikube_app::logs::export::timestamp(entry)
 }
 
 /// The words of the "truncated" marker for `dropped` older lines and a buffer of `capacity`.
@@ -92,6 +93,15 @@ pub fn group(n: u64) -> String {
         out.push(ch);
     }
     out
+}
+
+/// `1 line` or `12,345 lines`.
+pub fn lines_of(n: u64) -> String {
+    if n == 1 {
+        "1 line".to_owned()
+    } else {
+        format!("{} lines", group(n))
+    }
 }
 
 #[cfg(test)]

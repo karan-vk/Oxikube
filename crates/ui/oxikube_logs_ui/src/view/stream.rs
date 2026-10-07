@@ -108,6 +108,7 @@ impl LogView {
             self.expanded = None;
         }
         self.rows_changed(change);
+        self.forget_dropped();
         self.follow_tail();
         notify_coalesced(cx);
     }
