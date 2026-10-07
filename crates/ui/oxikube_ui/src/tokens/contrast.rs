@@ -144,3 +144,44 @@ fn log_source_colours_meet_wcag_aa() {
     }
     assert_no_failures(&failures);
 }
+
+/// The colour a text line is painted in, by log level (`level_colour` in `oxikube_logs_ui`).
+fn level_colours(c: &super::Colors) -> [(&'static str, Hsla); 4] {
+    [
+        ("error", c.error),
+        ("warning", c.warning),
+        ("text_muted", c.text_muted),
+        ("text", c.text),
+    ]
+}
+
+/// Level-coloured log text on every fill the log view puts behind it: the plain, matched and
+/// current-match row fills and the selected-line fill; and a search match's own text on its
+/// highlight.
+#[test]
+fn log_level_text_meets_wcag_aa_on_the_log_fills() {
+    let mut failures = Vec::new();
+    for (set, tokens) in sets() {
+        let c = tokens.colors;
+        let selected = c.background.blend(c.line_selection());
+        let rows = [
+            ("background", c.background),
+            ("element", c.element),
+            ("element_selected", c.element_selected),
+            ("line_selection", selected),
+        ];
+        for (fg_name, fg) in level_colours(&c) {
+            for (bg_name, bg) in rows {
+                let ratio = contrast(fg, bg);
+                if ratio < AA {
+                    failures.push(format!("{set}: {fg_name} on {bg_name} = {ratio:.2}"));
+                }
+            }
+        }
+        let ratio = contrast(c.search_match_text(), c.search_match_fill());
+        if ratio < AA {
+            failures.push(format!("{set}: search match text on fill = {ratio:.2}"));
+        }
+    }
+    assert_no_failures(&failures);
+}
