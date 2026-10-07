@@ -39,10 +39,9 @@
 //! # Threading
 //!
 //! Plain async Rust: no gpui, no kube. The manager spawns one thing: the per-connection forwarder
-//! of the adapter's kind events (`kinds`), owned by the session entry and aborted when the connection
-//! is released. Callers drive
-//! `connect` on the Tokio bridge (`oxikube_runtime::spawn_kube`); dropping that task
-//! cancels the attempt. Each session has its own short-lived lock, never held across
+//! of the adapter's kind events (`kinds`), owned by the session entry and aborted when the
+//! connection is released. Callers drive `connect` on the Tokio bridge
+//! (`oxikube_runtime::spawn_kube`); dropping that task cancels the attempt. Each session has its own short-lived lock, never held across
 //! an `.await`; updates of one session are sent in order under it.
 //!
 //! # Per-cluster settings

@@ -57,13 +57,6 @@ pub struct KindsChange {
     pub changed: Vec<Gvk>,
 }
 
-impl KindsChange {
-    /// Whether the change carries no detail: the subscriber missed events and must re-read.
-    pub fn is_resync(&self) -> bool {
-        self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty()
-    }
-}
-
 /// Whether the adapter can follow `CustomResourceDefinition` changes. Absence must be visible:
 /// a user who may not watch CRDs would otherwise see a registry that silently stops following.
 #[derive(Debug, Clone, PartialEq, Eq)]

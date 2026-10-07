@@ -285,7 +285,7 @@ async fn a_refused_crd_watch_is_reported_and_does_not_retry_hot() {
         ..CrdWatchConfig::default()
     });
     wait_until("the refusal to be reported", DEADLINE, || async {
-        watch.status().is_forbidden().then_some(())
+        discovery.crd_watch_status().is_forbidden().then_some(())
     })
     .await;
     tokio::time::sleep(Duration::from_secs(4)).await;

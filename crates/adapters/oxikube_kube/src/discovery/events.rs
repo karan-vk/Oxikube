@@ -3,6 +3,8 @@
 //! The stream owns the [`CrdWatch`](super::CrdWatch) it started, so dropping it (the session was
 //! released) aborts the watch.
 
+use std::sync::Arc;
+
 use futures::StreamExt as _;
 use futures::stream;
 use oxikube_domain::ids::Gvk;
@@ -14,7 +16,7 @@ use super::{CrdWatch, CrdWatchConfig, KubeDiscovery, RegistryDiff};
 
 /// What the stream owns while it is polled.
 struct Follow {
-    diffs: broadcast::Receiver<std::sync::Arc<RegistryDiff>>,
+    diffs: broadcast::Receiver<Arc<RegistryDiff>>,
     status: watch::Receiver<CrdWatchStatus>,
     /// Keeps the watch running; aborted when the stream is dropped.
     _watch: CrdWatch,

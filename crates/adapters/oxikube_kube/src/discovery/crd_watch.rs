@@ -25,7 +25,6 @@ use kube::runtime::WatchStreamExt;
 use kube::runtime::watcher::{self, Event, watcher};
 use oxikube_domain::ErrorKind;
 use oxikube_ports::CrdWatchStatus;
-use parking_lot::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep, sleep_until};
 use tracing::{debug, warn};
@@ -62,7 +61,6 @@ impl Default for CrdWatchConfig {
 #[derive(Debug)]
 pub struct CrdWatch {
     task: JoinHandle<()>,
-    discovery: KubeDiscovery,
     attempts: Arc<AtomicU32>,
 }
 
@@ -71,11 +69,6 @@ impl CrdWatch {
     /// retrying watcher never does; this is for tests and diagnostics).
     pub fn is_finished(&self) -> bool {
         self.task.is_finished()
-    }
-
-    /// Whether the watch is running or the server refused it.
-    pub fn status(&self) -> CrdWatchStatus {
-        self.discovery.crd_watch_status()
     }
 
     /// How many times the watch was started: once, plus one per
@@ -110,10 +103,9 @@ impl KubeDiscovery {
     ///
     /// A refused watch ends in [`CrdWatchStatus::Forbidden`] (see the module docs).
     pub fn watch_crds(&self, config: CrdWatchConfig) -> CrdWatch {
-        let discovery = self.clone();
         let attempts = Arc::new(AtomicU32::new(0));
         let task = tokio::spawn({
-            let discovery = discovery.clone();
+            let discovery = self.clone();
             let attempts = attempts.clone();
             async move {
                 let client = discovery.client.clone();
@@ -141,11 +133,7 @@ impl KubeDiscovery {
                 .await;
             }
         });
-        CrdWatch {
-            task,
-            discovery,
-            attempts,
-        }
+        CrdWatch { task, attempts }
     }
 }
 
@@ -192,12 +180,12 @@ pub(super) async fn watch_loop<M, S, R, Fut>(
 {
     loop {
         attempts.fetch_add(1, Ordering::Relaxed);
-        let refused = Mutex::new(None);
+        let mut refused = None;
         let signals = connect()
             .take_while(|signal| {
                 let proceed = match signal {
                     Signal::Forbidden(reason) => {
-                        *refused.lock() = Some(reason.clone());
+                        refused = Some(reason.clone());
                         false
                     }
                     Signal::Change => {
@@ -209,7 +197,7 @@ pub(super) async fn watch_loop<M, S, R, Fut>(
             })
             .map(|_| ());
         debounce_refresh(signals, config.clone(), &mut refresh).await;
-        let Some(reason) = refused.into_inner() else {
+        let Some(reason) = refused else {
             return;
         };
         warn!(
