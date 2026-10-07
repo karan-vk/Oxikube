@@ -6,6 +6,7 @@
 //! status bar badge, session restore) is in [`chrome`].
 
 mod actions;
+mod agent;
 mod chrome;
 mod logs;
 mod resources;
@@ -216,6 +217,7 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::LOGS_SET_RANGE, "oxikube_logs_ui"),
         (CommandId::LOGS_MARK, "oxikube_logs_ui"),
         (CommandId::LOGS_COPY, "oxikube_logs_ui"),
+        (CommandId::LOGS_SEND_TO_AGENT, "oxikube_logs_ui"),
         (CommandId::LOGS_CLEAR, "oxikube_logs_ui"),
         (CommandId::LOGS_SAVE, "oxikube_logs_ui"),
         (CommandId::LOGS_FIND, "oxikube_logs_ui"),

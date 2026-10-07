@@ -237,6 +237,7 @@ impl Stage {
             sessions: fixture.sessions.clone(),
             dispatcher: Rc::new(fixture::Ignore),
             fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
+            agent: oxikube_app::context::PendingContext::new(),
         };
         let hook = probe.then(|| recorder.clone());
         let target = fixture.target.clone();

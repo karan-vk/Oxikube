@@ -17,6 +17,7 @@
 //! | [`view`] `aggregate` | E08-S04 | [`LogView::workload`]: a Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or Service as one merged log (pod gutters coloured from the theme palette, the pod added / ended banner, "N more pods not streamed", the Sources menu) |
 //! | [`export`] | E08-S06 | [`SaveDialog`]: what `logs::Save` would write (which lines, how many, the truncation note) before the user picks the file; [`suggested_file_name`] |
 //! | [`search`] | E08-S03 | the search bar: regex with case and inverse toggles, highlight or filter mode, next / previous match with a count, the incremental match index over the ring buffer, and the per-session [`SearchMemory`] |
+//! | [`view`] `agent` | E08-S09 | `logs::SendToAgent` (key `a`, the toolbar's "Send to agent"): the selected lines, else the lines on screen, as a context block with its source (cluster, namespace, pod or workload, container, time span), masked of secrets and queued in the app's `PendingContext` until the agent panel (E27) takes it |
 //! | [`row_actions`] | E08-S02, E08-S04 | "View Logs" on a pod's row (and on a workload's or Service's) in the resource tables |
 //!
 //! A user reaches a log view from a pod's row in a resource table: its context menu (or the

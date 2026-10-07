@@ -98,6 +98,7 @@ impl LogViews {
                         ViewChange::Clear => view.clear(window, cx),
                         ViewChange::Copy => view.copy_lines(cx),
                         ViewChange::Mark => view.toggle_mark(cx),
+                        ViewChange::SendToAgent => view.send_to_agent(cx),
                         ViewChange::Save(scope) => view.offer_save(*scope, window, cx),
                         ViewChange::SetRange(range) => view.set_range(*range, cx),
                         ViewChange::SelectContainer(name) => view.select_container(name, cx),

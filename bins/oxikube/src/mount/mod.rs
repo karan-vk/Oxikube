@@ -21,6 +21,9 @@
 //! 7. the log service (E08-S01, [`logs`]): the app's one `LogService`, with `logs.buffer_lines`
 //!    following the settings, and the window's log views (E08-S02): "View Logs" on a pod's row
 //!    (`pod::ViewLogs`) opens its log as a tab of the cluster tab.
+//!    The agent hooks (E08-S09, `AppState::agent_hooks`) are built here too: `@logs` in the context
+//!    registry, `k8s.get_logs` in the tool registry, and the queue the viewer's "Send to agent"
+//!    fills until the agent panel exists.
 //! 8. the opener of terminal links (E09-S05): `terminal::OpenLink` validates a link off the UI
 //!    thread and this window opens it (browser or system opener); and the terminal's copy / paste
 //!    commands (E09-S06): `terminal::Copy` / `terminal::Paste` are dispatched to the window's
@@ -120,6 +123,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
     let log_service = logs::install(&state, ports.clusters.clock.clone(), cx);
+    // What hosted agents read: `@logs` and `k8s.get_logs` (E08-S09), and the queue "Send to agent"
+    // fills.
+    let agent = logs::install_agent_hooks(&state, services.sessions.clone(), log_service.clone());
 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
@@ -212,6 +218,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         log_service,
         services.sessions.clone(),
         ports.clusters.fs.clone(),
+        agent.pending,
         dispatcher.clone(),
         tabs.downgrade(),
         logs_rx,

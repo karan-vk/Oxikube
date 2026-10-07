@@ -89,6 +89,13 @@ impl LogView {
             .child(self.toggle("log-copy", "Copy", false, cx, |view, cx| {
                 view.request_copy(cx)
             }))
+            .child(self.toggle(
+                "log-send-to-agent",
+                "Send to agent",
+                false,
+                cx,
+                |view, cx| view.request_send_to_agent(cx),
+            ))
             .child(self.toggle("log-save", "Save", false, cx, |view, cx| {
                 view.request_save(LogSaveScope::All, cx)
             }))

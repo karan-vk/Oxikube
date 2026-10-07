@@ -191,6 +191,7 @@ fn render_with(
             sessions,
             dispatcher: Rc::new(Ignore),
             fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
+            agent: oxikube_app::context::PendingContext::new(),
         };
         cx.new(|cx| LogView::new(target, None, deps, cx))
     })?;
@@ -333,6 +334,7 @@ fn render_merged() -> anyhow::Result<RgbaImage> {
             sessions,
             dispatcher: Rc::new(Ignore),
             fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
+            agent: oxikube_app::context::PendingContext::new(),
         };
         cx.new(|cx| {
             LogView::workload(

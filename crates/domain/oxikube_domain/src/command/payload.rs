@@ -412,6 +412,14 @@ pub enum Command {
         /// The object the log view shows.
         target: ResourceRef,
     },
+    /// Queue the selected lines of a log view (with no selection, the lines on screen) as context
+    /// for the hosted agent, with where they came from. The agent panel (E27) drains the queue;
+    /// until then it waits locally. Reads nothing from the cluster and changes nothing in it.
+    #[serde(rename = "logs::SendToAgent")]
+    LogsSendToAgent {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
     /// Mark or unmark the focused line of a log view.
     #[serde(rename = "logs::Mark")]
     LogsMark {
@@ -678,6 +686,7 @@ impl Command {
             Command::LogsClear { .. } => CommandId::LOGS_CLEAR,
             Command::LogsCopy { .. } => CommandId::LOGS_COPY,
             Command::LogsMark { .. } => CommandId::LOGS_MARK,
+            Command::LogsSendToAgent { .. } => CommandId::LOGS_SEND_TO_AGENT,
             Command::LogsSave { .. } => CommandId::LOGS_SAVE,
             Command::LogsSetRange { .. } => CommandId::LOGS_SET_RANGE,
             Command::LogsSelectContainer { .. } => CommandId::LOGS_SELECT_CONTAINER,
@@ -742,6 +751,7 @@ impl Command {
             | Command::LogsClear { target }
             | Command::LogsCopy { target }
             | Command::LogsMark { target }
+            | Command::LogsSendToAgent { target }
             | Command::LogsSave { target, .. }
             | Command::LogsSetRange { target, .. }
             | Command::LogsSelectContainer { target, .. }
@@ -950,6 +960,7 @@ mod tests {
             Command::LogsClear { target: pod() },
             Command::LogsCopy { target: pod() },
             Command::LogsMark { target: pod() },
+            Command::LogsSendToAgent { target: pod() },
             Command::LogsSave {
                 target: pod(),
                 scope: LogSaveScope::All,
@@ -1155,6 +1166,7 @@ mod tests {
                     | Command::LogsClear { .. }
                     | Command::LogsCopy { .. }
                     | Command::LogsMark { .. }
+                    | Command::LogsSendToAgent { .. }
                     | Command::LogsSave { .. }
                     | Command::LogsSetRange { .. }
                     | Command::LogsSelectContainer { .. }

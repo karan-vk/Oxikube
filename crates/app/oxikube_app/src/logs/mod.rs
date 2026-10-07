@@ -16,6 +16,7 @@
 //! | search and filter: the regex predicate, the incremental match index | [`LogFilter`], [`LogMatcher`], [`MatchIndex`] (`filter`) |
 //! | batched change notifications | [`LogDelta`], [`LogDeltas`] (`delta`) |
 //! | `Connecting` / `Streaming` / `Ended` / `Failed` | [`LogState`], [`EndReason`], [`LogFailure`] (`state`) |
+//! | a bounded, non-following read as redacted text: the agent's `get_logs` and `@logs` (E08-S09) | [`ExcerptRequest`], [`LogExcerpt`], [`LogService::read_excerpt`] (`excerpt`) |
 //! | saving and copying lines: the line format, chunked reads, the write | [`export`] |
 //! | JSON structured lines: parsers, field names, normalised levels and times | [`parse`] |
 //! | which levels a view shows (the level chips) | [`LevelFilter`] (`level_filter`) |
@@ -50,6 +51,7 @@ mod bounds;
 mod delta;
 mod driver;
 mod entry;
+pub mod excerpt;
 pub mod export;
 mod filter;
 mod level_filter;
@@ -71,6 +73,10 @@ pub use aggregate::{
 };
 pub use delta::{LogDelta, LogDeltas};
 pub use entry::LogEntry;
+pub use excerpt::{
+    DEFAULT_TAIL, ExcerptRequest, ExcerptSource, LogCluster, LogClusters, LogExcerpt,
+    MAX_EXCERPT_BYTES, MAX_SINCE, MAX_TAIL, READ_DEADLINE, SCAN_LINES, parse_since, workload_kind,
+};
 pub use filter::{FilterError, IndexChange, LogFilter, LogMatcher, MatchIndex};
 pub use level_filter::LevelFilter;
 pub use options::{

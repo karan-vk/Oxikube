@@ -219,6 +219,12 @@ impl LogView {
         self.send(Command::LogsCopy { target }, cx);
     }
 
+    /// Asks to send the selection, else the lines on screen, to the agent (`logs::SendToAgent`).
+    pub fn request_send_to_agent(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsSendToAgent { target }, cx);
+    }
+
     /// Asks to clear the buffer and the view (`logs::Clear`).
     pub fn request_clear(&mut self, cx: &mut Context<Self>) {
         let target = self.target.clone();

@@ -183,6 +183,11 @@ impl LogService {
         AggregateSession::new(LogSession::new(shared, task), AggregateView::new(agg))
     }
 
+    /// The clock the service's tasks and deadlines run on.
+    pub(crate) fn clock(&self) -> Arc<dyn oxikube_ports::ClockPort> {
+        self.runtime.clock.clone()
+    }
+
     /// Streams an aggregate reads at once (`logs.max_streams`).
     pub fn max_streams(&self) -> usize {
         self.max_streams.load(Ordering::Acquire)

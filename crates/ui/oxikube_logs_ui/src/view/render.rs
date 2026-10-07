@@ -14,9 +14,9 @@ use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 use super::LogView;
 use super::actions::{
     Clear, ClearSelection, CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, SaveAll,
-    SaveVisible, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase,
-    ToggleFilterMode, ToggleFullscreen, ToggleInverse, ToggleJsonMode, TogglePrevious,
-    ToggleTimestamps, ToggleWrap,
+    SaveVisible, SendToAgent, Since1h, Since1m, Since5m, Since15m, Since30m, Tail,
+    ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen, ToggleInverse,
+    ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
 use super::text::group;
 
@@ -53,6 +53,7 @@ impl Render for LogView {
             .on_action(cx.listener(|v, _: &CloseSearch, _, cx| v.request_close_search(cx)))
             .on_action(cx.listener(|v, _: &Mark, _, cx| v.request_mark(cx)))
             .on_action(cx.listener(|v, _: &Copy, _, cx| v.request_copy(cx)))
+            .on_action(cx.listener(|v, _: &SendToAgent, _, cx| v.request_send_to_agent(cx)))
             .on_action(cx.listener(|v, _: &Clear, _, cx| v.request_clear(cx)))
             .on_action(cx.listener(|v, _: &SaveAll, _, cx| v.request_save(LogSaveScope::All, cx)))
             .on_action(

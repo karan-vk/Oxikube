@@ -103,6 +103,8 @@ pub struct CopiedText {
     pub lines: u64,
     /// Whether more lines matched but would have taken `text` past the limit.
     pub truncated: bool,
+    /// The server time of the first and last line copied; `None` for an empty copy.
+    pub span: Option<(jiff::Timestamp, jiff::Timestamp)>,
 }
 
 /// The lines of `spec`, as one string of at most `limit_bytes` (a whole line is always kept or
@@ -116,6 +118,7 @@ pub fn copy_text(reader: &LogReader, spec: &ExportSpec, limit_bytes: usize) -> C
             text: String::new(),
             lines: 0,
             truncated: false,
+            span: None,
         };
         if start >= end {
             return copied;
@@ -130,6 +133,11 @@ pub fn copy_text(reader: &LogReader, spec: &ExportSpec, limit_bytes: usize) -> C
             }
             spec.format.write_line(entry, &mut copied.text);
             copied.lines += 1;
+            copied.span = Some(
+                copied
+                    .span
+                    .map_or((entry.ts, entry.ts), |(first, _)| (first, entry.ts)),
+            );
         }
         copied
     })

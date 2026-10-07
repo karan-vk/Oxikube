@@ -95,6 +95,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::LogsClear { target }
         | Command::LogsCopy { target }
         | Command::LogsMark { target }
+        | Command::LogsSendToAgent { target }
         | Command::LogsSave { target, .. }
         | Command::LogsSetRange { target, .. }
         | Command::LogsSelectContainer { target, .. }
