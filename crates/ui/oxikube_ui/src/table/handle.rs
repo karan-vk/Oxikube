@@ -3,7 +3,6 @@
 use super::adapter::Adapter;
 use super::delegate::TableDelegate;
 use super::events::{TableEvent, TableEvents};
-use super::overflow::HorizontalOverflow;
 use super::widths::ColumnWidths;
 use gpui::{
     App, AppContext as _, Entity, FocusHandle, Focusable as _, ScrollHandle, ScrollStrategy,
@@ -178,11 +177,6 @@ impl<D: TableDelegate> TableHandle<D> {
                 .scroll_to_item(row_ix, ScrollStrategy::Nearest);
             cx.notify();
         });
-    }
-
-    /// Where columns continue past the view (after the table's first layout; none before).
-    pub fn horizontal_overflow(&self, cx: &App) -> HorizontalOverflow {
-        HorizontalOverflow::of(self.state.read(cx).horizontal_scroll_handle.base_handle())
     }
 
     /// The table's horizontal scroll handle, for the overflow cue.

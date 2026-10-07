@@ -19,18 +19,18 @@ const FADE_WIDTH: f32 = 28.;
 
 /// Where a table has more columns than the view shows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HorizontalOverflow {
+pub(super) struct HorizontalOverflow {
     /// Columns are scrolled off the left edge.
-    pub left: bool,
+    pub(super) left: bool,
     /// Columns continue past the right edge.
-    pub right: bool,
+    pub(super) right: bool,
 }
 
 impl HorizontalOverflow {
     /// The overflow of content scrolled by `offset_x` (zero or negative, as GPUI scroll offsets
     /// are) in a view that can scroll `max_x` (the hidden width, zero or more). Less than a pixel
     /// of overflow is rounding, not columns.
-    pub fn from_scroll(offset_x: Pixels, max_x: Pixels) -> Self {
+    fn from_scroll(offset_x: Pixels, max_x: Pixels) -> Self {
         let scrolled = -offset_x.min(Pixels::ZERO);
         let max_x = max_x.max(Pixels::ZERO);
         Self {
@@ -40,13 +40,8 @@ impl HorizontalOverflow {
     }
 
     /// Reads it from a table's horizontal scroll handle.
-    pub fn of(handle: &ScrollHandle) -> Self {
+    pub(super) fn of(handle: &ScrollHandle) -> Self {
         Self::from_scroll(handle.offset().x, handle.max_offset().x)
-    }
-
-    /// Whether any column is hidden by the view.
-    pub fn any(self) -> bool {
-        self.left || self.right
     }
 }
 
@@ -63,21 +58,20 @@ pub(super) fn cue(handle: ScrollHandle, color: Hsla) -> impl IntoElement {
                 size: size(width, bounds.size.height),
             };
             let clear = color.opacity(0.);
-            if overflow.right {
+            // `angle` points the gradient from clear (the table's inside) to `color` (its edge).
+            let mut paint_fade = |angle: f32, origin_x: Pixels| {
                 let gradient = linear_gradient(
-                    90.,
+                    angle,
                     linear_color_stop(clear, 0.),
                     linear_color_stop(color, 1.),
                 );
-                window.paint_quad(fill(edge(bounds.right() - width), gradient));
+                window.paint_quad(fill(edge(origin_x), gradient));
+            };
+            if overflow.right {
+                paint_fade(90., bounds.right() - width);
             }
             if overflow.left {
-                let gradient = linear_gradient(
-                    270.,
-                    linear_color_stop(clear, 0.),
-                    linear_color_stop(color, 1.),
-                );
-                window.paint_quad(fill(edge(bounds.left()), gradient));
+                paint_fade(270., bounds.left());
             }
         },
     )
@@ -95,7 +89,11 @@ mod tests {
     fn overflow_follows_the_scroll_position() {
         let at = |offset: f32, max: f32| HorizontalOverflow::from_scroll(px(offset), px(max));
         assert_eq!(at(0., 0.), HorizontalOverflow::default(), "fits");
-        assert!(!at(0., 0.5).any(), "a sub-pixel overflow is rounding");
+        assert_eq!(
+            at(0., 0.5),
+            HorizontalOverflow::default(),
+            "a sub-pixel overflow is rounding"
+        );
         assert_eq!(
             at(0., 120.),
             HorizontalOverflow {

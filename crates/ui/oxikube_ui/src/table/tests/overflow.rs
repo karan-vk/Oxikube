@@ -1,6 +1,7 @@
 //! The horizontal-overflow cue (E07-U561): the table reports where columns continue past the view.
 
-use crate::table::{HorizontalOverflow, Table, TableColumn, TableDelegate, TableHandle};
+use crate::table::overflow::HorizontalOverflow;
+use crate::table::{Table, TableColumn, TableDelegate, TableHandle};
 use gpui::{
     App, Context, Entity, IntoElement, ParentElement as _, Pixels, Render, Styled as _,
     TestAppContext, VisualTestContext, Window, div, point, px,
@@ -52,7 +53,9 @@ fn open(
 }
 
 fn overflow(view: &Entity<View>, cx: &mut VisualTestContext) -> HorizontalOverflow {
-    view.read_with(cx, |v, cx| v.table.horizontal_overflow(cx))
+    view.read_with(cx, |v, cx| {
+        HorizontalOverflow::of(&v.table.horizontal_scroll_handle(cx))
+    })
 }
 
 #[gpui::test]
