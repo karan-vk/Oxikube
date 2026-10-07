@@ -2,19 +2,21 @@
 //! decorations (underlines, strikethrough), the hovered link's underline, the scroll thumb.
 //!
 //! Everything is drawn from the row cache and the snapshot prepaint left behind; nothing is laid
-//! out or shaped here except the one glyph under a block cursor, and that is cached too.
+//! out or shaped here except the one glyph under a block cursor, which the row cache keeps (and
+//! drops with its rows when the font, metrics or palette change).
 
 use gpui::{
-    App, BorderStyle, Bounds, Hsla, Pixels, Point, ShapedLine, SharedString, TextAlign, TextRun,
-    UnderlineStyle, Window, fill, outline, point, px, size,
+    App, BorderStyle, Bounds, Hsla, Pixels, Point, TextAlign, UnderlineStyle, Window, fill,
+    outline, point, px, size,
 };
 use oxikube_theme::ActiveTheme;
 
+use super::cache::RowCache;
 use super::layout::{DecorationKind, DecorationSpan, selected_columns};
 use super::metrics::CellMetrics;
 use super::palette::TerminalPalette;
 use super::{Inner, TerminalElementState, TerminalFrame};
-use crate::grid::{CellFlags, CursorShape, SnapshotCell, TerminalSnapshot};
+use crate::grid::{CellFlags, CursorShape, TerminalSnapshot};
 
 /// Width of a beam cursor and height of an underline cursor, in strokes.
 const CURSOR_STROKES: f32 = 2.;
@@ -36,7 +38,6 @@ pub(super) fn paint(
         snapshot,
         cache,
         palette,
-        cursor_glyph,
         hovered,
         ..
     } = &mut *inner;
@@ -65,7 +66,7 @@ pub(super) fn paint(
             let _ = shaped.paint(at, metrics.line_height, TextAlign::Left, None, window, cx);
         }
     }
-    paint_cursor(snapshot, palette, frame, cursor_glyph, window, cx);
+    paint_cursor(snapshot, palette, frame, cache, window, cx);
     for (row, cached) in cache.rows().enumerate() {
         for span in &cached.layout.decorations {
             paint_decoration(span, row, origin, metrics, window);
@@ -94,7 +95,7 @@ fn paint_cursor(
     snapshot: &TerminalSnapshot,
     palette: &TerminalPalette,
     frame: &TerminalFrame,
-    glyph: &mut Option<(SnapshotCell, ShapedLine)>,
+    cache: &mut RowCache,
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -125,29 +126,7 @@ fn paint_cursor(
             if matches!(cell.c, ' ' | '\0') || cell.flags.contains(CellFlags::HIDDEN) {
                 return;
             }
-            if glyph
-                .as_ref()
-                .is_none_or(|(shaped_for, _)| shaped_for != cell)
-            {
-                let (_, background) = palette.cell_colors(cell);
-                let text: SharedString = cell.c.to_string().into();
-                let run = TextRun {
-                    len: text.len(),
-                    font: frame.font.font(
-                        cell.flags.contains(CellFlags::BOLD),
-                        cell.flags.contains(CellFlags::ITALIC),
-                    ),
-                    color: background.unwrap_or(palette.background()),
-                    background_color: None,
-                    underline: None,
-                    strikethrough: None,
-                };
-                let shaped = window
-                    .text_system()
-                    .shape_line(text, metrics.font_size, &[run], None);
-                *glyph = Some((*cell, shaped));
-            }
-            if let Some((_, shaped)) = glyph.as_ref() {
+            if let Some(shaped) = cache.cursor_glyph(cell, window.text_system()) {
                 let _ = shaped.paint(
                     area.origin,
                     metrics.line_height,

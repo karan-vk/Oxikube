@@ -7,6 +7,10 @@
 //! line per frame, and a full redraw (`htop`) only the rows that differ. What the hash does not
 //! cover drops every entry at once: the font, the cell metrics, the palette, the column count.
 //! Entries not shown in a frame are recycled (their buffers kept) for the next misses.
+//!
+//! The glyph under a block cursor (drawn in the cell's background colour) is cached here too, so
+//! the same key drops it: a zoom, a theme switch or an OSC 11 redraws it in the new font and
+//! colour even when the cursor has not moved.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,7 +21,7 @@ use super::hash::{FxBuild, row_hash};
 use super::layout::{RowLayout, TextSpan};
 use super::metrics::{CellMetrics, TerminalFont};
 use super::palette::TerminalPalette;
-use crate::grid::TerminalSnapshot;
+use crate::grid::{CellFlags, SnapshotCell, TerminalSnapshot};
 
 /// One cached row.
 #[derive(Default)]
@@ -38,6 +42,8 @@ pub struct CacheStats {
     pub misses: u64,
     /// Text runs shaped (the work the cache saves).
     pub shaped_runs: u64,
+    /// Glyphs shaped for the cell under a block cursor.
+    pub cursor_glyphs: u64,
 }
 
 /// What invalidates every row at once.
@@ -61,6 +67,8 @@ pub(super) struct RowCache {
     order: Vec<u64>,
     /// Rows no longer shown, kept for their buffers.
     spare: Vec<CachedRow>,
+    /// The cell under a block cursor and its glyph, shaped in the cell's background colour.
+    cursor: Option<(SnapshotCell, ShapedLine)>,
     stats: CacheStats,
 }
 
@@ -99,6 +107,7 @@ impl RowCache {
                 columns: snapshot.columns,
             });
             self.spare.extend(self.current.drain().map(|(_, row)| row));
+            self.cursor = None;
         }
         std::mem::swap(&mut self.current, &mut self.previous);
         self.order.clear();
@@ -131,6 +140,40 @@ impl RowCache {
                 self.spare.push(row);
             }
         }
+    }
+
+    /// The glyph of `cell` for a block cursor, in the cell's background colour (or the default
+    /// background), with the font, metrics and palette of the last [`update`](Self::update).
+    /// Shaped only when the cell or that key changed; `None` before the first update.
+    pub fn cursor_glyph(
+        &mut self,
+        cell: &SnapshotCell,
+        text_system: &WindowTextSystem,
+    ) -> Option<&ShapedLine> {
+        let key = self.key.as_ref()?;
+        if self
+            .cursor
+            .as_ref()
+            .is_none_or(|(shaped_for, _)| shaped_for != cell)
+        {
+            let (_, background) = key.palette.cell_colors(cell);
+            let text: SharedString = cell.c.to_string().into();
+            let run = TextRun {
+                len: text.len(),
+                font: key.font.font(
+                    cell.flags.contains(CellFlags::BOLD),
+                    cell.flags.contains(CellFlags::ITALIC),
+                ),
+                color: background.unwrap_or(key.palette.background()),
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            };
+            let shaped = text_system.shape_line(text, key.metrics.font_size, &[run], None);
+            self.stats.cursor_glyphs += 1;
+            self.cursor = Some((*cell, shaped));
+        }
+        self.cursor.as_ref().map(|(_, shaped)| shaped)
     }
 }
 

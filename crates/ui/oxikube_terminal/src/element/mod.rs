@@ -14,7 +14,7 @@
 //! | `metrics` | [`TerminalFont`], [`CellMetrics`]: cell size, pixels <-> cells |
 //! | `palette` | [`TerminalPalette`]: theme terminal tokens -> cell colours (16 ANSI, 256, truecolour, dim, bold, inverse, hidden) |
 //! | `layout` | a row as background spans, style runs and decoration spans (pure) |
-//! | `cache` | the shaped rows of the previous frame, reused for rows whose content hash did not change |
+//! | `cache` | the shaped rows of the previous frame, reused for rows whose content hash did not change, and the block cursor's glyph |
 //! | `paint` | the paint passes |
 //! | `links` | OSC 8, URL and path detection on the hovered line |
 //! | `mouse` | hover, cmd/ctrl-click (dispatches `terminal::OpenLink`), selection drags, wheel scrolling |
@@ -40,13 +40,13 @@ use std::sync::Arc;
 
 use gpui::{
     App, Bounds, Element, ElementId, Entity, FocusHandle, GlobalElementId, Hitbox, HitboxBehavior,
-    InspectorElementId, IntoElement, LayoutId, Pixels, Point, ShapedLine, Style, Window, relative,
+    InspectorElementId, IntoElement, LayoutId, Pixels, Point, Style, Window, relative,
 };
 use oxikube_ports::TerminalSize;
 use oxikube_theme::{ActiveTheme, ThemeTokens};
 use oxikube_workspace::CommandDispatcher;
 
-use crate::grid::{SelectionSide, SnapshotCell, TermRgb, TerminalSnapshot};
+use crate::grid::{SelectionSide, TermRgb, TerminalSnapshot};
 use crate::state::TerminalState;
 
 pub use cache::CacheStats;
@@ -84,8 +84,6 @@ struct Inner {
     requested: Option<TerminalSize>,
     metrics: Option<(TerminalFont, CellMetrics)>,
     palette: Option<PaletteMemo>,
-    /// The cell under a block cursor, shaped in the cursor's text colour.
-    cursor_glyph: Option<(SnapshotCell, ShapedLine)>,
     hovered: Option<TerminalLink>,
     /// The content hash of each row the hovered link is on, when it was found.
     hover_rows: Vec<(usize, u64)>,
@@ -191,7 +189,6 @@ impl TerminalElement {
 pub struct TerminalFrame {
     hitbox: Hitbox,
     origin: Point<Pixels>,
-    font: TerminalFont,
     metrics: CellMetrics,
     focused: bool,
 }
@@ -294,7 +291,6 @@ impl Element for TerminalElement {
         TerminalFrame {
             hitbox: window.insert_hitbox(bounds, HitboxBehavior::Normal),
             origin: bounds.origin,
-            font,
             metrics,
             focused: self.focus.is_focused(window),
         }
