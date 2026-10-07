@@ -1,6 +1,6 @@
 //! Typing: keystrokes become the bytes the process expects, through the focused element.
 
-use gpui::TestAppContext;
+use gpui::{KeyDownEvent, Keystroke, Modifiers, TestAppContext};
 
 use super::{FONT_SIZE, harness};
 use crate::configure;
@@ -175,4 +175,33 @@ fn an_echo_is_painted_within_one_frame_of_the_key(cx: &mut TestAppContext) {
         .terminal
         .read_with(&mut *h.window, |t, _| t.snapshot().cursor.column);
     assert_eq!(column, 0);
+}
+
+/// A key-down as Windows reports AltGr+Q on a German layout: Ctrl+Alt held, `key` the physical
+/// key, `key_char` the typed character, and the platform asking for text input.
+fn altgr_at(prefer_character_input: bool) -> KeyDownEvent {
+    KeyDownEvent {
+        keystroke: Keystroke {
+            modifiers: Modifiers {
+                control: true,
+                alt: true,
+                ..Modifiers::default()
+            },
+            key: "q".into(),
+            key_char: Some("@".into()),
+        },
+        is_held: false,
+        prefer_character_input,
+    }
+}
+
+#[gpui::test]
+fn altgr_characters_are_left_to_the_input_handler(cx: &mut TestAppContext) {
+    let mut h = harness(cx, 480., 130., FONT_SIZE);
+    h.window.simulate_event(altgr_at(true));
+    // Not mapped to ESC + Ctrl-Q: the character belongs to the platform's text input.
+    assert_eq!(h.written(), b"");
+    // The same chord without the flag is still the Ctrl+Alt control code.
+    h.window.simulate_event(altgr_at(false));
+    assert_eq!(h.written(), b"\x1b\x11");
 }

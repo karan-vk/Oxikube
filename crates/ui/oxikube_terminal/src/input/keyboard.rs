@@ -3,7 +3,9 @@
 //! GPUI matches the keymap first (`cmd-c`, `ctrl-shift-v`, the window's own shortcuts); a
 //! keystroke no binding took reaches [`handle_key_down`]:
 //!
-//! 1. while an input method is composing, nothing here: the keys belong to it;
+//! 1. while an input method is composing, nothing here: the keys belong to it; the same holds
+//!    for a key the platform flags as text (`prefer_character_input` with a `key_char`, which is
+//!    how Windows reports AltGr as Ctrl+Alt): it is typed by the input handler, not mapped;
 //! 2. Shift-PageUp / PageDown / Home / End scroll the history on the primary screen (they are
 //!    the terminal's, never sent);
 //! 3. [`to_esc_str`](crate::mappings::to_esc_str) maps what has no text of its own (arrows,
@@ -44,6 +46,11 @@ pub(crate) fn handle_key_down(
         return;
     }
     let keystroke = &event.keystroke;
+    // AltGr arrives as Ctrl+Alt with the typed character in `key_char`; mapping it would send a
+    // control code and swallow the character. GPUI's own dispatch honours the flag the same way.
+    if event.prefer_character_input && keystroke.key_char.is_some() {
+        return;
+    }
     if let Some(scroll) = history_scroll(keystroke)
         && !terminal
             .read(cx)

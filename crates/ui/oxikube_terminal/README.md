@@ -41,8 +41,8 @@ is only really exercised by hand. Run `cargo run -p oxikube_terminal --example t
    composition and nothing is sent. Repeat with the window moved and resized: the candidate window
    follows the cursor cell.
 2. **Dead keys / Option.** On macOS with `option_as_meta` off, Option-e then e types `é`; with it
-   on, Option-b / Option-f move by word in the shell. On Linux, AltGr combinations type
-   characters, Alt-b / Alt-f move by word.
+   on, Option-b / Option-f move by word in the shell. On Linux and Windows (German layout), AltGr
+   combinations (`@`, `{`, `\`) type characters, Alt-b / Alt-f move by word.
 3. **Arrows and friends.** In `vim` / `less` / `htop`: arrows, Home/End, PgUp/PgDn, F1-F12, Ctrl-arrows;
    `ctrl-c` interrupts `sleep 100`; `ctrl-d` ends `cat`.
 4. **Mouse.** `htop` / `vim` (`:set mouse=a`): click, drag and wheel act in the program; Shift-drag selects text.
