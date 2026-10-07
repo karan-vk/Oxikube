@@ -108,6 +108,10 @@ impl LogViews {
                         ViewChange::ToggleInverse => view.toggle_inverse(cx),
                         ViewChange::ToggleFilterMode => view.toggle_filter_mode(cx),
                         ViewChange::CloseSearch => view.close_search(window, cx),
+                        ViewChange::ToggleJsonMode => view.toggle_json_mode(cx),
+                        ViewChange::ToggleLevel(chip) => view.toggle_level(*chip, cx),
+                        ViewChange::ToggleLine(seq) => view.toggle_expanded(*seq, cx),
+                        ViewChange::CollapseLine => view.collapse(cx),
                     });
                 }
             }

@@ -1,0 +1,7 @@
+{"level":"info","msg":"Listening on :8080","time":"2023-10-07T09:20:00Z"}
+{"animal":"walrus","level":"warning","msg":"The group's number increased tremendously!","time":"2023-10-07T09:20:01.123456789+09:00"}
+{"level":"error","msg":"Failed to send event","time":"2023-10-07T09:20:02Z","err":"timeout","retries":3}
+{"level":"trace","msg":"entering handler","time":"2023-10-07T09:20:03Z"}
+{"level":"debug","msg":"cache miss","time":"2023-10-07T09:20:04Z","key":"user:42"}
+{"level":"fatal","msg":"cannot bind","time":"2023-10-07T09:20:05Z"}
+{"level":"panic","msg":"nil map","time":"2023-10-07T09:20:06Z"}

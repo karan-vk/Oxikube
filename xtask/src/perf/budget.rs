@@ -88,6 +88,14 @@ pub const BUDGETS: &[Budget] = &[
         "streaming 5 000 lines/s, wrapped, autoscroll paused (headless frame, p95)",
     ),
     logs_frame(
+        "raw_frame_ms",
+        "streaming 5 000 lines/s, JSON mode off, following (headless frame, p95)",
+    ),
+    logs_frame(
+        "json_filtered_frame_ms",
+        "streaming 5 000 lines/s of JSON, debug and plain chips off, following (headless frame, p95)",
+    ),
+    logs_frame(
         "search_frame_ms",
         "streaming 5 000 lines/s with a search highlighting, wrap off, following (headless frame, p95)",
     ),
@@ -97,8 +105,9 @@ pub const BUDGETS: &[Budget] = &[
     ),
 ];
 
-/// A `logs-stream` frame budget (E08-S02, the search modes E08-S03): p95 <= 8 ms. macOS only, as
-/// the table's (#509): the Linux runner's software renderer says nothing about the app on a GPU.
+/// A `logs-stream` frame budget (E08-S02, the JSON modes E08-S05, the search modes E08-S03):
+/// p95 <= 8 ms. macOS only, as the table's (#509): the Linux runner's software renderer says
+/// nothing about the app on a GPU.
 const fn logs_frame(metric: &'static str, what: &'static str) -> Budget {
     Budget {
         scenario: "logs-stream",
@@ -285,6 +294,8 @@ mod tests {
             "paused_frame_ms",
             "wrap_frame_ms",
             "wrap_paused_frame_ms",
+            "raw_frame_ms",
+            "json_filtered_frame_ms",
             "search_frame_ms",
             "filter_frame_ms",
         ];
@@ -301,7 +312,7 @@ mod tests {
                 launches: BTreeMap::new(),
             },
         );
-        assert_eq!(verdicts(&r)[2..], [Verdict::Within; 6]);
+        assert_eq!(verdicts(&r)[2..], [Verdict::Within; 8]);
         let logs = r.scenarios.get_mut("logs-stream").unwrap();
         logs.metrics.insert("wrap_frame_ms".to_owned(), pct(8.1));
         assert_eq!(verdicts(&r)[4], Verdict::Fail);

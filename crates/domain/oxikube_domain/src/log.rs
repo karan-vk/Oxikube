@@ -26,8 +26,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::bounds::truncate_in_place;
 
+mod level;
 mod range;
 
+pub use level::{LevelChip, LogLevel};
 pub use range::LogRange;
 
 /// Longest log line text kept, in bytes (16 KiB). Longer lines are cut on a

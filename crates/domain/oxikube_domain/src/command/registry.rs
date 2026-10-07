@@ -73,6 +73,14 @@ impl CommandId {
     pub const LOGS_SET_RANGE: CommandId = CommandId::new("logs::SetRange");
     /// `logs::ToggleAutoscroll`: follow the newest line of a log view, or stop following.
     pub const LOGS_TOGGLE_AUTOSCROLL: CommandId = CommandId::new("logs::ToggleAutoscroll");
+    /// `logs::ToggleJsonMode`: show structured lines as columns, or every line as raw text.
+    pub const LOGS_TOGGLE_JSON_MODE: CommandId = CommandId::new("logs::ToggleJsonMode");
+    /// `logs::ToggleLevel`: show or hide the lines of one level in a log view.
+    pub const LOGS_TOGGLE_LEVEL: CommandId = CommandId::new("logs::ToggleLevel");
+    /// `logs::ToggleLine`: expand a structured line into its pretty-printed pane, or close it.
+    pub const LOGS_TOGGLE_LINE: CommandId = CommandId::new("logs::ToggleLine");
+    /// `logs::CollapseLine`: close the expanded-line pane of a log view.
+    pub const LOGS_COLLAPSE_LINE: CommandId = CommandId::new("logs::CollapseLine");
     /// `logs::ToggleFullscreen`: let a log view fill its cluster tab, or give the space back.
     pub const LOGS_TOGGLE_FULLSCREEN: CommandId = CommandId::new("logs::ToggleFullscreen");
     /// `logs::TogglePrevious`: read the previous (terminated) container instance, or the current.
@@ -290,6 +298,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     CommandMeta::read(
+        CommandId::LOGS_COLLAPSE_LINE,
+        "Logs: Collapse Line",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::LOGS_FIND,
         "Logs: Find",
         CommandScope::Selection,
@@ -346,6 +360,24 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_INVERSE,
         "Logs: Toggle Inverse Match",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_JSON_MODE,
+        "Logs: Toggle JSON Mode",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_LEVEL,
+        "Logs: Toggle Level",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_LINE,
+        "Logs: Expand or Collapse Line",
         CommandScope::Selection,
         NONE,
     ),

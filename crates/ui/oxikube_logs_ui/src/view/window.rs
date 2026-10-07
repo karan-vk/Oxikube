@@ -16,8 +16,20 @@
 //! rides along (the view reads the count and the next match from it) and every line is a row. In
 //! filter mode the window is *narrowed*: the lines are the index's matches, so the rows are the
 //! matching lines only, and a delta changes the rows by what the index gained and lost.
+//!
+//! # Level filter
+//!
+//! With the level chips of the JSON mode (E08-S05) hiding some lines, the window keeps the seqs of
+//! the lines that are rows, in order (8 bytes a line; `None`, and free, while nothing is hidden).
+//! It composes with the search: while narrowed, the rows are the matches that also pass the chips.
+//! A delta is told which of its candidate lines pass ([`LineWindow::apply_filtered`]: the new
+//! matches while narrowed, the appended lines otherwise), and a changed filter or search replaces
+//! the whole list ([`LineWindow::set_visible`], built from [`LineWindow::candidate_seqs`]).
 
-use oxikube_app::logs::{LogBuffer, LogDelta, LogState, MatchIndex};
+use std::collections::VecDeque;
+use std::ops::Range;
+
+use oxikube_app::logs::{IndexChange, LogBuffer, LogDelta, LogState, MatchIndex};
 
 /// One row of a log view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +83,9 @@ pub struct LineWindow {
     index: Option<MatchIndex>,
     /// Whether only the index's lines are rows (filter mode).
     narrowed: bool,
+    /// Seqs of the lines that are rows while the level chips hide some lines, ascending; `None`
+    /// when they hide none (the rows are then every line, or the index's while narrowed).
+    visible: Option<VecDeque<u64>>,
 }
 
 impl Default for LineWindow {
@@ -81,6 +96,7 @@ impl Default for LineWindow {
             state: LogState::Connecting,
             index: None,
             narrowed: false,
+            visible: None,
         }
     }
 }
@@ -125,18 +141,50 @@ impl LineWindow {
         self.index.as_ref().filter(|_| self.narrowed)
     }
 
-    /// Lines shown: the retained ones, or the matching ones while narrowed.
+    /// Lines shown: the retained ones, the matching ones while narrowed, or those that pass the
+    /// level chips while they hide some.
     pub fn line_count(&self) -> usize {
-        self.narrowing()
-            .map_or_else(|| self.retained_count(), MatchIndex::len)
+        match (&self.visible, self.narrowing()) {
+            (Some(visible), _) => visible.len(),
+            (None, Some(index)) => index.len(),
+            (None, None) => self.retained_count(),
+        }
     }
 
     /// The seq of the `line`th line shown.
     fn line_at(&self, line: usize) -> Option<u64> {
-        match self.narrowing() {
-            Some(index) => index.get(line),
-            None => (line < self.retained_count()).then(|| self.first_seq + line as u64),
+        match (&self.visible, self.narrowing()) {
+            (Some(visible), _) => visible.get(line).copied(),
+            (None, Some(index)) => index.get(line),
+            (None, None) => (line < self.retained_count()).then(|| self.first_seq + line as u64),
         }
+    }
+
+    /// Whether the level chips hide some lines (the rows are the lines that pass them).
+    pub fn is_level_filtered(&self) -> bool {
+        self.visible.is_some()
+    }
+
+    /// Starts or stops the level filter: `Some(seqs)` makes exactly those lines (ascending, the
+    /// rows without the filter that pass it, see [`candidate_seqs`](Self::candidate_seqs)) the
+    /// rows, `None` shows every line (or every match) again. The rows change wholesale: the caller
+    /// resets whatever it keeps per row.
+    pub fn set_visible(&mut self, visible: Option<VecDeque<u64>>) {
+        self.visible = visible;
+    }
+
+    /// The seqs that would be rows without the level filter: the index's matches while narrowed,
+    /// every retained line otherwise. A new filter tests these against the buffer.
+    pub fn candidate_seqs(&self) -> Box<dyn Iterator<Item = u64> + '_> {
+        match self.narrowing() {
+            Some(index) => Box::new((0..index.len()).filter_map(|i| index.get(i))),
+            None => Box::new(self.first_seq..self.next_seq),
+        }
+    }
+
+    /// The seqs in `first_seq..next_seq`.
+    pub fn retained_seqs(&self) -> Range<u64> {
+        self.first_seq..self.next_seq
     }
 
     /// Whether the "truncated" marker is shown (older lines were dropped).
@@ -173,9 +221,10 @@ impl LineWindow {
 
     /// The row index of the line with `seq`, if it is shown.
     pub fn index_of(&self, seq: u64) -> Option<usize> {
-        let line = match self.narrowing() {
-            Some(index) => index.position(seq)?,
-            None => (self.first_seq..self.next_seq)
+        let line = match (&self.visible, self.narrowing()) {
+            (Some(visible), _) => visible.binary_search(&seq).ok()?,
+            (None, Some(index)) => index.position(seq)?,
+            (None, None) => (self.first_seq..self.next_seq)
                 .contains(&seq)
                 .then(|| usize::try_from(seq - self.first_seq).unwrap_or(0))?,
         };
@@ -189,9 +238,12 @@ impl LineWindow {
         if count == 0 {
             return None;
         }
-        let line = match self.narrowing() {
-            Some(index) => index.rank(seq),
-            None => usize::try_from(seq.saturating_sub(self.first_seq)).unwrap_or(usize::MAX),
+        let line = match (&self.visible, self.narrowing()) {
+            (Some(visible), _) => visible.partition_point(|s| *s < seq),
+            (None, Some(index)) => index.rank(seq),
+            (None, None) => {
+                usize::try_from(seq.saturating_sub(self.first_seq)).unwrap_or(usize::MAX)
+            }
         };
         Some(self.marker_rows() + line.min(count - 1))
     }
@@ -233,6 +285,32 @@ impl LineWindow {
     /// delta) brings the carried index up to date first; while narrowed the rows follow what the
     /// index gained and lost, otherwise every line is a row.
     pub fn apply(&mut self, delta: &LogDelta, buffer: Option<&LogBuffer>) -> RowChange {
+        self.apply_filtered(delta, buffer, |candidates| candidates)
+    }
+
+    /// The lines of `delta` the level filter has to test: the index's new matches while narrowed
+    /// (`scanned` says how many), the appended lines still retained otherwise.
+    fn delta_candidates(&self, delta: &LogDelta, scanned: Option<IndexChange>) -> Vec<u64> {
+        match (self.narrowing(), scanned) {
+            (Some(index), Some(change)) => (index.len().saturating_sub(change.appended)
+                ..index.len())
+                .filter_map(|i| index.get(i))
+                .collect(),
+            (Some(_), None) => Vec::new(),
+            (None, _) => (delta.appended.start.max(delta.first_seq)..delta.appended.end).collect(),
+        }
+    }
+
+    /// [`apply`](Self::apply) with the level filter on ([`set_visible`](Self::set_visible)):
+    /// `admit` is given the delta's candidate lines (the index's new matches while narrowed, the
+    /// appended lines still retained otherwise) and returns the ones that pass the chips. It is
+    /// only called while the filter is on.
+    pub fn apply_filtered(
+        &mut self,
+        delta: &LogDelta,
+        buffer: Option<&LogBuffer>,
+        admit: impl FnOnce(Vec<u64>) -> Vec<u64>,
+    ) -> RowChange {
         let old_marker = self.marker_rows();
         let old_state = usize::from(self.shows_state());
         let held = self.line_count();
@@ -240,7 +318,26 @@ impl LineWindow {
             (Some(index), Some(buffer)) => Some(index.catch_up(buffer)),
             _ => None,
         };
-        let (dropped, appended) = if self.is_narrowed() {
+        let candidates = if self.visible.is_some() {
+            self.delta_candidates(delta, scanned)
+        } else {
+            Vec::new()
+        };
+        let (dropped, appended) = if let Some(visible) = self.visible.as_mut() {
+            let before = visible.len();
+            while visible.front().is_some_and(|seq| *seq < delta.first_seq) {
+                visible.pop_front();
+            }
+            let dropped = before - visible.len();
+            let admitted = if candidates.is_empty() {
+                Vec::new()
+            } else {
+                admit(candidates)
+            };
+            let appended = admitted.len();
+            visible.extend(admitted);
+            (dropped, appended)
+        } else if self.is_narrowed() {
             scanned.map_or((0, 0), |change| {
                 (change.dropped_front.min(held), change.appended)
             })
@@ -446,6 +543,145 @@ mod tests {
                 3,
                 "the index followed the delta"
             );
+        }
+    }
+
+    mod levels {
+        use std::sync::Arc;
+
+        use jiff::Timestamp;
+        use oxikube_app::logs::{LogBuffer, LogEntry, LogFilter, MatchIndex};
+        use oxikube_domain::log::LogLine;
+
+        use super::*;
+
+        /// Lines whose text starts with `e` match the search; seqs not divisible by 3 pass the
+        /// level chips.
+        fn pass(seq: u64) -> bool {
+            !seq.is_multiple_of(3)
+        }
+
+        fn push(buffer: &mut LogBuffer, texts: &[String]) {
+            buffer.extend(texts.iter().map(|text| {
+                LogEntry::new(LogLine::new(Timestamp::UNIX_EPOCH, "p", "c", text.clone()))
+            }));
+        }
+
+        fn rows(window: &LineWindow) -> Vec<u64> {
+            (0..window.row_count())
+                .filter_map(|i| match window.row(i) {
+                    Some(Row::Line(seq)) => Some(seq),
+                    _ => None,
+                })
+                .collect()
+        }
+
+        fn admit(candidates: Vec<u64>) -> Vec<u64> {
+            candidates.into_iter().filter(|seq| pass(*seq)).collect()
+        }
+
+        /// Delta by delta, a level-filtered window shows exactly the lines of the model that pass.
+        #[test]
+        fn a_filtered_window_matches_a_naive_model_of_the_buffer() {
+            let mut window = LineWindow::new();
+            window.set_visible(Some(VecDeque::new()));
+            let capacity = 10u64;
+            let mut next = 0u64;
+            for batch in [4u64, 1, 12, 3, 30, 2] {
+                let seen_next = next;
+                next += batch;
+                let first = next.saturating_sub(capacity);
+                let dropped =
+                    (first.saturating_sub(window.first_seq())).min(window.retained_count() as u64);
+                let change = window.apply_filtered(
+                    &delta(
+                        seen_next.max(first)..next,
+                        dropped as usize,
+                        first,
+                        LogState::Streaming,
+                    ),
+                    None,
+                    admit,
+                );
+                let want: Vec<u64> = (first..next).filter(|seq| pass(*seq)).collect();
+                assert_eq!(rows(&window), want, "after {next} lines");
+                assert_eq!(window.line_count(), want.len());
+                assert_eq!(window.retained_count() as u64, next - first);
+                assert_eq!(change.kept + change.appended, window.line_count());
+                for (i, seq) in want.iter().enumerate() {
+                    assert_eq!(window.index_of(*seq), Some(window.marker_rows() + i));
+                }
+                assert_eq!(window.index_of(first).is_some(), pass(first));
+            }
+        }
+
+        #[test]
+        fn row_near_seq_finds_the_neighbourhood_of_a_hidden_line() {
+            let mut window = LineWindow::new();
+            window.apply(&delta(0..10, 0, 0, LogState::Streaming), None);
+            window.set_visible(Some([2, 5, 8].into_iter().collect()));
+            assert_eq!(window.index_of(5), Some(1));
+            assert_eq!(window.index_of(4), None);
+            assert_eq!(window.row_near_seq(4), Some(1), "the next shown line");
+            assert_eq!(window.row_near_seq(0), Some(0));
+            assert_eq!(
+                window.row_near_seq(9),
+                Some(2),
+                "past the end: the last line"
+            );
+            assert_eq!(
+                window.seq_near(7),
+                Some(8),
+                "a row past the end maps to the last line"
+            );
+            window.set_visible(Some(VecDeque::new()));
+            assert_eq!(window.row_near_seq(3), None);
+            assert_eq!(window.seq_near(0), None);
+            window.set_visible(None);
+            assert_eq!(window.row_near_seq(4), Some(4));
+        }
+
+        /// While the search narrows the rows, the level chips narrow them further: the rows are
+        /// the matches that pass, and a delta adds only the new matches that pass.
+        #[test]
+        fn the_chips_compose_with_a_narrowing_search() {
+            let text = |seq: u64| {
+                if seq.is_multiple_of(2) {
+                    format!("e{seq}")
+                } else {
+                    format!("x{seq}")
+                }
+            };
+            let mut buffer = LogBuffer::new(100);
+            push(&mut buffer, &(0..12).map(text).collect::<Vec<_>>());
+            let matcher = Arc::new(LogFilter::new("e").compile().unwrap());
+            let mut index = MatchIndex::new(matcher);
+            index.catch_up(&buffer);
+            let mut window = LineWindow::new();
+            window.apply(&delta(0..12, 0, 0, LogState::Streaming), None);
+            window.set_index(Some(index), true);
+            assert_eq!(rows(&window), [0, 2, 4, 6, 8, 10]);
+
+            window.set_visible(Some(window.candidate_seqs().filter(|s| pass(*s)).collect()));
+            assert_eq!(rows(&window), [2, 4, 8, 10], "matches that pass");
+            assert_eq!(window.index_of(6), None);
+            assert_eq!(window.index_of(3), None, "a line that does not match");
+
+            // Lines 12..16 arrive: 12 and 14 match, only 14 passes.
+            push(&mut buffer, &(12..16).map(text).collect::<Vec<_>>());
+            window.apply_filtered(
+                &delta(12..16, 0, 0, LogState::Streaming),
+                Some(&buffer),
+                admit,
+            );
+            assert_eq!(rows(&window), [2, 4, 8, 10, 14]);
+
+            // Without the chips the matches are back; without the narrowing the passing lines.
+            window.set_visible(None);
+            assert_eq!(rows(&window), [0, 2, 4, 6, 8, 10, 12, 14]);
+            window.set_narrowed(false);
+            window.set_visible(Some(window.candidate_seqs().filter(|s| pass(*s)).collect()));
+            assert_eq!(rows(&window), [1, 2, 4, 5, 7, 8, 10, 11, 13, 14]);
         }
     }
 

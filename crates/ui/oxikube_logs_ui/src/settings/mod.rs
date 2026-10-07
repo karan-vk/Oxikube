@@ -22,8 +22,7 @@
 //! | Key | Applies |
 //! |---|---|
 //! | `buffer_lines` | at once to every open session ([`follow_settings`](crate::follow_settings)) |
-//! | `wrap`, `timestamps` | at once to the open views, without reopening the stream |
-//! | `json_auto_detect` | reserved until E08-S05: reaches the open views' options, nothing renders from it yet |
+//! | `wrap`, `timestamps`, `json_auto_detect` | at once to the open views, without reopening the stream |
 //! | `default_tail` | to the views opened afterwards (changing it must not reopen what is being read) |
 //!
 //! k9s's `logger` keys that Oxikube's viewer does not have (`sinceSeconds` as a setting,
@@ -70,9 +69,9 @@ pub struct LogsContent {
     /// applies to open views at once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamps: Option<bool>,
-    /// Reserved until the JSON log mode lands (E08-S05): the value is stored and reaches open
-    /// views, but no rendering reads it yet. It will render lines that are JSON objects as
-    /// level / time / message columns when the log looks structured.
+    /// JSON mode (key `j` toggles it per view): render the lines that are JSON objects as level /
+    /// time / message columns with expandable fields and the level chips; plain-text lines stay
+    /// as they are. A change applies to open views at once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub json_auto_detect: Option<bool>,
 }
@@ -88,7 +87,7 @@ pub struct LogsSettings {
     pub wrap: bool,
     /// Show the server timestamp before each line.
     pub timestamps: bool,
-    /// Render JSON lines as columns when the log looks structured (reserved until E08-S05).
+    /// JSON mode: render JSON-object lines as columns with expandable fields (E08-S05).
     pub json_auto_detect: bool,
 }
 

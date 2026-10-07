@@ -8,7 +8,7 @@ use super::meta::CommandMeta;
 use super::registry;
 use crate::colour::ClusterColour;
 use crate::ids::{ClusterId, Gvk, ResourceRef};
-use crate::log::LogRange;
+use crate::log::{LevelChip, LogRange};
 use crate::preset::ClusterPreset;
 
 /// How the API server deletes dependents of an object.
@@ -479,6 +479,36 @@ pub enum Command {
         /// The object the log view shows.
         target: ResourceRef,
     },
+    /// Show structured (JSON) lines as level, time and message columns with expandable fields,
+    /// or show every line as the raw text it is.
+    #[serde(rename = "logs::ToggleJsonMode")]
+    LogsToggleJsonMode {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Show or hide the lines of one level in a log view (the level chips).
+    #[serde(rename = "logs::ToggleLevel")]
+    LogsToggleLevel {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The chip to flip: a level, or `text` for plain and level-less lines.
+        level: LevelChip,
+    },
+    /// Expand a structured line of a log view into its pretty-printed pane, or close the pane
+    /// when it already shows that line.
+    #[serde(rename = "logs::ToggleLine")]
+    LogsToggleLine {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The line's sequence number in the view (its row's `seq`).
+        seq: u64,
+    },
+    /// Close the expanded-line pane of a log view.
+    #[serde(rename = "logs::CollapseLine")]
+    LogsCollapseLine {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
     /// Set a workload's replica count.
     #[serde(rename = "workload::Scale")]
     WorkloadScale {
@@ -583,6 +613,10 @@ impl Command {
             Command::LogsToggleInverse { .. } => CommandId::LOGS_TOGGLE_INVERSE,
             Command::LogsToggleFilterMode { .. } => CommandId::LOGS_TOGGLE_FILTER_MODE,
             Command::LogsCloseSearch { .. } => CommandId::LOGS_CLOSE_SEARCH,
+            Command::LogsToggleJsonMode { .. } => CommandId::LOGS_TOGGLE_JSON_MODE,
+            Command::LogsToggleLevel { .. } => CommandId::LOGS_TOGGLE_LEVEL,
+            Command::LogsToggleLine { .. } => CommandId::LOGS_TOGGLE_LINE,
+            Command::LogsCollapseLine { .. } => CommandId::LOGS_COLLAPSE_LINE,
             Command::WorkloadScale { .. } => CommandId::WORKLOAD_SCALE,
             Command::WorkloadRestart { .. } => CommandId::WORKLOAD_RESTART,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
@@ -637,6 +671,10 @@ impl Command {
             | Command::LogsToggleInverse { target }
             | Command::LogsToggleFilterMode { target }
             | Command::LogsCloseSearch { target }
+            | Command::LogsToggleJsonMode { target }
+            | Command::LogsToggleLevel { target, .. }
+            | Command::LogsToggleLine { target, .. }
+            | Command::LogsCollapseLine { target }
             | Command::WorkloadScale { target, .. }
             | Command::WorkloadRestart { target }
             | Command::NodeCordon { target }
@@ -842,6 +880,16 @@ mod tests {
             Command::LogsToggleInverse { target: pod() },
             Command::LogsToggleFilterMode { target: pod() },
             Command::LogsCloseSearch { target: pod() },
+            Command::LogsToggleJsonMode { target: pod() },
+            Command::LogsToggleLevel {
+                target: pod(),
+                level: LevelChip::Warn,
+            },
+            Command::LogsToggleLine {
+                target: pod(),
+                seq: 7,
+            },
+            Command::LogsCollapseLine { target: pod() },
             Command::WorkloadScale {
                 target: deployment(),
                 replicas: 3,
@@ -1007,6 +1055,10 @@ mod tests {
                     | Command::LogsToggleInverse { .. }
                     | Command::LogsToggleFilterMode { .. }
                     | Command::LogsCloseSearch { .. }
+                    | Command::LogsToggleJsonMode { .. }
+                    | Command::LogsToggleLevel { .. }
+                    | Command::LogsToggleLine { .. }
+                    | Command::LogsCollapseLine { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterApplyPreset { .. }

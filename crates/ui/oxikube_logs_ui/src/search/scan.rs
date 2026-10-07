@@ -83,6 +83,7 @@ impl LogView {
         let anchor = self.top_seq();
         self.window
             .set_index(index, self.search.state.is_filtering());
+        self.relevel();
         self.rows_rebuilt(anchor);
         notify_coalesced(cx);
     }
@@ -96,6 +97,7 @@ impl LogView {
         }
         let anchor = self.top_seq();
         self.window.set_narrowed(self.search.state.is_filtering());
+        self.relevel();
         self.rows_rebuilt(anchor);
         notify_coalesced(cx);
     }

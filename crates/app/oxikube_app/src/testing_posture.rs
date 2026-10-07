@@ -165,6 +165,16 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "logs::ToggleCase" => Command::LogsToggleCase { target: target() },
         "logs::ToggleFilterMode" => Command::LogsToggleFilterMode { target: target() },
         "logs::ToggleInverse" => Command::LogsToggleInverse { target: target() },
+        "logs::ToggleJsonMode" => Command::LogsToggleJsonMode { target: target() },
+        "logs::ToggleLevel" => Command::LogsToggleLevel {
+            target: target(),
+            level: oxikube_domain::log::LevelChip::Error,
+        },
+        "logs::ToggleLine" => Command::LogsToggleLine {
+            target: target(),
+            seq: 0,
+        },
+        "logs::CollapseLine" => Command::LogsCollapseLine { target: target() },
         "namespace::Select" => Command::NamespaceSelect {
             cluster,
             namespaces: vec!["default".into()],

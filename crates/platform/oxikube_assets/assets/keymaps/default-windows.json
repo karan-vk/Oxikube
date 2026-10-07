@@ -111,7 +111,7 @@
   },
   {
     // Log views (E08-S02), k9s's keys: 0 tail, 1 head, 2-6 since 1m / 5m / 15m / 30m / 1h,
-    // s autoscroll, w wrap, t timestamps, p previous container, f fullscreen, m mark, c copy.
+    // s autoscroll, w wrap, t timestamps, j JSON mode (E08-S05), p previous container, f fullscreen, m mark, c copy.
     // Bare keys stay off while a text field inside the view has the focus. Rebind in keymap.json,
     // e.g. { "context": "LogView && !Editing", "bindings": { "w": null, "x": "log_view::ToggleWrap" } }.
     "context": "LogView && !Editing",
@@ -126,6 +126,7 @@
       "s": "log_view::ToggleAutoscroll",
       "w": "log_view::ToggleWrap",
       "t": "log_view::ToggleTimestamps",
+      "j": "log_view::ToggleJsonMode",
       "p": "log_view::TogglePrevious",
       "f": "log_view::ToggleFullscreen",
       "m": "log_view::Mark",

@@ -1,0 +1,7 @@
+{"level":30,"time":1696670400123,"pid":1,"hostname":"web-0","msg":"server started","port":3000}
+{"level":20,"time":1696670400456,"pid":1,"hostname":"web-0","msg":"config loaded"}
+{"level":30,"time":1696670401789,"pid":1,"hostname":"web-0","req":{"id":7,"method":"GET","url":"/health"},"res":{"statusCode":200},"responseTime":3,"msg":"request completed"}
+{"level":40,"time":1696670402000,"pid":1,"hostname":"web-0","msg":"deprecated header","header":"x-old"}
+{"level":50,"time":1696670403000,"pid":1,"hostname":"web-0","err":{"type":"Error","message":"upstream down"},"msg":"proxy failed"}
+{"level":60,"time":1696670404000,"pid":1,"hostname":"web-0","msg":"shutting down"}
+{"level":10,"time":1696670405000,"pid":1,"hostname":"web-0","msg":"gc"}

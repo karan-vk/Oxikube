@@ -72,9 +72,10 @@
   //                     it for one view). Applies to open views at once.
   //   timestamps        show each line's server timestamp before its text (key t toggles it for
   //                     one view). Applies to open views at once.
-  //   json_auto_detect  reserved: the JSON log mode (level / time / message columns for
-  //                     JSON-object lines) is not available yet, so this key changes nothing
-  //                     today. It is kept so a value you set now takes effect when it lands.
+  //   json_auto_detect  JSON mode: lines that are JSON objects show as level / time / message
+  //                     columns with the other fields collapsed (click to expand), with level
+  //                     chips; plain-text lines stay as they are (key j toggles it for one view).
+  //                     Applies to open views at once.
   // The keys of the log view are in the keymap (context "LogView"); rebind them in keymap.json.
   "logs": {
     "buffer_lines": 50000,

@@ -26,29 +26,51 @@ pub const FRAME: Duration = Duration::from_micros(8_333);
 pub const LINES_PER_S: u64 = 5_000;
 /// Lines of the tail read before the stream (the view's default tail range reads 1 000).
 pub const TAIL: usize = 1_000;
-/// Every this many lines, one long line (a stack trace or a JSON payload) that wraps.
+/// Every this many lines, one long line (a stack trace or a JSON payload) that wraps. 39 is odd
+/// and not a multiple of 4, so it is one of the JSON lines.
 const LONG_EVERY: usize = 40;
 
 /// The pod's name.
 const POD: &str = "firehose";
 
-/// Line `k` of the log: request lines of varying length, a warning or an error now and then,
-/// and every [`LONG_EVERY`]th line about 600 bytes.
+/// Line `k` of the log: a mixed stream, as a cluster's pods write one. Every 4th line is plain
+/// text (a request line, a warning now and then); the rest are JSON objects in zap's shape (info,
+/// with a warning, a debug or an error now and then, and every [`LONG_EVERY`]th about 600 bytes
+/// of message that wraps).
 pub fn line(k: usize) -> LogLine {
     let at = Timestamp::from_second(1_791_115_200).unwrap_or(Timestamp::UNIX_EPOCH)
         + SignedDuration::from_micros(i64::try_from(k).unwrap_or(i64::MAX) * 200);
-    let text = match k {
-        k if k % LONG_EVERY == LONG_EVERY - 1 => format!(
-            "ERROR request {k} failed: {}",
-            "upstream payments-svc refused the connection; ".repeat(12)
-        ),
-        k if k % 7 == 3 => format!("WARN  GET /api/orders/{k} 200 {}ms: slow query", k % 900),
-        k => format!(
-            "INFO  GET /api/orders/{k} 200 {}ms user={} region=eu-west-{} trace={k:016x}",
+    let text = if k % 4 == 0 {
+        match k {
+            k if k % 7 == 3 => format!("WARN  GET /api/orders/{k} 200 {}ms: slow query", k % 900),
+            k => format!(
+                "INFO  GET /api/orders/{k} 200 {}ms user={} region=eu-west-{} trace={k:016x}",
+                k % 97,
+                k % 4_409,
+                k % 3
+            ),
+        }
+    } else {
+        let (level, message) = match k {
+            k if k % LONG_EVERY == LONG_EVERY - 1 => (
+                "error",
+                format!(
+                    "request {k} failed: {}",
+                    "upstream payments-svc refused the connection; ".repeat(12)
+                ),
+            ),
+            k if k % 7 == 3 => ("warn", format!("GET /api/orders/{k} slow query")),
+            k if k % 11 == 5 => ("debug", format!("cache miss for order {k}")),
+            k => ("info", format!("GET /api/orders/{k} 200")),
+        };
+        format!(
+            r#"{{"level":"{level}","ts":{}.{:06},"caller":"orders/handler.go:88","msg":"{message}","status":200,"latency_ms":{},"user":{},"region":"eu-west-{}","trace":"{k:016x}"}}"#,
+            at.as_second(),
+            at.subsec_nanosecond() / 1_000,
             k % 97,
             k % 4_409,
             k % 3
-        ),
+        )
     };
     LogLine::new(at, POD, "app", text)
 }
@@ -142,5 +164,14 @@ mod tests {
         assert!((4_990..=5_000).contains(&per_second), "{per_second}");
         assert!(line(LONG_EVERY - 1).text.len() > 500, "a long line");
         assert!(line(0).text.len() < 120);
+        assert!(
+            oxikube_app::logs::parse::parse_line(&line(1).text).is_some(),
+            "JSON"
+        );
+        assert!(oxikube_app::logs::parse::parse_line(&line(LONG_EVERY - 1).text).is_some());
+        assert!(
+            oxikube_app::logs::parse::parse_line(&line(4).text).is_none(),
+            "plain"
+        );
     }
 }

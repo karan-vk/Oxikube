@@ -12,6 +12,7 @@ mod hot_reload;
 mod options;
 mod props;
 mod ring;
+mod structured;
 
 use std::sync::Arc;
 use std::time::Duration;

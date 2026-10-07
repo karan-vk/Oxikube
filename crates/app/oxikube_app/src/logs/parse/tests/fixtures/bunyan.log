@@ -1,0 +1,6 @@
+{"name":"myapp","hostname":"web-0","pid":18,"level":30,"msg":"server listening","time":"2023-10-07T09:20:00.123Z","v":0}
+{"name":"myapp","hostname":"web-0","pid":18,"level":10,"msg":"tick","time":"2023-10-07T09:20:01.000Z","v":0}
+{"name":"myapp","hostname":"web-0","pid":18,"level":20,"msg":"query","time":"2023-10-07T09:20:02.000Z","v":0,"sql":"select 1"}
+{"name":"myapp","hostname":"web-0","pid":18,"level":40,"msg":"disk almost full","time":"2023-10-07T09:20:03.000Z","v":0,"used":0.93}
+{"name":"myapp","hostname":"web-0","pid":18,"level":50,"msg":"unhandled","time":"2023-10-07T09:20:04.000Z","v":0,"err":{"message":"boom","name":"Error","stack":"Error: boom\n    at run (/app/index.js:9:11)"}}
+{"name":"myapp","hostname":"web-0","pid":18,"level":60,"msg":"out of memory","time":"2023-10-07T09:20:05.000Z","v":0}

@@ -26,7 +26,14 @@ impl LogView {
     }
 
     /// Replaces the rows (a new session): both renderers start over, at the end when following.
-    pub(crate) fn reset_rows(&mut self, window: LineWindow) {
+    pub(crate) fn reset_rows(&mut self, mut window: LineWindow) {
+        if self.effective_levels().is_some() {
+            window.set_visible(Some(std::collections::VecDeque::new()));
+        }
+        // The new session's seqs start at 0 again: nothing parsed or expanded carries over.
+        self.records.borrow_mut().clear();
+        self.expanded = None;
+        self.saw_json = false;
         self.window = window;
         // A new stream numbers its lines from 0: the search starts over on it.
         self.reindex_empty();
@@ -94,7 +101,7 @@ impl LogView {
     }
 
     /// Puts row `index` at the top of the screen.
-    fn scroll_to_row(&mut self, index: usize) {
+    pub(crate) fn scroll_to_row(&mut self, index: usize) {
         if self.options.wrap {
             self.list.scroll_to(ListOffset {
                 item_ix: index,

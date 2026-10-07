@@ -16,6 +16,8 @@
 //! | search and filter: the regex predicate, the incremental match index | [`LogFilter`], [`LogMatcher`], [`MatchIndex`] (`filter`) |
 //! | batched change notifications | [`LogDelta`], [`LogDeltas`] (`delta`) |
 //! | `Connecting` / `Streaming` / `Ended` / `Failed` | [`LogState`], [`EndReason`], [`LogFailure`] (`state`) |
+//! | JSON structured lines: parsers, field names, normalised levels and times | [`parse`] |
+//! | which levels a view shows (the level chips) | [`LevelFilter`] (`level_filter`) |
 //! | the task that reads the stream and commits batches | `driver` |
 //! | runtime, buffer bound, batching, the reconnect seam | [`LogRuntime`], [`LogConfig`], [`ReconnectPolicy`] (`options`) |
 //!
@@ -45,7 +47,9 @@ mod delta;
 mod driver;
 mod entry;
 mod filter;
+mod level_filter;
 mod options;
+pub mod parse;
 mod ring;
 mod service;
 mod session;
@@ -58,6 +62,7 @@ mod tests;
 pub use delta::{LogDelta, LogDeltas};
 pub use entry::LogEntry;
 pub use filter::{FilterError, IndexChange, LogFilter, LogMatcher, MatchIndex};
+pub use level_filter::LevelFilter;
 pub use options::{
     DEFAULT_BUFFER_LINES, LogConfig, LogRuntime, MAX_BUFFER_LINES, MIN_BUFFER_LINES,
     ReconnectPolicy, clamp_buffer_lines,
