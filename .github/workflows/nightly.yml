@@ -149,14 +149,11 @@ jobs:
       # report and checks it. Headless rendering needs a GPU device: Metal on macOS, Mesa lavapipe
       # on Linux (xvfb only for windowing init, as in the screenshot step).
       #
-      # Hosted runners swing between jobs with no code change. Linux stays within a few percent on
-      # the frame metrics (sub-millisecond stage timings move by up to 0.5 ms), but `macos-latest`
-      # moved p50 +20 to +90 % and p95/p99 up to +280 % across nightlies of the same code, including
-      # the runner's own `state_db_open_ms` and `init_window_ms`. So the tolerances are +50 % on p50
-      # and +150 % on the tails (the local default is +20 %, for a quiet machine compared with
-      # itself), a failed check is repeated once with fresh processes, and on macOS the result is
-      # advisory: the step may fail, the report is still uploaded and a warning annotation says so
-      # (docs/PERFORMANCE.md, E01-F542). The absolute budgets (ADR 0013) are part of the check.
+      # Hosted runners swing between jobs with no code change (`macos-latest` moved p50 +20 to +90 %
+      # and p95/p99 up to +280 % across nightlies of the same code), so the tolerances are loose
+      # (+50 % p50, +150 % tails; the local default is +20 %), a failed check is repeated once with
+      # fresh processes, and on macOS the result is advisory: the report is still uploaded and a
+      # warning annotation says so. Rationale and numbers: docs/PERFORMANCE.md (E01-F542).
       - name: cargo xtask perf --all --check
         id: perf
         # A macOS regression is read from the annotation and the uploaded report, not from a red job.

@@ -23,14 +23,11 @@ fn workflows() -> Vec<(String, String)> {
     let mut files: Vec<_> = fs::read_dir(&dir)
         .expect("workflows dir")
         .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "yml"))
-        .map(|path| {
-            let text = fs::read_to_string(&path).expect("workflow is readable");
-            (
-                path.file_name().unwrap().to_string_lossy().into_owned(),
-                text,
-            )
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "yml"))
+        .map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let text = read(&format!(".github/workflows/{name}"));
+            (name, text)
         })
         .collect();
     files.sort();
