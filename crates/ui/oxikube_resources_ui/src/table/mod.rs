@@ -25,6 +25,7 @@
 //! | `states` | states and diagnostics (E07-S10): loading / empty / filtered-empty / forbidden / unauthorized / error, the stale badge, retry, API warnings |
 //! | `actions` | the key actions of the `Table` context |
 //! | `row_actions` | the row actions (E07-S08): the targets of a menu or key, the entries the palette lists, running an action, the delete key |
+//! | `row_feedback` | what a row key says when it cannot run (no such action for the kind, no permission, no row) and that Shell, Attach and Debug act on the cursor row of a multi-selection |
 //! | `runtime` | [`store_runtime`]: where the stores' feed tasks run |
 //!
 //! # Performance
@@ -54,6 +55,7 @@ mod layout;
 mod prefs;
 mod render;
 mod row_actions;
+mod row_feedback;
 mod runtime;
 mod selection;
 pub mod states;

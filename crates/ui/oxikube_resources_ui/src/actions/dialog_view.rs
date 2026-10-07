@@ -16,6 +16,7 @@ use oxikube_ui::spinner::Spinner;
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 use oxikube_workspace::modal::DIALOG_KEY_CONTEXT;
 
+use super::dependents::owns_dependents;
 use super::dialog::{DeleteDialog, Stage};
 use super::results::{ROW_HEIGHT, result_row};
 
@@ -62,6 +63,18 @@ impl DeleteDialog {
         } else {
             None
         }
+    }
+
+    /// Whether the dialog asks how dependents are handled: only when an object being deleted can
+    /// own some, or the plan already departs from the default. Other kinds delete with
+    /// Background, silently.
+    fn asks_propagation(&self) -> bool {
+        self.plan.propagation() != Propagation::Background
+            || self
+                .plan
+                .items()
+                .iter()
+                .any(|item| owns_dependents(&item.target.gvk))
     }
 
     fn propagation_row(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -141,7 +154,7 @@ impl DeleteDialog {
                     .child(Icon::new(IconName::TriangleAlert).size(u(px(14.))))
                     .child(warning)
             }))
-            .child(self.propagation_row(cx))
+            .children(self.asks_propagation().then(|| self.propagation_row(cx)))
             .children(typed)
             .children(self.error.clone().map(|error| {
                 div()

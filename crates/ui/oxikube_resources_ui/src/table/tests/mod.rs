@@ -7,6 +7,7 @@ mod coalesce;
 pub(crate) mod fixture;
 mod layout;
 mod prefs;
+mod row_feedback;
 mod selection;
 mod view_columns;
 mod view_default_columns;

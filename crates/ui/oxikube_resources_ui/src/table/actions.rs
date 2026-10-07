@@ -46,13 +46,14 @@ actions!(
         /// Delete the selected rows, or the cursor row (`resource::Delete` through the delete
         /// dialog).
         DeleteSelected,
-        /// Open a shell in the cursor row's pod (`pod::Shell`; k9s's `s`). Does nothing for a
-        /// kind that is not a pod, or on a read-only cluster that does not allow shells.
+        /// Open a shell in the cursor row's pod (`pod::Shell`; k9s's `s`). A toast says why
+        /// not for a kind without a shell, or on a read-only cluster that does not allow shells; a
+        /// multi-selection acts on the cursor row and says so.
         ShellSelected,
         /// Attach to the cursor row's pod (`pod::Attach`; k9s's `a`).
         AttachSelected,
         /// Add a debug container to the cursor row's pod (`pod::Debug`, through the debug dialog;
-        /// `shift-d`). Does nothing for a kind that is not a pod, or on a read-only cluster.
+        /// `shift-d`). A toast says why not for a kind that is not a pod, or on a read-only cluster.
         DebugSelected,
     ]
 );

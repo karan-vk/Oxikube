@@ -60,3 +60,25 @@ pub fn exec_row_actions() -> Vec<RowActionSpec> {
         .order(NODE_SHELL_ORDER),
     ]
 }
+
+/// Whether `command` is one of the exec-class row actions, which act on a single object (none is
+/// bulk): with several rows selected, the table's key runs it on the cursor row and says so.
+pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
+    matches!(
+        command,
+        CommandId::POD_SHELL | CommandId::POD_ATTACH | CommandId::POD_DEBUG | CommandId::NODE_SHELL
+    )
+}
+
+/// The line that says which kinds an exec-class command is for, shown when its key is pressed in
+/// a table of another kind ("Shell is available for Pods and Nodes").
+pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
+    match command {
+        CommandId::POD_SHELL | CommandId::NODE_SHELL => {
+            Some("Shell is available for Pods and Nodes")
+        }
+        CommandId::POD_ATTACH => Some("Attach is available for Pods"),
+        CommandId::POD_DEBUG => Some("Debug is available for Pods"),
+        _ => None,
+    }
+}

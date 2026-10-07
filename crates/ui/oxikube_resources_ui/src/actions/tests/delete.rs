@@ -210,3 +210,66 @@ fn orphaning_dependents_is_still_a_plain_confirm(cx: &mut TestAppContext) {
             .all(|(_, policy, _)| *policy == Some(PropagationPolicy::Orphan))
     );
 }
+
+#[gpui::test]
+fn a_pod_owns_nothing_so_the_dialog_has_no_dependents_choice_and_sends_background(
+    cx: &mut TestAppContext,
+) {
+    let mut f = Fixture::with_actions(cx);
+    f.connect_with([p("x", "web-0", "1")]);
+    let table = f.open_pods();
+    f.keys(&table, "down");
+    f.keys(&table, "delete");
+    let d = dialog(&mut f).unwrap();
+    f.vcx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(f.vcx.debug_bounds("delete-dialog").is_some());
+    assert!(
+        f.vcx.debug_bounds("delete-propagation-note").is_none(),
+        "no Background / Foreground / Orphan row for a Pod"
+    );
+    with_dialog(&mut f, &d, |d, _, cx| d.confirm(cx));
+    assert!(
+        deletes(&f)
+            .iter()
+            .all(|(_, policy, _)| *policy == Some(PropagationPolicy::Background)),
+        "{:?}",
+        deletes(&f)
+    );
+}
+
+#[gpui::test]
+fn a_deployment_owns_dependents_so_the_dialog_asks_how_to_treat_them(cx: &mut TestAppContext) {
+    let mut f = Fixture::with_actions(cx);
+    let kind = deployments_kind();
+    f.ports().discovery.set_kinds([kind.clone()]);
+    let mut web = oxikube_testkit::deployment()
+        .namespace("x")
+        .name("web")
+        .build();
+    web.meta.resource_version = Some("1".into());
+    f.ports().resources.insert(web);
+    f.connect_with([]);
+    let table = f.open(kind);
+    f.keys(&table, "down");
+    f.keys(&table, "delete");
+    let d = dialog(&mut f).expect("the delete key opens the dialog");
+    f.vcx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(
+        f.vcx.debug_bounds("delete-propagation-note").is_some(),
+        "a Deployment owns ReplicaSets: the choice is shown"
+    );
+    with_dialog(&mut f, &d, |d, _, cx| d.cancel(cx));
+}
+
+fn deployments_kind() -> oxikube_domain::kinds::ResourceKind {
+    oxikube_domain::kinds::ResourceKind {
+        gvk: oxikube_domain::ids::Gvk::new("apps", "v1", "Deployment"),
+        preferred: true,
+        plural: "deployments".into(),
+        singular: "deployment".into(),
+        short_names: vec!["deploy".into()],
+        categories: vec!["all".into()],
+        verbs: oxikube_domain::kinds::VerbSet::from_names(["get", "list", "watch", "delete"]),
+        namespaced: true,
+    }
+}
