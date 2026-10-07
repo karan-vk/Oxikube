@@ -45,6 +45,8 @@ pub struct GridSearch {
     next_line: i32,
     done: bool,
     matches: Vec<GridMatch>,
+    /// Lines of history when the last step ran (see [`history_size`](Self::history_size)).
+    history_size: usize,
 }
 
 impl std::fmt::Debug for GridSearch {
@@ -86,6 +88,7 @@ impl GridSearch {
             layout: None,
             next_line: 0,
             matches: Vec::new(),
+            history_size: 0,
         })
     }
 
@@ -106,6 +109,7 @@ impl GridSearch {
             return true;
         }
         let term = &grid.term;
+        self.history_size = grid.history_size();
         let bottom = term.bottommost_line().0;
         let last_column = term.last_column();
         let first = self.next_line.max(term.topmost_line().0);
@@ -134,6 +138,13 @@ impl GridSearch {
         self.next_line = last + 1;
         self.done = last >= bottom || self.matches.len() >= MAX_SEARCH_MATCHES;
         self.done
+    }
+
+    /// Lines of history the grid had when the last step ran. While no output arrives, the lines
+    /// the matches are on move up by how much this grows: a caller that keeps a match across two
+    /// searches shifts it by the difference.
+    pub fn history_size(&self) -> usize {
+        self.history_size
     }
 
     /// The matches found, top to bottom (all of them once [`step`](Self::step) returned `true`).

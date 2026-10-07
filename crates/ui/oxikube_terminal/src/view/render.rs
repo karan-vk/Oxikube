@@ -12,6 +12,7 @@ use oxikube_ui::{ActiveTokens as _, u};
 use super::TerminalView;
 use super::terminal_view::Phase;
 use crate::element::{PathLinks, TerminalElement};
+use crate::input::{Search, SearchClose, SearchNext, SearchPrevious};
 
 impl TerminalView {
     /// Paths in a local shell's output are links (relative ones against its start directory); a
@@ -45,14 +46,20 @@ impl TerminalView {
 }
 
 impl Render for TerminalView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.play_due_bell(window);
+        let bar = self.search_bar(window, cx);
         let running = self.terminal().is_some();
         // A session that dropped or ended keeps its screen, dimmed: keystrokes go nowhere now.
         let dimmed = running && !self.lifecycle.accepts_input();
         let body = match &self.phase {
             Phase::Running(state) => {
                 let mut element = TerminalElement::new(state, &self.element, &self.focus)
-                    .path_links(self.path_links());
+                    .path_links(self.path_links())
+                    .searching(self.find.is_open());
+                if let Some(highlights) = self.find.highlights() {
+                    element = element.highlights(highlights);
+                }
                 if let Some(dispatcher) = self.services.dispatcher() {
                     element = element.dispatcher(dispatcher.clone());
                 }
@@ -70,14 +77,22 @@ impl Render for TerminalView {
             Phase::Closed => div().into_any_element(),
         };
         let banner = self.banner().map(|banner| self.banner_strip(banner, cx));
+        let flashing = self.bell.flashing();
         let tokens = cx.tokens();
         v_flex()
             .id("terminal-view")
             .size_full()
+            .on_action(cx.listener(|this, _: &Search, window, cx| this.open_search(window, cx)))
+            .on_action(cx.listener(|this, _: &SearchNext, _, cx| this.search_next(cx)))
+            .on_action(cx.listener(|this, _: &SearchPrevious, _, cx| this.search_previous(cx)))
+            .on_action(
+                cx.listener(|this, _: &SearchClose, window, cx| this.close_search(window, cx)),
+            )
             // The element tracks the focus handle itself; without it the body does, so the tab
             // takes focus while the process starts.
             .when(!running, |this| this.track_focus(&self.focus))
             .children(banner)
+            .when_some(bar, |this, bar| this.child(bar))
             .child(
                 div()
                     .relative()
@@ -85,6 +100,17 @@ impl Render for TerminalView {
                     .min_h_0()
                     .w_full()
                     .child(body)
+                    .when(flashing, |this| {
+                        this.child(
+                            div()
+                                .debug_selector(|| "terminal-bell".into())
+                                .absolute()
+                                .top_0()
+                                .left_0()
+                                .size_full()
+                                .bg(tokens.colors.text.opacity(0.18)),
+                        )
+                    })
                     .when(dimmed, |this| {
                         // No listeners: the screen stays selectable and scrollable under it.
                         this.child(

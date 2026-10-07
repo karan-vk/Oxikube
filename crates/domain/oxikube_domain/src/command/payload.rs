@@ -235,6 +235,36 @@ pub enum Command {
     /// pod.
     #[serde(rename = "terminal::Restart")]
     TerminalRestart,
+    /// Clear the focused terminal (E09-S11): its scrollback is dropped and the lines above the cursor are cleared, so the prompt moves to the top. The process is not told and is not interrupted. Changes nothing in a cluster.
+    #[serde(rename = "terminal::Clear")]
+    TerminalClear,
+    /// Scroll the focused terminal's history one line towards the live screen (E09-S11).
+    #[serde(rename = "terminal::ScrollLineDown")]
+    TerminalScrollLineDown,
+    /// Scroll the focused terminal's history one line up (E09-S11).
+    #[serde(rename = "terminal::ScrollLineUp")]
+    TerminalScrollLineUp,
+    /// Scroll the focused terminal's history one screen towards the live screen (E09-S11).
+    #[serde(rename = "terminal::ScrollPageDown")]
+    TerminalScrollPageDown,
+    /// Scroll the focused terminal's history one screen up (E09-S11).
+    #[serde(rename = "terminal::ScrollPageUp")]
+    TerminalScrollPageUp,
+    /// Open the search bar of the focused terminal (E09-S11) to find text, as a regular expression, in its screen and scrollback.
+    #[serde(rename = "terminal::Search")]
+    TerminalSearch,
+    /// Close the focused terminal's search bar and hand the keyboard back to the process (E09-S11).
+    #[serde(rename = "terminal::SearchClose")]
+    TerminalSearchClose,
+    /// Jump to the next match of the focused terminal's search, wrapping at the end (E09-S11).
+    #[serde(rename = "terminal::SearchNext")]
+    TerminalSearchNext,
+    /// Jump to the previous match of the focused terminal's search, wrapping at the start (E09-S11).
+    #[serde(rename = "terminal::SearchPrevious")]
+    TerminalSearchPrevious,
+    /// Select the whole screen and scrollback of the focused terminal (E09-S11), ready to copy.
+    #[serde(rename = "terminal::SelectAll")]
+    TerminalSelectAll,
     /// Open a link a terminal shows (cmd/ctrl-click, E09-S05): an `http`, `https`, `mailto` or
     /// `file` URL in the browser, or an absolute local path (an optional `:line[:column]` suffix
     /// is accepted) with the system's opener. Reads and changes nothing in a cluster.
@@ -720,6 +750,16 @@ impl Command {
             Command::TerminalClose => CommandId::TERMINAL_CLOSE,
             Command::TerminalReconnect => CommandId::TERMINAL_RECONNECT,
             Command::TerminalRestart => CommandId::TERMINAL_RESTART,
+            Command::TerminalClear => CommandId::TERMINAL_CLEAR,
+            Command::TerminalScrollLineDown => CommandId::TERMINAL_SCROLL_LINE_DOWN,
+            Command::TerminalScrollLineUp => CommandId::TERMINAL_SCROLL_LINE_UP,
+            Command::TerminalScrollPageDown => CommandId::TERMINAL_SCROLL_PAGE_DOWN,
+            Command::TerminalScrollPageUp => CommandId::TERMINAL_SCROLL_PAGE_UP,
+            Command::TerminalSearch => CommandId::TERMINAL_SEARCH,
+            Command::TerminalSearchClose => CommandId::TERMINAL_SEARCH_CLOSE,
+            Command::TerminalSearchNext => CommandId::TERMINAL_SEARCH_NEXT,
+            Command::TerminalSearchPrevious => CommandId::TERMINAL_SEARCH_PREVIOUS,
+            Command::TerminalSelectAll => CommandId::TERMINAL_SELECT_ALL,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -967,6 +1007,16 @@ mod tests {
             Command::TerminalClose,
             Command::TerminalReconnect,
             Command::TerminalRestart,
+            Command::TerminalClear,
+            Command::TerminalScrollLineDown,
+            Command::TerminalScrollLineUp,
+            Command::TerminalScrollPageDown,
+            Command::TerminalScrollPageUp,
+            Command::TerminalSearch,
+            Command::TerminalSearchClose,
+            Command::TerminalSearchNext,
+            Command::TerminalSearchPrevious,
+            Command::TerminalSelectAll,
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -1230,6 +1280,16 @@ mod tests {
                     | Command::TerminalClose
                     | Command::TerminalReconnect
                     | Command::TerminalRestart
+                    | Command::TerminalClear
+                    | Command::TerminalScrollLineDown
+                    | Command::TerminalScrollLineUp
+                    | Command::TerminalScrollPageDown
+                    | Command::TerminalScrollPageUp
+                    | Command::TerminalSearch
+                    | Command::TerminalSearchClose
+                    | Command::TerminalSearchNext
+                    | Command::TerminalSearchPrevious
+                    | Command::TerminalSelectAll
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }

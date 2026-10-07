@@ -124,6 +124,19 @@ fn the_terminal_commands_are_on_the_bus(cx: &mut TestAppContext) {
         CommandId::TERMINAL_CLOSE,
         CommandId::TERMINAL_RECONNECT,
         CommandId::TERMINAL_RESTART,
+        // E09-S11: the terminal's own actions are commands too.
+        CommandId::TERMINAL_COPY,
+        CommandId::TERMINAL_PASTE,
+        CommandId::TERMINAL_SELECT_ALL,
+        CommandId::TERMINAL_CLEAR,
+        CommandId::TERMINAL_SCROLL_PAGE_UP,
+        CommandId::TERMINAL_SCROLL_PAGE_DOWN,
+        CommandId::TERMINAL_SCROLL_LINE_UP,
+        CommandId::TERMINAL_SCROLL_LINE_DOWN,
+        CommandId::TERMINAL_SEARCH,
+        CommandId::TERMINAL_SEARCH_NEXT,
+        CommandId::TERMINAL_SEARCH_PREVIOUS,
+        CommandId::TERMINAL_SEARCH_CLOSE,
     ] {
         assert_eq!(bus.owner(id), Some("oxikube_terminal"), "{id}");
         assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");
@@ -234,4 +247,60 @@ fn terminal_restart_on_the_bus_starts_the_exited_shell_again(cx: &mut TestAppCon
         .vcx
         .update(|_, cx| matches!(view.read(cx).lifecycle(), Lifecycle::Running));
     assert!(running);
+}
+
+/// The platform's chord for `terminal::Search` in the shipped keymap.
+fn search_chord() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "cmd-f"
+    } else {
+        "ctrl-shift-f"
+    }
+}
+
+#[gpui::test]
+fn terminal_search_and_the_settings_are_reachable_in_the_running_app(cx: &mut TestAppContext) {
+    // E09-S11: a terminal opened in the cluster tab's bottom dock answers the shipped keymap's
+    // search chord with its find bar, the bar's commands go through the bus, and the terminal
+    // settings are in the app's settings store with their defaults.
+    use oxikube_terminal::TerminalSettings;
+    use oxikube_terminal::view::{BackendDescriptor, TerminalView};
+
+    let (mut app, launcher) = connected_with_fake_launcher(cx);
+    assert!(run(&mut app, Command::TerminalNew { cluster: None }));
+    assert_eq!(launcher.launches.borrow().len(), 1);
+    let tab = app.cluster_tabs().pop().expect("the cluster tab");
+    let workspace = app.vcx.update(|_, cx| tab.read(cx).workspace().clone());
+    let view = app
+        .vcx
+        .update(|_, cx| workspace.read(cx).items_of_type::<TerminalView>().pop())
+        .expect("the terminal");
+    assert!(!app.vcx.update(|_, cx| view.read(cx).search_open()));
+
+    // The new terminal has the keyboard: the chord opens the bar...
+    app.press(search_chord());
+    assert!(
+        app.vcx.update(|_, cx| view.read(cx).search_open()),
+        "{} opens the find bar",
+        search_chord()
+    );
+    // ...and escape in its field closes it, through terminal::SearchClose on the bus.
+    app.press("escape");
+    assert!(!app.vcx.update(|_, cx| view.read(cx).search_open()));
+    // The same through the bus (palette, agents).
+    assert!(run(&mut app, Command::TerminalSearch));
+    assert!(app.vcx.update(|_, cx| view.read(cx).search_open()));
+    assert!(run(&mut app, Command::TerminalSearchClose));
+    assert!(!app.vcx.update(|_, cx| view.read(cx).search_open()));
+
+    let settings = app.vcx.update(|_, cx| TerminalSettings::current(cx));
+    assert_eq!(
+        settings,
+        TerminalSettings::default(),
+        "default.json is the built-in default"
+    );
+    assert_eq!(
+        *launcher.launches.borrow(),
+        [BackendDescriptor::local(Some(TestPorts::cluster_id()))]
+    );
 }

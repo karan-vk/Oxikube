@@ -102,6 +102,14 @@ impl TermGrid {
         }
     }
 
+    /// Selects everything: the oldest history line through the last cell of the screen.
+    pub fn select_all(&mut self) {
+        let top = GridPoint::new(self.term.topmost_line().0, 0);
+        let bottom = GridPoint::new(self.term.bottommost_line().0, self.term.last_column().0);
+        self.start_selection(SelectionKind::Cell, top, SelectionSide::Left);
+        self.update_selection(bottom, SelectionSide::Right);
+    }
+
     /// Drops the selection.
     pub fn clear_selection(&mut self) {
         self.term.selection = None;

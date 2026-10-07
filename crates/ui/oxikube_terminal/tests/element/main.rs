@@ -12,6 +12,8 @@ mod layout;
 mod links;
 mod mouse;
 mod report;
+mod settings;
+mod terminal_keys;
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -56,14 +58,18 @@ struct Host {
     recorder: Rc<Recorder>,
     paths: PathLinks,
     confirm: Option<Rc<dyn PasteConfirm>>,
+    /// Draw with the `terminal` font settings instead of `font`.
+    themed: bool,
 }
 
 impl Render for Host {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let mut element = TerminalElement::new(&self.terminal, &self.state, &self.focus)
-            .font(self.font.clone())
             .dispatcher(self.recorder.clone())
             .path_links(self.paths.clone());
+        if !self.themed {
+            element = element.font(self.font.clone());
+        }
         if let Some(confirm) = &self.confirm {
             element = element.paste_confirm(confirm.clone());
         }
@@ -111,6 +117,31 @@ fn harness_on(
     confirm: Option<Rc<dyn PasteConfirm>>,
     backend: FakeTerminalBackend,
 ) -> Harness {
+    build(cx, width, height, font_size, confirm, backend, false)
+}
+
+/// A window whose element draws with the `terminal` font settings (themed), like the app's.
+fn harness_themed(cx: &mut TestAppContext, width: f32, height: f32) -> Harness {
+    build(
+        cx,
+        width,
+        height,
+        FONT_SIZE,
+        None,
+        FakeTerminalBackend::silent(),
+        true,
+    )
+}
+
+fn build(
+    cx: &mut TestAppContext,
+    width: f32,
+    height: f32,
+    font_size: f32,
+    confirm: Option<Rc<dyn PasteConfirm>>,
+    backend: FakeTerminalBackend,
+    themed: bool,
+) -> Harness {
     cx.update(oxikube_runtime::init_deterministic);
     let boxed = Box::new(backend.clone());
     let terminal = cx.new(|cx| TerminalState::new(boxed, TerminalSize::new(80, 24), cx));
@@ -135,6 +166,7 @@ fn harness_on(
                 base: Some(PathBuf::from("/work")),
             },
             confirm,
+            themed,
         }
     });
     window.simulate_resize(size(px(width), px(height)));

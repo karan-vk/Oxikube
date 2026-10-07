@@ -3,9 +3,13 @@
 
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::{RenderableCursor, TermMode};
-use alacritty_terminal::vte::ansi::{Color, CursorShape as AnsiCursorShape, NamedColor, Rgb};
+use alacritty_terminal::vte::ansi::{
+    Color, CursorShape as AnsiCursorShape, CursorStyle, NamedColor, Rgb,
+};
 
-use super::{CellFlags, CursorShape, TermColor, TermRgb, TerminalCursor, TerminalModes};
+use super::{
+    CellFlags, CursorShape, DefaultCursor, TermColor, TermRgb, TerminalCursor, TerminalModes,
+};
 
 pub(super) fn rgb(rgb: Rgb) -> TermRgb {
     TermRgb {
@@ -112,6 +116,7 @@ pub(super) fn modes(mode: TermMode) -> TerminalModes {
 /// away from it.
 pub(super) fn cursor(
     cursor: RenderableCursor,
+    blinking: bool,
     display_offset: usize,
     rows: usize,
 ) -> TerminalCursor {
@@ -128,6 +133,21 @@ pub(super) fn cursor(
         row: row.max(0) as usize,
         column: cursor.point.column.0,
         shape,
+        blinking,
         visible: shown && in_view,
+    }
+}
+
+/// The emulator's form of the default cursor.
+pub(super) fn cursor_style(cursor: DefaultCursor) -> CursorStyle {
+    let shape = match cursor.shape {
+        CursorShape::Block => AnsiCursorShape::Block,
+        CursorShape::Underline => AnsiCursorShape::Underline,
+        CursorShape::Beam => AnsiCursorShape::Beam,
+        CursorShape::HollowBlock => AnsiCursorShape::HollowBlock,
+    };
+    CursorStyle {
+        shape,
+        blinking: cursor.blinking,
     }
 }
