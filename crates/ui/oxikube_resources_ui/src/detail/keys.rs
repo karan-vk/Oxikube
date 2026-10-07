@@ -85,15 +85,18 @@ impl DetailView {
         }
     }
 
-    /// Steps the table the drawer was opened from by `delta` rows; the table dispatches
-    /// `resource::Open` for the row it lands on and the drawer shows that object. A pinned tab
-    /// and a detail without a table (an owner's, whose list is not open) do nothing.
+    /// Steps the table of the shown object's kind by `delta` rows from the row of the object the
+    /// drawer shows (not from the table's own cursor); the table dispatches `resource::Open`
+    /// for the row it lands on and the drawer shows that object. A pinned tab, a detail whose
+    /// kind has no table open, and one whose object is not listed there (filtered out) do
+    /// nothing.
     fn step(&mut self, delta: isize, cx: &mut Context<Self>) {
         if self.mount != Mount::Drawer {
             return;
         }
         if let Some(table) = self.origin.as_ref().and_then(WeakEntity::upgrade) {
-            table.update(cx, |table, cx| table.step_detail(delta, cx));
+            let from = self.target.clone();
+            table.update(cx, |table, cx| table.step_detail(&from, delta, cx));
         }
     }
 }

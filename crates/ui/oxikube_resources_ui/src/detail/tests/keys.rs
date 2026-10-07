@@ -67,6 +67,58 @@ fn enter_moves_the_focus_into_the_drawer_and_j_k_and_the_arrows_step_the_table(
     assert_eq!(d.f.selected(&table), ["b"]);
 }
 
+/// Focuses the drawer's view, as Enter on a row does.
+fn focus_drawer(d: &mut Detail) {
+    let view = d.drawer_view().expect("the drawer shows a detail");
+    d.f.vcx.update(|window, cx| {
+        let focus = gpui::Focusable::focus_handle(view.read(cx), cx);
+        window.focus(&focus, cx);
+    });
+}
+
+#[gpui::test]
+fn j_and_k_step_from_the_object_the_drawer_shows_not_from_the_table_cursor(
+    cx: &mut TestAppContext,
+) {
+    let (mut d, table) = drawer_on_b(cx);
+    // The table's cursor goes to `c`, then the drawer shows `a` as an owner link or the palette
+    // would open it.
+    d.f.vcx
+        .update(|_, cx| table.update(cx, |t, cx| t.move_cursor(1, false, cx)));
+    assert_eq!(d.f.selected(&table), ["c"]);
+    d.open(&pod_ref("a"));
+    assert_eq!(shown_name(&mut d), "a");
+    focus_drawer(&mut d);
+
+    press(&mut d, "j");
+    assert_eq!(
+        shown_name(&mut d),
+        "b",
+        "the object after `a`, not after `c`"
+    );
+    assert_eq!(d.f.selected(&table), ["b"]);
+    press(&mut d, "k");
+    press(&mut d, "k");
+    assert_eq!(shown_name(&mut d), "a", "the first row has no previous");
+}
+
+#[gpui::test]
+fn j_and_k_do_nothing_when_the_shown_object_is_not_listed(cx: &mut TestAppContext) {
+    let (mut d, table) = drawer_on_b(cx);
+    // `zz` is not a row of the table (filtered out, say).
+    d.open(&pod_ref("zz"));
+    focus_drawer(&mut d);
+    d.f.dispatcher.clear();
+    press(&mut d, "j k");
+    assert_eq!(shown_name(&mut d), "zz");
+    assert!(d.f.dispatcher.sent().is_empty(), "nothing was opened");
+    assert_eq!(
+        d.f.selected(&table),
+        ["b"],
+        "the table's cursor did not move"
+    );
+}
+
 #[gpui::test]
 fn number_keys_switch_the_tabs(cx: &mut TestAppContext) {
     let (mut d, _table) = drawer_on_b(cx);
