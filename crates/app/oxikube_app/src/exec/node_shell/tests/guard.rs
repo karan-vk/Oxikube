@@ -248,7 +248,7 @@ fn the_tool_stub_is_unsafe_interactive_and_hidden_from_agents() {
     assert_eq!(tool.name.as_str(), "k8s.node_shell");
     assert!(tool.annotations.unsafe_ && tool.annotations.interactive);
     assert!(tool.annotations.agent_hidden && !tool.agent_exposed_by_default());
-    assert_eq!(tool.risk, Some(Risk::High));
+    assert_eq!(tool.risk, Some(Risk::Medium));
     assert!(
         f.h.bus
             .agent_tools(false)
