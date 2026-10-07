@@ -334,7 +334,7 @@ fn initialized(conditions: &[Value]) -> bool {
 }
 
 /// An init container spec with `restartPolicy: Always` (a sidecar).
-fn is_restartable(spec: &Value) -> bool {
+pub(super) fn is_restartable(spec: &Value) -> bool {
     str_of(spec, "restartPolicy") == Some("Always")
 }
 
@@ -360,14 +360,14 @@ fn len_u32(n: usize) -> u32 {
 }
 
 /// Borrowed view of a container status's `state` (each key present only when set).
-struct StateView<'a> {
-    waiting: Option<&'a Value>,
-    running: Option<&'a Value>,
-    terminated: Option<&'a Value>,
+pub(super) struct StateView<'a> {
+    pub(super) waiting: Option<&'a Value>,
+    pub(super) running: Option<&'a Value>,
+    pub(super) terminated: Option<&'a Value>,
 }
 
 impl<'a> StateView<'a> {
-    fn of(container_status: &'a Value) -> Self {
+    pub(super) fn of(container_status: &'a Value) -> Self {
         let state = sub(container_status, "state");
         Self {
             waiting: obj_of(state, "waiting"),

@@ -5,7 +5,7 @@
 //!
 //! | Kind | Healthy when |
 //! |---|---|
-//! | Pod | `status.phase` is `Running` or `Succeeded` (`Pending`, `Failed` and `Unknown` are not) |
+//! | Pod | `Succeeded`; or `Running`, not being deleted, with every non-completed container ready (crash-looping, `OOMKilled`, `ImagePullBackOff`, `Terminating` and not-ready pods are not; `Pending`, `Failed` and `Unknown` are not) |
 //! | Deployment, StatefulSet, ReplicaSet, DaemonSet | ready replicas reach the desired count |
 //! | Job | it has not failed (`Failed` or `FailureTarget`); running and complete jobs are healthy |
 //! | CronJob | it is not suspended (a suspended schedule is not running) |
@@ -13,8 +13,8 @@
 //!
 //! A metadata-only object ([`Resource::is_partial`]) has no status, so it has no health either.
 
-use super::{CronJobSummary, JobStatus, JobSummary, NodeSummary, PodPhase};
-use super::{WorkloadSummary, str_of, sub};
+use super::pod_health::pod_is_healthy;
+use super::{CronJobSummary, JobStatus, JobSummary, NodeSummary, WorkloadSummary};
 use crate::resource::Resource;
 
 /// The verdict of [`health_of`].
@@ -63,9 +63,8 @@ pub fn health_of(res: &Resource) -> Option<Health> {
     }
     let healthy = match (&*res.kind.group, &*res.kind.kind) {
         ("", "Pod") => {
-            // Read the phase directly: building the whole summary would walk every container.
-            let phase = PodPhase::parse(str_of(sub(&res.json, "status"), "phase"));
-            matches!(phase, PodPhase::Running | PodPhase::Succeeded)
+            // Read the JSON directly: building the whole summary would allocate per pod.
+            pod_is_healthy(res)
         }
         ("", "Node") => NodeSummary::from_resource(res).ok()?.is_ready(),
         ("batch", "Job") => !matches!(

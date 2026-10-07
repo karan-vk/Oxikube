@@ -46,6 +46,7 @@ pub(crate) fn status_tone(status: &str) -> Tone {
         "Rejected",
         "CreateContainer",
         "RunContainerError",
+        "ContainerStatusUnknown",
     ];
     const OK: &[&str] = &[
         "Running",
