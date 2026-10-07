@@ -15,7 +15,7 @@ use crate::markdown::MarkdownView;
 use crate::{ActiveTokens as _, Sizable as _, u};
 
 /// The label of the toggle: "Details" while collapsed, "Hide details" while open.
-pub const fn toggle_label(open: bool) -> &'static str {
+const fn toggle_label(open: bool) -> &'static str {
     if open { "Hide details" } else { "Details" }
 }
 

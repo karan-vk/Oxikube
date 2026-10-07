@@ -45,10 +45,9 @@ impl TerminalView {
                 .debug_selector(move || selector.to_string())
                 .child(button)
         });
-        let details = banner.details.clone();
+        let details = banner.details;
         let open = self.banner_details_open;
         let toggle = view.clone();
-        let has_details = details.is_some();
         let row = h_flex()
             .w_full()
             .items_center()
@@ -72,7 +71,7 @@ impl TerminalView {
                             .child(banner.detail),
                     ),
             )
-            .when(has_details, |row| {
+            .when(details.is_some(), |row| {
                 row.child(details_toggle(
                     "terminal-banner-details-toggle",
                     open,

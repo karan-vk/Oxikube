@@ -98,7 +98,7 @@ impl ErrorKind {
     /// The kind whose [`Display`](fmt::Display) label is `label` (`"internal error"` gives
     /// [`ErrorKind::Internal`]): reads back the kind of a rendered [`OxiError`], for text that
     /// crossed a boundary as a plain string (a session's failure reason).
-    pub fn from_label(label: &str) -> Option<ErrorKind> {
+    pub(crate) fn from_label(label: &str) -> Option<ErrorKind> {
         Self::ALL.into_iter().find(|kind| kind.label() == label)
     }
 

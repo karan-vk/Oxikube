@@ -10,8 +10,6 @@
 //! certificate, a deadline) and else from its [`ErrorKind`]. The raw text is the adapter's
 //! message, redacted, with the kind's label taken off: the kind is the summary's business.
 
-use std::borrow::Cow;
-
 use crate::error::{ErrorKind, OxiError};
 use crate::redact::redact;
 
@@ -117,7 +115,7 @@ fn summary_of(kind: Option<ErrorKind>, raw: &str) -> String {
 /// the kind: an adapter that could not classify an error calls it internal, but a refused
 /// connection is a refused connection.
 fn by_message(raw: &str) -> Option<&'static str> {
-    let text: Cow<str> = Cow::Owned(raw.to_ascii_lowercase());
+    let text = raw.to_ascii_lowercase();
     let has = |needle: &str| text.contains(needle);
     if has("connection refused") {
         Some("The cluster's API server refused the connection.")

@@ -22,7 +22,7 @@ use super::text::state_text;
 use super::{LogView, Recovery};
 
 /// A failure of the log stream as the user reads it.
-pub(crate) fn human_failure(failure: &LogFailure, what: &str) -> HumanError {
+fn human_failure(failure: &LogFailure, what: &str) -> HumanError {
     let error = HumanError::new(failure.kind, &failure.message);
     if error.is_not_found() {
         let what = what.to_lowercase();
