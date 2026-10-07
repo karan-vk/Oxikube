@@ -31,6 +31,14 @@ use super::KubeconfigSources;
 use super::layout::Layout;
 use crate::kubeconfig::{Diagnostic, KubeconfigMerge, SourceStatus, is_blank_kubeconfig};
 
+/// What a pasted kubeconfig's stand-in path and source id start with.
+const PSEUDO_PREFIX: &str = "pasted:";
+
+/// Whether `path` is the stand-in of a pasted kubeconfig rather than a file.
+pub(super) fn is_pseudo_path(path: &std::path::Path) -> bool {
+    path.to_str().is_some_and(|p| p.starts_with(PSEUDO_PREFIX))
+}
+
 /// Keychain namespace of pasted kubeconfig text.
 const SECRET_NAMESPACE: &str = "kubeconfig-paste";
 
@@ -61,11 +69,11 @@ impl PastedDescriptor {
 
     /// Stands in for a file path in loader results: unique per paste, never a real file.
     fn pseudo_path(&self) -> PathBuf {
-        PathBuf::from(format!("pasted:{}", self.id))
+        PathBuf::from(format!("{PSEUDO_PREFIX}{}", self.id))
     }
 
     fn source_id(&self) -> SourceId {
-        SourceId(format!("pasted:{}", self.id))
+        SourceId(format!("{PSEUDO_PREFIX}{}", self.id))
     }
 
     fn label_or_id(&self) -> &str {

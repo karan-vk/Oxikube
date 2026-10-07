@@ -9,7 +9,8 @@ use futures::stream::BoxStream;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
     CloudDiscoveryPort, CloudProvider, CloudToolStatus, ClusterContext, ClusterSource,
-    ClusterSourcePort, DiscoveredCluster, SourceState, SourceStatus, SourcesChanged, UserSource,
+    ClusterSourcePort, DiscoveredCluster, SourceDiagnostic, SourceState, SourceStatus,
+    SourcesChanged, UserSource,
 };
 use parking_lot::Mutex;
 
@@ -30,6 +31,8 @@ pub struct ClusterSourceScripts {
     pub set_user_sources: Script<SourcesChanged>,
     /// `source_statuses`.
     pub source_statuses: Script<Vec<SourceStatus>>,
+    /// `source_diagnostics`.
+    pub source_diagnostics: Script<Vec<SourceDiagnostic>>,
     /// `validate_kubeconfig`.
     pub validate_kubeconfig: Script<usize>,
 }
@@ -49,6 +52,10 @@ pub enum ClusterSourceCall {
     SetUserSources(Vec<UserSource>),
     /// `source_statuses()`.
     SourceStatuses,
+    /// `source_diagnostics()`.
+    SourceDiagnostics,
+    /// `subscribe_diagnostics()`.
+    SubscribeDiagnostics,
     /// `validate_kubeconfig(text)`. The text is kept, so tests can check what was parsed; it
     /// is test data, never a real credential.
     ValidateKubeconfig(String),
@@ -61,6 +68,8 @@ struct FakeSources {
     statuses: Option<Vec<SourceStatus>>,
     user_sources: Vec<UserSource>,
     subscribers: Vec<mpsc::UnboundedSender<SourcesChanged>>,
+    diagnostics: Vec<SourceDiagnostic>,
+    diagnostic_subscribers: Vec<mpsc::UnboundedSender<Vec<SourceDiagnostic>>>,
 }
 
 /// Fake `ClusterSourcePort`.
@@ -72,6 +81,9 @@ struct FakeSources {
 /// source counting the contexts that name it. `validate_kubeconfig` accepts text with a
 /// `contexts:` line and counts its `- context:` entries; anything else is a `Validation`
 /// error (a stand-in for the real parser, which the adapter tests cover).
+/// `source_diagnostics` returns the configured list ([`with_diagnostics`](Self::with_diagnostics),
+/// empty by default); [`set_diagnostics`](Self::set_diagnostics) replaces it and pushes the new
+/// list to every `subscribe_diagnostics` stream when it differs, as the adapter does.
 /// [`set_contexts`](Self::set_contexts) replaces the contexts and pushes the diff to every
 /// `subscribe` stream; a non-empty scripted `reload` result is pushed the same way, as a real
 /// source would after re-reading its files.
@@ -131,6 +143,28 @@ impl FakeClusterSourcePort {
         state.contexts = new;
         Self::broadcast(&mut state, &diff);
         diff
+    }
+
+    /// Sets the diagnostics `source_diagnostics` returns (without notifying subscribers).
+    #[must_use]
+    pub fn with_diagnostics(self, diagnostics: impl IntoIterator<Item = SourceDiagnostic>) -> Self {
+        self.state.lock().diagnostics = diagnostics.into_iter().collect();
+        self
+    }
+
+    /// Replaces the diagnostics and, when the list changed, pushes it to every
+    /// `subscribe_diagnostics` stream. Returns whether it changed.
+    pub fn set_diagnostics(&self, diagnostics: impl IntoIterator<Item = SourceDiagnostic>) -> bool {
+        let mut state = self.state.lock();
+        let new: Vec<_> = diagnostics.into_iter().collect();
+        if state.diagnostics == new {
+            return false;
+        }
+        state.diagnostics = new.clone();
+        state
+            .diagnostic_subscribers
+            .retain(|s| s.unbounded_send(new.clone()).is_ok());
+        true
     }
 
     /// Sets the statuses `source_statuses` returns (instead of deriving them from the sources).
@@ -235,6 +269,20 @@ impl ClusterSourcePort for FakeClusterSourcePort {
                 })
                 .collect())
         })
+    }
+
+    async fn source_diagnostics(&self) -> OxiResult<Vec<SourceDiagnostic>> {
+        self.calls.record(ClusterSourceCall::SourceDiagnostics);
+        self.script
+            .source_diagnostics
+            .next_or_else(|| Ok(self.state.lock().diagnostics.clone()))
+    }
+
+    fn subscribe_diagnostics(&self) -> BoxStream<'static, Vec<SourceDiagnostic>> {
+        self.calls.record(ClusterSourceCall::SubscribeDiagnostics);
+        let (tx, rx) = mpsc::unbounded();
+        self.state.lock().diagnostic_subscribers.push(tx);
+        rx.boxed()
     }
 
     async fn validate_kubeconfig(&self, text: &str) -> OxiResult<usize> {
@@ -408,6 +456,49 @@ mod tests {
                 ClusterSourceCall::Subscribe,
                 ClusterSourceCall::Reload,
                 ClusterSourceCall::Reload,
+            ]
+        );
+    }
+
+    #[test]
+    fn source_diagnostics_fall_back_to_the_configured_list_and_notify_on_change() {
+        use oxikube_ports::DiagnosticSeverity;
+
+        let broken = SourceDiagnostic::new(
+            DiagnosticSeverity::Warning,
+            "kubeconfig /a.yaml is not a valid kubeconfig; skipped",
+        )
+        .with_path("/a.yaml");
+        let fake = FakeClusterSourcePort::new().with_diagnostics([broken.clone()]);
+        assert_eq!(
+            block_on(fake.source_diagnostics()).unwrap(),
+            vec![broken.clone()]
+        );
+
+        let mut changes = fake.subscribe_diagnostics();
+        assert!(
+            !fake.set_diagnostics([broken]),
+            "the same list is not a change"
+        );
+        assert!(changes.next().now_or_never().is_none());
+        assert!(fake.set_diagnostics([]));
+        assert_eq!(block_on(changes.next()), Some(Vec::new()));
+        assert!(block_on(fake.source_diagnostics()).unwrap().is_empty());
+
+        fake.script()
+            .source_diagnostics
+            .push_err(OxiError::internal("boom"));
+        assert_eq!(
+            block_on(fake.source_diagnostics()).unwrap_err().kind(),
+            ErrorKind::Internal
+        );
+        assert_eq!(
+            fake.recorded_calls(),
+            vec![
+                ClusterSourceCall::SourceDiagnostics,
+                ClusterSourceCall::SubscribeDiagnostics,
+                ClusterSourceCall::SourceDiagnostics,
+                ClusterSourceCall::SourceDiagnostics,
             ]
         );
     }

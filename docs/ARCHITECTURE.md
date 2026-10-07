@@ -665,7 +665,9 @@ weaken `cargo xtask lint-deps`.
 
 - `kube_ports`: the cluster adapters. `LazyKubeSources` is the `ClusterSourcePort` over
   `oxikube_kube::sources::KubeconfigSources`, built on its first port call (on `spawn_kube`, after
-  the first frame) from the `kubeconfig.sources` setting; `SourcesConnector` is the
+  the first frame) from the `kubeconfig.sources` setting, and forwards `source_diagnostics` /
+  `subscribe_diagnostics` (E03-F439) so a holder of `Arc<dyn ClusterSourcePort>` reads the loader's
+  findings; `SourcesConnector` is the
   `ClusterConnectorPort` over `oxikube_kube::KubeConnector`, handing it the catalog's current
   kubeconfig before each connect (`KubeConnector::replace_loaded`); `SystemClock` is the
   `ClockPort`. They join the state db in `AppPorts` (`AppPorts::clusters`).

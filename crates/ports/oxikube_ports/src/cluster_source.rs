@@ -5,7 +5,10 @@
 //! Implemented by `oxikube_kube::sources` (E03-S02 defines the behaviour): kubeconfig
 //! files and directories, `KUBECONFIG`, in-cluster config and cloud-imported entries.
 //! The port lists sources and their contexts, streams [`SourcesChanged`] diffs when a
-//! file changes, and can be told to [`reload`](ClusterSourcePort::reload).
+//! file changes, and can be told to [`reload`](ClusterSourcePort::reload). What the last read
+//! skipped or shadowed is available as [`SourceDiagnostic`]s
+//! ([`source_diagnostics`](ClusterSourcePort::source_diagnostics)), with a stream that fires
+//! when that list changes.
 //!
 //! Contexts are keyed by [`ClusterId`]. They carry no credentials: the adapter keeps
 //! tokens and exec plugins to itself (non-negotiable 5).
@@ -131,6 +134,62 @@ pub struct SourceStatus {
     pub message: Option<String>,
 }
 
+/// How loudly a [`SourceDiagnostic`] should be shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DiagnosticSeverity {
+    /// Expected and harmless: a path that does not exist yet, a blank file, which input was
+    /// chosen.
+    Info,
+    /// The user probably wants to know: a file that could not be read or parsed, a shadowed
+    /// context, a directory that is not watched.
+    Warning,
+}
+
+/// One thing worth telling the user about the last read of the sources ("file X could not be
+/// read"), for the sources screen.
+///
+/// This is the port-level view of the adapter's richer loader diagnostic: the adapter keeps its
+/// own enum and maps it here, so the port does not depend on the loader's shape. Like
+/// [`SourceStatus`] it carries no file content. `message` is fixed wording that names files
+/// and context names, never their text (parser messages can quote a token, so they are
+/// dropped).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceDiagnostic {
+    /// How loudly to show it.
+    pub severity: DiagnosticSeverity,
+    /// The file or directory it is about, when it is about one. Matches
+    /// [`ClusterSource::path`] for file and directory sources, or a file inside a directory
+    /// source. `None` for diagnostics about the load as a whole (which input was chosen, the
+    /// in-cluster fallback) and for pasted kubeconfigs, which are not files.
+    pub path: Option<PathBuf>,
+    /// Plain text for display. No secrets.
+    pub message: String,
+}
+
+impl SourceDiagnostic {
+    /// A diagnostic with no path.
+    pub fn new(severity: DiagnosticSeverity, message: impl Into<String>) -> Self {
+        Self {
+            severity,
+            path: None,
+            message: message.into(),
+        }
+    }
+
+    /// Names the file or directory the diagnostic is about.
+    #[must_use]
+    pub fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.path = Some(path.into());
+        self
+    }
+}
+
+impl std::fmt::Display for SourceDiagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
 /// One context of one source: an entry of the cluster catalog.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClusterContext {
@@ -250,6 +309,22 @@ pub trait ClusterSourcePort: Send + Sync {
     /// How the last read of each source went, in source order. Local: no cluster is contacted.
     async fn source_statuses(&self) -> OxiResult<Vec<SourceStatus>>;
 
+    /// What the last read skipped, shadowed or could not watch, in the order the adapter found
+    /// it. Local: no cluster is contacted. Empty when all is well, and before the first read
+    /// (the first call reads the sources, as [`contexts`](Self::contexts) does).
+    ///
+    /// Complements [`source_statuses`](Self::source_statuses): that is one row per source, this
+    /// is the list of individual findings (a shadowed context, a directory that could not be
+    /// watched, why the in-cluster fallback did not run).
+    async fn source_diagnostics(&self) -> OxiResult<Vec<SourceDiagnostic>>;
+
+    /// A stream of the full diagnostics list each time it changes, from now on. A reload that
+    /// leaves the list as it was emits nothing, and nothing is replayed on subscribe (call
+    /// [`source_diagnostics`](Self::source_diagnostics) for the current list). Changes that do
+    /// not alter the catalog, such as a new broken file, are reported here and not on
+    /// [`subscribe`](Self::subscribe).
+    fn subscribe_diagnostics(&self) -> BoxStream<'static, Vec<SourceDiagnostic>>;
+
     /// Checks that `text` is a usable kubeconfig, without storing it, merging it or touching
     /// the network, and returns how many contexts it defines.
     ///
@@ -286,6 +361,16 @@ mod tests {
         assert_eq!(diff.changed, vec![ctx("b", "https://b2")]);
         assert_eq!(diff.removed, vec![old[0].cluster.clone()]);
         assert!(!diff.is_empty());
+    }
+
+    #[test]
+    fn a_diagnostic_displays_as_its_message_and_may_name_a_path() {
+        let plain = SourceDiagnostic::new(DiagnosticSeverity::Info, "no kubeconfig path to load");
+        assert_eq!(plain.path, None);
+        assert_eq!(plain.to_string(), "no kubeconfig path to load");
+        let named = SourceDiagnostic::new(DiagnosticSeverity::Warning, "x").with_path("/a.yaml");
+        assert_eq!(named.path.as_deref(), Some(std::path::Path::new("/a.yaml")));
+        assert!(DiagnosticSeverity::Info < DiagnosticSeverity::Warning);
     }
 
     #[test]

@@ -13,6 +13,7 @@
 //! | `watcher` | `notify` on parent directories, debounce, 60 s poll, abort-on-drop |
 //! | `port` | the [`ClusterSourcePort`](oxikube_ports::ClusterSourcePort) impl: the list, `set_user_sources`, `source_statuses`, `validate_kubeconfig` |
 //! | `status` | how reading each source went (the port's `SourceStatus`, E06-S05) |
+//! | `diagnostics` | the loader's findings as the port's `SourceDiagnostic`s, and the change feed (E03-F439) |
 //! | `pasted` | pasted kubeconfigs, stored in the keychain, never in a file |
 //!
 //! # Sources
@@ -75,6 +76,7 @@
 //! ```
 
 mod config;
+mod diagnostics;
 mod layout;
 mod pasted;
 mod port;
@@ -98,6 +100,7 @@ use oxikube_ports::{SecretStorePort, SourcesChanged};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::watch;
 
+use self::diagnostics::DiagnosticFeed;
 use self::layout::Layout;
 use self::snapshot::Snapshot;
 use crate::kubeconfig::{Diagnostic, KubeconfigMerge, LoadedKubeconfig, apply_in_cluster_fallback};
@@ -121,6 +124,8 @@ pub(crate) struct Inner {
     rewatch: watch::Sender<u64>,
     /// Directories the watcher could not register (the poll covers them).
     unwatched: Mutex<Vec<PathBuf>>,
+    /// The diagnostics last published and who listens for changes to them.
+    diagnostic_feed: Mutex<DiagnosticFeed>,
     /// Pasted kubeconfig text by descriptor id, read from the keychain once. Reloads are
     /// frequent and a keychain read can be slow or prompt; the text is already in memory
     /// whenever it is parsed, and `SecretString` wipes it on drop.
@@ -191,6 +196,7 @@ impl Inner {
         let snapshot = Arc::new(self.load().await?);
         let previous = self.current.write().replace(snapshot.clone());
         let diff = snapshot.diff_from(previous.as_deref());
+        self.publish_diagnostics(true);
         if !diff.is_empty() {
             self.subscribers
                 .lock()
@@ -210,11 +216,16 @@ impl Inner {
         }
         let snapshot = Arc::new(self.load().await?);
         *self.current.write() = Some(snapshot.clone());
+        // The first read notifies nobody, as for the catalog: callers read what is there.
+        self.publish_diagnostics(false);
         Ok(snapshot)
     }
 
     pub(crate) fn set_watch_status(&self, status: WatchStatus, unwatched: Vec<PathBuf>) {
         *self.unwatched.lock() = unwatched;
+        // Before the first load the list is only the unwatched directories, not the full list
+        // subscribers are promised; the first read reports everything and announces nothing.
+        self.publish_diagnostics(self.current.read().is_some());
         self.watch_status.send_replace(status);
     }
 }
@@ -260,6 +271,7 @@ impl KubeconfigSources {
             watch_status: watch::channel(initial).0,
             rewatch: watch::channel(0).0,
             unwatched: Mutex::new(Vec::new()),
+            diagnostic_feed: Mutex::default(),
             pasted_text: Mutex::new(HashMap::new()),
         });
         let guard = if inner.config.read().watch {
@@ -290,30 +302,13 @@ impl KubeconfigSources {
     }
 
     /// What the last load skipped or shadowed ("file X could not be read"), plus directories
-    /// the watcher could not register. Empty before the first load. Updated on every reload,
-    /// whether or not the catalog changed.
-    ///
-    /// Not part of [`ClusterSourcePort`](oxikube_ports::ClusterSourcePort): callers holding the port as a trait object cannot
-    /// reach it until the port grows a diagnostics method.
+    /// the watcher could not register, in the loader's own shape. Empty before the first load.
+    /// Updated on every reload, whether or not the catalog changed.
+    /// Callers holding `Arc<dyn ClusterSourcePort>` use
+    /// [`source_diagnostics`](ClusterSourcePort::source_diagnostics) instead, which maps these
+    /// to the port's `SourceDiagnostic`.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        let mut found: Vec<Diagnostic> = self
-            .inner
-            .current
-            .read()
-            .iter()
-            .flat_map(|s| s.diagnostics.iter().cloned())
-            .collect();
-        found.extend(
-            self.inner
-                .unwatched
-                .lock()
-                .iter()
-                .map(|path| Diagnostic::Unreadable {
-                    path: path.clone(),
-                    reason: "could not be watched for changes; checked every poll interval".into(),
-                }),
-        );
-        found
+        self.inner.loader_diagnostics()
     }
 
     /// The loader result of the last load, for the client pool (`None` before the first load).
@@ -334,5 +329,7 @@ impl KubeconfigSources {
     }
 }
 
+#[cfg(test)]
+mod diagnostics_tests;
 #[cfg(test)]
 mod user_sources_tests;

@@ -94,6 +94,13 @@ pub enum Diagnostic {
         /// The file whose definition is ignored.
         shadowed: PathBuf,
     },
+    /// A directory source could not be registered with the file watcher, so changes in it are
+    /// only noticed by the periodic poll (E03-F439). Reported by the sources adapter, not by
+    /// the loader.
+    DirectoryNotWatched {
+        /// The directory as listed.
+        path: PathBuf,
+    },
     /// Which input supplied the paths that were loaded (E03-S10).
     SourceSelected {
         /// The winning tier.
@@ -157,6 +164,11 @@ impl fmt::Display for Diagnostic {
                     path.display()
                 )
             }
+            Diagnostic::DirectoryNotWatched { path } => write!(
+                f,
+                "directory {} could not be watched for changes; it is checked at every poll interval",
+                path.display()
+            ),
             Diagnostic::SourceSelected { tier, paths } => {
                 write!(f, "kubeconfig source: {tier} ({paths} path(s))")
             }
