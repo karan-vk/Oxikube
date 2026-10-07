@@ -125,7 +125,7 @@ pub(crate) struct Inner {
     /// Directories the watcher could not register (the poll covers them).
     unwatched: Mutex<Vec<PathBuf>>,
     /// The diagnostics last published and who listens for changes to them.
-    diagnostic_feed: DiagnosticFeed,
+    diagnostic_feed: Mutex<DiagnosticFeed>,
     /// Pasted kubeconfig text by descriptor id, read from the keychain once. Reloads are
     /// frequent and a keychain read can be slow or prompt; the text is already in memory
     /// whenever it is parsed, and `SecretString` wipes it on drop.
@@ -269,7 +269,7 @@ impl KubeconfigSources {
             watch_status: watch::channel(initial).0,
             rewatch: watch::channel(0).0,
             unwatched: Mutex::new(Vec::new()),
-            diagnostic_feed: DiagnosticFeed::default(),
+            diagnostic_feed: Mutex::default(),
             pasted_text: Mutex::new(HashMap::new()),
         });
         let guard = if inner.config.read().watch {

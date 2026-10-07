@@ -10,7 +10,6 @@ use futures::StreamExt as _;
 use futures::channel::mpsc;
 use futures::stream::BoxStream;
 use oxikube_ports::{DiagnosticSeverity, SourceDiagnostic};
-use parking_lot::Mutex;
 
 use super::{Inner, pasted};
 use crate::kubeconfig::{Diagnostic, Severity};
@@ -41,24 +40,11 @@ pub(super) fn to_port(diagnostic: &Diagnostic) -> SourceDiagnostic {
     out
 }
 
-#[derive(Default)]
-struct FeedState {
-    last: Vec<SourceDiagnostic>,
-    subscribers: Vec<mpsc::UnboundedSender<Vec<SourceDiagnostic>>>,
-}
-
 /// The diagnostics last seen, and the subscribers told when they change.
 #[derive(Default)]
 pub(super) struct DiagnosticFeed {
-    state: Mutex<FeedState>,
-}
-
-impl DiagnosticFeed {
-    fn subscribe(&self) -> BoxStream<'static, Vec<SourceDiagnostic>> {
-        let (tx, rx) = mpsc::unbounded();
-        self.state.lock().subscribers.push(tx);
-        rx.boxed()
-    }
+    last: Vec<SourceDiagnostic>,
+    subscribers: Vec<mpsc::UnboundedSender<Vec<SourceDiagnostic>>>,
 }
 
 impl Inner {
@@ -89,7 +75,7 @@ impl Inner {
     /// sends the full list to every subscriber. Called after a load and when the watcher's
     /// outcome changes; the feed lock makes the two agree on order.
     pub(super) fn publish_diagnostics(&self, notify: bool) {
-        let mut state = self.diagnostic_feed.state.lock();
+        let mut state = self.diagnostic_feed.lock();
         let now = self.port_diagnostics();
         if state.last == now {
             return;
@@ -103,6 +89,8 @@ impl Inner {
     }
 
     pub(super) fn subscribe_diagnostics(&self) -> BoxStream<'static, Vec<SourceDiagnostic>> {
-        self.diagnostic_feed.subscribe()
+        let (tx, rx) = mpsc::unbounded();
+        self.diagnostic_feed.lock().subscribers.push(tx);
+        rx.boxed()
     }
 }
