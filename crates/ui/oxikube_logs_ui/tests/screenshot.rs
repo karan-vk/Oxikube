@@ -39,10 +39,10 @@ use gpui::{App, AppContext as _, HeadlessAppContext, px, size};
 use jiff::Timestamp;
 use oxikube_app::ClusterSessionManager;
 use oxikube_app::logs::{LogConfig, LogService};
-use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::log::{LevelChip, LogLine};
+use oxikube_domain::{OxiError, Resource};
 use oxikube_logs_ui::{LogView, LogViewDeps, SearchMode, log_runtime};
 use oxikube_ports::{ClusterContext, SourceId};
 use oxikube_testkit::headless::HEADLESS_SCALE_FACTOR;
@@ -146,7 +146,7 @@ fn pod() -> Resource {
 /// With `json` the stream is [`json_log`], the `debug` chip is off and the failure line (seq 7)
 /// is expanded.
 fn render(wrap: bool, timestamps: bool, light: bool, json: bool) -> anyhow::Result<RgbaImage> {
-    render_with(wrap, timestamps, light, json, None, false, false)
+    render_with(wrap, timestamps, light, json, None, false, false, None)
 }
 
 /// [`render`] with the search bar open on `search` (a pattern and the mode), the first match
@@ -161,6 +161,7 @@ fn render_with(
     search: Option<(&str, SearchMode)>,
     picked: bool,
     kubectl: bool,
+    failure: Option<(OxiError, bool)>,
 ) -> anyhow::Result<RgbaImage> {
     render_pod(
         pod(),
@@ -171,6 +172,7 @@ fn render_with(
         search,
         picked,
         kubectl,
+        failure,
     )
 }
 
@@ -203,6 +205,7 @@ fn render_pod(
     search: Option<(&str, SearchMode)>,
     picked: bool,
     kubectl: bool,
+    failure: Option<(OxiError, bool)>,
 ) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
@@ -210,11 +213,22 @@ fn render_pod(
     let connector = Arc::new(FakeClusterConnectorPort::new());
     let ports = connector.ports_for(&cluster);
     ports.resources.insert(pod);
-    ports
-        .logs
-        .script()
-        .stream_logs
-        .push_ok(Timeline::immediate(if json { json_log() } else { log() }));
+    // A failure scene: the stream cannot be opened, and the strip says so once (with the raw text
+    // open behind Details when asked).
+    let (failure, details_open) = match failure {
+        Some((error, open)) => (Some(error), open),
+        None => (None, false),
+    };
+    let script = ports.logs.script();
+    match failure {
+        Some(error) => {
+            script.stream_logs.push_err(error);
+        }
+        None => {
+            let lines = if json { json_log() } else { log() };
+            script.stream_logs.push_ok(Timeline::immediate(lines));
+        }
+    }
     let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry]));
     let sessions =
         ClusterSessionManager::new(connector, source, Arc::new(FakeClockPort::default()));
@@ -280,6 +294,9 @@ fn render_pod(
                 } else {
                     view.next_match(cx);
                 }
+            }
+            if details_open {
+                view.toggle_error_details(cx);
             }
             if picked {
                 view.click_line(6, false, cx);
@@ -491,6 +508,7 @@ fn main() -> ExitCode {
             Some(("error|warn", SearchMode::Highlight)),
             false,
             false,
+            None,
         )
         .and_then(|image| check("log_view_search", false, image)),
         render_with(
@@ -501,11 +519,12 @@ fn main() -> ExitCode {
             Some(("error|warn", SearchMode::Filter)),
             false,
             false,
+            None,
         )
         .and_then(|image| check("log_view_filter", false, image)),
-        render_with(false, true, false, false, None, true, false)
+        render_with(false, true, false, false, None, true, false, None)
             .and_then(|image| check("log_view_selection_marks", false, image)),
-        render_with(false, true, false, false, None, false, true)
+        render_with(false, true, false, false, None, false, true, None)
             .and_then(|image| check("log_view_kubectl", false, image)),
         render_pod(
             crash_looping_pod(),
@@ -516,8 +535,37 @@ fn main() -> ExitCode {
             None,
             false,
             false,
+            None,
         )
         .and_then(|image| check("log_view_crash_loop", false, image)),
+        render_with(
+            false,
+            true,
+            false,
+            false,
+            None,
+            false,
+            false,
+            Some((
+                OxiError::internal("dial tcp 10.0.0.12:6443: connect: connection refused"),
+                true,
+            )),
+        )
+        .and_then(|image| check("log_view_failed", false, image)),
+        render_with(
+            false,
+            true,
+            false,
+            false,
+            None,
+            false,
+            false,
+            Some((
+                OxiError::not_found("pods \"orders-api-7c9d\" not found"),
+                false,
+            )),
+        )
+        .and_then(|image| check("log_view_gone", false, image)),
         render_merged(false).and_then(|image| check("log_view_merged", false, image)),
         render_merged(true).and_then(|image| check("log_view_overview", true, image)),
     ];

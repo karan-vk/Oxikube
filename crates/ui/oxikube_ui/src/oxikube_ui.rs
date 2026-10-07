@@ -20,6 +20,7 @@
 //! - [`editor`]: the read-only, tree-sitter highlighted code view the YAML tab shows.
 //! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`chart`], [`markdown`],
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
+//! - [`error_details`]: the Details toggle and raw-text box every error notice shares.
 //! - [`spinner`]: [`spinner::Spinner`], a loading indicator that stands still under reduce-motion.
 //! - [`tooltip`]: [`tooltip::Tooltip`], hover text for any element.
 //! - [`tile`]: [`tile::StatTile`], a clickable number with a caption (overview pages).
@@ -35,6 +36,7 @@ pub mod chart;
 pub mod dialog;
 pub mod dock;
 pub mod editor;
+pub mod error_details;
 pub mod icon;
 pub mod input;
 pub mod layout;

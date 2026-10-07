@@ -32,9 +32,13 @@ use super::colour::cluster_hsla;
 use crate::{
     cluster::ClusterMark,
     item::{CloseRequest, Item, ItemEvent, TabContent},
+    panel::DockPosition,
     persistence::LayoutPersistence,
     workspace::Workspace,
 };
+
+/// How tall the terminal under a connect view is, unscaled.
+const SIGN_IN_TERMINAL_HEIGHT: f32 = 260.;
 
 /// What a cluster tab shows about its cluster. Kept in step with the session by
 /// [`ClusterTabs`](super::ClusterTabs).
@@ -174,6 +178,23 @@ impl ClusterTab {
         self.toolbar.as_ref()
     }
 
+    /// The terminal the user opened while the cluster is not connected (the sign-in view's
+    /// "Open terminal"): the item the cluster workspace's bottom dock displays, when that dock is
+    /// open. The workspace itself is not drawn until the cluster connects, so the tab shows this
+    /// one view under the connect view, where a login can be run. A connected tab never shows it,
+    /// so the lookup is skipped before it touches the workspace.
+    fn sign_in_terminal(&self, phase: SessionPhase, cx: &App) -> Option<AnyView> {
+        if phase.is_connected() {
+            return None;
+        }
+        let workspace = self.workspace.read(cx);
+        let dock = workspace
+            .dock(DockPosition::Bottom, cx)
+            .filter(|d| d.is_open())?;
+        let item = workspace.item(dock.active_item()?)?;
+        Some(item.to_any_view())
+    }
+
     pub(super) fn set_persistence(&mut self, persistence: Entity<LayoutPersistence>) {
         self.persistence = Some(persistence);
     }
@@ -256,14 +277,34 @@ impl Render for ClusterTab {
                 )
             })
             .child(content);
+        let terminal = self.sign_in_terminal(phase, cx);
         let body = match &self.connect_ui {
-            Some(ui) if !phase.is_connected() => div()
-                .id("cluster-connect")
-                .debug_selector(|| format!("cluster-connect-{title}"))
+            Some(ui) if !phase.is_connected() => v_flex()
                 .flex_1()
                 .min_h_0()
                 .w_full()
-                .child(ui.body.clone())
+                .child(
+                    div()
+                        .id("cluster-connect")
+                        .debug_selector(|| format!("cluster-connect-{title}"))
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .child(ui.body.clone()),
+                )
+                .when_some(terminal, |this, terminal| {
+                    this.child(
+                        div()
+                            .id("cluster-connect-terminal")
+                            .debug_selector(|| format!("cluster-connect-terminal-{title}"))
+                            .flex_none()
+                            .w_full()
+                            .h(u(px(SIGN_IN_TERMINAL_HEIGHT)))
+                            .border_t_1()
+                            .border_color(colors.border_variant)
+                            .child(terminal),
+                    )
+                })
                 .into_any_element(),
             Some(ui) if phase == SessionPhase::Degraded => v_flex()
                 .flex_1()

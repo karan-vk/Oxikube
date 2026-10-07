@@ -54,11 +54,20 @@ pub fn tab_setup(
         stores: Some(deps.stores.clone()),
     });
     let sources = deps.dispatcher.clone();
+    let terminals = deps.dispatcher.clone();
     let connect = connect::tab_setup(
-        ConnectDeps::new(deps.sessions.clone(), deps.dispatcher.clone()).with_sources(move |cx| {
-            let view = SOURCES_VIEW.to_owned();
-            sources.dispatch(Command::ViewOpen { view }, cx);
-        }),
+        ConnectDeps::new(deps.sessions.clone(), deps.dispatcher.clone())
+            .with_sources(move |cx| {
+                let view = SOURCES_VIEW.to_owned();
+                sources.dispatch(Command::ViewOpen { view }, cx);
+            })
+            // "Open terminal" on the sign-in view: a shell on this cluster's context for the
+            // provider's login (`terminal::New`, E09). It opens in the cluster tab's bottom dock,
+            // which the tab shows under the sign-in view while the cluster is not connected.
+            .with_terminal(move |cluster, cx| {
+                let cluster = Some(cluster.clone());
+                terminals.dispatch(Command::TerminalNew { cluster }, cx);
+            }),
     );
     let navigation = sidebar_navigation(deps.resources.clone());
     let terminal = super::terminal::tab_setup(deps.dispatcher.clone());

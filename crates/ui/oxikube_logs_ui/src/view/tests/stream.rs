@@ -7,7 +7,7 @@ use oxikube_testkit::Timeline;
 use oxikube_workspace::Item as _;
 
 use super::fixture::{Fx, line, lines};
-use crate::view::{OpenLogs, Row};
+use crate::view::Row;
 
 #[gpui::test]
 fn the_initial_lines_render_with_the_tab_named_after_pod_and_container(cx: &mut TestAppContext) {
@@ -101,36 +101,6 @@ fn an_ended_stream_has_its_state_row_at_the_bottom(cx: &mut TestAppContext) {
         let text = view.row_text(2).unwrap();
         assert!(text.starts_with("Pod finished"), "{text}");
         assert_eq!(view.recovery(), None, "nothing to reconnect to");
-    });
-}
-
-#[gpui::test]
-fn a_failed_stream_says_why(cx: &mut TestAppContext) {
-    let mut fx = Fx::new(cx);
-    fx.ports
-        .logs
-        .script()
-        .stream_logs
-        .push_err(OxiError::forbidden(
-            "pods \"web-0\" is forbidden: cannot get pods/log",
-        ));
-    let views = fx.views.clone();
-    let view = fx
-        .vcx
-        .update(|window, cx| {
-            views.update(cx, |views, cx| {
-                views.open(&super::fixture::pod_ref(), &OpenLogs::default(), window, cx)
-            })
-        })
-        .unwrap();
-    fx.settle();
-    fx.read(&view, |view| {
-        assert!(matches!(view.line_window().state(), LogState::Failed(_)));
-        let text = view.row_text(0).unwrap();
-        assert!(
-            text.starts_with("Not allowed to read these logs: pods \"web-0\" is forbidden"),
-            "{text}"
-        );
     });
 }
 

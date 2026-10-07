@@ -40,6 +40,8 @@ pub struct TerminalView {
     /// What the user sees of the process's life (running, disconnected, exited): drives the
     /// banner and whether input is dimmed. `phase` owns the resources, this the meaning.
     pub(super) lifecycle: Lifecycle,
+    /// Whether the banner shows the raw text behind its summary (the Details toggle).
+    pub(super) banner_details_open: bool,
     pub(super) element: TerminalElementState,
     pub(super) focus: FocusHandle,
     /// The title before the process sets one (the program or the pod).
@@ -86,6 +88,7 @@ impl TerminalView {
             services,
             phase: Phase::Starting,
             lifecycle: Lifecycle::Connecting,
+            banner_details_open: false,
             element: TerminalElementState::new(),
             focus: cx.focus_handle(),
             default_title,

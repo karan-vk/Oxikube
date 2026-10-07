@@ -19,6 +19,9 @@
 //! - `terminal_search` (E09-S11): the matches of a search painted over the cells, the current one
 //!   in its own colour.
 //!
+//! - `terminal_banner_gone` (E06-U558): a pod terminal whose pod no longer exists: one plain
+//!   sentence, the server's words open behind Details, and Close instead of Reconnect.
+//!
 //! The byte stream is in this file, so the picture only changes when the element (or the font
 //! the platform ships) does. `harness = false`: on macOS the platform text system can only be
 //! created on the process main thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe
@@ -328,6 +331,62 @@ fn tabs() -> Result<RgbaImage> {
     app.capture(window)
 }
 
+/// A launcher whose pod is gone: every launch fails with `NotFound`.
+struct GoneLauncher;
+
+impl oxikube_terminal::view::TerminalLauncher for GoneLauncher {
+    fn launch(
+        &self,
+        _: &oxikube_terminal::view::BackendDescriptor,
+        _: TerminalSize,
+        _: &mut App,
+    ) -> oxikube_terminal::view::Launch {
+        gpui::Task::ready(Err(oxikube_domain::OxiError::not_found(
+            "pods \"web-0\" not found",
+        )))
+    }
+}
+
+const GONE: (u32, u32) = (720, 200);
+
+fn banner_gone() -> Result<RgbaImage> {
+    use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
+    use oxikube_terminal::view::{BackendDescriptor, TerminalServices, TerminalView};
+    use oxikube_workspace::Workspace;
+
+    let mut app = ScreenshotApp::with_assets(Arc::new(oxikube_ui::Assets));
+    let services = TerminalServices::new(std::rc::Rc::new(GoneLauncher));
+    let cluster = ClusterId::new("~/.kube/config", &ContextName::new("prod-eu"));
+    let mut view = None;
+    let window: AnyWindowHandle =
+        app.open_window(size(px(GONE.0 as f32), px(GONE.1 as f32)), |window, cx| {
+            oxikube_runtime::init_deterministic(cx);
+            oxikube_ui::init(cx);
+            set_theme(Appearance::Dark, cx);
+            let workspace = cx.new(|cx| Workspace::new(window, cx));
+            let pod = BackendDescriptor::Exec {
+                pod: ResourceRef::namespaced(cluster, Gvk::new("", "v1", "Pod"), "shop", "web-0"),
+                container: Some("app".into()),
+                command: vec!["/bin/sh".into()],
+            };
+            let terminal = cx.new(|cx| TerminalView::new(pod, services.clone(), cx));
+            view = Some(terminal.clone());
+            workspace.update(cx, |ws, cx| ws.open_item(terminal, window, cx));
+            oxikube_ui::root::new_root(workspace, window, cx)
+        })?;
+    app.run_until_parked();
+    app.update(|cx| {
+        if let Some(view) = &view {
+            view.update(cx, |view, cx| view.toggle_banner_details(cx));
+        }
+    });
+    app.run_until_parked();
+    app.advance_clock(FRAME_INTERVAL);
+    let _ = app.capture(window)?;
+    app.advance_clock(FRAME_INTERVAL);
+    app.capture(window)
+}
+
 /// A terminal drawn with the `terminal` settings (no font given to the element), with the matches
 /// of a search over it.
 struct Themed {
@@ -455,6 +514,11 @@ fn main() -> ExitCode {
                 name: "terminal_tabs",
                 size: TABS,
                 render: tabs,
+            },
+            GoldenCase {
+                name: "terminal_banner_gone",
+                size: GONE,
+                render: banner_gone,
             },
             GoldenCase {
                 name: "terminal_settings",

@@ -1,11 +1,13 @@
 //! The banner strip above a terminal's screen (E09-S12): headline, one line of help and the
 //! buttons of a [`Banner`].
 
+use gpui::prelude::FluentBuilder as _;
 use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement as _, ParentElement as _,
     SharedString, Styled as _, div, px,
 };
 use oxikube_ui::button::{Button, ButtonVariants as _};
+use oxikube_ui::error_details::{self, details_box, details_toggle};
 use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
@@ -43,20 +45,13 @@ impl TerminalView {
                 .debug_selector(move || selector.to_string())
                 .child(button)
         });
-        h_flex()
-            .id("terminal-banner")
-            .debug_selector(|| "terminal-banner".to_owned())
+        let details = banner.details;
+        let open = self.banner_details_open;
+        let toggle = view.clone();
+        let row = h_flex()
             .w_full()
-            .flex_none()
             .items_center()
             .gap(u(tokens.spacing.md))
-            .px(u(tokens.spacing.lg))
-            .py(u(tokens.spacing.sm))
-            .bg(tint.opacity(0.14))
-            .border_b_1()
-            .border_color(tint.opacity(0.5))
-            .text_size(u(tokens.font.body))
-            .text_color(colors.text)
             .child(Icon::new(icon).size(u(px(16.))).color(tint))
             .child(
                 v_flex()
@@ -76,7 +71,41 @@ impl TerminalView {
                             .child(banner.detail),
                     ),
             )
-            .children(buttons)
+            .when(details.is_some(), |row| {
+                row.child(details_toggle(
+                    "terminal-banner-details-toggle",
+                    open,
+                    move |_, cx| {
+                        toggle
+                            .update(cx, |this, cx| this.toggle_banner_details(cx))
+                            .ok();
+                    },
+                ))
+            })
+            .children(buttons);
+        v_flex()
+            .id("terminal-banner")
+            .debug_selector(|| "terminal-banner".to_owned())
+            .w_full()
+            .flex_none()
+            .gap(u(tokens.spacing.sm))
+            .px(u(tokens.spacing.lg))
+            .py(u(tokens.spacing.sm))
+            .bg(tint.opacity(0.14))
+            .border_b_1()
+            .border_color(tint.opacity(0.5))
+            .text_size(u(tokens.font.body))
+            .text_color(colors.text)
+            .child(row)
+            .when_some(details.filter(|_| open), |strip, text| {
+                strip.child(details_box(
+                    "terminal-banner-details-box",
+                    "terminal-banner-details",
+                    &text,
+                    error_details::SHORT,
+                    cx,
+                ))
+            })
             .into_any_element()
     }
 }

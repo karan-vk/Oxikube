@@ -95,7 +95,7 @@ fn auth_required_explains_why_and_offers_retry(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn the_exec_policy_of_the_cluster_is_shown_next_to_auth_required(cx: &mut TestAppContext) {
+fn the_exec_policy_line_is_shown_only_when_interaction_is_forbidden(cx: &mut TestAppContext) {
     for (setting, label) in [
         (ExecInteractivity::Never, "Forbid"),
         (ExecInteractivity::IfAvailable, "Ask"),
@@ -117,12 +117,15 @@ fn the_exec_policy_of_the_cluster_is_shown_next_to_auth_required(cx: &mut TestAp
             other => panic!("{other:?}"),
         });
         assert_eq!(shown, label);
-        assert!(fx.drawn("connect-policy"), "{label}");
-        // Forbidden interaction says how to authenticate outside the app.
+        // The policy line is drawn only when interaction is really forbidden.
         assert_eq!(
-            instructions.contains("forbidden"),
+            fx.drawn("connect-policy"),
             setting == ExecInteractivity::Never,
-            "{instructions}"
+            "{label}"
+        );
+        assert!(
+            !instructions.contains("forbidden"),
+            "plain words: {instructions}"
         );
     }
 }

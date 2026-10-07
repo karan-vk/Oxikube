@@ -12,6 +12,7 @@ mod exec;
 mod logs;
 mod node_shell;
 mod resources;
+mod signin;
 mod tail;
 mod terminal;
 

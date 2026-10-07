@@ -249,10 +249,22 @@ fn a_pod_that_cannot_be_opened_says_why_and_reconnect_retries(cx: &mut TestAppCo
         .expect("a banner");
     assert_eq!(banner.headline, "Not allowed to open a terminal here");
     assert!(
-        banner.detail.contains("shop/web-0"),
-        "the server's message: {}",
+        !banner.detail.contains("shop/web-0"),
+        "the sentence is plain: {}",
         banner.detail
     );
+    assert_eq!(
+        banner.details.as_deref(),
+        Some("not allowed to exec in pod shop/web-0"),
+        "the server's message is behind Details"
+    );
+    // Details starts collapsed, opens the raw text and closes it again.
+    assert!(h.drawn("terminal-banner-details-toggle"));
+    assert!(!h.drawn("terminal-banner-details"));
+    h.click("terminal-banner-details-toggle");
+    assert!(h.drawn("terminal-banner-details"));
+    h.click("terminal-banner-details-toggle");
+    assert!(!h.drawn("terminal-banner-details"));
     assert!(h.drawn("terminal-banner-Reconnect"));
     assert!(h.drawn("terminal-failed"), "the backdrop stays");
 
@@ -326,4 +338,31 @@ fn every_failed_start_gets_its_own_banner(cx: &mut TestAppContext) {
             "{lifecycle:?}"
         );
     }
+}
+
+#[gpui::test]
+fn a_pod_that_is_gone_offers_close_instead_of_a_futile_reconnect(cx: &mut TestAppContext) {
+    let launcher = FakeLauncher::default();
+    *launcher.fail_next.borrow_mut() = Some(OxiError::not_found("pods \"web-0\" not found"));
+    let mut h = harness_with(cx, launcher);
+    let view = h.open(pod_shell());
+    h.frame();
+
+    let banner = h
+        .vcx
+        .update(|_, cx| view.read(cx).banner())
+        .expect("a banner");
+    assert_eq!(banner.headline, "The pod or container is gone");
+    assert_eq!(banner.actions, [BannerAction::CloseTab]);
+    assert!(h.drawn("terminal-banner-CloseTab"));
+    assert!(
+        !h.drawn("terminal-banner-Reconnect"),
+        "reconnecting to something that no longer exists cannot work"
+    );
+    // The raw server text is behind Details, the sentence is plain.
+    assert_eq!(banner.details.as_deref(), Some("pods \"web-0\" not found"));
+    assert!(h.drawn("terminal-banner-details-toggle"));
+
+    h.click("terminal-banner-CloseTab");
+    assert_eq!(h.commands(), [Command::TerminalClose]);
 }

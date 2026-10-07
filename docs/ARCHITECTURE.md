@@ -445,14 +445,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   toggle is `cluster::ToggleFavourite`. Module `connect` (E06-S06): the connect lifecycle of a cluster
   tab. `ConnectView` follows one session and draws its state (`Connecting`: spinner, server, context,
   Cancel; `AuthRequired`: the plugin's message, the cluster's exec policy and how to sign in, Open
-  terminal, Retry; `Error`: summary, expandable and copyable details, Retry, Edit kubeconfig
-  sources; `Disconnected`: Connect), `DegradedBanner` is the strip above a degraded cluster's
+  terminal, Retry; `Error`: one human sentence with the raw text behind a Details toggle, copyable,
+  Retry, Edit kubeconfig sources; `Disconnected`: Connect), `DegradedBanner` is the strip above a degraded cluster's
   content, and `ConnectViewModel::of(state, info)` is the pure state-to-content mapping with every
   text redacted. `connect::install` / `tab_setup` hand both to a `ClusterTab` (`ConnectUi`); Retry,
   Cancel and Connect send `cluster::Reconnect`, `cluster::CancelConnect` and `cluster::Connect`
   through the `CommandDispatcher`. The terminal (E09) and kubeconfig sources (E06-S05) are host
-  hooks on `ConnectDeps`: the terminal button is drawn disabled until a terminal exists, the
-  sources link is hidden until the sources page exists.
+  hooks on `ConnectDeps`: the app wires "Open terminal" to `terminal::New` for the cluster (the tab
+  shows that shell under the sign-in view, `ClusterTab::sign_in_terminal`; a host without the hook
+  gets the button disabled with the reason), the sources link is hidden until the sources page
+  exists. The exec policy gets a line only when it is `never` (interaction really forbidden).
+  Errors are one human sentence plus the raw text behind a Details toggle, in the connect view,
+  the log viewer's recovery strip and the terminal's banner alike (`oxikube_domain::HumanError`
+  words the sentence, `oxikube_ui::error_details` draws the toggle and the box); a `NotFound`
+  pod, in the log viewer or the terminal, offers Close instead of Reconnect.
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
   mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
   events).

@@ -2,6 +2,7 @@
 //! so every state's content is tested without a window.
 
 use oxikube_app::ClusterSession;
+use oxikube_domain::HumanError;
 use oxikube_domain::session::ClusterSessionState;
 use oxikube_ports::ExecInteractivity;
 
@@ -79,6 +80,9 @@ pub struct AuthRequiredModel {
     pub message: DisplayText,
     /// The cluster's exec policy.
     pub policy: ExecPolicy,
+    /// The policy's one line, only when interaction is really forbidden: `None` for `Ask` and
+    /// `Allow`, where a plugin may prompt and there is nothing to explain.
+    pub policy_note: Option<&'static str>,
     /// How to sign in, worded for the policy.
     pub instructions: &'static str,
     /// The Open terminal button.
@@ -90,10 +94,11 @@ pub struct AuthRequiredModel {
 pub struct ErrorModel {
     /// The cluster's name.
     pub title: String,
-    /// The error: summary and full text.
+    /// The error: one plain sentence, and the raw text behind the Details toggle (never both
+    /// at once, and without the adapter's `internal error:` label).
     pub message: DisplayText,
-    /// The details block: the cluster, context and server, then the full error text. What
-    /// "Copy details" copies.
+    /// The details block: the cluster, context and server, then the raw error text. What the
+    /// Details toggle shows and "Copy details" copies.
     pub details: String,
     /// Whether the "Edit kubeconfig sources" link is offered.
     pub sources: bool,
@@ -157,6 +162,7 @@ impl ConnectViewModel {
                 title: info.title.clone(),
                 message: DisplayText::new(reason),
                 policy,
+                policy_note: policy.note(),
                 instructions: policy.instructions(info.terminal),
                 terminal: if info.terminal {
                     TerminalAction::Available
@@ -168,11 +174,13 @@ impl ConnectViewModel {
                 title: info.title.clone(),
             }),
             ClusterSessionState::Error { reason } => {
-                let message = DisplayText::new(reason);
+                // The reason is a rendered `OxiError` ("internal error: dial tcp ..."): the
+                // label is the kind's, and the screen says the cause in words.
+                let human = HumanError::from_display(reason);
                 Self::Error(ErrorModel {
-                    details: error_details(info, &message),
+                    details: error_details(info, &human),
                     title: info.title.clone(),
-                    message,
+                    message: DisplayText::from_error(&human),
                     sources: info.sources,
                 })
             }
@@ -181,15 +189,18 @@ impl ConnectViewModel {
 }
 
 /// The text "Copy details" puts on the clipboard: enough for a bug report, nothing secret.
-fn error_details(info: &ConnectInfo, message: &DisplayText) -> String {
+fn error_details(info: &ConnectInfo, error: &HumanError) -> String {
     let mut details = format!("cluster: {}\ncontext: {}\n", info.title, info.context);
     if let Some(server) = &info.server {
         details.push_str(&format!("server: {server}\n"));
     }
+    if let Some(kind) = error.kind() {
+        details.push_str(&format!("error_kind: {kind:?}\n"));
+    }
     details.push_str(&format!(
         "exec_interactivity: {}\n\n{}",
         ExecPolicy::of(info.exec).setting_value(),
-        message.full
+        error.raw()
     ));
     details
 }

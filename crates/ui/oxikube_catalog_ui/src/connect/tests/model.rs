@@ -65,9 +65,14 @@ fn auth_required_carries_the_plugin_message_the_policy_and_the_terminal_action()
     assert_eq!(auth.policy.label(), "Forbid");
     assert_eq!(auth.terminal, TerminalAction::Available);
     assert!(
-        auth.instructions.contains("forbidden"),
+        auth.instructions.starts_with("Open a terminal"),
         "{}",
         auth.instructions
+    );
+    assert!(
+        auth.policy_note
+            .is_some_and(|note| note.contains("not allowed")),
+        "interaction is forbidden, the line says so plainly"
     );
 
     let no_terminal = ConnectInfo {
@@ -103,9 +108,38 @@ fn the_exec_policy_is_named_for_every_setting() {
         assert_eq!(policy.setting_value(), value);
         assert_eq!(policy.allows_interaction(), interactive);
         assert!(!policy.explanation().is_empty());
+        // The one line that explains a policy exists only when interaction is forbidden.
+        assert_eq!(policy.note().is_some(), !interactive);
         for terminal in [true, false] {
             let text = policy.instructions(terminal);
-            assert_eq!(text.contains("forbidden"), !interactive, "{text}");
+            assert!(!text.contains("forbidden"), "plain words: {text}");
+            assert_eq!(
+                text.contains("Sign in outside Oxikube"),
+                !interactive && !terminal
+            );
+        }
+    }
+}
+
+#[test]
+fn the_policy_line_is_only_there_when_interaction_is_really_forbidden() {
+    for (setting, shown) in [
+        (ExecInteractivity::Never, true),
+        (ExecInteractivity::IfAvailable, false),
+        (ExecInteractivity::Always, false),
+    ] {
+        let info = ConnectInfo {
+            exec: setting,
+            ..info()
+        };
+        let ConnectViewModel::AuthRequired(auth) = ConnectViewModel::of(&auth_state(), &info)
+        else {
+            panic!("auth");
+        };
+        assert_eq!(auth.policy_note.is_some(), shown, "{setting:?}");
+        if let Some(note) = auth.policy_note {
+            assert!(!note.contains("Forbid"), "no jargon: {note}");
+            assert!(note.contains("exec_interactivity: never"), "{note}");
         }
     }
 }
@@ -150,8 +184,9 @@ fn error_has_a_summary_details_and_the_way_to_the_sources() {
     };
     assert_eq!(
         error.message.summary,
-        "connection refused: dial tcp 10.0.0.1:6443"
+        "The cluster's API server refused the connection."
     );
+    assert_eq!(error.message.full, reason, "the raw text is the details");
     assert!(error.message.truncated, "more lines than the summary shows");
     assert!(error.details.contains("cluster: prod-eu\n"));
     assert!(error.details.contains("context: prod-eu-ctx\n"));
@@ -177,6 +212,34 @@ fn error_has_a_summary_details_and_the_way_to_the_sources() {
         panic!("error");
     };
     assert!(!error.sources, "no sources page, no link");
+}
+
+#[test]
+fn the_internal_error_label_never_reaches_the_summary() {
+    let reason = "internal error: dial tcp 10.0.0.12:6443: connect: connection refused";
+    let ConnectViewModel::Error(error) = ConnectViewModel::of(&error(reason), &info()) else {
+        panic!("error");
+    };
+    assert_eq!(
+        error.message.summary,
+        "The cluster's API server refused the connection."
+    );
+    assert!(!error.message.summary.contains("internal error"));
+    assert!(error.message.truncated, "the raw text is behind Details");
+    assert_eq!(
+        error.message.full, "dial tcp 10.0.0.12:6443: connect: connection refused",
+        "the raw text, without the label"
+    );
+    assert!(
+        error.details.contains("error_kind: Internal\n"),
+        "{}",
+        error.details
+    );
+    assert!(
+        !error.details.contains("internal error:"),
+        "{}",
+        error.details
+    );
 }
 
 #[test]
