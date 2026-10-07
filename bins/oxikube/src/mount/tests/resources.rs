@@ -323,6 +323,45 @@ fn slash_in_a_table_focuses_its_filter_through_the_real_bus(cx: &mut TestAppCont
     assert!(!editing(&mut app));
 }
 
+#[gpui::test]
+fn keys_typed_right_after_slash_are_filter_text_even_in_an_inactive_window(
+    cx: &mut TestAppContext,
+) {
+    // #555 on the real keymap and bus: the window is not activated (so no focus events), and `/`
+    // and the text come in one burst (no frame and no bus round trip in between). `a` (attach),
+    // `s` (shell), `j` and `k` (move) must all land in the bar.
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.serve([kind("", "v1", "Pod", "pods")]);
+    app.press("enter");
+    app.tick();
+    app.click("sidebar-entry-workloads/pods");
+    app.tick();
+    let ws = app.tab_workspace();
+    let table = app
+        .vcx
+        .update(|_, cx| ws.read(cx).items_of_type::<ResourceTable>().remove(0));
+    let text = |app: &mut App| {
+        app.vcx
+            .update(|_, cx| table.read(cx).filter().read(cx).text().to_owned())
+    };
+    app.press("/ a s j k 1");
+    app.tick();
+    assert_eq!(text(&mut app), "asjk1");
+    let stack = app.vcx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        window.context_stack()
+    });
+    assert!(
+        stack
+            .iter()
+            .any(|c| c.contains("Table") && c.contains("Editing")),
+        "the table's key context says Editing: {stack:?}"
+    );
+    app.press("escape");
+    app.tick();
+    assert_eq!(text(&mut app), "", "escape cleared the filter");
+}
+
 /// The Widget CRD as the cluster stores it: cluster-scoped object, two versions, `v1` the storage
 /// one.
 fn widget_crd() -> oxikube_domain::Resource {

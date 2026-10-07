@@ -110,7 +110,7 @@ impl ResourceViews {
             ViewRequest::FocusFilter { cluster, gvk } => {
                 // The tab's active table (a kind has one table per cluster tab).
                 if let Some(table) = self.tables(&cluster, &gvk, cx).into_iter().next() {
-                    table.update(cx, |table, cx| table.focus_filter(window, cx));
+                    table.update(cx, |table, cx| table.focus_filter_on_command(window, cx));
                 }
             }
             ViewRequest::OpenCrdResources { cluster, name } => {

@@ -22,11 +22,13 @@ use super::states::stale_badge;
 use super::view::ResourceTable;
 
 impl Render for ResourceTable {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(test)]
         {
             self.renders += 1;
         }
+        // Before the key context below: `Editing` turns the bare-key bindings off.
+        self.editing = self.filter_focused(window, cx);
         let colors = ToneColors::current(cx);
         let (rows, selected, state) = self.table.update_quiet(cx, |d| {
             d.now = Timestamp::now();
