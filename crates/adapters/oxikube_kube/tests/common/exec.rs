@@ -4,11 +4,15 @@
 use std::time::Duration;
 
 use futures::StreamExt;
+use futures::stream::BoxStream;
 use k8s_openapi::api::core::v1::Pod;
 use kube::Client;
+use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_ports::exec::OutputStream;
+use oxikube_ports::{BackendEvent, ExitStatus};
 use oxikube_testkit::images;
-use serde_json::{Value, json};
+use oxikube_testkit::integration::pods;
+use serde_json::Value;
 
 use super::logs;
 
@@ -23,32 +27,39 @@ async fn create(client: &Client, namespace: &str, pod: Value) {
     logs::create(client, namespace, &pod).await;
 }
 
-/// A pod `name` that sleeps, with a container named `main`.
-pub async fn create_sleeper(client: &Client, namespace: &str, name: &str) {
-    create(
-        client,
-        namespace,
-        json!({
-            "metadata": {"name": name},
-            "spec": {"terminationGracePeriodSeconds": 1, "containers": [
-                {"name": "main", "image": BUSYBOX, "command": ["sleep", "3600"]}]},
-        }),
+/// A backend's event stream ([`oxikube_ports::TerminalBackend::output_stream`]).
+pub type Events = BoxStream<'static, BackendEvent>;
+
+/// The pod `name` in `namespace` of the kind context, as the exec port addresses it.
+pub fn pod_ref(namespace: &str, name: &str) -> ResourceRef {
+    ResourceRef::new(
+        ClusterId::new("kubeconfig", &ContextName::new("kind")),
+        Gvk::new("", "v1", "Pod"),
+        Some(namespace.into()),
+        name,
     )
-    .await;
 }
 
-/// A pod `name` whose main process is `cat` with stdin open, so `attach` talks to it.
+/// A pod `name` that sleeps, with a container named `main` ([`pods::sleeper`]).
+pub async fn create_sleeper(client: &Client, namespace: &str, name: &str) {
+    create(client, namespace, pods::sleeper(name)).await;
+}
+
+/// A pod `name` whose main process is `cat` with stdin open, so `attach` talks to it
+/// ([`pods::cat`]).
 pub async fn create_cat(client: &Client, namespace: &str, name: &str) {
-    create(
-        client,
-        namespace,
-        json!({
-            "metadata": {"name": name},
-            "spec": {"terminationGracePeriodSeconds": 1, "containers": [
-                {"name": "main", "image": BUSYBOX, "command": ["cat"], "stdin": true}]},
-        }),
-    )
-    .await;
+    create(client, namespace, pods::cat(name)).await;
+}
+
+/// A pod `name` that prints `tick <n>` once a second, for as long as it lives ([`pods::logger`]).
+pub async fn create_logger(client: &Client, namespace: &str, name: &str) {
+    create(client, namespace, pods::logger(name)).await;
+}
+
+/// A pod `name` with no shell and no tools, the stand-in for a distroless image
+/// ([`pods::shell_less`]).
+pub async fn create_shell_less(client: &Client, namespace: &str, name: &str) {
+    create(client, namespace, pods::shell_less(name)).await;
 }
 
 /// The restart count of container `container` in pod `name`; 0 before it has a status.
@@ -93,4 +104,53 @@ pub async fn read_all(stream: &mut OutputStream) -> Vec<u8> {
     .await
     .expect("the stream ends");
     all
+}
+
+/// Reads backend events until the output contains `marker`; returns everything read so far.
+/// Panics on a transport error, on an exit or the end of the stream before the marker, or after
+/// [`OUTPUT_DEADLINE`].
+pub async fn events_until(events: &mut Events, marker: &str) -> String {
+    events_satisfying(events, marker, |text| text.contains(marker)).await
+}
+
+/// [`events_until`] for a condition on everything read so far; `what` names it in the failure.
+pub async fn events_satisfying(
+    events: &mut Events,
+    what: &str,
+    done: impl Fn(&str) -> bool,
+) -> String {
+    let mut seen = Vec::new();
+    let found = tokio::time::timeout(OUTPUT_DEADLINE, async {
+        while let Some(event) = events.next().await {
+            match event {
+                BackendEvent::Output(bytes) => seen.extend_from_slice(&bytes),
+                BackendEvent::Error(error) => panic!("transport error: {error}"),
+                BackendEvent::Exited(status) => panic!("exited early: {status:?}"),
+            }
+            if done(&String::from_utf8_lossy(&seen)) {
+                return true;
+            }
+        }
+        false
+    })
+    .await;
+    let text = String::from_utf8_lossy(&seen).into_owned();
+    assert_eq!(found, Ok(true), "never saw {what:?}; got {text:?}");
+    text
+}
+
+/// Drains the backend's events; returns the exit status it ended with.
+pub async fn events_exit(events: &mut Events) -> ExitStatus {
+    let exit = tokio::time::timeout(OUTPUT_DEADLINE, async {
+        let mut exit = None;
+        while let Some(event) = events.next().await {
+            if let BackendEvent::Exited(status) = event {
+                exit = Some(status);
+            }
+        }
+        exit
+    })
+    .await
+    .expect("the stream ends");
+    exit.expect("an exit event")
 }

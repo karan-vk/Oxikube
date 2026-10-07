@@ -1,0 +1,41 @@
+[?1049h[24;1H[?1h=[1;32mINFO [0m line 01: pod web-1 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 02: pod web-2 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 03: pod web-3 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 04: pod web-4 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 05: pod web-5 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 06: pod web-6 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 07: pod web-7 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 08: pod web-8 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 09: pod web-9 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 10: pod web-10 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 11: pod web-11 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 12: pod web-12 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 13: pod web-13 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 14: pod web-14 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 15: pod web-15 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 16: pod web-16 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 17: pod web-17 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 18: pod web-18 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 19: pod web-19 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 20: pod web-20 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 21: pod web-21 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 22: pod web-22 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 23: pod web-23 is [33mPending[0m -> [32mRunning[0m[m
+[7mlog.txt[27m[K[K[1;32mINFO [0m line 24: pod web-24 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 25: pod web-25 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 26: pod web-26 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 27: pod web-27 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 28: pod web-28 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 29: pod web-29 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 30: pod web-30 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 31: pod web-31 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 32: pod web-32 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 33: pod web-33 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 34: pod web-34 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 35: pod web-35 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 36: pod web-36 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 37: pod web-37 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 38: pod web-38 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 39: pod web-39 is [33mPending[0m -> [32mRunning[0m[m
+[1;32mINFO [0m line 40: pod web-40 is [33mPending[0m -> [32mRunning[0m[m
+[7m(END)[27m[K

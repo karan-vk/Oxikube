@@ -117,5 +117,13 @@ path = "tests/screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# Recorded full-screen programs (vim, less, tmux) painted by the element (E09-S13); same feature,
+# same nightly job, same goldens directory.
+[[test]]
+name = "screenshot_programs"
+path = "tests/screenshot_programs.rs"
+harness = false
+required-features = ["screenshot"]
+
 [lints]
 workspace = true

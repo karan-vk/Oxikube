@@ -54,6 +54,15 @@ Port fakes, fixtures, builders, kind helpers, gpui test helpers.
   `resource("test.oxikube.dev/v1", "Widget")`. They share the fixtures' defaults, and
   `tests/fixtures.rs` checks that they match the corresponding fixtures field by field.
 
+## Kind pods for the exec and terminal suites (feature `integration`)
+
+- `integration::pods` returns pod manifests as JSON for `kubectl apply` or `serde_json::from_value`:
+  `sleeper(name)` (busybox, sleeps), `cat(name)` (main process `cat`, stdin open: attach round
+  trips), `logger(name)` (prints `tick <n>` every second: attach to a long-running pod) and
+  `shell_less(name)` (the pause image, no shell: the stand-in for a distroless image; a shell
+  fails, a debug container works). One container `main`, never restarted, labelled
+  `oxikube.test/suite`, images from the pre-pulled list.
+
 ## GPUI tests (feature `gpui-test`)
 
 - `oxikube_testkit::gpui_test::TestApp::new(cx)` wraps the `TestAppContext` of a `#[gpui::test]`:

@@ -13,6 +13,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+pub mod pods;
+
 /// Environment variable naming the kubectl context of the kind cluster under test.
 pub const CONTEXT_ENV: &str = "OXIKUBE_TEST_CONTEXT";
 

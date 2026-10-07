@@ -60,7 +60,7 @@ logs. Locally, without that variable, a failed test prints its namespace's event
 | `TableFeedPort` | `list_table`, `table_feed` | `table_feed` (CRD printer columns and pods against `kubectl get`, live create/update/delete, paged lists) |
 | `LogPort` | `stream_logs` | `logs_streams` (options, multi-container, selector fan-in, rate), `logs_restart` (restart without dupes or gaps) |
 | `ExecStreamPort` | `exec_session`, `attach_session` | `exec_streams` (echo, large payload, resize, exit status, attach, error kinds), `exec_node_shell` |
-| `ExecPort` | `exec`, `attach`, `create_debug_container`, `node_shell` | `exec_terminal` (TTY echo, resize, exit code, attach and kill, debug container, node shell removed on kill, `NotFound`) |
+| `ExecPort` | `exec`, `attach`, `create_debug_container`, `node_shell` | `exec_terminal` (TTY echo, resize, exit code, attach and kill, debug container, node shell removed on kill, `NotFound`), `exec_scenarios` (attach to a long-running logger pod, a debug container in a pod with no shell) |
 | `TerminalBackend` (`KubeStream`) | `write`, `resize`, `output_stream`, `kill`, `reconnect` | `exec_kube_stream` (`interactive_tty` echo, `stty size` after a resize, non-zero exit, missing container, `Forbidden` without `pods/exec`, reconnect to a fresh shell, 50 open/drop cycles leave no task, flood throughput) |
 | `PortForwardPort` | `forward` | `portforward` (pod and service GET, named ports, errors, `Forbidden`), `portforward_restart` |
 | `MetricsPort` | `node_metrics`, `pod_metrics` | `metrics_kind` (present, absent as `Unavailable(NotInstalled)`, `Forbidden`) |
@@ -82,3 +82,27 @@ logs. Locally, without that variable, a failed test prints its namespace's event
 | Eviction and drain with a PodDisruptionBudget | `subresources_pods::a_blocking_budget_refuses_the_eviction_as_a_retryable_error`, `algorithms_drain::a_drain_waits_out_a_budget_that_blocks_then_allows_and_evicts_everything` |
 | Metrics present, and absence reported (not swallowed) | `metrics_kind::node_metrics_report_usage_and_utilisation_for_every_node`, `metrics_kind::a_cluster_without_the_metrics_group_is_unavailable_not_an_error` |
 | 403 for an RBAC-restricted service account | `rbac`, `resources_special::a_restricted_account_gets_forbidden_not_a_crash`, `resources_port::list_metadata_without_rights_is_forbidden`, `metrics_kind::an_account_without_rights_on_metrics_gets_forbidden` |
+
+## Epic E09 acceptance items (terminal and exec, E09-S13)
+
+The terminal suite spans four places; each row names the test that proves the item.
+
+| Item | Test |
+|---|---|
+| exec `echo` round trip | `exec_terminal::exec_gives_a_tty_with_resize_and_an_exit_code`, `exec_kube_stream::echo_round_trips_a_resize_reaches_stty_and_the_exit_code_propagates` |
+| resize reaches the pod (`stty size`) | the same two; through the app: `bins/oxikube/tests/kind_terminal::a_full_screen_program_in_a_pod_renders_and_follows_a_resize` |
+| non-zero exit code propagates | `exec_terminal` (`exit 3`), `exec_kube_stream`, `exec_streams::the_exit_status_and_separate_stderr_are_propagated` |
+| attach to a long-running pod and receive its output | `exec_scenarios::attaching_to_a_long_running_pod_receives_what_it_keeps_writing` (a logger pod), `exec_terminal::attach_round_trips_and_kill_ends_the_stream` (`cat`) |
+| node shell: `hostname` equals the node, the pod is cleaned up on close | `exec_terminal::a_node_shell_through_the_port_removes_its_pod_on_kill`, `exec_node_shell`; through the guard: `oxikube_app/tests/kind_smoke/node_shell` |
+| ephemeral debug container: status appears, attach works | `exec_terminal::a_debug_container_is_created_and_attached_through_the_port`, `exec_node_shell::an_ephemeral_debug_container_is_attached_to`, `exec_scenarios::a_debug_container_reaches_a_pod_that_has_no_shell`; through the guard and the UI: `oxikube_app/tests/kind_smoke/debug`, `bins/oxikube/tests/kind_exec` |
+| a read-only session blocks node shell and debug | `oxikube_app/tests/kind_smoke/node_shell::a_read_only_cluster_and_a_missing_permit_create_nothing`, `oxikube_app/tests/kind_smoke/debug::a_container_that_cannot_start_and_a_read_only_session_are_readable_errors` |
+| a shell from the pod table, audited, output in the grid | `bins/oxikube/tests/kind_exec` |
+| vi and top render, follow a resize, never scroll | `bins/oxikube/tests/kind_terminal::a_full_screen_program_in_a_pod_renders_and_follows_a_resize`; recorded vim, less, tmux: `oxikube_terminal/tests/captures.rs` |
+| a flood stays within the scrollback | `bins/oxikube/tests/kind_terminal::a_flood_of_output_through_the_websocket_stays_within_the_scrollback` (prints `perf-jsonl`) |
+| nothing typed or printed reaches the data dir | `bins/oxikube/tests/kind_terminal_data::nothing_typed_or_printed_in_a_terminal_reaches_the_data_dir`, `oxikube_terminal/tests/view/persist.rs` |
+| golden screenshots of colours, bold and recorded programs (macOS nightly) | `oxikube_terminal/tests/screenshot.rs` (16 colours, 256 ramp, bold, italic, underline, strike, wide glyphs, cursors, selection), `tests/screenshot_programs.rs` (vim, less, tmux) |
+
+Run it all: `cargo xtask kind-up`, then `cargo it` (this crate, the app's kind smoke, the testkit) and
+`OXIKUBE_TEST_CONTEXT=kind-oxikube cargo test -p oxikube --features integration --test kind_exec
+--test kind_terminal --test kind_terminal_data`. Pods come from `oxikube_testkit::integration::pods` (`sleeper`, `cat`,
+`logger`, `shell_less`).
