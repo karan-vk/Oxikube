@@ -146,6 +146,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "logs::Copy" => Command::LogsCopy { target: target() },
         "logs::Mark" => Command::LogsMark { target: target() },
         "logs::SendToAgent" => Command::LogsSendToAgent { target: target() },
+        "logs::TailInTerminal" => Command::LogsTailInTerminal { target: target() },
         "logs::FollowReplacement" => Command::LogsFollowReplacement { target: target() },
         "logs::Reconnect" => Command::LogsReconnect { target: target() },
         "logs::Save" => Command::LogsSave {

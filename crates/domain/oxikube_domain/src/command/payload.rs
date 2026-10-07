@@ -450,6 +450,16 @@ pub enum Command {
         /// The object the log view shows.
         target: ResourceRef,
     },
+    /// Run `kubectl logs -f` for what a log view shows (its pod and container, or a workload's pods
+    /// by selector) in a terminal tab of the cluster, with the cluster's kubeconfig in the
+    /// terminal's environment: the escape hatch for users who want kubectl itself. Starts a
+    /// process on this machine; `kubectl logs` reads and changes nothing in the cluster. Does
+    /// nothing when kubectl is not installed.
+    #[serde(rename = "logs::TailInTerminal")]
+    LogsTailInTerminal {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
     /// Mark or unmark the focused line of a log view.
     #[serde(rename = "logs::Mark")]
     LogsMark {
@@ -737,6 +747,7 @@ impl Command {
             Command::LogsCopy { .. } => CommandId::LOGS_COPY,
             Command::LogsMark { .. } => CommandId::LOGS_MARK,
             Command::LogsSendToAgent { .. } => CommandId::LOGS_SEND_TO_AGENT,
+            Command::LogsTailInTerminal { .. } => CommandId::LOGS_TAIL_IN_TERMINAL,
             Command::LogsFollowReplacement { .. } => CommandId::LOGS_FOLLOW_REPLACEMENT,
             Command::LogsReconnect { .. } => CommandId::LOGS_RECONNECT,
             Command::LogsSave { .. } => CommandId::LOGS_SAVE,
@@ -804,6 +815,7 @@ impl Command {
             | Command::LogsCopy { target }
             | Command::LogsMark { target }
             | Command::LogsSendToAgent { target }
+            | Command::LogsTailInTerminal { target }
             | Command::LogsFollowReplacement { target }
             | Command::LogsReconnect { target }
             | Command::LogsSave { target, .. }
@@ -1023,6 +1035,7 @@ mod tests {
             Command::LogsCopy { target: pod() },
             Command::LogsMark { target: pod() },
             Command::LogsSendToAgent { target: pod() },
+            Command::LogsTailInTerminal { target: pod() },
             Command::LogsFollowReplacement { target: pod() },
             Command::LogsReconnect { target: pod() },
             Command::LogsSave {
@@ -1236,6 +1249,7 @@ mod tests {
                     | Command::LogsCopy { .. }
                     | Command::LogsMark { .. }
                     | Command::LogsSendToAgent { .. }
+                    | Command::LogsTailInTerminal { .. }
                     | Command::LogsFollowReplacement { .. }
                     | Command::LogsReconnect { .. }
                     | Command::LogsSave { .. }

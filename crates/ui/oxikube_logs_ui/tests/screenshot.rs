@@ -10,6 +10,8 @@
 //! - `log_view_json` (E08-S05): a mixed stream of zap, logrus and pino JSON lines and plain text in
 //!   JSON mode: level chips, time and message columns, the level chips with `debug` off, and one
 //!   line expanded into its pretty-printed JSON.
+//! - `log_view_kubectl` (E08-S08): the toolbar with kubectl installed: "Tail in terminal (kubectl)"
+//!   after the range presets (the other goldens have no kubectl, so no button).
 //! - `log_view_merged`: a Deployment's three pods merged by timestamp (E08-S04): the pod gutters in
 //!   the theme's `log_sources` colours, and the "pod ... added" banner (dark theme).
 //! - `log_view_overview` (E08-S11): the suite's one picture of the whole view: a Deployment's three
@@ -141,12 +143,13 @@ fn pod() -> Resource {
 /// With `json` the stream is [`json_log`], the `debug` chip is off and the failure line (seq 7)
 /// is expanded.
 fn render(wrap: bool, timestamps: bool, light: bool, json: bool) -> anyhow::Result<RgbaImage> {
-    render_with(wrap, timestamps, light, json, None, false)
+    render_with(wrap, timestamps, light, json, None, false, false)
 }
 
 /// [`render`] with the search bar open on `search` (a pattern and the mode), the first match
 /// being the current one; `picked` marks the failing line and selects three lines above it
-/// (E08-S06).
+/// (E08-S06); `kubectl` is installed, so the toolbar offers "Tail in terminal (kubectl)"
+/// (E08-S08).
 fn render_with(
     wrap: bool,
     timestamps: bool,
@@ -154,6 +157,7 @@ fn render_with(
     json: bool,
     search: Option<(&str, SearchMode)>,
     picked: bool,
+    kubectl: bool,
 ) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
@@ -199,6 +203,14 @@ fn render_with(
             dispatcher: Rc::new(Ignore),
             fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
             agent: oxikube_app::context::PendingContext::new(),
+            kubectl: {
+                let found = oxikube_app::logs::kubectl::Kubectl::new(move || {
+                    kubectl.then(|| std::path::PathBuf::from("/usr/local/bin/kubectl"))
+                });
+                found.refresh();
+                found
+            },
+            terminal: oxikube_terminal::view::TerminalViewSink::channel().0,
         };
         cx.new(|cx| LogView::new(target, None, deps, cx))
     })?;
@@ -350,6 +362,9 @@ fn render_merged(overview: bool) -> anyhow::Result<RgbaImage> {
             dispatcher: Rc::new(Ignore),
             fs: Arc::new(oxikube_testkit::FakeFsPort::new()),
             agent: oxikube_app::context::PendingContext::new(),
+            // Not found: the toolbar is the one the goldens show.
+            kubectl: oxikube_app::logs::kubectl::Kubectl::new(|| None),
+            terminal: oxikube_terminal::view::TerminalViewSink::channel().0,
         };
         cx.new(|cx| {
             LogView::workload(
@@ -430,6 +445,7 @@ fn main() -> ExitCode {
             false,
             Some(("error|warn", SearchMode::Highlight)),
             false,
+            false,
         )
         .and_then(|image| check("log_view_search", false, image)),
         render_with(
@@ -439,10 +455,13 @@ fn main() -> ExitCode {
             false,
             Some(("error|warn", SearchMode::Filter)),
             false,
+            false,
         )
         .and_then(|image| check("log_view_filter", false, image)),
-        render_with(false, true, false, false, None, true)
+        render_with(false, true, false, false, None, true, false)
             .and_then(|image| check("log_view_selection_marks", false, image)),
+        render_with(false, true, false, false, None, false, true)
+            .and_then(|image| check("log_view_kubectl", false, image)),
         render_merged(false).and_then(|image| check("log_view_merged", false, image)),
         render_merged(true).and_then(|image| check("log_view_overview", true, image)),
     ];

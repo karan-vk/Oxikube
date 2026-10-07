@@ -1,6 +1,8 @@
 //! The terminal in the workspace (E09-S07): [`TerminalView`], a workspace `Item` that moves
 //! between the panes and the bottom dock, the cluster's [`TerminalPanel`] in its bottom dock, and
-//! the `terminal::New` / `terminal::Split` / `terminal::Close` commands.
+//! the `terminal::New` / `terminal::Split` / `terminal::Close` commands, and what another view asks
+//! for through [`TerminalViewSink::open`] (a process of its own in its cluster's bottom dock, such as
+//! the log viewer's `kubectl logs -f`).
 //!
 //! | Module | What |
 //! |---|---|

@@ -5930,6 +5930,7 @@ dependencies = [
  "oxikube_ports",
  "oxikube_runtime",
  "oxikube_settings",
+ "oxikube_terminal",
  "oxikube_testkit",
  "oxikube_theme",
  "oxikube_ui",
@@ -5938,6 +5939,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

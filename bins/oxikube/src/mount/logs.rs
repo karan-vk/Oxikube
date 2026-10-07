@@ -20,6 +20,7 @@ use gpui::{App, Entity, WeakEntity, Window};
 use oxikube_app::ClusterSessionManager;
 use oxikube_app::RowActionRegistry;
 use oxikube_app::context::{LogContextProvider, PendingContext};
+use oxikube_app::logs::kubectl::Kubectl;
 use oxikube_app::logs::{LogConfig, LogService};
 use oxikube_app::tools::k8s::GetLogsTool;
 use oxikube_logs_ui::{
@@ -28,9 +29,23 @@ use oxikube_logs_ui::{
 };
 use oxikube_ports::{ClockPort, FsPort};
 use oxikube_settings::Settings as _;
+use oxikube_terminal::view::TerminalViewSink;
 use oxikube_workspace::{ClusterTabs, CommandDispatcher};
 
 use crate::app_state::{AgentHooks, AppState};
+
+/// The [`Kubectl`] lookup the log views use when something installed one before the window mounted
+/// (the tests' fake); the app's own looks on this machine ([`Kubectl::system`]).
+#[derive(Clone)]
+pub struct KubectlOverride(pub Kubectl);
+
+impl gpui::Global for KubectlOverride {}
+
+/// Whether kubectl is installed, as the window's log views ask it (E08-S08).
+pub fn kubectl(cx: &App) -> Kubectl {
+    cx.try_global::<KubectlOverride>()
+        .map_or_else(Kubectl::system, |installed| installed.0.clone())
+}
 
 /// The app's `LogService`: the one already set on `state`, else a new one that is set (and follows
 /// the settings).
@@ -81,12 +96,15 @@ pub fn install_agent_hooks(
 }
 
 /// Starts the window's log views over the app's `service` (saving through `fs`): requests from `requests` (the bus's
-/// log handlers) open views in the cluster tabs of `tabs`.
+/// log handlers) open views in the cluster tabs of `tabs`. `kubectl` says whether "Tail in
+/// terminal" is offered (E08-S08), and `terminal` is where that action asks for its terminal tab.
 pub fn start_views(
     service: Arc<LogService>,
     sessions: ClusterSessionManager,
     fs: Arc<dyn FsPort>,
     agent: PendingContext,
+    kubectl: Kubectl,
+    terminal: TerminalViewSink,
     dispatcher: Rc<dyn CommandDispatcher>,
     tabs: WeakEntity<ClusterTabs>,
     requests: UnboundedReceiver<LogRequest>,
@@ -100,6 +118,8 @@ pub fn start_views(
             dispatcher,
             fs,
             agent,
+            kubectl,
+            terminal,
         },
         host: Rc::new(tabs),
     };

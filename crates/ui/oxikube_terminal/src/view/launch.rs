@@ -78,6 +78,7 @@ impl LocalLauncher {
             shell,
             args,
             cwd,
+            ..
         } = descriptor
         else {
             return Err(OxiError::unsupported(

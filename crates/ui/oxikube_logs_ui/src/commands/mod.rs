@@ -6,7 +6,7 @@
 //! the search's (E08-S03) `Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`,
 //! `ToggleFilterMode`, `CloseSearch`, the JSON mode's (E08-S05) `ToggleJsonMode`,
 //! `ToggleLevel`, `ToggleLine` and `CollapseLine`, (E08-S06) the local actions on what a
-//! view holds: `Mark`, `Copy`, `Clear`, `Save`, and (E08-S07) what follows a stream that stopped:
+//! view holds: `Mark`, `Copy`, `Clear`, `Save`, (E08-S08) `TailInTerminal` (`kubectl logs -f` in a terminal tab), and (E08-S07) what follows a stream that stopped:
 //! `Reconnect` and `FollowReplacement` (switch to the pod that replaced a gone one).
 //!
 //! None changes a cluster (no `MutationGuard` tier; all are allowed on a read-only cluster):
@@ -36,7 +36,7 @@ use crate::view::OpenLogs;
 pub use controller::{LogHost, LogViews, LogViewsDeps};
 
 /// The commands this crate handles.
-pub const LOG_COMMANDS: [CommandId; 28] = [
+pub const LOG_COMMANDS: [CommandId; 29] = [
     CommandId::POD_VIEW_LOGS,
     CommandId::WORKLOAD_VIEW_LOGS,
     CommandId::LOGS_FOLLOW_REPLACEMENT,
@@ -46,6 +46,7 @@ pub const LOG_COMMANDS: [CommandId; 28] = [
     CommandId::LOGS_COPY,
     CommandId::LOGS_MARK,
     CommandId::LOGS_SEND_TO_AGENT,
+    CommandId::LOGS_TAIL_IN_TERMINAL,
     CommandId::LOGS_SAVE,
     CommandId::LOGS_CLOSE_SEARCH,
     CommandId::LOGS_FIND,
@@ -78,6 +79,8 @@ pub enum ViewChange {
     Mark,
     /// `logs::SendToAgent`: queue the selection (else the lines on screen) as agent context.
     SendToAgent,
+    /// `logs::TailInTerminal`: run `kubectl logs -f` for what the view shows in a terminal tab.
+    TailInTerminal,
     /// `logs::Save`: offer to write the lines of this scope to a file.
     Save(LogSaveScope),
     /// `logs::SetRange`.
@@ -198,6 +201,7 @@ impl LogRequest {
             Command::LogsCopy { target } => change(target, ViewChange::Copy),
             Command::LogsMark { target } => change(target, ViewChange::Mark),
             Command::LogsSendToAgent { target } => change(target, ViewChange::SendToAgent),
+            Command::LogsTailInTerminal { target } => change(target, ViewChange::TailInTerminal),
             Command::LogsReconnect { target } => change(target, ViewChange::Reconnect),
             Command::LogsFollowReplacement { target } => {
                 change(target, ViewChange::FollowReplacement)

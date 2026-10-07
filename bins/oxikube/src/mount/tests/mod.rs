@@ -10,6 +10,7 @@ mod agent;
 mod chrome;
 mod logs;
 mod resources;
+mod tail;
 mod terminal;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
@@ -218,6 +219,7 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::LOGS_MARK, "oxikube_logs_ui"),
         (CommandId::LOGS_COPY, "oxikube_logs_ui"),
         (CommandId::LOGS_SEND_TO_AGENT, "oxikube_logs_ui"),
+        (CommandId::LOGS_TAIL_IN_TERMINAL, "oxikube_logs_ui"),
         (CommandId::LOGS_CLEAR, "oxikube_logs_ui"),
         (CommandId::LOGS_SAVE, "oxikube_logs_ui"),
         (CommandId::LOGS_RECONNECT, "oxikube_logs_ui"),

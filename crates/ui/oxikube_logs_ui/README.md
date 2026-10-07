@@ -11,6 +11,7 @@ Log viewer (single/aggregate/JSON), search, export, send-to-agent.
 - `oxikube_app`
 - `oxikube_ui`
 - `oxikube_workspace`
+- `oxikube_terminal` (ui, E08-S08: "Tail in terminal" asks it for a tab)
 - `oxikube_keymap`, `oxikube_runtime`, `oxikube_settings`, `oxikube_theme` (platform)
 
 See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps` fails CI when this crate depends on anything outside its layer rules.
@@ -23,6 +24,7 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 - `view::aggregate` (E08-S04): `LogView::workload`, a workload's or Service's pods merged: pod gutters and colours, the banner, the Sources menu.
 - `commands` (E08-S02, E08-S04): `pod::ViewLogs`, `workload::ViewLogs` and `logs::*` on the bus, and `LogViews`, which opens and drives the views.
 - `search` (E08-S03): the `/` bar: regex with case and inverse toggles, highlight or filter mode, next / previous match with a count; the match index is `oxikube_app::logs::MatchIndex`.
+- `view::tail`, `kubectl` (E08-S08): "Tail in terminal (kubectl)" (`logs::TailInTerminal`, `shift-t`) runs `kubectl logs -f` for the view in a terminal tab of the cluster; hidden when kubectl is not installed (`follow_kubectl` looks it up off the UI thread).
 - `row_actions` (E08-S02, E08-S04): "View Logs" on pod rows, and on workload and Service rows.
 
 ## Owning epics

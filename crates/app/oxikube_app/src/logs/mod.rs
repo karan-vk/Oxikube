@@ -23,6 +23,7 @@
 //! | the task that reads the stream and commits batches | `driver`, `batcher` |
 //! | the logs of every pod a workload, Service or selector picks, merged by server timestamp (E08-S04) | [`AggregateSession`], [`AggregateSpec`] (`aggregate`) |
 //! | runtime, buffer bound, batching | [`LogRuntime`], [`LogConfig`] (`options`) |
+//! | `kubectl logs -f` for the viewer's "Tail in terminal" fallback: the argv, and whether kubectl is installed (E08-S08) | [`kubectl`] |
 //! | reconnect with backoff and overlap dedupe, why a pod's stream ended, its replacement (E08-S07) | [`ReconnectPolicy`], [`PodIdentity`], [`find_replacement`] (`churn`) |
 //!
 //! # Data flow
@@ -56,6 +57,7 @@ mod entry;
 pub mod excerpt;
 pub mod export;
 mod filter;
+pub mod kubectl;
 mod level_filter;
 mod options;
 pub mod parse;

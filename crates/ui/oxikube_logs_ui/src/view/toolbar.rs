@@ -39,6 +39,17 @@ impl LogView {
             })
             .child(div().w(u(px(8.))))
             .children(LogRange::ALL.map(|range| self.range_button(range, cx)))
+            // With the range presets, where a narrow window does not cut it off (the controls on
+            // the right do clip): hidden, not disabled, without kubectl (E08-S08).
+            .children(self.can_tail_in_terminal().then(|| {
+                self.toggle(
+                    "log-tail-in-terminal",
+                    "Tail in terminal (kubectl)",
+                    false,
+                    cx,
+                    |view, cx| view.request_tail_in_terminal(cx),
+                )
+            }))
             .child(div().flex_1())
             .child(self.toggle(
                 "log-find",
