@@ -305,7 +305,7 @@ impl KubeconfigSources {
     /// the watcher could not register, in the loader's own shape. Empty before the first load.
     /// Updated on every reload, whether or not the catalog changed.
     /// Callers holding `Arc<dyn ClusterSourcePort>` use
-    /// [`source_diagnostics`](ClusterSourcePort::source_diagnostics) instead, which maps these
+    /// [`source_diagnostics`](oxikube_ports::ClusterSourcePort::source_diagnostics) instead, which maps these
     /// to the port's `SourceDiagnostic`.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         self.inner.loader_diagnostics()
