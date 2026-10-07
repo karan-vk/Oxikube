@@ -128,7 +128,8 @@ pub fn build_client(config: Config, policy: ExecInteractivePolicy) -> OxiResult<
 /// runs once here (kube alone runs it three times while building) and again, bounded by
 /// `refresh_deadline`, whenever the token nears expiry. A plugin that returns a client
 /// certificate keeps kube's own path, where the certificate is fixed for the client's life
-/// (the plugin then runs four times per build: one probe of ours, three of kube's).
+/// (the plugin then runs four times per build: one probe of ours, three of kube's; tracked
+/// in #550).
 ///
 /// # Errors
 ///

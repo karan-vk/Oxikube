@@ -15,10 +15,15 @@
 //! * The refresh is never cancelled and never duplicated. A plugin run cannot be
 //!   cancelled (`std::process::Command::output` on a blocking thread), and dropping
 //!   kube's future would release the token mutex so the next request would start another
-//!   process. The unfinished future is handed to a detached task instead; while any such
-//!   task is alive new requests fail fast with [`RefreshStalled`] rather than queueing
-//!   behind the plugin. When the plugin finally returns, kube has cached the token and
-//!   the client recovers without a rebuild.
+//!   process. The unfinished future is handed to a detached task instead, which keeps the
+//!   token mutex until the plugin returns and kube has cached the token.
+//! * Only a refresh that passed the deadline marks the client stalled: while such a task is
+//!   alive new requests fail fast with [`RefreshStalled`] rather than queueing behind the
+//!   plugin, and the client recovers without a rebuild once the plugin returns. A caller
+//!   that merely cancels (a dropped LIST, a watch restart) while the refresh is still
+//!   inside the deadline does not: the next request queues on the detached refresh's
+//!   token mutex under its own deadline, so a healthy refresh is neither failed nor
+//!   rebuilt around.
 //! * Requests that already have a token pay one `Mutex` hop and one timer; sending the
 //!   request is not bounded, so streams and slow LISTs are unaffected.
 
@@ -170,6 +175,7 @@ impl Gate {
         let mut refresh = Refresh {
             future: Some(Box::pin(authorize.call(request))),
             stalled: self.stalled.clone(),
+            timed_out: false,
         };
         let pending = refresh.future.as_mut().expect("just set");
         match tokio::time::timeout(self.deadline, pending).await {
@@ -178,17 +184,23 @@ impl Gate {
                 result.map(Response::into_body)
             }
             // `refresh` drops at the end of this arm and takes the future with it.
-            Err(_) => Err(RefreshStalled::TimedOut(self.deadline).into()),
+            Err(_) => {
+                refresh.timed_out = true;
+                Err(RefreshStalled::TimedOut(self.deadline).into())
+            }
         }
     }
 }
 
 /// An unfinished credential refresh. Dropping it before it completes (the deadline passed,
 /// or the caller went away) lets the future run to the end in a detached task, so the
-/// refresh finishes once and the token mutex is not released early.
+/// refresh finishes once and the token mutex is not released early. Only a refresh that
+/// passed the deadline (`timed_out`) counts as stalled; a cancelled one still inside the
+/// deadline is detached without failing later requests fast.
 struct Refresh {
     future: Option<Pending>,
     stalled: Arc<AtomicUsize>,
+    timed_out: bool,
 }
 
 impl Drop for Refresh {
@@ -200,12 +212,16 @@ impl Drop for Refresh {
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
             return;
         };
-        self.stalled.fetch_add(1, Ordering::AcqRel);
-        let stalled = self.stalled.clone();
+        let stalled = self.timed_out.then(|| {
+            self.stalled.fetch_add(1, Ordering::AcqRel);
+            self.stalled.clone()
+        });
         runtime.spawn(async move {
             // The outcome is not wanted; running it updates kube's cached token.
             let _ = future.await;
-            stalled.fetch_sub(1, Ordering::AcqRel);
+            if let Some(stalled) = stalled {
+                stalled.fetch_sub(1, Ordering::AcqRel);
+            }
         });
     }
 }
@@ -223,5 +239,35 @@ mod tests {
                 .to_string()
                 .contains("still running")
         );
+    }
+
+    fn refresh(timed_out: bool, stalled: &Arc<AtomicUsize>) -> Refresh {
+        Refresh {
+            future: Some(Box::pin(std::future::pending())),
+            stalled: stalled.clone(),
+            timed_out,
+        }
+    }
+
+    #[test]
+    fn dropping_a_refresh_outside_a_runtime_is_harmless() {
+        // App shutdown: the runtime is gone, so there is nothing to detach to and the client
+        // must not be left marked stalled.
+        let stalled = Arc::new(AtomicUsize::new(0));
+        drop(refresh(true, &stalled));
+        drop(refresh(false, &stalled));
+        assert_eq!(stalled.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn only_a_refresh_past_the_deadline_marks_the_client_stalled() {
+        let stalled = Arc::new(AtomicUsize::new(0));
+        // Cancelled while still inside the deadline: detached, but later requests are not
+        // failed fast.
+        drop(refresh(false, &stalled));
+        assert_eq!(stalled.load(Ordering::Acquire), 0);
+        // Past the deadline: stalled until the detached future ends (this one never does).
+        drop(refresh(true, &stalled));
+        assert_eq!(stalled.load(Ordering::Acquire), 1);
     }
 }
