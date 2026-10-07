@@ -21,8 +21,22 @@
 //! 7. the log service (E08-S01, [`logs`]): the app's one `LogService`, with `logs.buffer_lines`
 //!    following the settings, and the window's log views (E08-S02): "View Logs" on a pod's row
 //!    (`pod::ViewLogs`) opens its log as a tab of the cluster tab.
+//!    The agent hooks (E08-S09, `AppState::agent_hooks`) are built here too: `@logs` in the context
+//!    registry, `k8s.get_logs` in the tool registry, and the queue the viewer's "Send to agent"
+//!    fills until the agent panel exists. "Tail in terminal (kubectl)" (E08-S08) is in the log
+//!    view's toolbar when kubectl is installed (`oxikube_logs_ui::follow_kubectl` looks it up off
+//!    the UI thread); it asks the window's `TerminalViews` for a kubectl tab.
 //! 8. the opener of terminal links (E09-S05): `terminal::OpenLink` validates a link off the UI
-//!    thread and this window opens it (browser or system opener).
+//!    thread and this window opens it (browser or system opener); and the terminal's own
+//!    commands (E09-S06, E09-S11): `terminal::Copy` / `Paste` / `SelectAll` / `Clear`, the scroll
+//!    commands and `terminal::Search*` are dispatched to the window's focused terminal;
+//! 9. the terminal tabs (E09-S07, [`terminal`]): the terminal services (local shells with the
+//!    cluster's environment), the terminal panel in every cluster tab's bottom dock, and the
+//!    window's `TerminalViews` behind `terminal::New` / `Split` / `Close`;
+//! 10. shells in pods (E09-S08): the app's one `ExecService`, "Shell" and "Attach" in a pod's
+//!     context menu, palette list, detail header and on `s` / `a`, and `pod::Shell` /
+//!     `pod::Attach` / `pod::Exec` on the bus (read-only blocked unless `exec_in_read_only`,
+//!     audited, never confirmed) opening a terminal in the cluster tab's bottom dock.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -34,6 +48,7 @@ mod describe;
 mod logs;
 mod resources;
 mod tabs;
+mod terminal;
 #[cfg(test)]
 mod tests;
 mod views;
@@ -53,7 +68,9 @@ use oxikube_resources_ui::table::ResourceTableDeps;
 use oxikube_resources_ui::{
     ResourceCommandSink, ResourceViews, ResourceViewsDeps, ResourceViewsSlot,
 };
-use oxikube_terminal::open_link::{LinkAction, LinkSink};
+use oxikube_terminal::input::TerminalInputSink;
+use oxikube_terminal::open_link::LinkSink;
+use oxikube_terminal::view::{TerminalViewSink, TerminalViews};
 use oxikube_workspace::cluster_tab::TabsDispatcher;
 use oxikube_workspace::window::MainView;
 use oxikube_workspace::{
@@ -84,10 +101,17 @@ pub struct Wiring {
     _open_kinds: Task<()>,
     /// Opens the links `terminal::OpenLink` validated. Lives as long as the window.
     _open_links: Task<()>,
+    /// Runs `terminal::Copy` / `terminal::Paste` on the focused terminal. Lives as long as the
+    /// window.
+    _terminal_input: Task<()>,
     /// Opens the resource tables and runs the table commands.
     _resource_views: Entity<ResourceViews>,
     /// Opens the log views and runs the log commands.
     _log_views: Entity<oxikube_logs_ui::LogViews>,
+    /// Keeps the answer to "is kubectl installed?" fresh (E08-S08).
+    _follow_kubectl: oxikube_logs_ui::KubectlFollow,
+    /// Opens, splits and closes the terminals.
+    _terminal_views: Entity<TerminalViews>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -114,6 +138,23 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
     let log_service = logs::install(&state, ports.clusters.clock.clone(), cx);
+    // What hosted agents read: `@logs` and `k8s.get_logs` (E08-S09), and the queue "Send to agent"
+    // fills.
+    let agent = logs::install_agent_hooks(&state, services.sessions.clone(), log_service.clone());
+
+    // Shells, attaches and commands in pod containers (E09-S08): one service per app, so the
+    // container chosen last in a pod is remembered across windows.
+    let exec_service = terminal::install_exec_service(&state, services.sessions.clone());
+
+    // Before any cluster tab opens: its layout restore rebuilds saved terminal tabs with these.
+    let terminal_services = terminal::install_services(
+        services.sessions.clone(),
+        ports.clusters.source.clone(),
+        exec_service.clone(),
+        dispatcher.clone(),
+        &workspace,
+        cx,
+    );
 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
@@ -151,6 +192,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (resources_sink, resources_rx) = ResourceCommandSink::channel();
     let (logs_sink, logs_rx) = oxikube_logs_ui::LogCommandSink::channel();
     let (links_sink, links_rx) = LinkSink::channel();
+    let (terminal_input_sink, terminal_input_rx) = TerminalInputSink::channel();
+    let (terminal_views_sink, terminal_views_rx) = TerminalViewSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -163,6 +206,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         resources: resources_sink,
         logs: logs_sink,
         links: links_sink,
+        terminal_input: terminal_input_sink,
+        terminal_views: terminal_views_sink.clone(),
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -185,12 +230,15 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                 columns: Arc::new(CoreColumns::new()),
                 state: ports.state.clone(),
                 dispatcher: dispatcher.clone(),
-                actions: Some(ResourceActions::with_registry(
-                    &bus,
-                    services.sessions.clone(),
-                    local_user(),
-                    &logs::row_actions(),
-                )),
+                actions: Some(
+                    ResourceActions::with_registry(
+                        &bus,
+                        services.sessions.clone(),
+                        local_user(),
+                        &logs::row_actions(),
+                    )
+                    .with_exec(exec_service),
+                ),
             },
             tabs: tabs.downgrade(),
             fs: ports.clusters.fs.clone(),
@@ -200,12 +248,30 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         cx,
     );
     resources_slot.set(&resource_views);
+    // Is kubectl installed? "Tail in terminal" (E08-S08) is offered only if it is; looked up off the
+    // UI thread now, on a settings change and every minute.
+    let kubectl = logs::kubectl(cx);
+    let follow_kubectl = oxikube_logs_ui::follow_kubectl(&kubectl, cx);
     let log_views = logs::start_views(
         log_service,
         services.sessions.clone(),
+        ports.clusters.fs.clone(),
+        agent.pending,
+        kubectl,
+        terminal_views_sink,
         dispatcher.clone(),
         tabs.downgrade(),
         logs_rx,
+        window,
+        cx,
+    );
+
+    let terminal_views = terminal::start_views(
+        terminal_services,
+        services.sessions.clone(),
+        tabs.downgrade(),
+        &workspace,
+        terminal_views_rx,
         window,
         cx,
     );
@@ -260,7 +326,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
 
     let open_views = open_views(views_rx, view_deps, &workspace, window, cx);
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
-    let open_links = open_links(links_rx, cx);
+    let open_links = terminal::open_links(links_rx, cx);
+    let terminal_input = terminal::terminal_input(terminal_input_rx, window, cx);
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -270,8 +337,11 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _open_views: open_views,
         _open_kinds: open_kinds,
         _open_links: open_links,
+        _terminal_input: terminal_input,
         _resource_views: resource_views,
         _log_views: log_views,
+        _follow_kubectl: follow_kubectl,
+        _terminal_views: terminal_views,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }
@@ -294,16 +364,6 @@ fn open_views(
             if opened.is_err() {
                 break;
             }
-        }
-    })
-}
-
-/// Runs each link `terminal::OpenLink` validated (the browser for a URL, the system's opener for a
-/// plain file, the file manager for anything else), on the UI thread.
-fn open_links(mut links: mpsc::UnboundedReceiver<LinkAction>, cx: &mut App) -> Task<()> {
-    cx.spawn(async move |cx| {
-        while let Some(link) = links.next().await {
-            cx.update(|cx| oxikube_terminal::open_link::open(&link, cx));
         }
     })
 }

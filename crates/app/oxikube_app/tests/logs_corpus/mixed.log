@@ -1,0 +1,15 @@
+=== booting payments v2.3.1 ===
+{"level":"info","ts":1696670400.5,"msg":"zap line after a banner","caller":"main.go:9"}
+{"level":"warning","msg":"logrus line with no time","animal":"walrus"}
+{"level":30,"time":1696670401000,"msg":"pino line","pid":1}
+{"level":50,"time":"2023-10-07T09:20:02.000Z","msg":"bunyan line","name":"api","v":0}
+{"level":"info","msg":"cut off mid-obj
+{"level":"info","msg":"text after the object"} and then some
+[{"level":"info","msg":"an array is not a record"}]
+42
+{}
+{"msg":"no level, no time","detail":{"nested":[1,2,{"deep":true}]}}
+{"level":"nonsense","msg":12345}
+java.lang.IllegalStateException: boom
+	at com.example.Main.run(Main.java:42)
+  {"level":"error","msg":"indented json still counts"}

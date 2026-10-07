@@ -29,6 +29,13 @@ impl LogTarget {
         }
     }
 
+    /// The target an aggregate session is listed by: `label` (`deployment/api`) stands where the
+    /// pod's name would. It names no single pod (a pod name never contains `/`), so it never
+    /// collides with the target of a pod's own session.
+    pub fn aggregate(namespace: impl Into<String>, label: impl Into<String>) -> Self {
+        Self::pod(namespace, label)
+    }
+
     /// The default container of the namespaced object `pod` refers to. `None` for a
     /// cluster-scoped reference, which names no pod.
     pub fn of(pod: &ResourceRef) -> Option<Self> {

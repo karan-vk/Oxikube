@@ -21,6 +21,11 @@ pub struct LogBuffer {
     first_seq: u64,
     /// Lines dropped from the front over the buffer's life.
     dropped: u64,
+    /// Lines the user cleared over the buffer's life (not counted in `dropped`).
+    cleared: u64,
+    /// What `dropped` was when the buffer was last cleared: lines dropped before it are gone on
+    /// purpose, so they are no longer a truncation of what the buffer holds.
+    dropped_at_clear: u64,
 }
 
 impl LogBuffer {
@@ -33,6 +38,8 @@ impl LogBuffer {
             capacity,
             first_seq: 0,
             dropped: 0,
+            cleared: 0,
+            dropped_at_clear: 0,
         }
     }
 
@@ -64,6 +71,19 @@ impl LogBuffer {
     /// Lines dropped from the front so far: the count behind the "truncated" marker.
     pub fn dropped(&self) -> u64 {
         self.dropped
+    }
+
+    /// Lines dropped from the front since the buffer was last cleared (all of them when it never
+    /// was): what is missing before the first retained line, as the viewer's "truncated" marker
+    /// counts it. Lines the user cleared are not part of it.
+    pub fn dropped_since_clear(&self) -> u64 {
+        self.dropped - self.dropped_at_clear
+    }
+
+    /// Lines the user cleared so far ([`clear`](Self::clear)); they were not dropped for space,
+    /// so they are not part of [`dropped`](Self::dropped) and do not make the buffer truncated.
+    pub fn cleared(&self) -> u64 {
+        self.cleared
     }
 
     /// Whether older lines were dropped (show the "truncated" marker above the first line).
@@ -122,6 +142,19 @@ impl LogBuffer {
         }
         self.trim();
         usize::try_from(self.dropped - before).unwrap_or(usize::MAX)
+    }
+
+    /// Empties the buffer at the user's request. Seqs are never reused: the next line gets
+    /// [`next_seq`](Self::next_seq) as before, and [`first_seq`](Self::first_seq) moves up to it.
+    /// Returns how many lines were cleared.
+    pub fn clear(&mut self) -> usize {
+        let cleared = self.lines.len();
+        self.lines.clear();
+        self.lines.shrink_to(1_024);
+        self.first_seq += cleared as u64;
+        self.cleared += cleared as u64;
+        self.dropped_at_clear = self.dropped;
+        cleared
     }
 
     /// Changes the capacity (at least one), dropping the oldest lines when it shrinks. Returns how

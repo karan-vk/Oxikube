@@ -78,6 +78,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceSelectAll { cluster, .. }
         | Command::TableFocusFilter { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
+        Command::TerminalNew { cluster } => cluster.as_ref(),
         Command::ResourceOpen { target }
         | Command::ResourceCopyName { target }
         | Command::ResourcePinDetail { target }
@@ -89,18 +90,41 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceViewYaml { target }
         | Command::ResourceDelete { target, .. }
         | Command::PodDelete { target, .. }
+        | Command::PodShell { target, .. }
+        | Command::PodAttach { target, .. }
         | Command::PodExec { target, .. }
         | Command::PodPortForward { target, .. }
         | Command::PodViewLogs { target, .. }
+        | Command::LogsClear { target }
+        | Command::LogsCopy { target }
+        | Command::LogsMark { target }
+        | Command::LogsSendToAgent { target }
+        | Command::LogsTailInTerminal { target }
+        | Command::LogsFollowReplacement { target }
+        | Command::LogsReconnect { target }
+        | Command::LogsSave { target, .. }
         | Command::LogsSetRange { target, .. }
         | Command::LogsSelectContainer { target, .. }
         | Command::LogsToggleAutoscroll { target }
         | Command::LogsToggleFullscreen { target }
         | Command::LogsTogglePrevious { target }
         | Command::LogsToggleTimestamps { target }
+        | Command::LogsToggleSource { target, .. }
         | Command::LogsToggleWrap { target }
+        | Command::LogsFind { target, .. }
+        | Command::LogsNextMatch { target }
+        | Command::LogsPreviousMatch { target }
+        | Command::LogsToggleCase { target }
+        | Command::LogsToggleInverse { target }
+        | Command::LogsToggleFilterMode { target }
+        | Command::LogsCloseSearch { target }
+        | Command::LogsToggleJsonMode { target }
+        | Command::LogsToggleLevel { target, .. }
+        | Command::LogsToggleLine { target, .. }
+        | Command::LogsCollapseLine { target }
         | Command::WorkloadScale { target, .. }
         | Command::WorkloadRestart { target }
+        | Command::WorkloadViewLogs { target, .. }
         | Command::NodeCordon { target }
         | Command::NodeUncordon { target }
         | Command::NodeDrain { target, .. } => Some(&target.cluster),
@@ -117,7 +141,23 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ViewZoomIn
         | Command::ViewZoomOut
         | Command::ViewZoomReset
-        | Command::TerminalOpenLink { .. } => None,
+        | Command::TerminalOpenLink { .. }
+        | Command::TerminalCopy
+        | Command::TerminalPaste
+        | Command::TerminalSplit
+        | Command::TerminalClose
+        | Command::TerminalReconnect
+        | Command::TerminalRestart
+        | Command::TerminalClear
+        | Command::TerminalScrollLineDown
+        | Command::TerminalScrollLineUp
+        | Command::TerminalScrollPageDown
+        | Command::TerminalScrollPageUp
+        | Command::TerminalSearch
+        | Command::TerminalSearchClose
+        | Command::TerminalSearchNext
+        | Command::TerminalSearchPrevious
+        | Command::TerminalSelectAll => None,
     }
 }
 

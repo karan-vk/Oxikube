@@ -47,6 +47,7 @@ fn actions_rig(
     state: &Arc<FakeStatePort>,
     clock: Arc<dyn ClockPort>,
     sink: &ResourceCommandSink,
+    exec: bool,
 ) -> ResourceActions {
     let mut registry = CommandRegistry::new();
     registry
@@ -66,6 +67,18 @@ fn actions_rig(
             |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
         )
         .unwrap();
+    if exec {
+        // The exec class (E09-S08): do-nothing handlers behind the real guard, so a test sees the
+        // read-only block and the audit record.
+        for id in [CommandId::POD_SHELL, CommandId::POD_ATTACH] {
+            registry
+                .register(
+                    *command::lookup(id).unwrap(),
+                    |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
+                )
+                .unwrap();
+        }
+    }
     let bus = CommandBus::new(
         registry,
         MutationGuard::new(sessions.clone(), state.clone(), clock),
@@ -87,7 +100,28 @@ fn actions_rig(
     for spec in crate::crds::crd_row_actions() {
         rows.register(spec).unwrap();
     }
-    ResourceActions::with_registry(&bus, sessions.clone(), "alice", &rows)
+    if exec {
+        for spec in crate::exec::exec_row_actions() {
+            rows.register(spec).unwrap();
+        }
+    }
+    let actions = ResourceActions::with_registry(&bus, sessions.clone(), "alice", &rows);
+    if exec {
+        actions.with_exec(Arc::new(oxikube_app::ExecService::new(sessions.clone())))
+    } else {
+        actions
+    }
+}
+
+/// Which row actions the fixture's tables get.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Rig {
+    /// None.
+    None,
+    /// Delete, the CRD actions and a do-nothing "Logs" on Pods.
+    Actions,
+    /// [`Rig::Actions`] and the exec class.
+    Exec,
 }
 
 /// The cluster of every test.
@@ -153,17 +187,24 @@ impl Fixture {
 
     /// [`Self::new`] over an existing state port (a "restarted app").
     pub(crate) fn with_state(cx: &mut TestAppContext, state: Arc<FakeStatePort>) -> Self {
-        Self::build(cx, state, false)
+        Self::build(cx, state, Rig::None)
     }
 
     /// [`Self::new`] with the row actions (E07-S08) over a real `CommandBus` and `MutationGuard`
     /// on the fakes: the real `resource::Delete` handler, the table commands, and a `pod::ViewLogs`
     /// whose handler does nothing (a per-kind action, for Pods only).
     pub(crate) fn with_actions(cx: &mut TestAppContext) -> Self {
-        Self::build(cx, Arc::new(FakeStatePort::new()), true)
+        Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Actions)
     }
 
-    fn build(cx: &mut TestAppContext, state: Arc<FakeStatePort>, with_actions: bool) -> Self {
+    /// [`Self::with_actions`] plus "Shell" and "Attach" on Pods (E09-S08): do-nothing `pod::Shell`
+    /// and `pod::Attach` handlers behind the real guard, and the `ExecService` that reads the pod
+    /// to choose a container.
+    pub(crate) fn with_exec(cx: &mut TestAppContext) -> Self {
+        Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Exec)
+    }
+
+    fn build(cx: &mut TestAppContext, state: Arc<FakeStatePort>, rig: Rig) -> Self {
         let entry = ClusterContext::new(
             cluster(),
             ContextName::new("kind"),
@@ -204,8 +245,15 @@ impl Fixture {
         let tabs = vcx.update(|window, cx| ClusterTabs::start(&workspace, tabs_deps, window, cx));
         let clock_port: Arc<dyn ClockPort> = clock.clone();
         // One object at a time: scripted responses then follow the selection's order.
-        let actions = with_actions.then(|| {
-            actions_rig(&sessions, &state, clock_port.clone(), &dispatcher.sink).with_concurrency(1)
+        let actions = (rig != Rig::None).then(|| {
+            actions_rig(
+                &sessions,
+                &state,
+                clock_port.clone(),
+                &dispatcher.sink,
+                rig == Rig::Exec,
+            )
+            .with_concurrency(1)
         });
         let deps = vcx.update(|_, cx| ResourceTableDeps {
             sessions: sessions.clone(),

@@ -46,7 +46,9 @@ anyhow.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_assets.workspace = true
+oxikube_keymap.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
+oxikube_workspace = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 
@@ -67,6 +69,11 @@ path = "examples/element_bench.rs"
 name = "terminal_preview"
 path = "examples/terminal_preview.rs"
 
+# Non-gating cost of the input mapping layer: `cargo run --release -p oxikube_terminal --example input_bench`.
+[[example]]
+name = "input_bench"
+path = "examples/input_bench.rs"
+
 # The backend -> grid -> GPUI bridge under `#[gpui::test]` (one binary, one module per area).
 [[test]]
 name = "state"
@@ -76,6 +83,26 @@ path = "tests/state/main.rs"
 [[test]]
 name = "element"
 path = "tests/element/main.rs"
+
+# The terminal tab (E09-S07): the item, docking, persistence and the terminal::* commands.
+[[test]]
+name = "view"
+path = "tests/view/main.rs"
+
+# A keypress must not allocate (counting global allocator; own binary).
+[[test]]
+name = "no_alloc"
+path = "tests/no_alloc.rs"
+
+# The mapped keystrokes against a real PTY (Unix; the Linux smoke test of E09-S06).
+[[test]]
+name = "pty_keys"
+path = "tests/pty_keys.rs"
+
+# 50 open/close cycles of a real PTY leave no task and no descriptor (Unix; E09-S12).
+[[test]]
+name = "pty_leak"
+path = "tests/pty_leak.rs"
 
 [features]
 default = []

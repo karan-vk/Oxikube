@@ -3,15 +3,20 @@
 //! per frame (per row, wrapped).
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use gpui::{
-    AnyElement, Context, FontWeight, Hsla, IntoElement, ParentElement as _, SharedString,
-    Styled as _, div,
+    AnyElement, Context, FontWeight, HighlightStyle, Hsla, IntoElement, ParentElement as _,
+    SharedString, Styled as _, StyledText, div,
 };
 use oxikube_app::logs::{LogEntry, LogState};
+use oxikube_domain::log::LogLevel;
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, Colors, u};
 
+use super::aggregate::gutter;
+use super::highlight::{LineMarks, Mark};
+use super::json::JsonColumns;
 use super::text::{Level, level_of, state_text, timestamp, truncated_marker};
 use super::window::Row;
 use super::{LogView, NOWRAP_CHARS};
@@ -19,9 +24,29 @@ use super::{LogView, NOWRAP_CHARS};
 /// What one row shows, read out of the buffer before any element is built.
 enum RowData {
     Line {
+        seq: u64,
+        /// The pod gutter of a multi-pod view: its text and palette slot.
+        prefix: Option<(SharedString, usize)>,
         ts: Option<SharedString>,
         text: SharedString,
         level: Level,
+        /// How the search marks the row, and the byte ranges of its matches to highlight.
+        marks: LineMarks,
+        /// Whether the user marked the line (`m`): the gutter bar.
+        marked: bool,
+        /// Whether the line is in the selection.
+        selected: bool,
+    },
+    /// A structured line in JSON mode: columns instead of text.
+    Json {
+        /// The pod gutter of a multi-pod view (see `Line`).
+        prefix: Option<(SharedString, usize)>,
+        seq: u64,
+        ts: Option<SharedString>,
+        record: Arc<JsonColumns>,
+        expanded: bool,
+        marked: bool,
+        selected: bool,
     },
     /// A line the buffer dropped since the last delta (drawn empty for that frame).
     Gone,
@@ -52,31 +77,128 @@ impl LogView {
         self.row_element(row, true, cx)
     }
 
-    /// The words row `index` shows (timestamp and text for a line), as drawn.
+    /// The words row `index` shows (timestamp and text for a line; for a structured line in JSON
+    /// mode its level, time, message and collapsed fields), as drawn.
     pub fn row_text(&self, index: usize) -> Option<String> {
         let row = self.window.row(index)?;
         let data = self.row_data(&[Some(row)]).into_iter().next()?;
         Some(match data {
             RowData::Line {
-                ts: Some(ts), text, ..
-            } => format!("{ts} {text}"),
-            RowData::Line { ts: None, text, .. } => text.to_string(),
+                prefix, ts, text, ..
+            } => {
+                let mut copied = String::new();
+                for part in prefix.map(|(prefix, _)| prefix).into_iter().chain(ts) {
+                    copied.push_str(&part);
+                    copied.push(' ');
+                }
+                copied.push_str(&text);
+                copied
+            }
+            RowData::Json {
+                prefix, ts, record, ..
+            } => {
+                let level = record.level.label().to_uppercase();
+                let parts = [
+                    prefix.as_ref().map_or("", |(prefix, _)| prefix.as_ref()),
+                    ts.as_deref().unwrap_or(""),
+                    &level,
+                    &record.time,
+                    &record.message,
+                    &record.summary,
+                ];
+                parts
+                    .into_iter()
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            }
             RowData::Gone => String::new(),
             RowData::Marker(words) | RowData::State(words, _) => words.to_string(),
         })
     }
 
+    /// The columns of row `index` when it is a structured line drawn in JSON mode.
+    pub fn row_columns(&self, index: usize) -> Option<Arc<JsonColumns>> {
+        let row = self.window.row(index)?;
+        match self.row_data(&[Some(row)]).into_iter().next()? {
+            RowData::Json { record, .. } => Some(record),
+            _ => None,
+        }
+    }
+
+    /// Lines parsed for drawing so far: the columns of the rows that were on screen, each once
+    /// (the cache serves the rest), never the whole buffer.
+    pub fn parsed_rows(&self) -> usize {
+        self.records.borrow().parsed()
+    }
+
+    /// The original text of the line at row `index`, exactly as the container wrote it (what a
+    /// copy takes, never the reconstructed columns).
+    pub fn raw_text(&self, index: usize) -> Option<Arc<str>> {
+        let Some(Row::Line(seq)) = self.window.row(index) else {
+            return None;
+        };
+        self.session
+            .as_ref()?
+            .read(|buffer, _| buffer.get_seq(seq).map(|entry| entry.text.clone()))
+    }
+
+    /// The rows' data with the search's marks on the lines, computed after the session's lock
+    /// was let go (a regex over the few rows on screen, not under the lock).
     fn row_data(&self, rows: &[Option<Row>]) -> Vec<RowData> {
+        let mut data = self.read_rows(rows);
+        for row in &mut data {
+            if let RowData::Line {
+                seq, text, marks, ..
+            } = row
+            {
+                *marks = self.line_marks(*seq, text);
+            }
+        }
+        data
+    }
+
+    fn read_rows(&self, rows: &[Option<Row>]) -> Vec<RowData> {
         let timestamps = self.options.timestamps;
         let wrap = self.options.wrap;
         let capacity = self.deps.service.buffer_lines();
         let state = self.window.state();
+        let json = self.options.json;
+        let expanded = self.expanded.as_ref().map(|e| e.seq);
+        let labels = self.aggregate.as_ref().map(|state| &state.labels);
         let line = |entry: Option<&LogEntry>| match entry {
-            Some(entry) => RowData::Line {
-                ts: timestamps.then(|| timestamp(entry).into()),
-                level: level_of(&entry.text),
-                text: line_text(entry, wrap),
-            },
+            Some(entry) => {
+                let prefix = labels
+                    .and_then(|labels| labels.prefix(&entry.pod, &entry.container))
+                    .map(|p| (SharedString::from(p.text.clone()), p.colour));
+                let ts = timestamps.then(|| SharedString::from(timestamp(entry)));
+                let record = (json && entry.level.is_some())
+                    .then(|| self.records.borrow_mut().row(entry.seq, &entry.text))
+                    .flatten();
+                let marked = self.marks.contains(entry.seq);
+                let selected = self.selection.contains(entry.seq);
+                match record {
+                    Some(record) => RowData::Json {
+                        prefix,
+                        seq: entry.seq,
+                        ts,
+                        record,
+                        expanded: expanded == Some(entry.seq),
+                        marked,
+                        selected,
+                    },
+                    None => RowData::Line {
+                        prefix,
+                        seq: entry.seq,
+                        ts,
+                        level: level_of(&entry.text),
+                        text: line_text(entry, wrap),
+                        marks: LineMarks::default(),
+                        marked,
+                        selected,
+                    },
+                }
+            }
             None => RowData::Gone,
         };
         let build = |row: &Option<Row>, entry: Option<&LogEntry>| match row {
@@ -121,12 +243,30 @@ impl LogView {
             base.h(self.row_height()).items_center().overflow_hidden()
         };
         match row {
-            RowData::Line { ts, text, level } => {
+            RowData::Line {
+                prefix,
+                seq,
+                ts,
+                text,
+                level,
+                marks,
+                marked,
+                selected,
+            } => {
+                let base = match marks.mark {
+                    Mark::None => base,
+                    Mark::Matched => base.bg(colors.element),
+                    Mark::Current => base.bg(colors.element_selected),
+                };
                 let text = div()
                     .flex_1()
                     .min_w_0()
                     .text_color(level_colour(level, &colors))
-                    .child(text);
+                    .child(highlighted(
+                        text,
+                        &marks.spans,
+                        colors.warning.opacity(0.45),
+                    ));
                 let text = if wrap {
                     text
                 } else {
@@ -139,7 +279,25 @@ impl LogView {
                         .text_color(colors.text_muted)
                         .child(ts)
                 });
-                base.children(ts).child(text).into_any_element()
+                self.row_chrome(base, seq, marked, selected, cx)
+                    .children(gutter(prefix, cx))
+                    .children(ts)
+                    .child(text)
+                    .into_any_element()
+            }
+            RowData::Json {
+                prefix,
+                seq,
+                ts,
+                record,
+                expanded,
+                marked,
+                selected,
+            } => {
+                let base = self
+                    .row_chrome(base, seq, marked, selected, cx)
+                    .children(gutter(prefix, cx));
+                self.json_row(base, seq, ts, &record, expanded, wrap, cx)
             }
             RowData::Gone => base.into_any_element(),
             RowData::Marker(words) => base
@@ -179,5 +337,29 @@ fn level_colour(level: Level, colors: &Colors) -> Hsla {
         Level::Warn => colors.warning,
         Level::Debug => colors.text_muted,
         Level::Plain => colors.text,
+    }
+}
+
+/// `text`, with the byte ranges `spans` highlighted in `colour`.
+fn highlighted(text: SharedString, spans: &[Range<usize>], colour: Hsla) -> AnyElement {
+    if spans.is_empty() {
+        return text.into_any_element();
+    }
+    let style = HighlightStyle {
+        background_color: Some(colour),
+        ..HighlightStyle::default()
+    };
+    StyledText::new(text)
+        .with_highlights(spans.iter().map(|span| (span.clone(), style)))
+        .into_any_element()
+}
+
+/// The accent of a level: its chip, and the title of the expanded pane.
+pub(super) fn level_accent(level: LogLevel, colors: &Colors) -> Hsla {
+    match level {
+        LogLevel::Fatal | LogLevel::Error => colors.error,
+        LogLevel::Warn => colors.warning,
+        LogLevel::Info => colors.info,
+        LogLevel::Debug | LogLevel::Trace | LogLevel::Unknown => colors.text_muted,
     }
 }

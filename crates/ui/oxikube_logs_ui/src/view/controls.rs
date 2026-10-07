@@ -8,7 +8,7 @@
 
 use gpui::Context;
 use oxikube_domain::command::Command;
-use oxikube_domain::log::LogRange;
+use oxikube_domain::log::{LevelChip, LogRange, LogSaveScope};
 use oxikube_workspace::ItemEvent;
 
 use super::LogView;
@@ -51,7 +51,9 @@ impl LogView {
         if before.container != self.options.container || before.previous != self.options.previous {
             cx.emit(ItemEvent::UpdateTab);
         }
-        if before.log_options() != self.options.log_options() {
+        if before.log_options() != self.options.log_options()
+            || before.selector != self.options.selector
+        {
             self.open_stream(cx);
         }
     }
@@ -63,7 +65,15 @@ impl LogView {
 
     /// Shows the timestamps, or not.
     pub fn toggle_timestamps(&mut self, cx: &mut Context<Self>) {
-        self.options.timestamps = !self.options.timestamps;
+        self.set_timestamps(!self.options.timestamps, cx);
+    }
+
+    /// Shows the timestamps, or not (what the key and the `logs.timestamps` setting both do).
+    pub(crate) fn set_timestamps(&mut self, show: bool, cx: &mut Context<Self>) {
+        if self.options.timestamps == show {
+            return;
+        }
+        self.options.timestamps = show;
         if self.options.wrap {
             // The rows' heights may change with their text.
             self.list.remeasure();
@@ -99,7 +109,7 @@ impl LogView {
             .is_some_and(|ws| ws.read(cx).is_zoomed(cx))
     }
 
-    fn send(&self, command: Command, cx: &mut Context<Self>) {
+    pub(crate) fn send(&self, command: Command, cx: &mut Context<Self>) {
         self.deps.dispatcher.dispatch(command, cx);
     }
 
@@ -114,6 +124,26 @@ impl LogView {
         let target = self.target.clone();
         let container = container.to_owned();
         self.send(Command::LogsSelectContainer { target, container }, cx);
+    }
+
+    /// Asks to switch `container` of `pod` (the whole pod when `None`) off or on in a multi-pod
+    /// view (`logs::ToggleSource`).
+    pub fn request_toggle_source(
+        &mut self,
+        pod: &str,
+        container: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let target = self.target.clone();
+        let (pod, container) = (pod.to_owned(), container.map(str::to_owned));
+        self.send(
+            Command::LogsToggleSource {
+                target,
+                pod,
+                container,
+            },
+            cx,
+        );
     }
 
     /// Asks to toggle the previous instance (`logs::TogglePrevious`).
@@ -146,6 +176,30 @@ impl LogView {
         self.send(Command::LogsToggleFullscreen { target }, cx);
     }
 
+    /// Asks to toggle JSON mode (`logs::ToggleJsonMode`).
+    pub fn request_json_mode(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsToggleJsonMode { target }, cx);
+    }
+
+    /// Asks to turn a level chip on or off (`logs::ToggleLevel`).
+    pub fn request_level(&mut self, level: LevelChip, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsToggleLevel { target, level }, cx);
+    }
+
+    /// Asks to expand the structured line `seq`, or close its pane (`logs::ToggleLine`).
+    pub fn request_toggle_line(&mut self, seq: u64, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsToggleLine { target, seq }, cx);
+    }
+
+    /// Asks to close the expanded-line pane (`logs::CollapseLine`).
+    pub fn request_collapse(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsCollapseLine { target }, cx);
+    }
+
     /// The pill: follows again, as `logs::ToggleAutoscroll` does while autoscroll is off.
     pub fn jump_to_newest(&mut self, cx: &mut Context<Self>) {
         if !self.follow.is_on() {
@@ -153,13 +207,33 @@ impl LogView {
         }
     }
 
-    /// `m`: marks are E08-S06's. The key is bound so it stays reserved.
-    pub(crate) fn mark(&mut self, _: &mut Context<Self>) {
-        tracing::debug!(target = %self.target, "log marks arrive with E08-S06");
+    /// Asks to mark or unmark the focused line (`logs::Mark`).
+    pub fn request_mark(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsMark { target }, cx);
     }
 
-    /// `c`: copying lines is E08-S06's. The key is bound so it stays reserved.
-    pub(crate) fn copy(&mut self, _: &mut Context<Self>) {
-        tracing::debug!(target = %self.target, "copying log lines arrives with E08-S06");
+    /// Asks to copy the selection, else the lines on screen (`logs::Copy`).
+    pub fn request_copy(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsCopy { target }, cx);
+    }
+
+    /// Asks to send the selection, else the lines on screen, to the agent (`logs::SendToAgent`).
+    pub fn request_send_to_agent(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsSendToAgent { target }, cx);
+    }
+
+    /// Asks to clear the buffer and the view (`logs::Clear`).
+    pub fn request_clear(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsClear { target }, cx);
+    }
+
+    /// Asks to save the lines of `scope` to a file (`logs::Save`).
+    pub fn request_save(&mut self, scope: LogSaveScope, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsSave { target, scope }, cx);
     }
 }

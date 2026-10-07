@@ -51,16 +51,61 @@ impl CommandId {
     pub const KUBECONFIG_RELOAD: CommandId = CommandId::new("kubeconfig::Reload");
     /// `kubeconfig::RemoveSource`: remove a kubeconfig source.
     pub const KUBECONFIG_REMOVE_SOURCE: CommandId = CommandId::new("kubeconfig::RemoveSource");
+    /// `logs::CloseSearch`: close a log view's search bar and clear its highlights and filter.
+    pub const LOGS_CLOSE_SEARCH: CommandId = CommandId::new("logs::CloseSearch");
+    /// `logs::Find`: open a log view's search bar (optionally with a pattern).
+    pub const LOGS_FIND: CommandId = CommandId::new("logs::Find");
+    /// `logs::NextMatch`: go to the next match of a log view's search (wraps around).
+    pub const LOGS_NEXT_MATCH: CommandId = CommandId::new("logs::NextMatch");
+    /// `logs::PreviousMatch`: go to the previous match of a log view's search (wraps around).
+    pub const LOGS_PREVIOUS_MATCH: CommandId = CommandId::new("logs::PreviousMatch");
+    /// `logs::ToggleCase`: make a log view's search case-sensitive, or not.
+    pub const LOGS_TOGGLE_CASE: CommandId = CommandId::new("logs::ToggleCase");
+    /// `logs::ToggleFilterMode`: hide the lines that do not match a log view's search, or show all
+    /// of them with the matches highlighted.
+    pub const LOGS_TOGGLE_FILTER_MODE: CommandId = CommandId::new("logs::ToggleFilterMode");
+    /// `logs::ToggleInverse`: match the lines that do not contain a log view's pattern, or those
+    /// that do.
+    pub const LOGS_TOGGLE_INVERSE: CommandId = CommandId::new("logs::ToggleInverse");
+    /// `logs::Clear`: empty a log view's local buffer (the cluster's logs are untouched).
+    pub const LOGS_CLEAR: CommandId = CommandId::new("logs::Clear");
+    /// `logs::Copy`: copy the selected lines of a log view (else what is on screen).
+    pub const LOGS_COPY: CommandId = CommandId::new("logs::Copy");
+    /// `logs::Mark`: mark or unmark the focused line of a log view.
+    pub const LOGS_MARK: CommandId = CommandId::new("logs::Mark");
+    /// `logs::SendToAgent`: queue the selected lines of a log view as context for the hosted agent.
+    pub const LOGS_SEND_TO_AGENT: CommandId = CommandId::new("logs::SendToAgent");
+    /// `logs::TailInTerminal`: run `kubectl logs -f` for a log view's pod or workload in a terminal
+    /// tab of the cluster (the power-user fallback; needs kubectl on this machine).
+    pub const LOGS_TAIL_IN_TERMINAL: CommandId = CommandId::new("logs::TailInTerminal");
+    /// `logs::Save`: save a log view's lines to a file the user picks.
+    pub const LOGS_SAVE: CommandId = CommandId::new("logs::Save");
+    /// `logs::FollowReplacement`: switch a log view whose pod was replaced (a rollout, a
+    /// StatefulSet's recreated pod) to the pod that took over.
+    pub const LOGS_FOLLOW_REPLACEMENT: CommandId = CommandId::new("logs::FollowReplacement");
+    /// `logs::Reconnect`: open a log view's stream again after it failed or ended, keeping the
+    /// lines it holds.
+    pub const LOGS_RECONNECT: CommandId = CommandId::new("logs::Reconnect");
     /// `logs::SelectContainer`: show another container of a log view's pod (reopens the stream).
     pub const LOGS_SELECT_CONTAINER: CommandId = CommandId::new("logs::SelectContainer");
     /// `logs::SetRange`: read the tail, the head or the last minutes of a log view's log.
     pub const LOGS_SET_RANGE: CommandId = CommandId::new("logs::SetRange");
     /// `logs::ToggleAutoscroll`: follow the newest line of a log view, or stop following.
     pub const LOGS_TOGGLE_AUTOSCROLL: CommandId = CommandId::new("logs::ToggleAutoscroll");
+    /// `logs::ToggleJsonMode`: show structured lines as columns, or every line as raw text.
+    pub const LOGS_TOGGLE_JSON_MODE: CommandId = CommandId::new("logs::ToggleJsonMode");
+    /// `logs::ToggleLevel`: show or hide the lines of one level in a log view.
+    pub const LOGS_TOGGLE_LEVEL: CommandId = CommandId::new("logs::ToggleLevel");
+    /// `logs::ToggleLine`: expand a structured line into its pretty-printed pane, or close it.
+    pub const LOGS_TOGGLE_LINE: CommandId = CommandId::new("logs::ToggleLine");
+    /// `logs::CollapseLine`: close the expanded-line pane of a log view.
+    pub const LOGS_COLLAPSE_LINE: CommandId = CommandId::new("logs::CollapseLine");
     /// `logs::ToggleFullscreen`: let a log view fill its cluster tab, or give the space back.
     pub const LOGS_TOGGLE_FULLSCREEN: CommandId = CommandId::new("logs::ToggleFullscreen");
     /// `logs::TogglePrevious`: read the previous (terminated) container instance, or the current.
     pub const LOGS_TOGGLE_PREVIOUS: CommandId = CommandId::new("logs::TogglePrevious");
+    /// `logs::ToggleSource`: show or hide one pod's (or container's) lines in a multi-pod log view.
+    pub const LOGS_TOGGLE_SOURCE: CommandId = CommandId::new("logs::ToggleSource");
     /// `logs::ToggleTimestamps`: show or hide the server timestamps of a log view.
     pub const LOGS_TOGGLE_TIMESTAMPS: CommandId = CommandId::new("logs::ToggleTimestamps");
     /// `logs::ToggleWrap`: wrap a log view's long lines, or let them run off the edge.
@@ -77,12 +122,16 @@ impl CommandId {
     pub const NODE_UNCORDON: CommandId = CommandId::new("node::Uncordon");
     /// `palette::Toggle`: show or hide the command palette.
     pub const PALETTE_TOGGLE: CommandId = CommandId::new("palette::Toggle");
+    /// `pod::Attach`: attach to a container's main process.
+    pub const POD_ATTACH: CommandId = CommandId::new("pod::Attach");
     /// `pod::Delete`: delete one pod.
     pub const POD_DELETE: CommandId = CommandId::new("pod::Delete");
     /// `pod::Exec`: run a command (or shell) in a container.
     pub const POD_EXEC: CommandId = CommandId::new("pod::Exec");
     /// `pod::PortForward`: forward a local port to a pod port.
     pub const POD_PORT_FORWARD: CommandId = CommandId::new("pod::PortForward");
+    /// `pod::Shell`: open an interactive shell in a container (`bash`, else `sh`).
+    pub const POD_SHELL: CommandId = CommandId::new("pod::Shell");
     /// `pod::ViewLogs`: open a pod's logs.
     pub const POD_VIEW_LOGS: CommandId = CommandId::new("pod::ViewLogs");
     /// `resource::Apply`: apply a manifest.
@@ -116,8 +165,43 @@ impl CommandId {
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
+    /// `terminal::Close`: close the focused terminal, ending its process.
+    pub const TERMINAL_CLOSE: CommandId = CommandId::new("terminal::Close");
+    /// `terminal::Clear`: clear the focused terminal's scrollback and the screen above the cursor.
+    pub const TERMINAL_CLEAR: CommandId = CommandId::new("terminal::Clear");
+    /// `terminal::Copy`: copy the focused terminal's selection to the clipboard.
+    pub const TERMINAL_COPY: CommandId = CommandId::new("terminal::Copy");
+    /// `terminal::New`: open a local shell in a new terminal of the (displayed) cluster's tab.
+    pub const TERMINAL_NEW: CommandId = CommandId::new("terminal::New");
     /// `terminal::OpenLink`: open a URL or local path a terminal shows.
     pub const TERMINAL_OPEN_LINK: CommandId = CommandId::new("terminal::OpenLink");
+    /// `terminal::Paste`: paste the clipboard into the focused terminal.
+    pub const TERMINAL_PASTE: CommandId = CommandId::new("terminal::Paste");
+    /// `terminal::Reconnect`: open the focused pod terminal's session again after the connection
+    /// dropped (a new session in the same container).
+    pub const TERMINAL_RECONNECT: CommandId = CommandId::new("terminal::Reconnect");
+    /// `terminal::Restart`: start a new shell in the focused local terminal after its shell exited.
+    pub const TERMINAL_RESTART: CommandId = CommandId::new("terminal::Restart");
+    /// `terminal::ScrollLineDown`: scroll the focused terminal one line towards the live screen.
+    pub const TERMINAL_SCROLL_LINE_DOWN: CommandId = CommandId::new("terminal::ScrollLineDown");
+    /// `terminal::ScrollLineUp`: scroll the focused terminal one line into its history.
+    pub const TERMINAL_SCROLL_LINE_UP: CommandId = CommandId::new("terminal::ScrollLineUp");
+    /// `terminal::ScrollPageDown`: scroll the focused terminal one screen towards the live screen.
+    pub const TERMINAL_SCROLL_PAGE_DOWN: CommandId = CommandId::new("terminal::ScrollPageDown");
+    /// `terminal::ScrollPageUp`: scroll the focused terminal one screen into its history.
+    pub const TERMINAL_SCROLL_PAGE_UP: CommandId = CommandId::new("terminal::ScrollPageUp");
+    /// `terminal::Search`: open the focused terminal's search bar.
+    pub const TERMINAL_SEARCH: CommandId = CommandId::new("terminal::Search");
+    /// `terminal::SearchClose`: close the focused terminal's search bar.
+    pub const TERMINAL_SEARCH_CLOSE: CommandId = CommandId::new("terminal::SearchClose");
+    /// `terminal::SearchNext`: jump to the next match of the focused terminal's search.
+    pub const TERMINAL_SEARCH_NEXT: CommandId = CommandId::new("terminal::SearchNext");
+    /// `terminal::SearchPrevious`: jump to the previous match of the focused terminal's search.
+    pub const TERMINAL_SEARCH_PREVIOUS: CommandId = CommandId::new("terminal::SearchPrevious");
+    /// `terminal::SelectAll`: select the focused terminal's screen and scrollback.
+    pub const TERMINAL_SELECT_ALL: CommandId = CommandId::new("terminal::SelectAll");
+    /// `terminal::Split`: open a new terminal in a new pane beside the active one.
+    pub const TERMINAL_SPLIT: CommandId = CommandId::new("terminal::Split");
     /// `view::Open`: open a registered view by id.
     pub const VIEW_OPEN: CommandId = CommandId::new("view::Open");
     /// `view::ZoomIn`: make the UI one zoom step larger.
@@ -132,6 +216,8 @@ impl CommandId {
     pub const WORKLOAD_RESTART: CommandId = CommandId::new("workload::Restart");
     /// `workload::Scale`: set a workload's replica count.
     pub const WORKLOAD_SCALE: CommandId = CommandId::new("workload::Scale");
+    /// `workload::ViewLogs`: open the merged logs of a workload's or a Service's pods.
+    pub const WORKLOAD_VIEW_LOGS: CommandId = CommandId::new("workload::ViewLogs");
 }
 
 const NONE: Capabilities = Capabilities::empty();
@@ -264,13 +350,90 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
-    // The log view's commands (E08-S02): they change what a view shows or which stream it
-    // reads, never the cluster. Reopening a stream reads logs, so those need the logs capability.
+    // The log view's commands (E08-S02, search E08-S03): they change what a view shows or which
+    // stream it reads, never the cluster. Reopening a stream reads logs, so those need the logs
+    // capability. Kept sorted by id (the table is binary-searched). The local actions on what a
+    // view holds (E08-S06) clear the buffer, never the cluster's logs; a save writes only the
+    // file the user picks, so none of them is a mutation. Reconnecting and following a
+    // replacement pod (E08-S07) read logs (and the pod's owner), nothing else.
+    CommandMeta::read(
+        CommandId::LOGS_CLEAR,
+        "Logs: Clear",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_CLOSE_SEARCH,
+        "Logs: Close Search",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_COLLAPSE_LINE,
+        "Logs: Collapse Line",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_COPY,
+        "Logs: Copy Lines",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_FIND,
+        "Logs: Find",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_FOLLOW_REPLACEMENT,
+        "Logs: Follow Replacement Pod",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_MARK,
+        "Logs: Mark Line",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_NEXT_MATCH,
+        "Logs: Next Match",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_PREVIOUS_MATCH,
+        "Logs: Previous Match",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_RECONNECT,
+        "Logs: Reconnect",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_SAVE,
+        "Logs: Save to File",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
     CommandMeta::read(
         CommandId::LOGS_SELECT_CONTAINER,
         "Logs: Select Container",
         CommandScope::Selection,
         Capabilities::LOGS,
+    ),
+    // Queues local context for the agent panel; the lines are read from the view's own buffer.
+    CommandMeta::read(
+        CommandId::LOGS_SEND_TO_AGENT,
+        "Logs: Send to Agent",
+        CommandScope::Selection,
+        NONE,
     ),
     CommandMeta::read(
         CommandId::LOGS_SET_RANGE,
@@ -278,9 +441,31 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         Capabilities::LOGS,
     ),
+    // Starts kubectl on this machine in a terminal tab, with the cluster's kubeconfig in its
+    // environment; `kubectl logs` only reads. It is an interactive action: it has a tool stub like
+    // every command, but no agent runs processes on the user's machine until the agent phase
+    // decides how (the guard's initiator rules are the place for that).
+    CommandMeta::read(
+        CommandId::LOGS_TAIL_IN_TERMINAL,
+        "Logs: Tail in Terminal (kubectl)",
+        CommandScope::Selection,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_AUTOSCROLL,
         "Logs: Toggle Autoscroll",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_CASE,
+        "Logs: Toggle Case Sensitivity",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_FILTER_MODE,
+        "Logs: Toggle Filter Mode",
         CommandScope::Selection,
         NONE,
     ),
@@ -291,10 +476,40 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     CommandMeta::read(
+        CommandId::LOGS_TOGGLE_INVERSE,
+        "Logs: Toggle Inverse Match",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_JSON_MODE,
+        "Logs: Toggle JSON Mode",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_LEVEL,
+        "Logs: Toggle Level",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_LINE,
+        "Logs: Expand or Collapse Line",
+        CommandScope::Selection,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::LOGS_TOGGLE_PREVIOUS,
         "Logs: Toggle Previous Container",
         CommandScope::Selection,
         Capabilities::LOGS,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_TOGGLE_SOURCE,
+        "Logs: Toggle Source",
+        CommandScope::Selection,
+        NONE,
     ),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_TIMESTAMPS,
@@ -347,6 +562,9 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // The exec class (`CommandMeta::exec`): not mutations, no confirmation, blocked on a
+    // read-only cluster unless `exec_in_read_only` allows it, audited on every open.
+    CommandMeta::exec(CommandId::POD_ATTACH, "Attach", CommandScope::Selection),
     CommandMeta::mutation(
         CommandId::POD_DELETE,
         "Delete Pod",
@@ -354,12 +572,10 @@ pub static COMMANDS: &[CommandMeta] = &[
         Risk::Medium,
         NONE,
     ),
-    CommandMeta::mutation(
+    CommandMeta::exec(
         CommandId::POD_EXEC,
         "Exec into Container",
         CommandScope::Selection,
-        Risk::Medium,
-        Capabilities::EXEC,
     ),
     CommandMeta::read(
         CommandId::POD_PORT_FORWARD,
@@ -367,6 +583,7 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         Capabilities::PORTFORWARD,
     ),
+    CommandMeta::exec(CommandId::POD_SHELL, "Shell", CommandScope::Selection),
     CommandMeta::read(
         CommandId::POD_VIEW_LOGS,
         "View Logs",
@@ -475,10 +692,132 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::ResourceKind,
         NONE,
     ),
+    // Drops the scrollback this machine holds for the user's own session; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_CLEAR,
+        "Clear Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Ends a shell on this machine the user opened; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_CLOSE,
+        "Close Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Copies text the user sees to the clipboard; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_COPY,
+        "Copy Terminal Selection",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Starts the user's own shell on this machine (with the cluster's kubeconfig in its
+    // environment); the cluster is only touched by what the user then types, outside the guard.
+    CommandMeta::read(
+        CommandId::TERMINAL_NEW,
+        "New Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
     // Opens the user's browser or file opener; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_OPEN_LINK,
         "Open Terminal Link",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Types the clipboard into the user's own session (a multi-line paste asks first); the
+    // cluster is only touched by what the user's shell then does, outside the guard's reach.
+    CommandMeta::read(
+        CommandId::TERMINAL_PASTE,
+        "Paste into Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Opens the pod session again through the exec service, which re-checks read-only mode and
+    // the exec capability itself; the command only asks the terminal to start over.
+    CommandMeta::read(
+        CommandId::TERMINAL_RECONNECT,
+        "Reconnect Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Starts the user's own shell on this machine again; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_RESTART,
+        "Restart Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Moves the view of a terminal's own history; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SCROLL_LINE_DOWN,
+        "Scroll Terminal Line Down",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Moves the view of a terminal's own history; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SCROLL_LINE_UP,
+        "Scroll Terminal Line Up",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Moves the view of a terminal's own history; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SCROLL_PAGE_DOWN,
+        "Scroll Terminal Page Down",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Moves the view of a terminal's own history; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SCROLL_PAGE_UP,
+        "Scroll Terminal Page Up",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SEARCH,
+        "Search Terminal Scrollback",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SEARCH_CLOSE,
+        "Close Terminal Search",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SEARCH_NEXT,
+        "Next Terminal Search Match",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SEARCH_PREVIOUS,
+        "Previous Terminal Search Match",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Selects text a terminal shows; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SELECT_ALL,
+        "Select All in Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Starts another shell on this machine beside the active pane; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SPLIT,
+        "Split Terminal",
         CommandScope::Global,
         NONE,
     ),
@@ -525,6 +864,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         Risk::Medium,
         NONE,
+    ),
+    CommandMeta::read(
+        CommandId::WORKLOAD_VIEW_LOGS,
+        "View Logs",
+        CommandScope::Selection,
+        Capabilities::LOGS,
     ),
 ];
 
@@ -674,10 +1019,37 @@ mod tests {
         assert_eq!(get(CommandId::NODE_DRAIN).confirm, ConfirmTier::TypeName);
         assert_eq!(get(CommandId::WORKLOAD_SCALE).confirm, ConfirmTier::Simple);
         assert_eq!(get(CommandId::POD_VIEW_LOGS).needs, Capabilities::LOGS);
-        assert_eq!(
-            get(CommandId::POD_EXEC).needs,
-            Capabilities::EXEC | Capabilities::MUTATE
-        );
         assert!(!get(CommandId::POD_PORT_FORWARD).mutating);
+    }
+
+    #[test]
+    fn exec_commands_are_their_own_class() {
+        let exec: Vec<_> = COMMANDS.iter().filter(|m| m.exec).map(|m| m.id).collect();
+        assert_eq!(
+            exec,
+            [
+                CommandId::POD_ATTACH,
+                CommandId::POD_EXEC,
+                CommandId::POD_SHELL
+            ],
+            "the exec class is a reviewed allow-list"
+        );
+        for meta in COMMANDS.iter().filter(|m| m.exec) {
+            // Not a mutation (no object changes, no confirmation) and not privileged (an agent
+            // may ask; the tool stub is hidden from agents by default instead).
+            assert!(!meta.mutating && !meta.privileged, "{}", meta.id);
+            assert_eq!(meta.confirm, ConfirmTier::None, "{}", meta.id);
+            assert_eq!(meta.risk, None, "{}", meta.id);
+            assert_eq!(meta.needs, Capabilities::EXEC, "{}", meta.id);
+            assert_eq!(meta.tool_risk(), Some(Risk::High), "{}", meta.id);
+            assert!(meta.id.tool_name().starts_with("k8s.pod_"), "{}", meta.id);
+        }
+        assert_eq!(CommandId::POD_EXEC.tool_name(), "k8s.pod_exec");
+        assert!(
+            COMMANDS
+                .iter()
+                .filter(|m| !m.exec)
+                .all(|m| m.tool_risk() == m.risk || m.id == CommandId::RESOURCE_DELETE)
+        );
     }
 }

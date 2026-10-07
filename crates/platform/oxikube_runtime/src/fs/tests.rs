@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
-use oxikube_domain::ErrorKind;
+use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 use oxikube_ports::{EntryKind, FsPort};
 use tempfile::TempDir;
 
@@ -111,4 +111,72 @@ async fn watch_reports_a_created_file_and_stops_when_dropped() {
         assert!(Instant::now() < deadline, "no event within 3 s");
     }
     drop(events);
+}
+
+fn chunks(parts: Vec<OxiResult<Vec<u8>>>) -> oxikube_ports::FileChunks {
+    futures::stream::iter(parts).boxed()
+}
+
+#[tokio::test]
+async fn write_stream_writes_the_chunks_as_one_file_and_replaces_atomically() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("out").join("log.txt");
+    StdFs.write(&path, b"old").await.unwrap();
+    let parts = vec![Ok(b"one\n".to_vec()), Ok(Vec::new()), Ok(b"two\n".to_vec())];
+    StdFs.write_stream(&path, chunks(parts)).await.unwrap();
+    assert_eq!(StdFs.read(&path).await.unwrap(), b"one\ntwo\n");
+    let names: Vec<_> = StdFs
+        .list(path.parent().unwrap())
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|e| e.path.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["log.txt"], "no temp file is left behind");
+}
+
+#[tokio::test]
+async fn a_failing_chunk_leaves_the_old_file_and_no_temp_file() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("log.txt");
+    StdFs.write(&path, b"old").await.unwrap();
+    let parts = vec![
+        Ok(b"half".to_vec()),
+        Err(OxiError::internal("the source failed")),
+        Ok(b"never".to_vec()),
+    ];
+    let error = StdFs.write_stream(&path, chunks(parts)).await.unwrap_err();
+    assert!(error.message().contains("the source failed"));
+    assert_eq!(StdFs.read(&path).await.unwrap(), b"old");
+    assert_eq!(StdFs.list(dir.path()).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_dropped_write_stream_stops_and_cleans_up() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("log.txt");
+    // A stream that never ends: only dropping the call can stop the write.
+    let endless = futures::stream::unfold(0u64, |n| async move {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        Some((Ok(vec![b'x'; 16]), n + 1))
+    })
+    .boxed();
+    let write = tokio::spawn({
+        let path = path.clone();
+        async move { StdFs.write_stream(&path, endless).await }
+    });
+    tokio::time::sleep(Duration::from_millis(60)).await;
+    write.abort();
+    let _ = write.await;
+    // The blocking thread sees the flag at its next chunk and removes the temp file.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let entries = StdFs.list(dir.path()).await.unwrap();
+        if entries.is_empty() {
+            break;
+        }
+        assert!(Instant::now() < deadline, "the temp file was not removed");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(!path.exists(), "nothing was published");
 }

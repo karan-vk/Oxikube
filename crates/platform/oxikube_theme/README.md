@@ -32,7 +32,8 @@ cx.observe_global::<oxikube_theme::ActiveTheme>(|cx| { /* theme changed */ }).de
   `oxikube_settings`). A watcher thread rescans on change, off the UI thread; the registry swaps
   in the finished scan, so deleted files disappear. A user theme with a bundled theme's name wins.
 - **`oxikube` block**: optional `"oxikube": { "status.running": "#..", "status.pending", "status.failed",
-  "status.succeeded", "status.terminating", "status.unknown", "cluster.tab.1" .. "cluster.tab.8" }`
+  "status.succeeded", "status.terminating", "status.unknown", "cluster.tab.1" .. "cluster.tab.8",
+  "log.source.1" .. "log.source.10" }`
   next to a theme's `style`. Anything unset is derived from the theme's own status colours and
   player colours.
 - **Extending the mapping**: one line in `src/import/table.rs` (and a field in `src/tokens/colors.rs`

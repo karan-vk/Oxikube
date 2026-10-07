@@ -142,6 +142,17 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "kubeconfig::RemoveSource" => Command::KubeconfigRemoveSource {
             source: KubeconfigSourceRef::Default,
         },
+        "logs::Clear" => Command::LogsClear { target: target() },
+        "logs::Copy" => Command::LogsCopy { target: target() },
+        "logs::Mark" => Command::LogsMark { target: target() },
+        "logs::SendToAgent" => Command::LogsSendToAgent { target: target() },
+        "logs::TailInTerminal" => Command::LogsTailInTerminal { target: target() },
+        "logs::FollowReplacement" => Command::LogsFollowReplacement { target: target() },
+        "logs::Reconnect" => Command::LogsReconnect { target: target() },
+        "logs::Save" => Command::LogsSave {
+            target: target(),
+            scope: oxikube_domain::log::LogSaveScope::All,
+        },
         "logs::SelectContainer" => Command::LogsSelectContainer {
             target: target(),
             container: "app".into(),
@@ -153,8 +164,33 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "logs::ToggleAutoscroll" => Command::LogsToggleAutoscroll { target: target() },
         "logs::ToggleFullscreen" => Command::LogsToggleFullscreen { target: target() },
         "logs::TogglePrevious" => Command::LogsTogglePrevious { target: target() },
+        "logs::ToggleSource" => Command::LogsToggleSource {
+            target: target(),
+            pod: "web-0".into(),
+            container: None,
+        },
         "logs::ToggleTimestamps" => Command::LogsToggleTimestamps { target: target() },
         "logs::ToggleWrap" => Command::LogsToggleWrap { target: target() },
+        "logs::CloseSearch" => Command::LogsCloseSearch { target: target() },
+        "logs::Find" => Command::LogsFind {
+            target: target(),
+            pattern: Some("error".into()),
+        },
+        "logs::NextMatch" => Command::LogsNextMatch { target: target() },
+        "logs::PreviousMatch" => Command::LogsPreviousMatch { target: target() },
+        "logs::ToggleCase" => Command::LogsToggleCase { target: target() },
+        "logs::ToggleFilterMode" => Command::LogsToggleFilterMode { target: target() },
+        "logs::ToggleInverse" => Command::LogsToggleInverse { target: target() },
+        "logs::ToggleJsonMode" => Command::LogsToggleJsonMode { target: target() },
+        "logs::ToggleLevel" => Command::LogsToggleLevel {
+            target: target(),
+            level: oxikube_domain::log::LevelChip::Error,
+        },
+        "logs::ToggleLine" => Command::LogsToggleLine {
+            target: target(),
+            seq: 0,
+        },
+        "logs::CollapseLine" => Command::LogsCollapseLine { target: target() },
         "namespace::Select" => Command::NamespaceSelect {
             cluster,
             namespaces: vec!["default".into()],
@@ -177,6 +213,14 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "pod::Delete" => Command::PodDelete {
             target: target(),
             grace_period_seconds: None,
+        },
+        "pod::Attach" => Command::PodAttach {
+            target: target(),
+            container: None,
+        },
+        "pod::Shell" => Command::PodShell {
+            target: target(),
+            container: None,
         },
         "pod::Exec" => Command::PodExec {
             target: target(),
@@ -251,6 +295,23 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "view::ZoomIn" => Command::ViewZoomIn,
         "view::ZoomOut" => Command::ViewZoomOut,
         "view::ZoomReset" => Command::ViewZoomReset,
+        "terminal::Copy" => Command::TerminalCopy,
+        "terminal::Paste" => Command::TerminalPaste,
+        "terminal::New" => Command::TerminalNew { cluster: None },
+        "terminal::Split" => Command::TerminalSplit,
+        "terminal::Close" => Command::TerminalClose,
+        "terminal::Reconnect" => Command::TerminalReconnect,
+        "terminal::Restart" => Command::TerminalRestart,
+        "terminal::Clear" => Command::TerminalClear,
+        "terminal::ScrollLineDown" => Command::TerminalScrollLineDown,
+        "terminal::ScrollLineUp" => Command::TerminalScrollLineUp,
+        "terminal::ScrollPageDown" => Command::TerminalScrollPageDown,
+        "terminal::ScrollPageUp" => Command::TerminalScrollPageUp,
+        "terminal::Search" => Command::TerminalSearch,
+        "terminal::SearchClose" => Command::TerminalSearchClose,
+        "terminal::SearchNext" => Command::TerminalSearchNext,
+        "terminal::SearchPrevious" => Command::TerminalSearchPrevious,
+        "terminal::SelectAll" => Command::TerminalSelectAll,
         "terminal::OpenLink" => Command::TerminalOpenLink {
             target: "https://kubernetes.io".into(),
         },
@@ -271,6 +332,18 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
                 "api",
             ),
             replicas: 3,
+        },
+        "workload::ViewLogs" => Command::WorkloadViewLogs {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("apps", "v1", "Deployment"),
+                "default",
+                "api",
+            ),
+            selector: None,
+            container: None,
+            follow: true,
+            tail_lines: None,
         },
         other => panic!(
             "no sample for the declared command {other}: add one to testing_posture::sample; the \

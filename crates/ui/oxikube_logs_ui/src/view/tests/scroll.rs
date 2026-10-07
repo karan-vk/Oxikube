@@ -8,7 +8,7 @@ use oxikube_testkit::Timeline;
 use super::fixture::{Fx, line};
 
 /// A stream that delivers `first` lines at once, then one more line every second, forever.
-fn trickle(first: usize, more: usize) -> Timeline<oxikube_domain::log::LogLine> {
+pub(super) fn trickle(first: usize, more: usize) -> Timeline<oxikube_domain::log::LogLine> {
     let mut timeline = Timeline::new();
     for i in 0..first {
         timeline = timeline.ok_at(Duration::ZERO, line(i));
@@ -19,7 +19,7 @@ fn trickle(first: usize, more: usize) -> Timeline<oxikube_domain::log::LogLine> 
     timeline.keep_open()
 }
 
-fn tick(fx: &mut Fx, seconds: u64) {
+pub(super) fn tick(fx: &mut Fx, seconds: u64) {
     for _ in 0..seconds {
         fx.ports.logs.clock().advance(Duration::from_secs(1));
         fx.settle();

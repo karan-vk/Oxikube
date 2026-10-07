@@ -8,6 +8,17 @@
 //! - `terminal_cursors`: four small terminals: block, beam and underline cursors (focused) and
 //!   the hollow block of an unfocused terminal.
 //!
+//! - `terminal_preedit` (E09-S06): an input method composing four Japanese syllables at the shell
+//!   prompt: the marked text is underlined at the cursor, over the cells after it.
+//! - `terminal_tabs` (E09-S07): terminal tabs in a workspace: one in the centre pane (its title
+//!   set by the process, the dirty dot of a running process), one in the bottom dock beside the
+//!   terminal panel, carrying a read-only cluster's mark, and the exit line of an ended one.
+//!
+//! - `terminal_settings` (E09-S11): the `terminal` settings drive the element: an 18 pt font with
+//!   a 1.5 line height and a steady underline cursor, no font passed to the element.
+//! - `terminal_search` (E09-S11): the matches of a search painted over the cells, the current one
+//!   in its own colour.
+//!
 //! The byte stream is in this file, so the picture only changes when the element (or the font
 //! the platform ships) does. `harness = false`: on macOS the platform text system can only be
 //! created on the process main thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe
@@ -21,8 +32,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use gpui::{
-    AnyWindowHandle, App, AppContext as _, Context, Entity, FocusHandle, IntoElement, Modifiers,
-    MouseMoveEvent, ParentElement as _, PlatformInput, Render, Styled as _, Window, div, px, size,
+    AnyWindowHandle, App, AppContext as _, Context, Entity, EntityInputHandler as _, FocusHandle,
+    IntoElement, Modifiers, MouseMoveEvent, ParentElement as _, PlatformInput, Render, Styled as _,
+    Window, div, px, size,
 };
 use oxikube_ports::TerminalSize;
 use oxikube_runtime::FRAME_INTERVAL;
@@ -99,6 +111,7 @@ fn render(
     feeds: &[&str],
     hollow_last: bool,
     select: bool,
+    compose: Option<&str>,
 ) -> Result<RgbaImage> {
     let mut app = ScreenshotApp::new();
     let backends: Vec<FakeTerminalBackend> = feeds
@@ -153,6 +166,15 @@ fn render(
         });
         hover_link(&mut app, window)?;
     }
+    if let (Some(text), Some(terminal)) = (compose, terminals.first()) {
+        app.update(|cx| {
+            window.update(cx, |_, window, cx| {
+                terminal.update(cx, |terminal, cx| {
+                    terminal.replace_and_mark_text_in_range(None, text, None, window, cx)
+                })
+            })
+        })?;
+    }
     app.advance_clock(FRAME_INTERVAL);
     app.capture(window)
 }
@@ -178,11 +200,11 @@ fn hover_link(app: &mut ScreenshotApp, window: AnyWindowHandle) -> Result<()> {
 }
 
 fn full_dark() -> Result<RgbaImage> {
-    render(Appearance::Dark, FULL, &[FIXTURE], false, true)
+    render(Appearance::Dark, FULL, &[FIXTURE], false, true, None)
 }
 
 fn full_light() -> Result<RgbaImage> {
-    render(Appearance::Light, FULL, &[FIXTURE], false, true)
+    render(Appearance::Light, FULL, &[FIXTURE], false, true, None)
 }
 
 fn cursors() -> Result<RgbaImage> {
@@ -197,6 +219,211 @@ fn cursors() -> Result<RgbaImage> {
         ],
         true,
         false,
+        None,
+    )
+}
+
+fn preedit() -> Result<RgbaImage> {
+    render(
+        Appearance::Dark,
+        CURSORS,
+        &["$ echo "],
+        false,
+        false,
+        Some("\u{306b}\u{307b}\u{3093}\u{3054}"),
+    )
+}
+
+/// The fake launcher of `terminal_tabs`: a silent fake backend per launch.
+struct ShotLauncher(std::cell::RefCell<Vec<FakeTerminalBackend>>);
+
+impl oxikube_terminal::view::TerminalLauncher for ShotLauncher {
+    fn launch(
+        &self,
+        _: &oxikube_terminal::view::BackendDescriptor,
+        _: TerminalSize,
+        _: &mut App,
+    ) -> oxikube_terminal::view::Launch {
+        let backend = FakeTerminalBackend::silent();
+        self.0.borrow_mut().push(backend.clone());
+        gpui::Task::ready(Ok(Box::new(backend)))
+    }
+
+    fn cluster_mark(
+        &self,
+        _: &oxikube_domain::ids::ClusterId,
+        _: &App,
+    ) -> Option<oxikube_workspace::ClusterMark> {
+        Some(oxikube_workspace::ClusterMark {
+            colour: None,
+            read_only: true,
+        })
+    }
+}
+
+const TABS: (u32, u32) = (720, 420);
+
+fn tabs() -> Result<RgbaImage> {
+    use oxikube_domain::ids::{ClusterId, ContextName};
+    use oxikube_terminal::view::{BackendDescriptor, TerminalServices, TerminalView};
+    use oxikube_workspace::{DockPosition, Workspace};
+
+    // The tab icons and the read-only lock are SVGs from the app's assets.
+    let mut app = ScreenshotApp::with_assets(Arc::new(oxikube_ui::Assets));
+    let launcher = std::rc::Rc::new(ShotLauncher(Default::default()));
+    let services = TerminalServices::new(launcher.clone());
+    let cluster = ClusterId::new("~/.kube/config", &ContextName::new("prod-eu"));
+    let window: AnyWindowHandle =
+        app.open_window(size(px(TABS.0 as f32), px(TABS.1 as f32)), |window, cx| {
+            oxikube_runtime::init_deterministic(cx);
+            oxikube_ui::init(cx);
+            set_theme(Appearance::Dark, cx);
+            let workspace = cx.new(|cx| Workspace::new(window, cx));
+            let centre = cx.new(|cx| {
+                let shell = BackendDescriptor::local(None).with_shell("/bin/zsh", vec![]);
+                TerminalView::new(shell, services.clone(), cx)
+            });
+            let docked = cx.new(|cx| {
+                let shell =
+                    BackendDescriptor::local(Some(cluster.clone())).with_shell("bash", vec![]);
+                TerminalView::new(shell, services.clone(), cx)
+            });
+            let ended = cx.new(|cx| {
+                let shell = BackendDescriptor::local(None).with_shell("sh", vec![]);
+                TerminalView::new(shell, services.clone(), cx)
+            });
+            oxikube_terminal::view::ensure_terminal_panel(
+                &workspace,
+                Some(cluster.clone()),
+                None,
+                window,
+                cx,
+            );
+            workspace.update(cx, |ws, cx| {
+                ws.open_item(centre, window, cx);
+                ws.open_item_in_split(
+                    Box::new(ended),
+                    None,
+                    oxikube_workspace::SplitDirection::Right,
+                    window,
+                    cx,
+                );
+                ws.open_item_in_dock(Box::new(docked), DockPosition::Bottom, false, window, cx);
+                let first = ws.panes(cx)[0].id();
+                ws.activate_pane(first, window, cx);
+            });
+            oxikube_ui::root::new_root(workspace, window, cx)
+        })?;
+    app.run_until_parked();
+    let backends = launcher.0.borrow().clone();
+    // Launch order: the centre shell, the docked cluster shell, the ended one.
+    backends[0].output("\x1b]0;kubectl get pods\x07$ kubectl get pods\r\nNAME    READY   STATUS    RESTARTS   AGE\r\nweb-0   1/1     Running   0          3d\r\n$ ".to_owned());
+    backends[1].output("$ helm list -n shop\r\nNAME  NAMESPACE  REVISION  STATUS\r\nshop  shop       7         deployed\r\n$ ".to_owned());
+    backends[2].output("$ exit 2\r\n".to_owned());
+    backends[2].exit(oxikube_ports::ExitStatus::with_code(2));
+    app.run_until_parked();
+    app.advance_clock(FRAME_INTERVAL);
+    let _ = app.capture(window)?;
+    app.advance_clock(FRAME_INTERVAL);
+    app.capture(window)
+}
+
+/// A terminal drawn with the `terminal` settings (no font given to the element), with the matches
+/// of a search over it.
+struct Themed {
+    terminal: Entity<TerminalState>,
+    state: TerminalElementState,
+    focus: FocusHandle,
+    highlights: Option<oxikube_terminal::element::SearchHighlights>,
+}
+
+impl Render for Themed {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let mut element = TerminalElement::new(&self.terminal, &self.state, &self.focus);
+        if let Some(highlights) = &self.highlights {
+            element = element.highlights(highlights.clone());
+        }
+        div().size_full().child(element)
+    }
+}
+
+const SETTINGS: (u32, u32) = (480, 150);
+
+/// `feed` shown under the settings `user`, with the matches of `search` painted when given.
+fn themed(user: &str, feed: &str, search: Option<&str>) -> Result<RgbaImage> {
+    use gpui::UpdateGlobal as _;
+    let mut app = ScreenshotApp::new();
+    let backend = FakeTerminalBackend::silent();
+    let boxed = Box::new(backend.clone());
+    let mut host = None;
+    let mut terminal_handle = None;
+    let window: AnyWindowHandle = app.open_window(
+        size(px(SETTINGS.0 as f32), px(SETTINGS.1 as f32)),
+        |window, cx| {
+            oxikube_runtime::init_deterministic(cx);
+            oxikube_ui::init(cx);
+            set_theme(Appearance::Dark, cx);
+            let store = oxikube_settings::SettingsStore::new(oxikube_assets::default_settings())
+                .expect("the shipped defaults");
+            cx.set_global(store);
+            oxikube_terminal::init(cx);
+            oxikube_settings::SettingsStore::update_global(cx, |store, _| {
+                store.set_user_settings(user).expect("valid settings")
+            });
+            let focus = cx.focus_handle();
+            window.focus(&focus, cx);
+            let terminal = cx.new(|cx| TerminalState::new(boxed, TerminalSize::new(80, 24), cx));
+            terminal_handle = Some(terminal.clone());
+            let view = cx.new(|_| Themed {
+                terminal,
+                state: TerminalElementState::new(),
+                focus,
+                highlights: None,
+            });
+            host = Some(view.clone());
+            view
+        },
+    )?;
+    backend.output(feed.to_owned());
+    app.run_until_parked();
+    app.advance_clock(FRAME_INTERVAL);
+    let _ = app.capture(window)?;
+    if let (Some(pattern), Some(terminal), Some(host)) = (search, terminal_handle, host) {
+        app.update(|cx| {
+            let found = terminal.update(cx, |terminal, cx| terminal.search(pattern, cx));
+            cx.spawn(async move |cx| {
+                let matches = found.await.expect("a valid pattern");
+                host.update(cx, |host, cx| {
+                    host.highlights = Some(oxikube_terminal::element::SearchHighlights::sorted(
+                        matches,
+                        Some(1),
+                    ));
+                    cx.notify();
+                });
+            })
+            .detach();
+        });
+        app.run_until_parked();
+        app.advance_clock(FRAME_INTERVAL);
+    }
+    app.advance_clock(FRAME_INTERVAL);
+    app.capture(window)
+}
+
+fn settings_shot() -> Result<RgbaImage> {
+    themed(
+        r#"{ "terminal": { "font_size": 18, "line_height": 1.5,
+                           "cursor_shape": "underline", "cursor_blink": false } }"#,
+        "$ kubectl get pods\r\nNAME    READY   STATUS\r\nweb-0   1/1     Running\r\n$ ls",
+        None,
+    )
+}
+
+fn search_shot() -> Result<RgbaImage> {
+    themed(
+        "{}",
+        "NAME    READY   STATUS\r\nweb-0   1/1     Running\r\nweb-1   1/1     Running\r\ndb-0    0/1     Pending\r\n$ ",
+        Some("web-\\d"),
     )
 }
 
@@ -218,6 +445,26 @@ fn main() -> ExitCode {
                 name: "terminal_cursors",
                 size: CURSORS,
                 render: cursors,
+            },
+            GoldenCase {
+                name: "terminal_preedit",
+                size: CURSORS,
+                render: preedit,
+            },
+            GoldenCase {
+                name: "terminal_tabs",
+                size: TABS,
+                render: tabs,
+            },
+            GoldenCase {
+                name: "terminal_settings",
+                size: SETTINGS,
+                render: settings_shot,
+            },
+            GoldenCase {
+                name: "terminal_search",
+                size: SETTINGS,
+                render: search_shot,
             },
         ],
     )

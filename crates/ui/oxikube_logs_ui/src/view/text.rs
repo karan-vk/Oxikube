@@ -44,9 +44,10 @@ pub fn level_of(text: &str) -> Level {
     Level::Plain
 }
 
-/// The timestamp column: UTC to the millisecond, fixed width (`2026-10-07T12:00:00.123Z`).
+/// The timestamp column: UTC to the millisecond, fixed width (`2026-10-07T12:00:00.123Z`). The
+/// same text a save or a copy writes, so a file matches the screen.
 pub fn timestamp(entry: &LogEntry) -> String {
-    entry.ts.strftime("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+    oxikube_app::logs::export::timestamp(entry)
 }
 
 /// The words of the "truncated" marker for `dropped` older lines and a buffer of `capacity`.
@@ -68,6 +69,25 @@ pub fn state_text(state: &LogState) -> String {
             "Stream ended: the container stopped or the connection closed".to_owned()
         }
         LogState::Ended(EndReason::Cancelled) => "Stopped".to_owned(),
+        LogState::Ended(EndReason::PodFinished) => {
+            "Pod finished: its containers ran to completion".to_owned()
+        }
+        LogState::Ended(EndReason::ContainerFinished) => {
+            "Container finished: it exited and will not restart".to_owned()
+        }
+        LogState::Ended(EndReason::PodReplaced) => {
+            "Pod replaced (deleted or recreated by its controller): follow the replacement to keep \
+             reading"
+                .to_owned()
+        }
+        LogState::Ended(EndReason::PodDeleted) => {
+            "Pod deleted: nothing owns it, so no pod replaces it".to_owned()
+        }
+        LogState::Reconnecting {
+            attempt,
+            max,
+            failure,
+        } => format!("Reconnecting ({attempt}/{max}): {}", failure.message),
         LogState::Failed(failure) => {
             let what = match failure.kind {
                 ErrorKind::NotFound => "Not found",
@@ -92,6 +112,15 @@ pub fn group(n: u64) -> String {
         out.push(ch);
     }
     out
+}
+
+/// `1 line` or `12,345 lines`.
+pub fn lines_of(n: u64) -> String {
+    if n == 1 {
+        "1 line".to_owned()
+    } else {
+        format!("{} lines", group(n))
+    }
 }
 
 #[cfg(test)]
@@ -127,6 +156,7 @@ mod tests {
             container: Arc::from("app"),
             text: Arc::from("hi"),
             truncated: false,
+            level: None,
         };
         assert_eq!(timestamp(&entry), "2026-10-07T12:00:00.123Z");
     }
@@ -137,6 +167,10 @@ mod tests {
         assert_eq!(group(12), "12");
         assert!(truncated_marker(1_500, 50_000).starts_with("1,500 older lines dropped"));
         assert_eq!(state_text(&LogState::Connecting), "Connecting…");
+        assert_eq!(
+            state_text(&LogState::Ended(EndReason::ContainerFinished)),
+            "Container finished: it exited and will not restart"
+        );
         let failed = LogState::Failed(LogFailure {
             kind: ErrorKind::Forbidden,
             message: "pods/log is forbidden".into(),

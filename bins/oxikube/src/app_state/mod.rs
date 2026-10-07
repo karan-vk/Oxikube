@@ -10,6 +10,8 @@
 //! | command bus | set once by the main window's mount ([`CommandBus`] with its `MutationGuard`) | [`AppState::command_bus`] |
 //! | resource stores | set once by the main window's mount (`ResourceStores`: one `ResourceStore` per connected cluster) | [`AppState::resource_stores`] |
 //! | log service | set once by the main window's mount (`LogService`: the log sessions of every cluster, bounded by `logs.buffer_lines`) | [`AppState::log_service`] |
+//! | exec service | set once by the main window's mount (`ExecService`: shells, attaches and commands in pod containers, the last container chosen per pod) | [`AppState::exec_service`] |
+//! | agent hooks | set once by the main window's mount (`AgentHooks`: the `@`-mention `ContextRegistry` with `@logs`, the `ToolRegistry` with `k8s.get_logs`, and the queue "Send to agent" fills) | [`AppState::agent_hooks`] |
 //! | state db | `ports.state`: the SQLite adapter, opened off the UI thread | [`AppState::state`] |
 //! | settings | `oxikube_settings::SettingsStore` global | [`AppState::settings`] |
 //! | theme | `oxikube_theme::ThemeRegistry` + `ActiveTheme` globals | [`AppState::theme_registry`], [`AppState::active_theme`] |
@@ -39,6 +41,7 @@
 //! (`startup::init`), so a test that calls it exercises the order. `AppState::test_with(cx, &ports)`
 //! does the same over a `oxikube_testkit::TestPorts` the test keeps, to script and assert on the fakes.
 
+mod agent;
 #[cfg(test)]
 mod harness_tests;
 mod ports;
@@ -51,13 +54,14 @@ use std::sync::{Arc, OnceLock};
 
 use gpui::{App, Global};
 use oxikube_app::logs::LogService;
-use oxikube_app::{CommandBus, ResourceStores};
+use oxikube_app::{CommandBus, ExecService, ResourceStores};
 use oxikube_keymap::KeymapStore;
 use oxikube_ports::StatePort;
 use oxikube_runtime::RuntimeMode;
 use oxikube_settings::SettingsStore;
 use oxikube_theme::{ActiveTheme, ThemeRegistry, ThemeTokens};
 
+pub use agent::AgentHooks;
 pub use ports::{AppPorts, ClusterAdapters};
 pub use services::ClusterServices;
 
@@ -79,6 +83,8 @@ pub struct AppState {
     bus: OnceLock<CommandBus>,
     stores: OnceLock<Arc<ResourceStores>>,
     logs: OnceLock<Arc<LogService>>,
+    exec: OnceLock<Arc<ExecService>>,
+    agent: OnceLock<AgentHooks>,
     data_dir: Option<PathBuf>,
 }
 
@@ -99,6 +105,8 @@ impl AppState {
             bus: OnceLock::new(),
             stores: OnceLock::new(),
             logs: OnceLock::new(),
+            exec: OnceLock::new(),
+            agent: OnceLock::new(),
             data_dir,
         }
     }
@@ -183,6 +191,29 @@ impl AppState {
     /// Stores the log service. The first one stays: `false` when one was set already.
     pub fn set_log_service(&self, service: Arc<LogService>) -> bool {
         self.logs.set(service).is_ok()
+    }
+
+    /// The exec service behind `pod::Shell`, `pod::Attach` and the container picker, once the main
+    /// window has been mounted (`None` before). One per app: the container chosen last in each pod
+    /// is remembered across windows.
+    pub fn exec_service(&self) -> Option<&Arc<ExecService>> {
+        self.exec.get()
+    }
+
+    /// Stores the exec service. The first one stays: `false` when one was set already.
+    pub fn set_exec_service(&self, service: Arc<ExecService>) -> bool {
+        self.exec.set(service).is_ok()
+    }
+
+    /// The agent-facing registries (mention providers, tools) and the pending-context queue, once
+    /// the main window has been mounted (`None` before). One per app.
+    pub fn agent_hooks(&self) -> Option<&AgentHooks> {
+        self.agent.get()
+    }
+
+    /// Stores the agent hooks. The first ones stay: `false` when some were set already.
+    pub fn set_agent_hooks(&self, hooks: AgentHooks) -> bool {
+        self.agent.set(hooks).is_ok()
     }
 
     /// The state db port (`ports().state`). In the app it is the SQLite adapter, opened in the

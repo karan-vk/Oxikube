@@ -14,7 +14,7 @@
 //! - `scroll-10k` ([`scroll_10k`], also `table-scroll-10k`): the resource table scrolling
 //!   10 000 pods under feed churn, first rows after the feed is warm (E07-S09).
 //! - `logs-stream` ([`logs_stream`]): the log view streaming 5 000 lines/s, wrap off/on and
-//!   autoscroll on/paused (E08-S02).
+//!   autoscroll on/paused (E08-S02), and with a search highlighting or filtering (E08-S03).
 
 mod logs_stream;
 mod scroll_10k;

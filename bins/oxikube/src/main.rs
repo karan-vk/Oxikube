@@ -108,7 +108,12 @@ fn main() -> ExitCode {
             scroll: args.perf_scroll.unwrap_or(DEFAULT_SCROLL),
         });
     let logs = args.perf_logs.as_deref().and_then(|value| {
-        oxikube::perf_logs::LogsDrive::parse(value, args.perf_logs_wrap, args.perf_logs_paused)
+        oxikube::perf_logs::LogsDrive::parse(
+            value,
+            args.perf_logs_wrap,
+            args.perf_logs_paused,
+            args.perf_logs_workload,
+        )
     });
     let drive = Drive { table: drive, logs };
 

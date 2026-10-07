@@ -30,13 +30,16 @@ impl KeyContextual for LogView {
     fn extend_key_context(&self, context: &mut KeyContextBuilder) {
         context.flag_if(self.options.wrap, "wrap");
         context.flag_if(self.follow.is_on(), "autoscroll");
+        context.flag_if(self.options.json, "json");
+        context.flag_if(self.search.state.is_open(), "searching");
+        context.flag_if(self.search.editing, contexts::EDITING);
     }
 }
 
 impl Item for LogView {
     /// `pod/container`, with `(previous)` while the previous instance is read.
     fn tab_content(&self, _: &App) -> TabContent {
-        let mut title = self.target.name.to_string();
+        let mut title = self.subject();
         if let Some(container) = &self.options.container {
             title.push('/');
             title.push_str(container);
@@ -51,10 +54,16 @@ impl Item for LogView {
         Some(item_key(&self.target).into())
     }
 
-    fn on_close(&mut self, _: &mut Window, _: &mut Context<Self>) {
+    fn on_close(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         // Dropping the session aborts its read and closes the connection.
+        if let Some(state) = self.aggregate.as_mut() {
+            state.restart();
+        }
         self.pump = None;
         self.pod_task = None;
+        self.replacement_task = None;
+        self.stop_save(cx);
+        self.search.scan = None;
         self.session = None;
     }
 }

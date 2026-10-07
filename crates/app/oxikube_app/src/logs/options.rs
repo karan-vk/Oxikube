@@ -1,5 +1,5 @@
 //! Service inputs: [`LogRuntime`] (where tasks run, what time it is) and [`LogConfig`] (the
-//! buffer bound and batching).
+//! buffer bound, batching and the reconnect policy).
 //!
 //! What a session reads is the port's [`LogOptions`](oxikube_ports::LogOptions): `follow`,
 //! `since`, `tail_lines`, `previous` and `timestamps` (plus `container` and `limit_bytes`) are
@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use oxikube_ports::ClockPort;
 
+use super::churn::ReconnectPolicy;
 use crate::store::Spawner;
 
 /// Lines a session keeps when the setting says nothing (`logs.buffer_lines`).
@@ -19,20 +20,19 @@ pub const MIN_BUFFER_LINES: usize = 100;
 /// Most lines a buffer may be set to (memory stays bounded whatever the settings file says).
 pub const MAX_BUFFER_LINES: usize = 5_000_000;
 
+/// Streams an aggregate reads at once when the setting says nothing (`logs.max_streams`).
+pub const DEFAULT_MAX_STREAMS: usize = 20;
+/// Most streams an aggregate may be set to read at once.
+pub const MAX_MAX_STREAMS: usize = 200;
+
+/// Clamps a `logs.max_streams` value to `1..=`[`MAX_MAX_STREAMS`].
+pub fn clamp_max_streams(streams: usize) -> usize {
+    streams.clamp(1, MAX_MAX_STREAMS)
+}
+
 /// Clamps a `logs.buffer_lines` value to [`MIN_BUFFER_LINES`]..=[`MAX_BUFFER_LINES`].
 pub fn clamp_buffer_lines(lines: usize) -> usize {
     lines.clamp(MIN_BUFFER_LINES, MAX_BUFFER_LINES)
-}
-
-/// What a session does when its stream ends or breaks. The seam of E08-S07 (reconnect and churn
-/// following): today a session never reopens a stream by itself. The kube adapter already
-/// reconnects a followed stream inside the stream it returns.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum ReconnectPolicy {
-    /// The session ends (`Ended` or `Failed`) with the stream.
-    #[default]
-    Never,
 }
 
 /// Where the service runs its tasks and measures time. Plain async Rust: it never names a
@@ -64,8 +64,20 @@ pub struct LogConfig {
     pub flush_interval: Duration,
     /// Lines that commit a batch at once, whatever the tick: a burst becomes a few batches.
     pub max_batch: usize,
-    /// What a session does when its stream ends.
+    /// What a session does when its stream breaks (E08-S07): reconnect with backoff by default.
+    /// The retry cap of [`ReconnectPolicy::Backoff`] is where `logs.reconnect_retries` starts;
+    /// [`LogService::set_reconnect_retries`](super::LogService::set_reconnect_retries) changes it.
     pub reconnect: ReconnectPolicy,
+    /// Streams an aggregate (E08-S04) reads at once (`logs.max_streams`); the pods left out are
+    /// counted, not read. Clamped by [`clamp_max_streams`].
+    pub max_streams: usize,
+    /// How long an aggregate holds a line before it commits it, so the lines of a slower stream
+    /// can slot in before it (the merge by server timestamp). See `aggregate` in the module
+    /// docs.
+    pub reorder_window: Duration,
+    /// The longest an aggregate waits, at its start, for every stream of the first group to open
+    /// before it commits anything.
+    pub startup_wait: Duration,
 }
 
 impl Default for LogConfig {
@@ -74,7 +86,10 @@ impl Default for LogConfig {
             buffer_lines: DEFAULT_BUFFER_LINES,
             flush_interval: Duration::from_millis(32),
             max_batch: 2_048,
-            reconnect: ReconnectPolicy::Never,
+            reconnect: ReconnectPolicy::default(),
+            max_streams: DEFAULT_MAX_STREAMS,
+            reorder_window: Duration::from_millis(300),
+            startup_wait: Duration::from_secs(2),
         }
     }
 }

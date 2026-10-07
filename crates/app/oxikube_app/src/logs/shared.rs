@@ -9,6 +9,7 @@ use std::task::Waker;
 use oxikube_ports::LogOptions;
 use parking_lot::Mutex;
 
+use super::churn::IdentityCell;
 use super::entry::LogEntry;
 use super::ring::LogBuffer;
 use super::state::{EndReason, LogState};
@@ -19,6 +20,9 @@ pub(super) struct Shared {
     pub(super) id: u64,
     pub(super) target: LogTarget,
     pub(super) options: LogOptions,
+    /// The pod a single-pod session follows, once read (E08-S07): what "follow replacement"
+    /// starts from.
+    pub(super) identity: IdentityCell,
     /// Batches committed so far.
     batches: AtomicU64,
     inner: Mutex<Inner>,
@@ -47,6 +51,7 @@ impl Shared {
             id,
             target,
             options,
+            identity: IdentityCell::default(),
             batches: AtomicU64::new(0),
             inner: Mutex::new(Inner {
                 buffer: LogBuffer::new(capacity),
@@ -102,6 +107,21 @@ impl Shared {
         wake(wakers);
     }
 
+    /// Starts the session again after it ended or failed (a reconnect by hand): `Connecting`,
+    /// the lines kept. `false` when the owner dropped it or it was not over.
+    pub(super) fn reopen(&self) -> bool {
+        let wakers = {
+            let mut inner = self.inner.lock();
+            if inner.closed || !inner.state.is_terminal() {
+                return false;
+            }
+            inner.state = LogState::Connecting;
+            std::mem::take(&mut inner.wakers)
+        };
+        wake(wakers);
+        true
+    }
+
     /// Applies a new `logs.buffer_lines`.
     pub(super) fn set_capacity(&self, capacity: usize) {
         let wakers = {
@@ -113,6 +133,18 @@ impl Shared {
             std::mem::take(&mut inner.wakers)
         };
         wake(wakers);
+    }
+
+    /// Empties the buffer (the user's "clear"): readers see the lines go, new lines keep
+    /// arriving. Returns the seq the next line gets.
+    pub(super) fn clear(&self) -> u64 {
+        let (next, wakers) = {
+            let mut inner = self.inner.lock();
+            inner.buffer.clear();
+            (inner.buffer.next_seq(), std::mem::take(&mut inner.wakers))
+        };
+        wake(wakers);
+        next
     }
 
     /// The owner dropped the session: cancel what is not finished and end the streams.

@@ -54,6 +54,11 @@ impl TerminalState {
         self.grid.lock().modes()
     }
 
+    /// Whether the view is scrolled up into the history.
+    pub fn is_scrolled_back(&self) -> bool {
+        self.grid.lock().display_offset() > 0
+    }
+
     /// The title the process set, if any.
     pub fn title(&self) -> Option<Arc<str>> {
         self.grid.lock().title().cloned()
@@ -71,12 +76,18 @@ impl TerminalState {
             changed
         });
         if changed {
+            // Reflow moves lines: positions found before no longer hold the same text.
+            self.content_generation = self.content_generation.wrapping_add(1);
             cx.notify();
         }
     }
 
     /// Sends `bytes` (encoded keystrokes, a paste) to the process, after anything sent before.
+    /// Dropped once the session ended or its connection dropped ([`close_input`](Self::close_input)).
     pub fn input(&self, bytes: impl Into<Bytes>) {
+        if !self.accepts_input {
+            return;
+        }
         // Closed only once the entity is gone.
         let _ = self.input.unbounded_send(bytes.into());
     }
@@ -127,6 +138,20 @@ impl TerminalState {
         cx.notify();
     }
 
+    /// Selects the whole screen and scrollback.
+    pub fn select_all(&mut self, cx: &mut Context<Self>) {
+        self.grid.lock().select_all();
+        cx.notify();
+    }
+
+    /// Clears the scrollback and the screen above the cursor's line (see [`crate::grid::TermGrid::clear`]).
+    /// The process is not told.
+    pub fn clear(&mut self, cx: &mut Context<Self>) {
+        self.grid.lock().clear();
+        self.content_generation = self.content_generation.wrapping_add(1);
+        cx.notify();
+    }
+
     /// Drops the selection.
     pub fn clear_selection(&mut self, cx: &mut Context<Self>) {
         self.grid.lock().clear_selection();
@@ -150,6 +175,21 @@ impl TerminalState {
     ///
     /// The task yields `Validation` when `pattern` is not a valid regex.
     pub fn search(&self, pattern: &str, cx: &mut Context<Self>) -> Task<OxiResult<Vec<GridMatch>>> {
+        let found = self.search_anchored(pattern, cx);
+        cx.background_spawn(async move { found.await.map(|found| found.matches) })
+    }
+
+    /// [`search`](Self::search) that also says how much history the grid had when it ended, so a
+    /// caller can carry a match from an earlier search over the lines output pushed up since.
+    ///
+    /// # Errors
+    ///
+    /// The task yields `Validation` when `pattern` is not a valid regex.
+    pub fn search_anchored(
+        &self,
+        pattern: &str,
+        cx: &mut Context<Self>,
+    ) -> Task<OxiResult<SearchResult>> {
         let grid = self.grid.clone();
         let gate = self.output_gate.clone();
         let pattern = pattern.to_owned();
@@ -162,9 +202,22 @@ impl TerminalState {
                 // Hand the lock straight to a waiter (the UI thread) rather than re-taking it.
                 MutexGuard::unlock_fair(locked);
                 if done {
-                    return Ok(search.into_matches());
+                    let history_size = search.history_size();
+                    return Ok(SearchResult {
+                        matches: search.into_matches(),
+                        history_size,
+                    });
                 }
             }
         })
     }
+}
+
+/// What [`TerminalState::search_anchored`] finds.
+#[derive(Debug, Clone)]
+pub struct SearchResult {
+    /// The matches, top to bottom.
+    pub matches: Vec<GridMatch>,
+    /// Lines of history the grid had when the search ended.
+    pub history_size: usize,
 }

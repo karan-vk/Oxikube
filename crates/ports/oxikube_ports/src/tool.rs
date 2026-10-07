@@ -17,6 +17,7 @@
 //! | `annotations.destructiveHint` | [`ToolDef::destructive_hint`] (derived: risk at least high) |
 //! | `annotations.idempotentHint` | [`ToolAnnotations::idempotent`] |
 //! | `annotations.openWorldHint` | [`ToolAnnotations::open_world`] |
+//! | (ours) interactive, unsafe, hidden from agents | [`ToolAnnotations::interactive`], [`unsafe_`](ToolAnnotations::unsafe_), [`agent_hidden`](ToolAnnotations::agent_hidden) |
 //! | `icons`, `_meta` | deferred (no UI uses them) |
 //! | `CallToolResult.content` | [`ToolOutput::content`] |
 //! | `CallToolResult.structuredContent` | [`ToolOutput::structured`] |
@@ -135,6 +136,19 @@ pub struct ToolAnnotations {
     /// (the MCP default is `true`).
     #[serde(default)]
     pub open_world: bool,
+    /// The tool opens an interactive session (a shell, an attach): its effect is whatever the
+    /// user types next, so it cannot be described by a schema, and an agent can only start it
+    /// (E09-S08, `k8s.pod_shell`).
+    #[serde(default)]
+    pub interactive: bool,
+    /// The tool is unsafe to run unattended: it gives access no policy can bound (a shell in a
+    /// container). Shown with the tool, and a reason for [`agent_hidden`](Self::agent_hidden).
+    #[serde(default, rename = "unsafe")]
+    pub unsafe_: bool,
+    /// Not offered to agents unless the user turns it on in the settings. The default (`false`)
+    /// offers the tool; an `unsafe_` tool sets this.
+    #[serde(default)]
+    pub agent_hidden: bool,
 }
 
 /// The static description of a tool.
@@ -220,6 +234,13 @@ impl ToolDef {
         def.title = Some(meta.title.to_owned());
         def.risk = meta.tool_risk();
         def.needs = meta.needs;
+        if meta.exec {
+            // A shell in a container: unsafe, interactive, and not exposed to agents until the
+            // user asks for it (E09-S08).
+            def.annotations.interactive = true;
+            def.annotations.unsafe_ = true;
+            def.annotations.agent_hidden = true;
+        }
         Ok(def)
     }
 
@@ -251,9 +272,16 @@ impl ToolDef {
         self
     }
 
-    /// Whether the tool changes cluster state (and so must go through `MutationGuard`).
+    /// Whether the tool changes cluster state or opens a session that can (a `risk` is declared),
+    /// so it must not run without `MutationGuard` or the exec policy.
     pub const fn is_mutating(&self) -> bool {
         self.risk.is_some()
+    }
+
+    /// Whether the tool is offered to agents without the user turning it on: it is not
+    /// [`agent_hidden`](ToolAnnotations::agent_hidden).
+    pub const fn agent_exposed_by_default(&self) -> bool {
+        !self.annotations.agent_hidden
     }
 
     /// MCP `readOnlyHint`: the tool does not change its environment.
@@ -290,9 +318,20 @@ impl ToolDef {
                 "tool {name}: output_schema must be a JSON Schema with \"type\": \"object\""
             )));
         }
-        if self.is_mutating() && !self.needs.contains(Capabilities::MUTATE) {
+        // An interactive tool (a shell) carries a risk without changing objects: it needs `exec`.
+        let needed = if self.annotations.interactive {
+            Capabilities::EXEC
+        } else {
+            Capabilities::MUTATE
+        };
+        if self.is_mutating() && !self.needs.contains(needed) {
             return Err(OxiError::validation(format!(
-                "tool {name} is mutating but does not need the mutate capability"
+                "tool {name} is mutating but does not need the {} capability",
+                if self.annotations.interactive {
+                    "exec"
+                } else {
+                    "mutate"
+                }
             )));
         }
         Ok(())
@@ -549,6 +588,36 @@ mod tests {
     }
 
     #[test]
+    fn an_exec_command_is_an_unsafe_interactive_tool_hidden_from_agents() {
+        for id in [
+            CommandId::POD_SHELL,
+            CommandId::POD_ATTACH,
+            CommandId::POD_EXEC,
+        ] {
+            let meta = COMMANDS.iter().find(|m| m.id == id).unwrap();
+            let tool = ToolDef::for_command(meta, "Open a session", schema()).unwrap();
+            tool.validate().unwrap();
+            assert_eq!(tool.risk, Some(Risk::High), "{id}");
+            assert_eq!(tool.needs, Capabilities::EXEC, "{id}: exec, not mutate");
+            assert!(tool.annotations.interactive && tool.annotations.unsafe_);
+            assert!(tool.annotations.agent_hidden && !tool.agent_exposed_by_default());
+            assert!(!tool.read_only_hint() && tool.destructive_hint());
+        }
+        let meta = COMMANDS
+            .iter()
+            .find(|m| m.id == CommandId::POD_VIEW_LOGS)
+            .unwrap();
+        let logs = ToolDef::for_command(meta, "Logs", schema()).unwrap();
+        assert!(logs.agent_exposed_by_default() && !logs.annotations.interactive);
+        let json = serde_json::to_value(ToolAnnotations {
+            unsafe_: true,
+            ..ToolAnnotations::default()
+        })
+        .unwrap();
+        assert_eq!(json["unsafe"], true, "the wire name is `unsafe`");
+    }
+
+    #[test]
     fn validate_rejects_broken_definitions() {
         let name = || ToolName::new("k8s.pod_list").unwrap();
         let err = |def: ToolDef| def.validate().unwrap_err().kind();
@@ -585,7 +654,7 @@ mod tests {
         .with_title("Rollback")
         .with_annotations(ToolAnnotations {
             idempotent: true,
-            open_world: false,
+            ..ToolAnnotations::default()
         })
         .with_needs(Capabilities::HELM);
         let v = serde_json::to_value(&def).unwrap();

@@ -93,6 +93,9 @@ fn the_cluster_layer_beats_the_user_layer_beats_the_defaults_for_every_field() {
             json!("if_available"),
             |p| json!(p.exec_interactivity),
         ),
+        ("exec_in_read_only", json!(true), json!(false), |p| {
+            json!(p.exec_in_read_only)
+        }),
         (
             "prometheus",
             json!({"provider": "auto"}),
@@ -431,6 +434,7 @@ fn the_schema_documents_the_cluster_block_with_an_example() {
         "prometheus",
         "accessible_namespaces",
         "exec_interactivity",
+        "exec_in_read_only",
     ];
     for key in keys {
         let property = &cluster["properties"][key];

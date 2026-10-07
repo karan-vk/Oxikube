@@ -2,13 +2,22 @@
 //!
 //! The defaults are k9s's, in the per-OS keymap files of `oxikube_assets`: `0` tail, `1` head,
 //! `2`-`6` since 1m / 5m / 15m / 30m / 1h, `s` autoscroll, `w` wrap, `t` timestamps, `p` previous
-//! container, `f` fullscreen, `m` mark, `c` copy. Each action that stands for a command
-//! dispatches it with the view's target (`logs::SetRange`, `logs::ToggleWrap`, ...), so the key,
-//! the toolbar, the palette and an agent run one behaviour (non-negotiable 4). Users rebind them
-//! in `keymap.json`.
+//! container, `j` JSON mode, `f` fullscreen, `m` mark, `c` copy. Each action that stands for a
+//! command dispatches it with the view's target (`logs::SetRange`, `logs::ToggleWrap`, ...), so
+//! the key, the toolbar, the palette and an agent run one behaviour (non-negotiable 4). Users
+//! rebind them in `keymap.json`.
 //!
-//! `Mark` and `Copy` are bound here so their keys are reserved; what they do arrives with
-//! E08-S06 (export, copy, mark, clear).
+//! The search keys (E08-S03): `/` or `cmd-f` open the bar (`Find`), `enter` / `shift-enter` in it,
+//! or `n` / `N` outside it, step through the matches, `escape` closes it, `alt-c` / `alt-i` /
+//! `alt-f` toggle case, inverse and filter mode. Each dispatches its `logs::*` command too.
+//!
+//! `m` marks the focused line, `c` copies the selection (else the lines on screen), `shift-c`
+//! clears the buffer, `ctrl-s` saves the whole buffer and `ctrl-shift-s` the lines on screen to a
+//! file, `escape` drops the selection. Mark, copy, clear and the two saves dispatch their `logs::*`
+//! command like the rest; `escape` only changes the selection, which is a view's own business.
+//!
+//! After the stream stopped (E08-S07): `r` reconnects (`logs::Reconnect`) and `shift-r` follows
+//! the pod that replaced this one (`logs::FollowReplacement`).
 
 use gpui::actions;
 
@@ -35,13 +44,48 @@ actions!(
         ToggleWrap,
         /// Show the timestamps, or not (`t`, `logs::ToggleTimestamps`).
         ToggleTimestamps,
+        /// JSON mode: columns for structured lines, or raw text (`j`, `logs::ToggleJsonMode`).
+        ToggleJsonMode,
         /// Read the previous container instance, or the current one (`p`, `logs::TogglePrevious`).
         TogglePrevious,
         /// Fill the cluster tab, or not (`f`, `logs::ToggleFullscreen`).
         ToggleFullscreen,
-        /// Mark the current position (`m`; E08-S06).
+        /// Mark the focused line, or unmark it (`m`, `logs::Mark`).
         Mark,
-        /// Copy the lines (`c`; E08-S06).
+        /// Copy the selected lines, else the lines on screen (`c`, `logs::Copy`).
         Copy,
+        /// Open the search bar (`/`, `cmd-f`, `logs::Find`).
+        Find,
+        /// Go to the next match (`enter` in the bar, `n`, `logs::NextMatch`).
+        NextMatch,
+        /// Go to the previous match (`shift-enter` in the bar, `shift-n`, `logs::PreviousMatch`).
+        PreviousMatch,
+        /// Make the search case-sensitive, or not (`alt-c`, `logs::ToggleCase`).
+        ToggleCase,
+        /// Match the lines without the pattern, or those with it (`alt-i`, `logs::ToggleInverse`).
+        ToggleInverse,
+        /// Show only the matching lines, or all with the matches highlighted (`alt-f`,
+        /// `logs::ToggleFilterMode`).
+        ToggleFilterMode,
+        /// Close the search bar and clear the search (`escape`, `logs::CloseSearch`).
+        CloseSearch,
+        /// Queue the selected lines (else the lines on screen) as context for the hosted agent
+        /// (`a`, `logs::SendToAgent`).
+        SendToAgent,
+        /// Run `kubectl logs -f` for this view in a terminal tab (`shift-t`,
+        /// `logs::TailInTerminal`); does nothing when kubectl is not installed.
+        TailInTerminal,
+        /// Empty the local buffer and the view; the stream goes on (`shift-c`, `logs::Clear`).
+        Clear,
+        /// Save everything the buffer holds to a file (`ctrl-s`, `logs::Save` with scope `all`).
+        SaveAll,
+        /// Save the lines on screen to a file (`ctrl-shift-s`, `logs::Save` with scope `visible`).
+        SaveVisible,
+        /// Select nothing (`escape`).
+        ClearSelection,
+        /// Open the stream again after it failed or ended (`r`, `logs::Reconnect`).
+        Reconnect,
+        /// Switch to the pod that replaced this one (`shift-r`, `logs::FollowReplacement`).
+        FollowReplacement,
     ]
 );

@@ -6,11 +6,11 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
     div, px,
 };
-use oxikube_domain::log::LogRange;
+use oxikube_domain::log::{LevelChip, LogRange, LogSaveScope};
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{Disableable as _, Selectable as _, h_flex};
 use oxikube_ui::menu::{DropdownMenu as _, PopupMenuItem};
-use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
+use oxikube_ui::{ActiveTokens as _, Colors, Sizable as _, u};
 
 use super::LogView;
 
@@ -32,10 +32,32 @@ impl LogView {
                     .text_size(u(tokens.font.small))
                     .child(self.title()),
             )
-            .child(self.container_selector(cx))
+            .child(if self.aggregate.is_some() {
+                self.sources_menu(cx)
+            } else {
+                self.container_selector(cx)
+            })
             .child(div().w(u(px(8.))))
             .children(LogRange::ALL.map(|range| self.range_button(range, cx)))
+            // With the range presets, where a narrow window does not cut it off (the controls on
+            // the right do clip): hidden, not disabled, without kubectl (E08-S08).
+            .children(self.can_tail_in_terminal().then(|| {
+                self.toggle(
+                    "log-tail-in-terminal",
+                    "Tail in terminal (kubectl)",
+                    false,
+                    cx,
+                    |view, cx| view.request_tail_in_terminal(cx),
+                )
+            }))
             .child(div().flex_1())
+            .child(self.toggle(
+                "log-find",
+                "Search",
+                self.search.state.is_open(),
+                cx,
+                |view, cx| view.request_find(cx),
+            ))
             .child(self.toggle(
                 "log-previous",
                 "Previous",
@@ -55,6 +77,11 @@ impl LogView {
                 cx,
                 |view, cx| view.request_timestamps(cx),
             ))
+            .children(self.shows_json_controls().then(|| {
+                self.toggle("log-json", "JSON", self.options.json, cx, |view, cx| {
+                    view.request_json_mode(cx)
+                })
+            }))
             .child(self.toggle(
                 "log-autoscroll",
                 "Autoscroll",
@@ -62,6 +89,31 @@ impl LogView {
                 cx,
                 |view, cx| view.request_autoscroll(cx),
             ))
+            .child(div().w(u(px(8.))))
+            .child(self.toggle(
+                "log-mark",
+                "Mark",
+                self.focused_seq().is_some_and(|seq| self.is_marked(seq)),
+                cx,
+                |view, cx| view.request_mark(cx),
+            ))
+            .child(self.toggle("log-copy", "Copy", false, cx, |view, cx| {
+                view.request_copy(cx)
+            }))
+            .child(self.toggle(
+                "log-send-to-agent",
+                "Send to agent",
+                false,
+                cx,
+                |view, cx| view.request_send_to_agent(cx),
+            ))
+            .child(self.toggle("log-save", "Save", false, cx, |view, cx| {
+                view.request_save(LogSaveScope::All, cx)
+            }))
+            .child(self.toggle("log-clear", "Clear", false, cx, |view, cx| {
+                view.request_clear(cx)
+            }))
+            .child(div().w(u(px(8.))))
             .child(self.toggle(
                 "log-fullscreen",
                 "Fullscreen",
@@ -71,11 +123,67 @@ impl LogView {
             ))
     }
 
-    /// `namespace/pod`.
+    /// The level chips (JSON mode): one per level plus `text`, each showing or hiding its lines.
+    pub(crate) fn level_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.options.json || !self.shows_json_controls() {
+            return None;
+        }
+        let tokens = cx.tokens();
+        let chips = LevelChip::ALL.map(|chip| {
+            let id = format!("log-level-{}", chip.label());
+            let selector = id.clone();
+            let colour = chip_colour(chip, &tokens.colors);
+            h_flex()
+                .gap(u(tokens.spacing.xs))
+                .items_center()
+                .debug_selector(move || selector)
+                .child(
+                    div()
+                        .size(u(px(6.)))
+                        .rounded_full()
+                        .bg(if self.levels.shows(chip) {
+                            colour
+                        } else {
+                            tokens.colors.text_disabled
+                        }),
+                )
+                .child(
+                    Button::new(gpui::SharedString::from(id))
+                        .label(chip.label())
+                        .ghost()
+                        .xsmall()
+                        .selected(self.levels.shows(chip))
+                        .on_click(cx.listener(move |view, _, _, cx| view.request_level(chip, cx))),
+                )
+        });
+        Some(
+            h_flex()
+                .id("log-levels")
+                .debug_selector(|| "log-levels".into())
+                .flex_none()
+                .gap(u(tokens.spacing.sm))
+                .px(u(tokens.spacing.md))
+                .py(u(tokens.spacing.xs))
+                .items_center()
+                .border_b_1()
+                .border_color(tokens.colors.border_variant)
+                .child(
+                    div()
+                        .text_color(tokens.colors.text_muted)
+                        .text_size(u(tokens.font.small))
+                        .child("Levels"),
+                )
+                .children(chips)
+                .into_any_element(),
+        )
+    }
+
+    /// `namespace/pod`, or `namespace/deployment/web` for a multi-pod view.
     fn title(&self) -> String {
+        let name = self.subject();
         match &self.target.namespace {
-            Some(namespace) => format!("{namespace}/{}", self.target.name),
-            None => self.target.name.to_string(),
+            Some(namespace) => format!("{namespace}/{name}"),
+            None => name,
         }
     }
 
@@ -149,5 +257,16 @@ impl LogView {
                     .on_click(cx.listener(move |view, _, _, cx| request(view, cx))),
             )
             .into_any_element()
+    }
+}
+
+/// The dot of a chip: the level's accent (the `text` chip is neutral).
+fn chip_colour(chip: LevelChip, colors: &Colors) -> gpui::Hsla {
+    match chip {
+        LevelChip::Trace | LevelChip::Debug => colors.text_muted,
+        LevelChip::Info => colors.info,
+        LevelChip::Warn => colors.warning,
+        LevelChip::Error | LevelChip::Fatal => colors.error,
+        LevelChip::Text => colors.text,
     }
 }

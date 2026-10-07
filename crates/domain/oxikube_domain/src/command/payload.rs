@@ -8,7 +8,7 @@ use super::meta::CommandMeta;
 use super::registry;
 use crate::colour::ClusterColour;
 use crate::ids::{ClusterId, Gvk, ResourceRef};
-use crate::log::LogRange;
+use crate::log::{LevelChip, LogRange, LogSaveScope};
 use crate::preset::ClusterPreset;
 
 /// How the API server deletes dependents of an object.
@@ -24,6 +24,11 @@ pub enum Propagation {
     Foreground,
     /// Leave dependents in place.
     Orphan,
+}
+
+/// `true`: the serde default of flags that are on unless the caller says otherwise.
+fn default_follow() -> bool {
+    true
 }
 
 /// A user or agent action as plain data.
@@ -191,6 +196,75 @@ pub enum Command {
     /// Set the UI zoom back to 100 %.
     #[serde(rename = "view::ZoomReset")]
     ViewZoomReset,
+    /// Copy the focused terminal's selection to the clipboard (E09-S06). Does nothing without a
+    /// selection. Reads and changes nothing in a cluster.
+    #[serde(rename = "terminal::Copy")]
+    TerminalCopy,
+    /// Paste the clipboard into the focused terminal (E09-S06), as a bracketed paste when the
+    /// process asked for it; text with several lines asks first (setting
+    /// `terminal.confirm_multiline_paste`). Writes only to the user's own session.
+    #[serde(rename = "terminal::Paste")]
+    TerminalPaste,
+    /// Open a local shell in a new terminal (E09-S07): in the bottom dock of `cluster`'s tab (the
+    /// displayed cluster tab when `None`) with that cluster's `KUBECONFIG`, context and namespace
+    /// in its environment, or as a plain shell tab of the window when no cluster tab is shown.
+    /// Starts a process on this machine; reads and changes nothing in a cluster.
+    #[serde(rename = "terminal::New")]
+    TerminalNew {
+        /// The cluster whose tab gets the terminal; the displayed cluster tab when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+    },
+    /// Open a new terminal in a new pane to the right of the active pane (E09-S07): the same
+    /// shell, directory and cluster as the focused terminal, else a local shell of the displayed
+    /// cluster. Reads and changes nothing in a cluster.
+    #[serde(rename = "terminal::Split")]
+    TerminalSplit,
+    /// Close the focused terminal (E09-S07), ending its process; the active pane's terminal when
+    /// focus is elsewhere. Does nothing when neither is a terminal.
+    #[serde(rename = "terminal::Close")]
+    TerminalClose,
+    /// Open the focused pod terminal's session again after its connection dropped or it ended
+    /// (E09-S12): a new session in the same container (the state of the old shell is gone). Goes
+    /// through the exec service, which re-checks the exec capability. Does nothing for a terminal
+    /// that is running or runs on this machine.
+    #[serde(rename = "terminal::Reconnect")]
+    TerminalReconnect,
+    /// Start a new shell in the focused local terminal whose shell exited (E09-S12), with the same
+    /// program, directory and cluster. Does nothing for a terminal that is running or runs in a
+    /// pod.
+    #[serde(rename = "terminal::Restart")]
+    TerminalRestart,
+    /// Clear the focused terminal (E09-S11): its scrollback is dropped and the lines above the cursor are cleared, so the prompt moves to the top. The process is not told and is not interrupted. Changes nothing in a cluster.
+    #[serde(rename = "terminal::Clear")]
+    TerminalClear,
+    /// Scroll the focused terminal's history one line towards the live screen (E09-S11).
+    #[serde(rename = "terminal::ScrollLineDown")]
+    TerminalScrollLineDown,
+    /// Scroll the focused terminal's history one line up (E09-S11).
+    #[serde(rename = "terminal::ScrollLineUp")]
+    TerminalScrollLineUp,
+    /// Scroll the focused terminal's history one screen towards the live screen (E09-S11).
+    #[serde(rename = "terminal::ScrollPageDown")]
+    TerminalScrollPageDown,
+    /// Scroll the focused terminal's history one screen up (E09-S11).
+    #[serde(rename = "terminal::ScrollPageUp")]
+    TerminalScrollPageUp,
+    /// Open the search bar of the focused terminal (E09-S11) to find text, as a regular expression, in its screen and scrollback.
+    #[serde(rename = "terminal::Search")]
+    TerminalSearch,
+    /// Close the focused terminal's search bar and hand the keyboard back to the process (E09-S11).
+    #[serde(rename = "terminal::SearchClose")]
+    TerminalSearchClose,
+    /// Jump to the next match of the focused terminal's search, wrapping at the end (E09-S11).
+    #[serde(rename = "terminal::SearchNext")]
+    TerminalSearchNext,
+    /// Jump to the previous match of the focused terminal's search, wrapping at the start (E09-S11).
+    #[serde(rename = "terminal::SearchPrevious")]
+    TerminalSearchPrevious,
+    /// Select the whole screen and scrollback of the focused terminal (E09-S11), ready to copy.
+    #[serde(rename = "terminal::SelectAll")]
+    TerminalSelectAll,
     /// Open a link a terminal shows (cmd/ctrl-click, E09-S05): an `http`, `https`, `mailto` or
     /// `file` URL in the browser, or an absolute local path (an optional `:line[:column]` suffix
     /// is accepted) with the system's opener. Reads and changes nothing in a cluster.
@@ -343,7 +417,30 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         grace_period_seconds: Option<u32>,
     },
-    /// Run a command (or an interactive shell) in a container.
+    /// Open an interactive shell in a container: `bash`, else `sh` (the `terminal.exec_shells`
+    /// chain), probed with a quick exec. An exec-class command: blocked on a read-only cluster
+    /// unless `exec_in_read_only` allows it, never confirmed, audited on every open.
+    #[serde(rename = "pod::Shell")]
+    PodShell {
+        /// The pod to open a shell in.
+        target: ResourceRef,
+        /// Container name; `None` picks the default one (the `kubectl.kubernetes.io/
+        /// default-container` annotation, else the first container).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+    },
+    /// Attach to the main process of a container (`kubectl attach -it`). An exec-class command
+    /// like [`Command::PodShell`].
+    #[serde(rename = "pod::Attach")]
+    PodAttach {
+        /// The pod to attach to.
+        target: ResourceRef,
+        /// Container name; `None` picks the default one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+    },
+    /// Run a command (or an interactive shell) in a container. An exec-class command like
+    /// [`Command::PodShell`].
     #[serde(rename = "pod::Exec")]
     PodExec {
         /// The pod to exec into.
@@ -383,6 +480,68 @@ pub enum Command {
         /// Only the last N lines.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tail_lines: Option<u32>,
+    },
+    /// Empty a log view's local buffer (the cluster's logs are untouched; streaming continues).
+    /// Asks first when the view has marked lines.
+    #[serde(rename = "logs::Clear")]
+    LogsClear {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Copy the selected lines of a log view to the clipboard; with no selection, the lines on
+    /// screen.
+    #[serde(rename = "logs::Copy")]
+    LogsCopy {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Queue the selected lines of a log view (with no selection, the lines on screen) as context
+    /// for the hosted agent, with where they came from. The agent panel (E27) drains the queue;
+    /// until then it waits locally. Reads nothing from the cluster and changes nothing in it.
+    #[serde(rename = "logs::SendToAgent")]
+    LogsSendToAgent {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Run `kubectl logs -f` for what a log view shows (its pod and container, or a workload's pods
+    /// by selector) in a terminal tab of the cluster, with the cluster's kubeconfig in the
+    /// terminal's environment: the escape hatch for users who want kubectl itself. Starts a
+    /// process on this machine; `kubectl logs` reads and changes nothing in the cluster. Does
+    /// nothing when kubectl is not installed.
+    #[serde(rename = "logs::TailInTerminal")]
+    LogsTailInTerminal {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Mark or unmark the focused line of a log view.
+    #[serde(rename = "logs::Mark")]
+    LogsMark {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Switch a log view whose pod was replaced (deleted by a rollout, recreated by its
+    /// StatefulSet) to the pod that took over, found through the gone pod's controller. Reads
+    /// only; the view says when there is no replacement (yet).
+    #[serde(rename = "logs::FollowReplacement")]
+    LogsFollowReplacement {
+        /// The object the log view shows (the gone pod).
+        target: ResourceRef,
+    },
+    /// Open a log view's stream again after it failed (the reconnects ran out, a denied read
+    /// that was fixed) or ended; the lines it holds stay and the overlap is not shown twice.
+    #[serde(rename = "logs::Reconnect")]
+    LogsReconnect {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Offer to save a log view's lines to a file: the view shows what would be written and the
+    /// user picks the file, so nothing is written without them.
+    #[serde(rename = "logs::Save")]
+    LogsSave {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// Which lines: the ones on screen, or the whole buffer.
+        scope: LogSaveScope,
     },
     /// Read another part of a log view's log: the tail, the head or the last minutes
     /// (reopens the stream). `target` is what the view was opened on (a pod).
@@ -427,9 +586,97 @@ pub enum Command {
         /// The object the log view shows.
         target: ResourceRef,
     },
+    /// Show or hide the lines of one pod (or one of its containers) in a multi-pod log view.
+    /// The source keeps streaming while hidden.
+    #[serde(rename = "logs::ToggleSource")]
+    LogsToggleSource {
+        /// The workload or Service the log view shows.
+        target: ResourceRef,
+        /// The pod's name.
+        pod: String,
+        /// The container's name; `None` toggles every container of the pod.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+    },
     /// Wrap a log view's long lines, or let them run off the edge.
     #[serde(rename = "logs::ToggleWrap")]
     LogsToggleWrap {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Open a log view's search bar, optionally with `pattern` already typed.
+    #[serde(rename = "logs::Find")]
+    LogsFind {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The regular expression to search for; `None` just opens the bar.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pattern: Option<String>,
+    },
+    /// Go to the next match of a log view's search, wrapping from the last to the first.
+    #[serde(rename = "logs::NextMatch")]
+    LogsNextMatch {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Go to the previous match of a log view's search, wrapping from the first to the last.
+    #[serde(rename = "logs::PreviousMatch")]
+    LogsPreviousMatch {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Make a log view's search case-sensitive, or case-insensitive again.
+    #[serde(rename = "logs::ToggleCase")]
+    LogsToggleCase {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Match the lines that do not contain a log view's pattern, or those that do.
+    #[serde(rename = "logs::ToggleInverse")]
+    LogsToggleInverse {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Hide the lines that do not match a log view's search, or show every line with the matches
+    /// highlighted.
+    #[serde(rename = "logs::ToggleFilterMode")]
+    LogsToggleFilterMode {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Close a log view's search bar and clear its highlights and filter.
+    #[serde(rename = "logs::CloseSearch")]
+    LogsCloseSearch {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Show structured (JSON) lines as level, time and message columns with expandable fields,
+    /// or show every line as the raw text it is.
+    #[serde(rename = "logs::ToggleJsonMode")]
+    LogsToggleJsonMode {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
+    /// Show or hide the lines of one level in a log view (the level chips).
+    #[serde(rename = "logs::ToggleLevel")]
+    LogsToggleLevel {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The chip to flip: a level, or `text` for plain and level-less lines.
+        level: LevelChip,
+    },
+    /// Expand a structured line of a log view into its pretty-printed pane, or close the pane
+    /// when it already shows that line.
+    #[serde(rename = "logs::ToggleLine")]
+    LogsToggleLine {
+        /// The object the log view shows.
+        target: ResourceRef,
+        /// The line's sequence number in the view (its row's `seq`).
+        seq: u64,
+    },
+    /// Close the expanded-line pane of a log view.
+    #[serde(rename = "logs::CollapseLine")]
+    LogsCollapseLine {
         /// The object the log view shows.
         target: ResourceRef,
     },
@@ -446,6 +693,25 @@ pub enum Command {
     WorkloadRestart {
         /// The workload to restart.
         target: ResourceRef,
+    },
+    /// Open the logs of every pod of a workload or Service merged by time, one colour per pod
+    /// (stern-style). The pods are the ones the object's selector matches.
+    #[serde(rename = "workload::ViewLogs")]
+    WorkloadViewLogs {
+        /// The Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or Service to read.
+        target: ResourceRef,
+        /// A further label selector (`app=web,tier!=db`) the pods must match too.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+        /// Read only the containers of this name; `None` reads every container.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+        /// Keep streaming new lines (default `true`).
+        #[serde(default = "default_follow")]
+        follow: bool,
+        /// Only the last N lines of every pod.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tail_lines: Option<u32>,
     },
     /// Mark a node unschedulable.
     #[serde(rename = "node::Cordon")]
@@ -500,6 +766,23 @@ impl Command {
             Command::ViewZoomOut => CommandId::VIEW_ZOOM_OUT,
             Command::ViewZoomReset => CommandId::VIEW_ZOOM_RESET,
             Command::TerminalOpenLink { .. } => CommandId::TERMINAL_OPEN_LINK,
+            Command::TerminalCopy => CommandId::TERMINAL_COPY,
+            Command::TerminalPaste => CommandId::TERMINAL_PASTE,
+            Command::TerminalNew { .. } => CommandId::TERMINAL_NEW,
+            Command::TerminalSplit => CommandId::TERMINAL_SPLIT,
+            Command::TerminalClose => CommandId::TERMINAL_CLOSE,
+            Command::TerminalReconnect => CommandId::TERMINAL_RECONNECT,
+            Command::TerminalRestart => CommandId::TERMINAL_RESTART,
+            Command::TerminalClear => CommandId::TERMINAL_CLEAR,
+            Command::TerminalScrollLineDown => CommandId::TERMINAL_SCROLL_LINE_DOWN,
+            Command::TerminalScrollLineUp => CommandId::TERMINAL_SCROLL_LINE_UP,
+            Command::TerminalScrollPageDown => CommandId::TERMINAL_SCROLL_PAGE_DOWN,
+            Command::TerminalScrollPageUp => CommandId::TERMINAL_SCROLL_PAGE_UP,
+            Command::TerminalSearch => CommandId::TERMINAL_SEARCH,
+            Command::TerminalSearchClose => CommandId::TERMINAL_SEARCH_CLOSE,
+            Command::TerminalSearchNext => CommandId::TERMINAL_SEARCH_NEXT,
+            Command::TerminalSearchPrevious => CommandId::TERMINAL_SEARCH_PREVIOUS,
+            Command::TerminalSelectAll => CommandId::TERMINAL_SELECT_ALL,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -520,18 +803,41 @@ impl Command {
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
             Command::ResourceApply { .. } => CommandId::RESOURCE_APPLY,
             Command::PodDelete { .. } => CommandId::POD_DELETE,
+            Command::PodShell { .. } => CommandId::POD_SHELL,
+            Command::PodAttach { .. } => CommandId::POD_ATTACH,
             Command::PodExec { .. } => CommandId::POD_EXEC,
             Command::PodPortForward { .. } => CommandId::POD_PORT_FORWARD,
             Command::PodViewLogs { .. } => CommandId::POD_VIEW_LOGS,
+            Command::LogsClear { .. } => CommandId::LOGS_CLEAR,
+            Command::LogsCopy { .. } => CommandId::LOGS_COPY,
+            Command::LogsMark { .. } => CommandId::LOGS_MARK,
+            Command::LogsSendToAgent { .. } => CommandId::LOGS_SEND_TO_AGENT,
+            Command::LogsTailInTerminal { .. } => CommandId::LOGS_TAIL_IN_TERMINAL,
+            Command::LogsFollowReplacement { .. } => CommandId::LOGS_FOLLOW_REPLACEMENT,
+            Command::LogsReconnect { .. } => CommandId::LOGS_RECONNECT,
+            Command::LogsSave { .. } => CommandId::LOGS_SAVE,
             Command::LogsSetRange { .. } => CommandId::LOGS_SET_RANGE,
             Command::LogsSelectContainer { .. } => CommandId::LOGS_SELECT_CONTAINER,
             Command::LogsToggleAutoscroll { .. } => CommandId::LOGS_TOGGLE_AUTOSCROLL,
             Command::LogsToggleFullscreen { .. } => CommandId::LOGS_TOGGLE_FULLSCREEN,
             Command::LogsTogglePrevious { .. } => CommandId::LOGS_TOGGLE_PREVIOUS,
             Command::LogsToggleTimestamps { .. } => CommandId::LOGS_TOGGLE_TIMESTAMPS,
+            Command::LogsToggleSource { .. } => CommandId::LOGS_TOGGLE_SOURCE,
             Command::LogsToggleWrap { .. } => CommandId::LOGS_TOGGLE_WRAP,
+            Command::LogsFind { .. } => CommandId::LOGS_FIND,
+            Command::LogsNextMatch { .. } => CommandId::LOGS_NEXT_MATCH,
+            Command::LogsPreviousMatch { .. } => CommandId::LOGS_PREVIOUS_MATCH,
+            Command::LogsToggleCase { .. } => CommandId::LOGS_TOGGLE_CASE,
+            Command::LogsToggleInverse { .. } => CommandId::LOGS_TOGGLE_INVERSE,
+            Command::LogsToggleFilterMode { .. } => CommandId::LOGS_TOGGLE_FILTER_MODE,
+            Command::LogsCloseSearch { .. } => CommandId::LOGS_CLOSE_SEARCH,
+            Command::LogsToggleJsonMode { .. } => CommandId::LOGS_TOGGLE_JSON_MODE,
+            Command::LogsToggleLevel { .. } => CommandId::LOGS_TOGGLE_LEVEL,
+            Command::LogsToggleLine { .. } => CommandId::LOGS_TOGGLE_LINE,
+            Command::LogsCollapseLine { .. } => CommandId::LOGS_COLLAPSE_LINE,
             Command::WorkloadScale { .. } => CommandId::WORKLOAD_SCALE,
             Command::WorkloadRestart { .. } => CommandId::WORKLOAD_RESTART,
+            Command::WorkloadViewLogs { .. } => CommandId::WORKLOAD_VIEW_LOGS,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
             Command::NodeUncordon { .. } => CommandId::NODE_UNCORDON,
             Command::NodeDrain { .. } => CommandId::NODE_DRAIN,
@@ -553,6 +859,12 @@ impl Command {
         self.meta().mutating
     }
 
+    /// Whether this command opens an interactive session in a container (the exec class: see
+    /// [`CommandMeta::exec`]).
+    pub fn is_exec(&self) -> bool {
+        self.meta().exec
+    }
+
     /// The resource this command targets, if it acts on a single selection.
     pub fn target(&self) -> Option<&ResourceRef> {
         match self {
@@ -567,18 +879,41 @@ impl Command {
             | Command::ResourceViewYaml { target }
             | Command::ResourceDelete { target, .. }
             | Command::PodDelete { target, .. }
+            | Command::PodShell { target, .. }
+            | Command::PodAttach { target, .. }
             | Command::PodExec { target, .. }
             | Command::PodPortForward { target, .. }
             | Command::PodViewLogs { target, .. }
+            | Command::LogsClear { target }
+            | Command::LogsCopy { target }
+            | Command::LogsMark { target }
+            | Command::LogsSendToAgent { target }
+            | Command::LogsTailInTerminal { target }
+            | Command::LogsFollowReplacement { target }
+            | Command::LogsReconnect { target }
+            | Command::LogsSave { target, .. }
             | Command::LogsSetRange { target, .. }
             | Command::LogsSelectContainer { target, .. }
             | Command::LogsToggleAutoscroll { target }
             | Command::LogsToggleFullscreen { target }
             | Command::LogsTogglePrevious { target }
             | Command::LogsToggleTimestamps { target }
+            | Command::LogsToggleSource { target, .. }
             | Command::LogsToggleWrap { target }
+            | Command::LogsFind { target, .. }
+            | Command::LogsNextMatch { target }
+            | Command::LogsPreviousMatch { target }
+            | Command::LogsToggleCase { target }
+            | Command::LogsToggleInverse { target }
+            | Command::LogsToggleFilterMode { target }
+            | Command::LogsCloseSearch { target }
+            | Command::LogsToggleJsonMode { target }
+            | Command::LogsToggleLevel { target, .. }
+            | Command::LogsToggleLine { target, .. }
+            | Command::LogsCollapseLine { target }
             | Command::WorkloadScale { target, .. }
             | Command::WorkloadRestart { target }
+            | Command::WorkloadViewLogs { target, .. }
             | Command::NodeCordon { target }
             | Command::NodeUncordon { target }
             | Command::NodeDrain { target, .. } => Some(target),
@@ -695,6 +1030,26 @@ mod tests {
             Command::TerminalOpenLink {
                 target: "https://kubernetes.io".into(),
             },
+            Command::TerminalCopy,
+            Command::TerminalPaste,
+            Command::TerminalNew { cluster: None },
+            Command::TerminalNew {
+                cluster: Some(cluster()),
+            },
+            Command::TerminalSplit,
+            Command::TerminalClose,
+            Command::TerminalReconnect,
+            Command::TerminalRestart,
+            Command::TerminalClear,
+            Command::TerminalScrollLineDown,
+            Command::TerminalScrollLineUp,
+            Command::TerminalScrollPageDown,
+            Command::TerminalScrollPageUp,
+            Command::TerminalSearch,
+            Command::TerminalSearchClose,
+            Command::TerminalSearchNext,
+            Command::TerminalSearchPrevious,
+            Command::TerminalSelectAll,
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -742,6 +1097,14 @@ mod tests {
                 target: pod(),
                 grace_period_seconds: Some(0),
             },
+            Command::PodShell {
+                target: pod(),
+                container: Some("app".into()),
+            },
+            Command::PodAttach {
+                target: pod(),
+                container: None,
+            },
             Command::PodExec {
                 target: pod(),
                 container: Some("app".into()),
@@ -759,6 +1122,17 @@ mod tests {
                 previous: false,
                 tail_lines: Some(500),
             },
+            Command::LogsClear { target: pod() },
+            Command::LogsCopy { target: pod() },
+            Command::LogsMark { target: pod() },
+            Command::LogsSendToAgent { target: pod() },
+            Command::LogsTailInTerminal { target: pod() },
+            Command::LogsFollowReplacement { target: pod() },
+            Command::LogsReconnect { target: pod() },
+            Command::LogsSave {
+                target: pod(),
+                scope: LogSaveScope::All,
+            },
             Command::LogsSetRange {
                 target: pod(),
                 range: LogRange::Last15m,
@@ -771,7 +1145,39 @@ mod tests {
             Command::LogsToggleFullscreen { target: pod() },
             Command::LogsTogglePrevious { target: pod() },
             Command::LogsToggleTimestamps { target: pod() },
+            Command::LogsToggleSource {
+                target: deployment(),
+                pod: "web-7d9".into(),
+                container: Some("app".into()),
+            },
             Command::LogsToggleWrap { target: pod() },
+            Command::LogsFind {
+                target: pod(),
+                pattern: Some("timeout".into()),
+            },
+            Command::LogsNextMatch { target: pod() },
+            Command::LogsPreviousMatch { target: pod() },
+            Command::LogsToggleCase { target: pod() },
+            Command::LogsToggleInverse { target: pod() },
+            Command::LogsToggleFilterMode { target: pod() },
+            Command::LogsCloseSearch { target: pod() },
+            Command::LogsToggleJsonMode { target: pod() },
+            Command::LogsToggleLevel {
+                target: pod(),
+                level: LevelChip::Warn,
+            },
+            Command::LogsToggleLine {
+                target: pod(),
+                seq: 7,
+            },
+            Command::LogsCollapseLine { target: pod() },
+            Command::WorkloadViewLogs {
+                target: deployment(),
+                selector: Some("tier=api".into()),
+                container: None,
+                follow: true,
+                tail_lines: Some(200),
+            },
             Command::WorkloadScale {
                 target: deployment(),
                 replicas: 3,
@@ -836,6 +1242,31 @@ mod tests {
         );
         assert!(command.is_mutating());
         assert_eq!(command.target(), Some(&deployment()));
+    }
+
+    #[test]
+    fn exec_commands_parse_from_tool_arguments_and_are_exec_class() {
+        let shell: Command = serde_json::from_value(json!({
+            "type": "pod::Shell",
+            "target": pod(),
+        }))
+        .unwrap();
+        assert_eq!(
+            shell,
+            Command::PodShell {
+                target: pod(),
+                container: None
+            }
+        );
+        assert!(shell.is_exec() && !shell.is_mutating());
+        assert_eq!(shell.effective_risk(), None, "a shell is not a mutation");
+        for command in samples() {
+            let exec = matches!(
+                command,
+                Command::PodShell { .. } | Command::PodAttach { .. } | Command::PodExec { .. }
+            );
+            assert_eq!(command.is_exec(), exec, "{}", command.id());
+        }
     }
 
     #[test]
@@ -908,6 +1339,23 @@ mod tests {
                     | Command::ViewZoomOut
                     | Command::ViewZoomReset
                     | Command::TerminalOpenLink { .. }
+                    | Command::TerminalCopy
+                    | Command::TerminalPaste
+                    | Command::TerminalNew { .. }
+                    | Command::TerminalSplit
+                    | Command::TerminalClose
+                    | Command::TerminalReconnect
+                    | Command::TerminalRestart
+                    | Command::TerminalClear
+                    | Command::TerminalScrollLineDown
+                    | Command::TerminalScrollLineUp
+                    | Command::TerminalScrollPageDown
+                    | Command::TerminalScrollPageUp
+                    | Command::TerminalSearch
+                    | Command::TerminalSearchClose
+                    | Command::TerminalSearchNext
+                    | Command::TerminalSearchPrevious
+                    | Command::TerminalSelectAll
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }
@@ -923,13 +1371,34 @@ mod tests {
                     | Command::ResourceSelectAll { .. }
                     | Command::TableFocusFilter { .. }
                     | Command::ResourceViewYaml { .. }
+                    | Command::LogsClear { .. }
+                    | Command::LogsCopy { .. }
+                    | Command::LogsMark { .. }
+                    | Command::LogsSendToAgent { .. }
+                    | Command::LogsTailInTerminal { .. }
+                    | Command::LogsFollowReplacement { .. }
+                    | Command::LogsReconnect { .. }
+                    | Command::LogsSave { .. }
                     | Command::LogsSetRange { .. }
                     | Command::LogsSelectContainer { .. }
                     | Command::LogsToggleAutoscroll { .. }
                     | Command::LogsToggleFullscreen { .. }
                     | Command::LogsTogglePrevious { .. }
                     | Command::LogsToggleTimestamps { .. }
+                    | Command::LogsToggleSource { .. }
                     | Command::LogsToggleWrap { .. }
+                    | Command::LogsFind { .. }
+                    | Command::LogsNextMatch { .. }
+                    | Command::LogsPreviousMatch { .. }
+                    | Command::LogsToggleCase { .. }
+                    | Command::LogsToggleInverse { .. }
+                    | Command::LogsToggleFilterMode { .. }
+                    | Command::LogsCloseSearch { .. }
+                    | Command::LogsToggleJsonMode { .. }
+                    | Command::LogsToggleLevel { .. }
+                    | Command::LogsToggleLine { .. }
+                    | Command::LogsCollapseLine { .. }
+                    | Command::WorkloadViewLogs { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterApplyPreset { .. }

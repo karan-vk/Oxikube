@@ -287,3 +287,20 @@ fn a_live_exit_ends_the_stream_before_later_scripted_events() {
         assert!(events.next().await.is_none());
     });
 }
+
+#[test]
+fn the_working_directory_is_reported_while_the_session_runs() {
+    let backend = FakeTerminalBackend::silent();
+    assert_eq!(backend.working_directory(), None, "unknown by default");
+    backend.set_working_directory("/home/me/projects/shop");
+    assert_eq!(
+        backend.working_directory().as_deref(),
+        Some(std::path::Path::new("/home/me/projects/shop"))
+    );
+    block_on(backend.kill()).expect("killed");
+    assert_eq!(
+        backend.working_directory(),
+        None,
+        "an ended session has none"
+    );
+}

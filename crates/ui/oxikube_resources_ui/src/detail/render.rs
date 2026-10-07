@@ -120,6 +120,7 @@ impl DetailView {
                             .font_semibold()
                             .child(name.to_string()),
                     )
+                    .children(self.exec_buttons(cx))
                     .when(mount == Mount::Drawer, |row| {
                         row.child(
                             div().debug_selector(|| "detail-pin".to_owned()).child(

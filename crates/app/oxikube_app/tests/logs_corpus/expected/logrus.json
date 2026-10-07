@@ -1,0 +1,107 @@
+[
+  {
+    "kind": "record",
+    "level": "Info",
+    "time": {
+      "instant": "2023-10-07T09:20:00Z",
+      "text": "2023-10-07T09:20:00Z",
+      "display": "09:20:00.000"
+    },
+    "message": "Listening on :8080",
+    "fields": {},
+    "field_order": [],
+    "summary": ""
+  },
+  {
+    "kind": "record",
+    "level": "Warn",
+    "time": {
+      "instant": "2023-10-07T00:20:01.123457Z",
+      "text": "2023-10-07T09:20:01.123456789+09:00",
+      "display": "00:20:01.123"
+    },
+    "message": "The group's number increased tremendously!",
+    "fields": {
+      "animal": "walrus"
+    },
+    "field_order": [
+      "animal"
+    ],
+    "summary": "animal=walrus"
+  },
+  {
+    "kind": "record",
+    "level": "Error",
+    "time": {
+      "instant": "2023-10-07T09:20:02Z",
+      "text": "2023-10-07T09:20:02Z",
+      "display": "09:20:02.000"
+    },
+    "message": "Failed to send event",
+    "fields": {
+      "err": "timeout",
+      "retries": 3
+    },
+    "field_order": [
+      "err",
+      "retries"
+    ],
+    "summary": "err=timeout retries=3"
+  },
+  {
+    "kind": "record",
+    "level": "Trace",
+    "time": {
+      "instant": "2023-10-07T09:20:03Z",
+      "text": "2023-10-07T09:20:03Z",
+      "display": "09:20:03.000"
+    },
+    "message": "entering handler",
+    "fields": {},
+    "field_order": [],
+    "summary": ""
+  },
+  {
+    "kind": "record",
+    "level": "Debug",
+    "time": {
+      "instant": "2023-10-07T09:20:04Z",
+      "text": "2023-10-07T09:20:04Z",
+      "display": "09:20:04.000"
+    },
+    "message": "cache miss",
+    "fields": {
+      "key": "user:42"
+    },
+    "field_order": [
+      "key"
+    ],
+    "summary": "key=user:42"
+  },
+  {
+    "kind": "record",
+    "level": "Fatal",
+    "time": {
+      "instant": "2023-10-07T09:20:05Z",
+      "text": "2023-10-07T09:20:05Z",
+      "display": "09:20:05.000"
+    },
+    "message": "cannot bind",
+    "fields": {},
+    "field_order": [],
+    "summary": ""
+  },
+  {
+    "kind": "record",
+    "level": "Fatal",
+    "time": {
+      "instant": "2023-10-07T09:20:06Z",
+      "text": "2023-10-07T09:20:06Z",
+      "display": "09:20:06.000"
+    },
+    "message": "nil map",
+    "fields": {},
+    "field_order": [],
+    "summary": ""
+  }
+]

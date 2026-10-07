@@ -6,10 +6,13 @@ use std::rc::Rc;
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{App, AppContext as _, Context, Entity, SharedString, Task, WeakEntity, Window};
+use oxikube_app::logs::AggregateSpec;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_workspace::{ClusterTabs, OpenOptions, Workspace};
 
 use super::{LogRequest, ViewChange};
+use crate::LogsSettings;
+use crate::search::SearchMemory;
 use crate::view::{LogView, LogViewDeps, OpenLogs, ViewOptions, item_key};
 
 /// Where a cluster's log views live: the workspace of its tab in this window. The app's is the
@@ -50,6 +53,8 @@ pub struct LogViewsDeps {
 /// Opens and drives the log views of one window. See the [module docs](self).
 pub struct LogViews {
     deps: LogViewsDeps,
+    /// The searches of this window's log views, kept for the session.
+    searches: SearchMemory,
     _requests: Task<()>,
 }
 
@@ -75,6 +80,7 @@ impl LogViews {
             });
             Self {
                 deps,
+                searches: SearchMemory::new(),
                 _requests: pump,
             }
         })
@@ -89,6 +95,12 @@ impl LogViews {
             LogRequest::Change { target, change } => {
                 if let Some(view) = self.view_of(&target, cx) {
                     view.update(cx, |view, cx| match &change {
+                        ViewChange::Clear => view.clear(window, cx),
+                        ViewChange::Copy => view.copy_lines(cx),
+                        ViewChange::Mark => view.toggle_mark(cx),
+                        ViewChange::SendToAgent => view.send_to_agent(cx),
+                        ViewChange::TailInTerminal => view.tail_in_terminal(cx),
+                        ViewChange::Save(scope) => view.offer_save(*scope, window, cx),
                         ViewChange::SetRange(range) => view.set_range(*range, cx),
                         ViewChange::SelectContainer(name) => view.select_container(name, cx),
                         ViewChange::ToggleAutoscroll => view.toggle_autoscroll(cx),
@@ -96,15 +108,31 @@ impl LogViews {
                         ViewChange::TogglePrevious => view.toggle_previous(cx),
                         ViewChange::ToggleTimestamps => view.toggle_timestamps(cx),
                         ViewChange::ToggleWrap => view.toggle_wrap(cx),
+                        ViewChange::Find(pattern) => view.find(pattern.as_deref(), window, cx),
+                        ViewChange::NextMatch => view.next_match(cx),
+                        ViewChange::PreviousMatch => view.previous_match(cx),
+                        ViewChange::ToggleCase => view.toggle_case(cx),
+                        ViewChange::ToggleInverse => view.toggle_inverse(cx),
+                        ViewChange::ToggleFilterMode => view.toggle_filter_mode(cx),
+                        ViewChange::CloseSearch => view.close_search(window, cx),
+                        ViewChange::ToggleJsonMode => view.toggle_json_mode(cx),
+                        ViewChange::ToggleLevel(chip) => view.toggle_level(*chip, cx),
+                        ViewChange::ToggleLine(seq) => view.toggle_expanded(*seq, cx),
+                        ViewChange::CollapseLine => view.collapse(cx),
+                        ViewChange::Reconnect => view.reconnect(cx),
+                        ViewChange::FollowReplacement => view.follow_replacement(cx),
+                        ViewChange::ToggleSource { pod, container } => {
+                            view.toggle_source(pod, container.as_deref());
+                        }
                     });
                 }
             }
         }
     }
 
-    /// Shows the log view of `target` in its cluster's tab, reading what `open` asks: the open
-    /// one (switched to it), else a new tab, focused so its keys work. `None` when the cluster
-    /// has no tab here.
+    /// Shows the log view of `target` (a pod, or a workload or Service whose pods are merged) in
+    /// its cluster's tab, reading what `open` asks: the open one (switched to it), else a new tab,
+    /// focused so its keys work. `None` when the cluster has no tab here.
     pub fn open(
         &mut self,
         target: &ResourceRef,
@@ -112,6 +140,10 @@ impl LogViews {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Entity<LogView>> {
+        // A pod, or an object whose pods are merged; nothing else has logs to open.
+        if !super::is_pod(target) && AggregateSpec::of(target).is_none() {
+            return None;
+        }
         let workspace = self.deps.host.workspace(&target.cluster, cx)?;
         self.deps.host.show(&target.cluster, window, cx);
         let key = SharedString::from(item_key(target));
@@ -123,11 +155,22 @@ impl LogViews {
         }
         let deps = self.deps.views.clone();
         let target = target.clone();
-        let mut options = ViewOptions::default();
+        let mut options = ViewOptions::from_settings(&LogsSettings::resolve(&target.cluster, cx));
         open.apply(&mut options);
+        let searches = self.searches.clone();
         let view = cx.new(|cx| {
-            let mut view = LogView::with_options(target, options, deps, cx);
+            let saved = searches.get(&target);
+            let mut view = if super::is_pod(&target) {
+                LogView::with_options(target, options, deps, cx)
+            } else {
+                LogView::workload(target, options, deps, cx)
+            };
             view.set_workspace(workspace.downgrade());
+            view.set_search_memory(searches);
+            // The same pod's logs opened again in this session: the search as it was.
+            if let Some(saved) = saved {
+                view.restore_search(&saved, cx);
+            }
             view
         });
         let options = OpenOptions {

@@ -10,15 +10,25 @@
 //!
 //! | File | Holds |
 //! |---|---|
+//! | `aggregate` | a workload or Service as one merged log (E08-S04): pod colours and gutters, the banner, switching sources off |
 //! | `options` | [`ViewOptions`]: range (tail / head / since), container, previous, wrap, timestamps; the port's request |
-//! | `window` | [`LineWindow`] (the rows: truncated marker, lines by seq, state row) and [`Follow`] (autoscroll and its "N new lines" count, by seq) |
+//! | `window` | [`LineWindow`] (the rows: truncated marker, lines by seq or the search's matches, state row) |
+//! | `autoscroll` | [`Follow`] (autoscroll and its "N new lines" count, by seq) |
 //! | `text` | what a row says: timestamp, level colour, marker and state words |
 //! | `containers` | the container selector's list (init, sidecar, regular, ephemeral) from the pod spec |
 //! | `stream` | opening and reopening the session, the delta pump |
+//! | `settings` | the `logs` settings of the view's cluster: its first options, and `wrap` / `timestamps` / `json_auto_detect` applied live |
 //! | `scroll` | autoscroll, pausing on a scroll up, the anchor line across the wrap toggle |
 //! | `controls` | the view's operations (what the commands do) and the requests that dispatch them |
+//! | `selection`, `chrome` | [`Selection`] (click, shift-click, drag, by seq) and [`Marks`] (k9s `m`), the pointer handlers; the gutter bar and selection colour a row carries |
+//! | `agent` | `logs::SendToAgent`: the selection (else the lines on screen) as agent context, with its source |
+//! | `pick`, `copy` | which lines an action takes (on screen, the buffer, the filter) and `logs::Copy` (cap 5 MB) |
+//! | `save`, `clear`, `notice` | `logs::Save` (dialog, panel, streamed write), `logs::Clear`, the toasts of local actions |
+//! | `tail` | `logs::TailInTerminal` (E08-S08): `kubectl logs -f` for what the view shows, in a terminal tab; the toolbar offers it only when kubectl is installed |
+//! | `recovery` | after the stream stopped (E08-S07): `logs::FollowReplacement` (switch to the pod that replaced a gone one), `logs::Reconnect`, the strip offering them |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
 //! | `render`, `toolbar`, `rows` | drawing: toolbar, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
+//! | `json`, `columns`, `filter`, `detail` | JSON mode (E08-S05): the parsed columns of a structured line and their caches, the row they draw, the level chips and the filtered row index, the expanded line's pane |
 //! | `item` | the workspace `Item`, focus and key context |
 //!
 //! # Rendering and performance
@@ -32,42 +42,81 @@
 //! key (PERFORMANCE rule 5). Unwrapped rows draw at most [`NOWRAP_CHARS`] bytes of a line.
 
 mod actions;
+mod agent;
+mod aggregate;
+mod autoscroll;
+mod chrome;
+mod clear;
+mod columns;
 mod containers;
 mod controls;
+mod copy;
+mod detail;
+mod filter;
+mod highlight;
 mod item;
+mod json;
+mod notice;
 mod options;
+mod pick;
+mod recovery;
 mod render;
 mod rows;
+mod save;
 mod scroll;
+mod selection;
+mod settings;
 mod stream;
-mod text;
+mod tail;
+pub(crate) mod text;
 mod toolbar;
 mod window;
 
 #[cfg(test)]
 mod tests;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    AppContext as _, Context, Entity, FocusHandle, ListAlignment, ListState, Task,
+    AppContext as _, Context, Entity, FocusHandle, ListAlignment, ListState, Subscription, Task,
     UniformListScrollHandle, WeakEntity, px,
 };
 use oxikube_app::ClusterSessionManager;
-use oxikube_app::logs::{LogService, LogSession};
+use oxikube_app::context::PendingContext;
+use oxikube_app::logs::export::LineFilter;
+use oxikube_app::logs::kubectl::Kubectl;
+use oxikube_app::logs::{AggregateSpec, LevelFilter, LogService, LogSession};
 use oxikube_domain::ids::ResourceRef;
+use oxikube_ports::FsPort;
+use oxikube_settings::Settings as _;
+use oxikube_terminal::view::TerminalViewSink;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
+use crate::LogsSettings;
+use crate::search::Search;
+
 pub use actions::{
-    Copy, Head, Mark, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll,
-    ToggleFullscreen, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    Clear, ClearSelection, CloseSearch, Copy, Find, FollowReplacement, Head, Mark, NextMatch,
+    PreviousMatch, Reconnect, SaveAll, SaveVisible, SendToAgent, Since1h, Since1m, Since5m,
+    Since15m, Since30m, Tail, TailInTerminal, ToggleAutoscroll, ToggleCase, ToggleFilterMode,
+    ToggleFullscreen, ToggleInverse, ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
+pub use aggregate::{
+    AggregateState, BANNER_LINES, BANNER_SECONDS, Banner, MAX_GUTTER, Prefix, SourceChoice,
+    SourceLabels, colour_index, short_names,
+};
+pub use autoscroll::Follow;
 pub use containers::{ContainerChoice, choices_of, default_container};
+pub use copy::COPY_LIMIT_BYTES;
 pub use item::item_key;
+pub use json::JsonColumns;
 pub use options::{HEAD_LIMIT_BYTES, OpenLogs, TAIL_LINES, ViewOptions};
-pub use text::{Level, level_of};
-pub use window::{Follow, LineWindow, Row, RowChange};
+pub use recovery::Recovery;
+pub use selection::{Marks, Selection};
+pub use text::{Level, group, level_of, lines_of};
+pub use window::{LineWindow, Row, RowChange};
 
 /// Bytes of a line an unwrapped row draws: more than any screen is wide, and a 16 KiB line costs
 /// no more to shape than a short one.
@@ -82,6 +131,15 @@ pub struct LogViewDeps {
     pub sessions: ClusterSessionManager,
     /// Where the view's commands go (the bus): `logs::*` from the keys and the toolbar.
     pub dispatcher: Rc<dyn CommandDispatcher>,
+    /// The files `logs::Save` writes (a path the user chose, streamed in chunks).
+    pub fs: Arc<dyn FsPort>,
+    /// Where `logs::SendToAgent` queues the selected lines until the agent panel takes them.
+    pub agent: PendingContext,
+    /// Whether kubectl is installed (the "Tail in terminal" action is hidden without it); the
+    /// binary keeps the answer fresh on a background task.
+    pub kubectl: Kubectl,
+    /// Where "Tail in terminal" asks for its terminal tab.
+    pub terminal: TerminalViewSink,
 }
 
 /// The log of one pod's container. See the [module docs](self).
@@ -97,7 +155,26 @@ pub struct LogView {
     /// stream: a change of what is read until then is kept in the options and opens with them.
     pub(crate) awaiting_pod: bool,
     pub(crate) window: LineWindow,
+    /// The level chips (JSON mode filters by them; see [`LogView::levels`]).
+    pub(crate) levels: LevelFilter,
+    /// Whether the session has delivered a structured (JSON) line: the JSON controls (the toggle
+    /// and the level chips) appear with the first, so a plain-text log looks as it always did.
+    pub(crate) saw_json: bool,
+    /// The line shown in the detail pane (JSON mode), if any.
+    pub(crate) expanded: Option<detail::Expanded>,
+    /// Columns and pretty text of the JSON lines drawn, by seq (drawing reads it).
+    pub(crate) records: RefCell<json::RecordCache>,
     pub(crate) follow: Follow,
+    /// The selected lines, by seq (click, shift-click, drag).
+    pub(crate) selection: Selection,
+    /// The marked lines, by seq.
+    pub(crate) marks: Marks,
+    /// What a copy or a save keeps (the search installs its matcher); `None` keeps every line.
+    pub(crate) filter: Option<LineFilter>,
+    /// The save panel being answered (dropping it forgets the question).
+    pub(crate) save_prompt: Option<Task<()>>,
+    /// The running save; [`stop_save`](LogView::stop_save) ends it and tells the user.
+    pub(crate) save_job: Option<save::SaveJob>,
     /// The unwrapped list's scroll position.
     pub(crate) scroll: UniformListScrollHandle,
     /// The wrapped list's rows and scroll position (kept in step with the window by splices).
@@ -111,6 +188,16 @@ pub struct LogView {
     pub(crate) pump: Option<Task<()>>,
     /// Reads the pod for the container selector.
     pub(crate) pod_task: Option<Task<()>>,
+    /// Looks for the pod that replaced this one (`logs::FollowReplacement`).
+    pub(crate) replacement_task: Option<Task<()>>,
+    /// The `logs` settings as last applied to the options (a change applies the keys that moved).
+    pub(crate) settings: LogsSettings,
+    /// Applies changes of the `logs` settings; dropped with the view.
+    pub(crate) _settings_subscription: Subscription,
+    /// The search bar's state (E08-S03).
+    pub(crate) search: Search,
+    /// Set when the view shows a workload or Service (several pods merged), not one pod.
+    pub(crate) aggregate: Option<AggregateState>,
 }
 
 impl LogView {
@@ -125,7 +212,7 @@ impl LogView {
     ) -> Self {
         let options = ViewOptions {
             container,
-            ..ViewOptions::default()
+            ..ViewOptions::from_settings(&LogsSettings::resolve(&target.cluster, cx))
         };
         Self::with_options(target, options, deps, cx)
     }
@@ -138,7 +225,23 @@ impl LogView {
         deps: LogViewDeps,
         cx: &mut Context<Self>,
     ) -> Self {
-        let mut view = Self {
+        let mut view = Self::blank(target, options, deps, cx);
+        if view.options.container.is_some() {
+            view.open_stream(cx);
+        }
+        view.load_pod(cx);
+        view
+    }
+
+    /// A view that reads nothing yet.
+    fn blank(
+        target: ResourceRef,
+        options: ViewOptions,
+        deps: LogViewDeps,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let settings = LogsSettings::resolve(&target.cluster, cx);
+        Self {
             target,
             deps,
             options,
@@ -147,7 +250,16 @@ impl LogView {
             started: false,
             awaiting_pod: false,
             window: LineWindow::new(),
+            levels: LevelFilter::all(),
+            saw_json: false,
+            expanded: None,
+            records: RefCell::default(),
             follow: Follow::default(),
+            selection: Selection::default(),
+            marks: Marks::default(),
+            filter: None,
+            save_prompt: None,
+            save_job: None,
             scroll: UniformListScrollHandle::new(),
             list: ListState::new(0, ListAlignment::Top, px(400.)),
             focus: cx.focus_handle(),
@@ -155,11 +267,32 @@ impl LogView {
             rows_built: 0,
             pump: None,
             pod_task: None,
-        };
-        if view.options.container.is_some() {
-            view.open_stream(cx);
+            replacement_task: None,
+            settings,
+            _settings_subscription: LogsSettings::observe_in(cx, Self::settings_changed),
+            search: Search::default(),
+            aggregate: None,
         }
-        view.load_pod(cx);
+    }
+
+    /// A view of the logs of every pod `target` (a Deployment, StatefulSet, DaemonSet,
+    /// ReplicaSet, Job or Service) selects, merged by server timestamp, one colour per pod. The
+    /// options' `container` (when set) reads only the containers of that name and `selector`
+    /// narrows the pods. The stream opens at once on the service's runtime.
+    ///
+    /// # Panics
+    ///
+    /// When `target` is not such an object: check [`AggregateSpec::of`] first.
+    pub fn workload(
+        target: ResourceRef,
+        options: ViewOptions,
+        deps: LogViewDeps,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let spec = AggregateSpec::of(&target).expect("a workload or Service of a namespace");
+        let mut view = Self::blank(target, options, deps, cx);
+        view.aggregate = Some(AggregateState::new(spec));
+        view.open_stream(cx);
         view
     }
 

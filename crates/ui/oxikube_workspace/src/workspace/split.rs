@@ -5,6 +5,7 @@ use oxikube_ui::dock::{DockPlacement, InsertTarget, PanelId};
 
 use super::{Workspace, layout::first_group, open::ItemPlacement};
 use crate::{
+    item::ItemHandle,
     pane::{PaneId, SplitDirection},
     panel::DockPosition,
 };
@@ -94,6 +95,27 @@ impl Workspace {
         }
     }
 
+    /// Opens `item` in a new pane beside `pane` (the active pane when `None`), in `direction`,
+    /// and displays and focuses it there. With no pane in the centre yet it opens as the first
+    /// one. Returns the id of the item.
+    pub fn open_item_in_split(
+        &mut self,
+        item: Box<dyn ItemHandle>,
+        pane: Option<PaneId>,
+        direction: SplitDirection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> EntityId {
+        let pane = pane
+            .filter(|pane| self.pane_group(cx).pane(*pane).is_some())
+            .or_else(|| self.active_pane(cx).map(|pane| pane.id()));
+        let placement = match pane {
+            Some(pane) => ItemPlacement::Split(pane, direction),
+            None => ItemPlacement::InPane(None, None),
+        };
+        self.insert_item(item, placement, true, window, cx)
+    }
+
     /// [`Self::split_pane`] on the active pane.
     pub fn split_active_pane(
         &mut self,
@@ -105,10 +127,11 @@ impl Workspace {
         self.split_pane(pane, direction, window, cx)
     }
 
-    /// Puts back into the centre every item tab that a drag left in a dock. Items live only in
-    /// centre panes (Zed's model): the dock area accepts any tab on any tab bar, so an item tab
-    /// dropped on a dock's tab bar is returned to the pane and index it was dragged from, or to
-    /// the active pane when that pane is gone, and displayed and focused there.
+    /// Puts back into the centre every item tab that a drag left in a dock. Items live in centre
+    /// panes (Zed's model) unless they [can dock](crate::Item::can_dock): the dock area accepts
+    /// any tab on any tab bar, so the tab of any other item dropped on a dock's tab bar is
+    /// returned to the pane and index it was dragged from, or to the active pane when that pane
+    /// is gone, and displayed and focused there.
     pub(super) fn return_items_from_docks(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let area = self.dock_area.read(cx);
         let stray: Vec<(EntityId, PanelId)> = DockPosition::ALL
@@ -116,6 +139,12 @@ impl Workspace {
             .filter_map(|position| area.layout(position.placement()))
             .flat_map(|tree| tree.panels())
             .filter_map(|panel| self.item_panels.get(&panel).map(|item| (*item, panel)))
+            .filter(|(item, _)| {
+                !self
+                    .items
+                    .get(item)
+                    .is_some_and(|open| open.handle.can_dock(cx))
+            })
             .collect();
         for (item, panel) in stray {
             let group = self.pane_group(cx);

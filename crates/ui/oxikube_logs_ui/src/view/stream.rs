@@ -8,7 +8,7 @@
 
 use futures::StreamExt as _;
 use gpui::Context;
-use oxikube_app::logs::{LogDelta, LogFailure, LogState, LogTarget};
+use oxikube_app::logs::{AggregatePorts, LogDelta, LogFailure, LogSession, LogState, LogTarget};
 use oxikube_domain::ErrorKind;
 use oxikube_runtime::notify_coalesced;
 
@@ -30,11 +30,13 @@ impl LogView {
         self.session = None;
         self.started = true;
         self.follow.restart();
-        let port = self
-            .deps
-            .sessions
-            .get(&self.target.cluster)
-            .and_then(|session| session.logs());
+        if self.aggregate.is_some() {
+            self.open_aggregate_stream(cx);
+            return;
+        }
+        let cluster = self.deps.sessions.get(&self.target.cluster);
+        let port = cluster.as_ref().and_then(|session| session.logs());
+        let resources = cluster.as_ref().and_then(|session| session.resources());
         let (Some(port), Some(namespace)) = (port, self.target.namespace.as_deref()) else {
             self.reset_rows(LineWindow::with_state(not_connected()));
             notify_coalesced(cx);
@@ -45,12 +47,40 @@ impl LogView {
             pod: self.target.name.to_string(),
             container: self.options.container.clone(),
         };
-        let session = self
-            .deps
-            .service
-            .open(port, target, self.options.log_options());
-        let mut deltas = session.deltas();
+        let service = &self.deps.service;
+        let options = self.options.log_options();
+        // With the pod readable the session follows its life (E08-S07): it reconnects while the
+        // pod runs and says when it finished or was replaced.
+        let session = match resources {
+            Some(resources) => service.open_following_in(
+                &self.target.cluster,
+                AggregatePorts {
+                    logs: port,
+                    resources,
+                },
+                target,
+                options,
+            ),
+            None => service.open_in(&self.target.cluster, port, target, options),
+        };
+        self.start_session(session, cx);
+    }
+
+    /// Takes `session` as the one the view reads: the rows start over and one pump applies its
+    /// deltas (replacing, so cancelling, the previous pump).
+    pub(crate) fn start_session(&mut self, session: LogSession, cx: &mut Context<Self>) {
         self.session = Some(session);
+        self.pump_session(cx);
+    }
+
+    /// Reads the session from its first retained line again: the rows start over and one pump
+    /// applies its deltas (replacing, so cancelling, the previous pump). Also what a reconnect
+    /// by hand does, whose deltas ended with the read before it.
+    pub(crate) fn pump_session(&mut self, cx: &mut Context<Self>) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        let mut deltas = session.deltas();
         self.reset_rows(LineWindow::new());
         self.pump = Some(cx.spawn(async move |this, cx| {
             // Each poll computes one delta from the view's cursor: everything committed since
@@ -67,17 +97,55 @@ impl LogView {
         notify_coalesced(cx);
     }
 
-    /// Applies one delta: the rows, the renderers, autoscroll.
+    /// Applies one delta: the rows, the renderers, autoscroll. A multi-pod view that switched
+    /// sources off keeps only the lines of the sources still on.
     pub(crate) fn apply_delta(&mut self, delta: &LogDelta, cx: &mut Context<Self>) {
-        let change = self.window.apply(delta);
+        let filter = self.effective_filter();
+        let change = match &self.session {
+            // The level chips and the hidden sources may hide some lines: only the delta's candidates
+            // are tested.
+            Some(session) => session.read(|buffer, _| {
+                self.window
+                    .apply_filtered(delta, Some(buffer), |candidates| {
+                        candidates
+                            .into_iter()
+                            .filter(|seq| {
+                                buffer.get_seq(*seq).is_some_and(|entry| {
+                                    filter.as_ref().is_none_or(|filter| filter.admits(entry))
+                                })
+                            })
+                            .collect()
+                    })
+            }),
+            None => self.window.apply(delta, None),
+        };
+        if !self.saw_json
+            && let Some(session) = &self.session
+        {
+            let appended = delta.appended.clone();
+            self.saw_json = session.read(|buffer, _| {
+                buffer
+                    .range_seq(appended)
+                    .any(|entry| entry.level.is_some())
+            });
+        }
+        if self
+            .expanded
+            .as_ref()
+            .is_some_and(|e| e.seq < delta.first_seq)
+        {
+            // The expanded line fell out of the ring buffer.
+            self.expanded = None;
+        }
         self.rows_changed(change);
+        self.forget_dropped();
         self.follow_tail();
         notify_coalesced(cx);
     }
 }
 
 /// The state row of a view whose cluster has no connection (or whose target names no pod).
-fn not_connected() -> LogState {
+pub(super) fn not_connected() -> LogState {
     LogState::Failed(LogFailure {
         kind: ErrorKind::Network,
         message: "the cluster is not connected".to_owned(),

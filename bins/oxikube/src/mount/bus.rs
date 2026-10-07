@@ -16,8 +16,8 @@
 //! | `oxikube` | `view::Open` for the catalog home and the kubeconfig sources screen |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
-//! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (E08-S02; reads only) |
-//! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05) |
+//! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
+//! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
 //! Only `resource::Delete` mutates a cluster; it and the posture commands confirm and audit through
 //! the `MutationGuard` the bus owns, and E12's per-kind actions join here.
@@ -39,7 +39,9 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_logs_ui::LogCommandSink;
 use oxikube_resources_ui::ResourceCommandSink;
 use oxikube_resources_ui::navigate::OpenKind;
+use oxikube_terminal::input::TerminalInputSink;
 use oxikube_terminal::open_link::LinkSink;
+use oxikube_terminal::view::TerminalViewSink;
 use oxikube_workspace::cluster_tab::CommandSink;
 use oxikube_workspace::{ClusterCommandRunner, CommandDispatcher};
 use serde_json::json;
@@ -71,6 +73,10 @@ pub struct BusParts {
     pub logs: LogCommandSink,
     /// Where `terminal::OpenLink` sends the links to open (opened on the UI thread).
     pub links: LinkSink,
+    /// Where `terminal::Copy` and `terminal::Paste` send what the focused terminal should do.
+    pub terminal_input: TerminalInputSink,
+    /// The terminal views' queue (`terminal::New`, `Split`, `Close`, applied on the UI thread).
+    pub terminal_views: TerminalViewSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -108,7 +114,11 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         oxikube_logs_ui::register_commands(r, parts.logs)
     })?;
     registry.install("oxikube_terminal", |r| {
-        oxikube_terminal::open_link::register_commands(r, parts.links)
+        oxikube_terminal::open_link::register_commands(r, parts.links)?;
+        oxikube_terminal::input::register_input_commands(r, parts.terminal_input)?;
+        oxikube_terminal::view::register_view_commands(r, parts.terminal_views.clone())?;
+        // `pod::Shell`, `pod::Attach`, `pod::Exec` (E09-S08): exec class, guarded and audited.
+        oxikube_terminal::view::register_pod_commands(r, parts.terminal_views)
     })?;
     Ok(registry)
 }

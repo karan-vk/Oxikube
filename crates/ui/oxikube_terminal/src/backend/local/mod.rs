@@ -24,6 +24,7 @@ mod kubeconfig;
 mod options;
 mod unix;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -289,6 +290,16 @@ impl TerminalBackend for LocalPty {
     async fn kill(&self) -> OxiResult<()> {
         self.shared.kill_group();
         Ok(())
+    }
+
+    /// The foreground job's directory (the shell's at its prompt, so a `cd` shows), else the
+    /// shell's; `None` once the shell ended.
+    fn working_directory(&self) -> Option<PathBuf> {
+        let shell = (*self.shared.pid.lock())?;
+        let foreground = unix::foreground_group(&**self.master.lock());
+        foreground
+            .and_then(unix::working_directory)
+            .or_else(|| unix::working_directory(shell))
     }
 }
 

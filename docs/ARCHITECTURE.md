@@ -50,7 +50,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   exchange (`Delta`, `Table`, `ToolDef`, …). One module per port; each names its adapter.
 - `oxikube_testkit` — a `Fake*` for every port, fixtures and builders, `TestPorts` (the seeded fakes
   `AppState::test` is built from), and the GPUI test harness (`gpui_test::TestApp` / `TestWindow`,
-  `ScreenshotApp` with golden compare; `docs/testing-gpui.md`).
+  `ScreenshotApp` with golden compare; `docs/testing-gpui.md`; the logs test matrix is `docs/testing-logs.md`).
 - `oxikube_app` — services: `ClusterSessionManager`, `ResourceStore`, `CommandBus`,
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
   `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `sidebar` (E06-S10):
@@ -154,9 +154,118 @@ crate's `README.md` for its allowed dependencies. Highlights:
   first_seq, state }` computed at poll time, so a slow consumer gets one larger delta and nothing queues. The
   state machine is `Connecting`, `Streaming`, `Ended(Completed | StreamClosed | Cancelled)` or
   `Failed(LogFailure)` (kind, redacted message, retryable); `ReconnectPolicy` is the seam of E08-S07.
-  `set_buffer_lines` applies a changed setting to open sessions at once. Line text is never logged.
-- `oxikube_logs_ui` — E08-S01: `LogsSettings` (`logs.buffer_lines`, default 50 000, clamped 100 to 5 000 000),
-  `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload into the `LogService`). Module
+  `set_buffer_lines` applies a changed setting to open sessions at once; `open_in(cluster, ..)` and
+  `set_cluster_buffer_lines` give a cluster its own bound (`clusters.<id>.logs.buffer_lines`, E08-S10; each
+  cluster's sessions read one shared cell, so open sessions resize when the override changes). Line text is
+  never logged.
+  `LogSession::clear` (E08-S06) empties the buffer at the user's request: seqs are not reused and cleared lines are
+  not "dropped" (`LogBuffer::cleared`), the stream goes on. Module `logs::export` (E08-S06): `ExportFormat`
+  (`[timestamp ][pod/container ]text`), `ExportSpec` (a seq range plus the viewer's `LineFilter`), `chunks` / `save`
+  (bounded ~256 KiB chunks read under one short lock, fed to `FsPort::write_stream`) and `copy_text` (capped).
+  Module `filter` (E08-S03): `LogFilter { pattern, case_sensitive, inverse }` (a regex; the empty pattern matches
+  everything), compiled once per edit to a `LogMatcher` (`matches(&str)`, the predicate the agent's `get_logs`
+  `grep` reuses, and the highlight `spans`; an invalid or oversized pattern is a one-line `FilterError`), and
+  `MatchIndex`, the sorted seqs of the matching lines over a `LogBuffer`: `scan` tests only the lines appended
+  since the last call and drops the matches of lines the ring dropped (a rescan is the same call in chunks),
+  with `next` / `prev` that wrap and skip trimmed lines. A property test pins it to a naive full scan.
+  `logs::parse` (E08-S05, pure): `parse_line(&str) -> Option<LogRecord>` reads a line that is a complete JSON
+  object (per line, so streams mix text and JSON) into a normalised `LogLevel` (trace to fatal, `Unknown`;
+  bunyan and pino decades 10-60, names like `warning` / `dpanic`), a `RecordTime` (RFC 3339, epoch s / ms / us /
+  ns, floats; the original text is kept when unreadable), the message and the remaining fields in source order,
+  under a `FieldMap` of key names (zap, logrus, bunyan, pino and the aliases `severity` / `message` /
+  `timestamp`); `pretty` is the expanded form; lines over 64 KB and lines cut by the per-line cap are text.
+  The service reads each line's level once as it commits it (`LogEntry::level`, `None` for plain text), before the
+  buffer's lock is taken; `LevelFilter` (one byte, a set of level chips) is the predicate a view tests entries with.
+  Module `aggregate` (E08-S04): `open_aggregate(ports, spec, options)` returns an `AggregateSession`, the logs of
+  every pod a Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or Service (its `spec.selector`) or a typed label
+  selector picks, merged into one `LogSession` (one ring bounded by `logs.buffer_lines`, not one per pod). One
+  coordinator task (abort-on-drop) reads the object through the `ResourceReader`, watches the matching pods and opens
+  one stream task per streamable container (regular and sidecar containers; at most `logs.max_streams` at once, default
+  20, the pods left out counted for the "N more pods not streamed" notice); each stream batches like a single session
+  and hands its batches to the coordinator over a bounded queue (a slow coordinator pushes back on the connection); the lines waiting in the merge are capped at `logs.buffer_lines` too, so the memory is the ring plus at most as many lines again, whatever the number of pods.
+  Lines are merged by server timestamp (`timestamps=true`), then stream id, then position in the stream, through a
+  300 ms reorder window (`LogConfig::reorder_window`), never reordering within one pod whatever the clock skew; nothing
+  is committed until the first group of streams answered (`startup_wait`, 2 s at most) plus one window; a line that
+  arrives later than the window goes in at once after what is there. The `AggregateView` says which streams exist
+  (`SourceInfo`), what changed in the pod set (`PodEvent` `Added` / `Ended`, the hook E08-S07 follows replacements
+  from; the first list is the baseline), the pods the cap left out, and which pods and containers the user switched off
+  (`HiddenSources`; they keep streaming, the viewer filters).
+  Module `logs::excerpt` (E08-S09): `LogService::read_excerpt(ports, &ExcerptRequest)` is the bounded, non-following
+  read behind the agent hooks: it opens a session (or an aggregate for a workload or selector) with `follow` off,
+  waits for it to end (20 s at most on the service's clock), picks the newest `tail` (1 to 2 000, default 200) lines
+  the `LogFilter` accepts (a `grep` searches the newest 10 000 lines of each container), writes them as
+  `timestamp pod/container text` within 256 KiB with the secrets masked by `oxikube_domain::redact` (applied to the
+  joined text, so a PEM block spanning lines is caught too; best effort for free text), and returns a `LogExcerpt`
+  whose `notes()` say what was left out (tail, size, search window, timeout, failed streams, pods over
+  `logs.max_streams`). `LogClusters` names the cluster's `AggregatePorts` (`ClusterSessionManager` implements it:
+  the call's cluster, else the only connected one).
+- `oxikube_app::context` (E08-S09) — `ContextRegistry` routes an `@`-mention to the `ContextProviderPort` that owns its
+  prefix and keeps one resolution within `ContextScope::max_total_bytes`. `LogContextProvider` owns `@logs`:
+  `@logs/<ns>/<pod>[/<container>]`, `@logs/<kind>/<ns>/<name>` (a workload's pods merged), `@logs/selector/<ns>/<labels>`
+  and the options `--since`, `--tail`, `--grep`, `--container` as path segments (a mention has no whitespace); the block
+  is a `# key: value` header (cluster, namespace, source, container, time span, line count), `# note:` lines and the
+  lines. `selection_context` builds the same block from lines the viewer selected ("Send to agent"). `PendingContext`
+  is the small queue between the viewer and the agent panel: items wait (32 at most, the oldest dropped and counted)
+  until a `ContextConsumer` attaches, which receives them in order, then every later send; nothing is persisted.
+- `oxikube_app::exec` (E09-S08) — `ExecService`: `open_shell(pod, container, &ShellOptions)` finds the shell with a quick
+  non-interactive exec per entry of the chain (`terminal.exec_shells`, default `bash`, `sh`; exit 126/127 or `executable file
+  not found` means missing, anything else stops the search), opens the first the container has over the session's `ExecPort`
+  and wraps the backend in a `NoticeBackend` whose first output is one dim line (`bash not found, using sh in web-0/app`);
+  `attach` and `exec` open the other two; failures keep their kind with a message that names the pod, a `Conflict`
+  (container not running, pod terminating) marked retryable, and "no shell" an `Unsupported` that points to a debug
+  container (Windows pods get Windows advice). `PodContainers::of(&Resource)` lists what can open (regular containers,
+  sidecars, ephemeral ones, an init container only while it runs; the `kubectl.kubernetes.io/default-container` annotation,
+  else the first regular one, is the default), `plan_container` turns a request into `ContainerPlan::Open(name)` (named,
+  or the only candidate) or `Pick(ContainerChoices)` (several: the picker's rows with the last container opened in this
+  pod, else the default, preselected; `ExecService::remember` keeps it for the session). Nothing here applies policy.
+  The policy is the guard's: `pod::Shell`, `pod::Attach` and `pod::Exec` are the **exec class** (`CommandMeta::exec`,
+  `meta.exec`): not mutations and never confirmed, but `MutationGuard::run_exec` refuses them on a read-only cluster
+  unless `clusters.<id>.exec_in_read_only` (`ClusterPrefs::exec_in_read_only`, read live from the session) is on, fails
+  closed when the audit log cannot be written, and audits every open with the initiator, the pod and a `detail`
+  (`session=shell container=app`, plus `program=psql` for `pod::Exec`: the program only, never arguments, input or
+  output). Their tool stubs (`k8s.pod_shell`, `k8s.pod_attach`, `k8s.pod_exec`) are `risk: high`, `unsafe`,
+  `interactive` and `agent_hidden`: `CommandBus::agent_tools(false)` and `ToolRegistry::visible` leave them out until
+  the agent epic turns them on. `ActionContext` greys the row actions out on a read-only cluster with the reason.
+- `oxikube_app::tools` (E08-S09) — `ToolRegistry`: `register` (validates the `ToolDef`, refuses a mutating tool, which
+  belongs behind `MutationGuard` in E26, and duplicates), `defs` / `visible(capabilities)` (a tool's `needs`), and
+  `invoke(name, args, &ToolContext)` which checks the arguments against the tool's input schema (`validate_args`, the
+  flat subset the tool schemas use) before the tool runs. `tools::k8s::get_logs` is `k8s.get_logs`: `pod` or `selector`
+  (a label selector or `deployment/api`), `namespace`, `container`, `since`, `tail`, `grep`; read-only (no risk, needs
+  the logs capability, idempotent), output as text plus structured counts; both or neither of `pod` / `selector`, a
+  `tail` over the cap and an unparsable `since` or `grep` are a failed call (`Err`), a missing pod or a denied
+  `pods/log` is a tool error the model sees. The name is the acceptance's `get_logs` in the `k8s.` namespace
+  `ToolName` requires (E26-S04's `k8s.logs` can alias it).
+  Module `churn` (E08-S07, reconnect and churn following): every followed stream (a session's, an aggregate's)
+  reads through `Resumable`, which reopens a stream that broke while its pod runs after a backoff with deterministic
+  jitter (`ReconnectPolicy::Backoff`: 500 ms doubling to 30 s; `logs.reconnect_retries`, default 5, failures in a row,
+  hot-reloaded through `LogService::set_reconnect_retries`; a stream that delivers a line, or stays open 10 s
+  (`Backoff::stable`: a quiet pod behind a proxy that closes idle streams), starts the count again),
+  from `sinceTime` = last line - 2 s with the replayed overlap dropped by (server timestamp, text hash) over the last
+  512 lines (`Overlap`); state `LogState::Reconnecting { attempt, max, failure }` (aggregate:
+  `SourceState::Reconnecting`), then `Failed` after the cap. A container still waiting to start (a rollout's new pod)
+  is retried every second, not failed. `open_following_in(cluster, ports, target, options)` gives a single-pod session
+  the `ResourceReader` too: it records the pod's `PodIdentity` (uid, controller `OwnerRef`, node) as the stream opens
+  and, when it ends, reads the pod again to say why: `EndReason::PodFinished` (`Succeeded`/`Failed`),
+  `ContainerFinished` (the followed container exited and will not restart while the pod runs on: a completed init
+  container), `PodReplaced` (deleted, terminating or recreated, with a controller) or `PodDeleted` (no controller); a
+  container between restarts (`CrashLoopBackOff`) is waited for with growing pauses and no retry counted; still
+  running is a dropped connection. `find_replacement(resources, &identity)` names the pod that took over (the Deployment's
+  selector for a ReplicaSet's pod; only the namesake for a StatefulSet's, only a pod on the same node for a DaemonSet's,
+  otherwise only a pod newer than the gone one, the newest running first; `None` until it exists, never a sibling). `LogSession::reconnect` restarts a failed or ended session in place: the lines stay
+  and the new stream continues after them. An aggregate reads a pod that joins after the view opened from its first
+  line (no tail, no since).
+  Module `logs::kubectl` (E08-S08): `KubectlTail` builds the argv of `kubectl logs -f` for a pod or a label selector
+  (`--context=`, `--namespace=`, `--container=`, `--previous`, `--timestamps`, `--since=`, `--tail=`, `--limit-bytes=`;
+  a selector adds `--prefix`, `--all-containers` and `--max-log-requests`), values glued to their flag and a pod name
+  that starts with `-` refused, never a shell string; `Kubectl` is the cached answer to "is kubectl installed?"
+  (`KubectlLookup`, `PathLookup`: `PATH` plus the install folders a GUI launch lacks; refreshed by the caller on a
+  background task, "not known yet" reads as "not installed").
+- `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to
+  5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect` (JSON mode's starting value, E08-S05); defaults in
+  `default.json`, schema generated, per-cluster overrides under `clusters.<id>.logs`, out-of-range values clamped
+  with a warning), `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload of
+  `buffer_lines`, global and per cluster, into the `LogService` on a background task; `wrap`, `timestamps` and
+  `json_auto_detect` are applied by each open view, `default_tail` by the next read of the tail). Module
   `view` (E08-S02): `LogView`, a pod's log as a workspace `Item` (tab `pod/container`). It holds one `LogSession`
   (the service owns the abort-on-drop read) and polls its deltas into a `LineWindow` (truncated marker, lines by
   seq, state row for Connecting / Ended / Failed), redrawing through `notify_coalesced`; rows are read from the
@@ -165,12 +274,63 @@ crate's `README.md` for its allowed dependencies. Highlights:
   Options: range (tail 1 000 lines / head 1 MiB / since 1m-1h), container (init, sidecar, regular, ephemeral from
   the pod spec; a pod of several containers is read on its `default-container` or first regular one), previous
   instance, wrap, timestamps, fullscreen (the cluster tab's pane zoom); a change of what is read reopens the
-  session. Keys in the `LogView` context (k9s: `0`-`6`, `s`, `w`, `t`, `p`, `f`; `m`, `c` reserved for E08-S06).
+  session. Keys in the `LogView` context (k9s: `0`-`6`, `s`, `w`, `t`, `p`, `f`, `m`, `c`, `shift-c`, `ctrl-s`).
+  E08-S06: lines are selected by click, shift-click or drag (by seq, so scrolling and the ring never move a
+  selection); `m` marks the focused line (gutter bar, dropped with its line); `c` copies the selection or the
+  screen (5 MB cap, toast); `shift-c` clears the buffer (asks when lines are marked); `ctrl-s` / `ctrl-shift-s`
+  open the `SaveDialog` (module `export`: scope, line count, timestamp and pod-prefix toggles, the truncation note),
+  then the platform's save panel, then the chunked write on the Tokio bridge through `FsPort::write_stream`.
+  Copy and save take what the rows show: the search's matches while filter mode narrows the rows, the lines the level
+  chips admit, and any filter installed with `set_line_filter` (`LogView::active_filter`); structured lines are copied as
+  their raw JSON text. `view::chrome` draws the gutter bar and selection colour on both plain and JSON rows.
   Module `commands`: `pod::ViewLogs` and `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`,
-  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` on the bus (reads, tool stubs), queued to the
+  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (and, E08-S05, `ToggleJsonMode`, `ToggleLevel`, `ToggleLine`, `CollapseLine`; E08-S06, `Mark`, `Copy`, `Clear`, `Save`; E08-S09, `SendToAgent`; E08-S08, `TailInTerminal`) on the bus (reads, tool stubs), queued to the
   window's `LogViews`, which opens a view in the pod's cluster tab (one per pod, through a `LogHost`) and applies
-  the changes. `row_actions`: "View Logs" on pod rows of the resource tables.
-- `oxikube_resources_ui` — module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
+  the changes. `row_actions`: "View Logs" on pod rows of the resource tables, and on Deployment, StatefulSet,
+  DaemonSet, ReplicaSet, Job and Service rows (`workload::ViewLogs`).
+  Tail in terminal (E08-S08; `view::tail`, `kubectl`): the toolbar's "Tail in terminal (kubectl)" and `shift-t`
+  (`logs::TailInTerminal`) ask the window's `TerminalViews` (through `TerminalViewSink::open`) for a terminal tab of the
+  view's cluster that runs `kubectl logs -f` for what the view shows: the program is the kubectl that was found (absolute
+  path), the arguments come from the view's own options (`KubectlTail`), the tab is a local `BackendDescriptor` of the
+  cluster and namespace titled `logs <pod>/<container>`, so the cluster's kubeconfig, context and namespace reach it as
+  for `terminal::New` (no second env injection, nothing secret in the descriptor or the argv) and nothing on its screen
+  is saved. The action is hidden, not disabled, when kubectl is not installed: `follow_kubectl` looks it up on a
+  background task at start-up, on a settings change and every minute (`Kubectl`, never a process on the UI thread);
+  the key and the palette's command say "kubectl was not found" instead. A workload view uses its resolved selector
+  (`--selector=... --prefix`); before the selector is read the action says to try again.
+  Module `search` (E08-S03): the `/` bar under the toolbar (`logs::Find`, also `cmd-f` / `ctrl-f`): a regex over the
+  stored lines with case and inverse toggles, in *highlight* mode (all lines, matches painted, `3 of 41`, enter /
+  shift-enter or `n` / `N` jump and wrap) or *filter* mode (only the matching lines are rows: the `LineWindow` is
+  narrowed to the `MatchIndex`). An invalid pattern shows its reason and the last good one stays. Commands
+  `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (reads,
+  tool stubs). The matching is `oxikube_app::logs::{LogFilter, LogMatcher, MatchIndex}` (below); an index over a
+  buffer of more than 4 000 lines is built in 16 384-line background jobs and published when done, and each delta
+  tests only its new lines. The search is kept per window in `SearchMemory` (not on disk), so reopening the same pod's
+  logs in the same session restores it.
+  JSON mode (E08-S05, `logs.json_auto_detect`, on by default; `j`, `logs::ToggleJsonMode`): a structured line is a row of level chip, time,
+  message and its other fields collapsed to `key=value` (`view::columns`, parsed only for the rows on screen and
+  cached by seq, `view::json`); a click expands it (`logs::ToggleLine`, closed by `logs::CollapseLine`, JSON mode off or a chip hiding the line) into a pane under the rows with its pretty-printed JSON
+  (`view::detail`, rows keep one height); plain-text lines draw as before. Level chips (`logs::ToggleLevel`:
+  trace to fatal, and `text` for plain and level-less lines) hide lines through `LevelFilter`; while one is off the
+  `LineWindow` keeps the seqs of the lines that are rows (`view::filter`, composed with the search: the rows are the
+  matches that also pass the chips), a delta is filtered as it is applied and a changed chip, search or mode is one
+  pass over the window's candidate lines. Raw text is what a copy takes.
+  Multi-pod (E08-S04): `LogView::workload` is the same tab over an `AggregateSession` (tab `deployment/web`; one tab
+  per object; `workload::ViewLogs` takes an optional further label `selector` and container). Module `view::aggregate`:
+  each line is led by a fixed-width gutter with the pod's short name (the part of the name its siblings do not share,
+  plus `/container` when the pods have several) in a colour hashed from the pod name into the theme's
+  `oxikube.log_sources` palette (`log.source.1` .. `10` in a theme's `oxikube` block, derived from the terminal ANSI
+  colours by default); a non-modal banner under the toolbar shows "pod web-7d9 added" / "pod web-4c1 ended" (cleared
+  after 8 s or dismissed), "N more pods not streamed" and "No pods match app=web"; the toolbar's Sources menu
+  (`logs::ToggleSource`) switches pods and containers off and on, which `LineWindow` applies as a filter over seqs
+  (hidden lines stay in the ring buffer). `logs.max_streams` is the setting (default.json, schema, hot reload).
+  After the stream stopped (E08-S07, `view::recovery`): the state row says why ("Reconnecting (1/5): ...", "Pod
+  finished", "Pod replaced", "Pod deleted"), and a strip under the toolbar offers "Follow replacement"
+  (`logs::FollowReplacement`, `shift-r`: `find_replacement` on `spawn_kube`, then the tab switches to the new pod with
+  the same container and range) or "Reconnect" (`logs::Reconnect`, `r`: `LogSession::reconnect`, the lines kept; a
+  multi-pod view reopens). The multi-pod banner lists the streams that reconnect ("web-7d9/app reconnecting (1/5)").
+  `logs.reconnect_retries` is the setting (default.json, schema, hot reload).
+- `oxikube_resources_ui` — module `exec` (E09-S08): `exec_row_actions` ("Shell" and "Attach" on a Pod's context menu and the palette's list, keys `s` / `a`, the pod detail's header buttons), `ExecFlow` (reads the pod through `ExecService::plan` on `spawn_kube`, then dispatches `pod::Shell` / `pod::Attach` with the container chosen, or asks first) and `ContainerPicker` (a workspace modal: up / down, enter or click opens, escape sends nothing, so cancelling leaves no audit record of an open that never happened). Module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
   mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,
   after `resource::PinDetail`, a workspace `Item` that moves between panes with its tab, scroll and expanded values intact.
@@ -279,12 +439,77 @@ crate's `README.md` for its allowed dependencies. Highlights:
   hovered link), with OSC 8 / URL / path detection on the hovered line and mouse selection and
   wheel scrolling. Module `open_link`: the `terminal::OpenLink` handler (validated off the UI
   thread, opened on it; only `http`/`https`/`mailto`/`file` URLs and existing absolute paths).
+  Module `mappings` (E09-S06, pure and table-tested, written from the xterm docs): `to_esc_str`
+  (keystroke + `KeyMode` -> `&'static str` sequence: arrows, home/end, paging, insert/delete,
+  F1-F12, tab, enter, escape, backspace, Ctrl-letter codes, `CSI 1;m X` modifier variants, DECCKM,
+  alt as meta; no allocation per keypress), `encode_paste` (bracketed paste, embedded end marker
+  stripped), `encode_mouse` (SGR / UTF-8 / legacy reports). Module `input`: what a focused element
+  attaches (`element::attach`): the `Terminal` key context, the key-down listener, `EntityInputHandler`
+  for `TerminalState` (IME composition painted inline by `element::preedit`, committed text as
+  UTF-8, `bounds_for_range` for the candidate window), `terminal::Copy` / `terminal::Paste` actions
+  (copy on select, the multi-line paste confirmation through a host-supplied `PasteConfirm`, a
+  `DialogModal` on the workspace via `WorkspacePasteConfirm`) and the bus handlers
+  (`register_input_commands`) that dispatch those actions to the focused terminal; mouse
+  reporting is `element::report`. Settings `terminal.copy_on_select`, `terminal.option_as_meta`,
+  `terminal.confirm_multiline_paste`. Module `view` (E09-S07): `TerminalView`, the terminal as a
+  workspace `Item` that owns its `TerminalState` for the tab's life (tab title = the process's
+  title, else the program or pod name; dirty while a process runs; icon by backend kind; the
+  cluster's mark; dockable; split = a fresh process from the same descriptor; closing kills the
+  process and drops the tasks); `BackendDescriptor` (kind `local` / `exec` / `attach`, program,
+  directory, cluster and namespace, or pod and container) is the tab's whole saved state, so a
+  restored tab is a fresh process and nothing on screen or in the environment is persisted;
+  `TerminalLauncher` starts a descriptor off the UI thread (`LocalLauncher`: a local shell, with
+  the cluster's kubeconfig cut again at every start from the session's context and the catalog's
+  sources); `TerminalServices` (launcher, dispatcher, paste confirmation) is an app global so the
+  `ItemRegistry` builder rebuilds saved tabs; `TerminalPanel` anchors a cluster tab's bottom dock
+  (added by the tab setup, closed until a terminal opens; terminal tabs share its tab group and
+  move between it and the panes); `TerminalViews` applies `terminal::New` (a shell in the shown
+  cluster's bottom dock with its selected namespace, a plain shell tab in the window without
+  one), `terminal::Split` and `terminal::Close` through a `TerminalHost` (`ClusterTerminalHost`), and
+  `TerminalRequest::Open { descriptor }` (E08-S08, `TerminalViewSink::open`): another view's process in
+  its cluster's bottom dock, e.g. the log viewer's `kubectl logs -f` (`BackendDescriptor::titled` names the tab; a
+  local descriptor with `shell` and `args` runs that program directly, not through the user's shell).
+  Pod terminals (E09-S08): `register_pod_commands` registers `pod::Shell` / `pod::Attach` / `pod::Exec`, whose handlers
+  (run after the guard's exec policy) queue `TerminalRequest::Pod(BackendDescriptor::Exec | Attach)`; `TerminalViews`
+  opens it in the bottom dock of the pod's cluster tab; `ClusterLauncher` (the app's launcher: `LocalLauncher` plus
+  `ExecService`) connects it off the UI thread with `spawn_kube` (abort on drop), the tab showing "Starting web-0/app…"
+  in its first frame. A pod session is only ever started by its command: a split, Reconnect and the layout restore
+  never start one themselves (a split and Reconnect send the command again so the guard checks and audits it; a pod
+  terminal is not saved with the layout and does not clone on split).
+  Module `view::lifecycle` (E09-S12): `Lifecycle` (Connecting, Running, Disconnected, Exited,
+  Failed, Closed) is a small enum fed by the launch result and the session's events, so the banner
+  logic runs without a window; `Failure` maps an adapter error kind to a distinct headline and hint
+  (expired login, forbidden, pod gone, container stopped, connection lost, ...); `Banner` is the
+  text and buttons shown above the kept, dimmed screen (a pod's Reconnect, a local shell's Restart
+  with its exit code, Close tab first after code 0). `terminal::Restart` re-launches a local
+  shell through its launcher; `terminal::Reconnect` on a pod terminal sends the pod command again (the guard re-checks
+  read-only mode and audits; `ExecService` does neither), the new terminal opening in the dock; a dropped session's
+  input is closed (`TerminalState::close_input`).
+  Terminal settings and keymap (E09-S11): `settings` is a directory module (`content`, `resolved`):
+  `terminal.{shell, shell_args, font_family, font_size, line_height, cursor_shape, cursor_blink,
+  bell, scrollback_lines, copy_on_select, option_as_meta, confirm_multiline_paste}` with defaults in
+  `default.json`, a schema entry and hot reload (font settings re-lay every open terminal out once,
+  cursor and scrollback reach the grid at once, a changed shell applies to terminals opened
+  afterwards only); out-of-range numbers are clamped with a log warning; `clusters.<id>.terminal.shell`
+  and `shell_args` override the shell for one cluster's terminals (`TerminalSettings::for_cluster`;
+  the look and input settings are read from the top-level block only). The `Terminal` key
+  context (set by the element; `searching` is added while the find bar is open) carries the
+  default bindings of every platform (cmd-based on macOS, ctrl-shift-based on Linux and Windows
+  so `ctrl-c` and the plain control chords reach the process) for `terminal::Copy`, `Paste`,
+  `SelectAll`, `Clear`, `Search`, `SearchNext`, `SearchPrevious`, `New`, `Split`, `Close` and the
+  scroll commands; each is a `Command` with an MCP tool stub (all reads: no `MutationGuard` tier).
+  Find in scrollback is `view::find` (bar, matches painted by `element::highlight`, regex scan
+  from `TerminalState::search`); the cursor's blink clock and the bell (`terminal.bell`) are
+  `view::bell`.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's
   `DockArea` (via `oxikube_ui::dock`): centre panes of `Item`s (`open_item`, split, move, close,
   reopen-closed, drag-drop tabs, zoom) and side `Panel`s in left/bottom/right docks
-  (`toggle_panel`, `toggle_dock`); `item`, `panel`, `pane` (`PaneGroup`/`Pane` snapshots), `dock`,
+  (`toggle_panel`, `toggle_dock`); items that `can_dock` (the terminal, E09-S07) also live in a
+  dock (`open_item_in_dock`, `move_item_to_dock`, `item_dock`, dragging their tab), are saved with
+  the dock's layout and rebuilt into it on restore; any other item tab dropped on a dock goes back
+  to its pane; `item`, `panel`, `pane` (`PaneGroup`/`Pane` snapshots), `dock`,
   `closed`, `actions` (`workspace::*` actions and bindings), `test_support` (feature
   `test-support`: `TestItem`, `TestPanel`, `TestStatusItem`, `TestModal`). Module `cluster_tab`
   (E06-S04): `ClusterTab` is an `Item` that hosts a `Workspace` of its own, embedded in the window's
@@ -345,7 +570,7 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | App reading user settings (aliases, budgets, per-cluster read-only / colour / name) | plain values pushed in at init / on change (`ClusterPrefsTable` for `clusters.<id>`, via `bins/oxikube::cluster_prefs`) | `oxikube_settings` (via bins) | `oxikube_app` |
 | App writing per-cluster read-only / colour back to `settings.json` | `oxikube_app::PrefsWriter` (a trait of the app crate, not a port: it carries no cluster I/O) | `bins/oxikube::cluster_prefs::SettingsPrefsWriter` over `ClusterSettings::update_cluster` | `oxikube_app::guard::posture` |
 | App editing the user's kubeconfig source list (`kubeconfig.sources`) | `SourceListStore` (a trait in `oxikube_app::sources`, async `load` / `save`) | `oxikube_catalog_ui::sources::SettingsSourceList` over `oxikube_settings::update_user_settings` | `oxikube_app::sources::KubeconfigSourcesService` |
-| Local files by path (pasted kubeconfigs: owner-only write, delete) | `FsPort` | `oxikube_runtime::StdFs` (tests: `FakeFsPort`) | `oxikube_app::sources` |
+| Local files by path (pasted kubeconfigs: owner-only write, delete; streamed chunked writes for log exports) | `FsPort` | `oxikube_runtime::StdFs` (tests: `FakeFsPort`) | `oxikube_app::sources` |
 | Per-cluster ports for a connected context | `ClusterConnectorPort` (returns `ClusterPorts` + `AccessReviewPort`; health via the `HealthReporter` callback) | `oxikube_kube` (wired by `bins/oxikube`) | `oxikube_app::session` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`), opened by `ExecPort` (`exec`, `attach`, `create_debug_container`, `node_shell`) | `oxikube_terminal` (local PTY), `oxikube_kube` (`KubeExec` handing out `KubeStream`), `oxikube_argocd` | `oxikube_terminal` element, `oxikube_app` `ExecService` |
 
@@ -393,7 +618,13 @@ weaken `cargo xtask lint-deps`.
   home as the first tab, the hotbar strip, the active cluster's status item, the kubeconfig
   sources (settings list, hot reload, the sources screen behind `view::Open`), session restore and the app's
   one `LogService` (`mount::logs`, stored with `AppState::set_log_service`; `logs.buffer_lines` follows the
-  settings) with the window's `LogViews` and the tables' row actions ("View Logs" on pods, E08-S02).
+  settings) with the window's `LogViews` and the tables' row actions ("View Logs" on pods, E08-S02, and on
+  workloads and Services, E08-S04), and the app's `AgentHooks` (E08-S09, `mount::logs::install_agent_hooks`, stored with
+  `AppState::set_agent_hooks`): the `ContextRegistry` holding `@logs`, the `ToolRegistry` holding `k8s.get_logs`, and the
+  `PendingContext` queue the viewer's "Send to agent" fills until the agent panel (E27) attaches.
+  The app's one `ExecService` (E09-S08, `mount::exec_service`, stored with `AppState::set_exec_service`) backs the pod
+  actions and the terminal's `ClusterLauncher`; `mount::bus` registers `pod::Shell` / `Attach` / `Exec` under
+  `oxikube_terminal`.
   Views dispatch through `mount::bus::BusDispatcher`, which runs each command on the bus through
   the window's `ClusterCommandRunner` (toasts, confirmations, denials).
 

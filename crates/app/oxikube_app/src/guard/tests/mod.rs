@@ -4,6 +4,7 @@
 mod audit;
 mod confirm;
 mod enforcement;
+mod exec;
 mod policy;
 mod posture;
 mod read_only;

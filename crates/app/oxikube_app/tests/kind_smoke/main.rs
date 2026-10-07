@@ -20,8 +20,13 @@ mod clock;
 mod cluster;
 mod columns;
 mod delete;
+mod exec;
 mod filter_selector;
 mod logs;
+mod logs_agent;
+mod logs_aggregate;
+mod logs_churn;
+mod logs_search;
 mod scoped_feeds;
 mod two_clusters;
 

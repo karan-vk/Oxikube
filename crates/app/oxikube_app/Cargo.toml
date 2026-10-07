@@ -13,6 +13,8 @@ doctest = false
 
 [dependencies]
 async-trait.workspace = true
+# `Bytes` in `BackendEvent::Output` (the notice line of a terminal).
+bytes.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 jiff.workspace = true
@@ -31,6 +33,8 @@ tracing.workspace = true
 
 [dev-dependencies]
 oxikube_testkit.workspace = true
+# `#[tokio::test(start_paused = true)]` for the exec shell probe's timeout.
+tokio = { workspace = true, features = ["test-util"] }
 proptest.workspace = true
 # The kind smoke test (`tests/kind_smoke`, E06-S12) runs the app services over the real adapter.
 # Dev-dependencies are exempt from `lint-deps`; the production graph stays free of adapters.
@@ -59,6 +63,14 @@ harness = false
 name = "log_ingest"
 harness = false
 
+# `cargo bench -p oxikube_app --bench log_search` (E08-S03): the match index over a full ring buffer.
+[[bench]]
+name = "log_search"
+# `cargo bench -p oxikube_app --bench log_merge` (E08-S04): many pods merged into one ring.
+[[bench]]
+name = "log_merge"
+harness = false
+
 [features]
 default = []
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
@@ -67,3 +79,8 @@ integration = ["oxikube_testkit/integration"]
 
 [lints]
 workspace = true
+
+# `cargo bench -p oxikube_app --bench log_parse` (E08-S05): JSON structured-line parse throughput.
+[[bench]]
+name = "log_parse"
+harness = false

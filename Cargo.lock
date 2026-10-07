@@ -5697,6 +5697,7 @@ name = "oxikube_app"
 version = "0.0.1"
 dependencies = [
  "async-trait",
+ "bytes",
  "futures",
  "indexmap",
  "jiff",
@@ -5918,6 +5919,7 @@ name = "oxikube_logs_ui"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "gpui-pre",
  "gpui-pre-platform",
@@ -5929,14 +5931,18 @@ dependencies = [
  "oxikube_ports",
  "oxikube_runtime",
  "oxikube_settings",
+ "oxikube_terminal",
  "oxikube_testkit",
+ "oxikube_theme",
  "oxikube_ui",
  "oxikube_workspace",
  "parking_lot",
  "schemars",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -6090,6 +6096,7 @@ dependencies = [
  "oxikube_app",
  "oxikube_assets",
  "oxikube_domain",
+ "oxikube_keymap",
  "oxikube_ports",
  "oxikube_runtime",
  "oxikube_settings",

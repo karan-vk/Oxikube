@@ -177,7 +177,8 @@ const STATUS: &[(&str, ColorSlot)] = slots! {
     "version_control.conflict_marker.theirs" => vcs.conflict_theirs,
 };
 
-/// The `oxikube` block keys. `cluster.tab.<1..=8>` is handled by index in [`cluster_tab_index`].
+/// The `oxikube` block keys. `cluster.tab.<1..=8>` and `log.source.<1..=10>` are handled by index
+/// in [`cluster_tab_index`] and [`log_source_index`].
 pub(crate) const OXIKUBE: &[(&str, OxikubeSlot)] = &[
     ("status.running", |c| &mut c.status_running),
     ("status.pending", |c| &mut c.status_pending),
@@ -194,6 +195,17 @@ const CLUSTER_TAB_PREFIX: &str = "cluster.tab.";
 pub(crate) fn cluster_tab_index(key: &str) -> Option<usize> {
     let n: usize = key.strip_prefix(CLUSTER_TAB_PREFIX)?.parse().ok()?;
     (1..=crate::tokens::CLUSTER_TAB_COLORS)
+        .contains(&n)
+        .then(|| n - 1)
+}
+
+/// Prefix of the log-source palette keys (`log.source.1` ..).
+const LOG_SOURCE_PREFIX: &str = "log.source.";
+
+/// The zero-based palette slot of an `oxikube` key like `log.source.3`, when it is one.
+pub(crate) fn log_source_index(key: &str) -> Option<usize> {
+    let n: usize = key.strip_prefix(LOG_SOURCE_PREFIX)?.parse().ok()?;
+    (1..=crate::tokens::LOG_SOURCE_COLORS)
         .contains(&n)
         .then(|| n - 1)
 }

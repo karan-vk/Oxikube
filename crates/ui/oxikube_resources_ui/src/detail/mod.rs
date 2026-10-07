@@ -17,6 +17,7 @@
 //! | `view` | [`DetailView`]: the entity and its commands |
 //! | `follow` | the store subscription (one row on the table's own feed), the model and the list's rows kept in step |
 //! | `full` | the full read for metadata-only and Table feeds, and the owners' scopes from discovery |
+//! | `exec` | "Shell" and "Attach" buttons in a pod's header (E09-S08), through the same [`ExecFlow`](crate::exec::ExecFlow) as the table's row actions |
 //! | `events_feed` | the Events tab's subscription, started on first show |
 //! | `render`, `overview`, `parts`, `events_tab` | drawing: header, tab strip, the virtualised Overview (its stateless rows in `parts`) and Events lists |
 //! | `schema_tab`, `schema_view` | the Schema tab of a CRD's detail (E07-S07): its `openAPIV3Schema` as a collapsible tree, the version chips and the way to the custom resources (state and commands, then drawing) |
@@ -46,6 +47,7 @@ mod drawer;
 mod events;
 mod events_feed;
 mod events_tab;
+mod exec;
 mod follow;
 mod full;
 pub mod model;

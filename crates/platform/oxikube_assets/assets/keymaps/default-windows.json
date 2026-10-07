@@ -98,6 +98,10 @@
       "delete": "resource_table::DeleteSelected",
       // k9s: ctrl-d deletes the selection (the same delete dialog, never a silent delete).
       "ctrl-d": "resource_table::DeleteSelected",
+      // k9s: s opens a shell in the pod, a attaches to it (Pods only; a read-only cluster blocks
+      // both unless `exec_in_read_only` is on).
+      "s": "resource_table::ShellSelected",
+      "a": "resource_table::AttachSelected",
       "/": "resource_table::FocusFilter"
     }
   },
@@ -111,8 +115,12 @@
   },
   {
     // Log views (E08-S02), k9s's keys: 0 tail, 1 head, 2-6 since 1m / 5m / 15m / 30m / 1h,
-    // s autoscroll, w wrap, t timestamps, p previous container, f fullscreen, m mark, c copy.
-    // Bare keys stay off while a text field inside the view has the focus.
+    // s autoscroll, w wrap, t timestamps, j JSON mode (E08-S05), p previous container, f fullscreen,
+    // m mark, c copy (the selected lines, else the lines on screen), shift-c clear, ctrl-s save the
+    // whole buffer to a file, ctrl-shift-s save the lines on screen, escape drops the selection
+    // (E08-S06), a send the same lines to the agent (E08-S09). Bare keys stay off while a text field
+    // inside the view has the focus. Rebind in
+    // keymap.json, e.g. { "context": "LogView && !Editing", "bindings": { "w": null, "x": "log_view::ToggleWrap" } }.
     "context": "LogView && !Editing",
     "bindings": {
       "0": "log_view::Tail",
@@ -125,10 +133,99 @@
       "s": "log_view::ToggleAutoscroll",
       "w": "log_view::ToggleWrap",
       "t": "log_view::ToggleTimestamps",
+      "j": "log_view::ToggleJsonMode",
       "p": "log_view::TogglePrevious",
       "f": "log_view::ToggleFullscreen",
       "m": "log_view::Mark",
-      "c": "log_view::Copy"
+      "c": "log_view::Copy",
+      "a": "log_view::SendToAgent",
+      // E08-S08: kubectl logs -f for this view in a terminal tab (needs kubectl on this machine).
+      "shift-t": "log_view::TailInTerminal",
+      "shift-c": "log_view::Clear",
+      "ctrl-s": "log_view::SaveAll",
+      "ctrl-shift-s": "log_view::SaveVisible",
+      "escape": "log_view::ClearSelection",
+      // After the stream stopped (E08-S07): reconnect, or follow the pod that replaced this one.
+      "r": "log_view::Reconnect",
+      "shift-r": "log_view::FollowReplacement",
+      // Search (E08-S03): `/` opens the bar (k9s), `n` / `N` step through the matches.
+      "/": "log_view::Find",
+      "n": "log_view::NextMatch",
+      "shift-n": "log_view::PreviousMatch"
+    }
+  },
+  {
+    // Open the search from anywhere in the log view, the field included.
+    "context": "LogView",
+    "bindings": {
+      "ctrl-f": "log_view::Find"
+    }
+  },
+  {
+    // While the bar is open (enter / shift-enter step through the matches in the field itself):
+    // escape closes it, and alt-c / alt-i / alt-f toggle case, inverse and filter mode.
+    "context": "LogView && searching",
+    "bindings": {
+      "escape": "log_view::CloseSearch",
+      "alt-c": "log_view::ToggleCase",
+      "alt-i": "log_view::ToggleInverse",
+      "alt-f": "log_view::ToggleFilterMode"
+    }
+  },
+  {
+    // Terminals (E09-S07): ctrl-` shows (and focuses) the shown cluster's terminal panel in the
+    // bottom dock or hides it; ctrl-~ opens a new shell there (a plain shell tab when no cluster
+    // tab is shown).
+    "bindings": {
+      "ctrl-`": "terminal_panel::TogglePanel",
+      "ctrl-~": "terminal::New"
+    }
+  },
+  {
+    // Terminal (E09-S06, E09-S11): ctrl-shift-c copies the selection, ctrl-shift-v (or
+    // shift-insert) pastes (a multi-line paste asks first, `terminal.confirm_multiline_paste`),
+    // ctrl-shift-a selects everything, ctrl-shift-k clears the scrollback, ctrl-shift-f searches
+    // it. ctrl-c is never bound: it always reaches the process as an interrupt, as does every
+    // plain ctrl chord. Every other key goes to the process (see the mapping in
+    // `oxikube_terminal::mappings`).
+    "context": "Terminal",
+    "bindings": {
+      "ctrl-shift-c": "terminal::Copy",
+      "ctrl-shift-v": "terminal::Paste",
+      "shift-insert": "terminal::Paste",
+      "ctrl-shift-a": "terminal::SelectAll",
+      "ctrl-shift-k": "terminal::Clear",
+      "ctrl-shift-f": "terminal::Search",
+      // E09-S07: ctrl-shift-w closes the focused terminal (in a pane or the bottom dock),
+      // ctrl-shift-d opens a terminal running the same shell in a new pane to the right;
+      // ctrl-shift-t opens a new shell (in the shown cluster's bottom dock).
+      "ctrl-shift-t": "terminal::New",
+      "ctrl-shift-w": "terminal::Close",
+      "ctrl-shift-d": "terminal::Split",
+      // Scroll the history: shift-pageup / shift-pagedown a screen, shift-up / shift-down a
+      // line. On the alternate screen (vim, htop, less) the keys go to the program instead.
+      "shift-pageup": "terminal::ScrollPageUp",
+      "shift-pagedown": "terminal::ScrollPageDown",
+      "shift-up": "terminal::ScrollLineUp",
+      "shift-down": "terminal::ScrollLineDown"
+    }
+  },
+  {
+    // While the search bar is open (the terminal has the keyboard): the next / previous match.
+    "context": "Terminal && searching",
+    "bindings": {
+      "f3": "terminal::SearchNext",
+      "shift-f3": "terminal::SearchPrevious"
+    }
+  },
+  {
+    // In the search bar's field: enter / shift-enter step through the matches (the field handles
+    // them), escape closes the bar and returns to the terminal.
+    "context": "TerminalSearch > Input",
+    "bindings": {
+      "escape": "terminal::SearchClose",
+      "f3": "terminal::SearchNext",
+      "shift-f3": "terminal::SearchPrevious"
     }
   }
 ]

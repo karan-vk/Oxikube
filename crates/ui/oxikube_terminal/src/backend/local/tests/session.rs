@@ -69,6 +69,35 @@ async fn the_working_directory_is_honoured() {
 }
 
 #[tokio::test]
+async fn the_working_directory_follows_the_shell_after_a_cd() {
+    let start = tempfile::tempdir().unwrap();
+    let start = start.path().canonicalize().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let elsewhere = elsewhere.path().canonicalize().unwrap();
+    // The shell reads a directory, `cd`s there and says so, then waits.
+    let pty = LocalPty::spawn(
+        sh("echo ready; read dir; cd \"$dir\" && echo moved; read _").in_dir(&start),
+    )
+    .unwrap();
+    let mut stream = pty.output_stream();
+    read_until(&mut stream, |out| out.contains("ready")).await;
+    assert_eq!(
+        pty.working_directory(),
+        Some(start.clone()),
+        "where it started"
+    );
+
+    let line = format!("{}\n", elsewhere.display());
+    pty.write(line.as_bytes()).await.unwrap();
+    read_until(&mut stream, |out| out.contains("moved")).await;
+    assert_eq!(pty.working_directory(), Some(elsewhere), "after the cd");
+
+    pty.write(b"\n").await.unwrap();
+    read_until(&mut stream, |_| false).await;
+    assert_eq!(pty.working_directory(), None, "an ended shell has none");
+}
+
+#[tokio::test]
 async fn output_bytes_are_passed_through_untouched() {
     let pty = LocalPty::spawn(sh(r"printf '\033[31mred\033[0m\303\251'")).unwrap();
     let mut stream = pty.output_stream();

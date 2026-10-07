@@ -67,6 +67,13 @@ pub struct AuditRecord {
     pub dry_run: bool,
     /// How it ended.
     pub outcome: AuditOutcome,
+    /// What else names the attempt, as short `key=value` words: the container and the program of
+    /// a shell opened in a pod (`container=app program=bash`). Names only, never typed input or
+    /// output (non-negotiable 5), capped at [`MAX_AUDIT_FIELD_BYTES`]. Absent for a mutation,
+    /// which the command id and the target describe fully; records written before this field
+    /// existed read back without it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<Arc<str>>,
 }
 
 impl AuditRecord {
@@ -90,7 +97,18 @@ impl AuditRecord {
             target,
             dry_run,
             outcome,
+            detail: None,
         }
+    }
+
+    /// Adds [`detail`](Self::detail), cut to [`MAX_AUDIT_FIELD_BYTES`] on a char boundary.
+    #[must_use]
+    pub fn with_detail(mut self, detail: &str) -> Self {
+        self.detail = Some(Arc::from(char_boundary_prefix(
+            detail,
+            MAX_AUDIT_FIELD_BYTES,
+        )));
+        self
     }
 }
 
@@ -179,6 +197,26 @@ mod tests {
         ] {
             assert!(!obj.contains_key(banned), "{banned}");
         }
+    }
+
+    #[test]
+    fn detail_is_optional_bounded_and_old_records_still_read() {
+        let plain = record("alice", "pod::Delete");
+        assert!(plain.detail.is_none());
+        let json = serde_json::to_value(&plain).unwrap();
+        assert!(!json.as_object().unwrap().contains_key("detail"));
+        let detailed = record("alice", "pod::Shell").with_detail("container=app program=bash");
+        let text = serde_json::to_string(&detailed).unwrap();
+        assert_eq!(
+            serde_json::from_str::<AuditRecord>(&text).unwrap(),
+            detailed
+        );
+        assert_eq!(
+            detailed.detail.as_deref(),
+            Some("container=app program=bash")
+        );
+        let long = record("alice", "pod::Shell").with_detail(&"é".repeat(1000));
+        assert!(long.detail.unwrap().len() <= MAX_AUDIT_FIELD_BYTES);
     }
 
     #[test]

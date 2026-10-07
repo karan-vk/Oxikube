@@ -3,12 +3,18 @@
 
 mod batching;
 mod cancel;
+mod clear;
 mod delta;
 mod errors;
+mod export;
+mod filter;
+mod filter_index;
+mod filter_props;
 mod hot_reload;
 mod options;
 mod props;
 mod ring;
+mod structured;
 
 use std::sync::Arc;
 use std::time::Duration;

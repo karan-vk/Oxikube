@@ -4,10 +4,12 @@
 //! bus does with the log commands (records them, then queues them for the controller).
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::channel::mpsc::UnboundedReceiver;
 use futures::executor::block_on;
 use gpui::{
     Entity, Modifiers, ScrollDelta, ScrollWheelEvent, TestAppContext, TouchPhase,
@@ -15,16 +17,19 @@ use gpui::{
 };
 use jiff::Timestamp;
 use oxikube_app::ClusterSessionManager;
+use oxikube_app::context::PendingContext;
+use oxikube_app::logs::kubectl::Kubectl;
 use oxikube_app::logs::{LogConfig, LogService};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::log::LogLine;
 use oxikube_keymap::KeymapOptions;
-use oxikube_ports::{ClusterContext, LogOptions, SourceId};
+use oxikube_ports::{ClusterContext, FsPort, LogOptions, SourceId};
+use oxikube_terminal::view::{TerminalRequest, TerminalViewSink};
 use oxikube_testkit::{
-    FakeClockPort, FakeClusterConnectorPort, FakeClusterPorts, FakeClusterSourcePort, LogCall,
-    Timeline,
+    FakeClockPort, FakeClusterConnectorPort, FakeClusterPorts, FakeClusterSourcePort, FakeFsPort,
+    LogCall, Timeline,
 };
 use oxikube_workspace::test_support::open_workspace;
 use oxikube_workspace::{CommandDispatcher, Workspace};
@@ -62,9 +67,42 @@ pub(crate) fn pod() -> Resource {
     .expect("a pod")
 }
 
+/// The Deployment `shop/web`.
+pub(crate) fn deployment_ref() -> ResourceRef {
+    ResourceRef::namespaced(
+        cluster(),
+        Gvk::new("apps", "v1", "Deployment"),
+        "shop",
+        "web",
+    )
+}
+
+/// The Deployment `shop/web` (selector `app=web`).
+pub(crate) fn deployment() -> Resource {
+    oxikube_testkit::deployment()
+        .name("web")
+        .namespace("shop")
+        .build()
+}
+
+/// A running pod of the `web` deployment: one container `app`.
+pub(crate) fn web_pod(name: &str) -> Resource {
+    oxikube_testkit::pod()
+        .name(name)
+        .namespace("shop")
+        .uid(format!("uid-{name}"))
+        .label("app", "web")
+        .build()
+}
+
 /// The server timestamp of line `i`: one second apart.
 pub(crate) fn ts(i: usize) -> Timestamp {
     Timestamp::from_second(1_791_115_200 + i as i64).unwrap()
+}
+
+/// Line `i` of container `app` of pod `pod`, stamped `i` seconds.
+pub(crate) fn pod_line(pod: &str, i: usize) -> LogLine {
+    LogLine::new(ts(i), pod, "app", format!("INFO {pod} line {i}"))
 }
 
 /// Line `i`: every fifth an error, every seventh a warning.
@@ -122,9 +160,22 @@ pub(crate) struct Fx {
     pub(crate) vcx: VisualTestContext,
     pub(crate) workspace: Entity<Workspace>,
     pub(crate) ports: FakeClusterPorts,
+    pub(crate) fs: Arc<FakeFsPort>,
+    /// Where "Send to agent" queues.
+    pub(crate) agent: PendingContext,
     pub(crate) views: Entity<LogViews>,
     pub(crate) dispatcher: Dispatcher,
+    /// Whether kubectl is installed (E08-S08): found at [`KUBECTL`] unless the window was built
+    /// [`without_kubectl`](Self::without_kubectl).
+    pub(crate) kubectl: Kubectl,
+    /// Where the fake lookup finds kubectl: a test installs it by setting this.
+    pub(crate) installed: Arc<parking_lot::Mutex<Option<PathBuf>>>,
+    /// What the views asked the window's terminals for.
+    pub(crate) terminal_requests: UnboundedReceiver<TerminalRequest>,
 }
+
+/// Where the tests' kubectl is.
+pub(crate) const KUBECTL: &str = "/opt/tools/bin/kubectl";
 
 impl Fx {
     /// A window with the cluster connected and `shop/web-0` readable.
@@ -134,6 +185,48 @@ impl Fx {
 
     /// [`Self::new`] with a log service that keeps `buffer_lines` lines per session.
     pub(crate) fn with_buffer(cx: &mut TestAppContext, buffer_lines: usize) -> Self {
+        Self::with_config(
+            cx,
+            LogConfig {
+                buffer_lines,
+                ..LogConfig::default()
+            },
+        )
+    }
+
+    /// [`Self::new`] over the file port `wrap` makes of the in-memory one (a test's own fake
+    /// that holds a write back, say).
+    pub(crate) fn with_fs(
+        cx: &mut TestAppContext,
+        wrap: impl FnOnce(Arc<FakeFsPort>) -> Arc<dyn FsPort>,
+    ) -> Self {
+        Self::build(cx, LogConfig::default(), wrap)
+    }
+
+    /// [`Self::new`] with a log service built from `config`.
+    pub(crate) fn with_config(cx: &mut TestAppContext, config: LogConfig) -> Self {
+        Self::build(cx, config, |fs| fs)
+    }
+
+    /// [`Self::new`] on a machine without kubectl.
+    pub(crate) fn without_kubectl(cx: &mut TestAppContext) -> Self {
+        Self::build_with(cx, LogConfig::default(), |fs| fs, None)
+    }
+
+    fn build(
+        cx: &mut TestAppContext,
+        config: LogConfig,
+        wrap: impl FnOnce(Arc<FakeFsPort>) -> Arc<dyn FsPort>,
+    ) -> Self {
+        Self::build_with(cx, config, wrap, Some(PathBuf::from(KUBECTL)))
+    }
+
+    fn build_with(
+        cx: &mut TestAppContext,
+        config: LogConfig,
+        wrap: impl FnOnce(Arc<FakeFsPort>) -> Arc<dyn FsPort>,
+        kubectl_at: Option<PathBuf>,
+    ) -> Self {
         let entry = ClusterContext::new(cluster(), ContextName::new("kind"), SourceId("k".into()));
         let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry]));
         let connector = Arc::new(FakeClusterConnectorPort::new());
@@ -152,21 +245,29 @@ impl Fx {
         block_on(sessions.connect(&cluster())).expect("connect");
 
         let clock: Arc<FakeClockPort> = ports.logs.clock().clone();
-        let config = LogConfig {
-            buffer_lines,
-            ..LogConfig::default()
-        };
         let service = vcx.update(|_, cx| Arc::new(LogService::new(log_runtime(clock, cx), config)));
+        let fs = Arc::new(FakeFsPort::new());
+        let agent = PendingContext::new();
         let (sink, requests) = LogCommandSink::channel();
         let dispatcher = Dispatcher {
             sent: Rc::default(),
             sink,
         };
+        let installed = Arc::new(parking_lot::Mutex::new(kubectl_at));
+        let lookup = installed.clone();
+        let kubectl = Kubectl::new(move || lookup.lock().clone());
+        // The binary refreshes it on a background task at start-up; here it is known at once.
+        kubectl.refresh();
+        let (terminal, terminal_requests) = TerminalViewSink::channel();
         let deps = LogViewsDeps {
             views: LogViewDeps {
                 service,
                 sessions,
                 dispatcher: Rc::new(dispatcher.clone()),
+                fs: wrap(fs.clone()),
+                agent: agent.clone(),
+                kubectl: kubectl.clone(),
+                terminal,
             },
             host: Rc::new(Host(workspace.downgrade())),
         };
@@ -176,14 +277,64 @@ impl Fx {
             vcx,
             workspace,
             ports,
+            fs,
+            agent,
             views,
             dispatcher,
+            kubectl,
+            installed,
+            terminal_requests,
         }
+    }
+
+    /// A window for the multi-pod tests: [`Self::open_web`] lets the merge's reorder window pass.
+    pub(crate) fn merged(cx: &mut TestAppContext) -> Self {
+        Self::new(cx)
+    }
+
+    /// Lets `total` of fake time pass on the log port's clock (the streams, the merge's window),
+    /// in steps finer than the window, then a frame.
+    pub(crate) fn pass(&mut self, total: Duration) {
+        let step = Duration::from_millis(20);
+        let mut left = total;
+        while !left.is_zero() {
+            let by = left.min(step);
+            self.ports.logs.clock().advance(by);
+            self.vcx.run_until_parked();
+            left -= by;
+        }
+        self.vcx.executor().advance_clock(Duration::from_millis(20));
+        self.vcx.run_until_parked();
     }
 
     /// Queues `timeline` as the next log stream the port hands out.
     pub(crate) fn script(&self, timeline: Timeline<LogLine>) {
         self.ports.logs.script().stream_logs.push_ok(timeline);
+    }
+
+    /// Seeds the cluster with the `web` deployment and one pod per name, and queues a stream per
+    /// pod (in name order, the order the aggregate opens them) from `timelines`.
+    pub(crate) fn seed_web(&mut self, mut pods: Vec<(&str, Timeline<LogLine>)>) {
+        self.ports.resources.insert(deployment());
+        pods.sort_by_key(|(name, _)| *name);
+        for (name, timeline) in pods {
+            self.ports.resources.insert(web_pod(name));
+            self.script(timeline);
+        }
+    }
+
+    /// Opens the merged log of the `web` deployment as `workload::ViewLogs` does, settled.
+    pub(crate) fn open_web(&mut self) -> Entity<LogView> {
+        let views = self.views.clone();
+        let view = self.vcx.update(|window, cx| {
+            views.update(cx, |views, cx| {
+                views.open(&deployment_ref(), &OpenLogs::default(), window, cx)
+            })
+        });
+        self.settle();
+        // The start-up barrier and the reorder window (300 ms) before the first lines are shown.
+        self.pass(Duration::from_millis(800));
+        view.expect("the cluster has a tab")
     }
 
     /// Opens the log view of `shop/web-0` as `pod::ViewLogs` does, over `timeline`, settled.

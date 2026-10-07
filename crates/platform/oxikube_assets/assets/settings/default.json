@@ -60,12 +60,40 @@
     // Saved per kind, not per cluster; only the text you typed is kept.
     "persist_filter": false
   },
-  // Logs (E08-S01).
+  // Logs (E08-S01, E08-S10). Every key can also be set under "clusters.<id>.logs" (a chatty
+  // production cluster may want a bigger buffer). Numbers out of range are clamped (a warning
+  // goes to the log), never refused.
+  //   buffer_lines      lines each log session keeps in memory (100 to 5,000,000). When a chatty
+  //                     pod writes more, the oldest lines are dropped and the viewer shows a
+  //                     "truncated" marker above the first one. Applies to open sessions at once.
+  //   default_tail      lines the tail range (key 0) reads before it follows (1 to 100,000).
+  //                     Applies to log views opened afterwards.
+  //   wrap              wrap long lines instead of letting them run off the edge (key w toggles
+  //                     it for one view). Applies to open views at once.
+  //   timestamps        show each line's server timestamp before its text (key t toggles it for
+  //                     one view). Applies to open views at once.
+  //   max_streams       containers a multi-pod log (a Deployment, StatefulSet, DaemonSet, Job or
+  //                     Service) reads at once (1 to 200). When more match, the first are read in
+  //                     name order and the view says how many pods were left out. Applies to
+  //                     open views at once.
+  //   json_auto_detect  JSON mode: lines that are JSON objects show as level / time / message
+  //                     columns with the other fields collapsed (click to expand), with level
+  //                     chips; plain-text lines stay as they are (key j toggles it for one view).
+  //                     Applies to open views at once.
+  //   reconnect_retries times in a row a log stream that broke while its pod runs (a dropped
+  //                     connection, an API server timeout) is reopened, after a pause that
+  //                     doubles each time, before the view shows it failed (0 to 50; 0 never
+  //                     reconnects). The overlap is never shown twice; a failed view reconnects
+  //                     with key r. Applies to open views at once.
+  // The keys of the log view are in the keymap (context "LogView"); rebind them in keymap.json.
   "logs": {
-    // Lines each log session keeps in memory (100 to 5,000,000). When a chatty pod writes more,
-    // the oldest lines are dropped and the viewer shows a "truncated" marker above the first one.
-    // A change applies to the sessions that are open at once.
-    "buffer_lines": 50000
+    "buffer_lines": 50000,
+    "default_tail": 1000,
+    "wrap": false,
+    "timestamps": false,
+    "json_auto_detect": true,
+    "max_streams": 20,
+    "reconnect_retries": 5
   },
   // The Describe tab of a resource's detail (`kubectl describe`-style text). `backend`:
   //   "auto"     render in process (deskribe: 36 specialised kinds, a generic layout for custom
@@ -83,14 +111,41 @@
   // re-reads your profile and slows opening a terminal). A cluster's terminal starts with
   // KUBECONFIG (a private merged file holding only that cluster's context, removed when the
   // terminal closes), KUBE_CONTEXT and OXIKUBE_NAMESPACE set; PATH is yours, untouched. Note that
-  // kubectl in the shell is not behind Oxikube's read-only mode or confirmations. Applies to
-  // terminals opened afterwards.
+  // kubectl in the shell is not behind Oxikube's read-only mode or confirmations. A new shell
+  // applies to terminals opened afterwards; a running one keeps its shell. `shell` and
+  // `shell_args` can also be set under `clusters.<id>.terminal` for one cluster's terminals; the
+  // other keys are read from this block only.
   "terminal": {
     "shell": null,
     "shell_args": [],
+    // Font of the terminal text. null: the platform's monospace font (Menlo, Consolas, DejaVu
+    // Sans Mono) at the theme's monospace size. font_size is in points (6 - 72), line_height a
+    // multiple of it (1.0 - 2.5); values outside are clamped. Changes repaint open terminals.
+    "font_family": null,
+    "font_size": null,
+    "line_height": 1.3,
+    // The cursor until the process sets its own: "block", "bar" or "underline"; cursor_blink
+    // makes it blink.
+    "cursor_shape": "block",
+    "cursor_blink": false,
+    // What a bell from the process does: "none", "visual" (a brief flash) or "audible" (the
+    // system alert sound).
+    "bell": "visual",
     // Lines of history each terminal keeps in memory (0 - 100000). Scrollback is never saved to
-    // disk. A change applies to open terminals at once.
-    "scrollback_lines": 10000
+    // disk. A change applies to open terminals at once (a smaller value drops the oldest lines).
+    "scrollback_lines": 10000,
+    // Copy the selection to the clipboard when the mouse button is released. cmd-c (ctrl-shift-c
+    // on Linux and Windows) always copies it; ctrl-c always interrupts the process.
+    "copy_on_select": false,
+    // Alt (Option) sends ESC before the key ("meta": alt-b, alt-f, alt-. in shells and editors).
+    // null: off on macOS, where Option types characters, on elsewhere.
+    "option_as_meta": null,
+    // Ask before pasting text with more than one line (a pasted newline runs the line).
+    "confirm_multiline_paste": true,
+    // The shells `pod: shell` tries in a container, first to last (each probed with a quick exec;
+    // the first the container has is opened and named in a line at the top of the terminal).
+    // A name or an absolute path. Empty uses the default. Applies to shells opened afterwards.
+    "exec_shells": ["bash", "sh"]
   },
   // Per-cluster settings. Each key below is a default for every cluster; write the same key under
   // `clusters.<id>` (below) to override it for one cluster. Layers merge field by field:
@@ -122,6 +177,10 @@
   // (no stdin, no prompts), "if_available" or "always". Read when a session connects, so a change
   // applies on the next connect.
   "exec_interactivity": "never",
+  // Allow a shell, attach or exec into a pod (pod::Shell, pod::Attach) while `read_only` is on. A
+  // shell can change anything the container's user can, so a read-only cluster blocks it unless
+  // you set this to true, at the top level or under `clusters.<id>`. Applies at once.
+  "exec_in_read_only": false,
   // Per-cluster overrides, keyed by cluster id (16 hex characters; the catalog shows it). Each
   // value takes the per-cluster settings above and any other setting. Edits apply at once, except
   // `exec_interactivity` (next connect) and `default_namespace` (new sessions). Example:

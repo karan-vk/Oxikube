@@ -1,8 +1,10 @@
 //! [`ResourceActions`]: the app's row actions and delete flow, as the tables use them.
 
+use std::sync::Arc;
+
 use oxikube_app::{
-    ActionContext, ActionState, ClusterSessionManager, CommandBus, DeleteFlow, RowAction,
-    RowActionRegistry, RowActions,
+    ActionContext, ActionState, ClusterSessionManager, CommandBus, DeleteFlow, ExecService,
+    RowAction, RowActionRegistry, RowActions,
 };
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::ClusterId;
@@ -47,6 +49,7 @@ pub struct ResourceActions {
     actions: RowActions,
     flow: DeleteFlow,
     sessions: ClusterSessionManager,
+    exec: Option<Arc<ExecService>>,
 }
 
 impl ResourceActions {
@@ -77,6 +80,7 @@ impl ResourceActions {
             actions: RowActions::from_bus(bus, registry),
             flow: DeleteFlow::new(bus.clone(), sessions.clone(), who),
             sessions,
+            exec: None,
         }
     }
 
@@ -86,6 +90,20 @@ impl ResourceActions {
     pub fn with_concurrency(mut self, n: usize) -> Self {
         self.flow = self.flow.with_concurrency(n);
         self
+    }
+
+    /// Lets the pod actions choose a container before they dispatch: "Shell" and "Attach" read
+    /// the pod through `service` and ask which container when it has several. Without it they
+    /// dispatch at once and the pod's default container opens.
+    #[must_use]
+    pub fn with_exec(mut self, service: Arc<ExecService>) -> Self {
+        self.exec = Some(service);
+        self
+    }
+
+    /// The service the pod actions read pods through, if one was given.
+    pub fn exec_service(&self) -> Option<&Arc<ExecService>> {
+        self.exec.as_ref()
     }
 
     /// The delete flow.

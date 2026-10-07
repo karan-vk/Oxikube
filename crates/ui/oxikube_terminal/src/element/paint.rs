@@ -15,6 +15,7 @@ use super::cache::RowCache;
 use super::layout::{DecorationKind, DecorationSpan, selected_columns};
 use super::metrics::CellMetrics;
 use super::palette::TerminalPalette;
+use super::preedit;
 use super::{Inner, TerminalElementState, TerminalFrame};
 use crate::grid::{CellFlags, CursorShape, TerminalSnapshot};
 
@@ -39,6 +40,9 @@ pub(super) fn paint(
         cache,
         palette,
         hovered,
+        metrics: font_memo,
+        highlight_spans,
+        blink,
         ..
     } = &mut *inner;
     let Some(palette) = palette.as_ref().map(|memo| &memo.palette) else {
@@ -59,6 +63,18 @@ pub(super) fn paint(
             window.paint_quad(fill(area, palette.selection()));
         }
     }
+    if !highlight_spans.is_empty() {
+        let colors = ActiveTheme::get(cx).colors;
+        for span in highlight_spans.iter() {
+            let area = metrics.span(origin, span.row, span.column, span.cells);
+            let color = if span.current {
+                colors.search_active_match
+            } else {
+                colors.search_match
+            };
+            window.paint_quad(fill(area, color));
+        }
+    }
     for (row, cached) in cache.rows().enumerate() {
         for (run, shaped) in cached.layout.runs.iter().zip(&cached.shaped) {
             let at = metrics.cell_origin(origin, row, run.column);
@@ -66,7 +82,9 @@ pub(super) fn paint(
             let _ = shaped.paint(at, metrics.line_height, TextAlign::Left, None, window, cx);
         }
     }
-    paint_cursor(snapshot, palette, frame, cache, window, cx);
+    if blink.shown() {
+        paint_cursor(snapshot, palette, frame, cache, window, cx);
+    }
     for (row, cached) in cache.rows().enumerate() {
         for span in &cached.layout.decorations {
             paint_decoration(span, row, origin, metrics, window);
@@ -87,6 +105,18 @@ pub(super) fn paint(
         }
     }
     paint_scroll_thumb(snapshot, bounds, window, cx);
+    if let (Some(text), Some((font, _))) = (frame.preedit.as_deref(), font_memo.as_ref()) {
+        preedit::paint(
+            text,
+            snapshot.cursor,
+            origin,
+            font,
+            metrics,
+            palette,
+            window,
+            cx,
+        );
+    }
 }
 
 /// The cursor: a block (with the glyph under it redrawn in the cell's background colour), a beam,

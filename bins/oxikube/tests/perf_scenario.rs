@@ -107,7 +107,7 @@ fn scroll_10k_scrolls_the_table_under_churn_with_coalesced_notifies() {
 const LOGS_FRAMES: u64 = 10;
 
 #[test]
-fn logs_stream_measures_four_modes_with_coalesced_notifies() {
+fn logs_stream_measures_ten_modes_with_coalesced_notifies() {
     let (out, sample) = run("logs-stream");
     assert!(
         out.status.success(),
@@ -118,7 +118,18 @@ fn logs_stream_measures_four_modes_with_coalesced_notifies() {
     assert_eq!(s["status"], "ok");
     assert_eq!(s["scenario"], "logs-stream");
     assert_eq!(s["metrics"]["draw_ms"]["count"], LOGS_FRAMES);
-    for prefix in ["", "paused_", "wrap_", "wrap_paused_"] {
+    for prefix in [
+        "",
+        "paused_",
+        "wrap_",
+        "wrap_paused_",
+        "raw_",
+        "json_filtered_",
+        "search_",
+        "filter_",
+        "merged_",
+        "merged_wrap_",
+    ] {
         let frames = s["metrics"][format!("{prefix}frame_ms")]["count"]
             .as_u64()
             .unwrap_or_else(|| panic!("{prefix}frame_ms"));

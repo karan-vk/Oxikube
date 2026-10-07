@@ -63,7 +63,8 @@ pub struct ClusterSettingsContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(schema_with = "colour_schema")]
     pub colour: Option<ClusterColour>,
-    /// Block every mutation (create, edit, delete, scale, exec, node shell) for the cluster.
+    /// Block every mutation (create, edit, delete, scale, node shell) for the cluster, and shells and
+    /// attaches into pods unless `exec_in_read_only` allows them.
     /// Set it under `clusters.<id>` to protect one cluster, or at the top level to start every
     /// cluster read-only and opt individual ones out with `false`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -95,4 +96,10 @@ pub struct ClusterSettingsContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(schema_with = "exec_interactivity_schema")]
     pub exec_interactivity: Option<ExecInteractivity>,
+    /// Allow a shell, attach or exec into a pod (`pod::Shell`, `pod::Attach`) while `read_only`
+    /// is on. Off by default: a shell can change anything the container's user can, so a
+    /// read-only cluster blocks it. Takes effect at once. Set it under `clusters.<id>` to let one
+    /// read-only cluster keep its shells.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exec_in_read_only: Option<bool>,
 }
