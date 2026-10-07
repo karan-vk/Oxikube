@@ -17,9 +17,12 @@ pub mod commands;
 pub mod ime;
 pub mod keyboard;
 
+use std::borrow::Cow;
+
 use bytes::Bytes;
 use gpui::{Context, actions};
 
+use crate::grid::TerminalModes;
 use crate::mappings::{KeyMode, encode_paste, to_esc_str};
 use crate::state::TerminalState;
 
@@ -67,11 +70,11 @@ impl TerminalState {
     ) -> bool {
         let mode = KeyMode::new(self.modes(), option_as_meta);
         match to_esc_str(keystroke, mode) {
-            Some(std::borrow::Cow::Borrowed(sequence)) => {
+            Some(Cow::Borrowed(sequence)) => {
                 self.type_bytes(Bytes::from_static(sequence.as_bytes()), cx);
                 true
             }
-            Some(std::borrow::Cow::Owned(sequence)) => {
+            Some(Cow::Owned(sequence)) => {
                 self.type_bytes(Bytes::from(sequence), cx);
                 true
             }
@@ -83,9 +86,7 @@ impl TerminalState {
     /// stripped), otherwise with line breaks as carriage returns. The multi-line confirmation is
     /// the caller's ([`clipboard::paste_clipboard`]).
     pub fn paste_text(&mut self, text: &str, cx: &mut Context<Self>) {
-        let bracketed = self
-            .modes()
-            .contains(crate::grid::TerminalModes::BRACKETED_PASTE);
+        let bracketed = self.modes().contains(TerminalModes::BRACKETED_PASTE);
         self.type_bytes(encode_paste(text, bracketed), cx);
     }
 }

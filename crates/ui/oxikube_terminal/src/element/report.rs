@@ -57,7 +57,7 @@ impl Pointer {
         }
     }
 
-    /// Reports a press; `false` when it is not a button the protocol knows.
+    /// Reports a press of a button the protocol knows (others are ignored) and takes focus.
     pub(super) fn report_press(&self, event: &MouseDownEvent, window: &mut Window, cx: &mut App) {
         let Some(pressed) = button(event.button) else {
             return;
@@ -73,7 +73,7 @@ impl Pointer {
         cx.stop_propagation();
     }
 
-    /// Reports the release of the button whose press was reported; `false` when none was.
+    /// Reports the release of the button whose press was reported; `false` when it was not one.
     pub(super) fn report_release(&self, event: &MouseUpEvent, cx: &mut App) -> bool {
         let Some(released) = button(event.button) else {
             return false;

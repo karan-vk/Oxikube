@@ -57,10 +57,8 @@ use oxikube_ports::TerminalSize;
 use oxikube_theme::ActiveTheme;
 use oxikube_workspace::CommandDispatcher;
 
-use crate::input::PasteConfirm;
-
 use crate::grid::{SelectionSide, TerminalSnapshot};
-use crate::input::ImeAnchor;
+use crate::input::{ImeAnchor, PasteConfirm};
 use crate::state::TerminalState;
 
 pub use cache::CacheStats;

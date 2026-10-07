@@ -71,7 +71,7 @@ impl TerminalState {
 }
 
 /// The cells `c` takes: 0 for combining marks, 2 for the East Asian wide ranges, else 1.
-pub fn cells_of(c: char) -> usize {
+fn cells_of(c: char) -> usize {
     match u32::from(c) {
         0x0300..=0x036F | 0x200B..=0x200F | 0xFE00..=0xFE0F => 0,
         0x1100..=0x115F

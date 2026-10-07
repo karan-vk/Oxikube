@@ -20,14 +20,11 @@ const PREVIEW_COLUMNS: usize = 100;
 /// pieces around it into another (`ESC[2` + `ESC[201~` + `01~`). Text that tries to end the
 /// bracket early could otherwise run the rest as typed commands.
 fn strip_end_marker(text: &str) -> Cow<'_, str> {
-    if !text.contains(PASTE_END) {
-        return Cow::Borrowed(text);
-    }
-    let mut stripped = text.replace(PASTE_END, "");
+    let mut stripped = Cow::Borrowed(text);
     while stripped.contains(PASTE_END) {
-        stripped = stripped.replace(PASTE_END, "");
+        stripped = Cow::Owned(stripped.replace(PASTE_END, ""));
     }
-    Cow::Owned(stripped)
+    stripped
 }
 
 /// The bytes for pasting `text`.
@@ -44,7 +41,7 @@ pub fn encode_paste(text: &str, bracketed: bool) -> Bytes {
         out.extend_from_slice(body.as_bytes());
         out.extend_from_slice(PASTE_END.as_bytes());
         Bytes::from(out)
-    } else if text.contains(['\r', '\n']) {
+    } else if is_multiline(text) {
         Bytes::from(text.replace("\r\n", "\r").replace('\n', "\r"))
     } else {
         Bytes::copy_from_slice(text.as_bytes())

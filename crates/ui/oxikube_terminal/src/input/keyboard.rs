@@ -13,7 +13,7 @@
 //!
 //! The mapping returns `&'static str` for every common key, so a keypress allocates nothing.
 
-use gpui::{App, Entity, KeyDownEvent, Keystroke, Window};
+use gpui::{App, Entity, KeyDownEvent, Keystroke};
 
 use crate::grid::{TerminalModes, TerminalScroll};
 use crate::settings::TerminalSettings;
@@ -38,7 +38,6 @@ fn history_scroll(keystroke: &Keystroke) -> Option<TerminalScroll> {
 pub(crate) fn handle_key_down(
     terminal: &Entity<TerminalState>,
     event: &KeyDownEvent,
-    _window: &mut Window,
     cx: &mut App,
 ) {
     if terminal.read(cx).is_composing() {

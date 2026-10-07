@@ -23,11 +23,11 @@ use crate::grid::{DEFAULT_SCROLLBACK_LINES, MAX_SCROLLBACK_LINES};
 
 /// `terminal.option_as_meta` when the setting is `null`: off on macOS (Option composes
 /// characters), on elsewhere.
-pub const DEFAULT_OPTION_AS_META: bool = !cfg!(target_os = "macos");
+const DEFAULT_OPTION_AS_META: bool = !cfg!(target_os = "macos");
 /// `terminal.copy_on_select` default.
-pub const DEFAULT_COPY_ON_SELECT: bool = false;
+const DEFAULT_COPY_ON_SELECT: bool = false;
 /// `terminal.confirm_multiline_paste` default.
-pub const DEFAULT_CONFIRM_MULTILINE_PASTE: bool = true;
+const DEFAULT_CONFIRM_MULTILINE_PASTE: bool = true;
 
 /// What one settings layer says about terminals: the `terminal` object of `settings.json`.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]

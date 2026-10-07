@@ -34,9 +34,9 @@ pub(super) fn register(
     );
 
     let terminal = element.terminal.clone();
-    window.on_key_event(move |event: &KeyDownEvent, phase, window, cx| {
+    window.on_key_event(move |event: &KeyDownEvent, phase, _, cx| {
         if phase == DispatchPhase::Bubble {
-            keyboard::handle_key_down(&terminal, event, window, cx);
+            keyboard::handle_key_down(&terminal, event, cx);
         }
     });
     let terminal = element.terminal.clone();
