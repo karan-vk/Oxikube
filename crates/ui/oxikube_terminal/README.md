@@ -8,7 +8,13 @@ alacritty_terminal grid + custom GPUI Element + TerminalBackend (local PTY, kube
 
 - `backend::local` (E09-S02): `LocalPty`, the user's shell on a PTY with the cluster environment
   (`KUBECONFIG`, `KUBE_CONTEXT`, `OXIKUBE_NAMESPACE`). Bench: `cargo run --release -p oxikube_terminal --example local_pty_bench`.
-- Element and view: E09-S05..S07.
+- `element` (E09-S05): `TerminalElement`, the custom GPUI element painting a `TerminalState`
+  (theme terminal colours, attributes, wide glyphs, cursor styles, selection, OSC 8 / URL / path
+  links with cmd/ctrl-click). `open_link`: the `terminal::OpenLink` handler.
+  Bench: `cargo run --profile release-fast -p oxikube_terminal --example element_bench`; a live
+  window: `cargo run -p oxikube_terminal --example terminal_preview [-- <program> [args...]]`;
+  screenshots: `cargo test -p oxikube_terminal --features screenshot --test screenshot`.
+- Keyboard and view: E09-S06, E09-S07.
 
 ## Modules
 

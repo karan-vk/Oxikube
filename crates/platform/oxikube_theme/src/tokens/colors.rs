@@ -98,7 +98,9 @@ color_struct! {
     }
 }
 
-/// Terminal colours: base, foreground variants and the normal/bright/dim ANSI rows.
+/// Terminal colours: base, foreground variants, cursor and selection, and the normal/bright/dim
+/// ANSI rows (the 16 colours plus their dim row; the terminal element derives the rest of the
+/// 256-colour palette from them).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TerminalColors {
     /// Terminal background.
@@ -109,6 +111,11 @@ pub struct TerminalColors {
     pub bright_foreground: Hsla,
     /// Foreground of faint text.
     pub dim_foreground: Hsla,
+    /// The cursor (derived: the first player's cursor colour, else the accent text colour). Zed
+    /// theme files have no terminal cursor key.
+    pub cursor: Hsla,
+    /// The selection highlight drawn over cells (derived: the interface selection colour).
+    pub selection: Hsla,
     /// Normal ANSI colours.
     pub ansi: AnsiColors,
     /// Bright ANSI colours.
@@ -124,6 +131,8 @@ impl TerminalColors {
             foreground: color,
             bright_foreground: color,
             dim_foreground: color,
+            cursor: color,
+            selection: color,
             ansi: AnsiColors::splat(color),
             bright: AnsiColors::splat(color),
             dim: AnsiColors::splat(color),

@@ -270,7 +270,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
   flood repaints once per frame; a writer task sends input and emulator replies in order and
   forwards resizes through a latest-value channel (coalesced during a drag). Module `settings`:
   `terminal.scrollback_lines` (default 10 000, cap 100 000, hot-reloaded into open terminals).
-  Scrollback stays in memory; nothing is persisted or logged.
+  Scrollback stays in memory; nothing is persisted or logged. Module `element` (E09-S05):
+  `TerminalElement`, the custom GPUI element (`request_layout` fills the parent; `prepaint`
+  measures the cell from the font, turns the bounds into cols x rows and resizes the
+  `TerminalState` once per change, takes a snapshot without waiting on the grid lock, resolves the
+  palette from `oxikube_theme`'s terminal tokens and brings a row cache keyed by row content up to
+  date; `paint` draws background, cell backgrounds, selection, runs, cursor, decorations and the
+  hovered link), with OSC 8 / URL / path detection on the hovered line and mouse selection and
+  wheel scrolling. Module `open_link`: the `terminal::OpenLink` handler (validated off the UI
+  thread, opened on it; only `http`/`https`/`mailto`/`file` URLs and existing absolute paths).
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's

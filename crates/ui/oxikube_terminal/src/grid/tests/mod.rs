@@ -1,5 +1,6 @@
 //! Unit tests: feed VT sequences, assert the grid (E09-S04 AC 3).
 
+mod hyperlink;
 mod scrollback;
 mod search;
 mod selection;

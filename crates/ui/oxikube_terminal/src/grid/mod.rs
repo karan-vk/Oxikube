@@ -16,6 +16,7 @@
 //! | [`TerminalSnapshot`] and its cell, colour, cursor, mode and damage types | `snapshot` |
 //! | selection ([`SelectionKind`], [`GridPoint`], `selection_text`) | `selection` |
 //! | search ([`GridMatch`], `search`) | `search` |
+//! | OSC 8 hyperlinks of a snapshot ([`TerminalSnapshot::hyperlink_at`]) | `hyperlink` |
 //! | [`GridEvent`], [`ColorRequest`] and the `EventListener` that collects them | `events` |
 //! | alacritty → Oxikube type conversions | `convert` |
 //!
@@ -23,6 +24,7 @@
 
 mod convert;
 mod events;
+mod hyperlink;
 mod search;
 mod selection;
 mod snapshot;

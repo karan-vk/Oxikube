@@ -332,6 +332,46 @@ per read), with one allocation per read and none per byte; the grid coalesces ch
 cadence. A login shell (`terminal.shell_args: ["-l"]`) re-reads the profile and costs the shell's own
 start time, which is why it is off by default.
 
+## Terminal element (E09-S05)
+
+`cargo run --profile release-fast -p oxikube_terminal --example element_bench` paints the element
+headless (the host's real text system, no GPU time) at 80 x 24 and 240 x 60, one wave of output per
+frame. The *frame* is the tick firing the coalesced notify plus the whole window's layout, prepaint
+and paint, every reshape included; a *repaint* is a frame with nothing new (hover, focus).
+
+Reference machine (macOS, Apple silicon, Menlo 13 px, 300 frames after 30 warm-up):
+
+| grid | workload | frame p50 / p95 / max (ms) | repaint p50 (ms) | allocs/frame | row cache hits | runs shaped/frame |
+|---|---|---|---|---|---|---|
+| 80x24 | idle | - | 0.016 | 0 | 100 % | 0 |
+| 80x24 | `yes` | 0.025 / 0.049 / 0.072 | 0.022 | 79 | 100 % | 0 |
+| 80x24 | `ls --color` (8 lines/frame) | 0.314 / 0.464 / 1.283 | 0.108 | 303 | 83 % | 32 |
+| 80x24 | `htop` (every row redrawn) | 0.547 / 0.712 / 1.162 | 0.124 | 608 | 50 % | 72 |
+| 240x60 | idle | - | 0.114 | 0 | 100 % | 0 |
+| 240x60 | `yes` | 0.134 / 0.178 / 0.235 | 0.132 | 79 | 100 % | 0 |
+| 240x60 | `ls --color` | 0.526 / 0.639 / 1.019 | 0.332 | 303 | 93 % | 32 |
+| 240x60 | `htop` | 1.555 / 1.979 / 4.049 | 0.405 | 1 400 | 50 % | 180 |
+
+What keeps it there:
+
+- **Rows are cached by content, not position.** A row's laid-out spans and shaped runs are keyed by
+  a hash of its cells, so a scrolling log shapes only the new lines, `yes` shapes nothing after the
+  first frame, identical rows (blank lines) share one entry, and a repaint shapes nothing. The
+  `htop` hit rate is 50 % because every row is new each frame and the bench then repaints once.
+- **Runs, not cells.** Adjacent cells of one style are one shaped run (blanks inside it included),
+  with every glyph forced to the cell width so a run cannot drift off the grid; adjacent equal
+  backgrounds are one quad.
+- **Allocations follow what changed.** A repaint allocates only GPUI's own per-frame bookkeeping
+  (about 70 to 80); each shaped run costs about 8 more (the text and GPUI's line layout). The
+  snapshot, palette, row buffers and spare rows are reused frame to frame.
+- **Nothing waits on the grid.** The snapshot uses `try_lock`; a busy grid repaints the previous
+  frame and asks for another. Resizes go to the grid at once (the frame shows the new size) and
+  reach the process coalesced.
+
+These are headless numbers: compare them with the same machine, not with the 8 ms budget (which
+includes GPU time and present). The windowed check is `cargo run -p oxikube_terminal --example
+terminal_preview` (a live `top`).
+
 ## Resource table: 10 000 pods under churn (E07-S09)
 
 The epic's exit criterion (E07): 10 000 pods with churn scroll at ≥ 55 fps on the reference machine

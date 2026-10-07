@@ -9,6 +9,7 @@ mod actions;
 mod chrome;
 mod logs;
 mod resources;
+mod terminal;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use oxikube_catalog_ui::namespaces::NamespaceSelector;
