@@ -6,7 +6,6 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
     SharedString, Styled as _, Window, div, prelude::FluentBuilder as _,
 };
-use oxikube_ports::ExitStatus;
 use oxikube_ui::layout::v_flex;
 use oxikube_ui::{ActiveTokens as _, u};
 
@@ -42,15 +41,6 @@ impl TerminalView {
             .text_color(tokens.colors.text_muted)
             .child(text)
             .into_any_element()
-    }
-}
-
-/// The line under a terminal whose process ended.
-pub fn describe_exit(status: &ExitStatus) -> String {
-    match (&status.code, &status.signal) {
-        (Some(code), _) => format!("Process exited with code {code}"),
-        (None, Some(signal)) => format!("Process ended by signal {signal}"),
-        (None, None) => "Process ended".to_owned(),
     }
 }
 

@@ -55,6 +55,9 @@ pub struct Banner {
 /// Said under every pod banner: a new session is a new shell.
 const SESSION_GONE: &str = "Reconnecting starts a new session: the state of the old shell is gone.";
 
+/// Said under a local shell's exit banner.
+const RESTART_HINT: &str = "Restart starts a fresh shell with the same settings.";
+
 impl Banner {
     pub(super) fn of(lifecycle: &Lifecycle, local: bool) -> Option<Self> {
         match lifecycle {
@@ -88,30 +91,15 @@ impl Banner {
         }
     }
 
-    /// A local shell ended: its code (or signal) and Restart; code 0 offers Close first.
+    /// A local shell ended: its code (or signal) and Restart.
     fn shell_exited(status: &ExitStatus) -> Self {
-        let (headline, clean) = match (&status.code, &status.signal) {
-            (Some(code), _) => (format!("Shell exited with code {code}"), *code == 0),
-            (None, Some(signal)) => (format!("Shell ended by signal {signal}"), false),
-            (None, None) => ("Shell ended".to_owned(), false),
-        };
-        let (tone, actions) = if clean {
-            (
-                Tone::Info,
-                vec![BannerAction::CloseTab, BannerAction::Restart],
-            )
-        } else {
-            (
-                Tone::Warning,
-                vec![BannerAction::Restart, BannerAction::CloseTab],
-            )
-        };
-        Self {
-            tone,
-            headline,
-            detail: "Restart starts a fresh shell with the same settings.".to_owned(),
-            actions,
-        }
+        Self::ended(
+            "Shell exited",
+            "Shell",
+            status,
+            BannerAction::Restart,
+            RESTART_HINT,
+        )
     }
 
     /// A pod session ended with a verdict: its code, or the server's message when the command
@@ -126,26 +114,38 @@ impl Banner {
                 actions: vec![BannerAction::Reconnect, BannerAction::CloseTab],
             };
         }
+        Self::ended(
+            "Session ended",
+            "Session",
+            status,
+            BannerAction::Reconnect,
+            SESSION_GONE,
+        )
+    }
+
+    /// `subject` ended with `status`, worded `with_code` when it has a code; code 0 offers Close
+    /// first, anything else `retry` first.
+    fn ended(
+        with_code: &str,
+        subject: &str,
+        status: &ExitStatus,
+        retry: BannerAction,
+        detail: &str,
+    ) -> Self {
         let (headline, clean) = match (&status.code, &status.signal) {
-            (Some(code), _) => (format!("Session ended with code {code}"), *code == 0),
-            (None, Some(signal)) => (format!("Session ended by signal {signal}"), false),
-            (None, None) => ("Session ended".to_owned(), false),
+            (Some(code), _) => (format!("{with_code} with code {code}"), *code == 0),
+            (None, Some(signal)) => (format!("{subject} ended by signal {signal}"), false),
+            (None, None) => (format!("{subject} ended"), false),
         };
         let (tone, actions) = if clean {
-            (
-                Tone::Info,
-                vec![BannerAction::CloseTab, BannerAction::Reconnect],
-            )
+            (Tone::Info, vec![BannerAction::CloseTab, retry])
         } else {
-            (
-                Tone::Warning,
-                vec![BannerAction::Reconnect, BannerAction::CloseTab],
-            )
+            (Tone::Warning, vec![retry, BannerAction::CloseTab])
         };
         Self {
             tone,
             headline,
-            detail: SESSION_GONE.to_owned(),
+            detail: detail.to_owned(),
             actions,
         }
     }

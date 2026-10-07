@@ -58,10 +58,7 @@ fn the_tab_shows_the_program_then_the_process_title_and_is_dirty_while_running(
         .vcx
         .update(|_, cx| view.read(cx).exit_status(cx).cloned())
         .expect("exited");
-    assert_eq!(
-        oxikube_terminal::view::describe_exit(&status),
-        "Process exited with code 3"
-    );
+    assert_eq!(status, ExitStatus::with_code(3));
 }
 
 #[gpui::test]
