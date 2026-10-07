@@ -22,7 +22,8 @@ use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ClusterId;
 use oxikube_keymap::KeymapOptions;
 use oxikube_ports::{
-    ClusterContext, ClusterSource, ClusterSourcePort, SourceStatus, SourcesChanged, UserSource,
+    ClusterContext, ClusterSource, ClusterSourcePort, SourceDiagnostic, SourceStatus,
+    SourcesChanged, UserSource,
 };
 use oxikube_testkit::gpui_test::{TestApp, TestWindow};
 use oxikube_testkit::{
@@ -69,6 +70,14 @@ impl ClusterSourcePort for GatedSource {
 
     async fn source_statuses(&self) -> OxiResult<Vec<SourceStatus>> {
         self.inner.source_statuses().await
+    }
+
+    async fn source_diagnostics(&self) -> OxiResult<Vec<SourceDiagnostic>> {
+        self.inner.source_diagnostics().await
+    }
+
+    fn subscribe_diagnostics(&self) -> BoxStream<'static, Vec<SourceDiagnostic>> {
+        self.inner.subscribe_diagnostics()
     }
 
     async fn validate_kubeconfig(&self, text: &str) -> OxiResult<usize> {

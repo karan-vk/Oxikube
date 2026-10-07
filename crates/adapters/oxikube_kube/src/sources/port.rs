@@ -6,8 +6,8 @@ use futures::channel::mpsc;
 use futures::stream::BoxStream;
 use oxikube_domain::OxiResult;
 use oxikube_ports::{
-    ClusterContext, ClusterSource, ClusterSourcePort, SourceStatus, SourcesChanged, UserSource,
-    UserSourceKind,
+    ClusterContext, ClusterSource, ClusterSourcePort, SourceDiagnostic, SourceStatus,
+    SourcesChanged, UserSource, UserSourceKind,
 };
 
 use super::{KubeconfigSources, pasted};
@@ -53,6 +53,16 @@ impl ClusterSourcePort for KubeconfigSources {
 
     async fn source_statuses(&self) -> OxiResult<Vec<SourceStatus>> {
         Ok(self.inner.snapshot().await?.statuses.clone())
+    }
+
+    async fn source_diagnostics(&self) -> OxiResult<Vec<SourceDiagnostic>> {
+        // Load first when nothing was read yet, as `source_statuses` does.
+        self.inner.snapshot().await?;
+        Ok(self.inner.port_diagnostics())
+    }
+
+    fn subscribe_diagnostics(&self) -> BoxStream<'static, Vec<SourceDiagnostic>> {
+        self.inner.subscribe_diagnostics()
     }
 
     async fn validate_kubeconfig(&self, text: &str) -> OxiResult<usize> {

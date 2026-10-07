@@ -20,13 +20,14 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_kube::kubeconfig::{Env, LoadedKubeconfig};
 use oxikube_kube::sources::{KubeconfigSources, SourcesConfig};
 use oxikube_ports::{
-    ClusterContext, ClusterSource, ClusterSourcePort, SecretStorePort, SourceStatus,
-    SourcesChanged, UserSource, UserSourceKind,
+    ClusterContext, ClusterSource, ClusterSourcePort, SecretStorePort, SourceDiagnostic,
+    SourceStatus, SourcesChanged, UserSource, UserSourceKind,
 };
 use parking_lot::Mutex;
 use tokio::sync::OnceCell;
 
 type Subscribers = Arc<Mutex<Vec<mpsc::UnboundedSender<SourcesChanged>>>>;
+type DiagnosticSubscribers = Arc<Mutex<Vec<mpsc::UnboundedSender<Vec<SourceDiagnostic>>>>>;
 
 /// The kubeconfig-backed `ClusterSourcePort`, built on first use. See the module docs.
 pub struct LazyKubeSources {
@@ -38,6 +39,7 @@ pub struct LazyKubeSources {
     /// Start the adapter's file watcher. Off in tests, which drive `reload()` themselves.
     watch: bool,
     subscribers: Subscribers,
+    diagnostic_subscribers: DiagnosticSubscribers,
 }
 
 impl std::fmt::Debug for LazyKubeSources {
@@ -59,6 +61,7 @@ impl LazyKubeSources {
             secrets,
             watch,
             subscribers: Arc::default(),
+            diagnostic_subscribers: Arc::default(),
         }
     }
 
@@ -122,6 +125,15 @@ impl LazyKubeSources {
                     .retain(|tx| tx.unbounded_send(diff.clone()).is_ok());
             }
         });
+        let mut diagnostics = adapter.subscribe_diagnostics();
+        let diagnostic_subscribers = self.diagnostic_subscribers.clone();
+        tokio::spawn(async move {
+            while let Some(list) = diagnostics.next().await {
+                diagnostic_subscribers
+                    .lock()
+                    .retain(|tx| tx.unbounded_send(list.clone()).is_ok());
+            }
+        });
         tracing::debug!(watch = self.watch, "kubeconfig sources built on first use");
         Ok(adapter)
     }
@@ -153,6 +165,16 @@ impl ClusterSourcePort for LazyKubeSources {
 
     async fn source_statuses(&self) -> OxiResult<Vec<SourceStatus>> {
         self.adapter().await?.source_statuses().await
+    }
+
+    async fn source_diagnostics(&self) -> OxiResult<Vec<SourceDiagnostic>> {
+        self.adapter().await?.source_diagnostics().await
+    }
+
+    fn subscribe_diagnostics(&self) -> BoxStream<'static, Vec<SourceDiagnostic>> {
+        let (tx, rx) = mpsc::unbounded();
+        self.diagnostic_subscribers.lock().push(tx);
+        rx.boxed()
     }
 
     async fn validate_kubeconfig(&self, text: &str) -> OxiResult<usize> {
@@ -227,6 +249,29 @@ contexts:
             .expect("a change arrives")
             .expect("the stream is open");
         assert!(!diff.is_empty());
+    }
+
+    #[tokio::test]
+    async fn diagnostics_reach_an_early_subscriber_through_the_dyn_port() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("config");
+        std::fs::write(&file, KUBECONFIG).unwrap();
+        let port: Arc<dyn ClusterSourcePort> = Arc::new(port(&file));
+        let mut changes = port.subscribe_diagnostics();
+        assert!(port.source_diagnostics().await.unwrap().is_empty());
+
+        std::fs::write(&file, "{{{ not yaml").unwrap();
+        port.reload().await.unwrap();
+        let list = tokio::time::timeout(CHANGE_TIMEOUT, changes.next())
+            .await
+            .expect("a change arrives")
+            .expect("the stream is open");
+        assert_eq!(list, port.source_diagnostics().await.unwrap());
+        assert!(
+            list.iter()
+                .any(|d| d.path.as_deref() == Some(file.as_path())),
+            "{list:?}"
+        );
     }
 
     #[test]
