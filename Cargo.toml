@@ -145,6 +145,12 @@ log = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 keyring = { version = "4", features = ["apple-native", "linux-native", "windows-native"] }
 notify-rust = "4"
+# macOS only (oxikube's `os_motion` probe: NSWorkspace reduce-motion + its change notification).
+# The versions GPUI's macOS platform already links, so no second copy enters the tree.
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSWorkspace", "NSAccessibility"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSNotification", "NSOperation", "NSString"] }
+block2 = "0.6"
 
 # --- network / http ---
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json", "stream", "gzip", "socks"] }

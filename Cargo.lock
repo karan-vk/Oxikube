@@ -5650,6 +5650,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "block2 0.6.2",
  "dirs 7.0.0",
  "futures",
  "gpui-component",
@@ -5657,6 +5658,9 @@ dependencies = [
  "gpui-pre-platform",
  "jiff",
  "kube",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
  "oxikube_app",
  "oxikube_assets",
  "oxikube_catalog_ui",

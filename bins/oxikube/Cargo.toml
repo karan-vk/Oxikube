@@ -58,6 +58,13 @@ tokio.workspace = true
 # Perf scenarios (feature `perf-scenarios`): headless app context.
 oxikube_testkit = { workspace = true, optional = true }
 
+# `os_motion::macos`: the OS reduce-motion preference and its change notification.
+[target.'cfg(target_os = "macos")'.dependencies]
+block2.workspace = true
+objc2.workspace = true
+objc2-app-kit.workspace = true
+objc2-foundation.workspace = true
+
 [dev-dependencies]
 # `startup` / `app_state` tests: `#[gpui::test]` over the real init order with testkit fakes.
 gpui = { workspace = true, features = ["test-support"] }
