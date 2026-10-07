@@ -65,11 +65,14 @@ mod build;
 mod config;
 mod entry;
 mod eviction;
+mod no_proxy;
 mod proxy;
 mod tls;
 
 #[cfg(test)]
 mod in_cluster_tests;
+#[cfg(test)]
+mod no_proxy_tests;
 #[cfg(test)]
 mod security_tests;
 #[cfg(test)]
@@ -140,7 +143,7 @@ struct State {
 
 impl ClientPool {
     /// A pool over `kubeconfig` using the real kube factory (with the process's
-    /// `HTTPS_PROXY` as proxy fallback) and the system clock.
+    /// `HTTPS_PROXY` as proxy fallback, minus hosts in `NO_PROXY`) and the system clock.
     pub fn new(kubeconfig: Kubeconfig, config: PoolConfig) -> Self {
         Self::with_parts(
             kubeconfig,
