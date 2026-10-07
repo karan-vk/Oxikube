@@ -14,7 +14,7 @@ use oxikube_testkit::Timeline;
 const CONTEXT: &str = "LogView && !Editing";
 
 /// k9s's keys, as the shipped keymap binds them.
-const DEFAULTS: [(&str, &str); 14] = [
+const DEFAULTS: [(&str, &str); 17] = [
     ("0", "log_view::Tail"),
     ("1", "log_view::Head"),
     ("2", "log_view::Since1m"),
@@ -29,6 +29,9 @@ const DEFAULTS: [(&str, &str); 14] = [
     ("f", "log_view::ToggleFullscreen"),
     ("m", "log_view::Mark"),
     ("c", "log_view::Copy"),
+    ("/", "log_view::Find"),
+    ("n", "log_view::NextMatch"),
+    ("shift-n", "log_view::PreviousMatch"),
 ];
 
 fn defaults_of(platform: KeymapPlatform) -> Vec<(String, String)> {
