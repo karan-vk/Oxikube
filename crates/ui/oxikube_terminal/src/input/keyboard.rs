@@ -1,7 +1,7 @@
 //! The key-down listener a focused [`TerminalElement`](crate::TerminalElement) registers.
 //!
 //! GPUI matches the keymap first (`cmd-c`, `ctrl-shift-v`, the window's own shortcuts); a
-//! keystroke no binding took reaches [`handle_key_down`]:
+//! keystroke no binding took reaches `handle_key_down`:
 //!
 //! 1. while an input method is composing, nothing here: the keys belong to it; the same holds
 //!    for a key the platform flags as text (`prefer_character_input` with a `key_char`, which is

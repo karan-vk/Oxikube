@@ -76,7 +76,7 @@ pub enum ClusterTabEvent {
     Closed,
 }
 
-/// The tab of one cluster. See the [module docs](self).
+/// The tab of one cluster. See the module docs.
 pub struct ClusterTab {
     cluster: ClusterId,
     info: ClusterTabInfo,

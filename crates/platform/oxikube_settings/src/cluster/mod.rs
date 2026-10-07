@@ -12,7 +12,7 @@
 //! - [`ClusterSettings`] is the resolved value, wrapping the plain
 //!   [`ClusterPrefs`](oxikube_ports::ClusterPrefs) the app layer understands, with
 //!   [`ClusterSettings::resolve`], [`ClusterSettings::observe_cluster`],
-//!   [`ClusterSettings::table`] and the comment-preserving writers in [`edit`];
+//!   [`ClusterSettings::table`] and the comment-preserving writers in `edit`;
 //! - [`fields`] has the validated field types: a URL without credentials and a keychain entry
 //!   name, so the file never holds a secret.
 //!

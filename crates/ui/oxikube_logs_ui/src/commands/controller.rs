@@ -50,7 +50,7 @@ pub struct LogViewsDeps {
     pub host: Rc<dyn LogHost>,
 }
 
-/// Opens and drives the log views of one window. See the [module docs](self).
+/// Opens and drives the log views of one window. See the module docs.
 pub struct LogViews {
     deps: LogViewsDeps,
     /// The searches of this window's log views, kept for the session.

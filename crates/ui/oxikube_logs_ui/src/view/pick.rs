@@ -67,7 +67,7 @@ impl LogView {
     }
 
     /// Installs (or removes) an extra filter that copies and saves apply, on top of what the view
-    /// itself hides (see [`active_filter`](Self::active_filter)); without one every line passes.
+    /// itself hides (see `active_filter`); without one every line passes.
     pub fn set_line_filter(&mut self, filter: Option<LineFilter>, cx: &mut Context<Self>) {
         self.filter = filter;
         cx.notify();

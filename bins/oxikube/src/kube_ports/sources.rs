@@ -28,7 +28,7 @@ use tokio::sync::OnceCell;
 
 type Subscribers = Arc<Mutex<Vec<mpsc::UnboundedSender<SourcesChanged>>>>;
 
-/// The kubeconfig-backed `ClusterSourcePort`, built on first use. See the [module docs](self).
+/// The kubeconfig-backed `ClusterSourcePort`, built on first use. See the module docs.
 pub struct LazyKubeSources {
     adapter: OnceCell<Arc<KubeconfigSources>>,
     /// The user's source list as settings had it at start-up (`kubeconfig.sources`); the sources

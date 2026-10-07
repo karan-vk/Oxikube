@@ -20,8 +20,8 @@
 //!   bounds fitted to the displays.
 //! - [`closed`]: the bounded reopen-closed stack.
 //! - [`cluster`]: cluster badges (colour dot, read-only lock) for tabs, hotbar and status bar, the
-//!   status bar [`ClusterStatusItem`](cluster::ClusterStatusItem), the read-only / preset menu and the
-//!   [`ClusterCommandRunner`](cluster::ClusterCommandRunner) (E06-S09).
+//!   status bar [`ClusterStatusItem`], the read-only / preset menu and the
+//!   [`ClusterCommandRunner`] (E06-S09).
 //! - [`cluster_tab`]: one tab per live cluster session (E06-S04): [`ClusterTab`] hosts the
 //!   cluster's own workspace, [`ClusterTabs`] keeps the tabs in step with the sessions, switches
 //!   (`cmd-1..9`), closes (with the running-operations prompt) and saves the open list.

@@ -4,7 +4,7 @@
 //! (through [`crate::ActiveTokens`]) and never gpui-component theme fields, so a library bump
 //! that renames a field is fixed here and nowhere else.
 //!
-//! - this file: [`set_tokens`] and [`apply_tokens`], the per-component colour projection.
+//! - this file: [`set_tokens`] and `apply_tokens`, the per-component colour projection.
 //! - `config`: [`set_theme`] and [`theme_config`], `ThemeTokens` -> the library's `ThemeConfig`
 //!   (core colours, editor/syntax highlight) applied through its own theme mechanism.
 //! - `follow`: [`follow_active_theme`], keeps the library in step with `oxikube_theme`.

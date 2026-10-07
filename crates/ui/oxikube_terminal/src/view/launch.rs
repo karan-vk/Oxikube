@@ -25,7 +25,7 @@ use crate::settings::TerminalSettings;
 /// The result of a launch: the running backend, or why it could not start.
 pub type Launch = Task<OxiResult<Box<dyn TerminalBackend>>>;
 
-/// Starts terminal processes. See the [module docs](self).
+/// Starts terminal processes. See the module docs.
 pub trait TerminalLauncher: 'static {
     /// Starts the process `descriptor` describes, at `size`. The work runs off the UI thread;
     /// dropping the task abandons it (a backend that started anyway is dropped, which ends it).

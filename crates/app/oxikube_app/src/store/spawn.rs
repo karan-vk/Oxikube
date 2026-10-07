@@ -24,7 +24,7 @@ use futures::future::{AbortHandle, Abortable, BoxFuture, FutureExt};
 /// });
 /// ```
 ///
-/// The store never relies on the spawned task's handle: it cancels through the [`TaskGuard`]
+/// The store never relies on the spawned task's handle: it cancels through the `TaskGuard`
 /// it keeps, so an implementation may detach the task.
 pub trait Spawner: Send + Sync {
     /// Starts `task` and returns at once; `task` must not be polled on the caller's stack.

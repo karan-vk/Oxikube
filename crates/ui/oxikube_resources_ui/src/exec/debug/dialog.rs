@@ -20,7 +20,7 @@ pub enum DebugStage {
     Starting,
 }
 
-/// The debug-container dialog. See the [module docs](super).
+/// The debug-container dialog. See the module docs.
 pub struct DebugDialog {
     pub(super) defaults: DebugDefaults,
     runner: DebugRunner,

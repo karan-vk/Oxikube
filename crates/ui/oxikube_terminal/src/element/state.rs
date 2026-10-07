@@ -14,7 +14,7 @@ use crate::grid::{SelectionSide, TerminalSnapshot};
 
 /// What the element keeps between frames: the snapshot buffers, the shaped rows, the palette and
 /// metrics it last used, and the hover and drag state. The host view creates one per terminal
-/// and passes it to every [`TerminalElement`] it renders. Cheap to clone (a shared handle).
+/// and passes it to every [`TerminalElement`](crate::TerminalElement) it renders. Cheap to clone (a shared handle).
 #[derive(Clone, Default)]
 pub struct TerminalElementState(pub(super) Rc<RefCell<Inner>>);
 

@@ -32,7 +32,7 @@ pub(super) enum Phase {
 }
 
 /// A terminal tab: a [`BackendDescriptor`], the process started from it, and the element state.
-/// See the [module docs](self).
+/// See the module docs.
 pub struct TerminalView {
     pub(super) descriptor: BackendDescriptor,
     pub(super) services: TerminalServices,

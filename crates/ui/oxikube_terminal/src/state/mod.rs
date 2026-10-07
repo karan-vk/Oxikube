@@ -8,18 +8,18 @@
 //! keystrokes ─▶ writer (tokio) ─▶ backend write / resize        notify_coalesced ─▶ snapshot
 //! ```
 //!
-//! * The **pump** ([`pump::pump`]) runs on tokio through `oxikube_runtime::spawn_kube`. It parses
+//! * The **pump** (`pump::pump`) runs on tokio through `oxikube_runtime::spawn_kube`. It parses
 //!   every chunk as it arrives (a flood of megabytes is applied in full), holding the grid lock for
-//!   at most [`pump::PARSE_SLICE`] bytes at a time and never across an `.await`.
+//!   at most `pump::PARSE_SLICE` bytes at a time and never across an `.await`.
 //! * **Search** scans screen and scrollback on the background executor in slices of
 //!   [`SEARCH_SLICE_LINES`](crate::grid::SEARCH_SLICE_LINES), releasing the grid lock (fairly)
 //!   between slices; output waits on an async gate meanwhile so lines do not move under it. The UI
 //!   thread therefore never waits on the lock for more than one parse or search slice.
-//! * **Frame coalescing**: the pump sends [`GridUpdate::Changed`](pump::GridUpdate) only when it
+//! * **Frame coalescing**: the pump sends `GridUpdate::Changed` only when it
 //!   turns the shared wake flag on; the UI turns it off and calls
 //!   `oxikube_runtime::notify_coalesced`, so observers (the element) hear at most one `notify` per
 //!   frame however many chunks arrived. Never one per chunk.
-//! * The **writer** ([`pump::write_loop`]) sends input and the emulator's replies in order, and
+//! * The **writer** (`pump::write_loop`) sends input and the emulator's replies in order, and
 //!   forwards resizes through a watch channel that keeps only the latest size.
 //! * **Ownership**: the entity owns both tokio tasks (abort on drop) and the drain task; dropping
 //!   the entity stops the pump, closes the stream and releases the backend. Nothing is persisted:

@@ -123,7 +123,7 @@ pub struct KubeEvents {
 
 impl KubeEvents {
     /// Events of `cluster`, read through `resources` (its client, discovery and
-    /// [`FeedConfig`] for page size, backoff and batching).
+    /// [`FeedConfig`](crate::feed::FeedConfig) for page size, backoff and batching).
     pub fn new(resources: KubeResources, cluster: ClusterId) -> Self {
         Self {
             resources,

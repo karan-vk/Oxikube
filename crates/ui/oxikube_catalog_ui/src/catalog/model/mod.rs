@@ -48,7 +48,7 @@ pub enum LoadState {
     Failed(SharedString),
 }
 
-/// The catalog as the view shows it. See the [module docs](self).
+/// The catalog as the view shows it. See the module docs.
 pub struct CatalogModel {
     rows: Vec<Row>,
     visible: Vec<usize>,

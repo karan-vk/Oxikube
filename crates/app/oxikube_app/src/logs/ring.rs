@@ -12,7 +12,7 @@ use std::ops::Range;
 
 use super::entry::LogEntry;
 
-/// The retained lines of one session. See the [module docs](self).
+/// The retained lines of one session. See the module docs.
 #[derive(Debug, Clone)]
 pub struct LogBuffer {
     lines: VecDeque<LogEntry>,

@@ -39,7 +39,7 @@ impl BannerAction {
     }
 }
 
-/// What a banner says. See the [module docs](self).
+/// What a banner says. See the module docs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Banner {
     /// How serious it looks.

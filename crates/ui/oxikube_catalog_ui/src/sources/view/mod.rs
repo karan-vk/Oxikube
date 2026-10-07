@@ -44,7 +44,7 @@ pub struct SourcesDeps {
     pub workspace: Option<WeakEntity<Workspace>>,
 }
 
-/// The kubeconfig sources screen. See the [module docs](self).
+/// The kubeconfig sources screen. See the module docs.
 pub struct SourcesView {
     pub(super) deps: SourcesDeps,
     pub(super) model: SourcesModel,

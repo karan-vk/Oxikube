@@ -1,13 +1,13 @@
 //! Layout persistence (E05-S05): saving the workspace's layout and restoring it on launch.
 //!
-//! - [`model`]: [`SerializedWorkspace`], the versioned on-disk layout (gpui-component's
+//! - `model`: [`SerializedWorkspace`], the versioned on-disk layout (gpui-component's
 //!   `DockAreaState` with the open item descriptors, the active pane and the window place).
-//! - [`store`]: [`LayoutStore`], one window's layout in the `StatePort` (SQLite in the app).
-//! - [`controller`]: [`LayoutPersistence`], the entity that restores at start, debounces saves
+//! - `store`: [`LayoutStore`], one window's layout in the `StatePort` (SQLite in the app).
+//! - `controller`: [`LayoutPersistence`], the entity that restores at start, debounces saves
 //!   and flushes on quit.
-//! - [`bounds`]: [`restore_window_bounds`], fitting saved window bounds to today's displays.
-//! - [`prune`]: pure edits of saved `PanelState` trees.
-//! - [`report`]: [`RestoreReport`], what a restore did.
+//! - `bounds`: [`restore_window_bounds`], fitting saved window bounds to today's displays.
+//! - `prune`: pure edits of saved `PanelState` trees.
+//! - `report`: [`RestoreReport`], what a restore did.
 //!
 //! The workspace side (`Workspace::serialize_layout` / `restore_layout`) lives with the
 //! workspace in `workspace::restore`. Items are rebuilt through the

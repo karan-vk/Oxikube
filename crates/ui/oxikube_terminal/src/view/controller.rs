@@ -46,7 +46,7 @@ pub struct TerminalViewsDeps {
     pub services: TerminalServices,
 }
 
-/// Opens, splits and closes the terminals of one window. See the [module docs](self).
+/// Opens, splits and closes the terminals of one window. See the module docs.
 pub struct TerminalViews {
     deps: TerminalViewsDeps,
     _requests: Task<()>,
@@ -79,7 +79,7 @@ impl TerminalViews {
         })
     }
 
-    /// Applies `request` on the next turn (see the [module docs](self)).
+    /// Applies `request` on the next turn (see the module docs).
     pub fn apply(&mut self, request: TerminalRequest, window: &mut Window, cx: &mut Context<Self>) {
         cx.defer_in(window, move |this, window, cx| match request {
             TerminalRequest::New { cluster } => this.open_new(cluster, window, cx),

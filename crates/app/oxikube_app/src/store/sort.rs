@@ -37,7 +37,7 @@ pub enum SortField {
     Cell(CellSortKey),
     /// How well the name matches the subscription's fuzzy filter (`/-f`), best first when
     /// ascending; objects the filter does not rank sort last. Ties break on the object key.
-    /// Computed by the subscriber's index from its filter, so [`SortKey::value_of`] alone
+    /// Computed by the subscriber's index from its filter, so `SortKey::value_of` alone
     /// cannot rank by it.
     Relevance,
 }

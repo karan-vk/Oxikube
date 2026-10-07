@@ -30,7 +30,7 @@ use crate::store::StoreObject;
 
 type MemoKey = (Arc<str>, Arc<str>, Capabilities);
 
-/// Column definitions and cells for the core kinds. See the [module docs](self).
+/// Column definitions and cells for the core kinds. See the module docs.
 pub struct CoreColumns {
     by_kind: HashMap<&'static str, Vec<&'static KindDef>>,
     memo: Mutex<HashMap<MemoKey, Arc<[Column]>>>,

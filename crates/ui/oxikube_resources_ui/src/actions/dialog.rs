@@ -29,7 +29,7 @@ pub enum Stage {
     Done,
 }
 
-/// The delete confirmation. See the [module docs](self).
+/// The delete confirmation. See the module docs.
 pub struct DeleteDialog {
     pub(super) flow: DeleteFlow,
     pub(super) plan: DeletePlan,

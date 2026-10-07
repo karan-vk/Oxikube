@@ -9,7 +9,7 @@
 //! |---|---|
 //! | tools by name, listed and invoked after a schema check | [`ToolRegistry`], [`RegisterToolError`] (`registry`) |
 //! | the schema subset arguments are checked against | [`validate_args`] (`schema`) |
-//! | `k8s.get_logs`: a pod's or a selector's newest log lines, bounded and redacted | [`k8s::get_logs`](k8s::get_logs) |
+//! | `k8s.get_logs`: a pod's or a selector's newest log lines, bounded and redacted | [`k8s::get_logs`] |
 
 pub mod k8s;
 mod registry;

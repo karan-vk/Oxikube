@@ -54,7 +54,7 @@ pub enum PersistenceEvent {
     RestoreFinished(RestoreStatus),
 }
 
-/// See the [module docs](self).
+/// See the module docs.
 pub struct LayoutPersistence {
     workspace: WeakEntity<Workspace>,
     store: LayoutStore,

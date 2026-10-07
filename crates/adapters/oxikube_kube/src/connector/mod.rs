@@ -9,7 +9,7 @@
 //! |---|---|
 //! | the pooled client, one pool per exec-plugin policy | [`ClientPool`] |
 //! | `AccessReviewPort`: RBAC rules review plus the metrics flag from discovery | `access` |
-//! | the liveness loop and its [`HealthReporter`] bridge, the watch budget | `connection` |
+//! | the liveness loop and its [`HealthReporter`](oxikube_ports::HealthReporter) bridge, the watch budget | `connection` |
 //!
 //! # Contract
 //!
@@ -19,7 +19,7 @@
 //!   classified there. A context that is not in the kubeconfig is `NotFound`; a plugin that wants
 //!   more interaction than the request's [`ExecInteractivity`] allows is a non-retryable `Auth`.
 //! * The liveness loop ([`Liveness`](crate::health::Liveness), `GET /version`) starts with the
-//!   connection and reports through the request's [`HealthReporter`]. The manager ignores
+//!   connection and reports through the request's [`HealthReporter`](oxikube_ports::HealthReporter). The manager ignores
 //!   signals until the session is `Ready`.
 //! * Each connection owns a [`FeedRegistry`] (the watch budget, E04-S13), reachable with
 //!   [`KubeConnector::feeds`] for as long as the connection lives: the resource store opens its

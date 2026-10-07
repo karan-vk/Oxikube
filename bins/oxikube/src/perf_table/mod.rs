@@ -9,7 +9,7 @@
 //! rows every frame interval, down to the end and back, until the `--perf` session ends. The
 //! frame times, feed throughput and notify counts of that run are what `--perf` records.
 //!
-//! Every step logs to stderr; a step that does not happen within [`STEP_DEADLINE`] gives up with a
+//! Every step logs to stderr; a step that does not happen within `STEP_DEADLINE` gives up with a
 //! message, leaving the app running so the session still records (and the user can take over).
 
 use std::sync::Arc;

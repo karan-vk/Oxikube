@@ -19,7 +19,7 @@ pub struct IndexChange {
     pub tested: u64,
 }
 
-/// The matching lines of one session, by seq, oldest first. See the [module docs](super).
+/// The matching lines of one session, by seq, oldest first. See the module docs.
 #[derive(Clone, Debug)]
 pub struct MatchIndex {
     matcher: Arc<LogMatcher>,

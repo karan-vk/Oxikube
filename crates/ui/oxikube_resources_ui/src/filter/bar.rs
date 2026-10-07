@@ -48,7 +48,7 @@ pub(super) struct Pending {
     pub text: String,
 }
 
-/// The filter bar of one table. See the [module docs](self).
+/// The filter bar of one table. See the module docs.
 pub struct FilterBar {
     pub(super) input: Entity<InputState>,
     /// The text last parsed: the input's own change event after `set_text` is ignored.
