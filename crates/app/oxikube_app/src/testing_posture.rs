@@ -251,6 +251,9 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "view::ZoomIn" => Command::ViewZoomIn,
         "view::ZoomOut" => Command::ViewZoomOut,
         "view::ZoomReset" => Command::ViewZoomReset,
+        "terminal::OpenLink" => Command::TerminalOpenLink {
+            target: "https://kubernetes.io".into(),
+        },
         "window::New" => Command::WindowNew,
         "workload::Restart" => Command::WorkloadRestart {
             target: ResourceRef::namespaced(

@@ -9,6 +9,8 @@
 //! | [`backend`] | [`TerminalBackend`](oxikube_ports::exec::TerminalBackend) implementations. [`backend::local::LocalPty`] runs the user's shell on a PTY (E09-S02) |
 //! | [`grid`] | [`TermGrid`]: `alacritty_terminal` (pinned `=0.26.0`) behind our own types; the only module that names them. Snapshot, selection, search, scrollback (E09-S04) |
 //! | [`state`] | [`TerminalState`]: the GPUI entity bridging a backend and the grid; tokio pump, writer, frame-coalesced notify (E09-S04) |
+//! | [`element`] | [`TerminalElement`]: the custom GPUI element painting a terminal (cells, cursor, selection, decorations, links) from theme colours (E09-S05) |
+//! | [`open_link`] | `terminal::OpenLink`: the handler cmd/ctrl-click on a link dispatches to (browser URLs; local files opened only when plain, otherwise revealed) (E09-S05) |
 //! | [`settings`] | [`TerminalSettings`]: the `terminal` block of `settings.json` (`shell`, `shell_args`, `scrollback_lines`) |
 //!
 //! Scrollback is never persisted and terminal bytes are never logged (non-negotiable 5).
@@ -17,11 +19,14 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod backend;
+pub mod element;
 pub mod grid;
+pub mod open_link;
 mod quit;
 pub mod settings;
 pub mod state;
 
+pub use element::{PathLinks, TerminalElement, TerminalElementState, TerminalFont};
 pub use grid::{
     GridMatch, GridPoint, SelectionKind, SelectionSide, TermGrid, TerminalScroll, TerminalSnapshot,
 };

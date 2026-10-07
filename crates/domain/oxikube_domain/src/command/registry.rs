@@ -116,6 +116,8 @@ impl CommandId {
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
+    /// `terminal::OpenLink`: open a URL or local path a terminal shows.
+    pub const TERMINAL_OPEN_LINK: CommandId = CommandId::new("terminal::OpenLink");
     /// `view::Open`: open a registered view by id.
     pub const VIEW_OPEN: CommandId = CommandId::new("view::Open");
     /// `view::ZoomIn`: make the UI one zoom step larger.
@@ -471,6 +473,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::TABLE_FOCUS_FILTER,
         "Focus Table Filter",
         CommandScope::ResourceKind,
+        NONE,
+    ),
+    // Opens the user's browser or file opener; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_OPEN_LINK,
+        "Open Terminal Link",
+        CommandScope::Global,
         NONE,
     ),
     CommandMeta::read(

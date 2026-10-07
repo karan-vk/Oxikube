@@ -116,7 +116,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::WindowNew
         | Command::ViewZoomIn
         | Command::ViewZoomOut
-        | Command::ViewZoomReset => None,
+        | Command::ViewZoomReset
+        | Command::TerminalOpenLink { .. } => None,
     }
 }
 

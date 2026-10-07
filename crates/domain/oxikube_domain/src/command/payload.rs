@@ -191,6 +191,14 @@ pub enum Command {
     /// Set the UI zoom back to 100 %.
     #[serde(rename = "view::ZoomReset")]
     ViewZoomReset,
+    /// Open a link a terminal shows (cmd/ctrl-click, E09-S05): an `http`, `https`, `mailto` or
+    /// `file` URL in the browser, or an absolute local path (an optional `:line[:column]` suffix
+    /// is accepted) with the system's opener. Reads and changes nothing in a cluster.
+    #[serde(rename = "terminal::OpenLink")]
+    TerminalOpenLink {
+        /// The URL or absolute path.
+        target: String,
+    },
     /// Open the list of the cluster's CustomResourceDefinitions (the sidebar's "Definitions").
     /// Read-only.
     #[serde(rename = "crd::OpenList")]
@@ -491,6 +499,7 @@ impl Command {
             Command::ViewZoomIn => CommandId::VIEW_ZOOM_IN,
             Command::ViewZoomOut => CommandId::VIEW_ZOOM_OUT,
             Command::ViewZoomReset => CommandId::VIEW_ZOOM_RESET,
+            Command::TerminalOpenLink { .. } => CommandId::TERMINAL_OPEN_LINK,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -683,6 +692,9 @@ mod tests {
             Command::ViewZoomIn,
             Command::ViewZoomOut,
             Command::ViewZoomReset,
+            Command::TerminalOpenLink {
+                target: "https://kubernetes.io".into(),
+            },
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -895,6 +907,7 @@ mod tests {
                     | Command::ViewZoomIn
                     | Command::ViewZoomOut
                     | Command::ViewZoomReset
+                    | Command::TerminalOpenLink { .. }
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }

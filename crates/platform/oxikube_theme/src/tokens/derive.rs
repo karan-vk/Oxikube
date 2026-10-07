@@ -4,14 +4,16 @@ use super::{OxikubeColors, ThemeTokens};
 use gpui::{Hsla, Rgba, hsla};
 
 /// Fills the derived [`super::ThemeColors`] fields: `selection` (the first player's selection,
-/// else the accent at 30 %) and `on_accent` (near-black on a light accent, white on a dark one).
+/// else the accent at 30 %) and `on_accent` (near-black on a light accent, white on a dark one),
+/// and the derived [`super::TerminalColors`] fields: `cursor` (the first player's cursor, else the
+/// accent) and `selection` (the interface selection).
 pub(crate) fn derive_colors(tokens: &mut ThemeTokens) {
     let accent = tokens.colors.text_accent;
-    tokens.colors.selection = tokens
-        .players
-        .first()
-        .map_or_else(|| accent.opacity(0.3), |player| player.selection);
+    let player = tokens.players.first();
+    tokens.colors.selection = player.map_or_else(|| accent.opacity(0.3), |player| player.selection);
     tokens.colors.on_accent = on_accent_for(accent);
+    tokens.terminal.cursor = player.map_or(accent, |player| player.cursor);
+    tokens.terminal.selection = tokens.colors.selection;
 }
 
 /// Near-black or white, whichever has the higher WCAG contrast ratio against `accent`.
