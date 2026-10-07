@@ -94,6 +94,7 @@ pub use boot::{Boot, boot, boot_in, shutdown};
 pub use env::{ConfigSource, PortsChoice, RuntimeChoice, StartupEnv};
 pub use features::{FEATURES, Feature};
 pub use first_frame::{CONFIG_LOAD_BUDGET, STARTUP_BUDGET};
+pub use paths::default_perf_dir;
 pub use quit::{QUIT_LOG_GRACE, flush_log_on_quit};
 pub use stage::{FirstFrame, Stage, StageTiming, StartupReport, time_after_init};
 

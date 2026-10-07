@@ -23,8 +23,9 @@ measured on a mid-range x86 laptop with an integrated GPU.
 ## How to measure
 
 - `oxikube --perf` logs per-frame times, feed throughput and `notify` counts to
-  `<data dir>/oxikube/perf/*.jsonl` (`~/.local/share/oxikube/perf` on Linux,
-  `~/Library/Application Support/oxikube/perf` on macOS) and prints p50/p95/p99 on exit (E01-S14);
+  `<data dir>/perf/*.jsonl` (`~/.local/share/oxikube/perf` on Linux,
+  `~/Library/Application Support/oxikube/perf` on macOS; `$OXIKUBE_DATA_DIR/perf` when that is set,
+  `--perf-dir` overrides both) and prints p50/p95/p99 on exit (E01-S14);
   see [Perf harness](#perf-harness-oxikube---perf-and-cargo-xtask-perf).
 - `cargo xtask load-pods --count 10000 --churn` seeds the churn scenario on kind (E01-S10); see
   [Load fixture](#load-fixture-cargo-xtask-load-pods) below. `oxikube --perf-table <context>` then

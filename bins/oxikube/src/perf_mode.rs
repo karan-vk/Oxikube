@@ -32,7 +32,7 @@ const SIGINT_EXIT: i32 = 130;
 /// Starts the session before the GPUI app runs. Returns the recorder the window root reports to.
 pub fn start(dir: Option<PathBuf>) -> Result<Arc<Recorder>> {
     let dir = dir
-        .or_else(perf::default_dir)
+        .or_else(oxikube::startup::default_perf_dir)
         .context("the OS reports no data directory; pass --perf-dir")?;
     let recorder = Arc::new(Recorder::new());
     let session = PerfSession::start(
