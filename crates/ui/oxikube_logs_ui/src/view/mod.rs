@@ -120,8 +120,10 @@ pub struct LogView {
     pub(crate) marks: Marks,
     /// What a copy or a save keeps (the search installs its matcher); `None` keeps every line.
     pub(crate) filter: Option<LineFilter>,
-    /// The running save (dropping it stops the write); replaced by the next one.
-    pub(crate) save_task: Option<Task<()>>,
+    /// The save panel being answered (dropping it forgets the question).
+    pub(crate) save_prompt: Option<Task<()>>,
+    /// The running save; [`stop_save`](LogView::stop_save) ends it and tells the user.
+    pub(crate) save_job: Option<save::SaveJob>,
     /// The unwrapped list's scroll position.
     pub(crate) scroll: UniformListScrollHandle,
     /// The wrapped list's rows and scroll position (kept in step with the window by splices).
@@ -175,7 +177,8 @@ impl LogView {
             selection: Selection::default(),
             marks: Marks::default(),
             filter: None,
-            save_task: None,
+            save_prompt: None,
+            save_job: None,
             scroll: UniformListScrollHandle::new(),
             list: ListState::new(0, ListAlignment::Top, px(400.)),
             focus: cx.focus_handle(),

@@ -51,11 +51,11 @@ impl Item for LogView {
         Some(item_key(&self.target).into())
     }
 
-    fn on_close(&mut self, _: &mut Window, _: &mut Context<Self>) {
+    fn on_close(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         // Dropping the session aborts its read and closes the connection.
         self.pump = None;
         self.pod_task = None;
-        self.save_task = None;
+        self.stop_save(cx);
         self.session = None;
     }
 }

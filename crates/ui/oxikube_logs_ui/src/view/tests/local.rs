@@ -178,6 +178,37 @@ fn a_selection_stays_on_its_lines_when_the_list_scrolls_and_new_lines_arrive(
 }
 
 #[gpui::test]
+fn a_selection_follows_its_lines_when_the_ring_drops_the_oldest(cx: &mut TestAppContext) {
+    let mut fx = Fx::with_buffer(cx, 100);
+    let view = fx.open(trickle(100, 40));
+    fx.wheel(1_000.); // to the top: autoscroll pauses
+    fx.click_row(2, false);
+    fx.click_row(8, true);
+    assert_eq!(fx.read(&view, |v| v.selection()), Some(2..=8));
+
+    tick(&mut fx, 5); // seqs 0..5 leave the ring: every row index moves up by five
+    assert_eq!(fx.read(&view, |v| v.line_window().first_seq()), 5);
+    assert_eq!(
+        fx.read(&view, |v| v.selection()),
+        Some(2..=8),
+        "the selection is by seq: it did not slide onto the lines that took the rows"
+    );
+    fx.keys("c");
+    let expected: String = (5..=8).map(|i| format!("{}\n", line(i).text)).collect();
+    assert_eq!(
+        fx.clipboard(),
+        Some(expected),
+        "a copy reads what is still there"
+    );
+
+    // Entirely in what went: nothing is selected any more.
+    fx.click_row(0, false); // seq 5
+    tick(&mut fx, 10); // seqs 5..15 leave the ring
+    assert!(fx.read(&view, |v| v.line_window().first_seq()) >= 15);
+    assert_eq!(fx.read(&view, |v| v.selection()), None);
+}
+
+#[gpui::test]
 fn m_marks_the_focused_line_and_the_bar_survives_scrolling(cx: &mut TestAppContext) {
     let mut fx = Fx::new(cx);
     let view = open(&mut fx, 500);

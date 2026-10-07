@@ -16,6 +16,7 @@ use oxikube_domain::command::Command;
 use oxikube_domain::log::LogSaveScope;
 use oxikube_ports::{DirEntry, FileChunks, FsEvent, FsPort};
 use oxikube_testkit::{FakeFsPort, Timeline};
+use oxikube_workspace::Workspace;
 use parking_lot::Mutex;
 
 use super::fixture::{Fx, line, lines, pod_ref};
@@ -329,6 +330,97 @@ fn a_big_export_does_not_block_the_ui(cx: &mut TestAppContext) {
         fx.toasts()
             .iter()
             .any(|t| t == "Saved 20,000 lines to /exports/big.log"),
+        "{:?}",
+        fx.toasts()
+    );
+}
+
+/// A view with a 20 000 line buffer whose first write is held back by the port.
+fn held_back(cx: &mut TestAppContext) -> (Fx, Entity<crate::LogView>, oneshot::Sender<()>) {
+    let (release, gate) = oneshot::channel();
+    let mut fx = Fx::with_fs(cx, move |inner| {
+        Arc::new(GatedFs {
+            inner,
+            gate: Mutex::new(Some(gate)),
+        })
+    });
+    let view = open(&mut fx, 20_000);
+    fx.keys("ctrl-s");
+    fx.choose_file(Some("/exports/a.log"));
+    assert!(fx.toasts().iter().any(|t| t == "Saving a.log…"));
+    (fx, view, release)
+}
+
+#[gpui::test]
+fn closing_the_tab_mid_save_does_not_leave_a_saving_toast(cx: &mut TestAppContext) {
+    let (mut fx, view, release) = held_back(cx);
+    let workspace: Entity<Workspace> = fx.workspace.clone();
+    let id = view.entity_id();
+    fx.vcx.update(|window, cx| {
+        workspace.update(cx, |ws, cx| {
+            ws.close_item(id, window, cx);
+        })
+    });
+    fx.settle();
+    release.send(()).ok();
+    fx.settle();
+    assert_eq!(
+        fx.toasts(),
+        ["Stopped saving a.log."],
+        "the progress toast says it stopped"
+    );
+    assert!(
+        fx.written("/exports/a.log").is_none(),
+        "the write was aborted"
+    );
+}
+
+#[gpui::test]
+fn a_second_save_stops_the_first_and_says_so(cx: &mut TestAppContext) {
+    let (mut fx, _view, _release) = held_back(cx);
+    fx.keys("ctrl-s");
+    fx.choose_file(Some("/exports/b.log"));
+    assert!(fx.written("/exports/a.log").is_none());
+    assert_eq!(
+        fx.written("/exports/b.log").map(|t| t.lines().count()),
+        Some(20_000)
+    );
+    let toasts = fx.toasts();
+    assert!(
+        toasts.iter().any(|t| t == "Stopped saving a.log."),
+        "{toasts:?}"
+    );
+    assert!(
+        toasts
+            .iter()
+            .any(|t| t.starts_with("Saved 20,000 lines to /exports/b.log"))
+    );
+    assert!(
+        !toasts.iter().any(|t| t.starts_with("Saving")),
+        "{toasts:?}"
+    );
+}
+
+#[gpui::test]
+fn cancelling_a_second_panel_leaves_the_first_save_running(cx: &mut TestAppContext) {
+    let (mut fx, _view, release) = held_back(cx);
+    fx.keys("ctrl-s");
+    fx.choose_file(None);
+    assert!(
+        fx.toasts().iter().any(|t| t == "Saving a.log…"),
+        "{:?}",
+        fx.toasts()
+    );
+    release.send(()).unwrap();
+    fx.settle();
+    assert_eq!(
+        fx.written("/exports/a.log").map(|t| t.lines().count()),
+        Some(20_000)
+    );
+    assert!(
+        fx.toasts()
+            .iter()
+            .any(|t| t == "Saved 20,000 lines to /exports/a.log"),
         "{:?}",
         fx.toasts()
     );
