@@ -259,8 +259,11 @@ impl Element for TerminalElement {
             self.terminal
                 .update(cx, |terminal, cx| terminal.resize(size, cx));
         }
-        let Inner { snapshot, .. } = &mut *inner;
-        if self.terminal.read(cx).try_snapshot_into(snapshot) {
+        if self
+            .terminal
+            .read(cx)
+            .try_snapshot_into(&mut inner.snapshot)
+        {
             forget_stale_hover(&mut inner);
         } else {
             // The grid is busy with a parse or search slice: paint the last frame, try again.

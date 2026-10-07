@@ -5,8 +5,8 @@
 //! out or shaped here except the one glyph under a block cursor, and that is cached too.
 
 use gpui::{
-    App, BorderStyle, Bounds, Hsla, Pixels, SharedString, TextAlign, TextRun, UnderlineStyle,
-    Window, fill, outline, point, px, size,
+    App, BorderStyle, Bounds, Hsla, Pixels, Point, ShapedLine, SharedString, TextAlign, TextRun,
+    UnderlineStyle, Window, fill, outline, point, px, size,
 };
 use oxikube_theme::ActiveTheme;
 
@@ -14,7 +14,7 @@ use super::layout::{DecorationKind, DecorationSpan, selected_columns};
 use super::metrics::CellMetrics;
 use super::palette::TerminalPalette;
 use super::{Inner, TerminalElementState, TerminalFrame};
-use crate::grid::{CellFlags, CursorShape, TerminalSnapshot};
+use crate::grid::{CellFlags, CursorShape, SnapshotCell, TerminalSnapshot};
 
 /// Width of a beam cursor and height of an underline cursor, in strokes.
 const CURSOR_STROKES: f32 = 2.;
@@ -94,7 +94,7 @@ fn paint_cursor(
     snapshot: &TerminalSnapshot,
     palette: &TerminalPalette,
     frame: &TerminalFrame,
-    glyph: &mut Option<(crate::grid::SnapshotCell, gpui::ShapedLine)>,
+    glyph: &mut Option<(SnapshotCell, ShapedLine)>,
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -181,7 +181,7 @@ fn paint_cursor(
 fn paint_decoration(
     span: &DecorationSpan,
     row: usize,
-    origin: gpui::Point<Pixels>,
+    origin: Point<Pixels>,
     metrics: CellMetrics,
     window: &mut Window,
 ) {

@@ -10,6 +10,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use super::layout::SPACERS;
 use crate::grid::{CellFlags, TerminalSnapshot};
 
 /// URLs: a scheme the opener accepts, then anything up to whitespace or a delimiter.
@@ -195,7 +196,6 @@ impl LogicalLine {
         while last + 1 < snapshot.rows && wraps(last) {
             last += 1;
         }
-        let spacers = CellFlags::WIDE_CHAR_SPACER | CellFlags::LEADING_WIDE_CHAR_SPACER;
         let mut line = Self {
             text: String::new(),
             chars: Vec::new(),
@@ -205,7 +205,7 @@ impl LogicalLine {
                 let Some(cell) = snapshot.cell(r, column) else {
                     continue;
                 };
-                if cell.flags.intersects(spacers) {
+                if cell.flags.intersects(SPACERS) {
                     continue;
                 }
                 line.chars.push((line.text.len(), r, column));

@@ -83,9 +83,9 @@ pub(super) fn register(element: &TerminalElement, frame: &TerminalFrame, window:
             p.scrolled(event, window, cx);
         }
     });
-    window.on_modifiers_changed(move |event: &ModifiersChangedEvent, window, cx| {
+    window.on_modifiers_changed(move |event: &ModifiersChangedEvent, window, _| {
         let position = window.mouse_position();
-        pointer.hover(position, event.modifiers, window, cx);
+        pointer.hover(position, event.modifiers, window);
     });
 }
 
@@ -119,11 +119,11 @@ impl Pointer {
                 });
             }
         }
-        self.hover(event.position, event.modifiers, window, cx);
+        self.hover(event.position, event.modifiers, window);
     }
 
     /// Finds (or drops) the hovered link; repaints when it changed.
-    fn hover(&self, position: Point<Pixels>, modifiers: Modifiers, window: &mut Window, _: &App) {
+    fn hover(&self, position: Point<Pixels>, modifiers: Modifiers, window: &mut Window) {
         let wanted = modifiers.secondary() && self.hitbox.is_hovered(window);
         let mut inner = self.state.0.borrow_mut();
         if !wanted {
@@ -145,8 +145,8 @@ impl Pointer {
         let rows = found
             .iter()
             .flat_map(|link| &link.cells)
-            .map(|&(row, _, _)| (row, hash::row_hash(snapshot, row)));
-        let rows: Vec<(usize, u64)> = rows.collect();
+            .map(|&(row, _, _)| (row, hash::row_hash(snapshot, row)))
+            .collect();
         inner.hover_cell = Some((row, column));
         inner.hover_rows = rows;
         if inner.hovered != found {

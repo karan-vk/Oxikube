@@ -9,11 +9,12 @@
 //! Entries not shown in a frame are recycled (their buffers kept) for the next misses.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use gpui::{ShapedLine, SharedString, TextRun, WindowTextSystem};
 
 use super::hash::{FxBuild, row_hash};
-use super::layout::RowLayout;
+use super::layout::{RowLayout, TextSpan};
 use super::metrics::{CellMetrics, TerminalFont};
 use super::palette::TerminalPalette;
 use crate::grid::TerminalSnapshot;
@@ -137,7 +138,7 @@ impl RowCache {
 /// glyph is a run of its own and keeps its natural width.
 fn shape(
     layout: &RowLayout,
-    run: &super::layout::TextSpan,
+    run: &TextSpan,
     font: &TerminalFont,
     metrics: CellMetrics,
     text_system: &WindowTextSystem,
@@ -154,7 +155,7 @@ fn shape(
     let force = (!run.wide).then_some(metrics.cell_width);
     // `Arc<str>` straight from the slice: one allocation, not a `String` and then an `Arc`.
     text_system.shape_line(
-        SharedString::from(std::sync::Arc::<str>::from(text)),
+        SharedString::from(Arc::<str>::from(text)),
         metrics.font_size,
         &[style],
         force,

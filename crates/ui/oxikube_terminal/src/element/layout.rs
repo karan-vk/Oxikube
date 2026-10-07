@@ -19,7 +19,8 @@ use super::palette::TerminalPalette;
 use crate::grid::{CellFlags, SnapshotCell, TerminalSnapshot};
 
 /// The cells that only hold space for a wide glyph.
-const SPACERS: CellFlags = CellFlags::WIDE_CHAR_SPACER.union(CellFlags::LEADING_WIDE_CHAR_SPACER);
+pub(super) const SPACERS: CellFlags =
+    CellFlags::WIDE_CHAR_SPACER.union(CellFlags::LEADING_WIDE_CHAR_SPACER);
 
 /// A background colour over `cells` cells from `column`.
 #[derive(Debug, Clone, Copy, PartialEq)]
