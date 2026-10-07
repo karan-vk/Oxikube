@@ -40,6 +40,10 @@ pub struct TableDrive {
     pub context: String,
     /// Rows scrolled per frame interval (0: open the table and leave it still).
     pub scroll: usize,
+    /// Further contexts to connect first, each with its pods table open and left still, so the
+    /// run measures several connected clusters (`--perf-also`). `context` is opened last and is
+    /// the tab in front.
+    pub also: Vec<String>,
 }
 
 /// Starts driving `window` (the app's main window). Runs until the window or the app goes.
@@ -66,58 +70,33 @@ async fn run(drive: &TableDrive, window: AnyWindowHandle, cx: &mut AsyncApp) -> 
         .await
         .context("the catalog task")?
         .context("reading the kubeconfig catalog")?;
-    let cluster = entries
+    let find = |context: &str| {
+        entries
+            .iter()
+            .find(|entry| entry.name() == context)
+            .map(|entry| entry.id().clone())
+            .with_context(|| format!("no context `{context}` in the catalog"))
+    };
+    let others = drive
+        .also
         .iter()
-        .find(|entry| entry.name() == drive.context)
-        .map(|entry| entry.id().clone())
-        .with_context(|| format!("no context `{}` in the catalog", drive.context))?;
+        .map(|context| find(context))
+        .collect::<Result<Vec<_>>>()?;
+    for (context, other) in drive.also.iter().zip(others) {
+        eprintln!("oxikube --perf-table: connecting {context} (not scrolled)");
+        let (_, listed) = open_pods(&state, &workspace, window, &other, cx).await?;
+        eprintln!(
+            "oxikube --perf-table: {context} pods listed {:.0} ms after opening the table",
+            listed.as_secs_f64() * 1000.0
+        );
+    }
+    let cluster = find(&drive.context)?;
     eprintln!("oxikube --perf-table: connecting {}", drive.context);
-    run_command(
-        &state,
-        &workspace,
-        window,
-        Command::ClusterConnect {
-            cluster: cluster.clone(),
-        },
-        cx,
-    )?;
-    wait(cx, "the session to connect", |_| {
-        state
-            .services()
-            .sessions
-            .get(&cluster)
-            .is_some_and(|session| session.is_connected())
-    })
-    .await?;
-
-    let gvk = Gvk::new("", "v1", "Pod");
-    eprintln!("oxikube --perf-table: opening the pods table");
-    run_command(
-        &state,
-        &workspace,
-        window,
-        Command::ResourceOpenList {
-            cluster: cluster.clone(),
-            gvk,
-        },
-        cx,
-    )?;
-    let started = Instant::now();
-    let mut table = None;
-    wait(cx, "the pods table to list", |cx| {
-        table = pods_table(&workspace, &cluster, cx);
-        table.as_ref().is_some_and(|table| {
-            table.read(cx).read_rows(cx, |d| {
-                d.state() == &FeedState::Ready && !d.rows().is_empty()
-            })
-        })
-    })
-    .await?;
-    let table = table.context("the pods table")?;
+    let (table, listed) = open_pods(&state, &workspace, window, &cluster, cx).await?;
     let rows = cx.update(|cx| table.read(cx).read_rows(cx, |d| d.rows().len()));
     eprintln!(
         "oxikube --perf-table: {rows} pods listed {:.0} ms after opening the table",
-        started.elapsed().as_secs_f64() * 1000.0
+        listed.as_secs_f64() * 1000.0
     );
     if drive.scroll == 0 {
         return Ok(());
@@ -132,6 +111,58 @@ async fn run(drive: &TableDrive, window: AnyWindowHandle, cx: &mut AsyncApp) -> 
     drop(workspace);
     scroll(table, drive.scroll, cx).await;
     Ok(())
+}
+
+/// What a user does to see a cluster's pods: connects `cluster` (the catalog's Enter), opens its
+/// pods table (the sidebar's Pods entry) and waits until it lists. Returns the table and how long
+/// the listing took after the table opened.
+async fn open_pods(
+    state: &Arc<AppState>,
+    workspace: &Entity<Workspace>,
+    window: AnyWindowHandle,
+    cluster: &ClusterId,
+    cx: &mut AsyncApp,
+) -> Result<(Entity<ResourceTable>, Duration)> {
+    run_command(
+        state,
+        workspace,
+        window,
+        Command::ClusterConnect {
+            cluster: cluster.clone(),
+        },
+        cx,
+    )?;
+    wait(cx, "the session to connect", |_| {
+        state
+            .services()
+            .sessions
+            .get(cluster)
+            .is_some_and(|session| session.is_connected())
+    })
+    .await?;
+    eprintln!("oxikube --perf-table: opening the pods table");
+    run_command(
+        state,
+        workspace,
+        window,
+        Command::ResourceOpenList {
+            cluster: cluster.clone(),
+            gvk: Gvk::new("", "v1", "Pod"),
+        },
+        cx,
+    )?;
+    let started = Instant::now();
+    let mut table = None;
+    wait(cx, "the pods table to list", |cx| {
+        table = pods_table(workspace, cluster, cx);
+        table.as_ref().is_some_and(|table| {
+            table.read(cx).read_rows(cx, |d| {
+                d.state() == &FeedState::Ready && !d.rows().is_empty()
+            })
+        })
+    })
+    .await?;
+    Ok((table.context("the pods table")?, started.elapsed()))
 }
 
 /// Runs `command` on the window's command bus, as the views dispatch it.

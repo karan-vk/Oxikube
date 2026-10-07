@@ -2,6 +2,7 @@
 //! view as `#[gpui::test]`s over testkit fakes (a fake connector and a real session manager and
 //! store, a fake state port, a recording dispatcher). No cluster, no disk, no threads.
 
+mod ages;
 mod coalesce;
 pub(crate) mod fixture;
 mod layout;

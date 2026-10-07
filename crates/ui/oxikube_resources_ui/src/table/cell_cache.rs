@@ -27,7 +27,7 @@ const MAX_ROWS: usize = 1024;
 /// One row's cells, by column.
 struct RowCells {
     /// The object the cells were read from (kept so its address cannot be reused meanwhile).
-    _object: Arc<StoreObject>,
+    object: Arc<StoreObject>,
     cells: Vec<(ColumnId, SharedString, Tone)>,
     /// The frame that last drew this row.
     frame: u64,
@@ -83,7 +83,7 @@ impl CellCache {
             .rows
             .entry(address(object))
             .or_insert_with(|| RowCells {
-                _object: object.clone(),
+                object: object.clone(),
                 cells: Vec::new(),
                 frame,
             });
@@ -100,6 +100,23 @@ impl CellCache {
         let tone = cell.tone();
         row.cells.push((column.clone(), text.clone(), tone));
         (text, tone)
+    }
+
+    /// Whether any cell the last frame drew would read differently at `now`: an age that
+    /// crossed into its next unit or second. The table's once-a-second tick asks this and
+    /// redraws only on `true`, so a table that is on screen and still costs no frames (most ages
+    /// are days old and change once a minute or less). Reads the cells of the drawn rows only,
+    /// about one screen, never the whole list.
+    pub fn ages_moved(&self, provider: &dyn ColumnProvider, now: Timestamp) -> bool {
+        self.rows
+            .values()
+            .filter(|row| row.frame == self.frame)
+            .any(|row| {
+                row.cells.iter().any(|(column, text, tone)| {
+                    let cell = provider.cell(&row.object, column, now);
+                    cell.display() != text.as_ref() || cell.tone() != *tone
+                })
+            })
     }
 
     /// Rows held now.
@@ -161,6 +178,62 @@ mod tests {
         cache.begin_frame(later, &other);
         cache.get(&a2, &restarts, &*other, later);
         assert_eq!(cache.misses, 4);
+    }
+
+    #[test]
+    fn ages_moved_only_when_a_drawn_cell_would_read_differently() {
+        let provider: Arc<dyn ColumnProvider> = Arc::new(CoreColumns::new());
+        let now = Timestamp::from_second(1_800_000_000).unwrap();
+        let age = ColumnId::new("age");
+        let name = ColumnId::new(ColumnId::NAME);
+        let mut cache = CellCache::default();
+        // Created 30 days before `now`: its age string ("30d") moves once a day.
+        let old = Arc::new(StoreObject::Resource(
+            pod()
+                .namespace("x")
+                .name("old")
+                .created((now - jiff::SignedDuration::from_hours(30 * 24)).to_string())
+                .build(),
+        ));
+        let young = Arc::new(StoreObject::Resource(
+            pod()
+                .namespace("x")
+                .name("young")
+                .created((now - jiff::SignedDuration::from_secs(30)).to_string())
+                .build(),
+        ));
+        let at = |s| now + jiff::SignedDuration::from_secs(s);
+
+        // Nothing drawn yet: nothing can have moved.
+        assert!(!cache.ages_moved(&*provider, at(3_600)));
+
+        cache.begin_frame(now, &provider);
+        cache.get(&old, &age, &*provider, now);
+        cache.get(&old, &name, &*provider, now);
+        assert!(!cache.ages_moved(&*provider, now));
+        assert!(
+            !cache.ages_moved(&*provider, at(1)),
+            "30d is still 30d a second on"
+        );
+        assert!(!cache.ages_moved(&*provider, at(3_600)), "and an hour on");
+        assert!(
+            cache.ages_moved(&*provider, at(24 * 3_600)),
+            "a day on it reads 31d"
+        );
+
+        // A row whose age is in seconds moves every second.
+        cache.get(&young, &age, &*provider, now);
+        assert!(cache.ages_moved(&*provider, at(1)));
+        // But not while only its name is drawn.
+        let mut names = CellCache::default();
+        names.begin_frame(now, &provider);
+        names.get(&young, &name, &*provider, now);
+        assert!(!names.ages_moved(&*provider, at(1)));
+
+        // Rows the last frame did not draw are not asked about.
+        cache.begin_frame(now, &provider);
+        cache.get(&old, &age, &*provider, now);
+        assert!(!cache.ages_moved(&*provider, at(1)));
     }
 
     #[test]

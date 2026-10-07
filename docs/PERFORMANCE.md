@@ -403,7 +403,9 @@ the catalog lists the context it runs `cluster::Connect` on the command bus (the
 waits for the session, runs `resource::OpenList` for pods (the sidebar's Pods entry), waits for
 the table to list, then scrolls it `--perf-scroll` rows (default 3, a fast trackpad fling) every
 8.3 ms, to the end and back, until the session ends. Code: `bins/oxikube/src/perf_table/mod.rs`.
-It logs each step and how long the table took to list.
+It logs each step and how long the table took to list. `--perf-also <context>` (repeatable)
+connects further contexts first, each with its pods table open and left still, for the
+several-clusters idle measurement ([Idle CPU](#idle-cpu-under-the-budget-e07-f512)).
 
 Headless, on the fake feed generator (the CI regression gate, no cluster):
 
@@ -487,23 +489,59 @@ on the main thread: no lock contention.
    cell element filled its column, so the alignment never showed.
 5. **No layout-dependent work per row**: none was found; the fit check reads cached line layouts.
 
-### Idle CPU: at the budget (follow-up)
+### Idle CPU: under the budget (E07-F512)
 
-`--perf` has no CPU metric, so idle CPU is the process's CPU time from `ps -o time=` over a 60 s
-window, started once the app has settled (15 s unconnected, 30 s with the table so the list is in).
-Same machine and build, after the review fixes; the 10 000 load pods without `--churn`; load
-average 6 to 11, so a tenth of a percent is noise:
+`--perf` has no CPU metric, so idle CPU is the process's CPU time from `ps -o time=` over a 45 to
+60 s window, started once the app has settled (10 s after launch, the table already listed), next to
+the redraw count from the `--perf` JSONL (`tick.frames_us`, frames per second after the list
+landed). Before this story (#512) the budget was only just met: idle app, no cluster 0.7 to 0.9 %,
+about 2 frames/s; connected, pods table open and still, 10 000 pods, 0.93 to 1.18 %, about 1.5
+frames/s.
 
-| Run | CPU | Redraws |
+**What drove the redraws** (`oxikube_workspace::window::background`, `oxikube_resources_ui::table`):
+
+1. *The idle app, no cluster: a caret.* The catalog home focuses its search field when it opens,
+   and a focused `Input` of the component library blinks its caret from a 500 ms timer that
+   notifies the field, which redraws the window, for as long as the field has the focus. The timer
+   does not look at the window: a window that lost the key (another app in front, this one still
+   visible beside it) kept redrawing twice a second for a caret nobody sees. An inactive window now
+   parks its focus (`background::follow`, installed by `MainView`) and gives it back to the same
+   element on activation, unless something else took it meanwhile; a blurred field stops its
+   timer. The caret of the window you are using still blinks, which is a visible change, and stops
+   when the focus leaves the field (opening a cluster tab moves it to the table).
+2. *A still table: the age tick.* `ResourceTable` notified itself every second while shown so ages
+   would move. It now asks the `CellCache` whether any cell the last frame drew reads differently
+   at the current time (re-reading about one screen of cells, no redraw) and notifies only then.
+   Most ages are days old and change once a day (kubectl's format: `30d`), so a table of them
+   draws nothing; a pod a few minutes old still redraws each second its seconds show. Covered by
+   `table::tests::ages` and `CellCache::ages_moved`.
+
+**Numbers** (Apple M5 Max, `release-fast`, `kind-oxikube`; load average 35 to 57 from other
+builds, so a tenth of a percent is noise; 10 000 `Pending` load pods in my own namespace, no churn,
+the kubeconfig context scoped to it so other agents' pods are not listed;
+`--perf-table kind-oxikube --perf-scroll 0`, five runs each, alternating, a pause between runs):
+
+| Build | CPU, one cluster | Redraws, one cluster |
 |---|---|---|
-| idle app, no cluster (`oxikube --perf --perf-duration 80`) | 0.7–0.9 % | about 2 frames/s, nothing visibly changing |
-| connected, pods table open and still, 10 000 pods listed (`--perf-table kind-oxikube --perf-scroll 0 --perf-duration 95`, two runs) | 0.93 %, 1.18 % | about 1.5 frames/s (ages tick each second); frame p95 7.1 and 9.5 ms |
+| before (`ef05d296`) | 1.38, 1.33, 1.22, 1.33, 1.18 % (mean 1.29 %) | 0.95 to 1.10 frames/s |
+| after | 0.64, 0.56, 0.62, 0.73, 0.64 % (mean 0.64 %) | 0.00 to 0.11 frames/s (the strays are a conditions or age change) |
 
-So the connected table sits at the < 1 % budget rather than clearly under it, and most of the cost
-is the app itself, which redraws about twice a second with no cluster; the table and its watch add
-about 0.1–0.3 %. Only one cluster was measured (the budget says two). Finding what drives the idle
-redraws, and redrawing ages only when a visible age string changes, is tracked in
-[#512](https://github.com/karan-vk/Oxikube/issues/512).
+Two clusters (the budget's scenario): `oxikube --perf --perf-duration 75 --perf-table kind-oxikube
+--perf-also kind-oxikube-b --perf-scroll 0` connects both contexts (the same kind cluster under two
+context names, each scoped to the 10 000-pod namespace, so 20 000 pods are listed) and opens both
+pods tables. Three runs after the list landed: **0.13, 0.27 and 0.45 % CPU, 0.00 to 0.04
+frames/s**, which is under the 1 % budget. (RSS reads 875 MiB with two 10 000-pod clusters, over
+the memory budget: [#508](https://github.com/karan-vk/Oxikube/issues/508).)
+
+The scrolling hot path is unchanged (the only per-frame difference is reading the clock through
+`ResourceTable::now`): `cargo xtask perf scroll-10k --samples 3` on this branch, headless, same
+loaded machine: `frame_ms` p50 3.58, p95 7.75 ms, first rows 70 ms, at most 1 notify per frame.
+
+Measuring notes: a window that is not visible (covered, another Space) draws nothing, and its CPU
+reads 0.1 to 0.3 % whatever the code does, so compare runs whose `--perf` JSONL shows frames in the
+first seconds, and compare the redraw count, which does not depend on the machine's load. The
+detail drawer still redraws once a second while it is open (its ages are drawn by several views);
+tracked in [#566](https://github.com/karan-vk/Oxikube/issues/566).
 
 ### Memory: 10 000 pods under 400 MB (E07-F508)
 

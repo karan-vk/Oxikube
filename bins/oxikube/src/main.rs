@@ -106,6 +106,7 @@ fn main() -> ExitCode {
         .map(|context| oxikube::perf_table::TableDrive {
             context,
             scroll: args.perf_scroll.unwrap_or(DEFAULT_SCROLL),
+            also: args.perf_also.clone(),
         });
     let logs = args.perf_logs.as_deref().and_then(|value| {
         oxikube::perf_logs::LogsDrive::parse(
