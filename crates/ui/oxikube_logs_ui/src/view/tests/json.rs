@@ -415,12 +415,15 @@ fn the_json_controls_appear_with_the_first_structured_line(cx: &mut TestAppConte
             .ok_at(step, zap(2, "info", "now structured"))
             .keep_open(),
     );
-    assert!(!fx.drawn("log-json"), "a plain-text log has no JSON toggle");
+    assert!(
+        !fx.overflow_ids(&view).contains(&"log-json"),
+        "a plain-text log has no JSON toggle"
+    );
     assert!(!fx.drawn("log-levels"), "and no chips");
     clock.advance(step);
     fx.settle();
     assert!(fx.read(&view, |v| v.line_window().line_count() == 3));
-    assert!(fx.drawn("log-json"));
+    assert!(fx.overflow_ids(&view).contains(&"log-json"));
     assert!(fx.drawn("log-levels"));
 }
 

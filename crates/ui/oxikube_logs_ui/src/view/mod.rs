@@ -18,6 +18,7 @@
 //! | `containers` | the container selector's list (init, sidecar, regular, ephemeral) from the pod spec |
 //! | `stream` | opening and reopening the session, the delta pump |
 //! | `settings` | the `logs` settings of the view's cluster: its first options, and `wrap` / `timestamps` / `json_auto_detect` applied live |
+//! | `snap` | the slack above the unwrapped rows that keeps every row on screen whole |
 //! | `scroll` | autoscroll, pausing on a scroll up, the anchor line across the wrap toggle |
 //! | `controls` | the view's operations (what the commands do) and the requests that dispatch them |
 //! | `selection`, `chrome` | [`Selection`] (click, shift-click, drag, by seq) and [`Marks`] (k9s `m`), the pointer handlers; the gutter bar and selection colour a row carries |
@@ -27,7 +28,8 @@
 //! | `tail` | `logs::TailInTerminal` (E08-S08): `kubectl logs -f` for what the view shows, in a terminal tab; the toolbar offers it only when kubectl is installed |
 //! | `recovery` | after the stream stopped (E08-S07): `logs::FollowReplacement` (switch to the pod that replaced a gone one), `logs::Reconnect`, the strip offering them |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
-//! | `render`, `toolbar`, `rows` | drawing: toolbar, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
+//! | `render`, `rows` | drawing: the frame, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
+//! | `toolbar` | the one-row toolbar (E08-U556): breadcrumb, container picker, range dropdown, Search / Previous / Wrap / Autoscroll, the "..." menu; the crash-loop hint and the level chips |
 //! | `json`, `columns`, `filter`, `detail` | JSON mode (E08-S05): the parsed columns of a structured line and their caches, the row they draw, the level chips and the filtered row index, the expanded line's pane |
 //! | `item` | the workspace `Item`, focus and key context |
 //!
@@ -48,7 +50,7 @@ mod autoscroll;
 mod chrome;
 mod clear;
 mod columns;
-mod containers;
+pub(crate) mod containers;
 mod controls;
 mod copy;
 mod detail;
@@ -66,6 +68,7 @@ mod save;
 mod scroll;
 mod selection;
 mod settings;
+mod snap;
 mod stream;
 mod tail;
 pub(crate) mod text;
@@ -177,6 +180,8 @@ pub struct LogView {
     pub(crate) save_job: Option<save::SaveJob>,
     /// The unwrapped list's scroll position.
     pub(crate) scroll: UniformListScrollHandle,
+    /// The empty space above the unwrapped rows that keeps every row whole (see `snap`).
+    pub(crate) snap: snap::RowSnap,
     /// The wrapped list's rows and scroll position (kept in step with the window by splices).
     pub(crate) list: ListState,
     pub(crate) focus: FocusHandle,
@@ -261,6 +266,7 @@ impl LogView {
             save_prompt: None,
             save_job: None,
             scroll: UniformListScrollHandle::new(),
+            snap: snap::RowSnap::default(),
             list: ListState::new(0, ListAlignment::Top, px(400.)),
             focus: cx.focus_handle(),
             workspace: None,

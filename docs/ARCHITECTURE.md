@@ -329,7 +329,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   window's `LogViews`, which opens a view in the pod's cluster tab (one per pod, through a `LogHost`) and applies
   the changes. `row_actions`: "View Logs" on pod rows of the resource tables, and on Deployment, StatefulSet,
   DaemonSet, ReplicaSet, Job and Service rows (`workload::ViewLogs`).
-  Tail in terminal (E08-S08; `view::tail`, `kubectl`): the toolbar's "Tail in terminal (kubectl)" and `shift-t`
+  Toolbar (E08-U556; `view::toolbar`): one row that fits at 1024 px and at UI scale 1.5: the breadcrumb (the only part
+  that truncates), the container picker (`main (1/2)` with a caret when the pod has several containers), the range
+  dropdown (`tail 1000`, `since 5m`, ...), Search, Previous, Wrap, Autoscroll and a "..." menu with the rest
+  (Timestamps, JSON, Mark, Copy, Send to agent, Save, Clear, Tail in terminal, Fullscreen); every entry sends its
+  command, and each has a key. A crash-looping container (`CrashLoopBackOff`, or restarted with an error exit) gets a
+  strip saying that Previous holds its last crash. `view::snap` leaves the body's slack (height modulo one row) empty
+  above the unwrapped rows, so the oldest row on screen is never cut in half under the toolbar.
+  Tail in terminal (E08-S08; `view::tail`, `kubectl`): the "..." menu's "Tail in terminal (kubectl)" and `shift-t`
   (`logs::TailInTerminal`) ask the window's `TerminalViews` (through `TerminalViewSink::open`) for a terminal tab of the
   view's cluster that runs `kubectl logs -f` for what the view shows: the program is the kubectl that was found (absolute
   path), the arguments come from the view's own options (`KubectlTail`), the tab is a local `BackendDescriptor` of the

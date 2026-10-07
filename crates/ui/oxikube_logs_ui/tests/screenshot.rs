@@ -11,7 +11,10 @@
 //!   JSON mode: level chips, time and message columns, the level chips with `debug` off, and one
 //!   line expanded into its pretty-printed JSON.
 //! - `log_view_kubectl` (E08-S08): the toolbar with kubectl installed: "Tail in terminal (kubectl)"
-//!   after the range presets (the other goldens have no kubectl, so no button).
+//!   is an entry of the "..." menu since E08-U556, so the row looks like the others'.
+//! - `log_view_crash_loop` (E08-U556): a two-container pod whose `app` is crash-looping: the toolbar's
+//!   one row (breadcrumb, `app (1/2)` picker, `tail 1000` dropdown, Search / Previous / Wrap /
+//!   Autoscroll, "...") and the hint that Previous holds the last crash.
 //! - `log_view_merged`: a Deployment's three pods merged by timestamp (E08-S04): the pod gutters in
 //!   the theme's `log_sources` colours, and the "pod ... added" banner (dark theme).
 //! - `log_view_overview` (E08-S11): the suite's one picture of the whole view: a Deployment's three
@@ -159,12 +162,54 @@ fn render_with(
     picked: bool,
     kubectl: bool,
 ) -> anyhow::Result<RgbaImage> {
+    render_pod(
+        pod(),
+        wrap,
+        timestamps,
+        light,
+        json,
+        search,
+        picked,
+        kubectl,
+    )
+}
+
+/// A two-container pod whose `app` container is crash-looping (E08-U556): the container picker
+/// says `app (1/2)` with its caret, and the hint says that Previous holds the last crash.
+fn crash_looping_pod() -> Resource {
+    Resource::from_json(json!({
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {"name": "orders-api-7c9d", "namespace": "shop"},
+        "spec": {"containers": [{"name": "app"}, {"name": "istio-proxy"}]},
+        "status": {"phase": "Running", "containerStatuses": [
+            {"name": "app", "restartCount": 7,
+             "state": {"waiting": {"reason": "CrashLoopBackOff"}},
+             "lastState": {"terminated": {"exitCode": 1, "reason": "Error"}}},
+            {"name": "istio-proxy", "restartCount": 0, "state": {"running": {}}}
+        ]}
+    }))
+    .expect("a pod")
+}
+
+/// [`render_with`] over `pod`.
+#[allow(clippy::too_many_arguments)]
+fn render_pod(
+    pod: Resource,
+    wrap: bool,
+    timestamps: bool,
+    light: bool,
+    json: bool,
+    search: Option<(&str, SearchMode)>,
+    picked: bool,
+    kubectl: bool,
+) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
     let connector = Arc::new(FakeClusterConnectorPort::new());
     let ports = connector.ports_for(&cluster);
-    ports.resources.insert(pod());
+    ports.resources.insert(pod);
     ports
         .logs
         .script()
@@ -462,6 +507,17 @@ fn main() -> ExitCode {
             .and_then(|image| check("log_view_selection_marks", false, image)),
         render_with(false, true, false, false, None, false, true)
             .and_then(|image| check("log_view_kubectl", false, image)),
+        render_pod(
+            crash_looping_pod(),
+            false,
+            true,
+            false,
+            false,
+            None,
+            false,
+            false,
+        )
+        .and_then(|image| check("log_view_crash_loop", false, image)),
         render_merged(false).and_then(|image| check("log_view_merged", false, image)),
         render_merged(true).and_then(|image| check("log_view_overview", true, image)),
     ];

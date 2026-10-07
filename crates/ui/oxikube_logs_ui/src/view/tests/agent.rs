@@ -207,7 +207,7 @@ fn the_toolbar_button_sends_the_same_command(cx: &mut TestAppContext) {
     let mut fx = Fx::new(cx);
     open(&mut fx, 6);
     fx.click_row(1, false);
-    fx.click("log-send-to-agent");
+    fx.overflow("log-send-to-agent");
     assert_eq!(
         fx.dispatcher.sent().last(),
         Some(&Command::LogsSendToAgent { target: pod_ref() })

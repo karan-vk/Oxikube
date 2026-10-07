@@ -36,6 +36,11 @@ fn requested(fx: &mut Fx) -> BackendDescriptor {
     }
 }
 
+/// Whether the toolbar's "..." menu offers "Tail in terminal" now.
+fn offered(fx: &mut Fx, view: &Entity<LogView>) -> bool {
+    fx.overflow_ids(view).contains(&"log-tail-in-terminal")
+}
+
 fn nothing_requested(fx: &mut Fx) -> bool {
     fx.vcx.run_until_parked();
     fx.terminal_requests.try_recv().is_err()
@@ -59,10 +64,10 @@ fn command_of(descriptor: &BackendDescriptor) -> (String, Vec<String>, String) {
 #[gpui::test]
 fn the_action_is_in_the_toolbar_and_sends_its_command(cx: &mut TestAppContext) {
     let mut fx = Fx::new(cx);
-    open(&mut fx);
+    let view = open(&mut fx);
     fx.draw();
-    assert!(fx.drawn("log-tail-in-terminal"), "kubectl is installed");
-    fx.click("log-tail-in-terminal");
+    assert!(offered(&mut fx, &view), "kubectl is installed");
+    fx.overflow("log-tail-in-terminal");
     assert_eq!(
         fx.dispatcher.sent().last(),
         Some(&Command::LogsTailInTerminal { target: pod_ref() }),
@@ -76,10 +81,11 @@ fn it_is_hidden_not_disabled_without_kubectl(cx: &mut TestAppContext) {
     let mut fx = Fx::without_kubectl(cx);
     let view = open(&mut fx);
     fx.draw();
-    assert!(!fx.drawn("log-tail-in-terminal"), "no button at all");
+    assert!(!offered(&mut fx, &view), "no entry at all");
     assert!(!fx.read(&view, LogView::can_tail_in_terminal));
     // Every other control is still there.
-    assert!(fx.drawn("log-copy") && fx.drawn("log-save"));
+    let ids = fx.overflow_ids(&view);
+    assert!(ids.contains(&"log-copy") && ids.contains(&"log-save"));
 
     // The key and the palette's command say why instead of doing nothing.
     fx.keys("shift-t");
@@ -102,12 +108,12 @@ fn installing_kubectl_shows_the_action_without_restarting(cx: &mut TestAppContex
     let mut fx = Fx::without_kubectl(cx);
     let view = open(&mut fx);
     fx.draw();
-    assert!(!fx.drawn("log-tail-in-terminal"));
+    assert!(!offered(&mut fx, &view));
 
     // The user installs kubectl while the app runs. The answer is cached: nothing looks yet.
     *fx.installed.lock() = Some(PathBuf::from(KUBECTL));
     fx.draw();
-    assert!(!fx.drawn("log-tail-in-terminal"));
+    assert!(!offered(&mut fx, &view));
     assert!(!fx.read(&view, LogView::can_tail_in_terminal));
 
     // The app looks again now and then, off the UI thread (`follow_kubectl`).
@@ -119,17 +125,14 @@ fn installing_kubectl_shows_the_action_without_restarting(cx: &mut TestAppContex
     fx.vcx.run_until_parked();
     fx.draw();
     assert!(fx.read(&view, LogView::can_tail_in_terminal));
-    assert!(
-        fx.drawn("log-tail-in-terminal"),
-        "the toolbar offers it now"
-    );
+    assert!(offered(&mut fx, &view), "the menu offers it now");
 
     // And it is forgotten again when kubectl goes away.
     *fx.installed.lock() = None;
     fx.vcx.executor().advance_clock(crate::KUBECTL_POLL);
     fx.vcx.run_until_parked();
     fx.draw();
-    assert!(!fx.drawn("log-tail-in-terminal"));
+    assert!(!offered(&mut fx, &view));
 }
 
 #[gpui::test]
@@ -215,7 +218,7 @@ fn a_workloads_pods_are_tailed_by_selector_with_their_names(cx: &mut TestAppCont
         ),
     ]);
     let view = fx.open_web();
-    fx.click("log-tail-in-terminal");
+    fx.overflow("log-tail-in-terminal");
 
     let (program, args, title) = command_of(&requested(&mut fx));
     assert_eq!(program, KUBECTL);
@@ -313,7 +316,7 @@ fn clicking_the_action_opens_a_terminal_tab_running_kubectl(cx: &mut TestAppCont
     let (launcher, terminals) = start_terminals(&mut fx, requests);
     open(&mut fx);
     fx.draw();
-    fx.click("log-tail-in-terminal");
+    fx.overflow("log-tail-in-terminal");
     let request = fx
         .terminal_requests
         .try_recv()

@@ -131,18 +131,17 @@ fn f_fills_the_tab(cx: &mut TestAppContext) {
 fn the_toolbar_sends_the_same_commands(cx: &mut TestAppContext) {
     let mut fx = Fx::new(cx);
     let view = open(&mut fx);
-    fx.click("log-range-15m");
-    assert_eq!(fx.read(&view, |v| v.options().range), LogRange::Last15m);
     fx.click("log-wrap");
     assert!(fx.read(&view, |v| v.options().wrap));
-    fx.click("log-timestamps");
+    fx.overflow("log-timestamps");
     assert!(fx.read(&view, |v| v.options().timestamps));
     assert_eq!(
         fx.dispatcher.sent()[0],
-        Command::LogsSetRange {
-            target: pod_ref(),
-            range: LogRange::Last15m
-        }
+        Command::LogsToggleWrap { target: pod_ref() }
+    );
+    assert_eq!(
+        fx.dispatcher.sent()[1],
+        Command::LogsToggleTimestamps { target: pod_ref() }
     );
 }
 

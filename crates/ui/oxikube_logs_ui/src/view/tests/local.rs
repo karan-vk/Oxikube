@@ -11,9 +11,11 @@ use super::scroll::{tick, trickle};
 impl Fx {
     /// The window position of row `index` while the list is at the top (rows are 20 px).
     fn row_point(&mut self, index: usize) -> Point<Pixels> {
+        // The rows start below the slack that keeps them whole (`snap`), when the log fills the body.
         let body = self
             .vcx
-            .debug_bounds("log-body")
+            .debug_bounds("log-rows")
+            .or_else(|| self.vcx.debug_bounds("log-body"))
             .expect("the rows are drawn");
         body.origin + gpui::point(gpui::px(60.), gpui::px(20. * index as f32 + 10.))
     }
