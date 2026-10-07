@@ -505,18 +505,48 @@ about 0.1–0.3 %. Only one cluster was measured (the budget says two). Finding 
 redraws, and redrawing ages only when a visible age string changes, is tracked in
 [#512](https://github.com/karan-vk/Oxikube/issues/512).
 
-### Memory: over budget (follow-up)
+### Memory: 10 000 pods under 400 MB (E07-F508)
 
-The windowed app connected to the cluster with the 10 000 pods listed reads **504 MiB** RSS (idle
-app 117 MiB), over the 400 MB budget for 10 k pods; the headless scenario (testkit pods, one
-store) reads 179 MiB against 45 MiB for `startup`. It does not grow: over the 60 s windowed run RSS
-stayed between 504.0 and 504.2 MiB. The pods are held twice as `serde_json::Value`
-trees (the kube adapter's reflector store and the resource store's cache, each a full `Resource`
-with `managedFields` stripped; a load pod is about 2.1 KB of JSON), and a `Value` tree costs many
-times its JSON. Halving it means sharing one object between the reflector store and the store
-(a port change), and the budget probably needs the store to keep only column-relevant fields hot
-and the JSON compact or lazy. Both are store/adapter changes beyond this story: tracked in
-[#508](https://github.com/karan-vk/Oxikube/issues/508).
+Measured on the story branch of E07-S09 the windowed app read **504 MiB** RSS with the 10 000 pods
+listed, over the 400 MB budget for 10 k pods
+([#508](https://github.com/karan-vk/Oxikube/issues/508)). Every watched object was held twice as a
+`serde_json::Value` tree: once in the kube adapter's reflector store (`FeedObject`), and once in the
+resource store's cache, which received a clone of it in the `DeltaBatch`. A tree costs about eight
+times its JSON: a load pod (`managedFields` stripped) is 2.0 KB of JSON and 16.1 KB in 162
+allocations as a `Value` (serde_json `preserve_order`), plus 1.7 KB for its typed `ObjectMeta`.
+
+**Fix:** `Resource::json` is an `Arc<Value>` (ADR 0005, amendment), so the reflector's clone and the
+store's copy are one tree; a `Resource` clone now costs its `ObjectMeta` (about 1 KB, two
+allocations) instead of about 17 KB. No port changed. Tests that hold it: the domain's
+`a_clone_shares_the_json_tree`, the feed's `feed::tests::sharing` (the opening list, live changes
+and both relist deliveries hand the consumer the reflector store's own tree) and the store's
+`the_cache_keeps_the_feeds_json_tree_without_copying_it`.
+
+**Allocator retention** (the issue's third hypothesis) is not the cause: `vmmap` of the running app
+with the table listed shows 224 MiB allocated in the default malloc zone with 7 % fragmentation,
+i.e. live objects, not pages the allocator kept after the list.
+
+Numbers: same machine and cluster as above, `release-fast`, `--perf --perf-duration 45..60
+--perf-table kind-oxikube`, `cargo xtask load-pods --count 10000 --namespaces 8 --churn` running;
+the two binaries alternated back to back (main at `ef05d29` against this story). The peak is the
+`peak_rss_mib` of the exit summary and is reached, within a few MiB, as the first list lands;
+afterwards the reading stays at or near it (and drops further whenever macOS compresses idle pages, which other builds on
+the machine caused during some runs, so steady-state readings are only indicative).
+
+| Pods listed | Before: peak RSS | After: peak RSS | After: RSS p50 |
+|---|---|---|---|
+| 10 990 (run 1) | 542.8 MiB | 342.9 MiB (10 010 pods) | 194.7 MiB (compressed after 30 s) |
+| 9 963 / 10 154 (run 2) | 507.3 MiB | 356.9 MiB | 350.2 MiB |
+| 19 950 / 19 935 (another story's 10 000 pods on the shared cluster as well) | 868.1 MiB | 552.6 MiB | 306.0 MiB |
+
+So 10 000 pods peak at about 345 to 357 MiB, under the 400 MB budget, and each further 10 000
+pods costs about 210 MiB instead of about 330 MiB. Frame times are unchanged (p95 5.9 to 6.9 ms before
+and after in these runs, about 100 fps paced by the scroll timer).
+
+The headless `scroll-10k` scenario does not change (`peak_rss_mib` 182.8 before, 181.2 after, 5
+samples each): it feeds testkit pods straight into one store, so it never held the second copy.
+The remaining cost is the one tree per pod; keeping only column fields hot and the JSON compact or
+lazy (the issue's second option) would cut it further but is not needed for the budget.
 
 ## Log viewer: streaming 5 000 lines/s (E08-S02)
 
