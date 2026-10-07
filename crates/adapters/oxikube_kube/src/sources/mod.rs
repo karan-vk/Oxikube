@@ -223,7 +223,9 @@ impl Inner {
 
     pub(crate) fn set_watch_status(&self, status: WatchStatus, unwatched: Vec<PathBuf>) {
         *self.unwatched.lock() = unwatched;
-        self.publish_diagnostics(true);
+        // Before the first load the list is only the unwatched directories, not the full list
+        // subscribers are promised; the first read reports everything and announces nothing.
+        self.publish_diagnostics(self.current.read().is_some());
         self.watch_status.send_replace(status);
     }
 }

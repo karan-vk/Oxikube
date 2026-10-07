@@ -233,3 +233,25 @@ async fn a_directory_the_watcher_could_not_register_is_reported_and_announced() 
     let cleared = diagnostics.next().now_or_never().flatten().expect("heard");
     assert!(about(&cleared, &unwatched).is_empty());
 }
+
+#[tokio::test]
+async fn a_watcher_outcome_before_the_first_load_does_not_announce_a_partial_list() {
+    let dir = TempDir::new().unwrap();
+    let bad = dir.path().join("broken.yaml");
+    fs::write(&bad, "{{{ not yaml").unwrap();
+    let (adapter, _) = port(dir.path(), &["d1"], &[UserSource::file(&bad)], Vec::new());
+    let mut diagnostics = adapter.subscribe_diagnostics();
+    let unwatched = dir.path().join("kubeconfigs");
+
+    // Nothing is loaded yet, so the unwatched directory alone is not the full list.
+    adapter
+        .inner
+        .set_watch_status(WatchStatus::Active, vec![unwatched.clone()]);
+    assert!(diagnostics.next().now_or_never().is_none());
+
+    // The first read reports everything, the unwatched directory and the broken file.
+    let first = adapter.source_diagnostics().await.unwrap();
+    assert_eq!(about(&first, &unwatched).len(), 1, "{first:?}");
+    assert_eq!(about(&first, &bad).len(), 1, "{first:?}");
+    assert!(diagnostics.next().now_or_never().is_none());
+}
