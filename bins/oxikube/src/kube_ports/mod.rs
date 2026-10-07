@@ -28,7 +28,7 @@ use oxikube_ports::UserSource;
 use oxikube_runtime::StdFs;
 use tokio::runtime::Handle;
 
-pub use budget::{RegistryBudget, WatchBudgets, budget_config, report_line};
+pub use budget::{WatchBudgets, report_line};
 pub use clock::SystemClock;
 pub use connector::SourcesConnector;
 pub use secrets::MemorySecrets;

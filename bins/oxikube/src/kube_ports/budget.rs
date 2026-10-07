@@ -28,7 +28,7 @@ use oxikube_ports::{ClusterPrefs, ClusterPrefsTable, FeedStats, FeedVariant, Wat
 use parking_lot::RwLock;
 
 /// The adapter's limits for a cluster's `watch_budget` setting.
-pub fn budget_config(prefs: &WatchBudgetPrefs) -> BudgetConfig {
+fn budget_config(prefs: &WatchBudgetPrefs) -> BudgetConfig {
     BudgetConfig {
         max_feeds: prefs.max_feeds,
         max_objects: prefs.max_objects,
@@ -163,13 +163,12 @@ pub fn report_line(name: &str, stats: &FeedStats) -> String {
 /// feeds, oldest first, and ask again, and each one it closes is
 /// [released](FeedRegistry::release_owned) at once, so the next check already has the room.
 /// Its final refusals and its degrades are counted in the registry's stats.
-pub struct RegistryBudget {
+struct RegistryBudget {
     registry: FeedRegistry,
 }
 
 impl RegistryBudget {
-    /// A budget hook over `registry`.
-    pub fn new(registry: FeedRegistry) -> Self {
+    fn new(registry: FeedRegistry) -> Self {
         Self { registry }
     }
 }
