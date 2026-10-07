@@ -42,9 +42,7 @@ fn a_pod_replaced_by_a_rollout_ends_replaced_with_its_controller_known() {
     going["metadata"]["deletionTimestamp"] = serde_json::json!("2026-10-07T12:00:00Z");
     h.resources.insert(resource(going));
     h.run_for(Duration::from_millis(300));
-    let state = session.state();
-    assert_eq!(state, LogState::Ended(EndReason::PodReplaced));
-    assert!(matches!(state, LogState::Ended(reason) if reason.has_replacement()));
+    assert_eq!(session.state(), LogState::Ended(EndReason::PodReplaced));
     assert_eq!(texts(&session), ["line 0", "line 1"], "its lines stay");
 }
 
@@ -78,9 +76,7 @@ fn a_bare_pod_that_is_deleted_has_no_replacement() {
     let session = h.follow(LogOptions::follow());
     assert!(h.resources.remove(&pod_kind(), Some("default"), "web-0"));
     h.run_for(Duration::from_millis(300));
-    let state = session.state();
-    assert_eq!(state, LogState::Ended(EndReason::PodDeleted));
-    assert!(matches!(state, LogState::Ended(reason) if !reason.has_replacement()));
+    assert_eq!(session.state(), LogState::Ended(EndReason::PodDeleted));
 }
 
 #[test]

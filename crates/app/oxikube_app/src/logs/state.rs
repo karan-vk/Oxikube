@@ -22,13 +22,6 @@ pub enum EndReason {
     PodDeleted,
 }
 
-impl EndReason {
-    /// Whether a replacement pod may be followed (`logs::FollowReplacement`).
-    pub fn has_replacement(self) -> bool {
-        self == Self::PodReplaced
-    }
-}
-
 /// Why a session failed: the error of opening the stream (pod not found, `pods/log` forbidden, a
 /// container that has not started) or the one that broke it. Redacted: it may be shown and
 /// logged.

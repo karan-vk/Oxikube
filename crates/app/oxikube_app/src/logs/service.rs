@@ -11,7 +11,7 @@ use super::aggregate::{
     AggShared, AggregatePorts, AggregateSession, AggregateSpec, AggregateView, Coordinator,
 };
 use super::bounds::{BoundCell, Bounds};
-use super::churn::{Overlap, ReconnectPolicy, clamp_reconnect_retries};
+use super::churn::{Overlap, clamp_reconnect_retries};
 use super::driver::Driver;
 use super::options::{LogConfig, LogRuntime, clamp_max_streams};
 use super::session::{LogReader, LogSession, Restart};
@@ -49,10 +49,12 @@ impl LogService {
             runtime,
             bounds: Mutex::new(Bounds::new(config.buffer_lines)),
             max_streams: Arc::new(AtomicUsize::new(clamp_max_streams(config.max_streams))),
-            retries: Arc::new(AtomicU32::new(match config.reconnect {
-                ReconnectPolicy::Backoff(backoff) => clamp_reconnect_retries(backoff.max_retries),
-                ReconnectPolicy::Never => 0,
-            })),
+            retries: Arc::new(AtomicU32::new(
+                config
+                    .reconnect
+                    .backoff()
+                    .map_or(0, |backoff| clamp_reconnect_retries(backoff.max_retries)),
+            )),
             config,
             next_id: AtomicU64::new(1),
             sessions: Mutex::new(Vec::new()),

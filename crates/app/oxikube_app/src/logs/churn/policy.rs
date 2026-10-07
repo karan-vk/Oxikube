@@ -32,6 +32,16 @@ impl Default for ReconnectPolicy {
     }
 }
 
+impl ReconnectPolicy {
+    /// The backoff of [`ReconnectPolicy::Backoff`], `None` for [`ReconnectPolicy::Never`].
+    pub fn backoff(self) -> Option<Backoff> {
+        match self {
+            Self::Never => None,
+            Self::Backoff(backoff) => Some(backoff),
+        }
+    }
+}
+
 /// The timing of [`ReconnectPolicy::Backoff`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Backoff {

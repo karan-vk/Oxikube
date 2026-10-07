@@ -23,7 +23,6 @@ use oxikube_ports::{ClockPort, LogOptions, LogPort, LogSince, ResourceReader};
 use parking_lot::Mutex;
 
 use super::overlap::Overlap;
-use super::policy::{Backoff, ReconnectPolicy};
 use super::probe::{PodFate, PodIdentity, fate};
 use crate::logs::batcher::{Stop, pump};
 use crate::logs::entry::LogEntry;
@@ -96,17 +95,12 @@ impl Resumable {
         C: FnMut(Vec<LogEntry>) -> CF,
         CF: Future<Output = ()>,
     {
-        let backoff = match self.config.reconnect {
-            ReconnectPolicy::Backoff(backoff) if self.resumes() => Some(backoff),
-            _ => None,
-        };
+        let policy = self.config.reconnect.backoff();
+        let backoff = policy.filter(|_| self.resumes());
         let mut failures = 0u32;
         let mut starts = 0u32;
         let mut opened = false;
-        let span = match self.config.reconnect {
-            ReconnectPolicy::Backoff(backoff) => backoff.overlap,
-            ReconnectPolicy::Never => Backoff::default().overlap,
-        };
+        let span = policy.unwrap_or_default().overlap;
         // A session started again by hand continues after the lines its buffer kept.
         let mut options = self.resume_options(span);
         loop {
