@@ -106,6 +106,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::LogsToggleInverse { target }
         | Command::LogsToggleFilterMode { target }
         | Command::LogsCloseSearch { target }
+        | Command::LogsToggleJsonMode { target }
+        | Command::LogsToggleLevel { target, .. }
+        | Command::LogsToggleLine { target, .. }
+        | Command::LogsCollapseLine { target }
         | Command::WorkloadScale { target, .. }
         | Command::WorkloadRestart { target }
         | Command::NodeCordon { target }

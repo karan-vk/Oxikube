@@ -15,7 +15,7 @@ use super::LogView;
 use super::actions::{
     CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, Since1h, Since1m, Since5m,
     Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen,
-    ToggleInverse, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    ToggleInverse, ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
 use super::text::group;
 
@@ -38,6 +38,7 @@ impl Render for LogView {
             .on_action(cx.listener(|v, _: &ToggleAutoscroll, _, cx| v.request_autoscroll(cx)))
             .on_action(cx.listener(|v, _: &ToggleWrap, _, cx| v.request_wrap(cx)))
             .on_action(cx.listener(|v, _: &ToggleTimestamps, _, cx| v.request_timestamps(cx)))
+            .on_action(cx.listener(|v, _: &ToggleJsonMode, _, cx| v.request_json_mode(cx)))
             .on_action(cx.listener(|v, _: &TogglePrevious, _, cx| v.request_previous(cx)))
             .on_action(cx.listener(|v, _: &ToggleFullscreen, _, cx| v.request_fullscreen(cx)))
             .on_action(cx.listener(|v, _: &Find, _, cx| v.request_find(cx)))
@@ -56,7 +57,9 @@ impl Render for LogView {
             .text_color(tokens.colors.text)
             .child(self.toolbar(cx))
             .children(self.search_bar(window, cx))
+            .children(self.level_bar(cx))
             .child(self.body(cx))
+            .children(self.detail_pane(cx))
     }
 }
 

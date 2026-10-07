@@ -1,7 +1,7 @@
 //! The `logs` settings of the view's cluster (E08-S10): read when the view is built, and applied
 //! live when they change.
 //!
-//! `wrap`, `timestamps` and `json_auto_detect` are the view's own options with the setting as
+//! `wrap`, `timestamps` and `json_auto_detect` (JSON mode, E08-S05) are the view's own options with the setting as
 //! their starting value, so a change of the setting moves them in every open view without
 //! reopening the stream (a view the user toggled is moved too: the settings file is the newer
 //! word). `default_tail` is the length the tail range reads, so it takes effect at the next read
@@ -26,8 +26,7 @@ impl LogView {
             self.set_timestamps(new.timestamps, cx);
         }
         if new.json_auto_detect != old.json_auto_detect {
-            self.options.json_auto_detect = new.json_auto_detect;
-            cx.notify();
+            self.set_json_mode(new.json_auto_detect, cx);
         }
         if new.default_tail != old.default_tail {
             self.options.default_tail = new.default_tail;

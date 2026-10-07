@@ -1,6 +1,7 @@
 //! [`ViewOptions`]: what a log view reads (range, container, previous instance, tail length,
-//! follow) and how it draws it (wrap, timestamps). Plain data; [`ViewOptions::log_options`] is the
-//! port's request. [`OpenLogs`] is what `pod::ViewLogs` asks of a view.
+//! follow) and how it draws it (wrap, timestamps, JSON mode). Plain data;
+//! [`ViewOptions::log_options`] is the port's request. [`OpenLogs`] is what `pod::ViewLogs` asks
+//! of a view.
 
 use oxikube_domain::log::LogRange;
 use oxikube_ports::{LogOptions, LogSince};
@@ -16,8 +17,9 @@ pub const TAIL_LINES: i64 = 1_000;
 pub const HEAD_LIMIT_BYTES: i64 = 1 << 20;
 
 /// The options of one log view. Changing what [`log_options`](Self::log_options) asks of the port
-/// (range, container, previous, tail length, follow) reopens the stream; [`wrap`](Self::wrap)
-/// and [`timestamps`](Self::timestamps) only change how the lines already read are drawn.
+/// (range, container, previous, tail length, follow) reopens the stream; [`wrap`](Self::wrap),
+/// [`timestamps`](Self::timestamps) and [`json`](Self::json) only change how the lines already
+/// read are drawn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewOptions {
     /// Which part of the log is read: the tail (default), the head or the last minutes.
@@ -39,9 +41,10 @@ pub struct ViewOptions {
     pub wrap: bool,
     /// Show each line's server timestamp before its text.
     pub timestamps: bool,
-    /// Render JSON-object lines as columns when the log looks structured
-    /// (`logs.json_auto_detect`). Reserved: nothing reads it until the JSON mode (E08-S05).
-    pub json_auto_detect: bool,
+    /// JSON mode (`logs.json_auto_detect`, on by default): a line that is a JSON object is drawn as level, time and message
+    /// columns with its other fields collapsed, expands to pretty-printed JSON, and the level
+    /// chips filter lines; plain-text lines are drawn as they are. Off, every line is raw text.
+    pub json: bool,
 }
 
 impl Default for ViewOptions {
@@ -63,7 +66,7 @@ impl ViewOptions {
             follow: true,
             wrap: settings.wrap,
             timestamps: settings.timestamps,
-            json_auto_detect: settings.json_auto_detect,
+            json: settings.json_auto_detect,
         }
     }
 

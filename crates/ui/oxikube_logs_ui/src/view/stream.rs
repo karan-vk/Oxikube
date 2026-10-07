@@ -71,10 +71,42 @@ impl LogView {
 
     /// Applies one delta: the rows, the renderers, autoscroll.
     pub(crate) fn apply_delta(&mut self, delta: &LogDelta, cx: &mut Context<Self>) {
+        let filter = self.levels;
         let change = match &self.session {
-            Some(session) => session.read(|buffer, _| self.window.apply(delta, Some(buffer))),
+            // The level chips may hide some lines: only the delta's candidates are tested.
+            Some(session) => session.read(|buffer, _| {
+                self.window
+                    .apply_filtered(delta, Some(buffer), |candidates| {
+                        candidates
+                            .into_iter()
+                            .filter(|seq| {
+                                buffer
+                                    .get_seq(*seq)
+                                    .is_some_and(|entry| filter.admits(entry))
+                            })
+                            .collect()
+                    })
+            }),
             None => self.window.apply(delta, None),
         };
+        if !self.saw_json
+            && let Some(session) = &self.session
+        {
+            let appended = delta.appended.clone();
+            self.saw_json = session.read(|buffer, _| {
+                buffer
+                    .range_seq(appended)
+                    .any(|entry| entry.level.is_some())
+            });
+        }
+        if self
+            .expanded
+            .as_ref()
+            .is_some_and(|e| e.seq < delta.first_seq)
+        {
+            // The expanded line fell out of the ring buffer.
+            self.expanded = None;
+        }
         self.rows_changed(change);
         self.follow_tail();
         notify_coalesced(cx);

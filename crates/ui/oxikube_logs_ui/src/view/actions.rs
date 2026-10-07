@@ -2,10 +2,10 @@
 //!
 //! The defaults are k9s's, in the per-OS keymap files of `oxikube_assets`: `0` tail, `1` head,
 //! `2`-`6` since 1m / 5m / 15m / 30m / 1h, `s` autoscroll, `w` wrap, `t` timestamps, `p` previous
-//! container, `f` fullscreen, `m` mark, `c` copy. Each action that stands for a command
-//! dispatches it with the view's target (`logs::SetRange`, `logs::ToggleWrap`, ...), so the key,
-//! the toolbar, the palette and an agent run one behaviour (non-negotiable 4). Users rebind them
-//! in `keymap.json`.
+//! container, `j` JSON mode, `f` fullscreen, `m` mark, `c` copy. Each action that stands for a
+//! command dispatches it with the view's target (`logs::SetRange`, `logs::ToggleWrap`, ...), so
+//! the key, the toolbar, the palette and an agent run one behaviour (non-negotiable 4). Users
+//! rebind them in `keymap.json`.
 //!
 //! The search keys (E08-S03): `/` or `cmd-f` open the bar (`Find`), `enter` / `shift-enter` in it,
 //! or `n` / `N` outside it, step through the matches, `escape` closes it, `alt-c` / `alt-i` /
@@ -39,6 +39,8 @@ actions!(
         ToggleWrap,
         /// Show the timestamps, or not (`t`, `logs::ToggleTimestamps`).
         ToggleTimestamps,
+        /// JSON mode: columns for structured lines, or raw text (`j`, `logs::ToggleJsonMode`).
+        ToggleJsonMode,
         /// Read the previous container instance, or the current one (`p`, `logs::TogglePrevious`).
         TogglePrevious,
         /// Fill the cluster tab, or not (`f`, `logs::ToggleFullscreen`).

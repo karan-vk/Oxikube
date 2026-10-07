@@ -9,7 +9,7 @@
 //!
 //! | Module | Story | Holds |
 //! |---|---|---|
-//! | [`settings`] | E08-S01, S10 | [`LogsSettings`]: the `logs` settings (`buffer_lines`, `default_tail`, `wrap`, `timestamps`, `json_auto_detect` (reserved for E08-S05)), per-cluster overrides, clamping |
+//! | [`settings`] | E08-S01, S10 | [`LogsSettings`]: the `logs` settings (`buffer_lines`, `default_tail`, `wrap`, `timestamps`, `json_auto_detect` (JSON mode, E08-S05)), per-cluster overrides, clamping |
 //! | [`runtime`] | E08-S01 | [`log_runtime`]: where `LogService` runs its stream tasks (the Tokio bridge) |
 //! | [`follow`] | E08-S01, S10 | [`follow_settings`]: a changed `logs.buffer_lines` (global or a cluster's) reaches the open sessions at once, off the UI thread |
 //! | [`view`] | E08-S02 | [`LogView`]: a pod's log as a workspace tab (virtualised rows, wrap, timestamps, autoscroll with the "N new lines" pill, container selector, previous instance, tail / head / since presets, the `LogView` key context) |

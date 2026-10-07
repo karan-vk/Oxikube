@@ -8,7 +8,7 @@
 
 use gpui::Context;
 use oxikube_domain::command::Command;
-use oxikube_domain::log::LogRange;
+use oxikube_domain::log::{LevelChip, LogRange};
 use oxikube_workspace::ItemEvent;
 
 use super::LogView;
@@ -152,6 +152,30 @@ impl LogView {
     pub fn request_fullscreen(&mut self, cx: &mut Context<Self>) {
         let target = self.target.clone();
         self.send(Command::LogsToggleFullscreen { target }, cx);
+    }
+
+    /// Asks to toggle JSON mode (`logs::ToggleJsonMode`).
+    pub fn request_json_mode(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsToggleJsonMode { target }, cx);
+    }
+
+    /// Asks to turn a level chip on or off (`logs::ToggleLevel`).
+    pub fn request_level(&mut self, level: LevelChip, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsToggleLevel { target, level }, cx);
+    }
+
+    /// Asks to expand the structured line `seq`, or close its pane (`logs::ToggleLine`).
+    pub fn request_toggle_line(&mut self, seq: u64, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsToggleLine { target, seq }, cx);
+    }
+
+    /// Asks to close the expanded-line pane (`logs::CollapseLine`).
+    pub fn request_collapse(&mut self, cx: &mut Context<Self>) {
+        let target = self.target.clone();
+        self.send(Command::LogsCollapseLine { target }, cx);
     }
 
     /// The pill: follows again, as `logs::ToggleAutoscroll` does while autoscroll is off.

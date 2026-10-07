@@ -72,3 +72,8 @@ integration = ["oxikube_testkit/integration"]
 
 [lints]
 workspace = true
+
+# `cargo bench -p oxikube_app --bench log_parse` (E08-S05): JSON structured-line parse throughput.
+[[bench]]
+name = "log_parse"
+harness = false

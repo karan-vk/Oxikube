@@ -220,14 +220,14 @@ fn the_schema_documents_every_key_with_its_range() {
     }
     let json = defs["json_auto_detect"]["description"].as_str().unwrap();
     assert!(
-        json.contains("Reserved") && json.contains("E08-S05"),
-        "json_auto_detect has no JSON mode behind it yet, so its docs must say so: {json}"
+        json.contains("JSON mode") && !json.contains("Reserved"),
+        "json_auto_detect drives the JSON mode now: {json}"
     );
     let default_json =
         include_str!("../../../../platform/oxikube_assets/assets/settings/default.json");
     assert!(
-        default_json.contains("json_auto_detect  reserved"),
-        "default.json must mark json_auto_detect as reserved"
+        !default_json.contains("json_auto_detect  reserved"),
+        "default.json must document json_auto_detect as the JSON mode's setting"
     );
     assert_eq!(
         defs["buffer_lines"]["minimum"], 100,

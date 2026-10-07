@@ -4,6 +4,7 @@
 
 mod containers;
 mod fixture;
+mod json;
 mod keymap;
 mod keys;
 mod open;

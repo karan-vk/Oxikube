@@ -21,6 +21,7 @@
 //! | `controls` | the view's operations (what the commands do) and the requests that dispatch them |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
 //! | `render`, `toolbar`, `rows` | drawing: toolbar, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
+//! | `json`, `columns`, `filter`, `detail` | JSON mode (E08-S05): the parsed columns of a structured line and their caches, the row they draw, the level chips and the filtered row index, the expanded line's pane |
 //! | `item` | the workspace `Item`, focus and key context |
 //!
 //! # Rendering and performance
@@ -35,10 +36,14 @@
 
 mod actions;
 mod autoscroll;
+mod columns;
 mod containers;
 mod controls;
+mod detail;
+mod filter;
 mod highlight;
 mod item;
+mod json;
 mod options;
 mod render;
 mod rows;
@@ -52,6 +57,7 @@ mod window;
 #[cfg(test)]
 mod tests;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -60,7 +66,7 @@ use gpui::{
     UniformListScrollHandle, WeakEntity, px,
 };
 use oxikube_app::ClusterSessionManager;
-use oxikube_app::logs::{LogService, LogSession};
+use oxikube_app::logs::{LevelFilter, LogService, LogSession};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_settings::Settings as _;
 use oxikube_workspace::{CommandDispatcher, Workspace};
@@ -71,11 +77,12 @@ use crate::search::Search;
 pub use actions::{
     CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, Since1h, Since1m, Since5m,
     Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen,
-    ToggleInverse, TogglePrevious, ToggleTimestamps, ToggleWrap,
+    ToggleInverse, ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
 pub use autoscroll::Follow;
 pub use containers::{ContainerChoice, choices_of, default_container};
 pub use item::item_key;
+pub use json::JsonColumns;
 pub use options::{HEAD_LIMIT_BYTES, OpenLogs, TAIL_LINES, ViewOptions};
 pub use text::{Level, level_of};
 pub use window::{LineWindow, Row, RowChange};
@@ -108,6 +115,15 @@ pub struct LogView {
     /// stream: a change of what is read until then is kept in the options and opens with them.
     pub(crate) awaiting_pod: bool,
     pub(crate) window: LineWindow,
+    /// The level chips (JSON mode filters by them; see [`LogView::levels`]).
+    pub(crate) levels: LevelFilter,
+    /// Whether the session has delivered a structured (JSON) line: the JSON controls (the toggle
+    /// and the level chips) appear with the first, so a plain-text log looks as it always did.
+    pub(crate) saw_json: bool,
+    /// The line shown in the detail pane (JSON mode), if any.
+    pub(crate) expanded: Option<detail::Expanded>,
+    /// Columns and pretty text of the JSON lines drawn, by seq (drawing reads it).
+    pub(crate) records: RefCell<json::RecordCache>,
     pub(crate) follow: Follow,
     /// The unwrapped list's scroll position.
     pub(crate) scroll: UniformListScrollHandle,
@@ -165,6 +181,10 @@ impl LogView {
             started: false,
             awaiting_pod: false,
             window: LineWindow::new(),
+            levels: LevelFilter::all(),
+            saw_json: false,
+            expanded: None,
+            records: RefCell::default(),
             follow: Follow::default(),
             scroll: UniformListScrollHandle::new(),
             list: ListState::new(0, ListAlignment::Top, px(400.)),

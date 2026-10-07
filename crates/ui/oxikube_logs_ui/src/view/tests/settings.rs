@@ -55,7 +55,7 @@ fn the_settings_are_the_first_options_of_a_view(cx: &mut TestAppContext) {
     );
     let view = fx.open(timeline());
     let options = fx.read(&view, |v| v.options().clone());
-    assert!(options.wrap && options.timestamps && !options.json_auto_detect);
+    assert!(options.wrap && options.timestamps && !options.json);
     assert_eq!(
         fx.opened()[0].tail_lines,
         Some(200),
@@ -97,13 +97,13 @@ fn wrap_timestamps_and_json_apply_live_without_reopening(cx: &mut TestAppContext
         r#"{ "logs": { "wrap": true, "timestamps": true, "json_auto_detect": false } }"#,
     );
     let options = fx.read(&view, |v| v.options().clone());
-    assert!(options.wrap && options.timestamps && !options.json_auto_detect);
+    assert!(options.wrap && options.timestamps && !options.json);
     let text = fx.read(&view, |v| v.row_text(0)).unwrap();
     assert!(text.starts_with("2026-10-04T"), "{text}");
 
     set_user(&mut fx, "{}");
     let options = fx.read(&view, |v| v.options().clone());
-    assert!(!options.wrap && !options.timestamps && options.json_auto_detect);
+    assert!(!options.wrap && !options.timestamps && options.json);
 
     assert_eq!(fx.opened().len(), 1, "no setting reopened the stream");
     assert_eq!(

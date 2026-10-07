@@ -388,7 +388,7 @@
           ]
         },
         "json_auto_detect": {
-          "description": "Reserved until the JSON log mode lands (E08-S05): the value is stored and reaches open\nviews, but no rendering reads it yet. It will render lines that are JSON objects as\nlevel / time / message columns when the log looks structured.",
+          "description": "JSON mode (key `j` toggles it per view): render the lines that are JSON objects as level /\ntime / message columns with expandable fields and the level chips; plain-text lines stay\nas they are. A change applies to open views at once.",
           "type": [
             "boolean",
             "null"

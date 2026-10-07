@@ -622,6 +622,36 @@ second of 5 000 lines.
 Against a live stream (kind): `cargo test -p oxikube_app --features integration --test kind_smoke
 logs_search` follows a pod writing 20 lines/s into a 100-line ring and checks the index equals a
 naive scan of what the ring holds.
+### JSON structured mode (E08-S05)
+
+A line that is a JSON object is drawn as level chip, time, message and collapsed fields; the level
+of every line is read once as the service commits it (before the buffer's lock), the columns are
+parsed only for the rows on screen and cached by seq, and nothing is parsed per frame.
+
+Parse throughput, one core, `cargo bench -p oxikube_app --bench log_parse` (release, M-series, a
+corpus of zap, logrus, bunyan and pino lines about 112 bytes each plus 20 % plain text):
+
+| Cost | lines/s on one core | headroom over 5 000 lines/s |
+|---|---|---|
+| `classify`: the level, per committed line | ~1 350 000 | x270 |
+| `parse_line` + summary: the columns, per row shown | ~900 000 | x180 |
+
+Headless frames (`cargo xtask perf logs-stream`, release-fast, median of 5 fresh processes, 120
+frames per mode, 5 000 lines/s of a stream that is three quarters JSON; the lines are longer than
+before E08-S05's fixture change, so compare the new modes with each other, not with the E08-S02
+table above):
+
+| Mode | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| JSON mode on, following (`frame_ms`) | 1.80 ms | 3.58 ms | 4.29 ms | 4.91 ms |
+| JSON on, autoscroll paused | 1.82 ms | 3.09 ms | 4.41 ms | 4.52 ms |
+| JSON on, wrapped, following | 1.25 ms | 3.04 ms | 4.06 ms | 5.39 ms |
+| JSON on, wrapped, paused | 1.25 ms | 1.83 ms | 2.77 ms | 2.82 ms |
+| JSON mode off (`raw_frame_ms`) | 1.36 ms | 2.41 ms | 2.59 ms | 3.34 ms |
+| JSON on, debug and plain chips off (`json_filtered_frame_ms`) | 2.18 ms | 3.46 ms | 4.32 ms | 4.40 ms |
+
+All within the 8 ms p95 budget (`xtask/src/perf/budget.rs` holds the two new modes); at most one
+notify per frame; headless RSS 76 MiB.
 
 ## Load fixture: `cargo xtask load-pods`
 
