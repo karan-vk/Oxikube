@@ -2,7 +2,7 @@
 
 use oxikube_app::RowActionSpec;
 use oxikube_app::actions::KindFilter;
-use oxikube_domain::command::CommandId;
+use oxikube_domain::command::{Command, CommandId, DEFAULT_DEBUG_IMAGE};
 
 use super::ExecKind;
 
@@ -11,9 +11,13 @@ pub const SHELL_ORDER: u16 = 110;
 /// Where "Attach" sits: right after "Shell".
 pub const ATTACH_ORDER: u16 = 120;
 
-/// The row actions this module adds: `pod::Shell` and `pod::Attach` for pods. Both need the
-/// session's `exec` capability and, on a read-only cluster, are greyed out unless the cluster
-/// allows them (`exec_in_read_only`). Neither is bulk: a selection of several offers neither.
+/// Where "Debug" sits: after "Attach".
+pub const DEBUG_ORDER: u16 = 130;
+
+/// The row actions this module adds: `pod::Shell`, `pod::Attach` and `pod::Debug` for pods. All need
+/// the session's `exec` capability. A shell and an attach are greyed out on a read-only cluster
+/// unless it allows them (`exec_in_read_only`); a debug container patches the pod, so it is greyed
+/// out on every read-only cluster. None is bulk: a selection of several offers none.
 ///
 /// The commands built here name no container; [`ExecFlow`](super::ExecFlow) fills it in (or asks)
 /// before the command is dispatched.
@@ -31,5 +35,17 @@ pub fn exec_row_actions() -> Vec<RowActionSpec> {
         .label("Attach")
         .kinds(KindFilter::Matching(|kind| kind.gvk.is_pod()))
         .order(ATTACH_ORDER),
+        // The dialog asks for the image, target and command; this command is what the flow falls
+        // back to (defaults) when there is nothing to ask in.
+        RowActionSpec::new(CommandId::POD_DEBUG, |target| Command::PodDebug {
+            target: target.clone(),
+            image: DEFAULT_DEBUG_IMAGE.to_owned(),
+            target_container: None,
+            command: Vec::new(),
+            name: None,
+        })
+        .label("Debug")
+        .kinds(KindFilter::Matching(|kind| kind.gvk.is_pod()))
+        .order(DEBUG_ORDER),
     ]
 }

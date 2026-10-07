@@ -12,7 +12,7 @@ use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::{Toast, Workspace};
 
-use super::actions::{AttachSelected, DeleteSelected, ShellSelected};
+use super::actions::{AttachSelected, DebugSelected, DeleteSelected, ShellSelected};
 use super::view::ResourceTable;
 use crate::actions::{ActionEntry, DeleteDialog, ResourceActions};
 use crate::exec::{ExecFlow, ExecKind};
@@ -76,18 +76,25 @@ impl ResourceTable {
         }
         if command == CommandId::RESOURCE_DELETE {
             self.begin_delete(&actions, targets, window, cx);
-        } else if let (Some(kind), Some(service)) =
-            (ExecKind::of(command), actions.exec_service().cloned())
+        } else if let Some(service) = actions
+            .exec_service()
+            .filter(|_| ExecKind::of(command).is_some() || command == CommandId::POD_DEBUG)
+            .cloned()
         {
-            // A shell or an attach: the pod is read first, so the container is chosen (or
-            // asked for) before the command is dispatched and audited.
+            // A shell, an attach or a debug container: the pod is read first, so the container is
+            // chosen (or asked for, or the dialog filled in) before the command is dispatched and
+            // audited.
             let workspace = self
                 .workspace
                 .clone()
                 .unwrap_or_else(gpui::WeakEntity::new_invalid);
-            let flow = ExecFlow::new(service, self.deps.dispatcher.clone(), workspace);
+            let flow = ExecFlow::new(service, self.deps.dispatcher.clone(), workspace)
+                .with_debug(actions.debug_runner());
             if let Some(target) = targets.into_iter().next() {
-                self.exec_task = Some(flow.begin(kind, target, window, cx));
+                self.exec_task = Some(match ExecKind::of(command) {
+                    Some(kind) => flow.begin(kind, target, window, cx),
+                    None => flow.begin_debug(target, window, cx),
+                });
             }
         } else {
             for target in &targets {
@@ -163,5 +170,15 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::POD_ATTACH, targets, window, cx);
+    }
+
+    pub(super) fn on_debug(
+        &mut self,
+        _: &DebugSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::POD_DEBUG, targets, window, cx);
     }
 }

@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use oxikube_app::{
-    ActionContext, ActionState, ClusterSessionManager, CommandBus, DeleteFlow, ExecService,
-    RowAction, RowActionRegistry, RowActions,
+    ActionContext, ActionState, ClusterSessionManager, CommandBus, DebugRunner, DeleteFlow,
+    ExecService, RowAction, RowActionRegistry, RowActions,
 };
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::ClusterId;
@@ -50,6 +50,8 @@ pub struct ResourceActions {
     flow: DeleteFlow,
     sessions: ClusterSessionManager,
     exec: Option<Arc<ExecService>>,
+    /// Runs `pod::Debug` for the debug dialog (E09-S10).
+    debug: DebugRunner,
 }
 
 impl ResourceActions {
@@ -76,11 +78,13 @@ impl ResourceActions {
         who: impl Into<std::sync::Arc<str>>,
         registry: &RowActionRegistry,
     ) -> Self {
+        let who: Arc<str> = who.into();
         Self {
             actions: RowActions::from_bus(bus, registry),
-            flow: DeleteFlow::new(bus.clone(), sessions.clone(), who),
+            flow: DeleteFlow::new(bus.clone(), sessions.clone(), who.clone()),
             sessions,
             exec: None,
+            debug: DebugRunner::new(bus.clone(), who),
         }
     }
 
@@ -104,6 +108,11 @@ impl ResourceActions {
     /// The service the pod actions read pods through, if one was given.
     pub fn exec_service(&self) -> Option<&Arc<ExecService>> {
         self.exec.as_ref()
+    }
+
+    /// The runner of `pod::Debug` for the debug dialog: dispatches on the same bus, as the user.
+    pub fn debug_runner(&self) -> DebugRunner {
+        self.debug.clone()
     }
 
     /// The delete flow.

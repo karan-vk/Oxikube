@@ -1,7 +1,7 @@
 //! Pure guard policy: the confirmation tier of a command, the cluster it acts on, and
 //! what its audit record names as the target.
 
-use oxikube_domain::command::{Command, CommandMeta};
+use oxikube_domain::command::{Command, CommandMeta, DEFAULT_DEBUG_IMAGE};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::safety::{ConfirmTier, Risk};
 
@@ -93,6 +93,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PodShell { target, .. }
         | Command::PodAttach { target, .. }
         | Command::PodExec { target, .. }
+        | Command::PodDebug { target, .. }
         | Command::PodPortForward { target, .. }
         | Command::PodViewLogs { target, .. }
         | Command::LogsClear { target }
@@ -177,6 +178,20 @@ pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
 /// The one-line description the confirmation dialog shows, e.g.
 /// `Delete Pod: Pod default/web-0 on kind-oxikube`. Names only, never payload fields.
 pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
+    if let Command::PodDebug {
+        target,
+        image,
+        target_container,
+        ..
+    } = command
+    {
+        return debug_summary(
+            target,
+            effective_image(image),
+            target_container.as_deref(),
+            context,
+        );
+    }
     match command.target() {
         Some(target) => {
             let object = match target.namespace() {
@@ -187,6 +202,68 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
         }
         None => format!("{} on {context}", meta.title),
     }
+}
+
+/// The confirmation text of `pod::Debug`: the pod, the image and the target container, and that the
+/// container stays in the pod for good (an ephemeral container can be neither removed nor edited
+/// until the pod is deleted).
+fn debug_summary(
+    pod: &ResourceRef,
+    image: &str,
+    target_container: Option<&str>,
+    context: &str,
+) -> String {
+    let object = match pod.namespace() {
+        Some(ns) => format!("{ns}/{}", pod.name),
+        None => pod.name.to_string(),
+    };
+    let target = target_container.map_or_else(
+        || "the pod's default container".to_owned(),
+        |name| format!("container {name}"),
+    );
+    format!(
+        "Add a debug container running {image} (sharing the processes of {target}) to Pod \
+         {object} on {context}. It cannot be removed or edited afterwards: it stays in the pod \
+         until the pod is deleted."
+    )
+}
+
+/// The image a `pod::Debug` runs: the one named, else the default.
+fn effective_image(image: &str) -> &str {
+    let image = image.trim();
+    if image.is_empty() {
+        DEFAULT_DEBUG_IMAGE
+    } else {
+        image
+    }
+}
+
+/// What the audit record of a guarded `command` says besides its target, if anything: for
+/// `pod::Debug` the image, the target container, the program (never its arguments) and a chosen
+/// name. Short, free of typed content, and redacted by the audit log like every field.
+pub fn audit_detail(command: &Command) -> Option<String> {
+    let Command::PodDebug {
+        image,
+        target_container,
+        command,
+        name,
+        ..
+    } = command
+    else {
+        return None;
+    };
+    let mut detail = format!(
+        "session=debug image={} target={}",
+        effective_image(image),
+        target_container.as_deref().unwrap_or("(default)")
+    );
+    if let Some(program) = command.first() {
+        detail.push_str(&format!(" program={program}"));
+    }
+    if let Some(name) = name {
+        detail.push_str(&format!(" name={name}"));
+    }
+    Some(detail)
 }
 
 /// The text a [`ConfirmTier::TypeName`] confirmation must repeat: the target's name, or

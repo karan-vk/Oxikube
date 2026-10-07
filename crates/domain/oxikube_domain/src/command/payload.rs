@@ -26,6 +26,17 @@ pub enum Propagation {
     Orphan,
 }
 
+/// The image of a debug container when `pod::Debug` names none (`kubectl debug`'s own
+/// suggestion for a minimal toolbox).
+pub const DEFAULT_DEBUG_IMAGE: &str = "busybox";
+
+/// The program a debug container runs when `pod::Debug` names none.
+pub const DEFAULT_DEBUG_COMMAND: &str = "sh";
+
+fn default_debug_image() -> String {
+    DEFAULT_DEBUG_IMAGE.to_owned()
+}
+
 /// `true`: the serde default of flags that are on unless the caller says otherwise.
 fn default_follow() -> bool {
     true
@@ -452,6 +463,29 @@ pub enum Command {
         #[serde(default)]
         command: Vec<String>,
     },
+    /// Add an ephemeral debug container to a running pod (`kubectl debug`) and open a terminal
+    /// in it once it runs. A mutation (low risk, simple confirm): it patches the pod's
+    /// `ephemeralcontainers` subresource, and an ephemeral container can be neither removed nor
+    /// edited afterwards, so the confirmation says so.
+    #[serde(rename = "pod::Debug")]
+    PodDebug {
+        /// The pod to debug.
+        target: ResourceRef,
+        /// The image to run ([`DEFAULT_DEBUG_IMAGE`] when left out).
+        #[serde(default = "default_debug_image")]
+        image: String,
+        /// The container whose process namespace the debug container shares; `None` picks the
+        /// pod's default container.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target_container: Option<String>,
+        /// The program and arguments to run; empty runs [`DEFAULT_DEBUG_COMMAND`].
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        command: Vec<String>,
+        /// The new container's name; `None` generates `debugger-xxxxx`. A name cannot be reused
+        /// in the pod.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+    },
     /// Forward a local port to a pod port.
     #[serde(rename = "pod::PortForward")]
     PodPortForward {
@@ -806,6 +840,7 @@ impl Command {
             Command::PodShell { .. } => CommandId::POD_SHELL,
             Command::PodAttach { .. } => CommandId::POD_ATTACH,
             Command::PodExec { .. } => CommandId::POD_EXEC,
+            Command::PodDebug { .. } => CommandId::POD_DEBUG,
             Command::PodPortForward { .. } => CommandId::POD_PORT_FORWARD,
             Command::PodViewLogs { .. } => CommandId::POD_VIEW_LOGS,
             Command::LogsClear { .. } => CommandId::LOGS_CLEAR,
@@ -882,6 +917,7 @@ impl Command {
             | Command::PodShell { target, .. }
             | Command::PodAttach { target, .. }
             | Command::PodExec { target, .. }
+            | Command::PodDebug { target, .. }
             | Command::PodPortForward { target, .. }
             | Command::PodViewLogs { target, .. }
             | Command::LogsClear { target }
@@ -1110,6 +1146,13 @@ mod tests {
                 container: Some("app".into()),
                 command: vec!["sh".into(), "-c".into(), "id".into()],
             },
+            Command::PodDebug {
+                target: pod(),
+                image: "busybox".into(),
+                target_container: Some("app".into()),
+                command: vec!["sh".into()],
+                name: None,
+            },
             Command::PodPortForward {
                 target: pod(),
                 local_port: None,
@@ -1267,6 +1310,39 @@ mod tests {
             );
             assert_eq!(command.is_exec(), exec, "{}", command.id());
         }
+    }
+
+    #[test]
+    fn a_debug_command_defaults_to_busybox_and_is_a_mutation_not_exec_class() {
+        let debug: Command = serde_json::from_value(json!({
+            "type": "pod::Debug",
+            "target": pod(),
+        }))
+        .unwrap();
+        assert_eq!(
+            debug,
+            Command::PodDebug {
+                target: pod(),
+                image: DEFAULT_DEBUG_IMAGE.into(),
+                target_container: None,
+                command: Vec::new(),
+                name: None,
+            }
+        );
+        assert!(debug.is_mutating() && !debug.is_exec());
+        assert_eq!(debug.effective_risk(), Some(crate::safety::Risk::Low));
+        assert_eq!(debug.target(), Some(&pod()));
+        assert!(debug.meta().interactive);
+        // What the dialog sends survives a round trip unchanged.
+        let full = Command::PodDebug {
+            target: pod(),
+            image: "nicolaka/netshoot".into(),
+            target_container: Some("app".into()),
+            command: vec!["bash".into()],
+            name: Some("dbg".into()),
+        };
+        let back: Command = serde_json::from_value(serde_json::to_value(&full).unwrap()).unwrap();
+        assert_eq!(back, full);
     }
 
     #[test]

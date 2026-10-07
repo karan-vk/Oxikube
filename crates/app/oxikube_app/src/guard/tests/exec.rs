@@ -295,7 +295,13 @@ fn the_exec_tool_stubs_are_unsafe_interactive_and_hidden_from_agents_by_default(
         .agent_tools(false)
         .map(|t| t.name.to_string())
         .collect();
-    for hidden in ["k8s.pod_exec", "k8s.pod_shell", "k8s.pod_attach"] {
+    for hidden in [
+        "k8s.pod_exec",
+        "k8s.pod_shell",
+        "k8s.pod_attach",
+        // A mutation that ends in a terminal (E09-S10): hidden the same way.
+        "k8s.pod_debug",
+    ] {
         assert!(
             !default_set.iter().any(|n| n == hidden),
             "{hidden} is hidden by default"
@@ -311,5 +317,6 @@ fn the_exec_tool_stubs_are_unsafe_interactive_and_hidden_from_agents_by_default(
         .map(|t| t.name.to_string())
         .collect();
     assert!(opted_in.iter().any(|n| n == "k8s.pod_exec"));
-    assert_eq!(opted_in.len(), default_set.len() + EXEC.len());
+    assert!(opted_in.iter().any(|n| n == "k8s.pod_debug"));
+    assert_eq!(opted_in.len(), default_set.len() + EXEC.len() + 1);
 }

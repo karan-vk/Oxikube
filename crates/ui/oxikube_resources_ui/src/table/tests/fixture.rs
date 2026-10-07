@@ -78,6 +78,26 @@ fn actions_rig(
                 )
                 .unwrap();
         }
+        // `pod::Debug` (E09-S10): the guard is real; the handler stands in for the terminal crate's,
+        // names the container it would add, and refuses an image that says "reject" the way an
+        // admission policy would.
+        registry
+            .register(
+                *command::lookup(CommandId::POD_DEBUG).unwrap(),
+                |command: Command, _: HandlerContext| async move {
+                    let request = oxikube_app::DebugRequest::from_command(&command)?;
+                    if request.image.contains("reject") {
+                        return Err(oxikube_domain::OxiError::forbidden(
+                            "pods \"web-0\" is forbidden: violates PodSecurity \"restricted:latest\"",
+                        ));
+                    }
+                    Ok(CommandOutput {
+                        message: Some("Debug container debugger-ab12c is running".into()),
+                        data: Some(serde_json::json!({ "container": "debugger-ab12c" })),
+                    })
+                },
+            )
+            .unwrap();
     }
     let bus = CommandBus::new(
         registry,

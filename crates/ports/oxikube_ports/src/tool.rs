@@ -234,9 +234,10 @@ impl ToolDef {
         def.title = Some(meta.title.to_owned());
         def.risk = meta.tool_risk();
         def.needs = meta.needs;
-        if meta.exec {
-            // A shell in a container: unsafe, interactive, and not exposed to agents until the
-            // user asks for it (E09-S08).
+        if meta.interactive {
+            // A shell in a container, or a debug container with a shell in it: unsafe,
+            // interactive, and not exposed to agents until the user asks for it (E09-S08,
+            // E09-S10).
             def.annotations.interactive = true;
             def.annotations.unsafe_ = true;
             def.annotations.agent_hidden = true;
@@ -603,6 +604,24 @@ mod tests {
             assert!(tool.annotations.agent_hidden && !tool.agent_exposed_by_default());
             assert!(!tool.read_only_hint() && tool.destructive_hint());
         }
+        // `pod::Debug` is a mutation that ends in a terminal: the same unsafe, interactive,
+        // hidden-by-default stub (E09-S10), with the guard's own (low) risk.
+        let meta = COMMANDS
+            .iter()
+            .find(|m| m.id == CommandId::POD_DEBUG)
+            .unwrap();
+        let debug = ToolDef::for_command(meta, "Add a debug container", schema()).unwrap();
+        debug.validate().unwrap();
+        assert_eq!(debug.name.as_str(), "k8s.pod_debug");
+        assert_eq!(debug.risk, Some(Risk::Low));
+        assert!(
+            debug
+                .needs
+                .contains(Capabilities::EXEC | Capabilities::MUTATE)
+        );
+        assert!(debug.annotations.interactive && debug.annotations.unsafe_);
+        assert!(debug.annotations.agent_hidden && !debug.agent_exposed_by_default());
+        assert!(!debug.read_only_hint());
         let meta = COMMANDS
             .iter()
             .find(|m| m.id == CommandId::POD_VIEW_LOGS)

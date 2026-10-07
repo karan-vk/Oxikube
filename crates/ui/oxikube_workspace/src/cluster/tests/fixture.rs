@@ -190,6 +190,8 @@ pub(crate) struct Fixture {
     pub status: Entity<ClusterStatusItem>,
     pub tab: Entity<ClusterTab>,
     pub runner: ClusterCommandRunner,
+    /// How many times the `pod::Debug` handler ran.
+    pub debugs: Arc<Mutex<u32>>,
     pub deletes: Arc<Mutex<usize>>,
 }
 
@@ -221,6 +223,7 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
         .unwrap();
 
     let deletes = Arc::new(Mutex::new(0));
+    let debugs = Arc::new(Mutex::new(0));
     let state = Arc::new(FakeStatePort::new());
     let writer = Arc::new(StoreWriter {
         manager: manager.clone(),
@@ -242,6 +245,23 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
                     cx.require_mutation()?;
                     *counter.lock() += 1;
                     Ok(CommandOutput::message("Deleted"))
+                }
+            },
+        )
+        .unwrap();
+    // `pod::Debug` (E09-S10): a mutation the runner confirms with its own wording.
+    let debug_counter = debugs.clone();
+    registry
+        .register(
+            *command::lookup(CommandId::POD_DEBUG).unwrap(),
+            move |_: Command, cx: HandlerContext| {
+                let counter = debug_counter.clone();
+                async move {
+                    cx.require_mutation()?;
+                    *counter.lock() += 1;
+                    Ok(CommandOutput::message(
+                        "Debug container debugger-x1y2z is running",
+                    ))
                 }
             },
         )
@@ -276,5 +296,6 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
         tab,
         runner,
         deletes,
+        debugs,
     }
 }

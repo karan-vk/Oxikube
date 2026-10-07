@@ -141,11 +141,20 @@ impl ClusterCommandRunner {
         let (on_confirm, on_decline) = (self.clone(), self.clone());
         self.workspace
             .update(cx, |workspace, cx| {
+                // The posture commands lower protection (a destructive "Turn off"); a debug
+                // container (E09-S10) is an addition that cannot be undone, with its own wording.
+                let adds = matches!(command, Command::PodDebug { .. });
+                let (title, confirm) = if adds {
+                    ("Add a debug container?", "Add debug container")
+                } else {
+                    ("Are you sure?", "Turn off")
+                };
                 let dialog = cx.new(|cx| {
-                    DialogModal::new("Are you sure?", cx)
+                    let modal = DialogModal::new(title, cx)
                         .message(request.summary)
-                        .confirm_label("Turn off")
-                        .destructive()
+                        .confirm_label(confirm);
+                    let modal = if adds { modal } else { modal.destructive() };
+                    modal
                         .on_confirm(move |window, cx| {
                             on_confirm.dispatch(
                                 command.clone(),

@@ -30,6 +30,7 @@
 //! none exists the error says so and points to a debug container (distroless images, Windows).
 
 mod containers;
+mod debug;
 mod failure;
 mod notice;
 mod service;
@@ -40,5 +41,9 @@ mod tests;
 pub use containers::{
     ContainerChoices, ContainerPlan, DEFAULT_CONTAINER_ANNOTATION, ExecContainer, PodContainers,
     container_to_open, plan_container,
+};
+pub use debug::{
+    DEFAULT_DEBUG_START_TIMEOUT, DebugDefaults, DebugOpened, DebugPlan, DebugReport, DebugRequest,
+    DebugRunner, check_name, plan_debug, split_command,
 };
 pub use service::{ExecService, ShellOptions};

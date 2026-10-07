@@ -5,6 +5,7 @@
 //! deterministic runtime: no process, no OS thread.
 
 mod commands;
+mod debug;
 mod dock;
 mod find;
 mod item;

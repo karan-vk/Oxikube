@@ -40,7 +40,8 @@ pub enum TerminalRequest {
     Split,
     /// `terminal::Close`: close the focused terminal.
     Close,
-    /// `pod::Shell`, `pod::Attach` or `pod::Exec`: a terminal in a pod's container, in the bottom
+    /// `pod::Shell`, `pod::Attach`, `pod::Exec`, or the terminal of a new debug container
+    /// (`pod::Debug`, E09-S10, as an attach of it): a terminal in a pod's container, in the bottom
     /// dock of its cluster's tab. The descriptor is [`BackendDescriptor::Exec`] (an empty
     /// command means the shell chain) or [`BackendDescriptor::Attach`].
     Pod(BackendDescriptor),
@@ -69,7 +70,7 @@ impl TerminalViewSink {
         self.send(TerminalRequest::Open { descriptor }).is_ok()
     }
 
-    fn send(&self, request: TerminalRequest) -> OxiResult<()> {
+    pub(super) fn send(&self, request: TerminalRequest) -> OxiResult<()> {
         self.tx
             .unbounded_send(request)
             .map_err(|_| OxiError::internal("the window with the terminals is gone"))
@@ -177,7 +178,7 @@ fn blank_to_none(container: Option<String>) -> Option<String> {
     container.filter(|name| !name.trim().is_empty())
 }
 
-fn ensure_pod(target: &ResourceRef, command: &str) -> OxiResult<()> {
+pub(super) fn ensure_pod(target: &ResourceRef, command: &str) -> OxiResult<()> {
     if !target.gvk.is_pod() || target.namespace.is_none() {
         return Err(OxiError::validation(format!(
             "{command} needs a namespaced pod, not a {}",

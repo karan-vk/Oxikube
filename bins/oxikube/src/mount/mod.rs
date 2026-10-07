@@ -36,7 +36,11 @@
 //! 10. shells in pods (E09-S08): the app's one `ExecService`, "Shell" and "Attach" in a pod's
 //!     context menu, palette list, detail header and on `s` / `a`, and `pod::Shell` /
 //!     `pod::Attach` / `pod::Exec` on the bus (read-only blocked unless `exec_in_read_only`,
-//!     audited, never confirmed) opening a terminal in the cluster tab's bottom dock.
+//!     audited, never confirmed) opening a terminal in the cluster tab's bottom dock;
+//! 11. debug containers (E09-S10): "Debug" in a pod's context menu, palette list, detail header and
+//!     on `shift-d` opens the debug dialog, and `pod::Debug` on the bus (a low-risk guarded
+//!     mutation: read-only blocked, confirmed, audited) adds the ephemeral container and opens a
+//!     terminal attached to it in the same bottom dock.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -208,6 +212,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         links: links_sink,
         terminal_input: terminal_input_sink,
         terminal_views: terminal_views_sink.clone(),
+        exec: exec_service.clone(),
     });
     let registry = match registry {
         Ok(registry) => registry,

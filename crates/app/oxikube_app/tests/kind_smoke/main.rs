@@ -19,6 +19,7 @@ mod auth_required;
 mod clock;
 mod cluster;
 mod columns;
+mod debug;
 mod delete;
 mod exec;
 mod filter_selector;

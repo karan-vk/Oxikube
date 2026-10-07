@@ -214,6 +214,13 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             target: target(),
             grace_period_seconds: None,
         },
+        "pod::Debug" => Command::PodDebug {
+            target: target(),
+            image: "busybox".into(),
+            target_container: None,
+            command: Vec::new(),
+            name: None,
+        },
         "pod::Attach" => Command::PodAttach {
             target: target(),
             container: None,
