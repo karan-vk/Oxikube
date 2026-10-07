@@ -116,9 +116,9 @@ fn a_mixed_stream_keeps_malformed_and_plain_lines_as_text() {
 
 #[test]
 fn the_mixed_stream_has_both_kinds_and_every_logger_spelling() {
-    // Guards the fixture itself: a blessed run over a emptied or all-text file would pass.
+    // Guards the fixture itself: a blessed run over an emptied or all-text file would pass.
     let text = std::fs::read_to_string(manifest().join("tests/logs_corpus/mixed.log")).unwrap();
-    let kinds: Vec<_> = text.lines().map(|l| parse_line(l).is_some()).collect();
-    assert!(kinds.iter().filter(|k| **k).count() >= 6);
-    assert!(kinds.iter().filter(|k| !**k).count() >= 6);
+    let parsed = text.lines().filter(|l| parse_line(l).is_some()).count();
+    assert!(parsed >= 6);
+    assert!(text.lines().count() - parsed >= 6);
 }

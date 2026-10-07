@@ -3,19 +3,20 @@
 
 use std::time::Duration;
 
+use oxikube_domain::log::LogLine;
 use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::{LogOptions, LogSince};
 use oxikube_testkit::Timeline;
 
 use super::{Harness, line, lines, texts, ts};
-use crate::logs::{LogState, ReconnectPolicy};
+use crate::logs::{LogSession, LogState, ReconnectPolicy};
 
 fn ms(n: u64) -> Duration {
     Duration::from_millis(n)
 }
 
 /// Lines `range` at once, then a dropped connection at 100 ms.
-fn breaking(range: std::ops::Range<i64>) -> Timeline<oxikube_domain::log::LogLine> {
+fn breaking(range: std::ops::Range<i64>) -> Timeline<LogLine> {
     range
         .map(line)
         .fold(Timeline::new(), |t, l| t.ok_at(Duration::ZERO, l))
@@ -224,12 +225,12 @@ fn a_session_reconnected_by_hand_continues_after_the_lines_it_kept() {
 }
 
 /// A line `text` of `web-0` stamped `at_ms` milliseconds in.
-fn stamped(at_ms: i64, text: &str) -> oxikube_domain::log::LogLine {
-    oxikube_domain::log::LogLine::new(ts(at_ms), "web-0", "app", text)
+fn stamped(at_ms: i64, text: &str) -> LogLine {
+    LogLine::new(ts(at_ms), "web-0", "app", text)
 }
 
 /// The server timestamps of the buffer, in milliseconds into the fixture's hour, oldest first.
-fn stamps(session: &crate::logs::LogSession) -> Vec<i64> {
+fn stamps(session: &LogSession) -> Vec<i64> {
     session.read(|buffer, _| {
         buffer
             .iter()
