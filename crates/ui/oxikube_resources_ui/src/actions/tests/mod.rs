@@ -27,7 +27,6 @@ pub(crate) fn nodes_kind() -> ResourceKind {
     }
 }
 
-/// A kind the server cannot delete (events are read-only here).
 /// The deployments kind as discovery serves it (a controller: it owns dependents).
 pub(crate) fn deployments_kind() -> ResourceKind {
     ResourceKind {
@@ -42,6 +41,7 @@ pub(crate) fn deployments_kind() -> ResourceKind {
     }
 }
 
+/// A kind the server cannot delete (events are read-only here).
 pub(crate) fn readonly_kind() -> ResourceKind {
     ResourceKind {
         gvk: Gvk::new("", "v1", "ComponentStatus"),
