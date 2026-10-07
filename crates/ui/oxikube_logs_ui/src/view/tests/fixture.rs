@@ -412,6 +412,23 @@ impl Fx {
         self.settle();
     }
 
+    /// The ids of the entries of the toolbar's "..." menu now, in order.
+    pub(crate) fn overflow_ids(&mut self, view: &Entity<LogView>) -> Vec<&'static str> {
+        self.vcx.update(|_, cx| {
+            view.read(cx)
+                .overflow_items(cx)
+                .iter()
+                .filter_map(|item| item.id())
+                .collect()
+        })
+    }
+
+    /// Opens the toolbar's "..." menu and chooses the entry `id`, like a click.
+    pub(crate) fn overflow(&mut self, id: &'static str) {
+        self.click("log-overflow");
+        self.click(id);
+    }
+
     /// Scrolls the rows by `lines` (positive: up, towards older lines).
     pub(crate) fn wheel(&mut self, lines: f32) {
         let bounds = self

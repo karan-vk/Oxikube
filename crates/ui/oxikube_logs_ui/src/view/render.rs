@@ -70,6 +70,7 @@ impl Render for LogView {
             .text_color(tokens.colors.text)
             .child(self.toolbar(cx))
             .children(self.recovery_strip(cx))
+            .children(self.crash_hint(cx))
             .children(self.banner(cx))
             .children(self.search_bar(window, cx))
             .children(self.level_bar(cx))
@@ -88,14 +89,25 @@ impl LogView {
             .size_full()
             .into_any_element()
         } else {
-            uniform_list(
-                "log-rows",
-                self.window.row_count(),
-                cx.processor(|view, range, _, cx| view.render_rows(range, cx)),
-            )
-            .track_scroll(&self.scroll)
-            .size_full()
-            .into_any_element()
+            // The slack above keeps the oldest row on screen whole (`snap`).
+            div()
+                .size_full()
+                .pt(self.snap.slack(self.window.row_count(), self.row_height()))
+                .child(
+                    div()
+                        .size_full()
+                        .debug_selector(|| "log-rows".into())
+                        .child(
+                            uniform_list(
+                                "log-rows",
+                                self.window.row_count(),
+                                cx.processor(|view, range, _, cx| view.render_rows(range, cx)),
+                            )
+                            .track_scroll(&self.scroll)
+                            .size_full(),
+                        ),
+                )
+                .into_any_element()
         };
         div()
             .id("log-body")
@@ -104,6 +116,7 @@ impl LogView {
             .flex_1()
             .min_h_0()
             .on_scroll_wheel(cx.listener(Self::on_wheel))
+            .child(self.body_probe(cx))
             .child(rows)
             .children(self.pill(cx))
     }

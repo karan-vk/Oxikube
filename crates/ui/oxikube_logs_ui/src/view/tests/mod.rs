@@ -18,3 +18,4 @@ mod search;
 mod settings;
 mod stream;
 mod tail;
+mod toolbar;

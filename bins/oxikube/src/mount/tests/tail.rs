@@ -79,11 +79,11 @@ fn the_logs_toolbar_tails_in_a_terminal_tab_of_the_cluster(cx: &mut TestAppConte
         .vcx
         .update(|_, cx| ws.read(cx).items_of_type::<LogView>());
     assert_eq!(views.len(), 1, "the log is open");
+    app.click("log-overflow");
     assert!(
         app.drawn("log-tail-in-terminal"),
-        "kubectl is installed: the toolbar offers the action"
+        "kubectl is installed: the toolbar's menu offers the action"
     );
-
     app.click("log-tail-in-terminal");
     app.tick();
 
@@ -141,7 +141,8 @@ fn the_action_is_hidden_when_kubectl_is_missing(cx: &mut TestAppContext) {
             .update(|_, cx| ws.read(cx).items_of_type::<LogView>().len()),
         1
     );
-    assert!(app.drawn("log-copy"), "the rest of the toolbar is there");
+    app.click("log-overflow");
+    assert!(app.drawn("log-copy"), "the rest of the menu is there");
     assert!(!app.drawn("log-tail-in-terminal"), "hidden, not disabled");
 
     // The command still answers (a palette or an agent may send it): it says why, opens nothing.

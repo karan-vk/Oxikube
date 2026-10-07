@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use gpui::Context;
 use oxikube_domain::Resource;
-use oxikube_domain::view::{ContainerKind, ContainerSummary};
+use oxikube_domain::view::{ContainerKind, ContainerState, ContainerSummary, TerminatedState};
 use oxikube_runtime::{notify_coalesced, spawn_kube};
 use oxikube_workspace::ItemEvent;
 
@@ -20,6 +20,9 @@ pub struct ContainerChoice {
     pub kind: ContainerKind,
     /// Whether it has restarted (so a previous instance may have a log).
     pub restarted: bool,
+    /// Whether it is crash-looping: waiting in `CrashLoopBackOff`, or it restarted and its last
+    /// run exited with an error. The log of its last crash is the previous instance's.
+    pub crash_looping: bool,
 }
 
 impl ContainerChoice {
@@ -40,12 +43,52 @@ pub fn choices_of(pod: &Resource) -> Vec<ContainerChoice> {
     ContainerSummary::list_from_resource(pod)
         .unwrap_or_default()
         .into_iter()
-        .map(|c| ContainerChoice {
-            name: c.name,
-            kind: c.kind,
-            restarted: c.restarts > 0,
+        .map(|c| {
+            let crashed = |t: &TerminatedState| t.exit_code != 0 || t.signal != 0;
+            let crash_looping = match &c.state {
+                ContainerState::Waiting { reason, .. } => {
+                    reason.as_deref() == Some("CrashLoopBackOff")
+                }
+                ContainerState::Terminated(last) => c.restarts > 0 && crashed(last),
+                _ => false,
+            };
+            ContainerChoice {
+                name: c.name,
+                kind: c.kind,
+                restarted: c.restarts > 0,
+                crash_looping,
+            }
         })
         .collect()
+}
+
+/// Longest container name the toolbar button spells out; a longer one is cut in the middle (the
+/// menu keeps the whole name).
+const LABEL_NAME_CHARS: usize = 24;
+
+/// What the toolbar's container picker says: the container read, with its place among the pod's
+/// containers when there are several (`main (1/2)`).
+pub(super) fn container_label(current: Option<&str>, choices: &[ContainerChoice]) -> String {
+    let name = current.map_or_else(|| "default container".to_owned(), shorten);
+    if choices.len() < 2 {
+        return name;
+    }
+    match current.and_then(|c| choices.iter().position(|choice| &*choice.name == c)) {
+        Some(index) => format!("{name} ({}/{})", index + 1, choices.len()),
+        None => format!("{name} ({})", choices.len()),
+    }
+}
+
+/// `name`, or its first and last characters around an ellipsis when it is long.
+fn shorten(name: &str) -> String {
+    let count = name.chars().count();
+    if count <= LABEL_NAME_CHARS {
+        return name.to_owned();
+    }
+    let keep = (LABEL_NAME_CHARS - 1) / 2;
+    let head: String = name.chars().take(keep + 1).collect();
+    let tail: String = name.chars().skip(count - keep).collect();
+    format!("{head}\u{2026}{tail}")
 }
 
 /// The container a view reads when none was asked for: the pod's `kubectl.kubernetes.io/
@@ -65,6 +108,18 @@ pub fn default_container(pod: &Resource, choices: &[ContainerChoice]) -> Option<
 }
 
 impl LogView {
+    /// Whether the container read is crash-looping and its current instance is shown: the strip
+    /// under the toolbar then says that "Previous" holds the last crash.
+    pub(crate) fn shows_crash_hint(&self) -> bool {
+        self.aggregate.is_none()
+            && !self.options.previous
+            && self.options.container.as_deref().is_some_and(|name| {
+                self.containers
+                    .iter()
+                    .any(|c| &*c.name == name && c.crash_looping)
+            })
+    }
+
     /// The containers the selector lists (empty until the pod was read).
     pub fn containers(&self) -> &[ContainerChoice] {
         &self.containers
@@ -184,5 +239,53 @@ mod tests {
             default_container(&plain, &choices).as_deref(),
             Some("sidecar")
         );
+    }
+
+    fn choice(name: &str) -> ContainerChoice {
+        ContainerChoice {
+            name: name.into(),
+            kind: ContainerKind::Regular,
+            restarted: false,
+            crash_looping: false,
+        }
+    }
+
+    #[test]
+    fn the_label_counts_the_containers_when_there_are_several() {
+        let two = [choice("main"), choice("sidecar")];
+        assert_eq!(container_label(Some("main"), &two), "main (1/2)");
+        assert_eq!(container_label(Some("sidecar"), &two), "sidecar (2/2)");
+        assert_eq!(container_label(Some("gone"), &two), "gone (2)");
+        assert_eq!(container_label(Some("main"), &two[..1]), "main");
+        assert_eq!(container_label(None, &[]), "default container");
+    }
+
+    #[test]
+    fn a_long_name_is_cut_in_the_middle() {
+        let name = "a-very-long-container-name-for-a-sidecar";
+        let label = container_label(Some(name), &[]);
+        assert!(label.chars().count() <= LABEL_NAME_CHARS, "{label}");
+        assert!(label.starts_with("a-very-long") && label.ends_with("sidecar"));
+        assert!(label.contains('\u{2026}'));
+    }
+
+    #[test]
+    fn a_crash_looping_container_is_flagged() {
+        let pod = Resource::from_json(json!({
+            "apiVersion": "v1", "kind": "Pod",
+            "metadata": {"name": "p", "namespace": "n"},
+            "spec": {"containers": [{"name": "boom"}, {"name": "ok"}, {"name": "done"}]},
+            "status": {"containerStatuses": [
+                {"name": "boom", "restartCount": 5,
+                 "state": {"waiting": {"reason": "CrashLoopBackOff"}},
+                 "lastState": {"terminated": {"exitCode": 1, "reason": "Error"}}},
+                {"name": "ok", "restartCount": 1, "state": {"running": {}}},
+                {"name": "done", "restartCount": 0,
+                 "state": {"terminated": {"exitCode": 0, "reason": "Completed"}}}
+            ]}
+        }))
+        .unwrap();
+        let flags: Vec<bool> = choices_of(&pod).iter().map(|c| c.crash_looping).collect();
+        assert_eq!(flags, [true, false, false]);
     }
 }
