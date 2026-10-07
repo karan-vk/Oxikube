@@ -154,9 +154,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   first_seq, state }` computed at poll time, so a slow consumer gets one larger delta and nothing queues. The
   state machine is `Connecting`, `Streaming`, `Ended(Completed | StreamClosed | Cancelled)` or
   `Failed(LogFailure)` (kind, redacted message, retryable); `ReconnectPolicy` is the seam of E08-S07.
-  `set_buffer_lines` applies a changed setting to open sessions at once. Line text is never logged.
-- `oxikube_logs_ui` — E08-S01: `LogsSettings` (`logs.buffer_lines`, default 50 000, clamped 100 to 5 000 000),
-  `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload into the `LogService`). Module
+  `set_buffer_lines` applies a changed setting to open sessions at once; `open_in(cluster, ..)` and
+  `set_cluster_buffer_lines` give a cluster its own bound (`clusters.<id>.logs.buffer_lines`, E08-S10; each
+  cluster's sessions read one shared cell, so open sessions resize when the override changes). Line text is
+  never logged.
+- `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to
+  5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect`; defaults in
+  `default.json`, schema generated, per-cluster overrides under `clusters.<id>.logs`, out-of-range values clamped
+  with a warning), `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload of
+  `buffer_lines`, global and per cluster, into the `LogService` on a background task; `wrap`, `timestamps` and
+  `json_auto_detect` are applied by each open view, `default_tail` by the next read of the tail). Module
   `view` (E08-S02): `LogView`, a pod's log as a workspace `Item` (tab `pod/container`). It holds one `LogSession`
   (the service owns the abort-on-drop read) and polls its deltas into a `LineWindow` (truncated marker, lines by
   seq, state row for Connecting / Ended / Failed), redrawing through `notify_coalesced`; rows are read from the

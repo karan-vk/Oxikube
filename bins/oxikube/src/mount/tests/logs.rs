@@ -61,7 +61,35 @@ fn a_user_setting_bounds_the_service_and_hot_reloads_into_open_sessions(cx: &mut
                 .expect("valid settings");
         });
     });
+    // The resize runs on a background task, off the UI thread.
+    app.vcx.run_until_parked();
     assert_eq!(service.buffer_lines(), 400);
+    session.read(|buffer, _| assert_eq!(buffer.capacity(), 400));
+
+    // A cluster can carry its own bound (`clusters.<id>.logs.buffer_lines`).
+    let cluster = TestPorts::cluster_id();
+    let port = Arc::new(FakeLogPort::new());
+    port.script()
+        .stream_logs
+        .push_ok(Timeline::new().keep_open());
+    let in_cluster = service.open_in(
+        &cluster,
+        port,
+        LogTarget::pod("default", "web-0"),
+        LogOptions::follow(),
+    );
+    let user = format!(
+        r#"{{ "logs": {{ "buffer_lines": 400 }},
+              "clusters": {{ "{}": {{ "logs": {{ "buffer_lines": 9000 }} }} }} }}"#,
+        cluster.as_str()
+    );
+    app.vcx.update(|_, cx| {
+        SettingsStore::update_global(cx, |store, _| {
+            store.set_user_settings(&user).expect("valid settings");
+        });
+    });
+    app.vcx.run_until_parked();
+    in_cluster.read(|buffer, _| assert_eq!(buffer.capacity(), 9_000));
     session.read(|buffer, _| assert_eq!(buffer.capacity(), 400));
 }
 

@@ -5,7 +5,10 @@
 use oxikube_domain::log::LogRange;
 use oxikube_ports::{LogOptions, LogSince};
 
-/// Lines the tail range (`0`) reads before following: the newest of the log.
+use crate::LogsSettings;
+
+/// Lines the tail range (`0`) reads before following when `logs.default_tail` is not set: the
+/// newest of the log.
 pub const TAIL_LINES: i64 = 1_000;
 
 /// Bytes the head range (`1`) reads from the start of the log (about 10 000 short lines). The
@@ -23,8 +26,11 @@ pub struct ViewOptions {
     pub container: Option<String>,
     /// Read the previous (terminated) instance of the container.
     pub previous: bool,
-    /// Lines the tail range reads; `None` for [`TAIL_LINES`] (`pod::ViewLogs { tail_lines }`).
+    /// Lines the tail range reads; `None` for [`default_tail`](Self::default_tail)
+    /// (`pod::ViewLogs { tail_lines }`).
     pub tail_lines: Option<u32>,
+    /// Lines the tail range reads when nothing asks for another length (`logs.default_tail`).
+    pub default_tail: u32,
     /// Keep reading new lines after the range (default `true`; `pod::ViewLogs { follow: false }`
     /// reads the range once). A range that does not follow (the head, a previous instance)
     /// never follows whatever this says.
@@ -33,24 +39,34 @@ pub struct ViewOptions {
     pub wrap: bool,
     /// Show each line's server timestamp before its text.
     pub timestamps: bool,
+    /// Render JSON-object lines as columns when the log looks structured
+    /// (`logs.json_auto_detect`; the JSON mode itself is E08-S05's).
+    pub json_auto_detect: bool,
 }
 
 impl Default for ViewOptions {
-    /// The tail of the default container, following.
+    /// The tail of the default container, following, as the shipped `logs` settings say.
     fn default() -> Self {
+        Self::from_settings(&LogsSettings::default())
+    }
+}
+
+impl ViewOptions {
+    /// The tail of the default container, following, drawn as `settings` say.
+    pub fn from_settings(settings: &LogsSettings) -> Self {
         Self {
             range: LogRange::default(),
             container: None,
             previous: false,
             tail_lines: None,
+            default_tail: settings.default_tail,
             follow: true,
-            wrap: false,
-            timestamps: false,
+            wrap: settings.wrap,
+            timestamps: settings.timestamps,
+            json_auto_detect: settings.json_auto_detect,
         }
     }
-}
 
-impl ViewOptions {
     /// The port's request for these options. Timestamps are always asked of the server: the
     /// viewer shows them on demand without a new read, and the multi-pod merge orders by them.
     /// A previous instance has stopped, so its read never follows.
@@ -65,7 +81,7 @@ impl ViewOptions {
         };
         match self.range {
             LogRange::Tail => {
-                options.tail_lines = Some(self.tail_lines.map_or(TAIL_LINES, i64::from));
+                options.tail_lines = Some(i64::from(self.tail_lines.unwrap_or(self.default_tail)));
             }
             LogRange::Head => options.limit_bytes = Some(HEAD_LIMIT_BYTES),
             since => options.since = since.since_seconds().map(LogSince::Seconds),
@@ -126,6 +142,17 @@ mod tests {
         assert_eq!(options.tail_lines, Some(TAIL_LINES));
         assert_eq!(options.since, None);
         assert_eq!(options.limit_bytes, None);
+    }
+
+    #[test]
+    fn the_default_tail_setting_is_the_tails_length_until_a_view_asks_for_another() {
+        let mut options = ViewOptions::from_settings(&LogsSettings {
+            default_tail: 200,
+            ..LogsSettings::default()
+        });
+        assert_eq!(options.log_options().tail_lines, Some(200));
+        options.tail_lines = Some(50);
+        assert_eq!(options.log_options().tail_lines, Some(50));
     }
 
     #[test]

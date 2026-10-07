@@ -1,29 +1,37 @@
 //! [`LogService`]: opens log sessions over a `LogPort` and keeps their memory bounded.
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 
+use oxikube_domain::ids::ClusterId;
 use oxikube_ports::{LogOptions, LogPort};
 use parking_lot::Mutex;
 
+use super::bounds::{BoundCell, Bounds};
 use super::driver::Driver;
-use super::options::{LogConfig, LogRuntime, clamp_buffer_lines};
+use super::options::{LogConfig, LogRuntime};
 use super::session::{LogReader, LogSession};
 use super::shared::Shared;
 use super::target::LogTarget;
 use crate::store::spawn_guarded;
 
-/// Opens and tracks log sessions. One per app: the sessions of every cluster share the
-/// `logs.buffer_lines` bound and the runtime.
+/// Opens and tracks log sessions. One per app: the sessions of every cluster share the runtime and
+/// the `logs.buffer_lines` bound, which a cluster may override for its own sessions.
 ///
 /// Plain async Rust over [`LogPort`]: no gpui, no kube. The UI, the MCP `get_logs` tool and the
 /// tests share this one implementation.
 pub struct LogService {
     runtime: LogRuntime,
     config: LogConfig,
-    buffer_lines: Arc<AtomicUsize>,
+    bounds: Mutex<Bounds>,
     next_id: AtomicU64,
-    sessions: Mutex<Vec<Weak<Shared>>>,
+    sessions: Mutex<Vec<Tracked>>,
+}
+
+/// An open session and the bound it reads.
+struct Tracked {
+    shared: Weak<Shared>,
+    bound: BoundCell,
 }
 
 impl LogService {
@@ -32,7 +40,7 @@ impl LogService {
     pub fn new(runtime: LogRuntime, config: LogConfig) -> Self {
         Self {
             runtime,
-            buffer_lines: Arc::new(AtomicUsize::new(clamp_buffer_lines(config.buffer_lines))),
+            bounds: Mutex::new(Bounds::new(config.buffer_lines)),
             config,
             next_id: AtomicU64::new(1),
             sessions: Mutex::new(Vec::new()),
@@ -48,6 +56,30 @@ impl LogService {
     pub fn open(
         &self,
         port: Arc<dyn LogPort>,
+        target: LogTarget,
+        options: LogOptions,
+    ) -> LogSession {
+        let bound = self.bounds.lock().default_cell();
+        self.open_bounded(bound, port, target, options)
+    }
+
+    /// [`LogService::open`] for a session of `cluster`: it keeps the cluster's own
+    /// `buffer_lines` ([`LogService::set_cluster_buffer_lines`]) when it has one.
+    pub fn open_in(
+        &self,
+        cluster: &ClusterId,
+        port: Arc<dyn LogPort>,
+        target: LogTarget,
+        options: LogOptions,
+    ) -> LogSession {
+        let bound = self.bounds.lock().cell_for(cluster);
+        self.open_bounded(bound, port, target, options)
+    }
+
+    fn open_bounded(
+        &self,
+        bound: BoundCell,
+        port: Arc<dyn LogPort>,
         mut target: LogTarget,
         mut options: LogOptions,
     ) -> LogSession {
@@ -56,36 +88,71 @@ impl LogService {
         options.container = container;
 
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let capacity = self.buffer_lines();
+        let capacity = bound.load(Ordering::Acquire);
         let shared = Arc::new(Shared::new(id, target, options, capacity));
         {
             let mut sessions = self.sessions.lock();
-            sessions.retain(|s| s.strong_count() > 0);
-            sessions.push(Arc::downgrade(&shared));
+            sessions.retain(|s| s.shared.strong_count() > 0);
+            sessions.push(Tracked {
+                shared: Arc::downgrade(&shared),
+                bound: bound.clone(),
+            });
         }
         let driver = Driver {
             port,
             shared: shared.clone(),
             clock: self.runtime.clock.clone(),
             config: self.config.clone(),
-            buffer_lines: self.buffer_lines.clone(),
+            buffer_lines: bound,
         };
         let task = spawn_guarded(&self.runtime.spawner, driver.run());
         LogSession::new(shared, task)
     }
 
-    /// Lines each session keeps (`logs.buffer_lines`).
+    /// Lines a session keeps by default (`logs.buffer_lines`).
     pub fn buffer_lines(&self) -> usize {
-        self.buffer_lines.load(Ordering::Acquire)
+        self.bounds.lock().default_lines()
     }
 
-    /// Applies a new `logs.buffer_lines` (clamped) to every open session at once and to the
-    /// ones opened later. A smaller bound drops the oldest lines of the sessions now.
+    /// Lines the sessions of `cluster` keep: its own bound, else the default.
+    pub fn buffer_lines_for(&self, cluster: &ClusterId) -> usize {
+        self.bounds.lock().lines_for(cluster)
+    }
+
+    /// Applies a new `logs.buffer_lines` (clamped) to every open session without a cluster
+    /// override at once and to the ones opened later. A smaller bound drops the oldest lines of
+    /// the sessions now.
     pub fn set_buffer_lines(&self, lines: usize) {
-        let lines = clamp_buffer_lines(lines);
-        self.buffer_lines.store(lines, Ordering::Release);
-        for shared in self.live() {
-            shared.set_capacity(lines);
+        self.bounds.lock().set_default(lines);
+        self.apply_bounds();
+    }
+
+    /// Sets the clusters' own `buffer_lines` (`clusters.<id>.logs.buffer_lines`), replacing the
+    /// previous overrides: a cluster missing from `overrides` goes back to the default. Open
+    /// sessions are resized at once like [`LogService::set_buffer_lines`] does.
+    pub fn set_cluster_buffer_lines(
+        &self,
+        overrides: impl IntoIterator<Item = (ClusterId, usize)>,
+    ) {
+        self.bounds.lock().set_overrides(overrides);
+        self.apply_bounds();
+    }
+
+    /// Resizes every open buffer to the bound it reads (the cells are stored first, so a
+    /// concurrent commit that reads the new bound and this agree).
+    fn apply_bounds(&self) {
+        let open: Vec<(Arc<Shared>, BoundCell)> = {
+            let mut sessions = self.sessions.lock();
+            sessions.retain(|s| s.shared.strong_count() > 0);
+            sessions
+                .iter()
+                .filter_map(|s| Some((s.shared.upgrade()?, s.bound.clone())))
+                .collect()
+        };
+        for (shared, bound) in open {
+            if !shared.is_closed() {
+                shared.set_capacity(bound.load(Ordering::Acquire));
+            }
         }
     }
 
@@ -105,10 +172,10 @@ impl LogService {
 
     fn live(&self) -> Vec<Arc<Shared>> {
         let mut sessions = self.sessions.lock();
-        sessions.retain(|s| s.strong_count() > 0);
+        sessions.retain(|s| s.shared.strong_count() > 0);
         sessions
             .iter()
-            .filter_map(Weak::upgrade)
+            .filter_map(|s| s.shared.upgrade())
             .filter(|shared| !shared.is_closed())
             .collect()
     }
