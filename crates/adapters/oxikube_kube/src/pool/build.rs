@@ -20,7 +20,7 @@ use oxikube_domain::OxiError;
 use super::config::PoolConfig;
 use super::entry::ContextDefinition;
 use super::{proxy, tls};
-use crate::auth::{build_client_with_warnings, classify_kubeconfig};
+use crate::auth::{build_client_bounded, classify_kubeconfig};
 use crate::kubeconfig::in_cluster_config_fixups;
 use crate::warnings::WarningHub;
 
@@ -62,7 +62,12 @@ impl ClientFactory for KubeClientFactory {
         let kube_config = build_config(definition, config, &self.proxy_env)?;
         // Every pooled client publishes the server's `Warning:` headers under its context.
         let sink = WarningHub::global().sink(definition.context());
-        build_client_with_warnings(kube_config, config.exec_policy, Some(sink))
+        build_client_bounded(
+            kube_config,
+            config.exec_policy,
+            Some(sink),
+            config.exec_refresh_deadline,
+        )
     }
 }
 

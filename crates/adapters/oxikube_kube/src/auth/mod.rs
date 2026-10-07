@@ -15,6 +15,9 @@
 //! * `exec`: [`ExecInteractivePolicy`], the cap on exec-plugin interactivity, and
 //!   [`build_client`], which applies it and builds a client (blocking; `ClientPool`
 //!   runs it on the blocking pool under a deadline).
+//! * `refresh`: [`RefreshGuardLayer`], the deadline on a credential refresh inside a live
+//!   client (a hung exec plugin fails requests with [`RefreshStalled`] instead of queueing
+//!   them).
 //! * [`retry_once`]: invalidate-and-retry-once for auth failures.
 //!
 //! # The `retryable` rule for `Auth`
@@ -36,6 +39,7 @@
 
 mod classify;
 mod exec;
+mod refresh;
 mod retry;
 
 pub(crate) use classify::redacted_line;
@@ -43,5 +47,8 @@ pub use classify::{
     CredentialRefresh, classify, classify_kubeconfig, classify_tls_setup, classify_with,
 };
 pub(crate) use exec::describe;
-pub use exec::{ExecInteractivePolicy, build_client, build_client_with_warnings};
+pub use exec::{
+    ExecInteractivePolicy, build_client, build_client_bounded, build_client_with_warnings,
+};
+pub use refresh::{DEFAULT_REFRESH_DEADLINE, RefreshGuard, RefreshGuardLayer, RefreshStalled};
 pub use retry::{retry_once, retry_once_kube};

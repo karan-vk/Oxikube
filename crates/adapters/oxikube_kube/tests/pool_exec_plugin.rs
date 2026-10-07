@@ -85,10 +85,9 @@ async fn slow_plugin_hits_the_deadline_and_is_resumed_not_rerun() {
     assert!(pool.get(&ctx).await.is_err());
     assert_eq!(runs(dir.path()), 1);
 
-    // When the build finishes, its client is used. kube 4.2 runs an exec plugin three
-    // times per client build, one after another (`valid_until`, the rustls client
-    // identity, the auth layer), so one build is three runs, about 1.8 s here.
-    tokio::time::sleep(Duration::from_millis(2500)).await;
+    // When the build finishes, its client is used. A token plugin runs once per build
+    // (the refresh guard takes kube's auth layer over; kube alone runs it three times).
+    tokio::time::sleep(Duration::from_millis(800)).await;
     pool.get(&ctx).await.expect("the resumed build succeeds");
-    assert_eq!(runs(dir.path()), 3, "one build, no restart");
+    assert_eq!(runs(dir.path()), 1, "one build, no restart");
 }
