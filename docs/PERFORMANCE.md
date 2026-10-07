@@ -33,7 +33,8 @@ measured on a mid-range x86 laptop with an integrated GPU.
   [Resource table](#resource-table-10-000-pods-under-churn-e07-s09).
 - `cargo xtask perf <scenario>|--all` runs scripted scenarios headless and writes a report; nightly
   CI compares against [`docs/perf/baseline.json`](perf/baseline.json) and fails on > 50 % (p50) or
-  > 150 % (p95/p99) regression on the hosted runners, > 20 % by default (E01-S14, E01-F542).
+  > 150 % (p95/p99) regression on Linux (advisory on macOS, whose hosted runners are too noisy),
+  > 20 % by default (E01-S14, E01-F542).
 - macOS: Instruments (Time Profiler, Metal System Trace) for stalls; Linux: `perf` + `tracy`
   via the `tracy` feature on `oxikube_runtime`.
 - Memory: `oxikube --perf` writes the process's resident memory (RSS, MiB) into every JSONL tick
@@ -200,11 +201,16 @@ noise floor in the metric's own unit:
   so 8 MiB sits well above jitter and below 6 % of the 150 MB idle budget.
 
 The nightly passes `--tolerance 0.5 --tail-tolerance 1.5` and repeats a failed check once
-(E01-F542): on the hosted runners the same code measured p50 +20 to +30 % and p95/p99 up to
-+120 % between two nightlies (macOS `scroll-10k` frame p95 4.4 to 8.6 ms), so +20 % made the gate
-fail on weather. The 20 % default is for a quiet machine compared with itself. The absolute budgets
-above are checked on every run regardless, so a regression the loose gate lets through still has
-to fit them.
+(E01-F542). Linux stays within a few percent on the frame metrics (sub-millisecond stage timings
+move by up to 0.5 ms), but the hosted macOS runner does not: across nightlies of the same code p50
+moved +20 to +90 %, p95/p99 up to +280 %, and even `state_db_open_ms` and `init_window_ms` (no app
+code) +65 %. +20 % made the gate fail on weather, and no relative tolerance that still catches
+a regression survives that. So the Linux check blocks the nightly, and the macOS check is advisory:
+the step may fail without failing the job, the report is still uploaded (`perf-report-macOS`) and
+a warning annotation says the check failed. A quiet-machine comparison (`cargo xtask perf --all
+--check` locally, 20 %) is the way to confirm a suspected macOS regression; a stable macOS signal
+(instructions retired, or a dedicated runner) is the way to gate on it again. The absolute budgets
+above are part of every check. The 20 % default is for a quiet machine compared with itself.
 
 While the app is a placeholder this means only `first_frame_ms`,
 `launch_to_first_frame_ms` and the memory metrics effectively gate; the floors are to be re-tuned once real views land (https://github.com/karan-vk/Oxikube/issues/411). A scenario or metric with no baseline is reported as

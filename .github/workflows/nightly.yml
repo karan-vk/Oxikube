@@ -119,6 +119,7 @@ jobs:
   # Perf regression gate (E01-S14, ADR 0013): headless scenarios on each OS, median of several
   # fresh-process samples, compared with docs/perf/baseline.json for the same runner OS. Fails above
   # +50 % on p50 and +150 % on p95/p99 (and +0.25 ms); the failure feeds `report-failure` below.
+  # Blocking on Linux; advisory on macOS, whose hosted runners are too noisy to gate (see below).
   perf:
     name: perf / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -148,12 +149,18 @@ jobs:
       # report and checks it. Headless rendering needs a GPU device: Metal on macOS, Mesa lavapipe
       # on Linux (xvfb only for windowing init, as in the screenshot step).
       #
-      # Shared runners swing between jobs with no code change: on `macos-latest` p50 moved +20 to
-      # +30 % and p95/p99 up to +120 % (scroll-10k frame p95 4.4 -> 8.6 ms, logs-stream the same
-      # way). The tolerances are therefore +50 % on p50 and +150 % on the tails (the local default
-      # is +20 %, for a quiet machine compared with itself), and a failed check is repeated once
-      # with fresh processes. The absolute budgets (ADR 0013) are checked regardless (E01-F542).
+      # Hosted runners swing between jobs with no code change. Linux stays within a few percent on
+      # the frame metrics (sub-millisecond stage timings move by up to 0.5 ms), but `macos-latest`
+      # moved p50 +20 to +90 % and p95/p99 up to +280 % across nightlies of the same code, including
+      # the runner's own `state_db_open_ms` and `init_window_ms`. So the tolerances are +50 % on p50
+      # and +150 % on the tails (the local default is +20 %, for a quiet machine compared with
+      # itself), a failed check is repeated once with fresh processes, and on macOS the result is
+      # advisory: the step may fail, the report is still uploaded and a warning annotation says so
+      # (docs/PERFORMANCE.md, E01-F542). The absolute budgets (ADR 0013) are part of the check.
       - name: cargo xtask perf --all --check
+        id: perf
+        # A macOS regression is read from the annotation and the uploaded report, not from a red job.
+        continue-on-error: ${{ runner.os == 'macOS' }}
         shell: bash
         run: |
           perf_check() {
@@ -164,6 +171,9 @@ jobs:
             echo "::warning::perf check failed; repeating once to rule out runner noise"
             perf_check
           fi
+      - name: Perf check is advisory on macOS
+        if: ${{ runner.os == 'macOS' && steps.perf.outcome == 'failure' }}
+        run: echo "::warning title=macOS perf check failed (advisory)::Hosted macOS runners are too noisy to gate on; compare the uploaded perf-report-macOS artifact with docs/perf/baseline.json before trusting a regression."
       - name: Upload perf report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
