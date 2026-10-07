@@ -1,4 +1,4 @@
-//! `terminal::New`, `terminal::Split` and `terminal::Close`: registered on a real `CommandBus`
+//! `terminal::New`, `Split`, `Close`, `Reconnect` and `Restart`: registered on a real `CommandBus`
 //! with MCP tool stubs, turned into requests, and applied by `TerminalViews` in the shown
 //! workspace (a cluster's bottom dock, a split, the focused terminal). The keymap's actions send
 //! the same commands.
@@ -42,6 +42,8 @@ fn the_commands_are_reads_with_tool_stubs_that_become_requests() {
         CommandId::TERMINAL_NEW,
         CommandId::TERMINAL_SPLIT,
         CommandId::TERMINAL_CLOSE,
+        CommandId::TERMINAL_RECONNECT,
+        CommandId::TERMINAL_RESTART,
     ] {
         let meta = bus
             .commands()
@@ -61,6 +63,8 @@ fn the_commands_are_reads_with_tool_stubs_that_become_requests() {
         ),
         (Command::TerminalSplit, TerminalRequest::Split),
         (Command::TerminalClose, TerminalRequest::Close),
+        (Command::TerminalReconnect, TerminalRequest::Reconnect),
+        (Command::TerminalRestart, TerminalRequest::Restart),
     ] {
         block_on(bus.dispatch(command, DispatchContext::new(Initiator::Ui, "me")))
             .expect("dispatched");
@@ -285,4 +289,56 @@ fn the_shipped_keymaps_bind_the_terminal_commands(cx: &mut TestAppContext) {
             }
         });
     }
+}
+
+#[gpui::test]
+fn restart_starts_a_local_shell_and_reconnect_asks_the_bus_for_a_pod_session(
+    cx: &mut TestAppContext,
+) {
+    use oxikube_ports::ExitStatus;
+
+    let mut h = harness(cx);
+    let views = views(&mut h, Some(cluster()));
+    apply(&mut h, &views, TerminalRequest::New { cluster: None });
+    let shell = BackendDescriptor::local(Some(cluster())).in_namespace(Some("shop".into()));
+
+    // Running: nothing to restart.
+    apply(&mut h, &views, TerminalRequest::Restart);
+    assert_eq!(h.launches().len(), 1);
+
+    // The shell exits; Reconnect is not for a local shell, Restart is.
+    h.backend(0).exit(ExitStatus::with_code(1));
+    h.frame();
+    apply(&mut h, &views, TerminalRequest::Reconnect);
+    assert_eq!(h.launches().len(), 1, "a local shell does not reconnect");
+    apply(&mut h, &views, TerminalRequest::Restart);
+    assert_eq!(h.launches(), [shell.clone(), shell], "the same shell again");
+
+    // A pod terminal whose connection dropped: Reconnect asks for it again, Restart does not.
+    let pod = super::lifecycle::pod_shell();
+    let view = h.open(pod);
+    h.frame();
+    let second = h.launches().len() - 1;
+    h.backend(second)
+        .error(oxikube_domain::OxiError::network("reset"));
+    h.backend(second).exit(ExitStatus::default());
+    h.frame();
+    apply(&mut h, &views, TerminalRequest::Restart);
+    assert_eq!(
+        h.launches().len(),
+        second + 1,
+        "a pod session does not restart"
+    );
+    apply(&mut h, &views, TerminalRequest::Reconnect);
+    // A pod session starts only through its command, which the guard checks and audits: the
+    // terminal sent it and launched nothing itself.
+    assert_eq!(h.launches().len(), second + 1);
+    assert_eq!(
+        *h.recorder.0.borrow(),
+        [super::lifecycle::pod_shell_command()]
+    );
+    let disconnected = h
+        .vcx
+        .update(|_, cx| matches!(view.read(cx).lifecycle(), view::Lifecycle::Disconnected(_)));
+    assert!(disconnected, "the old tab keeps its screen");
 }

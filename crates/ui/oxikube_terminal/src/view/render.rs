@@ -1,14 +1,13 @@
 //! Drawing a [`TerminalView`]: the element over the running session, a line while the process
-//! starts or when it could not, and the exit line once it ended (the screen stays readable).
+//! starts, and above the screen the banner of a session that dropped, ended or could not start
+//! (the screen stays readable, dimmed when input no longer reaches the process).
 
 use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-    SharedString, Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    SharedString, Styled as _, Window, div, prelude::FluentBuilder as _,
 };
-use oxikube_ports::ExitStatus;
-use oxikube_ui::button::Button;
 use oxikube_ui::layout::v_flex;
-use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
+use oxikube_ui::{ActiveTokens as _, u};
 
 use super::TerminalView;
 use super::terminal_view::Phase;
@@ -43,48 +42,13 @@ impl TerminalView {
             .child(text)
             .into_any_element()
     }
-
-    /// The terminal that could not start: why, and a Retry that starts it again (a pod session
-    /// is asked for again through its command, so the read-only policy applies to the retry too).
-    fn failed(&self, reason: &str, cx: &mut Context<Self>) -> AnyElement {
-        let tokens = cx.tokens();
-        let what = if self.descriptor.is_local() {
-            "The terminal could not start".to_owned()
-        } else {
-            format!("Could not open a session in {}", self.title())
-        };
-        v_flex()
-            .debug_selector(|| "terminal-failed".into())
-            .size_full()
-            .gap(u(tokens.spacing.md))
-            .p(u(tokens.spacing.md))
-            .bg(tokens.colors.background)
-            .text_color(tokens.colors.text_muted)
-            .child(div().child(format!("{what}: {reason}")))
-            .child(
-                div().debug_selector(|| "terminal-retry".into()).child(
-                    Button::new("terminal-retry")
-                        .small()
-                        .label("Retry")
-                        .on_click(cx.listener(|this, _, _, cx| this.retry(cx))),
-                ),
-            )
-            .into_any_element()
-    }
-}
-
-/// The line under a terminal whose process ended.
-pub fn describe_exit(status: &ExitStatus) -> String {
-    match (&status.code, &status.signal) {
-        (Some(code), _) => format!("Process exited with code {code}"),
-        (None, Some(signal)) => format!("Process ended by signal {signal}"),
-        (None, None) => "Process ended".to_owned(),
-    }
 }
 
 impl Render for TerminalView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let running = self.terminal().is_some();
+        // A session that dropped or ended keeps its screen, dimmed: keystrokes go nowhere now.
+        let dimmed = running && !self.lifecycle.accepts_input();
         let body = match &self.phase {
             Phase::Running(state) => {
                 let mut element = TerminalElement::new(state, &self.element, &self.focus)
@@ -101,34 +65,36 @@ impl Render for TerminalView {
                 let text = format!("Starting {}…", self.title()).into();
                 self.message("terminal-starting", text, cx)
             }
-            Phase::Failed(reason) => self.failed(reason, cx),
+            // The banner above says why; the body is only the backdrop.
+            Phase::Failed(_) => self.message("terminal-failed", SharedString::default(), cx),
             Phase::Closed => div().into_any_element(),
         };
-        let exit = self.exit_status(cx).map(describe_exit);
+        let banner = self.banner().map(|banner| self.banner_strip(banner, cx));
         let tokens = cx.tokens();
-        div()
+        v_flex()
             .id("terminal-view")
-            .relative()
             .size_full()
             // The element tracks the focus handle itself; without it the body does, so the tab
             // takes focus while the process starts.
             .when(!running, |this| this.track_focus(&self.focus))
-            .child(body)
-            .when_some(exit, |this, line| {
-                this.child(
-                    div()
-                        .debug_selector(|| "terminal-exited".into())
-                        .absolute()
-                        .bottom_0()
-                        .left_0()
-                        .right_0()
-                        .px(u(tokens.spacing.md))
-                        .py(u(px(2.)))
-                        .bg(tokens.colors.surface)
-                        .text_color(tokens.colors.text_muted)
-                        .text_size(u(tokens.font.small))
-                        .child(line),
-                )
-            })
+            .children(banner)
+            .child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .child(body)
+                    .when(dimmed, |this| {
+                        // No listeners: the screen stays selectable and scrollable under it.
+                        this.child(
+                            div()
+                                .debug_selector(|| "terminal-dimmed".into())
+                                .absolute()
+                                .inset_0()
+                                .bg(tokens.colors.background.opacity(0.35)),
+                        )
+                    }),
+            )
     }
 }

@@ -1,0 +1,144 @@
+[
+  {
+    "kind": "text",
+    "text": "=== booting payments v2.3.1 ==="
+  },
+  {
+    "kind": "record",
+    "level": "Info",
+    "time": {
+      "instant": "2023-10-07T09:20:00.5Z",
+      "text": "1696670400.5",
+      "display": "09:20:00.500"
+    },
+    "message": "zap line after a banner",
+    "fields": {
+      "caller": "main.go:9"
+    },
+    "field_order": [
+      "caller"
+    ],
+    "summary": "caller=main.go:9"
+  },
+  {
+    "kind": "record",
+    "level": "Warn",
+    "time": null,
+    "message": "logrus line with no time",
+    "fields": {
+      "animal": "walrus"
+    },
+    "field_order": [
+      "animal"
+    ],
+    "summary": "animal=walrus"
+  },
+  {
+    "kind": "record",
+    "level": "Info",
+    "time": {
+      "instant": "2023-10-07T09:20:01Z",
+      "text": "1696670401000",
+      "display": "09:20:01.000"
+    },
+    "message": "pino line",
+    "fields": {
+      "pid": 1
+    },
+    "field_order": [
+      "pid"
+    ],
+    "summary": "pid=1"
+  },
+  {
+    "kind": "record",
+    "level": "Error",
+    "time": {
+      "instant": "2023-10-07T09:20:02Z",
+      "text": "2023-10-07T09:20:02.000Z",
+      "display": "09:20:02.000"
+    },
+    "message": "bunyan line",
+    "fields": {
+      "name": "api",
+      "v": 0
+    },
+    "field_order": [
+      "name",
+      "v"
+    ],
+    "summary": "name=api v=0"
+  },
+  {
+    "kind": "text",
+    "text": "{\"level\":\"info\",\"msg\":\"cut off mid-obj"
+  },
+  {
+    "kind": "text",
+    "text": "{\"level\":\"info\",\"msg\":\"text after the object\"} and then some"
+  },
+  {
+    "kind": "text",
+    "text": "[{\"level\":\"info\",\"msg\":\"an array is not a record\"}]"
+  },
+  {
+    "kind": "text",
+    "text": "42"
+  },
+  {
+    "kind": "record",
+    "level": "Unknown",
+    "time": null,
+    "message": null,
+    "fields": {},
+    "field_order": [],
+    "summary": ""
+  },
+  {
+    "kind": "record",
+    "level": "Unknown",
+    "time": null,
+    "message": "no level, no time",
+    "fields": {
+      "detail": {
+        "nested": [
+          1,
+          2,
+          {
+            "deep": true
+          }
+        ]
+      }
+    },
+    "field_order": [
+      "detail"
+    ],
+    "summary": "detail={\"nested\":[1,2,{\"deep\":true}]}"
+  },
+  {
+    "kind": "record",
+    "level": "Unknown",
+    "time": null,
+    "message": "12345",
+    "fields": {},
+    "field_order": [],
+    "summary": ""
+  },
+  {
+    "kind": "text",
+    "text": "java.lang.IllegalStateException: boom"
+  },
+  {
+    "kind": "text",
+    "text": "\tat com.example.Main.run(Main.java:42)"
+  },
+  {
+    "kind": "record",
+    "level": "Error",
+    "time": null,
+    "message": "indented json still counts",
+    "fields": {},
+    "field_order": [],
+    "summary": ""
+  }
+]

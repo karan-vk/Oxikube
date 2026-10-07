@@ -99,6 +99,11 @@ path = "tests/no_alloc.rs"
 name = "pty_keys"
 path = "tests/pty_keys.rs"
 
+# 50 open/close cycles of a real PTY leave no task and no descriptor (Unix; E09-S12).
+[[test]]
+name = "pty_leak"
+path = "tests/pty_leak.rs"
+
 [features]
 default = []
 # Headless GPU screenshots of the element (`tests/screenshot.rs`, harness = false so it runs on the

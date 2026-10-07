@@ -150,7 +150,7 @@ impl BackendDescriptor {
     /// command, `pod::Exec`, `pod::Attach`); `None` for a local shell.
     ///
     /// A pod session is only ever started by its command, so the guard applies the read-only
-    /// policy and the audit record: a split, a retry or a reopen sends this instead of starting
+    /// policy and the audit record: a split, a reconnect or a reopen sends this instead of starting
     /// another process itself.
     pub fn pod_command(&self) -> Option<Command> {
         match self {

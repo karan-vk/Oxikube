@@ -50,7 +50,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   exchange (`Delta`, `Table`, `ToolDef`, …). One module per port; each names its adapter.
 - `oxikube_testkit` — a `Fake*` for every port, fixtures and builders, `TestPorts` (the seeded fakes
   `AppState::test` is built from), and the GPUI test harness (`gpui_test::TestApp` / `TestWindow`,
-  `ScreenshotApp` with golden compare; `docs/testing-gpui.md`).
+  `ScreenshotApp` with golden compare; `docs/testing-gpui.md`; the logs test matrix is `docs/testing-logs.md`).
 - `oxikube_app` — services: `ClusterSessionManager`, `ResourceStore`, `CommandBus`,
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
   `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `sidebar` (E06-S10):
@@ -454,9 +454,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   (run after the guard's exec policy) queue `TerminalRequest::Pod(BackendDescriptor::Exec | Attach)`; `TerminalViews`
   opens it in the bottom dock of the pod's cluster tab; `ClusterLauncher` (the app's launcher: `LocalLauncher` plus
   `ExecService`) connects it off the UI thread with `spawn_kube` (abort on drop), the tab showing "Starting web-0/app…"
-  in its first frame. A pod session is only ever started by its command: a split, a failed tab's Retry and the layout
-  restore never start one themselves (a split and Retry send the command again so the guard checks and audits it; a pod
+  in its first frame. A pod session is only ever started by its command: a split, Reconnect and the layout restore
+  never start one themselves (a split and Reconnect send the command again so the guard checks and audits it; a pod
   terminal is not saved with the layout and does not clone on split).
+  Module `view::lifecycle` (E09-S12): `Lifecycle` (Connecting, Running, Disconnected, Exited,
+  Failed, Closed) is a small enum fed by the launch result and the session's events, so the banner
+  logic runs without a window; `Failure` maps an adapter error kind to a distinct headline and hint
+  (expired login, forbidden, pod gone, container stopped, connection lost, ...); `Banner` is the
+  text and buttons shown above the kept, dimmed screen (a pod's Reconnect, a local shell's Restart
+  with its exit code, Close tab first after code 0). `terminal::Restart` re-launches a local
+  shell through its launcher; `terminal::Reconnect` on a pod terminal sends the pod command again (the guard re-checks
+  read-only mode and audits; `ExecService` does neither), the new terminal opening in the dock; a dropped session's
+  input is closed (`TerminalState::close_input`).
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's

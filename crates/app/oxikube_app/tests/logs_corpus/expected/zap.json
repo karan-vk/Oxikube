@@ -1,0 +1,122 @@
+[
+  {
+    "kind": "record",
+    "level": "Info",
+    "time": {
+      "instant": "2023-10-07T09:20:00.123456Z",
+      "text": "1696670400.123456",
+      "display": "09:20:00.123"
+    },
+    "message": "starting server",
+    "fields": {
+      "caller": "server/main.go:42",
+      "addr": ":8080",
+      "version": "1.4.2"
+    },
+    "field_order": [
+      "caller",
+      "addr",
+      "version"
+    ],
+    "summary": "caller=server/main.go:42 addr=:8080 version=1.4.2"
+  },
+  {
+    "kind": "record",
+    "level": "Debug",
+    "time": {
+      "instant": "2023-10-07T09:20:00.5Z",
+      "text": "1696670400.5",
+      "display": "09:20:00.500"
+    },
+    "message": "cache warmed",
+    "fields": {
+      "caller": "cache/lru.go:31",
+      "entries": 1024
+    },
+    "field_order": [
+      "caller",
+      "entries"
+    ],
+    "summary": "caller=cache/lru.go:31 entries=1024"
+  },
+  {
+    "kind": "record",
+    "level": "Warn",
+    "time": {
+      "instant": "2023-10-07T09:20:01.25Z",
+      "text": "1696670401.25",
+      "display": "09:20:01.250"
+    },
+    "message": "slow request",
+    "fields": {
+      "caller": "server/handler.go:88",
+      "path": "/api/users",
+      "duration": 1.2
+    },
+    "field_order": [
+      "caller",
+      "path",
+      "duration"
+    ],
+    "summary": "caller=server/handler.go:88 path=/api/users duration=1.2"
+  },
+  {
+    "kind": "record",
+    "level": "Error",
+    "time": {
+      "instant": "2023-10-07T09:20:02.000789Z",
+      "text": "1696670402.000789",
+      "display": "09:20:02.001"
+    },
+    "message": "connection refused",
+    "fields": {
+      "caller": "db/pool.go:120",
+      "error": "dial tcp 10.0.0.5:5432: connect: connection refused",
+      "stacktrace": "main.connect\n\t/app/db/pool.go:120\nmain.main\n\t/app/main.go:30"
+    },
+    "field_order": [
+      "caller",
+      "error",
+      "stacktrace"
+    ],
+    "summary": "caller=db/pool.go:120 error=\"dial tcp 10.0.0.5:5432: connect: connection refused\" stacktrace=\"main.connect\\n\\t/app/db/pool.go:120\\nmain.main\\n\\t/app/main.go:30\""
+  },
+  {
+    "kind": "record",
+    "level": "Fatal",
+    "time": {
+      "instant": "2023-10-07T09:20:03Z",
+      "text": "1696670403",
+      "display": "09:20:03.000"
+    },
+    "message": "invariant violated",
+    "fields": {
+      "caller": "worker/job.go:7"
+    },
+    "field_order": [
+      "caller"
+    ],
+    "summary": "caller=worker/job.go:7"
+  },
+  {
+    "kind": "record",
+    "level": "Info",
+    "time": {
+      "instant": "2023-10-07T09:00:04.456Z",
+      "text": "2023-10-07T18:00:04.456+0900",
+      "display": "09:00:04.456"
+    },
+    "message": "Reconciling",
+    "fields": {
+      "logger": "controller",
+      "namespace": "default",
+      "name": "web"
+    },
+    "field_order": [
+      "logger",
+      "namespace",
+      "name"
+    ],
+    "summary": "logger=controller namespace=default name=web"
+  }
+]

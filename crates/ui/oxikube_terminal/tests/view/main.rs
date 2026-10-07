@@ -7,17 +7,24 @@
 mod commands;
 mod dock;
 mod item;
+mod leak;
+mod lifecycle;
 mod persist;
 mod pod;
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+use async_trait::async_trait;
+use futures::stream::BoxStream;
 use gpui::{AppContext as _, Entity, Task, TestAppContext, VisualTestContext};
-use oxikube_domain::OxiError;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName};
-use oxikube_ports::TerminalSize;
+use oxikube_domain::{OxiError, OxiResult};
+use oxikube_ports::{BackendEvent, TerminalBackend, TerminalSize};
 use oxikube_runtime::FRAME_INTERVAL;
 use oxikube_terminal::view::{
     BackendDescriptor, Launch, TerminalLauncher, TerminalServices, TerminalView,
@@ -34,6 +41,50 @@ struct FakeLauncher {
     mark: Option<ClusterMark>,
     /// Never finish starting: the tab stays in its "Starting" state.
     hang: bool,
+    /// Counts the backends that are alive (started and not dropped yet), when set.
+    alive: Option<Arc<AtomicUsize>>,
+}
+
+/// A backend that counts itself while it is alive: what is left of a closed terminal's process.
+struct Probed {
+    inner: FakeTerminalBackend,
+    alive: Arc<AtomicUsize>,
+}
+
+impl Probed {
+    fn new(inner: FakeTerminalBackend, alive: Arc<AtomicUsize>) -> Self {
+        alive.fetch_add(1, Ordering::SeqCst);
+        Self { inner, alive }
+    }
+}
+
+impl Drop for Probed {
+    fn drop(&mut self) {
+        self.alive.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+#[async_trait]
+impl TerminalBackend for Probed {
+    async fn write(&self, bytes: &[u8]) -> OxiResult<()> {
+        self.inner.write(bytes).await
+    }
+
+    async fn resize(&self, size: TerminalSize) -> OxiResult<()> {
+        self.inner.resize(size).await
+    }
+
+    fn output_stream(&self) -> BoxStream<'static, BackendEvent> {
+        self.inner.output_stream()
+    }
+
+    async fn kill(&self) -> OxiResult<()> {
+        self.inner.kill().await
+    }
+
+    fn working_directory(&self) -> Option<PathBuf> {
+        self.inner.working_directory()
+    }
 }
 
 impl TerminalLauncher for FakeLauncher {
@@ -52,7 +103,10 @@ impl TerminalLauncher for FakeLauncher {
         }
         let backend = FakeTerminalBackend::silent();
         self.backends.borrow_mut().push(backend.clone());
-        Task::ready(Ok(Box::new(backend)))
+        match &self.alive {
+            Some(alive) => Task::ready(Ok(Box::new(Probed::new(backend, alive.clone())))),
+            None => Task::ready(Ok(Box::new(backend))),
+        }
     }
 
     fn cluster_mark(&self, _: &ClusterId, _: &gpui::App) -> Option<ClusterMark> {

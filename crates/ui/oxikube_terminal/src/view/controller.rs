@@ -12,6 +12,8 @@
 //! - **Pod** (`pod::Shell`, `pod::Attach`, `pod::Exec`, E09-S08) opens a terminal in a pod's
 //!   container in the bottom dock of the pod's cluster tab, which it shows; the terminal starts in
 //!   its "Starting" state at once and connects off the UI thread.
+//! - **Reconnect** and **Restart** (E09-S12) start a new session in the same terminal (a pod's, a
+//!   local shell's): the focused one, else the active pane's.
 //!
 //! Each request waits one turn first, so a palette that just closed has handed the focus back to
 //! the terminal it was opened over.
@@ -82,6 +84,8 @@ impl TerminalViews {
             TerminalRequest::Split => this.split(window, cx),
             TerminalRequest::Close => this.close_focused(window, cx),
             TerminalRequest::Pod(descriptor) => this.open_pod(descriptor, window, cx),
+            TerminalRequest::Reconnect => this.recover(true, window, cx),
+            TerminalRequest::Restart => this.recover(false, window, cx),
         });
     }
 
@@ -197,15 +201,29 @@ impl TerminalViews {
         let Some((_, workspace)) = self.shown_workspace(cx) else {
             return;
         };
-        let target = focused_terminal(&workspace, window, cx)
-            .map(|view| view.entity_id())
-            .or_else(|| {
-                let item = workspace.read(cx).active_item(cx)?;
-                item.downcast::<TerminalView>().map(|view| view.entity_id())
-            });
-        if let Some(target) = target {
-            workspace.update(cx, |ws, cx| ws.close_item(target, window, cx));
+        if let Some(target) = target_terminal(&workspace, window, cx) {
+            let id = target.entity_id();
+            workspace.update(cx, |ws, cx| ws.close_item(id, window, cx));
         }
+    }
+
+    /// Starts a new session in the focused (else the active pane's) terminal: a pod's when
+    /// `reconnect`, a local shell's otherwise. Does nothing for a terminal that is not in the
+    /// matching kind and state (see [`TerminalView::reconnect`]).
+    fn recover(&mut self, reconnect: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((_, workspace)) = self.shown_workspace(cx) else {
+            return;
+        };
+        let Some(target) = target_terminal(&workspace, window, cx) else {
+            return;
+        };
+        target.update(cx, |view, cx| {
+            if reconnect {
+                view.reconnect(cx);
+            } else {
+                view.restart(cx);
+            }
+        });
     }
 
     /// The workspace on screen: the shown cluster's, else the window's.
@@ -222,6 +240,18 @@ impl TerminalViews {
         let services = self.deps.services.clone();
         cx.new(|cx| TerminalView::new(descriptor, services, cx))
     }
+}
+
+/// The terminal a command acts on: the focused one, else the active pane's when it is a terminal.
+fn target_terminal(
+    workspace: &Entity<Workspace>,
+    window: &Window,
+    cx: &App,
+) -> Option<Entity<TerminalView>> {
+    focused_terminal(workspace, window, cx).or_else(|| {
+        let item = workspace.read(cx).active_item(cx)?;
+        item.downcast::<TerminalView>()
+    })
 }
 
 /// The terminal of `workspace` that has the focus.

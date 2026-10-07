@@ -1,6 +1,6 @@
 //! Pod terminals (E09-S08): `pod::Shell`, `pod::Attach` and `pod::Exec` on a real `CommandBus`
 //! (guarded, audited, with unsafe tool stubs), applied as terminal tabs in the cluster's bottom
-//! dock, and never restored, cloned or retried around the bus.
+//! dock, and never restored, cloned, split or reconnected around the bus.
 
 use std::sync::Arc;
 
@@ -290,7 +290,7 @@ fn the_tab_shows_connecting_in_its_first_frame_while_the_session_opens(cx: &mut 
 }
 
 #[gpui::test]
-fn a_failed_pod_start_says_why_and_offers_retry_through_the_command(cx: &mut TestAppContext) {
+fn a_failed_pod_start_says_why_and_offers_reconnect_through_the_command(cx: &mut TestAppContext) {
     let mut h = harness_with(
         cx,
         FakeLauncher {
@@ -302,15 +302,18 @@ fn a_failed_pod_start_says_why_and_offers_retry_through_the_command(cx: &mut Tes
     );
     let view = h.open(shell_in(Some("app")));
     assert!(h.drawn("terminal-failed"), "the failure shows");
-    assert!(h.drawn("terminal-retry"), "with a Retry");
+    assert!(h.drawn("terminal-banner-Reconnect"), "with a Reconnect");
     let failure = view
         .read_with(&h.vcx, |v, _| v.failure().cloned())
         .expect("failed");
     assert!(failure.contains("debug container"), "{failure}");
 
-    // Retry sends the command again (the guard applies the policy and audits it) and closes the
-    // failed tab; it does not start a process by itself.
-    h.vcx.update(|_, cx| view.update(cx, |v, cx| v.retry(cx)));
+    // Reconnect sends the command again (the guard applies the policy and audits it) and closes
+    // the failed tab; it does not start a process by itself.
+    assert!(
+        h.vcx
+            .update(|_, cx| view.update(cx, |v, cx| v.reconnect(cx)))
+    );
     h.frame();
     assert_eq!(
         *h.recorder.0.borrow(),
@@ -327,26 +330,36 @@ fn a_failed_pod_start_says_why_and_offers_retry_through_the_command(cx: &mut Tes
 }
 
 #[gpui::test]
-fn a_failed_local_shell_retries_in_place(cx: &mut TestAppContext) {
-    let mut h = harness_with(
-        cx,
-        FakeLauncher {
-            fail_next: std::cell::RefCell::new(Some(OxiError::internal("no pty"))),
-            ..FakeLauncher::default()
-        },
-    );
-    let view = h.open(BackendDescriptor::local(None));
-    assert!(h.drawn("terminal-failed"));
-    h.vcx.update(|_, cx| view.update(cx, |v, cx| v.retry(cx)));
+fn a_dropped_pod_session_reconnects_only_through_the_guarded_command(cx: &mut TestAppContext) {
+    let mut h = harness(cx);
+    let views = pod_views(&mut h);
+    super::commands::apply(&mut h, &views, TerminalRequest::Pod(shell_in(Some("app"))));
+    let view = super::commands::terminals(&mut h)
+        .pop()
+        .expect("a terminal");
     h.frame();
-    assert_eq!(h.launches().len(), 2, "started again");
-    assert!(
-        view.read_with(&h.vcx, |v, _| v.terminal().is_some()),
-        "and running"
+    h.backend(0).error(OxiError::network("connection reset"));
+    h.backend(0).exit(oxikube_ports::ExitStatus::default());
+    h.frame();
+
+    // The `terminal::Reconnect` request reaches the focused terminal, which asks the bus.
+    super::commands::apply(&mut h, &views, TerminalRequest::Reconnect);
+    assert_eq!(
+        *h.recorder.0.borrow(),
+        [Command::PodShell {
+            target: pod(),
+            container: Some("app".into())
+        }],
+        "the pod command, so read-only mode and the audit apply to the new session"
+    );
+    assert_eq!(
+        h.launches().len(),
+        1,
+        "the terminal launched nothing itself"
     );
     assert!(
-        h.recorder.0.borrow().is_empty(),
-        "a local shell needs no command"
+        super::commands::terminals(&mut h).contains(&view),
+        "a dropped tab stays: when the guard refuses, its screen is not lost"
     );
 }
 
