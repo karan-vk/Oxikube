@@ -199,7 +199,7 @@ impl fmt::Display for Row {
     }
 }
 
-/// Result of [`compare`].
+/// Result of `compare_with_tails`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Comparison {
     pub rows: Vec<Row>,
@@ -241,7 +241,7 @@ pub fn compare(
     compare_with_tails(report, baseline, tolerance, tolerance, floors)
 }
 
-/// [`compare`] with a separate tolerance for the tail statistics (p95 and p99). Tails are what a
+/// `compare` with a separate tolerance for the tail statistics (p95 and p99). Tails are what a
 /// shared CI runner's noisy neighbours move first (a frame p95 doubled between two runs of the
 /// same code), so a hosted-runner gate can hold p50 tighter than the tails.
 pub fn compare_with_tails(
