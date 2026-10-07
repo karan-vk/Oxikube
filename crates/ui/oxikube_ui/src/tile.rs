@@ -129,7 +129,7 @@ impl RenderOnce for StatTile {
             .bg(colors.surface)
             .child(
                 div()
-                    .text_size(tokens.font.small)
+                    .text_size(u(tokens.font.small))
                     .text_color(colors.text_muted)
                     .truncate()
                     .child(self.title),
@@ -145,7 +145,7 @@ impl RenderOnce for StatTile {
             .child(
                 div()
                     .h(u(px(16.)))
-                    .text_size(tokens.font.small)
+                    .text_size(u(tokens.font.small))
                     .text_color(colors.text_muted)
                     .truncate()
                     .child(self.caption),

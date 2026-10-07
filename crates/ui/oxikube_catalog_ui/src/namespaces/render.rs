@@ -98,7 +98,7 @@ impl NamespaceSelector {
             })
             .bg(colors.element)
             .text_color(colors.text)
-            .text_size(tokens.font.body)
+            .text_size(u(tokens.font.body))
             .cursor_pointer()
             .hover(|style| style.bg(colors.element_hover))
             .child(
@@ -142,7 +142,7 @@ impl NamespaceSelector {
             .p(u(tokens.spacing.sm))
             .bg(colors.elevated_surface)
             .text_color(colors.text)
-            .text_size(tokens.font.body)
+            .text_size(u(tokens.font.body))
             .border_1()
             .border_color(colors.border)
             .rounded(u(tokens.radius.lg))
@@ -200,7 +200,7 @@ impl NamespaceSelector {
             .id("namespace-notice")
             .debug_selector(|| "namespace-notice".to_owned())
             .px(u(tokens.spacing.sm))
-            .text_size(tokens.font.small)
+            .text_size(u(tokens.font.small))
             .text_color(colour)
             .child(text)
     }
@@ -232,13 +232,13 @@ impl NamespaceSelector {
                 .px(u(tokens.spacing.sm))
                 .rounded(u(tokens.radius.sm))
                 .bg(colors.element)
-                .text_size(tokens.font.small)
+                .text_size(u(tokens.font.small))
                 .text_color(colors.text_muted)
                 .child(slot.to_string())
         };
         match row {
             Row::Header(title) => base
-                .text_size(tokens.font.small)
+                .text_size(u(tokens.font.small))
                 .text_color(colors.text_muted)
                 .child(title.clone())
                 .into_any_element(),

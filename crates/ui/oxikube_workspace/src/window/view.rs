@@ -9,7 +9,7 @@ use gpui::{
     ParentElement as _, Render, Styled as _, Subscription, Window, div,
     prelude::FluentBuilder as _, px,
 };
-use oxikube_ui::{ActiveTokens as _, layout::v_flex, title_bar::TitleBar};
+use oxikube_ui::{ActiveTokens as _, layout::v_flex, title_bar::TitleBar, u};
 
 use super::options::WINDOW_TITLE;
 use crate::persistence::{LayoutPersistence, LayoutStore};
@@ -96,7 +96,7 @@ impl Render for MainView {
                         div()
                             .id("window-title")
                             .debug_selector(|| "window-title".to_owned())
-                            .text_sm()
+                            .text_size(u(px(14.)))
                             .text_color(colors.text_muted)
                             .px(px(8.))
                             .child(WINDOW_TITLE),
@@ -106,7 +106,7 @@ impl Render for MainView {
                             div()
                                 .id("layout-restoring")
                                 .debug_selector(|| "layout-restoring".to_owned())
-                                .text_xs()
+                                .text_size(u(px(12.)))
                                 .text_color(colors.text_muted)
                                 .px(px(12.))
                                 .child(RESTORING_LABEL),
