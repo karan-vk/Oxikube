@@ -24,6 +24,9 @@ pub(super) struct Reading {
     pub container: Option<String>,
     /// The previous container instance (so only restarted containers have a log).
     pub previous: bool,
+    /// A read that does not follow: `logs.max_streams` bounds the containers read in all, not
+    /// only the ones read at once (a stream that ended frees no slot for a skipped pod).
+    pub finite: bool,
 }
 
 /// See the [module docs](self).
@@ -139,8 +142,8 @@ impl Fleet {
         }
     }
 
-    /// Opens a stream for every streamable container that has none, up to `cap` live streams,
-    /// pods in name order. `start` spawns the stream's task and returns its guard. Publishes the
+    /// Opens a stream for every streamable container that has none, up to `cap` live streams
+    /// (up to `cap` streams in all for a finite read), pods in name order. `start` spawns the stream's task and returns its guard. Publishes the
     /// number of pods left out by the cap. Returns the ids of the streams opened.
     pub fn reconcile(
         &mut self,
@@ -149,7 +152,11 @@ impl Fleet {
         mut start: impl FnMut(SourceId, &PodState, &Arc<str>) -> TaskGuard,
     ) -> Vec<SourceId> {
         let mut opened = Vec::new();
-        let mut live = self.live();
+        let mut live = if self.reading.finite {
+            self.streams.len()
+        } else {
+            self.live()
+        };
         let mut skipped: HashSet<&str> = HashSet::new();
         for pod in self.pods.values() {
             for container in pod.containers.iter().filter(|c| c.streamable) {
@@ -241,6 +248,7 @@ mod tests {
         Fleet::new(Reading {
             container: None,
             previous: false,
+            finite: false,
         })
     }
 
@@ -280,6 +288,32 @@ mod tests {
         assert_eq!(opened, [2]);
         assert_eq!(view.skipped_pods(), 0);
         assert_eq!(view.sources().len(), 3);
+    }
+
+    #[test]
+    fn a_finite_read_opens_at_most_the_cap_in_all() {
+        let agg = Arc::new(AggShared::new("deployment/web".into()));
+        let mut fleet = Fleet::new(Reading {
+            container: None,
+            previous: false,
+            finite: true,
+        });
+        fleet.apply(
+            batch(vec![Delta::Restarted(vec![
+                pod("web-1", "u1", true),
+                pod("web-2", "u2", true),
+                pod("web-3", "u3", true),
+            ])]),
+            &agg,
+        );
+        assert_eq!(fleet.reconcile(2, &agg, |_, _, _| guard()), [0, 1]);
+        fleet.stream_ended(0, SourceState::Ended, &agg);
+        assert!(
+            fleet.reconcile(2, &agg, |_, _, _| guard()).is_empty(),
+            "an ended stream does not free a slot"
+        );
+        assert_eq!(AggregateView::new(agg.clone()).skipped_pods(), 1);
+        assert_eq!(fleet.reconcile(3, &agg, |_, _, _| guard()), [2]);
     }
 
     #[test]

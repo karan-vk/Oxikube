@@ -73,6 +73,8 @@ impl CommandId {
     pub const LOGS_COPY: CommandId = CommandId::new("logs::Copy");
     /// `logs::Mark`: mark or unmark the focused line of a log view.
     pub const LOGS_MARK: CommandId = CommandId::new("logs::Mark");
+    /// `logs::SendToAgent`: queue the selected lines of a log view as context for the hosted agent.
+    pub const LOGS_SEND_TO_AGENT: CommandId = CommandId::new("logs::SendToAgent");
     /// `logs::Save`: save a log view's lines to a file the user picks.
     pub const LOGS_SAVE: CommandId = CommandId::new("logs::Save");
     /// `logs::SelectContainer`: show another container of a log view's pod (reopens the stream).
@@ -368,6 +370,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Logs: Select Container",
         CommandScope::Selection,
         Capabilities::LOGS,
+    ),
+    // Queues local context for the agent panel; the lines are read from the view's own buffer.
+    CommandMeta::read(
+        CommandId::LOGS_SEND_TO_AGENT,
+        "Logs: Send to Agent",
+        CommandScope::Selection,
+        NONE,
     ),
     CommandMeta::read(
         CommandId::LOGS_SET_RANGE,

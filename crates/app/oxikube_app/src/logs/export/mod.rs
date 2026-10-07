@@ -18,7 +18,7 @@
 mod format;
 mod stream;
 
-pub use format::{ExportFormat, timestamp, truncation_note};
+pub use format::{ExportFormat, timestamp, truncation_note, utc_millis};
 pub use stream::{
     CHUNK_BYTES, CopiedText, ExportCounters, ExportSpec, ExportSummary, LineFilter, chunks,
     copy_text, save,

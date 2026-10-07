@@ -145,6 +145,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "logs::Clear" => Command::LogsClear { target: target() },
         "logs::Copy" => Command::LogsCopy { target: target() },
         "logs::Mark" => Command::LogsMark { target: target() },
+        "logs::SendToAgent" => Command::LogsSendToAgent { target: target() },
         "logs::Save" => Command::LogsSave {
             target: target(),
             scope: oxikube_domain::log::LogSaveScope::All,

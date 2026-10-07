@@ -66,6 +66,9 @@ actions!(
         ToggleFilterMode,
         /// Close the search bar and clear the search (`escape`, `logs::CloseSearch`).
         CloseSearch,
+        /// Queue the selected lines (else the lines on screen) as context for the hosted agent
+        /// (`a`, `logs::SendToAgent`).
+        SendToAgent,
         /// Empty the local buffer and the view; the stream goes on (`shift-c`, `logs::Clear`).
         Clear,
         /// Save everything the buffer holds to a file (`ctrl-s`, `logs::Save` with scope `all`).

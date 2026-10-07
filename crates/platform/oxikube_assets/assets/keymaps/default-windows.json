@@ -114,7 +114,8 @@
     // s autoscroll, w wrap, t timestamps, j JSON mode (E08-S05), p previous container, f fullscreen,
     // m mark, c copy (the selected lines, else the lines on screen), shift-c clear, ctrl-s save the
     // whole buffer to a file, ctrl-shift-s save the lines on screen, escape drops the selection
-    // (E08-S06). Bare keys stay off while a text field inside the view has the focus. Rebind in
+    // (E08-S06), a send the same lines to the agent (E08-S09). Bare keys stay off while a text field
+    // inside the view has the focus. Rebind in
     // keymap.json, e.g. { "context": "LogView && !Editing", "bindings": { "w": null, "x": "log_view::ToggleWrap" } }.
     "context": "LogView && !Editing",
     "bindings": {
@@ -133,6 +134,7 @@
       "f": "log_view::ToggleFullscreen",
       "m": "log_view::Mark",
       "c": "log_view::Copy",
+      "a": "log_view::SendToAgent",
       "shift-c": "log_view::Clear",
       "ctrl-s": "log_view::SaveAll",
       "ctrl-shift-s": "log_view::SaveVisible",

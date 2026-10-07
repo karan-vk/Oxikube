@@ -122,7 +122,8 @@ impl LogService {
     /// ignored: the spec names the container; `timestamps` is always on, the merge needs it).
     ///
     /// The merged buffer is bounded by `logs.buffer_lines` like any session's, and at most
-    /// `logs.max_streams` containers are read at once. See [`AggregateSession`].
+    /// `logs.max_streams` containers are read at once (a session that does not follow reads at
+    /// most that many in all: a stream that ends frees no slot). See [`AggregateSession`].
     pub fn open_aggregate(
         &self,
         ports: AggregatePorts,
@@ -181,6 +182,11 @@ impl LogService {
         };
         let task = spawn_guarded(&self.runtime.spawner, coordinator.run());
         AggregateSession::new(LogSession::new(shared, task), AggregateView::new(agg))
+    }
+
+    /// The clock the service's tasks and deadlines run on.
+    pub(crate) fn clock(&self) -> Arc<dyn oxikube_ports::ClockPort> {
+        self.runtime.clock.clone()
     }
 
     /// Streams an aggregate reads at once (`logs.max_streams`).

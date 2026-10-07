@@ -190,6 +190,32 @@ crate's `README.md` for its allowed dependencies. Highlights:
   (`SourceInfo`), what changed in the pod set (`PodEvent` `Added` / `Ended`, the hook E08-S07 follows replacements
   from; the first list is the baseline), the pods the cap left out, and which pods and containers the user switched off
   (`HiddenSources`; they keep streaming, the viewer filters).
+  Module `logs::excerpt` (E08-S09): `LogService::read_excerpt(ports, &ExcerptRequest)` is the bounded, non-following
+  read behind the agent hooks: it opens a session (or an aggregate for a workload or selector) with `follow` off,
+  waits for it to end (20 s at most on the service's clock), picks the newest `tail` (1 to 2 000, default 200) lines
+  the `LogFilter` accepts (a `grep` searches the newest 10 000 lines of each container), writes them as
+  `timestamp pod/container text` within 256 KiB with the secrets masked by `oxikube_domain::redact` (applied to the
+  joined text, so a PEM block spanning lines is caught too; best effort for free text), and returns a `LogExcerpt`
+  whose `notes()` say what was left out (tail, size, search window, timeout, failed streams, pods over
+  `logs.max_streams`). `LogClusters` names the cluster's `AggregatePorts` (`ClusterSessionManager` implements it:
+  the call's cluster, else the only connected one).
+- `oxikube_app::context` (E08-S09) — `ContextRegistry` routes an `@`-mention to the `ContextProviderPort` that owns its
+  prefix and keeps one resolution within `ContextScope::max_total_bytes`. `LogContextProvider` owns `@logs`:
+  `@logs/<ns>/<pod>[/<container>]`, `@logs/<kind>/<ns>/<name>` (a workload's pods merged), `@logs/selector/<ns>/<labels>`
+  and the options `--since`, `--tail`, `--grep`, `--container` as path segments (a mention has no whitespace); the block
+  is a `# key: value` header (cluster, namespace, source, container, time span, line count), `# note:` lines and the
+  lines. `selection_context` builds the same block from lines the viewer selected ("Send to agent"). `PendingContext`
+  is the small queue between the viewer and the agent panel: items wait (32 at most, the oldest dropped and counted)
+  until a `ContextConsumer` attaches, which receives them in order, then every later send; nothing is persisted.
+- `oxikube_app::tools` (E08-S09) — `ToolRegistry`: `register` (validates the `ToolDef`, refuses a mutating tool, which
+  belongs behind `MutationGuard` in E26, and duplicates), `defs` / `visible(capabilities)` (a tool's `needs`), and
+  `invoke(name, args, &ToolContext)` which checks the arguments against the tool's input schema (`validate_args`, the
+  flat subset the tool schemas use) before the tool runs. `tools::k8s::get_logs` is `k8s.get_logs`: `pod` or `selector`
+  (a label selector or `deployment/api`), `namespace`, `container`, `since`, `tail`, `grep`; read-only (no risk, needs
+  the logs capability, idempotent), output as text plus structured counts; both or neither of `pod` / `selector`, a
+  `tail` over the cap and an unparsable `since` or `grep` are a failed call (`Err`), a missing pod or a denied
+  `pods/log` is a tool error the model sees. The name is the acceptance's `get_logs` in the `k8s.` namespace
+  `ToolName` requires (E26-S04's `k8s.logs` can alias it).
 - `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to
   5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect` (JSON mode's starting value, E08-S05); defaults in
   `default.json`, schema generated, per-cluster overrides under `clusters.<id>.logs`, out-of-range values clamped
@@ -214,7 +240,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   chips admit, and any filter installed with `set_line_filter` (`LogView::active_filter`); structured lines are copied as
   their raw JSON text. `view::chrome` draws the gutter bar and selection colour on both plain and JSON rows.
   Module `commands`: `pod::ViewLogs` and `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`,
-  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (and, E08-S05, `ToggleJsonMode`, `ToggleLevel`, `ToggleLine`, `CollapseLine`; E08-S06, `Mark`, `Copy`, `Clear`, `Save`) on the bus (reads, tool stubs), queued to the
+  `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen` (and, E08-S05, `ToggleJsonMode`, `ToggleLevel`, `ToggleLine`, `CollapseLine`; E08-S06, `Mark`, `Copy`, `Clear`, `Save`; E08-S09, `SendToAgent`) on the bus (reads, tool stubs), queued to the
   window's `LogViews`, which opens a view in the pod's cluster tab (one per pod, through a `LogHost`) and applies
   the changes. `row_actions`: "View Logs" on pod rows of the resource tables, and on Deployment, StatefulSet,
   DaemonSet, ReplicaSet, Job and Service rows (`workload::ViewLogs`).
@@ -481,7 +507,9 @@ weaken `cargo xtask lint-deps`.
   sources (settings list, hot reload, the sources screen behind `view::Open`), session restore and the app's
   one `LogService` (`mount::logs`, stored with `AppState::set_log_service`; `logs.buffer_lines` follows the
   settings) with the window's `LogViews` and the tables' row actions ("View Logs" on pods, E08-S02, and on
-  workloads and Services, E08-S04).
+  workloads and Services, E08-S04), and the app's `AgentHooks` (E08-S09, `mount::logs::install_agent_hooks`, stored with
+  `AppState::set_agent_hooks`): the `ContextRegistry` holding `@logs`, the `ToolRegistry` holding `k8s.get_logs`, and the
+  `PendingContext` queue the viewer's "Send to agent" fills until the agent panel (E27) attaches.
   Views dispatch through `mount::bus::BusDispatcher`, which runs each command on the bus through
   the window's `ClusterCommandRunner` (toasts, confirmations, denials).
 

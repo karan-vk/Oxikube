@@ -35,13 +35,14 @@ use crate::view::OpenLogs;
 pub use controller::{LogHost, LogViews, LogViewsDeps};
 
 /// The commands this crate handles.
-pub const LOG_COMMANDS: [CommandId; 25] = [
+pub const LOG_COMMANDS: [CommandId; 26] = [
     CommandId::POD_VIEW_LOGS,
     CommandId::WORKLOAD_VIEW_LOGS,
     CommandId::LOGS_TOGGLE_SOURCE,
     CommandId::LOGS_CLEAR,
     CommandId::LOGS_COPY,
     CommandId::LOGS_MARK,
+    CommandId::LOGS_SEND_TO_AGENT,
     CommandId::LOGS_SAVE,
     CommandId::LOGS_CLOSE_SEARCH,
     CommandId::LOGS_FIND,
@@ -72,6 +73,8 @@ pub enum ViewChange {
     Copy,
     /// `logs::Mark`.
     Mark,
+    /// `logs::SendToAgent`: queue the selection (else the lines on screen) as agent context.
+    SendToAgent,
     /// `logs::Save`: offer to write the lines of this scope to a file.
     Save(LogSaveScope),
     /// `logs::SetRange`.
@@ -187,6 +190,7 @@ impl LogRequest {
             Command::LogsClear { target } => change(target, ViewChange::Clear),
             Command::LogsCopy { target } => change(target, ViewChange::Copy),
             Command::LogsMark { target } => change(target, ViewChange::Mark),
+            Command::LogsSendToAgent { target } => change(target, ViewChange::SendToAgent),
             Command::LogsSave { target, scope } => change(target, ViewChange::Save(*scope)),
             Command::WorkloadViewLogs {
                 target,

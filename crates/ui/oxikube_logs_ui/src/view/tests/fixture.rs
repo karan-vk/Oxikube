@@ -15,6 +15,7 @@ use gpui::{
 };
 use jiff::Timestamp;
 use oxikube_app::ClusterSessionManager;
+use oxikube_app::context::PendingContext;
 use oxikube_app::logs::{LogConfig, LogService};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
@@ -156,6 +157,8 @@ pub(crate) struct Fx {
     pub(crate) workspace: Entity<Workspace>,
     pub(crate) ports: FakeClusterPorts,
     pub(crate) fs: Arc<FakeFsPort>,
+    /// Where "Send to agent" queues.
+    pub(crate) agent: PendingContext,
     pub(crate) views: Entity<LogViews>,
     pub(crate) dispatcher: Dispatcher,
 }
@@ -216,6 +219,7 @@ impl Fx {
         let clock: Arc<FakeClockPort> = ports.logs.clock().clone();
         let service = vcx.update(|_, cx| Arc::new(LogService::new(log_runtime(clock, cx), config)));
         let fs = Arc::new(FakeFsPort::new());
+        let agent = PendingContext::new();
         let (sink, requests) = LogCommandSink::channel();
         let dispatcher = Dispatcher {
             sent: Rc::default(),
@@ -227,6 +231,7 @@ impl Fx {
                 sessions,
                 dispatcher: Rc::new(dispatcher.clone()),
                 fs: wrap(fs.clone()),
+                agent: agent.clone(),
             },
             host: Rc::new(Host(workspace.downgrade())),
         };
@@ -237,6 +242,7 @@ impl Fx {
             workspace,
             ports,
             fs,
+            agent,
             views,
             dispatcher,
         }

@@ -21,6 +21,7 @@
 //! | `scroll` | autoscroll, pausing on a scroll up, the anchor line across the wrap toggle |
 //! | `controls` | the view's operations (what the commands do) and the requests that dispatch them |
 //! | `selection`, `chrome` | [`Selection`] (click, shift-click, drag, by seq) and [`Marks`] (k9s `m`), the pointer handlers; the gutter bar and selection colour a row carries |
+//! | `agent` | `logs::SendToAgent`: the selection (else the lines on screen) as agent context, with its source |
 //! | `pick`, `copy` | which lines an action takes (on screen, the buffer, the filter) and `logs::Copy` (cap 5 MB) |
 //! | `save`, `clear`, `notice` | `logs::Save` (dialog, panel, streamed write), `logs::Clear`, the toasts of local actions |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
@@ -39,6 +40,7 @@
 //! key (PERFORMANCE rule 5). Unwrapped rows draw at most [`NOWRAP_CHARS`] bytes of a line.
 
 mod actions;
+mod agent;
 mod aggregate;
 mod autoscroll;
 mod chrome;
@@ -78,6 +80,7 @@ use gpui::{
     UniformListScrollHandle, WeakEntity, px,
 };
 use oxikube_app::ClusterSessionManager;
+use oxikube_app::context::PendingContext;
 use oxikube_app::logs::export::LineFilter;
 use oxikube_app::logs::{AggregateSpec, LevelFilter, LogService, LogSession};
 use oxikube_domain::ids::ResourceRef;
@@ -90,9 +93,9 @@ use crate::search::Search;
 
 pub use actions::{
     Clear, ClearSelection, CloseSearch, Copy, Find, Head, Mark, NextMatch, PreviousMatch, SaveAll,
-    SaveVisible, Since1h, Since1m, Since5m, Since15m, Since30m, Tail, ToggleAutoscroll, ToggleCase,
-    ToggleFilterMode, ToggleFullscreen, ToggleInverse, ToggleJsonMode, TogglePrevious,
-    ToggleTimestamps, ToggleWrap,
+    SaveVisible, SendToAgent, Since1h, Since1m, Since5m, Since15m, Since30m, Tail,
+    ToggleAutoscroll, ToggleCase, ToggleFilterMode, ToggleFullscreen, ToggleInverse,
+    ToggleJsonMode, TogglePrevious, ToggleTimestamps, ToggleWrap,
 };
 pub use aggregate::{
     AggregateState, BANNER_LINES, BANNER_SECONDS, Banner, MAX_GUTTER, Prefix, SourceChoice,
@@ -123,6 +126,8 @@ pub struct LogViewDeps {
     pub dispatcher: Rc<dyn CommandDispatcher>,
     /// The files `logs::Save` writes (a path the user chose, streamed in chunks).
     pub fs: Arc<dyn FsPort>,
+    /// Where `logs::SendToAgent` queues the selected lines until the agent panel takes them.
+    pub agent: PendingContext,
 }
 
 /// The log of one pod's container. See the [module docs](self).

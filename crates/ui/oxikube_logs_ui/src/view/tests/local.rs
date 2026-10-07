@@ -19,7 +19,7 @@ impl Fx {
     }
 
     /// Presses the left button on row `index` (shift held when `shift`) and lets go.
-    fn click_row(&mut self, index: usize, shift: bool) {
+    pub(crate) fn click_row(&mut self, index: usize, shift: bool) {
         let at = self.row_point(index);
         let modifiers = Modifiers {
             shift,
