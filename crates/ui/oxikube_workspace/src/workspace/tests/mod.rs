@@ -2,6 +2,7 @@
 //! drag and drop, all through a real window with the dock area's skin.
 
 mod close_request;
+mod dock_items;
 mod dock_sizes;
 mod docks;
 mod drag;

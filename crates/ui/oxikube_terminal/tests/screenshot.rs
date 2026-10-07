@@ -10,6 +10,9 @@
 //!
 //! - `terminal_preedit` (E09-S06): an input method composing four Japanese syllables at the shell
 //!   prompt: the marked text is underlined at the cursor, over the cells after it.
+//! - `terminal_tabs` (E09-S07): terminal tabs in a workspace: one in the centre pane (its title
+//!   set by the process, the dirty dot of a running process), one in the bottom dock beside the
+//!   terminal panel, carrying a read-only cluster's mark, and the exit line of an ended one.
 //!
 //! The byte stream is in this file, so the picture only changes when the element (or the font
 //! the platform ships) does. `harness = false`: on macOS the platform text system can only be
@@ -226,6 +229,100 @@ fn preedit() -> Result<RgbaImage> {
     )
 }
 
+/// The fake launcher of `terminal_tabs`: a silent fake backend per launch.
+struct ShotLauncher(std::cell::RefCell<Vec<FakeTerminalBackend>>);
+
+impl oxikube_terminal::view::TerminalLauncher for ShotLauncher {
+    fn launch(
+        &self,
+        _: &oxikube_terminal::view::BackendDescriptor,
+        _: TerminalSize,
+        _: &mut App,
+    ) -> oxikube_terminal::view::Launch {
+        let backend = FakeTerminalBackend::silent();
+        self.0.borrow_mut().push(backend.clone());
+        gpui::Task::ready(Ok(Box::new(backend)))
+    }
+
+    fn cluster_mark(
+        &self,
+        _: &oxikube_domain::ids::ClusterId,
+        _: &App,
+    ) -> Option<oxikube_workspace::ClusterMark> {
+        Some(oxikube_workspace::ClusterMark {
+            colour: None,
+            read_only: true,
+        })
+    }
+}
+
+const TABS: (u32, u32) = (720, 420);
+
+fn tabs() -> Result<RgbaImage> {
+    use oxikube_domain::ids::{ClusterId, ContextName};
+    use oxikube_terminal::view::{BackendDescriptor, TerminalServices, TerminalView};
+    use oxikube_workspace::{DockPosition, Workspace};
+
+    // The tab icons and the read-only lock are SVGs from the app's assets.
+    let mut app = ScreenshotApp::with_assets(Arc::new(oxikube_ui::Assets));
+    let launcher = std::rc::Rc::new(ShotLauncher(Default::default()));
+    let services = TerminalServices::new(launcher.clone());
+    let cluster = ClusterId::new("~/.kube/config", &ContextName::new("prod-eu"));
+    let window: AnyWindowHandle =
+        app.open_window(size(px(TABS.0 as f32), px(TABS.1 as f32)), |window, cx| {
+            oxikube_runtime::init_deterministic(cx);
+            oxikube_ui::init(cx);
+            set_theme(Appearance::Dark, cx);
+            let workspace = cx.new(|cx| Workspace::new(window, cx));
+            let centre = cx.new(|cx| {
+                let shell = BackendDescriptor::local(None).with_shell("/bin/zsh", vec![]);
+                TerminalView::new(shell, services.clone(), cx)
+            });
+            let docked = cx.new(|cx| {
+                let shell =
+                    BackendDescriptor::local(Some(cluster.clone())).with_shell("bash", vec![]);
+                TerminalView::new(shell, services.clone(), cx)
+            });
+            let ended = cx.new(|cx| {
+                let shell = BackendDescriptor::local(None).with_shell("sh", vec![]);
+                TerminalView::new(shell, services.clone(), cx)
+            });
+            oxikube_terminal::view::ensure_terminal_panel(
+                &workspace,
+                Some(cluster.clone()),
+                None,
+                window,
+                cx,
+            );
+            workspace.update(cx, |ws, cx| {
+                ws.open_item(centre, window, cx);
+                ws.open_item_in_split(
+                    Box::new(ended),
+                    None,
+                    oxikube_workspace::SplitDirection::Right,
+                    window,
+                    cx,
+                );
+                ws.open_item_in_dock(Box::new(docked), DockPosition::Bottom, false, window, cx);
+                let first = ws.panes(cx)[0].id();
+                ws.activate_pane(first, window, cx);
+            });
+            oxikube_ui::root::new_root(workspace, window, cx)
+        })?;
+    app.run_until_parked();
+    let backends = launcher.0.borrow().clone();
+    // Launch order: the centre shell, the docked cluster shell, the ended one.
+    backends[0].output("\x1b]0;kubectl get pods\x07$ kubectl get pods\r\nNAME    READY   STATUS    RESTARTS   AGE\r\nweb-0   1/1     Running   0          3d\r\n$ ".to_owned());
+    backends[1].output("$ helm list -n shop\r\nNAME  NAMESPACE  REVISION  STATUS\r\nshop  shop       7         deployed\r\n$ ".to_owned());
+    backends[2].output("$ exit 2\r\n".to_owned());
+    backends[2].exit(oxikube_ports::ExitStatus::with_code(2));
+    app.run_until_parked();
+    app.advance_clock(FRAME_INTERVAL);
+    let _ = app.capture(window)?;
+    app.advance_clock(FRAME_INTERVAL);
+    app.capture(window)
+}
+
 fn main() -> ExitCode {
     run_golden_cases(
         env!("CARGO_MANIFEST_DIR"),
@@ -249,6 +346,11 @@ fn main() -> ExitCode {
                 name: "terminal_preedit",
                 size: CURSORS,
                 render: preedit,
+            },
+            GoldenCase {
+                name: "terminal_tabs",
+                size: TABS,
+                render: tabs,
             },
         ],
     )

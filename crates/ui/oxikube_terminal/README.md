@@ -18,7 +18,12 @@ alacritty_terminal grid + custom GPUI Element + TerminalBackend (local PTY, kube
   paste, mouse reporting, IME composition (`EntityInputHandler` for `TerminalState`), copy / paste
   / copy on select with the multi-line confirmation, and the `terminal::Copy` / `terminal::Paste`
   commands. Cost of the mapping: `cargo run --release -p oxikube_terminal --example input_bench`.
-- The view that hosts the element in a tab: E09-S07.
+- `view` (E09-S07): `TerminalView`, the terminal as a workspace item (tab title from the process,
+  dirty while it runs, dockable, saved as its `BackendDescriptor` only, restored as a fresh
+  process), the `TerminalPanel` in a cluster tab's bottom dock, `TerminalViews` and the
+  `terminal::New` (`ctrl-~`), `terminal::Split` (`cmd-d` / `ctrl-shift-d` in a terminal) and
+  `terminal::Close` (`cmd-w` / `ctrl-shift-w` in a terminal) commands; `` ctrl-` `` toggles the panel.
+  Screenshot: `terminal_tabs` in `tests/screenshot.rs`.
 
 ## Modules
 

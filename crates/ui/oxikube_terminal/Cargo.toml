@@ -46,6 +46,7 @@ anyhow.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_assets.workspace = true
+oxikube_keymap.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
@@ -82,6 +83,11 @@ path = "tests/state/main.rs"
 [[test]]
 name = "element"
 path = "tests/element/main.rs"
+
+# The terminal tab (E09-S07): the item, docking, persistence and the terminal::* commands.
+[[test]]
+name = "view"
+path = "tests/view/main.rs"
 
 # A keypress must not allocate (counting global allocator; own binary).
 [[test]]

@@ -31,6 +31,8 @@ pub trait ItemHandle: 'static {
     fn set_active(&self, active: bool, window: &mut Window, cx: &mut App);
     /// The item's focus handle.
     fn focus_handle(&self, cx: &App) -> FocusHandle;
+    /// See [`Item::can_dock`].
+    fn can_dock(&self, cx: &App) -> bool;
     /// See [`Item::clone_on_split`].
     fn clone_on_split(&self, window: &mut Window, cx: &mut App) -> Option<Box<dyn ItemHandle>>;
     /// See [`Item::serialized_kind`].
@@ -89,6 +91,10 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn focus_handle(&self, cx: &App) -> FocusHandle {
         self.read(cx).focus_handle(cx)
+    }
+
+    fn can_dock(&self, cx: &App) -> bool {
+        self.read(cx).can_dock(cx)
     }
 
     fn clone_on_split(&self, window: &mut Window, cx: &mut App) -> Option<Box<dyn ItemHandle>> {

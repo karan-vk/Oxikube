@@ -205,6 +205,25 @@ pub enum Command {
     /// `terminal.confirm_multiline_paste`). Writes only to the user's own session.
     #[serde(rename = "terminal::Paste")]
     TerminalPaste,
+    /// Open a local shell in a new terminal (E09-S07): in the bottom dock of `cluster`'s tab (the
+    /// displayed cluster tab when `None`) with that cluster's `KUBECONFIG`, context and namespace
+    /// in its environment, or as a plain shell tab of the window when no cluster tab is shown.
+    /// Starts a process on this machine; reads and changes nothing in a cluster.
+    #[serde(rename = "terminal::New")]
+    TerminalNew {
+        /// The cluster whose tab gets the terminal; the displayed cluster tab when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+    },
+    /// Open a new terminal in a new pane to the right of the active pane (E09-S07): the same
+    /// shell, directory and cluster as the focused terminal, else a local shell of the displayed
+    /// cluster. Reads and changes nothing in a cluster.
+    #[serde(rename = "terminal::Split")]
+    TerminalSplit,
+    /// Close the focused terminal (E09-S07), ending its process; the active pane's terminal when
+    /// focus is elsewhere. Does nothing when neither is a terminal.
+    #[serde(rename = "terminal::Close")]
+    TerminalClose,
     /// Open a link a terminal shows (cmd/ctrl-click, E09-S05): an `http`, `https`, `mailto` or
     /// `file` URL in the browser, or an absolute local path (an optional `:line[:column]` suffix
     /// is accepted) with the system's opener. Reads and changes nothing in a cluster.
@@ -675,6 +694,9 @@ impl Command {
             Command::TerminalOpenLink { .. } => CommandId::TERMINAL_OPEN_LINK,
             Command::TerminalCopy => CommandId::TERMINAL_COPY,
             Command::TerminalPaste => CommandId::TERMINAL_PASTE,
+            Command::TerminalNew { .. } => CommandId::TERMINAL_NEW,
+            Command::TerminalSplit => CommandId::TERMINAL_SPLIT,
+            Command::TerminalClose => CommandId::TERMINAL_CLOSE,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -912,6 +934,12 @@ mod tests {
             },
             Command::TerminalCopy,
             Command::TerminalPaste,
+            Command::TerminalNew { cluster: None },
+            Command::TerminalNew {
+                cluster: Some(cluster()),
+            },
+            Command::TerminalSplit,
+            Command::TerminalClose,
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -1169,6 +1197,9 @@ mod tests {
                     | Command::TerminalOpenLink { .. }
                     | Command::TerminalCopy
                     | Command::TerminalPaste
+                    | Command::TerminalNew { .. }
+                    | Command::TerminalSplit
+                    | Command::TerminalClose
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }

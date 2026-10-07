@@ -1,4 +1,5 @@
-//! What every cluster tab gets when it opens: the sidebar (E06-S10) in its left dock, the connect
+//! What every cluster tab gets when it opens: the sidebar (E06-S10) in its left dock, the terminal
+//! panel (E09-S07) in its bottom dock, the connect
 //! lifecycle views (E06-S06), the namespace selector (E06-S07) in its toolbar, the resource
 //! views (E07-S11: the overview, see `resources`) and the sidebar's navigation to the resource
 //! tables (E07-S03).
@@ -60,8 +61,10 @@ pub fn tab_setup(
         }),
     );
     let navigation = sidebar_navigation(deps.resources.clone());
+    let terminal = super::terminal::tab_setup(deps.dispatcher.clone());
     move |tab, session, window, cx| {
         sidebar(tab, session, window, cx);
+        terminal(tab, session, window, cx);
         navigation(tab, session, window, cx);
         connect(tab, session, window, cx);
         install_selector(tab, session, &deps, window, cx);
