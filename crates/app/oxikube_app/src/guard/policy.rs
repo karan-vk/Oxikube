@@ -99,6 +99,13 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::LogsTogglePrevious { target }
         | Command::LogsToggleTimestamps { target }
         | Command::LogsToggleWrap { target }
+        | Command::LogsFind { target, .. }
+        | Command::LogsNextMatch { target }
+        | Command::LogsPreviousMatch { target }
+        | Command::LogsToggleCase { target }
+        | Command::LogsToggleInverse { target }
+        | Command::LogsToggleFilterMode { target }
+        | Command::LogsCloseSearch { target }
         | Command::WorkloadScale { target, .. }
         | Command::WorkloadRestart { target }
         | Command::NodeCordon { target }

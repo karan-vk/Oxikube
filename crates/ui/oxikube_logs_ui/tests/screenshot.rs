@@ -4,6 +4,9 @@
 //!   unwrapped, timestamps shown, the "stream ended" state row at the bottom (dark theme).
 //! - `log_view_wrapped`: the same log wrapped, timestamps hidden (dark theme).
 //! - `log_view_light`: the same log unwrapped in the light theme.
+//! - `log_view_search`: the search bar open with `error|warn` (E08-S03): the matches highlighted,
+//!   the current match's row tinted, the count in the bar (dark theme).
+//! - `log_view_filter`: the same search in filter mode: only the matching lines are rows.
 //!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
 //! thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so it only builds
@@ -27,7 +30,7 @@ use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::log::LogLine;
-use oxikube_logs_ui::{LogView, LogViewDeps, log_runtime};
+use oxikube_logs_ui::{LogView, LogViewDeps, SearchMode, log_runtime};
 use oxikube_ports::{ClusterContext, SourceId};
 use oxikube_testkit::headless::HEADLESS_SCALE_FACTOR;
 use oxikube_testkit::screenshot::{
@@ -95,6 +98,17 @@ fn pod() -> Resource {
 
 /// Renders the view, wrapped or not, with or without timestamps, in the dark or `light` theme.
 fn render(wrap: bool, timestamps: bool, light: bool) -> anyhow::Result<RgbaImage> {
+    render_with(wrap, timestamps, light, None)
+}
+
+/// [`render`] with the search bar open on `search` (a pattern and the mode), the first match
+/// being the current one.
+fn render_with(
+    wrap: bool,
+    timestamps: bool,
+    light: bool,
+    search: Option<(&str, SearchMode)>,
+) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
@@ -141,7 +155,7 @@ fn render(wrap: bool, timestamps: bool, light: bool) -> anyhow::Result<RgbaImage
         cx.new(|cx| LogView::new(target, None, deps, cx))
     })?;
     cx.run_until_parked();
-    cx.update_window(window.into(), |view, _, cx| {
+    cx.update_window(window.into(), |view, window, cx| {
         let view = view.downcast::<LogView>().expect("the root view");
         view.update(cx, |view, cx| {
             if wrap {
@@ -149,6 +163,14 @@ fn render(wrap: bool, timestamps: bool, light: bool) -> anyhow::Result<RgbaImage
             }
             if timestamps {
                 view.toggle_timestamps(cx);
+            }
+            if let Some((pattern, mode)) = search {
+                view.find(Some(pattern), window, cx);
+                if mode == SearchMode::Filter {
+                    view.toggle_filter_mode(cx);
+                } else {
+                    view.next_match(cx);
+                }
             }
         });
     })?;
@@ -191,6 +213,15 @@ fn main() -> ExitCode {
         render(false, true, false).and_then(|image| check("log_view_levels", image)),
         render(true, false, false).and_then(|image| check("log_view_wrapped", image)),
         render(false, true, true).and_then(|image| check("log_view_light", image)),
+        render_with(
+            false,
+            true,
+            false,
+            Some(("error|warn", SearchMode::Highlight)),
+        )
+        .and_then(|image| check("log_view_search", image)),
+        render_with(false, true, false, Some(("error|warn", SearchMode::Filter)))
+            .and_then(|image| check("log_view_filter", image)),
     ];
     let mut failed = false;
     for result in results {

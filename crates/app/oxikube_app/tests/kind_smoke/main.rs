@@ -22,6 +22,7 @@ mod columns;
 mod delete;
 mod filter_selector;
 mod logs;
+mod logs_search;
 mod scoped_feeds;
 mod two_clusters;
 

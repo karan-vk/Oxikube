@@ -115,6 +115,58 @@ fn the_handlers_queue_the_request_for_the_window() {
                 change: ViewChange::SelectContainer("migrate".into()),
             },
         ),
+        (
+            Command::LogsFind {
+                target: pod(),
+                pattern: Some("timeout".into()),
+            },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::Find(Some("timeout".into())),
+            },
+        ),
+        (
+            Command::LogsNextMatch { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::NextMatch,
+            },
+        ),
+        (
+            Command::LogsPreviousMatch { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::PreviousMatch,
+            },
+        ),
+        (
+            Command::LogsToggleCase { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::ToggleCase,
+            },
+        ),
+        (
+            Command::LogsToggleInverse { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::ToggleInverse,
+            },
+        ),
+        (
+            Command::LogsToggleFilterMode { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::ToggleFilterMode,
+            },
+        ),
+        (
+            Command::LogsCloseSearch { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::CloseSearch,
+            },
+        ),
     ];
     for (command, expected) in cases {
         block_on(bus.dispatch(command.clone(), ctx()))

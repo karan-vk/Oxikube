@@ -37,6 +37,13 @@ impl LogView {
             .children(LogRange::ALL.map(|range| self.range_button(range, cx)))
             .child(div().flex_1())
             .child(self.toggle(
+                "log-find",
+                "Search",
+                self.search.state.is_open(),
+                cx,
+                |view, cx| view.request_find(cx),
+            ))
+            .child(self.toggle(
                 "log-previous",
                 "Previous",
                 self.options.previous,

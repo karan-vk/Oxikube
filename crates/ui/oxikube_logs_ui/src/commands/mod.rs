@@ -1,6 +1,8 @@
 //! The log commands on the `CommandBus` (E08-S02): `pod::ViewLogs` opens a pod's log view, and
 //! the `logs::*` commands change one: `SetRange` (tail, head, since 1m ... 1h), `SelectContainer`,
-//! `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`.
+//! `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, and
+//! the search's (E08-S03) `Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`,
+//! `ToggleFilterMode`, `CloseSearch`.
 //!
 //! None changes a cluster (no `MutationGuard` tier; all are allowed on a read-only cluster):
 //! they read logs or change what a view shows. Each is declared in `oxikube_domain::command`, so
@@ -28,8 +30,15 @@ use crate::view::OpenLogs;
 pub use controller::{LogHost, LogViews, LogViewsDeps};
 
 /// The commands this crate handles.
-pub const LOG_COMMANDS: [CommandId; 8] = [
+pub const LOG_COMMANDS: [CommandId; 15] = [
     CommandId::POD_VIEW_LOGS,
+    CommandId::LOGS_CLOSE_SEARCH,
+    CommandId::LOGS_FIND,
+    CommandId::LOGS_NEXT_MATCH,
+    CommandId::LOGS_PREVIOUS_MATCH,
+    CommandId::LOGS_TOGGLE_CASE,
+    CommandId::LOGS_TOGGLE_FILTER_MODE,
+    CommandId::LOGS_TOGGLE_INVERSE,
     CommandId::LOGS_SET_RANGE,
     CommandId::LOGS_SELECT_CONTAINER,
     CommandId::LOGS_TOGGLE_AUTOSCROLL,
@@ -56,6 +65,20 @@ pub enum ViewChange {
     ToggleTimestamps,
     /// `logs::ToggleWrap`.
     ToggleWrap,
+    /// `logs::Find`: open the search bar, searching for the pattern when there is one.
+    Find(Option<String>),
+    /// `logs::NextMatch`.
+    NextMatch,
+    /// `logs::PreviousMatch`.
+    PreviousMatch,
+    /// `logs::ToggleCase`.
+    ToggleCase,
+    /// `logs::ToggleInverse`.
+    ToggleInverse,
+    /// `logs::ToggleFilterMode`.
+    ToggleFilterMode,
+    /// `logs::CloseSearch`.
+    CloseSearch,
 }
 
 /// A log command, resolved, for the UI thread.
@@ -130,6 +153,17 @@ impl LogRequest {
                 change(target, ViewChange::ToggleTimestamps)
             }
             Command::LogsToggleWrap { target } => change(target, ViewChange::ToggleWrap),
+            Command::LogsFind { target, pattern } => {
+                change(target, ViewChange::Find(pattern.clone()))
+            }
+            Command::LogsNextMatch { target } => change(target, ViewChange::NextMatch),
+            Command::LogsPreviousMatch { target } => change(target, ViewChange::PreviousMatch),
+            Command::LogsToggleCase { target } => change(target, ViewChange::ToggleCase),
+            Command::LogsToggleInverse { target } => change(target, ViewChange::ToggleInverse),
+            Command::LogsToggleFilterMode { target } => {
+                change(target, ViewChange::ToggleFilterMode)
+            }
+            Command::LogsCloseSearch { target } => change(target, ViewChange::CloseSearch),
             _ => None,
         })
     }

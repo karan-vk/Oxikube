@@ -155,6 +155,16 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "logs::TogglePrevious" => Command::LogsTogglePrevious { target: target() },
         "logs::ToggleTimestamps" => Command::LogsToggleTimestamps { target: target() },
         "logs::ToggleWrap" => Command::LogsToggleWrap { target: target() },
+        "logs::CloseSearch" => Command::LogsCloseSearch { target: target() },
+        "logs::Find" => Command::LogsFind {
+            target: target(),
+            pattern: Some("error".into()),
+        },
+        "logs::NextMatch" => Command::LogsNextMatch { target: target() },
+        "logs::PreviousMatch" => Command::LogsPreviousMatch { target: target() },
+        "logs::ToggleCase" => Command::LogsToggleCase { target: target() },
+        "logs::ToggleFilterMode" => Command::LogsToggleFilterMode { target: target() },
+        "logs::ToggleInverse" => Command::LogsToggleInverse { target: target() },
         "namespace::Select" => Command::NamespaceSelect {
             cluster,
             namespaces: vec!["default".into()],

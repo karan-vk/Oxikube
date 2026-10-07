@@ -5,13 +5,14 @@
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, Context, FontWeight, Hsla, IntoElement, ParentElement as _, SharedString,
-    Styled as _, div,
+    AnyElement, Context, FontWeight, HighlightStyle, Hsla, IntoElement, ParentElement as _,
+    SharedString, Styled as _, StyledText, div,
 };
 use oxikube_app::logs::{LogEntry, LogState};
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, Colors, u};
 
+use super::highlight::{LineMarks, Mark};
 use super::text::{Level, level_of, state_text, timestamp, truncated_marker};
 use super::window::Row;
 use super::{LogView, NOWRAP_CHARS};
@@ -19,9 +20,12 @@ use super::{LogView, NOWRAP_CHARS};
 /// What one row shows, read out of the buffer before any element is built.
 enum RowData {
     Line {
+        seq: u64,
         ts: Option<SharedString>,
         text: SharedString,
         level: Level,
+        /// How the search marks the row, and the byte ranges of its matches to highlight.
+        marks: LineMarks,
     },
     /// A line the buffer dropped since the last delta (drawn empty for that frame).
     Gone,
@@ -66,16 +70,33 @@ impl LogView {
         })
     }
 
+    /// The rows' data with the search's marks on the lines, computed after the session's lock
+    /// was let go (a regex over the few rows on screen, not under the lock).
     fn row_data(&self, rows: &[Option<Row>]) -> Vec<RowData> {
+        let mut data = self.read_rows(rows);
+        for row in &mut data {
+            if let RowData::Line {
+                seq, text, marks, ..
+            } = row
+            {
+                *marks = self.line_marks(*seq, text);
+            }
+        }
+        data
+    }
+
+    fn read_rows(&self, rows: &[Option<Row>]) -> Vec<RowData> {
         let timestamps = self.options.timestamps;
         let wrap = self.options.wrap;
         let capacity = self.deps.service.buffer_lines();
         let state = self.window.state();
         let line = |entry: Option<&LogEntry>| match entry {
             Some(entry) => RowData::Line {
+                seq: entry.seq,
                 ts: timestamps.then(|| timestamp(entry).into()),
                 level: level_of(&entry.text),
                 text: line_text(entry, wrap),
+                marks: LineMarks::default(),
             },
             None => RowData::Gone,
         };
@@ -121,12 +142,27 @@ impl LogView {
             base.h(self.row_height()).items_center().overflow_hidden()
         };
         match row {
-            RowData::Line { ts, text, level } => {
+            RowData::Line {
+                ts,
+                text,
+                level,
+                marks,
+                ..
+            } => {
+                let base = match marks.mark {
+                    Mark::None => base,
+                    Mark::Matched => base.bg(colors.element),
+                    Mark::Current => base.bg(colors.element_selected),
+                };
                 let text = div()
                     .flex_1()
                     .min_w_0()
                     .text_color(level_colour(level, &colors))
-                    .child(text);
+                    .child(highlighted(
+                        text,
+                        &marks.spans,
+                        colors.warning.opacity(0.45),
+                    ));
                 let text = if wrap {
                     text
                 } else {
@@ -180,4 +216,18 @@ fn level_colour(level: Level, colors: &Colors) -> Hsla {
         Level::Debug => colors.text_muted,
         Level::Plain => colors.text,
     }
+}
+
+/// `text`, with the byte ranges `spans` highlighted in `colour`.
+fn highlighted(text: SharedString, spans: &[Range<usize>], colour: Hsla) -> AnyElement {
+    if spans.is_empty() {
+        return text.into_any_element();
+    }
+    let style = HighlightStyle {
+        background_color: Some(colour),
+        ..HighlightStyle::default()
+    };
+    StyledText::new(text)
+        .with_highlights(spans.iter().map(|span| (span.clone(), style)))
+        .into_any_element()
 }

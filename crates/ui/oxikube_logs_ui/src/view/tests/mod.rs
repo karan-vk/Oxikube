@@ -9,4 +9,5 @@ mod keys;
 mod open;
 mod scroll;
 mod settings;
+mod search;
 mod stream;

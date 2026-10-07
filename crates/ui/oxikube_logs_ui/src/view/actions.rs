@@ -7,6 +7,10 @@
 //! the toolbar, the palette and an agent run one behaviour (non-negotiable 4). Users rebind them
 //! in `keymap.json`.
 //!
+//! The search keys (E08-S03): `/` or `cmd-f` open the bar (`Find`), `enter` / `shift-enter` in it,
+//! or `n` / `N` outside it, step through the matches, `escape` closes it, `alt-c` / `alt-i` /
+//! `alt-f` toggle case, inverse and filter mode. Each dispatches its `logs::*` command too.
+//!
 //! `Mark` and `Copy` are bound here so their keys are reserved; what they do arrives with
 //! E08-S06 (export, copy, mark, clear).
 
@@ -43,5 +47,20 @@ actions!(
         Mark,
         /// Copy the lines (`c`; E08-S06).
         Copy,
+        /// Open the search bar (`/`, `cmd-f`, `logs::Find`).
+        Find,
+        /// Go to the next match (`enter` in the bar, `n`, `logs::NextMatch`).
+        NextMatch,
+        /// Go to the previous match (`shift-enter` in the bar, `shift-n`, `logs::PreviousMatch`).
+        PreviousMatch,
+        /// Make the search case-sensitive, or not (`alt-c`, `logs::ToggleCase`).
+        ToggleCase,
+        /// Match the lines without the pattern, or those with it (`alt-i`, `logs::ToggleInverse`).
+        ToggleInverse,
+        /// Show only the matching lines, or all with the matches highlighted (`alt-f`,
+        /// `logs::ToggleFilterMode`).
+        ToggleFilterMode,
+        /// Close the search bar and clear the search (`escape`, `logs::CloseSearch`).
+        CloseSearch,
     ]
 );
