@@ -56,7 +56,7 @@ struct Slot {
     status: bool,
 }
 
-/// The [`ColumnProvider`] of one Table feed. See the [module docs](self).
+/// The [`ColumnProvider`] of one Table feed. See the module docs.
 #[derive(Debug, Clone)]
 pub struct TableColumns {
     columns: Arc<[Column]>,

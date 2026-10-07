@@ -39,7 +39,7 @@ pub enum FailureKind {
     Unexpected,
 }
 
-/// A [`FailureKind`] with the adapter's detail. See the [module docs](self).
+/// A [`FailureKind`] with the adapter's detail. See the module docs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Failure {
     kind: FailureKind,

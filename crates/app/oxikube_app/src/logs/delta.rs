@@ -46,7 +46,7 @@ struct Cursor {
     state: LogState,
 }
 
-/// The deltas of one session; see [`LogSession::deltas`](super::LogSession::deltas). Ends after
+/// The deltas of one session; see [`LogReader::deltas`](super::LogReader::deltas). Ends after
 /// the delta that carries a terminal state (`Ended` or `Failed`), or when the session is dropped.
 /// Dropping the stream stops nothing: only dropping the session cancels the read.
 pub struct LogDeltas {

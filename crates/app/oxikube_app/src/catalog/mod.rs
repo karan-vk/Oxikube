@@ -16,7 +16,7 @@
 //!
 //! # What is stored
 //!
-//! One row per cluster in the state table [`CATALOG_TABLE`], keyed by [`ClusterId`]:
+//! One row per cluster in the state table [`CATALOG_TABLE`], keyed by [`ClusterId`](oxikube_domain::ids::ClusterId):
 //! `{"favourite": bool, "last_used": <timestamp>}`. Names and times only, never credentials
 //! (non-negotiable 5). A state db that cannot be read or written does not take the catalog
 //! down: the entries load without marks and the failure is logged. A row of an unexpected

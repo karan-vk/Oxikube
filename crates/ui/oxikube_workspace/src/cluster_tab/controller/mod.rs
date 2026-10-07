@@ -142,7 +142,7 @@ impl TabsWindows {
     }
 }
 
-/// See the [module docs](self).
+/// See the module docs.
 pub struct ClusterTabs {
     workspace: WeakEntity<Workspace>,
     deps: ClusterTabsDeps,

@@ -2,7 +2,7 @@
 //!
 //! Settings files are JSONC: `//` and `/* */` comments and trailing commas are allowed
 //! (`serde_json_lenient`, the parser Zed uses). Parsed layers are plain [`Value`]s; the store
-//! merges them with [`merge_layer`] before any setting is deserialised, so a setting's
+//! merges them with `merge_layer` before any setting is deserialised, so a setting's
 //! content struct sees one object with every layer applied.
 
 use serde::Deserialize as _;

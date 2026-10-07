@@ -13,7 +13,7 @@ use crate::store::service::ResourceStore;
 impl ResourceStore {
     /// The count of each of `targets` under `selection`, in order. Only reads: no feed is
     /// started, so a kind nobody watches is [`CountState::NotWatched`]. See the
-    /// [module docs](super).
+    /// module docs.
     pub fn counts(
         &self,
         targets: &[CountTarget],

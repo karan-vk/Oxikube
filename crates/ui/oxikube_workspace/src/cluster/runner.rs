@@ -54,7 +54,7 @@ fn confirm_copy(command: &Command) -> (&'static str, &'static str, bool) {
     }
 }
 
-/// Dispatches commands from views. See the [module docs](self).
+/// Dispatches commands from views. See the module docs.
 #[derive(Clone)]
 pub struct ClusterCommandRunner {
     bus: CommandBus,

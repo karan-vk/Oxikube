@@ -73,7 +73,7 @@ impl RowChange {
     }
 }
 
-/// The rows of a log view. See the [module docs](self).
+/// The rows of a log view. See the module docs.
 #[derive(Debug, Clone)]
 pub struct LineWindow {
     first_seq: u64,

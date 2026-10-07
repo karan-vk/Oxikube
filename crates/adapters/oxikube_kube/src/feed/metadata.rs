@@ -65,7 +65,7 @@ impl KubeResources {
     ///
     /// `NotFound` when the object is gone, or when the name now belongs to a different
     /// object (its UID changed: it was deleted and re-created, and the feed will say so
-    /// shortly). Otherwise as [`ResourceReader::get`](oxikube_ports::ResourceReader::get).
+    /// shortly). Otherwise as [`ResourceReader::get`].
     pub async fn upgrade(&self, partial: &Resource) -> OxiResult<Resource> {
         let full = self
             .get(&partial.kind, partial.namespace(), partial.name())

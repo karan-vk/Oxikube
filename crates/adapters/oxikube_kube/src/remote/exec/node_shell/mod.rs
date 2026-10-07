@@ -1,10 +1,10 @@
 //! Node shells: a shell on a node through a privileged pod (E04-S09).
 //!
-//! The pod ([`node_shell_manifest`](oxikube_ports::node_shell_manifest), rendered from the
+//! The pod ([`node_shell_manifest`], rendered from the
 //! [`NodeShellSpec`] in `oxikube_ports`) is created on the target node, the shell is an exec of
 //! `nsenter` into the node's namespaces ([`node_shell_command`]), and the pod is deleted when the
 //! shell exits, when opening fails at any step, and when the session is dropped or aborted
-//! (`guard`), or when the app quits ([`LiveShells`], `release`). While a shell is open its pod
+//! (`guard`), or when the app quits (`LiveShells`, `release`). While a shell is open its pod
 //! is stamped alive every minute (`heartbeat`). If a run dies before it can clean up (a crash, a
 //! lost connection), `sweep` deletes what it left once nothing has stamped the pod for a while,
 //! which never takes another window's or user's live shell, and the pod's

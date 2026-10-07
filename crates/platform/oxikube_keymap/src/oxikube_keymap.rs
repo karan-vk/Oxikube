@@ -19,10 +19,10 @@
 //! the MCP tool run one behaviour ([`ActionRegistry::command`]).
 //!
 //! Module map:
-//! - [`file`]: the `keymap.json` format and its lenient parser.
+//! - [`mod@file`]: the `keymap.json` format and its lenient parser.
 //! - [`registry`]: [`ActionRegistry`], names by namespace and the action-to-`Command` mapping.
 //! - [`build`]: sections to `KeyBinding`s, with validation.
-//! - [`store`]: [`KeymapStore`], the layers and their merge; [`layer`], [`diagnostics`].
+//! - [`store`]: [`KeymapStore`], the layers and their merge; [`layer`], [`mod@diagnostics`].
 //! - [`global`]: [`init`], hot reload, [`rebind`]; [`paths`]: where `keymap.json` lives.
 //! - [`context`]: key-context helpers and the standard context names.
 //! - [`query`]: the bindings of an action, for the palette.

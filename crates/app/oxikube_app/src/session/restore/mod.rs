@@ -21,7 +21,7 @@
 //! A cluster the user dismisses while it is still queued ([`RestoreSkips`]) is never connected.
 //!
 //! Failures are isolated per cluster: every connect has its own deadline
-//! ([`ClusterSessionManager::connect_with_deadline`]) and its own outcome, a slow VPN cluster
+//! ([`ClusterSessionManager::connect_with_deadline`](crate::session::ClusterSessionManager::connect_with_deadline)) and its own outcome, a slow VPN cluster
 //! holds only its own concurrency slot, and a failure is that cluster's `Error` state, shown in
 //! its own tab. Clusters whose credential plugins may prompt connect one at a time.
 //!

@@ -37,7 +37,7 @@ pub(super) struct CrdTasks {
 
 impl ResourceViews {
     /// Opens the table of the custom resources the CRD `name` defines. See the
-    /// [module docs](self).
+    /// module docs.
     pub fn open_crd_resources(
         &mut self,
         cluster: &ClusterId,

@@ -31,7 +31,7 @@ use parking_lot::Mutex;
 
 use super::LazyKubeSources;
 
-/// See the [module docs](self).
+/// See the module docs.
 pub struct SourcesConnector {
     sources: Arc<LazyKubeSources>,
     kube: KubeConnector,

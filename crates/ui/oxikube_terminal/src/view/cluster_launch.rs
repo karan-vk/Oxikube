@@ -25,7 +25,7 @@ use super::descriptor::BackendDescriptor;
 use super::launch::{Launch, LocalLauncher, TerminalLauncher};
 use crate::settings::TerminalSettings;
 
-/// Starts local shells and pod sessions. See the [module docs](self).
+/// Starts local shells and pod sessions. See the module docs.
 #[derive(Clone)]
 pub struct ClusterLauncher {
     local: LocalLauncher,

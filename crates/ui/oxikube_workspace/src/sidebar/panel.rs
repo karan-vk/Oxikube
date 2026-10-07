@@ -66,7 +66,7 @@ pub enum SidebarEvent {
 /// The default width of the sidebar dock, unscaled pixels.
 pub const DEFAULT_WIDTH: f32 = 248.;
 
-/// The sidebar of one cluster. See the [module docs](self).
+/// The sidebar of one cluster. See the module docs.
 pub struct SidebarPanel {
     cluster: ClusterId,
     deps: SidebarDeps,

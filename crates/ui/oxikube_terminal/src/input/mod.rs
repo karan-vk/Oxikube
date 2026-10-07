@@ -4,7 +4,7 @@
 //!
 //! | Module | What |
 //! |---|---|
-//! | [`keyboard`] | the key-down listener: [`to_esc_str`](crate::mappings::to_esc_str) over the process's modes and the `terminal.option_as_meta` setting; Shift-PageUp/PageDown/Home/End scroll the history; anything that is plain text falls through to the IME handler |
+//! | [`keyboard`] | the key-down listener: [`to_esc_str`] over the process's modes and the `terminal.option_as_meta` setting; Shift-PageUp/PageDown/Home/End scroll the history; anything that is plain text falls through to the IME handler |
 //! | [`ime`] | `EntityInputHandler` for [`TerminalState`]: composition (marked text) shown inline at the cursor, committed text sent as UTF-8, `bounds_for_range` for the candidate window |
 //! | [`clipboard`] | `terminal::Copy` / `terminal::Paste`, copy on select, the multi-line paste confirmation ([`PasteConfirm`]) |
 //! | [`commands`] | the bus handlers of the terminal's own commands (copy, paste, select all, clear, scroll, search): palette and agents reach the focused terminal through the window (E09-S11 added all but copy and paste) |
@@ -33,7 +33,7 @@
 //! forwards (`ctrl-w`, `ctrl-k`, `ctrl-b`, `ctrl-j`, `ctrl-q`, `ctrl-2..8`, `ctrl--`). The UI
 //! zoom chords (`ctrl-=`, `ctrl--`, `ctrl-0`) are unbound (`null`) in the `Terminal` context. `ctrl--` is readline's
 //! undo (`0x1f`). The `keymap_shadowing` test (`tests/element`) sweeps every key
-//! [`to_esc_str`](crate::mappings::to_esc_str) encodes against the keymap an off-macOS build
+//! [`to_esc_str`] encodes against the keymap an off-macOS build
 //! installs and fails when a binding shadows one, so a new global shortcut cannot regress this.
 //!
 //! The scroll keys are the terminal's only on the primary screen; a full-screen program (vim, htop, less) on the alternate screen receives them.

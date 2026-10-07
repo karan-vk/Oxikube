@@ -1,8 +1,8 @@
 //! Cluster sources: the kubeconfig catalog with hot reload (E03-S02).
 //!
-//! [`KubeconfigSources`] implements [`ClusterSourcePort`] on top of the tolerant loader
+//! [`KubeconfigSources`] implements [`ClusterSourcePort`](oxikube_ports::ClusterSourcePort) on top of the tolerant loader
 //! ([`crate::kubeconfig`]). It owns the list of sources, the last snapshot of the catalog and
-//! the subscribers, and has exactly one code path that reads files: [`reload`](ClusterSourcePort::reload).
+//! the subscribers, and has exactly one code path that reads files: [`reload`](oxikube_ports::ClusterSourcePort::reload).
 //! The file watcher, the safety poll and a manual call all end there.
 //!
 //! | File | Role |
@@ -11,7 +11,7 @@
 //! | `layout` | expands the configured sources into files; directory filtering |
 //! | `snapshot` | the catalog as of one load, and the diff between two |
 //! | `watcher` | `notify` on parent directories, debounce, 60 s poll, abort-on-drop |
-//! | `port` | the [`ClusterSourcePort`] impl: the list, `set_user_sources`, `source_statuses`, `validate_kubeconfig` |
+//! | `port` | the [`ClusterSourcePort`](oxikube_ports::ClusterSourcePort) impl: the list, `set_user_sources`, `source_statuses`, `validate_kubeconfig` |
 //! | `status` | how reading each source went (the port's `SourceStatus`, E06-S05) |
 //! | `pasted` | pasted kubeconfigs, stored in the keychain, never in a file |
 //!
@@ -34,10 +34,10 @@
 //!    file was broken ([`apply_in_cluster_fallback`]).
 //!
 //! The user-added paths and the default tier can be replaced at run time with
-//! [`set_user_sources`](ClusterSourcePort::set_user_sources) (the settings key
+//! [`set_user_sources`](oxikube_ports::ClusterSourcePort::set_user_sources) (the settings key
 //! `kubeconfig.sources`, E06-S05): it stores the new list, reloads, and tells the watcher to
 //! watch the new directories. The sources screen reads
-//! [`source_statuses`](ClusterSourcePort::source_statuses) to show, per source, whether it was
+//! [`source_statuses`](oxikube_ports::ClusterSourcePort::source_statuses) to show, per source, whether it was
 //! found, how many contexts it gave and why it was skipped.
 //!
 //! # Change detection
@@ -219,7 +219,7 @@ impl Inner {
     }
 }
 
-/// The kubeconfig-backed [`ClusterSourcePort`].
+/// The kubeconfig-backed [`ClusterSourcePort`](oxikube_ports::ClusterSourcePort).
 ///
 /// Dropping it stops the watcher. Cheap to share behind an `Arc`.
 pub struct KubeconfigSources {
@@ -238,7 +238,7 @@ impl fmt::Debug for KubeconfigSources {
 }
 
 impl KubeconfigSources {
-    /// Build the adapter. Nothing is read until the first port call or [`reload`](ClusterSourcePort::reload).
+    /// Build the adapter. Nothing is read until the first port call or [`reload`](oxikube_ports::ClusterSourcePort::reload).
     ///
     /// `secrets` stores pasted kubeconfig text. With `config.watch` the watcher starts, which
     /// needs a tokio runtime (an error otherwise). Out-of-range watch timings are a
@@ -293,7 +293,7 @@ impl KubeconfigSources {
     /// the watcher could not register. Empty before the first load. Updated on every reload,
     /// whether or not the catalog changed.
     ///
-    /// Not part of [`ClusterSourcePort`]: callers holding the port as a trait object cannot
+    /// Not part of [`ClusterSourcePort`](oxikube_ports::ClusterSourcePort): callers holding the port as a trait object cannot
     /// reach it until the port grows a diagnostics method.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         let mut found: Vec<Diagnostic> = self

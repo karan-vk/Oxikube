@@ -14,11 +14,11 @@
 //! 4. the kubeconfig sources (E06-S05): the settings-backed source list, its hot reload into the
 //!    cluster source, and the sources screen behind `view::Open`;
 //! 5. session restore (E06-S11), which waits for the first frame and the layout restore by itself;
-//! 6. the resource stores and the resource views of every cluster tab (E07-S11, [`resources`]):
+//! 6. the resource stores and the resource views of every cluster tab (E07-S11, `resources`):
 //!    sidebar count badges, the Workloads overview as the first screen, and `resource::OpenList`;
 //!    the [`ResourceViews`] controller (E07-S03) opens a kind's table in its cluster's tab when
 //!    the sidebar or `resource::OpenList` asks;
-//! 7. the log service (E08-S01, [`logs`]): the app's one `LogService`, with `logs.buffer_lines`
+//! 7. the log service (E08-S01, `logs`): the app's one `LogService`, with `logs.buffer_lines`
 //!    following the settings, and the window's log views (E08-S02): "View Logs" on a pod's row
 //!    (`pod::ViewLogs`) opens its log as a tab of the cluster tab.
 //!    The agent hooks (E08-S09, `AppState::agent_hooks`) are built here too: `@logs` in the context
@@ -30,7 +30,7 @@
 //!    thread and this window opens it (browser or system opener); and the terminal's own
 //!    commands (E09-S06, E09-S11): `terminal::Copy` / `Paste` / `SelectAll` / `Clear`, the scroll
 //!    commands and `terminal::Search*` are dispatched to the window's focused terminal;
-//! 9. the terminal tabs (E09-S07, [`terminal`]): the terminal services (local shells with the
+//! 9. the terminal tabs (E09-S07, `terminal`): the terminal services (local shells with the
 //!    cluster's environment), the terminal panel in every cluster tab's bottom dock, and the
 //!    window's `TerminalViews` behind `terminal::New` / `Split` / `Close`;
 //! 10. shells in pods (E09-S08): the app's one `ExecService`, "Shell" and "Attach" in a pod's
@@ -45,7 +45,7 @@
 //!     `s`, and `node::Shell` on the bus (a mutation: blocked read-only, confirmed with the node and
 //!     the image named, the pod dry-run, audited at creation and at deletion) opening a terminal
 //!     in the cluster tab's bottom dock; quitting the app deletes the pods of the shells still
-//!     open and writes their closing records ([`terminal::close_node_shells_on_quit`]).
+//!     open and writes their closing records (`terminal::close_node_shells_on_quit`).
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame

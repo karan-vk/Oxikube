@@ -2,7 +2,7 @@
 //!
 //! The view is a GPUI entity that is also a workspace [`Item`](oxikube_workspace::Item) (title
 //! `pod/container`, draggable between panes like every tab). It holds one
-//! [`LogSession`](oxikube_app::logs::LogSession) of the app's `LogService`: the service's task
+//! [`LogSession`] of the app's `LogService`: the service's task
 //! (abort-on-drop, owned by the session) reads the stream into the bounded ring buffer, and the
 //! view polls the session's batched deltas once per wake, applies them in one update and redraws
 //! through `notify_coalesced`. Changing what is read (range, container, previous instance) drops

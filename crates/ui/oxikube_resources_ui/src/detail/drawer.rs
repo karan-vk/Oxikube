@@ -31,7 +31,7 @@ actions!(
 /// The default width of the drawer's dock, unscaled pixels.
 pub const DEFAULT_WIDTH: f32 = 460.;
 
-/// The detail drawer of one cluster tab. See the [module docs](self).
+/// The detail drawer of one cluster tab. See the module docs.
 pub struct DetailDrawer {
     focus: FocusHandle,
     view: Option<Entity<DetailView>>,

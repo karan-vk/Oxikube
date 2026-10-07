@@ -3,7 +3,7 @@
 //! The *enforcement* of read-only mode is the guard's ([`MutationGuard`](super::MutationGuard)
 //! denies every `mutating` command of a read-only session before confirmation or execution, for
 //! every initiator, and re-checks right before each request through the
-//! [`ReadOnlyGate`](super::gate)). This module is the other half: the commands that change the
+//! `ReadOnlyGate`). This module is the other half: the commands that change the
 //! posture itself.
 //!
 //! | Command | Effect | Initiators |
@@ -14,7 +14,7 @@
 //!
 //! None of them touches the cluster, so none is `mutating` and none is blocked by read-only
 //! mode (lifting it must be possible). They run through the guard's posture pipeline instead
-//! ([`MutationGuard::run_posture`]):
+//! (`MutationGuard::run_posture`):
 //!
 //! 1. **Confirmation**: turning read-only *off* on a cluster flagged production (its colour is
 //!    the [`Prod`](ClusterPreset::Prod) red) answers

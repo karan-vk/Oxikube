@@ -23,7 +23,7 @@ use super::TogglePanel;
 const PANEL_HINT: &str = "Terminals of this cluster open here with its kubeconfig, context and namespace set. Drag a \
      terminal tab to a pane, or back here to dock it.";
 
-/// The bottom-dock panel of a cluster's terminals. See the [module docs](self).
+/// The bottom-dock panel of a cluster's terminals. See the module docs.
 pub struct TerminalPanel {
     focus: FocusHandle,
     cluster: Option<ClusterId>,

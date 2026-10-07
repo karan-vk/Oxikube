@@ -45,7 +45,7 @@ pub struct HotbarEntry {
     pub active: bool,
 }
 
-/// The hotbar's data. See the [module docs](self).
+/// The hotbar's data. See the module docs.
 #[derive(Debug, Default)]
 pub struct HotbarModel {
     /// Favourite clusters and the name the catalog knows them by.

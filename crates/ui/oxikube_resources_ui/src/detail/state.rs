@@ -14,7 +14,7 @@ use super::events::EventRow;
 use crate::exec::ExecFlow;
 use crate::table::ResourceTableDeps;
 
-/// What a [`DetailView`] is built over. Cheap to clone.
+/// What a [`DetailView`](crate::detail::DetailView) is built over. Cheap to clone.
 #[derive(Clone)]
 pub struct DetailDeps {
     /// The sessions: the cluster's connection, ports and namespace selection.

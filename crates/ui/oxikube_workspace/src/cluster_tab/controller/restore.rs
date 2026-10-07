@@ -39,7 +39,7 @@ use crate::persistence::{LayoutPersistence, PersistenceEvent, RestoreStatus};
 use crate::toast::Toast;
 
 impl ClusterTabs {
-    /// Reopens the last session, if `session.restore` is on: see the [file docs](self). Call it
+    /// Reopens the last session, if `session.restore` is on: see the file docs. Call it
     /// once the window exists, after [`ClusterTabs::start`] and after the layout persistence
     /// started (`layout`; `None` when there is none to wait for). Returns at once; everything
     /// runs after the first frame.

@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::grid::{GridMatch, TerminalSnapshot};
 
-/// The matches of a search and the one the user is on, for [`TerminalElement::highlights`]
+/// The matches of a search and the one the user is on, for [`TerminalElement::highlights`](crate::TerminalElement::highlights)
 /// (`crate::TerminalElement::highlights`).
 #[derive(Debug, Clone, Default)]
 pub struct SearchHighlights {

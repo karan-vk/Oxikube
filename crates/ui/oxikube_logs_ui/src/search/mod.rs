@@ -23,7 +23,7 @@
 //!
 //! The view's [`LineWindow`](crate::view::LineWindow) carries the index. A delta tests only the
 //! lines it appended and drops the matches of lines the ring dropped. A pattern edit builds a new
-//! index: up to [`scan::INLINE_LINES`] lines on the spot (under a frame's budget), otherwise in
+//! index: up to `scan::INLINE_LINES` lines on the spot (under a frame's budget), otherwise in
 //! chunks on the background executor, publishing the finished index in one update. Until then the
 //! old index keeps serving, so typing never blocks a frame. Highlight spans are computed for the
 //! rows on screen at draw time.

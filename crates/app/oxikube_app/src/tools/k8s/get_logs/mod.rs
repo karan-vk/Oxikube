@@ -10,7 +10,7 @@
 //! | `tail` | the most lines returned, 1 to 2 000, default 200 |
 //! | `grep` | a regular expression, case-insensitive: only matching lines (searches the newest 10 000 lines of each container) |
 //!
-//! The read never follows: it opens a [`LogService`](crate::logs::LogService) session that ends,
+//! The read never follows: it opens a [`LogService`] session that ends,
 //! waits at most 20 s, and returns at most 256 KiB, each line prefixed with its server time and
 //! `pod/container`. What was left out is said in a `note:` line. Secrets are masked best-effort
 //! before anything leaves the tool; the viewer shows the user's own lines unmasked. The tool is

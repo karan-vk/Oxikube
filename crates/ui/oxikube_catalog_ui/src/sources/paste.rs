@@ -33,7 +33,7 @@ pub fn storage_warning(dir: &std::path::Path) -> String {
     )
 }
 
-/// The paste dialog. See the [module docs](self).
+/// The paste dialog. See the module docs.
 pub struct PasteDialog {
     backend: Rc<dyn SourcesBackend>,
     sources: WeakEntity<SourcesView>,

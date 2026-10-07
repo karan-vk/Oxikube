@@ -28,7 +28,7 @@ struct SaveRequest {
     reply: oneshot::Sender<OxiResult<()>>,
 }
 
-/// The [`SourceListStore`] over the `kubeconfig.sources` setting. See the [module docs](self).
+/// The [`SourceListStore`] over the `kubeconfig.sources` setting. See the module docs.
 pub struct SettingsSourceList {
     current: Arc<Mutex<Vec<UserSource>>>,
     saves: mpsc::UnboundedSender<SaveRequest>,

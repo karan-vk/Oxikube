@@ -184,7 +184,7 @@ pub(crate) fn core_kinds() -> impl Iterator<Item = (&'static str, &'static str)>
 /// The plan for kinds the table does not list: CRDs and unknown kinds read the Table API.
 pub const FALLBACK: FeedPlan = FeedPlan::new(FeedKind::Table, FeedPriority::Low);
 
-/// Table-driven feed choice: the built-in [`CORE`] rows plus per-kind overrides (E12 adds its
+/// Table-driven feed choice: the built-in `CORE` rows plus per-kind overrides (E12 adds its
 /// own; a user setting could too).
 #[derive(Debug, Clone)]
 pub struct FeedPolicy {

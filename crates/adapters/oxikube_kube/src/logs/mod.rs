@@ -2,7 +2,7 @@
 //!
 //! [`KubeLogs`] reads `pods/log` with `Api<Pod>::log_stream`. A followed stream is kept alive
 //! through dropped connections, container restarts and API-server stream timeouts, without
-//! duplicated lines and without gaps; see [`follow`] for the algorithm (ported from kdash's
+//! duplicated lines and without gaps; see `follow` for the algorithm (ported from kdash's
 //! `stream_container_logs`, MIT).
 //!
 //! | Piece | Where |
@@ -18,7 +18,7 @@
 //!
 //! # Lines
 //!
-//! Timestamps are always requested from the server and moved into [`LogLine::ts`]; the text
+//! Timestamps are always requested from the server and moved into [`LogLine::ts`](oxikube_domain::log::LogLine::ts); the text
 //! never carries the prefix, whether or not [`LogOptions::timestamps`] was set. That makes the
 //! timestamp the dedup key, so lines an application repeats are kept. A line over
 //! [`MAX_LOG_LINE_BYTES`](oxikube_domain::log::MAX_LOG_LINE_BYTES) is cut and flagged

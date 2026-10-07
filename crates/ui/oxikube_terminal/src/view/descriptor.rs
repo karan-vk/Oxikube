@@ -22,7 +22,7 @@ const DESCRIPTOR_VERSION: u32 = 1;
 /// Longest tab title, in characters; a longer process title is cut with an ellipsis.
 const MAX_TITLE_CHARS: usize = 48;
 
-/// What a terminal runs. See the [module docs](self).
+/// What a terminal runs. See the module docs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum BackendDescriptor {

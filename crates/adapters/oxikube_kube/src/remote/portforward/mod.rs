@@ -5,7 +5,7 @@
 //! * [`PortForwardPort::forward`](oxikube_ports::PortForwardPort::forward): one byte stream
 //!   to one pod port, from `Api<Pod>::portforward` (`take_stream` bridged to `futures::io`
 //!   with `tokio_util::compat`, `take_error` surfaced as the connection's `closed` future).
-//! * [`KubePortForward::start`]: a whole forward for a [`ForwardSpec`]: a local TCP listener
+//! * [`KubePortForward::start`]: a whole forward for a [`ForwardSpec`](oxikube_domain::ForwardSpec): a local TCP listener
 //!   (loopback by default, port `0` picks a free one), service-to-pod resolution, a
 //!   restart hook and a status feed, owned by a [`ForwardHandle`].
 //!

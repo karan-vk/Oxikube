@@ -13,7 +13,7 @@ use oxikube_ports::SecretStorePort;
 use oxikube_ports::secrets::{SecretKey, SecretString};
 use parking_lot::Mutex;
 
-/// See the [module docs](self).
+/// See the module docs.
 #[derive(Default)]
 pub struct MemorySecrets {
     values: Mutex<HashMap<String, SecretString>>,

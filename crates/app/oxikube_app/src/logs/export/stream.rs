@@ -67,7 +67,7 @@ impl ExportSpec {
     }
 
     /// How many lines the spec selects now. Constant time without a filter; with one, every line
-    /// is looked at (in locked slices of [`MAX_SCAN`]), so a UI calls it off its thread.
+    /// is looked at (in locked slices of `MAX_SCAN`), so a UI calls it off its thread.
     pub fn count(&self, reader: &LogReader) -> u64 {
         let (first, next) = reader.read(|buffer, _| (buffer.first_seq(), buffer.next_seq()));
         let start = self.seqs.start.max(first);
