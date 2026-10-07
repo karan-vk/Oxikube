@@ -161,7 +161,7 @@ async fn api_resource_is_available_for_dynamic_apis() {
 async fn subscribers_see_the_diff_of_each_changing_refresh() {
     let server = FakeApiServer::new(Behaviour::Aggregated);
     let discovery: KubeDiscovery = server.discovery();
-    let mut changes = discovery.subscribe();
+    let mut changes = discovery.registry_changes();
 
     discovery.refresh().await.expect("first refresh");
     let first = changes.try_recv().expect("first diff");

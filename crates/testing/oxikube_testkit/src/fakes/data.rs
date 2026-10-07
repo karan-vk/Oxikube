@@ -4,13 +4,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures::StreamExt as _;
+use futures::channel::mpsc;
 use oxikube_domain::OxiResult;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::ResourceKind;
 use oxikube_domain::log::LogLine;
 use oxikube_ports::{
-    ClockPort, DiscoveryPort, LogOptions, LogPort, LogStream, ServerVersion, Table, TableBatch,
-    TableFeed, TableFeedPort, TableOptions,
+    ClockPort, DiscoveryEvent, DiscoveryEvents, DiscoveryPort, LogOptions, LogPort, LogStream,
+    ServerVersion, Table, TableBatch, TableFeed, TableFeedPort, TableOptions,
 };
 use parking_lot::Mutex;
 
@@ -39,19 +41,25 @@ pub enum DiscoveryCall {
     Resolve(Gvk),
     /// `server_version()`.
     ServerVersion,
+    /// `subscribe()`.
+    Subscribe,
 }
 
 /// Fake `DiscoveryPort`.
 ///
 /// Fallbacks: `discover` returns the configured kinds ([`with_kinds`](Self::with_kinds)),
 /// `resolve` finds a configured kind with the same `Gvk`, and `server_version` returns the
-/// configured version (default `v1.33.0`, `linux/amd64`).
+/// configured version (default `v1.33.0`, `linux/amd64`). `subscribe` returns a stream that
+/// yields what [`emit`](Self::emit) sends and counts as live until dropped
+/// ([`live_subscriptions`](Self::live_subscriptions)).
 #[derive(Debug)]
 pub struct FakeDiscoveryPort {
     script: DiscoveryScripts,
     calls: CallLog<DiscoveryCall>,
     kinds: Mutex<Vec<ResourceKind>>,
     version: Mutex<ServerVersion>,
+    subscribers: Mutex<Vec<mpsc::UnboundedSender<DiscoveryEvent>>>,
+    subscriptions: StreamGauge,
 }
 
 fake_plumbing!(FakeDiscoveryPort, DiscoveryScripts, DiscoveryCall);
@@ -68,6 +76,8 @@ impl Default for FakeDiscoveryPort {
                 git_version: "v1.33.0".into(),
                 platform: "linux/amd64".into(),
             }),
+            subscribers: Mutex::new(Vec::new()),
+            subscriptions: StreamGauge::default(),
         }
     }
 }
@@ -96,6 +106,18 @@ impl FakeDiscoveryPort {
         *self.version.lock() = version;
         self
     }
+
+    /// Sends `event` to every live `subscribe` stream (a CRD was added, the watch was refused).
+    pub fn emit(&self, event: DiscoveryEvent) {
+        self.subscribers
+            .lock()
+            .retain(|tx| tx.unbounded_send(event.clone()).is_ok());
+    }
+
+    /// `subscribe` streams handed out and not yet dropped.
+    pub fn live_subscriptions(&self) -> usize {
+        self.subscriptions.live()
+    }
 }
 
 #[async_trait]
@@ -119,6 +141,13 @@ impl DiscoveryPort for FakeDiscoveryPort {
         self.script
             .server_version
             .next_or_else(|| Ok(self.version.lock().clone()))
+    }
+
+    fn subscribe(&self) -> DiscoveryEvents {
+        self.calls.record(DiscoveryCall::Subscribe);
+        let (tx, rx) = mpsc::unbounded();
+        self.subscribers.lock().push(tx);
+        self.subscriptions.track(rx.boxed())
     }
 }
 

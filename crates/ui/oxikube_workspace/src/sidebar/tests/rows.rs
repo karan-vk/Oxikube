@@ -27,6 +27,7 @@ fn rows_for(
         integrations,
         custom,
         access,
+        crd_watch_forbidden: false,
         open,
     })
 }

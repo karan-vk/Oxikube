@@ -59,8 +59,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ClusterSessionManager` connects a context through `ClusterConnectorPort`, holds the returned
   `ClusterPorts` bundle per session, drives `ClusterSessionState` (auth failures to
   `AuthRequired`, transient ones retried with backoff on the `ClockPort`, health reports for
-  `Ready` ↔ `Degraded` → `Error`) and broadcasts `SessionUpdate`s; it spawns nothing (callers
-  drive `connect` with `spawn_kube`, dropping it cancels the attempt). Per-cluster settings
+  `Ready` ↔ `Degraded` → `Error`) and broadcasts `SessionUpdate`s; it spawns only the
+  per-connection forwarder of `DiscoveryPort::subscribe` events (a CRD added or removed becomes
+  `SessionChange::KindsChanged`, a refused CRD watch `CrdWatchChanged`; E03-F544), owned by the
+  session entry and aborted when the connection is released (callers drive `connect` with
+  `spawn_kube`, dropping it cancels the attempt). Per-cluster settings
   (E06-S08): the binary pushes a `ClusterPrefsTable` (`oxikube_ports::cluster_prefs`, resolved by
   `oxikube_settings::ClusterSettings` from `clusters.<id>`) into `set_prefs_table`; new sessions
   start from it and open ones follow it live (read-only, colour, display name; exec policy on the

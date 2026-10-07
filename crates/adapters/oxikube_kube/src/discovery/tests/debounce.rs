@@ -15,6 +15,7 @@ fn config() -> CrdWatchConfig {
         debounce: MS(500),
         max_wait: MS(3000),
         retry_delay: MS(5000),
+        ..CrdWatchConfig::default()
     }
 }
 

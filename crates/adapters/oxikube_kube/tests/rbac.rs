@@ -15,12 +15,13 @@ use kube::{Api, Client};
 use oxikube_domain::access::{Access, AccessRequirement};
 use oxikube_domain::ids::{ContextName, Gvr};
 use oxikube_domain::{Capability, ErrorKind};
-use oxikube_kube::ClientPool;
 use oxikube_kube::auth::{CredentialRefresh, classify};
 use oxikube_kube::health::{
     AccessLevel, AccessQuery, RBAC_DERIVED, RulesCache, can_i, capabilities_for_context,
     fetch_rules, rules_for_context,
 };
+use oxikube_kube::{ClientPool, CrdWatchConfig, KubeDiscovery};
+use oxikube_ports::{CrdWatchStatus, DiscoveryEvent, DiscoveryPort};
 use oxikube_testkit::integration::TestNamespace;
 
 use common::{DEADLINE, Kind, TestServiceAccount, wait_until, whoami};
@@ -245,4 +246,51 @@ async fn restricted_account_rules_answer_per_resource_list_questions() {
         let access = admin.check(&AccessRequirement::list(group, resource));
         assert_eq!(access, Access::Granted, "{group}/{resource}");
     }
+}
+
+/// A user who may not watch CRDs (#449): the refusal is a reported status, not a silent retry
+/// loop, and the registry still works through the discovery endpoints (E03-F544).
+#[tokio::test]
+async fn a_refused_crd_watch_is_reported_and_does_not_retry_hot() {
+    use futures::StreamExt as _;
+    use std::time::Duration;
+
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let restricted = Restricted::create(&kind).await;
+    let client = (*restricted.client).clone();
+
+    // Through the port: the first event is the refusal, with the server's reason.
+    let discovery = KubeDiscovery::new(client.clone());
+    let mut events = discovery.subscribe();
+    let event = tokio::time::timeout(DEADLINE, events.next())
+        .await
+        .expect("an event within the deadline")
+        .expect("the stream is open");
+    let DiscoveryEvent::CrdWatch(CrdWatchStatus::Forbidden { reason }) = event else {
+        panic!("expected the refusal first, got {event:?}");
+    };
+    assert!(reason.contains("oxi-restricted"), "{reason}");
+    assert!(!reason.contains(&restricted.account.token));
+    assert!(discovery.crd_watch_status().is_forbidden());
+    // Discovery itself is allowed for every authenticated user, so the registry works.
+    assert!(!discovery.discover().await.expect("discover").is_empty());
+    drop(events);
+
+    // Bounded attempts: a long interval means one watch start, however long we look.
+    let discovery = KubeDiscovery::new(client);
+    let watch = discovery.watch_crds(CrdWatchConfig {
+        forbidden_interval: Duration::from_secs(3600),
+        ..CrdWatchConfig::default()
+    });
+    wait_until("the refusal to be reported", DEADLINE, || async {
+        discovery.crd_watch_status().is_forbidden().then_some(())
+    })
+    .await;
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    assert_eq!(watch.attempts(), 1, "no hot retry loop");
+    assert!(!watch.is_finished(), "parked until the next interval");
+    // The fallback re-discovery ran once the watch was refused.
+    assert!(!discovery.registry().is_empty());
 }

@@ -138,7 +138,9 @@ pub use connector::{
 pub use context::{ContentPart, ContextProviderPort, ContextScope, Mention, MentionPrefix};
 pub use crash::{CrashId, CrashReport, CrashReporterPort};
 pub use describe::{DescribeOutput, DescribePort, DescribeSource};
-pub use discovery::{DiscoveryPort, ServerVersion};
+pub use discovery::{
+    CrdWatchStatus, DiscoveryEvent, DiscoveryEvents, DiscoveryPort, KindsChange, ServerVersion,
+};
 pub use exec::{
     AttachTarget, BackendEvent, DEFAULT_NODE_SHELL_IMAGE, DEFAULT_NODE_SHELL_NAMESPACE,
     DEFAULT_NSENTER_ARGS, DebugContainerSpec, ExecOptions, ExecPort, ExecSession, ExecStreamPort,

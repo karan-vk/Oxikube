@@ -4,6 +4,7 @@
 
 mod badges;
 mod counts;
+mod crd_watch;
 mod panel;
 mod registry;
 mod rows;
@@ -74,6 +75,9 @@ pub(super) struct Fixture {
     pub(super) state: Arc<FakeStatePort>,
     pub(super) integrations: IntegrationRegistry,
     pub(super) cluster: ClusterId,
+    /// Runs the session's kind forwarder (one task per connection): a current-thread runtime that
+    /// only advances inside [`Self::connect_following`] and [`Self::emit`], so nothing is racy.
+    runtime: tokio::runtime::Runtime,
     /// The stores the badges read, when the fixture was opened with them.
     pub(super) stores: Option<Arc<ResourceStores>>,
 }
@@ -158,6 +162,9 @@ impl Fixture {
             state,
             integrations,
             cluster,
+            runtime: tokio::runtime::Builder::new_current_thread()
+                .build()
+                .expect("tokio runtime"),
             stores,
         }
     }
@@ -177,6 +184,25 @@ impl Fixture {
     /// Connects `prod` and lets the sidebar react (reviews, discovery).
     pub(super) fn connect(&mut self) {
         block_on(self.sessions.connect(&self.cluster)).expect("connect");
+        self.vcx.run_until_parked();
+    }
+
+    /// [`Self::connect`] on the fixture's runtime, so the session follows the cluster's kinds.
+    pub(super) fn connect_following(&mut self) {
+        self.runtime
+            .block_on(self.sessions.connect(&self.cluster))
+            .expect("connect");
+        self.vcx.run_until_parked();
+    }
+
+    /// The adapter reports `event`; the session forwards it and the sidebar reacts.
+    pub(super) fn emit(&mut self, event: oxikube_ports::DiscoveryEvent) {
+        self.ports.discovery.emit(event);
+        self.runtime.block_on(async {
+            for _ in 0..5 {
+                tokio::task::yield_now().await;
+            }
+        });
         self.vcx.run_until_parked();
     }
 
