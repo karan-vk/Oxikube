@@ -61,6 +61,7 @@ impl Item for LogView {
         }
         self.pump = None;
         self.pod_task = None;
+        self.replacement_task = None;
         self.stop_save(cx);
         self.search.scan = None;
         self.session = None;

@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::future::pending;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
 use futures::channel::mpsc::{Receiver, Sender, channel};
 use futures::{FutureExt as _, StreamExt as _, select_biased};
@@ -48,6 +48,8 @@ pub(crate) struct Coordinator {
     pub config: LogConfig,
     pub buffer_lines: Arc<AtomicUsize>,
     pub max_streams: Arc<AtomicUsize>,
+    /// `logs.reconnect_retries`, for every stream's reconnects.
+    pub retries: Arc<AtomicU32>,
 }
 
 /// Batches that may wait for the coordinator before the streams are pushed back on.
@@ -143,6 +145,11 @@ impl Coordinator {
         let mut options = self.options.clone();
         options.container = Some(container.to_string());
         options.timestamps = true;
+        if pod.joined {
+            // A pod that appeared after the view opened (a rollout's) is new: read all of it.
+            options.tail_lines = None;
+            options.since = None;
+        }
         let task = StreamTask {
             id,
             port: self.ports.logs.clone(),
@@ -152,6 +159,7 @@ impl Coordinator {
             container: container.clone(),
             clock: self.runtime.clock.clone(),
             config: self.config.clone(),
+            retries: self.retries.clone(),
             tx: tx.clone(),
         };
         spawn_guarded(&self.runtime.spawner, task.run())
@@ -218,6 +226,10 @@ impl Coordinator {
             match wake {
                 Wake::Stream(Some(StreamEvent::Opened(id))) => {
                     awaiting_first.remove(&id);
+                    self.agg.set_live_state(id, SourceState::Streaming);
+                }
+                Wake::Stream(Some(StreamEvent::Reconnecting(id, state))) => {
+                    self.agg.set_live_state(id, state);
                 }
                 Wake::Stream(Some(StreamEvent::Lines(id, lines))) => {
                     awaiting_first.remove(&id);

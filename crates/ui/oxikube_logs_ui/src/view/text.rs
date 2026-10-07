@@ -69,6 +69,25 @@ pub fn state_text(state: &LogState) -> String {
             "Stream ended: the container stopped or the connection closed".to_owned()
         }
         LogState::Ended(EndReason::Cancelled) => "Stopped".to_owned(),
+        LogState::Ended(EndReason::PodFinished) => {
+            "Pod finished: its containers ran to completion".to_owned()
+        }
+        LogState::Ended(EndReason::ContainerFinished) => {
+            "Container finished: it exited and will not restart".to_owned()
+        }
+        LogState::Ended(EndReason::PodReplaced) => {
+            "Pod replaced (deleted or recreated by its controller): follow the replacement to keep \
+             reading"
+                .to_owned()
+        }
+        LogState::Ended(EndReason::PodDeleted) => {
+            "Pod deleted: nothing owns it, so no pod replaces it".to_owned()
+        }
+        LogState::Reconnecting {
+            attempt,
+            max,
+            failure,
+        } => format!("Reconnecting ({attempt}/{max}): {}", failure.message),
         LogState::Failed(failure) => {
             let what = match failure.kind {
                 ErrorKind::NotFound => "Not found",
@@ -148,6 +167,10 @@ mod tests {
         assert_eq!(group(12), "12");
         assert!(truncated_marker(1_500, 50_000).starts_with("1,500 older lines dropped"));
         assert_eq!(state_text(&LogState::Connecting), "Connecting…");
+        assert_eq!(
+            state_text(&LogState::Ended(EndReason::ContainerFinished)),
+            "Container finished: it exited and will not restart"
+        );
         let failed = LogState::Failed(LogFailure {
             kind: ErrorKind::Forbidden,
             message: "pods/log is forbidden".into(),

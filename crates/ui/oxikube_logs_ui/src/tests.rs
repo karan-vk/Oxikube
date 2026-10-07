@@ -1,5 +1,6 @@
-//! `logs.buffer_lines` and `logs.max_streams` through the real settings store: the default in
-//! `default.json` and a hot reload, global and per cluster, into a `LogService` with open sessions.
+//! `logs.buffer_lines`, `logs.max_streams` and `logs.reconnect_retries` through the real settings
+//! store: the default in `default.json` and a hot reload, global and per cluster, into a
+//! `LogService` with open sessions.
 
 use std::sync::Arc;
 
@@ -221,4 +222,31 @@ fn editing_max_streams_reaches_the_service(cx: &mut TestAppContext) {
     // Removing the override returns to the default.
     edit(cx, r#"{ "ui_scale": 1.25 }"#);
     assert_eq!(service.max_streams(), DEFAULT_MAX_STREAMS);
+}
+
+#[gpui::test]
+fn editing_reconnect_retries_reaches_the_service(cx: &mut TestAppContext) {
+    cx.set_global(store());
+    let service = service();
+    cx.update(|cx| follow_settings(&service, cx));
+    cx.run_until_parked();
+    assert_eq!(
+        service.reconnect_retries(),
+        oxikube_app::logs::DEFAULT_RECONNECT_RETRIES
+    );
+    let edit = |cx: &mut TestAppContext, json: &str| {
+        cx.update(|cx| {
+            SettingsStore::update_global(cx, |store, _| {
+                store.set_user_settings(json).expect("valid settings");
+            });
+        });
+        cx.run_until_parked();
+    };
+    edit(cx, r#"{ "logs": { "reconnect_retries": 0 } }"#);
+    assert_eq!(service.reconnect_retries(), 0, "0 never reconnects");
+    edit(cx, r#"{ "logs": { "reconnect_retries": 9000 } }"#);
+    assert_eq!(
+        service.reconnect_retries(),
+        oxikube_app::logs::MAX_RECONNECT_RETRIES
+    );
 }

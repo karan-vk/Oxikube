@@ -24,6 +24,9 @@ pub(super) struct PodState {
     /// same name (a StatefulSet's) is a new pod with new streams.
     pub uid: Arc<str>,
     pub containers: Vec<PodContainer>,
+    /// Whether the pod appeared after the view opened (not in the first list): it is new, so its
+    /// log is read from the start (E08-S07).
+    pub joined: bool,
 }
 
 impl PodState {
@@ -61,6 +64,7 @@ impl PodState {
                 .clone()
                 .unwrap_or_else(|| Arc::from(resource.name())),
             containers,
+            joined: false,
         }
     }
 }

@@ -8,7 +8,7 @@
 
 use futures::StreamExt as _;
 use gpui::Context;
-use oxikube_app::logs::{LogDelta, LogFailure, LogSession, LogState, LogTarget};
+use oxikube_app::logs::{AggregatePorts, LogDelta, LogFailure, LogSession, LogState, LogTarget};
 use oxikube_domain::ErrorKind;
 use oxikube_runtime::notify_coalesced;
 
@@ -34,11 +34,9 @@ impl LogView {
             self.open_aggregate_stream(cx);
             return;
         }
-        let port = self
-            .deps
-            .sessions
-            .get(&self.target.cluster)
-            .and_then(|session| session.logs());
+        let cluster = self.deps.sessions.get(&self.target.cluster);
+        let port = cluster.as_ref().and_then(|session| session.logs());
+        let resources = cluster.as_ref().and_then(|session| session.resources());
         let (Some(port), Some(namespace)) = (port, self.target.namespace.as_deref()) else {
             self.reset_rows(LineWindow::with_state(not_connected()));
             notify_coalesced(cx);
@@ -49,20 +47,40 @@ impl LogView {
             pod: self.target.name.to_string(),
             container: self.options.container.clone(),
         };
-        let session = self.deps.service.open_in(
-            &self.target.cluster,
-            port,
-            target,
-            self.options.log_options(),
-        );
+        let service = &self.deps.service;
+        let options = self.options.log_options();
+        // With the pod readable the session follows its life (E08-S07): it reconnects while the
+        // pod runs and says when it finished or was replaced.
+        let session = match resources {
+            Some(resources) => service.open_following_in(
+                &self.target.cluster,
+                AggregatePorts {
+                    logs: port,
+                    resources,
+                },
+                target,
+                options,
+            ),
+            None => service.open_in(&self.target.cluster, port, target, options),
+        };
         self.start_session(session, cx);
     }
 
     /// Takes `session` as the one the view reads: the rows start over and one pump applies its
     /// deltas (replacing, so cancelling, the previous pump).
     pub(crate) fn start_session(&mut self, session: LogSession, cx: &mut Context<Self>) {
-        let mut deltas = session.deltas();
         self.session = Some(session);
+        self.pump_session(cx);
+    }
+
+    /// Reads the session from its first retained line again: the rows start over and one pump
+    /// applies its deltas (replacing, so cancelling, the previous pump). Also what a reconnect
+    /// by hand does, whose deltas ended with the read before it.
+    pub(crate) fn pump_session(&mut self, cx: &mut Context<Self>) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        let mut deltas = session.deltas();
         self.reset_rows(LineWindow::new());
         self.pump = Some(cx.spawn(async move |this, cx| {
             // Each poll computes one delta from the view's cursor: everything committed since

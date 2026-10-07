@@ -87,13 +87,20 @@ fn dropped_lines_show_the_truncated_marker_on_top(cx: &mut TestAppContext) {
 #[gpui::test]
 fn an_ended_stream_has_its_state_row_at_the_bottom(cx: &mut TestAppContext) {
     let mut fx = Fx::new(cx);
+    // The pod ran to its end: its stream ends, and the row says why (E08-S07).
+    let mut done = super::fixture::pod().json;
+    done["status"]["phase"] = serde_json::json!("Succeeded");
+    fx.ports
+        .resources
+        .insert(oxikube_domain::Resource::from_json(done).unwrap());
     let view = fx.open(Timeline::immediate(lines(0, 2)));
     fx.read(&view, |view| {
         let window = view.line_window();
-        assert_eq!(window.state(), &LogState::Ended(EndReason::StreamClosed));
+        assert_eq!(window.state(), &LogState::Ended(EndReason::PodFinished));
         assert_eq!(window.row(2), Some(Row::State));
         let text = view.row_text(2).unwrap();
-        assert!(text.starts_with("Stream ended"), "{text}");
+        assert!(text.starts_with("Pod finished"), "{text}");
+        assert_eq!(view.recovery(), None, "nothing to reconnect to");
     });
 }
 

@@ -1,19 +1,20 @@
 //! [`LogService`]: opens log sessions over a `LogPort` and keeps their memory bounded.
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 
 use oxikube_domain::ids::ClusterId;
-use oxikube_ports::{LogOptions, LogPort};
+use oxikube_ports::{LogOptions, LogPort, ResourceReader};
 use parking_lot::Mutex;
 
 use super::aggregate::{
     AggShared, AggregatePorts, AggregateSession, AggregateSpec, AggregateView, Coordinator,
 };
 use super::bounds::{BoundCell, Bounds};
+use super::churn::{Overlap, clamp_reconnect_retries};
 use super::driver::Driver;
 use super::options::{LogConfig, LogRuntime, clamp_max_streams};
-use super::session::{LogReader, LogSession};
+use super::session::{LogReader, LogSession, Restart};
 use super::shared::Shared;
 use super::target::LogTarget;
 use crate::store::spawn_guarded;
@@ -28,6 +29,8 @@ pub struct LogService {
     config: LogConfig,
     bounds: Mutex<Bounds>,
     max_streams: Arc<AtomicUsize>,
+    /// `logs.reconnect_retries`, shared with every session's read.
+    retries: Arc<AtomicU32>,
     next_id: AtomicU64,
     sessions: Mutex<Vec<Tracked>>,
 }
@@ -46,6 +49,12 @@ impl LogService {
             runtime,
             bounds: Mutex::new(Bounds::new(config.buffer_lines)),
             max_streams: Arc::new(AtomicUsize::new(clamp_max_streams(config.max_streams))),
+            retries: Arc::new(AtomicU32::new(
+                config
+                    .reconnect
+                    .backoff()
+                    .map_or(0, |backoff| clamp_reconnect_retries(backoff.max_retries)),
+            )),
             config,
             next_id: AtomicU64::new(1),
             sessions: Mutex::new(Vec::new()),
@@ -65,7 +74,7 @@ impl LogService {
         options: LogOptions,
     ) -> LogSession {
         let bound = self.bounds.lock().default_cell();
-        self.open_bounded(bound, port, target, options)
+        self.open_bounded(bound, port, None, target, options)
     }
 
     /// [`LogService::open`] for a session of `cluster`: it keeps the cluster's own
@@ -78,13 +87,31 @@ impl LogService {
         options: LogOptions,
     ) -> LogSession {
         let bound = self.bounds.lock().cell_for(cluster);
-        self.open_bounded(bound, port, target, options)
+        self.open_bounded(bound, port, None, target, options)
+    }
+
+    /// [`LogService::open_in`] for a session that follows its pod's life (E08-S07): it reads the
+    /// pod through `ports.resources` as the stream opens and again when the stream ends, so the
+    /// session says why it ended ([`EndReason::PodFinished`](super::EndReason),
+    /// [`ContainerFinished`](super::EndReason::ContainerFinished),
+    /// [`PodReplaced`](super::EndReason::PodReplaced), [`PodDeleted`](super::EndReason::PodDeleted))
+    /// and reconnects when the pod still runs. What the viewer opens.
+    pub fn open_following_in(
+        &self,
+        cluster: &ClusterId,
+        ports: AggregatePorts,
+        target: LogTarget,
+        options: LogOptions,
+    ) -> LogSession {
+        let bound = self.bounds.lock().cell_for(cluster);
+        self.open_bounded(bound, ports.logs, Some(ports.resources), target, options)
     }
 
     fn open_bounded(
         &self,
         bound: BoundCell,
         port: Arc<dyn LogPort>,
+        resources: Option<Arc<dyn ResourceReader>>,
         mut target: LogTarget,
         mut options: LogOptions,
     ) -> LogSession {
@@ -109,9 +136,18 @@ impl LogService {
             clock: self.runtime.clock.clone(),
             config: self.config.clone(),
             buffer_lines: bound,
+            retries: self.retries.clone(),
+            resources,
         };
-        let task = spawn_guarded(&self.runtime.spawner, driver.run());
-        LogSession::new(shared, task)
+        let task = spawn_guarded(
+            &self.runtime.spawner,
+            driver.clone().run(Overlap::default()),
+        );
+        let restart = Restart {
+            spawner: self.runtime.spawner.clone(),
+            driver,
+        };
+        LogSession::new(shared, task, Some(restart))
     }
 
     /// Opens an aggregate session reading the pods `spec` picks (a workload, a Service or a label
@@ -179,9 +215,10 @@ impl LogService {
             config: self.config.clone(),
             buffer_lines: bound,
             max_streams: self.max_streams.clone(),
+            retries: self.retries.clone(),
         };
         let task = spawn_guarded(&self.runtime.spawner, coordinator.run());
-        AggregateSession::new(LogSession::new(shared, task), AggregateView::new(agg))
+        AggregateSession::new(LogSession::new(shared, task, None), AggregateView::new(agg))
     }
 
     /// The clock the service's tasks and deadlines run on.
@@ -200,6 +237,19 @@ impl LogService {
     pub fn set_max_streams(&self, streams: usize) {
         self.max_streams
             .store(clamp_max_streams(streams), Ordering::Release);
+    }
+
+    /// Reconnects a broken stream tries in a row before its session is `Failed`
+    /// (`logs.reconnect_retries`).
+    pub fn reconnect_retries(&self) -> u32 {
+        self.retries.load(Ordering::Acquire)
+    }
+
+    /// Applies a new `logs.reconnect_retries` (clamped) to every open session and stream: the next
+    /// failure counts against it.
+    pub fn set_reconnect_retries(&self, retries: u32) {
+        self.retries
+            .store(clamp_reconnect_retries(retries), Ordering::Release);
     }
 
     /// Lines a session keeps by default (`logs.buffer_lines`).

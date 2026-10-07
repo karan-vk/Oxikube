@@ -220,6 +220,8 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::LOGS_SEND_TO_AGENT, "oxikube_logs_ui"),
         (CommandId::LOGS_CLEAR, "oxikube_logs_ui"),
         (CommandId::LOGS_SAVE, "oxikube_logs_ui"),
+        (CommandId::LOGS_RECONNECT, "oxikube_logs_ui"),
+        (CommandId::LOGS_FOLLOW_REPLACEMENT, "oxikube_logs_ui"),
         (CommandId::LOGS_FIND, "oxikube_logs_ui"),
         (CommandId::LOGS_NEXT_MATCH, "oxikube_logs_ui"),
         (CommandId::LOGS_TOGGLE_FILTER_MODE, "oxikube_logs_ui"),

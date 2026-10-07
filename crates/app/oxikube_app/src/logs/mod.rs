@@ -15,14 +15,15 @@
 //! | the ring of lines with seq numbers and O(1) index / range reads | [`LogBuffer`], [`LogEntry`] (`ring`, `entry`) |
 //! | search and filter: the regex predicate, the incremental match index | [`LogFilter`], [`LogMatcher`], [`MatchIndex`] (`filter`) |
 //! | batched change notifications | [`LogDelta`], [`LogDeltas`] (`delta`) |
-//! | `Connecting` / `Streaming` / `Ended` / `Failed` | [`LogState`], [`EndReason`], [`LogFailure`] (`state`) |
+//! | `Connecting` / `Streaming` / `Reconnecting` / `Ended` / `Failed` | [`LogState`], [`EndReason`], [`LogFailure`] (`state`) |
 //! | a bounded, non-following read as redacted text: the agent's `get_logs` and `@logs` (E08-S09) | [`ExcerptRequest`], [`LogExcerpt`], [`LogService::read_excerpt`] (`excerpt`) |
 //! | saving and copying lines: the line format, chunked reads, the write | [`export`] |
 //! | JSON structured lines: parsers, field names, normalised levels and times | [`parse`] |
 //! | which levels a view shows (the level chips) | [`LevelFilter`] (`level_filter`) |
 //! | the task that reads the stream and commits batches | `driver`, `batcher` |
 //! | the logs of every pod a workload, Service or selector picks, merged by server timestamp (E08-S04) | [`AggregateSession`], [`AggregateSpec`] (`aggregate`) |
-//! | runtime, buffer bound, batching, the reconnect seam | [`LogRuntime`], [`LogConfig`], [`ReconnectPolicy`] (`options`) |
+//! | runtime, buffer bound, batching | [`LogRuntime`], [`LogConfig`] (`options`) |
+//! | reconnect with backoff and overlap dedupe, why a pod's stream ended, its replacement (E08-S07) | [`ReconnectPolicy`], [`PodIdentity`], [`find_replacement`] (`churn`) |
 //!
 //! # Data flow
 //!
@@ -48,6 +49,7 @@
 mod aggregate;
 mod batcher;
 mod bounds;
+mod churn;
 mod delta;
 mod driver;
 mod entry;
@@ -71,6 +73,10 @@ pub use aggregate::{
     AggregateView, HiddenSources, PodChange, PodEvent, SourceId, SourceInfo, SourceState,
     and_selectors, is_aggregate_kind, selector_of,
 };
+pub use churn::{
+    Backoff, DEFAULT_RECONNECT_RETRIES, MAX_RECONNECT_RETRIES, PodIdentity, ReconnectPolicy,
+    clamp_reconnect_retries, find_replacement,
+};
 pub use delta::{LogDelta, LogDeltas};
 pub use entry::LogEntry;
 pub use excerpt::{
@@ -81,7 +87,7 @@ pub use filter::{FilterError, IndexChange, LogFilter, LogMatcher, MatchIndex};
 pub use level_filter::LevelFilter;
 pub use options::{
     DEFAULT_BUFFER_LINES, DEFAULT_MAX_STREAMS, LogConfig, LogRuntime, MAX_BUFFER_LINES,
-    MAX_MAX_STREAMS, MIN_BUFFER_LINES, ReconnectPolicy, clamp_buffer_lines, clamp_max_streams,
+    MAX_MAX_STREAMS, MIN_BUFFER_LINES, clamp_buffer_lines, clamp_max_streams,
 };
 pub use ring::LogBuffer;
 pub use service::LogService;

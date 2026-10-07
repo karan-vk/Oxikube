@@ -7,7 +7,7 @@ use oxikube_ports::LogOptions;
 use oxikube_testkit::Timeline;
 
 use super::{Harness, burst, line};
-use crate::logs::{EndReason, LogFailure, LogState, LogTarget};
+use crate::logs::{EndReason, LogConfig, LogFailure, LogState, LogTarget, ReconnectPolicy};
 
 fn failed(state: LogState) -> LogFailure {
     match state {
@@ -112,7 +112,11 @@ fn a_followed_stream_that_ends_is_closed_not_completed() {
 
 #[test]
 fn a_stream_that_breaks_keeps_its_lines_and_reports_a_retryable_failure() {
-    let mut h = Harness::new();
+    // Without reconnects (E08-S07 reconnects by default: `churn::tests`).
+    let mut h = Harness::with_config(LogConfig {
+        reconnect: ReconnectPolicy::Never,
+        ..LogConfig::default()
+    });
     let session = h.follow(
         Timeline::new()
             .ok_at(Duration::ZERO, line(0))

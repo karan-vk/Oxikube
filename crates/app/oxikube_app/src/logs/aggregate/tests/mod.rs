@@ -1,6 +1,7 @@
 //! Aggregate tests over `FakeLogPort` and `FakeResourcePort` scripts, on the same deterministic
 //! executor and fake clock as the single-session tests (no runtime, no threads).
 
+mod churn;
 mod lifecycle;
 mod ordering;
 mod pods;

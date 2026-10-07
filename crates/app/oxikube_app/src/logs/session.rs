@@ -5,12 +5,14 @@ use std::sync::Arc;
 
 use oxikube_ports::LogOptions;
 
+use super::churn::{Overlap, PodIdentity};
 use super::delta::LogDeltas;
+use super::driver::Driver;
 use super::ring::LogBuffer;
 use super::shared::Shared;
-use super::state::LogState;
+use super::state::{EndReason, LogState};
 use super::target::LogTarget;
-use crate::store::TaskGuard;
+use crate::store::{Spawner, TaskGuard, spawn_guarded};
 
 /// A read-only view of a session: its buffer, state and deltas. Cheap to clone; it does not keep
 /// the stream open (only the [`LogSession`] does), so the service's listing, an agent tool or a
@@ -53,6 +55,13 @@ impl LogReader {
         self.shared.read(f)
     }
 
+    /// The pod a single-pod session follows, as read when its stream opened (E08-S07): what
+    /// [`find_replacement`](super::find_replacement) starts from. `None` until it was read, for a
+    /// session that cannot read pods, and for a multi-pod session.
+    pub fn pod_identity(&self) -> Option<PodIdentity> {
+        self.shared.identity.lock().clone()
+    }
+
     /// Lines retained now.
     pub fn len(&self) -> usize {
         self.read(|buffer, _| buffer.len())
@@ -93,14 +102,42 @@ impl std::fmt::Debug for LogReader {
 pub struct LogSession {
     reader: LogReader,
     _task: TaskGuard,
+    /// How to start the read again ([`LogSession::reconnect`]); `None` for a multi-pod session.
+    restart: Option<Restart>,
+}
+
+/// What starts a single-pod session's read again.
+pub(super) struct Restart {
+    pub spawner: Arc<dyn Spawner>,
+    pub driver: Driver,
 }
 
 impl LogSession {
-    pub(super) fn new(shared: Arc<Shared>, task: TaskGuard) -> Self {
+    pub(super) fn new(shared: Arc<Shared>, task: TaskGuard, restart: Option<Restart>) -> Self {
         Self {
             reader: LogReader::new(shared),
             _task: task,
+            restart,
         }
+    }
+
+    /// Starts the read again after the session ended or failed (the viewer's "reconnect", after
+    /// the retries ran out): the state goes back to `Connecting`, the lines stay, and the new
+    /// stream starts a little before the newest of them, the overlap dropped. Returns `false`
+    /// (and does nothing) while the session still reads, after it was cancelled, and for a
+    /// multi-pod session (reopen that one instead). A reader's [`deltas`](LogReader::deltas)
+    /// ended with the old read: take new ones.
+    pub fn reconnect(&mut self) -> bool {
+        let Some(restart) = &self.restart else {
+            return false;
+        };
+        let shared = &self.reader.shared;
+        if matches!(shared.state(), LogState::Ended(EndReason::Cancelled)) || !shared.reopen() {
+            return false;
+        }
+        let overlap = shared.read(|buffer, _| Overlap::seeded(buffer.iter()));
+        self._task = spawn_guarded(&restart.spawner, restart.driver.clone().run(overlap));
+        true
     }
 
     /// Empties the buffer at the user's request (the viewer's "clear"): the retained lines go,

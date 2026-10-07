@@ -377,6 +377,15 @@ impl FakeResourcePort {
         }
     }
 
+    /// Removes the object of `kind` named `name` in `namespace` from the store (it was deleted
+    /// behind the code under test's back). Returns whether there was one. Not a recorded call.
+    pub fn remove(&self, kind: &Gvk, namespace: Option<&str>, name: &str) -> bool {
+        let mut store = self.store.lock();
+        let before = store.len();
+        store.retain(|o| !(&o.kind == kind && o.namespace() == namespace && o.name() == name));
+        store.len() != before
+    }
+
     /// A copy of every stored object, in insertion order.
     pub fn objects(&self) -> Vec<Resource> {
         self.store.lock().clone()

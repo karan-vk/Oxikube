@@ -77,6 +77,12 @@ impl CommandId {
     pub const LOGS_SEND_TO_AGENT: CommandId = CommandId::new("logs::SendToAgent");
     /// `logs::Save`: save a log view's lines to a file the user picks.
     pub const LOGS_SAVE: CommandId = CommandId::new("logs::Save");
+    /// `logs::FollowReplacement`: switch a log view whose pod was replaced (a rollout, a
+    /// StatefulSet's recreated pod) to the pod that took over.
+    pub const LOGS_FOLLOW_REPLACEMENT: CommandId = CommandId::new("logs::FollowReplacement");
+    /// `logs::Reconnect`: open a log view's stream again after it failed or ended, keeping the
+    /// lines it holds.
+    pub const LOGS_RECONNECT: CommandId = CommandId::new("logs::Reconnect");
     /// `logs::SelectContainer`: show another container of a log view's pod (reopens the stream).
     pub const LOGS_SELECT_CONTAINER: CommandId = CommandId::new("logs::SelectContainer");
     /// `logs::SetRange`: read the tail, the head or the last minutes of a log view's log.
@@ -310,7 +316,8 @@ pub static COMMANDS: &[CommandMeta] = &[
     // stream it reads, never the cluster. Reopening a stream reads logs, so those need the logs
     // capability. Kept sorted by id (the table is binary-searched). The local actions on what a
     // view holds (E08-S06) clear the buffer, never the cluster's logs; a save writes only the
-    // file the user picks, so none of them is a mutation.
+    // file the user picks, so none of them is a mutation. Reconnecting and following a
+    // replacement pod (E08-S07) read logs (and the pod's owner), nothing else.
     CommandMeta::read(
         CommandId::LOGS_CLEAR,
         "Logs: Clear",
@@ -342,6 +349,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     CommandMeta::read(
+        CommandId::LOGS_FOLLOW_REPLACEMENT,
+        "Logs: Follow Replacement Pod",
+        CommandScope::Selection,
+        Capabilities::LOGS,
+    ),
+    CommandMeta::read(
         CommandId::LOGS_MARK,
         "Logs: Mark Line",
         CommandScope::Selection,
@@ -358,6 +371,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Logs: Previous Match",
         CommandScope::Selection,
         NONE,
+    ),
+    CommandMeta::read(
+        CommandId::LOGS_RECONNECT,
+        "Logs: Reconnect",
+        CommandScope::Selection,
+        Capabilities::LOGS,
     ),
     CommandMeta::read(
         CommandId::LOGS_SAVE,

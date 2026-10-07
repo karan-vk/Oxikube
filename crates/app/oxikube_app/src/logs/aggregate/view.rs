@@ -89,6 +89,21 @@ impl AggShared {
         });
     }
 
+    /// Moves a live stream to `state` (reconnecting, streaming again). A stream that ended keeps
+    /// its end, and an unchanged state wakes nobody (every stream says it opened).
+    pub(super) fn set_live_state(&self, id: SourceId, state: SourceState) {
+        let differs = self
+            .inner
+            .lock()
+            .sources
+            .iter()
+            .find(|s| s.id == id)
+            .is_some_and(|s| s.state.is_live() && s.state != state);
+        if differs {
+            self.set_source_state(id, state);
+        }
+    }
+
     pub(super) fn push_event(&self, pod: Arc<str>, change: PodChange) {
         self.change(|inner| {
             let seq = inner.next_event;

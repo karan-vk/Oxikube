@@ -1,6 +1,7 @@
 //! The banner of a multi-pod view: a non-modal strip under the toolbar that says what changed in
-//! the pod set ("pod web-7d9 added", "pod web-4c1 ended"), how many pods the stream cap left out,
-//! and when no pod matches. The model is plain Rust; [`LogView::banner`] draws it.
+//! the pod set ("pod web-7d9 added", "pod web-4c1 ended"), the streams that wait to reconnect
+//! ("web-7d9/app reconnecting (1/5)"), how many pods the stream cap left out, and when no pod
+//! matches. The model is plain Rust; [`LogView::banner`] draws it.
 
 use std::collections::VecDeque;
 
@@ -8,7 +9,7 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement as _, ParentElement as _,
     Styled as _, div,
 };
-use oxikube_app::logs::{PodChange, PodEvent};
+use oxikube_app::logs::{PodChange, PodEvent, SourceState};
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
@@ -67,6 +68,19 @@ impl LogView {
     pub(crate) fn banner(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let state = self.aggregate.as_ref()?;
         let mut lines = state.banner.lines();
+        // Streams that broke and wait to reconnect (E08-S07); the others keep flowing.
+        lines.extend(
+            state
+                .sources
+                .iter()
+                .filter_map(|source| match source.state {
+                    SourceState::Reconnecting { attempt, max } => Some(format!(
+                        "{}/{} reconnecting ({attempt}/{max})",
+                        source.pod, source.container
+                    )),
+                    _ => None,
+                }),
+        );
         if state.skipped_pods > 0 {
             lines.push(format!(
                 "{} more pods not streamed (logs.max_streams = {})",

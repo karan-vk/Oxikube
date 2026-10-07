@@ -8,11 +8,21 @@ use oxikube_domain::{ErrorKind, OxiError};
 pub enum EndReason {
     /// A read that does not follow (`follow` off, `previous`) reached the end of the log.
     Completed,
-    /// A followed stream ended: the container stopped, the pod went away, or the connection was
-    /// closed. Whether to follow a replacement is the reconnect policy (E08-S07).
+    /// A followed stream ended and why could not be told (the session cannot read its pod).
     StreamClosed,
     /// The session was dropped or cancelled by its owner.
     Cancelled,
+    /// The pod ran to its end (`Succeeded` or `Failed`): nothing more will be written.
+    PodFinished,
+    /// The followed container exited and will not run again while its pod runs on (a completed
+    /// init container, a container that finished next to a sidecar): its log is complete.
+    ContainerFinished,
+    /// The pod was deleted (or is terminating, or was recreated under its name) and a controller
+    /// owns it: a new pod takes over, and the viewer offers to follow it
+    /// ([`find_replacement`](super::find_replacement)).
+    PodReplaced,
+    /// The pod was deleted and nothing owns it: there is no replacement to follow.
+    PodDeleted,
 }
 
 /// Why a session failed: the error of opening the stream (pod not found, `pods/log` forbidden, a
@@ -38,13 +48,24 @@ impl From<&OxiError> for LogFailure {
     }
 }
 
-/// The state machine of a session: `Connecting`, then `Streaming`, then `Ended` or `Failed`.
+/// The state machine of a session: `Connecting`, then `Streaming`, then `Ended` or `Failed`. A
+/// stream that breaks while its pod runs goes `Reconnecting` and back to `Streaming` (E08-S07).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LogState {
-    /// The stream is being opened.
+    /// The stream is being opened (or its container is waiting to start).
     Connecting,
     /// The stream is open; lines arrive as the server sends them.
     Streaming,
+    /// The stream broke while its pod runs: reconnect `attempt` of `max` is due after a pause.
+    /// Lines already read stay; the replayed overlap is dropped when the stream is back.
+    Reconnecting {
+        /// Which attempt (1 for the first).
+        attempt: u32,
+        /// Attempts before the session gives up (`logs.reconnect_retries`).
+        max: u32,
+        /// What broke the stream, redacted.
+        failure: LogFailure,
+    },
     /// The stream ended without an error. Lines already read stay in the buffer.
     Ended(EndReason),
     /// The stream could not be opened, or broke. Lines already read stay in the buffer.

@@ -177,7 +177,8 @@ async fn run(drive: &LogsDrive, window: AnyWindowHandle, cx: &mut AsyncApp) -> R
         eprintln!(
             "oxikube --perf-logs: {} lines ({:.0} lines/s)",
             next,
-            (next - last.1) as f64 / elapsed
+            // A view that switched to another session (a replacement pod, E08-S07) counts anew.
+            next.saturating_sub(last.1) as f64 / elapsed
         );
         last = (Instant::now(), next);
     }

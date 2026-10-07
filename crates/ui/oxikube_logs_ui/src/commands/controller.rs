@@ -118,6 +118,8 @@ impl LogViews {
                         ViewChange::ToggleLevel(chip) => view.toggle_level(*chip, cx),
                         ViewChange::ToggleLine(seq) => view.toggle_expanded(*seq, cx),
                         ViewChange::CollapseLine => view.collapse(cx),
+                        ViewChange::Reconnect => view.reconnect(cx),
+                        ViewChange::FollowReplacement => view.follow_replacement(cx),
                         ViewChange::ToggleSource { pod, container } => {
                             view.toggle_source(pod, container.as_deref());
                         }

@@ -78,6 +78,11 @@ fn every_log_command_is_a_read_with_an_mcp_tool_stub() {
         (CommandId::LOGS_MARK, "k8s.logs_mark"),
         (CommandId::LOGS_CLEAR, "k8s.logs_clear"),
         (CommandId::LOGS_SEND_TO_AGENT, "k8s.logs_send_to_agent"),
+        (CommandId::LOGS_RECONNECT, "k8s.logs_reconnect"),
+        (
+            CommandId::LOGS_FOLLOW_REPLACEMENT,
+            "k8s.logs_follow_replacement",
+        ),
     ] {
         assert_eq!(id.tool_name(), name);
     }
@@ -162,6 +167,20 @@ fn the_handlers_queue_the_request_for_the_window() {
             LogRequest::Change {
                 target: pod(),
                 change: ViewChange::Mark,
+            },
+        ),
+        (
+            Command::LogsReconnect { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::Reconnect,
+            },
+        ),
+        (
+            Command::LogsFollowReplacement { target: pod() },
+            LogRequest::Change {
+                target: pod(),
+                change: ViewChange::FollowReplacement,
             },
         ),
         (

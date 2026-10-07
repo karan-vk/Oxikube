@@ -426,6 +426,21 @@ pub enum Command {
         /// The object the log view shows.
         target: ResourceRef,
     },
+    /// Switch a log view whose pod was replaced (deleted by a rollout, recreated by its
+    /// StatefulSet) to the pod that took over, found through the gone pod's controller. Reads
+    /// only; the view says when there is no replacement (yet).
+    #[serde(rename = "logs::FollowReplacement")]
+    LogsFollowReplacement {
+        /// The object the log view shows (the gone pod).
+        target: ResourceRef,
+    },
+    /// Open a log view's stream again after it failed (the reconnects ran out, a denied read
+    /// that was fixed) or ended; the lines it holds stay and the overlap is not shown twice.
+    #[serde(rename = "logs::Reconnect")]
+    LogsReconnect {
+        /// The object the log view shows.
+        target: ResourceRef,
+    },
     /// Offer to save a log view's lines to a file: the view shows what would be written and the
     /// user picks the file, so nothing is written without them.
     #[serde(rename = "logs::Save")]
@@ -687,6 +702,8 @@ impl Command {
             Command::LogsCopy { .. } => CommandId::LOGS_COPY,
             Command::LogsMark { .. } => CommandId::LOGS_MARK,
             Command::LogsSendToAgent { .. } => CommandId::LOGS_SEND_TO_AGENT,
+            Command::LogsFollowReplacement { .. } => CommandId::LOGS_FOLLOW_REPLACEMENT,
+            Command::LogsReconnect { .. } => CommandId::LOGS_RECONNECT,
             Command::LogsSave { .. } => CommandId::LOGS_SAVE,
             Command::LogsSetRange { .. } => CommandId::LOGS_SET_RANGE,
             Command::LogsSelectContainer { .. } => CommandId::LOGS_SELECT_CONTAINER,
@@ -752,6 +769,8 @@ impl Command {
             | Command::LogsCopy { target }
             | Command::LogsMark { target }
             | Command::LogsSendToAgent { target }
+            | Command::LogsFollowReplacement { target }
+            | Command::LogsReconnect { target }
             | Command::LogsSave { target, .. }
             | Command::LogsSetRange { target, .. }
             | Command::LogsSelectContainer { target, .. }
@@ -961,6 +980,8 @@ mod tests {
             Command::LogsCopy { target: pod() },
             Command::LogsMark { target: pod() },
             Command::LogsSendToAgent { target: pod() },
+            Command::LogsFollowReplacement { target: pod() },
+            Command::LogsReconnect { target: pod() },
             Command::LogsSave {
                 target: pod(),
                 scope: LogSaveScope::All,
@@ -1167,6 +1188,8 @@ mod tests {
                     | Command::LogsCopy { .. }
                     | Command::LogsMark { .. }
                     | Command::LogsSendToAgent { .. }
+                    | Command::LogsFollowReplacement { .. }
+                    | Command::LogsReconnect { .. }
                     | Command::LogsSave { .. }
                     | Command::LogsSetRange { .. }
                     | Command::LogsSelectContainer { .. }
