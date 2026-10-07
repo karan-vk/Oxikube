@@ -162,7 +162,10 @@ Theme families bundled under `crates/platform/oxikube_assets` list their own lic
   `one-light-ui`; the theme file is Zed's `assets/themes/one/one.json` @
   56cf49bc1afe05bbc777a7df5a01f79299ab4956): `crates/platform/oxikube_assets/assets/themes/one.json`,
   licence text in `assets/themes/LICENSES.md` next to it. Bundled, and the fallback for any key
-  a user theme leaves unset.
+  a user theme leaves unset. Oxikube modifies the file in one respect: the text and status colours
+  (`text.muted`, `text.accent`, `error`, `info`, `success`, `warning`) are adjusted in lightness so
+  they reach WCAG AA (4.5:1) on the backgrounds they are drawn on (E05-U562; checked by
+  `oxikube_ui::tokens::contrast`).
 
 Test-only fixtures (not bundled, not shipped in the application): `crates/platform/oxikube_theme/tests/fixtures/`
 holds Zed's `ayu/ayu.json` (MIT, Copyright (c) 2016 Ike Ku, https://github.com/dempfi/ayu) and
