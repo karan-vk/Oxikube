@@ -159,7 +159,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   cluster's sessions read one shared cell, so open sessions resize when the override changes). Line text is
   never logged.
 - `oxikube_logs_ui` — E08-S01, S10: `LogsSettings` (the `logs` block: `buffer_lines` default 50 000 clamped 100 to
-  5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect`; defaults in
+  5 000 000, `default_tail` 1 000 clamped 1 to 100 000, `wrap`, `timestamps`, `json_auto_detect` (reserved: stored and hot-reloaded, read by nothing until the JSON mode of E08-S05); defaults in
   `default.json`, schema generated, per-cluster overrides under `clusters.<id>.logs`, out-of-range values clamped
   with a warning), `log_runtime` (the Tokio-bridge spawner) and `follow_settings` (hot reload of
   `buffer_lines`, global and per cluster, into the `LogService` on a background task; `wrap`, `timestamps` and

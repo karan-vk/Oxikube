@@ -40,7 +40,7 @@ pub struct ViewOptions {
     /// Show each line's server timestamp before its text.
     pub timestamps: bool,
     /// Render JSON-object lines as columns when the log looks structured
-    /// (`logs.json_auto_detect`; the JSON mode itself is E08-S05's).
+    /// (`logs.json_auto_detect`). Reserved: nothing reads it until the JSON mode (E08-S05).
     pub json_auto_detect: bool,
 }
 

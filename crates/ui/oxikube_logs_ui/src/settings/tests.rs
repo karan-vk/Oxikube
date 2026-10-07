@@ -218,6 +218,17 @@ fn the_schema_documents_every_key_with_its_range() {
             "logs.{key} has no description: {text}"
         );
     }
+    let json = defs["json_auto_detect"]["description"].as_str().unwrap();
+    assert!(
+        json.contains("Reserved") && json.contains("E08-S05"),
+        "json_auto_detect has no JSON mode behind it yet, so its docs must say so: {json}"
+    );
+    let default_json =
+        include_str!("../../../../platform/oxikube_assets/assets/settings/default.json");
+    assert!(
+        default_json.contains("json_auto_detect  reserved"),
+        "default.json must mark json_auto_detect as reserved"
+    );
     assert_eq!(
         defs["buffer_lines"]["minimum"], 100,
         "{}",
