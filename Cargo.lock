@@ -5862,7 +5862,7 @@ version = "0.0.1"
 dependencies = [
  "async-trait",
  "backon",
- "base64 0.22.1",
+ "base64 0.23.1",
  "either",
  "futures",
  "hex",
@@ -6123,7 +6123,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "flate2",
  "futures",
