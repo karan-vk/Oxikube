@@ -27,14 +27,17 @@ pub(super) fn classify_upgrade(
         return generic(err);
     };
     match status.as_u16() {
-        401 => OxiError::auth(
-            if refresh.allows_retry() {
-                "the cluster rejected the credentials for the streaming connection (they may have expired)"
-            } else {
-                "the cluster rejected the credentials for the streaming connection; sign in again or update the kubeconfig"
-            },
-            refresh.allows_retry(),
-        ),
+        401 => {
+            let retryable = refresh.allows_retry();
+            OxiError::auth(
+                if retryable {
+                    "the cluster rejected the credentials for the streaming connection (they may have expired)"
+                } else {
+                    "the cluster rejected the credentials for the streaming connection; sign in again or update the kubeconfig"
+                },
+                retryable,
+            )
+        }
         403 => OxiError::forbidden(
             "not allowed to open a streaming connection (exec, attach or port-forward): \
              the cluster answered 403 Forbidden; check RBAC for `create` on `pods/exec`, \
@@ -65,13 +68,9 @@ mod tests {
         UpgradeConnectionError::ProtocolSwitch(StatusCode::from_u16(code).unwrap())
     }
 
-    fn check(err: &UpgradeConnectionError, refresh: CredentialRefresh) -> OxiError {
-        classify_upgrade(err, refresh)
-    }
-
     #[test]
     fn forbidden_upgrade_is_forbidden_and_not_retryable() {
-        let e = check(&switch(403), CredentialRefresh::Unknown);
+        let e = classify_upgrade(&switch(403), CredentialRefresh::Unknown);
         assert_eq!(e.kind(), ErrorKind::Forbidden, "{e:?}");
         assert!(!e.is_retryable());
         assert!(e.message().contains("pods/exec"), "{e}");
@@ -84,7 +83,7 @@ mod tests {
             (CredentialRefresh::Unknown, true),
             (CredentialRefresh::Static, false),
         ] {
-            let e = check(&switch(401), refresh);
+            let e = classify_upgrade(&switch(401), refresh);
             assert_eq!(e.kind(), ErrorKind::Auth, "{e:?}");
             assert_eq!(e.is_retryable(), retryable, "{refresh:?}");
         }
@@ -92,7 +91,7 @@ mod tests {
 
     #[test]
     fn missing_pod_upgrade_is_not_found() {
-        let e = check(&switch(404), CredentialRefresh::Unknown);
+        let e = classify_upgrade(&switch(404), CredentialRefresh::Unknown);
         assert_eq!(e.kind(), ErrorKind::NotFound, "{e:?}");
         assert!(!e.is_retryable());
     }
@@ -110,7 +109,7 @@ mod tests {
             U::SecWebSocketProtocolMismatch,
         ];
         for err in others {
-            let e = check(&err, CredentialRefresh::Unknown);
+            let e = classify_upgrade(&err, CredentialRefresh::Unknown);
             assert_eq!(e.kind(), ErrorKind::Network, "{err}: {e:?}");
             assert!(e.is_retryable(), "{err}");
         }
@@ -120,7 +119,9 @@ mod tests {
     fn messages_carry_no_url_or_header_text() {
         for code in [401, 403, 404, 500] {
             for refresh in [CredentialRefresh::Static, CredentialRefresh::Unknown] {
-                let text = check(&switch(code), refresh).to_string().to_lowercase();
+                let text = classify_upgrade(&switch(code), refresh)
+                    .to_string()
+                    .to_lowercase();
                 for leak in [
                     "http://",
                     "https://",

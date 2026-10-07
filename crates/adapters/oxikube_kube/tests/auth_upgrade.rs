@@ -71,8 +71,8 @@ async fn upgrade_without_rbac_is_forbidden() {
     wait_ready(&admin, ns.name(), "box").await;
 
     // No Role at all: every request is forbidden, including the streaming ones.
-    let account = TestServiceAccount::create(&admin, ns.name(), "no-rbac", Vec::new()).await;
     let name = "no-rbac";
+    let account = TestServiceAccount::create(&admin, ns.name(), name, Vec::new()).await;
     let pool = kind.pool(kind.with_token_context(name, &account.token));
     let client = pool.get(&name.into()).await.expect("no-rbac client");
 
