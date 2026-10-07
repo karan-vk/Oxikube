@@ -19,6 +19,7 @@ mod cert_error;
 mod config_error;
 mod text;
 mod upgrade_error;
+use super::refresh::RefreshStalled;
 use auth_error::classify_auth;
 use cert_error::certificate_rejection;
 pub use config_error::{classify_kubeconfig, classify_tls_setup};
@@ -227,6 +228,14 @@ fn classify_discovery(err: &kube::error::DiscoveryError) -> OxiError {
 fn classify_chain(err: &(dyn StdError + 'static), refresh: CredentialRefresh) -> OxiError {
     let mut cur: Option<&(dyn StdError + 'static)> = Some(err);
     while let Some(e) = cur {
+        if let Some(stalled) = e.downcast_ref::<RefreshStalled>() {
+            return OxiError::auth(
+                format!(
+                    "{stalled}; the exec credential plugin may be hung, so the connection is rebuilt on retry"
+                ),
+                true,
+            );
+        }
         if let Some(auth) = e.downcast_ref::<kube::client::AuthError>() {
             return classify_auth(auth);
         }

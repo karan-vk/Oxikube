@@ -632,6 +632,7 @@ fn custom_pool_config_is_applied() {
         retry: RetryMode::Disabled,
         exec_policy: ExecInteractivePolicy::IfAvailable,
         exec_deadline: Duration::from_secs(5),
+        exec_refresh_deadline: Duration::from_secs(7),
         eviction: EvictionPolicy::NEVER,
     };
     let config =

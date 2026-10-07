@@ -18,20 +18,25 @@
 //! [`ErrorKind::Auth`](oxikube_domain::ErrorKind::Auth) so the session moves to
 //! `AuthRequired` with an explanation instead of failing later in an opaque way.
 //!
-//! Building a client runs the plugin synchronously (`Client::try_from` calls it), so
-//! [`build_client`] blocks. Its one caller, `ClientPool`, runs it on the blocking pool
-//! under `PoolConfig::exec_deadline` and reuses a build that outlived the deadline
-//! instead of starting another plugin process; nothing calls it on the UI thread.
+//! Building a client runs the plugin synchronously, so [`build_client`] blocks. Its one
+//! caller, `ClientPool`, runs it on the blocking pool under `PoolConfig::exec_deadline` and
+//! reuses a build that outlived the deadline instead of starting another plugin process;
+//! nothing calls it on the UI thread. A refresh inside the live client is bounded by
+//! `PoolConfig::exec_refresh_deadline` (see [`refresh`](super::refresh)).
 
 use std::path::Path;
 use std::time::Duration;
 
-use kube::client::ClientBuilder;
+use bytes::Bytes;
+use http::{Request, Response};
+use kube::client::{Body, ClientBuilder, ConfigExt as _};
 use kube::config::{ExecConfig, ExecInteractiveMode};
 use kube::{Client, Config};
 use oxikube_domain::{OxiError, OxiResult};
+use tower::{BoxError, Service};
 
 use super::classify::{CredentialRefresh, classify_with};
+use super::refresh::{DEFAULT_REFRESH_DEADLINE, RefreshGuardLayer};
 use crate::warnings::{WarningLayer, WarningSink};
 
 /// How interactive an exec credential plugin is allowed to be.
@@ -101,37 +106,86 @@ impl ExecInteractivePolicy {
 
 /// Applies `policy`, then builds a [`Client`], classifying any failure.
 ///
-/// **Blocks**: kube runs exec credential plugins synchronously inside `Client::try_from`
-/// with no timeout of its own, and loads the client identity there. Call it on the blocking
-/// pool, inside a Tokio runtime (kube spawns the client's buffer task), under a deadline:
-/// `ClientPool` does all three. A plugin that hangs later, when kube refreshes an
-/// expiring token inside a live client, is not covered by that deadline.
+/// **Blocks**: kube runs exec credential plugins synchronously while the client is built
+/// and loads the client identity there. Call it on the blocking pool, inside a Tokio
+/// runtime (kube spawns the client's buffer task), under a deadline: `ClientPool` does all
+/// three. When the plugin later refreshes an expiring token inside the live client, the
+/// refresh is bounded by [`DEFAULT_REFRESH_DEADLINE`] (see [`RefreshGuardLayer`]).
 ///
 /// # Errors
 ///
 /// The policy's `Auth` error, or the build failure classified by [`classify_with`].
 pub fn build_client(config: Config, policy: ExecInteractivePolicy) -> OxiResult<Client> {
-    build_client_with_warnings(config, policy, None)
+    build_client_bounded(config, policy, None, DEFAULT_REFRESH_DEADLINE)
 }
 
 /// [`build_client`] with a [`WarningLayer`] on the client's HTTP stack, so the API server's
-/// `Warning:` response headers are published to `warnings` (E07-S10).
+/// `Warning:` response headers are published to `warnings` (E07-S10), and an explicit limit
+/// on each credential refresh the client performs after it was built (`ClientPool` passes
+/// `PoolConfig::exec_refresh_deadline`).
+///
+/// A user with an `exec` plugin or an `auth-provider` gets the refresh guard: the plugin
+/// runs once here (kube alone runs it three times while building) and again, bounded by
+/// `refresh_deadline`, whenever the token nears expiry. A plugin that returns a client
+/// certificate keeps kube's own path, where the certificate is fixed for the client's life
+/// (the plugin then runs four times per build: one probe of ours, three of kube's; tracked
+/// in #550).
 ///
 /// # Errors
 ///
 /// As [`build_client`].
-pub fn build_client_with_warnings(
+pub fn build_client_bounded(
     mut config: Config,
     policy: ExecInteractivePolicy,
     warnings: Option<WarningSink>,
+    refresh_deadline: Duration,
 ) -> OxiResult<Client> {
     policy.apply_to_config(&mut config)?;
     let refresh = CredentialRefresh::of(&config.auth_info);
+    let guard = take_refreshable_auth(&mut config, refresh_deadline)
+        .map_err(|err| classify_with(&err, refresh))?;
     let builder = ClientBuilder::try_from(config).map_err(|err| classify_with(&err, refresh))?;
-    Ok(match warnings {
+    Ok(match guard {
+        Some(guard) => with_warnings(builder.with_layer(&guard), warnings),
+        None => with_warnings(builder, warnings),
+    })
+}
+
+/// Builds kube's auth layer for an exec or auth-provider user and clears the credential
+/// from `config`, so kube's own stack adds no `Authorization` header (and runs no plugin).
+/// `None` when the user has neither, or the plugin returned a client certificate.
+fn take_refreshable_auth(
+    config: &mut Config,
+    deadline: Duration,
+) -> Result<Option<RefreshGuardLayer>, kube::Error> {
+    if config.auth_info.exec.is_none() && config.auth_info.auth_provider.is_none() {
+        return Ok(None);
+    }
+    let Some(auth) = config.auth_layer()? else {
+        return Ok(None);
+    };
+    let info = &mut config.auth_info;
+    info.exec = None;
+    info.auth_provider = None;
+    info.username = None;
+    info.password = None;
+    info.token = None;
+    info.token_file = None;
+    Ok(Some(RefreshGuardLayer::new(&auth, deadline)))
+}
+
+fn with_warnings<S, B>(builder: ClientBuilder<S>, warnings: Option<WarningSink>) -> Client
+where
+    S: Service<Request<Body>, Response = Response<B>> + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Into<BoxError> + 'static,
+    B: http_body::Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxError>,
+{
+    match warnings {
         Some(sink) => builder.with_layer(&WarningLayer::new(sink)).build(),
         None => builder.build(),
-    })
+    }
 }
 
 /// A deadline as `"30s"` or `"500ms"`, for timeout messages.

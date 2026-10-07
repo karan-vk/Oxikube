@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use super::eviction::EvictionPolicy;
-use crate::auth::ExecInteractivePolicy;
+use crate::auth::{DEFAULT_REFRESH_DEADLINE, ExecInteractivePolicy};
 
 /// Default TCP + TLS connect timeout. Shorter than kube's 30 s so an unreachable
 /// cluster fails fast in the UI; the health probe (E03-S05) retries on its own.
@@ -65,13 +65,20 @@ pub struct PoolConfig {
     /// The most interaction an exec credential plugin may ask for (E03-S04).
     /// Defaults to [`ExecInteractivePolicy::Never`]: a GUI cannot answer prompts.
     pub exec_policy: ExecInteractivePolicy,
-    /// Limit on building one client, exec plugin included. kube 4.2 runs an exec
-    /// plugin three times per build, one after another (expiry, TLS client identity,
-    /// auth layer), so this bounds all three runs. A build that overruns fails with
+    /// Limit on building one client, exec plugin included. A plugin that returns a token
+    /// runs once per build; one that returns a client certificate runs up to four times
+    /// (kube's expiry, TLS identity and auth layer runs, plus ours to tell the two apart),
+    /// all inside this limit. A build that overruns fails with
     /// [`Timeout`](oxikube_domain::ErrorKind::Timeout); it keeps running on the
     /// blocking pool (a plugin process cannot be cancelled) and the next `get` waits
     /// on it again instead of starting another plugin.
     pub exec_deadline: Duration,
+    /// Limit on one credential refresh inside a built client: the exec plugin that runs
+    /// when kube renews an expiring token. kube runs it on the request path with no
+    /// timeout; past this limit requests fail with a retryable `Auth` error (and, while
+    /// the plugin still runs, fail fast) instead of queueing behind it. See
+    /// [`RefreshGuardLayer`](crate::auth::RefreshGuardLayer).
+    pub exec_refresh_deadline: Duration,
     /// When idle clients are dropped.
     pub eviction: EvictionPolicy,
 }
@@ -85,6 +92,7 @@ impl Default for PoolConfig {
             retry: RetryMode::ServerRetry,
             exec_policy: ExecInteractivePolicy::default(),
             exec_deadline: DEFAULT_EXEC_DEADLINE,
+            exec_refresh_deadline: DEFAULT_REFRESH_DEADLINE,
             eviction: EvictionPolicy::default(),
         }
     }

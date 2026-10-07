@@ -13,6 +13,8 @@ doctest = false
 
 [dependencies]
 backon.workspace = true
+# `Bytes`: body bound of the client builder (`auth::exec`).
+bytes.workspace = true
 either.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
