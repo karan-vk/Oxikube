@@ -25,8 +25,6 @@ pub struct Budget {
     pub tolerance: f64,
     /// What the budget is, for the table.
     pub what: &'static str,
-    /// Only check on this OS (`std::env::consts::OS`); `None`: everywhere.
-    pub os: Option<&'static str>,
 }
 
 /// Every budget, in report order.
@@ -38,7 +36,6 @@ pub const BUDGETS: &[Budget] = &[
         // The nightly tolerance: the scenario fails when the first frame is more than 20 % over.
         tolerance: 0.20,
         what: "cold start to the first interactive frame (process spawn, headless)",
-        os: None,
     },
     Budget {
         scenario: "startup",
@@ -48,7 +45,6 @@ pub const BUDGETS: &[Budget] = &[
         // main thread.
         tolerance: 0.0,
         what: "settings + theme + keymap load on the main thread",
-        os: None,
     },
     Budget {
         scenario: "scroll-10k",
@@ -56,7 +52,6 @@ pub const BUDGETS: &[Budget] = &[
         limit: 1000.0,
         tolerance: 0.0,
         what: "first table rows after the feed is warm (10 000 pods, headless)",
-        os: None,
     },
     Budget {
         scenario: "scroll-10k",
@@ -68,7 +63,6 @@ pub const BUDGETS: &[Budget] = &[
         what: ">= 55 fps scrolling 10 000 pods under churn (headless frame, p95)",
         // Every OS: the Linux runner's 340 ms frames were the scenario's font fallback with error
         // backtraces on, not its software renderer (#509); about 3.4 ms p95 there since.
-        os: None,
     },
     logs_frame(
         "frame_ms",
@@ -122,7 +116,6 @@ const fn logs_frame(metric: &'static str, what: &'static str) -> Budget {
         limit: 8.0,
         tolerance: 0.0,
         what,
-        os: None,
     }
 }
 
@@ -175,7 +168,6 @@ impl fmt::Display for BudgetRow {
 pub fn check(report: &Report, budgets: &[Budget]) -> Vec<BudgetRow> {
     budgets
         .iter()
-        .filter(|budget| budget.os.is_none_or(|os| os == report.os))
         .filter_map(|budget| {
             let result = report.scenarios.get(budget.scenario)?;
             if result.status != Status::Ok {
@@ -291,18 +283,6 @@ mod tests {
         // Checked on Linux too since #509: its slow frames were the scenario, not the runner.
         r.os = "linux".into();
         assert_eq!(verdicts(&r)[2..], [Verdict::Fail, Verdict::Fail]);
-    }
-
-    #[test]
-    fn a_budget_for_one_os_is_not_checked_on_another() {
-        let only_macos = [Budget {
-            os: Some("macos"),
-            ..BUDGETS[0]
-        }];
-        let mut r = report(Some(100.0), 1.0);
-        assert_eq!(check(&r, &only_macos).len(), 1);
-        r.os = "linux".into();
-        assert!(check(&r, &only_macos).is_empty());
     }
 
     #[test]

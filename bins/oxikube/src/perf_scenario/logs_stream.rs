@@ -4,9 +4,9 @@
 //! It runs the real pieces behind a log tab on testkit fakes: a `ClusterSessionManager` connected
 //! through the fake connector, the app's `LogService` (default config: batches of 2 048 lines or
 //! one 32 ms tick, the 50 000-line ring buffer) and the [`LogView`], in a headless window built as
-//! the app builds its own (the window root, then the `--perf` frame hook: [`window_root`]). The pod's log ([`fixture`]) is a 1 000-line tail, then
-//! [`LINES_PER_S`] lines a second replayed on the log port's clock, one [`FRAME`] of it per
-//! scripted frame.
+//! the app builds its own (the window root, then the `--perf` frame hook: [`window_root`]). The
+//! pod's log ([`fixture`]) is a 1 000-line tail, then [`LINES_PER_S`] lines a second replayed on
+//! the log port's clock, one [`FRAME`] of it per scripted frame.
 //!
 //! 1. **Tail**: the view opens (reading the pod for its default container, then the stream) and
 //!    the clocks run a frame at a time until the tail is on screen.

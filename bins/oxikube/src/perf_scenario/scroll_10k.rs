@@ -5,9 +5,9 @@
 //! `ClusterSessionManager` connected through the fake connector, the app's `ResourceStores` on
 //! [`store_runtime`] (the probe that feeds `--perf`'s feed counter included) and the
 //! [`ResourceTable`] view, in a headless window built as the app builds its own (the window root,
-//! then the `--perf` frame hook: [`window_root`]). The pods come
-//! from the fake feed generator ([`fixture`]): a relist of [`PODS`] pods, then one watch batch per
-//! frame (see [`fixture::churn`] for the mix and how it compares with the load-pods churn).
+//! then the `--perf` frame hook: [`window_root`]). The pods come from the fake feed generator
+//! ([`fixture`]): a relist of [`PODS`] pods, then one watch batch per frame (see [`fixture::churn`]
+//! for the mix and how it compares with the load-pods churn).
 //!
 //! 1. **Warm**: a subscription lists the feed into the store before the table exists, as when a
 //!    view of the kind is already open (the "after feed warm" of the budget).
