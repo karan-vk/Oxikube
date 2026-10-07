@@ -181,8 +181,12 @@ impl ClusterTab {
     /// The terminal the user opened while the cluster is not connected (the sign-in view's
     /// "Open terminal"): the item the cluster workspace's bottom dock displays, when that dock is
     /// open. The workspace itself is not drawn until the cluster connects, so the tab shows this
-    /// one view under the connect view, where a login can be run.
-    fn sign_in_terminal(&self, cx: &App) -> Option<AnyView> {
+    /// one view under the connect view, where a login can be run. A connected tab never shows it,
+    /// so the lookup is skipped before it touches the workspace.
+    fn sign_in_terminal(&self, phase: SessionPhase, cx: &App) -> Option<AnyView> {
+        if phase.is_connected() {
+            return None;
+        }
         let workspace = self.workspace.read(cx);
         let dock = workspace
             .dock(DockPosition::Bottom, cx)
@@ -273,7 +277,7 @@ impl Render for ClusterTab {
                 )
             })
             .child(content);
-        let terminal = self.sign_in_terminal(cx);
+        let terminal = self.sign_in_terminal(phase, cx);
         let body = match &self.connect_ui {
             Some(ui) if !phase.is_connected() => v_flex()
                 .flex_1()

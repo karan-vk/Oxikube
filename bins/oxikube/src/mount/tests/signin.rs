@@ -65,3 +65,26 @@ fn open_terminal_on_the_sign_in_view_opens_a_cluster_terminal_under_it(cx: &mut 
     assert!(app.drawn("connect-auth"), "the sign-in view stays above it");
     assert!(app.drawn("connect-retry"));
 }
+
+#[gpui::test]
+fn a_connected_tab_does_not_draw_the_sign_in_terminal_slot(cx: &mut TestAppContext) {
+    let (mut app, _launcher) = auth_required_with_fake_launcher(cx);
+    app.click("connect-open-terminal");
+    let terminal_slot = format!("cluster-connect-terminal-{}", TestPorts::CONTEXT);
+    assert!(
+        app.drawn(&terminal_slot),
+        "the terminal is under the sign-in view"
+    );
+
+    // The retry connects (the script is exhausted, so the fake succeeds): the tab hands the
+    // screen to the workspace, and the sign-in slot (and its per-frame lookup) goes away.
+    app.click("connect-retry");
+    assert!(
+        !app.drawn("connect-auth"),
+        "the sign-in view is gone once connected"
+    );
+    assert!(
+        !app.drawn(&terminal_slot),
+        "a connected tab has no sign-in terminal slot"
+    );
+}
