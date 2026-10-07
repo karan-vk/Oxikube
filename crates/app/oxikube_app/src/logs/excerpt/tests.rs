@@ -188,6 +188,26 @@ fn the_byte_budget_cuts_the_oldest_lines_and_says_so() {
 }
 
 #[test]
+fn a_masked_multi_line_secret_is_not_reported_as_omitted() {
+    let mut env = Env::new();
+    env.script(Timeline::immediate([
+        line("web-0", 0, "loading key"),
+        line("web-0", 1, "-----BEGIN RSA PRIVATE KEY-----"),
+        line("web-0", 2, "MIIEowIBAAKCAQEAsecretsecret"),
+        line("web-0", 3, "-----END RSA PRIVATE KEY-----"),
+        line("web-0", 4, "key loaded"),
+    ]));
+    let excerpt = read(&mut env, &pod_request()).unwrap();
+    assert!(
+        !excerpt.text.contains("MIIEowIBAAKCAQEA"),
+        "{}",
+        excerpt.text
+    );
+    assert_eq!((excerpt.lines, excerpt.matched, excerpt.omitted), (5, 5, 0));
+    assert!(excerpt.notes().is_empty(), "{:?}", excerpt.notes());
+}
+
+#[test]
 fn a_bearer_token_is_masked_in_the_output() {
     let mut env = Env::new();
     env.script(Timeline::immediate([

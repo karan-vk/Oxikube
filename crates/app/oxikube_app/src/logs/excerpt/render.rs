@@ -43,7 +43,8 @@ pub(super) fn pick(buffer: &LogBuffer, matcher: &LogMatcher, tail: usize) -> Pic
 pub(super) struct Rendered {
     /// `timestamp pod/container text` per line, secrets masked, at most the budget.
     pub text: String,
-    /// Lines in `text`.
+    /// Log lines represented in `text`: a line that masking merged into a neighbour (a PEM block
+    /// is one marker) still counts, so `matched - lines` is only what the tail or budget left out.
     pub lines: usize,
     /// Whether older lines were dropped to fit the budget.
     pub budget_cut: bool,
@@ -70,13 +71,22 @@ pub(super) fn render(entries: &[LogEntry], format: ExportFormat, budget: usize) 
         format.write_line(entry, &mut text);
     }
     let mut budget_cut = start > 0;
+    let kept = entries.len() - start;
     let mut text = redact(&text).into_owned();
+    // Masking can merge lines (a PEM block, or everything after a BEGIN with no END, is one
+    // marker); those lines were selected and masked, not left out.
+    let mut lines = kept;
     if text.len() > budget {
         budget_cut = true;
+        let before = text.lines().count();
         fit(&mut text, budget);
+        // Whole lines dropped by `fit` are no longer represented; `lines()` still counts a last
+        // line cut short by the budget (it has no newline any more).
+        lines = lines.saturating_sub(before.saturating_sub(text.lines().count()));
     }
-    // `lines()` also counts a last line cut short by the budget (it has no newline any more).
-    let lines = text.lines().count();
+    if text.is_empty() {
+        lines = 0;
+    }
     Rendered {
         text,
         lines,
@@ -170,6 +180,32 @@ mod tests {
             rendered.text
         );
         assert!(rendered.text.starts_with("web-0/app auth Bearer "));
+    }
+
+    #[test]
+    fn lines_that_masking_merges_still_count_as_rendered() {
+        let pem = [
+            "-----BEGIN RSA PRIVATE KEY-----",
+            "MIIEowIBAAKCAQEA",
+            "abcdef",
+            "-----END RSA PRIVATE KEY-----",
+        ];
+        let mut texts = vec!["before"];
+        texts.extend(pem);
+        texts.push("after");
+        let entries: Vec<_> = texts.iter().enumerate().map(|(i, t)| entry(i, t)).collect();
+        let rendered = render(&entries, ExportFormat::default(), 10_000);
+        assert!(
+            !rendered.text.contains("MIIEowIBAAKCAQEA"),
+            "{}",
+            rendered.text
+        );
+        assert!(
+            rendered.text.lines().count() < entries.len(),
+            "the key collapsed"
+        );
+        assert_eq!(rendered.lines, entries.len());
+        assert!(!rendered.budget_cut);
     }
 
     #[test]
