@@ -113,7 +113,8 @@ mod tests {
     #[test]
     fn defaults_to_ten_thousand_lines_and_caps_the_value() {
         assert_eq!(TerminalSettings::default().scrollback_lines, 10_000);
-        let content: TerminalContent = serde_json::from_str(r#"{"scrollback_lines": 500}"#).unwrap();
+        let content: TerminalContent =
+            serde_json::from_str(r#"{"scrollback_lines": 500}"#).unwrap();
         assert_eq!(
             TerminalSettings::from_content(content).scrollback_lines,
             500
