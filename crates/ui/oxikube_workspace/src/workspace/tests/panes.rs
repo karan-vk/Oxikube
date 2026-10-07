@@ -100,7 +100,7 @@ fn split_actions_dispatch_from_the_keymap(cx: &mut TestAppContext) {
     let prefix = if cfg!(target_os = "macos") {
         "cmd"
     } else {
-        "ctrl"
+        "ctrl-shift"
     };
     vcx.simulate_keystrokes(&format!("{prefix}-k right"));
     vcx.run_until_parked();

@@ -24,8 +24,19 @@
 //! | scroll history | `shift-pageup`, `shift-pagedown`, `shift-up`, `shift-down`, `shift-home`, `shift-end` | the same |
 //!
 //! `ctrl-c`, `ctrl-d`, `ctrl-z`, `ctrl-r`, `ctrl-a` and every other plain `ctrl-` chord reach the
-//! process: nothing here binds them. The scroll keys are the terminal's only on the primary
-//! screen; a full-screen program (vim, htop, less) on the alternate screen receives them.
+//! process: nothing here binds them.
+//!
+//! The same holds for the window's own shortcuts (E09-U560). Off macOS they live on
+//! `ctrl-shift-<key>`, the application namespace (`ctrl-shift-w` closes the tab, `ctrl-shift-b` /
+//! `-j` / `-r` toggle the docks, `ctrl-shift-k <arrow>` splits, `ctrl-shift-q` quits,
+//! `ctrl-shift-1..9` switches cluster tab), never on the plain `ctrl-` chords the table above
+//! forwards (`ctrl-w`, `ctrl-k`, `ctrl-b`, `ctrl-j`, `ctrl-q`, `ctrl-2..8`, `ctrl--`). The UI
+//! zoom chords (`ctrl-=`, `ctrl--`, `ctrl-0`) are unbound (`null`) in the `Terminal` context. `ctrl--` is readline's
+//! undo (`0x1f`). The `keymap_shadowing` test (`tests/element`) sweeps every key
+//! [`to_esc_str`](crate::mappings::to_esc_str) encodes against the keymap an off-macOS build
+//! installs and fails when a binding shadows one, so a new global shortcut cannot regress this.
+//!
+//! The scroll keys are the terminal's only on the primary screen; a full-screen program (vim, htop, less) on the alternate screen receives them.
 //!
 //! Everything a user types or pastes goes to the process only: never to a log, the audit trail
 //! or disk (non-negotiable 5).

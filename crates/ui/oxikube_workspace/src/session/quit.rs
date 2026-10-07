@@ -2,7 +2,7 @@
 //!
 //! Features that start long-lived work (exec sessions and port-forwards in E09, applies in E15)
 //! register an *operation provider*: a function that lists what is running right now. A quit
-//! ([`Quit`], `cmd-q` / `ctrl-q`, the menu) asks every provider; with nothing running, or with
+//! ([`Quit`], `cmd-q` / `ctrl-shift-q`, the menu) asks every provider; with nothing running, or with
 //! `confirm_quit` off, the app quits at once. Otherwise a confirm dialog lists the operations on
 //! the window, and only its confirm button quits. The dialog is an overlay on the window's `Root`
 //! (E05-S03): nothing waits for the answer, so the UI thread never blocks.

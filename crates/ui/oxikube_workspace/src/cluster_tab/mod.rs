@@ -20,8 +20,8 @@
 //! `cluster::Select` (the user's "switch"), `cluster::SwitchTab`, `cluster::NextTab`,
 //! `cluster::PreviousTab` and `cluster::CloseTab` are declared in `oxikube_domain::command`, so
 //! each has an MCP tool stub, and [`register_commands`] puts them on the `CommandBus`. The key
-//! bindings in the per-OS keymaps (`cmd-1` to `cmd-9`, `ctrl-1` to `ctrl-9` on Linux and
-//! Windows, `ctrl-tab`) reach them through the actions in [`actions`]. None changes a cluster,
+//! bindings in the per-OS keymaps (`cmd-1` to `cmd-9`, `ctrl-shift-1` to `ctrl-shift-9` on
+//! Linux and Windows, `ctrl-tab`) reach them through the actions in [`actions`]. None changes a cluster,
 //! so none goes through `MutationGuard`; closing a tab sends `cluster::Disconnect`.
 //!
 //! # Saved state

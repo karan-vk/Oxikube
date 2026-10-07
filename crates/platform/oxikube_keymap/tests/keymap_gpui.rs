@@ -38,14 +38,14 @@ fn the_default_keymap_follows_the_os(cx: &mut TestAppContext) {
     };
     install(cx, linux, "");
     let (window, log) = probe(cx, "Pane");
-    assert_eq!(press(cx, window, &log, "ctrl-q"), ["Quit"]);
+    assert_eq!(press(cx, window, &log, "ctrl-shift-q"), ["Quit"]);
     assert!(
         press(cx, window, &log, "cmd-q").is_empty(),
         "cmd-q is macOS only"
     );
 
     install(cx, mac(), "");
-    assert!(press(cx, window, &log, "ctrl-q").is_empty());
+    assert!(press(cx, window, &log, "ctrl-shift-q").is_empty());
     assert_eq!(press(cx, window, &log, "cmd-q"), ["Quit"]);
 }
 
@@ -410,7 +410,7 @@ fn init_with_the_default_options_installs_the_current_os_keymap(cx: &mut TestApp
     let quit = if cfg!(target_os = "macos") {
         "cmd-q"
     } else {
-        "ctrl-q"
+        "ctrl-shift-q"
     };
     assert_eq!(press(cx, window, &log, quit), ["Quit"]);
 }

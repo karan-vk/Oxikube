@@ -11,11 +11,24 @@
 // action may not be part of this build.
 [
   {
+    // Application shortcuts. Off macOS a shell owns the plain `ctrl-` chords (ctrl-q is XON,
+    // ctrl-w deletes a word, ctrl-k kills the line, ctrl-b / ctrl-j move and accept ...), so an
+    // application shortcut that a focused terminal would swallow lives on `ctrl-shift-`, the way
+    // macOS uses `cmd-`. The `keymap_shadowing` test of `oxikube_terminal` fails when a binding
+    // here (or in the workspace) shadows a key the terminal sends to its process.
     "bindings": {
-      "ctrl-q": "app::Quit",
+      "ctrl-shift-q": "app::Quit",
       "ctrl-,": "oxikube::OpenPreferences",
       "ctrl-shift-p": "palette::Toggle",
-      "ctrl-shift-n": "window::New",
+      "ctrl-shift-n": "window::New"
+    }
+  },
+  {
+    // Zoom. `ctrl--` is readline's undo, so the plain chords are unbound again in the `Terminal`
+    // section below while a terminal has the focus (the View menu and the palette still zoom
+    // there). Not `!Terminal`: GPUI evaluates a negation false on an empty context stack, which
+    // would leave the keys dead while nothing is focused.
+    "bindings": {
       "ctrl-=": "view::ZoomIn",
       "ctrl-+": "view::ZoomIn",
       "ctrl--": "view::ZoomOut",
@@ -23,18 +36,19 @@
     }
   },
   {
-    // Cluster tabs (E06-S04): the nth cluster tab, and cycling through them. `cmd-w` (or
-    // `ctrl-w`) closes the displayed one, through `workspace::CloseActiveItem`.
+    // Cluster tabs (E06-S04): the nth cluster tab, and cycling through them. `ctrl-shift-w`
+    // closes the displayed one, through `workspace::CloseActiveItem`. ctrl-2..8 are control codes
+    // (ctrl-3 is ESC, ctrl-4 is SIGQUIT), hence ctrl-shift-1..9; ctrl-tab is never sent to a shell.
     "bindings": {
-      "ctrl-1": ["cluster::SwitchTab", { "index": 1 }],
-      "ctrl-2": ["cluster::SwitchTab", { "index": 2 }],
-      "ctrl-3": ["cluster::SwitchTab", { "index": 3 }],
-      "ctrl-4": ["cluster::SwitchTab", { "index": 4 }],
-      "ctrl-5": ["cluster::SwitchTab", { "index": 5 }],
-      "ctrl-6": ["cluster::SwitchTab", { "index": 6 }],
-      "ctrl-7": ["cluster::SwitchTab", { "index": 7 }],
-      "ctrl-8": ["cluster::SwitchTab", { "index": 8 }],
-      "ctrl-9": ["cluster::SwitchTab", { "index": 9 }],
+      "ctrl-shift-1": ["cluster::SwitchTab", { "index": 1 }],
+      "ctrl-shift-2": ["cluster::SwitchTab", { "index": 2 }],
+      "ctrl-shift-3": ["cluster::SwitchTab", { "index": 3 }],
+      "ctrl-shift-4": ["cluster::SwitchTab", { "index": 4 }],
+      "ctrl-shift-5": ["cluster::SwitchTab", { "index": 5 }],
+      "ctrl-shift-6": ["cluster::SwitchTab", { "index": 6 }],
+      "ctrl-shift-7": ["cluster::SwitchTab", { "index": 7 }],
+      "ctrl-shift-8": ["cluster::SwitchTab", { "index": 8 }],
+      "ctrl-shift-9": ["cluster::SwitchTab", { "index": 9 }],
       "ctrl-tab": "cluster::NextTab",
       "ctrl-shift-tab": "cluster::PreviousTab"
     }
@@ -209,7 +223,12 @@
       "shift-pageup": "terminal::ScrollPageUp",
       "shift-pagedown": "terminal::ScrollPageDown",
       "shift-up": "terminal::ScrollLineUp",
-      "shift-down": "terminal::ScrollLineDown"
+      "shift-down": "terminal::ScrollLineDown",
+      // The shell owns the plain ctrl chords of the zoom shortcuts (see the Zoom section).
+      "ctrl-=": null,
+      "ctrl-+": null,
+      "ctrl--": null,
+      "ctrl-0": null
     }
   },
   {

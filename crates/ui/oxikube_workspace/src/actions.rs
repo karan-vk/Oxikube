@@ -37,19 +37,29 @@ actions!(
 );
 
 /// The default key bindings of the workspace actions.
+///
+/// Off macOS every chord is `ctrl-shift-<key>`, the application namespace: a terminal in focus
+/// sends the plain `ctrl-<key>` chords to its shell (`ctrl-w` deletes a word, `ctrl-k` kills the
+/// line, `ctrl-b` and `ctrl-j` move and accept), so none of them may be bound here. macOS has no
+/// such conflict and keeps Zed's `cmd` chords. A terminal's own `ctrl-shift-` chords (`k` clear,
+/// `w` close, `t` new) win inside it, as the `cmd` ones do on macOS.
 pub fn default_bindings(macos: bool) -> Vec<KeyBinding> {
     let ctx = Some(WORKSPACE_KEY_CONTEXT);
-    let m = if macos { "cmd" } else { "ctrl" };
+    let m = if macos { "cmd" } else { "ctrl-shift" };
     vec![
         KeyBinding::new(&format!("{m}-k left"), SplitLeft, ctx),
         KeyBinding::new(&format!("{m}-k right"), SplitRight, ctx),
         KeyBinding::new(&format!("{m}-k up"), SplitUp, ctx),
         KeyBinding::new(&format!("{m}-k down"), SplitDown, ctx),
         KeyBinding::new(&format!("{m}-w"), CloseActiveItem, ctx),
-        KeyBinding::new(&format!("{m}-shift-t"), ReopenClosedItem, ctx),
+        KeyBinding::new(
+            if macos { "cmd-shift-t" } else { "ctrl-shift-t" },
+            ReopenClosedItem,
+            ctx,
+        ),
         KeyBinding::new(&format!("{m}-b"), ToggleLeftDock, ctx),
         KeyBinding::new(
-            if macos { "cmd-r" } else { "ctrl-alt-b" },
+            if macos { "cmd-r" } else { "ctrl-shift-r" },
             ToggleRightDock,
             ctx,
         ),

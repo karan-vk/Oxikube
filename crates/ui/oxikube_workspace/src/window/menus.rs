@@ -15,7 +15,8 @@
 
 use crate::session::{NewWindow, Quit, ZoomIn, ZoomOut, ZoomReset};
 use gpui::{
-    App, Global, KeyBinding, Menu, MenuItem, OsAction, ParentElement as _, SystemMenuType, actions,
+    App, Global, KeyBinding, Menu, MenuItem, NoAction, OsAction, ParentElement as _,
+    SystemMenuType, actions,
 };
 use oxikube_ui::{
     dialog::{Dialog, OverlayExt as _, Toast},
@@ -81,8 +82,19 @@ pub fn app_menus() -> Vec<Menu> {
     ]
 }
 
+/// The key context of a focused terminal, whose shell owns the plain `ctrl-` chords (`ctrl--` is
+/// readline's undo). Off macOS the zoom chords are unbound there; the menu items still zoom.
+///
+/// Unbound with a `NoAction` section rather than scoped `!Terminal`: GPUI evaluates a negation
+/// false on an empty context stack, which would leave the zoom keys dead while nothing is focused.
+const TERMINAL_KEY_CONTEXT: &str = "Terminal";
+
 /// Default key bindings of the menu actions (shown next to the items by macOS), including the
 /// session shortcuts: zoom in (`=` and `+`), out and actual size, and New Window.
+///
+/// Off macOS none of them may shadow a key a focused terminal sends to its shell: quit and New
+/// Window are `ctrl-shift-q` / `ctrl-shift-n` (the application namespace), and the plain `ctrl-`
+/// zoom chords are unbound while a terminal has the focus. See the `keymap_shadowing` terminal test.
 ///
 /// The binary does not load the keymap files of `oxikube_assets` yet (E05-S07/S09), so these
 /// interim bindings are what makes the shortcuts work; the files carry the same keys for when it
@@ -94,10 +106,10 @@ pub fn default_bindings(macos: bool) -> Vec<KeyBinding> {
         KeyBinding::new(&format!("{m}-+"), ZoomIn, None),
         KeyBinding::new(&format!("{m}--"), ZoomOut, None),
         KeyBinding::new(&format!("{m}-0"), ZoomReset, None),
-        KeyBinding::new(&format!("{m}-shift-n"), NewWindow, None),
     ];
     if macos {
         bindings.extend([
+            KeyBinding::new("cmd-shift-n", NewWindow, None),
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-,", OpenPreferences, None),
             KeyBinding::new("cmd-h", Hide, None),
@@ -105,7 +117,13 @@ pub fn default_bindings(macos: bool) -> Vec<KeyBinding> {
             KeyBinding::new("cmd-m", Minimize, None),
         ]);
     } else {
-        bindings.push(KeyBinding::new("ctrl-q", Quit, None));
+        bindings.extend([
+            KeyBinding::new("ctrl-shift-n", NewWindow, None),
+            KeyBinding::new("ctrl-shift-q", Quit, None),
+        ]);
+        for chord in ["ctrl-=", "ctrl-+", "ctrl--", "ctrl-0"] {
+            bindings.push(KeyBinding::new(chord, NoAction, Some(TERMINAL_KEY_CONTEXT)));
+        }
     }
     bindings
 }
