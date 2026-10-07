@@ -44,7 +44,7 @@ pub const MERGED_PODS: usize = 10;
 pub fn line(k: usize) -> LogLine {
     let at = Timestamp::from_second(1_791_115_200).unwrap_or(Timestamp::UNIX_EPOCH)
         + SignedDuration::from_micros(i64::try_from(k).unwrap_or(i64::MAX) * 200);
-    let text = if k % 4 == 0 {
+    let text = if k.is_multiple_of(4) {
         match k {
             k if k % 7 == 3 => format!("WARN  GET /api/orders/{k} 200 {}ms: slow query", k % 900),
             k => format!(

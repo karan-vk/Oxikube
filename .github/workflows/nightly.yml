@@ -43,7 +43,7 @@ jobs:
       CARGO_PROFILE: ${{ matrix.profile == 'release' && 'release-fast' || 'dev' }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@v2
         with:
           # Distinct per profile so the dev and release legs never evict each other.
@@ -129,7 +129,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@v2
         with:
           key: perf

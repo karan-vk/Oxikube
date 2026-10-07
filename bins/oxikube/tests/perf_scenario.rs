@@ -146,12 +146,12 @@ fn logs_stream_measures_ten_modes_with_coalesced_notifies() {
 }
 
 #[test]
-fn scenarios_without_views_are_not_available_and_exit_0() {
+fn scenarios_without_views_are_unavailable_and_exit_0() {
     for scenario in ["palette", "editor-5mb"] {
         let (out, sample) = run(scenario);
         assert!(out.status.success(), "{scenario}");
         let s = sample.expect("sample written");
-        assert_eq!(s["status"], "not_available", "{scenario}");
+        assert_eq!(s["status"], "unavailable", "{scenario}");
         assert!(s["enabled_by"][0].as_str().unwrap().starts_with("E05-S11"));
     }
 }

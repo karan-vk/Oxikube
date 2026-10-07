@@ -20,9 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
+      - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo run -q -p xtask -- lint-deps
@@ -41,9 +39,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+      - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@v2
       - name: Linux system dependencies (GPUI)
         if: runner.os == 'Linux'
@@ -52,17 +48,28 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libasound2-dev libfontconfig-dev libfreetype-dev libglib2.0-dev libssl-dev \
             libvulkan1 libvulkan-dev libwayland-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev \
-            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config xvfb mesa-vulkan-drivers
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       # settings.schema.json must match the registered settings types (E05-S06).
       - run: cargo run -q -p xtask -- gen-settings-schema --check
       # Feature-gated screenshot harness (E01-S11): lint everything with the feature on, and run
-      # the pure-image golden-compare tests (no GPU needed). GPU smoke tests run in nightly.
-      - run: cargo clippy -p oxikube -p oxikube_testkit -p oxikube_ui -p oxikube_workspace -p oxikube_catalog_ui -p oxikube_resources_ui --features oxikube/screenshot,oxikube_testkit/screenshot,oxikube_ui/screenshot,oxikube_workspace/screenshot,oxikube_catalog_ui/screenshot,oxikube_resources_ui/screenshot --all-targets -- -D warnings
+      # the pure-image golden-compare tests (no GPU needed). GPU smoke tests run in nightly. The
+      # perf-scenarios feature is linted here too: only the nightly built it before (E01-F542).
+      - run: cargo clippy -p oxikube -p oxikube_testkit -p oxikube_ui -p oxikube_workspace -p oxikube_catalog_ui -p oxikube_resources_ui -p oxikube_terminal -p oxikube_logs_ui --features oxikube/screenshot,oxikube/perf-scenarios,oxikube_testkit/screenshot,oxikube_ui/screenshot,oxikube_workspace/screenshot,oxikube_catalog_ui/screenshot,oxikube_resources_ui/screenshot,oxikube_terminal/screenshot,oxikube_logs_ui/screenshot --all-targets -- -D warnings
       - run: cargo test -p oxikube_testkit --features screenshot
       # GPUI test harness (E05-S11, docs/testing-gpui.md): lint it and run its `#[gpui::test]`s on
       # both OSes (deterministic: no GPU, no OS threads). The golden screenshot example runs in
       # nightly (needs a GPU device).
       - run: cargo clippy -p oxikube_testkit --features gpui-test --all-targets -- -D warnings
       - run: cargo test -p oxikube_testkit --features gpui-test
+      # Gates the nightly also runs, here so a break shows on the PR instead of days later (E01-F542).
+      # Perf scenarios (E01-S14): the smoke test drives the real binary headlessly (software Vulkan
+      # on Linux, so under xvfb like the nightly); the budgets themselves stay a nightly check.
+      - name: Perf scenario smoke test
+        run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube --features perf-scenarios --test perf_scenario
+      # Rustdoc with warnings as errors (broken intra-doc links, redundant targets, ...).
+      - name: Docs (warnings are errors)
+        run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
