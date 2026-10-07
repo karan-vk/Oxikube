@@ -8,7 +8,7 @@
 //! sleeps.
 #![allow(dead_code)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
@@ -18,7 +18,8 @@ use oxikube::startup::{
 };
 use oxikube_app::store::FeedState;
 use oxikube_catalog_ui::CatalogView;
-use oxikube_domain::ids::ContextName;
+use oxikube_domain::command::CommandId;
+use oxikube_domain::ids::{ClusterId, ContextName, ResourceRef};
 use oxikube_domain::session::SessionPhase;
 use oxikube_kube::kubeconfig::{Strictness, default_kubeconfig_path, load_local_kubeconfig};
 use oxikube_kube::{ClientPool, ContextDefinition, PoolConfig};
@@ -36,15 +37,15 @@ pub const DEADLINE: Duration = Duration::from_secs(60);
 pub struct Launched {
     pub vcx: VisualTestContext,
     pub tab: Entity<ClusterTab>,
-    pub cluster: oxikube_domain::ids::ClusterId,
+    pub cluster: ClusterId,
     pub table: Entity<ResourceTable>,
-    pub _dir: tempfile::TempDir,
+    pub dir: tempfile::TempDir,
 }
 
 impl Launched {
     /// The directory holding the app's SQLite state and settings for this run.
-    pub fn data_dir(&self) -> &std::path::Path {
-        self._dir.path()
+    pub fn data_dir(&self) -> &Path {
+        self.dir.path()
     }
 }
 
@@ -108,7 +109,7 @@ pub fn launch_with(cx: &mut TestAppContext, context: &str, extra: serde_json::Va
         tab,
         cluster,
         table,
-        _dir: dir,
+        dir,
     }
 }
 
@@ -137,7 +138,7 @@ pub fn on_cluster<T>(context: &str, call: impl AsyncFnOnce(kube::Client) -> T) -
     })
 }
 
-pub fn pods_api(client: kube::Client, namespace: &str) -> kube::Api<kube::api::DynamicObject> {
+fn pods_api(client: kube::Client, namespace: &str) -> kube::Api<kube::api::DynamicObject> {
     let resource = kube::api::ApiResource::from_gvk_with_plural(
         &kube::api::GroupVersionKind::gvk("", "v1", "Pod"),
         "pods",
@@ -145,17 +146,13 @@ pub fn pods_api(client: kube::Client, namespace: &str) -> kube::Api<kube::api::D
     kube::Api::namespaced_with(client, namespace, &resource)
 }
 
-/// A busybox pod `name` with one container `main` that sleeps, ready to be exec'd into
-/// (`oxikube_testkit::integration::pods::sleeper`).
+/// A busybox pod `name` with one container `main` that sleeps
+/// (`oxikube_testkit::integration::pods::sleeper`), created in `namespace` and `Running`.
 pub fn create_pod(context: &str, namespace: &str, name: &str) {
-    create_pod_from(context, namespace, pods::sleeper(name));
-}
-
-/// Creates the pod `manifest` in `namespace` and waits until it is `Running`.
-pub fn create_pod_from(context: &str, namespace: &str, manifest: serde_json::Value) {
     on_cluster(context, async |client| {
         let pods = pods_api(client, namespace);
-        let pod: kube::api::DynamicObject = serde_json::from_value(manifest).expect("a pod");
+        let pod: kube::api::DynamicObject =
+            serde_json::from_value(pods::sleeper(name)).expect("a pod");
         let name = pod.metadata.name.clone().expect("a pod name");
         pods.create(&kube::api::PostParams::default(), &pod)
             .await
@@ -253,7 +250,7 @@ pub fn open_pods_table(
     vcx.update(|_, cx| inner.read(cx).items_of_type::<ResourceTable>()[0].clone())
 }
 
-pub fn wait_ready(vcx: &mut VisualTestContext, context: &str) -> oxikube_domain::ids::ClusterId {
+pub fn wait_ready(vcx: &mut VisualTestContext, context: &str) -> ClusterId {
     let context = ContextName::new(context);
     let mut found = None;
     wait(vcx, &format!("{context} to connect"), |vcx| {
@@ -278,7 +275,7 @@ pub fn wait_ready(vcx: &mut VisualTestContext, context: &str) -> oxikube_domain:
 pub fn tab_of(
     vcx: &mut VisualTestContext,
     workspace: &Entity<Workspace>,
-    cluster: &oxikube_domain::ids::ClusterId,
+    cluster: &ClusterId,
 ) -> Entity<ClusterTab> {
     vcx.update(|_, cx| {
         workspace
@@ -335,16 +332,11 @@ pub fn open_pod_shell(
     vcx: &mut VisualTestContext,
     tab: &Entity<ClusterTab>,
     table: &Entity<ResourceTable>,
-    pod: &oxikube_domain::ids::ResourceRef,
+    pod: &ResourceRef,
 ) -> Entity<TerminalView> {
     vcx.update(|window, cx| {
         table.update(cx, |table, cx| {
-            table.run_action(
-                oxikube_domain::command::CommandId::POD_SHELL,
-                vec![pod.clone()],
-                window,
-                cx,
-            );
+            table.run_action(CommandId::POD_SHELL, vec![pod.clone()], window, cx);
         });
     });
     let inner = vcx.update(|_, cx| tab.read(cx).workspace().clone());

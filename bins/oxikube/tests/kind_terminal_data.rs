@@ -67,7 +67,7 @@ fn nothing_typed_or_printed_in_a_terminal_reaches_the_data_dir(cx: &mut TestAppC
         tab,
         cluster,
         table,
-        _dir,
+        dir,
     } = launch_with(
         cx,
         &context,
@@ -149,15 +149,14 @@ fn nothing_typed_or_printed_in_a_terminal_reaches_the_data_dir(cx: &mut TestAppC
         "bearer-eyJ",
         "using sh",
         "echo ",
-        "secrets", // the pod the shell ran in is the audit's business, not the layout's
     ];
-    for needle in &forbidden[..forbidden.len() - 1] {
+    for needle in &forbidden {
         assert!(
             !saved.contains(needle),
             "{needle} is in the saved layout: {saved}"
         );
     }
-    let files = files_under(_dir.path());
+    let files = files_under(dir.path());
     let state_db = files
         .iter()
         .find(|(path, _)| path.ends_with("state.db"))
@@ -171,7 +170,7 @@ fn nothing_typed_or_printed_in_a_terminal_reaches_the_data_dir(cx: &mut TestAppC
         files
             .iter()
             .flat_map(|(path, bytes)| {
-                forbidden[..forbidden.len() - 1]
+                forbidden
                     .iter()
                     .filter(|needle| contains(bytes, needle))
                     .map(move |needle| format!("{needle} in {}", path.display()))
@@ -190,5 +189,5 @@ fn nothing_typed_or_printed_in_a_terminal_reaches_the_data_dir(cx: &mut TestAppC
     vcx.run_until_parked();
     app.services().sessions.disconnect(&cluster).ok();
     vcx.run_until_parked();
-    assert_eq!(leaks(&files_under(_dir.path())), Vec::<String>::new());
+    assert_eq!(leaks(&files_under(dir.path())), Vec::<String>::new());
 }

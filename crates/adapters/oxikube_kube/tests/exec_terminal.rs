@@ -8,68 +8,17 @@ mod common;
 
 use std::time::Duration;
 
-use futures::StreamExt;
-use futures::stream::BoxStream;
 use k8s_openapi::api::core::v1::{Node, Pod};
 use kube::{Api, Client};
-use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_kube::KubeExec;
 use oxikube_ports::{
-    AttachTarget, BackendEvent, DebugContainerSpec, ExecPort, ExecTarget, ExitStatus,
-    NodeShellSpec, TerminalSize,
+    AttachTarget, DebugContainerSpec, ExecPort, ExecTarget, NodeShellSpec, TerminalSize,
 };
 use oxikube_testkit::integration::TestNamespace;
 
-use common::exec::{BUSYBOX, OUTPUT_DEADLINE, create_cat, create_sleeper};
+use common::exec::{BUSYBOX, create_cat, create_sleeper, events_exit, events_until, pod_ref};
 use common::portforward::wait_ready;
 use common::wait_until;
-
-fn pod_ref(namespace: &str, name: &str) -> ResourceRef {
-    ResourceRef::new(
-        ClusterId::new("kubeconfig", &ContextName::new("kind")),
-        Gvk::new("", "v1", "Pod"),
-        Some(namespace.into()),
-        name,
-    )
-}
-
-/// Reads events until the output contains `marker`; returns everything read so far.
-async fn read_until(events: &mut BoxStream<'static, BackendEvent>, marker: &str) -> String {
-    let mut seen = Vec::new();
-    let found = tokio::time::timeout(OUTPUT_DEADLINE, async {
-        while let Some(event) = events.next().await {
-            match event {
-                BackendEvent::Output(bytes) => seen.extend_from_slice(&bytes),
-                BackendEvent::Error(error) => panic!("transport error: {error}"),
-                BackendEvent::Exited(status) => panic!("exited early: {status:?}"),
-            }
-            if String::from_utf8_lossy(&seen).contains(marker) {
-                return true;
-            }
-        }
-        false
-    })
-    .await;
-    let text = String::from_utf8_lossy(&seen).into_owned();
-    assert_eq!(found, Ok(true), "never saw {marker:?}; got {text:?}");
-    text
-}
-
-/// Drains the stream; returns the exit status it ended with.
-async fn exit_of(events: &mut BoxStream<'static, BackendEvent>) -> ExitStatus {
-    let exit = tokio::time::timeout(OUTPUT_DEADLINE, async {
-        let mut exit = None;
-        while let Some(event) = events.next().await {
-            if let BackendEvent::Exited(status) = event {
-                exit = Some(status);
-            }
-        }
-        exit
-    })
-    .await
-    .expect("the stream ends");
-    exit.expect("an exit event")
-}
 
 #[tokio::test]
 async fn exec_gives_a_tty_with_resize_and_an_exit_code() {
@@ -88,7 +37,7 @@ async fn exec_gives_a_tty_with_resize_and_an_exit_code() {
     let mut events = backend.output_stream();
 
     backend.write(b"echo oxi-$((40+2))\n").await.expect("write");
-    read_until(&mut events, "oxi-42").await;
+    events_until(&mut events, "oxi-42").await;
 
     // The kubelet applies a resize asynchronously: ask until the shell sees it.
     let mut attempts = 0;
@@ -104,7 +53,7 @@ async fn exec_gives_a_tty_with_resize_and_an_exit_code() {
             .write(format!("echo size=$(stty size)=en$((0))d{attempts}\n").as_bytes())
             .await
             .expect("write");
-        let text = read_until(&mut events, &format!("=en0d{attempts}")).await;
+        let text = events_until(&mut events, &format!("=en0d{attempts}")).await;
         if text.contains("size=30 100=en0d") {
             break;
         }
@@ -112,7 +61,7 @@ async fn exec_gives_a_tty_with_resize_and_an_exit_code() {
     }
 
     backend.write(b"exit 3\n").await.expect("write");
-    let status = exit_of(&mut events).await;
+    let status = events_exit(&mut events).await;
     assert_eq!(status.code, Some(3), "{status:?}");
     backend.kill().await.expect("kill after exit is fine");
 }
@@ -135,11 +84,11 @@ async fn attach_round_trips_and_kill_ends_the_stream() {
     let backend = exec.attach(&target).await.expect("attach");
     let mut events = backend.output_stream();
     backend.write(b"hello-attach\n").await.expect("write");
-    read_until(&mut events, "hello-attach").await;
+    events_until(&mut events, "hello-attach").await;
 
     backend.kill().await.expect("kill");
     backend.kill().await.expect("kill is idempotent");
-    let status = exit_of(&mut events).await;
+    let status = events_exit(&mut events).await;
     assert_eq!(status.signal.as_deref(), Some("KILL"), "{status:?}");
     assert!(backend.write(b"x").await.is_err(), "closed after kill");
 }
@@ -182,9 +131,9 @@ async fn a_debug_container_is_created_and_attached_through_the_port() {
     let backend = exec.create_debug_container(&spec).await.expect("debug");
     let mut events = backend.output_stream();
     backend.write(b"echo dbg-$((20+1))\n").await.expect("write");
-    read_until(&mut events, "dbg-21").await;
+    events_until(&mut events, "dbg-21").await;
     backend.write(b"exit\n").await.expect("write");
-    assert!(exit_of(&mut events).await.is_success());
+    assert!(events_exit(&mut events).await.is_success());
 
     let pod = Api::<Pod>::namespaced((*client).clone(), ns.name())
         .get("box")
@@ -235,10 +184,13 @@ async fn a_node_shell_through_the_port_removes_its_pod_on_kill() {
         .write(b"echo host=$(hostname)=end\n")
         .await
         .expect("write");
-    read_until(&mut events, &format!("host={node}=end")).await;
+    events_until(&mut events, &format!("host={node}=end")).await;
 
     backend.kill().await.expect("kill");
-    assert_eq!(exit_of(&mut events).await.signal.as_deref(), Some("KILL"));
+    assert_eq!(
+        events_exit(&mut events).await.signal.as_deref(),
+        Some("KILL")
+    );
     wait_until(
         &format!("pod {name} to be deleted"),
         Duration::from_secs(60),

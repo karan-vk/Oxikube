@@ -50,7 +50,7 @@ fn a_shell_opens_in_a_pod_from_its_row_through_the_guard_and_runs_a_command(
         tab,
         cluster,
         table,
-        _dir,
+        dir: _dir,
     } = launch(cx, &context);
 
     // "Shell" on the pod's row: the menu item and the `s` key both end in this.
@@ -172,7 +172,7 @@ fn a_debug_container_is_added_from_the_pods_row_and_opens_a_terminal_in_it(
         tab,
         cluster,
         table,
-        _dir,
+        dir: _dir,
     } = launch(cx, &context);
     let target = ResourceRef::namespaced(
         cluster.clone(),

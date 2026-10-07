@@ -13,25 +13,16 @@ use std::time::Duration;
 
 use k8s_openapi::api::core::v1::Pod;
 use kube::Api;
-use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_kube::KubeExec;
-use oxikube_ports::{AttachTarget, DebugContainerSpec, ExecPort};
+use oxikube_ports::{AttachTarget, DebugContainerSpec, ExecPort, ExecTarget};
 use oxikube_testkit::integration::TestNamespace;
 use oxikube_testkit::integration::pods::{LOGGER_PREFIX, MAIN};
 
 use common::exec::{
     BUSYBOX, create_logger, create_shell_less, events_exit, events_satisfying, events_until,
+    pod_ref,
 };
 use common::portforward::wait_ready;
-
-fn pod_ref(namespace: &str, name: &str) -> ResourceRef {
-    ResourceRef::new(
-        ClusterId::new("kubeconfig", &ContextName::new("kind")),
-        Gvk::new("", "v1", "Pod"),
-        Some(namespace.into()),
-        name,
-    )
-}
 
 /// The numbers of the complete `tick <n>` lines in `text` (a line cut short by the end of the
 /// read is not one).
@@ -98,8 +89,7 @@ async fn a_debug_container_reaches_a_pod_that_has_no_shell() {
     // A shell in the pod itself finds nothing to run: the image has no `sh`, so the session opens
     // (the API server accepts the exec) and ends at once with a failure status.
     let shell =
-        oxikube_ports::ExecTarget::interactive(pod_ref(ns.name(), "bare"), vec!["sh".into()])
-            .container(MAIN);
+        ExecTarget::interactive(pod_ref(ns.name(), "bare"), vec!["sh".into()]).container(MAIN);
     let backend = exec
         .exec(&shell)
         .await
@@ -123,8 +113,7 @@ async fn a_debug_container_reaches_a_pod_that_has_no_shell() {
         .write(b"echo seen=$(ps | grep -c '[/]pause')=end\n")
         .await
         .expect("write");
-    let text = events_until(&mut events, "seen=1=end").await;
-    assert!(text.contains("seen=1=end"), "{text:?}");
+    events_until(&mut events, "seen=1=end").await;
     backend.write(b"exit\n").await.expect("write");
     assert!(events_exit(&mut events).await.is_success());
 

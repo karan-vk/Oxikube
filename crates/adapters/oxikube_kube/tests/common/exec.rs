@@ -4,9 +4,12 @@
 use std::time::Duration;
 
 use futures::StreamExt;
+use futures::stream::BoxStream;
 use k8s_openapi::api::core::v1::Pod;
 use kube::Client;
+use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_ports::exec::OutputStream;
+use oxikube_ports::{BackendEvent, ExitStatus};
 use oxikube_testkit::images;
 use oxikube_testkit::integration::pods;
 use serde_json::Value;
@@ -22,6 +25,19 @@ pub const OUTPUT_DEADLINE: Duration = Duration::from_secs(30);
 async fn create(client: &Client, namespace: &str, pod: Value) {
     let pod: Pod = serde_json::from_value(pod).expect("pod");
     logs::create(client, namespace, &pod).await;
+}
+
+/// A backend's event stream ([`oxikube_ports::TerminalBackend::output_stream`]).
+pub type Events = BoxStream<'static, BackendEvent>;
+
+/// The pod `name` in `namespace` of the kind context, as the exec port addresses it.
+pub fn pod_ref(namespace: &str, name: &str) -> ResourceRef {
+    ResourceRef::new(
+        ClusterId::new("kubeconfig", &ContextName::new("kind")),
+        Gvk::new("", "v1", "Pod"),
+        Some(namespace.into()),
+        name,
+    )
 }
 
 /// A pod `name` that sleeps, with a container named `main` ([`pods::sleeper`]).
@@ -93,20 +109,16 @@ pub async fn read_all(stream: &mut OutputStream) -> Vec<u8> {
 /// Reads backend events until the output contains `marker`; returns everything read so far.
 /// Panics on a transport error, on an exit or the end of the stream before the marker, or after
 /// [`OUTPUT_DEADLINE`].
-pub async fn events_until(
-    events: &mut futures::stream::BoxStream<'static, oxikube_ports::BackendEvent>,
-    marker: &str,
-) -> String {
+pub async fn events_until(events: &mut Events, marker: &str) -> String {
     events_satisfying(events, marker, |text| text.contains(marker)).await
 }
 
 /// [`events_until`] for a condition on everything read so far; `what` names it in the failure.
 pub async fn events_satisfying(
-    events: &mut futures::stream::BoxStream<'static, oxikube_ports::BackendEvent>,
+    events: &mut Events,
     what: &str,
     done: impl Fn(&str) -> bool,
 ) -> String {
-    use oxikube_ports::BackendEvent;
     let mut seen = Vec::new();
     let found = tokio::time::timeout(OUTPUT_DEADLINE, async {
         while let Some(event) = events.next().await {
@@ -128,10 +140,7 @@ pub async fn events_satisfying(
 }
 
 /// Drains the backend's events; returns the exit status it ended with.
-pub async fn events_exit(
-    events: &mut futures::stream::BoxStream<'static, oxikube_ports::BackendEvent>,
-) -> oxikube_ports::ExitStatus {
-    use oxikube_ports::BackendEvent;
+pub async fn events_exit(events: &mut Events) -> ExitStatus {
     let exit = tokio::time::timeout(OUTPUT_DEADLINE, async {
         let mut exit = None;
         while let Some(event) = events.next().await {
