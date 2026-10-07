@@ -19,11 +19,6 @@
 //! probe spawns its `gsettings` processes from a plain thread and the values arrive over a
 //! channel, so the UI thread never waits on the OS. The glue is one foreground task that wakes
 //! only when the preference changes.
-//!
-//! # Files
-//!
-//! - this file: [`OsMotionProbe`], [`Watch`], [`follow`], [`system_probe`].
-//! - `macos`: the AppKit probe. `gsettings`: the GNOME probe. `tests`: the glue against a fake.
 
 use futures::{StreamExt as _, channel::mpsc};
 use gpui::{App, Global, Task};

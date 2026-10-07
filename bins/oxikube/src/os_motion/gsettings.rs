@@ -60,13 +60,16 @@ fn lock(monitor: &Mutex<Monitor>) -> MutexGuard<'_, Monitor> {
 
 impl Drop for Stop {
     fn drop(&mut self) {
-        if let Monitor::Running(mut child) =
-            std::mem::replace(&mut *lock(&self.0), Monitor::Stopped)
-        {
-            let _ = child.kill();
-            let _ = child.wait();
+        if let Monitor::Running(child) = std::mem::replace(&mut *lock(&self.0), Monitor::Stopped) {
+            reap(child);
         }
     }
+}
+
+/// Kills the process and collects its exit status.
+fn reap(mut child: Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 impl OsMotionProbe for Gsettings {
@@ -100,18 +103,14 @@ fn run(program: &OsString, tx: &UnboundedSender<bool>, monitor: &Arc<Mutex<Monit
         }
     };
     let Some(stdout) = child.stdout.take() else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return;
+        return reap(child);
     };
     {
         let mut slot = lock(monitor);
         if matches!(*slot, Monitor::Stopped) {
             // The watch was dropped while the process started.
             drop(slot);
-            let _ = child.kill();
-            let _ = child.wait();
-            return;
+            return reap(child);
         }
         *slot = Monitor::Running(child);
     }

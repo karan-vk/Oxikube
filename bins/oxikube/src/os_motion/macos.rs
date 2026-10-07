@@ -32,10 +32,10 @@ impl Drop for Observer {
 
 impl OsMotionProbe for Workspace {
     fn watch(self: Box<Self>) -> Watch {
-        let Some(main) = MainThreadMarker::new() else {
+        if MainThreadMarker::new().is_none() {
             tracing::debug!("not on the main thread: the OS reduce-motion preference is not read");
             return Watch::silent();
-        };
+        }
         let (tx, rx) = mpsc::unbounded();
         let workspace = NSWorkspace::sharedWorkspace();
         // The current value first; the observer then reports each change. The notification
@@ -56,7 +56,6 @@ impl OsMotionProbe for Workspace {
                 &block,
             )
         };
-        let _ = main;
         Watch::new(rx, Observer { center, token })
     }
 }
