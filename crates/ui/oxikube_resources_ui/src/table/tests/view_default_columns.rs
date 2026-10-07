@@ -175,13 +175,13 @@ const RAIL: f32 = 52.;
 /// The table's vertical scrollbar.
 const SCROLLBAR: f32 = 12.;
 
-#[gpui::test]
-fn the_default_pod_columns_fit_1280px_with_the_sidebar_open(cx: &mut TestAppContext) {
+/// The widths the default pod columns start at under `scope`, in display order.
+fn default_widths(cx: &mut TestAppContext, scope: NamespaceSelection) -> Vec<(String, f32)> {
     let mut f = Fixture::new(cx);
     f.connect_with([p("x", "a", "1")]);
-    select(&mut f, NamespaceSelection::single("x"));
+    select(&mut f, scope);
     let table = f.open_pods();
-    let widths: Vec<(String, f32)> = f.vcx.update(|_, cx| {
+    f.vcx.update(|_, cx| {
         table.read(cx).read_rows(cx, |d| {
             let layout = d.layout();
             (0..layout.visible_len())
@@ -189,18 +189,41 @@ fn the_default_pod_columns_fit_1280px_with_the_sidebar_open(cx: &mut TestAppCont
                 .map(|c| (c.id.to_string(), ColumnLayout::default_width(c)))
                 .collect()
         })
-    });
-    let ids: Vec<&str> = widths.iter().map(|(id, _)| id.as_str()).collect();
-    assert_eq!(
-        ids,
-        ["name", "status", "ready", "restarts", "age", "node", "ip"]
-    );
-    let total: f32 = widths.iter().map(|(_, w)| w).sum();
+    })
+}
+
+#[gpui::test]
+fn the_default_pod_columns_fit_1280px_with_the_sidebar_open(cx: &mut TestAppContext) {
     let room = WINDOW - oxikube_workspace::sidebar::DEFAULT_WIDTH - RAIL - SCROLLBAR;
-    assert!(
-        total <= room,
-        "the default columns total {total} px but only {room} px are left: {widths:?}"
-    );
+    // One namespace, and all of them: a fresh install opens on all namespaces.
+    for (scope, expected) in [
+        (
+            NamespaceSelection::single("x"),
+            &["name", "status", "ready", "restarts", "age", "node", "ip"][..],
+        ),
+        (
+            NamespaceSelection::All,
+            &[
+                "name",
+                "namespace",
+                "status",
+                "ready",
+                "restarts",
+                "age",
+                "node",
+                "ip",
+            ][..],
+        ),
+    ] {
+        let widths = default_widths(cx, scope.clone());
+        let ids: Vec<&str> = widths.iter().map(|(id, _)| id.as_str()).collect();
+        assert_eq!(ids, expected, "{scope:?}");
+        let total: f32 = widths.iter().map(|(_, w)| w).sum();
+        assert!(
+            total <= room,
+            "{scope:?}: the default columns total {total} px but only {room} px are left: {widths:?}"
+        );
+    }
 }
 
 #[gpui::test]
