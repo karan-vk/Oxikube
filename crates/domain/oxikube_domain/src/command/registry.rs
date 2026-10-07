@@ -167,6 +167,8 @@ impl CommandId {
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
     /// `terminal::Close`: close the focused terminal, ending its process.
     pub const TERMINAL_CLOSE: CommandId = CommandId::new("terminal::Close");
+    /// `terminal::Clear`: clear the focused terminal's scrollback and the screen above the cursor.
+    pub const TERMINAL_CLEAR: CommandId = CommandId::new("terminal::Clear");
     /// `terminal::Copy`: copy the focused terminal's selection to the clipboard.
     pub const TERMINAL_COPY: CommandId = CommandId::new("terminal::Copy");
     /// `terminal::New`: open a local shell in a new terminal of the (displayed) cluster's tab.
@@ -180,6 +182,24 @@ impl CommandId {
     pub const TERMINAL_RECONNECT: CommandId = CommandId::new("terminal::Reconnect");
     /// `terminal::Restart`: start a new shell in the focused local terminal after its shell exited.
     pub const TERMINAL_RESTART: CommandId = CommandId::new("terminal::Restart");
+    /// `terminal::ScrollLineDown`: scroll the focused terminal one line towards the live screen.
+    pub const TERMINAL_SCROLL_LINE_DOWN: CommandId = CommandId::new("terminal::ScrollLineDown");
+    /// `terminal::ScrollLineUp`: scroll the focused terminal one line into its history.
+    pub const TERMINAL_SCROLL_LINE_UP: CommandId = CommandId::new("terminal::ScrollLineUp");
+    /// `terminal::ScrollPageDown`: scroll the focused terminal one screen towards the live screen.
+    pub const TERMINAL_SCROLL_PAGE_DOWN: CommandId = CommandId::new("terminal::ScrollPageDown");
+    /// `terminal::ScrollPageUp`: scroll the focused terminal one screen into its history.
+    pub const TERMINAL_SCROLL_PAGE_UP: CommandId = CommandId::new("terminal::ScrollPageUp");
+    /// `terminal::Search`: open the focused terminal's search bar.
+    pub const TERMINAL_SEARCH: CommandId = CommandId::new("terminal::Search");
+    /// `terminal::SearchClose`: close the focused terminal's search bar.
+    pub const TERMINAL_SEARCH_CLOSE: CommandId = CommandId::new("terminal::SearchClose");
+    /// `terminal::SearchNext`: jump to the next match of the focused terminal's search.
+    pub const TERMINAL_SEARCH_NEXT: CommandId = CommandId::new("terminal::SearchNext");
+    /// `terminal::SearchPrevious`: jump to the previous match of the focused terminal's search.
+    pub const TERMINAL_SEARCH_PREVIOUS: CommandId = CommandId::new("terminal::SearchPrevious");
+    /// `terminal::SelectAll`: select the focused terminal's screen and scrollback.
+    pub const TERMINAL_SELECT_ALL: CommandId = CommandId::new("terminal::SelectAll");
     /// `terminal::Split`: open a new terminal in a new pane beside the active one.
     pub const TERMINAL_SPLIT: CommandId = CommandId::new("terminal::Split");
     /// `view::Open`: open a registered view by id.
@@ -672,6 +692,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::ResourceKind,
         NONE,
     ),
+    // Drops the scrollback this machine holds for the user's own session; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_CLEAR,
+        "Clear Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
     // Ends a shell on this machine the user opened; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_CLOSE,
@@ -721,6 +748,69 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::TERMINAL_RESTART,
         "Restart Terminal",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Moves the view of a terminal's own history; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SCROLL_LINE_DOWN,
+        "Scroll Terminal Line Down",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Moves the view of a terminal's own history; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SCROLL_LINE_UP,
+        "Scroll Terminal Line Up",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Moves the view of a terminal's own history; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SCROLL_PAGE_DOWN,
+        "Scroll Terminal Page Down",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Moves the view of a terminal's own history; never touches a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SCROLL_PAGE_UP,
+        "Scroll Terminal Page Up",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SEARCH,
+        "Search Terminal Scrollback",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SEARCH_CLOSE,
+        "Close Terminal Search",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SEARCH_NEXT,
+        "Next Terminal Search Match",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SEARCH_PREVIOUS,
+        "Previous Terminal Search Match",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Selects text a terminal shows; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::TERMINAL_SELECT_ALL,
+        "Select All in Terminal",
         CommandScope::Global,
         NONE,
     ),

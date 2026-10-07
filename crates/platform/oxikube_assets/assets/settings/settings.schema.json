@@ -1,5 +1,25 @@
 {
   "$defs": {
+    "BellSetting": {
+      "description": "`terminal.bell`: what a bell (`BEL`, `^G`) from the process does.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "Nothing.",
+          "type": "string"
+        },
+        {
+          "const": "visual",
+          "description": "The terminal flashes briefly (the default).",
+          "type": "string"
+        },
+        {
+          "const": "audible",
+          "description": "The system's alert sound.",
+          "type": "string"
+        }
+      ]
+    },
     "ClusterSettings": {
       "additionalProperties": false,
       "description": "Overrides for one cluster: the per-cluster settings (display name, colour, read-only, default namespace, terminal directory, node shell, Prometheus, accessible namespaces, exec policy) and any other setting. Layers merge field by field: defaults, then the top-level values, then this block.",
@@ -251,6 +271,26 @@
         }
       },
       "type": "object"
+    },
+    "CursorShapeSetting": {
+      "description": "`terminal.cursor_shape`: the cursor a terminal shows until its process asks for another one.",
+      "oneOf": [
+        {
+          "const": "block",
+          "description": "A filled block (the default).",
+          "type": "string"
+        },
+        {
+          "const": "bar",
+          "description": "A thin vertical bar.",
+          "type": "string"
+        },
+        {
+          "const": "underline",
+          "description": "A line under the character.",
+          "type": "string"
+        }
+      ]
     },
     "DescribeBackendSetting": {
       "description": "Which implementation describes an object (`describe.backend`).",
@@ -608,6 +648,17 @@
       "additionalProperties": false,
       "description": "What one settings layer says about terminals: the `terminal` object of `settings.json`.",
       "properties": {
+        "bell": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BellSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What a bell from the process does: `none`, `visual` (a brief flash, the default) or\n`audible` (the system alert sound)."
+        },
         "confirm_multiline_paste": {
           "description": "Ask before pasting text with more than one line (default `true`): a pasted newline runs\nthe line. Single-line pastes never ask.",
           "type": [
@@ -622,6 +673,24 @@
             "null"
           ]
         },
+        "cursor_blink": {
+          "description": "Whether that cursor blinks (default `false`). A process that asks for a blinking or a\nsteady cursor is obeyed until it resets it.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cursor_shape": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CursorShapeSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The cursor shape until the process sets its own (`block`, `bar` or `underline`)."
+        },
         "exec_shells": {
           "description": "The shells `pod::Shell` tries in a container, first to last, each probed with a quick\nexec; the first one the container has is opened (default `[\"bash\", \"sh\"]`, like Lens).\nA name or an absolute path. An empty list uses the default. Applies to shells opened\nafterwards.",
           "items": {
@@ -629,6 +698,33 @@
           },
           "type": [
             "array",
+            "null"
+          ]
+        },
+        "font_family": {
+          "description": "Font family of the terminal text; should be monospace. `null` uses the platform's\nmonospace font (Menlo, Consolas, DejaVu Sans Mono). Applies to open terminals at once.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "font_size": {
+          "description": "Font size in points (6 - 72); a value outside is clamped. `null` uses the theme's\nmonospace size. The UI zoom applies on top. Applies to open terminals at once.",
+          "format": "float",
+          "maximum": 72.0,
+          "minimum": 6.0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "line_height": {
+          "description": "Row height as a multiple of the font size (1.0 - 2.5); a value outside is clamped.",
+          "format": "float",
+          "maximum": 2.5,
+          "minimum": 1.0,
+          "type": [
+            "number",
             "null"
           ]
         },
@@ -640,7 +736,7 @@
           ]
         },
         "scrollback_lines": {
-          "description": "Lines of history each terminal keeps in memory (0 - 100000). Never saved to disk.",
+          "description": "Lines of history each terminal keeps in memory (0 - 100000); a larger value is clamped.\nNever saved to disk, whatever this says. Lowering it drops the oldest lines of open\nterminals at once.",
           "format": "uint",
           "maximum": 100000,
           "minimum": 0,
@@ -650,7 +746,7 @@
           ]
         },
         "shell": {
-          "description": "The shell a local terminal runs (a path or a name found on `PATH`). `null` uses the\n`SHELL` environment variable, then `/bin/sh`. Applies to terminals opened afterwards.",
+          "description": "The shell a local terminal runs (a path or a name found on `PATH`). `null` uses the\n`SHELL` environment variable, then `/bin/sh`. Applies to terminals opened afterwards;\n`clusters.<id>.terminal.shell` sets it for one cluster's terminals.",
           "type": [
             "string",
             "null"

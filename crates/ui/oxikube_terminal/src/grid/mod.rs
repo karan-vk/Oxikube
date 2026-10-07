@@ -22,6 +22,7 @@
 //!
 //! Scrollback lives in memory only and is never persisted (non-negotiable 5).
 
+mod clear;
 mod convert;
 mod events;
 mod hyperlink;
@@ -105,10 +106,31 @@ impl Dimensions for Cells {
     }
 }
 
-/// The emulator configuration: `scrollback` lines of history, alacritty's defaults otherwise.
-fn config(scrollback: usize) -> Config {
+/// The cursor a terminal shows until its process asks for another (DECSCUSR): the
+/// `terminal.cursor_shape` and `terminal.cursor_blink` settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DefaultCursor {
+    /// Block, beam or underline (a hollow block is only the unfocused look).
+    pub shape: CursorShape,
+    /// Whether it blinks.
+    pub blinking: bool,
+}
+
+impl Default for DefaultCursor {
+    fn default() -> Self {
+        Self {
+            shape: CursorShape::Block,
+            blinking: false,
+        }
+    }
+}
+
+/// The emulator configuration: `scrollback` lines of history and the default cursor, alacritty's
+/// defaults otherwise.
+fn config(scrollback: usize, cursor: DefaultCursor) -> Config {
     Config {
         scrolling_history: scrollback,
+        default_cursor_style: convert::cursor_style(cursor),
         // A process may copy to the clipboard (OSC 52, surfaced as `GridEvent::ClipboardStore` for
         // the view to honour), never read it.
         osc52: Osc52::OnlyCopy,
@@ -137,6 +159,7 @@ pub struct TermGrid {
     listener: GridListener,
     size: TerminalSize,
     scrollback: usize,
+    cursor: DefaultCursor,
     title: Option<Arc<str>>,
     /// The selection the last snapshot showed: alacritty's damage leaves selection changes out,
     /// so [`snapshot_into`](Self::snapshot_into) compares against this and damages the rows.
@@ -164,11 +187,16 @@ impl TermGrid {
         let scrollback = scrollback_lines.min(MAX_SCROLLBACK_LINES);
         let listener = GridListener::default();
         Self {
-            term: Term::new(config(scrollback), &Cells::new(size), listener.clone()),
+            term: Term::new(
+                config(scrollback, DefaultCursor::default()),
+                &Cells::new(size),
+                listener.clone(),
+            ),
             parser: Processor::new(),
             listener,
             size,
             scrollback,
+            cursor: DefaultCursor::default(),
             title: None,
             painted_selection: None,
             layout_generation: 0,
@@ -222,8 +250,26 @@ impl TermGrid {
             return;
         }
         self.scrollback = lines;
-        self.term.set_options(config(lines));
+        self.apply_config();
         self.layout_generation += 1;
+    }
+
+    /// Shows `cursor` whenever the process has not chosen a cursor of its own (and again after it
+    /// resets it). A cursor the process set stays until it resets it.
+    pub fn set_default_cursor(&mut self, cursor: DefaultCursor) {
+        if cursor != self.cursor {
+            self.cursor = cursor;
+            self.apply_config();
+        }
+    }
+
+    /// The default cursor in force.
+    pub fn default_cursor(&self) -> DefaultCursor {
+        self.cursor
+    }
+
+    fn apply_config(&mut self) {
+        self.term.set_options(config(self.scrollback, self.cursor));
         // `set_options` re-announces the title; the title did not change.
         self.listener.discard();
     }

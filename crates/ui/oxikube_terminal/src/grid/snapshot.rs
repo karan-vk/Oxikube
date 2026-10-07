@@ -145,6 +145,9 @@ pub struct TerminalCursor {
     pub column: usize,
     /// Shape the process asked for (DECSCUSR).
     pub shape: CursorShape,
+    /// Whether it blinks: the process asked (DECSCUSR, `CSI ? 12 h`) or, when it did not, the
+    /// `terminal.cursor_blink` setting.
+    pub blinking: bool,
     /// Whether to draw it: the process did not hide it and it is inside the viewport (it is not
     /// when the view is scrolled up past it).
     pub visible: bool,
@@ -306,7 +309,12 @@ impl TermGrid {
         out.history_size = self.term.grid().history_size();
         out.modes = convert::modes(content.mode);
         out.title = self.title.clone();
-        out.cursor = convert::cursor(content.cursor, content.display_offset, rows);
+        out.cursor = convert::cursor(
+            content.cursor,
+            self.term.cursor_style().blinking,
+            content.display_offset,
+            rows,
+        );
         out.selection = content
             .selection
             .map(|range| (range.start.into(), range.end.into(), range.is_block));

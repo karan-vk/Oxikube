@@ -14,6 +14,11 @@
 //!   set by the process, the dirty dot of a running process), one in the bottom dock beside the
 //!   terminal panel, carrying a read-only cluster's mark, and the exit line of an ended one.
 //!
+//! - `terminal_settings` (E09-S11): the `terminal` settings drive the element: an 18 pt font with
+//!   a 1.5 line height and a steady underline cursor, no font passed to the element.
+//! - `terminal_search` (E09-S11): the matches of a search painted over the cells, the current one
+//!   in its own colour.
+//!
 //! The byte stream is in this file, so the picture only changes when the element (or the font
 //! the platform ships) does. `harness = false`: on macOS the platform text system can only be
 //! created on the process main thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe
@@ -323,6 +328,105 @@ fn tabs() -> Result<RgbaImage> {
     app.capture(window)
 }
 
+/// A terminal drawn with the `terminal` settings (no font given to the element), with the matches
+/// of a search over it.
+struct Themed {
+    terminal: Entity<TerminalState>,
+    state: TerminalElementState,
+    focus: FocusHandle,
+    highlights: Option<oxikube_terminal::element::SearchHighlights>,
+}
+
+impl Render for Themed {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let mut element = TerminalElement::new(&self.terminal, &self.state, &self.focus);
+        if let Some(highlights) = &self.highlights {
+            element = element.highlights(highlights.clone());
+        }
+        div().size_full().child(element)
+    }
+}
+
+const SETTINGS: (u32, u32) = (480, 150);
+
+/// `feed` shown under the settings `user`, with the matches of `search` painted when given.
+fn themed(user: &str, feed: &str, search: Option<&str>) -> Result<RgbaImage> {
+    use gpui::UpdateGlobal as _;
+    let mut app = ScreenshotApp::new();
+    let backend = FakeTerminalBackend::silent();
+    let boxed = Box::new(backend.clone());
+    let mut host = None;
+    let mut terminal_handle = None;
+    let window: AnyWindowHandle = app.open_window(
+        size(px(SETTINGS.0 as f32), px(SETTINGS.1 as f32)),
+        |window, cx| {
+            oxikube_runtime::init_deterministic(cx);
+            oxikube_ui::init(cx);
+            set_theme(Appearance::Dark, cx);
+            let store = oxikube_settings::SettingsStore::new(oxikube_assets::default_settings())
+                .expect("the shipped defaults");
+            cx.set_global(store);
+            oxikube_terminal::init(cx);
+            oxikube_settings::SettingsStore::update_global(cx, |store, _| {
+                store.set_user_settings(user).expect("valid settings")
+            });
+            let focus = cx.focus_handle();
+            window.focus(&focus, cx);
+            let terminal = cx.new(|cx| TerminalState::new(boxed, TerminalSize::new(80, 24), cx));
+            terminal_handle = Some(terminal.clone());
+            let view = cx.new(|_| Themed {
+                terminal,
+                state: TerminalElementState::new(),
+                focus,
+                highlights: None,
+            });
+            host = Some(view.clone());
+            view
+        },
+    )?;
+    backend.output(feed.to_owned());
+    app.run_until_parked();
+    app.advance_clock(FRAME_INTERVAL);
+    let _ = app.capture(window)?;
+    if let (Some(pattern), Some(terminal), Some(host)) = (search, terminal_handle, host) {
+        app.update(|cx| {
+            let found = terminal.update(cx, |terminal, cx| terminal.search(pattern, cx));
+            cx.spawn(async move |cx| {
+                let matches = found.await.expect("a valid pattern");
+                host.update(cx, |host, cx| {
+                    host.highlights = Some(oxikube_terminal::element::SearchHighlights::sorted(
+                        matches,
+                        Some(1),
+                    ));
+                    cx.notify();
+                });
+            })
+            .detach();
+        });
+        app.run_until_parked();
+        app.advance_clock(FRAME_INTERVAL);
+    }
+    app.advance_clock(FRAME_INTERVAL);
+    app.capture(window)
+}
+
+fn settings_shot() -> Result<RgbaImage> {
+    themed(
+        r#"{ "terminal": { "font_size": 18, "line_height": 1.5,
+                           "cursor_shape": "underline", "cursor_blink": false } }"#,
+        "$ kubectl get pods\r\nNAME    READY   STATUS\r\nweb-0   1/1     Running\r\n$ ls",
+        None,
+    )
+}
+
+fn search_shot() -> Result<RgbaImage> {
+    themed(
+        "{}",
+        "NAME    READY   STATUS\r\nweb-0   1/1     Running\r\nweb-1   1/1     Running\r\ndb-0    0/1     Pending\r\n$ ",
+        Some("web-\\d"),
+    )
+}
+
 fn main() -> ExitCode {
     run_golden_cases(
         env!("CARGO_MANIFEST_DIR"),
@@ -351,6 +455,16 @@ fn main() -> ExitCode {
                 name: "terminal_tabs",
                 size: TABS,
                 render: tabs,
+            },
+            GoldenCase {
+                name: "terminal_settings",
+                size: SETTINGS,
+                render: settings_shot,
+            },
+            GoldenCase {
+                name: "terminal_search",
+                size: SETTINGS,
+                render: search_shot,
             },
         ],
     )

@@ -7,16 +7,17 @@ use gpui::{
     font, point, px,
 };
 use oxikube_ports::TerminalSize;
+use oxikube_settings::Settings as _;
 use oxikube_ui::ActiveTokens as _;
 
 use crate::grid::SelectionSide;
+use crate::settings::TerminalSettings;
 
-/// Line height as a multiple of the font size when nothing else says (`terminal.line_height`
-/// arrives with the font settings, E09-S11).
+/// Line height as a multiple of the font size when `terminal.line_height` says nothing.
 pub const DEFAULT_LINE_HEIGHT: f32 = 1.3;
 
-/// The font a terminal draws with. Family and size come from the theme's monospace tokens until
-/// the terminal settings (E09-S11) add their own.
+/// The font a terminal draws with: the `terminal` font settings, falling back to the platform's
+/// monospace family and the theme's monospace size.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TerminalFont {
     /// Font family, e.g. `Menlo`.
@@ -47,6 +48,24 @@ impl TerminalFont {
             size: oxikube_ui::u(cx.tokens().font.mono),
             line_height: DEFAULT_LINE_HEIGHT,
         }
+    }
+
+    /// The font the `terminal.font_family`, `font_size` and `line_height` settings ask for, each
+    /// falling back to [`from_theme`](Self::from_theme) when unset (and all of it without a
+    /// settings store). The UI zoom applies to an explicit size too. Cheap: it is read on every
+    /// frame, and a change invalidates the shaped rows once.
+    pub fn from_settings(cx: &App) -> Self {
+        let mut font = Self::from_theme(cx);
+        if let Some(settings) = TerminalSettings::try_get(cx) {
+            if let Some(family) = &settings.font_family {
+                font.family = family.clone();
+            }
+            if let Some(points) = settings.font_size {
+                font.size = oxikube_ui::u(px(points));
+            }
+            font.line_height = settings.line_height;
+        }
+        font
     }
 
     /// The GPUI font of a cell: regular, bold and/or italic.

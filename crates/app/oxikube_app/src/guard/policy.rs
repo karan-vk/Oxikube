@@ -147,7 +147,17 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::TerminalSplit
         | Command::TerminalClose
         | Command::TerminalReconnect
-        | Command::TerminalRestart => None,
+        | Command::TerminalRestart
+        | Command::TerminalClear
+        | Command::TerminalScrollLineDown
+        | Command::TerminalScrollLineUp
+        | Command::TerminalScrollPageDown
+        | Command::TerminalScrollPageUp
+        | Command::TerminalSearch
+        | Command::TerminalSearchClose
+        | Command::TerminalSearchNext
+        | Command::TerminalSearchPrevious
+        | Command::TerminalSelectAll => None,
     }
 }
 

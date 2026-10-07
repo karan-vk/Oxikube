@@ -6,11 +6,13 @@
 
 mod commands;
 mod dock;
+mod find;
 mod item;
 mod leak;
 mod lifecycle;
 mod persist;
 mod pod;
+mod settings;
 
 use std::cell::RefCell;
 use std::path::PathBuf;

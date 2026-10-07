@@ -48,6 +48,10 @@ pub trait TerminalLauncher: 'static {
     }
 }
 
+fn pod_unsupported() -> OxiError {
+    OxiError::unsupported("pod terminals cannot be opened in this build")
+}
+
 /// The app's launcher: local shells on a PTY ([`LocalPty`]), a cluster shell with the cluster's
 /// kubeconfig, context and namespace in its environment.
 ///
@@ -66,32 +70,51 @@ impl LocalLauncher {
         Self { sessions, sources }
     }
 
-    fn launch_local(
-        &self,
+    /// The process options a local terminal for `descriptor` starts with: the `terminal`
+    /// settings of the descriptor's cluster (its own block wins over the global one), then the
+    /// descriptor's own shell, directory and `size`. The cluster environment is added at launch.
+    ///
+    /// # Errors
+    /// `Unsupported` for a pod terminal.
+    pub fn local_options(
         descriptor: &BackendDescriptor,
         size: TerminalSize,
-        cx: &mut App,
-    ) -> OxiResult<Launch> {
+        cx: &App,
+    ) -> OxiResult<LocalPtyOptions> {
         let BackendDescriptor::Local {
             cluster,
-            namespace,
             shell,
             args,
             cwd,
             ..
         } = descriptor
         else {
-            return Err(OxiError::unsupported(
-                "pod terminals cannot be opened in this build",
-            ));
+            return Err(pod_unsupported());
         };
-        let mut options = LocalPtyOptions::from_settings(&TerminalSettings::current(cx));
+        let mut options =
+            LocalPtyOptions::from_settings(&TerminalSettings::for_cluster(cx, cluster.as_ref()));
         if let Some(shell) = shell {
             options.shell = Some(shell.clone());
             options.args = args.clone();
         }
         options.cwd = cwd.clone();
         options.size = size;
+        Ok(options)
+    }
+
+    fn launch_local(
+        &self,
+        descriptor: &BackendDescriptor,
+        size: TerminalSize,
+        cx: &mut App,
+    ) -> OxiResult<Launch> {
+        let mut options = Self::local_options(descriptor, size, cx)?;
+        let BackendDescriptor::Local {
+            cluster, namespace, ..
+        } = descriptor
+        else {
+            return Err(pod_unsupported());
+        };
         let context = match cluster {
             Some(cluster) => {
                 let session = self

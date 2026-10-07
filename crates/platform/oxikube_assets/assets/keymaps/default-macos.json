@@ -188,18 +188,48 @@
     }
   },
   {
-    // Terminal (E09-S06): cmd-c copies the selection, cmd-v pastes (a multi-line paste asks
-    // first, `terminal.confirm_multiline_paste`). ctrl-c is never bound: it always reaches the
-    // process as an interrupt. Every other key goes to the process (see the mapping in
-    // `oxikube_terminal::mappings`); cmd-<key> shortcuts stay the application's.
+    // Terminal (E09-S06, E09-S11): cmd-c copies the selection, cmd-v pastes (a multi-line paste
+    // asks first, `terminal.confirm_multiline_paste`), cmd-a selects everything, cmd-k clears the
+    // scrollback, cmd-f searches it. ctrl-c is never bound: it always reaches the process as an
+    // interrupt, as does every other ctrl chord. Every other key goes to the process (see the
+    // mapping in `oxikube_terminal::mappings`); cmd-<key> shortcuts stay the application's.
     "context": "Terminal",
     "bindings": {
       "cmd-c": "terminal::Copy",
       "cmd-v": "terminal::Paste",
+      "cmd-a": "terminal::SelectAll",
+      "cmd-k": "terminal::Clear",
+      "cmd-f": "terminal::Search",
       // E09-S07: cmd-w closes the focused terminal (in a pane or the bottom dock), cmd-d opens a
-      // terminal running the same shell in a new pane to the right.
+      // terminal running the same shell in a new pane to the right; cmd-t opens a new shell (in
+      // the shown cluster's bottom dock).
+      "cmd-t": "terminal::New",
       "cmd-w": "terminal::Close",
-      "cmd-d": "terminal::Split"
+      "cmd-d": "terminal::Split",
+      // Scroll the history: shift-pageup / shift-pagedown a screen, shift-up / shift-down a
+      // line. On the alternate screen (vim, htop, less) the keys go to the program instead.
+      "shift-pageup": "terminal::ScrollPageUp",
+      "shift-pagedown": "terminal::ScrollPageDown",
+      "shift-up": "terminal::ScrollLineUp",
+      "shift-down": "terminal::ScrollLineDown"
+    }
+  },
+  {
+    // While the search bar is open (the terminal has the keyboard): the next / previous match.
+    "context": "Terminal && searching",
+    "bindings": {
+      "cmd-g": "terminal::SearchNext",
+      "cmd-shift-g": "terminal::SearchPrevious"
+    }
+  },
+  {
+    // In the search bar's field: enter / shift-enter step through the matches (the field handles
+    // them), escape closes the bar and returns to the terminal.
+    "context": "TerminalSearch > Input",
+    "bindings": {
+      "escape": "terminal::SearchClose",
+      "cmd-g": "terminal::SearchNext",
+      "cmd-shift-g": "terminal::SearchPrevious"
     }
   }
 ]

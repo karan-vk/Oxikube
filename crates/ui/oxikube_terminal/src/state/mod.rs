@@ -31,6 +31,8 @@
 mod ops;
 pub(crate) mod pump;
 
+pub use ops::SearchResult;
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -86,6 +88,10 @@ pub struct TerminalState {
     last_error: Option<Arc<OxiError>>,
     /// Off once the session ended or its connection dropped: keystrokes then go nowhere.
     accepts_input: bool,
+    /// Bumped whenever the text at a grid position may have changed: process output (at most once
+    /// a frame), a clear, a resize that reflowed the grid, a smaller scrollback. What a search
+    /// compares to know its matches went stale.
+    content_generation: u64,
     /// The input method's composition and the cursor anchor for its candidate window (E09-S06).
     pub(crate) ime: crate::input::ime::ImeState,
     _pump: KubeTask<()>,
@@ -114,8 +120,10 @@ impl TerminalState {
         size: TerminalSize,
         cx: &mut Context<Self>,
     ) -> Self {
-        let scrollback = TerminalSettings::current(cx).scrollback_lines;
-        let grid = Arc::new(Mutex::new(TermGrid::new(size, scrollback)));
+        let settings = TerminalSettings::current(cx);
+        let mut term_grid = TermGrid::new(size, settings.scrollback_lines);
+        term_grid.set_default_cursor(settings.default_cursor());
+        let grid = Arc::new(Mutex::new(term_grid));
         let size = grid.lock().size();
         let backend: Arc<dyn TerminalBackend> = Arc::from(backend);
         let wake = Arc::new(AtomicBool::new(false));
@@ -143,8 +151,15 @@ impl TerminalState {
             }
         });
         let settings = TerminalSettings::observe_in(cx, |this: &mut Self, cx| {
-            let lines = TerminalSettings::current(cx).scrollback_lines;
-            this.grid.lock().set_scrollback(lines);
+            // One notify however many of the settings changed: the element re-lays out once.
+            let settings = TerminalSettings::current(cx);
+            {
+                let mut grid = this.grid.lock();
+                grid.set_scrollback(settings.scrollback_lines);
+                grid.set_default_cursor(settings.default_cursor());
+            }
+            // A smaller scrollback drops lines: matches into them are stale.
+            this.content_generation = this.content_generation.wrapping_add(1);
             cx.notify();
         });
 
@@ -158,6 +173,7 @@ impl TerminalState {
             exit: None,
             last_error: None,
             accepts_input: true,
+            content_generation: 0,
             ime: Default::default(),
             _pump: pump,
             _writer: writer,
@@ -174,6 +190,7 @@ impl TerminalState {
                 // the next `Changed`; output parsed before it is in the snapshot this notify
                 // leads to.
                 self.wake.store(false, Ordering::Release);
+                self.content_generation = self.content_generation.wrapping_add(1);
                 cx.notify_coalesced();
             }
             GridUpdate::Event(event) => cx.emit(match event {
@@ -197,6 +214,14 @@ impl TerminalState {
                 cx.notify();
             }
         }
+    }
+
+    /// A counter that changes whenever the text at a grid position may have changed: the
+    /// process's output (at most once a frame), [`clear`](Self::clear), a resize that changed
+    /// the grid's size and a change of the settings (the scrollback limit). Scrolling and
+    /// selecting do not.
+    pub fn content_generation(&self) -> u64 {
+        self.content_generation
     }
 
     /// How the process ended; `None` while it runs.

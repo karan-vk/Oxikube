@@ -11,9 +11,11 @@
 //! | `cluster_launch` | [`ClusterLauncher`], the app's launcher: [`LocalLauncher`] plus pod sessions through the app's `ExecService` (E09-S08) |
 //! | `services` | [`TerminalServices`]: launcher, command dispatcher, paste confirmation; an app global so the layout restore builds terminals too |
 //! | `terminal_view` | [`TerminalView`]: owns the [`TerminalState`](crate::TerminalState) (grid, backend, tasks) for the tab's life; title from the process |
-//! | `render` | the element, the starting line, the banner and the dimming of a session that cannot take input |
+//! | `render` | the element, the search bar above it, the starting line, the banner, the bell's flash and the dimming of a session that cannot take input |
 //! | `lifecycle` | [`Lifecycle`]: connecting / running / disconnected / exited / failed / closed as a small enum, the error taxonomy ([`Failure`]) and the [`Banner`] text (E09-S12) |
 //! | `recover`, `strip` | Reconnect (pod) and Restart (local shell) from the same descriptor, and the banner strip with its buttons |
+//! | `find` | find in scrollback: the search bar, the matches painted over the cells, `terminal::Search*` (E09-S11) |
+//! | `bell` | what the bell does (`terminal.bell`: nothing, a flash, the system sound) and the cursor's blink clock (E09-S11) |
 //! | `item` | the `Item` impl: tab title = process or pod name, dirty = a process runs, icon by kind, cluster mark, dockable, split = a fresh copy, close ends the process, saved = the descriptor only |
 //! | `panel` | [`TerminalPanel`]: the bottom-dock panel of a cluster's terminals, and [`ensure_terminal_panel`] |
 //! | `commands` | the bus handlers: [`register_view_commands`] (`terminal::*`) and [`register_pod_commands`] (`pod::Shell`, `pod::Attach`, `pod::Exec`, E09-S08) queue a [`TerminalRequest`] on the window's [`TerminalViewSink`] |
@@ -24,10 +26,12 @@
 //! tasks (abort on drop). A restored tab starts a fresh process from its descriptor; the
 //! scrollback is never saved (non-negotiable 5).
 
+mod bell;
 mod cluster_launch;
 mod commands;
 mod controller;
 mod descriptor;
+mod find;
 mod host;
 mod item;
 mod launch;
@@ -42,12 +46,14 @@ mod terminal_view;
 use gpui::{App, actions};
 use oxikube_domain::command::Command;
 
+pub use bell::FLASH_DURATION;
 pub use cluster_launch::ClusterLauncher;
 pub use commands::{
     POD_COMMANDS, TerminalRequest, TerminalViewSink, register_pod_commands, register_view_commands,
 };
 pub use controller::{TerminalViews, TerminalViewsDeps};
 pub use descriptor::BackendDescriptor;
+pub use find::REFRESH_DELAY;
 pub use host::{ClusterTerminalHost, TerminalHost};
 pub use item::TERMINAL_ITEM_KIND;
 pub use launch::{Launch, LocalLauncher, TerminalLauncher};
