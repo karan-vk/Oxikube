@@ -4,6 +4,7 @@
 use oxikube_domain::command::{Command, CommandMeta, DEFAULT_DEBUG_IMAGE};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::safety::{ConfirmTier, Risk};
+use oxikube_ports::{ClusterPrefs, NodeShellSpec};
 
 /// The confirmation tier the guard asks for before running a command.
 ///
@@ -127,6 +128,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::WorkloadRestart { target }
         | Command::WorkloadViewLogs { target, .. }
         | Command::NodeCordon { target }
+        | Command::NodeShell { target }
         | Command::NodeUncordon { target }
         | Command::NodeDrain { target, .. } => Some(&target.cluster),
         Command::ClusterNextTab
@@ -264,6 +266,57 @@ pub fn audit_detail(command: &Command) -> Option<String> {
         detail.push_str(&format!(" name={name}"));
     }
     Some(detail)
+}
+
+/// [`summary`], with what only the cluster's settings know: a node shell names the image and the
+/// namespace of the privileged pod it will create, so the user confirms what actually runs as
+/// root on the node.
+pub fn summary_in(
+    meta: &CommandMeta,
+    command: &Command,
+    context: &str,
+    prefs: &ClusterPrefs,
+) -> String {
+    let base = summary(meta, command, context);
+    match command {
+        Command::NodeShell { target } => {
+            let spec = NodeShellSpec::for_node(&*target.name, prefs);
+            format!(
+                "{base}. Creates a privileged pod from image {} in namespace {} with full access \
+                 to the node; it is deleted when the terminal closes.",
+                spec.image, spec.namespace
+            )
+        }
+        _ => base,
+    }
+}
+
+/// [`audit_detail`], with what only the cluster's settings know: the image and namespace of a node
+/// shell's pod (`phase=create`; the record of its deletion says `phase=delete`). `None` for
+/// every other command, which its id and target describe fully.
+pub fn audit_detail_in(command: &Command, prefs: &ClusterPrefs) -> Option<String> {
+    match command {
+        Command::NodeShell { target } => {
+            let spec = NodeShellSpec::for_node(&*target.name, prefs);
+            Some(node_shell_detail("create", &spec))
+        }
+        _ => audit_detail(command),
+    }
+}
+
+/// `phase=create image=busybox:1.37 namespace=kube-system`: the audit detail of one end of a
+/// node shell's pod.
+pub fn node_shell_detail(phase: &str, spec: &NodeShellSpec) -> String {
+    format!(
+        "phase={phase} image={} namespace={}",
+        spec.image, spec.namespace
+    )
+}
+
+/// `phase=sweep namespace=kube-system`: the audit detail of a leftover node-shell pod the sweep
+/// deleted because nothing had stamped it alive for the grace period (its owner is gone).
+pub fn node_shell_sweep_detail(namespace: &str) -> String {
+    format!("phase=sweep namespace={namespace}")
 }
 
 /// The text a [`ConfirmTier::TypeName`] confirmation must repeat: the target's name, or

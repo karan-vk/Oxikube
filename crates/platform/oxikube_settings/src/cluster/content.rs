@@ -11,6 +11,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::fields::{HttpUrl, SecretName, colour_schema, exec_interactivity_schema};
+use super::node_shell::NodeShellContent;
 
 /// A manual Prometheus location for a cluster (`prometheus` key). Keeps no secret: the bearer
 /// token lives in the OS keychain and `auth_secret` only names its entry.
@@ -75,7 +76,8 @@ pub struct ClusterSettingsContent {
     /// Working directory of terminals opened for the cluster. Unset uses the home directory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_cwd: Option<String>,
-    /// Container image of the node shell pod. Unset uses the built-in image.
+    /// Container image of the node shell pod; it needs `nsenter` and `sleep`. Unset uses the
+    /// built-in image.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node_shell_image: Option<String>,
     /// Name of the image pull Secret (in the node shell's namespace) used to pull
@@ -83,6 +85,10 @@ pub struct ClusterSettingsContent {
     /// credential.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node_shell_pull_secret: Option<String>,
+    /// The rest of the node shell pod's template: namespace, command, `nsenter` options,
+    /// tolerations, labels, image pull policy and lifetime. Fields merge across layers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_shell: Option<NodeShellContent>,
     /// Manual Prometheus location; unset auto-detects. Fields merge across layers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prometheus: Option<PrometheusContent>,

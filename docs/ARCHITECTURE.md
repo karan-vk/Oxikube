@@ -240,6 +240,33 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `session=debug image=busybox target=app program=sh`, a dry-run dispatch stops after planning because the port has no
   server dry run of the subresource patch); its tool stub `k8s.pod_debug` is `unsafe`, `interactive` and `agent_hidden`
   (`CommandMeta::interactive` drives the three flags). The confirmation text says the container cannot be removed or edited.
+- `oxikube_app::exec::node_shell` (E09-S09) — node shells: `node::Shell` is a **mutation** (it creates a privileged pod), not
+  the exec class, so it takes the whole `MutationGuard` pipeline: blocked on a read-only cluster for every initiator
+  (`exec_in_read_only` does not lift it), a `Simple` confirmation (`Risk::Medium`) whose summary names the node, the image
+  and the namespace (`policy::summary_in` reads the session's `ClusterPrefs`), and an audit record with
+  `detail = phase=create image=... namespace=...`. `register_command(registry, service, opener)` registers the handler:
+  `ExecService::authorize_node_shell` renders the pod from the settings (`NodeShellSpec::for_node`, `node_shell_manifest`
+  in `oxikube_ports`), asks the server to **dry-run** creating it through the command's `Mutation` (so missing RBAC, a pod
+  security admission that refuses privileged pods or a quota fails here with the namespace and the setting to change, and
+  no tab opens) and leaves a one-shot, 2-minute **permit** for that node; `opener` (the terminal's `TerminalViewSink::
+  node_shell_opener`) queues the tab. The tab's launcher calls `ExecService::open_node_shell`, which refuses without a
+  permit (`Forbidden`: the UI cannot reach the privileged port around the guard), sweeps the cluster's leftover shell pods
+  once per run (label `oxikube.dev/node-shell`, nothing stamped the pod alive for `JANITOR_GRACE`, 15 min: an open shell
+  refreshes its pod's `oxikube.dev/node-shell-heartbeat` annotation every minute, so another window's or user's live
+  shell is spared however long it lives; each deletion is audited as `phase=sweep`) and has `ExecPort::node_shell` create
+  the pod, wait for it, exec `nsenter` into the node's namespaces and hand back the session; the backend is wrapped in
+  `AuditedBackend`, which writes the second audit record (`phase=delete`, same who/initiator/node/image/namespace) when the
+  shell exits, is killed or the backend is dropped (the tab closed) while the adapter deletes the pod (on exit, error, drop,
+  abort; `ExecService::close_node_shells`, called from the quit hook in `bins/oxikube`'s mount, deletes the pods of the shells
+  still open and writes their records and the audit backlog, since GPUI drops no terminal on quit; `activeDeadlineSeconds`
+  is the last net). The tool stub `k8s.node_shell` is `unsafe`, `interactive`, `agent_hidden`
+  (`CommandMeta::interactive_mutation`) and advertises `risk: medium`. Failures are re-worded by `failure::explain` (pod security
+  admission, quota, RBAC, image pull, timeout) and keep their kind and `retryable`. `ExecService::set_audit` is wired after
+  the bus exists (`MutationGuard::audit_handle`) because the bus needs the service for the handler.
+  The template: `ClusterPrefs::node_shell_image` / `node_shell_pull_secret` plus the `node_shell` block
+  (`NodeShellPrefs`: `namespace`, `command`, `nsenter_args`, `tolerations`, `labels`, `image_pull_policy`,
+  `max_lifetime_seconds`), defaults in `default.json` (equal to `NodeShellSpec::new`, a test checks it), merged field by
+  field across layers.
 - `oxikube_app::tools` (E08-S09) — `ToolRegistry`: `register` (validates the `ToolDef`, refuses a mutating tool, which
   belongs behind `MutationGuard` in E26, and duplicates), `defs` / `visible(capabilities)` (a tool's `needs`), and
   `invoke(name, args, &ToolContext)` which checks the arguments against the tool's input schema (`validate_args`, the
@@ -345,6 +372,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   multi-pod view reopens). The multi-pod banner lists the streams that reconnect ("web-7d9/app reconnecting (1/5)").
   `logs.reconnect_retries` is the setting (default.json, schema, hot reload).
 - `oxikube_resources_ui` — module `exec` (E09-S08): `exec_row_actions` ("Shell" and "Attach" on a Pod's context menu and the palette's list, keys `s` / `a`, the pod detail's header buttons), `ExecFlow` (reads the pod through `ExecService::plan` on `spawn_kube`, then dispatches `pod::Shell` / `pod::Attach` with the container chosen, or asks first) and `ContainerPicker` (a workspace modal: up / down, enter or click opens, escape sends nothing, so cancelling leaves no audit record of an open that never happened). Module `exec::debug` (E09-S10): "Debug" on a Pod's row (order 130, key `shift-d`, the detail header's bug button) opens `DebugDialog` through `ExecFlow::begin_debug` (it reads the pod for the defaults on `spawn_kube`): image, the container to share processes with, command, optional name, the note that the container is permanent; the button runs `DebugRunner` on `spawn_kube`, shows progress while the container starts and an API refusal under the fields, and closes on success (the terminal opens in the bottom dock). Module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the palette's list, the same), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
+  Node rows (E09-S09): `exec_row_actions` also offers "Shell" on a Node (`node::Shell`, key `s` on a node table, a button in
+  the node detail's header), greyed out on every read-only cluster; the runner confirms with the node and the image named.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
   mounting modes: the content of `DetailDrawer` (a `Panel` in the cluster tab's right dock, opened by `resource::Open`) and,
   after `resource::PinDetail`, a workspace `Item` that moves between panes with its tab, scroll and expanded values intact.
@@ -495,6 +524,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `TerminalRequest::Pod(BackendDescriptor::Attach { container: Some("debugger-xxxxx") })`: the tab is a plain pod attach
   that claims the session just opened, so Reconnect attaches to the same container and never adds another. A refused
   patch or a timeout is the command's error (and a `Failed` audit record); no tab opens.
+  Node shells (E09-S09): `TerminalViewSink::node_shell_opener` queues `TerminalRequest::Pod(BackendDescriptor::NodeShell)`
+  once `node::Shell` was confirmed and dry-run; the tab ("Starting a shell on node worker-1: creating the privileged shell
+  pod, waiting for it to start ... and connecting") is opened by `ClusterLauncher` through `ExecService::open_node_shell`;
+  like pod terminals it is never saved with the layout or cloned on split, and Reconnect and split send `node::Shell` again,
+  so the confirmation and the audit apply to the new pod too.
   Module `view::lifecycle` (E09-S12): `Lifecycle` (Connecting, Running, Disconnected, Exited,
   Failed, Closed) is a small enum fed by the launch result and the session's events, so the banner
   logic runs without a window; `Failure` maps an adapter error kind to a distinct headline and hint
@@ -643,7 +677,8 @@ weaken `cargo xtask lint-deps`.
   `PendingContext` queue the viewer's "Send to agent" fills until the agent panel (E27) attaches.
   The app's one `ExecService` (E09-S08, `mount::exec_service`, stored with `AppState::set_exec_service`) backs the pod
   actions and the terminal's `ClusterLauncher`; `mount::bus` registers `pod::Shell` / `Attach` / `Exec` and
-  (E09-S10, with the same `ExecService`) `pod::Debug` under `oxikube_terminal`.
+  (E09-S10, with the same `ExecService`) `pod::Debug` under `oxikube_terminal`, and (E09-S09) `node::Shell`
+  (`oxikube_app::exec::register_command`); the mount gives the service the guard's audit log once the bus is built.
   Views dispatch through `mount::bus::BusDispatcher`, which runs each command on the bus through
   the window's `ClusterCommandRunner` (toasts, confirmations, denials).
 

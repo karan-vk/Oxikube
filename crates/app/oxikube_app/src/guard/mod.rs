@@ -76,7 +76,7 @@ use confirm::PendingConfirmations;
 #[derive(Debug)]
 pub struct MutationGuard {
     sessions: ClusterSessionManager,
-    audit: AuditLog,
+    audit: Arc<AuditLog>,
     confirmations: PendingConfirmations,
 }
 
@@ -90,7 +90,7 @@ impl MutationGuard {
     ) -> Self {
         Self {
             sessions,
-            audit: AuditLog::new(state, clock),
+            audit: Arc::new(AuditLog::new(state, clock)),
             confirmations: PendingConfirmations::default(),
         }
     }
@@ -98,6 +98,13 @@ impl MutationGuard {
     /// The audit log.
     pub fn audit(&self) -> &AuditLog {
         &self.audit
+    }
+
+    /// A shared handle on the audit log, for a service that must write a record after the guarded
+    /// command returned (`ExecService`: the deletion of a node shell's pod when its terminal
+    /// closes). Appends only; the guard stays the one place that decides what may run.
+    pub fn audit_handle(&self) -> Arc<AuditLog> {
+        self.audit.clone()
     }
 
     /// How many confirmation requests are waiting for an answer.

@@ -2,6 +2,9 @@
 //! containers (`pod::Shell`, `pod::Attach`, `pod::Exec`, E09-S08) go through the app's
 //! [`ExecService`], over the cluster's `ExecPort`.
 //!
+//! A node shell (`node::Shell`, E09-S09) is opened here too, but only with the permit its guarded
+//! command left in the [`ExecService`]: this launcher cannot start one on its own.
+//!
 //! A pod session is started only by its bus command (the guard has checked the read-only policy
 //! and audited the open by then): nothing here restores, clones or retries one by itself, the
 //! view dispatches the command again for those.
@@ -74,6 +77,13 @@ impl TerminalLauncher for ClusterLauncher {
                     cx,
                     async move { exec.attach(&pod, container.as_deref()).await },
                 )
+            }
+            BackendDescriptor::NodeShell { node } => {
+                // The guarded `node::Shell` left the permit this exchanges for the session; the
+                // pod is created, awaited and execed into on the Kubernetes runtime, and deleted
+                // when this launch (or the backend it makes) is dropped.
+                let node = node.clone();
+                open_pod_session(cx, async move { exec.open_node_shell(&node).await })
             }
         }
     }

@@ -124,7 +124,7 @@ fn mcp_mutation_tools_are_denied_on_a_read_only_cluster() {
     let h = Harness::with_every_command();
     h.connect("a", true);
     // The exec tools carry a risk too but are not mutations: `exec.rs` covers them. `pod::Debug`
-    // is interactive and a mutation, so it stays in this list.
+    // and `node::Shell` are interactive and mutations, so they stay in this list.
     let exec_tool = |name: &str| COMMANDS.iter().any(|m| m.exec && m.id.tool_name() == name);
     let tools: Vec<_> = h
         .bus

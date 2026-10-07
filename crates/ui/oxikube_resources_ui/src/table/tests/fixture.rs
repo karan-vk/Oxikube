@@ -70,7 +70,11 @@ fn actions_rig(
     if exec {
         // The exec class (E09-S08): do-nothing handlers behind the real guard, so a test sees the
         // read-only block and the audit record.
-        for id in [CommandId::POD_SHELL, CommandId::POD_ATTACH] {
+        for id in [
+            CommandId::POD_SHELL,
+            CommandId::POD_ATTACH,
+            CommandId::NODE_SHELL,
+        ] {
             registry
                 .register(
                     *command::lookup(id).unwrap(),

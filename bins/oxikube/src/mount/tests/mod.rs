@@ -10,6 +10,7 @@ mod agent;
 mod chrome;
 mod exec;
 mod logs;
+mod node_shell;
 mod resources;
 mod tail;
 mod terminal;

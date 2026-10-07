@@ -12,8 +12,9 @@ use kube::runtime::WatchStreamExt;
 use kube::runtime::watcher::watch_object;
 use kube::{Api, Client};
 use oxikube_domain::{OxiError, OxiResult};
+use oxikube_ports::HEARTBEAT_ANNOTATION;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::wait::{Container, Readiness, readiness};
 use crate::auth::{classify, redacted_line};
@@ -37,6 +38,17 @@ pub(super) struct PodStamp {
     pub(super) name: String,
     /// Seconds since the epoch.
     pub(super) created: i64,
+    /// The last time its owner stamped it alive (the [`HEARTBEAT_ANNOTATION`]), seconds since
+    /// the epoch; `None` when it never was.
+    pub(super) heartbeat: Option<i64>,
+}
+
+impl PodStamp {
+    /// The newest sign of life: the owner's last heartbeat, or the creation if that is later.
+    pub(super) fn last_seen(&self) -> i64 {
+        self.heartbeat
+            .map_or(self.created, |beat| beat.max(self.created))
+    }
 }
 
 /// Pod operations of the exec adapter.
@@ -50,6 +62,10 @@ pub(super) trait Pods: Send + Sync {
 
     /// The pods matching a label selector.
     async fn list(&self, namespace: &str, label_selector: &str) -> OxiResult<Vec<PodStamp>>;
+
+    /// Stamps the pod alive: sets its [`HEARTBEAT_ANNOTATION`] to `at` (seconds since the epoch)
+    /// with a merge patch of its metadata.
+    async fn heartbeat(&self, namespace: &str, name: &str, at: i64) -> OxiResult<()>;
 
     /// The shape of a pod; `None` when it does not exist.
     async fn shape(&self, namespace: &str, name: &str) -> OxiResult<Option<PodShape>>;
@@ -124,15 +140,31 @@ impl Pods for KubePods {
             .items
             .into_iter()
             .filter_map(|pod| {
+                let heartbeat = pod
+                    .metadata
+                    .annotations
+                    .as_ref()
+                    .and_then(|annotations| annotations.get(HEARTBEAT_ANNOTATION))
+                    .and_then(|value| value.parse().ok());
                 Some(PodStamp {
                     name: pod.metadata.name?,
                     created: pod
                         .metadata
                         .creation_timestamp
                         .map_or(0, |t| t.0.as_second()),
+                    heartbeat,
                 })
             })
             .collect())
+    }
+
+    async fn heartbeat(&self, namespace: &str, name: &str, at: i64) -> OxiResult<()> {
+        let patch = json!({"metadata": {"annotations": {HEARTBEAT_ANNOTATION: at.to_string()}}});
+        self.api(namespace)
+            .patch(name, &PatchParams::default(), &Patch::Merge(&patch))
+            .await
+            .map(drop)
+            .map_err(|err| classify(&err))
     }
 
     async fn shape(&self, namespace: &str, name: &str) -> OxiResult<Option<PodShape>> {

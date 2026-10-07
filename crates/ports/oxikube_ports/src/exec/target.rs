@@ -141,35 +141,3 @@ impl DebugContainerSpec {
         namespaced(&self.pod)
     }
 }
-
-/// A shell on a node through a privileged helper pod
-/// ([`ExecPort::node_shell`](super::ExecPort::node_shell)).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeShellSpec {
-    /// The node's name.
-    pub node: String,
-    /// Image of the helper pod; needs `nsenter`. `None` uses the adapter's configured default.
-    pub image: Option<String>,
-    /// Namespace of the helper pod; `None` uses the adapter's configured default.
-    pub namespace: Option<String>,
-    /// Name of an image pull secret in `namespace`, for a private registry.
-    pub image_pull_secret: Option<String>,
-    /// The command run inside the node's namespaces; empty runs the node's login shell.
-    pub shell: Vec<String>,
-    /// How long to wait for the helper pod to run.
-    pub start_timeout: Duration,
-}
-
-impl NodeShellSpec {
-    /// A node shell on `node` with every default.
-    pub fn new(node: impl Into<String>) -> Self {
-        Self {
-            node: node.into(),
-            image: None,
-            namespace: None,
-            image_pull_secret: None,
-            shell: Vec::new(),
-            start_timeout: Duration::from_secs(120),
-        }
-    }
-}

@@ -759,6 +759,16 @@ pub enum Command {
         /// The node.
         target: ResourceRef,
     },
+    /// Open a shell on a node through a privileged helper pod (`kubectl debug node` style): the
+    /// pod is created on the node from the node shell settings, the shell runs in the node's
+    /// namespaces, and the pod is deleted when the terminal closes. Creating a privileged pod
+    /// is a mutation: blocked on a read-only cluster, confirmed with the node and the image
+    /// named, audited.
+    #[serde(rename = "node::Shell")]
+    NodeShell {
+        /// The node.
+        target: ResourceRef,
+    },
     /// Cordon a node and evict its pods.
     #[serde(rename = "node::Drain")]
     NodeDrain {
@@ -874,6 +884,7 @@ impl Command {
             Command::WorkloadRestart { .. } => CommandId::WORKLOAD_RESTART,
             Command::WorkloadViewLogs { .. } => CommandId::WORKLOAD_VIEW_LOGS,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
+            Command::NodeShell { .. } => CommandId::NODE_SHELL,
             Command::NodeUncordon { .. } => CommandId::NODE_UNCORDON,
             Command::NodeDrain { .. } => CommandId::NODE_DRAIN,
         }
@@ -951,6 +962,7 @@ impl Command {
             | Command::WorkloadRestart { target }
             | Command::WorkloadViewLogs { target, .. }
             | Command::NodeCordon { target }
+            | Command::NodeShell { target }
             | Command::NodeUncordon { target }
             | Command::NodeDrain { target, .. } => Some(target),
             _ => None,
@@ -1229,6 +1241,7 @@ mod tests {
                 target: deployment(),
             },
             Command::NodeCordon { target: node() },
+            Command::NodeShell { target: node() },
             Command::NodeUncordon { target: node() },
             Command::NodeDrain {
                 target: node(),

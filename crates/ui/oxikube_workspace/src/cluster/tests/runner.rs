@@ -110,6 +110,70 @@ fn a_writable_cluster_asks_to_confirm_a_mutation_instead_of_denying_it(cx: &mut 
     );
 }
 
+fn node_shell() -> Command {
+    Command::NodeShell {
+        target: ResourceRef::cluster_scoped(id(PROD), Gvk::new("", "v1", "Node"), "worker-1"),
+    }
+}
+
+#[gpui::test]
+fn a_node_shell_asks_with_the_node_and_the_image_named_and_opens_only_when_confirmed(
+    cx: &mut TestAppContext,
+) {
+    let mut f = fixture(cx);
+    run(&mut f, node_shell());
+    let layer = f.vcx.update(|_, cx| f.ws.read(cx).modal_layer().clone());
+    let dialog = f
+        .vcx
+        .update(|_, cx| layer.read(cx).active_modal::<crate::modal::DialogModal>())
+        .expect("the guard's confirmation opens a dialog");
+    let (title, message) = f.vcx.update(|_, cx| {
+        let dialog = dialog.read(cx);
+        (
+            dialog.title().to_string(),
+            dialog
+                .message_text()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+        )
+    });
+    assert_eq!(title, "Open a shell on the node?");
+    assert!(message.contains("worker-1"), "{message}");
+    assert!(message.contains("busybox:1.37"), "{message}");
+    assert!(message.contains("privileged"), "{message}");
+    assert_eq!(*f.node_shells.lock(), 0, "nothing runs before the answer");
+
+    // Cancelling opens nothing and is audited.
+    f.vcx.simulate_keystrokes("escape");
+    f.vcx.run_until_parked();
+    assert_eq!(*f.node_shells.lock(), 0);
+    assert!(f.state.audit_log().iter().any(|r| r.outcome
+        == oxikube_domain::audit::AuditOutcome::Cancelled
+        && &*r.cmd == "node::Shell"));
+
+    run(&mut f, node_shell());
+    f.vcx.simulate_keystrokes("enter");
+    f.vcx.run_until_parked();
+    assert_eq!(*f.node_shells.lock(), 1, "confirming dispatches it again");
+}
+
+#[gpui::test]
+fn a_node_shell_on_a_read_only_cluster_is_refused_with_a_toast_and_no_dialog(
+    cx: &mut TestAppContext,
+) {
+    let mut f = fixture(cx);
+    f.manager.set_read_only(&id(PROD), true).unwrap();
+    f.vcx.run_until_parked();
+    run(&mut f, node_shell());
+    assert!(!modal_open(&mut f), "refused before it asks");
+    assert_eq!(*f.node_shells.lock(), 0);
+    let shown = toasts(&mut f);
+    assert!(
+        shown.iter().any(|(_, m)| m.contains("read-only")),
+        "{shown:?}"
+    );
+}
+
 #[gpui::test]
 fn a_debug_container_is_confirmed_in_its_own_words_not_as_turning_something_off(
     cx: &mut TestAppContext,

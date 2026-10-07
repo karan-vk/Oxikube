@@ -22,6 +22,8 @@ enum Admission {
         context: ContextName,
         target: ResourceRef,
         writer: Arc<dyn ResourceWriter>,
+        /// What the audit record adds to the target ([`policy::audit_detail`]).
+        detail: Option<String>,
     },
     /// Ask the user first; nothing ran.
     Confirm(ConfirmationRequest),
@@ -41,13 +43,14 @@ impl MutationGuard {
         ctx: DispatchContext,
         handler: Arc<dyn CommandHandler>,
     ) -> Result<Outcome, DispatchError> {
-        let (cluster, context, target, writer) = match self.admit(meta, &command, &ctx) {
+        let (cluster, context, target, writer, detail) = match self.admit(meta, &command, &ctx) {
             Admission::Proceed {
                 cluster,
                 context,
                 target,
                 writer,
-            } => (cluster, context, target, writer),
+                detail,
+            } => (cluster, context, target, writer, detail),
             Admission::Confirm(request) => return Ok(Outcome::NeedsConfirmation(request)),
             Admission::Deny { error, record } => {
                 if let Some(record) = record
@@ -70,7 +73,6 @@ impl MutationGuard {
 
         // Armed before the handler: if this future is dropped while the handler runs,
         // the attempt still lands in the audit backlog (as `Cancelled`).
-        let detail = policy::audit_detail(&command);
         let attempt = self.audit.begin_described(
             &ctx.who,
             ctx.initiator,
@@ -199,7 +201,12 @@ impl MutationGuard {
                         tier,
                         risk: command.effective_risk(),
                         cluster,
-                        summary: policy::summary(meta, command, context.as_str()),
+                        summary: policy::summary_in(
+                            meta,
+                            command,
+                            context.as_str(),
+                            session.prefs(),
+                        ),
                         expected_name,
                     });
                 }
@@ -214,11 +221,13 @@ impl MutationGuard {
             }
         }
 
+        let detail = policy::audit_detail_in(command, session.prefs());
         Admission::Proceed {
             cluster,
             context,
             target,
             writer,
+            detail,
         }
     }
 }

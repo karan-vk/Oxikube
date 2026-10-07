@@ -17,13 +17,15 @@
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
 //! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
+//! | `oxikube_app::exec` | `node::Shell` (guarded: blocked read-only, a confirmation naming the node and the image, a server dry run of the pod, audit; E09-S09) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
 //! `pod::Debug` (E09-S10, registered by `oxikube_terminal` over the app's `ExecService`) adds an
 //! ephemeral debug container to a pod and opens a terminal in it.
 //!
-//! Only `resource::Delete` and `pod::Debug` mutate a cluster; they and the posture commands confirm
-//! and audit through the `MutationGuard` the bus owns, and E12's per-kind actions join here.
+//! Only `resource::Delete`, `pod::Debug` and `node::Shell` (it creates a privileged pod) mutate a
+//! cluster; they and the posture commands confirm and audit through the `MutationGuard` the bus
+//! owns, and E12's per-kind actions join here.
 
 use std::cell::OnceCell;
 use std::rc::Rc;
@@ -82,7 +84,9 @@ pub struct BusParts {
     pub terminal_input: TerminalInputSink,
     /// The terminal views' queue (`terminal::New`, `Split`, `Close`, applied on the UI thread).
     pub terminal_views: TerminalViewSink,
-    /// The app's exec service: `pod::Debug` adds its container through it (E09-S10).
+    /// The app's exec service: `pod::Debug` adds its container through it (E09-S10), and
+    /// `node::Shell`'s handler dry-runs the shell pod and leaves the permit the node's terminal
+    /// opens with (E09-S09).
     pub exec: Arc<ExecService>,
 }
 
@@ -128,7 +132,14 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         oxikube_terminal::view::register_pod_commands(r, parts.terminal_views.clone())?;
         // `pod::Debug` (E09-S10): a guarded, confirmed, audited mutation that adds an ephemeral
         // container to the pod and opens a terminal attached to it.
-        oxikube_terminal::view::register_debug_command(r, parts.terminal_views, parts.exec)
+        oxikube_terminal::view::register_debug_command(
+            r,
+            parts.terminal_views.clone(),
+            parts.exec.clone(),
+        )?;
+        // `node::Shell` (E09-S09): a mutation (a privileged pod), confirmed with the node and the
+        // image named, dry-run through the guard, audited at both ends of the pod's life.
+        oxikube_app::exec::register_command(r, parts.exec, parts.terminal_views.node_shell_opener())
     })?;
     Ok(registry)
 }

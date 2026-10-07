@@ -162,10 +162,30 @@
   "default_namespace": null,
   // Working directory of terminals opened for the cluster; null uses your home directory.
   "terminal_cwd": null,
-  // Image and image pull Secret (a Kubernetes Secret name, not a credential) of the node shell
-  // pod; null uses the built-in image.
-  "node_shell_image": null,
+  // The node shell (`node: shell`) runs in a short-lived privileged pod pinned to the node and
+  // deleted when the terminal closes. Its image needs `nsenter` and `sleep`; the image pull Secret
+  // is a Kubernetes Secret name in the pod's namespace, not a credential.
+  "node_shell_image": "busybox:1.37",
   "node_shell_pull_secret": null,
+  // The rest of the pod template. Fields merge across layers; a list replaces the one above it.
+  //   namespace: where the pod lives. kube-system exists everywhere and is exempt from the pod
+  //     security admission that refuses privileged pods in ordinary namespaces.
+  //   command: what runs in the node's namespaces; [] runs `bash -l` if the node has bash, else
+  //     `sh -l`.
+  //   nsenter_args: the nsenter options before `--` (enter every namespace of the node's init).
+  //   tolerations: what the pod tolerates; the default tolerates every taint, [] tolerates none.
+  //   labels: added to the pod (Oxikube's own labels cannot be replaced).
+  //   image_pull_policy: "Always", "IfNotPresent" or "Never"; null leaves the cluster's default.
+  //   max_lifetime_seconds: the cluster deletes the pod after this long if Oxikube could not.
+  "node_shell": {
+    "namespace": "kube-system",
+    "command": [],
+    "nsenter_args": ["-t", "1", "-m", "-u", "-i", "-n", "-p"],
+    "tolerations": [{ "operator": "Exists" }],
+    "labels": {},
+    "image_pull_policy": null,
+    "max_lifetime_seconds": 28800
+  },
   // Manual Prometheus location instead of auto-detection, e.g.
   // { "url": "https://prometheus.example.com", "auth_secret": "prod-prometheus" }.
   // `auth_secret` names an OS keychain entry (namespace `prometheus`) holding the bearer token;

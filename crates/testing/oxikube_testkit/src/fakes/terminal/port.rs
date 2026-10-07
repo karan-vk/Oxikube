@@ -1,5 +1,7 @@
 //! [`FakeExecPort`].
 
+use std::time::Duration;
+
 use async_trait::async_trait;
 use oxikube_domain::OxiResult;
 use oxikube_ports::{
@@ -22,6 +24,10 @@ pub struct ExecPortScripts {
     pub create_debug_container: Script<FakeTerminalBackend>,
     /// `node_shell`.
     pub node_shell: Script<FakeTerminalBackend>,
+    /// `sweep_node_shells`: the names of the pods the sweep deleted (nothing queued: none).
+    pub sweep_node_shells: Script<Vec<String>>,
+    /// `release_node_shells`: how many pods the release deleted (nothing queued: `0`).
+    pub release_node_shells: Script<usize>,
 }
 
 /// One call made on a [`FakeExecPort`], with the descriptor it was given.
@@ -35,6 +41,15 @@ pub enum ExecPortCall {
     CreateDebugContainer(DebugContainerSpec),
     /// `node_shell(spec)`.
     NodeShell(NodeShellSpec),
+    /// `sweep_node_shells(namespace, older_than)`.
+    SweepNodeShells {
+        /// The namespace swept.
+        namespace: String,
+        /// The age a pod must have.
+        older_than: Duration,
+    },
+    /// `release_node_shells()`.
+    ReleaseNodeShells,
 }
 
 /// Fake `ExecPort`. Each method records its descriptor and returns the next queued
@@ -94,5 +109,24 @@ impl ExecPort for FakeExecPort {
     async fn node_shell(&self, spec: &NodeShellSpec) -> OxiResult<Box<dyn TerminalBackend>> {
         self.calls.record(ExecPortCall::NodeShell(spec.clone()));
         self.hand_out(&self.script.node_shell)
+    }
+
+    async fn sweep_node_shells(
+        &self,
+        namespace: &str,
+        older_than: Duration,
+    ) -> OxiResult<Vec<String>> {
+        self.calls.record(ExecPortCall::SweepNodeShells {
+            namespace: namespace.to_owned(),
+            older_than,
+        });
+        self.script
+            .sweep_node_shells
+            .next_or_else(|| Ok(Vec::new()))
+    }
+
+    async fn release_node_shells(&self) -> OxiResult<usize> {
+        self.calls.record(ExecPortCall::ReleaseNodeShells);
+        self.script.release_node_shells.next_or_else(|| Ok(0))
     }
 }

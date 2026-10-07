@@ -206,6 +206,9 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             target: node(name, "worker-1"),
             force: false,
         },
+        "node::Shell" => Command::NodeShell {
+            target: node(name, "worker-1"),
+        },
         "node::Uncordon" => Command::NodeUncordon {
             target: node(name, "worker-1"),
         },

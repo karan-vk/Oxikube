@@ -98,8 +98,19 @@
         "logs": {
           "$ref": "#/$defs/LogsContent"
         },
+        "node_shell": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeShellContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The rest of the node shell pod's template: namespace, command, `nsenter` options,\ntolerations, labels, image pull policy and lifetime. Fields merge across layers."
+        },
         "node_shell_image": {
-          "description": "Container image of the node shell pod. Unset uses the built-in image.",
+          "description": "Container image of the node shell pod; it needs `nsenter` and `sleep`. Unset uses the\nbuilt-in image.",
           "type": [
             "string",
             "null"
@@ -230,8 +241,19 @@
             "null"
           ]
         },
+        "node_shell": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeShellContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The rest of the node shell pod's template: namespace, command, `nsenter` options,\ntolerations, labels, image pull policy and lifetime. Fields merge across layers."
+        },
         "node_shell_image": {
-          "description": "Container image of the node shell pod. Unset uses the built-in image.",
+          "description": "Container image of the node shell pod; it needs `nsenter` and `sleep`. Unset uses the\nbuilt-in image.",
           "type": [
             "string",
             "null"
@@ -344,6 +366,26 @@
       ],
       "pattern": "^https?://[^\\s@?#/]+(/[^\\s?#]*)?$",
       "type": "string"
+    },
+    "ImagePullPolicy": {
+      "description": "When the node shell image is pulled.",
+      "oneOf": [
+        {
+          "const": "Always",
+          "description": "Always pull.",
+          "type": "string"
+        },
+        {
+          "const": "IfNotPresent",
+          "description": "Pull when the node does not have the image.",
+          "type": "string"
+        },
+        {
+          "const": "Never",
+          "description": "Never pull: the node must have the image.",
+          "type": "string"
+        }
+      ]
     },
     "KubeconfigSettingsContent": {
       "additionalProperties": false,
@@ -479,6 +521,80 @@
           "description": "Wrap long lines instead of letting them run off the edge (key `w` toggles it per view).\nA change applies to open views at once.",
           "type": [
             "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "NodeShellContent": {
+      "additionalProperties": false,
+      "description": "The node shell pod template, as one settings layer writes it. Every field is optional so a\nlayer sets any subset.\n\nExample, to run on a tainted GPU node from a mirror registry:\n\n```json\n\"node_shell_image\": \"registry.example/tools/nsenter:1\",\n\"node_shell\": {\n  \"namespace\": \"ops-debug\",\n  \"tolerations\": [{ \"key\": \"nvidia.com/gpu\", \"operator\": \"Exists\" }],\n  \"labels\": { \"team\": \"infra\" }\n}\n```",
+      "properties": {
+        "command": {
+          "description": "The command run in the node's namespaces, after the `nsenter` options. Empty runs\n`bash -l` when the node has bash, else `sh -l`.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "image_pull_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImagePullPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`Always`, `IfNotPresent` or `Never`; unset leaves the cluster's default for the tag."
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Labels added to the pod. Oxikube's own labels cannot be replaced.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "max_lifetime_seconds": {
+          "description": "The longest the pod lives, in seconds (`activeDeadlineSeconds`): the cluster deletes a\npod Oxikube could not. Unset is eight hours.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "namespace": {
+          "description": "Namespace of the helper pod. The default, `kube-system`, exists everywhere and is exempt\nfrom the pod security admission that refuses privileged pods in ordinary namespaces.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nsenter_args": {
+          "description": "The `nsenter` options before the `--`. Empty enters every namespace of the node's init\nprocess: `-t 1 -m -u -i -n -p`.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "tolerations": {
+          "description": "What the pod tolerates. The default tolerates every taint; an empty list tolerates\nnone. A list replaces the one of the layer above.",
+          "items": {
+            "$ref": "#/$defs/TolerationContent"
+          },
+          "type": [
+            "array",
             "null"
           ]
         }
@@ -643,6 +759,26 @@
         }
       },
       "type": "object"
+    },
+    "TaintEffect": {
+      "description": "Which taint effect a toleration covers.",
+      "oneOf": [
+        {
+          "const": "NoSchedule",
+          "description": "New pods are not scheduled onto the node.",
+          "type": "string"
+        },
+        {
+          "const": "PreferNoSchedule",
+          "description": "The scheduler avoids the node.",
+          "type": "string"
+        },
+        {
+          "const": "NoExecute",
+          "description": "Running pods are evicted.",
+          "type": "string"
+        }
+      ]
     },
     "TerminalContent": {
       "additionalProperties": false,
@@ -825,6 +961,72 @@
         }
       ],
       "description": "What one settings layer says about the theme."
+    },
+    "TolerationContent": {
+      "additionalProperties": false,
+      "description": "One toleration of the node shell pod (a Kubernetes `Toleration`).",
+      "properties": {
+        "effect": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaintEffect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The taint effect; unset covers every effect."
+        },
+        "key": {
+          "description": "The taint key; unset with `operator: Exists` matches every key.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TolerationOperator"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`Exists` or `Equal` (Kubernetes' own default)."
+        },
+        "toleration_seconds": {
+          "description": "For `NoExecute`: how long the pod stays after the taint appears.",
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "value": {
+          "description": "The taint value, for `Equal`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "TolerationOperator": {
+      "description": "How a toleration matches a taint.",
+      "oneOf": [
+        {
+          "const": "Exists",
+          "description": "Any value of the key (or every key when `key` is unset).",
+          "type": "string"
+        },
+        {
+          "const": "Equal",
+          "description": "The key with exactly `value`.",
+          "type": "string"
+        }
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2019-09/schema",
@@ -931,8 +1133,19 @@
     "logs": {
       "$ref": "#/$defs/LogsContent"
     },
+    "node_shell": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NodeShellContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The rest of the node shell pod's template: namespace, command, `nsenter` options,\ntolerations, labels, image pull policy and lifetime. Fields merge across layers."
+    },
     "node_shell_image": {
-      "description": "Container image of the node shell pod. Unset uses the built-in image.",
+      "description": "Container image of the node shell pod; it needs `nsenter` and `sleep`. Unset uses the\nbuilt-in image.",
       "type": [
         "string",
         "null"

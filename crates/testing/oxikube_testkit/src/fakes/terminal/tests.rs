@@ -211,6 +211,36 @@ fn exec_port_records_descriptors_and_returns_the_scripted_backend() {
             ]
         );
         assert_eq!(port.opened().len(), 4);
+
+        port.script()
+            .sweep_node_shells
+            .push_ok(vec!["a".to_owned(), "b".to_owned()]);
+        let older = std::time::Duration::from_secs(60);
+        assert_eq!(
+            port.sweep_node_shells("kube-system", older).await.unwrap(),
+            ["a", "b"]
+        );
+        assert!(
+            port.sweep_node_shells("kube-system", older)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            port.recorded_calls().last(),
+            Some(&ExecPortCall::SweepNodeShells {
+                namespace: "kube-system".into(),
+                older_than: older,
+            })
+        );
+
+        port.script().release_node_shells.push_ok(3);
+        assert_eq!(port.release_node_shells().await.unwrap(), 3);
+        assert_eq!(port.release_node_shells().await.unwrap(), 0);
+        assert_eq!(
+            port.recorded_calls().last(),
+            Some(&ExecPortCall::ReleaseNodeShells)
+        );
     });
 }
 

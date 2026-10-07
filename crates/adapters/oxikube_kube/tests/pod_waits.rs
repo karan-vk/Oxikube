@@ -13,7 +13,7 @@ use common::pods::{
     wait_pod,
 };
 use k8s_openapi::api::core::v1::{Event, Pod};
-use oxikube_kube::NodeShellConfig;
+use oxikube_ports::DEFAULT_NODE_SHELL_IMAGE;
 use oxikube_testkit::images;
 use oxikube_testkit::integration::TestNamespace;
 use serde_json::{Value, json};
@@ -144,7 +144,7 @@ fn diagnostics_name_the_container_states_and_the_events() {
 
 #[test]
 fn the_node_shell_default_image_is_a_listed_test_image() {
-    assert_eq!(NodeShellConfig::default().image, images::BUSYBOX);
+    assert_eq!(DEFAULT_NODE_SHELL_IMAGE, images::BUSYBOX);
     assert!(images::all().contains(&images::BUSYBOX));
 }
 

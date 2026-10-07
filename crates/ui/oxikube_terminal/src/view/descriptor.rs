@@ -70,6 +70,14 @@ pub enum BackendDescriptor {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         container: Option<String>,
     },
+    /// A shell on a node through a short-lived privileged pod (`node::Shell`, E09-S09). Only
+    /// the node is kept: the image, namespace and everything else of the pod come from the
+    /// settings of the moment the shell is opened, and a new one is opened only through the
+    /// command (confirmed, audited), never from this descriptor.
+    NodeShell {
+        /// The node (its cluster included).
+        node: ResourceRef,
+    },
 }
 
 /// The saved form: the descriptor under a version.
@@ -144,6 +152,7 @@ impl BackendDescriptor {
         match self {
             Self::Local { cluster, .. } => cluster.as_ref(),
             Self::Exec { pod, .. } | Self::Attach { pod, .. } => Some(&pod.cluster),
+            Self::NodeShell { node } => Some(&node.cluster),
         }
     }
 
@@ -151,7 +160,7 @@ impl BackendDescriptor {
     pub fn cwd(&self) -> Option<&Path> {
         match self {
             Self::Local { cwd, .. } => cwd.as_deref(),
-            Self::Exec { .. } | Self::Attach { .. } => None,
+            Self::Exec { .. } | Self::Attach { .. } | Self::NodeShell { .. } => None,
         }
     }
 
@@ -160,11 +169,12 @@ impl BackendDescriptor {
         matches!(self, Self::Local { .. })
     }
 
-    /// The bus command that opens this pod terminal again (`pod::Shell` for an exec without a
-    /// command, `pod::Exec`, `pod::Attach`); `None` for a local shell.
+    /// The bus command that opens this remote terminal again (`pod::Shell` for an exec without a
+    /// command, `pod::Exec`, `pod::Attach`, `node::Shell`); `None` for a local shell.
     ///
-    /// A pod session is only ever started by its command, so the guard applies the read-only
-    /// policy and the audit record: a split, a reconnect or a reopen sends this instead of starting
+    /// A pod or node session is only ever started by its command, so the guard applies the
+    /// read-only policy, the confirmation (a node shell asks again: it creates another privileged
+    /// pod) and the audit record: a split, a reconnect or a reopen sends this instead of starting
     /// another process itself.
     pub fn pod_command(&self) -> Option<Command> {
         match self {
@@ -188,6 +198,9 @@ impl BackendDescriptor {
             Self::Attach { pod, container } => Some(Command::PodAttach {
                 target: pod.clone(),
                 container: container.clone(),
+            }),
+            Self::NodeShell { node } => Some(Command::NodeShell {
+                target: node.clone(),
             }),
         }
     }
@@ -216,6 +229,21 @@ impl BackendDescriptor {
                 };
                 tab_title(&name)
             }
+            Self::NodeShell { node } => tab_title(&format!("node/{}", node.name)),
+        }
+    }
+
+    /// The line shown in the tab while the process starts. A node shell says what is going on,
+    /// because it takes the longest: the pod is created, the image may be pulled, and only then
+    /// does the shell connect.
+    pub fn starting_text(&self, title: &str) -> String {
+        match self {
+            Self::NodeShell { node } => format!(
+                "Starting a shell on node {}: creating the privileged shell pod, waiting for it \
+                 to start (the image is pulled on first use) and connecting…",
+                node.name
+            ),
+            _ => format!("Starting {title}…"),
         }
     }
 
@@ -223,7 +251,7 @@ impl BackendDescriptor {
     pub fn icon(&self) -> IconName {
         match self {
             Self::Local { .. } => IconName::Terminal,
-            Self::Exec { .. } | Self::Attach { .. } => IconName::Container,
+            Self::Exec { .. } | Self::Attach { .. } | Self::NodeShell { .. } => IconName::Container,
         }
     }
 

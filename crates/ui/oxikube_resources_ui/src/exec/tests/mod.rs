@@ -5,6 +5,7 @@
 mod debug;
 mod detail;
 mod menu;
+mod node;
 mod picker;
 
 use gpui::Entity;
@@ -60,5 +61,14 @@ pub(super) fn sent_exec(f: &Fixture) -> Vec<Command> {
         .sent()
         .into_iter()
         .filter(Command::is_exec)
+        .collect()
+}
+
+/// Only the `node::Shell` commands among what the dispatcher saw.
+pub(super) fn sent_node_shell(f: &Fixture) -> Vec<Command> {
+    f.dispatcher
+        .sent()
+        .into_iter()
+        .filter(|command| matches!(command, Command::NodeShell { .. }))
         .collect()
 }

@@ -118,6 +118,8 @@ impl CommandId {
     pub const NODE_CORDON: CommandId = CommandId::new("node::Cordon");
     /// `node::Drain`: evict a node's pods.
     pub const NODE_DRAIN: CommandId = CommandId::new("node::Drain");
+    /// `node::Shell`: open a shell on a node through a privileged pod.
+    pub const NODE_SHELL: CommandId = CommandId::new("node::Shell");
     /// `node::Uncordon`: mark a node schedulable again.
     pub const NODE_UNCORDON: CommandId = CommandId::new("node::Uncordon");
     /// `palette::Toggle`: show or hide the command palette.
@@ -550,6 +552,15 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         Risk::High,
         NONE,
+    ),
+    // A shell on a node is root on it: the command creates a privileged pod (a mutation, blocked
+    // on a read-only cluster, a confirmation that names the node and the image) and opens a
+    // session in it; its tool stub is unsafe, interactive and hidden from agents.
+    CommandMeta::interactive_mutation(
+        CommandId::NODE_SHELL,
+        "Node Shell",
+        CommandScope::Selection,
+        Risk::Medium,
     ),
     CommandMeta::mutation(
         CommandId::NODE_UNCORDON,
@@ -1074,6 +1085,38 @@ mod tests {
                 .iter()
                 .filter(|m| !m.exec)
                 .all(|m| m.tool_risk() == m.risk || m.id == CommandId::RESOURCE_DELETE)
+        );
+    }
+
+    #[test]
+    fn node_shell_is_a_guarded_interactive_mutation() {
+        let meta = lookup(CommandId::NODE_SHELL).expect("declared");
+        // Not the exec class (that one is never confirmed and may run on a read-only cluster):
+        // it creates a privileged pod.
+        assert!(meta.mutating && !meta.exec && meta.interactive && !meta.privileged);
+        assert_eq!(meta.risk, Some(Risk::Medium));
+        assert_eq!(meta.confirm, ConfirmTier::Simple);
+        assert!(
+            meta.needs
+                .contains(Capabilities::MUTATE | Capabilities::EXEC)
+        );
+        assert_eq!(meta.tool_risk(), Some(Risk::Medium));
+        assert_eq!(CommandId::NODE_SHELL.tool_name(), "k8s.node_shell");
+        let interactive: Vec<_> = COMMANDS
+            .iter()
+            .filter(|m| m.interactive)
+            .map(|m| m.id)
+            .collect();
+        assert_eq!(
+            interactive,
+            [
+                CommandId::NODE_SHELL,
+                CommandId::POD_ATTACH,
+                CommandId::POD_DEBUG,
+                CommandId::POD_EXEC,
+                CommandId::POD_SHELL
+            ],
+            "the interactive tools are a reviewed allow-list"
         );
     }
 }

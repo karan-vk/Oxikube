@@ -8,13 +8,14 @@
 //! and on every change. Everything here is a value type: no I/O, no secrets. A Prometheus
 //! bearer token, for example, is only a [`SecretKey`] naming a keychain entry.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use oxikube_domain::ClusterColour;
 use oxikube_domain::ids::ClusterId;
 
 use crate::connector::ExecInteractivity;
+use crate::exec::NodeShellToleration;
 use crate::secrets::SecretKey;
 
 /// Where a cluster's Prometheus is, when the user overrides auto-detection (E13).
@@ -31,6 +32,29 @@ pub struct PrometheusOverride {
     pub url: Option<String>,
     /// The keychain entry holding the bearer token. Only the name is ever configured.
     pub auth: Option<SecretKey>,
+}
+
+/// The node shell's pod template as the settings give it (E09-S09): the keys under
+/// `node_shell` beside the flat `node_shell_image` and `node_shell_pull_secret`. Every field is
+/// optional; [`NodeShellSpec::for_node`](crate::NodeShellSpec::for_node) puts what is set over
+/// the defaults.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NodeShellPrefs {
+    /// Namespace of the helper pod.
+    pub namespace: Option<String>,
+    /// The command run in the node's namespaces; empty runs `bash -l` if the node has bash, else
+    /// `sh -l`.
+    pub command: Vec<String>,
+    /// The `nsenter` options before the `--`; empty enters every namespace of the node's init.
+    pub nsenter_args: Vec<String>,
+    /// What the helper pod tolerates; `None` tolerates every taint, an empty list none.
+    pub tolerations: Option<Vec<NodeShellToleration>>,
+    /// Labels added to the helper pod.
+    pub labels: BTreeMap<String, String>,
+    /// `Always`, `IfNotPresent` or `Never`; `None` leaves the cluster's default.
+    pub image_pull_policy: Option<String>,
+    /// The longest the helper pod lives (`activeDeadlineSeconds`); `None` is eight hours.
+    pub max_lifetime_seconds: Option<u64>,
 }
 
 /// The per-cluster settings, resolved: defaults, then the user's global values, then
@@ -57,6 +81,8 @@ pub struct ClusterPrefs {
     /// Name of the `imagePullSecret` the node shell pod references (a Kubernetes Secret name,
     /// not a credential).
     pub node_shell_pull_secret: Option<String>,
+    /// The rest of the node shell's pod template (namespace, command, tolerations, ...).
+    pub node_shell: NodeShellPrefs,
     /// Manual Prometheus location, if any.
     pub prometheus: Option<PrometheusOverride>,
     /// Namespaces to offer when the user may not list namespaces cluster-wide.
