@@ -57,8 +57,8 @@ workspace.update(cx, |ws, cx| {
   leaves the default layout usable). The app opens its first window this way.
 - Session basics (`session`): `window::New` opens another main window (own `Workspace`);
   `view::ZoomIn`/`ZoomOut`/`ZoomReset` change the `ui_scale` setting (cmd/ctrl `+`, `-`, `0`);
-  `reduce_motion` resolves the OS preference (fed by `session::set_os_reduce_motion`, GPUI does not
-  read it) and the setting into GPUI's flag; a feature that starts exec sessions, port-forwards or
+  `reduce_motion` resolves the OS preference (fed by `session::set_os_reduce_motion`, which the binary's
+  `os_motion` probe calls at start-up and on change; GPUI does not read it) and the setting into GPUI's flag; a feature that starts exec sessions, port-forwards or
   applies calls `session::register_operation_provider(cx, |cx| vec![RunningOperation::new(..)])`
   so `app::Quit` asks before stopping them (setting `confirm_quit`).
 - Tests: `cargo test -p oxikube_workspace`. Feature `test-support` exports `TestItem` and

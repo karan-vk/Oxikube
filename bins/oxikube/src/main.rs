@@ -185,6 +185,8 @@ fn start(
             return false;
         }
     };
+    // After the window: the OS reduce-motion preference is read without delaying the first frame.
+    oxikube::os_motion::follow(cx, oxikube::os_motion::system_probe());
     if let Some(table) = drive.table {
         oxikube::perf_table::start(table, handle.into(), cx);
     }

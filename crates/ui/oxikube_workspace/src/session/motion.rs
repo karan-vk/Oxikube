@@ -5,8 +5,9 @@
 //! decides ([`resolve_reduce_motion`]) and the result is written to GPUI's flag, which GPUI's
 //! animations and gpui-component already check. Views use `oxikube_ui::motion::reduce_motion`.
 //!
-//! Nothing reports the OS preference yet, so `system` behaves as `off` until the platform glue
-//! calls [`set_os_reduce_motion`] (follow-up E05-S12b, issue #473); `on` and `off` work now.
+//! The binary's `os_motion` module is that glue (E05-F473): it reads the preference after the
+//! window opens and reports each change here. Where the platform has no probe, `system` behaves
+//! as `off`.
 
 use gpui::{App, Global};
 use oxikube_settings::Settings as _;
