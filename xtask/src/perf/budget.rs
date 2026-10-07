@@ -312,7 +312,7 @@ mod tests {
                 launches: BTreeMap::new(),
             },
         );
-        assert_eq!(verdicts(&r)[2..], [Verdict::Within; 6]);
+        assert_eq!(verdicts(&r)[2..], [Verdict::Within; 8]);
         let logs = r.scenarios.get_mut("logs-stream").unwrap();
         logs.metrics.insert("wrap_frame_ms".to_owned(), pct(8.1));
         assert_eq!(verdicts(&r)[4], Verdict::Fail);

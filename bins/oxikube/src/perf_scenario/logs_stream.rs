@@ -202,8 +202,6 @@ pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
                         v.toggle_filter_mode(cx);
                     }
                 }
-                    }
-                }
             });
         })?;
         park(&cx);

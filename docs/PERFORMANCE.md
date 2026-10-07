@@ -622,7 +622,7 @@ second of 5 000 lines.
 Against a live stream (kind): `cargo test -p oxikube_app --features integration --test kind_smoke
 logs_search` follows a pod writing 20 lines/s into a 100-line ring and checks the index equals a
 naive scan of what the ring holds.
-### JSON structured mode (E08-S05)
+## Log JSON structured mode (E08-S05)
 
 A line that is a JSON object is drawn as level chip, time, message and collapsed fields; the level
 of every line is read once as the service commits it (before the buffer's lock), the columns are
@@ -652,6 +652,11 @@ table above):
 
 All within the 8 ms p95 budget (`xtask/src/perf/budget.rs` holds the two new modes); at most one
 notify per frame; headless RSS 76 MiB.
+
+The search modes of E08-S03 run over the same JSON-heavy stream with JSON mode on (the level chips
+compose with the search: while narrowed, the rows are the matches that also pass the chips, and a
+delta tests only its new matches against the chips): search highlighting p95 2.12 ms, search
+filtering p95 2.26 ms (same run, headless frames as above, 8 modes, peak RSS 82 MiB).
 
 ## Load fixture: `cargo xtask load-pods`
 

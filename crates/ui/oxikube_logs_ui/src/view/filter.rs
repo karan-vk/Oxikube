@@ -87,13 +87,9 @@ impl LogView {
     /// the chips, JSON mode or the search's index or mode changed; the caller rebuilds the
     /// renderers.
     pub(crate) fn relevel(&mut self) {
-        let visible = self.effective_levels().map(|filter| {
-            admitted(
-                self.session.as_ref(),
-                filter,
-                self.window.candidate_seqs(),
-            )
-        });
+        let visible = self
+            .effective_levels()
+            .map(|filter| admitted(self.session.as_ref(), filter, self.window.candidate_seqs()));
         self.window.set_visible(visible);
     }
 }

@@ -29,7 +29,7 @@
 use std::collections::VecDeque;
 use std::ops::Range;
 
-use oxikube_app::logs::{LogBuffer, LogDelta, LogState, MatchIndex};
+use oxikube_app::logs::{IndexChange, LogBuffer, LogDelta, LogState, MatchIndex};
 
 /// One row of a log view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -288,6 +288,19 @@ impl LineWindow {
         self.apply_filtered(delta, buffer, |candidates| candidates)
     }
 
+    /// The lines of `delta` the level filter has to test: the index's new matches while narrowed
+    /// (`scanned` says how many), the appended lines still retained otherwise.
+    fn delta_candidates(&self, delta: &LogDelta, scanned: Option<IndexChange>) -> Vec<u64> {
+        match (self.narrowing(), scanned) {
+            (Some(index), Some(change)) => (index.len().saturating_sub(change.appended)
+                ..index.len())
+                .filter_map(|i| index.get(i))
+                .collect(),
+            (Some(_), None) => Vec::new(),
+            (None, _) => (delta.appended.start.max(delta.first_seq)..delta.appended.end).collect(),
+        }
+    }
+
     /// [`apply`](Self::apply) with the level filter on ([`set_visible`](Self::set_visible)):
     /// `admit` is given the delta's candidate lines (the index's new matches while narrowed, the
     /// appended lines still retained otherwise) and returns the ones that pass the chips. It is
@@ -305,20 +318,12 @@ impl LineWindow {
             (Some(index), Some(buffer)) => Some(index.catch_up(buffer)),
             _ => None,
         };
-        let candidates = |window: &Self| -> Vec<u64> {
-            match (window.narrowing(), scanned) {
-                (Some(index), Some(change)) => (index.len().saturating_sub(change.appended)
-                    ..index.len())
-                    .filter_map(|i| index.get(i))
-                    .collect(),
-                (Some(_), None) => Vec::new(),
-                (None, _) => (delta.appended.start.max(delta.first_seq)..delta.appended.end)
-                    .collect(),
-            }
+        let candidates = if self.visible.is_some() {
+            self.delta_candidates(delta, scanned)
+        } else {
+            Vec::new()
         };
-        let (dropped, appended) = if self.visible.is_some() {
-            let candidates = candidates(self);
-            let visible = self.visible.as_mut().expect("checked");
+        let (dropped, appended) = if let Some(visible) = self.visible.as_mut() {
             let before = visible.len();
             while visible.front().is_some_and(|seq| *seq < delta.first_seq) {
                 visible.pop_front();
@@ -558,12 +563,7 @@ mod tests {
 
         fn push(buffer: &mut LogBuffer, texts: &[String]) {
             buffer.extend(texts.iter().map(|text| {
-                LogEntry::new(LogLine::new(
-                    Timestamp::UNIX_EPOCH,
-                    "p",
-                    "c",
-                    text.clone(),
-                ))
+                LogEntry::new(LogLine::new(Timestamp::UNIX_EPOCH, "p", "c", text.clone()))
             }));
         }
 
