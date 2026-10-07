@@ -10,7 +10,7 @@ use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_workspace::{ClusterTabs, OpenOptions, Workspace};
 
 use super::{LogRequest, ViewChange};
-use crate::view::{LogView, LogViewDeps, item_key};
+use crate::view::{LogView, LogViewDeps, OpenLogs, ViewOptions, item_key};
 
 /// Where a cluster's log views live: the workspace of its tab in this window. The app's is the
 /// window's [`ClusterTabs`] (`WeakEntity<ClusterTabs>` implements it); a test hands a workspace.
@@ -83,12 +83,8 @@ impl LogViews {
     /// Applies one request.
     pub fn apply(&mut self, request: LogRequest, window: &mut Window, cx: &mut Context<Self>) {
         match request {
-            LogRequest::Open {
-                target,
-                container,
-                previous,
-            } => {
-                self.open(&target, container, previous, window, cx);
+            LogRequest::Open { target, open } => {
+                self.open(&target, &open, window, cx);
             }
             LogRequest::Change { target, change } => {
                 if let Some(view) = self.view_of(&target, cx) {
@@ -106,14 +102,13 @@ impl LogViews {
         }
     }
 
-    /// Shows the log view of `target` in its cluster's tab: the open one (switched to
-    /// `container` when one is named), else a new tab, focused so its keys work. `None` when
-    /// the cluster has no tab here.
+    /// Shows the log view of `target` in its cluster's tab, reading what `open` asks: the open
+    /// one (switched to it), else a new tab, focused so its keys work. `None` when the cluster
+    /// has no tab here.
     pub fn open(
         &mut self,
         target: &ResourceRef,
-        container: Option<String>,
-        previous: bool,
+        open: &OpenLogs,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Entity<LogView>> {
@@ -123,24 +118,16 @@ impl LogViews {
         if let Some(id) = workspace.read(cx).find_item_by_key(&key, cx) {
             workspace.update(cx, |ws, cx| ws.activate_item(id, true, window, cx));
             let view = find(&workspace, target, cx)?;
-            view.update(cx, |view, cx| {
-                if let Some(container) = &container {
-                    view.select_container(container, cx);
-                }
-                if view.options().previous != previous {
-                    view.toggle_previous(cx);
-                }
-            });
+            view.update(cx, |view, cx| view.open_logs(open, cx));
             return Some(view);
         }
         let deps = self.deps.views.clone();
         let target = target.clone();
+        let mut options = ViewOptions::default();
+        open.apply(&mut options);
         let view = cx.new(|cx| {
-            let mut view = LogView::new(target, container, deps, cx);
+            let mut view = LogView::with_options(target, options, deps, cx);
             view.set_workspace(workspace.downgrade());
-            if previous {
-                view.toggle_previous(cx);
-            }
             view
         });
         let options = OpenOptions {

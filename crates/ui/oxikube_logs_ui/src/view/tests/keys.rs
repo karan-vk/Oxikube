@@ -8,7 +8,7 @@ use oxikube_ports::LogSince;
 use oxikube_testkit::Timeline;
 
 use super::fixture::{Fx, lines, pod_ref};
-use crate::view::HEAD_LIMIT_BYTES;
+use crate::view::{Copy, HEAD_LIMIT_BYTES, Mark};
 
 fn open(fx: &mut Fx) -> gpui::Entity<crate::LogView> {
     let view = fx.open(Timeline::immediate(lines(0, 5)).keep_open());
@@ -126,6 +126,27 @@ fn f_fills_the_tab_and_m_c_are_reserved(cx: &mut TestAppContext) {
     fx.keys("f");
     assert!(!fx.read_workspace_zoomed());
 
+    // `m` and `c` are bound in the `LogView` context and the view handles them (reserved for
+    // E08-S06's marks and copy, which dispatch nothing yet).
+    fx.draw();
+    let reserved: [(&dyn gpui::Action, &str); 2] = [(&Mark, "m"), (&Copy, "c")];
+    for (action, key) in reserved {
+        let (keys, available) = fx.vcx.update(|window, cx| {
+            let focus = view.read(cx).focus.clone();
+            let keys: Vec<String> = window
+                .bindings_for_action_in(action, &focus)
+                .iter()
+                .map(|binding| {
+                    let strokes: Vec<String> =
+                        binding.keystrokes().iter().map(|k| k.unparse()).collect();
+                    strokes.join(" ")
+                })
+                .collect();
+            (keys, window.is_action_available_in(action, &focus))
+        });
+        assert!(keys.iter().any(|k| k == key), "{key} is bound: {keys:?}");
+        assert!(available, "the view handles {}", action.name());
+    }
     let sent = fx.dispatcher.sent().len();
     fx.keys("m c");
     assert_eq!(

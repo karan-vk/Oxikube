@@ -15,6 +15,8 @@ use oxikube_testkit::{
     FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeStatePort,
 };
 
+use crate::view::OpenLogs;
+
 use super::{LOG_COMMANDS, LogCommandSink, LogRequest, ViewChange, register_commands};
 
 fn cluster() -> ClusterId {
@@ -78,8 +80,12 @@ fn the_handlers_queue_the_request_for_the_window() {
             },
             LogRequest::Open {
                 target: pod(),
-                container: Some("app".into()),
-                previous: true,
+                open: OpenLogs {
+                    container: Some("app".into()),
+                    previous: true,
+                    follow: true,
+                    tail_lines: Some(10),
+                },
             },
         ),
         (

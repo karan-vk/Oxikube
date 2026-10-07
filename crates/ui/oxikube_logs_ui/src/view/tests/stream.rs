@@ -7,7 +7,7 @@ use oxikube_testkit::Timeline;
 use oxikube_workspace::Item as _;
 
 use super::fixture::{Fx, line, lines};
-use crate::view::Row;
+use crate::view::{OpenLogs, Row};
 
 #[gpui::test]
 fn the_initial_lines_render_with_the_tab_named_after_pod_and_container(cx: &mut TestAppContext) {
@@ -112,7 +112,7 @@ fn a_failed_stream_says_why(cx: &mut TestAppContext) {
         .vcx
         .update(|window, cx| {
             views.update(cx, |views, cx| {
-                views.open(&super::fixture::pod_ref(), None, false, window, cx)
+                views.open(&super::fixture::pod_ref(), &OpenLogs::default(), window, cx)
             })
         })
         .unwrap();

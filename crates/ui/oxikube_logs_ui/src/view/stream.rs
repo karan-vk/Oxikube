@@ -18,7 +18,14 @@ use super::window::LineWindow;
 impl LogView {
     /// Opens the session for the current options, dropping the previous one first (which
     /// cancels its read). The rows start over: a new session numbers its lines from 0.
+    ///
+    /// While the view waits for the pod to name its default container nothing opens: the
+    /// pod's arrival opens the stream with the options as they are then, so a stream is never
+    /// read from a container other than the one the tab names.
     pub(crate) fn open_stream(&mut self, cx: &mut Context<Self>) {
+        if self.awaiting_pod {
+            return;
+        }
         self.pump = None;
         self.session = None;
         self.started = true;

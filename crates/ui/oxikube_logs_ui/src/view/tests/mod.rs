@@ -5,5 +5,6 @@
 mod containers;
 mod fixture;
 mod keys;
+mod open;
 mod scroll;
 mod stream;

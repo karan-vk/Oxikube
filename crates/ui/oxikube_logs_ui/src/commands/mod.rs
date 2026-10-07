@@ -24,6 +24,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::log::LogRange;
 
+use crate::view::OpenLogs;
 pub use controller::{LogHost, LogViews, LogViewsDeps};
 
 /// The commands this crate handles.
@@ -64,10 +65,8 @@ pub enum LogRequest {
     Open {
         /// The pod.
         target: ResourceRef,
-        /// The container to read; `None` for the pod's default.
-        container: Option<String>,
-        /// Read the previous (terminated) instance.
-        previous: bool,
+        /// What to read: container, previous instance, follow, tail length.
+        open: OpenLogs,
     },
     /// Change the log views of `target` (`logs::*`).
     Change {
@@ -96,8 +95,9 @@ impl LogRequest {
             Command::PodViewLogs {
                 target,
                 container,
+                follow,
                 previous,
-                ..
+                tail_lines,
             } => {
                 if !is_pod(target) {
                     return Err(OxiError::validation(format!(
@@ -107,8 +107,12 @@ impl LogRequest {
                 }
                 Some(LogRequest::Open {
                     target: target.clone(),
-                    container: container.clone(),
-                    previous: *previous,
+                    open: OpenLogs {
+                        container: container.clone(),
+                        previous: *previous,
+                        follow: *follow,
+                        tail_lines: *tail_lines,
+                    },
                 })
             }
             Command::LogsSetRange { target, range } => change(target, ViewChange::SetRange(*range)),

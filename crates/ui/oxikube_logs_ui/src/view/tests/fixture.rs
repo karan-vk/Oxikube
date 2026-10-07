@@ -32,7 +32,7 @@ use serde_json::json;
 
 use crate::commands::{LogCommandSink, LogHost, LogRequest, LogViews, LogViewsDeps};
 use crate::log_runtime;
-use crate::view::{LogView, LogViewDeps};
+use crate::view::{LogView, LogViewDeps, OpenLogs};
 
 /// The cluster of every test.
 pub(crate) fn cluster() -> ClusterId {
@@ -188,12 +188,25 @@ impl Fx {
 
     /// Opens the log view of `shop/web-0` as `pod::ViewLogs` does, over `timeline`, settled.
     pub(crate) fn open(&mut self, timeline: Timeline<LogLine>) -> Entity<LogView> {
+        self.open_with(timeline, &OpenLogs::default(), |_, _| {})
+    }
+
+    /// [`Self::open`] asking for `open`; `then` runs on the new view in the same update, before
+    /// the pod was read.
+    pub(crate) fn open_with(
+        &mut self,
+        timeline: Timeline<LogLine>,
+        open: &OpenLogs,
+        then: impl FnOnce(&mut LogView, &mut gpui::Context<LogView>),
+    ) -> Entity<LogView> {
         self.script(timeline);
         let views = self.views.clone();
         let view = self.vcx.update(|window, cx| {
-            views.update(cx, |views, cx| {
-                views.open(&pod_ref(), None, false, window, cx)
-            })
+            let view = views.update(cx, |views, cx| views.open(&pod_ref(), open, window, cx));
+            if let Some(view) = &view {
+                view.update(cx, then);
+            }
+            view
         });
         self.settle();
         view.expect("the cluster has a tab")

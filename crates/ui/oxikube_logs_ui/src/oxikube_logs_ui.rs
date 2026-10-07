@@ -39,4 +39,4 @@ pub use follow::follow_settings;
 pub use row_actions::log_row_actions;
 pub use runtime::log_runtime;
 pub use settings::{LogsContent, LogsSettings};
-pub use view::{LogView, LogViewDeps};
+pub use view::{LogView, LogViewDeps, OpenLogs};

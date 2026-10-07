@@ -65,7 +65,7 @@ pub use actions::{
 };
 pub use containers::{ContainerChoice, choices_of, default_container};
 pub use item::item_key;
-pub use options::{HEAD_LIMIT_BYTES, TAIL_LINES, ViewOptions};
+pub use options::{HEAD_LIMIT_BYTES, OpenLogs, TAIL_LINES, ViewOptions};
 pub use text::{Level, level_of};
 pub use window::{Follow, LineWindow, Row, RowChange};
 
@@ -93,6 +93,9 @@ pub struct LogView {
     pub(crate) session: Option<LogSession>,
     /// Whether the stream was opened (a view that names no container waits for the pod).
     pub(crate) started: bool,
+    /// Whether the view waits for the pod to name its default container before it opens the
+    /// stream: a change of what is read until then is kept in the options and opens with them.
+    pub(crate) awaiting_pod: bool,
     pub(crate) window: LineWindow,
     pub(crate) follow: Follow,
     /// The unwrapped list's scroll position.
@@ -120,16 +123,29 @@ impl LogView {
         deps: LogViewDeps,
         cx: &mut Context<Self>,
     ) -> Self {
+        let options = ViewOptions {
+            container,
+            ..ViewOptions::default()
+        };
+        Self::with_options(target, options, deps, cx)
+    }
+
+    /// [`LogView::new`] with every option given (what `pod::ViewLogs` asks: previous instance,
+    /// tail length, follow). The stream opens once, with these options.
+    pub fn with_options(
+        target: ResourceRef,
+        options: ViewOptions,
+        deps: LogViewDeps,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut view = Self {
             target,
             deps,
-            options: ViewOptions {
-                container,
-                ..ViewOptions::default()
-            },
+            options,
             containers: Vec::new(),
             session: None,
             started: false,
+            awaiting_pod: false,
             window: LineWindow::new(),
             follow: Follow::default(),
             scroll: UniformListScrollHandle::new(),

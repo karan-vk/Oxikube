@@ -6,6 +6,7 @@ use oxikube_testkit::Timeline;
 
 use super::fixture::{Fx, lines, pod_ref};
 use crate::LogView;
+use crate::view::OpenLogs;
 
 #[gpui::test]
 fn the_selector_lists_init_regular_and_ephemeral_containers(cx: &mut TestAppContext) {
@@ -71,7 +72,11 @@ fn view_logs_of_an_open_pod_shows_its_tab_again(cx: &mut TestAppContext) {
         .vcx
         .update(|window, cx| {
             views.update(cx, |views, cx| {
-                views.open(&pod_ref(), Some("metrics".into()), false, window, cx)
+                let open = OpenLogs {
+                    container: Some("metrics".into()),
+                    ..OpenLogs::default()
+                };
+                views.open(&pod_ref(), &open, window, cx)
             })
         })
         .unwrap();

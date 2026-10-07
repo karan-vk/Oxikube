@@ -174,7 +174,7 @@ same-runner baseline, never with the absolute budgets above.
 | `startup` | measured | the real init order to the main window's first interactive frame (E05-S13, see [Startup](#startup-cold-start-to-the-first-interactive-frame)): `first_frame_ms` (first line of `main` to the end of the update that drew the first frame), `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask), `config_load_ms` (settings + theme + keymap on the main thread), `init_<stage>_ms` (every stage of `oxikube::startup`), `state_db_open_ms` (creating and migrating the SQLite state db, off the UI thread in the app); then `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) and `rss_mib` / `peak_rss_mib` (headless resident memory after the redraws, MiB; see [Memory (RSS)](#memory-rss)) |
 | `scroll-10k` (alias `table-scroll-10k`) | measured (E07-S09, see [Resource table](#resource-table-10-000-pods-under-churn-e07-s09)) | `first_rows_ms` (table created on a warm feed to the first frame showing all 10 000 pods), `frame_ms` / `draw_ms` scrolling 3 rows a frame while the feed delivers a 10-event batch a frame, `rss_mib` / `peak_rss_mib`; fails unless every batch is counted as feed deltas and `max_notifies_per_frame` ≤ 1 |
 | `palette` | not available: needs E05-S11 #93, E11-S03 #158 | open time, filter of 2 000 entries |
-| `logs-stream` | not available: needs E05-S11 #93, E08-S02 #120 | frame time at 5 000 lines/s |
+| `logs-stream` | measured (E08-S02, see [Log viewer](#log-viewer-streaming-5-000-liness-e08-s02)) | the log view streaming 5 000 lines/s after a 1 000-line tail, 120 scripted frames per mode: `frame_ms` / `draw_ms` (wrap off, following), `paused_*`, `wrap_*`, `wrap_paused_*`, `rss_mib` / `peak_rss_mib`; fails unless every mode receives the lines at that rate and `max_notifies_per_frame` ≤ 1 |
 | `editor-5mb` | not available: needs E05-S11 #93, E10-S04 #146, E10-S11 #153 | open time, typing latency |
 
 A scenario that is not available yet prints `SKIPPED` with the stories that enable it and exits 0.
@@ -483,6 +483,19 @@ reuses the shaping of rows drawn in the previous frame.
 
 ### Measuring it
 
+Headless, every run of `cargo xtask perf` (the nightly included): the `logs-stream` scenario
+(`bins/oxikube/src/perf_scenario/logs_stream.rs`) runs the real `LogService` and `LogView` on
+testkit fakes. The pod's log is a 1 000-line tail, then 5 000 lines a second (request lines of
+varying length, every 40th line about 600 bytes) replayed on the log port's clock, one 8.33 ms
+frame of it per scripted frame. Four modes run 120 frames each on one stream: wrap off and
+following (the budget's mode, `frame_ms`), autoscroll paused (`paused_frame_ms`), wrapped and
+following (`wrap_frame_ms`), wrapped and paused (`wrap_paused_frame_ms`). `cargo xtask perf`
+fails on macOS when any mode's p95 frame is above 8 ms (`xtask/src/perf/budget.rs`).
+
+```
+cargo xtask perf logs-stream
+```
+
 Windowed, against kind: a pod that writes about 5 000 lines/s, then the app opening its log view
 through the same commands as a user (`cluster::Connect`, `pod::ViewLogs`, optionally
 `logs::ToggleWrap` and `logs::ToggleAutoscroll`):
@@ -497,7 +510,25 @@ target/release-fast/oxikube --perf-logs kind-oxikube/<ns>/firehose [--perf-logs-
 `--perf-logs` prints the lines received per second every 5 s; `--perf` prints the frame times and
 notify counts on exit.
 
-### Numbers (E08-S02, M-series laptop, release-fast, 30 s each)
+### Numbers (E08-S02, M-series laptop, release-fast)
+
+Headless (`cargo xtask perf logs-stream`, median of 5 fresh processes, 120 frames per mode;
+CPU, layout and paint preparation, no present and no GPU time):
+
+| Mode | lines/s received | frames | p50 | p95 | p99 | max |
+|---|---|---|---|---|---|---|
+| wrap off, autoscroll on | 5 000 | 144 | 0.56 ms | 0.92 ms | 1.06 ms | 1.09 ms |
+| wrap off, autoscroll paused | 5 000 | 144 | 0.57 ms | 0.75 ms | 0.84 ms | 1.11 ms |
+| wrap on, autoscroll on | 5 000 | 144 | 0.58 ms | 1.06 ms | 1.11 ms | 1.14 ms |
+| wrap on, autoscroll paused | 5 000 | 144 | 0.60 ms | 0.74 ms | 0.84 ms | 0.94 ms |
+
+144 frames per mode: one per scripted frame and one per delta's coalesced notify (24, one per
+32 ms commit; at most one notify between two frames). Headless RSS 61.5 MiB with the stream's
+lines in the ring buffer. The CI-runner baseline for `--check` is seeded from the first nightly
+that runs the scenario ([#520](https://github.com/karan-vk/Oxikube/issues/520)); until then the
+baseline is reported missing, which is not fatal.
+
+Windowed (`--perf-logs`, 30 s each, the window not in front):
 
 | Mode | lines/s received | frames | p50 | p95 | max | notify |
 |---|---|---|---|---|---|---|
@@ -506,12 +537,13 @@ notify counts on exit.
 | wrap on, autoscroll on | ~4 880 | 105 | 2.31 ms | 2.71 ms | 9.10 ms | 6.8/s |
 | wrap on, autoscroll paused | ~4 920 | 12 | 2.85 ms | 10.10 ms | 10.10 ms | 5.1/s |
 
-RSS stayed at 150-156 MiB with the default 50 000-line buffer full. The window was not in front
-during these runs (macOS draws an occluded window rarely), hence the low frame counts: the p95 of
-the runs with under 50 frames is the slowest single frame, the window's first draw of the view
-included. A run with the window in front, and the headless `logs-stream` scenario of
-`cargo xtask perf` (still a stub, needs the scripted harness), are the follow-ups for a stable
-baseline.
+RSS stayed at 150-156 MiB with the default 50 000-line buffer full. macOS draws an occluded
+window rarely, so these runs drew only 12 to 105 frames. Below 50 frames the p95 is the slowest
+single frame, and these frames include the window's first draw of the view, which shapes a whole
+screen of rows at once. Every run's max is 9-10 ms, whatever its frame count. So these windowed
+runs neither show nor refute the 8 ms p95. The headless scenario measures the streaming frames:
+120 per mode, every one under 1.2 ms of CPU. No frame in either measurement came near the 50 ms
+limit.
 
 ## Load fixture: `cargo xtask load-pods`
 

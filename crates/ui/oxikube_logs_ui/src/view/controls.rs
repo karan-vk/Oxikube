@@ -9,31 +9,51 @@
 use gpui::Context;
 use oxikube_domain::command::Command;
 use oxikube_domain::log::LogRange;
+use oxikube_workspace::ItemEvent;
 
 use super::LogView;
+use super::options::{OpenLogs, ViewOptions};
 
 impl LogView {
-    /// Reads `range` of the log (reopens the stream when it changes).
+    /// Reads `range` of the log with the range's own tail length and following (reopens the
+    /// stream when that changes what is read).
     pub fn set_range(&mut self, range: LogRange, cx: &mut Context<Self>) {
-        if self.options.range != range {
-            self.options.range = range;
-            self.open_stream(cx);
-        }
+        self.reconfigure(
+            |options| {
+                options.range = range;
+                options.tail_lines = None;
+                options.follow = true;
+            },
+            cx,
+        );
     }
 
     /// Reads `container` (reopens the stream when it changes).
     pub fn select_container(&mut self, container: &str, cx: &mut Context<Self>) {
-        if self.options.container.as_deref() != Some(container) {
-            self.options.container = Some(container.to_owned());
-            cx.emit(oxikube_workspace::ItemEvent::UpdateTab);
-            self.open_stream(cx);
-        }
+        self.reconfigure(|options| options.container = Some(container.to_owned()), cx);
     }
 
     /// Reads the previous container instance, or the current one (reopens the stream).
     pub fn toggle_previous(&mut self, cx: &mut Context<Self>) {
-        self.options.previous = !self.options.previous;
-        self.open_stream(cx);
+        self.reconfigure(|options| options.previous = !options.previous, cx);
+    }
+
+    /// Reads what `pod::ViewLogs` asks (`open`) of the view of its pod that is open already.
+    pub fn open_logs(&mut self, open: &OpenLogs, cx: &mut Context<Self>) {
+        self.reconfigure(|options| open.apply(options), cx);
+    }
+
+    /// Changes the options: the tab is redrawn when its title (container, previous instance)
+    /// changes, and the stream is reopened when what is read changes.
+    fn reconfigure(&mut self, change: impl FnOnce(&mut ViewOptions), cx: &mut Context<Self>) {
+        let before = self.options.clone();
+        change(&mut self.options);
+        if before.container != self.options.container || before.previous != self.options.previous {
+            cx.emit(ItemEvent::UpdateTab);
+        }
+        if before.log_options() != self.options.log_options() {
+            self.open_stream(cx);
+        }
     }
 
     /// Wraps long lines, or not; the line at the top of the screen stays there.

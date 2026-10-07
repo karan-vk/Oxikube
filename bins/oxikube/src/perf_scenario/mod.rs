@@ -13,7 +13,10 @@
 //!   placeholder, the first interactive frame and the per-stage breakdown (E05-S13).
 //! - `scroll-10k` ([`scroll_10k`], also `table-scroll-10k`): the resource table scrolling
 //!   10 000 pods under feed churn, first rows after the feed is warm (E07-S09).
+//! - `logs-stream` ([`logs_stream`]): the log view streaming 5 000 lines/s, wrap off/on and
+//!   autoscroll on/paused (E08-S02).
 
+mod logs_stream;
 mod scroll_10k;
 mod startup;
 
@@ -49,11 +52,7 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
             "no command palette yet: open <= 1 frame and filter 2 000 entries <= 5 ms",
             &[NEEDS_TEST_APP, "E11-S03 #158"],
         )),
-        "logs-stream" => Ok(ScenarioSample::not_available(
-            name,
-            "no log viewer yet: streaming 5 000 lines/s",
-            &[NEEDS_TEST_APP, "E08-S02 #120"],
-        )),
+        logs_stream::NAME => logs_stream::run(probe),
         "editor-5mb" => Ok(ScenarioSample::not_available(
             name,
             "no manifest editor yet: 5 MB YAML open <= 500 ms and typing",
