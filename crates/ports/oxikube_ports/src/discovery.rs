@@ -7,7 +7,10 @@
 //! registry record, so nothing above the adapter sees kube's `ApiResource` or
 //! `ApiCapabilities`.
 
+use std::pin::Pin;
+
 use async_trait::async_trait;
+use futures::Stream;
 use oxikube_domain::OxiResult;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::ResourceKind;
@@ -42,6 +45,59 @@ impl ServerVersion {
     }
 }
 
+/// Which kinds a [`DiscoveryEvent::KindsChanged`] touched. All three lists empty means "something
+/// changed and the details were lost" (the subscriber fell behind): re-run discovery.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KindsChange {
+    /// Kinds newly served (a CRD was created).
+    pub added: Vec<Gvk>,
+    /// Kinds no longer served (a CRD was deleted).
+    pub removed: Vec<Gvk>,
+    /// Kinds whose record changed (short names, scope, verbs, ...).
+    pub changed: Vec<Gvk>,
+}
+
+impl KindsChange {
+    /// Whether the change carries no detail: the subscriber missed events and must re-read.
+    pub fn is_resync(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty()
+    }
+}
+
+/// Whether the adapter can follow `CustomResourceDefinition` changes. Absence must be visible:
+/// a user who may not watch CRDs would otherwise see a registry that silently stops following.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CrdWatchStatus {
+    /// The watch is running (or starting); new CRDs appear without reconnecting.
+    Watching,
+    /// The API server refused the watch (`Forbidden`). The adapter does not retry in a loop: it
+    /// re-discovers on a long interval and tries the watch again then, so the registry still
+    /// follows the cluster, slowly.
+    Forbidden {
+        /// The server's reason, redacted and one line.
+        reason: String,
+    },
+}
+
+impl CrdWatchStatus {
+    /// Whether the watch was refused.
+    pub fn is_forbidden(&self) -> bool {
+        matches!(self, Self::Forbidden { .. })
+    }
+}
+
+/// What a [`DiscoveryPort::subscribe`] stream reports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiscoveryEvent {
+    /// Discovery re-ran after a CRD change and the served kinds differ.
+    KindsChanged(KindsChange),
+    /// The CRD watch moved to a new status (sent on changes only).
+    CrdWatch(CrdWatchStatus),
+}
+
+/// The stream of [`DiscoveryEvent`]s. Dropping it stops the watch that feeds it.
+pub type DiscoveryEvents = Pin<Box<dyn Stream<Item = DiscoveryEvent> + Send>>;
+
 /// Discovers the kinds a cluster serves. Read-only.
 ///
 /// # Effects
@@ -71,6 +127,13 @@ pub trait DiscoveryPort: Send + Sync {
 
     /// Reads the API server version.
     async fn server_version(&self) -> OxiResult<ServerVersion>;
+
+    /// Starts following the cluster's kinds: the adapter watches `CustomResourceDefinition`s,
+    /// re-runs discovery (so [`resolve`](Self::resolve) answers for a new CRD) and reports each
+    /// change. Each call starts its own watch; dropping the stream stops it. Must be called
+    /// inside the runtime the adapter's tasks run on. Failures are events
+    /// ([`DiscoveryEvent::CrdWatch`]), never a panic or a silent retry loop.
+    fn subscribe(&self) -> DiscoveryEvents;
 }
 
 #[cfg(test)]

@@ -37,6 +37,8 @@ oxikube_state_sqlite.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 parking_lot.workspace = true
 tempfile.workspace = true
+# A current-thread runtime the sidebar tests connect on, so the session's kind forwarder runs.
+tokio = { workspace = true, features = ["rt"] }
 
 [features]
 default = []

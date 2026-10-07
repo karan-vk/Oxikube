@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::Verb;
 use oxikube_kube::{CrdWatchConfig, DiscoveryConfig, KubeDiscovery, RegistryDiff};
-use oxikube_ports::DiscoveryPort;
+use oxikube_ports::{DiscoveryEvent, DiscoveryPort};
 use tokio::sync::broadcast::Receiver;
 use tokio::time::timeout;
 
@@ -120,7 +120,7 @@ async fn a_crd_created_at_runtime_appears_and_removal_is_reported() {
     let client = (*kind.admin_client().await).clone();
     let discovery = KubeDiscovery::new(client.clone());
     discovery.discover().await.expect("discover");
-    let mut changes = discovery.subscribe();
+    let mut changes = discovery.registry_changes();
     let _watch = discovery.watch_crds(CrdWatchConfig {
         debounce: Duration::from_millis(100),
         ..CrdWatchConfig::default()
@@ -190,4 +190,65 @@ async fn a_resolve_miss_finds_a_crd_created_after_discovery() {
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
     crd.delete(&client).await;
+}
+
+/// The app's path (E03-F544): the session subscribes through the port and the adapter starts the
+/// CRD watch itself; a CRD created and deleted at runtime is reported and resolvable.
+#[tokio::test]
+async fn subscribing_through_the_port_follows_a_crd_added_and_removed() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let ctx = kind.context.as_str();
+    let client = (*kind.admin_client().await).clone();
+    let discovery = KubeDiscovery::new(client.clone());
+    discovery.discover().await.expect("discover");
+    let mut events = discovery.subscribe();
+
+    let crd = TestCrd::create(&client, ctx).await;
+    next_event(
+        &mut events,
+        "the new CRD's kind",
+        |e| matches!(e, DiscoveryEvent::KindsChanged(c) if c.added.contains(&crd.gvk)),
+    )
+    .await;
+    assert!(
+        discovery
+            .resolve(&crd.gvk)
+            .await
+            .expect("resolve")
+            .is_some(),
+        "the registry knows the kind once the event arrived"
+    );
+
+    crd.delete(&client).await;
+    next_event(
+        &mut events,
+        "removal of the CRD's kind",
+        |e| matches!(e, DiscoveryEvent::KindsChanged(c) if c.removed.contains(&crd.gvk)),
+    )
+    .await;
+    assert!(discovery.registry().get(&crd.gvk).is_none());
+
+    // Dropping the stream stops the watch: the status channel keeps its last value and no task
+    // lingers to publish (nothing to assert beyond not hanging the runtime on drop).
+    drop(events);
+}
+
+async fn next_event(
+    events: &mut oxikube_ports::DiscoveryEvents,
+    what: &str,
+    wanted: impl Fn(&DiscoveryEvent) -> bool,
+) {
+    use futures::StreamExt as _;
+    let started = Instant::now();
+    loop {
+        let remaining = DEADLINE.saturating_sub(started.elapsed());
+        match timeout(remaining, events.next()).await {
+            Ok(Some(event)) if wanted(&event) => return,
+            Ok(Some(_)) => {}
+            Ok(None) => panic!("event stream ended while waiting for {what}"),
+            Err(_) => panic!("{what} not seen within {DEADLINE:?}"),
+        }
+    }
 }

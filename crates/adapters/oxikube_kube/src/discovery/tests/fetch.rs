@@ -169,7 +169,7 @@ async fn a_group_version_that_blinks_keeps_its_kinds_and_is_not_reported_removed
     discovery.refresh().await.expect("first refresh");
     let hpa_v1 = Gvk::new("autoscaling", "v1", "HorizontalPodAutoscaler");
     assert!(discovery.registry().get(&hpa_v1).is_some());
-    let mut changes = discovery.subscribe();
+    let mut changes = discovery.registry_changes();
 
     server.fail_path("/apis/autoscaling/v1", 503);
     discovery

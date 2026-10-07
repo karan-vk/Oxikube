@@ -27,8 +27,9 @@ serde.workspace = true
 # Tool stub input schemas (`ToolDef::input_schema`) and command output data.
 serde_json.workspace = true
 thiserror.workspace = true
-# `tokio::sync::broadcast` only (the session update stream); runtime-agnostic, no task is spawned.
-tokio.workspace = true
+# `tokio::sync::broadcast` (the session update stream) and one spawned task per connected session:
+# the forwarder of the adapter's kind events (`session::kinds`, E03-F544).
+tokio = { workspace = true, features = ["rt"] }
 tracing.workspace = true
 
 [dev-dependencies]

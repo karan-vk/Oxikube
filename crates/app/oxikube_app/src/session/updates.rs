@@ -13,6 +13,7 @@ use futures::stream::{BoxStream, Stream, StreamExt};
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPhase};
 use oxikube_domain::{Capabilities, ClusterColour};
+use oxikube_ports::{CrdWatchStatus, KindsChange};
 use tokio::sync::broadcast;
 
 /// One change to one session.
@@ -40,6 +41,13 @@ pub enum SessionChange {
     },
     /// The capabilities changed: probed on connect, cleared on disconnect.
     CapabilitiesChanged(Capabilities),
+    /// The cluster's served kinds changed while connected (a CRD was added or removed) and
+    /// discovery re-ran; the session's discovery already answers for them. An empty change means
+    /// the details were lost: re-run discovery.
+    KindsChanged(KindsChange),
+    /// The CRD watch was refused (`Forbidden`) or runs again. Reset to `Watching` when the
+    /// connection is released.
+    CrdWatchChanged(CrdWatchStatus),
     /// The namespace selection changed.
     NamespaceChanged(NamespaceSelection),
     /// The read-only flag changed.

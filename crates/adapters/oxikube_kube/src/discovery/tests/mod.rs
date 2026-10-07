@@ -5,6 +5,7 @@ mod convert;
 mod debounce;
 mod fake;
 mod fetch;
+mod forbidden;
 mod registry;
 mod resolve;
 mod serves_group;

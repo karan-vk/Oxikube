@@ -164,6 +164,9 @@ impl DiscoveryPort for Stub {
     async fn server_version(&self) -> OxiResult<ServerVersion> {
         stub()
     }
+    fn subscribe(&self) -> DiscoveryEvents {
+        Box::pin(futures::stream::empty())
+    }
 }
 
 #[async_trait]

@@ -31,6 +31,7 @@ fn rows_with(access: &AccessState) -> Vec<Row> {
         sections: &sections,
         integrations: &[],
         custom: None,
+        crd_watch_forbidden: false,
         access,
         open: &BTreeMap::new(),
     })

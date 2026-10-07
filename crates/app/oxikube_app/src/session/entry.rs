@@ -10,6 +10,7 @@
 //! * `connection` is `Some` exactly when the phase is `Ready` or `Degraded`.
 //! * `capabilities` is empty unless connected.
 //! * `abort` is `Some` only while `Connecting`.
+//! * `kind_watch` is `Some` only when connected, and `crd_watch` is `Watching` unless connected.
 //! * `generation` changes on every new attempt and whenever a connection is released, so
 //!   late results and health reports of an older connection are recognised and ignored.
 
@@ -22,9 +23,10 @@ use oxikube_domain::session::{
     ClusterSessionState, InvalidTransition, NamespaceSelection, SessionEvent, SessionPhase,
 };
 use oxikube_domain::{Capabilities, ClusterColour};
-use oxikube_ports::{ClusterConnection, ClusterPrefs, ExecInteractivity};
+use oxikube_ports::{ClusterConnection, ClusterPrefs, CrdWatchStatus, ExecInteractivity};
 
 use super::config::SessionOptions;
+use super::kinds::KindWatch;
 use super::model::ClusterSession;
 use super::updates::{SessionChange, UpdateSender};
 
@@ -50,6 +52,9 @@ pub(super) struct Entry {
     /// The settings last applied; a new push is applied as a delta against them.
     pub(super) prefs: Arc<ClusterPrefs>,
     pub(super) abort: Option<AbortHandle>,
+    /// Forwards the adapter's kind changes while connected (`Some` only then).
+    pub(super) kind_watch: Option<KindWatch>,
+    pub(super) crd_watch: CrdWatchStatus,
 }
 
 impl Entry {
@@ -69,6 +74,8 @@ impl Entry {
             server: None,
             prefs: options.prefs,
             abort: None,
+            kind_watch: None,
+            crd_watch: CrdWatchStatus::Watching,
         }
     }
 
@@ -85,6 +92,7 @@ impl Entry {
             display_name: self.display_name.clone(),
             server: self.server.clone(),
             prefs: self.prefs.clone(),
+            crd_watch: self.crd_watch.clone(),
             ports: self.connection.as_ref().map(|c| c.ports.clone()),
         }
     }
@@ -130,6 +138,9 @@ impl Entry {
                 released = Some(connection);
             }
             self.set_capabilities(Capabilities::empty(), updates);
+            // Stops the forwarder, and with it the adapter's CRD watch.
+            self.kind_watch = None;
+            self.set_crd_watch(CrdWatchStatus::Watching, updates);
         }
         if next != self.state {
             self.state = next.clone();
@@ -165,6 +176,14 @@ impl Entry {
         self.generation += 1;
         self.apply(SessionEvent::Disconnect, updates)
             .unwrap_or(Released(None))
+    }
+
+    /// Records the CRD watch status and announces a change.
+    pub(super) fn set_crd_watch(&mut self, status: CrdWatchStatus, updates: &UpdateSender) {
+        if self.crd_watch != status {
+            self.crd_watch = status.clone();
+            updates.send(&self.id, SessionChange::CrdWatchChanged(status));
+        }
     }
 
     fn set_capabilities(&mut self, capabilities: Capabilities, updates: &UpdateSender) {

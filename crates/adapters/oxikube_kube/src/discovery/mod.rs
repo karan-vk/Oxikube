@@ -11,14 +11,18 @@
 //!   it; a cooldown stops unknown kinds from hammering the server) before answering `None`.
 //! - **CRD changes** are picked up by [`KubeDiscovery::watch_crds`]: a metadata-only watch on
 //!   `CustomResourceDefinition`, debounced, re-runs discovery and publishes a [`RegistryDiff`]
-//!   to [`KubeDiscovery::subscribe`]rs, so new CRDs appear without reconnecting. Aggregated APIs
-//!   (`APIService`) are not watched; they are picked up by the next refresh or resolve miss.
+//!   to [`KubeDiscovery::registry_changes`] receivers, so new CRDs appear without reconnecting.
+//!   The app starts it through [`DiscoveryPort::subscribe`] (`events`). A user who may not watch
+//!   CRDs gets [`CrdWatchStatus::Forbidden`] and a slow re-discovery instead of a silent retry
+//!   loop. Aggregated APIs (`APIService`) are not watched; they are picked up by the next
+//!   refresh or resolve miss.
 //!
 //! kube types stay inside the adapter; E04 reaches `ApiResource` through
 //! [`KubeDiscovery::resolve_api_resource`].
 
 mod convert;
 mod crd_watch;
+mod events;
 mod fetch;
 mod registry;
 #[cfg(test)]
@@ -34,9 +38,9 @@ use kube::core::ApiResource;
 use oxikube_domain::OxiResult;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::ResourceKind;
-use oxikube_ports::{DiscoveryPort, ServerVersion};
+use oxikube_ports::{CrdWatchStatus, DiscoveryEvents, DiscoveryPort, ServerVersion};
 use parking_lot::RwLock;
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::{Mutex, broadcast, watch};
 use tokio::time::Instant;
 use tracing::debug;
 
@@ -85,6 +89,8 @@ struct Shared {
     /// Serialises refreshes; holds when the last `resolve` miss triggered one (for the cooldown).
     refresh: Mutex<Option<Instant>>,
     changes: broadcast::Sender<Arc<RegistryDiff>>,
+    /// Whether the CRD watch runs or was refused; see [`KubeDiscovery::crd_watch_status`].
+    crd_status: watch::Sender<CrdWatchStatus>,
 }
 
 impl KubeDiscovery {
@@ -105,6 +111,7 @@ impl KubeDiscovery {
                 generation: AtomicU64::new(0),
                 refresh: Mutex::new(None),
                 changes,
+                crd_status: watch::channel(CrdWatchStatus::Watching).0,
             }),
         }
     }
@@ -114,12 +121,29 @@ impl KubeDiscovery {
         self.shared.registry.read().clone()
     }
 
-    /// Subscribes to registry changes. Every refresh that changes the registry (the first
+    /// Receives registry changes. Every refresh that changes the registry (the first
     /// discovery counts: everything is `added`) publishes its diff; an unchanged refresh publishes
     /// nothing. A receiver that falls behind gets `RecvError::Lagged` and should re-read
     /// [`registry`](Self::registry).
-    pub fn subscribe(&self) -> broadcast::Receiver<Arc<RegistryDiff>> {
+    pub fn registry_changes(&self) -> broadcast::Receiver<Arc<RegistryDiff>> {
         self.shared.changes.subscribe()
+    }
+
+    /// Whether the CRD watch is running or the server refused it (`Forbidden`). `Watching` until
+    /// a watch says otherwise, also before [`watch_crds`](Self::watch_crds) was called.
+    pub fn crd_watch_status(&self) -> CrdWatchStatus {
+        self.shared.crd_status.borrow().clone()
+    }
+
+    /// Sets the CRD watch status; receivers of [`DiscoveryPort::subscribe`] hear about changes only.
+    pub(super) fn set_crd_watch_status(&self, status: CrdWatchStatus) {
+        self.shared.crd_status.send_if_modified(|current| {
+            let changed = *current != status;
+            if changed {
+                *current = status;
+            }
+            changed
+        });
     }
 
     /// Re-runs discovery, swaps in the new registry and publishes the diff. Concurrent calls queue
@@ -245,5 +269,9 @@ impl DiscoveryPort for KubeDiscovery {
             git_version: info.git_version,
             platform: info.platform,
         })
+    }
+
+    fn subscribe(&self) -> DiscoveryEvents {
+        self.events()
     }
 }

@@ -78,6 +78,8 @@ pub struct SidebarPanel {
     integrations: Vec<IntegrationSection>,
     /// The cluster's custom resources; `None` until discovery answered.
     custom: Option<Vec<CustomResourceGroup>>,
+    /// Whether the session says the CRD watch was refused (`Forbidden`).
+    crd_watch_forbidden: bool,
     access: AccessState,
     /// The user's explicit open and closed choices by row id.
     open: BTreeMap<String, bool>,
@@ -213,6 +215,7 @@ impl SidebarPanel {
                 sections: Vec::new(),
                 integrations: Vec::new(),
                 custom: None,
+                crd_watch_forbidden: false,
                 access: AccessState::Pending,
                 open: BTreeMap::new(),
                 rows: Vec::new(),

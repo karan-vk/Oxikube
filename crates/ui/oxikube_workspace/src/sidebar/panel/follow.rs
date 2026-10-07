@@ -44,11 +44,11 @@ impl SidebarPanel {
     /// Reads the session as it is: build the rows, and review its access when it is connected.
     fn resync(&mut self, cx: &mut Context<Self>) {
         self.rebuild(cx);
-        let connected = self
-            .deps
-            .sessions
-            .get(&self.cluster)
-            .is_some_and(|s| s.is_connected());
+        let session = self.deps.sessions.get(&self.cluster);
+        self.crd_watch_forbidden = session
+            .as_ref()
+            .is_some_and(|s| s.crd_watch().is_forbidden());
+        let connected = session.is_some_and(|s| s.is_connected());
         if connected {
             self.refresh_access(cx);
             self.refresh_custom_resources(cx);
@@ -65,6 +65,13 @@ impl SidebarPanel {
                 self.rebuild(cx);
                 self.refresh_access(cx);
                 self.refresh_custom_resources(cx);
+            }
+            // A CRD was added or removed: list the custom kinds again (discovery already did).
+            SessionChange::KindsChanged(_) => self.refresh_custom_resources(cx),
+            // Say so when the user may not watch CRDs (the list is then only refreshed slowly).
+            SessionChange::CrdWatchChanged(status) => {
+                self.crd_watch_forbidden = status.is_forbidden();
+                self.rebuild(cx);
             }
             // Which namespaces are selected decides which rules apply.
             SessionChange::NamespaceChanged(_) => {
@@ -183,6 +190,7 @@ impl SidebarPanel {
             integrations: &self.integrations,
             custom: self.custom.as_deref(),
             access: &self.access,
+            crd_watch_forbidden: self.crd_watch_forbidden,
             open: &self.open,
         });
         self.apply_count_states(&mut rows);

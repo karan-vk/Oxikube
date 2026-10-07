@@ -6,9 +6,9 @@ use oxikube_domain::ids::{ClusterId, ContextName, Scope};
 use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPhase, WatchScope};
 use oxikube_domain::{Capabilities, Capability, ClusterColour};
 use oxikube_ports::{
-    AccessReviewPort, ClusterPorts, ClusterPrefs, DescribePort, DiscoveryPort, ExecInteractivity,
-    ExecPort, LogPort, MetricsPort, PortForwardPort, ResourceReader, ResourceWriter, TableFeedPort,
-    WarningPort,
+    AccessReviewPort, ClusterPorts, ClusterPrefs, CrdWatchStatus, DescribePort, DiscoveryPort,
+    ExecInteractivity, ExecPort, LogPort, MetricsPort, PortForwardPort, ResourceReader,
+    ResourceWriter, TableFeedPort, WarningPort,
 };
 
 /// One cluster session as the manager saw it when the snapshot was taken.
@@ -34,6 +34,7 @@ pub struct ClusterSession {
     pub(super) display_name: Option<String>,
     pub(super) server: Option<String>,
     pub(super) prefs: Arc<ClusterPrefs>,
+    pub(super) crd_watch: CrdWatchStatus,
     pub(super) ports: Option<ClusterPorts>,
 }
 
@@ -92,6 +93,12 @@ impl ClusterSession {
     /// What the user may do, probed on connect; empty while not connected.
     pub fn capabilities(&self) -> Capabilities {
         self.capabilities
+    }
+
+    /// Whether the CRD watch behind the session's kind list runs or the user may not watch CRDs
+    /// (then new CRDs appear only on the adapter's slow re-discovery or a reconnect).
+    pub fn crd_watch(&self) -> &CrdWatchStatus {
+        &self.crd_watch
     }
 
     /// Whether the session has `capability`.

@@ -153,6 +153,8 @@ pub struct RowInputs<'a> {
     pub custom: Option<&'a [CustomResourceGroup]>,
     /// What the user may list.
     pub access: &'a AccessState,
+    /// Whether the user may not watch CustomResourceDefinitions, so new CRDs appear late.
+    pub crd_watch_forbidden: bool,
     /// The user's explicit open and closed choices by row id.
     pub open: &'a BTreeMap<String, bool>,
 }
@@ -185,6 +187,13 @@ pub fn build_rows(input: &RowInputs<'_>) -> Vec<Row> {
     for integration in input.integrations {
         rows.extend(integration_rows(integration, input.open));
     }
+    if input.crd_watch_forbidden {
+        rows.push(Row::Notice(NoticeRow {
+            id: "crd-watch-forbidden",
+            text: CRD_WATCH_FORBIDDEN.into(),
+            kind: NoticeKind::Muted,
+        }));
+    }
     match input.access {
         AccessState::Pending => rows.push(Row::Notice(NoticeRow {
             id: "access-pending",
@@ -202,6 +211,10 @@ pub fn build_rows(input: &RowInputs<'_>) -> Vec<Row> {
     }
     rows
 }
+
+/// Shown when the CRD watch was refused: the list of custom resources is not live.
+const CRD_WATCH_FORBIDDEN: &str = "Custom resources may be out of date: you may not watch \
+CustomResourceDefinitions. New ones appear after a while or on reconnect.";
 
 fn limited_access_text(hidden: usize) -> String {
     let what = if hidden == 1 { "section" } else { "sections" };

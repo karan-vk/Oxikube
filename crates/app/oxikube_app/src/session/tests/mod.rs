@@ -8,6 +8,7 @@ mod connect;
 mod deadline;
 mod failure;
 mod health;
+mod kinds;
 mod multi;
 mod prefs;
 mod props;

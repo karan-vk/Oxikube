@@ -8,17 +8,20 @@ use futures::FutureExt as _;
 use futures::future::{AbortHandle, Abortable, Aborted};
 use oxikube_domain::session::{ClusterSessionState, SessionEvent, SessionEventKind, SessionPhase};
 use oxikube_domain::{Capabilities, ErrorKind, OxiError, OxiResult};
-use oxikube_ports::{ClusterConnection, ConnectRequest};
+use oxikube_ports::{ClusterConnection, ConnectRequest, DiscoveryEvents};
 use parking_lot::Mutex;
 
 use super::entry::Entry;
 use super::health::SessionHealth;
+use super::kinds;
 use super::manager::Shared;
 
 /// What a successful attempt produced.
 pub(super) struct Established {
     pub(super) connection: ClusterConnection,
     pub(super) capabilities: Capabilities,
+    /// The adapter's kind and CRD-watch events, started with the connection.
+    pub(super) kind_events: Option<DiscoveryEvents>,
 }
 
 impl Shared {
@@ -68,7 +71,7 @@ impl Shared {
     /// Lands an attempt's outcome, unless the session moved on (disconnected, closed or
     /// restarted) in the meantime, in which case the outcome is dropped.
     fn finish(
-        &self,
+        self: &Arc<Self>,
         entry: &Mutex<Entry>,
         generation: u64,
         outcome: Result<OxiResult<Established>, Aborted>,
@@ -85,11 +88,14 @@ impl Shared {
             // Only `Entry::disconnect` aborts, and it also moves the session on.
             Err(Aborted) => return e.state.clone(),
             Ok(Ok(established)) => {
+                let kind_events = established.kind_events;
                 e.install(
                     established.connection,
                     established.capabilities,
                     &self.updates,
                 );
+                e.kind_watch =
+                    kind_events.and_then(|events| self.follow_kinds(&e.id, generation, events));
                 SessionEvent::Connected
             }
             // The state already says "authentication"; the reason is the adapter's message
@@ -173,9 +179,12 @@ impl Shared {
                 Capabilities::all()
             }
         };
+        // The CRD watch starts with the connection, so a CRD added from now on is seen.
+        let kind_events = kinds::subscribe(ports.discovery.as_ref());
         Ok(Established {
             connection,
             capabilities,
+            kind_events,
         })
     }
 }
