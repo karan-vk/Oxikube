@@ -12,12 +12,16 @@ path = "src/oxikube_terminal.rs"
 doctest = false
 
 [dependencies]
+# Pinned exactly in the workspace; only the `grid` module names its types.
+alacritty_terminal.workspace = true
 async-trait.workspace = true
+bitflags.workspace = true
 bytes.workspace = true
 futures.workspace = true
 gpui.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
+oxikube_runtime.workspace = true
 oxikube_settings.workspace = true
 parking_lot.workspace = true
 portable-pty.workspace = true
@@ -26,13 +30,27 @@ serde.workspace = true
 serde_json.workspace = true
 serde-saphyr.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
+oxikube_assets.workspace = true
+oxikube_testkit.workspace = true
 tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+# Non-gating throughput benchmark: `cargo run --release -p oxikube_terminal --example grid_bench`.
+[[example]]
+name = "grid_bench"
+path = "examples/grid_bench.rs"
+
+# The backend -> grid -> GPUI bridge under `#[gpui::test]` (one binary, one module per area).
+[[test]]
+name = "state"
+path = "tests/state/main.rs"
 
 [lints]
 workspace = true

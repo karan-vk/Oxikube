@@ -91,6 +91,7 @@ fn the_settings_become_options() {
     let settings = crate::TerminalSettings {
         shell: Some("/usr/bin/fish".into()),
         shell_args: vec!["-l".into()],
+        ..crate::TerminalSettings::default()
     };
     let options = LocalPtyOptions::from_settings(&settings);
     assert_eq!(options.resolved_shell(), "/usr/bin/fish");

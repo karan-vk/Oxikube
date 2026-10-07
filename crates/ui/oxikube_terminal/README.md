@@ -8,8 +8,17 @@ alacritty_terminal grid + custom GPUI Element + TerminalBackend (local PTY, kube
 
 - `backend::local` (E09-S02): `LocalPty`, the user's shell on a PTY with the cluster environment
   (`KUBECONFIG`, `KUBE_CONTEXT`, `OXIKUBE_NAMESPACE`). Bench: `cargo run --release -p oxikube_terminal --example local_pty_bench`.
-- Settings: `terminal.shell`, `terminal.shell_args`.
-- Grid, element and view: E09-S04..S07.
+- Element and view: E09-S05..S07.
+
+## Modules
+
+- `grid` (E09-S04): `TermGrid` wraps `alacritty_terminal` (pinned `=0.26.0`; the only module that
+  names its types): parse, snapshot, selection, search, scrollback, resize.
+- `state` (E09-S04): `TerminalState`, the GPUI entity bridging a `TerminalBackend` and the grid
+  (tokio pump and writer, frame-coalesced notify).
+- `settings`: the `terminal` block of `settings.json` (`shell`, `shell_args`, `scrollback_lines`).
+
+Throughput benchmark (non-gating): `cargo run --release -p oxikube_terminal --example grid_bench`.
 
 ## Allowed internal dependencies
 

@@ -151,6 +151,11 @@ Semantics only, no code copied: the `kubectl get` column rules of `printPod`, `p
 ## gpui-kit / gpui-component (Apache-2.0) — https://github.com/longbridge/gpui-kit
 Used as a dependency through `oxikube_ui`. Bundled Lucide icons (ISC) via `gpui-kit-assets`.
 
+## alacritty_terminal (Apache-2.0) — https://github.com/alacritty/alacritty
+Used as a dependency of `oxikube_terminal` only (pinned `=0.26.0`, with its `vte` parser); no
+source is vendored. `oxikube_terminal::grid` wraps its `Term` behind Oxikube types, written from
+the crate's documentation (Zed's GPL `terminal` crate was not copied).
+
 ## Bundled themes
 Theme families bundled under `crates/platform/oxikube_assets` list their own licence in the JSON `author`/`license` fields and here:
 - One Dark and One Light (MIT, Copyright (c) 2014 GitHub Inc., from Atom's `one-dark-ui` /
