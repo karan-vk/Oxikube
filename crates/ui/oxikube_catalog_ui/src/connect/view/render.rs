@@ -4,11 +4,12 @@ use gpui::{
     Context, InteractiveElement as _, IntoElement as _, ParentElement as _, Styled as _, Window,
     div, prelude::FluentBuilder as _,
 };
+use oxikube_ui::error_details::{self, details_box, details_toggle};
 use oxikube_ui::spinner::Spinner;
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::ConnectView;
-use super::parts::{actions, button, card, details_box, link, note};
+use super::parts::{actions, button, card, link, note};
 use crate::connect::model::{
     AuthRequiredModel, ConnectViewModel, ConnectingModel, DisconnectedModel, ErrorModel,
     TerminalAction,
@@ -33,17 +34,17 @@ impl ConnectView {
         }
     }
 
-    /// The "Show details" and "Copy details" row. `toggle`: the text is longer than what the
-    /// body shows; `copy`: there is text worth copying.
+    /// The "Details" and "Copy details" row. `toggle`: there is raw text behind the summary;
+    /// `copy`: there is text worth copying.
     fn details_controls(&self, toggle: bool, copy: bool, cx: &mut Context<Self>) -> gpui::Div {
         let toggle_view = cx.entity();
         let copy_view = cx.entity();
         let open = self.details_open;
         actions()
             .when(toggle, |row| {
-                row.child(link(
+                row.child(details_toggle(
                     "connect-details-toggle",
-                    if open { "Hide details" } else { "Show details" },
+                    open,
                     move |_, cx| toggle_view.update(cx, |this, cx| this.toggle_details(cx)),
                 ))
             })
@@ -130,12 +131,6 @@ impl ConnectView {
         } else {
             model.message.summary.clone()
         };
-        let policy = format!(
-            "Interactive sign-in: {} ({}). {}",
-            model.policy.label(),
-            model.policy.setting_value(),
-            model.policy.explanation()
-        );
         let terminal_ready = model.terminal == TerminalAction::Available;
         card(
             "connect-auth",
@@ -147,10 +142,18 @@ impl ConnectView {
         .child(note("connect-auth-message", message, cx).text_color(colors.text))
         .child(self.details_controls(model.message.truncated, model.message.truncated, cx))
         .when(self.details_open && model.message.truncated, |card| {
-            card.child(details_box("connect-details-box", &model.message.full, cx))
+            card.child(details_box(
+                "connect-details-box",
+                "connect-details",
+                &model.message.full,
+                error_details::TALL,
+                cx,
+            ))
         })
         .child(note("connect-auth-instructions", model.instructions, cx))
-        .child(note("connect-policy", policy, cx).text_size(u(tokens.font.small)))
+        .when_some(model.policy_note, |card, policy| {
+            card.child(note("connect-policy", policy, cx).text_size(u(tokens.font.small)))
+        })
         .child(
             actions()
                 .child(button(
@@ -201,9 +204,15 @@ impl ConnectView {
             cx,
         )
         .child(note("connect-error-summary", summary, cx).text_color(colors.text))
-        .child(self.details_controls(true, true, cx))
-        .when(open, |card| {
-            card.child(details_box("connect-details-box", &model.details, cx))
+        .child(self.details_controls(model.message.truncated, true, cx))
+        .when(open && model.message.truncated, |card| {
+            card.child(details_box(
+                "connect-details-box",
+                "connect-details",
+                &model.details,
+                error_details::TALL,
+                cx,
+            ))
         })
         .child(
             actions()

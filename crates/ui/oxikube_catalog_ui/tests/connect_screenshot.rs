@@ -2,9 +2,11 @@
 //! screenshot per state of a cluster tab.
 //!
 //! - `connect_connecting`: spinner (still, reduce-motion is on), the API server and context, Cancel.
-//! - `connect_auth_required`: the plugin's message, the exec policy (forbid), how to sign in,
-//!   a disabled Open terminal (no terminal yet) and Retry.
-//! - `connect_error`: summary, expanded details, Copy details, Edit kubeconfig sources, Retry.
+//! - `connect_auth_required`: the plugin's message, how to sign in, an enabled Open terminal and
+//!   Retry; no policy line (a plugin may prompt here).
+//! - `connect_auth_forbidden`: the same under the `never` policy: the one plain policy line.
+//! - `connect_error`: one human sentence (no `internal error:` label), the raw text open behind
+//!   Details, Copy details, Edit kubeconfig sources, Retry.
 //! - `connect_degraded`: the banner above the cluster's own content.
 //!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
@@ -31,7 +33,7 @@ use oxikube_catalog_ui::catalog::test_support::{
 };
 use oxikube_catalog_ui::connect::{ConnectDeps, ConnectView, tab_setup};
 use oxikube_domain::OxiError;
-use oxikube_ports::HealthSignal;
+use oxikube_ports::{ExecInteractivity, HealthSignal};
 use oxikube_testkit::headless::HEADLESS_SCALE_FACTOR;
 use oxikube_testkit::screenshot::{
     RgbaImage, Tolerance, check_golden, distinct_colors_at_least, golden_path,
@@ -50,6 +52,7 @@ const CLUSTER: &str = "prod-eu";
 enum Scene {
     Connecting,
     AuthRequired,
+    AuthForbidden,
     Error,
     Degraded,
 }
@@ -84,7 +87,11 @@ fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
             anyhow::ensure!((&mut connect).now_or_never().is_none(), "the attempt waits");
             waiting = Some(connect);
         }
-        Scene::AuthRequired => {
+        Scene::AuthRequired | Scene::AuthForbidden => {
+            if matches!(scene, Scene::AuthForbidden) {
+                sessions.open_configured(&context(CLUSTER));
+                sessions.set_exec_interactivity(&cluster, ExecInteractivity::Never)?;
+            }
             connector
                 .connect_script_for(&cluster)
                 .push_err(OxiError::auth(
@@ -97,7 +104,7 @@ fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
         Scene::Error => {
             connector
                 .connect_script_for(&cluster)
-                .push_err(OxiError::validation(
+                .push_err(OxiError::internal(
                     "dial tcp 10.20.30.40:6443: i/o timeout\nthe API server did not answer within \
                  30s (is the VPN up?)\ncontext: prod-eu",
                 ));
@@ -119,7 +126,9 @@ fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
 
         let workspace = cx.new(|cx| Workspace::new(window, cx));
         let dispatcher: Rc<dyn CommandDispatcher> = Rc::new(RecordingDispatcher::new());
-        let connect = ConnectDeps::new(sessions.clone(), dispatcher.clone()).with_sources(|_| {});
+        let connect = ConnectDeps::new(sessions.clone(), dispatcher.clone())
+            .with_sources(|_| {})
+            .with_terminal(|_, _| {});
         let deps = ClusterTabsDeps::new(sessions.clone(), state.clone(), dispatcher)
             .with_setup(tab_setup(connect));
         let tabs = ClusterTabs::start(&workspace, deps, window, cx);
@@ -200,6 +209,11 @@ fn run() -> anyhow::Result<()> {
         "connect_auth_required",
         colors.warning,
         render(Scene::AuthRequired)?,
+    )?;
+    check(
+        "connect_auth_forbidden",
+        colors.warning,
+        render(Scene::AuthForbidden)?,
     )?;
     check("connect_error", colors.error, render(Scene::Error)?)?;
     check("connect_degraded", colors.warning, render(Scene::Degraded)?)

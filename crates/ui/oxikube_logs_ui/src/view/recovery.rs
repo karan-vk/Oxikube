@@ -7,18 +7,12 @@
 //! took over: same container and range, the tab renamed. A reconnect keeps the lines the session
 //! holds and continues after them (`LogSession::reconnect`); a multi-pod view reopens its streams.
 
-use gpui::{
-    AnyElement, Context, InteractiveElement as _, IntoElement as _, ParentElement as _,
-    Styled as _, div,
-};
+use gpui::Context;
 use oxikube_app::logs::{EndReason, LogState, find_replacement};
-use oxikube_domain::OxiResult;
 use oxikube_domain::command::Command;
 use oxikube_domain::redact::redact;
+use oxikube_domain::{ErrorKind, OxiResult};
 use oxikube_runtime::{KubeTaskError, spawn_kube};
-use oxikube_ui::button::{Button, ButtonVariants as _};
-use oxikube_ui::layout::h_flex;
-use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
 use oxikube_workspace::{ItemEvent, Toast};
 
 use super::LogView;
@@ -31,6 +25,9 @@ pub enum Recovery {
     /// Open the stream again (`logs::Reconnect`): it failed, or closed for a reason the view
     /// could not tell.
     Reconnect,
+    /// The pod or container is gone (the read failed with `NotFound`): reading it again cannot
+    /// help, so the strip offers to close the tab instead.
+    Close,
 }
 
 impl LogView {
@@ -39,6 +36,9 @@ impl LogView {
         match self.window.state() {
             LogState::Ended(EndReason::PodReplaced) if self.aggregate.is_none() => {
                 Some(Recovery::FollowReplacement)
+            }
+            LogState::Failed(failure) if failure.kind == ErrorKind::NotFound => {
+                Some(Recovery::Close)
             }
             LogState::Ended(EndReason::StreamClosed) | LogState::Failed(_) => {
                 Some(Recovery::Reconnect)
@@ -55,6 +55,12 @@ impl LogView {
         if !state.is_terminal() || matches!(state, LogState::Ended(EndReason::Cancelled)) {
             return;
         }
+        // Gone is gone: the strip offers Close, and the `r` key does not reopen a read that
+        // cannot succeed.
+        if self.recovery() == Some(Recovery::Close) {
+            return;
+        }
+        self.error_details_open = false;
         let resumed = match (&self.aggregate, self.session.as_mut()) {
             (None, Some(session)) => session.reconnect(),
             _ => false,
@@ -154,49 +160,5 @@ impl LogView {
     pub fn request_reconnect(&mut self, cx: &mut Context<Self>) {
         let target = self.target.clone();
         self.send(Command::LogsReconnect { target }, cx);
-    }
-
-    /// The strip that offers [`LogView::recovery`]: what happened, and the button.
-    pub(crate) fn recovery_strip(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let recovery = self.recovery()?;
-        let (words, id, label) = match recovery {
-            Recovery::FollowReplacement => (
-                "The pod was replaced. Its replacement's log is one click away.",
-                "log-follow-replacement",
-                "Follow replacement",
-            ),
-            Recovery::Reconnect => ("The log stream stopped.", "log-reconnect", "Reconnect"),
-        };
-        let tokens = cx.tokens();
-        let button = Button::new(id)
-            .label(label)
-            .primary()
-            .xsmall()
-            .on_click(cx.listener(move |view, _, _, cx| match recovery {
-                Recovery::FollowReplacement => view.request_follow_replacement(cx),
-                Recovery::Reconnect => view.request_reconnect(cx),
-            }));
-        Some(
-            h_flex()
-                .id("log-recovery")
-                .debug_selector(|| "log-recovery".into())
-                .flex_none()
-                .items_center()
-                .gap(u(tokens.spacing.md))
-                .px(u(tokens.spacing.md))
-                .py(u(tokens.spacing.sm))
-                .bg(tokens.colors.surface)
-                .border_b_1()
-                .border_color(tokens.colors.border_variant)
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .text_size(u(tokens.font.small))
-                        .child(words),
-                )
-                .child(div().debug_selector(move || id.into()).child(button))
-                .into_any_element(),
-        )
     }
 }

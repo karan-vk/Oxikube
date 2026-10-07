@@ -359,18 +359,6 @@ fn pods_that_have_not_started_are_waited_for_not_denied(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
-fn a_deployment_that_cannot_be_read_is_a_failed_state_row(cx: &mut TestAppContext) {
-    let mut fx = Fx::merged(cx);
-    // No deployment in the cluster.
-    let view = fx.open_web();
-    fx.read(&view, |view| {
-        assert!(matches!(view.line_window().state(), LogState::Failed(_)));
-        let text = view.row_text(0).expect("the state row");
-        assert!(text.starts_with("Not found:"), "{text}");
-    });
-}
-
-#[gpui::test]
 fn closing_the_tab_cancels_the_watch_and_every_stream(cx: &mut TestAppContext) {
     let mut fx = Fx::merged(cx);
     fx.seed_web(vec![

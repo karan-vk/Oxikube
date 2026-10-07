@@ -20,6 +20,7 @@
 //! | [`portforward`] | [`ForwardSpec`], [`ForwardStatus`]: what a port-forward targets and how it is doing |
 //! | [`agent`] | [`ContextBlock`](agent::ContextBlock), the bounded context handed to agents |
 //! | [`error`], [`error_details`] | [`OxiError`], [`ErrorKind`], [`OxiResult`]; [`ConflictDetails`] and [`ValidationDetails`] (field managers and field paths of a rejected write) |
+//! | [`human_error`] | [`HumanError`]: an error as one plain sentence plus its raw text, for every view that shows a failure |
 //! | [`redact`] | secret redaction: [`redact::redact`], [`redact::Redacted`], the pattern catalogue |
 //!
 //! [`redact`] holds the pure secret scrubber (`redact(&str) -> Cow<str>`, `Redacted<T>`). The
@@ -42,6 +43,7 @@ pub mod command;
 pub mod error;
 pub mod error_details;
 pub mod event;
+pub mod human_error;
 pub mod ids;
 pub mod kinds;
 pub mod log;
@@ -62,6 +64,7 @@ pub use command::{
 };
 pub use error::{ErrorKind, OxiError, OxiResult};
 pub use error_details::{ConflictDetails, ConflictReason, FieldCause, ValidationDetails};
+pub use human_error::HumanError;
 pub use portforward::{ForwardPort, ForwardSpec, ForwardStatus};
 pub use preset::ClusterPreset;
 pub use quantity::{Quantity, QuantityError, QuantityFormat};

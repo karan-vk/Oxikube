@@ -25,6 +25,17 @@ impl TerminalView {
         &self.lifecycle
     }
 
+    /// Whether the banner shows the raw text behind its sentence.
+    pub fn banner_details_open(&self) -> bool {
+        self.banner_details_open
+    }
+
+    /// Opens or closes the banner's raw text (its Details toggle).
+    pub fn toggle_banner_details(&mut self, cx: &mut Context<Self>) {
+        self.banner_details_open = !self.banner_details_open;
+        cx.notify();
+    }
+
     /// The banner the terminal shows above its screen, if its session dropped, ended or failed.
     pub fn banner(&self) -> Option<Banner> {
         self.lifecycle.banner(self.descriptor.is_local())
@@ -33,6 +44,8 @@ impl TerminalView {
     /// Feeds the lifecycle.
     pub(super) fn signal(&mut self, signal: Signal) {
         let local = self.descriptor.is_local();
+        // Another state is another story: its raw text starts collapsed.
+        self.banner_details_open = false;
         let state = std::mem::replace(&mut self.lifecycle, Lifecycle::Closed);
         self.lifecycle = state.apply(signal, local);
     }

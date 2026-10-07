@@ -1,18 +1,15 @@
 //! The pieces the bodies share.
 
 use gpui::{
-    App, ElementId, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, div, px,
+    App, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, Styled as _, div,
+    px,
 };
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{Disableable as _, StyledExt as _, h_flex, v_flex};
-use oxikube_ui::markdown::MarkdownView;
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 /// The widest a body's text runs, so long lines wrap instead of stretching the card.
 pub(super) const CARD_WIDTH: f32 = 560.;
-/// The tallest the details box grows before it scrolls.
-const DETAILS_MAX_HEIGHT: f32 = 220.;
 
 /// A body: centred column, icon, heading, then the caller's children.
 pub(super) fn card(
@@ -94,51 +91,4 @@ pub(super) fn link(
     div()
         .debug_selector(move || selector.to_owned())
         .child(button)
-}
-
-/// The full text of an error, in a box that scrolls past a height, selectable with the mouse
-/// (and copyable with the platform's copy). Drawn as a code block, so error text that looks like
-/// Markdown stays text.
-pub(super) fn details_box(
-    id: impl Into<ElementId>,
-    text: &str,
-    cx: &App,
-) -> gpui::Stateful<gpui::Div> {
-    let tokens = cx.tokens();
-    let id = id.into();
-    div()
-        .id(id.clone())
-        .debug_selector(|| "connect-details".to_owned())
-        .w_full()
-        .max_w(u(px(CARD_WIDTH)))
-        .max_h(u(px(DETAILS_MAX_HEIGHT)))
-        .overflow_y_scroll()
-        .text_size(u(tokens.font.mono))
-        .child(
-            MarkdownView::markdown(SharedString::from(format!("{id:?}-text")), fenced(text))
-                .selectable(true),
-        )
-}
-
-/// `text` as a Markdown fenced block whose fence no line of the text can close.
-fn fenced(text: &str) -> String {
-    let longest = text
-        .split(|c| c != '`')
-        .map(str::len)
-        .max()
-        .unwrap_or_default();
-    let fence = "`".repeat((longest + 1).max(3));
-    format!("{fence}text\n{text}\n{fence}")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::fenced;
-
-    #[test]
-    fn the_fence_is_longer_than_any_backtick_run_in_the_text() {
-        assert_eq!(fenced("plain"), "```text\nplain\n```");
-        assert!(fenced("a ``` b").starts_with("````text"));
-        assert!(fenced("`````").starts_with("``````text"));
-    }
 }

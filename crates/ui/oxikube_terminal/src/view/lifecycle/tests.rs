@@ -114,7 +114,12 @@ fn a_pod_command_that_could_not_run_is_an_exit_with_its_message() {
     assert_eq!(state, Lifecycle::Exited(status));
     let banner = state.banner(false).expect("a banner");
     assert_eq!(banner.headline, "The command could not run");
-    assert!(banner.detail.contains("executable file not found"));
+    assert_eq!(
+        banner.details.as_deref(),
+        Some("exec: \"vim\": executable file not found"),
+        "the server's words are behind Details"
+    );
+    assert!(!banner.detail.contains("executable file not found"));
 }
 
 #[test]
@@ -135,8 +140,13 @@ fn a_dropped_connection_banner_offers_reconnect_and_says_the_shell_state_is_gone
     assert_eq!(banner.tone, Tone::Warning);
     assert!(banner.detail.contains("state of the old shell is gone"));
     assert!(
-        banner.detail.contains("connection reset"),
-        "the adapter's message"
+        !banner.detail.contains("connection reset"),
+        "the sentence does not repeat the adapter's message"
+    );
+    assert_eq!(
+        banner.details.as_deref(),
+        Some("connection reset"),
+        "the adapter's message is behind Details"
     );
 }
 
@@ -186,8 +196,14 @@ fn a_failed_start_offers_the_action_of_its_kind_of_terminal() {
     let remote = Lifecycle::Failed(Failure::from_error(&OxiError::not_found(
         "pod a/b not found",
     )));
+    // The pod is gone: starting a session in it again cannot work, so Close, not Reconnect.
     assert_eq!(
         remote.banner(false).expect("banner").actions,
+        [BannerAction::CloseTab]
+    );
+    let dropped = Lifecycle::Failed(Failure::from_error(&OxiError::network("reset")));
+    assert_eq!(
+        dropped.banner(false).expect("banner").actions,
         [BannerAction::Reconnect]
     );
     let local = Lifecycle::Failed(Failure::local_start(&OxiError::validation("no such shell")));
@@ -195,7 +211,23 @@ fn a_failed_start_offers_the_action_of_its_kind_of_terminal() {
     assert_eq!(banner.actions, [BannerAction::Restart]);
     assert_eq!(banner.tone, Tone::Error);
     assert_eq!(banner.headline, "The terminal could not start");
-    assert!(banner.detail.contains("no such shell"));
+    assert_eq!(banner.details.as_deref(), Some("no such shell"));
+}
+
+#[test]
+fn a_pod_that_is_gone_offers_close_whether_it_failed_to_start_or_dropped() {
+    let gone = || Failure::from_error(&OxiError::not_found("pods \"web-0\" not found"));
+    for lifecycle in [Lifecycle::Failed(gone()), Lifecycle::Disconnected(gone())] {
+        let banner = lifecycle.banner(false).expect("banner");
+        assert_eq!(banner.actions, [BannerAction::CloseTab]);
+        assert_eq!(BannerAction::CloseTab.label(), "Close");
+        assert!(
+            !banner.detail.contains("not found"),
+            "the sentence is plain: {}",
+            banner.detail
+        );
+        assert_eq!(banner.details.as_deref(), Some("pods \"web-0\" not found"));
+    }
 }
 
 /// Every kind of error a pod terminal can hit says something different and specific, never the
@@ -290,4 +322,6 @@ fn details_are_redacted_and_never_carry_output() {
         .banner(false)
         .expect("banner");
     assert!(!shown.detail.contains("eyJhbGci"), "{}", shown.detail);
+    let raw = shown.details.expect("the raw text, redacted");
+    assert!(!raw.contains("eyJhbGci"), "{raw}");
 }

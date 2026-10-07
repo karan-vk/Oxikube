@@ -8,9 +8,9 @@
 //! | State | Shows | Commands |
 //! |---|---|---|
 //! | `Connecting` | spinner, the API server and context, Cancel | `cluster::CancelConnect` |
-//! | `AuthRequired` | the plugin's message, how to sign in under the cluster's exec policy, Open terminal, Retry | `cluster::Reconnect` |
+//! | `AuthRequired` | the plugin's message, how to sign in, a policy line only when interaction is forbidden, Open terminal (a shell under the view), Retry | `cluster::Reconnect` |
 //! | `Degraded` | a banner above the cluster's content ("some data may be stale"), Retry | `cluster::Reconnect` |
-//! | `Error` | a one-line summary, expandable and copyable details, Retry, Edit kubeconfig sources | `cluster::Reconnect` |
+//! | `Error` | one human sentence, the raw text behind a Details toggle (copyable), Retry, Edit kubeconfig sources | `cluster::Reconnect` |
 //! | `Disconnected` | Connect (seen for a moment: the tab closes with the session) | `cluster::Connect` |
 //!
 //! | Module | Holds |
@@ -37,8 +37,11 @@
 //! Reasons come from adapters and plugins and can hold anything, including a token a plugin
 //! echoed. The session manager redacts a reason before it stores it; the model redacts again
 //! ([`text::scrub`]), so what is drawn, copied or shown in the details never carries a secret.
-//! The summary is the first line cut at [`text::SUMMARY_MAX_CHARS`]; the whole text is in the
-//! details, selectable and copyable.
+//! An `Error` reason is a rendered `OxiError` (`"internal error: dial tcp ..."`): it is read back
+//! into a [`HumanError`](oxikube_domain::HumanError), whose sentence is the summary and whose raw
+//! text, without the kind's label, is behind the Details toggle, selectable and copyable. Any
+//! other text (a plugin's message) is its first line, cut at [`text::SUMMARY_MAX_CHARS`], with the
+//! whole text in the details.
 //!
 //! # Motion
 //!

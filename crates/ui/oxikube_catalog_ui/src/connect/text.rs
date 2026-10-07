@@ -1,5 +1,6 @@
 //! What the connect view may show of an error: redacted, summarised, never cut mid-character.
 
+use oxikube_domain::HumanError;
 use oxikube_domain::redact::redact;
 
 /// The longest summary line, in characters. The rest is in the details.
@@ -39,6 +40,16 @@ impl DisplayText {
             summary,
             full,
             truncated,
+        }
+    }
+
+    /// An error's sentence and its raw text: the sentence is the summary, and there is more to
+    /// read only when the raw text says more ([`HumanError::has_details`]).
+    pub fn from_error(error: &HumanError) -> Self {
+        Self {
+            summary: error.summary().to_owned(),
+            full: error.raw().to_owned(),
+            truncated: error.has_details(),
         }
     }
 

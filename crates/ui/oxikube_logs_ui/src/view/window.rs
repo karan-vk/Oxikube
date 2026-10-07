@@ -29,7 +29,7 @@
 use std::collections::VecDeque;
 use std::ops::Range;
 
-use oxikube_app::logs::{IndexChange, LogBuffer, LogDelta, LogState, MatchIndex};
+use oxikube_app::logs::{EndReason, IndexChange, LogBuffer, LogDelta, LogState, MatchIndex};
 
 /// One row of a log view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,9 +197,14 @@ impl LineWindow {
         self.first_seq > self.cleared_to
     }
 
-    /// Whether the state row is shown.
+    /// Whether the state row is shown. Not while streaming, and not for a stream that failed or
+    /// closed unexpectedly: the recovery strip says that once, with the way out (an error is
+    /// never drawn as a strip and again as a red row).
     pub fn shows_state(&self) -> bool {
-        self.state != LogState::Streaming
+        !matches!(
+            self.state,
+            LogState::Streaming | LogState::Failed(_) | LogState::Ended(EndReason::StreamClosed)
+        )
     }
 
     fn marker_rows(&self) -> usize {
@@ -500,7 +505,7 @@ mod tests {
     fn clearing_keeps_the_state_row() {
         let mut window = LineWindow::new();
         window.apply(
-            &delta(0..2, 0, 0, LogState::Ended(EndReason::StreamClosed)),
+            &delta(0..2, 0, 0, LogState::Ended(EndReason::PodFinished)),
             None,
         );
         assert_eq!(window.row_count(), 3);
@@ -510,11 +515,28 @@ mod tests {
     }
 
     #[test]
+    fn a_failure_or_an_unexplained_close_is_left_to_the_recovery_strip() {
+        use oxikube_app::logs::LogFailure;
+        use oxikube_domain::ErrorKind;
+        let failed = LogState::Failed(LogFailure {
+            kind: ErrorKind::Network,
+            message: "connection refused".into(),
+            retryable: true,
+        });
+        for state in [failed, LogState::Ended(EndReason::StreamClosed)] {
+            let mut window = LineWindow::new();
+            window.apply(&delta(0..2, 0, 0, state), None);
+            assert_eq!(window.row_count(), 2, "the lines only, no state row");
+            assert_eq!(window.row(2), None);
+        }
+    }
+
+    #[test]
     fn an_ended_stream_gets_its_state_row_back() {
         let mut window = LineWindow::new();
         window.apply(&delta(0..2, 0, 0, LogState::Streaming), None);
         let change = window.apply(
-            &delta(2..2, 0, 0, LogState::Ended(EndReason::StreamClosed)),
+            &delta(2..2, 0, 0, LogState::Ended(EndReason::PodFinished)),
             None,
         );
         assert_eq!(window.row(2), Some(Row::State));

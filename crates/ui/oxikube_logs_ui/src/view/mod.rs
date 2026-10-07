@@ -26,6 +26,7 @@
 //! | `pick`, `copy` | which lines an action takes (on screen, the buffer, the filter) and `logs::Copy` (cap 5 MB) |
 //! | `save`, `clear`, `notice` | `logs::Save` (dialog, panel, streamed write), `logs::Clear`, the toasts of local actions |
 //! | `tail` | `logs::TailInTerminal` (E08-S08): `kubectl logs -f` for what the view shows, in a terminal tab; the toolbar offers it only when kubectl is installed |
+//! | `recovery_strip` | the strip itself: one human sentence for what stopped, a Details toggle for the raw text, Reconnect (or Close when the pod is gone) |
 //! | `recovery` | after the stream stopped (E08-S07): `logs::FollowReplacement` (switch to the pod that replaced a gone one), `logs::Reconnect`, the strip offering them |
 //! | `actions` | the `log_view::*` key actions of the `LogView` key context |
 //! | `render`, `rows` | drawing: the frame, virtualised rows (`uniform_list` unwrapped, `list` wrapped), the pill |
@@ -62,6 +63,7 @@ mod notice;
 mod options;
 mod pick;
 mod recovery;
+mod recovery_strip;
 mod render;
 mod rows;
 mod save;
@@ -203,6 +205,8 @@ pub struct LogView {
     pub(crate) search: Search,
     /// Set when the view shows a workload or Service (several pods merged), not one pod.
     pub(crate) aggregate: Option<AggregateState>,
+    /// Whether the recovery strip shows the raw text of the failure (its Details toggle).
+    pub(crate) error_details_open: bool,
 }
 
 impl LogView {
@@ -278,6 +282,7 @@ impl LogView {
             _settings_subscription: LogsSettings::observe_in(cx, Self::settings_changed),
             search: Search::default(),
             aggregate: None,
+            error_details_open: false,
         }
     }
 

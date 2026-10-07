@@ -51,6 +51,16 @@ impl ExecPolicy {
         }
     }
 
+    /// The line that explains the setting, for the one policy that needs explaining: `never`
+    /// stops a credential plugin from asking for input, so the screen cannot prompt for it.
+    /// `None` for `Ask` and `Allow`, which only say what is normal.
+    pub fn note(self) -> Option<&'static str> {
+        (!self.allows_interaction()).then_some(
+            "Credential plugins are not allowed to ask for input on this cluster, so Oxikube \
+             cannot prompt you here (exec_interactivity: never).",
+        )
+    }
+
     /// Whether a plugin may be interactive at all.
     pub(super) fn allows_interaction(self) -> bool {
         self.setting != ExecInteractivity::Never
@@ -60,12 +70,12 @@ impl ExecPolicy {
     pub fn instructions(self, terminal: bool) -> &'static str {
         match (self.allows_interaction(), terminal) {
             (false, true) => {
-                "Interactive sign-in is forbidden for this cluster. Open a terminal, sign in with \
-                 your provider's tool (the login you use for kubectl), then retry."
+                "Open a terminal, sign in with your provider's tool (the login you use for \
+                 kubectl), then retry."
             }
             (false, false) => {
-                "Interactive sign-in is forbidden for this cluster. Sign in outside Oxikube, in a \
-                 terminal, with your provider's tool (the login you use for kubectl), then retry."
+                "Sign in outside Oxikube, in a terminal, with your provider's tool (the login \
+                 you use for kubectl), then retry."
             }
             (true, true) => {
                 "Sign in again, then retry. Open a terminal to run your provider's login, or \

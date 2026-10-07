@@ -6,6 +6,7 @@ mod agent;
 mod aggregate;
 mod churn;
 mod containers;
+mod failure;
 mod fixture;
 mod json;
 mod keymap;

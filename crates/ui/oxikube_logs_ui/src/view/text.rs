@@ -2,7 +2,7 @@
 //! marker's and the state row's words. Plain Rust, no gpui.
 
 use oxikube_app::logs::{EndReason, LogEntry, LogState};
-use oxikube_domain::ErrorKind;
+use oxikube_domain::HumanError;
 
 /// How a line is coloured, read from the first words of its text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,17 +87,17 @@ pub fn state_text(state: &LogState) -> String {
             attempt,
             max,
             failure,
-        } => format!("Reconnecting ({attempt}/{max}): {}", failure.message),
-        LogState::Failed(failure) => {
-            let what = match failure.kind {
-                ErrorKind::NotFound => "Not found",
-                ErrorKind::Forbidden => "Not allowed to read these logs",
-                ErrorKind::Validation => "Cannot read these logs",
-                _ if failure.retryable => "Connection failed",
-                _ => "Failed",
-            };
-            format!("{what}: {}", failure.message)
+        } => {
+            // The sentence, not the adapter's text: the row is transient and the stream is
+            // already trying again.
+            let why = HumanError::new(failure.kind, &failure.message);
+            format!("Reconnecting ({attempt}/{max}): {}", why.summary())
         }
+        // The recovery strip says it (one sentence, details behind a toggle); the row only
+        // exists for a caller that asks the words of the state.
+        LogState::Failed(failure) => HumanError::new(failure.kind, &failure.message)
+            .summary()
+            .to_owned(),
     }
 }
 
@@ -128,6 +128,7 @@ mod tests {
     use std::sync::Arc;
 
     use oxikube_app::logs::LogFailure;
+    use oxikube_domain::ErrorKind;
 
     use super::*;
 
@@ -178,7 +179,7 @@ mod tests {
         });
         assert_eq!(
             state_text(&failed),
-            "Not allowed to read these logs: pods/log is forbidden"
+            "You do not have permission to do that."
         );
     }
 }

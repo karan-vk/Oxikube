@@ -34,7 +34,7 @@ impl BannerAction {
         match self {
             Self::Reconnect => "Reconnect",
             Self::Restart => "Restart",
-            Self::CloseTab => "Close tab",
+            Self::CloseTab => "Close",
         }
     }
 }
@@ -46,8 +46,11 @@ pub struct Banner {
     pub tone: Tone,
     /// The first line.
     pub headline: String,
-    /// What to do about it (and what the server said), one or two sentences.
+    /// What to do about it, one or two sentences: plain words, never the server's own text.
     pub detail: String,
+    /// What the server or the launcher said, redacted: shown behind the strip's Details toggle,
+    /// so the banner says the failure once, as a sentence, and keeps the raw text a click away.
+    pub details: Option<String>,
     /// The buttons, the primary one first.
     pub actions: Vec<BannerAction>,
 }
@@ -73,8 +76,9 @@ impl Banner {
         Self {
             tone: Tone::Warning,
             headline: failure.headline().to_owned(),
-            detail: with_detail(failure, SESSION_GONE),
-            actions: vec![BannerAction::Reconnect],
+            detail: with_tail(failure, SESSION_GONE),
+            details: raw_details(failure),
+            actions: recovery_actions(failure, BannerAction::Reconnect),
         }
     }
 
@@ -82,12 +86,16 @@ impl Banner {
         Self {
             tone: Tone::Error,
             headline: failure.headline().to_owned(),
-            detail: with_detail(failure, ""),
-            actions: vec![if local {
-                BannerAction::Restart
-            } else {
-                BannerAction::Reconnect
-            }],
+            detail: with_tail(failure, ""),
+            details: raw_details(failure),
+            actions: recovery_actions(
+                failure,
+                if local {
+                    BannerAction::Restart
+                } else {
+                    BannerAction::Reconnect
+                },
+            ),
         }
     }
 
@@ -110,7 +118,8 @@ impl Banner {
             return Self {
                 tone: Tone::Error,
                 headline: failure.headline().to_owned(),
-                detail: with_detail(&failure, SESSION_GONE),
+                detail: with_tail(&failure, SESSION_GONE),
+                details: raw_details(&failure),
                 actions: vec![BannerAction::Reconnect, BannerAction::CloseTab],
             };
         }
@@ -146,26 +155,42 @@ impl Banner {
             tone,
             headline,
             detail: detail.to_owned(),
+            details: None,
             actions,
         }
     }
 }
 
-/// The failure's hint, the server's message when there is one, then `tail`.
-fn with_detail(failure: &Failure, tail: &str) -> String {
+/// The failure's hint, then `tail`: sentences only. The server's message is
+/// [`raw_details`], behind the Details toggle.
+fn with_tail(failure: &Failure, tail: &str) -> String {
     let mut text = failure.hint().to_owned();
-    // The hint of a stream that simply closed says all there is to say.
-    if let Some(detail) = failure.detail()
-        && failure.kind() != FailureKind::StreamClosed
-    {
-        text.push(' ');
-        text.push('(');
-        text.push_str(detail.trim_end_matches('.'));
-        text.push_str(").");
-    }
     if !tail.is_empty() {
         text.push(' ');
         text.push_str(tail);
     }
     text
+}
+
+/// What the server said, when it said more than the hint does. The hint of a stream that simply
+/// closed says all there is to say.
+fn raw_details(failure: &Failure) -> Option<String> {
+    if failure.kind() == FailureKind::StreamClosed {
+        return None;
+    }
+    failure
+        .detail()
+        .map(str::trim)
+        .filter(|detail| !detail.is_empty())
+        .map(str::to_owned)
+}
+
+/// The buttons of a failure: `retry` first, except when the pod or container is gone (`NotFound`):
+/// starting a session in something that no longer exists cannot work, so only Close is offered.
+fn recovery_actions(failure: &Failure, retry: BannerAction) -> Vec<BannerAction> {
+    if failure.kind() == FailureKind::PodGone {
+        vec![BannerAction::CloseTab]
+    } else {
+        vec![retry]
+    }
 }
