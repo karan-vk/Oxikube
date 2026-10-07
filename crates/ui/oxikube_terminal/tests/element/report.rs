@@ -221,3 +221,48 @@ fn shift_wheel_scrolls_the_history_even_while_reporting(cx: &mut TestAppContext)
     assert_eq!(offset, 2);
     assert_eq!(h.written(), b"");
 }
+
+#[gpui::test]
+fn motion_outside_the_element_is_not_reported(cx: &mut TestAppContext) {
+    let mut h = harness(cx, 480., 130., FONT_SIZE);
+    h.output("\x1b[?1003h\x1b[?1006h");
+    // Beyond the window (so beyond the element): clamped to an edge cell before the fix.
+    for outside in [point(px(600.), px(50.)), point(px(100.), px(400.))] {
+        h.window
+            .simulate_mouse_move(outside, None, Modifiers::none());
+    }
+    assert_eq!(
+        text(h.written()),
+        "",
+        "the pointer is not over the terminal"
+    );
+    // Over it, motion reports as before, and the cell it left from reports again on return.
+    h.window
+        .simulate_mouse_move(Harness::at(0, 5), None, Modifiers::none());
+    h.window
+        .simulate_mouse_move(point(px(600.), px(50.)), None, Modifiers::none());
+    h.window
+        .simulate_mouse_move(Harness::at(0, 5), None, Modifiers::none());
+    assert_eq!(text(h.written()), "\x1b[<35;6;1M\x1b[<35;6;1M");
+}
+
+#[gpui::test]
+fn a_drag_keeps_reporting_outside_the_element(cx: &mut TestAppContext) {
+    let mut h = harness(cx, 480., 130., FONT_SIZE);
+    h.output("\x1b[?1002h\x1b[?1006h");
+    h.window
+        .simulate_mouse_down(Harness::at(1, 1), MouseButton::Left, Modifiers::none());
+    h.window.simulate_mouse_move(
+        point(px(600.), px(50.)),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
+    h.window.simulate_mouse_up(
+        point(px(600.), px(50.)),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
+    let written = text(h.written());
+    assert!(written.starts_with("\x1b[<0;2;2M\x1b[<32;"), "{written:?}");
+    assert!(written.ends_with('m'), "{written:?}");
+}

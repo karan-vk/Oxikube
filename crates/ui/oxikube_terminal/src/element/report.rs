@@ -99,10 +99,26 @@ impl Pointer {
 
     /// Reports a drag (a reported button is down) or bare motion, once per cell. Returns whether
     /// the pointer belongs to the process at the moment (so selection and link hover stay out).
-    pub(super) fn report_move(&self, event: &MouseMoveEvent, cx: &mut App) -> bool {
+    ///
+    /// A drag keeps reporting when the pointer leaves the element (the button is the process's
+    /// until it comes up); bare motion is only for the pointer over the element, since GPUI hands
+    /// every mouse move in the window to every listener.
+    pub(super) fn report_move(
+        &self,
+        event: &MouseMoveEvent,
+        window: &Window,
+        cx: &mut App,
+    ) -> bool {
         let held = self.state.0.borrow().reported;
-        if held.is_none() && !self.reporting(event.modifiers) {
-            return false;
+        if held.is_none() {
+            if !self.reporting(event.modifiers) {
+                return false;
+            }
+            if !self.hitbox.is_hovered(window) {
+                // Back over the element it reports its cell again, even the one it left from.
+                self.state.0.borrow_mut().report_cell = None;
+                return false;
+            }
         }
         let (row, column, _) = self.cell(event.position);
         {

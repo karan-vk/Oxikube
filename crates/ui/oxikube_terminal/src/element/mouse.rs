@@ -40,7 +40,7 @@ pub(super) struct Pointer {
     pub(super) focus: FocusHandle,
     dispatcher: Option<Rc<dyn CommandDispatcher>>,
     paths: PathLinks,
-    hitbox: Hitbox,
+    pub(super) hitbox: Hitbox,
     origin: Point<Pixels>,
     metrics: CellMetrics,
 }
@@ -130,7 +130,7 @@ impl Pointer {
     }
 
     fn moved(&self, event: &MouseMoveEvent, window: &mut Window, cx: &mut App) {
-        if self.report_move(event, cx) {
+        if self.report_move(event, window, cx) {
             return;
         }
         let dragging = self.state.0.borrow().dragging;

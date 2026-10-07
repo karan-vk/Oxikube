@@ -257,3 +257,23 @@ fn an_empty_clipboard_pastes_nothing(cx: &mut TestAppContext) {
     h.window.dispatch_action(oxikube_terminal::input::Paste);
     assert_eq!(h.written(), b"");
 }
+
+#[gpui::test]
+fn the_bus_commands_reach_the_focused_terminal(cx: &mut TestAppContext) {
+    // What `terminal::Copy` / `terminal::Paste` on the bus end in: the window runs the queued
+    // command, which dispatches the action to whatever has focus (here the terminal).
+    use oxikube_terminal::input::{TerminalInputCommand, run};
+    set_clipboard(cx, "before");
+    let mut h = harness(cx, 480., 130., FONT_SIZE);
+    select_hello(&mut h);
+    h.window
+        .update(|window, cx| run(TerminalInputCommand::Copy, window, cx));
+    h.window.run_until_parked();
+    assert_eq!(clipboard(cx).as_deref(), Some("hello"));
+
+    set_clipboard(cx, "echo hi");
+    h.window
+        .update(|window, cx| run(TerminalInputCommand::Paste, window, cx));
+    h.window.run_until_parked();
+    assert_eq!(h.written(), b"echo hi");
+}
