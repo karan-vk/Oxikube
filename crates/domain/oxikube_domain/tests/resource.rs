@@ -1,5 +1,7 @@
 //! Tests for `oxikube_domain::resource` on Pod, Deployment and CR fixtures.
 
+use std::sync::Arc;
+
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::{ObjectMeta, Resource, ResourceError};
 use serde_json::{Value, json};
@@ -369,7 +371,7 @@ fn a_clone_shares_the_json_tree() {
     let r = load(POD);
     let copy = r.clone();
     assert!(
-        std::sync::Arc::ptr_eq(&r.json, &copy.json),
+        Arc::ptr_eq(&r.json, &copy.json),
         "a clone must not copy the JSON: a feed's cache and the store hold the same object"
     );
     assert_eq!(copy, r);
@@ -380,14 +382,14 @@ fn json_mut_copies_a_shared_tree_and_leaves_the_clone_alone() {
     let mut r = load(POD);
     let copy = r.clone();
     r.json_mut()["spec"]["nodeName"] = json!("elsewhere");
-    assert!(!std::sync::Arc::ptr_eq(&r.json, &copy.json));
+    assert!(!Arc::ptr_eq(&r.json, &copy.json));
     assert_eq!(r.get_str("/spec/nodeName"), Some("elsewhere"));
     assert_ne!(copy.get_str("/spec/nodeName"), Some("elsewhere"));
 
     // The only holder edits in place.
-    let before = std::sync::Arc::as_ptr(&r.json);
+    let before = Arc::as_ptr(&r.json);
     r.json_mut()["spec"]["nodeName"] = json!("again");
-    assert_eq!(std::sync::Arc::as_ptr(&r.json), before);
+    assert_eq!(Arc::as_ptr(&r.json), before);
 }
 
 #[test]
@@ -400,7 +402,7 @@ fn stripping_a_shared_tree_leaves_the_clone_alone() {
     // Nothing to strip: the tree stays shared rather than being copied for nothing.
     let mut stripped = r.clone();
     assert!(!stripped.strip_managed_fields());
-    assert!(std::sync::Arc::ptr_eq(&r.json, &stripped.json));
+    assert!(Arc::ptr_eq(&r.json, &stripped.json));
 }
 
 #[test]
