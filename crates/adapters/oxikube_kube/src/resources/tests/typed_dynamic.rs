@@ -85,7 +85,7 @@ async fn kinds_without_a_bundled_type_fall_back_to_dynamic() {
         .list(&widget_gvk(), Some("default"), &ListOptions::default())
         .await
         .unwrap();
-    assert_eq!(page.items[0].json, widget);
+    assert_eq!(*page.items[0].json, widget);
 }
 
 #[tokio::test]

@@ -16,7 +16,7 @@ fn pod_gvk() -> Gvk {
 
 /// `base` with `edit` applied to its JSON.
 fn edited(base: Resource, edit: impl FnOnce(&mut Value)) -> Resource {
-    let mut json = base.json;
+    let mut json = base.into_json();
     edit(&mut json);
     Resource::from_json(json).expect("still a resource")
 }

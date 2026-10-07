@@ -234,7 +234,7 @@ mod tests {
         let choices = choices_of(&pod);
         assert_eq!(default_container(&pod, &choices).as_deref(), Some("app"));
         let mut plain = pod;
-        plain.json["metadata"]["annotations"] = json!({});
+        plain.json_mut()["metadata"]["annotations"] = json!({});
         assert_eq!(
             default_container(&plain, &choices).as_deref(),
             Some("sidecar")

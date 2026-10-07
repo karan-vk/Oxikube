@@ -472,7 +472,11 @@ fn object_from_body(object: &Value, namespace: Option<&str>) -> OxiResult<Resour
     if res.meta.namespace.is_none() {
         if let Some(ns) = namespace {
             res.meta.namespace = Some(Arc::from(ns));
-            if let Some(meta) = res.json.get_mut("metadata").and_then(Value::as_object_mut) {
+            if let Some(meta) = res
+                .json_mut()
+                .get_mut("metadata")
+                .and_then(Value::as_object_mut)
+            {
                 meta.insert("namespace".into(), Value::String(ns.to_owned()));
             }
         }

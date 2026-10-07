@@ -82,7 +82,7 @@ impl DetailView {
             .as_deref()
             .and_then(|object| object.resource())
             .filter(|resource| !resource.is_partial());
-        from_feed.or(self.full.resource()).map(|r| &r.json)
+        from_feed.or(self.full.resource()).map(|r| &*r.json)
     }
 
     /// Reads the CRD again after the object changed: its versions, the one shown (kept when it is

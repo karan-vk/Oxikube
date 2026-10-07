@@ -52,7 +52,7 @@ pub fn mask_secret_with(resource: &mut Resource, placeholder: Option<&str>) -> O
         return None;
     }
     let names = keys(resource);
-    if let Some(object) = resource.json.as_object_mut() {
+    if let Some(object) = resource.json_mut().as_object_mut() {
         for field in ["data", "stringData"] {
             if let Some(map) = object.get_mut(field).and_then(|v| v.as_object_mut()) {
                 for value in map.values_mut() {
