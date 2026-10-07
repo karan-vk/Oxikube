@@ -240,11 +240,11 @@ pub fn compare(
     for (scenario, result) in &report.scenarios {
         let base = os.and_then(|o| o.scenarios.get(scenario));
         match (result.status, base) {
-            (Status::NotAvailable, None) => rows.push(Row::note(
+            (Status::Unavailable, None) => rows.push(Row::note(
                 scenario,
                 "-",
                 Outcome::Skipped(format!(
-                    "not available yet ({}); enabled by {}",
+                    "unavailable: {}; enabled by {}",
                     result.reason.as_deref().unwrap_or("no reason given"),
                     if result.enabled_by.is_empty() {
                         "-".to_owned()
@@ -253,7 +253,7 @@ pub fn compare(
                     }
                 )),
             )),
-            (Status::NotAvailable, Some(_)) => rows.push(Row::note(
+            (Status::Unavailable, Some(_)) => rows.push(Row::note(
                 scenario,
                 "-",
                 Outcome::MissingInRun(format!(
@@ -365,7 +365,7 @@ mod tests {
                             launches: BTreeMap::new(),
                         },
                         None => ScenarioResult {
-                            status: Status::NotAvailable,
+                            status: Status::Unavailable,
                             reason: Some("no view".into()),
                             enabled_by: vec!["E11-S03 #158".into()],
                             samples: 0,
