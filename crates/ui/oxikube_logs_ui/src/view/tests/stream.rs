@@ -88,7 +88,7 @@ fn dropped_lines_show_the_truncated_marker_on_top(cx: &mut TestAppContext) {
 fn an_ended_stream_has_its_state_row_at_the_bottom(cx: &mut TestAppContext) {
     let mut fx = Fx::new(cx);
     // The pod ran to its end: its stream ends, and the row says why (E08-S07).
-    let mut done = super::fixture::pod().json;
+    let mut done = super::fixture::pod().into_json();
     done["status"]["phase"] = serde_json::json!("Succeeded");
     fx.ports
         .resources

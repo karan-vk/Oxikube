@@ -100,7 +100,7 @@ async fn create_replace_and_the_three_patch_kinds_round_trip() {
         json!({"b": "2", "c": "3", "d": "4"})
     );
 
-    let mut next = json_patched.json.clone();
+    let mut next = (*json_patched.json).clone();
     next["data"] = json!({"only": "this"});
     let replaced = r
         .replace(&configmap_gvk(), ns, "cm", &next, &write)
@@ -135,7 +135,7 @@ async fn replace_with_a_stale_resource_version_is_a_stale_version_conflict() {
     .await
     .expect("concurrent edit");
 
-    let mut stale = first.json.clone();
+    let mut stale = (*first.json).clone();
     stale["data"]["a"] = json!("mine");
     let err = r
         .replace(&configmap_gvk(), ns, "cm", &stale, &write)

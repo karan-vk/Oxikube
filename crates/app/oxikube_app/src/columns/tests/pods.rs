@@ -112,7 +112,7 @@ fn status_tones_follow_meaning() {
     assert_eq!(tone(&fx::pod_image_pull_backoff()), Tone::Error);
     assert_eq!(tone(&fx::pod_oom_killed()), Tone::Error);
     let unknown = pod().running().build();
-    let mut json = unknown.json;
+    let mut json = unknown.into_json();
     json["status"]["containerStatuses"][0]["state"] =
         json!({"terminated": {"reason": "ContainerStatusUnknown", "exitCode": 137}});
     let unknown = Resource::from_json(json).unwrap();

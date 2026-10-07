@@ -20,7 +20,7 @@ fn press_shell(f: &mut Fixture, pod: Resource) {
 }
 
 fn annotated(pod: Resource, default: &str) -> Resource {
-    let mut json = pod.json;
+    let mut json = pod.into_json();
     json["metadata"]["annotations"] = json!({ DEFAULT_CONTAINER_ANNOTATION: default });
     Resource::from_json(json).expect("a pod")
 }

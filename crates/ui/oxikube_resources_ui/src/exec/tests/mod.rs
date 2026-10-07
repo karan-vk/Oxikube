@@ -31,7 +31,7 @@ pub(super) fn pod_with(ns: &str, name: &str, containers: &[&str]) -> Resource {
         })
         .collect();
     let mut resource = oxikube_testkit::pod().namespace(ns).name(name).build();
-    let mut json = resource.json.clone();
+    let mut json = (*resource.json).clone();
     json["spec"]["containers"] = Value::Array(specs);
     json["status"]["containerStatuses"] = Value::Array(statuses);
     json["metadata"]["resourceVersion"] = json!("1");

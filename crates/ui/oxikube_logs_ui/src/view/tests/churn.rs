@@ -22,7 +22,7 @@ use crate::view::Recovery;
 /// `shop/<name>` as the fixture's pod (containers `app` and `metrics`), labelled `app=web` and
 /// owned by the ReplicaSet `rs` of the `web` Deployment.
 fn replica(name: &str, rs: &str) -> Resource {
-    let mut json = pod().json;
+    let mut json = pod().into_json();
     json["metadata"]["name"] = json!(name);
     json["metadata"]["uid"] = json!(format!("uid-{name}"));
     json["metadata"]["labels"] = json!({"app": "web"});

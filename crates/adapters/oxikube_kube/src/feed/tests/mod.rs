@@ -7,6 +7,7 @@ mod metadata;
 mod perf;
 mod retry;
 mod server;
+mod sharing;
 mod streaming;
 
 use std::collections::BTreeMap;

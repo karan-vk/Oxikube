@@ -104,7 +104,7 @@ async fn custom_resources_keep_every_field() {
         .await
         .unwrap();
     assert_eq!(page.items[0].kind, widget_gvk());
-    assert_eq!(page.items[0].json, widget);
+    assert_eq!(*page.items[0].json, widget);
     assert_eq!(page.items[0].meta.finalizers.len(), 1);
 }
 

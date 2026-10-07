@@ -3,8 +3,9 @@
 //! Kubernetes has 200+ kinds and arbitrary CRDs, so the domain does not model
 //! them one by one (ADR 0005). A [`Resource`] keeps the handful of metadata
 //! fields every screen needs in a typed [`ObjectMeta`] and the whole object as
-//! an untouched [`serde_json::Value`]. CRDs and unknown kinds therefore work
-//! with no extra code, and `k8s-openapi` never reaches the domain.
+//! an untouched [`serde_json::Value`], shared between clones. CRDs and unknown
+//! kinds therefore work with no extra code, and `k8s-openapi` never reaches the
+//! domain.
 //!
 //! Field reads go through the JSON-pointer accessors ([`Resource::get`],
 //! [`Resource::get_str`], [`Resource::get_i64`], [`Resource::get_bool`]); they
@@ -176,7 +177,9 @@ impl ObjectMeta {
 /// `json` is kept exactly as received (the workspace enables `serde_json`'s
 /// `preserve_order`, so key order survives for the YAML view). `meta` and `kind`
 /// are derived from it by [`Resource::from_json`]; if you mutate `json`
-/// directly, rebuild the `Resource` to keep them in sync.
+/// (through [`Resource::json_mut`]), rebuild the `Resource` to keep them in sync.
+///
+/// Cloning is cheap: the clone shares `json` (an [`Arc`]) and copies only `meta`.
 ///
 /// `json` may hold base64 Secret data. See the [module docs](self#secrets).
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
@@ -186,7 +189,12 @@ pub struct Resource {
     /// Group-version-kind from `apiVersion` + `kind`.
     pub kind: Gvk,
     /// The object as received: complete, unless [`partial`](Self::partial) is set.
-    pub json: Value,
+    ///
+    /// Shared, not copied, when the `Resource` is cloned: a watch feed's cache and the
+    /// resource store hold the same tree (a `Value` tree costs several times its JSON, so a
+    /// second copy of 10 000 pods is about 200 MB; #508). Mutate through
+    /// [`json_mut`](Self::json_mut), which copies the tree only while it is shared.
+    pub json: Arc<Value>,
     /// Set on metadata-only objects (`PartialObjectMetadata`): `json` then holds `apiVersion`,
     /// `kind` and `metadata` but no `spec`, `status` or data, so a view must not render it as a
     /// complete object. Read through [`is_partial`](Self::is_partial); set by
@@ -242,7 +250,7 @@ impl Resource {
         Ok(Self {
             meta,
             kind,
-            json,
+            json: Arc::new(json),
             partial: false,
         })
     }
@@ -296,10 +304,28 @@ impl Resource {
     /// key order) untouched. `meta` is unaffected. Returns whether anything was
     /// removed.
     pub fn strip_managed_fields(&mut self) -> bool {
-        self.json
+        let has = self
+            .json
+            .get("metadata")
+            .and_then(Value::as_object)
+            .is_some_and(|m| m.contains_key("managedFields"));
+        has && self
+            .json_mut()
             .get_mut("metadata")
             .and_then(Value::as_object_mut)
             .is_some_and(|m| m.shift_remove("managedFields").is_some())
+    }
+
+    /// The JSON for editing: copied first if another clone of this `Resource` shares it
+    /// ([`Arc::make_mut`]), so the change never shows through those clones. `meta` and `kind`
+    /// are not updated; rebuild the `Resource` if the edit touches them.
+    pub fn json_mut(&mut self) -> &mut Value {
+        Arc::make_mut(&mut self.json)
+    }
+
+    /// The JSON by value, without a copy when this is the only holder of the tree.
+    pub fn into_json(self) -> Value {
+        Arc::unwrap_or_clone(self.json)
     }
 
     /// Render `json` as YAML.
