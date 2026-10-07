@@ -22,8 +22,9 @@
 //! A terminal in focus gets every plain `ctrl-` chord (`ctrl-w`, `ctrl-k`, `ctrl-q`, ...): GPUI
 //! matches bindings before the focused element sees the key, so a binding in `Workspace` or with
 //! no context on one of those keys never reaches the shell. Off macOS use `ctrl-shift-<key>` for
-//! application shortcuts, or scope the binding `!Terminal` (the negation looks at the whole
-//! context stack, so it is off whenever a terminal is focused). The `keymap_shadowing` test in
+//! application shortcuts, or unbind (`null`) it in a later `Terminal` section (not `!Terminal`: GPUI
+//! evaluates a negation false on an empty context stack, so the key would be dead while nothing
+//! is focused). The `keymap_shadowing` test in
 //! `oxikube_terminal` checks the shipped defaults.
 //!
 //! Every context built with [`KeyContextBuilder`] also carries `os == macos|linux|windows`, so a

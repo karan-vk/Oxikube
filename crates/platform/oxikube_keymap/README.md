@@ -51,12 +51,13 @@ A focused terminal sends every plain `ctrl-` chord to its shell (`ctrl-w` delete
 `ctrl-k` kills the line, `ctrl-q`, `ctrl-2..8`, `ctrl--`, `ctrl-alt-<letter>`, ...), and GPUI
 matches bindings before the terminal sees the key. So an application shortcut in the `linux` /
 `windows` defaults (or in the workspace's interim bindings) must be `ctrl-shift-<key>` (the
-macOS `cmd` counterpart), or be scoped `!Terminal` (the negation checks the whole context stack,
-so it is off whenever a terminal is focused). The `keymap_shadowing` test in `oxikube_terminal`
+macOS `cmd` counterpart), or be unbound (`null`) in a `Terminal` section after it (not scoped `!Terminal`: GPUI
+evaluates a negation false on an empty context stack, so the key would be dead while nothing is
+focused). The `keymap_shadowing` test in `oxikube_terminal`
 sweeps every key the terminal encodes (`mappings::to_esc_str`) against the shipped keymap and
 fails on a shadowed one. The shipped defaults: `ctrl-shift-w` close tab, `ctrl-shift-b` / `-j` /
 `-r` left / bottom / right dock, `ctrl-shift-k <arrow>` split, `ctrl-shift-q` quit,
-`ctrl-shift-1..9` cluster tab, zoom `ctrl-=` / `ctrl--` / `ctrl-0` scoped `!Terminal`.
+`ctrl-shift-1..9` cluster tab, zoom `ctrl-=` / `ctrl--` / `ctrl-0` unbound in `Terminal`.
 
 `ActionRegistry::from_app(cx)` lists names by namespace; `bindings_for_action_name(cx, name, data)`
 lists an action's effective bindings (for the palette, E11).

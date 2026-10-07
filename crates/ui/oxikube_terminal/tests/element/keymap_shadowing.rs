@@ -9,7 +9,7 @@
 //! the menu bindings) and asks GPUI's own matcher, from inside the context stack of a terminal
 //! in a pane and in the bottom dock, about every key `to_esc_str` encodes.
 
-use gpui::{Action as _, KeyBinding, KeyContext, Keymap, Keystroke, actions};
+use gpui::{Action as _, KeyBinding, KeyContext, Keymap, Keystroke, NoAction, actions};
 use oxikube_assets::{KeymapPlatform, default_keymap};
 use oxikube_keymap::file::{KeymapAction, parse_keymap};
 use oxikube_keymap::layer::KeymapLayer;
@@ -43,14 +43,19 @@ fn installed_bindings(platform: KeymapPlatform) -> Vec<KeyBinding> {
     bindings.extend(menu_bindings(false));
     for (_, section) in &parsed.sections {
         for (keys, value) in &section.bindings {
-            // `null` unbinds; nothing to shadow with.
-            if let Ok(KeymapAction::Action { .. }) = KeymapAction::from_json(value) {
-                let context = section.context_expr();
-                bindings.push(if context.is_some_and(|c| c.contains("Terminal")) {
-                    KeyBinding::new(keys, TerminalProbe, context)
-                } else {
-                    KeyBinding::new(keys, Probe, context)
-                });
+            let context = section.context_expr();
+            match KeymapAction::from_json(value) {
+                // `null` is a `NoAction` binding (as `oxikube_keymap` builds it): it suppresses
+                // the bindings it out-ranks, which is how the zoom keys are off in a terminal.
+                Ok(KeymapAction::Unbind) => bindings.push(KeyBinding::new(keys, NoAction, context)),
+                Ok(KeymapAction::Action { .. }) => {
+                    bindings.push(if context.is_some_and(|c| c.contains("Terminal")) {
+                        KeyBinding::new(keys, TerminalProbe, context)
+                    } else {
+                        KeyBinding::new(keys, Probe, context)
+                    });
+                }
+                Err(_) => {}
             }
         }
     }
@@ -185,7 +190,7 @@ fn no_binding_shadows_a_key_the_terminal_forwards() {
     assert!(
         shadowed.is_empty(),
         "these bindings shadow keys the terminal sends to its process; move them to \
-         ctrl-shift-<key> or scope them `!Terminal`:\n{}",
+         ctrl-shift-<key> or unbind them in the `Terminal` context:\n{}",
         shadowed.join("\n")
     );
 }

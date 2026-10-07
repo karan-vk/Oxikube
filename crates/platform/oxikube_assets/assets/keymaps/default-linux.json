@@ -24,9 +24,10 @@
     }
   },
   {
-    // Zoom. `ctrl--` is readline's undo, so the plain chords are off while a terminal has the
-    // focus (the View menu and the palette still zoom there).
-    "context": "!Terminal",
+    // Zoom. `ctrl--` is readline's undo, so the plain chords are unbound again in the `Terminal`
+    // section below while a terminal has the focus (the View menu and the palette still zoom
+    // there). Not `!Terminal`: GPUI evaluates a negation false on an empty context stack, which
+    // would leave the keys dead while nothing is focused.
     "bindings": {
       "ctrl-=": "view::ZoomIn",
       "ctrl-+": "view::ZoomIn",
@@ -222,7 +223,12 @@
       "shift-pageup": "terminal::ScrollPageUp",
       "shift-pagedown": "terminal::ScrollPageDown",
       "shift-up": "terminal::ScrollLineUp",
-      "shift-down": "terminal::ScrollLineDown"
+      "shift-down": "terminal::ScrollLineDown",
+      // The shell owns the plain ctrl chords of the zoom shortcuts (see the Zoom section).
+      "ctrl-=": null,
+      "ctrl-+": null,
+      "ctrl--": null,
+      "ctrl-0": null
     }
   },
   {

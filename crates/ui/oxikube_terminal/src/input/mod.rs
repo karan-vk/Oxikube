@@ -31,7 +31,7 @@
 //! `-j` / `-r` toggle the docks, `ctrl-shift-k <arrow>` splits, `ctrl-shift-q` quits,
 //! `ctrl-shift-1..9` switches cluster tab), never on the plain `ctrl-` chords the table above
 //! forwards (`ctrl-w`, `ctrl-k`, `ctrl-b`, `ctrl-j`, `ctrl-q`, `ctrl-2..8`, `ctrl--`). The UI
-//! zoom chords (`ctrl-=`, `ctrl--`, `ctrl-0`) are scoped `!Terminal`. `ctrl--` is readline's
+//! zoom chords (`ctrl-=`, `ctrl--`, `ctrl-0`) are unbound (`null`) in the `Terminal` context. `ctrl--` is readline's
 //! undo (`0x1f`). The `keymap_shadowing` test (`tests/element`) sweeps every key
 //! [`to_esc_str`](crate::mappings::to_esc_str) encodes against the keymap an off-macOS build
 //! installs and fails when a binding shadows one, so a new global shortcut cannot regress this.

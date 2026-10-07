@@ -204,6 +204,41 @@ fn zoom_and_new_window_are_bound_on_every_platform() {
     }
 }
 
+/// Off macOS the zoom keys work with nothing focused (an empty key context stack) and are off in a
+/// focused terminal, whose shell owns `ctrl--`. A `!Terminal` scope would fail the first half:
+/// GPUI evaluates a negation false on an empty stack.
+#[test]
+fn off_macos_zoom_keys_work_everywhere_but_in_a_terminal() {
+    use crate::session::{ZoomIn, ZoomOut, ZoomReset};
+    use gpui::{KeyContext, Keymap, Keystroke};
+    let keymap = Keymap::new(default_bindings(false));
+    let terminal = [
+        KeyContext::parse("Workspace").unwrap(),
+        KeyContext::parse("Terminal").unwrap(),
+    ];
+    for (chord, action) in [
+        ("ctrl-=", &ZoomIn as &dyn gpui::Action),
+        ("ctrl-+", &ZoomIn),
+        ("ctrl--", &ZoomOut),
+        ("ctrl-0", &ZoomReset),
+    ] {
+        let key = [Keystroke::parse(chord).unwrap()];
+        for stack in [&[][..], &terminal[..1]] {
+            let (bound, _) = keymap.bindings_for_input(&key, stack);
+            assert!(
+                bound.iter().any(|b| b.action().partial_eq(action)),
+                "{chord} zooms with {} contexts",
+                stack.len()
+            );
+        }
+        let (bound, pending) = keymap.bindings_for_input(&key, &terminal);
+        assert!(
+            bound.is_empty() && !pending,
+            "{chord} is the shell's in a terminal"
+        );
+    }
+}
+
 fn bounds() -> WindowBounds {
     WindowBounds::Windowed(Bounds::new(gpui::point(px(0.), px(0.)), DEFAULT_SIZE))
 }
