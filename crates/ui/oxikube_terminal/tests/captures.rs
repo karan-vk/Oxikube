@@ -3,7 +3,7 @@
 //! xterm-256color pty, committed under `tests/captures/` (`record.py` makes them), parsed by
 //! [`TermGrid`] and asserted cell by cell: text, alternate screen, colours, bold, inverse video,
 //! box-drawing borders and wide glyphs. The same bytes are painted by the screenshot suite
-//! (`tests/screenshot/programs.rs`), so a parser regression fails here and a paint regression
+//! (`tests/screenshot_programs.rs`), so a parser regression fails here and a paint regression
 //! there.
 //!
 //! The recordings never pass through a process: the test needs no `vim` and no cluster. A live
