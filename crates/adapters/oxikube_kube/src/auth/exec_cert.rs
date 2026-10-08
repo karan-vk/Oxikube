@@ -314,10 +314,14 @@ mod tests {
         ));
         exec.provide_cluster_info = true;
         exec.cluster = Some(ExecAuthCluster::default());
-        exec.env = Some(vec![HashMap::from([
-            ("name".to_owned(), "FROM_CONFIG".to_owned()),
-            ("value".to_owned(), "yes".to_owned()),
-        ])]);
+        let var = |name: &str, value: &str| {
+            HashMap::from([
+                ("name".to_owned(), name.to_owned()),
+                ("value".to_owned(), value.to_owned()),
+            ])
+        };
+        // DROPPED is set for the child, so it is only absent if `drop_env` is applied.
+        exec.env = Some(vec![var("FROM_CONFIG", "yes"), var("DROPPED", "leaked")]);
         exec.drop_env = Some(vec!["DROPPED".into()]);
         assert!(matches!(run(&exec), Ok(PluginOutput::Identity(_))));
     }
