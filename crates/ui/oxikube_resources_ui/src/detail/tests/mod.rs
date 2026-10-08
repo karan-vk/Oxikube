@@ -3,6 +3,7 @@
 //! session manager and store, a recording dispatcher, and the real `ResourceViews` opening the
 //! drawer in a cluster tab. No cluster, no disk, no threads.
 
+mod ages;
 mod conditions;
 mod describe;
 pub(crate) mod fixture;
