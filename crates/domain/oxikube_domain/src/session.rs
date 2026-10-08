@@ -24,10 +24,12 @@
 //! AuthRequired  Disconnect   -> Disconnected   (give up)
 //! Ready         Healthy      -> Ready          (probe ok, no change)
 //! Ready         Unhealthy    -> Degraded
+//! Ready         AuthNeeded   -> AuthRequired   (credentials rejected while connected)
 //! Ready         Failed       -> Error
 //! Ready         Disconnect   -> Disconnected
 //! Degraded      Healthy      -> Ready          (recovered)
 //! Degraded      Unhealthy    -> Degraded       (still failing)
+//! Degraded      AuthNeeded   -> AuthRequired   (credentials rejected while connected)
 //! Degraded      Failed       -> Error
 //! Degraded      Disconnect   -> Disconnected
 //! Error         Connect      -> Connecting     (retry)
@@ -42,6 +44,10 @@
 //!   `Ready + Healthy` and `Degraded + Unhealthy` are legal self-transitions.
 //! * `Ready -> Error` is allowed directly (the connection died between probes)
 //!   in addition to the `Ready -> Degraded -> Error` path.
+//! * `Ready` / `Degraded` + `AuthNeeded` -> `AuthRequired`: a health probe whose
+//!   credentials were revoked or expired for good needs the user, not a reconnect
+//!   loop, so it lands where a failed connect with the same 401 would (E06-F440).
+//!   There is still no `Error -> Ready` edge: recovering from `Error` is a `Connect`.
 //! * Reasons are plain strings for now (an `ErrorKind` can join them once the
 //!   error taxonomy is serialisable) and must never contain secrets.
 
@@ -113,6 +119,7 @@ impl SessionPhase {
             (P::Ready, E::Healthy) => Some(P::Ready),
             (P::Ready, E::Unhealthy) => Some(P::Degraded),
             (P::Ready, E::Failed) => Some(P::Error),
+            (P::Ready | P::Degraded, E::AuthNeeded) => Some(P::AuthRequired),
             (P::Degraded, E::Healthy) => Some(P::Ready),
             (P::Degraded, E::Unhealthy) => Some(P::Degraded),
             (P::Degraded, E::Failed) => Some(P::Error),
@@ -632,10 +639,12 @@ mod tests {
             (P::AuthRequired, E::Disconnect, P::Disconnected),
             (P::Ready, E::Healthy, P::Ready),
             (P::Ready, E::Unhealthy, P::Degraded),
+            (P::Ready, E::AuthNeeded, P::AuthRequired),
             (P::Ready, E::Failed, P::Error),
             (P::Ready, E::Disconnect, P::Disconnected),
             (P::Degraded, E::Healthy, P::Ready),
             (P::Degraded, E::Unhealthy, P::Degraded),
+            (P::Degraded, E::AuthNeeded, P::AuthRequired),
             (P::Degraded, E::Failed, P::Error),
             (P::Degraded, E::Disconnect, P::Disconnected),
             (P::Error, E::Connect, P::Connecting),
@@ -676,7 +685,7 @@ mod tests {
             }
         }
         assert_eq!(checked, 42);
-        assert_eq!(ALLOWED.len(), 17);
+        assert_eq!(ALLOWED.len(), 19);
     }
 
     #[test]
@@ -760,6 +769,24 @@ mod tests {
                 reason: "401 Unauthorized".into()
             }
         );
+    }
+
+    #[test]
+    fn revoked_credentials_while_connected_need_the_user() {
+        for start in [ClusterSessionState::Ready, ClusterSessionState::Degraded] {
+            let state = start
+                .transition(SessionEvent::AuthNeeded {
+                    reason: "token revoked".into(),
+                })
+                .unwrap();
+            assert_eq!(state.phase(), SessionPhase::AuthRequired);
+            assert_eq!(state.reason(), Some("token revoked"));
+            // Retry is a connect, as after a failed connect.
+            assert_eq!(
+                state.transition(SessionEvent::Connect),
+                Ok(ClusterSessionState::Connecting)
+            );
+        }
     }
 
     #[test]

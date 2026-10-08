@@ -15,6 +15,15 @@ use super::entry::Entry;
 use super::health::SessionHealth;
 use super::kinds;
 use super::manager::Shared;
+use super::reconnect::is_transient;
+
+/// Who started a connect: the user (any public method), or the automatic reconnect schedule
+/// with its epoch (`reconnect`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Origin {
+    User,
+    Auto(u64),
+}
 
 /// What a successful attempt produced.
 pub(super) struct Established {
@@ -31,12 +40,21 @@ impl Shared {
         self: &Arc<Self>,
         entry: Arc<Mutex<Entry>>,
         deadline: Option<Duration>,
+        origin: Origin,
     ) -> ClusterSessionState {
         let (request, registration, generation) = {
             let mut e = entry.lock();
             if !e.state.can_handle(SessionEventKind::Connect) {
                 // Connecting, Ready or Degraded: nothing to start.
                 return e.state.clone();
+            }
+            match origin {
+                // The user takes over from an automatic reconnect schedule (not from inside its
+                // task, so dropping it aborts the task).
+                Origin::User => e.reconnecting = None,
+                // The schedule was cancelled or replaced while it slept.
+                Origin::Auto(epoch) if !e.is_due(epoch) => return e.state.clone(),
+                Origin::Auto(_) => {}
             }
             // Legal (checked above) and releases nothing: no connection outside Ready/Degraded.
             if e.apply(SessionEvent::Connect, &self.updates).is_err() {
@@ -84,6 +102,14 @@ impl Shared {
             drop(outcome);
             return state;
         }
+        // An automatic attempt plans the next one, or ends the schedule, before its state is
+        // announced, so a listener re-reading the session sees both together.
+        let transient = matches!(
+            &outcome,
+            Ok(Err(error)) if error.kind() != ErrorKind::Auth
+                && is_transient(error.kind(), error.is_retryable())
+        );
+        e.after_attempt(transient, self.config.auto_reconnect);
         let event = match outcome {
             // Only `Entry::disconnect` aborts, and it also moves the session on.
             Err(Aborted) => return e.state.clone(),

@@ -11,6 +11,8 @@ use oxikube_ports::{
     ResourceWriter, TableFeedPort, WarningPort,
 };
 
+use super::reconnect::AutoReconnect;
+
 /// One cluster session as the manager saw it when the snapshot was taken.
 ///
 /// Cheap to clone. It does not update itself: subscribe to
@@ -36,6 +38,7 @@ pub struct ClusterSession {
     pub(super) prefs: Arc<ClusterPrefs>,
     pub(super) crd_watch: CrdWatchStatus,
     pub(super) ports: Option<ClusterPorts>,
+    pub(super) auto_reconnect: Option<AutoReconnect>,
 }
 
 impl ClusterSession {
@@ -83,6 +86,13 @@ impl ClusterSession {
     /// The connection phase.
     pub fn phase(&self) -> SessionPhase {
         self.state.phase()
+    }
+
+    /// The reconnect the manager will make by itself after a transient failure (E06-F440):
+    /// `Some` while the session waits in `Error` for it, or runs it (`Connecting`). `None` when
+    /// it will not reconnect without the user.
+    pub fn auto_reconnect(&self) -> Option<AutoReconnect> {
+        self.auto_reconnect
     }
 
     /// Whether the session is `Ready` or `Degraded`.

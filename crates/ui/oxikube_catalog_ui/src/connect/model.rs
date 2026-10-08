@@ -2,6 +2,7 @@
 //! so every state's content is tested without a window.
 
 use oxikube_app::ClusterSession;
+use oxikube_app::session::AutoReconnect;
 use oxikube_domain::HumanError;
 use oxikube_domain::session::ClusterSessionState;
 use oxikube_ports::ExecInteractivity;
@@ -25,6 +26,8 @@ pub struct ConnectInfo {
     pub terminal: bool,
     /// Whether the host can open the kubeconfig sources (E06-S05 provides it).
     pub sources: bool,
+    /// The reconnect the session manager will make by itself (E06-F440), if any.
+    pub auto_reconnect: Option<AutoReconnect>,
 }
 
 impl ConnectInfo {
@@ -47,6 +50,7 @@ impl ConnectInfo {
             exec: session.exec_interactivity(),
             terminal,
             sources,
+            auto_reconnect: session.auto_reconnect(),
         }
     }
 }
@@ -102,6 +106,8 @@ pub struct ErrorModel {
     pub details: String,
     /// Whether the "Edit kubeconfig sources" link is offered.
     pub sources: bool,
+    /// The line saying Oxikube reconnects by itself (E06-F440), when it will.
+    pub reconnect: Option<String>,
 }
 
 /// `Degraded`: the banner above the cluster's content.
@@ -182,10 +188,21 @@ impl ConnectViewModel {
                     title: info.title.clone(),
                     message: DisplayText::from_error(&human),
                     sources: info.sources,
+                    reconnect: info.auto_reconnect.map(reconnect_line),
                 })
             }
         }
     }
+}
+
+/// What the error card says about an automatic reconnect. The delay is counted from the failure
+/// (the card is not a countdown, so it never redraws by itself).
+fn reconnect_line(plan: AutoReconnect) -> String {
+    format!(
+        "Reconnecting automatically (attempt {}, {} s after the failure). Retry to try now.",
+        plan.attempt,
+        plan.delay.as_secs().max(1)
+    )
 }
 
 /// The text "Copy details" puts on the clipboard: enough for a bug report, nothing secret.

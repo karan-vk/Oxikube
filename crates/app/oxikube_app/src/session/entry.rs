@@ -13,6 +13,8 @@
 //! * `kind_watch` is `Some` only when connected, and `crd_watch` is `Watching` unless connected.
 //! * `generation` changes on every new attempt and whenever a connection is released, so
 //!   late results and health reports of an older connection are recognised and ignored.
+//! * `reconnecting` is `Some` only in `Error` or `Connecting` (an automatic reconnect schedule,
+//!   `reconnect`), and `disconnect` always ends it.
 
 use std::sync::Arc;
 
@@ -28,6 +30,7 @@ use oxikube_ports::{ClusterConnection, ClusterPrefs, CrdWatchStatus, ExecInterac
 use super::config::SessionOptions;
 use super::kinds::KindWatch;
 use super::model::ClusterSession;
+use super::reconnect::Reconnecting;
 use super::updates::{SessionChange, UpdateSender};
 
 /// A connection taken out of an entry. Drop it *after* releasing the entry lock: an
@@ -55,6 +58,10 @@ pub(super) struct Entry {
     /// Forwards the adapter's kind changes while connected (`Some` only then).
     pub(super) kind_watch: Option<KindWatch>,
     pub(super) crd_watch: CrdWatchStatus,
+    /// The automatic reconnect schedule after a transient failure (E06-F440).
+    pub(super) reconnecting: Option<Reconnecting>,
+    /// Counts schedules, so a cancelled one's task recognises it is stale.
+    pub(super) reconnect_epoch: u64,
 }
 
 impl Entry {
@@ -76,6 +83,8 @@ impl Entry {
             abort: None,
             kind_watch: None,
             crd_watch: CrdWatchStatus::Watching,
+            reconnecting: None,
+            reconnect_epoch: 0,
         }
     }
 
@@ -94,6 +103,7 @@ impl Entry {
             prefs: self.prefs.clone(),
             crd_watch: self.crd_watch.clone(),
             ports: self.connection.as_ref().map(|c| c.ports.clone()),
+            auto_reconnect: self.reconnecting.as_ref().map(|r| r.plan),
         }
     }
 
@@ -163,8 +173,11 @@ impl Entry {
     }
 
     /// Takes the connection and moves to `Disconnected` from wherever the session is.
-    /// Aborts an in-flight attempt. A no-op when already disconnected.
+    /// Aborts an in-flight attempt and ends an automatic reconnect schedule. A no-op (beyond
+    /// that) when already disconnected.
     pub(super) fn disconnect(&mut self, updates: &UpdateSender) -> Released {
+        // The user (or a dropped connect) ends any automatic reconnect schedule.
+        self.reconnecting = None;
         if let Some(abort) = self.abort.take() {
             abort.abort();
         }

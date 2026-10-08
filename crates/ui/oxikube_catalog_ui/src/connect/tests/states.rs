@@ -2,8 +2,8 @@
 //! widgets each state shows, in a real cluster tab.
 
 use gpui::TestAppContext;
-use oxikube_domain::OxiError;
 use oxikube_domain::session::{ClusterSessionState, SessionPhase};
+use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::{ExecInteractivity, HealthSignal};
 
 use super::fixture::{Dispatch, Fixture, Offers};
@@ -229,6 +229,8 @@ fn a_connection_that_dies_shows_the_error_and_a_reconnect_brings_it_back(cx: &mu
         &id("prod-eu"),
         HealthSignal::Failed {
             reason: format!("Authorization: Bearer {TOKEN} rejected"),
+            kind: ErrorKind::Network,
+            retryable: true,
         },
     );
     fx.vcx.run_until_parked();
@@ -238,6 +240,72 @@ fn a_connection_that_dies_shows_the_error_and_a_reconnect_brings_it_back(cx: &mu
     fx.click("connect-retry");
     assert_eq!(fx.phase("prod-eu"), SessionPhase::Ready);
     assert!(fx.drawn(PLACEHOLDER));
+}
+
+#[gpui::test]
+fn a_connection_lost_to_the_network_says_it_reconnects_by_itself(cx: &mut TestAppContext) {
+    let mut fx = Fixture::start(cx, &["prod-eu"], Dispatch::Run, Offers::default());
+    fx.connect("prod-eu");
+    // The manager schedules its reconnect on the Tokio runtime the adapter reports from. This
+    // one is never driven: the schedule stays planned, which is the state the card shows.
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    {
+        let _inside = runtime.enter();
+        fx.connector.report(
+            &id("prod-eu"),
+            HealthSignal::failed(&OxiError::network("connection reset by peer")),
+        );
+    }
+    fx.vcx.run_until_parked();
+    assert_eq!(fx.phase("prod-eu"), SessionPhase::Error);
+    assert!(fx.drawn("connect-error"));
+    assert!(
+        fx.drawn("connect-error-reconnect"),
+        "the card promises a reconnect"
+    );
+    assert!(fx.drawn("connect-retry"), "and Retry still tries at once");
+
+    // Retry takes over: the user's connect ends the schedule.
+    fx.click("connect-retry");
+    assert_eq!(fx.phase("prod-eu"), SessionPhase::Ready);
+    let session = fx.sessions.get(&id("prod-eu")).unwrap();
+    assert_eq!(session.auto_reconnect(), None);
+    drop(runtime);
+}
+
+#[gpui::test]
+fn a_permanent_failure_promises_no_reconnect(cx: &mut TestAppContext) {
+    let mut fx = Fixture::open(cx, &["prod-eu"]);
+    fx.connect("prod-eu");
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    {
+        let _inside = runtime.enter();
+        fx.connector.report(
+            &id("prod-eu"),
+            HealthSignal::failed(&OxiError::forbidden("/version is forbidden")),
+        );
+    }
+    fx.vcx.run_until_parked();
+    assert!(fx.drawn("connect-error"));
+    assert!(!fx.drawn("connect-error-reconnect"));
+}
+
+#[gpui::test]
+fn revoked_credentials_while_connected_ask_to_sign_in(cx: &mut TestAppContext) {
+    let mut fx = Fixture::open(cx, &["prod-eu"]);
+    fx.connect("prod-eu");
+    fx.connector.report(
+        &id("prod-eu"),
+        HealthSignal::failed(&OxiError::auth("Unauthorized", false)),
+    );
+    fx.vcx.run_until_parked();
+    assert_eq!(fx.phase("prod-eu"), SessionPhase::AuthRequired);
+    assert!(fx.drawn("connect-auth"));
+    assert!(!fx.drawn(PLACEHOLDER));
 }
 
 #[gpui::test]

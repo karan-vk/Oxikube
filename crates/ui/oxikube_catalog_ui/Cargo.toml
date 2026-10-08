@@ -39,6 +39,9 @@ oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 serde_json.workspace = true
 tempfile.workspace = true
+# A runtime to enter while a health failure is reported: the session manager's automatic
+# reconnect (E06-F440) is a Tokio task, so the reconnecting error card needs one.
+tokio = { workspace = true, features = ["rt"] }
 
 [features]
 default = []

@@ -71,6 +71,8 @@ fn signal(n: u8) -> HealthSignal {
         1 => HealthSignal::Unhealthy,
         _ => HealthSignal::Failed {
             reason: "probe gave up".into(),
+            kind: oxikube_domain::ErrorKind::Timeout,
+            retryable: true,
         },
     }
 }

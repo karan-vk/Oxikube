@@ -16,6 +16,7 @@
 #![cfg(feature = "integration")]
 
 mod auth_required;
+mod auto_reconnect;
 mod clock;
 mod cluster;
 mod columns;

@@ -14,6 +14,7 @@ use oxikube_ports::{
 use parking_lot::{Mutex, RwLock};
 
 use super::config::{SessionManagerConfig, SessionOptions};
+use super::connect::Origin;
 use super::entry::{Entry, Released};
 use super::model::ClusterSession;
 use super::updates::{SessionChange, SessionUpdates, UpdateSender};
@@ -167,7 +168,7 @@ impl ClusterSessionManager {
             Some(entry) => entry,
             None => self.open_from_catalog(cluster).await?,
         };
-        Ok(self.shared.run_connect(entry, deadline).await)
+        Ok(self.shared.run_connect(entry, deadline, Origin::User).await)
     }
 
     /// Drops the connection (tearing down its feeds and health loop) and moves the
@@ -351,33 +352,6 @@ impl Shared {
             }
             None => false,
         })
-    }
-
-    /// Applies a health signal to a connected session. `generation` is the connection
-    /// the report is about (`None`: whatever is connected now).
-    pub(super) fn on_health(
-        &self,
-        cluster: &ClusterId,
-        generation: Option<u64>,
-        signal: HealthSignal,
-    ) -> bool {
-        let Some(entry) = self.entry(cluster) else {
-            return false;
-        };
-        let released = {
-            let mut e = entry.lock();
-            let current = generation.is_none_or(|g| g == e.generation);
-            if !current || !e.phase().is_connected() {
-                tracing::trace!(%cluster, ?signal, "health report ignored");
-                return false;
-            }
-            let Ok(released) = e.apply(signal.to_session_event(), &self.updates) else {
-                return false;
-            };
-            released
-        };
-        drop(released);
-        true
     }
 }
 

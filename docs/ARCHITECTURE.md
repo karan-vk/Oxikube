@@ -59,8 +59,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ClusterSessionManager` connects a context through `ClusterConnectorPort`, holds the returned
   `ClusterPorts` bundle per session, drives `ClusterSessionState` (auth failures to
   `AuthRequired`, transient ones retried with backoff on the `ClockPort`, health reports for
-  `Ready` ↔ `Degraded` → `Error`) and broadcasts `SessionUpdate`s; it spawns only the
-  per-connection forwarder of `DiscoveryPort::subscribe` events (a CRD added or removed becomes
+  `Ready` ↔ `Degraded` → `Error`, or `AuthRequired` for credentials rejected for good) and
+  broadcasts `SessionUpdate`s. After a health `Failed` with a transient cause (`Network`,
+  `Timeout`, retryable `Auth`) it reconnects by itself on the `SessionManagerConfig::auto_reconnect`
+  backoff (module `reconnect`, E06-F440; `ClusterSession::auto_reconnect` says what is planned,
+  any user connect / disconnect / close cancels it). It spawns two things: that reconnect
+  schedule, and the per-connection forwarder of `DiscoveryPort::subscribe` events (a CRD added or removed becomes
   `SessionChange::KindsChanged`, a refused CRD watch `CrdWatchChanged`; E03-F544), owned by the
   session entry and aborted when the connection is released (callers drive `connect` with
   `spawn_kube`, dropping it cancels the attempt). Per-cluster settings

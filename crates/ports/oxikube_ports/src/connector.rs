@@ -28,9 +28,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use oxikube_domain::OxiResult;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::session::SessionEvent;
+use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -66,19 +66,40 @@ pub enum HealthSignal {
     /// A probe (or feed) failed but the connection may recover: `Degraded`.
     Unhealthy,
     /// The connection is not coming back without a reconnect: `Error`.
+    ///
+    /// The cause tells the session manager what to do next (E06-F440): a transient one
+    /// (`Network`, `Timeout`, a retryable `Auth`) is reconnected automatically with backoff;
+    /// a non-retryable `Auth` (revoked or expired credentials) goes to `AuthRequired`;
+    /// anything else stays in `Error` until the user retries. Build it from the error with
+    /// [`HealthSignal::failed`].
     Failed {
-        /// What went wrong.
+        /// What went wrong: the error's `Display` (`"<kind label>: <message>"`).
         reason: String,
+        /// The kind of the failure that ended the probing.
+        kind: ErrorKind,
+        /// Whether retrying may fix it ([`OxiError::is_retryable`]).
+        retryable: bool,
     },
 }
 
 impl HealthSignal {
-    /// The session state-machine event this signal stands for.
+    /// `Failed` for `error`: its `Display` as the reason, its kind and retry flag as the cause.
+    /// The error's message must already be redacted (adapters build it that way).
+    pub fn failed(error: &OxiError) -> Self {
+        HealthSignal::Failed {
+            reason: error.to_string(),
+            kind: error.kind(),
+            retryable: error.is_retryable(),
+        }
+    }
+
+    /// The session state-machine event this signal stands for, before the session manager
+    /// routes a `Failed` by its cause (a non-retryable `Auth` becomes `AuthNeeded` there).
     pub fn to_session_event(&self) -> SessionEvent {
         match self {
             HealthSignal::Healthy => SessionEvent::Healthy,
             HealthSignal::Unhealthy => SessionEvent::Unhealthy,
-            HealthSignal::Failed { reason } => SessionEvent::Failed {
+            HealthSignal::Failed { reason, .. } => SessionEvent::Failed {
                 reason: reason.clone(),
             },
         }
@@ -231,14 +252,32 @@ mod tests {
             SessionEvent::Unhealthy
         );
         assert_eq!(
-            HealthSignal::Failed {
-                reason: "gone".into()
-            }
-            .to_session_event(),
+            HealthSignal::failed(&OxiError::network("gone")).to_session_event(),
             SessionEvent::Failed {
-                reason: "gone".into()
+                reason: "network error: gone".into()
             }
         );
+    }
+
+    #[test]
+    fn a_failed_signal_carries_the_cause() {
+        assert_eq!(
+            HealthSignal::failed(&OxiError::auth("revoked", false)),
+            HealthSignal::Failed {
+                reason: "authentication failed: revoked".into(),
+                kind: ErrorKind::Auth,
+                retryable: false,
+            }
+        );
+        let timeout = HealthSignal::failed(&OxiError::timeout("slow"));
+        assert!(matches!(
+            timeout,
+            HealthSignal::Failed {
+                kind: ErrorKind::Timeout,
+                retryable: true,
+                ..
+            }
+        ));
     }
 
     #[test]

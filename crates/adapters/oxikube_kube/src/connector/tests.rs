@@ -77,8 +77,72 @@ fn probe_results_map_onto_health_signals() {
     };
     assert!(matches!(
         signal(&failed),
-        HealthSignal::Failed { reason } if reason.contains("gone")
+        HealthSignal::Failed { reason, kind: ErrorKind::Network, retryable: true }
+            if reason.contains("gone")
     ));
+    let revoked = HealthEvent::Failed {
+        error: OxiError::auth("revoked", false),
+    };
+    assert!(matches!(
+        signal(&revoked),
+        HealthSignal::Failed {
+            kind: ErrorKind::Auth,
+            retryable: false,
+            ..
+        }
+    ));
+}
+
+/// Records every signal it is given.
+#[derive(Default)]
+struct Recorded(parking_lot::Mutex<Vec<HealthSignal>>);
+
+impl HealthReporter for Recorded {
+    fn report(&self, signal: HealthSignal) {
+        self.0.lock().push(signal);
+    }
+}
+
+#[tokio::test]
+async fn a_failed_connection_drops_its_pooled_client_before_reporting() {
+    let pool = Arc::new(ClientPool::new(
+        one_context_kubeconfig(),
+        PoolConfig::default(),
+    ));
+    let context = ContextName::new("only");
+    pool.get(&context).await.expect("client builds offline");
+    assert!(pool.contains(&context));
+
+    let (tx, rx) = tokio::sync::mpsc::channel(4);
+    let reports = Arc::new(Recorded::default());
+    let bridge = tokio::spawn(super::connection::forward(
+        rx,
+        reports.clone(),
+        pool.clone(),
+        context.clone(),
+    ));
+    tx.send(HealthEvent::Unhealthy {
+        error: OxiError::network("reset"),
+        consecutive_failures: 1,
+    })
+    .await
+    .unwrap();
+    tx.send(HealthEvent::Failed {
+        error: OxiError::network("reset"),
+    })
+    .await
+    .unwrap();
+    drop(tx);
+    bridge.await.unwrap();
+
+    assert!(
+        !pool.contains(&context),
+        "the reconnect after Failed must build a fresh client"
+    );
+    let reports = reports.0.lock();
+    assert_eq!(reports.len(), 2);
+    assert_eq!(reports[0], HealthSignal::Unhealthy);
+    assert!(matches!(reports[1], HealthSignal::Failed { .. }));
 }
 
 /// A loader result holding one token-auth context `name` on an address nothing listens on.
