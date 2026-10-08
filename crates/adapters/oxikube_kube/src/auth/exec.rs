@@ -131,7 +131,7 @@ pub fn build_client(config: Config, policy: ExecInteractivePolicy) -> OxiResult<
 ///
 /// A plugin that returns a client certificate cannot be refreshed in a live client (the
 /// certificate is part of the TLS identity). Its first run, which tells the two kinds
-/// apart, is followed by one run of ours ([`exec_cert`](super::exec_cert)) whose
+/// apart, is followed by one run of ours (`exec_cert`) whose
 /// certificate and key are moved into the config as inline data with `exec` cleared, so
 /// kube runs nothing more: two runs per build, one fewer than kube alone (E03-F550).
 /// [`Client::valid_until`] still reports the plugin's `expirationTimestamp`.
