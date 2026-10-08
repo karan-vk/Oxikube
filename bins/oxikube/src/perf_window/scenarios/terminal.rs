@@ -11,20 +11,21 @@
 //! The commands go to the shell as typed text (`TerminalState::input`, what the keyboard sends),
 //! in `sh -c '…'` so the user's own shell (fish, zsh) does not change them.
 
-use std::f32::consts::TAU;
+use std::cell::Cell;
+use std::rc::Rc;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
-use gpui::{App, Entity, px, size};
+use gpui::{App, Entity};
 use oxikube_domain::command::Command;
-use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_domain::ids::ResourceRef;
 use oxikube_runtime::perf::windowed::Flow;
 use oxikube_terminal::view::TerminalView;
 use oxikube_workspace::{ClusterTab, Workspace};
 
-use super::SETTLE;
+use super::{SETTLE, drag_size, pods, window_size};
 use crate::perf_window::driver::Driver;
-use crate::perf_window::run::{ExecTarget, WINDOW_SIZE};
+use crate::perf_window::run::ExecTarget;
 
 /// The flood: 50 MB of `y\n`, then a marker the command line itself does not contain.
 const FLOOD: &str = "sh -c 'yes | head -c 52428800; echo flood-$((1+1))-done'\n";
@@ -38,8 +39,6 @@ const REDRAW_FRAMES: u32 = 1_200;
 const REDRAW: Duration = Duration::from_secs(8);
 /// How long the window is resized while the redraw goes on.
 const RESIZE: Duration = Duration::from_secs(8);
-/// One back-and-forth of the resize drag, in refreshes.
-const RESIZE_PERIOD: f32 = 240.0;
 
 /// The `htop`-like redraw: `frames` full screens at about 60 Hz, each row recoloured and rewritten,
 /// then a marker.
@@ -72,7 +71,7 @@ pub async fn run(driver: &mut Driver<'_>, exec: Option<&ExecTarget>) -> Result<(
 
     type_text(driver, &terminal, FLOOD)?;
     let flood = terminal.clone();
-    let done = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = Rc::new(Cell::new(false));
     let seen = done.clone();
     driver
         .phase("yes-flood", FLOOD_DEADLINE, move |step, _, cx| {
@@ -98,34 +97,21 @@ pub async fn run(driver: &mut Driver<'_>, exec: Option<&ExecTarget>) -> Result<(
     if !redrawn.contains("frame ") {
         bail!("the redraw script is not drawing: {redrawn}");
     }
-    let (width, height) = WINDOW_SIZE;
     driver
-        .phase("resize", RESIZE, move |step, window, _| {
-            let phase = (step.index as f32 / RESIZE_PERIOD) * TAU;
+        .phase("resize", RESIZE, |step, window, _| {
             step.input();
-            window.resize(size(
-                px(width - 300.0 + 300.0 * phase.cos()),
-                px(height - 150.0 + 150.0 * phase.sin()),
-            ));
+            window.resize(drag_size(step.index));
             Ok(Flow::Continue)
         })
         .await?;
-    driver.update(|window, _| window.resize(size(px(width), px(height))))?;
+    driver.update(|window, _| window.resize(window_size()))?;
     Ok(())
 }
 
 /// `terminal::New` with no cluster tab shown: a local shell tab of the window.
 async fn open_local_shell(driver: &mut Driver<'_>) -> Result<Entity<TerminalView>> {
     driver.command(Command::TerminalNew { cluster: None })?;
-    let workspace = driver.workspace.clone();
-    let mut terminal = None;
-    driver
-        .wait("the terminal to open", |cx| {
-            terminal = terminals(&workspace, cx).into_iter().next();
-            terminal.is_some()
-        })
-        .await?;
-    terminal.context("the terminal")
+    first_terminal(driver, "the terminal to open").await
 }
 
 /// `pod::Shell` in `target`, connected from the user's kubeconfig.
@@ -137,7 +123,7 @@ async fn open_pod_shell(
     driver.command(Command::PodShell {
         target: ResourceRef::namespaced(
             cluster,
-            Gvk::new("", "v1", "Pod"),
+            pods(),
             target.namespace.as_str(),
             target.pod.as_str(),
         ),
@@ -147,15 +133,20 @@ async fn open_pod_shell(
         "the shell runs in pod {}/{} of {} (a real exec)",
         target.namespace, target.pod, target.context
     ));
+    first_terminal(driver, "the pod terminal to open").await
+}
+
+/// Waits for the window to hold a terminal and returns it.
+async fn first_terminal(driver: &mut Driver<'_>, what: &str) -> Result<Entity<TerminalView>> {
     let workspace = driver.workspace.clone();
     let mut terminal = None;
     driver
-        .wait("the pod terminal to open", |cx| {
+        .wait(what, |cx| {
             terminal = terminals(&workspace, cx).into_iter().next();
             terminal.is_some()
         })
         .await?;
-    terminal.context("the pod terminal")
+    terminal.with_context(|| format!("gave up waiting for {what}"))
 }
 
 /// Every terminal of the window: its own tabs and those in each cluster tab.

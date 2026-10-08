@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use super::phase::{Edge, Frame, PhaseLog, ms, summarise, summarise_refs};
+use super::phase::{Edge, Frame, PhaseLog, ms, nanos, summarise};
 use super::summary::{
     Budgets, MAX_LISTED_OVER_BUDGET, OverBudgetFrame, PhaseKind, PhaseSummary, WINDOWED_SCHEMA,
     WindowedSummary, failures,
@@ -90,9 +90,7 @@ impl Meter {
             // to the display at the next refresh.
             let end = frame.start + frame.drawn.unwrap_or(frame.duration);
             let latency = end.saturating_duration_since(input);
-            phase
-                .latencies_ns
-                .push(u64::try_from(latency.as_nanos()).unwrap_or(u64::MAX));
+            phase.latencies_ns.push(nanos(latency));
         }
         phase.frames.push(Frame {
             start: frame.start,
@@ -147,6 +145,7 @@ impl Meter {
     }
 
     /// The name of the current phase.
+    #[cfg(test)]
     pub fn phase(&self) -> String {
         self.state
             .borrow()
@@ -157,6 +156,7 @@ impl Meter {
     }
 
     /// Frames recorded in the current phase so far.
+    #[cfg(test)]
     pub fn frames_in_phase(&self) -> usize {
         self.state
             .borrow()
@@ -185,14 +185,14 @@ impl Meter {
         let phases: Vec<PhaseSummary> = state
             .phases
             .iter()
-            .map(|p| summarise(std::slice::from_ref(p), &p.name, p.kind, info))
+            .map(|p| summarise(&[p], &p.name, p.kind, info))
             .collect();
         let scripted_logs: Vec<&PhaseLog> = state
             .phases
             .iter()
             .filter(|p| p.kind != PhaseKind::Setup)
             .collect();
-        let scripted = summarise_refs(&scripted_logs, "scripted", PhaseKind::Driven, info);
+        let scripted = summarise(&scripted_logs, "scripted", PhaseKind::Driven, info);
         let budget = Duration::from_secs_f64(info.budgets.frame_ms / 1000.0);
         let over_budget = scripted_logs
             .iter()

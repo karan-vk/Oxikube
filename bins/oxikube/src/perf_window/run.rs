@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
 use gpui::{AnyWindowHandle, App, AsyncApp, px, size};
@@ -18,6 +18,8 @@ use crate::startup::{Boot, ConfigSource, PortsChoice, RuntimeChoice, StartupEnv}
 pub const WINDOW_SIZE: (f32, f32) = (1440.0, 900.0);
 /// How long to wait for the window to become the active one before measuring anyway.
 const ACTIVE_DEADLINE: Duration = Duration::from_secs(10);
+/// The refresh interval assumed when it could not be measured: 120 Hz.
+const ASSUMED_REFRESH: Duration = Duration::from_nanos(8_333_333);
 /// How long the display's refresh is sampled before the scenario.
 const CALIBRATION: Duration = Duration::from_millis(600);
 
@@ -150,7 +152,7 @@ async fn drive(
 
 /// Waits until the window is the key window (GPUI paces an inactive one at 30 fps).
 async fn wait_active(window: AnyWindowHandle, cx: &mut AsyncApp) -> bool {
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     while started.elapsed() < ACTIVE_DEADLINE {
         let active = window
             .update(cx, |_, window, _| window.is_window_active())
@@ -176,14 +178,14 @@ async fn calibrate(window: AnyWindowHandle, cx: &mut AsyncApp) -> Result<(Durati
     let info = RunInfo {
         scenario: "calibrate".into(),
         app_version: String::new(),
-        refresh: Duration::from_nanos(8_333_333),
+        refresh: ASSUMED_REFRESH,
         refresh_source: String::new(),
         budgets: windowed::Budgets::default(),
     };
     let gaps = probe.finish(&info, Vec::new()).scripted.refresh_gap_ms;
     Ok(match gaps {
         Some(gaps) if gaps.count >= 10 => (Duration::from_secs_f64(gaps.p50 / 1000.0), "measured"),
-        _ => (Duration::from_nanos(8_333_333), "assumed"),
+        _ => (ASSUMED_REFRESH, "assumed"),
     })
 }
 

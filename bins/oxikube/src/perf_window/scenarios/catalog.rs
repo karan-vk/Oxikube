@@ -9,7 +9,7 @@ use gpui::Entity;
 use oxikube_catalog_ui::CatalogView;
 use oxikube_runtime::perf::windowed::Flow;
 
-use super::{SETTLE, typing};
+use super::{KEY_EVERY, SETTLE, typing};
 use crate::perf_window::PHASE;
 use crate::perf_window::driver::{Driver, key};
 
@@ -17,8 +17,6 @@ use crate::perf_window::driver::{Driver, key};
 const CONTEXTS: usize = 50;
 /// What is typed: narrows the 50 to the ten `perf-listed-4x`, then to a few (the search is fuzzy).
 const SEARCH: &str = "listed-42";
-/// Refreshes between two keystrokes (about 15 a second).
-const KEY_EVERY: u64 = 8;
 
 /// See the [module docs](self).
 pub async fn run(driver: &mut Driver<'_>) -> Result<()> {

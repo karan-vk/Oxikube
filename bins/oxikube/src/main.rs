@@ -119,18 +119,19 @@ fn main() -> ExitCode {
             args.perf_logs_workload,
         )
     });
-    let window = match args.perf_scenario_window.as_deref() {
-        Some(name) => {
-            match window_scenario::parse(name, args.perf_exec.as_deref(), args.perf_report.clone())
-            {
-                Ok(window) => Some(window),
-                Err(code) => {
-                    startup::shutdown();
-                    return code;
-                }
-            }
+    let window = match args
+        .perf_scenario_window
+        .as_deref()
+        .map(|name| {
+            window_scenario::parse(name, args.perf_exec.as_deref(), args.perf_report.clone())
+        })
+        .transpose()
+    {
+        Ok(window) => window,
+        Err(code) => {
+            startup::shutdown();
+            return code;
         }
-        None => None,
     };
     let drive = Drive {
         table: drive,

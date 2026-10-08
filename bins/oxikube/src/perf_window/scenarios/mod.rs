@@ -10,16 +10,50 @@ mod table;
 mod tabs;
 mod terminal;
 
+use std::f32::consts::TAU;
 use std::time::Duration;
 
 use anyhow::Result;
+use gpui::{Pixels, Size, px, size};
+use oxikube_domain::ids::Gvk;
 
 use super::Scenario;
 use super::driver::Driver;
-use super::run::WindowRun;
+use super::run::{WINDOW_SIZE, WindowRun};
 
 /// After the first list lands: the table's first frames, ages and badges settle.
 pub const SETTLE: Duration = Duration::from_secs(2);
+/// Refreshes between two keystrokes: about 15 characters a second at 120 Hz, a fast typist.
+pub const KEY_EVERY: u64 = 8;
+/// One back-and-forth of a resize drag, in refreshes: two seconds at 120 Hz.
+const RESIZE_PERIOD: f32 = 240.0;
+/// The first pod of the main synthetic cluster.
+pub const FIRST_POD: &str = "load-00000";
+
+/// The `Pod` kind.
+pub fn pods() -> Gvk {
+    Gvk::new("", "v1", "Pod")
+}
+
+/// Where in its back-and-forth (radians) a resize drag is on refresh `index`.
+pub fn drag_phase(index: u64) -> f32 {
+    (index as f32 / RESIZE_PERIOD) * TAU
+}
+
+/// The window's size on refresh `index` of a continuous corner drag around [`WINDOW_SIZE`].
+pub fn drag_size(index: u64) -> Size<Pixels> {
+    let (width, height) = WINDOW_SIZE;
+    let phase = drag_phase(index);
+    size(
+        px(width - 300.0 + 300.0 * phase.cos()),
+        px(height - 150.0 + 150.0 * phase.sin()),
+    )
+}
+
+/// The size every scenario starts at, restored after a drag.
+pub fn window_size() -> Size<Pixels> {
+    size(px(WINDOW_SIZE.0), px(WINDOW_SIZE.1))
+}
 
 /// Runs `run`'s script on `driver`.
 pub async fn run(run: &WindowRun, driver: &mut Driver<'_>) -> Result<()> {

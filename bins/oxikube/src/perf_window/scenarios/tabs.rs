@@ -5,37 +5,31 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
-use std::f32::consts::TAU;
 use std::rc::Rc;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, ensure};
-use gpui::{px, size};
 use oxikube_domain::command::Command;
-use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_domain::ids::ResourceRef;
 use oxikube_resources_ui::detail::DetailDrawer;
 use oxikube_runtime::perf::windowed::Flow;
 use oxikube_ui::Unscaled;
 use oxikube_workspace::DockPosition;
 
-use super::SETTLE;
+use super::{FIRST_POD, SETTLE, drag_phase, drag_size, pods, window_size};
 use crate::perf_window::MAIN_CONTEXT;
 use crate::perf_window::driver::Driver;
-use crate::perf_window::run::WINDOW_SIZE;
 use crate::perf_window::world::namespace_name;
 
 /// Refreshes between two tab switches: a quarter of a second.
 const SWITCH_EVERY: u64 = 30;
-/// One back-and-forth of a resize drag, in refreshes: two seconds at 120 Hz.
-const RESIZE_PERIOD: f32 = 240.0;
 
 /// See the [module docs](self).
 pub async fn run(driver: &mut Driver<'_>) -> Result<()> {
-    let pods = Gvk::new("", "v1", "Pod");
     let mut front = None;
     for context in [MAIN_CONTEXT, "perf-b", "perf-c"] {
         let cluster = driver.connect(context).await?;
-        driver.open_list(&cluster, pods.clone()).await?;
+        driver.open_list(&cluster, pods()).await?;
         front = Some(cluster);
     }
     let front = front.context("no cluster")?;
@@ -67,28 +61,23 @@ pub async fn run(driver: &mut Driver<'_>) -> Result<()> {
         shown.borrow().len()
     );
 
-    let (width, height) = WINDOW_SIZE;
     driver
         .phase(
             "resize-window",
             Duration::from_secs(10),
             move |step, window, _| {
-                let phase = (step.index as f32 / RESIZE_PERIOD) * TAU;
                 step.input();
-                window.resize(size(
-                    px(width - 300.0 + 300.0 * phase.cos()),
-                    px(height - 150.0 + 150.0 * phase.sin()),
-                ));
+                window.resize(drag_size(step.index));
                 Ok(Flow::Continue)
             },
         )
         .await?;
-    driver.update(|window, _| window.resize(size(px(width), px(height))))?;
+    driver.update(|window, _| window.resize(window_size()))?;
     driver.settle(Duration::from_millis(500)).await;
 
     // The drawer of a pod in the front cluster's right dock, then its edge dragged.
     driver.command(Command::ResourceOpen {
-        target: ResourceRef::namespaced(front.clone(), pods, namespace_name(0), "load-00000"),
+        target: ResourceRef::namespaced(front.clone(), pods(), namespace_name(0), FIRST_POD),
     })?;
     let inner = driver
         .tab_workspace(&front)
@@ -108,7 +97,7 @@ pub async fn run(driver: &mut Driver<'_>) -> Result<()> {
             "resize-dock",
             Duration::from_secs(10),
             move |step, window, cx| {
-                let phase = (step.index as f32 / RESIZE_PERIOD) * TAU;
+                let phase = drag_phase(step.index);
                 step.input();
                 inner.update(cx, |workspace, cx| {
                     workspace.resize_dock(

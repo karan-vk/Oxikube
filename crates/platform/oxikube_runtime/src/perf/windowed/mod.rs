@@ -51,7 +51,6 @@ mod tests;
 
 pub use meter::{Meter, RunInfo, WINDOWED_MEASURES};
 pub use pace::{Flow, Step, drive, idle};
-pub use phase::missed_refreshes;
 pub use summary::{
     Budgets, FRAME_BUDGET_MS, MAX_LISTED_OVER_BUDGET, OverBudgetFrame, PhaseKind, PhaseSummary,
     WINDOWED_SCHEMA, WindowedSummary, failures,

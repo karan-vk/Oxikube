@@ -1,21 +1,22 @@
 //! The scenarios around a cluster's pods table: scroll it, filter it, switch its namespace, switch
 //! the theme over it, watch the sidebar's badges under churn, and leave two clusters idle.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeSet;
 use std::rc::Rc;
 use std::time::Duration;
 
 use anyhow::{Result, bail, ensure};
 use gpui::{App, Entity, UpdateGlobal as _};
 use oxikube_domain::command::Command;
-use oxikube_domain::ids::{ClusterId, Gvk};
+use oxikube_domain::ids::ClusterId;
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_runtime::perf::windowed::Flow;
 use oxikube_settings::SettingsStore;
 use oxikube_theme::ActiveTheme;
 
-use super::{SETTLE, typing};
-use crate::perf_window::driver::{Driver, key, middle, scroll};
+use super::{KEY_EVERY, SETTLE, pods, typing};
+use crate::perf_window::driver::{Driver, key, middle, scroll, tab_workspace};
 use crate::perf_window::world::namespace_name;
 use crate::perf_window::{MAIN_CONTEXT, PHASE, PODS};
 
@@ -23,15 +24,13 @@ use crate::perf_window::{MAIN_CONTEXT, PHASE, PODS};
 const FLING_PX: f32 = 90.0;
 /// What the filter scenario types: about one row in a hundred matches it fully.
 const FILTER_TEXT: &str = "load-012";
-/// Refreshes between two keystrokes: about 15 characters a second at 120 Hz, a fast typist.
-const KEY_EVERY: u64 = 8;
-
-fn pods() -> Gvk {
-    Gvk::new("", "v1", "Pod")
-}
 
 fn rows(table: &Entity<ResourceTable>, cx: &App) -> usize {
     table.read(cx).read_rows(cx, |d| d.rows().len())
+}
+
+fn feed_deltas() -> u64 {
+    oxikube_runtime::perf::global().map_or(0, |recorder| recorder.feed_deltas())
 }
 
 /// Connects the main cluster and opens its pods table, listed.
@@ -153,7 +152,7 @@ pub async fn namespaces(driver: &mut Driver<'_>) -> Result<()> {
 /// settings store (the path a `settings.json` hot reload takes).
 pub async fn theme(driver: &mut Driver<'_>) -> Result<()> {
     main_table(driver).await?;
-    let names = Rc::new(std::cell::RefCell::new(std::collections::BTreeSet::new()));
+    let names = Rc::new(RefCell::new(BTreeSet::new()));
     let seen = names.clone();
     driver
         .phase("switch-theme", PHASE, move |step, _, cx| {
@@ -187,18 +186,18 @@ pub async fn sidebar(driver: &mut Driver<'_>) -> Result<()> {
     let workspace = driver.workspace.clone();
     driver
         .wait("the cluster's first screen", |cx| {
-            crate::perf_window::driver::tab_workspace(&workspace, &cluster, cx)
+            tab_workspace(&workspace, &cluster, cx)
                 .is_some_and(|inner| inner.read(cx).items().next().is_some())
         })
         .await?;
     driver.settle(Duration::from_secs(3)).await;
-    let before = oxikube_runtime::perf::global().map_or(0, |r| r.feed_deltas());
+    let before = feed_deltas();
     driver
         .phase("churn", Duration::from_secs(30), |_, _, _| {
             Ok(Flow::Continue)
         })
         .await?;
-    let applied = oxikube_runtime::perf::global().map_or(0, |r| r.feed_deltas()) - before;
+    let applied = feed_deltas() - before;
     ensure!(
         applied > 0,
         "no watch event reached the stores during the churn"

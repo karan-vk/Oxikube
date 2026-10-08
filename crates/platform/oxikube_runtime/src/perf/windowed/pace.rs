@@ -25,8 +25,6 @@ pub enum Flow {
 pub struct Step<'a> {
     /// Refreshes of this phase before this one.
     pub index: u64,
-    /// Time since the phase began.
-    pub elapsed: Duration,
     meter: &'a Meter,
 }
 
@@ -172,7 +170,6 @@ fn refresh(pacer: Rc<RefCell<Pacer>>, window: &mut Window, cx: &mut App) {
             let meter = p.meter.clone();
             let step = Step {
                 index,
-                elapsed,
                 meter: &meter,
             };
             (p.step)(&step, window, cx)

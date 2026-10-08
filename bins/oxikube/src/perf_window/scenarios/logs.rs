@@ -9,12 +9,12 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, ensure};
 use gpui::{App, Entity};
 use oxikube_domain::command::Command;
-use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
+use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_logs_ui::LogView;
 use oxikube_runtime::perf::windowed::Flow;
 use oxikube_workspace::Workspace;
 
-use super::{SETTLE, typing};
+use super::{FIRST_POD, KEY_EVERY, SETTLE, pods, typing};
 use crate::perf_window::MAIN_CONTEXT;
 use crate::perf_window::driver::{Driver, key, tab_workspace};
 use crate::perf_window::world::namespace_name;
@@ -23,8 +23,6 @@ use crate::perf_window::world::namespace_name;
 const STREAM: Duration = Duration::from_secs(10);
 /// What is typed into the search: about one line in seven matches `slow`.
 const SEARCH: &str = "slow";
-/// Refreshes between two keystrokes (about 15 a second).
-const KEY_EVERY: u64 = 8;
 
 fn log_view(
     workspace: &Entity<Workspace>,
@@ -42,12 +40,7 @@ fn log_view(
 /// See the [module docs](self).
 pub async fn run(driver: &mut Driver<'_>) -> Result<()> {
     let cluster = driver.connect(MAIN_CONTEXT).await?;
-    let target = ResourceRef::namespaced(
-        cluster.clone(),
-        Gvk::new("", "v1", "Pod"),
-        namespace_name(0),
-        "load-00000",
-    );
+    let target = ResourceRef::namespaced(cluster.clone(), pods(), namespace_name(0), FIRST_POD);
     driver.command(Command::PodViewLogs {
         target: target.clone(),
         container: None,

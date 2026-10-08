@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{AppContext as _, Context, IntoElement, Render, TestAppContext, Window, div};
 
+use super::phase::missed_refreshes;
 use super::*;
 use crate::perf::{FrameNotifies, FrameSample, PerfRoot, Recorder};
 

@@ -76,18 +76,8 @@ impl PhaseLog {
     }
 }
 
-pub(super) fn summarise(
-    logs: &[PhaseLog],
-    name: &str,
-    kind: PhaseKind,
-    info: &RunInfo,
-) -> PhaseSummary {
-    let refs: Vec<&PhaseLog> = logs.iter().collect();
-    summarise_refs(&refs, name, kind, info)
-}
-
 /// One summary over `logs` (one phase, or every scripted phase together).
-pub(super) fn summarise_refs(
+pub(super) fn summarise(
     logs: &[&PhaseLog],
     name: &str,
     kind: PhaseKind,
@@ -159,7 +149,7 @@ pub(super) fn summarise_refs(
         s.inactive_checks += log.inactive_checks;
         for pair in log.refreshes.windows(2) {
             let gap = pair[1].saturating_duration_since(pair[0]);
-            gaps_ns.push(u64::try_from(gap.as_nanos()).unwrap_or(u64::MAX));
+            gaps_ns.push(nanos(gap));
             if log.kind == PhaseKind::Driven {
                 s.dropped_frames += missed_refreshes(gap, info.refresh);
             }
@@ -180,7 +170,7 @@ pub(super) fn summarise_refs(
 /// Refreshes skipped between two consecutive ones `gap` apart, on a display refreshing every
 /// `refresh`: none up to one and a half intervals (timer and vsync jitter), else the whole
 /// intervals beyond the first.
-pub fn missed_refreshes(gap: Duration, refresh: Duration) -> u64 {
+pub(super) fn missed_refreshes(gap: Duration, refresh: Duration) -> u64 {
     if refresh.is_zero() || gap.as_secs_f64() <= refresh.as_secs_f64() * 1.5 {
         return 0;
     }
@@ -188,7 +178,7 @@ pub fn missed_refreshes(gap: Duration, refresh: Duration) -> u64 {
     intervals.saturating_sub(1)
 }
 
-fn nanos(d: Duration) -> u64 {
+pub(super) fn nanos(d: Duration) -> u64 {
     u64::try_from(d.as_nanos()).unwrap_or(u64::MAX)
 }
 
