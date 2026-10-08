@@ -172,3 +172,106 @@ fn refresh_goldens_regenerates_and_verifies_what_the_nightly_compares() {
         "refresh-goldens is dispatch-only; drop the bootstrap push trigger"
     );
 }
+
+/// The nightly's `run:` lines that invoke `cargo test`, whitespace-normalised.
+fn nightly_cargo_test_lines() -> Vec<String> {
+    read(".github/workflows/nightly.yml")
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|line| line.contains("cargo test "))
+        .collect()
+}
+
+/// Whether `lines` has a `cargo test` for `package` with `--features <feature>` that runs `target`
+/// (a named `--test`, or every test of the package when the line names none).
+fn nightly_runs(lines: &[String], package: &str, feature: &str, target: Option<&str>) -> bool {
+    lines.iter().any(|line| {
+        let words: Vec<&str> = line.split(' ').collect();
+        let follows = |flag: &str, value: &str| {
+            words
+                .windows(2)
+                .any(|pair| pair[0] == flag && pair[1] == value)
+        };
+        let named_tests: Vec<&str> = words
+            .windows(2)
+            .filter(|pair| pair[0] == "--test")
+            .map(|pair| pair[1])
+            .collect();
+        follows("-p", package)
+            && follows("--features", feature)
+            && match target {
+                Some(name) => named_tests.is_empty() || named_tests.contains(&name),
+                None => true,
+            }
+    })
+}
+
+/// A feature name that gates a headless GPU render: `screenshot`, `gpui-golden`, ...
+fn is_render_feature(feature: &str) -> bool {
+    feature.contains("screenshot") || feature.contains("golden")
+}
+
+/// Every test gated behind a render feature (`required-features` in a `[[test]]`) must be run by
+/// the nightly's screenshot step (E01-F583): the list is hand-written, and a new screenshot test
+/// that is not added to it never runs anywhere, so its goldens rot unseen.
+#[test]
+fn nightly_runs_every_screenshot_test() {
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .no_deps()
+        .current_dir(repo_root())
+        .exec()
+        .expect("cargo metadata");
+    let lines = nightly_cargo_test_lines();
+    let mut missing = Vec::new();
+    for package in metadata.workspace_packages() {
+        // A crate whose tests are gated with `#[cfg(feature = "screenshot")]` rather than
+        // `required-features` still has to appear in the step. (Only the `screenshot` feature
+        // itself: `gpui-screenshot` and friends are helper features that dev-dependencies turn on.)
+        for feature in package.features.keys().filter(|f| *f == "screenshot") {
+            if !nightly_runs(&lines, &package.name, feature, None) {
+                missing.push(format!("-p {} --features {feature}", package.name));
+            }
+        }
+        for target in package
+            .targets
+            .iter()
+            .filter(|t| t.is_kind(cargo_metadata::TargetKind::Test))
+        {
+            for feature in target
+                .required_features
+                .iter()
+                .filter(|f| is_render_feature(f))
+            {
+                if !nightly_runs(&lines, &package.name, feature, Some(&target.name)) {
+                    missing.push(format!(
+                        "-p {} --features {feature} --test {}",
+                        package.name, target.name
+                    ));
+                }
+            }
+        }
+    }
+    missing.sort();
+    missing.dedup();
+    assert!(
+        missing.is_empty(),
+        "nightly.yml's screenshot step does not run: {missing:#?}\nadd a `cargo test` line for each \
+         (check it is green on the runners first)"
+    );
+}
+
+#[test]
+fn the_screenshot_step_matcher_reads_package_feature_and_test() {
+    let lines = vec![
+        "${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p a --features screenshot --test one --profile x"
+            .to_owned(),
+        "cargo test -p b --features screenshot --profile x".to_owned(),
+    ];
+    assert!(nightly_runs(&lines, "a", "screenshot", Some("one")));
+    assert!(!nightly_runs(&lines, "a", "screenshot", Some("two")));
+    assert!(!nightly_runs(&lines, "a", "golden", Some("one")));
+    assert!(!nightly_runs(&lines, "ab", "screenshot", Some("one")));
+    assert!(nightly_runs(&lines, "b", "screenshot", Some("anything")));
+    assert!(nightly_runs(&lines, "b", "screenshot", None));
+    assert!(!nightly_runs(&lines, "c", "screenshot", None));
+}

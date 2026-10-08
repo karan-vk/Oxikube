@@ -1,5 +1,6 @@
 //! Screenshots of the table's states (E07-S10), rendered through `Window::render_to_image`:
-//! loading, empty, forbidden, unauthorized, error, and rows with the stale badge.
+//! loading, empty, forbidden, unauthorized, error, and rows with the stale badge. The rows case
+//! hides the Age and Restarts columns, which read the wall clock, so the golden does not rot.
 //!
 //! Each case scripts the fake cluster's watch (never lists, lists nothing, 403, 401, a failure
 //! with a long message) and opens the real table over it. `harness = false`: on macOS the
@@ -20,8 +21,10 @@ use oxikube_domain::OxiError;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
-use oxikube_ports::{ClockPort, ClusterContext, Delta, DeltaBatch, SourceId};
-use oxikube_resources_ui::table::{ResourceTable, ResourceTableDeps, store_runtime};
+use oxikube_ports::{ClockPort, ClusterContext, Delta, DeltaBatch, SourceId, StatePort as _};
+use oxikube_resources_ui::table::{
+    ColumnPrefs, ResourceTable, ResourceTableDeps, prefs_key, store_runtime,
+};
 use oxikube_testkit::{
     FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeStatePort, Timeline,
     headless::HEADLESS_SCALE_FACTOR,
@@ -177,8 +180,27 @@ fn fixture(
     (sessions, cluster, clock, kind, after)
 }
 
+/// A saved layout without the Age and Restarts columns for the case that shows rows: the table
+/// reads ages off the wall clock, so a picture with them changes every day and fails the nightly.
+fn state_for(case: Case) -> Arc<FakeStatePort> {
+    let state = Arc::new(FakeStatePort::new());
+    if matches!(case, Case::StaleRows) {
+        let layout = ColumnPrefs {
+            visible: [("age".to_owned(), false), ("restarts".to_owned(), false)].into(),
+            ..ColumnPrefs::default()
+        };
+        futures::executor::block_on(state.kv_set(
+            &prefs_key(&pods_kind().gvk).expect("key"),
+            serde_json::to_value(layout).expect("prefs json"),
+        ))
+        .expect("store prefs");
+    }
+    state
+}
+
 fn render(case: Case) -> anyhow::Result<RgbaImage> {
     let (sessions, cluster, clock, kind, after) = fixture(case);
+    let state = state_for(case);
     let mut cx = headless();
     let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
         oxikube_ui::init(cx);
@@ -191,7 +213,7 @@ fn render(case: Case) -> anyhow::Result<RgbaImage> {
             sessions,
             stores: Arc::new(ResourceStores::new(store_runtime(clock, cx))),
             columns: Arc::new(CoreColumns::new()),
-            state: Arc::new(FakeStatePort::new()),
+            state,
             dispatcher: Rc::new(Ignore),
             actions: None,
         };
