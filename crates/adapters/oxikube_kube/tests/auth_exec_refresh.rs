@@ -289,7 +289,16 @@ fn a_hung_refresh_does_not_hold_up_runtime_shutdown() {
     });
     // Mid-refresh when the runtime goes away: well inside the 30 s deadline.
     let in_flight = runtime.spawn(async move { client.apiserver_version().await });
-    std::thread::sleep(Duration::from_millis(400));
+    // Wait (bounded) until the refresh plugin is actually running rather than guessing
+    // with a fixed sleep: a slow CI runner may take longer than any fixed pause.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while runs(dir.path()) < 2 {
+        assert!(
+            Instant::now() < deadline,
+            "the refresh plugin never started"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
     assert_eq!(runs(dir.path()), 2, "the refresh plugin is running");
 
     let started = Instant::now();
@@ -299,5 +308,16 @@ fn a_hung_refresh_does_not_hold_up_runtime_shutdown() {
         "{:?}",
         started.elapsed()
     );
-    assert!(!in_flight.is_finished(), "never completed: it was dropped");
+
+    // `JoinHandle::is_finished` right after `shutdown_background` races the worker threads
+    // dropping the task, so assert the outcome instead: once the runtime has dropped the
+    // task the handle resolves as cancelled (an `Err`), never as a completed request.
+    let outcome = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async { tokio::time::timeout(Duration::from_secs(10), in_flight).await })
+        .expect("the dropped task's handle resolves once the runtime is gone");
+    let join_err = outcome.expect_err("never completed: it was dropped");
+    assert!(join_err.is_cancelled(), "dropped, not panicked: {join_err}");
 }
