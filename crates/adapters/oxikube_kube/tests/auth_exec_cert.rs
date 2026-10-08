@@ -22,18 +22,23 @@ const CERT: &str = include_str!("fixtures/exec-cert/client.crt");
 const KEY: &str = include_str!("fixtures/exec-cert/client.key");
 const EXPIRY: &str = "2099-01-01T00:00:00Z";
 
-/// Writes `<dir>/plugin.sh`: it appends a line to `<dir>/runs`, sleeps `sleep_secs`, then
+/// Writes `<dir>/plugin.sh`: it appends a line to `<dir>/runs`, runs `prelude` (shell), then
 /// prints `<dir>/credential.json`.
-fn write_plugin(dir: &Path, credential: &serde_json::Value, sleep_secs: f32) -> String {
+fn write_plugin_with(dir: &Path, credential: &serde_json::Value, prelude: &str) -> String {
     std::fs::write(dir.join("credential.json"), credential.to_string()).unwrap();
     let script = format!(
-        "echo run >> {runs}\nsleep {sleep_secs}\ncat {cred}\n",
+        "echo run >> {runs}\n{prelude}\ncat {cred}\n",
         runs = dir.join("runs").display(),
         cred = dir.join("credential.json").display()
     );
     let path = dir.join("plugin.sh");
     std::fs::write(&path, script).unwrap();
     path.to_string_lossy().into_owned()
+}
+
+/// A plugin that sleeps `sleep_secs` on every run.
+fn write_plugin(dir: &Path, credential: &serde_json::Value, sleep_secs: f32) -> String {
+    write_plugin_with(dir, credential, &format!("sleep {sleep_secs}"))
 }
 
 fn certificate(cert: &str, key: &str) -> serde_json::Value {
@@ -190,24 +195,16 @@ async fn a_token_plugin_still_runs_once() {
 async fn a_plugin_that_fails_on_its_second_run_is_a_retryable_auth_error_without_leaks() {
     // Run 1 returns the certificate; later runs fail like an expired SSO session.
     let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("credential.json"),
-        certificate(CERT, KEY).to_string(),
-    )
-    .unwrap();
-    let script = dir.path().join("plugin.sh");
-    std::fs::write(
-        &script,
-        format!(
-            "echo run >> {runs}\nn=$(wc -l < {runs} | tr -d ' ')\n\
-             if [ \"$n\" -ge 2 ]; then echo 'credentials service unavailable' >&2; exit 1; fi\n\
-             cat {cred}\n",
-            runs = dir.path().join("runs").display(),
-            cred = dir.path().join("credential.json").display()
+    let script = write_plugin_with(
+        dir.path(),
+        &certificate(CERT, KEY),
+        &format!(
+            "n=$(wc -l < {runs} | tr -d ' ')\n\
+             if [ \"$n\" -ge 2 ]; then echo 'credentials service unavailable' >&2; exit 1; fi",
+            runs = dir.path().join("runs").display()
         ),
-    )
-    .unwrap();
-    let err = build(config(&script.to_string_lossy()))
+    );
+    let err = build(config(&script))
         .await
         .err()
         .expect("the second run fails");
