@@ -100,3 +100,75 @@ fn pr_ci_runs_the_gates_the_nightly_used_to_find_alone() {
         assert!(ci.contains(needle), "ci.yml lost {why} (`{needle}`)");
     }
 }
+
+/// The screenshot goldens the nightly Linux leg compares (E05-F453): without a committed Linux
+/// golden a test runs its structural checks only and cannot see a pixel regression. Each is
+/// `<crate>/tests/goldens/linux/<name>.png`, beside the macOS golden of the same test.
+const LINUX_GOLDENS: &[&str] = &[
+    "crates/ui/oxikube_ui/tests/goldens/linux/token_sampler.png",
+    "bins/oxikube/tests/goldens/linux/main_window.png",
+    "crates/ui/oxikube_workspace/tests/goldens/linux/workspace.png",
+    "crates/ui/oxikube_workspace/tests/goldens/linux/workspace_modal.png",
+    "crates/ui/oxikube_workspace/tests/goldens/linux/main_window_restoring.png",
+];
+
+/// Pixel size of a PNG, read from its IHDR chunk (always the first chunk).
+fn png_size(relative: &str) -> (u32, u32) {
+    let path = repo_root().join(relative);
+    let bytes = fs::read(&path).unwrap_or_else(|err| {
+        panic!(
+            "{relative} is missing ({err}); refresh it with the refresh-goldens workflow \
+             (docs/testing-gpui.md)"
+        )
+    });
+    assert!(
+        bytes.starts_with(b"\x89PNG\r\n\x1a\n") && bytes.get(12..16) == Some(b"IHDR"),
+        "{relative} is not a PNG"
+    );
+    let be = |at: usize| u32::from_be_bytes(bytes[at..at + 4].try_into().expect("4 bytes"));
+    (be(16), be(20))
+}
+
+#[test]
+fn linux_goldens_are_committed_for_the_nightly_screenshot_tests() {
+    for linux in LINUX_GOLDENS {
+        let macos = linux.replace("/goldens/linux/", "/goldens/macos/");
+        // Same test, same window: a golden of another size would fail every nightly comparison.
+        assert_eq!(
+            png_size(linux),
+            png_size(&macos),
+            "{linux} is not the size of {macos}"
+        );
+    }
+}
+
+#[test]
+fn refresh_goldens_regenerates_and_verifies_what_the_nightly_compares() {
+    let refresh = read(".github/workflows/refresh-goldens.yml");
+    let nightly = read(".github/workflows/nightly.yml");
+    for command in [
+        "-p oxikube --features screenshot --test screenshot",
+        "-p oxikube_ui --features screenshot --test screenshot",
+        "-p oxikube_workspace --features screenshot --test screenshot",
+    ] {
+        // Once in update mode, once in compare mode.
+        assert_eq!(
+            refresh.matches(command).count(),
+            2,
+            "refresh-goldens must regenerate and then verify with `{command}`"
+        );
+        assert!(
+            nightly.contains(command)
+                || nightly.contains(&command.replace(" --test screenshot", "")),
+            "nightly no longer runs `{command}`"
+        );
+    }
+    assert!(
+        refresh.contains("OXIKUBE_UPDATE_GOLDENS"),
+        "refresh-goldens must run the tests in update mode"
+    );
+    assert!(
+        !refresh.contains("push:"),
+        "refresh-goldens is dispatch-only; drop the bootstrap push trigger"
+    );
+}
