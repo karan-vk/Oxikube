@@ -2,6 +2,7 @@
 //! the tests, only the environment differs.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use oxikube_logging::LogHandle;
 
@@ -39,7 +40,14 @@ pub enum PortsChoice {
     Sqlite(PathBuf),
     /// A bundle built by the caller (testkit fakes).
     Provided(AppPorts),
+    /// A bundle built by the caller once the Tokio runtime exists, from its handle (the
+    /// synthetic clusters of the windowed perf scenarios, whose streams run on it). Needs
+    /// [`RuntimeChoice::Tokio`].
+    Build(BuildPorts),
 }
+
+/// Builds a ports bundle from the app's Tokio runtime ([`PortsChoice::Build`]).
+pub type BuildPorts = Arc<dyn Fn(tokio::runtime::Handle) -> AppPorts + Send + Sync>;
 
 /// Inputs of [`super::init`].
 #[derive(Clone)]
@@ -93,7 +101,6 @@ impl StartupEnv {
     /// [`StartupEnv::test`] over `ports`: the app's state and secret ports are the fakes of the
     /// bundle, so the test keeps handles to script them and to assert on their recorded calls.
     pub fn test_with(ports: &oxikube_testkit::TestPorts) -> Self {
-        use std::sync::Arc;
         let clusters = crate::app_state::ClusterAdapters::fakes(ports);
         let bundle = AppPorts::new(ports.state.clone(), clusters)
             .with_secrets(Arc::clone(&ports.secrets) as _);

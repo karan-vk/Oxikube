@@ -22,6 +22,8 @@
 //!   pods table and scroll it, through the same commands as a user (E07-S09).
 //! - [`perf_logs`]: what `oxikube --perf-logs` does in the window: connect a context and open a
 //!   pod's log view (wrapped, paused), through the same commands as a user (E08-S02).
+//! - `perf_window` (feature `perf-window`): what `oxikube --perf-scenario-window` does: the
+//!   windowed perf scenarios over synthetic clusters, measured against ADR 0016 (E01-P587).
 //!
 //! Everything else (command line, the `--perf` session, screenshot and perf scenarios) stays
 //! private to the binary.
@@ -33,4 +35,6 @@ pub mod mount;
 pub mod os_motion;
 pub mod perf_logs;
 pub mod perf_table;
+#[cfg(any(test, feature = "perf-window"))]
+pub mod perf_window;
 pub mod startup;

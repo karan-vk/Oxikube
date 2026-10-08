@@ -66,6 +66,8 @@ objc2-app-kit.workspace = true
 objc2-foundation.workspace = true
 
 [dev-dependencies]
+# `perf_window` is built by the library's tests too (its scripts run over fakes there).
+oxikube_runtime = { workspace = true, features = ["perf-window"] }
 # `startup` / `app_state` tests: `#[gpui::test]` over the real init order with testkit fakes.
 gpui = { workspace = true, features = ["test-support"] }
 # `gpui-test`: the `TestApp` harness (E05-S11) for the `app_state` harness example.
@@ -89,10 +91,16 @@ screenshot = [
     "gpui/test-support",
     "gpui_platform/test-support",
 ]
+# `oxikube --perf-scenario-window <name>` runs one windowed perf scenario in the real window over
+# synthetic clusters (testkit fakes for what a cluster sends; no gpui `test-support`, so the window,
+# renderer and executors are the product's). Driven by `cargo xtask perf --windowed`; never part of
+# default or release builds.
+perf-window = ["test-support", "oxikube_runtime/perf-window"]
 # `oxikube --perf-scenario <name>` runs one headless perf sample (driven by `cargo xtask perf`).
 # Turns on gpui/gpui_platform `test-support` (HeadlessAppContext) through the testkit; never part
 # of default or release builds.
 perf-scenarios = [
+    "perf-window",
     "test-support",
     "dep:oxikube_testkit",
     "oxikube_testkit/gpui-headless",

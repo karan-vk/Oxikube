@@ -49,6 +49,16 @@ pub fn start(dir: Option<PathBuf>) -> Result<Arc<Recorder>> {
     Ok(recorder)
 }
 
+/// The JSONL file of the running session, if one is running.
+#[cfg_attr(not(feature = "perf-window"), allow(dead_code))]
+pub fn jsonl_path() -> Option<PathBuf> {
+    SESSION
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(|session| session.path().to_owned())
+}
+
 /// Hooks the session end into the app: quit when the window closes, finish on quit, and quit
 /// after `duration` if given.
 pub fn attach(cx: &mut App, duration: Option<Duration>) {

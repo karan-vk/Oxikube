@@ -4,8 +4,10 @@
 //! binary defaults to `<data dir>/perf`, honouring `OXIKUBE_DATA_DIR`). One JSON object per line:
 //!
 //! - `{"kind":"start", "schema", "app_version", "os", "arch", "pid", "started_unix_ms", "flush_interval_ms", "measures"}`
-//! - `{"kind":"tick", "t_ms", "interval_ms", "frames_us":[..], "dropped_frames", "feed_deltas", "feed_deltas_per_s", "notifies", "notifies_per_s", "max_notifies_per_frame", "rss_mib", "peak_rss_mib"}`
-//!   every flush interval (one per second by default), `frames_us` holding every frame drawn in it;
+//! - `{"kind":"tick", "t_ms", "interval_ms", "frames_us":[..], "dropped_frames", "feed_deltas", "feed_deltas_per_s", "notifies", "notifies_per_s", "max_notifies_per_frame", "max_view_notifies_per_frame", "rss_mib", "peak_rss_mib"}`
+//!   every flush interval (one per second by default), `frames_us` holding every frame drawn in it
+//!   (`dropped_frames` here counts frames the recorder lost to ring overflow, not refreshes the
+//!   display missed: that figure is the windowed scenarios' summary, `perf::windowed`);
 //!   `rss_mib` / `peak_rss_mib` are the process's resident memory (MiB) read on the flush thread
 //!   when the tick is written (`null` where the OS has no reader, see [`memory`]);
 //! - `{"kind":"summary", ...SessionSummary}` once, from [`PerfSession::finish`].
@@ -27,8 +29,9 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-/// Version of the JSONL line format.
-pub const JSONL_SCHEMA: u32 = 1;
+/// Version of the JSONL line format (2: `max_view_notifies_per_frame` in ticks and the summary,
+/// E01-P587).
+pub const JSONL_SCHEMA: u32 = 2;
 
 /// How often the flush thread drains the recorder and writes a `tick` line.
 pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
@@ -59,6 +62,9 @@ pub struct SessionSummary {
     /// The most coalesced notifies delivered between two consecutive frames (1 with one streaming
     /// view on screen; see [`Recorder`]).
     pub max_notifies_per_frame: u64,
+    /// The most coalesced notifies one view received between two consecutive frames (1 when every
+    /// streaming view is coalesced to frame cadence; ADR 0016).
+    pub max_view_notifies_per_frame: u64,
     /// Resident memory over the per-tick readings, MiB; `None` when the OS has no reader.
     pub rss_mib: Option<Summary>,
     /// Peak resident memory of the process (OS high-water mark), MiB.
@@ -78,13 +84,15 @@ impl fmt::Display for SessionSummary {
         }
         write!(
             f,
-            "; dropped {}; feed {} deltas ({:.1}/s); notify {} ({:.1}/s, at most {} per frame)",
+            "; dropped {}; feed {} deltas ({:.1}/s); notify {} ({:.1}/s, at most {} per frame, {} \
+             per view)",
             self.dropped_frames,
             self.feed_deltas,
             self.feed_deltas_per_s,
             self.notifies,
             self.notifies_per_s,
-            self.max_notifies_per_frame
+            self.max_notifies_per_frame,
+            self.max_view_notifies_per_frame
         )?;
         if let Some(rss) = &self.rss_mib {
             write!(
@@ -108,6 +116,7 @@ struct Accumulator {
     feed: u64,
     notify: u64,
     max_notifies_per_frame: u64,
+    max_view_notifies_per_frame: u64,
     rss_bytes: Vec<u64>,
     peak_rss_bytes: Option<u64>,
 }
@@ -119,6 +128,9 @@ impl Accumulator {
         self.feed += tick.feed_deltas;
         self.notify += tick.notifies;
         self.max_notifies_per_frame = self.max_notifies_per_frame.max(tick.max_notifies_per_frame);
+        self.max_view_notifies_per_frame = self
+            .max_view_notifies_per_frame
+            .max(tick.max_view_notifies_per_frame);
     }
 
     fn add_memory(&mut self, reading: Option<MemoryReading>) {
@@ -140,6 +152,7 @@ impl Accumulator {
             notifies: self.notify,
             notifies_per_s: per_second(self.notify, secs),
             max_notifies_per_frame: self.max_notifies_per_frame,
+            max_view_notifies_per_frame: self.max_view_notifies_per_frame,
             rss_mib: Summary::from_scaled(&mut self.rss_bytes, memory::MIB),
             peak_rss_mib: self.peak_rss_bytes.map(bytes_to_mib),
         }
@@ -186,6 +199,7 @@ fn tick_line(
         "notifies": tick.notifies,
         "notifies_per_s": per_second(tick.notifies, secs),
         "max_notifies_per_frame": tick.max_notifies_per_frame,
+        "max_view_notifies_per_frame": tick.max_view_notifies_per_frame,
         "rss_mib": memory.map(|m| bytes_to_mib(m.rss_bytes)),
         "peak_rss_mib": memory.and_then(|m| m.peak_rss_bytes).map(bytes_to_mib),
     })
@@ -332,6 +346,7 @@ mod tests {
             feed_deltas: 500,
             notifies: 60,
             max_notifies_per_frame: 1,
+            max_view_notifies_per_frame: 1,
             interval: Duration::from_millis(500),
         };
         let memory = MemoryReading {
@@ -349,6 +364,7 @@ mod tests {
                 "interval_ms",
                 "kind",
                 "max_notifies_per_frame",
+                "max_view_notifies_per_frame",
                 "notifies",
                 "notifies_per_s",
                 "peak_rss_mib",

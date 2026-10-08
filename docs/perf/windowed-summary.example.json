@@ -1,0 +1,177 @@
+{
+  "schema": 1,
+  "scenario": "pods-table",
+  "os": "macos",
+  "arch": "aarch64",
+  "app_version": "0.0.1",
+  "refresh_ms": 8.327,
+  "refresh_source": "measured",
+  "measures": "root view render start -> end of the GPUI update that drew (and, in the windowed app, presented) the frame; excludes GPU execution and display latency",
+  "budgets": {
+    "frame_ms": 8.333333333333334,
+    "dropped_frames": 0,
+    "input_latency_ms": 8.333333333333334,
+    "notifies_per_view_per_frame": 1,
+    "peak_rss_mib": 381.4697265625
+  },
+  "scripted": {
+    "name": "scripted",
+    "kind": "driven",
+    "duration_ms": 30370.34,
+    "frames": {
+      "count": 756,
+      "p50": 27.851,
+      "p95": 29.68,
+      "p99": 30.312,
+      "max": 31.718
+    },
+    "over_budget_frames": 756,
+    "dropped_frames": 1515,
+    "refreshes": 714,
+    "refresh_gap_ms": {
+      "count": 713,
+      "p50": 27.958,
+      "p95": 29.806,
+      "p99": 30.392,
+      "max": 31.027
+    },
+    "inactive_refreshes": 0,
+    "inputs": 713,
+    "input_latency_ms": {
+      "count": 713,
+      "p50": 27.886,
+      "p95": 29.742,
+      "p99": 30.33,
+      "max": 30.961
+    },
+    "inputs_without_frame": 0,
+    "notifies": 82,
+    "max_notifies_per_frame": 3,
+    "max_view_notifies_per_frame": 1,
+    "feed_deltas": 1800,
+    "cpu_percent": 71.39,
+    "rss_mib": 295.094,
+    "peak_rss_mib": 295.094
+  },
+  "phases": [
+    {
+      "name": "setup",
+      "kind": "setup",
+      "duration_ms": 2759.194,
+      "frames": {
+        "count": 12,
+        "p50": 9.817,
+        "p95": 33.214,
+        "p99": 33.214,
+        "max": 33.214
+      },
+      "over_budget_frames": 8,
+      "dropped_frames": 0,
+      "refreshes": 0,
+      "refresh_gap_ms": null,
+      "inactive_refreshes": 0,
+      "inputs": 0,
+      "input_latency_ms": null,
+      "inputs_without_frame": 0,
+      "notifies": 8,
+      "max_notifies_per_frame": 5,
+      "max_view_notifies_per_frame": 1,
+      "feed_deltas": 10030,
+      "cpu_percent": 11.84,
+      "rss_mib": 287.359,
+      "peak_rss_mib": 287.406
+    },
+    {
+      "name": "scroll",
+      "kind": "driven",
+      "duration_ms": 20017.146,
+      "frames": {
+        "count": 713,
+        "p50": 27.805,
+        "p95": 29.643,
+        "p99": 30.225,
+        "max": 30.869
+      },
+      "over_budget_frames": 713,
+      "dropped_frames": 1515,
+      "refreshes": 714,
+      "refresh_gap_ms": {
+        "count": 713,
+        "p50": 27.958,
+        "p95": 29.806,
+        "p99": 30.392,
+        "max": 31.027
+      },
+      "inactive_refreshes": 0,
+      "inputs": 713,
+      "input_latency_ms": {
+        "count": 713,
+        "p50": 27.886,
+        "p95": 29.742,
+        "p99": 30.33,
+        "max": 30.961
+      },
+      "inputs_without_frame": 0,
+      "notifies": 54,
+      "max_notifies_per_frame": 3,
+      "max_view_notifies_per_frame": 1,
+      "feed_deltas": 1200,
+      "cpu_percent": 101.52,
+      "rss_mib": 293.266,
+      "peak_rss_mib": 293.266
+    },
+    {
+      "name": "still",
+      "kind": "idle",
+      "duration_ms": 10353.194,
+      "frames": {
+        "count": 43,
+        "p50": 28.828,
+        "p95": 30.997,
+        "p99": 31.718,
+        "max": 31.718
+      },
+      "over_budget_frames": 43,
+      "dropped_frames": 0,
+      "refreshes": 0,
+      "refresh_gap_ms": null,
+      "inactive_refreshes": 0,
+      "inputs": 0,
+      "input_latency_ms": null,
+      "inputs_without_frame": 0,
+      "notifies": 28,
+      "max_notifies_per_frame": 3,
+      "max_view_notifies_per_frame": 1,
+      "feed_deltas": 600,
+      "cpu_percent": 13.14,
+      "rss_mib": 295.094,
+      "peak_rss_mib": 295.094
+    }
+  ],
+  "over_budget": [
+    {
+      "phase": "scroll",
+      "t_ms": 2754.04,
+      "ms": 29.766
+    },
+    {
+      "phase": "scroll",
+      "t_ms": 2783.979,
+      "ms": 28.356
+    },
+    {
+      "phase": "scroll",
+      "t_ms": 2812.496,
+      "ms": 27.982
+    }
+  ],
+  "notes": [
+    "window 1440 x 900 pt at scale 2"
+  ],
+  "failures": [
+    "756 of 756 frames over 8.33 ms (max 31.72, p99 30.31, p95 29.68)",
+    "1515 refreshes dropped",
+    "input latency max 30.96 ms (p95 29.74) over one frame"
+  ],
+  "valid": true
+}

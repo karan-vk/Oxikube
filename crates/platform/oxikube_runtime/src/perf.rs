@@ -15,11 +15,15 @@
 //!   and each call is one atomic load and a branch.
 //! - [`memory`]: the process's resident memory (RSS and peak) per OS. The flush thread reads it
 //!   once per tick; the scripted driver reads it between frames. Never inside a frame.
+//! - [`cpu`]: the process's CPU time (user + system), for the windowed scenarios' CPU figure.
 //! - [`FirstFrameProbe`]: runs a callback at the end of a window's first frame, the start-up
 //!   marker (E05-S13); [`sockets`]: how many IPv4/IPv6 sockets the process holds, the "no network
 //!   before the first frame" check.
 //! - `harness` (feature `perf-harness`): drives a window frame by frame for scripted headless
 //!   scenarios and builds a [`ScenarioSample`].
+//! - `windowed` (feature `perf-window`, E01-P587, ADR 0016): paces a scripted scenario on the real
+//!   window's display refresh, measures every frame through the hook's [`FrameTap`], counts the
+//!   refreshes the window missed and writes the per-scenario summary.
 //!
 //! # What a frame is
 //!
@@ -38,6 +42,7 @@
 //! numbers are CPU, layout and paint-preparation time only. Compare them against a same-runner
 //! baseline, never against the absolute frame budget.
 
+pub mod cpu;
 mod first_frame;
 mod frame;
 #[cfg(any(test, feature = "perf-harness"))]
@@ -49,10 +54,12 @@ mod ring;
 mod session;
 pub mod sockets;
 mod stats;
+#[cfg(any(test, feature = "perf-window"))]
+pub mod windowed;
 
 pub use first_frame::FirstFrameProbe;
-pub use frame::PerfRoot;
-pub use recorder::{DEFAULT_FRAME_CAPACITY, Recorder, RecorderReader, Tick};
+pub use frame::{FrameSample, FrameTap, PerfRoot};
+pub use recorder::{DEFAULT_FRAME_CAPACITY, FrameNotifies, Recorder, RecorderReader, Tick};
 pub use report::{Counters, REPORT_SCHEMA, ScenarioSample, ScenarioStatus};
 pub use ring::{FrameRing, RingReader};
 pub use session::{
@@ -88,6 +95,15 @@ pub fn enabled() -> bool {
 pub fn record_notify() {
     if let Some(recorder) = GLOBAL.get() {
         recorder.record_notify();
+    }
+}
+
+/// Counts one coalesced `cx.notify()` delivered to the view `view` (its entity id), for the
+/// per-view figure (`max_view_notifies_per_frame`). UI thread only. No-op unless `--perf` is on.
+#[inline]
+pub fn record_view_notify(view: u64) {
+    if let Some(recorder) = GLOBAL.get() {
+        recorder.record_view_notify(view);
     }
 }
 

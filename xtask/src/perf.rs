@@ -25,6 +25,8 @@
 //!
 //! `--from-report <file>` skips 1-4 and applies `--check` / `--update-baseline` to a saved report
 //! (a nightly `perf-report-<OS>` artifact): that is how the CI-runner baselines are seeded.
+//!
+//! `--windowed` runs the real-window scenarios of ADR 0016 instead (`windowed`, E01-P587).
 
 mod baseline;
 mod budget;
@@ -32,6 +34,7 @@ mod fixture;
 mod floors;
 mod print;
 mod report;
+mod windowed;
 
 use anyhow::{Context, Result, bail};
 use baseline::{Baseline, compare_with_tails};
@@ -132,6 +135,19 @@ pub struct Args {
     /// Report the absolute budgets (ADR 0013) without failing on them (debugging a slow build).
     #[arg(long)]
     pub skip_budgets: bool,
+    /// Run the real-window scenarios of ADR 0016 (`oxikube --perf-scenario-window`; pods-table,
+    /// table-filter, namespaces, detail-drawer, tabs-panes, theme, catalog, sidebar, logs,
+    /// terminal, idle) instead of the headless ones; `--samples` is the runs per scenario.
+    #[arg(long, conflicts_with_all = ["check", "update_baseline", "from_report"])]
+    pub windowed: bool,
+    /// With `--windowed`: the context the terminal scenario's shell pod runs on when it answers
+    /// (a real exec); `none` keeps the shell on this machine.
+    #[arg(long, default_value = "kind-oxikube", requires = "windowed")]
+    pub exec_context: String,
+    /// With `--windowed`: fail when a scenario is over an ADR 0016 budget or was not measured
+    /// (default: report only).
+    #[arg(long, requires = "windowed")]
+    pub enforce: bool,
 }
 
 pub fn run(args: &Args) -> Result<()> {
@@ -144,6 +160,20 @@ pub fn run(args: &Args) -> Result<()> {
         .context("cargo metadata")?;
     let root = metadata.workspace_root.as_std_path().to_owned();
     let target = metadata.target_directory.as_std_path().to_owned();
+
+    if args.windowed {
+        let options = windowed::Options {
+            scenario: args.scenario.as_deref(),
+            all: args.all,
+            samples: args.samples,
+            profile: &args.profile,
+            bin: args.bin.as_deref(),
+            out: args.out.as_deref(),
+            exec_context: &args.exec_context,
+            enforce: args.enforce,
+        };
+        return windowed::run(&options, &root, &target);
+    }
 
     let report = match &args.from_report {
         Some(path) => {
@@ -470,6 +500,20 @@ mod tests {
         assert_eq!(canonical_scenario("table-scroll-10k"), "scroll-10k");
         assert_eq!(canonical_scenario("startup"), "startup");
         assert!(SCENARIOS.contains(&canonical_scenario("table-scroll-10k")));
+    }
+
+    #[test]
+    fn windowed_takes_a_scenario_or_all_and_no_baseline_flags() {
+        let cli = Cli::try_parse_from(["perf", "--windowed", "pods-table"]).unwrap();
+        assert!(cli.args.windowed);
+        assert_eq!(cli.args.exec_context, "kind-oxikube");
+        assert!(Cli::try_parse_from(["perf", "--windowed", "--all", "--enforce"]).is_ok());
+        assert!(Cli::try_parse_from(["perf", "--windowed", "--all", "--check"]).is_err());
+        assert!(Cli::try_parse_from(["perf", "--all", "--enforce"]).is_err());
+        assert!(
+            windowed::SCENARIOS.contains(&"terminal") && windowed::SCENARIOS.len() == 11,
+            "the list oxikube's Scenario::ALL has"
+        );
     }
 
     #[test]

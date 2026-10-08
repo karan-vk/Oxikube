@@ -91,7 +91,7 @@ use oxikube_settings::SettingsStore;
 use crate::app_state::{AppPorts, AppState, AppStateError};
 
 pub use boot::{Boot, boot, boot_in, shutdown};
-pub use env::{ConfigSource, PortsChoice, RuntimeChoice, StartupEnv};
+pub use env::{BuildPorts, ConfigSource, PortsChoice, RuntimeChoice, StartupEnv};
 pub use features::{FEATURES, Feature};
 pub use first_frame::{CONFIG_LOAD_BUDGET, STARTUP_BUDGET};
 pub use paths::default_perf_dir;
@@ -113,8 +113,8 @@ pub enum StartupError {
     /// An `init` ran out of order.
     #[error(transparent)]
     AppState(#[from] AppStateError),
-    /// The app's adapters ([`PortsChoice::Sqlite`]) were asked for on the deterministic test
-    /// runtime: the kube adapters need Tokio.
+    /// The app's adapters ([`PortsChoice::Sqlite`]) or built ports ([`PortsChoice::Build`]) were
+    /// asked for on the deterministic test runtime: they need Tokio.
     #[error("the app's adapters need the Tokio runtime")]
     NeedsTokio,
 }
@@ -207,6 +207,10 @@ fn init_settings(cx: &mut App, env: &StartupEnv) -> Result<(), StartupError> {
 fn build_ports(cx: &mut App, env: &StartupEnv) -> Result<AppPorts, StartupError> {
     match &env.ports {
         PortsChoice::Provided(ports) => Ok(ports.clone()),
+        PortsChoice::Build(build) => {
+            let runtime = oxikube_runtime::handle(cx).ok_or(StartupError::NeedsTokio)?;
+            Ok(build(runtime))
+        }
         PortsChoice::Sqlite(path) => {
             let runtime = oxikube_runtime::handle(cx).ok_or(StartupError::NeedsTokio)?;
             let state = state_db::LazyState::new(path.clone());

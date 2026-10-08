@@ -1,6 +1,7 @@
 # ADR 0013: Performance budget — the app must feel as smooth as Zed
 
-- **Status:** Accepted (2026-10-03)
+- **Status:** Accepted (2026-10-03); the frame-time row is superseded by ADR 0016 (zero-jank
+  budget, measured in the real window, 2026-10-08)
 - **Deciders:** project owner
 - **Related:** docs/PERFORMANCE.md (budgets + how to measure), ADR 0002 (layers), ADR 0004 (oxikube_ui)
 
@@ -18,7 +19,8 @@ event. Smoothness is therefore a product requirement with numbers, not a polish 
 Oxikube adopts the budgets in `docs/PERFORMANCE.md` as release-gating requirements:
 
 - **Frame time:** p95 ≤ 8 ms (120 Hz) and p99 ≤ 16 ms during scrolling, typing, resizing and
-  live watch churn (10 000 pods with 1 %/5 s churn), measured with `--perf`.
+  live watch churn (10 000 pods with 1 %/5 s churn), measured with `--perf`. *Superseded by ADR
+  0016: every frame ≤ 8.33 ms and no dropped frame, judged on the maximum in the real window.*
 - **Input latency:** keystroke/click to visible change within one frame; the command palette
   opens in ≤ 1 frame and filters 2 000 entries in ≤ 5 ms.
 - **Startup:** cold launch to first interactive frame ≤ 400 ms on an M-series Mac; catalog
