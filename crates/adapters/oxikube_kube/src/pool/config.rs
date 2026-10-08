@@ -66,9 +66,9 @@ pub struct PoolConfig {
     /// Defaults to [`ExecInteractivePolicy::Never`]: a GUI cannot answer prompts.
     pub exec_policy: ExecInteractivePolicy,
     /// Limit on building one client, exec plugin included. A plugin that returns a token
-    /// runs once per build; one that returns a client certificate runs up to four times
-    /// (kube's expiry, TLS identity and auth layer runs, plus ours to tell the two apart),
-    /// all inside this limit. A build that overruns fails with
+    /// runs once per build; one that returns a client certificate runs twice (the
+    /// first run tells the two apart, the second supplies the identity; kube alone would run
+    /// it three times), all inside this limit. A build that overruns fails with
     /// [`Timeout`](oxikube_domain::ErrorKind::Timeout); it keeps running on the
     /// blocking pool (a plugin process cannot be cancelled) and the next `get` waits
     /// on it again instead of starting another plugin.
