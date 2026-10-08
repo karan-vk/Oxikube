@@ -646,8 +646,22 @@ loaded machine: `frame_ms` p50 3.58, p95 7.75 ms, first rows 70 ms, at most 1 no
 Measuring notes: a window that is not visible (covered, another Space) draws nothing, and its CPU
 reads 0.1 to 0.3 % whatever the code does, so compare runs whose `--perf` JSONL shows frames in the
 first seconds, and compare the redraw count, which does not depend on the machine's load. The
-detail drawer still redraws once a second while it is open (its ages are drawn by several views);
-tracked in [#566](https://github.com/karan-vk/Oxikube/issues/566).
+detail drawer is no longer an exception ([E07-F566](#the-detail-age-tick-e07-f566), below).
+
+### The detail age tick (E07-F566)
+
+`DetailView` (the drawer, or pinned as a tab) notified itself every second while shown, so an open
+detail of a still object cost one redraw a second. Its ages are drawn by three views: the header's
+`age` chip (every tab), the Overview's condition rows and the Events tab's rows. The timer still
+fires once a second, but `detail::ages` now re-reads the ages the active tab draws, formatted at the
+time of the last frame (`drawn_at`, set by `render`) and now, and notifies only when one reads
+differently (`DetailView::ages_moved`; the same re-read-and-compare as the table's
+`CellCache::ages_moved`). An object days old changes once a day (`30d`), so a still detail draws
+nothing; a young object, or a condition or event a few minutes old on the tab that shows it, still
+ticks each second its seconds show. A hidden detail and one with a pinned clock (screenshots) never
+redraw for ages. Pinned by `detail::tests::ages` (render counts over 30 ticks of an old object, one
+redraw on a day rollover, a young object, condition and event ticking only on their own tab) and
+`detail::ages::tests`.
 
 ### Memory: 10 000 pods under 400 MB (E07-F508)
 

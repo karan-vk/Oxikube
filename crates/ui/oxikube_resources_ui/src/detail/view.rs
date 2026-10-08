@@ -3,7 +3,6 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
 
 use gpui::{
     App, Context, EventEmitter, FocusHandle, Focusable, ListAlignment, ListState, SharedString,
@@ -17,6 +16,7 @@ use oxikube_domain::ids::{Gvk, ResourceRef, Scope};
 use oxikube_ui::IconName;
 use oxikube_workspace::{Item, ItemEvent, TabContent};
 
+use super::ages::TICK;
 use super::describe::DescribeTab;
 use super::events::EventRow;
 use super::model::{DetailModel, OwnerLink, Row};
@@ -25,9 +25,6 @@ use super::state::{DetailDeps, DetailEvent, DetailState, EventsTab, FullState, M
 use super::tabs::DetailTab;
 use super::yaml::YamlTab;
 use crate::table::ResourceTable;
-
-/// How often ages are redrawn while the view is shown.
-const TICK: Duration = Duration::from_secs(1);
 
 /// The detail of one object. See the [module docs](crate::detail).
 pub struct DetailView {
@@ -38,8 +35,11 @@ pub struct DetailView {
     /// The table the drawer was opened from, which `j` / `k` step through.
     pub(super) origin: Option<WeakEntity<ResourceTable>>,
     pub(super) tab: DetailTab,
-    /// Whether the view is on screen (ages tick only then).
+    /// Whether the view is on screen (ages are checked only then).
     pub(super) shown: bool,
+    /// The time the last frame read its ages at: the age tick redraws when one reads differently
+    /// now (E07-F566).
+    pub(super) drawn_at: Timestamp,
     /// A fixed "now" for ages (screenshots), instead of the clock.
     pub(super) now_override: Option<Timestamp>,
     pub(super) state: DetailState,
@@ -78,6 +78,12 @@ pub struct DetailView {
     /// How many Overview rows were built (virtualisation tests).
     #[cfg(test)]
     pub(super) rendered_rows: usize,
+    /// How many times the view was drawn (age tick tests).
+    #[cfg(test)]
+    pub(super) renders: usize,
+    /// Added to the clock (age tick tests).
+    #[cfg(test)]
+    pub(super) skew: jiff::SignedDuration,
     _session_task: Task<()>,
     _tick: Task<()>,
 }
@@ -98,11 +104,7 @@ impl DetailView {
         let tick = cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(TICK).await;
-                let alive = this.update(cx, |view, cx| {
-                    if view.shown {
-                        cx.notify();
-                    }
-                });
+                let alive = this.update(cx, |view, cx| view.tick_ages(cx));
                 if alive.is_err() {
                     break;
                 }
@@ -117,6 +119,7 @@ impl DetailView {
             origin: None,
             tab: DetailTab::Overview,
             shown: true,
+            drawn_at: Timestamp::now(),
             now_override: None,
             state: DetailState::Loading,
             object: None,
@@ -143,6 +146,10 @@ impl DetailView {
             exec_task: None,
             #[cfg(test)]
             rendered_rows: 0,
+            #[cfg(test)]
+            renders: 0,
+            #[cfg(test)]
+            skew: jiff::SignedDuration::ZERO,
             _session_task: session_task,
             _tick: tick,
         };
@@ -182,7 +189,16 @@ impl DetailView {
 
     /// The time ages are read against.
     pub(super) fn now(&self) -> Timestamp {
-        self.now_override.unwrap_or_else(Timestamp::now)
+        self.now_override.unwrap_or_else(|| {
+            #[cfg(test)]
+            {
+                Timestamp::now() + self.skew
+            }
+            #[cfg(not(test))]
+            {
+                Timestamp::now()
+            }
+        })
     }
 
     /// Tells the view whether it is on screen (the drawer's active state).

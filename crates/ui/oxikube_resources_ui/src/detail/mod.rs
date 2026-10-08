@@ -15,6 +15,7 @@
 //! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, and a CRD's Schema |
 //! | `state` | [`DetailDeps`], [`Mount`], [`DetailState`]: what the view is built over and how the object stands |
 //! | `keys` | the `Detail` key context and its actions (E07-U559): close, step the table, switch tab |
+//! | `ages` | the age tick (E07-F566): a shown detail redraws for ages only when one reads differently |
 //! | `view` | [`DetailView`]: the entity and its commands |
 //! | `follow` | the store subscription (one row on the table's own feed), the model and the list's rows kept in step |
 //! | `full` | the full read for metadata-only and Table feeds, and the owners' scopes from discovery |
@@ -43,6 +44,7 @@
 //! A Secret shows its key names and never a value ([`model::mask_secret`]); its
 //! `last-applied-configuration` annotation, which embeds the data, is dropped.
 
+mod ages;
 mod describe;
 mod drawer;
 mod events;

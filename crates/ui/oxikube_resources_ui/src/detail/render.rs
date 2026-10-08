@@ -20,6 +20,12 @@ use crate::table::ToneColors;
 
 impl Render for DetailView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        {
+            self.renders += 1;
+        }
+        // The age tick compares against this frame's clock.
+        self.drawn_at = self.now();
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let deleted = matches!(self.state, DetailState::Deleted);
