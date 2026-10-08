@@ -25,7 +25,8 @@ fn info(budgets: Budgets) -> RunInfo {
 fn frame(meter: &Meter, start: Instant, ms: f64, views: u64) {
     meter.frame(FrameSample {
         start,
-        duration: Duration::from_secs_f64(ms / 1000.0),
+        duration: Duration::from_secs_f64(ms / 1000.0) + Duration::from_millis(5),
+        drawn: Some(Duration::from_secs_f64(ms / 1000.0)),
         notifies: FrameNotifies {
             total: views,
             max_per_view: views.min(1),
@@ -71,6 +72,11 @@ fn setup_is_reported_but_only_scripted_phases_are_judged() {
     let latency = scripted.input_latency_ms.unwrap();
     assert!(latency.max >= 3.0 && latency.max < 8.0, "{latency:?}");
     assert!(s.over_budget.is_empty());
+    let presented = scripted.presented_ms.unwrap();
+    assert!(
+        (presented.max - 8.0).abs() < 1e-9,
+        "the present (here 5 ms) is reported apart from the 3 ms draw: {presented:?}"
+    );
 }
 
 #[test]
@@ -138,6 +144,7 @@ fn two_notifies_for_one_view_in_a_frame_fail_the_coalescing_budget() {
     meter.frame(FrameSample {
         start: t0,
         duration: Duration::from_millis(1),
+        drawn: None,
         notifies: FrameNotifies {
             total: 3,
             max_per_view: 2,

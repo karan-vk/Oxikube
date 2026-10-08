@@ -85,8 +85,14 @@ pub struct PhaseSummary {
     pub kind: PhaseKind,
     /// Wall time, ms.
     pub duration_ms: f64,
-    /// Frame times, ms (`None`: no frame drawn).
+    /// Frame times, ms (`None`: no frame drawn): from the start of `Window::draw` to the end of
+    /// the content's paint (layout, prepaint, paint). What the frame budget judges.
     pub frames: Option<Summary>,
+    /// The same frames to the end of the update that presented them, ms: `frames` plus finishing
+    /// the scene and `present`, which waits for a free drawable (on macOS about until the next
+    /// refresh while the window draws on every one), so not a cost of the app's own. A present
+    /// that runs long shows as a dropped frame.
+    pub presented_ms: Option<Summary>,
     /// Frames over the frame budget.
     pub over_budget_frames: u64,
     /// Display refreshes the window missed while it was being driven (0 for setup and idle).

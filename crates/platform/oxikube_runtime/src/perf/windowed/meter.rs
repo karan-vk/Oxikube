@@ -9,7 +9,14 @@ use super::summary::{
     Budgets, MAX_LISTED_OVER_BUDGET, OverBudgetFrame, PhaseKind, PhaseSummary, WINDOWED_SCHEMA,
     WindowedSummary, failures,
 };
-use crate::perf::{FRAME_MEASURES, FrameSample, FrameTap};
+use crate::perf::{FrameSample, FrameTap};
+
+/// What the summary's frame figures cover.
+pub const WINDOWED_MEASURES: &str = "frames: from the start of Window::draw to the end of the \
+content's paint (layout, prepaint, paint), judged against the budget; presented_ms: to the end of \
+the GPUI update that presented the frame (finishing the scene and present, which waits for a free \
+drawable); dropped_frames: display refreshes missed while driven; input_latency_ms: from an \
+input's dispatch to the end of the paint of the frame that shows it";
 
 /// How the run is reported: what [`Meter::finish`] needs besides the measurements.
 #[derive(Debug, Clone)]
@@ -79,7 +86,9 @@ impl Meter {
             return;
         };
         if let Some(input) = pending {
-            let end = frame.start + frame.duration;
+            // The frame that shows the input is drawn when its paint ends; `present` then hands it
+            // to the display at the next refresh.
+            let end = frame.start + frame.drawn.unwrap_or(frame.duration);
             let latency = end.saturating_duration_since(input);
             phase
                 .latencies_ns
@@ -87,7 +96,8 @@ impl Meter {
         }
         phase.frames.push(Frame {
             start: frame.start,
-            duration: frame.duration,
+            drawn: frame.drawn.unwrap_or(frame.duration),
+            presented: frame.duration,
             notifies: frame.notifies,
         });
     }
@@ -177,11 +187,11 @@ impl Meter {
             .flat_map(|p| {
                 p.frames
                     .iter()
-                    .filter(|f| f.duration > budget)
+                    .filter(|f| f.drawn > budget)
                     .map(|f| OverBudgetFrame {
                         phase: p.name.clone(),
                         t_ms: origin.map_or(0.0, |o| ms(f.start.saturating_duration_since(o))),
-                        ms: ms(f.duration),
+                        ms: ms(f.drawn),
                     })
             })
             .take(MAX_LISTED_OVER_BUDGET)
@@ -211,7 +221,7 @@ impl Meter {
             app_version: info.app_version.clone(),
             refresh_ms: ms(info.refresh),
             refresh_source: info.refresh_source.clone(),
-            measures: FRAME_MEASURES.to_owned(),
+            measures: WINDOWED_MEASURES.to_owned(),
             budgets: info.budgets,
             scripted,
             phases,

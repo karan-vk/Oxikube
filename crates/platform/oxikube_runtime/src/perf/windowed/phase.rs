@@ -34,7 +34,10 @@ impl Edge {
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Frame {
     pub(super) start: Instant,
-    pub(super) duration: Duration,
+    /// Render start to the end of the content's paint (what the frame budget judges).
+    pub(super) drawn: Duration,
+    /// Render start to the end of the update that presented it.
+    pub(super) presented: Duration,
     pub(super) notifies: FrameNotifies,
 }
 
@@ -88,6 +91,7 @@ pub(super) fn summarise_refs(
 ) -> PhaseSummary {
     let budget = Duration::from_secs_f64(info.budgets.frame_ms / 1000.0);
     let mut frames_ns: Vec<u64> = Vec::new();
+    let mut presented_ns: Vec<u64> = Vec::new();
     let mut gaps_ns: Vec<u64> = Vec::new();
     let mut latencies_ns: Vec<u64> = Vec::new();
     let mut s = PhaseSummary {
@@ -95,6 +99,7 @@ pub(super) fn summarise_refs(
         kind,
         duration_ms: 0.0,
         frames: None,
+        presented_ms: None,
         over_budget_frames: 0,
         dropped_frames: 0,
         refreshes: 0,
@@ -132,8 +137,9 @@ pub(super) fn summarise_refs(
             s.peak_rss_mib = Some(s.peak_rss_mib.map_or(peak, |p: f64| p.max(peak)));
         }
         for frame in &log.frames {
-            frames_ns.push(u64::try_from(frame.duration.as_nanos()).unwrap_or(u64::MAX));
-            if frame.duration > budget {
+            frames_ns.push(nanos(frame.drawn));
+            presented_ns.push(nanos(frame.presented));
+            if frame.drawn > budget {
                 s.over_budget_frames += 1;
             }
             s.max_notifies_per_frame = s.max_notifies_per_frame.max(frame.notifies.total);
@@ -156,6 +162,7 @@ pub(super) fn summarise_refs(
     }
     s.duration_ms = ms(wall);
     s.frames = Summary::from_nanos(&mut frames_ns);
+    s.presented_ms = Summary::from_nanos(&mut presented_ns);
     s.refresh_gap_ms = Summary::from_nanos(&mut gaps_ns);
     s.input_latency_ms = Summary::from_nanos(&mut latencies_ns);
     s.cpu_percent = cpu::percent(Some(Duration::ZERO), cpu_used, wall);
@@ -171,6 +178,10 @@ pub fn missed_refreshes(gap: Duration, refresh: Duration) -> u64 {
     }
     let intervals = (gap.as_secs_f64() / refresh.as_secs_f64()).round() as u64;
     intervals.saturating_sub(1)
+}
+
+fn nanos(d: Duration) -> u64 {
+    u64::try_from(d.as_nanos()).unwrap_or(u64::MAX)
 }
 
 pub(super) fn ms(d: Duration) -> f64 {

@@ -15,16 +15,22 @@
 //!
 //! # What is measured
 //!
-//! - **Frames**: the hook's definition (`perf::FRAME_MEASURES`): from the start of `Window::draw`
-//!   to the end of the update that drew and presented it. Every frame of a scripted phase counts;
-//!   none is skipped. The budget is one refresh at 120 Hz (8.33 ms), judged on the maximum.
+//! - **Frames**: from the start of `Window::draw` to the end of the content's paint (layout,
+//!   prepaint and paint of the whole tree; the hook paints a probe after the content), judged
+//!   against one refresh at 120 Hz (8.33 ms) on the maximum. Every frame of a scripted phase
+//!   counts; none is skipped. The whole frame to the end of `present` is reported too
+//!   (`presented_ms`) but not judged: on macOS `present` waits for a free drawable, which while the
+//!   window draws on every refresh is about until the next refresh, so it measures the display's
+//!   pacing, not the app. A present (or anything else on the main thread) that runs long makes the
+//!   window miss a refresh, which the dropped-frame count catches.
 //! - **Dropped frames**: while a phase is driven the window wants a frame on every refresh, so a
 //!   gap of more than one and a half refresh intervals between two refreshes the pacer was called
 //!   on means the window missed the ones in between (the main thread was still busy, or the
 //!   display link's callbacks were merged). Counted against the display's refresh interval, from
 //!   the OS where it has a reader (`refresh_source`).
 //! - **Input latency**: from the moment a step dispatches an input ([`Step::input`]) to the end
-//!   of the next frame, i.e. the frame that shows it. The step runs at the start of a refresh, so
+//!   of the paint of the next frame, i.e. the frame that shows it (it is presented at the next
+//!   refresh). The step runs at the start of a refresh, so
 //!   one refresh is the budget: the input is handled, laid out, painted and presented before the
 //!   next refresh is due.
 //! - **Notifies**: per frame, all views together and the most for one view (the coalescing
@@ -43,7 +49,7 @@ mod summary;
 #[cfg(test)]
 mod tests;
 
-pub use meter::{Meter, RunInfo};
+pub use meter::{Meter, RunInfo, WINDOWED_MEASURES};
 pub use pace::{Flow, Step, drive, idle};
 pub use phase::missed_refreshes;
 pub use summary::{

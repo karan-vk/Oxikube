@@ -30,16 +30,22 @@ display, `release-fast`, nothing else running):
 
 | What | Budget | Judged on |
 |---|---|---|
-| Frames | every frame ≤ **8.33 ms** (one 120 Hz refresh) | the **maximum** (and p99, p95 reported); not a percentile |
+| Frames | every frame drawn in ≤ **8.33 ms** (one 120 Hz refresh) | the **maximum** (and p99, p95 reported); not a percentile |
 | Dropped frames | **0** refreshes missed while a view is being driven | the gaps between the display refreshes the window is called on |
-| Input | ≤ **1 frame**: dispatched at a refresh, shown in the frame of that refresh | from the dispatch to the end of the frame that shows it, ≤ 8.33 ms |
+| Input | ≤ **1 frame**: dispatched at a refresh, shown in the frame of that refresh | from the dispatch to the end of the paint of the frame that shows it, ≤ 8.33 ms |
 | Memory | 10 000 pods **< 400 MB** | the process's peak resident memory |
 | Idle CPU | **< 1 %** with two clusters connected | process CPU time over an idle phase |
 | Notifies | ≤ **1 coalesced notify per view per frame** | the most one view received between two frames |
 
-A frame is what the `--perf` hook measures (`oxikube_runtime::perf::FRAME_MEASURES`): from the start
-of `Window::draw` to the end of the update that drew and presented it, so layout, prepaint, paint,
-scene building and the `present` that submits the GPU work; not GPU execution or display latency.
+A frame is judged from the start of `Window::draw` to the end of the content's paint: layout,
+prepaint and paint of the whole tree, the app's own work for that frame. The `--perf` hook also
+reports the frame to the end of `present` (`presented_ms`), but that is not judged: GPUI's Metal
+`present` waits for a free drawable, so while the window draws on every refresh it lasts about until
+the next refresh (a windowed pods-table scroll reads about 8.3 ms per presented frame for about
+3 to 4 ms of drawing). It measures the display's pacing, not the app. Whatever does run long there
+(a heavy scene to encode, a GPU that cannot keep up) or anywhere else on the main thread makes the
+window miss a refresh, and the dropped-frame budget, zero, catches it. The input budget is judged the
+same way: the frame that shows an input must be painted within the refresh it was dispatched at.
 
 ### The measurement
 

@@ -1,7 +1,11 @@
 //! The frame hook: a root view that times every frame it is part of.
 
 use super::recorder::{FrameNotifies, Recorder};
-use gpui::{AnyView, Context, IntoElement, Render, Window};
+use gpui::{
+    AnyElement, AnyView, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
+    Styled as _, Window, canvas, div,
+};
+use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -13,6 +17,11 @@ pub struct FrameSample {
     pub start: Instant,
     /// From `start` to the end of the update that drew (and presented) the frame.
     pub duration: Duration,
+    /// From `start` to the end of the content's paint: layout, prepaint and paint of the tree,
+    /// before the scene is finished and handed to the renderer, whose `present` waits for a free
+    /// drawable (on macOS about until the next refresh while the window draws every refresh).
+    /// Only measured while a [`FrameTap`] is set.
+    pub drawn: Option<Duration>,
     /// The coalesced notifies the frame absorbed.
     pub notifies: FrameNotifies,
 }
@@ -65,6 +74,8 @@ impl Render for PerfRoot {
         let start = Instant::now();
         let recorder = self.recorder.clone();
         let tap = self.tap.clone();
+        let painted = Rc::new(Cell::new(None));
+        let drawn = painted.clone();
         cx.defer(move |_| {
             let duration = start.elapsed();
             let notifies = recorder.record_frame(duration);
@@ -72,10 +83,29 @@ impl Render for PerfRoot {
                 tap(FrameSample {
                     start,
                     duration,
+                    drawn: drawn.get().map(|end: Instant| end.saturating_duration_since(start)),
                     notifies,
                 });
             }
         });
-        self.inner.clone()
+        if self.tap.is_none() {
+            return self.inner.clone().into_any_element();
+        }
+        paint_probe(self.inner.clone(), painted)
     }
+}
+
+/// `inner`, followed by an empty element painted after it, which notes when the content's paint
+/// ended. Only with a tap: without one the root is the content alone.
+fn paint_probe(inner: AnyView, painted: Rc<Cell<Option<Instant>>>) -> AnyElement {
+    div()
+        .id("perf-root")
+        .size_full()
+        .child(inner)
+        .child(
+            canvas(|_, _, _| {}, move |_, _, _, _| painted.set(Some(Instant::now())))
+                .absolute()
+                .size_0(),
+        )
+        .into_any_element()
 }

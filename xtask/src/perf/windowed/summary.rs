@@ -26,6 +26,8 @@ pub struct Phase {
     pub kind: String,
     pub duration_ms: f64,
     pub frames: Option<Stats>,
+    #[serde(default)]
+    pub presented_ms: Option<Stats>,
     pub over_budget_frames: u64,
     pub dropped_frames: u64,
     pub refreshes: u64,
@@ -124,6 +126,8 @@ pub fn aggregate(runs: &[Summary]) -> BTreeMap<String, Spread> {
         add("frame_p99_ms", s.frames.map(|f| f.p99));
         add("frame_p95_ms", s.frames.map(|f| f.p95));
         add("frame_p50_ms", s.frames.map(|f| f.p50));
+        add("presented_max_ms", s.presented_ms.map(|f| f.max));
+        add("presented_p50_ms", s.presented_ms.map(|f| f.p50));
         add("over_budget_frames", Some(s.over_budget_frames as f64));
         add("dropped_frames", Some(s.dropped_frames as f64));
         add("input_latency_max_ms", s.input_latency_ms.map(|i| i.max));

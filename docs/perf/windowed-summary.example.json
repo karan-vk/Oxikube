@@ -4,9 +4,9 @@
   "os": "macos",
   "arch": "aarch64",
   "app_version": "0.0.1",
-  "refresh_ms": 8.327,
+  "refresh_ms": 8.273,
   "refresh_source": "measured",
-  "measures": "root view render start -> end of the GPUI update that drew (and, in the windowed app, presented) the frame; excludes GPU execution and display latency",
+  "measures": "frames: from the start of Window::draw to the end of the content's paint (layout, prepaint, paint), judged against the budget; presented_ms: to the end of the GPUI update that presented the frame (finishing the scene and present, which waits for a free drawable); dropped_frames: display refreshes missed while driven; input_latency_ms: from an input's dispatch to the end of the paint of the frame that shows it",
   "budgets": {
     "frame_ms": 8.333333333333334,
     "dropped_frames": 0,
@@ -17,55 +17,69 @@
   "scripted": {
     "name": "scripted",
     "kind": "driven",
-    "duration_ms": 30370.34,
+    "duration_ms": 30028.799,
     "frames": {
-      "count": 756,
-      "p50": 27.851,
-      "p95": 29.68,
-      "p99": 30.312,
-      "max": 31.718
+      "count": 2484,
+      "p50": 3.419,
+      "p95": 3.89,
+      "p99": 4.144,
+      "max": 5.855
     },
-    "over_budget_frames": 756,
-    "dropped_frames": 1515,
-    "refreshes": 714,
+    "presented_ms": {
+      "count": 2484,
+      "p50": 8.205,
+      "p95": 8.403,
+      "p99": 8.501,
+      "max": 11.528
+    },
+    "over_budget_frames": 0,
+    "dropped_frames": 0,
+    "refreshes": 2400,
     "refresh_gap_ms": {
-      "count": 713,
-      "p50": 27.958,
-      "p95": 29.806,
-      "p99": 30.392,
-      "max": 31.027
+      "count": 2399,
+      "p50": 8.33,
+      "p95": 8.919,
+      "p99": 9.295,
+      "max": 11.579
     },
     "inactive_refreshes": 0,
-    "inputs": 713,
+    "inputs": 2399,
     "input_latency_ms": {
-      "count": 713,
-      "p50": 27.886,
-      "p95": 29.742,
-      "p99": 30.33,
-      "max": 30.961
+      "count": 2399,
+      "p50": 3.454,
+      "p95": 3.923,
+      "p99": 4.133,
+      "max": 5.446
     },
     "inputs_without_frame": 0,
-    "notifies": 82,
+    "notifies": 84,
     "max_notifies_per_frame": 3,
     "max_view_notifies_per_frame": 1,
     "feed_deltas": 1800,
-    "cpu_percent": 71.39,
-    "rss_mib": 295.094,
-    "peak_rss_mib": 295.094
+    "cpu_percent": 36.7,
+    "rss_mib": 276.484,
+    "peak_rss_mib": 276.484
   },
   "phases": [
     {
       "name": "setup",
       "kind": "setup",
-      "duration_ms": 2759.194,
+      "duration_ms": 2774.606,
       "frames": {
-        "count": 12,
-        "p50": 9.817,
-        "p95": 33.214,
-        "p99": 33.214,
-        "max": 33.214
+        "count": 20,
+        "p50": 0.834,
+        "p95": 6.606,
+        "p99": 9.487,
+        "max": 9.487
       },
-      "over_budget_frames": 8,
+      "presented_ms": {
+        "count": 20,
+        "p50": 4.188,
+        "p95": 7.236,
+        "p99": 10.009,
+        "max": 10.009
+      },
+      "over_budget_frames": 1,
       "dropped_frames": 0,
       "refreshes": 0,
       "refresh_gap_ms": null,
@@ -77,61 +91,75 @@
       "max_notifies_per_frame": 5,
       "max_view_notifies_per_frame": 1,
       "feed_deltas": 10030,
-      "cpu_percent": 11.84,
-      "rss_mib": 287.359,
-      "peak_rss_mib": 287.406
+      "cpu_percent": 6.67,
+      "rss_mib": 268.047,
+      "peak_rss_mib": 268.063
     },
     {
       "name": "scroll",
       "kind": "driven",
-      "duration_ms": 20017.146,
+      "duration_ms": 20009.388,
       "frames": {
-        "count": 713,
-        "p50": 27.805,
-        "p95": 29.643,
-        "p99": 30.225,
-        "max": 30.869
+        "count": 2399,
+        "p50": 3.425,
+        "p95": 3.888,
+        "p99": 4.091,
+        "max": 5.391
       },
-      "over_budget_frames": 713,
-      "dropped_frames": 1515,
-      "refreshes": 714,
+      "presented_ms": {
+        "count": 2399,
+        "p50": 8.215,
+        "p95": 8.408,
+        "p99": 8.501,
+        "max": 11.528
+      },
+      "over_budget_frames": 0,
+      "dropped_frames": 0,
+      "refreshes": 2400,
       "refresh_gap_ms": {
-        "count": 713,
-        "p50": 27.958,
-        "p95": 29.806,
-        "p99": 30.392,
-        "max": 31.027
+        "count": 2399,
+        "p50": 8.33,
+        "p95": 8.919,
+        "p99": 9.295,
+        "max": 11.579
       },
       "inactive_refreshes": 0,
-      "inputs": 713,
+      "inputs": 2399,
       "input_latency_ms": {
-        "count": 713,
-        "p50": 27.886,
-        "p95": 29.742,
-        "p99": 30.33,
-        "max": 30.961
+        "count": 2399,
+        "p50": 3.454,
+        "p95": 3.923,
+        "p99": 4.133,
+        "max": 5.446
       },
       "inputs_without_frame": 0,
-      "notifies": 54,
+      "notifies": 56,
       "max_notifies_per_frame": 3,
       "max_view_notifies_per_frame": 1,
       "feed_deltas": 1200,
-      "cpu_percent": 101.52,
-      "rss_mib": 293.266,
-      "peak_rss_mib": 293.266
+      "cpu_percent": 52.79,
+      "rss_mib": 274.5,
+      "peak_rss_mib": 274.5
     },
     {
       "name": "still",
       "kind": "idle",
-      "duration_ms": 10353.194,
+      "duration_ms": 10019.411,
       "frames": {
-        "count": 43,
-        "p50": 28.828,
-        "p95": 30.997,
-        "p99": 31.718,
-        "max": 31.718
+        "count": 85,
+        "p50": 3.118,
+        "p95": 4.705,
+        "p99": 5.855,
+        "max": 5.855
       },
-      "over_budget_frames": 43,
+      "presented_ms": {
+        "count": 85,
+        "p50": 4.273,
+        "p95": 5.667,
+        "p99": 8.24,
+        "max": 8.24
+      },
+      "over_budget_frames": 0,
       "dropped_frames": 0,
       "refreshes": 0,
       "refresh_gap_ms": null,
@@ -143,35 +171,15 @@
       "max_notifies_per_frame": 3,
       "max_view_notifies_per_frame": 1,
       "feed_deltas": 600,
-      "cpu_percent": 13.14,
-      "rss_mib": 295.094,
-      "peak_rss_mib": 295.094
+      "cpu_percent": 4.57,
+      "rss_mib": 276.484,
+      "peak_rss_mib": 276.484
     }
   ],
-  "over_budget": [
-    {
-      "phase": "scroll",
-      "t_ms": 2754.04,
-      "ms": 29.766
-    },
-    {
-      "phase": "scroll",
-      "t_ms": 2783.979,
-      "ms": 28.356
-    },
-    {
-      "phase": "scroll",
-      "t_ms": 2812.496,
-      "ms": 27.982
-    }
-  ],
+  "over_budget": [],
   "notes": [
     "window 1440 x 900 pt at scale 2"
   ],
-  "failures": [
-    "756 of 756 frames over 8.33 ms (max 31.72, p99 30.31, p95 29.68)",
-    "1515 refreshes dropped",
-    "input latency max 30.96 ms (p95 29.74) over one frame"
-  ],
+  "failures": [],
   "valid": true
 }

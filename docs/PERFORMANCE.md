@@ -9,9 +9,9 @@ numbers are measured on a mid-range x86 laptop with an integrated GPU.
 
 | Area | Budget | Scenario |
 |---|---|---|
-| Frame time | **every frame ≤ 8.33 ms** (one 120 Hz refresh), judged on the maximum (p99 and p95 reported) | every [windowed scenario](#windowed-scenarios-the-zero-jank-budget-in-the-real-window-adr-0016): the pods table, filter, namespaces, detail drawer, tabs and panes, theme, catalog, sidebar, log viewer, terminal |
+| Frame time | **every frame drawn in ≤ 8.33 ms** (one 120 Hz refresh: `Window::draw` to the end of the content's paint), judged on the maximum (p99 and p95 reported) | every [windowed scenario](#windowed-scenarios-the-zero-jank-budget-in-the-real-window-adr-0016): the pods table, filter, namespaces, detail drawer, tabs and panes, theme, catalog, sidebar, log viewer, terminal |
 | Dropped frames | **0** display refreshes missed while a view is driven | the same |
-| Input latency | ≤ 1 frame: an input dispatched at a refresh is in that refresh's frame (≤ 8.33 ms to the end of it) | keystrokes, scroll events, actions and commands of the windowed scenarios |
+| Input latency | ≤ 1 frame: an input dispatched at a refresh is in that refresh's frame (≤ 8.33 ms to the end of its paint) | keystrokes, scroll events, actions and commands of the windowed scenarios |
 | Notifies | ≤ 1 coalesced notify per view per frame | the same |
 | Palette | open ≤ 1 frame; filter 2 000 entries ≤ 5 ms | command palette, `:` jump, picker |
 | Startup | ≤ 400 ms cold to first interactive frame; catalog before any network; settings + keymap + theme < 30 ms on the main thread | `oxikube` launch with 3 kubeconfigs, 20 contexts ([Startup](#startup-cold-start-to-the-first-interactive-frame)) |
@@ -358,14 +358,20 @@ afterwards) when `--exec-context` (default `kind-oxikube`) answers.
 
 Each run writes the `--perf` JSONL as before and `<jsonl stem>.<scenario>.summary.json` next to it
 (`--perf-report` to choose; format in `docs/perf/windowed-summary.example.json`, schema 1): per
-phase and for all scripted phases together the frames (count, p50, p95, p99, max), the frames over
+phase and for all scripted phases together the frames (count, p50, p95, p99, max: `Window::draw` to
+the end of the content's paint, which the hook marks with a probe painted after the content), the
+same frames to the end of `present` (`presented_ms`, reported, not judged: GPUI's Metal `present`
+waits for a free drawable, about until the next refresh while the window draws on every one, so it
+measures the display's pacing; a present that runs long shows as a dropped frame), the frames over
 8.33 ms, the dropped refreshes, the refresh gaps, input latency, notifies per frame and the most for
 one view, feed deltas, CPU % of one core, RSS and peak RSS at the phase's end; every scripted
 frame over budget with its phase and time; the verdict (`failures`, `valid`). It prints one line
-per phase:
+per phase and the verdict, for example (`release-fast`, M5 Max, the machine shared with other
+builds):
 
 ```
-oxikube --perf-scenario-window: pods-table scroll (Driven, 20.0 s): 2391 frames: p50 3.10, p95 4.02, p99 5.21, max 9.80 ms; 3 over budget; dropped 2; input p95 3.98, max 9.90 ms; notifies at most 3 per frame, 1 per view; cpu 41.20 %; rss 352.1 MiB (peak 356.0)
+oxikube --perf-scenario-window: pods-table scroll (Driven, 20.0 s): 2399 frames: p50 3.42, p95 3.89, p99 4.09, max 5.39 ms; 0 over budget; dropped 0; input p95 3.92, max 5.45 ms; notifies at most 3 per frame, 1 per view; cpu 52.79 %; rss 274.5 MiB (peak 274.5)
+oxikube --perf-scenario-window: pods-table: within every ADR 0016 budget
 ```
 
 `cargo xtask perf --windowed` writes `<target>/perf/windowed-report-<os>.json` (every run's summary,
