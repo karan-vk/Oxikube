@@ -36,6 +36,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use tower::{BoxError, Service};
 
 use super::classify::{CredentialRefresh, classify_with};
+use super::exec_cert::{self, PluginOutput};
 use super::refresh::{DEFAULT_REFRESH_DEADLINE, RefreshGuardLayer};
 use crate::warnings::{WarningLayer, WarningSink};
 
@@ -126,10 +127,14 @@ pub fn build_client(config: Config, policy: ExecInteractivePolicy) -> OxiResult<
 ///
 /// A user with an `exec` plugin or an `auth-provider` gets the refresh guard: the plugin
 /// runs once here (kube alone runs it three times while building) and again, bounded by
-/// `refresh_deadline`, whenever the token nears expiry. A plugin that returns a client
-/// certificate keeps kube's own path, where the certificate is fixed for the client's life
-/// (the plugin then runs four times per build: one probe of ours, three of kube's; tracked
-/// in #550).
+/// `refresh_deadline`, whenever the token nears expiry.
+///
+/// A plugin that returns a client certificate cannot be refreshed in a live client (the
+/// certificate is part of the TLS identity). Its first run, which tells the two kinds
+/// apart, is followed by one run of ours (`exec_cert`) whose
+/// certificate and key are moved into the config as inline data with `exec` cleared, so
+/// kube runs nothing more: two runs per build, one fewer than kube alone (E03-F550).
+/// [`Client::valid_until`] still reports the plugin's `expirationTimestamp`.
 ///
 /// # Errors
 ///
@@ -144,16 +149,22 @@ pub fn build_client_bounded(
     let refresh = CredentialRefresh::of(&config.auth_info);
     let guard = take_refreshable_auth(&mut config, refresh_deadline)
         .map_err(|err| classify_with(&err, refresh))?;
+    let valid_until = match guard {
+        Some(_) => None,
+        None => take_exec_identity(&mut config, refresh)?,
+    };
     let builder = ClientBuilder::try_from(config).map_err(|err| classify_with(&err, refresh))?;
-    Ok(match guard {
+    let client = match guard {
         Some(guard) => with_warnings(builder.with_layer(&guard), warnings),
         None => with_warnings(builder, warnings),
-    })
+    };
+    Ok(client.with_valid_until(valid_until))
 }
 
 /// Builds kube's auth layer for an exec or auth-provider user and clears the credential
 /// from `config`, so kube's own stack adds no `Authorization` header (and runs no plugin).
-/// `None` when the user has neither, or the plugin returned a client certificate.
+/// `None` when the user has neither, or the plugin returned a client certificate (or
+/// nothing): kube's auth layer is empty for those.
 fn take_refreshable_auth(
     config: &mut Config,
     deadline: Duration,
@@ -172,6 +183,35 @@ fn take_refreshable_auth(
     info.token = None;
     info.token_file = None;
     Ok(Some(RefreshGuardLayer::new(&auth, deadline)))
+}
+
+/// For an `exec` user that is still in `config` after [`take_refreshable_auth`], i.e. one
+/// whose plugin returned no token: runs the plugin once more and installs the client
+/// certificate it returns as inline data, clearing `exec` so kube does not run it again.
+/// Returns the certificate's expiry.
+///
+/// A plugin that now returns no credential at all leaves nothing for kube to run, so `exec`
+/// is cleared too. One that now returns a token (it answered differently from the first
+/// run) is left to kube's own path, which is the behaviour before this function existed.
+fn take_exec_identity(
+    config: &mut Config,
+    refresh: CredentialRefresh,
+) -> OxiResult<Option<jiff::Timestamp>> {
+    let Some(exec) = config.auth_info.exec.as_ref() else {
+        return Ok(None);
+    };
+    match exec_cert::run_once(exec, refresh)? {
+        PluginOutput::Identity(identity) => {
+            let expires = identity.expires;
+            identity.install(&mut config.auth_info);
+            Ok(expires)
+        }
+        PluginOutput::Nothing => {
+            config.auth_info.exec = None;
+            Ok(None)
+        }
+        PluginOutput::Token => Ok(None),
+    }
 }
 
 fn with_warnings<S, B>(builder: ClientBuilder<S>, warnings: Option<WarningSink>) -> Client

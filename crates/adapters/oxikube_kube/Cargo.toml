@@ -13,6 +13,8 @@ doctest = false
 
 [dependencies]
 backon.workspace = true
+# Inline PEM for the client certificate an exec plugin returns (`auth::exec_cert`).
+base64.workspace = true
 # `Bytes`: body bound of the client builder (`auth::exec`).
 bytes.workspace = true
 either.workspace = true
@@ -35,6 +37,8 @@ parking_lot.workspace = true
 rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# Plugin output may be YAML as well as JSON, like kube's own parse.
+serde-saphyr.workspace = true
 sha2.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -45,10 +49,11 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-base64.workspace = true
 oxikube_logging.workspace = true
 oxikube_testkit.workspace = true
 proptest.workspace = true
+# `ExposeSecret`: the kind user's client key in the exec-certificate integration test.
+secrecy.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tracing-subscriber.workspace = true

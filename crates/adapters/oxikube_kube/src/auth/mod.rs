@@ -15,6 +15,8 @@
 //! * `exec`: [`ExecInteractivePolicy`], the cap on exec-plugin interactivity, and
 //!   [`build_client`], which applies it and builds a client (blocking; `ClientPool`
 //!   runs it on the blocking pool under a deadline).
+//! * `exec_cert`: the single plugin run behind a client certificate (see
+//!   [`build_client_bounded`]).
 //! * `refresh`: [`RefreshGuardLayer`], the deadline on a credential refresh inside a live
 //!   client (a hung exec plugin fails requests with [`RefreshStalled`] instead of queueing
 //!   them).
@@ -39,6 +41,7 @@
 
 mod classify;
 mod exec;
+mod exec_cert;
 mod refresh;
 mod retry;
 
