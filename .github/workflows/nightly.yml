@@ -72,19 +72,32 @@ jobs:
         # Headless render needs a GPU device: Metal on macOS runners, Mesa lavapipe (software
         # Vulkan, from mesa-vulkan-drivers) on Linux. xvfb gives Linux a display for windowing init.
         run: |
+          # Run every line even when one fails (the ERR trap records it and the last line fails the
+          # step): one red golden must not hide the tests after it. `set +e` undoes the shell's
+          # default `-e` for this script only.
+          set +e
+          failed=0
+          trap 'failed=1' ERR
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube --features screenshot --profile "$CARGO_PROFILE"
           cargo test -p oxikube_testkit --features screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_testkit --features gpui-golden --test gpui_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_ui --features screenshot --test screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_ui --features screenshot --test theme_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_workspace --features screenshot --test screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_workspace --features screenshot --test cluster_screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_workspace --features screenshot --test restore_screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_workspace --features screenshot --test sidebar_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test catalog_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test sources_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test cluster_tabs_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test connect_screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_logs_ui --features screenshot --test screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_resources_ui --features screenshot --test screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_resources_ui --features screenshot --test states_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_terminal --features screenshot --test screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_terminal --features screenshot --test screenshot_programs --profile "$CARGO_PROFILE"
+          exit $failed
       - name: Capture screenshot
         id: capture
         if: ${{ !cancelled() }}
