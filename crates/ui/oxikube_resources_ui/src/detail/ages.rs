@@ -27,17 +27,18 @@ fn moved(at: Timestamp, then: Timestamp, now: Timestamp) -> bool {
 impl DetailView {
     /// The creation, condition and event times the active tab draws as ages.
     fn drawn_ages(&self) -> impl Iterator<Item = Timestamp> + '_ {
-        let created = self.model.as_ref().and_then(|m| m.header.created);
-        let conditions = (self.tab == DetailTab::Overview)
-            .then_some(self.model.as_ref())
-            .flatten()
+        let model = self.model.as_ref();
+        let created = model.and_then(|m| m.header.created);
+        let conditions = model
+            .filter(|_| self.tab == DetailTab::Overview)
             .into_iter()
             .flat_map(|m| m.conditions.iter().filter_map(|c| c.transition));
-        let events = (self.tab == DetailTab::Events)
-            .then_some(&self.events.rows)
-            .into_iter()
-            .flatten()
-            .filter_map(|e| e.last_seen);
+        let event_rows: &[_] = if self.tab == DetailTab::Events {
+            &self.events.rows
+        } else {
+            &[]
+        };
+        let events = event_rows.iter().filter_map(|e| e.last_seen);
         created.into_iter().chain(conditions).chain(events)
     }
 
