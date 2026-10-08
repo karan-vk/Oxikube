@@ -361,7 +361,9 @@ afterwards) when `--exec-context` (default `kind-oxikube`) answers.
 Each run writes the `--perf` JSONL as before and `<jsonl stem>.<scenario>.summary.json` next to it
 (`--perf-report` to choose; format in `docs/perf/windowed-summary.example.json`, schema 1): per
 phase and for all scripted phases together the frames (count, p50, p95, p99, max: `Window::draw` to
-the end of the content's paint, which the hook marks with a probe painted after the content), the
+the end of the content's paint, deferred overlays such as popovers, menus and dropdowns included,
+which the hook marks with a probe painted as the last deferred draw; only the paint of the window's
+tooltip, in-window prompt or drag preview comes after it), the
 same frames to the end of `present` (`presented_ms`, reported, not judged: GPUI's Metal `present`
 waits for a free drawable, about until the next refresh while the window draws on every one, so it
 measures the display's pacing; a present that runs long shows as a dropped frame), the frames over

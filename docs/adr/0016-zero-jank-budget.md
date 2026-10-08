@@ -38,7 +38,11 @@ display, `release-fast`, nothing else running):
 | Notifies | ≤ **1 coalesced notify per view per frame** | the most one view received between two frames |
 
 A frame is judged from the start of `Window::draw` to the end of the content's paint: layout,
-prepaint and paint of the whole tree, the app's own work for that frame. The `--perf` hook also
+prepaint and paint of the whole tree and of its deferred overlays (popovers, menus, dropdowns), the
+app's own work for that frame. The hook marks that end with a probe drawn as the last deferred
+draw. GPUI paints the window's one tooltip, in-window prompt or drag preview after every deferred
+draw, so that element's paint (not its layout or prepaint) falls outside the judged time; it is in
+`presented_ms`, and a long one shows as a dropped refresh. The `--perf` hook also
 reports the frame to the end of `present` (`presented_ms`), but that is not judged: GPUI's Metal
 `present` waits for a free drawable, so while the window draws on every refresh it lasts about until
 the next refresh (a windowed pods-table scroll reads about 8.3 ms per presented frame for about

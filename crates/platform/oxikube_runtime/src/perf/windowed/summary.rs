@@ -86,7 +86,8 @@ pub struct PhaseSummary {
     /// Wall time, ms.
     pub duration_ms: f64,
     /// Frame times, ms (`None`: no frame drawn): from the start of `Window::draw` to the end of
-    /// the content's paint (layout, prepaint, paint). What the frame budget judges.
+    /// the content's paint (layout, prepaint, paint, deferred overlays included). What the frame
+    /// budget judges.
     pub frames: Option<Summary>,
     /// The same frames to the end of the update that presented them, ms: `frames` plus finishing
     /// the scene and `present`, which waits for a free drawable (on macOS about until the next

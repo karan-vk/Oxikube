@@ -16,7 +16,9 @@
 //! # What is measured
 //!
 //! - **Frames**: from the start of `Window::draw` to the end of the content's paint (layout,
-//!   prepaint and paint of the whole tree; the hook paints a probe after the content), judged
+//!   prepaint and paint of the whole tree and its deferred overlays; the hook's probe is the last
+//!   deferred draw, so only the paint of the window's tooltip, prompt or drag preview is after
+//!   it), judged
 //!   against one refresh at 120 Hz (8.33 ms) on the maximum. Every frame of a scripted phase
 //!   counts; none is skipped. The whole frame to the end of `present` is reported too
 //!   (`presented_ms`) but not judged: on macOS `present` waits for a free drawable, which while the

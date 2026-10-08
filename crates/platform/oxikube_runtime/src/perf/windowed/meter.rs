@@ -13,7 +13,8 @@ use crate::perf::{FrameSample, FrameTap};
 
 /// What the summary's frame figures cover.
 pub const WINDOWED_MEASURES: &str = "frames: from the start of Window::draw to the end of the \
-content's paint (layout, prepaint, paint), judged against the budget; presented_ms: to the end of \
+content's paint (layout, prepaint, paint, deferred overlays included; not the paint of the \
+window's tooltip, prompt or drag preview), judged against the budget; presented_ms: to the end of \
 the GPUI update that presented the frame (finishing the scene and present, which waits for a free \
 drawable); dropped_frames: display refreshes missed while driven; input_latency_ms: from an \
 input's dispatch to the end of the paint of the frame that shows it";
