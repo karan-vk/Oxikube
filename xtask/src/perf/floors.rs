@@ -14,13 +14,10 @@ pub enum MetricClass {
     /// `launch_to_first_frame_ms`, `first_rows_ms`, `init_window_ms`): a whole launch, so one
     /// slow runner moves them by tens of milliseconds with unchanged code.
     ColdStart,
-    /// `frame_ms` / `draw_ms` and every `<mode>_frame_ms` / `<mode>_draw_ms`: the p50/p95/p99 of
-    /// many frames in one process. Real views put these at 1 to 5 ms, so a small floor lets them
-    /// gate.
-    Frame,
-    /// Any other `*_ms` metric: the small startup stages (`config_load_ms`, `state_db_open_ms`,
-    /// `init_<stage>_ms`).
-    Stage,
+    /// Every other `*_ms` metric: per-frame percentiles (`frame_ms`, `<mode>_draw_ms`), which
+    /// real views put at 1 to 5 ms, and the small startup stages (`config_load_ms`,
+    /// `init_<stage>_ms`). A small floor lets them gate.
+    Millis,
 }
 
 impl MetricClass {
@@ -33,10 +30,8 @@ impl MetricClass {
             || metric == "init_window_ms"
         {
             Self::ColdStart
-        } else if metric.ends_with("frame_ms") || metric.ends_with("draw_ms") {
-            Self::Frame
         } else {
-            Self::Stage
+            Self::Millis
         }
     }
 }
@@ -59,7 +54,7 @@ impl NoiseFloors {
         match MetricClass::of(metric) {
             MetricClass::Memory => self.mib,
             MetricClass::ColdStart => self.cold_ms,
-            MetricClass::Frame | MetricClass::Stage => self.ms,
+            MetricClass::Millis => self.ms,
         }
     }
 }
@@ -81,19 +76,19 @@ mod tests {
         for (metric, class) in [
             ("rss_mib", Memory),
             ("peak_rss_mib", Memory),
-            ("frame_ms", Frame),
-            ("draw_ms", Frame),
-            ("paused_frame_ms", Frame),
-            ("wrap_paused_draw_ms", Frame),
-            ("merged_wrap_frame_ms", Frame),
+            ("frame_ms", Millis),
+            ("draw_ms", Millis),
+            ("paused_frame_ms", Millis),
+            ("wrap_paused_draw_ms", Millis),
+            ("merged_wrap_frame_ms", Millis),
             ("first_frame_ms", ColdStart),
             ("launch_to_first_frame_ms", ColdStart),
             ("first_rows_ms", ColdStart),
             ("init_window_ms", ColdStart),
-            ("config_load_ms", Stage),
-            ("state_db_open_ms", Stage),
-            ("init_ui_ms", Stage),
-            ("init_assets_ms", Stage),
+            ("config_load_ms", Millis),
+            ("state_db_open_ms", Millis),
+            ("init_ui_ms", Millis),
+            ("init_assets_ms", Millis),
         ] {
             assert_eq!(MetricClass::of(metric), class, "{metric}");
         }
