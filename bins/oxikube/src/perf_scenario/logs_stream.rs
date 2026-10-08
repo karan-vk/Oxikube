@@ -3,10 +3,10 @@
 //!
 //! It runs the real pieces behind a log tab on testkit fakes: a `ClusterSessionManager` connected
 //! through the fake connector, the app's `LogService` (default config: batches of 2 048 lines or
-//! one 32 ms tick, the 50 000-line ring buffer) and the [`LogView`], in a headless window wrapped
-//! in the `--perf` frame hook. The pod's log ([`fixture`]) is a 1 000-line tail, then
-//! [`LINES_PER_S`] lines a second replayed on the log port's clock, one [`FRAME`] of it per
-//! scripted frame.
+//! one 32 ms tick, the 50 000-line ring buffer) and the [`LogView`], in a headless window built as
+//! the app builds its own (the window root, then the `--perf` frame hook: [`window_root`]). The
+//! pod's log ([`fixture`]) is a 1 000-line tail, then [`LINES_PER_S`] lines a second replayed on
+//! the log port's clock, one [`FRAME`] of it per scripted frame.
 //!
 //! 1. **Tail**: the view opens (reading the pod for its default container, then the stream) and
 //!    the clocks run a frame at a time until the tail is on screen.
@@ -29,26 +29,24 @@
 //!    off (`merged_*`) and wrapped (`merged_wrap_*`). The merge holds a line for its reorder
 //!    window (300 ms) before it commits it, so the lines in flight at any time are that many more.
 //!
-//! The sample fails (exit 1) unless every mode received lines at about the scripted rate and no
-//! frame absorbed more than one coalesced notify.
+//! The sample fails (exit 1) unless every mode received lines at about the scripted rate, no
+//! frame absorbed more than one coalesced notify and the view's text is drawn in a family the
+//! machine has (not GPUI's fallback on every text run, #509).
 
 use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result, bail, ensure};
-use gpui::{
-    AnyView, AnyWindowHandle, AppContext as _, Context, Entity, HeadlessAppContext, IntoElement,
-    Render, Window,
-};
+use gpui::{AnyWindowHandle, AppContext as _, Context, Entity, HeadlessAppContext};
 use oxikube_app::logs::{LogConfig, LogService};
 use oxikube_domain::log::LevelChip;
 use oxikube_logs_ui::view::ViewOptions;
 use oxikube_logs_ui::{LogView, LogViewDeps, SearchMode, log_runtime};
 use oxikube_runtime::perf::harness::{self, metric};
-use oxikube_runtime::perf::{PerfRoot, Recorder, ScenarioSample, Summary};
+use oxikube_runtime::perf::{Recorder, ScenarioSample, Summary};
 use oxikube_testkit::headless;
 
-use super::{FRAMES, WINDOW_SIZE};
+use super::{FRAMES, WINDOW_SIZE, window_root};
 
 mod fixture;
 
@@ -209,6 +207,8 @@ struct Stage {
     view: Entity<LogView>,
     window: AnyWindowHandle,
     log_clock: Arc<oxikube_testkit::FakeClockPort>,
+    /// The font the view's text is drawn in, checked once the tail is on screen.
+    text_font: window_root::TextFont,
 }
 
 impl Stage {
@@ -245,21 +245,21 @@ impl Stage {
         let hook = probe.then(|| recorder.clone());
         let target = fixture.target.clone();
         let mut view: Option<Entity<LogView>> = None;
+        let mut text_font = None;
         let window: AnyWindowHandle = cx
-            .open_window(WINDOW_SIZE, |_, cx| {
+            .open_window(WINDOW_SIZE, |window, cx| {
                 let log = cx.new(|cx| make(target, deps, cx));
                 view = Some(log.clone());
-                let content: AnyView = match hook {
-                    Some(recorder) => cx.new(|_| PerfRoot::new(log, recorder)).into(),
-                    None => log.into(),
-                };
-                cx.new(|_| Root(content))
+                let (root, font) = window_root::mount(log.into(), hook, window, cx);
+                text_font = Some(font);
+                root
             })?
             .into();
         Ok(Self {
             view: view.context("the log view")?,
             window,
             log_clock,
+            text_font: text_font.context("the window root")?,
         })
     }
 
@@ -280,6 +280,7 @@ impl Stage {
             self.park(cx);
             turns += 1;
         }
+        cx.update(|cx| self.text_font.check(cx))?;
         Ok(turns)
     }
 
@@ -389,13 +390,4 @@ fn read<R>(
     f: impl FnOnce(&LogView) -> R,
 ) -> R {
     cx.update(|cx| f(view.read(cx)))
-}
-
-/// The window's root: the view, behind the frame hook when probing.
-struct Root(AnyView);
-
-impl Render for Root {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        self.0.clone()
-    }
 }

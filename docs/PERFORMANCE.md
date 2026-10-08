@@ -171,6 +171,18 @@ renderer (`oxikube_testkit::headless`, feature `gpui-headless`). **Headless numb
 layout and paint-preparation time only: there is no `present` and no GPU time.** Compare them with a
 same-runner baseline, never with the absolute budgets above.
 
+Two rules keep a scenario measuring what the app does (E07-F509, see
+[the Linux runner's 340 ms frames](#the-linux-runners-340-ms-frames-509)):
+
+- A view-driving scenario mounts its view the way the app's window does: `oxikube_ui`'s window
+  root, then the `--perf` frame hook (`bins/oxikube/src/perf_scenario/window_root.rs`). The root
+  gives the view's text the theme's UI family; a sample fails if that text is drawn in a family the
+  machine does not have, since GPUI would then walk its fallback stack on every text run.
+- Samples run with error backtraces off. `cargo xtask perf` starts each one with
+  `RUST_LIB_BACKTRACE=0` (`.cargo/config.toml` sets `RUST_BACKTRACE=1` for every cargo command;
+  panic backtraces stay on), and `oxikube --perf-scenario` warns on stderr when they are on. With
+  them on, every `anyhow` error built on a hot path walks the stack.
+
 | Scenario | Status | Metrics |
 |---|---|---|
 | `startup` | measured | the real init order to the main window's first interactive frame (E05-S13, see [Startup](#startup-cold-start-to-the-first-interactive-frame)): `first_frame_ms` (first line of `main` to the end of the update that drew the first frame), `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask), `config_load_ms` (settings + theme + keymap on the main thread), `init_<stage>_ms` (every stage of `oxikube::startup`), `state_db_open_ms` (creating and migrating the SQLite state db, off the UI thread in the app); then `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) and `rss_mib` / `peak_rss_mib` (headless resident memory after the redraws, MiB; see [Memory (RSS)](#memory-rss)) |
@@ -433,11 +445,12 @@ and `ResourceTable` on testkit fakes: 10 000 pods listed into a warm store, then
 (1 s at 120 Hz; each draws twice, once for the feed's coalesced notify and once for the scroll, so
 240 frames are measured) scrolling 3 rows each while the feed delivers one 10-event batch per frame
 (6 modifies, 2 deletes, 2 creates: 1 200 events/s, about twenty times the load-pods churn). It
-fails unless every batch is counted as feed deltas and no frame absorbed more than one coalesced
-notify. Budgets checked by `cargo xtask perf`: `first_rows_ms` < 1 000 and, on macOS, `frame_ms`
-p95 ≤ 18.2 ms (55 fps); being headless they are lower bounds of the windowed figures. The Linux
-runner draws these frames with Mesa's software renderer at about 340 ms each, so the frame budget is
-not checked there (its baseline still gates regressions; why it is that slow is #509).
+fails unless every batch is counted as feed deltas, no frame absorbed more than one coalesced
+notify and the table's text is drawn in a family the machine has (E07-F509). Budgets checked by
+`cargo xtask perf` on every OS: `first_rows_ms` < 1 000 and `frame_ms` p95 ≤ 18.2 ms (55 fps); being
+headless they are lower bounds of the windowed figures. Until E07-F509 the frame budget was macOS
+only, because the Linux runner read about 340 ms a frame; that was the scenario, not the runner
+([below](#the-linux-runners-340-ms-frames-509)).
 
 ### Numbers
 
@@ -451,7 +464,8 @@ the machine (load average 4 to 26), so treat single digits of a percent as noise
 | windowed, `--perf-table`, 60 s, scrolling 3 rows / 8.3 ms | 6 019 in 60.3 s (100 fps, paced by the scroll timer) | 3.42 ms | 4.00 ms | 4.26 ms | 7.86 ms | 9 931 pods listed 258 ms after the table opened (a cold list from the API server); feed 11 430 deltas; 691 notifies, at most 3 per frame (table, sidebar badges, overview tiles); dropped 0 |
 | windowed, table still (`--perf-scroll 0`), 25 s | 293 | 3.96 ms | 4.64 ms | 7.22 ms | 8.20 ms | redraws only for churn and ages |
 | headless `scroll-10k`, nightly `macos-latest` (run 37492117478, the baseline until E01-F542; a later run of the same code measured 4.04 / 8.58 ms, p50 / p95, and 43 ms to first rows, so the baseline was re-seeded from run 37647964174: shared-runner variance, not a regression) | 240 per launch | 3.32 ms | 4.37 ms | 5.03 ms | 5.52 ms | `first_rows_ms` 26.4 (p95 30.7 across launches); RSS 176 MiB |
-| headless `scroll-10k`, nightly `ubuntu-latest` (same run, lavapipe) | 240 per launch | 338 ms | 343 ms | 348 ms | 370 ms | `first_rows_ms` 466 ms; RSS 269 MiB; see #509 |
+| headless `scroll-10k`, nightly `ubuntu-latest` (same run, lavapipe) | 240 per launch | 338 ms | 343 ms | 348 ms | 370 ms | `first_rows_ms` 466 ms; RSS 269 MiB; the scenario's font fallback with error backtraces on, not the runner (#509, [below](#the-linux-runners-340-ms-frames-509)) |
+| headless `scroll-10k`, `ubuntu-latest` after E07-F509 (run 37694476864, the committed baseline) | 240 per launch | 3.17 ms | 3.43 ms | 3.63 ms | 3.76 ms | `first_rows_ms` 88 ms; RSS 272 MiB |
 | headless `scroll-10k` (`cargo xtask perf scroll-10k --samples 7`), medians | 240 per launch | 1.89 ms | 2.52 ms | 2.97 ms | 3.07 ms | `first_rows_ms` 25.6 (p95 29.5 across launches); 1 200 feed deltas, 120 notifies, at most 1 per frame; RSS 179 MiB |
 
 After rebasing onto the detail drawer, row actions and states stories (`e1ba85b`) the headless
@@ -483,6 +497,73 @@ in `Window::draw`, of which about half is laying out the visible rows (gpui-comp
 horizontal virtual list and taffy); the cell path (`TextCell`, `CellCache`, the provider) is about
 6 % of the draw and applying the store's deltas under 0.1 %. No sample waits on a mutex or condvar
 on the main thread: no lock contention.
+
+### The Linux runner's 340 ms frames (#509)
+
+Until E07-F509 the nightly's `scroll-10k` frames took about 330 ms on `ubuntu-latest` (Mesa
+lavapipe) against 3 to 4 ms on `macos-latest`, and `logs-stream` about 17 ms. It was not the
+software renderer, and not shaping or rasterising new glyphs (the issue's two suspects). Probe runs
+on the runner (4 vCPU AMD EPYC, Mesa 25.2 llvmpipe, fonts: DejaVu, Liberation, Lato, Noto Color
+Emoji):
+
+| `scroll-10k` on `ubuntu-latest` (run 37686505840, `release-fast`) | `frame_ms` p50 / p95 | `first_rows_ms` |
+|---|---|---|
+| `oxikube --perf-scenario scroll-10k` run directly: 10, 40, 120 scripted frames | 5.8 / 6.4, 6.1 / 6.5, 6.6 / 7.0 ms | 138, 125, 128 ms |
+| the same binary through `cargo xtask perf scroll-10k --samples 1`: 10, 120 frames | 268 / 275, 267 / 277 ms | 390, 402 ms |
+
+The difference was the environment. `.cargo/config.toml` sets `RUST_BACKTRACE=1` for every cargo
+command, so `cargo xtask` ran under it and the sample process inherited it. With it set, every
+`anyhow::Error` captures a stack trace when it is built. An Ubuntu 24.04 container with lavapipe
+reproduces it with the binary alone: 5.9 ms p50 with `RUST_BACKTRACE=0`, 288 ms with `=1`.
+
+What built errors on every frame: the scenarios drew their view under a bare window root rather
+than the app's, so its text asked for GPUI's default family, `.SystemUIFont`. GPUI maps that to
+IBM Plex Sans on Linux, which the runner does not have, so `TextSystem::resolve_font` went through
+its fallback stack (`.ZedMono`, `.ZedSans`, Helvetica, Segoe UI, Ubuntu, Adwaita Sans, Cantarell,
+Noto Sans) to DejaVu Sans on every text run. GPUI caches each miss, but as an error that
+`TextSystem::font_id` re-creates with `anyhow!` on every hit (gpui-pre 0.3.7), so every text run
+of every frame built one error per missed family. Even without backtraces, `perf record` on the
+runner (a direct run) has `TextSystem::font_id` at the top of the self time and building and
+formatting `anyhow` errors close behind, with lavapipe at 2 % of the samples. macOS resolves
+`.SystemUIFont` itself, so it never missed.
+
+The app does not take this path: its window is `oxikube_ui`'s root (gpui-component's `Root`), which
+gives the content the theme's UI family, and gpui-component has already named the installed family
+`.SystemUIFont` lands on (DejaVu Sans on the runner). No Linux desktop with a GPU was at hand.
+Instead, the windowed app (`oxikube --perf --perf-table`, a product `release-fast` build,
+3 000 load pods under churn, an Ubuntu 24.04 container on xvfb + lavapipe, on a laptop at load
+average 30 to 40) drew 18 to 44 ms p50 frames with backtraces on and off alike. So there is no error
+on its hot path; what remains is software rendering and presenting the whole window. A product bug
+on Linux it is not.
+
+What changed (E07-F509):
+
+- `perf_scenario::window_root` mounts the `scroll-10k` and `logs-stream` views as the app's window
+  does and fails a sample whose text is drawn in a family the machine does not have (unit tests on a
+  fake machine with only DejaVu installed: mounted like the app, the view is drawn in DejaVu Sans;
+  outside the root it asks for `.SystemUIFont` and the check fails).
+- `cargo xtask perf` runs every sample with `RUST_LIB_BACKTRACE=0`, and `oxikube --perf-scenario`
+  warns when error backtraces are on.
+- The frame budgets (`scroll-10k` 55 fps, `logs-stream` 8 ms p95) are checked on Linux too.
+- The `scroll-10k` baselines were re-seeded from the story branch's runs. The view now sits in
+  the real root, which costs every frame what it costs the app (window border, overlay layers, rem
+  size): on the M5 Max under the same load, `frame_ms` p50 3.3 → 3.7 ms for the table and +0.1 to
+  0.2 ms for the log view.
+
+| Headless, the nightly's perf job (median of 7 launches) | before (run 37672159958, the last green nightly) | after (run 37694476864) |
+|---|---|---|
+| `ubuntu-latest` `scroll-10k` `frame_ms` p50 / p95 | 329 / 337 ms | 3.17 / 3.43 ms |
+| `ubuntu-latest` `scroll-10k` `first_rows_ms` | 468 ms | 88 ms |
+| `ubuntu-latest` `logs-stream` `frame_ms` p50 / p95 | 16.6 / 19.6 ms | 1.61 / 2.63 ms |
+| `ubuntu-latest` `logs-stream` slowest mode p95 (`filter_frame_ms`) | 25.6 ms | 3.39 ms |
+| `macos-latest` `scroll-10k` `frame_ms` p50 / p95 | 3.78 / 5.83 ms (3.8 to 4.5 p50 across four runs) | 5.13 / 9.68 ms (attempt 2; attempt 1 read 7.27 / 13.3 with the unchanged start-up stages 40 to 90 % slow too) |
+| `macos-latest` `scroll-10k` `first_rows_ms` | 36.6 ms (36 to 48) | 44.3 ms |
+
+The macOS runner is slower and far noisier than the laptop (E01-F542 measured the same code moving
++20 to +90 % at p50 across nightlies), so its share of the root's cost reads larger there; the
+baseline was seeded from the attempt whose start-up stages matched earlier runs. Its `logs-stream`
+p95s sit around the 8 ms budget on that runner before and after this change (run 37656531284 read
+8.9 ms for `filter_frame_ms` on the old code), which is a runner limit, not this change.
 
 ### What was tuned
 
@@ -625,7 +706,8 @@ following (the budget's mode, `frame_ms`), autoscroll paused (`paused_frame_ms`)
 following (`wrap_frame_ms`), wrapped and paused (`wrap_paused_frame_ms`), then with a search on (E08-S03, `WARN|ERROR`, about
 one line in six, wrap off, following): highlighting (`search_frame_ms`) and filtering
 (`filter_frame_ms`). `cargo xtask perf`
-fails on macOS when any mode's p95 frame is above 8 ms (`xtask/src/perf/budget.rs`).
+fails when any mode's p95 frame is above 8 ms (`xtask/src/perf/budget.rs`; on Linux too since
+E07-F509, see [the Linux runner's 340 ms frames](#the-linux-runners-340-ms-frames-509)).
 
 ```
 cargo xtask perf logs-stream

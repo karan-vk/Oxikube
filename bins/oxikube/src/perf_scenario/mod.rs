@@ -15,10 +15,17 @@
 //!   10 000 pods under feed churn, first rows after the feed is warm (E07-S09).
 //! - `logs-stream` ([`logs_stream`]): the log view streaming 5 000 lines/s, wrap off/on and
 //!   autoscroll on/paused (E08-S02), and with a search highlighting or filtering (E08-S03).
+//!
+//! The view-driving scenarios mount their view as the app's window does ([`window_root`]), so it
+//! is drawn with the app's text style; a sample fails if its text falls back to another family
+//! on every run (#509). Run them with error backtraces off (`RUST_LIB_BACKTRACE=0`, which
+//! `cargo xtask perf` sets): with them on, every error built on a hot path captures a stack trace
+//! and the numbers stop being comparable, so a sample warns about it on stderr.
 
 mod logs_stream;
 mod scroll_10k;
 mod startup;
+mod window_root;
 
 use anyhow::{Context as _, Result};
 use gpui::{Pixels, Size, px, size};
@@ -66,12 +73,28 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
             return ExitCode::from(2);
         }
     };
+    // After the sample, so the check's own stack walk is not in it.
+    warn_if_errors_capture_backtraces();
     match sample.and_then(|s| write_sample(&s, report)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("oxikube: perf scenario `{name}` failed: {err:#}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Says on stderr when `std::backtrace` captures (`RUST_BACKTRACE` or `RUST_LIB_BACKTRACE` set,
+/// e.g. by `cargo run` through `.cargo/config.toml`): every `anyhow` error then walks the stack, so
+/// a hot path that builds errors (GPUI's font fallback did, #509) measures the walk.
+fn warn_if_errors_capture_backtraces() {
+    if std::backtrace::Backtrace::capture().status() == std::backtrace::BacktraceStatus::Captured {
+        eprintln!(
+            "oxikube --perf-scenario: error backtraces are on (RUST_BACKTRACE / \
+             RUST_LIB_BACKTRACE), so every error built while drawing captures a stack trace and \
+             the numbers are not comparable with a baseline; set RUST_LIB_BACKTRACE=0 \
+             (`cargo xtask perf` does)"
+        );
     }
 }
 
