@@ -30,7 +30,17 @@ Options:
   --perf-scenario <NAME>  Run a headless perf scenario and exit: startup, scroll-10k (or
                           table-scroll-10k), palette, logs-stream, editor-5mb (needs --features
                           perf-scenarios; use `cargo xtask perf`)
-  --perf-report <FILE>    Where --perf-scenario writes its JSON sample (default: stdout)
+  --perf-scenario-window <NAME>
+                          Run a scripted scenario in the real window over synthetic clusters,
+                          measured against ADR 0016, and exit: pods-table, table-filter,
+                          namespaces, detail-drawer, tabs-panes, theme, catalog, sidebar, logs,
+                          terminal, idle (implies --perf; needs --features perf-window; use
+                          `cargo xtask perf --windowed`)
+  --perf-exec <CONTEXT>/<NAMESPACE>/<POD>
+                          With --perf-scenario-window terminal: the shell runs in this pod (a real
+                          exec) instead of on this machine
+  --perf-report <FILE>    Where --perf-scenario writes its JSON sample (default: stdout), or
+                          --perf-scenario-window its summary (default: next to the JSONL)
   --perf-no-probe         Run --perf-scenario without the frame hook (overhead measurement)
   -h, --help              Print this help";
 
@@ -61,6 +71,8 @@ pub struct Args {
     pub perf_logs_wrap: bool,
     pub perf_logs_paused: bool,
     pub perf_logs_workload: bool,
+    pub perf_scenario_window: Option<String>,
+    pub perf_exec: Option<String>,
 }
 
 /// What `main` should do.
@@ -137,6 +149,11 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
             "--perf-logs-paused" => out.perf_logs_paused = true,
             "--perf-logs-workload" => out.perf_logs_workload = true,
             "--perf-scenario" => out.perf_scenario = Some(value("--perf-scenario")?),
+            "--perf-scenario-window" => {
+                out.perf = true;
+                out.perf_scenario_window = Some(value("--perf-scenario-window")?);
+            }
+            "--perf-exec" => out.perf_exec = Some(value("--perf-exec")?),
             "--perf-report" => out.perf_report = Some(value("--perf-report")?.into()),
             other => return Err(format!("unknown argument `{other}`")),
         }
@@ -144,8 +161,31 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
     if out.perf_no_probe && out.perf_scenario.is_none() {
         return Err("--perf-no-probe only applies to --perf-scenario".into());
     }
-    if out.perf_report.is_some() && out.perf_scenario.is_none() {
-        return Err("--perf-report only applies to --perf-scenario".into());
+    if out.perf_report.is_some()
+        && out.perf_scenario.is_none()
+        && out.perf_scenario_window.is_none()
+    {
+        return Err(
+            "--perf-report only applies to --perf-scenario and --perf-scenario-window".into(),
+        );
+    }
+    if out.perf_scenario.is_some() && out.perf_scenario_window.is_some() {
+        return Err("--perf-scenario and --perf-scenario-window are separate runs".into());
+    }
+    if let Some(value) = &out.perf_exec {
+        if out.perf_scenario_window.as_deref() != Some("terminal") {
+            return Err("--perf-exec only applies to --perf-scenario-window terminal".into());
+        }
+        if value
+            .rsplitn(3, '/')
+            .filter(|part| !part.is_empty())
+            .count()
+            < 3
+        {
+            return Err(format!(
+                "--perf-exec: `{value}` is not CONTEXT/NAMESPACE/POD"
+            ));
+        }
     }
     if out.perf_scroll.is_some() && out.perf_table.is_none() {
         return Err("--perf-scroll only applies to --perf-table".into());
@@ -287,6 +327,48 @@ mod tests {
                 .contains("CONTEXT/NAMESPACE/POD")
         );
         assert!(USAGE.contains("--perf-logs"));
+    }
+
+    #[test]
+    fn window_scenario_flags() {
+        let a = run(&[
+            "--perf-scenario-window",
+            "pods-table",
+            "--perf-report=s.json",
+        ])
+        .unwrap();
+        assert!(a.perf, "--perf-scenario-window implies --perf");
+        assert_eq!(a.perf_scenario_window.as_deref(), Some("pods-table"));
+        assert_eq!(a.perf_report, Some(PathBuf::from("s.json")));
+        let t = run(&[
+            "--perf-scenario-window",
+            "terminal",
+            "--perf-exec",
+            "kind-oxikube/ns/tty",
+        ])
+        .unwrap();
+        assert_eq!(t.perf_exec.as_deref(), Some("kind-oxikube/ns/tty"));
+        assert!(
+            run(&["--perf-scenario-window", "logs", "--perf-exec", "a/b/c"])
+                .unwrap_err()
+                .contains("terminal")
+        );
+        assert!(
+            run(&["--perf-scenario-window", "terminal", "--perf-exec", "a/b"])
+                .unwrap_err()
+                .contains("CONTEXT/NAMESPACE/POD")
+        );
+        assert!(
+            run(&[
+                "--perf-scenario",
+                "startup",
+                "--perf-scenario-window",
+                "logs"
+            ])
+            .unwrap_err()
+            .contains("separate")
+        );
+        assert!(USAGE.contains("--perf-scenario-window"));
     }
 
     #[test]

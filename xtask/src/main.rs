@@ -6,7 +6,8 @@
 //! - `check-gpui-pin` verify gpui-pre / gpui-component pins are exact and aligned
 //! - `kind-up` / `kind-down`  local kind cluster for integration tests, with the test images pre-pulled (E01-S09, E04-B01)
 //! - `load-pods`      create N pause pods (+ optional churn) for perf work (E01-S10)
-//! - `perf`           headless perf scenarios, report, baseline check (E01-S14)
+//! - `perf`           headless perf scenarios, report, baseline check (E01-S14); `--windowed`: the
+//!                    real-window scenarios of ADR 0016 (E01-P587)
 //! - `gen-settings-schema`  write (or `--check`) settings.schema.json from the `oxikube` binary (E05-S06, E05-S06b)
 #![allow(clippy::print_stdout)]
 
@@ -50,7 +51,8 @@ enum Cmd {
     },
     /// Create N pause pods across namespaces; `--churn` keeps deleting/recreating them.
     LoadPods(load_pods::Args),
-    /// Run headless perf scenarios; `--check` gates on docs/perf/baseline.json (+20 %).
+    /// Run headless perf scenarios; `--check` gates on docs/perf/baseline.json (+20 %);
+    /// `--windowed` runs the real-window scenarios of ADR 0016.
     Perf(perf::Args),
     /// Write settings.schema.json from the registered settings; `--check` fails when stale.
     GenSettingsSchema(settings_schema::Args),

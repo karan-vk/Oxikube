@@ -53,6 +53,22 @@ pub fn open_main_window(
 /// The [`MainView`] of an app window opened by [`open_main_window`] (under the `Root`, the
 /// first-frame probe and, with `--perf`, the frame hook), `None` for any other window.
 pub fn main_view(window: &Window, cx: &App) -> Option<Entity<MainView>> {
+    let inner = probed_content(window, cx)?;
+    let inner = match inner.clone().downcast::<PerfRoot>() {
+        Ok(hook) => hook.read(cx).inner().clone(),
+        Err(_) => inner,
+    };
+    inner.downcast::<MainView>().ok()
+}
+
+/// The `--perf` frame hook of an app window opened by [`open_main_window`] with one, `None`
+/// without `--perf` or for any other window.
+pub fn perf_root(window: &Window, cx: &App) -> Option<Entity<PerfRoot>> {
+    probed_content(window, cx)?.downcast::<PerfRoot>().ok()
+}
+
+/// What the first-frame probe of an app window wraps.
+fn probed_content(window: &Window, cx: &App) -> Option<AnyView> {
     let root = window.root::<Root>().flatten()?;
     let probe = root
         .read(cx)
@@ -60,10 +76,5 @@ pub fn main_view(window: &Window, cx: &App) -> Option<Entity<MainView>> {
         .clone()
         .downcast::<FirstFrameProbe>()
         .ok()?;
-    let inner = probe.read(cx).inner().clone();
-    let inner = match inner.clone().downcast::<PerfRoot>() {
-        Ok(hook) => hook.read(cx).inner().clone(),
-        Err(_) => inner,
-    };
-    inner.downcast::<MainView>().ok()
+    Some(probe.read(cx).inner().clone())
 }

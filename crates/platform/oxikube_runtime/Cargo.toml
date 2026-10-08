@@ -25,8 +25,9 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
-# Resident-memory reader (`perf::memory`): task_info / getrusage on macOS. Linux reads /proc.
-[target.'cfg(target_os = "macos")'.dependencies]
+# Resident-memory reader (`perf::memory`): task_info / getrusage on macOS (Linux reads /proc), and
+# the process CPU time (`perf::cpu`): getrusage on every Unix.
+[target.'cfg(unix)'.dependencies]
 libc.workspace = true
 
 [dev-dependencies]
@@ -38,6 +39,10 @@ default = []
 # Scripted headless frame driver (`perf::harness`) used by `oxikube --perf-scenario` and
 # `cargo xtask perf`. Plain gpui API only; the binary's `perf-scenarios` feature turns it on.
 perf-harness = []
+# The windowed scenario driver (`perf::windowed`, E01-P587): paces scripted scenarios on the real
+# window's refresh and writes the per-scenario summary. The binary's `perf-window` feature turns it
+# on; plain gpui API only.
+perf-window = []
 
 [[example]]
 name = "perf_overhead"

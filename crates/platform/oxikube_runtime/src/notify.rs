@@ -4,7 +4,8 @@
 //! observer (and re-renders every dependent view) thousands of times for at most 120 visible frames.
 //! `notify_coalesced` marks the entity dirty instead and schedules a single `cx.notify()`
 //! [`FRAME_INTERVAL`] later; every further call before then is a hash-set lookup. Each delivered
-//! notify is counted by [`crate::perf::record_notify`] (the `notifies` figure of `--perf`).
+//! notify is counted by [`crate::perf::record_view_notify`] (the `notifies` figure of `--perf`, and
+//! per view `max_view_notifies_per_frame`).
 //!
 //! Use it for streams (watches, logs, terminal bytes, agent tokens). Direct user input keeps using
 //! `cx.notify()`: the coalesced notify lands up to one frame later, which is inside the input
@@ -46,7 +47,7 @@ pub fn notify_coalesced<T: 'static>(cx: &mut Context<T>) {
             cx.notify();
         });
         match notified {
-            Ok(()) => perf::record_notify(),
+            Ok(()) => perf::record_view_notify(entity_id.as_u64()),
             // The entity was released meanwhile: nothing to notify, just drop the flag.
             Err(_) => cx.update(|cx| {
                 cx.default_global::<PendingNotifies>().0.remove(&entity_id);

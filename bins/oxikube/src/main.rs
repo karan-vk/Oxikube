@@ -18,7 +18,9 @@
 //! Flags (`oxikube --help`): `--perf` records frame times, feed throughput, notify counts and RSS
 //! (docs/PERFORMANCE.md), `--perf-table` makes that run connect a context and scroll its pods
 //! table, and `--perf-logs` makes it open a pod's log view; `--perf-scenario` runs one headless
-//! perf sample (feature `perf-scenarios`, driven by `cargo xtask perf`).
+//! perf sample (feature `perf-scenarios`, driven by `cargo xtask perf`), and
+//! `--perf-scenario-window` one scripted scenario in the real window (feature `perf-window`,
+//! `cargo xtask perf --windowed`, ADR 0016).
 
 mod cli;
 mod perf_mode;
@@ -27,6 +29,7 @@ mod perf_scenario;
 #[cfg(feature = "screenshot")]
 mod screenshot;
 mod settings_schema;
+mod window_scenario;
 
 use gpui::{App, AppContext as _};
 use oxikube::startup::{self, Stage, StartupEnv};
@@ -116,7 +119,25 @@ fn main() -> ExitCode {
             args.perf_logs_workload,
         )
     });
-    let drive = Drive { table: drive, logs };
+    let window = match args
+        .perf_scenario_window
+        .as_deref()
+        .map(|name| {
+            window_scenario::parse(name, args.perf_exec.as_deref(), args.perf_report.clone())
+        })
+        .transpose()
+    {
+        Ok(window) => window,
+        Err(code) => {
+            startup::shutdown();
+            return code;
+        }
+    };
+    let drive = Drive {
+        table: drive,
+        logs,
+        window,
+    };
 
     run_app(boot, perf, perf_duration, drive);
     // Platforms where `run` returns after quitting (macOS exits from inside it; the quit hook
@@ -162,7 +183,11 @@ fn start(
     perf_duration: Option<Duration>,
     drive: Drive,
 ) -> bool {
-    if let Err(err) = startup::init(cx, StartupEnv::app(boot)) {
+    let env = match &drive.window {
+        Some(window) => window_scenario::env(window, boot),
+        None => StartupEnv::app(boot),
+    };
+    if let Err(err) = startup::init(cx, env) {
         tracing::error!(%err, "start-up failed");
         eprintln!("oxikube: {err}");
         return false;
@@ -194,14 +219,19 @@ fn start(
     if let Some(logs) = drive.logs {
         oxikube::perf_logs::start(logs, handle.into(), cx);
     }
+    if let Some(window) = drive.window {
+        window_scenario::start(window, handle.into(), cx);
+    }
     true
 }
 
 /// What a `--perf` run drives in the window: the pods table (`--perf-table`), a log view
-/// (`--perf-logs`), or nothing (a plain recorded launch).
+/// (`--perf-logs`), a windowed scenario (`--perf-scenario-window`), or nothing (a plain recorded
+/// launch).
 struct Drive {
     table: Option<oxikube::perf_table::TableDrive>,
     logs: Option<oxikube::perf_logs::LogsDrive>,
+    window: Option<window_scenario::Window>,
 }
 
 /// Rows `--perf-table` scrolls per frame without `--perf-scroll`: a fast trackpad fling at

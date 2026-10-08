@@ -44,7 +44,7 @@ fn main() {
         perf::record_feed_deltas(u64::from(i & 7))
     });
     let frame = per_call("Recorder::record_frame (ring push)", |i| {
-        recorder.record_frame(Duration::from_nanos(u64::from(i)))
+        std::hint::black_box(recorder.record_frame(Duration::from_nanos(u64::from(i))));
     });
     let instant = per_call("Instant::now + elapsed (hook timing pair)", |_| {
         black_box(Instant::now().elapsed());

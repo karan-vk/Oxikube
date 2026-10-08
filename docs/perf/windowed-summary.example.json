@@ -1,0 +1,193 @@
+{
+  "schema": 1,
+  "scenario": "pods-table",
+  "os": "macos",
+  "arch": "aarch64",
+  "app_version": "0.0.1",
+  "refresh_ms": 8.273,
+  "refresh_source": "measured",
+  "measures": "frames: from the start of Window::draw to the end of the content's paint (layout, prepaint, paint, deferred overlays included; not the paint of the window's tooltip, prompt or drag preview), judged against the budget; presented_ms: to the end of the GPUI update that presented the frame (finishing the scene and present, which waits for a free drawable); dropped_frames: display refreshes missed while driven; input_latency_ms: from an input's dispatch to the end of the paint of the frame that shows it",
+  "budgets": {
+    "frame_ms": 8.333333333333334,
+    "dropped_frames": 0,
+    "input_latency_ms": 8.333333333333334,
+    "notifies_per_view_per_frame": 1,
+    "peak_rss_mib": 381.4697265625
+  },
+  "scripted": {
+    "name": "scripted",
+    "kind": "driven",
+    "duration_ms": 30028.799,
+    "frames": {
+      "count": 2484,
+      "p50": 3.419,
+      "p95": 3.89,
+      "p99": 4.144,
+      "max": 5.855
+    },
+    "presented_ms": {
+      "count": 2484,
+      "p50": 8.205,
+      "p95": 8.403,
+      "p99": 8.501,
+      "max": 11.528
+    },
+    "over_budget_frames": 0,
+    "dropped_frames": 0,
+    "refreshes": 2400,
+    "refresh_gap_ms": {
+      "count": 2399,
+      "p50": 8.33,
+      "p95": 8.919,
+      "p99": 9.295,
+      "max": 11.579
+    },
+    "inactive_refreshes": 0,
+    "activity_checks": 40,
+    "inactive_checks": 0,
+    "inputs": 2399,
+    "input_latency_ms": {
+      "count": 2399,
+      "p50": 3.454,
+      "p95": 3.923,
+      "p99": 4.133,
+      "max": 5.446
+    },
+    "inputs_without_frame": 0,
+    "notifies": 84,
+    "max_notifies_per_frame": 3,
+    "max_view_notifies_per_frame": 1,
+    "feed_deltas": 1800,
+    "cpu_percent": 36.7,
+    "rss_mib": 276.484,
+    "peak_rss_mib": 276.484
+  },
+  "phases": [
+    {
+      "name": "setup",
+      "kind": "setup",
+      "duration_ms": 2774.606,
+      "frames": {
+        "count": 20,
+        "p50": 0.834,
+        "p95": 6.606,
+        "p99": 9.487,
+        "max": 9.487
+      },
+      "presented_ms": {
+        "count": 20,
+        "p50": 4.188,
+        "p95": 7.236,
+        "p99": 10.009,
+        "max": 10.009
+      },
+      "over_budget_frames": 1,
+      "dropped_frames": 0,
+      "refreshes": 0,
+      "refresh_gap_ms": null,
+      "inactive_refreshes": 0,
+      "activity_checks": 0,
+      "inactive_checks": 0,
+      "inputs": 0,
+      "input_latency_ms": null,
+      "inputs_without_frame": 0,
+      "notifies": 8,
+      "max_notifies_per_frame": 5,
+      "max_view_notifies_per_frame": 1,
+      "feed_deltas": 10030,
+      "cpu_percent": 6.67,
+      "rss_mib": 268.047,
+      "peak_rss_mib": 268.063
+    },
+    {
+      "name": "scroll",
+      "kind": "driven",
+      "duration_ms": 20009.388,
+      "frames": {
+        "count": 2399,
+        "p50": 3.425,
+        "p95": 3.888,
+        "p99": 4.091,
+        "max": 5.391
+      },
+      "presented_ms": {
+        "count": 2399,
+        "p50": 8.215,
+        "p95": 8.408,
+        "p99": 8.501,
+        "max": 11.528
+      },
+      "over_budget_frames": 0,
+      "dropped_frames": 0,
+      "refreshes": 2400,
+      "refresh_gap_ms": {
+        "count": 2399,
+        "p50": 8.33,
+        "p95": 8.919,
+        "p99": 9.295,
+        "max": 11.579
+      },
+      "inactive_refreshes": 0,
+      "activity_checks": 0,
+      "inactive_checks": 0,
+      "inputs": 2399,
+      "input_latency_ms": {
+        "count": 2399,
+        "p50": 3.454,
+        "p95": 3.923,
+        "p99": 4.133,
+        "max": 5.446
+      },
+      "inputs_without_frame": 0,
+      "notifies": 56,
+      "max_notifies_per_frame": 3,
+      "max_view_notifies_per_frame": 1,
+      "feed_deltas": 1200,
+      "cpu_percent": 52.79,
+      "rss_mib": 274.5,
+      "peak_rss_mib": 274.5
+    },
+    {
+      "name": "still",
+      "kind": "idle",
+      "duration_ms": 10019.411,
+      "frames": {
+        "count": 85,
+        "p50": 3.118,
+        "p95": 4.705,
+        "p99": 5.855,
+        "max": 5.855
+      },
+      "presented_ms": {
+        "count": 85,
+        "p50": 4.273,
+        "p95": 5.667,
+        "p99": 8.24,
+        "max": 8.24
+      },
+      "over_budget_frames": 0,
+      "dropped_frames": 0,
+      "refreshes": 0,
+      "refresh_gap_ms": null,
+      "inactive_refreshes": 0,
+      "activity_checks": 40,
+      "inactive_checks": 0,
+      "inputs": 0,
+      "input_latency_ms": null,
+      "inputs_without_frame": 0,
+      "notifies": 28,
+      "max_notifies_per_frame": 3,
+      "max_view_notifies_per_frame": 1,
+      "feed_deltas": 600,
+      "cpu_percent": 4.57,
+      "rss_mib": 276.484,
+      "peak_rss_mib": 276.484
+    }
+  ],
+  "over_budget": [],
+  "notes": [
+    "window 1440 x 900 pt at scale 2"
+  ],
+  "failures": [],
+  "valid": true
+}

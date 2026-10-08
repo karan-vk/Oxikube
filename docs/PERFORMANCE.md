@@ -1,27 +1,35 @@
 # Performance budget and how to measure it
 
 Oxikube must feel as smooth as Zed. These are the numbers reviewers hold PRs to
-(ADR 0013). Reference machine: Apple M-series laptop, 120 Hz display; Linux numbers are
-measured on a mid-range x86 laptop with an integrated GPU.
+(ADR 0013; the frame, dropped-frame, input, memory, idle CPU and notify rows are ADR 0016's
+zero-jank budget). Reference machine: Apple M-series laptop, its built-in 120 Hz display; Linux
+numbers are measured on a mid-range x86 laptop with an integrated GPU.
 
 ## Budgets
 
 | Area | Budget | Scenario |
 |---|---|---|
-| Frame time | p95 ≤ 8 ms, p99 ≤ 16 ms, no frame > 50 ms | scrolling a 10 000-row pod table under 1 %/5 s churn; typing in the editor on a 5 MB YAML; resizing panes; streaming logs at 5 000 lines/s |
-| Input latency | ≤ 1 frame to visible change | keystroke in palette/filter/editor; click on a row; tab switch |
+| Frame time | **every frame drawn in ≤ 8.33 ms** (one 120 Hz refresh: `Window::draw` to the end of the content's paint), judged on the maximum (p99 and p95 reported) | every [windowed scenario](#windowed-scenarios-the-zero-jank-budget-in-the-real-window-adr-0016): the pods table, filter, namespaces, detail drawer, tabs and panes, theme, catalog, sidebar, log viewer, terminal |
+| Dropped frames | **0** display refreshes missed while a view is driven | the same |
+| Input latency | ≤ 1 frame: an input dispatched at a refresh is in that refresh's frame (≤ 8.33 ms to the end of its paint) | keystrokes, scroll events, actions and commands of the windowed scenarios |
+| Notifies | ≤ 1 coalesced notify per view per frame | the same |
 | Palette | open ≤ 1 frame; filter 2 000 entries ≤ 5 ms | command palette, `:` jump, picker |
 | Startup | ≤ 400 ms cold to first interactive frame; catalog before any network; settings + keymap + theme < 30 ms on the main thread | `oxikube` launch with 3 kubeconfigs, 20 contexts ([Startup](#startup-cold-start-to-the-first-interactive-frame)) |
 | Cluster open | tab interactive ≤ 200 ms after connect; first table rows ≤ 1 s after feed warm | 2 000-pod cluster |
 | Main thread | 0 blocking I/O, process spawn, or lock contention > 1 ms | any |
-| Memory | idle < 150 MB (2 clusters); 10 k pods < 400 MB; logs/events ring-buffered | steady state after 10 min |
-| CPU idle | < 1 % with two clusters connected and no visible churn | laptop on battery |
+| Memory | 10 k pods < 400 MB (ADR 0016: the peak of the windowed scenarios whose load is the 10 000-pod cluster alone: `pods-table`, `table-filter`, `namespaces`, `theme`, `sidebar`); idle < 150 MB (2 clusters; ADR 0016: the peak of the windowed `idle` scenario); logs/events ring-buffered | steady state after 10 min |
+| CPU idle | < 1 % with two clusters connected and no visible churn (ADR 0016: the windowed `idle` scenario) | laptop on battery |
 | Terminal | 60 fps under `yes`/`htop`; resize ≤ 1 frame | local shell + exec |
 | Editor | typing latency ≤ 16 ms with validation debounced; 5 MB file opens ≤ 500 ms | manifest editor |
 | Agent thread | streaming markdown at 200 tokens/s without dropped frames | ACP panel |
 
 ## How to measure
 
+- `cargo xtask perf --windowed <scenario>|--all` runs the real-window scenarios against the
+  zero-jank budget (ADR 0016): the app drives its own UI in its window over synthetic clusters and
+  writes a per-scenario summary next to the `--perf` JSONL; see
+  [Windowed scenarios](#windowed-scenarios-the-zero-jank-budget-in-the-real-window-adr-0016). These
+  are the numbers the budget table is about.
 - `oxikube --perf` logs per-frame times, feed throughput and `notify` counts to
   `<data dir>/perf/*.jsonl` (`~/.local/share/oxikube/perf` on Linux,
   `~/Library/Application Support/oxikube/perf` on macOS; `$OXIKUBE_DATA_DIR/perf` when that is set,
@@ -84,8 +92,11 @@ second and appends JSONL; the UI thread never touches the file. Lines:
 | `kind` | Fields |
 |---|---|
 | `start` | `schema`, `app_version`, `os`, `arch`, `pid`, `started_unix_ms`, `flush_interval_ms`, `measures` |
-| `tick` (every second) | `t_ms`, `interval_ms`, `frames_us` (every frame in the interval), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `max_notifies_per_frame`, `rss_mib`, `peak_rss_mib` (MiB, `null` where the OS has no reader) |
-| `summary` (on exit) | `duration_ms`, `frame_count`, `frames` {`count`, `p50`, `p95`, `p99`, `max`} (ms), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `max_notifies_per_frame`, `rss_mib` {`count`, `p50`, `p95`, `p99`, `max`} (MiB, over the per-tick readings), `peak_rss_mib` |
+| `tick` (every second) | `t_ms`, `interval_ms`, `frames_us` (every frame in the interval), `dropped_frames` (frames the recorder lost to ring overflow; not display refreshes, which only the windowed summary counts), `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `max_notifies_per_frame`, `max_view_notifies_per_frame`, `rss_mib`, `peak_rss_mib` (MiB, `null` where the OS has no reader) |
+| `summary` (on exit) | `duration_ms`, `frame_count`, `frames` {`count`, `p50`, `p95`, `p99`, `max`} (ms), `dropped_frames`, `feed_deltas`, `feed_deltas_per_s`, `notifies`, `notifies_per_s`, `max_notifies_per_frame`, `max_view_notifies_per_frame`, `rss_mib` {`count`, `p50`, `p95`, `p99`, `max`} (MiB, over the per-tick readings), `peak_rss_mib` |
+
+The JSONL schema is 2 since E01-P587 (`max_view_notifies_per_frame`: the most coalesced notifies one
+view received between two frames, which ADR 0016 bounds at one).
 
 On exit (window closed, `--perf-duration` elapsed, or Ctrl-C) it prints to stderr, for example:
 
@@ -281,6 +292,150 @@ Rules for updating the baseline:
 3. Never edit numbers by hand and never refresh the baseline to make a red nightly green without
    explaining the regression.
 
+
+## Windowed scenarios: the zero-jank budget in the real window (ADR 0016)
+
+Built in E01-P587. The app, in its real window on the real GPU, drives its own UI through the paths
+a user's input takes and is measured against the budget table above. Code:
+`crates/platform/oxikube_runtime/src/perf/windowed/` (the pacer, the meter, the summary and its
+verdict), `bins/oxikube/src/perf_window/` (the scenarios, the synthetic clusters, the driver),
+`xtask/src/perf/windowed/` (the runner and the report).
+
+```
+cargo xtask perf --windowed pods-table          # one scenario, 5 runs
+cargo xtask perf --windowed --all               # every scenario, 5 runs each (about 40 minutes)
+cargo xtask perf --windowed --all --enforce     # fail when a scenario is over budget
+cargo build -p oxikube --features perf-window --profile release-fast
+target/release-fast/oxikube --perf-scenario-window logs     # one run by hand
+```
+
+Keep the window in front for the whole run and the machine otherwise idle: a window that is not
+the active one is paced at 30 fps by GPUI (the run is reported as `valid: false`, no measurement),
+and macOS stops refreshing a window nobody can see (hidden, minimised, behind a full-screen app on
+another Space): the run then stops after 5 s without a refresh and says so.
+
+### How a run works
+
+- **Start-up.** `oxikube --perf-scenario-window <name>` (feature `perf-window`, implies `--perf`)
+  starts through the real init order with the embedded default settings (nothing of the user's is
+  read or written), an in-memory state db, the app's Tokio runtime and wall clock, and the
+  scenario's synthetic clusters (`bins/oxikube/src/perf_window/world/mod.rs`). The window opens at
+  1440 x 900 pt. It waits until the window is the active one, then measures the display's refresh
+  (the median gap between refreshes while nothing is drawn: 8.33 ms on the reference Mac).
+- **Setup** goes through the user's commands: `cluster::Connect`, `resource::OpenList`,
+  `resource::Open`, `pod::ViewLogs`, `terminal::New`. Its frames are the `setup` phase, reported and
+  not judged.
+- **Scripted phases** run one step on every display refresh (`windowed::drive`: GPUI's
+  `on_next_frame`, from the display link, before the frame is drawn). A step dispatches what a user
+  does at that moment: a scroll event at the middle of the window (`Window::dispatch_event`), a
+  keystroke (`Window::dispatch_keystroke`: key bindings, then the focused input), an action
+  (`Window::dispatch_action`), a command on the bus, a window or dock resize. It marks the input,
+  whose latency then runs to the end of the frame that shows it. A script fails when its input does
+  not reach its view (a scroll that does not scroll, a filter that does not filter), so a broken
+  script cannot measure an idle window instead.
+- **Idle phases** drive nothing: the frames the app draws on its own, and its CPU. Every 250 ms
+  they check that the window is still the active one (`activity_checks`, `inactive_checks`), so an
+  idle-only scenario (`idle`) is a measurement exactly when its window stayed in front.
+
+| Scenario | Load | Phases |
+|---|---|---|
+| `pods-table` | 10 000 pods in 8 namespaces, 1 % recycled every 5 s (`load-pods --churn`'s MODIFIED, DELETED, ADDED, in 10 batches over a second) | `scroll` (20 s, a 90 px scroll event every refresh, reversing at either end), `still` (10 s idle) |
+| `table-filter` | the same | `type-filter` (15 s: `table::FocusFilter`, then `load-012` typed at 15 keys/s, erased, again) |
+| `namespaces` | the same | `switch-namespace` (15 s: `namespace::Select` 4 times a second through the 8 namespaces and all) |
+| `detail-drawer` | the same, and a 5 MB ConfigMap with 40 events | `cycle-tabs` (20 s: `resource_detail::ShowTab` 1 to 4, Overview, YAML, Describe, Events, every half second, focus in the drawer) |
+| `tabs-panes` | three clusters: 10 000, 3 000 and 3 000 pods, churning; each with its pods table open | `switch-tabs` (10 s, `cluster::NextTab` 4 times a second), `resize-window` (10 s, the window's size swept every refresh), `resize-dock` (10 s, the front cluster's right dock with the detail drawer swept every refresh) |
+| `theme` | the pods table under churn | `switch-theme` (15 s: One Light / One Dark every half second through the settings store, the path a `settings.json` hot reload takes) |
+| `catalog` | 50 contexts | `type-search` (15 s: `listed-42` typed at 15 keys/s into the catalog's search, erased, again) |
+| `sidebar` | 10 000 pods churning, the cluster's first screen (Workloads overview) with the sidebar's count badges | `churn` (30 s, every refresh watched, nothing driven) |
+| `logs` | a pod writing 5 000 lines/s (the mixed JSON / plain stream of the headless `logs-stream`) | `stream-json` (10 s, JSON mode, the default), `type-search` (10 s: `logs::Find`, then `slow` typed and erased), `stream-raw` (10 s, `logs::ToggleJsonMode` off) |
+| `terminal` | a real shell: `LocalPty` running `/bin/sh` (`SHELL=/bin/sh` from xtask), or `pod::Shell` in a busybox pod on kind | `yes-flood` (until a 50 MB `yes` ends), `redraw-60hz` (8 s: an `awk` script rewriting every row in colour 60 times a second), `resize` (8 s, the window swept every refresh during the redraw) |
+| `idle` | two clusters, 1 000 pods each, no churn, both pods tables open | `idle` (30 s): the idle CPU and idle memory (< 150 MB, judged on the run's peak RSS) budgets |
+
+The synthetic clusters are only what a cluster would send (contexts, watches, lists, gets, logs,
+describe text); every view, store, service, the session manager and the command bus are the app's.
+`cargo xtask perf --windowed` creates the terminal scenario's pod (`oxi-perf-tty-<pid>`, deleted
+afterwards) when `--exec-context` (default `kind-oxikube`) answers.
+
+### The summary
+
+Each run writes the `--perf` JSONL as before and `<jsonl stem>.<scenario>.summary.json` next to it
+(`--perf-report` to choose; format in `docs/perf/windowed-summary.example.json`, schema 1): per
+phase and for all scripted phases together the frames (count, p50, p95, p99, max: `Window::draw` to
+the end of the content's paint, deferred overlays such as popovers, menus and dropdowns included,
+which the hook marks with a probe painted as the last deferred draw; only the paint of the window's
+tooltip, in-window prompt or drag preview comes after it), the
+same frames to the end of `present` (`presented_ms`, reported, not judged: GPUI's Metal `present`
+waits for a free drawable, about until the next refresh while the window draws on every one, so it
+measures the display's pacing; a present that runs long shows as a dropped frame), the frames over
+8.33 ms, the dropped refreshes, the refresh gaps, input latency, notifies per frame and the most for
+one view, feed deltas, CPU % of one core, RSS and peak RSS at the phase's end; every scripted
+frame over budget with its phase and time; the verdict (`failures`, `valid`). It prints one line
+per phase and the verdict, for example (`release-fast`, M5 Max, the machine shared with other
+builds):
+
+```
+oxikube --perf-scenario-window: pods-table scroll (Driven, 20.0 s): 2399 frames: p50 3.42, p95 3.89, p99 4.09, max 5.39 ms; 0 over budget; dropped 0; input p95 3.92, max 5.45 ms; notifies at most 3 per frame, 1 per view; cpu 52.79 %; rss 274.5 MiB (peak 274.5)
+oxikube --perf-scenario-window: pods-table: within every ADR 0016 budget
+```
+
+`cargo xtask perf --windowed` writes `<target>/perf/windowed-report-<os>.json` (every run's summary,
+and per figure the median and the worst run) and prints a table of them. A run that could not
+measure (its script failed, the process crashed or ran past 10 minutes) is kept in the report as an
+error (`errors`) and the next run goes on; `--enforce` fails on it.
+
+### Baseline
+
+**First baseline: one run per scenario, on a busy machine (E01-P587, 2026-10-09).** `cargo xtask
+perf --windowed --all --samples 1`, `release-fast`, Apple M5 Max, built-in 120 Hz display (measured
+refresh 8.31 to 8.34 ms), window 1440 x 900 pt at scale 2, in front for the whole run. The machine
+was **not** quiet: load average 35 to 50 on 18 cores (other agents building and testing, eight
+stray `yes` processes each holding a core). These numbers say where the gaps are; the five quiet
+runs per scenario ADR 0016 asks for replace them (the story's verify stage). On the same machine
+with less load (2026-10-08, the example summary in `docs/perf/`) `pods-table` met every budget:
+2 399 scroll frames, max 5.39 ms, 0 dropped.
+
+| Scenario | Frames | max / p99 / p95 ms | over 8.33 ms | dropped | input max ms | notifies / view / frame | peak RSS MiB | CPU % |
+|---|---|---|---|---|---|---|---|---|
+| `pods-table` | 1602 | 19.84 / 13.88 / 11.99 | 459 | 1199 | 19.92 | 1 | 275.9 | 52.95 |
+| `table-filter` | 526 | 14.67 / 12.08 / 9.84 | 96 | 33 | 13.18 | 1 | 276.7 | 39.96 |
+| `namespaces` | 159 | 16.48 / 12.38 / 10.78 | 36 | 10 | 25.84 | 1 | 286.2 | 11.75 |
+| `detail-drawer` | 127 | 685.25 / 93.57 / 9.86 | 11 | 99 | 707.51 | 1 | 582.3 | 10.04 |
+| `tabs-panes` | 1685 | 15.32 / 11.69 / 7.98 | 71 | 812 | 17.85 | **2** | 362.4 | 44.44 |
+| `theme` | 76 | 15.78 / 15.78 / 9.40 | 4 | 2 | 16.20 | 1 | 269.2 | 4.16 |
+| `catalog` | 226 | 9.46 / 5.83 / 4.08 | 1 | 1 | 9.71 | 0 | 142.3 | 6.12 |
+| `sidebar` | 12 | 3.60 / 3.60 / 3.60 | 0 | 0 | - | 1 | 262.4 | 0.83 |
+| `logs` | 1136 | 14.05 / 8.84 / 6.22 | 17 | 17 | 12.82 | 1 | 292.3 | 24.85 |
+| `terminal` | 2599 | 8.01 / 5.15 / 3.98 | 0 | 984 | 7.15 | **2** | 267.8 | 42.82 |
+| `idle` | 0 | - | 0 | 0 | - | 0 | **180.8** | 0.48 |
+
+Frames are the scripted phases' (`Window::draw` to the end of the content's paint); CPU is % of one
+core over the scripted phases (for `idle`, the idle CPU budget's figure). The `idle` run was not
+counted as a measurement then (an idle-only scenario had no refresh to check the window on; idle
+phases now check it every 250 ms), its 0.48 % is within the 1 % budget. Peak RSS is within 400 MB
+(381 MiB) in every 10 000-pod scenario. `idle`'s 180.8 MiB is **over** its 150 MB (143 MiB) idle
+budget (the run was judged before that budget was added to the scenario; it is judged now). The drawer's 582 MiB is reported, not judged (the 5 MB object is
+more than 10 000 pods); that the 5 MB object and its YAML editor cost about 300 MiB over the pods
+table is itself a finding for the quiet profile.
+
+**Over-budget frames and their causes.** Each was placed by its phase and time in the summary
+(`over_budget`), against the script's input times and the 5 s churn period, and the drawer's by a
+`sample` time profile of the run (Instruments is not installed on the measuring machine; `sample`
+is its command-line sampler).
+
+| Scenario | Over-budget frames | Cause |
+|---|---|---|
+| `detail-drawer` | 1 frame of 685 ms (1 057 ms in a second run) at the first switch to YAML; 93.6 ms at the next switch; the rest 8.3 to 12 ms at tab switches; 99 refreshes dropped around them | The YAML tab makes its text and its editor on the UI thread the first time it is drawn (`detail/yaml/tab.rs` `refresh_yaml`: `yaml_text` serialises the 5 MB object; then `EditorState` takes the 5 MB string: rope build, tree-sitter parse, line wrapping). The profile's main thread is in `ropey::Rope::line_to_byte_idx`, `ts_lexer__do_advance` and `LineWrapper::wrap_lines` under `Window::draw`. Fix: build the text and the editor's buffer off the UI thread and show the editor when it is ready. |
+| `namespaces` | 36 frames, 8.4 to 16.5 ms, one at each `namespace::Select` (every 250 ms); input max 25.8 ms | The frame that shows the narrowed or widened row set: the table's visible rows are new rows, so their cells are made, shaped and laid out in that frame. The command reaches the table through the bus a refresh after its dispatch, so its input latency is about two frames (p95 20.5 ms). Placed by timing; which part of the frame dominates is for the quiet profile. |
+| `table-filter` | 96 frames, 8.3 to 14.7 ms, at the keystrokes (one every 67 ms) | As for `namespaces`: the frame that shows each key's new row set makes the new visible rows' cells (the filter itself runs in the store's subscription, `set_filter_parts`). Placed by timing; to profile. |
+| `theme` | 4 frames, 9.4 to 15.8 ms, at theme switches | The frame after a switch re-renders every view of the window with the new colours (the pods table's visible cells included). Placed by timing; to profile. |
+| `logs` | 17 frames, 8.5 to 14.1 ms, in bursts at 5 s intervals (5.0 s, 10.1 s, 15.0 s, 20.0 s, ...) in every mode | They come with the pods churn (100 pods every 5 s) of the cluster behind the log view, not with the log stream: the churn's store updates and the sidebar's badge redraw land in the frames the log view draws. To profile on the quiet machine. |
+| `pods-table` | 459 frames, 8.4 to 19.8 ms; 1 199 refreshes dropped (the scroll drew at 60 Hz) | The scroll's frames drew in 5 ms at p50 but presented at 16.5 ms: `present` waited two refreshes for a drawable, the window composited at half rate. On the less loaded machine the same scroll presented every refresh (0 dropped, max 5.39 ms), so this run's drops and its long tail are the machine's contention, not the table. Re-measure quiet. |
+| `tabs-panes` | 71 frames, 8.4 to 15.3 ms (most while resizing the window); 812 refreshes dropped (resize-dock drew at 60 Hz); a view received 2 coalesced notifies in one frame | Resizing lays out every pane at the new size in the frame (the window resize lays out three cluster tabs' visible views); the dock resize presented at half rate as in `pods-table` (contention). The 2 notifies per view: `notify_coalesced` is paced by an 8.33 ms timer, not by frames, so when a frame is late (or the display runs at 60 Hz) one view gets two notifies before it draws. Fix: deliver coalesced notifies once per frame (the window's next frame), not on a timer. |
+| `terminal` | none over 8.33 ms; 984 refreshes dropped in `yes-flood` (presented at 60 Hz) and 48 in `resize`; 2 notifies per view per frame in `yes-flood` | The flood's frames drew in 4 ms but presented at 16.5 ms (as `pods-table`: contention, re-measure); the 2 notifies per view are the timer-paced coalescing above, with the PTY reader notifying the terminal view. |
+| `catalog` | 1 frame, 9.46 ms, at a keystroke | p95 4.08 ms: a contention outlier; re-measure quiet. |
+| `idle` (memory) | none (no scripted frames); peak RSS 180.8 MiB, over the 150 MB (143 MiB) idle budget by about 38 MiB | Two connected clusters of 1 000 pods each with both pods tables open, after setup. Not yet placed: the quiet run's RSS at the idle phase's start and end (steady state against peak) and a heap profile say whether it is the stores, the two tables' cached rows, the fonts and atlas, or allocator slack. |
+
+Fix stories are filed from this report once the quiet runs confirm it (ADR 0016, rule 2).
 
 ## Startup: cold start to the first interactive frame
 
