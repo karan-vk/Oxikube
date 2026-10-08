@@ -83,7 +83,9 @@ impl Render for PerfRoot {
                 tap(FrameSample {
                     start,
                     duration,
-                    drawn: drawn.get().map(|end: Instant| end.saturating_duration_since(start)),
+                    drawn: drawn
+                        .get()
+                        .map(|end: Instant| end.saturating_duration_since(start)),
                     notifies,
                 });
             }
@@ -103,9 +105,12 @@ fn paint_probe(inner: AnyView, painted: Rc<Cell<Option<Instant>>>) -> AnyElement
         .size_full()
         .child(inner)
         .child(
-            canvas(|_, _, _| {}, move |_, _, _, _| painted.set(Some(Instant::now())))
-                .absolute()
-                .size_0(),
+            canvas(
+                |_, _, _| {},
+                move |_, _, _, _| painted.set(Some(Instant::now())),
+            )
+            .absolute()
+            .size_0(),
         )
         .into_any_element()
 }

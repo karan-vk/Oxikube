@@ -120,10 +120,34 @@ const STALL_CHECK: Duration = Duration::from_millis(500);
 
 /// Runs idle phase `name`: nothing is driven for `duration`; the frames the app draws on its own
 /// and the CPU it spends are what is measured.
-pub async fn idle(cx: &mut AsyncApp, meter: &Meter, name: &str, duration: Duration) {
+///
+/// Every [`IDLE_CHECK`] it notes whether `window` is still the active window (there is no refresh
+/// to note it on): a run whose window was not throughout is not a measurement.
+pub async fn idle(
+    cx: &mut AsyncApp,
+    window: AnyWindowHandle,
+    meter: &Meter,
+    name: &str,
+    duration: Duration,
+) {
     meter.begin(name, PhaseKind::Idle);
-    cx.background_executor().timer(duration).await;
+    let started = Instant::now();
+    loop {
+        let left = duration.saturating_sub(started.elapsed());
+        if left.is_zero() {
+            break;
+        }
+        cx.background_executor().timer(left.min(IDLE_CHECK)).await;
+        let active = window
+            .update(cx, |_, window, _| window.is_window_active())
+            .unwrap_or(false);
+        meter.activity(active);
+    }
 }
+
+/// How often an idle phase checks that its window is still the active one: four cheap reads a
+/// second, nothing drawn.
+const IDLE_CHECK: Duration = Duration::from_millis(250);
 
 fn schedule(pacer: Rc<RefCell<Pacer>>, window: &Window) {
     window.on_next_frame(move |window, cx| refresh(pacer, window, cx));

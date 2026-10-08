@@ -104,6 +104,14 @@ pub struct PhaseSummary {
     /// Refreshes during which the window was not the active (key) window. GPUI paces an
     /// inactive window at 30 fps, so a run with any is not a measurement of the budget.
     pub inactive_refreshes: u64,
+    /// Idle phases: how often the window's activity was checked (every 250 ms; an idle phase has no
+    /// refresh to check it on) and how many of those checks found it inactive. A run with any
+    /// inactive check is not a measurement either: an inactive window draws less and spends less.
+    #[serde(default)]
+    pub activity_checks: u64,
+    /// See [`PhaseSummary::activity_checks`].
+    #[serde(default)]
+    pub inactive_checks: u64,
     /// Inputs dispatched (keystrokes, scroll events, actions, commands).
     pub inputs: u64,
     /// From an input's dispatch to the end of the next frame, ms.

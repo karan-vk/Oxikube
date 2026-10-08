@@ -10,7 +10,8 @@
 //! 3. The `terminal` scenario runs its shell in a busybox pod on `--exec-context` (default
 //!    `kind-oxikube`) when that context answers, else on this machine (`--exec-context none`
 //!    forces the local shell).
-//! 4. Writes `<target>/perf/windowed-report-<os>.json` (`--out`): every run's summary and, per
+//! 4. Writes `<target>/perf/windowed-report-<os>.json` (`--out`): every run's summary (a run that
+//!    could not measure is kept as an error and the next run goes on) and, per
 //!    figure ADR 0016 judges, the median and the worst run; prints the table.
 //!
 //! The budgets are reported, not enforced, unless `--enforce` is given: today's numbers are the
@@ -74,6 +75,9 @@ pub struct ScenarioRuns {
     pub figures: BTreeMap<String, Spread>,
     /// Every distinct budget failure of the runs.
     pub failures: Vec<String>,
+    /// Runs that could not measure (the script failed, the process crashed or timed out).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<String>,
     /// Every run's summary.
     pub runs: Vec<Summary>,
 }
@@ -131,17 +135,23 @@ pub fn run(options: &Options<'_>, root: &Path, target: &Path) -> Result<()> {
         };
         let exec = pod.as_ref().map(pod::ShellPod::exec_arg);
         let mut runs = Vec::with_capacity(options.samples);
+        let mut errors = Vec::new();
         print!("{scenario}:");
         for i in 0..options.samples {
             print!(" {}", i + 1);
             let _ = std::io::stdout().flush();
-            runs.push(run_one(&bin, scenario, i, &dir, exec.as_deref())?);
+            // A run that could not measure is reported with the scenario and the next run (and
+            // scenario) still goes: one broken script does not lose the rest of an `--all`.
+            match run_one(&bin, scenario, i, &dir, exec.as_deref()) {
+                Ok(summary) => runs.push(summary),
+                Err(err) => errors.push(format!("run {}: {err:#}", i + 1)),
+            }
         }
         println!();
         drop(pod);
         report
             .scenarios
-            .insert(scenario.to_owned(), scenario_runs(runs));
+            .insert(scenario.to_owned(), scenario_runs(runs, errors));
     }
     let out = options.out.map_or_else(
         || {
@@ -158,7 +168,7 @@ pub fn run(options: &Options<'_>, root: &Path, target: &Path) -> Result<()> {
     let over: Vec<&String> = report
         .scenarios
         .iter()
-        .filter(|(_, s)| s.valid_runs == 0 || s.passed_runs < s.valid_runs)
+        .filter(|(_, s)| s.valid_runs == 0 || s.passed_runs < s.valid_runs || !s.errors.is_empty())
         .map(|(name, _)| name)
         .collect();
     if options.enforce && !over.is_empty() {
@@ -173,7 +183,7 @@ pub fn run(options: &Options<'_>, root: &Path, target: &Path) -> Result<()> {
     Ok(())
 }
 
-fn scenario_runs(runs: Vec<Summary>) -> ScenarioRuns {
+fn scenario_runs(runs: Vec<Summary>, errors: Vec<String>) -> ScenarioRuns {
     let valid: Vec<Summary> = runs.iter().filter(|r| r.valid).cloned().collect();
     let figures = aggregate(if valid.is_empty() { &runs } else { &valid });
     let mut failures: Vec<String> = Vec::new();
@@ -190,6 +200,7 @@ fn scenario_runs(runs: Vec<Summary>) -> ScenarioRuns {
         passed_runs: valid.iter().filter(|r| r.failures.is_empty()).count(),
         figures,
         failures,
+        errors,
         runs,
     }
 }
@@ -349,6 +360,9 @@ fn print(report: &Report) {
         for failure in &s.failures {
             println!("{:<14} over: {failure}", "");
         }
+        for error in &s.errors {
+            println!("{:<14} not measured: {error}", "");
+        }
     }
 }
 
@@ -394,9 +408,17 @@ mod tests {
         .unwrap();
         let mut inactive = example.clone();
         inactive.valid = false;
-        let runs = scenario_runs(vec![example.clone(), inactive]);
+        let runs = scenario_runs(vec![example.clone(), inactive], Vec::new());
         assert_eq!(runs.valid_runs, 1);
         assert_eq!(runs.runs.len(), 2);
         assert_eq!(runs.passed_runs, usize::from(example.failures.is_empty()));
+    }
+
+    #[test]
+    fn a_run_that_could_not_measure_is_kept_as_an_error() {
+        let runs = scenario_runs(Vec::new(), vec!["run 1: exited with 1".into()]);
+        assert_eq!((runs.valid_runs, runs.passed_runs), (0, 0));
+        assert!(runs.figures.is_empty());
+        assert_eq!(runs.errors, ["run 1: exited with 1"]);
     }
 }

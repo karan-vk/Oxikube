@@ -186,6 +186,38 @@ fn idle_cpu_and_memory_budgets_apply_where_set() {
 }
 
 #[test]
+fn an_idle_only_scenario_is_a_measurement_while_its_window_stays_active() {
+    let meter = Meter::new();
+    meter.begin("setup", PhaseKind::Setup);
+    meter.begin("idle", PhaseKind::Idle);
+    meter.activity(true);
+    meter.activity(true);
+    let s = meter.finish(&info(Budgets::default()), Vec::new());
+    assert!(s.valid, "{:?}", s.notes);
+    assert_eq!(
+        (s.scripted.activity_checks, s.scripted.inactive_checks),
+        (2, 0)
+    );
+
+    let meter = Meter::new();
+    meter.begin("idle", PhaseKind::Idle);
+    meter.activity(true);
+    meter.activity(false);
+    let s = meter.finish(&info(Budgets::default()), Vec::new());
+    assert!(!s.valid, "an inactive window draws and spends less");
+    assert!(
+        s.notes.iter().any(|n| n.contains("1 of 2 checks")),
+        "{:?}",
+        s.notes
+    );
+
+    let meter = Meter::new();
+    meter.begin("setup", PhaseKind::Setup);
+    let s = meter.finish(&info(Budgets::default()), Vec::new());
+    assert!(!s.valid, "nothing scripted ran");
+}
+
+#[test]
 fn the_summary_round_trips_through_json() {
     let meter = Meter::new();
     meter.begin("scroll", PhaseKind::Driven);

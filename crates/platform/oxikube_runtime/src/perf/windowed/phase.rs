@@ -50,6 +50,8 @@ pub(super) struct PhaseLog {
     pub(super) frames: Vec<Frame>,
     pub(super) refreshes: Vec<Instant>,
     pub(super) inactive_refreshes: u64,
+    pub(super) activity_checks: u64,
+    pub(super) inactive_checks: u64,
     pub(super) inputs: u64,
     pub(super) latencies_ns: Vec<u64>,
     pub(super) inputs_without_frame: u64,
@@ -65,6 +67,8 @@ impl PhaseLog {
             frames: Vec::new(),
             refreshes: Vec::new(),
             inactive_refreshes: 0,
+            activity_checks: 0,
+            inactive_checks: 0,
             inputs: 0,
             latencies_ns: Vec::new(),
             inputs_without_frame: 0,
@@ -105,6 +109,8 @@ pub(super) fn summarise_refs(
         refreshes: 0,
         refresh_gap_ms: None,
         inactive_refreshes: 0,
+        activity_checks: 0,
+        inactive_checks: 0,
         inputs: 0,
         input_latency_ms: None,
         inputs_without_frame: 0,
@@ -149,6 +155,8 @@ pub(super) fn summarise_refs(
         }
         s.refreshes += log.refreshes.len() as u64;
         s.inactive_refreshes += log.inactive_refreshes;
+        s.activity_checks += log.activity_checks;
+        s.inactive_checks += log.inactive_checks;
         for pair in log.refreshes.windows(2) {
             let gap = pair[1].saturating_duration_since(pair[0]);
             gaps_ns.push(u64::try_from(gap.as_nanos()).unwrap_or(u64::MAX));

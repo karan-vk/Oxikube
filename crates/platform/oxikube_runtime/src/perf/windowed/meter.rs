@@ -113,6 +113,18 @@ impl Meter {
         }
     }
 
+    /// Records a check of the window's activity during an idle phase; `active`: it was the key
+    /// window.
+    pub fn activity(&self, active: bool) {
+        let mut state = self.state.borrow_mut();
+        if let Some(phase) = state.phases.last_mut() {
+            phase.activity_checks += 1;
+            if !active {
+                phase.inactive_checks += 1;
+            }
+        }
+    }
+
     /// Records that an input is dispatched now: its latency runs to the end of the next frame.
     /// An earlier input still without a frame is counted as never shown before this one.
     pub fn input(&self) {
@@ -202,8 +214,8 @@ impl Meter {
             .filter(|p| p.kind == PhaseKind::Driven)
             .map(|p| p.refreshes.len() as u64)
             .sum();
-        if driven == 0 {
-            notes.push("no display refresh was driven".to_owned());
+        if driven == 0 && scripted.activity_checks == 0 {
+            notes.push("no display refresh was driven and no idle phase ran".to_owned());
         }
         if scripted.inactive_refreshes > 0 {
             notes.push(format!(
@@ -212,7 +224,15 @@ impl Meter {
                 scripted.inactive_refreshes, scripted.refreshes
             ));
         }
-        let valid = driven > 0 && scripted.inactive_refreshes == 0;
+        if scripted.inactive_checks > 0 {
+            notes.push(format!(
+                "the window was not the active window at {} of {} checks of an idle phase: keep \
+                 it in front for the whole run",
+                scripted.inactive_checks, scripted.activity_checks
+            ));
+        }
+        let measured = driven > 0 || scripted.activity_checks > 0;
+        let valid = measured && scripted.inactive_refreshes == 0 && scripted.inactive_checks == 0;
         let mut summary = WindowedSummary {
             schema: WINDOWED_SCHEMA,
             scenario: info.scenario.clone(),

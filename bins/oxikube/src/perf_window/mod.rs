@@ -155,10 +155,16 @@ impl Scenario {
     }
 
     /// The budgets it is judged against: ADR 0016's for every scenario, plus the memory budget
-    /// where 10 000 pods are listed and the idle CPU budget for `idle`.
+    /// where the load is the 10 000-pod cluster and its views alone, and the idle CPU budget for
+    /// `idle`. (The drawer's 5 MB object, the log stream's buffer and the two extra clusters of
+    /// `tabs-panes` are more than 10 000 pods; their peak RSS is reported, not judged.)
     pub fn budgets(self) -> Budgets {
         match self {
-            Scenario::PodsTable | Scenario::Sidebar => Budgets {
+            Scenario::PodsTable
+            | Scenario::TableFilter
+            | Scenario::Namespaces
+            | Scenario::Theme
+            | Scenario::Sidebar => Budgets {
                 peak_rss_mib: Some(MEMORY_10K_PODS_MIB),
                 ..Budgets::default()
             },

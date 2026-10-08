@@ -126,16 +126,18 @@ async fn drive(
             1.0 / refresh.as_secs_f64()
         ));
     }
+    // The size the scenario starts at (a script may resize the window on the way).
+    let (viewport, scale) = window.update(cx, |_, window, _| {
+        (window.viewport_size(), window.scale_factor())
+    })?;
+    notes.push(format!(
+        "window {:.0} x {:.0} pt at scale {scale}",
+        f32::from(viewport.width),
+        f32::from(viewport.height),
+    ));
     let mut driver = Driver::new(cx, window, meter.clone(), workspace)?;
     scenarios::run(run, &mut driver).await?;
     notes.extend(driver.take_notes());
-    let viewport = driver.update(|window, _| (window.viewport_size(), window.scale_factor()))?;
-    notes.push(format!(
-        "window {:.0} x {:.0} pt at scale {}",
-        f32::from(viewport.0.width),
-        f32::from(viewport.0.height),
-        viewport.1
-    ));
     let info = RunInfo {
         scenario: run.scenario.name().to_owned(),
         app_version: env!("CARGO_PKG_VERSION").to_owned(),

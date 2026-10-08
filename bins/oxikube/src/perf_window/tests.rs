@@ -153,7 +153,18 @@ fn cluster_tabs_switch_and_the_window_and_dock_resize(cx: &mut TestAppContext) {
 #[gpui::test]
 fn two_idle_clusters_are_an_idle_phase(cx: &mut TestAppContext) {
     let summary = run(cx, Scenario::Idle).expect("two clusters connected");
-    assert_eq!(phase(&summary, "idle").kind, PhaseKind::Idle);
+    let idle = phase(&summary, "idle");
+    assert_eq!(idle.kind, PhaseKind::Idle);
+    assert!(
+        idle.activity_checks > 0,
+        "an idle phase checks that its window stays active: {idle:?}"
+    );
+    assert_eq!(
+        summary.valid,
+        idle.inactive_checks == 0,
+        "an idle-only scenario is a measurement while its window stays active: {:?}",
+        summary.notes
+    );
 }
 
 #[test]
@@ -168,6 +179,20 @@ fn every_scenario_has_a_name_a_world_and_the_frame_budget() {
                 assert_eq!(world.clusters.len() + world.listed_only, 50, "50 contexts");
             }
             Scenario::TabsPanes => assert_eq!(world.clusters.len(), 3),
+            Scenario::PodsTable
+            | Scenario::TableFilter
+            | Scenario::Namespaces
+            | Scenario::Theme
+            | Scenario::Sidebar => {
+                assert_eq!(world.clusters.len(), 1);
+                assert_eq!(world.clusters[0].pods, super::PODS);
+                assert_eq!(
+                    scenario.budgets().peak_rss_mib,
+                    Some(super::MEMORY_10K_PODS_MIB),
+                    "{} lists 10 000 pods and nothing else",
+                    scenario.name()
+                );
+            }
             Scenario::Idle => {
                 assert_eq!(world.clusters.len(), 2);
                 assert!(world.clusters.iter().all(|c| !c.churn));

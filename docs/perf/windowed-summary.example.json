@@ -43,6 +43,8 @@
       "max": 11.579
     },
     "inactive_refreshes": 0,
+    "activity_checks": 40,
+    "inactive_checks": 0,
     "inputs": 2399,
     "input_latency_ms": {
       "count": 2399,
@@ -84,6 +86,8 @@
       "refreshes": 0,
       "refresh_gap_ms": null,
       "inactive_refreshes": 0,
+      "activity_checks": 0,
+      "inactive_checks": 0,
       "inputs": 0,
       "input_latency_ms": null,
       "inputs_without_frame": 0,
@@ -124,6 +128,8 @@
         "max": 11.579
       },
       "inactive_refreshes": 0,
+      "activity_checks": 0,
+      "inactive_checks": 0,
       "inputs": 2399,
       "input_latency_ms": {
         "count": 2399,
@@ -164,6 +170,8 @@
       "refreshes": 0,
       "refresh_gap_ms": null,
       "inactive_refreshes": 0,
+      "activity_checks": 40,
+      "inactive_checks": 0,
       "inputs": 0,
       "input_latency_ms": null,
       "inputs_without_frame": 0,

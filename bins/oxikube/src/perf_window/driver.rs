@@ -139,7 +139,7 @@ impl<'a> Driver<'a> {
     /// An idle phase: nothing driven for `duration`.
     pub async fn idle(&mut self, name: &str, duration: Duration) {
         eprintln!("oxikube --perf-scenario-window: phase {name} ({duration:?}, idle)");
-        windowed::idle(self.cx, &self.meter, name, scaled(duration)).await;
+        windowed::idle(self.cx, self.window, &self.meter, name, scaled(duration)).await;
     }
 
     /// Connects `context` as the catalog's Enter does and waits for the session.
