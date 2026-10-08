@@ -33,7 +33,7 @@ display, `release-fast`, nothing else running):
 | Frames | every frame drawn in ≤ **8.33 ms** (one 120 Hz refresh) | the **maximum** (and p99, p95 reported); not a percentile |
 | Dropped frames | **0** refreshes missed while a view is being driven | the gaps between the display refreshes the window is called on |
 | Input | ≤ **1 frame**: dispatched at a refresh, shown in the frame of that refresh | from the dispatch to the end of the paint of the frame that shows it, ≤ 8.33 ms |
-| Memory | 10 000 pods **< 400 MB** | the process's peak resident memory |
+| Memory | 10 000 pods **< 400 MB**; idle **< 150 MB** with two clusters connected (ADR 0013's rows) | the process's peak resident memory (for idle, never below its steady state) |
 | Idle CPU | **< 1 %** with two clusters connected | process CPU time over an idle phase |
 | Notifies | ≤ **1 coalesced notify per view per frame** | the most one view received between two frames |
 

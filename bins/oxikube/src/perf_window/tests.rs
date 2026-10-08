@@ -197,6 +197,11 @@ fn every_scenario_has_a_name_a_world_and_the_frame_budget() {
                 assert_eq!(world.clusters.len(), 2);
                 assert!(world.clusters.iter().all(|c| !c.churn));
                 assert_eq!(scenario.budgets().idle_cpu_percent, Some(1.0));
+                assert_eq!(
+                    scenario.budgets().peak_rss_mib,
+                    Some(super::MEMORY_IDLE_MIB),
+                    "idle is judged on the 150 MB two-cluster idle memory budget"
+                );
             }
             _ => {
                 assert_eq!(world.clusters[0].pods, super::PODS);
@@ -206,6 +211,7 @@ fn every_scenario_has_a_name_a_world_and_the_frame_budget() {
     }
     assert_eq!(Scenario::parse("nope"), None);
     assert!((super::MEMORY_10K_PODS_MIB - 381.47).abs() < 0.01);
+    assert!((super::MEMORY_IDLE_MIB - 143.05).abs() < 0.01);
 }
 
 #[test]

@@ -154,10 +154,11 @@ impl Scenario {
         }
     }
 
-    /// The budgets it is judged against: ADR 0016's for every scenario, plus the memory budget
-    /// where the load is the 10 000-pod cluster and its views alone, and the idle CPU budget for
-    /// `idle`. (The drawer's 5 MB object, the log stream's buffer and the two extra clusters of
-    /// `tabs-panes` are more than 10 000 pods; their peak RSS is reported, not judged.)
+    /// The budgets it is judged against: ADR 0016's for every scenario, plus the 10 000-pod memory
+    /// budget where the load is the 10 000-pod cluster and its views alone, and for `idle` (two
+    /// clusters connected) the idle CPU and idle memory budgets. (The drawer's 5 MB object, the
+    /// log stream's buffer and the two extra clusters of `tabs-panes` are more than 10 000 pods;
+    /// their peak RSS is reported, not judged.)
     pub fn budgets(self) -> Budgets {
         match self {
             Scenario::PodsTable
@@ -169,6 +170,7 @@ impl Scenario {
                 ..Budgets::default()
             },
             Scenario::Idle => Budgets {
+                peak_rss_mib: Some(MEMORY_IDLE_MIB),
                 idle_cpu_percent: Some(IDLE_CPU_PERCENT),
                 ..Budgets::default()
             },
@@ -179,6 +181,10 @@ impl Scenario {
 
 /// ADR 0016: 10 000 pods under 400 MB (MB = 10^6 bytes, so about 381 MiB).
 pub const MEMORY_10K_PODS_MIB: f64 = 400.0 * 1_000_000.0 / 1_048_576.0;
+/// ADR 0013 (restated by ADR 0016): idle under 150 MB with two clusters connected (about
+/// 143 MiB), judged on the `idle` scenario's peak resident memory, which is never below its
+/// steady state.
+pub const MEMORY_IDLE_MIB: f64 = 150.0 * 1_000_000.0 / 1_048_576.0;
 /// ADR 0016: idle CPU under 1 % with two clusters connected.
 pub const IDLE_CPU_PERCENT: f64 = 1.0;
 /// How long a scripted phase runs unless it says otherwise.

@@ -21,7 +21,7 @@ mod pod;
 mod print;
 mod summary;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -187,15 +187,13 @@ pub fn run(options: &Options<'_>, root: &Path, target: &Path) -> Result<()> {
 fn scenario_runs(runs: Vec<Summary>, errors: Vec<String>) -> ScenarioRuns {
     let valid: Vec<Summary> = runs.iter().filter(|r| r.valid).cloned().collect();
     let figures = aggregate(if valid.is_empty() { &runs } else { &valid });
-    let mut failures: Vec<String> = Vec::new();
-    for failure in runs.iter().flat_map(|r| r.failures.iter()) {
-        let kind = failure
-            .split_once(|c: char| c.is_ascii_digit())
-            .map_or(failure.as_str(), |(head, _)| head);
-        if !failures.iter().any(|f| f.starts_with(kind)) {
-            failures.push(failure.clone());
-        }
-    }
+    let mut kinds = BTreeSet::new();
+    let failures: Vec<String> = runs
+        .iter()
+        .flat_map(|r| r.failures.iter())
+        .filter(|f| kinds.insert(failure_kind(f)))
+        .cloned()
+        .collect();
     ScenarioRuns {
         valid_runs: valid.len(),
         passed_runs: valid.iter().filter(|r| r.failures.is_empty()).count(),
@@ -204,6 +202,23 @@ fn scenario_runs(runs: Vec<Summary>, errors: Vec<String>) -> ScenarioRuns {
         errors,
         runs,
     }
+}
+
+/// Which budget a failure line broke: the line with every number replaced by `#`, so the same
+/// failure in several runs is one kind while different failures (including those that start with
+/// a number, such as "812 refreshes dropped") stay apart.
+fn failure_kind(failure: &str) -> String {
+    let mut kind = String::with_capacity(failure.len());
+    let mut chars = failure.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c.is_ascii_digit() {
+            while chars.next_if(|c| c.is_ascii_digit() || *c == '.').is_some() {}
+            kind.push('#');
+        } else {
+            kind.push(c);
+        }
+    }
+    kind
 }
 
 /// Builds the windowed binary and copies it under `dir`.
@@ -355,6 +370,40 @@ mod tests {
         assert_eq!(runs.valid_runs, 1);
         assert_eq!(runs.runs.len(), 2);
         assert_eq!(runs.passed_runs, usize::from(example.failures.is_empty()));
+    }
+
+    #[test]
+    fn every_distinct_failure_is_kept_once_even_when_it_starts_with_a_number() {
+        let example: Summary = serde_json::from_str(include_str!(
+            "../../../../docs/perf/windowed-summary.example.json"
+        ))
+        .unwrap();
+        let with = |failures: &[&str]| Summary {
+            failures: failures.iter().map(|f| (*f).to_owned()).collect(),
+            ..example.clone()
+        };
+        let first = with(&[
+            "12 of 3000 frames over 8.33 ms (max 15.32, p99 11.69, p95 7.98)",
+            "812 refreshes dropped",
+            "input latency max 17.85 ms (p95 9.10) over one frame",
+            "3 inputs never reached a frame before the next one",
+        ]);
+        let second = with(&[
+            "40 of 2990 frames over 8.33 ms (max 19.01, p99 12.00, p95 8.01)",
+            "799 refreshes dropped",
+            "a view received 2 coalesced notifies in one frame",
+        ]);
+        let runs = scenario_runs(vec![first, second], Vec::new());
+        assert_eq!(
+            runs.failures,
+            [
+                "12 of 3000 frames over 8.33 ms (max 15.32, p99 11.69, p95 7.98)",
+                "812 refreshes dropped",
+                "input latency max 17.85 ms (p95 9.10) over one frame",
+                "3 inputs never reached a frame before the next one",
+                "a view received 2 coalesced notifies in one frame",
+            ]
+        );
     }
 
     #[test]

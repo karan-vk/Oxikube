@@ -17,7 +17,7 @@ numbers are measured on a mid-range x86 laptop with an integrated GPU.
 | Startup | ≤ 400 ms cold to first interactive frame; catalog before any network; settings + keymap + theme < 30 ms on the main thread | `oxikube` launch with 3 kubeconfigs, 20 contexts ([Startup](#startup-cold-start-to-the-first-interactive-frame)) |
 | Cluster open | tab interactive ≤ 200 ms after connect; first table rows ≤ 1 s after feed warm | 2 000-pod cluster |
 | Main thread | 0 blocking I/O, process spawn, or lock contention > 1 ms | any |
-| Memory | 10 k pods < 400 MB (ADR 0016: the peak of the windowed scenarios whose load is the 10 000-pod cluster alone: `pods-table`, `table-filter`, `namespaces`, `theme`, `sidebar`); idle < 150 MB (2 clusters); logs/events ring-buffered | steady state after 10 min |
+| Memory | 10 k pods < 400 MB (ADR 0016: the peak of the windowed scenarios whose load is the 10 000-pod cluster alone: `pods-table`, `table-filter`, `namespaces`, `theme`, `sidebar`); idle < 150 MB (2 clusters; ADR 0016: the peak of the windowed `idle` scenario); logs/events ring-buffered | steady state after 10 min |
 | CPU idle | < 1 % with two clusters connected and no visible churn (ADR 0016: the windowed `idle` scenario) | laptop on battery |
 | Terminal | 60 fps under `yes`/`htop`; resize ≤ 1 frame | local shell + exec |
 | Editor | typing latency ≤ 16 ms with validation debounced; 5 MB file opens ≤ 500 ms | manifest editor |
@@ -349,7 +349,7 @@ another Space): the run then stops after 5 s without a refresh and says so.
 | `sidebar` | 10 000 pods churning, the cluster's first screen (Workloads overview) with the sidebar's count badges | `churn` (30 s, every refresh watched, nothing driven) |
 | `logs` | a pod writing 5 000 lines/s (the mixed JSON / plain stream of the headless `logs-stream`) | `stream-json` (10 s, JSON mode, the default), `type-search` (10 s: `logs::Find`, then `slow` typed and erased), `stream-raw` (10 s, `logs::ToggleJsonMode` off) |
 | `terminal` | a real shell: `LocalPty` running `/bin/sh` (`SHELL=/bin/sh` from xtask), or `pod::Shell` in a busybox pod on kind | `yes-flood` (until a 50 MB `yes` ends), `redraw-60hz` (8 s: an `awk` script rewriting every row in colour 60 times a second), `resize` (8 s, the window swept every refresh during the redraw) |
-| `idle` | two clusters, 1 000 pods each, no churn, both pods tables open | `idle` (30 s): the idle CPU budget |
+| `idle` | two clusters, 1 000 pods each, no churn, both pods tables open | `idle` (30 s): the idle CPU and idle memory (< 150 MB, judged on the run's peak RSS) budgets |
 
 The synthetic clusters are only what a cluster would send (contexts, watches, lists, gets, logs,
 describe text); every view, store, service, the session manager and the command bus are the app's.
@@ -404,13 +404,14 @@ with less load (2026-10-08, the example summary in `docs/perf/`) `pods-table` me
 | `sidebar` | 12 | 3.60 / 3.60 / 3.60 | 0 | 0 | - | 1 | 262.4 | 0.83 |
 | `logs` | 1136 | 14.05 / 8.84 / 6.22 | 17 | 17 | 12.82 | 1 | 292.3 | 24.85 |
 | `terminal` | 2599 | 8.01 / 5.15 / 3.98 | 0 | 984 | 7.15 | **2** | 267.8 | 42.82 |
-| `idle` | 0 | - | 0 | 0 | - | 0 | 180.8 | 0.48 |
+| `idle` | 0 | - | 0 | 0 | - | 0 | **180.8** | 0.48 |
 
 Frames are the scripted phases' (`Window::draw` to the end of the content's paint); CPU is % of one
 core over the scripted phases (for `idle`, the idle CPU budget's figure). The `idle` run was not
 counted as a measurement then (an idle-only scenario had no refresh to check the window on; idle
 phases now check it every 250 ms), its 0.48 % is within the 1 % budget. Peak RSS is within 400 MB
-(381 MiB) wherever it is judged. The drawer's 582 MiB is reported, not judged (the 5 MB object is
+(381 MiB) in every 10 000-pod scenario. `idle`'s 180.8 MiB is **over** its 150 MB (143 MiB) idle
+budget (the run was judged before that budget was added to the scenario; it is judged now). The drawer's 582 MiB is reported, not judged (the 5 MB object is
 more than 10 000 pods); that the 5 MB object and its YAML editor cost about 300 MiB over the pods
 table is itself a finding for the quiet profile.
 
@@ -430,6 +431,7 @@ is its command-line sampler).
 | `tabs-panes` | 71 frames, 8.4 to 15.3 ms (most while resizing the window); 812 refreshes dropped (resize-dock drew at 60 Hz); a view received 2 coalesced notifies in one frame | Resizing lays out every pane at the new size in the frame (the window resize lays out three cluster tabs' visible views); the dock resize presented at half rate as in `pods-table` (contention). The 2 notifies per view: `notify_coalesced` is paced by an 8.33 ms timer, not by frames, so when a frame is late (or the display runs at 60 Hz) one view gets two notifies before it draws. Fix: deliver coalesced notifies once per frame (the window's next frame), not on a timer. |
 | `terminal` | none over 8.33 ms; 984 refreshes dropped in `yes-flood` (presented at 60 Hz) and 48 in `resize`; 2 notifies per view per frame in `yes-flood` | The flood's frames drew in 4 ms but presented at 16.5 ms (as `pods-table`: contention, re-measure); the 2 notifies per view are the timer-paced coalescing above, with the PTY reader notifying the terminal view. |
 | `catalog` | 1 frame, 9.46 ms, at a keystroke | p95 4.08 ms: a contention outlier; re-measure quiet. |
+| `idle` (memory) | none (no scripted frames); peak RSS 180.8 MiB, over the 150 MB (143 MiB) idle budget by about 38 MiB | Two connected clusters of 1 000 pods each with both pods tables open, after setup. Not yet placed: the quiet run's RSS at the idle phase's start and end (steady state against peak) and a heap profile say whether it is the stores, the two tables' cached rows, the fonts and atlas, or allocator slack. |
 
 Fix stories are filed from this report once the quiet runs confirm it (ADR 0016, rule 2).
 
