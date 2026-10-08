@@ -1,5 +1,6 @@
 //! `docs/perf/baseline.json`: per-OS, per-scenario p50/p95/p99, and the regression check.
 
+use super::floors::NoiseFloors;
 use super::report::{Percentiles, Report, Status, metric_unit};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -83,24 +84,6 @@ impl Baseline {
                 .map(|(m, p)| (m.clone(), Percentiles { max: None, ..*p }))
                 .collect();
             entry.scenarios.insert(name.clone(), metrics);
-        }
-    }
-}
-
-/// Absolute slowdown (or growth) a metric must also exceed to fail, per unit: milliseconds for
-/// `*_ms` metrics, MiB for `*_mib` metrics.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct NoiseFloors {
-    pub ms: f64,
-    pub mib: f64,
-}
-
-impl NoiseFloors {
-    /// The floor that applies to `metric`.
-    pub fn for_metric(&self, metric: &str) -> f64 {
-        match metric_unit(metric) {
-            "MiB" => self.mib,
-            _ => self.ms,
         }
     }
 }
@@ -348,6 +331,7 @@ mod tests {
     const FLOOR: f64 = 0.25;
     const FLOORS: NoiseFloors = NoiseFloors {
         ms: FLOOR,
+        cold_ms: 40.0,
         mib: 8.0,
     };
 
@@ -377,7 +361,7 @@ mod tests {
                             reason: None,
                             enabled_by: vec![],
                             samples: 5,
-                            metrics: [("first_frame_ms".to_owned(), pct(*v))].into(),
+                            metrics: [("frame_ms".to_owned(), pct(*v))].into(),
                             counters: Counters::default(),
                             launches: BTreeMap::new(),
                         },
@@ -407,17 +391,46 @@ mod tests {
             OsBaseline {
                 scenarios: scenarios
                     .iter()
-                    .map(|(n, v)| {
-                        (
-                            (*n).to_owned(),
-                            [("first_frame_ms".to_owned(), pct(*v))].into(),
-                        )
-                    })
+                    .map(|(n, v)| ((*n).to_owned(), [("frame_ms".to_owned(), pct(*v))].into()))
                     .collect(),
                 ..OsBaseline::default()
             },
         );
         b
+    }
+
+    /// A cold-start milestone carries the wider floor: +21 % of 100 ms is 21 ms, under 40 ms
+    /// (#411), where the same change on a frame metric fails.
+    #[test]
+    fn cold_start_metrics_use_the_cold_start_floor() {
+        let mut r = report(&[("startup", Some(10.0))]);
+        let set = |r: &mut Report, v: f64| {
+            r.scenarios
+                .get_mut("startup")
+                .unwrap()
+                .metrics
+                .insert("first_frame_ms".into(), pct(v));
+        };
+        set(&mut r, 121.0);
+        let mut b = baseline(&[("startup", 10.0)]);
+        b.os.get_mut("linux")
+            .unwrap()
+            .scenarios
+            .get_mut("startup")
+            .unwrap()
+            .insert("first_frame_ms".into(), pct(100.0));
+        let c = compare(&r, &b, TOL, FLOORS);
+        let cold: Vec<_> = c
+            .rows
+            .iter()
+            .filter(|r| r.metric == "first_frame_ms")
+            .collect();
+        assert_eq!(cold.len(), 3);
+        assert!(cold.iter().all(|r| r.outcome == Outcome::WithinNoiseFloor));
+        assert!(!c.failed());
+        // +61 ms is over both the percentage and the floor.
+        set(&mut r, 161.0);
+        assert!(compare(&r, &b, TOL, FLOORS).failed());
     }
 
     #[test]
@@ -567,21 +580,6 @@ mod tests {
     }
 
     #[test]
-    fn floors_apply_per_unit() {
-        assert_eq!(FLOORS.for_metric("rss_mib"), 8.0);
-        assert_eq!(FLOORS.for_metric("peak_rss_mib"), 8.0);
-        assert_eq!(FLOORS.for_metric("frame_ms"), 0.25);
-        // A 5 MiB jump passes; a 0.5 ms jump on a ms metric does not use the MiB floor.
-        assert!(!regressed(20.0, 25.0, TOL, FLOORS.for_metric("rss_mib")));
-        assert!(regressed(
-            1.0,
-            1.5,
-            TOL,
-            FLOORS.for_metric("first_frame_ms")
-        ));
-    }
-
-    #[test]
     fn baselined_memory_the_run_did_not_measure_fails_and_unbaselined_is_missing() {
         // Baseline has rss_mib, run does not (reader lost): FAIL.
         let c = compare(
@@ -680,7 +678,7 @@ mod tests {
         let r = report(&[("startup", Some(12.0)), ("logs-stream", None)]);
         b.update_from(&r, "test", "2026-10-03");
         let linux = &b.os["linux"];
-        assert_eq!(linux.scenarios["startup"]["first_frame_ms"].p50, 12.0);
+        assert_eq!(linux.scenarios["startup"]["frame_ms"].p50, 12.0);
         assert!(
             linux.scenarios.contains_key("palette"),
             "untouched scenario kept"
@@ -698,5 +696,40 @@ mod tests {
         let b: Baseline =
             serde_json::from_str(include_str!("../../../docs/perf/baseline.json")).unwrap();
         assert_eq!(b.schema, BASELINE_SCHEMA);
+    }
+
+    /// E08-F520: the `logs-stream` scenario is baselined on both runners, every mode the budget
+    /// table checks included, so `--check` gates it instead of reporting it MISSING.
+    #[test]
+    fn committed_baseline_covers_the_logs_stream_budgets() {
+        let b: Baseline =
+            serde_json::from_str(include_str!("../../../docs/perf/baseline.json")).unwrap();
+        for os in ["linux", "macos"] {
+            let logs = b.os[os]
+                .scenarios
+                .get("logs-stream")
+                .unwrap_or_else(|| panic!("no logs-stream baseline for {os}"));
+            for budget in super::super::budget::BUDGETS
+                .iter()
+                .filter(|budget| budget.scenario == "logs-stream")
+            {
+                let seeded = logs
+                    .get(budget.metric)
+                    .unwrap_or_else(|| panic!("{os} logs-stream baseline lacks {}", budget.metric));
+                // A baseline over the budget was seeded from a broken run (the Linux runner's
+                // 30 ms frames before #509): the gate would then allow +50 % of it.
+                assert!(
+                    seeded.p95 <= budget.limit,
+                    "{os} {} p95 {} ms is over its {} ms budget",
+                    budget.metric,
+                    seeded.p95,
+                    budget.limit
+                );
+            }
+            assert!(
+                b.os[os].source.contains("nightly run"),
+                "{os}: the baseline names the run it came from"
+            );
+        }
     }
 }
