@@ -33,7 +33,7 @@ Oxikube adopts the budgets in `docs/PERFORMANCE.md` as release-gating requiremen
 
 Every UI story's acceptance criteria inherit these budgets. Stories that touch hot paths
 (tables, logs, editor, terminal, agent thread, resource store, feeds) must report measured
-numbers in the PR. CI nightly runs the perf scenarios and fails on regression beyond 20 % by default (the hosted runners' nightly gate uses +50 % on p50 and +150 % on p95/p99 because their run-to-run noise is larger than 20 %, and the macOS check is advisory because its noise is larger still; E01-F542).
+numbers in the PR. CI nightly runs the perf scenarios and fails on regression beyond 20 % by default (the hosted runners' nightly gate uses +50 % on p50 and +150 % on p95/p99 because their run-to-run noise is larger than 20 %, and the macOS check is advisory because its noise is larger still; E01-F542). A regression must also exceed an absolute floor per class of metric: 0.25 ms for frames and startup stages, 40 ms for cold-start milestones, 8 MiB for memory (E08-F520).
 
 ## Consequences
 

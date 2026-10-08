@@ -202,11 +202,20 @@ laptop are not comparable with a CI VM.
 
 `--check` fails when any p50/p95/p99 of a baselined metric is more than **+20 %** higher
 (`--tolerance`; `--tail-tolerance` sets p95/p99 separately) **and** higher by more than an absolute
-noise floor in the metric's own unit:
+noise floor, which depends on the class of the metric (`xtask/src/perf/floors.rs`):
 
-- `*_ms` metrics: **0.25 ms** (`--noise-floor-ms`). It stops microsecond jitter on sub-millisecond
-  metrics (an idle redraw is about 0.01 ms) from failing the job; it is far below any budget in
-  the table above.
+- Frame metrics (`frame_ms`, `draw_ms` and every `<mode>_frame_ms` / `<mode>_draw_ms`) and the small
+  startup stages (`config_load_ms`, `state_db_open_ms`, `init_<stage>_ms`): **0.25 ms**
+  (`--noise-floor-ms`). It stops microsecond jitter on sub-millisecond metrics from failing the job
+  and is far below any budget in the table above. With the real views in (`scroll-10k` 3 to 5 ms,
+  `logs-stream` 1.6 to 3.5 ms a frame, the idle redraw 0.4 to 0.9 ms) it is under 10 % of a frame, so
+  these metrics gate on the +20 % rule and a frame that doubles fails. When the placeholder app drew
+  in 0.01 ms the same floor let a 10x slowdown through (#411).
+- Cold-start milestones, one value per launch (`first_frame_ms`, `launch_to_first_frame_ms`,
+  `first_rows_ms`, `init_window_ms`): **40 ms** (`--noise-floor-cold-ms`). The same code read 95.7 ms
+  and 120.3 ms (+25.7 %) on two `ubuntu-latest` nightlies (runs 37125615040 and 37126183063) and
+  66 to 107 ms across five `macos-latest` ones; a 20 % rule with a 0.25 ms floor failed the job on
+  that weather. Under +40 ms is noise, and the 400 ms absolute budget still applies.
 - `*_mib` metrics: **8 MiB** (`--noise-floor-mib`). Memory has its own floor because the ms floor
   does not apply to it (0.25 MiB would fail on allocator noise) and +20 % of a small RSS is only a
   few MiB. The run-to-run spread of the headless startup scenario is about 0.1 to 0.3 MiB on macOS,
@@ -224,32 +233,33 @@ a warning annotation says the check failed. A quiet-machine comparison (`cargo x
 (instructions retired, or a dedicated runner) is the way to gate on it again. The absolute budgets
 above are part of every check. The 20 % default is for a quiet machine compared with itself.
 
-While the app is a placeholder this means only `first_frame_ms`,
-`launch_to_first_frame_ms` and the memory metrics effectively gate; the floors are to be re-tuned once real views land (https://github.com/karan-vk/Oxikube/issues/411). A scenario or metric with no baseline is reported as
+The floors were re-tuned in E08-F520 (#411), once `scroll-10k` and `logs-stream` put the frame metrics
+in the millisecond range: they now gate against their baselines as well as against the absolute
+budgets. A scenario or metric with no baseline is reported as
 `MISSING` and does not fail; a scenario that has a baseline but no longer runs does fail.
 
 The nightly `perf` job (ubuntu + macOS) runs `cargo xtask perf --all --check --samples 7`, uploads
 `perf-report-<OS>` and, on failure, feeds the `nightly-failure` tracking issue.
 
-Committed numbers (`startup`, median of 7 samples; ms for timings, MiB for memory; seeded from
-nightly run 37401630806 on the story branch E05-S13, which runs the real init order), with a local
+Committed numbers (`startup`, median of 7 samples; ms for timings, MiB for memory; re-seeded from
+nightly run 37715509006, E08-F520, which runs the real init order), with a local
 M-series laptop run for reference (not gated):
 
 | Metric | `linux` (ubuntu-latest) p50 / p99 | `macos` (macos-latest) p50 / p99 | local M5 Max (20 samples) p50 / p99 |
 |---|---|---|---|
-| `launch_to_first_frame_ms` | 130.9 / 130.9 | 105.9 / 105.9 | 146.2 / 146.2 |
-| `first_frame_ms` | 113.5 / 113.5 | 95.1 / 95.1 | 139.5 / 139.5 |
-| `config_load_ms` (settings + theme + keymap) | 1.19 / 1.19 | 1.47 / 1.47 | 0.78 / 0.78 |
-| `state_db_open_ms` (off the UI thread in the app) | 3.0 / 3.0 | 4.1 / 4.1 | 2.6 / 2.6 |
-| `frame_ms` (idle redraw, hook) | 0.136 / 0.178 | 0.066 / 0.294 | 0.037 / 0.044 |
-| `draw_ms` (idle redraw, outside) | 0.150 / 0.192 | 0.071 / 0.322 | 0.039 / 0.047 |
-| `rss_mib` (headless, after the redraws) | 122.4 / 122.4 | 39.7 / 39.7 | 44.9 / 44.9 |
-| `peak_rss_mib` (headless) | 122.4 / 122.4 | 39.7 / 39.7 | 44.9 / 44.9 |
+| `launch_to_first_frame_ms` | 112.7 / 112.7 | 80.4 / 80.4 | 146.2 / 146.2 |
+| `first_frame_ms` | 98.6 / 98.6 | 70.1 / 70.1 | 139.5 / 139.5 |
+| `config_load_ms` (settings + theme + keymap) | 1.80 / 1.80 | 1.72 / 1.72 | 0.78 / 0.78 |
+| `state_db_open_ms` (off the UI thread in the app) | 2.54 / 2.54 | 1.91 / 1.91 | 2.6 / 2.6 |
+| `frame_ms` (idle redraw, hook) | 0.71 / 0.77 | 0.44 / 0.90 | 0.037 / 0.044 |
+| `draw_ms` (idle redraw, outside) | 0.73 / 0.79 | 0.45 / 0.95 | 0.039 / 0.047 |
+| `rss_mib` (headless, after the redraws) | 138.0 / 138.0 | 51.6 / 51.6 | 44.9 / 44.9 |
+| `peak_rss_mib` (headless) | 138.0 / 138.0 | 51.6 / 51.6 | 44.9 / 44.9 |
 
 The `init_<stage>_ms` breakdown is baselined too (`docs/perf/baseline.json`). On the macOS runner the
 component library's `init` (`init_ui_ms`, the font enumeration) and the platform (`init_assets_ms`)
-dominate as on the laptop; on the Linux runner (lavapipe) they are 3-4 ms and opening the window with
-its first draw (`init_window_ms`, about 119 ms) is the whole cost.
+dominate as on the laptop; on the Linux runner (lavapipe) they are 2-3.5 ms and opening the window with
+its first draw (`init_window_ms`, about 102 ms) is the whole cost.
 
 For scale: `oxikube --perf` with a real window on the same laptop reads about 95 MiB RSS, two to three times
 the headless figure, which is why the headless number is only a regression signal. The Linux
@@ -741,9 +751,31 @@ CPU, layout and paint preparation, no present and no GPU time):
 
 144 frames per mode: one per scripted frame and one per delta's coalesced notify (24, one per
 32 ms commit; at most one notify between two frames). Headless RSS 61.5 MiB with the stream's
-lines in the ring buffer. The CI-runner baseline for `--check` is seeded from the first nightly
-that runs the scenario ([#520](https://github.com/karan-vk/Oxikube/issues/520)); until then the
-baseline is reported missing, which is not fatal.
+lines in the ring buffer.
+
+The `--check` baseline comes from the nightly's own runners, never from the laptop (E08-F520,
+[#520](https://github.com/karan-vk/Oxikube/issues/520)): `docs/perf/baseline.json` holds the
+`logs-stream` numbers of **nightly run
+[37715509006](https://github.com/karan-vk/Oxikube/actions/runs/37715509006)** (`workflow_dispatch`
+on `story/E08-F520-perf-baselines`, 7 samples, `release-fast`), seeded with `cargo xtask perf
+--from-report perf-report-<OS>/report-<OS>.json --update-baseline` for the `perf-report-Linux` and
+`perf-report-macOS` artifacts. Before it, the Linux entry still held the pre-E07-F509 numbers (29.95 ms
+p50, 33.2 ms p95 for `frame_ms`), so a Linux regression up to 20x would have passed; a unit test
+now fails when a committed `logs-stream` baseline is missing a budgeted mode or is over its budget.
+
+| Mode (p50 / p95 `*_frame_ms`) | `linux` (ubuntu-latest) | `macos` (macos-latest) |
+|---|---|---|
+| wrap off, autoscroll on (`frame_ms`) | 2.34 / 3.74 ms | 2.19 / 3.69 ms |
+| wrap off, autoscroll paused | 2.38 / 2.45 ms | 2.27 / 3.01 ms |
+| wrap on, autoscroll on | 1.69 / 3.29 ms | 1.56 / 3.11 ms |
+| wrap on, autoscroll paused | 1.73 / 1.79 ms | 1.49 / 1.88 ms |
+| search highlighting | 2.61 / 4.03 ms | 2.38 / 3.95 ms |
+| search filtering | 2.71 / 4.74 ms | 2.48 / 4.23 ms |
+| 10 pods merged, wrap off | 2.65 / 4.11 ms | 2.48 / 3.73 ms |
+| `rss_mib` | 196.2 MiB | 112.8 MiB |
+
+Every mode is inside the 8 ms p95 budget on both runners; the CI runners' headless frames are 3 to 5
+times the laptop's (the laptop figures above are not comparable with them).
 
 Windowed (`--perf-logs`, 30 s each, the window not in front):
 
