@@ -333,7 +333,9 @@ another Space): the run then stops after 5 s without a refresh and says so.
   whose latency then runs to the end of the frame that shows it. A script fails when its input does
   not reach its view (a scroll that does not scroll, a filter that does not filter), so a broken
   script cannot measure an idle window instead.
-- **Idle phases** drive nothing: the frames the app draws on its own, and its CPU.
+- **Idle phases** drive nothing: the frames the app draws on its own, and its CPU. Every 250 ms
+  they check that the window is still the active one (`activity_checks`, `inactive_checks`), so an
+  idle-only scenario (`idle`) is a measurement exactly when its window stayed in front.
 
 | Scenario | Load | Phases |
 |---|---|---|
@@ -375,11 +377,61 @@ oxikube --perf-scenario-window: pods-table: within every ADR 0016 budget
 ```
 
 `cargo xtask perf --windowed` writes `<target>/perf/windowed-report-<os>.json` (every run's summary,
-and per figure the median and the worst run) and prints a table of them.
+and per figure the median and the worst run) and prints a table of them. A run that could not
+measure (its script failed, the process crashed or ran past 10 minutes) is kept in the report as an
+error (`errors`) and the next run goes on; `--enforce` fails on it.
 
 ### Baseline
 
-BASELINE_PLACEHOLDER
+**First baseline: one run per scenario, on a busy machine (E01-P587, 2026-10-09).** `cargo xtask
+perf --windowed --all --samples 1`, `release-fast`, Apple M5 Max, built-in 120 Hz display (measured
+refresh 8.31 to 8.34 ms), window 1440 x 900 pt at scale 2, in front for the whole run. The machine
+was **not** quiet: load average 35 to 50 on 18 cores (other agents building and testing, eight
+stray `yes` processes each holding a core). These numbers say where the gaps are; the five quiet
+runs per scenario ADR 0016 asks for replace them (the story's verify stage). On the same machine
+with less load (2026-10-08, the example summary in `docs/perf/`) `pods-table` met every budget:
+2 399 scroll frames, max 5.39 ms, 0 dropped.
+
+| Scenario | Frames | max / p99 / p95 ms | over 8.33 ms | dropped | input max ms | notifies / view / frame | peak RSS MiB | CPU % |
+|---|---|---|---|---|---|---|---|---|
+| `pods-table` | 1602 | 19.84 / 13.88 / 11.99 | 459 | 1199 | 19.92 | 1 | 275.9 | 52.95 |
+| `table-filter` | 526 | 14.67 / 12.08 / 9.84 | 96 | 33 | 13.18 | 1 | 276.7 | 39.96 |
+| `namespaces` | 159 | 16.48 / 12.38 / 10.78 | 36 | 10 | 25.84 | 1 | 286.2 | 11.75 |
+| `detail-drawer` | 127 | 685.25 / 93.57 / 9.86 | 11 | 99 | 707.51 | 1 | 582.3 | 10.04 |
+| `tabs-panes` | 1685 | 15.32 / 11.69 / 7.98 | 71 | 812 | 17.85 | **2** | 362.4 | 44.44 |
+| `theme` | 76 | 15.78 / 15.78 / 9.40 | 4 | 2 | 16.20 | 1 | 269.2 | 4.16 |
+| `catalog` | 226 | 9.46 / 5.83 / 4.08 | 1 | 1 | 9.71 | 0 | 142.3 | 6.12 |
+| `sidebar` | 12 | 3.60 / 3.60 / 3.60 | 0 | 0 | - | 1 | 262.4 | 0.83 |
+| `logs` | 1136 | 14.05 / 8.84 / 6.22 | 17 | 17 | 12.82 | 1 | 292.3 | 24.85 |
+| `terminal` | 2599 | 8.01 / 5.15 / 3.98 | 0 | 984 | 7.15 | **2** | 267.8 | 42.82 |
+| `idle` | 0 | - | 0 | 0 | - | 0 | 180.8 | 0.48 |
+
+Frames are the scripted phases' (`Window::draw` to the end of the content's paint); CPU is % of one
+core over the scripted phases (for `idle`, the idle CPU budget's figure). The `idle` run was not
+counted as a measurement then (an idle-only scenario had no refresh to check the window on; idle
+phases now check it every 250 ms), its 0.48 % is within the 1 % budget. Peak RSS is within 400 MB
+(381 MiB) wherever it is judged. The drawer's 582 MiB is reported, not judged (the 5 MB object is
+more than 10 000 pods); that the 5 MB object and its YAML editor cost about 300 MiB over the pods
+table is itself a finding for the quiet profile.
+
+**Over-budget frames and their causes.** Each was placed by its phase and time in the summary
+(`over_budget`), against the script's input times and the 5 s churn period, and the drawer's by a
+`sample` time profile of the run (Instruments is not installed on the measuring machine; `sample`
+is its command-line sampler).
+
+| Scenario | Over-budget frames | Cause |
+|---|---|---|
+| `detail-drawer` | 1 frame of 685 ms (1 057 ms in a second run) at the first switch to YAML; 93.6 ms at the next switch; the rest 8.3 to 12 ms at tab switches; 99 refreshes dropped around them | The YAML tab makes its text and its editor on the UI thread the first time it is drawn (`detail/yaml/tab.rs` `refresh_yaml`: `yaml_text` serialises the 5 MB object; then `EditorState` takes the 5 MB string: rope build, tree-sitter parse, line wrapping). The profile's main thread is in `ropey::Rope::line_to_byte_idx`, `ts_lexer__do_advance` and `LineWrapper::wrap_lines` under `Window::draw`. Fix: build the text and the editor's buffer off the UI thread and show the editor when it is ready. |
+| `namespaces` | 36 frames, 8.4 to 16.5 ms, one at each `namespace::Select` (every 250 ms); input max 25.8 ms | The frame that shows the narrowed or widened row set: the table's visible rows are new rows, so their cells are made, shaped and laid out in that frame. The command reaches the table through the bus a refresh after its dispatch, so its input latency is about two frames (p95 20.5 ms). Placed by timing; which part of the frame dominates is for the quiet profile. |
+| `table-filter` | 96 frames, 8.3 to 14.7 ms, at the keystrokes (one every 67 ms) | As for `namespaces`: the frame that shows each key's new row set makes the new visible rows' cells (the filter itself runs in the store's subscription, `set_filter_parts`). Placed by timing; to profile. |
+| `theme` | 4 frames, 9.4 to 15.8 ms, at theme switches | The frame after a switch re-renders every view of the window with the new colours (the pods table's visible cells included). Placed by timing; to profile. |
+| `logs` | 17 frames, 8.5 to 14.1 ms, in bursts at 5 s intervals (5.0 s, 10.1 s, 15.0 s, 20.0 s, ...) in every mode | They come with the pods churn (100 pods every 5 s) of the cluster behind the log view, not with the log stream: the churn's store updates and the sidebar's badge redraw land in the frames the log view draws. To profile on the quiet machine. |
+| `pods-table` | 459 frames, 8.4 to 19.8 ms; 1 199 refreshes dropped (the scroll drew at 60 Hz) | The scroll's frames drew in 5 ms at p50 but presented at 16.5 ms: `present` waited two refreshes for a drawable, the window composited at half rate. On the less loaded machine the same scroll presented every refresh (0 dropped, max 5.39 ms), so this run's drops and its long tail are the machine's contention, not the table. Re-measure quiet. |
+| `tabs-panes` | 71 frames, 8.4 to 15.3 ms (most while resizing the window); 812 refreshes dropped (resize-dock drew at 60 Hz); a view received 2 coalesced notifies in one frame | Resizing lays out every pane at the new size in the frame (the window resize lays out three cluster tabs' visible views); the dock resize presented at half rate as in `pods-table` (contention). The 2 notifies per view: `notify_coalesced` is paced by an 8.33 ms timer, not by frames, so when a frame is late (or the display runs at 60 Hz) one view gets two notifies before it draws. Fix: deliver coalesced notifies once per frame (the window's next frame), not on a timer. |
+| `terminal` | none over 8.33 ms; 984 refreshes dropped in `yes-flood` (presented at 60 Hz) and 48 in `resize`; 2 notifies per view per frame in `yes-flood` | The flood's frames drew in 4 ms but presented at 16.5 ms (as `pods-table`: contention, re-measure); the 2 notifies per view are the timer-paced coalescing above, with the PTY reader notifying the terminal view. |
+| `catalog` | 1 frame, 9.46 ms, at a keystroke | p95 4.08 ms: a contention outlier; re-measure quiet. |
+
+Fix stories are filed from this report once the quiet runs confirm it (ADR 0016, rule 2).
 
 ## Startup: cold start to the first interactive frame
 

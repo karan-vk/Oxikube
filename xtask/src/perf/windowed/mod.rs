@@ -18,6 +18,7 @@
 //! baseline the fix stories start from (E01-P587).
 
 mod pod;
+mod print;
 mod summary;
 
 use std::collections::BTreeMap;
@@ -163,7 +164,7 @@ pub fn run(options: &Options<'_>, root: &Path, target: &Path) -> Result<()> {
     );
     std::fs::write(&out, serde_json::to_string_pretty(&report)? + "\n")
         .with_context(|| format!("writing {}", out.display()))?;
-    print(&report);
+    print::table(&report);
     println!("\nreport: {}", out.display());
     let over: Vec<&String> = report
         .scenarios
@@ -306,64 +307,6 @@ fn run_command(
         command.args(["--perf-exec", exec]);
     }
     command
-}
-
-fn print(report: &Report) {
-    println!(
-        "\n{} {} ({}), {} runs per scenario, real window; median run / worst run (ADR 0016: \
-         every frame <= 8.33 ms, 0 dropped, input <= 1 frame, <= 1 notify per view per frame)",
-        report.os, report.arch, report.profile, report.runs_per_scenario
-    );
-    println!(
-        "{:<14} {:>5} {:>15} {:>15} {:>15} {:>13} {:>15} {:>9} {:>15} {:>13}",
-        "scenario",
-        "valid",
-        "frame max",
-        "frame p99",
-        "frame p95",
-        "dropped",
-        "input max",
-        "notif/vw",
-        "peak RSS MiB",
-        "CPU %"
-    );
-    for (name, s) in &report.scenarios {
-        let f = |key: &str| {
-            s.figures.get(key).map_or_else(
-                || "-".to_owned(),
-                |v| format!("{:.2}/{:.2}", v.median, v.worst),
-            )
-        };
-        let n = |key: &str| {
-            s.figures.get(key).map_or_else(
-                || "-".to_owned(),
-                |v| format!("{:.0}/{:.0}", v.median, v.worst),
-            )
-        };
-        let cpu = if s.figures.contains_key("idle_cpu_percent") {
-            f("idle_cpu_percent")
-        } else {
-            f("cpu_percent")
-        };
-        println!(
-            "{name:<14} {:>5} {:>15} {:>15} {:>15} {:>13} {:>15} {:>9} {:>15} {:>13}",
-            format!("{}/{}", s.valid_runs, s.runs.len()),
-            f("frame_max_ms"),
-            f("frame_p99_ms"),
-            f("frame_p95_ms"),
-            n("dropped_frames"),
-            f("input_latency_max_ms"),
-            n("max_view_notifies_per_frame"),
-            f("peak_rss_mib"),
-            cpu
-        );
-        for failure in &s.failures {
-            println!("{:<14} over: {failure}", "");
-        }
-        for error in &s.errors {
-            println!("{:<14} not measured: {error}", "");
-        }
-    }
 }
 
 #[cfg(test)]
