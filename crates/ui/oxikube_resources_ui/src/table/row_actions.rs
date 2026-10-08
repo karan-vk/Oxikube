@@ -47,9 +47,11 @@ impl ResourceTable {
 
     /// Runs the action `command` on `targets` (objects of this table).
     ///
-    /// A disabled action (read-only cluster) says why in a toast instead; an action this table
-    /// does not offer is ignored. `resource::Delete` opens the [`DeleteDialog`]; another
-    /// action's command is dispatched for each object, which is the bus's to guard and report.
+    /// A disabled action (read-only cluster) says why in a toast instead, and so does an action
+    /// this table does not offer (E07-U563: "Shell is available for Pods and Nodes"). Shell,
+    /// Attach and Debug take one object: of a selection they act on the cursor row and say so.
+    /// `resource::Delete` opens the [`DeleteDialog`]; another action's command is dispatched for
+    /// each object, which is the bus's to guard and report.
     pub fn run_action(
         &mut self,
         command: CommandId,
@@ -61,10 +63,16 @@ impl ResourceTable {
             return;
         };
         if targets.is_empty() {
+            self.say_no_row(cx);
             return;
         }
+        // Shell, attach and debug take one object: a selection acts on the cursor row.
+        let selected = targets.len();
+        let cursor_target = self.cursor_target(command, &targets, cx);
+        let targets = cursor_target.clone().map_or(targets, |target| vec![target]);
         let entries = actions.entries(&self.cluster, &self.kind, targets.len());
         let Some(entry) = entries.into_iter().find(|entry| entry.command() == command) else {
+            self.say_unavailable(&actions, command, selected, cx);
             return;
         };
         if let Some(reason) = entry.reason() {
@@ -73,6 +81,9 @@ impl ResourceTable {
                 cx,
             );
             return;
+        }
+        if let Some(target) = &cursor_target {
+            self.say_cursor_row(command, entry.action.label(), target, selected, cx);
         }
         if command == CommandId::RESOURCE_DELETE {
             self.begin_delete(&actions, targets, window, cx);
@@ -132,7 +143,7 @@ impl ResourceTable {
         });
     }
 
-    fn toast(&self, toast: Toast, cx: &mut Context<Self>) {
+    pub(super) fn toast(&self, toast: Toast, cx: &mut Context<Self>) {
         if let Some(workspace) = self.workspace.as_ref() {
             workspace
                 .update(cx, |workspace, cx| {

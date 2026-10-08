@@ -12,6 +12,7 @@
 //! | `host` | [`ResourceActions`]: the app's row actions and delete flow, shared by every table; [`ActionEntry`], one resolved action as a menu draws it |
 //! | `menu` | the entries appended to a row's context menu |
 //! | `dialog` | [`DeleteDialog`]: the delete confirmation (propagation choice, type-the-name, bulk summary), its run and its results; a modal of the workspace |
+//! | `dependents` | which kinds own dependents: the others get no propagation choice in the delete dialog |
 //! | `dialog_view` | the dialog's rendering |
 //! | `results` | the per-object results list of a finished delete |
 //!
@@ -33,6 +34,7 @@
 //!
 //! [`RowActions`]: oxikube_app::RowActions
 
+mod dependents;
 mod dialog;
 mod dialog_view;
 mod host;

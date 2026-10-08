@@ -6,6 +6,7 @@ use oxikube_app::{
     ActionContext, ActionState, ClusterSessionManager, CommandBus, DebugRunner, DeleteFlow,
     ExecService, RowAction, RowActionRegistry, RowActions,
 };
+use oxikube_domain::Capabilities;
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::kinds::ResourceKind;
@@ -126,6 +127,15 @@ impl ResourceActions {
             .get(cluster)
             .map(|session| ActionContext::of(&session))
             .unwrap_or_default()
+    }
+
+    /// Whether `command` is a row action of `kind` at all, whatever the session may do: the
+    /// difference between "this kind has no such action" and "you are not allowed it here".
+    pub(crate) fn offers(&self, kind: &ResourceKind, command: CommandId) -> bool {
+        self.actions
+            .actions_for(kind, Capabilities::all())
+            .iter()
+            .any(|action| action.meta().id == command)
     }
 
     /// The actions for `selected` objects of `kind` in `cluster`: what the context menu and the

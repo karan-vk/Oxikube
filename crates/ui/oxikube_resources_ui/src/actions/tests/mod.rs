@@ -27,6 +27,20 @@ pub(crate) fn nodes_kind() -> ResourceKind {
     }
 }
 
+/// The deployments kind as discovery serves it (a controller: it owns dependents).
+pub(crate) fn deployments_kind() -> ResourceKind {
+    ResourceKind {
+        gvk: Gvk::new("apps", "v1", "Deployment"),
+        preferred: true,
+        plural: "deployments".into(),
+        singular: "deployment".into(),
+        short_names: vec!["deploy".into()],
+        categories: vec!["all".into()],
+        verbs: VerbSet::from_names(["get", "list", "watch", "delete"]),
+        namespaced: true,
+    }
+}
+
 /// A kind the server cannot delete (events are read-only here).
 pub(crate) fn readonly_kind() -> ResourceKind {
     ResourceKind {
