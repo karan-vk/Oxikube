@@ -9,7 +9,6 @@
 
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use kube::config::{ExecConfig, ExecInteractiveMode, Kubeconfig};
@@ -289,13 +288,7 @@ fn a_hung_refresh_does_not_hold_up_runtime_shutdown() {
         build(config(dir.path(), port, 4.0), Duration::from_secs(30)).await
     });
     // Mid-refresh when the runtime goes away: well inside the 30 s deadline.
-    let completed = Arc::new(AtomicBool::new(false));
-    let flag = completed.clone();
-    let in_flight = runtime.spawn(async move {
-        let result = client.apiserver_version().await;
-        flag.store(true, Ordering::SeqCst);
-        result
-    });
+    let in_flight = runtime.spawn(async move { client.apiserver_version().await });
     // Wait (bounded) until the refresh plugin is actually running rather than guessing
     // with a fixed sleep: a slow CI runner may take longer than any fixed pause.
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -317,9 +310,8 @@ fn a_hung_refresh_does_not_hold_up_runtime_shutdown() {
     );
 
     // `JoinHandle::is_finished` right after `shutdown_background` races the worker threads
-    // dropping the task, so assert the outcome instead: the future never ran to completion
-    // (the plugin sleeps far longer than this test lives), and once the runtime has dropped
-    // it the handle resolves as cancelled, not as a panic.
+    // dropping the task, so assert the outcome instead: once the runtime has dropped the
+    // task the handle resolves as cancelled (an `Err`), never as a completed request.
     let outcome = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -328,5 +320,4 @@ fn a_hung_refresh_does_not_hold_up_runtime_shutdown() {
         .expect("the dropped task's handle resolves once the runtime is gone");
     let join_err = outcome.expect_err("never completed: it was dropped");
     assert!(join_err.is_cancelled(), "dropped, not panicked: {join_err}");
-    assert!(!completed.load(Ordering::SeqCst), "the request completed");
 }
