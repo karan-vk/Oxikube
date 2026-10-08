@@ -173,12 +173,12 @@ fn refresh_goldens_regenerates_and_verifies_what_the_nightly_compares() {
     );
 }
 
-/// The nightly's `run:` lines that invoke `cargo test`, whitespace-normalised.
+/// The nightly's `run:` lines that invoke `cargo test`.
 fn nightly_cargo_test_lines() -> Vec<String> {
     read(".github/workflows/nightly.yml")
         .lines()
-        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
         .filter(|line| line.contains("cargo test "))
+        .map(str::to_owned)
         .collect()
 }
 
@@ -186,7 +186,7 @@ fn nightly_cargo_test_lines() -> Vec<String> {
 /// (a named `--test`, or every test of the package when the line names none).
 fn nightly_runs(lines: &[String], package: &str, feature: &str, target: Option<&str>) -> bool {
     lines.iter().any(|line| {
-        let words: Vec<&str> = line.split(' ').collect();
+        let words: Vec<&str> = line.split_whitespace().collect();
         let follows = |flag: &str, value: &str| {
             words
                 .windows(2)
@@ -227,10 +227,10 @@ fn nightly_runs_every_screenshot_test() {
         // A crate whose tests are gated with `#[cfg(feature = "screenshot")]` rather than
         // `required-features` still has to appear in the step. (Only the `screenshot` feature
         // itself: `gpui-screenshot` and friends are helper features that dev-dependencies turn on.)
-        for feature in package.features.keys().filter(|f| *f == "screenshot") {
-            if !nightly_runs(&lines, &package.name, feature, None) {
-                missing.push(format!("-p {} --features {feature}", package.name));
-            }
+        if package.features.contains_key("screenshot")
+            && !nightly_runs(&lines, &package.name, "screenshot", None)
+        {
+            missing.push(format!("-p {} --features screenshot", package.name));
         }
         for target in package
             .targets
