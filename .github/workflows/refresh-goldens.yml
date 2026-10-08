@@ -1,0 +1,63 @@
+name: refresh-goldens
+
+# Regenerates the Linux screenshot goldens on the same runner image the nightly compares them on
+# (ubuntu-latest, Mesa lavapipe software Vulkan), because glyph rasterisation differs per OS and per
+# font set: a golden made elsewhere would fail the nightly. Run it, download the artifact, commit
+# the PNGs (E05-F453). Run from the repo root:
+#
+#   gh workflow run refresh-goldens.yml --ref <your-branch>
+#   gh run download <run-id> -n linux-goldens          # unpacks to ./crates and ./bins
+#
+# Review every PNG before committing: a refresh accepts whatever the code draws today.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  linux:
+    name: linux goldens
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: goldens
+          cache-on-failure: true
+      - name: Linux system dependencies (GPUI)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libfontconfig-dev libfreetype-dev libglib2.0-dev libssl-dev \
+            libvulkan1 libvulkan-dev libwayland-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config xvfb mesa-vulkan-drivers
+      # Keep this list in step with the screenshot step of nightly.yml: a golden is refreshed by the
+      # test that compares it.
+      - name: Regenerate goldens
+        env:
+          OXIKUBE_UPDATE_GOLDENS: "1"
+        run: |
+          xvfb-run -a cargo test -p oxikube --features screenshot --test screenshot
+          xvfb-run -a cargo test -p oxikube_ui --features screenshot --test screenshot
+          xvfb-run -a cargo test -p oxikube_workspace --features screenshot --test screenshot
+      # The nightly's path: the same tests in compare mode (`check_golden` against the PNGs just
+      # written). A golden that does not reproduce on its own runner fails here, not in the nightly.
+      - name: Verify goldens reproduce
+        run: |
+          xvfb-run -a cargo test -p oxikube --features screenshot --test screenshot
+          xvfb-run -a cargo test -p oxikube_ui --features screenshot --test screenshot
+          xvfb-run -a cargo test -p oxikube_workspace --features screenshot --test screenshot
+      - name: Upload goldens
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-goldens
+          path: |
+            **/tests/goldens/linux/*.png
+          if-no-files-found: error

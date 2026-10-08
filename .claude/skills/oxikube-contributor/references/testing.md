@@ -88,6 +88,11 @@ cargo test -p oxikube_terminal --features screenshot --test screenshot --test sc
   `.detach()`.
 - Screenshot tests need both `gpui/test-support` and `gpui_platform/test-support`;
   compare against goldens with a small tolerance; goldens live under `tests/goldens/<os>/`.
+- Linux goldens come only from the `refresh-goldens` workflow, which runs on the nightly's runner
+  image (ubuntu-latest, Mesa lavapipe, its font set): `gh workflow run refresh-goldens.yml --ref
+  <branch>`, then `gh run download <run-id> -n linux-goldens` at the repo root, review the PNGs and
+  commit them. Never make one on a laptop or in a local container. A new screenshot test goes into
+  that workflow's list as well as `nightly.yml` (details: `docs/testing-gpui.md`).
 - Use `TestWindow::simulate_keystrokes` to drive keymaps rather than calling handlers.
 - The full recipe, one worked example per helper and the "don't" list are in
   `docs/testing-gpui.md`; copy the tests in `crates/testing/oxikube_testkit/tests/gpui_harness.rs`.

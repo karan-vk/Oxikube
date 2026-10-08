@@ -166,8 +166,29 @@ OXIKUBE_UPDATE_GOLDENS=1 cargo test -p <crate> --features <your screenshot featu
 
 An OS with no golden gets the structural checks only (and says so); add its golden by running the
 same command on that OS (the nightly job uploads `*.actual.png` / `*.diff.png` on a mismatch, and
-`*.actual.png` is the file to commit after reviewing it). Pin everything that varies between
-machines before drawing: the theme (`oxikube_ui::set_tokens`), reduce motion, window size, fonts.
+`*.actual.png` is the file to commit after reviewing it).
+
+**Linux goldens** must come from the nightly's own runner image (ubuntu-latest, Mesa lavapipe, its
+font set), not from a container on your machine. Refresh them with the `refresh-goldens` workflow,
+from the repo root:
+
+```
+gh workflow run refresh-goldens.yml --ref <your-branch>
+gh run list --workflow refresh-goldens.yml --branch <your-branch> --limit 1   # the run id
+gh run download <run-id> -n linux-goldens        # drops the PNGs into their crates' tests/goldens/linux/
+```
+
+The workflow writes every golden in update mode and then runs the same tests again in compare mode,
+so a golden that does not reproduce on its own runner fails the run instead of being committed.
+Review the PNGs (a refresh accepts whatever the code draws today), commit them, and add a new
+screenshot test to the workflow's test list (and to `nightly.yml`) so the same test refreshes and
+compares its golden. Once a Linux golden is committed the nightly Linux leg runs `check_golden`
+for that test and fails on a pixel regression, uploading `*.actual.png` / `*.diff.png`. The goldens
+the Linux leg must have are listed in `xtask/src/workflows.rs` (`LINUX_GOLDENS`), which fails
+`cargo test --workspace` when one is missing.
+
+Pin everything that varies between machines before drawing: the theme (`oxikube_ui::set_tokens`),
+reduce motion, window size, fonts.
 
 ## Rules that keep a test deterministic
 
