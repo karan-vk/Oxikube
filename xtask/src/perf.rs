@@ -9,8 +9,10 @@
 //!    single noisy sample cannot fail the gate.
 //! 4. Writes the report (`--out`, default `<target>/perf/report-<os>.json`) and prints a table.
 //! 5. `--check`: compares with the baseline for this OS; fails when any p50/p95/p99 is more than
-//!    `--tolerance` (20 %) AND more than the absolute noise floor slower: `--noise-floor-ms`
-//!    (0.25 ms) for `*_ms` metrics, `--noise-floor-mib` (8 MiB) for `*_mib` memory metrics.
+//!    `--tolerance` (20 %) AND more than the absolute noise floor of its class slower
+//!    (`floors::MetricClass`): `--noise-floor-ms` (0.25 ms) for frame and stage `*_ms` metrics,
+//!    `--noise-floor-cold-ms` (40 ms) for the cold-start milestones, `--noise-floor-mib` (8 MiB)
+//!    for `*_mib` memory metrics.
 //!    Missing baselines are reported, not fatal; a baselined scenario that stops running is fatal.
 //! 6. `--update-baseline`: writes this run's numbers into the baseline for this OS.
 //! 7. Budgets (always, unless `--skip-budgets`): the absolute limits of ADR 0013 on the p95 across
@@ -27,11 +29,13 @@
 mod baseline;
 mod budget;
 mod fixture;
+mod floors;
 mod print;
 mod report;
 
 use anyhow::{Context, Result, bail};
-use baseline::{Baseline, NoiseFloors, compare_with_tails};
+use baseline::{Baseline, compare_with_tails};
+use floors::NoiseFloors;
 use report::{
     HEADLESS_NOTE, REPORT_SCHEMA, Report, SAMPLE_SCHEMA, Sample, SampleStats, ScenarioResult,
     Status, aggregate,
@@ -102,10 +106,15 @@ pub struct Args {
     /// `--tolerance` (default: the same). Hosted CI runners move the tails first.
     #[arg(long)]
     pub tail_tolerance: Option<f64>,
-    /// Absolute slowdown (ms) a `*_ms` metric must also exceed to fail; absorbs jitter on sub-ms
-    /// metrics.
+    /// Absolute slowdown (ms) a frame or startup-stage `*_ms` metric must also exceed to fail;
+    /// absorbs jitter on sub-ms metrics.
     #[arg(long, default_value_t = 0.25)]
     pub noise_floor_ms: f64,
+    /// Absolute slowdown (ms) a cold-start milestone (`first_frame_ms`,
+    /// `launch_to_first_frame_ms`, `first_rows_ms`, `init_window_ms`) must also exceed to fail:
+    /// one sample per run, so one slow runner moves it by tens of ms (#411).
+    #[arg(long, default_value_t = 40.0)]
+    pub noise_floor_cold_ms: f64,
     /// Absolute growth (MiB) a `*_mib` memory metric must also exceed to fail; absorbs allocator
     /// and loader jitter between runs (a few MiB), which +20 % of a small number would not.
     #[arg(long, default_value_t = 8.0)]
@@ -179,18 +188,20 @@ pub fn run(args: &Args) -> Result<()> {
         let baseline = Baseline::load(&baseline_path)?;
         let floors = NoiseFloors {
             ms: args.noise_floor_ms,
+            cold_ms: args.noise_floor_cold_ms,
             mib: args.noise_floor_mib,
         };
         let tail_tolerance = args.tail_tolerance.unwrap_or(args.tolerance);
         let comparison =
             compare_with_tails(&report, &baseline, args.tolerance, tail_tolerance, floors);
         println!(
-            "\ncheck against {} (os `{}`, fail above +{:.0} % (p95/p99 +{:.0} %) and +{} ms / +{} MiB):",
+            "\ncheck against {} (os `{}`, fail above +{:.0} % (p95/p99 +{:.0} %) and +{} ms (cold start +{} ms) / +{} MiB):",
             baseline_path.display(),
             report.os,
             args.tolerance * 100.0,
             tail_tolerance * 100.0,
             floors.ms,
+            floors.cold_ms,
             floors.mib
         );
         for row in &comparison.rows {
