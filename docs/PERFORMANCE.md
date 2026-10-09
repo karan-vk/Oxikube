@@ -119,6 +119,10 @@ otherwise. `max_view_notifies_per_frame` is at most 1 by construction since E05-
 on a timer, so a late frame or a 60 Hz display cannot land two notifies on one view before it
 draws. A backstop timer delivers only when no frame comes (no window, a window macOS stopped
 presenting), and the frame after a backstop delivery leaves the next batch for the frame after it.
+A streaming view that can be off screen (the pods table of a background cluster tab) redraws
+through `oxikube_runtime::RenderGate`: once notified it is not notified again until it renders, so
+it does not collect one notify per refresh while its window draws nothing (before E05-P599 such a
+table received 2 between two tab switches in `tabs-panes`).
 
 Recorder overhead (M-series, release, `cargo run --release -p oxikube_runtime --example
 perf_overhead`): a frame push is about 3 ns and the hook's timing pair about 45 ns; a feed or

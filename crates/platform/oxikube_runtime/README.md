@@ -17,7 +17,9 @@ tokio <-> GPUI bridge (gpui_tokio), spawn_kube with abort-on-drop, frame-coalesc
   one `cx.notify()` per entity at the start of the window's next frame (`Window::on_next_frame`),
   counted by `perf::record_view_notify`. `notify/pacer.rs` holds the batch, the windows' frame
   hooks and the backstop timer that delivers when no frame comes (`FRAME_INTERVAL` without a
-  presenting window, `FRAME_STALL` while frames flow).
+  presenting window, `FRAME_STALL` while frames flow). `RenderGate` (`notify/gate.rs`): a
+  streaming view's notify that is skipped until the view has rendered the last one, so a view off
+  screen (a table in a background cluster tab) is not notified on every frame its stream changes.
 - `channel` (E05-S01): `batch_channel(capacity)`, a bounded tokio channel whose receiver drains
   into an entity in batches (`BatchReceiver::drain_into`).
 - The task rules (nothing blocking the UI thread, owned tasks, the self-dropping task pitfall and
