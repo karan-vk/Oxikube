@@ -18,11 +18,16 @@
 //! `cx.notify()`: the coalesced notify lands in the next frame, which is inside the input budget
 //! only when nothing else is queued.
 //!
+//! A streaming *view* that may be off screen (a table in a background cluster tab) goes through a
+//! [`RenderGate`]: it skips the notifies that arrive before the view has rendered the last one.
+//!
 //! The pending set is a GPUI global keyed by [`EntityId`], so the helper needs no field in the
 //! entity and no `init`. Entities released before the delivery are skipped.
 
+mod gate;
 mod pacer;
 
+pub use gate::RenderGate;
 pub use pacer::{FRAME_INTERVAL, FRAME_STALL};
 
 use gpui::{Context, EntityId};

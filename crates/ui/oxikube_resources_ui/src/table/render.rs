@@ -26,6 +26,7 @@ impl Render for ResourceTable {
         {
             self.renders += 1;
         }
+        self.redraw.rendered();
         // Before the key context below: `Editing` turns the bare-key bindings off.
         self.editing = self.filter_focused(window, cx);
         let colors = ToneColors::current(cx);

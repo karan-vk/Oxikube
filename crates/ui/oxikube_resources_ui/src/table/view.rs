@@ -18,6 +18,7 @@ use oxikube_domain::kinds::ResourceKind;
 use oxikube_domain::session::WatchScope;
 use oxikube_keymap::{KeyContextBuilder, KeyContextual, contexts};
 use oxikube_ports::{StatePort, TableSource};
+use oxikube_runtime::RenderGate;
 use oxikube_ui::TableHandle;
 use oxikube_ui::table::TableEvent;
 use oxikube_ui::table::TableOptions;
@@ -123,6 +124,9 @@ pub struct ResourceTable {
     pub(super) prefs_task: Option<Task<()>>,
     _tick: Task<()>,
     _subscriptions: Vec<Subscription>,
+    /// The feed's redraw: skipped while the table has not rendered the last one (a table in a
+    /// background cluster tab is not drawn, E05-P599).
+    pub(super) redraw: RenderGate,
     /// How many times the view rendered (coalescing tests).
     #[cfg(test)]
     pub(super) renders: usize,
@@ -244,6 +248,7 @@ impl ResourceTable {
             prefs_task: None,
             _tick: tick,
             _subscriptions: vec![events, refocus, filter_events],
+            redraw: RenderGate::default(),
             #[cfg(test)]
             renders: 0,
             #[cfg(test)]

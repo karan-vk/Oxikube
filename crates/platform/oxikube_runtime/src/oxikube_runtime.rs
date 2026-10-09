@@ -88,5 +88,5 @@ pub use gpui_tokio::{
 pub use kube_task::{KubeTask, KubeTaskError, live_tasks, spawn_kube};
 pub use lazy::{LazyService, LazyServices, StartedService};
 pub use notify::{
-    FRAME_INTERVAL, FRAME_STALL, NotifyCoalescedExt, notify_coalesced, notify_pending,
+    FRAME_INTERVAL, FRAME_STALL, NotifyCoalescedExt, RenderGate, notify_coalesced, notify_pending,
 };

@@ -8,6 +8,7 @@ mod channel;
 mod frame_paced;
 mod kube_task;
 mod notify;
+mod render_gate;
 mod task_slot;
 
 use std::sync::Arc;
