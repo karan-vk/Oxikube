@@ -474,9 +474,33 @@ other builds (load average about 100):
 (The worker's figure is its second rasterisation of those glyphs in the process, after the
 no-warm-up frame's; CoreText's own caches make it lower than a first one would be.)
 
-The windowed `theme` scenario (`cargo xtask perf --windowed theme`, 5 runs) is the acceptance
-measurement; its numbers are taken on a quiet machine with the screen unlocked (the story's own
-attempt found the session locked, where macOS does not refresh a window: no valid run).
+**The windowed `theme` scenario**, 5 valid runs of each build, one after the other (the same
+scenario, themes, switch rate and table under churn; nothing excluded): `release-fast` with
+`--features perf-window`, run as `oxikube --perf-scenario-window theme` (what `cargo xtask perf
+--windowed theme` runs), M5 Max, 120 Hz built-in display, window in front, desktop idle for 20 s
+before each run, no cargo build running, load average 29 to 33 (other agents' processes).
+`before` is `origin/main` at `ea1fce2d`, `after` this story. Frames are the scripted
+`switch-theme` phase's; RSS is the phase's peak; CPU is % of one core.
+
+| run | frames | max / p99 / p95 ms | over 8.33 ms | dropped | input max ms | notifies / view / frame | peak RSS MiB | CPU % |
+|---|---|---|---|---|---|---|---|---|
+| before 1 | 77 | 9.21 / 9.21 / 4.02 | 1 | 1 | 9.71 | 1 | 274.2 | 3.34 |
+| before 2 | 76 | 9.11 / 9.11 / 3.82 | 1 | 0 | 9.37 | 1 | 274.4 | 3.23 |
+| before 3 | 75 | 8.77 / 8.77 / 3.98 | 1 | 0 | 9.03 | 1 | 274.7 | 3.24 |
+| before 4 | 76 | 8.82 / 8.82 / 3.83 | 1 | 0 | 9.07 | 1 | 275.8 | 3.23 |
+| before 5 | 77 | 8.92 / 8.92 / 3.85 | 1 | 0 | 9.16 | 1 | 276.4 | 3.28 |
+| **after 1** | 76 | 4.54 / 4.54 / 3.98 | 0 | 0 | 4.85 | 1 | 274.2 | 3.32 |
+| **after 2** | 77 | 4.00 / 4.00 / 3.87 | 0 | 0 | 4.19 | 1 | 276.4 | 3.29 |
+| **after 3** | 77 | 4.29 / 4.29 / 3.74 | 0 | 0 | 4.22 | 1 | 277.4 | 3.28 |
+| **after 4** | 76 | 4.10 / 4.10 / 3.87 | 0 | 0 | 4.28 | 1 | 275.8 | 3.28 |
+| **after 5** | 75 | 4.29 / 4.29 / 3.89 | 0 | 0 | 4.31 | 1 | 276.7 | 3.26 |
+
+Every `before` run is over budget with exactly one frame, the first switch (8.8 to 9.2 ms, its
+input 9.0 to 9.7 ms); every `after` run is within every ADR 0016 budget, its longest frame 4.0 to
+4.5 ms and its longest input 4.2 to 4.9 ms, the same as the later switches. Memory and CPU are
+unchanged (the prepared glyphs of a screen are tens of KiB). The first interactive frame of the
+same runs: 314 to 410 ms before, 328 to 364 ms after (the wrapper and the warmer cost nothing
+measurable at startup). The verify stage re-measures on a quiet machine.
 
 ## Startup: cold start to the first interactive frame
 
