@@ -36,11 +36,9 @@ impl Schedule {
 
 #[gpui::test]
 fn irregular_frames_absorb_at_most_one_notify_per_view(cx: &mut TestAppContext) {
-    let recorder = Arc::new(Recorder::new());
-    assert!(
-        perf::install(recorder.clone()),
-        "first recorder in this process"
-    );
+    // The first iteration installs it; later ones (`ITERATIONS=n`) reuse it.
+    perf::install(Arc::new(Recorder::new()));
+    let recorder = perf::global().expect("installed").clone();
     let frames: Rc<RefCell<Vec<FrameSample>>> = Rc::default();
     let feeds: Vec<Entity<Feed>> = (0..2).map(|_| cx.new(|_| Feed)).collect();
 

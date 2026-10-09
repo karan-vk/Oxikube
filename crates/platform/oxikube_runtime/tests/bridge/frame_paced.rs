@@ -225,3 +225,23 @@ fn released_entity_is_skipped_at_the_frame(cx: &mut TestAppContext) {
     );
     assert!(!cx.update(|cx| notify_pending(cx, gone_id)));
 }
+
+#[gpui::test]
+fn an_event_inside_the_window_update_still_waits_for_the_frame(cx: &mut TestAppContext) {
+    // A view's handler streams while its own window is being updated (and so cannot be updated
+    // again): the frame hook is queued once that update returns.
+    let f = Fixture::new(cx);
+    f.presenting(cx);
+    let feed = f.feed.clone();
+    cx.update_window(f.window, |_, _, cx| {
+        feed.update(cx, |feed, cx| {
+            feed.events += 1;
+            notify_coalesced(cx);
+        })
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(f.notifications.get(), 1);
+    assert_eq!(f.frame(cx), 1, "the window's frame hook was queued");
+    assert_eq!(f.notifications.get(), 2);
+}

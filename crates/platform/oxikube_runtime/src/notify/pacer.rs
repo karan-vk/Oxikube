@@ -79,7 +79,12 @@ pub(super) fn mark(entity_id: EntityId, entity: AnyWeakEntity, cx: &mut App) {
 /// Asks the windows for their next frame and arms the backstop for the batch just started.
 fn start_batch(cx: &mut App) {
     let now = cx.background_executor().now();
-    let pacer = cx.global::<Pacer>();
+    let windows = cx.windows();
+    let pacer = cx.global_mut::<Pacer>();
+    // A closed window dropped its queued hook with it.
+    pacer
+        .armed
+        .retain(|armed| windows.iter().any(|window| window.window_id() == *armed));
     let batch = pacer.delivered;
     let frames_flowing = pacer
         .last_frame
@@ -89,7 +94,6 @@ fn start_batch(cx: &mut App) {
     } else {
         FRAME_INTERVAL
     };
-    let windows = cx.windows();
     if windows
         .iter()
         .any(|window| !pacer.armed.contains(&window.window_id()))
@@ -110,16 +114,10 @@ fn start_batch(cx: &mut App) {
 
 /// Queues a frame hook on every open window that has none.
 fn arm_windows(cx: &mut App) {
-    let windows = cx.windows();
-    let pacer = cx.default_global::<Pacer>();
-    // A closed window drops its queued hook with it.
-    pacer
-        .armed
-        .retain(|armed| windows.iter().any(|window| window.window_id() == *armed));
-    if pacer.pending.is_empty() {
+    if cx.global::<Pacer>().pending.is_empty() {
         return;
     }
-    for window in windows {
+    for window in cx.windows() {
         let window_id = window.window_id();
         if cx.global::<Pacer>().armed.contains(&window_id) {
             continue;
