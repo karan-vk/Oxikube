@@ -224,14 +224,18 @@ impl DetailView {
         if self.tab == tab {
             return;
         }
-        self.tab = tab;
+        let left = std::mem::replace(&mut self.tab, tab);
+        if left == DetailTab::Schema {
+            self.schema_tab_closed();
+        }
         match tab {
             DetailTab::Events => self.start_events(cx),
             DetailTab::Yaml => {
                 self.refresh_yaml();
             }
             DetailTab::Describe => self.start_describe(cx),
-            DetailTab::Overview | DetailTab::Schema => {}
+            DetailTab::Schema => self.schema_tab_opened(),
+            DetailTab::Overview => {}
         }
         cx.notify();
     }

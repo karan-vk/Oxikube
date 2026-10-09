@@ -219,3 +219,60 @@ fn a_huge_schema_is_cut_and_only_the_rows_on_screen_are_built(cx: &mut TestAppCo
     assert!(d.shown("schema-row-field00000"));
     assert!(!d.shown("schema-row-field01500"), "far rows are not built");
 }
+
+#[gpui::test]
+fn the_crd_is_decoded_once_per_version_while_the_tab_is_up_and_not_at_all_otherwise(
+    cx: &mut TestAppContext,
+) {
+    let mut json = crate::crds::tests::fixture::widget_crd_json();
+    json["metadata"]["resourceVersion"] = json!("6");
+    let newer = Resource::from_json(json).unwrap();
+    let mut d = Detail::new(cx, [widget_crd()]);
+    d.f.ports().resources.script().watch.push_ok(
+        Timeline::immediate([DeltaBatch::from_deltas(vec![Delta::Restarted(vec![
+            widget_crd(),
+        ])])])
+        .ok_at(
+            Duration::from_secs(5),
+            DeltaBatch::from_deltas(vec![Delta::Applied(newer)]),
+        )
+        .keep_open(),
+    );
+    let view = d.open(&crd_ref("widgets.example.com"));
+    // On the Overview nothing is decoded or kept, and the update changes nothing.
+    assert_eq!(
+        d.read(&view, |v| (v.schema.decodes, v.schema.is_decoded())),
+        (0, false)
+    );
+    d.f.ports()
+        .resources
+        .clock()
+        .advance(Duration::from_secs(5));
+    d.settle();
+    assert_eq!(
+        d.read(&view, |v| (v.schema.decodes, v.schema.is_decoded())),
+        (0, false)
+    );
+
+    // Opening the tab reads the CRD once; clicks and version switches reuse the decoded tree.
+    d.update(&view, |v, cx| v.set_tab(DetailTab::Schema, cx));
+    assert_eq!(
+        d.read(&view, |v| (v.schema.decodes, v.schema.is_decoded())),
+        (1, true)
+    );
+    d.click("schema-row-spec");
+    d.click("schema-row-spec");
+    d.click("detail-schema-version-v1beta1");
+    d.click("detail-schema-version-v1");
+    assert!(row_keys(&mut d, &view).contains(&"spec".to_owned()));
+    assert_eq!(d.read(&view, |v| v.schema.decodes), 1);
+
+    // Leaving the tab frees the tree. Coming back keeps the rows (nothing changed), and the CRD
+    // is decoded again only when a click needs the tree.
+    d.update(&view, |v, cx| v.set_tab(DetailTab::Overview, cx));
+    assert!(!d.read(&view, |v| v.schema.is_decoded()));
+    d.update(&view, |v, cx| v.set_tab(DetailTab::Schema, cx));
+    assert_eq!(d.read(&view, |v| v.schema.decodes), 1);
+    d.click("schema-row-spec");
+    assert_eq!(d.read(&view, |v| v.schema.decodes), 2);
+}
