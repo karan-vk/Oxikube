@@ -32,6 +32,11 @@ pub struct Population {
 impl Population {
     /// `count` pods over `namespaces` namespaces, created two days before `now`.
     pub fn new(count: usize, namespaces: usize, now: Timestamp) -> Self {
+        Self::with_ages(count, namespaces, PodAges::Days, now)
+    }
+
+    /// `count` pods over `namespaces` namespaces, created as `ages` says before `now`.
+    pub fn with_ages(count: usize, namespaces: usize, ages: PodAges, now: Timestamp) -> Self {
         let namespaces = namespaces.max(1);
         let created = now
             .checked_sub(SignedDuration::from_hours(49))
@@ -44,7 +49,7 @@ impl Population {
             created,
         };
         for i in 0..count {
-            let pod = population.build(i, Steady::of(i), created, false);
+            let pod = population.build(i, Steady::of(i), ages.created(i, now), false);
             population.pods.push(pod);
         }
         population
@@ -177,6 +182,47 @@ impl Population {
     }
 }
 
+/// When the pods of a synthetic cluster were created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PodAges {
+    /// Two days before the run: the ages read in days and hours (`2d1h`), so none moves while a
+    /// run lasts.
+    #[default]
+    Days,
+    /// One to six minutes before the run, spread over the pods on whole seconds (as the API server
+    /// stamps them), like the pods `cargo xtask load-pods` created just before: the ages read in
+    /// seconds (`3m12s`), so every one on screen moves every second, as on a real cluster whose
+    /// pods are young (#605).
+    Minutes,
+}
+
+impl PodAges {
+    /// The oldest [`PodAges::Minutes`] pod, in seconds: six minutes, so a run of a few minutes
+    /// still reads every age in seconds (`kubectl` drops them at ten minutes).
+    const MINUTES_OLDEST: i64 = 360;
+    /// The youngest [`PodAges::Minutes`] pod, in seconds.
+    const MINUTES_YOUNGEST: i64 = 60;
+
+    /// When pod `i` was created, seen from `now`.
+    fn created(self, i: usize, now: Timestamp) -> Timestamp {
+        match self {
+            PodAges::Days => now
+                .checked_sub(SignedDuration::from_hours(49))
+                .unwrap_or(now),
+            PodAges::Minutes => {
+                // A stride coprime with the span, so neighbouring rows are seconds apart.
+                let span = Self::MINUTES_OLDEST - Self::MINUTES_YOUNGEST;
+                let offset = i64::try_from(i)
+                    .unwrap_or(0)
+                    .wrapping_mul(37)
+                    .rem_euclid(span);
+                let ago = Self::MINUTES_YOUNGEST + offset;
+                Timestamp::from_second(now.as_second() - ago).unwrap_or(now)
+            }
+        }
+    }
+}
+
 /// What one [`Population::recycle`] produced.
 #[derive(Debug, Default)]
 pub struct Recycled {
@@ -269,6 +315,26 @@ mod tests {
             .map(|p| p.meta.resource_version.clone())
             .collect();
         assert_eq!(versions.len(), 100, "every version is distinct");
+    }
+
+    #[test]
+    fn young_pods_read_their_ages_in_seconds() {
+        let now = now() + SignedDuration::from_millis(250);
+        let population = Population::with_ages(1_000, 8, PodAges::Minutes, now);
+        let ages: Vec<i64> = population
+            .pods(None)
+            .iter()
+            .map(|p| {
+                let created = p.meta.creation.expect("a creation time");
+                assert_eq!(created.subsec_nanosecond(), 0, "on a whole second");
+                now.as_second() - created.as_second()
+            })
+            .collect();
+        assert!(ages.iter().all(|age| (60..360).contains(age)), "{ages:?}");
+        assert_ne!(ages[0], ages[1], "neighbouring rows are seconds apart");
+        let old = Population::new(1, 1, now);
+        let created = old.pods(None)[0].meta.creation.unwrap();
+        assert!(now.duration_since(created) > SignedDuration::from_hours(48));
     }
 
     #[test]

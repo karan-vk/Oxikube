@@ -6,7 +6,8 @@
 //! whether any of the timestamps the active tab draws formats to different text at the current
 //! time than at the time of the last frame. Most objects are days old and change once a day
 //! (`30d`), so a still detail costs a timer wake-up and a handful of formatted strings, never a
-//! frame. Same idea as the table's `CellCache::ages_moved`.
+//! frame. The table instead keeps when each drawn cell next moves and wakes then (`table::age_tick`,
+//! #605).
 
 use std::time::Duration;
 

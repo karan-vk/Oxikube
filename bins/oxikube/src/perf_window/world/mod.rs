@@ -51,7 +51,7 @@ pub use describe::WorldDescribe;
 pub use fixed::{BIG_CONFIG_MAP, BIG_CONFIG_MAP_BYTES};
 pub use hub::{Hub, Stream};
 pub use logs::{WorldLogs, line};
-pub use population::{Population, namespace_name};
+pub use population::{PodAges, Population, namespace_name};
 pub use resources::WorldResources;
 
 /// The source every synthetic context is listed under.
@@ -72,6 +72,8 @@ pub struct ClusterSpec {
     pub namespaces: usize,
     /// Recycle 1 % of the pods every [`CHURN_EVERY`] once connected.
     pub churn: bool,
+    /// When the pods were created.
+    pub ages: PodAges,
 }
 
 impl ClusterSpec {
@@ -82,6 +84,7 @@ impl ClusterSpec {
             pods,
             namespaces: 8,
             churn: true,
+            ages: PodAges::Days,
         }
     }
 
@@ -90,6 +93,15 @@ impl ClusterSpec {
         Self {
             churn: false,
             ..Self::churning(context, pods)
+        }
+    }
+
+    /// The same with pods created a few minutes before the run (see [`PodAges::Minutes`]).
+    #[must_use]
+    pub fn young(self) -> Self {
+        Self {
+            ages: PodAges::Minutes,
+            ..self
         }
     }
 
@@ -176,7 +188,10 @@ pub fn ports_with(
         let objects = fixed::objects(spec.namespaces, now);
         let fixed = Arc::new(FakeResourcePort::new().with_objects(objects));
         let events = fixed::big_config_map_events(BIG_CONFIG_MAP_EVENTS, now);
-        let hub = Hub::new(Population::new(spec.pods, spec.namespaces, now), events);
+        let hub = Hub::new(
+            Population::with_ages(spec.pods, spec.namespaces, spec.ages, now),
+            events,
+        );
         let resources = Arc::new(WorldResources::new(hub.clone(), fixed));
         clusters.insert(
             id.clone(),

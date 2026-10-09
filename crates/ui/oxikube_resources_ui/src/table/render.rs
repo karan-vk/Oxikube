@@ -33,9 +33,11 @@ impl Render for ResourceTable {
         let (rows, selected, state) = self.table.update_quiet(cx, |d| {
             d.now = now;
             d.colors = Some(colors);
-            d.cells.begin_frame(d.now, &d.provider);
+            d.cells.begin_frame(&d.provider);
             (d.rows.len(), d.selection.len(), d.table_state())
         });
+        // After the frame, whose rows read their cells: wake when the first of them moves.
+        cx.defer_in(window, |this, _, cx| this.arm_age_tick(cx));
         let tokens = cx.colors();
         let count: SharedString = if selected > 0 {
             format!("{selected} of {rows} selected").into()

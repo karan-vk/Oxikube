@@ -2,7 +2,6 @@
 //! construction and the `Item` impl. See the [`table`](crate::table) module docs for the files.
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
 
 use gpui::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, SharedString,
@@ -23,6 +22,7 @@ use oxikube_ui::table::TableEvent;
 use oxikube_ui::table::TableOptions;
 use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent, Workspace};
 
+use super::age_tick::AgeTick;
 use super::cell_cache::CellCache;
 use super::columns::{ColumnScope, initial_provider};
 use super::delegate::RowsDelegate;
@@ -32,10 +32,6 @@ use super::selection::Selection;
 use super::states::{StateLabels, scope_label};
 use crate::actions::{ActionSource, ResourceActions};
 use crate::filter::{FilterBar, FilterWriter};
-
-/// How often the table checks whether a visible age moved while it is shown. The check redraws
-/// only when one did (see [`CellCache::ages_moved`]), so a still table is not redrawn at this rate.
-pub(super) const TICK: Duration = Duration::from_secs(1);
 
 /// What a [`ResourceTable`] is built over. Cheap to clone.
 #[derive(Clone)]
@@ -121,14 +117,16 @@ pub struct ResourceTable {
     pub(super) filter_task: Option<Task<()>>,
     _session_task: Task<()>,
     pub(super) prefs_task: Option<Task<()>>,
-    _tick: Task<()>,
+    /// Redraws the ages on screen when they move (see [`age_tick`](super::age_tick)).
+    pub(super) age_tick: AgeTick,
     _subscriptions: Vec<Subscription>,
     /// How many times the view rendered (coalescing tests).
     #[cfg(test)]
     pub(super) renders: usize,
-    /// Added to the clock (age tests).
+    /// Tests read the wall clock as it was when the table was made, moved on by the test
+    /// executor's clock, so the age tests move ages and timers together by advancing it.
     #[cfg(test)]
-    pub(super) skew: jiff::SignedDuration,
+    clock: (Timestamp, std::time::Instant, gpui::BackgroundExecutor),
 }
 
 impl EventEmitter<ItemEvent> for ResourceTable {}
@@ -200,19 +198,6 @@ impl ResourceTable {
         let filter_events = cx.subscribe_in(&filter, window, Self::on_filter_event);
 
         let session_task = Self::follow_session(&cluster, &deps, cx);
-        let tick = cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor().timer(TICK).await;
-                let alive = this.update(cx, |view, cx| {
-                    if view.active && view.ages_moved(cx) {
-                        cx.notify();
-                    }
-                });
-                if alive.is_err() {
-                    break;
-                }
-            }
-        });
 
         let mut this = Self {
             cluster,
@@ -242,12 +227,16 @@ impl ResourceTable {
             filter_task: None,
             _session_task: session_task,
             prefs_task: None,
-            _tick: tick,
+            age_tick: AgeTick::default(),
             _subscriptions: vec![events, refocus, filter_events],
             #[cfg(test)]
             renders: 0,
             #[cfg(test)]
-            skew: jiff::SignedDuration::ZERO,
+            clock: (
+                Timestamp::now(),
+                cx.background_executor().now(),
+                cx.background_executor().clone(),
+            ),
         };
         this.load_prefs(cx);
         this.load_filter(window, cx);
@@ -270,18 +259,13 @@ impl ResourceTable {
         &self.kind.gvk
     }
 
-    /// Whether a cell on screen would read differently now (an age crossed into its next unit).
-    fn ages_moved(&self, cx: &App) -> bool {
-        let now = self.now();
-        self.table
-            .read(cx, |d| d.cells.ages_moved(&*d.provider, now))
-    }
-
-    /// "Now" for ages: the clock (tests skew it to move ages without waiting).
+    /// "Now" for ages: the clock (in tests, the executor's: see `clock`).
     pub(super) fn now(&self) -> Timestamp {
         #[cfg(test)]
         {
-            Timestamp::now() + self.skew
+            let (wall, start, executor) = &self.clock;
+            let elapsed = executor.now().saturating_duration_since(*start);
+            *wall + jiff::SignedDuration::try_from(elapsed).unwrap_or_default()
         }
         #[cfg(not(test))]
         {

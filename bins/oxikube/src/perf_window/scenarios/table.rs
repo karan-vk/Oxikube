@@ -205,13 +205,37 @@ pub async fn sidebar(driver: &mut Driver<'_>) -> Result<()> {
     Ok(())
 }
 
-/// `idle`: two clusters connected, each with its pods table open, nothing moving.
+/// `idle`: two clusters of young pods connected, each with its pods table open, nothing moving
+/// but the ages on screen, which read in seconds and so move every second (#605). The idle phase
+/// is the minute the budget is judged over.
 pub async fn idle(driver: &mut Driver<'_>) -> Result<()> {
+    let mut front = None;
     for context in [MAIN_CONTEXT, "perf-b"] {
         let cluster = driver.connect(context).await?;
-        driver.open_list(&cluster, pods()).await?;
+        front = Some(driver.open_list(&cluster, pods()).await?);
     }
+    let front = front.expect("two clusters");
     driver.settle(Duration::from_secs(5)).await;
-    driver.idle("idle", Duration::from_secs(30)).await;
+    let ticking = driver.read(|cx| ages_in_seconds(&front, cx));
+    ensure!(
+        ticking > 0,
+        "no age on screen reads in seconds: the idle load is a table whose ages move every second"
+    );
+    driver.idle("idle", Duration::from_secs(60)).await;
     Ok(())
+}
+
+/// How many rows on screen show an age in seconds (`45s`, `3m12s`), which moves every second.
+fn ages_in_seconds(table: &Entity<ResourceTable>, cx: &App) -> usize {
+    let visible = table.read(cx).table().visible_rows(cx);
+    let now = jiff::Timestamp::now();
+    let age = oxikube_app::ColumnId::new("age");
+    table.read(cx).read_rows(cx, |d| {
+        d.rows()
+            .get(visible)
+            .unwrap_or_default()
+            .iter()
+            .filter(|row| d.provider().cell(row, &age, now).display().ends_with('s'))
+            .count()
+    })
 }

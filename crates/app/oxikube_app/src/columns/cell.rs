@@ -10,7 +10,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
 
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 use oxikube_domain::{Age, Quantity};
 
 /// How a cell should be coloured, by meaning. The table view maps these to theme tokens.
@@ -78,6 +78,10 @@ pub struct CellValue<'a> {
     pub sort: CellSort,
     /// How the cell should be coloured.
     pub tone: Tone,
+    /// How long after the `now` it was read at the text changes on its own (an age reaching its
+    /// next second, minute or hour); `None` for a cell that does not move with the clock. A table
+    /// redraws such a cell then, and only then (#605).
+    pub moves_in: Option<SignedDuration>,
 }
 
 /// One table cell for one object and one column.
@@ -97,6 +101,7 @@ impl<'a> Cell<'a> {
             text: Cow::Borrowed(""),
             sort: CellSort::None,
             tone: Tone::Neutral,
+            moves_in: None,
         })
     }
 
@@ -112,6 +117,7 @@ impl<'a> Cell<'a> {
             text,
             sort,
             tone: Tone::Neutral,
+            moves_in: None,
         })
     }
 
@@ -130,9 +136,9 @@ impl<'a> Cell<'a> {
         Self::shown(text, CellSort::Quantity(value))
     }
 
-    /// An age cell: kubectl text (`3d5h`), sorted by length.
+    /// An age cell: kubectl text (`3d5h`), sorted by length. It moves with the clock.
     pub fn age(age: Age) -> Self {
-        Self::shown(age.to_string(), CellSort::Age(age))
+        Self::shown(age.to_string(), CellSort::Age(age)).moving_in(age.until_text_changes())
     }
 
     /// A cell showing `text` that sorts chronologically by `at`.
@@ -146,7 +152,18 @@ impl<'a> Cell<'a> {
             text: text.into(),
             sort,
             tone: Tone::Neutral,
+            moves_in: None,
         })
+    }
+
+    /// The same cell, whose text changes on its own `after` the `now` it was read at (see
+    /// [`CellValue::moves_in`]). A [`Cell::Pending`] stays as it is.
+    #[must_use]
+    pub fn moving_in(mut self, after: SignedDuration) -> Self {
+        if let Cell::Value(v) = &mut self {
+            v.moves_in = Some(after);
+        }
+        self
     }
 
     /// The same cell with `tone`. A [`Cell::Pending`] stays as it is.
@@ -179,6 +196,15 @@ impl<'a> Cell<'a> {
         match self {
             Cell::Value(v) => v.tone,
             Cell::Pending => Tone::Neutral,
+        }
+    }
+
+    /// When, after the `now` it was read at, the text changes on its own: `None` for a cell that
+    /// does not move with the clock (and a pending one).
+    pub fn moves_in(&self) -> Option<SignedDuration> {
+        match self {
+            Cell::Value(v) => v.moves_in,
+            Cell::Pending => None,
         }
     }
 

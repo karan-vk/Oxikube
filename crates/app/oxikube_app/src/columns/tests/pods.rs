@@ -141,3 +141,26 @@ fn now_is_the_reference_clock() {
         "27h"
     );
 }
+
+#[test]
+fn cells_that_move_with_the_clock_say_when() {
+    use jiff::SignedDuration;
+    let restarted = fx::pod_running_restarted();
+    // Created about 27 h before `now`: `27h` reads `28h` within the hour.
+    let hour = SignedDuration::from_hours(1);
+    let created = restarted.meta.creation.expect("created");
+    let age = oxikube_domain::Age::between(created, now());
+    assert_eq!(
+        cell(&restarted, "age").moves_in(),
+        Some(age.until_text_changes())
+    );
+    // Last restarted about 26 h before: `3 (26h ago)` moves with that age, within the hour.
+    let restart = cell(&restarted, "last-restart").moves_in();
+    assert!(restart.is_some_and(|d| d > SignedDuration::ZERO && d <= hour));
+    assert_eq!(cell(&restarted, "restarts").moves_in(), restart);
+    // Nothing else does.
+    for column in ["name", "namespace", "status", "ready", "node", "ip"] {
+        assert_eq!(cell(&restarted, column).moves_in(), None, "{column}");
+    }
+    assert_eq!(cell(&fx::pod_running(), "restarts").moves_in(), None);
+}

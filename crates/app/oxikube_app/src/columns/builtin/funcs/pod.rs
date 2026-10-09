@@ -46,10 +46,15 @@ pub(crate) fn pod_restarts<'a>(res: &'a Resource, now: Timestamp) -> Cell<'a> {
     let Some(s) = summary(res) else {
         return Cell::empty();
     };
-    Cell::shown(
+    let cell = Cell::shown(
         s.restarts_display(now),
         CellSort::Int(i64::from(s.restarts)),
-    )
+    );
+    // `3 (5m ago)` moves with the clock like an age.
+    match s.last_restart {
+        Some(at) if s.restarts != 0 => cell.moving_in(Age::between(at, now).until_text_changes()),
+        _ => cell,
+    }
 }
 
 /// `IP`: the first of `status.podIPs`, else `status.podIP`.

@@ -21,7 +21,8 @@
 //! | `layout` | [`ColumnLayout`]: order, visibility, widths and sort of the columns |
 //! | `prefs` | [`ColumnPrefs`] saved per kind through the `StatePort` (`table.columns.<group>/<Kind>`) |
 //! | `cells` | [`ToneColors`]: a cell's tone to the theme's `oxikube` status colours |
-//! | `cell_cache` | the visible cells' text and tone, kept between frames (E07-S09) |
+//! | `cell_cache` | the visible cells' text and tone, kept between frames until they move (E07-S09, #605) |
+//! | `age_tick` | the redraw of the ages on screen at the second they move, and only then (#605) |
 //! | `states` | states and diagnostics (E07-S10): loading / empty / filtered-empty / forbidden / unauthorized / error, the stale badge, retry, API warnings |
 //! | `actions` | the key actions of the `Table` context |
 //! | `row_actions` | the row actions (E07-S08): the targets of a menu or key, the entries the palette lists, running an action, the delete key |
@@ -36,13 +37,17 @@
 //! render touches more than the visible cells. Those go to the table as plain text cells
 //! (`oxikube_ui`'s `TextCell` fast path: no extra element, the ellipsis only where the text does
 //! not fit) read from a per-frame cache, so a churning or scrolling frame re-reads only the rows
-//! that changed (E07-S09, docs/PERFORMANCE.md "Resource table").
+//! that changed (E07-S09, docs/PERFORMANCE.md "Resource table"). Ages redraw at the second they
+//! read differently and at no other time (`age_tick`, #605): a screen of day-old objects draws
+//! nothing for hours, a screen of young ones one frame a second, shared by every table on that
+//! second, which re-reads the moved cells only.
 //!
 //! [`ResourceStore`]: oxikube_app::store::ResourceStore
 //! [`ColumnProvider`]: oxikube_app::ColumnProvider
 //! [`Table`]: oxikube_ui::Table
 
 pub mod actions;
+mod age_tick;
 mod cell_cache;
 mod cells;
 mod columns;

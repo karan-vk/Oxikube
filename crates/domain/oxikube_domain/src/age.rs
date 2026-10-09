@@ -111,6 +111,30 @@ impl Age {
         out
     }
 
+    /// How long until the `kubectl get` text ([`Display`](fmt::Display)) of this age changes, as
+    /// the age grows with the clock: under a second while it reads in seconds (`45s`, `3m12s`),
+    /// under a minute while it reads in minutes (`25m`, `3h30m`), and so on up to years. Always
+    /// positive. A table redraws an age at that moment rather than on a fixed timer, so a screen of
+    /// day-old objects wakes once an hour, not once a second (#605).
+    pub fn until_text_changes(&self) -> SignedDuration {
+        let secs = self.as_secs();
+        // The text depends on `secs / unit` within each cut-off band, and every band starts at a
+        // multiple of the unit of the band below it, so the next change is the next multiple.
+        let unit = if secs < 10 * MINUTE {
+            1
+        } else if secs < 8 * HOUR {
+            MINUTE
+        } else if secs < 8 * DAY {
+            HOUR
+        } else if secs < 8 * YEAR {
+            DAY
+        } else {
+            YEAR
+        };
+        let next = (secs / unit).saturating_add(1).saturating_mul(unit);
+        SignedDuration::from_secs(next) - self.0
+    }
+
     /// `kubectl get` text, same as `to_string()`.
     pub fn to_kubectl_string(&self) -> String {
         self.format(AgeStyle::Kubectl, false)
@@ -262,6 +286,34 @@ mod tests {
         for (secs, want) in cases {
             assert_eq!(kubectl(*secs), *want, "{secs}s");
         }
+    }
+
+    #[test]
+    fn until_text_changes_follows_the_unit_shown() {
+        let cases: &[(i64, i64)] = &[
+            (0, 1),
+            (45, 1),
+            (119, 1),
+            (9 * MINUTE + 59, 1),
+            (10 * MINUTE, MINUTE),
+            (10 * MINUTE + 30, 30),
+            (3 * HOUR + 30 * MINUTE + 59, 1),
+            (8 * HOUR - 1, 1),
+            (8 * HOUR, HOUR),
+            (2 * DAY + 30 * MINUTE, 30 * MINUTE),
+            (8 * DAY, DAY),
+            (8 * YEAR, YEAR),
+        ];
+        for (secs, want) in cases {
+            assert_eq!(
+                Age::from_secs(*secs).until_text_changes(),
+                SignedDuration::from_secs(*want),
+                "{secs}s"
+            );
+        }
+        // The sub-second part counts: 45.25 s moves to 46 s in 0.75 s.
+        let age = Age::from_duration(SignedDuration::from_millis(45_250));
+        assert_eq!(age.until_text_changes(), SignedDuration::from_millis(750));
     }
 
     #[test]
@@ -475,6 +527,17 @@ mod tests {
     }
 
     proptest! {
+        #[test]
+        fn text_holds_until_it_changes(ms in 0i64..(20 * YEAR * 1_000)) {
+            let age = Age::from_duration(SignedDuration::from_millis(ms));
+            let until = age.until_text_changes();
+            prop_assert!(until > SignedDuration::ZERO);
+            let before = Age::from_duration(age.as_duration() + until - SignedDuration::from_millis(1));
+            let after = Age::from_duration(age.as_duration() + until);
+            prop_assert_eq!(before.to_string(), age.to_string());
+            prop_assert_ne!(after.to_string(), age.to_string());
+        }
+
         #[test]
         fn leading_unit_never_decreases(a in 0i64..(200 * YEAR), b in 0i64..(200 * YEAR)) {
             let (lo, hi) = if a <= b { (a, b) } else { (b, a) };

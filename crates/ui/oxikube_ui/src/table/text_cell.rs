@@ -7,7 +7,9 @@
 //! again and asks the text system for a line wrapper. Most cells fit their column, so
 //! [`text_cell`] measures the text once against the column (through the text system's line layout
 //! cache, which keeps the previous frame's lines) and only a cell that does not fit gets the
-//! ellipsis box; one that fits is a bare styled text, one element less and measured once.
+//! ellipsis box; one that fits is a single [`LineCell`](super::line::LineCell): one leaf the size of
+//! the cell that is never measured by the layout and paints its line from the line cache (#605:
+//! the table redraws every visible cell on any redraw, an age moving once a second included).
 //!
 //! A cell that does take the ellipsis path is cut, so it carries a tooltip with its full text
 //! (shown after a short hover). A cell that fits has none: it would only repeat what is on screen.
@@ -23,12 +25,13 @@
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, App, CursorStyle, ElementId, HighlightStyle, Hsla, InteractiveElement as _,
-    IntoElement as _, ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _,
-    Styled as _, StyledText, Window, div, px,
+    AnyElement, App, CursorStyle, ElementId, Hsla, InteractiveElement as _, IntoElement as _,
+    ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
+    div, px,
 };
 
 use super::column::ColumnAlign;
+use super::line::LineCell;
 use crate::size::ControlSize;
 use crate::tooltip::Tooltip;
 
@@ -119,35 +122,30 @@ pub(super) fn text_cell(
     window: &Window,
 ) -> AnyElement {
     let fitting = column_width.is_some_and(|width| fits(&cell, width, window));
-    let body = if fitting {
-        let len = cell.text.len();
-        let highlight = cell.color.map(|color| {
-            (
-                0..len,
-                HighlightStyle {
-                    color: Some(color),
-                    ..HighlightStyle::default()
-                },
-            )
-        });
-        StyledText::new(cell.text)
-            .with_highlights(highlight)
-            .into_any_element()
-    } else {
-        let full = cell.text.clone();
-        div()
-            .id(ElementId::NamedInteger(
-                "td-cut".into(),
-                ((row as u64) << 24) | col as u64,
-            ))
-            .debug_selector(move || format!("td-ellipsis-{row}-{col}"))
-            .w_full()
-            .text_ellipsis()
-            .when_some(cell.color, |d, color| d.text_color(color))
-            .child(cell.text)
-            .tooltip(move |window, cx| cut_tooltip(&full).build(window, cx))
-            .into_any_element()
-    };
+    if fitting {
+        let line = LineCell::new(cell.text, cell.color, align);
+        // One leaf per cell (#605); debug builds wrap it to tag its bounds for tests.
+        #[cfg(debug_assertions)]
+        return div()
+            .debug_selector(move || format!("td-{row}-{col}"))
+            .size_full()
+            .child(line)
+            .into_any_element();
+        #[cfg(not(debug_assertions))]
+        return line.into_any_element();
+    }
+    let full = cell.text.clone();
+    let body = div()
+        .id(ElementId::NamedInteger(
+            "td-cut".into(),
+            ((row as u64) << 24) | col as u64,
+        ))
+        .debug_selector(move || format!("td-ellipsis-{row}-{col}"))
+        .w_full()
+        .text_ellipsis()
+        .when_some(cell.color, |d, color| d.text_color(color))
+        .child(cell.text)
+        .tooltip(move |window, cx| cut_tooltip(&full).build(window, cx));
     super::adapter::aligned(align, body)
         .debug_selector(move || format!("td-{row}-{col}"))
         .into_any_element()

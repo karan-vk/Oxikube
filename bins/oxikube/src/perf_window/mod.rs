@@ -22,7 +22,7 @@
 //! | `sidebar` | count badges under churn |
 //! | `logs` | stream 5 000 lines/s; type a search; JSON mode |
 //! | `terminal` | a 50 MB `yes` flood; a full-screen redraw at 60 Hz; resize |
-//! | `idle` | two clusters connected, nothing moving: CPU |
+//! | `idle` | two clusters of young pods connected (ages in seconds on screen), nothing else moving: CPU |
 //!
 //! | File | Holds |
 //! |---|---|
@@ -146,10 +146,12 @@ impl Scenario {
                 listed_only: 49,
             },
             Scenario::Terminal => WorldSpec::default(),
+            // Young pods (#605): ages in seconds on screen, as on a cluster whose pods were created
+            // a few minutes before, so the table's age tick redraws every second.
             Scenario::Idle => WorldSpec {
                 clusters: vec![
-                    ClusterSpec::still(MAIN_CONTEXT, 1_000),
-                    ClusterSpec::still("perf-b", 1_000),
+                    ClusterSpec::still(MAIN_CONTEXT, 1_000).young(),
+                    ClusterSpec::still("perf-b", 1_000).young(),
                 ],
                 listed_only: 0,
             },
