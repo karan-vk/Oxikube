@@ -34,6 +34,7 @@ mod window_scenario;
 use gpui::{App, AppContext as _};
 use oxikube::startup::{self, Stage, StartupEnv};
 use oxikube_runtime::perf::{PerfRoot, Recorder};
+use oxikube_theme::glyph_warm;
 use std::io::Write as _;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -157,10 +158,16 @@ fn run_app(
     perf_duration: Option<Duration>,
     drive: Drive,
 ) {
-    let application = boot.report.time(Stage::Assets, || {
-        gpui_platform::application().with_assets(oxikube_ui::Assets)
+    let (application, warmer) = boot.report.time(Stage::Assets, || {
+        // The platform's text system is decorated so a theme switch's glyphs are rasterised
+        // ahead, off the UI thread (E05-P602, `oxikube_theme::glyph_warm`).
+        let (platform, warmer) = glyph_warm::wrap_platform(gpui_platform::current_platform(false));
+        let application =
+            gpui::Application::with_platform(platform).with_assets(oxikube_ui::Assets);
+        (application, warmer)
     });
     application.run(move |cx: &mut App| {
+        glyph_warm::install(warmer, cx);
         let up = start(cx, boot, perf, perf_duration, drive);
         // Registered after every other quit observer (the window's persistence controller, the
         // perf recorder), so the log outlives their quit work; also on the failure paths, which

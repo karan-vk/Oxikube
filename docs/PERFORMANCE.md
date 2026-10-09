@@ -427,7 +427,7 @@ is its command-line sampler).
 | `detail-drawer` | 1 frame of 685 ms (1 057 ms in a second run) at the first switch to YAML; 93.6 ms at the next switch; the rest 8.3 to 12 ms at tab switches; 99 refreshes dropped around them | The YAML tab makes its text and its editor on the UI thread the first time it is drawn (`detail/yaml/tab.rs` `refresh_yaml`: `yaml_text` serialises the 5 MB object; then `EditorState` takes the 5 MB string: rope build, tree-sitter parse, line wrapping). The profile's main thread is in `ropey::Rope::line_to_byte_idx`, `ts_lexer__do_advance` and `LineWrapper::wrap_lines` under `Window::draw`. Fix: build the text and the editor's buffer off the UI thread and show the editor when it is ready. |
 | `namespaces` | 36 frames, 8.4 to 16.5 ms, one at each `namespace::Select` (every 250 ms); input max 25.8 ms | The frame that shows the narrowed or widened row set: the table's visible rows are new rows, so their cells are made, shaped and laid out in that frame. The command reaches the table through the bus a refresh after its dispatch, so its input latency is about two frames (p95 20.5 ms). Placed by timing; which part of the frame dominates is for the quiet profile. |
 | `table-filter` | 96 frames, 8.3 to 14.7 ms, at the keystrokes (one every 67 ms) | As for `namespaces`: the frame that shows each key's new row set makes the new visible rows' cells (the filter itself runs in the store's subscription, `set_filter_parts`). Placed by timing; to profile. |
-| `theme` | 4 frames, 9.4 to 15.8 ms, at theme switches | The frame after a switch re-renders every view of the window with the new colours (the pods table's visible cells included). Placed by timing; to profile. |
+| `theme` | 4 frames, 9.4 to 15.8 ms, at theme switches | The frame after a switch re-renders every view of the window with the new colours (the pods table's visible cells included). The quiet profile (#602) placed the long one at the **first** switch: about 4 ms of it rasterising every visible glyph again, because the new theme's text colours have another glyph dilation. Fixed by the glyph warm-up, see [Theme switch](#theme-switch-glyph-warm-up-e05-p602). |
 | `logs` | 17 frames, 8.5 to 14.1 ms, in bursts at 5 s intervals (5.0 s, 10.1 s, 15.0 s, 20.0 s, ...) in every mode | They come with the pods churn (100 pods every 5 s) of the cluster behind the log view, not with the log stream: the churn's store updates and the sidebar's badge redraw land in the frames the log view draws. To profile on the quiet machine. |
 | `pods-table` | 459 frames, 8.4 to 19.8 ms; 1 199 refreshes dropped (the scroll drew at 60 Hz) | The scroll's frames drew in 5 ms at p50 but presented at 16.5 ms: `present` waited two refreshes for a drawable, the window composited at half rate. On the less loaded machine the same scroll presented every refresh (0 dropped, max 5.39 ms), so this run's drops and its long tail are the machine's contention, not the table. Re-measure quiet. |
 | `tabs-panes` | 71 frames, 8.4 to 15.3 ms (most while resizing the window); 812 refreshes dropped (resize-dock drew at 60 Hz); a view received 2 coalesced notifies in one frame | Resizing lays out every pane at the new size in the frame (the window resize lays out three cluster tabs' visible views); the dock resize presented at half rate as in `pods-table` (contention). The 2 notifies per view: `notify_coalesced` is paced by an 8.33 ms timer, not by frames, so when a frame is late (or the display runs at 60 Hz) one view gets two notifies before it draws. Fix: deliver coalesced notifies once per frame (the window's next frame), not on a timer. |
@@ -436,6 +436,73 @@ is its command-line sampler).
 | `idle` (memory) | none (no scripted frames); peak RSS 180.8 MiB, over the 150 MB (143 MiB) idle budget by about 38 MiB | Two connected clusters of 1 000 pods each with both pods tables open, after setup. Not yet placed: the quiet run's RSS at the idle phase's start and end (steady state against peak) and a heap profile say whether it is the stores, the two tables' cached rows, the fonts and atlas, or allocator slack. |
 
 Fix stories are filed from this report once the quiet runs confirm it (ADR 0016, rule 2).
+
+### Theme switch: glyph warm-up (E05-P602)
+
+GPUI keys a glyph in its atlas by its *dilation* too: on macOS the stroke thickening CoreGraphics
+applies depends on the luminance of the text colour (five levels), so One Dark's light text and
+One Light's dark text are different glyphs. The first frame after switching to a theme whose text
+sits at other levels missed the atlas for every glyph on screen and rasterised each one with
+CoreText (`CTFontDrawGlyphs`), one by one, inside `Window::paint_glyph`: about 4 ms of a 9 ms
+frame in the #587 baseline's profile, every run's longest frame.
+
+`oxikube_theme::glyph_warm` moves that work out of the frame without changing what is drawn. The
+app is built on a platform wrapper whose text system is the platform's, decorated: it records
+every glyph GPUI rasterises, and a worker thread rasterises the same glyphs at the levels a switch
+to any installed theme would draw them at (a `DilationPlan`: every colour slot of the active theme
+paired with the same slot of each installed theme, remade when a theme is selected or the
+registry changes). It uses the same platform calls with the same parameters, so the bitmaps are
+the ones the frame would have made; it runs only after the text system has been left alone for
+2 ms (between frames: the platform shapes text under a write lock a rasterisation in flight would
+hold off), and keeps at most 8 MiB. When the switch draws, GPUI misses the atlas as before and the
+prepared bounds and bitmaps answer: the frame only uploads them. Nothing is warmed by the scenario
+or before it: the warm-up is the app's, for every user, from the first glyph it draws.
+
+`cargo run --release -p oxikube_theme --example glyph_warm` measures it on CoreText: a screen of
+the pods table (60 rows, 117 distinct glyphs in the system UI font at 13 px, scale 2), drawn at
+One Dark's text level, then the One Light frame's glyph work (bounds and bitmap of every glyph;
+the atlas upload is the same either way and not included). Three runs, M5 Max, machine shared with
+other builds (load average about 100):
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| switch frame, no warm-up (rasterised in the frame) | 3.87 ms | 2.10 ms | 3.03 ms |
+| switch frame, warmed (117 served, 0 rasterised) | 0.028 ms | 0.046 ms | 0.027 ms |
+| the plan, remade on the UI thread at each switch (median of 200) | 4.6 µs | 4.5 µs | 3.4 µs |
+| the worker's warm-up, off the frame (117 glyphs, 33 KiB kept) | 0.83 ms | 0.96 ms | 0.84 ms |
+
+(The worker's figure is its second rasterisation of those glyphs in the process, after the
+no-warm-up frame's; CoreText's own caches make it lower than a first one would be.) The example
+also checks that what is drawn does not change: every prepared bitmap is byte for byte the one
+CoreText makes in the frame (117 of 117).
+
+**The windowed `theme` scenario**, 5 valid runs of each build, one after the other (the same
+scenario, themes, switch rate and table under churn; nothing excluded): `release-fast` with
+`--features perf-window`, run as `oxikube --perf-scenario-window theme` (what `cargo xtask perf
+--windowed theme` runs), M5 Max, 120 Hz built-in display, window in front, desktop idle for 20 s
+before each run, no cargo build running, load average 29 to 33 (other agents' processes).
+`before` is `origin/main` at `ea1fce2d`, `after` this story. Frames are the scripted
+`switch-theme` phase's; RSS is the phase's peak; CPU is % of one core.
+
+| run | frames | max / p99 / p95 ms | over 8.33 ms | dropped | input max ms | notifies / view / frame | peak RSS MiB | CPU % |
+|---|---|---|---|---|---|---|---|---|
+| before 1 | 77 | 9.21 / 9.21 / 4.02 | 1 | 1 | 9.71 | 1 | 274.2 | 3.34 |
+| before 2 | 76 | 9.11 / 9.11 / 3.82 | 1 | 0 | 9.37 | 1 | 274.4 | 3.23 |
+| before 3 | 75 | 8.77 / 8.77 / 3.98 | 1 | 0 | 9.03 | 1 | 274.7 | 3.24 |
+| before 4 | 76 | 8.82 / 8.82 / 3.83 | 1 | 0 | 9.07 | 1 | 275.8 | 3.23 |
+| before 5 | 77 | 8.92 / 8.92 / 3.85 | 1 | 0 | 9.16 | 1 | 276.4 | 3.28 |
+| **after 1** | 76 | 4.54 / 4.54 / 3.98 | 0 | 0 | 4.85 | 1 | 274.2 | 3.32 |
+| **after 2** | 77 | 4.00 / 4.00 / 3.87 | 0 | 0 | 4.19 | 1 | 276.4 | 3.29 |
+| **after 3** | 77 | 4.29 / 4.29 / 3.74 | 0 | 0 | 4.22 | 1 | 277.4 | 3.28 |
+| **after 4** | 76 | 4.10 / 4.10 / 3.87 | 0 | 0 | 4.28 | 1 | 275.8 | 3.28 |
+| **after 5** | 75 | 4.29 / 4.29 / 3.89 | 0 | 0 | 4.31 | 1 | 276.7 | 3.26 |
+
+Every `before` run is over budget with exactly one frame, the first switch (8.8 to 9.2 ms, its
+input 9.0 to 9.7 ms); every `after` run is within every ADR 0016 budget, its longest frame 4.0 to
+4.5 ms and its longest input 4.2 to 4.9 ms, the same as the later switches. Memory and CPU are
+unchanged (the prepared glyphs of a screen are tens of KiB). The first interactive frame of the
+same runs: 314 to 410 ms before, 328 to 364 ms after (the wrapper and the warmer cost nothing
+measurable at startup). The verify stage re-measures on a quiet machine.
 
 ## Startup: cold start to the first interactive frame
 

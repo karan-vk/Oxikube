@@ -42,6 +42,13 @@ cx.observe_global::<oxikube_theme::ActiveTheme>(|cx| { /* theme changed */ }).de
 - **Tests** never start the watcher thread (`init_with_dir`); `tests/watch_gpui.rs` is the one test
   that does, with `cx.executor().allow_parking()`. Fixtures (`tests/fixtures/`) are Zed's Ayu and
   Gruvbox, test input only (licences in `tests/fixtures/LICENSES.md`).
+- **Glyph warm-up** (`glyph_warm`, E05-P602): the app is built on `glyph_warm::wrap_platform(..)`
+  and calls `glyph_warm::install(warmer, cx)` first thing in `run`. The platform's text system is
+  decorated: a worker thread rasterises the glyphs already drawn at the dilation levels a switch to
+  any installed theme draws them at (macOS picks the level from the text colour's luminance), so
+  the frame that shows a new theme only uploads them. Same platform calls, same bitmaps; between
+  frames only; at most 8 MiB kept. `cargo run --release -p oxikube_theme --example glyph_warm`
+  prints a switch frame's rasterisation with and without it on CoreText.
 - **Cost**: `cargo run --release -p oxikube_theme --example theme_load` (cold init is about
   0.5 ms; the startup budget for settings + keymap + theme together is 30 ms).
 
