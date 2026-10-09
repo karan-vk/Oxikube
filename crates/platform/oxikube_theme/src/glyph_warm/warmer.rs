@@ -5,10 +5,10 @@
 //! `glyph_raster_bounds` and `rasterize_glyph` GPUI would call in the frame, with the same
 //! parameters, so a prepared glyph is byte for byte the one GPUI would have drawn.
 
-use super::plan::{DilationPlan, LEVELS};
+use super::plan::DilationPlan;
+use super::store::{Prepared, State, is_drawn, record_drawn};
 use gpui::{Bounds, DevicePixels, PlatformTextSystem, RenderGlyphParams, Size};
 use parking_lot::{Condvar, Mutex};
-use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
@@ -44,7 +44,7 @@ pub struct WarmStats {
 /// See the [module docs](super). Cheap to clone (a handle).
 #[derive(Clone)]
 pub struct GlyphWarmer {
-    pub(super) shared: Arc<Shared>,
+    shared: Arc<Shared>,
 }
 
 /// The state behind a [`GlyphWarmer`]; also the decorating text system GPUI holds
@@ -59,33 +59,6 @@ pub(super) struct Shared {
     /// Nanoseconds after `epoch` of the last call GPUI made into the text system.
     last_activity: AtomicU64,
     background: bool,
-}
-
-/// What is known of one glyph (its parameters at dilation 0): bit masks of levels.
-#[derive(Clone, Copy, Default)]
-struct Glyph {
-    /// Levels GPUI drew it at (rasterised in a frame or served prepared): in the atlas.
-    drawn: u8,
-    /// `drawn` plus the levels queued or prepared: never queued again.
-    known: u8,
-}
-
-struct Prepared {
-    bounds: Bounds<DevicePixels>,
-    size: Size<DevicePixels>,
-    bytes: Vec<u8>,
-}
-
-#[derive(Default)]
-struct State {
-    plan: DilationPlan,
-    /// The plan changed: every known glyph is to be checked against it.
-    rescan: bool,
-    glyphs: HashMap<RenderGlyphParams, Glyph>,
-    queue: VecDeque<RenderGlyphParams>,
-    prepared: HashMap<RenderGlyphParams, Prepared>,
-    stats: WarmStats,
-    worker_started: bool,
 }
 
 impl GlyphWarmer {
@@ -139,7 +112,7 @@ impl GlyphWarmer {
         }
         tracing::debug!(
             ?plan,
-            glyphs = state.glyphs.len(),
+            glyphs = state.glyph_count(),
             "glyph warm-up: new plan"
         );
         state.plan = plan;
@@ -274,18 +247,8 @@ impl Shared {
 
     fn rescan_if_needed(&self) {
         let mut state = self.state.lock();
-        if !state.rescan {
-            return;
-        }
-        state.rescan = false;
-        let State {
-            plan,
-            glyphs,
-            queue,
-            ..
-        } = &mut *state;
-        for (key, glyph) in glyphs.iter_mut() {
-            queue_missing(plan, key, glyph, queue);
+        if state.rescan {
+            state.queue_plan_levels();
         }
     }
 
@@ -330,60 +293,4 @@ impl Shared {
         }
         true
     }
-}
-
-/// Whether GPUI drew `params` itself (at its level).
-fn is_drawn(state: &State, params: &RenderGlyphParams) -> bool {
-    let key = RenderGlyphParams {
-        dilation: 0,
-        ..params.clone()
-    };
-    state
-        .glyphs
-        .get(&key)
-        .is_some_and(|glyph| glyph.drawn & (1 << params.dilation) != 0)
-}
-
-/// Marks `params`'s level drawn and queues the plan's levels it is not known at; whether it
-/// queued any.
-fn record_drawn(state: &mut State, params: &RenderGlyphParams) -> bool {
-    if params.dilation >= LEVELS {
-        return false;
-    }
-    let key = RenderGlyphParams {
-        dilation: 0,
-        ..params.clone()
-    };
-    let State {
-        plan,
-        glyphs,
-        queue,
-        ..
-    } = state;
-    let glyph = glyphs.entry(key.clone()).or_default();
-    let bit = 1 << params.dilation;
-    glyph.drawn |= bit;
-    glyph.known |= bit;
-    queue_missing(plan, &key, glyph, queue)
-}
-
-/// Queues `key` at the levels `plan` wants for what it was drawn at and it is not known at.
-fn queue_missing(
-    plan: &DilationPlan,
-    key: &RenderGlyphParams,
-    glyph: &mut Glyph,
-    queue: &mut VecDeque<RenderGlyphParams>,
-) -> bool {
-    let want = plan.targets_of(glyph.drawn) & !glyph.known;
-    if want == 0 {
-        return false;
-    }
-    glyph.known |= want;
-    for level in (0..LEVELS).filter(|level| want & (1 << level) != 0) {
-        queue.push_back(RenderGlyphParams {
-            dilation: level,
-            ..key.clone()
-        });
-    }
-    true
 }

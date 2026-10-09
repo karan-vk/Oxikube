@@ -27,12 +27,14 @@
 //! | File | Holds |
 //! |---|---|
 //! | `plan` | [`DilationPlan`] |
-//! | `warmer` | [`GlyphWarmer`]: the glyph records, the queue, the prepared bitmaps, the worker |
+//! | `store` | what the warmer knows: the glyph records, the queue, the prepared bitmaps |
+//! | `warmer` | [`GlyphWarmer`]: the handle, the decorated text system's state, the worker |
 //! | `text_system` | the decorated `PlatformTextSystem` |
 //! | `platform` | [`GlyphWarmPlatform`] |
 
 mod plan;
 mod platform;
+mod store;
 mod text_system;
 mod warmer;
 

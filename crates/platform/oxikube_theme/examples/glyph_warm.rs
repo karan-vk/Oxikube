@@ -71,7 +71,7 @@ fn screen_glyphs(text: &dyn PlatformTextSystem, ui: &Font) -> Vec<RenderGlyphPar
                         subpixel_rendering: false,
                         dilation: 0,
                     };
-                    if !params.is_emoji && seen.insert(format!("{params:?}")) {
+                    if !params.is_emoji && seen.insert(params.clone()) {
                         glyphs.push(params);
                     }
                 }
@@ -164,21 +164,18 @@ fn main() {
     frame(&*decorated, &glyphs, from);
     check.set_plan(DilationPlan::for_switch(dark, [dark, light], level));
     check.warm_pending();
-    let mut same = 0;
     for params in &glyphs {
         let params = at(params, to);
         let bounds = inner.glyph_raster_bounds(&params).expect("bounds");
         if bounds.is_empty() {
-            same += 1;
             continue;
         }
         let served = decorated.rasterize_glyph(&params, bounds).expect("served");
         let direct = inner.rasterize_glyph(&params, bounds).expect("direct");
         assert_eq!(served, direct, "{params:?}");
-        same += 1;
     }
     println!(
-        "prepared bitmaps identical to the platform's: {same}/{}",
-        glyphs.len()
+        "prepared bitmaps identical to the platform's: {n}/{n}",
+        n = glyphs.len()
     );
 }
