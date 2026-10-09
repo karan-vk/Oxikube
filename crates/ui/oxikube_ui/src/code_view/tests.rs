@@ -51,7 +51,6 @@ fn wrapping_breaks_after_a_space_and_numbers_only_the_first_row() {
     assert!(!map.starts_line(2), "a continuation row has no number");
     assert_eq!(map.lines(), 2);
     assert_eq!(map.first_row_of_line(1), 1);
-    assert_eq!(map.row_of(text.find("fox").unwrap()), 2);
 }
 
 #[test]

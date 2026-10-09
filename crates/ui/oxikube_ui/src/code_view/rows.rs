@@ -24,7 +24,7 @@ pub struct Row {
 }
 
 /// The fewest columns a wrapped row gets, however narrow the view.
-pub const MIN_WRAP_COLS: usize = 16;
+pub(super) const MIN_WRAP_COLS: usize = 16;
 
 /// The rows of a text at a given width.
 #[derive(Debug, Clone, Default)]
@@ -163,13 +163,6 @@ impl RowMap {
         self.widest
     }
 
-    /// The row holding byte `offset` (the last row for an offset past the end).
-    pub fn row_of(&self, offset: usize) -> usize {
-        self.rows
-            .partition_point(|row| row.start <= offset)
-            .saturating_sub(1)
-    }
-
     /// The first row of line `line` (the last row for a line past the end).
     pub fn first_row_of_line(&self, line: usize) -> usize {
         self.rows
@@ -185,7 +178,7 @@ fn digits(n: usize) -> usize {
 
 /// The columns `ch` takes in a monospace font: two for wide East Asian characters and emoji,
 /// one otherwise.
-pub fn char_cols(ch: char) -> usize {
+pub(super) fn char_cols(ch: char) -> usize {
     let c = u32::from(ch);
     if c < 0x1100 {
         return 1;
@@ -210,7 +203,7 @@ pub fn char_cols(ch: char) -> usize {
 
 /// The byte offset in `row_text` of the character boundary nearest column boundary `col` (clamped
 /// to the end of the row).
-pub fn offset_at_col(row_text: &str, col: usize) -> usize {
+pub(super) fn offset_at_col(row_text: &str, col: usize) -> usize {
     let mut width = 0;
     for (at, ch) in row_text.char_indices() {
         if width >= col {

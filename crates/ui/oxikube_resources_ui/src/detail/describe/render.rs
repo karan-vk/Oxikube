@@ -93,13 +93,8 @@ impl DetailView {
                         .color(tokens.colors.accent),
                 )
         };
-        let Some(view) = self
-            .describe
-            .output
-            .is_some()
-            .then(|| self.describe.view.clone())
-            .flatten()
-        else {
+        // The view is made with the first answer, so it exists once there is a text.
+        let Some(view) = self.describe.view.clone() else {
             return match &self.describe.state {
                 DescribeState::Failed { kind, message } => {
                     self.describe_failure(*kind, message, cx)

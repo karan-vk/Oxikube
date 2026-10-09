@@ -49,13 +49,13 @@ pub(in crate::detail) struct YamlTab {
 
 /// The complete object, shared with the background thread that writes it as YAML (no copy on
 /// the UI thread).
-enum Complete {
+pub(in crate::detail) enum Complete {
     Read(Arc<Resource>),
     Store(Arc<StoreObject>),
 }
 
 impl Complete {
-    fn resource(&self) -> Option<&Resource> {
+    pub(in crate::detail) fn resource(&self) -> Option<&Resource> {
         match self {
             Complete::Read(resource) => Some(resource),
             Complete::Store(object) => match object.as_ref() {
@@ -88,23 +88,10 @@ fn make(object: &Complete, key: YamlKey) -> YamlText {
 }
 
 impl DetailView {
-    /// The complete object: the full read when there is one, else the store's object when it is
-    /// whole. `None` for a metadata-only or Table object until its full read lands.
-    #[cfg(test)]
-    pub(in crate::detail) fn complete_resource(&self) -> Option<&Resource> {
-        if let FullState::Loaded(resource) = &self.full {
-            return Some(resource.as_ref());
-        }
-        match self.object.as_deref() {
-            Some(StoreObject::Resource(resource)) if !resource.is_partial() => Some(resource),
-            _ => None,
-        }
-    }
-
     /// The complete object (the full read when there is one, else the store's object when it is
     /// whole), as a handle the background thread can hold. `None` for a metadata-only or Table
     /// object until its full read lands.
-    fn complete_object(&self) -> Option<Complete> {
+    pub(in crate::detail) fn complete_object(&self) -> Option<Complete> {
         if let FullState::Loaded(resource) = &self.full {
             return Some(Complete::Read(resource.clone()));
         }
@@ -124,8 +111,7 @@ impl DetailView {
         let Some(object) = self.complete_object() else {
             // The object is no longer known in full (its re-read failed, or it is gone): the
             // old text is not the current object, so neither shown nor copied nor saved.
-            self.yaml.making = None;
-            self.yaml.task = None;
+            self.stop_making_yaml();
             if self.yaml.text.take().is_some()
                 && let Some(view) = &self.yaml.view
             {
@@ -141,8 +127,7 @@ impl DetailView {
         };
         if self.yaml.text.as_ref().is_some_and(|t| t.key == key) {
             // Back to the text on screen (a toggle undone before its text was made).
-            self.yaml.making = None;
-            self.yaml.task = None;
+            self.stop_making_yaml();
             return;
         }
         if self.yaml.making.as_ref() == Some(&key) {
@@ -159,6 +144,12 @@ impl DetailView {
                 .await;
             this.update(cx, |view, cx| view.yaml_made(made, cx)).ok();
         }));
+    }
+
+    /// Drops the text in flight (and so cancels making it).
+    fn stop_making_yaml(&mut self) {
+        self.yaml.making = None;
+        self.yaml.task = None;
     }
 
     /// A text made off the UI thread: shown, unless a newer request replaced it.

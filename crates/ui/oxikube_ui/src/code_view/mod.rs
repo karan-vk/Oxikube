@@ -33,7 +33,7 @@
 
 mod highlight;
 mod render;
-pub mod rows;
+mod rows;
 mod selection;
 mod view;
 
