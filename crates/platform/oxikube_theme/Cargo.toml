@@ -17,16 +17,25 @@ gpui.workspace = true
 notify.workspace = true
 oxikube_assets.workspace = true
 oxikube_settings.workspace = true
+parking_lot.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_json_lenient.workspace = true
+smallvec.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
+# The `glyph_warm` example measures on the platform's real text system.
+gpui_platform.workspace = true
 tempfile.workspace = true
+
+# The OS platform must be made on the main thread (AppKit), so this test is its own `main`.
+[[test]]
+name = "glyph_warm_platform"
+harness = false
 
 [lints]
 workspace = true

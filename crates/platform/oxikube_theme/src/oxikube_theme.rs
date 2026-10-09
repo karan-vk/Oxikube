@@ -17,6 +17,8 @@
 //!   does the file reads and parsing, never the UI thread).
 //! - [`global`]: [`init`], [`ActiveTheme`] and the observers that keep it current.
 //! - [`color`]: `#rgb` / `#rgba` / `#rrggbb` / `#rrggbbaa` <-> `Hsla`.
+//! - [`glyph_warm`]: the glyph atlas warmed for every installed theme's text colours, so a theme
+//!   switch draws without rasterising text in the frame (E05-P602).
 //!
 //! `oxikube_ui` turns the active [`ThemeTokens`] into gpui-component's theme (`ThemeConfig`)
 //! in its `theme_bridge`, since only that crate may import gpui-component.
@@ -27,6 +29,7 @@
 pub mod appearance;
 pub mod color;
 pub mod global;
+pub mod glyph_warm;
 pub mod import;
 pub mod registry;
 pub mod settings;

@@ -11,6 +11,7 @@
 //! - `contrast`: WCAG contrast ratio and the nudge that lifts a colour to a target ratio.
 //! - `derive`: the colours computed from others (selection, text on accent, `oxikube` defaults).
 //! - `fallback`: the tokens a theme falls back to for keys it does not set.
+//! - `pairs`: [`ThemeTokens::for_each_color_pair`], the same colour slot of two themes.
 
 mod colors;
 mod contrast;
@@ -18,6 +19,7 @@ mod derive;
 mod fallback;
 mod macros;
 mod oxikube;
+mod pairs;
 mod syntax;
 
 use crate::appearance::Appearance;
