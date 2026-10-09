@@ -7,6 +7,7 @@
 //! computed in render. The rows are rebuilt when the CRD changes, never per frame.
 
 use gpui::{Context, ListAlignment, ListState, px};
+use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use serde_json::Value;
 
@@ -75,14 +76,16 @@ fn sync_list(list: &ListState, old: &[SchemaRow], new: &[SchemaRow]) {
 }
 
 impl DetailView {
-    /// The CRD's JSON, once the object is complete (a Table-feed CRD waits for its full read).
-    fn crd_json(&self) -> Option<&Value> {
+    /// The CRD's JSON as a tree (decoded from the stored document: the schema walk wants one,
+    /// and a CRD is read only while its Schema tab is up), once the object is complete (a
+    /// Table-feed CRD waits for its full read).
+    fn crd_json(&self) -> Option<Value> {
         let from_feed = self
             .object
             .as_deref()
             .and_then(|object| object.resource())
             .filter(|resource| !resource.is_partial());
-        from_feed.or(self.full.resource()).map(|r| &*r.json)
+        from_feed.or(self.full.resource()).map(Resource::to_value)
     }
 
     /// Reads the CRD again after the object changed: its versions, the one shown (kept when it is
@@ -94,8 +97,8 @@ impl DetailView {
         let Some(json) = self.crd_json() else {
             return;
         };
-        let info = CrdInfo::parse(json);
-        let versions = version_names(json);
+        let info = CrdInfo::parse(&json);
+        let versions = version_names(&json);
         let keep = self.schema.version.clone().filter(|v| versions.contains(v));
         let version = keep.or_else(|| {
             let shown = info.as_ref().and_then(|i| i.display_version());
@@ -104,7 +107,7 @@ impl DetailView {
                 .filter(|name| versions.contains(name))
                 .or_else(|| versions.first().cloned())
         });
-        let rows = self.schema.walk(json, version.as_deref());
+        let rows = self.schema.walk(&json, version.as_deref());
         self.schema.info = info;
         self.schema.versions = versions;
         self.schema.version = version;
@@ -171,7 +174,7 @@ impl DetailView {
         let Some(json) = self.crd_json() else {
             return;
         };
-        let rows = self.schema.walk(json, self.schema.version.as_deref());
+        let rows = self.schema.walk(&json, self.schema.version.as_deref());
         self.schema.replace_rows(rows);
     }
 

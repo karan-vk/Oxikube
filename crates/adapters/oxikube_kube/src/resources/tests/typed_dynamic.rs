@@ -31,7 +31,7 @@ async fn typed_and_dynamic_lists_are_identical() {
         .unwrap();
 
     assert_eq!(typed, dynamic);
-    assert_eq!(typed.items[0].json["kind"], "Pod");
+    assert_eq!(typed.items[0].to_value()["kind"], "Pod");
 }
 
 #[tokio::test]
@@ -85,7 +85,7 @@ async fn kinds_without_a_bundled_type_fall_back_to_dynamic() {
         .list(&widget_gvk(), Some("default"), &ListOptions::default())
         .await
         .unwrap();
-    assert_eq!(*page.items[0].json, widget);
+    assert_eq!(page.items[0].to_value(), widget);
 }
 
 #[tokio::test]

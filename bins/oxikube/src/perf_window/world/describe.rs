@@ -31,7 +31,7 @@ impl DescribePort for WorldDescribe {
             .get(&target.gvk, target.namespace(), &target.name)
             .await?;
         Ok(DescribeOutput {
-            text: describe(&object.json),
+            text: describe(&object.to_value()),
             source: DescribeSource::Native,
         })
     }

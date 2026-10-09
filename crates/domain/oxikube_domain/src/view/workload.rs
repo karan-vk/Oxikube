@@ -91,8 +91,8 @@ impl WorkloadSummary {
                 ("apps", "ReplicaSet"),
             ],
         )?;
-        let spec = sub(&res.json, "spec");
-        let status = sub(&res.json, "status");
+        let spec = sub(res.json(), "spec");
+        let status = sub(res.json(), "status");
         let replicas = opt_count(spec, "replicas").unwrap_or(1);
 
         let (kind, desired, current, ready, updated, available) = match &*res.kind.kind {

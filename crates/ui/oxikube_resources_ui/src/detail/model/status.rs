@@ -6,6 +6,7 @@
 //! `[N items]`. `conditions` has its own table and is left out.
 
 use oxikube_domain::Resource;
+use oxikube_domain::json::JsonRef;
 use serde_json::{Map, Value};
 
 /// Deepest level of nesting expanded (the top level is depth 0).
@@ -41,7 +42,9 @@ impl StatusSummary {
     /// The summary of `resource`'s `status`; empty when it has none.
     pub fn of(resource: &Resource) -> Self {
         let mut summary = Self::default();
-        match resource.get("/status") {
+        // Only the `status` subtree is decoded: small, and read once per object version.
+        let status = resource.get("/status").map(JsonRef::to_value);
+        match status.as_ref() {
             Some(Value::Object(map)) => summary.walk(map, 0, true),
             Some(Value::Null) | None => {}
             Some(scalar) => {

@@ -24,7 +24,7 @@ use oxikube_domain::{Age, Capabilities};
 use oxikube_ports::{TableColumn, TableSource};
 use serde_json::Value;
 
-use super::builtin::{meta_cell, scalar, status_tone};
+use super::builtin::{meta_cell, status_tone, value_scalar};
 use super::{Align, Cell, Column, ColumnId, ColumnProvider, SortKind};
 use crate::store::StoreObject;
 
@@ -125,7 +125,7 @@ fn typed(value: &Value, ty: CellType, age_like: bool) -> Cell<'_> {
             Cell::shown(s.as_str(), sniff::age_sort(s))
         }
         Value::String(s) => Cell::shown(s.as_str(), sniff::text_sort(s)),
-        other => scalar(other),
+        other => value_scalar(other),
     }
 }
 

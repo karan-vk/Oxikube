@@ -80,8 +80,8 @@ async fn requests_ask_for_partial_object_metadata_and_objects_are_partial() {
         assert!(resource.is_partial(), "{resource:?}");
         // The kind is the discovered one, not the server's `PartialObjectMetadata`.
         assert_eq!(resource.kind, pod_gvk());
-        assert_eq!(resource.json["kind"], "Pod");
-        assert_eq!(resource.json["apiVersion"], "v1");
+        assert_eq!(resource.to_value()["kind"], "Pod");
+        assert_eq!(resource.to_value()["apiVersion"], "v1");
         assert!(resource.get("/spec").is_none() && resource.get("/status").is_none());
         assert!(resource.get("/metadata/managedFields").is_none());
         assert_eq!(resource.meta.labels.get("app").map(|v| &**v), Some("web"));

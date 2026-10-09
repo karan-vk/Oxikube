@@ -1,8 +1,8 @@
 //! Finding a Deployment's ReplicaSets and reading their revisions.
 
+use oxikube_domain::json::JsonRef;
 use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::{ListOptions, ResourcePort};
-use serde_json::Value;
 
 use crate::algorithms::api::{list_all, replicaset_gvk};
 
@@ -64,28 +64,31 @@ fn label_selector(deployment: &Resource) -> OxiResult<String> {
     let mut terms: Vec<String> = Vec::new();
     if let Some(labels) = selector
         .and_then(|s| s.get("matchLabels"))
-        .and_then(Value::as_object)
+        .and_then(JsonRef::as_object)
     {
-        for (key, value) in labels {
+        for (key, value) in labels.iter() {
             terms.push(format!("{key}={}", value.as_str().unwrap_or_default()));
         }
     }
     let expressions = selector
         .and_then(|s| s.get("matchExpressions"))
-        .and_then(Value::as_array);
+        .and_then(JsonRef::as_array);
     for expression in expressions.into_iter().flatten() {
-        let key = expression.get("key").and_then(Value::as_str).unwrap_or("");
+        let key = expression
+            .get("key")
+            .and_then(JsonRef::as_str)
+            .unwrap_or("");
         let values = expression
             .get("values")
-            .and_then(Value::as_array)
+            .and_then(JsonRef::as_array)
             .map(|vs| {
                 vs.iter()
-                    .filter_map(Value::as_str)
+                    .filter_map(JsonRef::as_str)
                     .collect::<Vec<_>>()
                     .join(",")
             })
             .unwrap_or_default();
-        terms.push(match expression.get("operator").and_then(Value::as_str) {
+        terms.push(match expression.get("operator").and_then(JsonRef::as_str) {
             Some("In") => format!("{key} in ({values})"),
             Some("NotIn") => format!("{key} notin ({values})"),
             Some("Exists") => key.to_owned(),
@@ -108,20 +111,20 @@ fn label_selector(deployment: &Resource) -> OxiResult<String> {
 }
 
 /// The images of a pod template's containers.
-pub(super) fn images(template: &Value) -> Vec<String> {
+pub(super) fn images(template: JsonRef<'_>) -> Vec<String> {
     template
         .pointer("/spec/containers")
-        .and_then(Value::as_array)
+        .and_then(JsonRef::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|container| container.get("image").and_then(Value::as_str))
+        .filter_map(|container| container.get("image").and_then(JsonRef::as_str))
         .map(str::to_owned)
         .collect()
 }
 
 #[cfg(test)]
 mod unit {
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::*;
 

@@ -215,9 +215,9 @@ fn event_message(reason: &str, pod: &str) -> String {
 /// A metadata-only copy of `object`, as a `PartialObjectMetadata` watch delivers it.
 pub fn metadata_only(object: &Resource) -> Resource {
     let json: Value = json!({
-        "apiVersion": object.json["apiVersion"],
-        "kind": object.json["kind"],
-        "metadata": object.json["metadata"],
+        "apiVersion": object.to_value()["apiVersion"],
+        "kind": object.to_value()["kind"],
+        "metadata": object.to_value()["metadata"],
     });
     Resource::from_json(json).map_or_else(|_| object.clone(), Resource::into_partial)
 }
@@ -239,7 +239,7 @@ mod tests {
         let pending = population
             .pods(None)
             .iter()
-            .filter(|p| p.json["status"]["phase"] == "Pending")
+            .filter(|p| p.to_value()["status"]["phase"] == "Pending")
             .count();
         assert_eq!(pending, 40);
     }
@@ -256,7 +256,7 @@ mod tests {
             panic!("a MODIFIED first");
         };
         assert_eq!(deleting.name(), "load-00098");
-        assert!(deleting.json["metadata"]["deletionTimestamp"].is_string());
+        assert!(deleting.to_value()["metadata"]["deletionTimestamp"].is_string());
         assert!(matches!(&recycled.pods.deltas[1], Delta::Deleted(p) if p.name() == "load-00098"));
         // Wraps to the start.
         assert!(matches!(&recycled.pods.deltas[8], Delta::Applied(p) if p.name() == "load-00000"));
@@ -278,6 +278,6 @@ mod tests {
         let partial = metadata_only(full);
         assert!(partial.is_partial());
         assert_eq!(partial.name(), full.name());
-        assert!(partial.json.get("spec").is_none());
+        assert!(partial.get("/spec").is_none());
     }
 }

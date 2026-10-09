@@ -2,7 +2,7 @@
 
 use jiff::Timestamp;
 use oxikube_domain::Resource;
-use serde_json::Value;
+use oxikube_domain::json::JsonRef;
 
 use super::{arr_at, spec, status_tone, str_at};
 use crate::columns::{Cell, Tone};
@@ -11,7 +11,7 @@ use crate::columns::{Cell, Tone};
 pub(crate) fn access_modes<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     let modes: Vec<&str> = arr_at(spec(res), "accessModes")
         .iter()
-        .filter_map(Value::as_str)
+        .filter_map(JsonRef::as_str)
         .map(|m| match m {
             "ReadWriteOnce" => "RWO",
             "ReadOnlyMany" => "ROX",
@@ -25,7 +25,10 @@ pub(crate) fn access_modes<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
 
 /// `STATUS`: `status.phase` of a PV, PVC or Namespace, toned (`Bound` green, `Pending` amber, `Lost` red).
 pub(crate) fn status_phase<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let phase = res.json.pointer("/status/phase").and_then(Value::as_str);
+    let phase = res
+        .json()
+        .pointer("/status/phase")
+        .and_then(JsonRef::as_str);
     phase.map_or_else(Cell::empty, |p| Cell::text(p).with_tone(status_tone(p)))
 }
 
@@ -48,7 +51,7 @@ pub(crate) fn storage_class_default<'a>(res: &'a Resource, _now: Timestamp) -> C
         "storageclass.beta.kubernetes.io/is-default-class",
     ]
     .iter()
-    .any(|k| res.meta.annotations.get(*k).is_some_and(|v| &**v == "true"));
+    .any(|k| res.meta.annotations.get(k).is_some_and(|v| &**v == "true"));
     if default {
         Cell::text("true").with_tone(Tone::Ok)
     } else {

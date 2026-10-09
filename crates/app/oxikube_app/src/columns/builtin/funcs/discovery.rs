@@ -2,7 +2,7 @@
 
 use jiff::Timestamp;
 use oxikube_domain::Resource;
-use serde_json::Value;
+use oxikube_domain::json::JsonRef;
 
 use super::{arr_at, join_capped, selector_text, spec, status, str_at};
 use crate::columns::Cell;
@@ -12,7 +12,7 @@ pub(crate) fn service_ports<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> 
     let ports = arr_at(spec(res), "ports").iter().filter_map(|p| {
         let port = p.get("port")?.as_i64()?;
         let proto = str_at(p, "protocol").unwrap_or("TCP");
-        Some(match p.get("nodePort").and_then(Value::as_i64) {
+        Some(match p.get("nodePort").and_then(JsonRef::as_i64) {
             Some(node) if node != 0 => format!("{port}:{node}/{proto}"),
             _ => format!("{port}/{proto}"),
         })
@@ -29,7 +29,7 @@ pub(crate) fn service_external_ip<'a>(res: &'a Resource, _now: Timestamp) -> Cel
     let spec = spec(res);
     let external: Vec<&str> = arr_at(spec, "externalIPs")
         .iter()
-        .filter_map(Value::as_str)
+        .filter_map(JsonRef::as_str)
         .collect();
     if !external.is_empty() {
         return Cell::text(external.join(","));
@@ -39,7 +39,7 @@ pub(crate) fn service_external_ip<'a>(res: &'a Resource, _now: Timestamp) -> Cel
 
 /// `status.loadBalancer.ingress[]` addresses (`ip`, else `hostname`), comma-separated.
 fn load_balancer(res: &Resource) -> String {
-    let lb = status(res).get("loadBalancer").unwrap_or(&Value::Null);
+    let lb = status(res).get("loadBalancer").unwrap_or(JsonRef::NULL);
     let addresses = arr_at(lb, "ingress")
         .iter()
         .filter_map(|i| str_at(i, "ip").or_else(|| str_at(i, "hostname")))
@@ -49,13 +49,13 @@ fn load_balancer(res: &Resource) -> String {
 
 /// `SELECTOR` of a Service: `spec.selector`.
 pub(crate) fn service_selector<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    Cell::text(selector_text(res.json.pointer("/spec/selector")))
+    Cell::text(selector_text(res.json().pointer("/spec/selector")))
 }
 
 /// `ENDPOINTS` of an Endpoints object: `ip:port` pairs, at most three then `+ N more...`.
 pub(crate) fn endpoints_list<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     let mut pairs = Vec::new();
-    for subset in arr_at(&res.json, "subsets") {
+    for subset in arr_at(res.json(), "subsets") {
         let ports = arr_at(subset, "ports");
         for addr in arr_at(subset, "addresses") {
             let Some(ip) = str_at(addr, "ip") else {
@@ -65,7 +65,7 @@ pub(crate) fn endpoints_list<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a>
                 pairs.push(ip.to_owned());
             }
             for port in ports {
-                if let Some(n) = port.get("port").and_then(Value::as_i64) {
+                if let Some(n) = port.get("port").and_then(JsonRef::as_i64) {
                     pairs.push(format!("{ip}:{n}"));
                 }
             }
@@ -76,16 +76,16 @@ pub(crate) fn endpoints_list<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a>
 
 /// `PORTS` of an EndpointSlice: port numbers, comma-separated.
 pub(crate) fn slice_ports<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let ports = arr_at(&res.json, "ports")
+    let ports = arr_at(res.json(), "ports")
         .iter()
-        .filter_map(|p| p.get("port").and_then(Value::as_i64))
+        .filter_map(|p| p.get("port").and_then(JsonRef::as_i64))
         .map(|n| n.to_string());
     Cell::text(join_capped(ports, usize::MAX))
 }
 
 /// `ENDPOINTS` of an EndpointSlice: the first address of each endpoint, at most three.
 pub(crate) fn slice_endpoints<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let addrs = arr_at(&res.json, "endpoints")
+    let addrs = arr_at(res.json(), "endpoints")
         .iter()
         .filter_map(|e| arr_at(e, "addresses").first()?.as_str())
         .map(str::to_owned);
@@ -126,7 +126,7 @@ pub(crate) fn ingress_ports<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> 
 /// `POD-SELECTOR` of a NetworkPolicy.
 pub(crate) fn netpol_selector<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     Cell::text(selector_text(
-        res.json.pointer("/spec/podSelector/matchLabels"),
+        res.json().pointer("/spec/podSelector/matchLabels"),
     ))
 }
 
@@ -134,7 +134,7 @@ pub(crate) fn netpol_selector<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a
 pub(crate) fn netpol_types<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     let types: Vec<&str> = arr_at(spec(res), "policyTypes")
         .iter()
-        .filter_map(Value::as_str)
+        .filter_map(JsonRef::as_str)
         .collect();
     if types.is_empty() {
         Cell::text("Ingress")

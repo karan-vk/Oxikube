@@ -55,7 +55,7 @@ async fn evicting_a_pod_without_a_budget_deletes_it() {
             .ok()?;
         match pod {
             None => Some(()),
-            Some(p) => p.json["metadata"]["deletionTimestamp"]
+            Some(p) => p.to_value()["metadata"]["deletionTimestamp"]
                 .is_string()
                 .then_some(()),
         }
@@ -115,7 +115,7 @@ async fn a_blocking_budget_refuses_the_eviction_as_a_retryable_error() {
     );
     let still = live_pod(&env.resources, ns, "guarded").await.expect("get");
     assert!(
-        still.is_some_and(|p| p.json["metadata"]["deletionTimestamp"].is_null()),
+        still.is_some_and(|p| p.to_value()["metadata"]["deletionTimestamp"].is_null()),
         "a refused eviction leaves the pod alone"
     );
 

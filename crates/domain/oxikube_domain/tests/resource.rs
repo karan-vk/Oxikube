@@ -1,8 +1,7 @@
 //! Tests for `oxikube_domain::resource` on Pod, Deployment and CR fixtures.
 
-use std::sync::Arc;
-
 use oxikube_domain::ids::Gvk;
+use oxikube_domain::json::JsonRef;
 use oxikube_domain::{ObjectMeta, Resource, ResourceError};
 use serde_json::{Value, json};
 
@@ -134,9 +133,9 @@ fn null_creation_timestamp_is_none() {
 fn from_json_keeps_the_value_untouched() {
     let original: Value = serde_json::from_str(POD).unwrap();
     let r = Resource::from_json(original.clone()).unwrap();
-    assert_eq!(*r.json, original);
+    assert_eq!(r.to_value(), original);
     assert_eq!(
-        serde_json::to_string(&r.json).unwrap(),
+        serde_json::to_string(r.doc()).unwrap(),
         serde_json::to_string(&original).unwrap(),
         "key order must survive"
     );
@@ -263,7 +262,7 @@ fn pointer_accessors_present() {
         Some("nginx:1.27")
     );
     assert_eq!(d.get_str("/spec/selector/matchLabels/app"), Some("web"));
-    assert!(d.get("").is_some_and(Value::is_object));
+    assert!(d.get("").is_some_and(JsonRef::is_object));
 
     let p = load(POD);
     assert_eq!(p.get_bool("/spec/hostNetwork"), Some(false));
@@ -323,10 +322,11 @@ fn strip_managed_fields_removes_only_managed_fields() {
         .unwrap()
         .shift_remove("managedFields");
     assert_eq!(
-        serde_json::to_string(&r.json).unwrap(),
+        serde_json::to_string(r.doc()).unwrap(),
         serde_json::to_string(&expected).unwrap()
     );
-    let keys: Vec<&str> = r.json["metadata"]
+    let value = r.to_value();
+    let keys: Vec<&str> = value["metadata"]
         .as_object()
         .unwrap()
         .keys()
@@ -352,9 +352,9 @@ fn strip_managed_fields_removes_only_managed_fields() {
 #[test]
 fn strip_managed_fields_is_idempotent_and_handles_absence() {
     let mut r = load(CLUSTER_CR);
-    let before = serde_json::to_string(&r.json).unwrap();
+    let before = serde_json::to_string(r.doc()).unwrap();
     assert!(!r.strip_managed_fields());
-    assert_eq!(serde_json::to_string(&r.json).unwrap(), before);
+    assert_eq!(serde_json::to_string(r.doc()).unwrap(), before);
 
     let mut cr = load(CR);
     assert!(
@@ -364,58 +364,53 @@ fn strip_managed_fields_is_idempotent_and_handles_absence() {
     assert!(!cr.strip_managed_fields());
 }
 
-// --- one shared JSON tree (#508) -------------------------------------------
+// --- one shared JSON document (#508, #603) -------------------------------------------
 
 #[test]
-fn a_clone_shares_the_json_tree() {
+fn a_clone_shares_the_json_document() {
     let r = load(POD);
     let copy = r.clone();
     assert!(
-        Arc::ptr_eq(&r.json, &copy.json),
+        r.doc().ptr_eq(copy.doc()),
         "a clone must not copy the JSON: a feed's cache and the store hold the same object"
     );
     assert_eq!(copy, r);
 }
 
 #[test]
-fn json_mut_copies_a_shared_tree_and_leaves_the_clone_alone() {
+fn edit_json_stores_a_new_document_and_leaves_the_clone_alone() {
     let mut r = load(POD);
     let copy = r.clone();
-    r.json_mut()["spec"]["nodeName"] = json!("elsewhere");
-    assert!(!Arc::ptr_eq(&r.json, &copy.json));
+    r.edit_json(|json| json["spec"]["nodeName"] = json!("elsewhere"));
+    assert!(!r.doc().ptr_eq(copy.doc()));
     assert_eq!(r.get_str("/spec/nodeName"), Some("elsewhere"));
     assert_ne!(copy.get_str("/spec/nodeName"), Some("elsewhere"));
 
-    // The only holder edits in place.
-    let before = Arc::as_ptr(&r.json);
-    r.json_mut()["spec"]["nodeName"] = json!("again");
-    assert_eq!(Arc::as_ptr(&r.json), before);
+    r.edit_json(|json| json["spec"]["nodeName"] = json!("again"));
+    assert_eq!(r.get_str("/spec/nodeName"), Some("again"));
+    assert_eq!(r.get_str("/metadata/name"), copy.get_str("/metadata/name"));
 }
 
 #[test]
-fn stripping_a_shared_tree_leaves_the_clone_alone() {
+fn stripping_a_shared_document_leaves_the_clone_alone() {
     let mut r = load(POD);
     let copy = r.clone();
     assert!(r.strip_managed_fields());
     assert!(copy.get("/metadata/managedFields").is_some());
 
-    // Nothing to strip: the tree stays shared rather than being copied for nothing.
+    // Nothing to strip: the document stays shared rather than being rebuilt for nothing.
     let mut stripped = r.clone();
     assert!(!stripped.strip_managed_fields());
-    assert!(Arc::ptr_eq(&r.json, &stripped.json));
+    assert!(r.doc().ptr_eq(stripped.doc()));
 }
 
 #[test]
-fn into_json_returns_the_value() {
+fn to_value_returns_the_value() {
     let original: Value = serde_json::from_str(POD).unwrap();
     let r = Resource::from_json(original.clone()).unwrap();
     let shared = r.clone();
-    assert_eq!(
-        r.into_json(),
-        original,
-        "copied while another clone holds it"
-    );
-    assert_eq!(shared.into_json(), original, "moved out as the last holder");
+    assert_eq!(r.to_value(), original);
+    assert_eq!(shared.to_value(), original, "a clone reads the same");
 }
 
 // --- to_yaml ---------------------------------------------------------------
@@ -461,7 +456,7 @@ fn yaml_keeps_ambiguous_scalars_as_strings() {
 
     // Every value reads back as the same string (not bool/number/null).
     let back: Value = serde_saphyr::from_str(&yaml).unwrap();
-    assert_eq!(back, *r.json);
+    assert_eq!(back, r.to_value());
     for (_, v) in back["data"].as_object().unwrap() {
         assert!(v.is_string(), "{v} lost its string type");
     }
@@ -476,7 +471,7 @@ fn yaml_keeps_ambiguous_keys_and_labels_as_strings() {
     }))
     .unwrap();
     let back: Value = serde_saphyr::from_str(&r.to_yaml().unwrap()).unwrap();
-    assert_eq!(back, *r.json);
+    assert_eq!(back, r.to_value());
 }
 
 #[test]

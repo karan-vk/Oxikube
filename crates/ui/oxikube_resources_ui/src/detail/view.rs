@@ -318,7 +318,7 @@ impl DetailView {
     pub(super) fn full_state_text(&self) -> String {
         self.full
             .resource()
-            .map(|resource| resource.json.to_string())
+            .map(|resource| resource.to_value().to_string())
             .unwrap_or_default()
     }
 

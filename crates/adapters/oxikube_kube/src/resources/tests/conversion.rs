@@ -25,8 +25,8 @@ async fn list_items_get_their_type_fields_from_discovery() {
         .unwrap();
     let pod = &page.items[0];
     assert_eq!(pod.kind, pod_gvk());
-    assert_eq!(pod.json["apiVersion"], "v1");
-    assert_eq!(pod.json["kind"], "Pod");
+    assert_eq!(pod.to_value()["apiVersion"], "v1");
+    assert_eq!(pod.to_value()["kind"], "Pod");
     assert_eq!(pod.namespace(), Some("default"));
     assert_eq!(pod.get_str("/spec/nodeName"), Some("node-1"));
     assert_eq!(&**pod.meta.uid.as_ref().unwrap(), "uid-a");
@@ -78,7 +78,13 @@ async fn key_order_is_type_fields_metadata_then_the_rest() {
         .get(&pod_gvk(), Some("default"), "a")
         .await
         .unwrap();
-    let keys: Vec<_> = got.json.as_object().unwrap().keys().cloned().collect();
+    let keys: Vec<_> = got
+        .json()
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(str::to_owned)
+        .collect();
     assert_eq!(&keys[..3], ["apiVersion", "kind", "metadata"]);
     assert!(keys.contains(&"spec".to_owned()) && keys.contains(&"status".to_owned()));
 }
@@ -104,7 +110,7 @@ async fn custom_resources_keep_every_field() {
         .await
         .unwrap();
     assert_eq!(page.items[0].kind, widget_gvk());
-    assert_eq!(*page.items[0].json, widget);
+    assert_eq!(page.items[0].to_value(), widget);
     assert_eq!(page.items[0].meta.finalizers.len(), 1);
 }
 

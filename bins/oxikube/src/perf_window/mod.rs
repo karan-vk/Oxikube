@@ -32,6 +32,8 @@
 //! | `scenarios/*` | one script per scenario |
 
 mod driver;
+#[cfg(test)]
+mod heap_probe;
 pub mod run;
 mod scenarios;
 #[cfg(test)]

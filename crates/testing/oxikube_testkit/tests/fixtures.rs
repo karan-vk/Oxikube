@@ -9,6 +9,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use oxikube_domain::event::{Event, EventType};
 use oxikube_domain::ids::{ClusterId, ContextName};
+use oxikube_domain::json::JsonRef;
 use oxikube_domain::{
     ContainerSummary, CronJobSummary, JobSummary, NodeSummary, PodSummary, Resource,
     WorkloadSummary,
@@ -84,7 +85,8 @@ fn every_fixture_parses_into_a_resource_and_its_view_model() {
                 NodeSummary::from_resource(&res).unwrap();
             }
             "Event" => {
-                Event::from_json(&cluster, &res.json).unwrap_or_else(|e| panic!("{path}: {e}"));
+                Event::from_json(&cluster, &res.to_value())
+                    .unwrap_or_else(|e| panic!("{path}: {e}"));
             }
             _ => {}
         }
@@ -147,13 +149,13 @@ fn workload_node_and_event_fixtures_read_as_expected() {
     assert_eq!((&*cj.schedule, cj.active), ("0 3 * * *", 1));
 
     let cluster = ClusterId::new("/kubeconfig", &ContextName::new("kind-oxikube"));
-    let warn = Event::from_json(&cluster, &fixtures::event_core_warning().json).unwrap();
+    let warn = Event::from_json(&cluster, &fixtures::event_core_warning().to_value()).unwrap();
     assert_eq!(
         (warn.event_type, &*warn.reason, warn.count),
         (EventType::Warning, "BackOff", 42)
     );
     assert_eq!(&*warn.regarding.name, "web-crashloop");
-    let v1 = Event::from_json(&cluster, &fixtures::event_events_v1().json).unwrap();
+    let v1 = Event::from_json(&cluster, &fixtures::event_events_v1().to_value()).unwrap();
     assert_eq!(&*v1.reason, "ScalingReplicaSet");
     assert_eq!(
         v1.related.map(|r| r.name.to_string()).as_deref(),
@@ -188,8 +190,8 @@ fn helm_release_secret_decodes_base64_base64_gzip_json() {
 #[test]
 fn secret_fixtures_hold_only_dummy_values() {
     let secret = fixtures::secret();
-    let data = secret.get("/data").and_then(Value::as_object).unwrap();
-    for (key, value) in data {
+    let data = secret.get("/data").and_then(JsonRef::as_object).unwrap();
+    for (key, value) in data.iter() {
         let decoded = STANDARD.decode(value.as_str().unwrap()).unwrap();
         let text = String::from_utf8(decoded).unwrap();
         assert!(

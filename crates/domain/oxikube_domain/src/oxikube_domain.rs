@@ -8,7 +8,9 @@
 //! | [`ids`] | [`ClusterId`](ids::ClusterId), [`ContextName`](ids::ContextName), [`Gvk`](ids::Gvk) / [`Gvr`](ids::Gvr), [`Scope`](ids::Scope), [`ResourceRef`](ids::ResourceRef) |
 //! | [`kinds`] | [`ResourceKind`](kinds::ResourceKind), [`Verb`](kinds::Verb), [`VerbSet`](kinds::VerbSet) |
 //! | [`access`] | [`AccessRules`](access::AccessRules): what the user may do per resource (a rules review as data), [`AccessRequirement`](access::AccessRequirement) |
-//! | [`resource`] | the thin [`Resource`] model: [`ObjectMeta`] + raw JSON |
+//! | [`resource`] | the thin [`Resource`] model: [`ObjectMeta`] + the object's JSON |
+//! | [`intern`] | [`intern`](intern::intern): one shared `Arc<str>` per short repeated text |
+//! | [`json`] | [`JsonDoc`](json::JsonDoc): compact immutable JSON read in place through [`JsonRef`](json::JsonRef) |
 //! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
 //! | [`quantity`], [`age`] | [`Quantity`] parsing/formatting and [`Age`] formatting |
 //! | [`session`] | the cluster session state machine, `NamespaceSelection`, `WatchScope` |
@@ -45,6 +47,8 @@ pub mod error_details;
 pub mod event;
 pub mod human_error;
 pub mod ids;
+pub mod intern;
+pub mod json;
 pub mod kinds;
 pub mod log;
 pub mod metrics;
@@ -65,10 +69,11 @@ pub use command::{
 pub use error::{ErrorKind, OxiError, OxiResult};
 pub use error_details::{ConflictDetails, ConflictReason, FieldCause, ValidationDetails};
 pub use human_error::HumanError;
+pub use json::{JsonDoc, JsonRef};
 pub use portforward::{ForwardPort, ForwardSpec, ForwardStatus};
 pub use preset::ClusterPreset;
 pub use quantity::{Quantity, QuantityError, QuantityFormat};
-pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError};
+pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError, StrMap};
 pub use safety::{ConfirmTier, Initiator, Risk};
 pub use view::{
     ContainerSummary, CronJobSummary, JobSummary, NodeSummary, PodSummary, ViewError,

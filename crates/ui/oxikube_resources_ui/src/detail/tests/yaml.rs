@@ -131,7 +131,7 @@ fn managed_fields_are_hidden_until_toggled_and_the_cached_object_is_untouched(
     // The object the store (and the Overview) hold never lost its managedFields.
     let kept = d.read(&view, |v| {
         v.complete_resource()
-            .map(|r| r.json["metadata"].get("managedFields").is_some())
+            .map(|r| r.to_value()["metadata"].get("managedFields").is_some())
     });
     assert_eq!(kept, Some(true));
 

@@ -32,6 +32,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::intern::intern;
+
 /// Why an identity string failed to parse.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum IdParseError {
@@ -266,7 +268,8 @@ impl Gvk {
     /// group. The input is not validated.
     pub fn from_api_version(api_version: &str, kind: &str) -> Self {
         let (group, version) = split_api_version(api_version);
-        Self::new(group, version, kind)
+        // Every object of a kind says the same three texts: share them.
+        Self::new(intern(group), intern(version), intern(kind))
     }
 
     /// The `apiVersion` string of this type (`apps/v1`, or `v1` for core).

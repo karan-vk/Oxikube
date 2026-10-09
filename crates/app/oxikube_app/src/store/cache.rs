@@ -7,10 +7,9 @@ use std::sync::Arc;
 
 use super::counts::{KindCount, Tally};
 use super::feed::{FeedBatch, ObjectDelta};
+use super::keyset::KeySet;
 use super::object::{FeedScope, ObjectKey, StoreObject};
 use super::query::StoreFilter;
-
-type KeySet = HashSet<ObjectKey>;
 
 /// What one applied batch changed: the final state of every key it touched.
 #[derive(Debug, Default)]
@@ -210,14 +209,20 @@ impl ObjectCache {
                 self.by_name
                     .get(name.as_str())
                     .into_iter()
-                    .flatten()
+                    .flat_map(KeySet::iter)
                     .collect(),
             );
         }
         if let Some(labels) = &filter.labels {
             for (k, v) in labels.equalities() {
                 let at = (Arc::<str>::from(k), Arc::<str>::from(v));
-                consider(self.by_label.get(&at).into_iter().flatten().collect());
+                consider(
+                    self.by_label
+                        .get(&at)
+                        .into_iter()
+                        .flat_map(KeySet::iter)
+                        .collect(),
+                );
             }
         }
         if let Some(namespaces) = &filter.namespaces {
@@ -225,7 +230,7 @@ impl ObjectCache {
                 namespaces
                     .iter()
                     .filter_map(|ns| self.by_namespace.get(ns.as_str()))
-                    .flatten()
+                    .flat_map(KeySet::iter)
                     .collect(),
             );
         }

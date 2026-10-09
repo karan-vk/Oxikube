@@ -39,7 +39,7 @@ in milliseconds.
 See `docs/PLAN.md` ("Workspace layout") for the one-line responsibility of every crate, and each
 crate's `README.md` for its allowed dependencies. Highlights:
 
-- `oxikube_domain` — ids, `ResourceKind`, the thin `Resource { meta, json }` model, view-models,
+- `oxikube_domain` — ids, `ResourceKind`, the thin `Resource { meta, doc }` model (the object's JSON as a compact `JsonDoc` read in place through `JsonRef`; `StrMap` label sets and `intern`ed strings shared across objects), view-models,
   `Quantity`, `Age`, session state and `NamespaceSelection`, `Command` / `Capability` vocabulary,
   safety types (`Risk`, `ConfirmTier`, `Initiator`), `AuditRecord`, telemetry-free records
   (`LogLine`, `Event`, `MetricsSample`, `ContextBlock`), the error taxonomy and the pure

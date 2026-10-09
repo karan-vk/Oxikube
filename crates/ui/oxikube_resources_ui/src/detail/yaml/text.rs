@@ -42,8 +42,6 @@ pub fn yaml_text(resource: &Resource, options: YamlOptions) -> Result<String, St
 /// Whether `resource` has `metadata.managedFields` (the toggle has something to show).
 pub fn has_managed_fields(resource: &Resource) -> bool {
     resource
-        .json
-        .get("metadata")
-        .and_then(|meta| meta.get("managedFields"))
+        .get("/metadata/managedFields")
         .is_some_and(|fields| !fields.is_null())
 }

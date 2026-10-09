@@ -142,7 +142,10 @@ async fn custom_resources_list_and_get_through_the_same_path() {
     let g2 = page.items.iter().find(|r| r.name() == "g2").unwrap();
     assert_eq!(g2.kind, crd.gvk);
     assert_eq!(g2.get_i64("/spec/size"), Some(2));
-    assert_eq!(g2.get("/spec/nested/list"), Some(&json!([1, 2, 3])));
+    assert_eq!(
+        g2.get("/spec/nested/list").map(|v| v.to_value()),
+        Some(json!([1, 2, 3]))
+    );
 
     let paged = resources
         .list_all(

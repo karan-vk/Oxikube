@@ -29,10 +29,9 @@
 
 use std::sync::Arc;
 
-use jiff::Timestamp;
-use serde_json::Value;
-
+use crate::json::{Array, JsonRef};
 use crate::resource::Resource;
+use jiff::Timestamp;
 
 mod health;
 mod job;
@@ -112,7 +111,7 @@ pub struct Condition {
 
 impl Condition {
     /// Parse one condition object. Returns `None` when it has no `type`.
-    fn from_json(v: &Value) -> Option<Self> {
+    fn from_json(v: JsonRef<'_>) -> Option<Self> {
         Some(Self {
             kind: Arc::from(str_of(v, "type")?),
             status: ConditionStatus::parse(str_of(v, "status")),
@@ -130,11 +129,9 @@ impl Condition {
 
 // --- shared JSON readers ------------------------------------------------------
 //
-// All of them accept any `Value` and return a default for non-objects, so a wrongly typed
-// subtree (for example `"status": "oops"`) degrades instead of panicking.
-
-/// Stand-in for an absent subtree.
-static NULL: Value = Value::Null;
+// All of them accept any value and return a default for non-objects, so a wrongly typed
+// subtree (for example `"status": "oops"`) degrades instead of panicking. They borrow from the
+// document and allocate nothing.
 
 /// Reject `res` unless its group and kind match one of `accepted`.
 fn check_kind(
@@ -158,62 +155,62 @@ fn check_kind(
     }
 }
 
-/// `v[key]`, or [`NULL`] when absent or `v` is not an object.
-fn sub<'a>(v: &'a Value, key: &str) -> &'a Value {
-    v.get(key).unwrap_or(&NULL)
+/// `v[key]`, or `null` when absent or `v` is not an object.
+fn sub<'a>(v: JsonRef<'a>, key: &str) -> JsonRef<'a> {
+    v.get(key).unwrap_or(JsonRef::NULL)
 }
 
 /// `v[key]` when it is a JSON object.
-fn obj_of<'a>(v: &'a Value, key: &str) -> Option<&'a Value> {
+fn obj_of<'a>(v: JsonRef<'a>, key: &str) -> Option<JsonRef<'a>> {
     v.get(key).filter(|x| x.is_object())
 }
 
 /// `v[key]` as a non-empty string.
-fn str_of<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
+fn str_of<'a>(v: JsonRef<'a>, key: &str) -> Option<&'a str> {
     v.get(key)?.as_str().filter(|s| !s.is_empty())
 }
 
 /// `v[key]` as a non-empty shared string.
-fn arc_of(v: &Value, key: &str) -> Option<Arc<str>> {
+fn arc_of(v: JsonRef<'_>, key: &str) -> Option<Arc<str>> {
     str_of(v, key).map(Arc::from)
 }
 
 /// `v[key]` as an array; empty when absent or not an array.
-fn arr_of<'a>(v: &'a Value, key: &str) -> &'a [Value] {
+fn arr_of<'a>(v: JsonRef<'a>, key: &str) -> Array<'a> {
     v.get(key)
-        .and_then(Value::as_array)
-        .map_or(&[], Vec::as_slice)
+        .and_then(JsonRef::as_array)
+        .unwrap_or(Array::EMPTY)
 }
 
 /// `v[key]` as an integer.
-fn i64_of(v: &Value, key: &str) -> Option<i64> {
+fn i64_of(v: JsonRef<'_>, key: &str) -> Option<i64> {
     v.get(key)?.as_i64()
 }
 
 /// `v[key]` as a boolean; `false` when absent or not a boolean.
-fn bool_of(v: &Value, key: &str) -> bool {
-    v.get(key).and_then(Value::as_bool).unwrap_or(false)
+fn bool_of(v: JsonRef<'_>, key: &str) -> bool {
+    v.get(key).and_then(JsonRef::as_bool).unwrap_or(false)
 }
 
 /// `v[key]` as a non-negative count; `None` when absent, negative or not an integer.
-fn opt_count(v: &Value, key: &str) -> Option<u32> {
+fn opt_count(v: JsonRef<'_>, key: &str) -> Option<u32> {
     let n = v.get(key)?.as_u64()?;
     Some(u32::try_from(n).unwrap_or(u32::MAX))
 }
 
 /// `v[key]` as a non-negative count; zero when absent, negative or not an integer.
-fn count_of(v: &Value, key: &str) -> u32 {
+fn count_of(v: JsonRef<'_>, key: &str) -> u32 {
     opt_count(v, key).unwrap_or(0)
 }
 
 /// `v[key]` as an `i32` (exit codes, signals); zero when absent or out of range.
-fn i32_of(v: &Value, key: &str) -> i32 {
+fn i32_of(v: JsonRef<'_>, key: &str) -> i32 {
     i64_of(v, key)
         .and_then(|n| i32::try_from(n).ok())
         .unwrap_or(0)
 }
 
 /// `v[key]` as an RFC 3339 timestamp; `None` when absent or unparseable.
-fn ts_of(v: &Value, key: &str) -> Option<Timestamp> {
+fn ts_of(v: JsonRef<'_>, key: &str) -> Option<Timestamp> {
     str_of(v, key)?.parse().ok()
 }

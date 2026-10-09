@@ -66,8 +66,8 @@ impl NodeSummary {
     /// never fail; they fall back to defaults.
     pub fn from_resource(res: &Resource) -> Result<Self, ViewError> {
         check_kind(res, "Node", &[("", "Node")])?;
-        let spec = sub(&res.json, "spec");
-        let status = sub(&res.json, "status");
+        let spec = sub(res.json(), "spec");
+        let status = sub(res.json(), "status");
         let info = sub(status, "nodeInfo");
         let allocatable = sub(status, "allocatable");
 
@@ -93,7 +93,7 @@ impl NodeSummary {
         let address = |kind: &str| {
             arr_of(status, "addresses")
                 .iter()
-                .find(|a| str_of(a, "type") == Some(kind))
+                .find(|&a| str_of(a, "type") == Some(kind))
                 .and_then(|a| arc_of(a, "address"))
         };
         let quantity = |key: &str| str_of(allocatable, key).and_then(|q| Quantity::parse(q).ok());

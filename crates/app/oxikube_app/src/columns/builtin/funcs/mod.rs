@@ -14,7 +14,7 @@ mod workload;
 use std::fmt::Write as _;
 
 use oxikube_domain::Resource;
-use serde_json::Value;
+use oxikube_domain::json::{Array, JsonRef};
 
 pub(super) use batch::*;
 pub(super) use discovery::*;
@@ -95,25 +95,25 @@ pub(crate) fn ready_tone(have: u32, want: u32) -> Tone {
 }
 
 /// A string at `key` of an object `v`, when non-empty.
-pub(crate) fn str_at<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
+pub(crate) fn str_at<'a>(v: JsonRef<'a>, key: &str) -> Option<&'a str> {
     v.get(key)?.as_str().filter(|s| !s.is_empty())
 }
 
 /// Entries of the array at `key`; empty when absent.
-pub(crate) fn arr_at<'a>(v: &'a Value, key: &str) -> &'a [Value] {
+pub(crate) fn arr_at<'a>(v: JsonRef<'a>, key: &str) -> Array<'a> {
     v.get(key)
-        .and_then(Value::as_array)
-        .map_or(&[], Vec::as_slice)
+        .and_then(JsonRef::as_array)
+        .unwrap_or(Array::EMPTY)
 }
 
 /// `spec` of `res`, or null.
-pub(crate) fn spec(res: &Resource) -> &Value {
-    res.json.get("spec").unwrap_or(&Value::Null)
+pub(crate) fn spec(res: &Resource) -> JsonRef<'_> {
+    res.json().get("spec").unwrap_or(JsonRef::NULL)
 }
 
 /// `status` of `res`, or null.
-pub(crate) fn status(res: &Resource) -> &Value {
-    res.json.get("status").unwrap_or(&Value::Null)
+pub(crate) fn status(res: &Resource) -> JsonRef<'_> {
+    res.json().get("status").unwrap_or(JsonRef::NULL)
 }
 
 /// Joins `items` with commas, dropping any beyond `max` for a `+N more` suffix (kubectl's
@@ -138,18 +138,15 @@ pub(crate) fn join_capped(items: impl IntoIterator<Item = String>, max: usize) -
 }
 
 /// `k=v,k=v` of a JSON object of strings, in key order; empty for anything else.
-pub(crate) fn selector_text(v: Option<&Value>) -> String {
-    let Some(Value::Object(map)) = v else {
+pub(crate) fn selector_text(v: Option<JsonRef<'_>>) -> String {
+    let Some(map) = v.and_then(JsonRef::as_object) else {
         return String::new();
     };
-    key_values(
-        map.iter()
-            .map(|(k, v)| (k.as_str(), v.as_str().unwrap_or_default())),
-    )
+    key_values(map.iter().map(|(k, v)| (k, v.as_str().unwrap_or_default())))
 }
 
 /// Every container image of a pod template `spec`, comma-separated.
-pub(crate) fn images_text(pod_spec: &Value) -> String {
+pub(crate) fn images_text(pod_spec: JsonRef<'_>) -> String {
     let mut out = String::new();
     for c in arr_at(pod_spec, "containers") {
         if let Some(image) = str_at(c, "image") {

@@ -29,8 +29,8 @@ pub(super) fn embeds_values(key: &str) -> bool {
 pub(super) fn keys(resource: &Resource) -> Vec<String> {
     let mut keys: Vec<String> = ["data", "stringData"]
         .into_iter()
-        .filter_map(|field| resource.json.get(field)?.as_object())
-        .flat_map(|map| map.keys().cloned())
+        .filter_map(|field| resource.json().get(field)?.as_object())
+        .flat_map(|map| map.keys().map(str::to_owned).collect::<Vec<_>>())
         .collect();
     keys.sort();
     keys.dedup();
@@ -52,7 +52,10 @@ pub fn mask_secret_with(resource: &mut Resource, placeholder: Option<&str>) -> O
         return None;
     }
     let names = keys(resource);
-    if let Some(object) = resource.json_mut().as_object_mut() {
+    resource.edit_json(|json| {
+        let Some(object) = json.as_object_mut() else {
+            return;
+        };
         for field in ["data", "stringData"] {
             if let Some(map) = object.get_mut(field).and_then(|v| v.as_object_mut()) {
                 for value in map.values_mut() {
@@ -65,9 +68,9 @@ pub fn mask_secret_with(resource: &mut Resource, placeholder: Option<&str>) -> O
             .and_then(|m| m.get_mut("annotations"))
             .and_then(|a| a.as_object_mut())
         {
-            annotations.remove(LAST_APPLIED);
+            annotations.shift_remove(LAST_APPLIED);
         }
-    }
+    });
     resource
         .meta
         .annotations

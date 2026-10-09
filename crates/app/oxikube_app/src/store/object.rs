@@ -5,7 +5,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use oxikube_domain::ids::Gvk;
-use oxikube_domain::{ObjectMeta, Resource};
+use oxikube_domain::{ObjectMeta, Resource, StrMap};
 use serde_json::Value;
 
 use super::selector::LabelSelector;
@@ -222,7 +222,7 @@ impl FeedKey {
     }
 
     /// Whether an object with `labels` belongs to this feed's selector.
-    pub fn selects(&self, labels: &std::collections::BTreeMap<Arc<str>, Arc<str>>) -> bool {
+    pub fn selects(&self, labels: &StrMap) -> bool {
         self.selector.as_ref().is_none_or(|s| s.matches(labels))
     }
 }

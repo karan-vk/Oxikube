@@ -87,7 +87,7 @@ async fn custom_resources_take_the_same_path() {
         .replace(&widget_gvk(), Some("default"), "a", &widget, &no_options())
         .await
         .expect("replace a custom resource");
-    assert_eq!(replaced.json["spec"]["size"], 3);
+    assert_eq!(replaced.to_value()["spec"]["size"], 3);
 }
 
 #[tokio::test]

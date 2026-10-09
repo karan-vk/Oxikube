@@ -57,7 +57,7 @@ pub async fn live(
 
 /// The field managers recorded in `managedFields` of `object`.
 pub fn managers(object: &Resource) -> Vec<String> {
-    object.json["metadata"]["managedFields"]
+    object.to_value()["metadata"]["managedFields"]
         .as_array()
         .map(|entries| {
             entries

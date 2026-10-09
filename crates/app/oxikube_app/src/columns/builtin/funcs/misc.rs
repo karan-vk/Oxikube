@@ -2,8 +2,8 @@
 //! the admission and scheduling kinds.
 
 use jiff::Timestamp;
+use oxikube_domain::json::JsonRef;
 use oxikube_domain::{Age, Resource};
-use serde_json::Value;
 
 use super::{arr_at, spec, status, str_at};
 use crate::columns::{Cell, Tone};
@@ -27,10 +27,10 @@ pub(crate) fn hpa_targets<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     if metrics.is_empty() {
         let target = spec
             .get("targetCPUUtilizationPercentage")
-            .and_then(Value::as_i64);
+            .and_then(JsonRef::as_i64);
         let current = status
             .get("currentCPUUtilizationPercentage")
-            .and_then(Value::as_i64);
+            .and_then(JsonRef::as_i64);
         return match target {
             Some(t) => Cell::text(format!(
                 "{}/{t}%",
@@ -46,7 +46,7 @@ pub(crate) fn hpa_targets<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
             let target = metric_value(m, "target").unwrap_or_else(|| "<unknown>".to_owned());
             let current = current_metrics
                 .iter()
-                .find(|c| same_metric(m, c))
+                .find(|&c| same_metric(m, c))
                 .and_then(|c| metric_value(c, "current"))
                 .unwrap_or_else(|| "<unknown>".to_owned());
             format!("{current}/{target}")
@@ -56,7 +56,7 @@ pub(crate) fn hpa_targets<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
 }
 
 /// The `type` of an HPA metric and the object holding its fields (`resource`, `pods`, ...).
-fn metric_body(m: &Value) -> Option<(&str, &Value)> {
+fn metric_body(m: JsonRef<'_>) -> Option<(&str, JsonRef<'_>)> {
     let kind = str_at(m, "type")?;
     let key = match kind {
         "Resource" => "resource",
@@ -70,11 +70,11 @@ fn metric_body(m: &Value) -> Option<(&str, &Value)> {
 }
 
 /// The metric's name: the resource name, or `metric.name` for the custom kinds.
-fn metric_name(body: &Value) -> Option<&str> {
+fn metric_name(body: JsonRef<'_>) -> Option<&str> {
     str_at(body, "name").or_else(|| str_at(body.get("metric")?, "name"))
 }
 
-fn same_metric(spec_metric: &Value, current: &Value) -> bool {
+fn same_metric(spec_metric: JsonRef<'_>, current: JsonRef<'_>) -> bool {
     match (metric_body(spec_metric), metric_body(current)) {
         (Some((k1, b1)), Some((k2, b2))) => k1 == k2 && metric_name(b1) == metric_name(b2),
         _ => false,
@@ -82,10 +82,10 @@ fn same_metric(spec_metric: &Value, current: &Value) -> bool {
 }
 
 /// `averageUtilization` (as a percentage), `averageValue` or `value` of `body[which]`.
-fn metric_value(m: &Value, which: &str) -> Option<String> {
+fn metric_value(m: JsonRef<'_>, which: &str) -> Option<String> {
     let (_, body) = metric_body(m)?;
     let v = body.get(which)?;
-    if let Some(u) = v.get("averageUtilization").and_then(Value::as_i64) {
+    if let Some(u) = v.get("averageUtilization").and_then(JsonRef::as_i64) {
         return Some(format!("{u}%"));
     }
     str_at(v, "averageValue")
@@ -96,10 +96,10 @@ fn metric_value(m: &Value, which: &str) -> Option<String> {
 /// Event `LAST SEEN`: time since the event last happened. `series.lastObservedTime` wins (a
 /// series event's `eventTime` is its first observation), then `lastTimestamp`, then `eventTime`.
 pub(crate) fn event_last_seen<'a>(res: &'a Resource, now: Timestamp) -> Cell<'a> {
-    let json = &res.json;
+    let json = res.json();
     let at = json
         .pointer("/series/lastObservedTime")
-        .and_then(Value::as_str)
+        .and_then(JsonRef::as_str)
         .or_else(|| str_at(json, "lastTimestamp"))
         .or_else(|| str_at(json, "eventTime"))
         .and_then(|s| s.parse::<Timestamp>().ok())
@@ -109,7 +109,7 @@ pub(crate) fn event_last_seen<'a>(res: &'a Resource, now: Timestamp) -> Cell<'a>
 
 /// Event `TYPE`: `Normal` or `Warning`; warnings are amber.
 pub(crate) fn event_type<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    match str_at(&res.json, "type") {
+    match str_at(res.json(), "type") {
         Some("Warning") => Cell::text("Warning").with_tone(Tone::Warn),
         Some(other) => Cell::text(other),
         None => Cell::empty(),
@@ -118,7 +118,7 @@ pub(crate) fn event_type<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
 
 /// Event `OBJECT`: `kind/name` of the involved object, kind in lower case as kubectl prints it.
 pub(crate) fn event_object<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let Some(obj) = res.json.get("involvedObject") else {
+    let Some(obj) = res.json().get("involvedObject") else {
         return Cell::empty();
     };
     match (str_at(obj, "kind"), str_at(obj, "name")) {
@@ -132,7 +132,7 @@ pub(crate) fn crd_version<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     let versions = arr_at(spec(res), "versions");
     versions
         .iter()
-        .find(|v| v.get("storage").and_then(Value::as_bool) == Some(true))
+        .find(|v| v.get("storage").and_then(JsonRef::as_bool) == Some(true))
         .or_else(|| versions.first())
         .and_then(|v| str_at(v, "name"))
         .map_or_else(Cell::empty, Cell::text)
@@ -140,10 +140,10 @@ pub(crate) fn crd_version<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
 
 /// CRD `SHORT NAMES`: `spec.names.shortNames`, comma-separated.
 pub(crate) fn crd_short_names<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let names = res.json.pointer("/spec/names").unwrap_or(&Value::Null);
+    let names = res.json().pointer("/spec/names").unwrap_or(JsonRef::NULL);
     let list: Vec<&str> = arr_at(names, "shortNames")
         .iter()
-        .filter_map(Value::as_str)
+        .filter_map(JsonRef::as_str)
         .collect();
     Cell::text(list.join(","))
 }
@@ -152,7 +152,7 @@ pub(crate) fn crd_short_names<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a
 pub(crate) fn binding_actions<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     let list: Vec<&str> = arr_at(spec(res), "validationActions")
         .iter()
-        .filter_map(Value::as_str)
+        .filter_map(JsonRef::as_str)
         .collect();
     Cell::text(list.join(","))
 }

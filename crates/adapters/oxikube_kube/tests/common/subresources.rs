@@ -151,7 +151,7 @@ pub async fn live_pod(
 
 /// Whether the pod reports `Ready=True`.
 pub fn is_ready(pod: &Resource) -> bool {
-    pod.json["status"]["conditions"]
+    pod.to_value()["status"]["conditions"]
         .as_array()
         .is_some_and(|conditions| {
             conditions
