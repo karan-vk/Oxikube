@@ -34,7 +34,7 @@ pub enum JsonKind {
     Object,
 }
 
-/// A borrowed view of a value in a [`JsonDoc`](super::JsonDoc). See the [module docs](self).
+/// A borrowed view of a value in a [`JsonDoc`](super::JsonDoc).
 #[derive(Clone, Copy)]
 pub struct JsonRef<'a> {
     /// Starts at the value's tag and may run on past its end (the rest of the document).

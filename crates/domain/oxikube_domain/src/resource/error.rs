@@ -2,7 +2,7 @@
 
 use crate::error::OxiError;
 
-/// Why a JSON value could not become a [`Resource`], or a [`Resource`] could not
+/// Why a JSON value could not become a [`Resource`](super::Resource), or a [`Resource`](super::Resource) could not
 /// be rendered.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ResourceError {

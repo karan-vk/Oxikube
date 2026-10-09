@@ -3,7 +3,7 @@
 //! A watched object used to be a [`serde_json::Value`] tree: one heap node per field, a `String`
 //! per key and per text value and a hash table per object, about 13 to 17 KB of small allocations
 //! for a pod (E07-P603). A [`JsonDoc`] is one immutable byte buffer in a tagged, varint format
-//! (see [`format`]) with the common Kubernetes keys replaced by small numbers ([`keys`]): the same
+//! (see the private `format` module) with the common Kubernetes keys replaced by small numbers (the private `keys` table): the same
 //! pod is a few hundred bytes to a couple of KB in one allocation.
 //!
 //! Reading does not decode: [`JsonRef`] walks the bytes, borrows strings from them and skips

@@ -16,7 +16,7 @@ use crate::intern::intern_pairs;
 
 type Pair = (Arc<str>, Arc<str>);
 
-/// A string-to-string map with ordered keys, cheap to clone. See the [module docs](self).
+/// A string-to-string map with ordered keys, cheap to clone.
 #[derive(Clone, Default, PartialEq, Eq, Hash)]
 pub struct StrMap {
     entries: Option<Arc<[Pair]>>,
