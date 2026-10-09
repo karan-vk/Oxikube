@@ -73,6 +73,29 @@ fn an_unwrapped_line_longer_than_the_cap_continues_on_the_next_row() {
 }
 
 #[test]
+fn the_widest_row_of_a_cut_line_is_a_full_row_not_its_short_tail() {
+    // A 2500-column line cut into 1000, 1000 and 500: the horizontal extent is measured from
+    // `widest()`, so it must point at a 1000-column row or the full rows are clipped.
+    let text = format!(
+        "short\n{}\n",
+        "z".repeat(MAX_ROW_COLS * 2 + MAX_ROW_COLS / 2)
+    );
+    let map = RowMap::build(&text, None, true);
+    assert_eq!(map.len(), 4);
+    let widest = map.row(map.widest()).unwrap();
+    assert_eq!(widest.end - widest.start, MAX_ROW_COLS);
+
+    // The same with word wrap: the widest row is the longest wrapped row, not the line's last.
+    let text = "aaaaaaaaaaaaaaa bbbbbbbbbbbbbbb c";
+    let map = RowMap::build(text, Some(MIN_WRAP_COLS), false);
+    assert_eq!(
+        texts(&map, text),
+        ["aaaaaaaaaaaaaaa ", "bbbbbbbbbbbbbbb ", "c"]
+    );
+    assert_eq!(map.widest(), 0);
+}
+
+#[test]
 fn wide_characters_take_two_columns_and_rows_end_on_char_boundaries() {
     assert_eq!(char_cols('a'), 1);
     assert_eq!(char_cols('漢'), 2);

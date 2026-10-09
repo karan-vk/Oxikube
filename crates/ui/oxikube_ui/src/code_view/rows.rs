@@ -60,48 +60,54 @@ impl RowMap {
         let body = text.strip_suffix('\n').unwrap_or(text);
         for (line, raw) in body.split('\n').enumerate() {
             let content = raw.strip_suffix('\r').unwrap_or(raw);
-            let width = if content.len() <= cols && content.is_ascii() {
+            let (width, row) = if content.len() <= cols && content.is_ascii() {
                 map.rows.push(Row {
                     start: base,
                     end: base + content.len(),
                     line,
                 });
-                content.len()
+                (content.len(), map.rows.len() - 1)
             } else {
                 map.split_line(content, base, line, word_wrap)
             };
             if width > widest_cols {
                 widest_cols = width;
-                map.widest = map.rows.len() - 1;
+                map.widest = row;
             }
             base += raw.len() + 1;
         }
         map
     }
 
-    /// Pushes the rows of one long (or non-ASCII) line; returns its widest row's columns.
-    fn split_line(&mut self, line: &str, base: usize, line_ix: usize, word_wrap: bool) -> usize {
+    /// Pushes the rows of one long (or non-ASCII) line; returns its widest row's columns and
+    /// index (the first of equally wide rows, which is a full row rather than a shorter tail).
+    fn split_line(
+        &mut self,
+        line: &str,
+        base: usize,
+        line_ix: usize,
+        word_wrap: bool,
+    ) -> (usize, usize) {
         let cols = self.cols;
         let mut start = 0;
         let mut width = 0;
-        let mut widest = 0;
+        // The widest row so far: its columns and its index in `rows`.
+        let mut widest = (0, self.rows.len());
         // The byte just after the last space of the row, and the row's width up to it.
         let mut space: Option<(usize, usize)> = None;
         for (at, ch) in line.char_indices() {
             let w = char_cols(ch);
             if width + w > cols && at > start {
-                let cut = match space {
+                let (cut, row_cols) = match space {
                     Some((after, before)) if word_wrap && after > start && after <= at => {
-                        widest = widest.max(before);
                         width -= before;
-                        after
+                        (after, before)
                     }
-                    _ => {
-                        widest = widest.max(width);
-                        width = 0;
-                        at
-                    }
+                    _ => (at, std::mem::take(&mut width)),
                 };
+                if row_cols > widest.0 {
+                    widest = (row_cols, self.rows.len());
+                }
                 self.rows.push(Row {
                     start: base + start,
                     end: base + cut,
@@ -115,12 +121,15 @@ impl RowMap {
                 space = Some((at + 1, width));
             }
         }
+        if width > widest.0 {
+            widest = (width, self.rows.len());
+        }
         self.rows.push(Row {
             start: base + start,
             end: base + line.len(),
             line: line_ix,
         });
-        widest.max(width)
+        widest
     }
 
     /// The columns a row holds at most.
