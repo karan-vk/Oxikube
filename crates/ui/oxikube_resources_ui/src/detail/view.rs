@@ -331,6 +331,7 @@ impl DetailView {
         self.full_task = None;
         self.owners_task = None;
         self.describe.task = None;
+        self.yaml.task = None;
         self.events.task = None;
         self.events.subscription = None;
     }

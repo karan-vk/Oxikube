@@ -69,8 +69,10 @@ pub struct CodeView {
     pub(super) shown: Option<Shown>,
     /// Counts [`CodeView::set_text`] calls: a layout for an older text is dropped.
     generation: u64,
-    /// The layout in flight; a newer one replaces (and so cancels) it.
+    /// The layout in flight; a newer text replaces (and so cancels) it.
     layout_task: Option<Task<()>>,
+    /// Whether that layout is still running (it re-lays out for a width that changed meanwhile).
+    laying_out: bool,
     /// The parse in flight for the shown text.
     parse_task: Option<Task<()>>,
     pub(super) metrics: Metrics,
@@ -91,6 +93,7 @@ impl CodeView {
             shown: None,
             generation: 0,
             layout_task: None,
+            laying_out: false,
             parse_task: None,
             metrics: Metrics::default(),
             styles: StyleCache::default(),
@@ -117,6 +120,7 @@ impl CodeView {
         self.wanted = None;
         self.shown = None;
         self.layout_task = None;
+        self.laying_out = false;
         self.parse_task = None;
         self.styles.clear();
         self.selection = Selection::default();
@@ -180,6 +184,9 @@ impl CodeView {
     }
 
     /// Lays the wanted text out off the UI thread. With soft wrap, waits for the first measure.
+    ///
+    /// One layout runs at a time per text: a width that changes meanwhile (a dock being dragged)
+    /// is picked up when it lands, by the same task, so a resize never starves the layout.
     fn lay_out(&mut self, cx: &mut Context<Self>) {
         let (Some(text), Some(width)) = (self.wanted.clone(), self.layout_width()) else {
             return;
@@ -192,32 +199,49 @@ impl CodeView {
             .is_some_and(|shown| Arc::ptr_eq(&shown.text, &text));
         // A text replacing one on screen comes with its colours, so it never flashes uncoloured;
         // the first text shows as soon as its rows are ready and is coloured after.
-        let parse_with = match (&self.shown, same_text) {
+        let mut parse_with = match (&self.shown, same_text) {
             (Some(_), false) => self.look.language,
             _ => None,
         };
+        self.laying_out = true;
         self.layout_task = Some(cx.spawn(async move |this, cx| {
-            let built = cx
-                .background_executor()
-                .spawn(async move {
-                    let rows = RowMap::build(&text, width, gutter);
-                    let parsed = parse_with.map(|language| Parsed::parse(&text, language));
-                    (text, rows, parsed)
-                })
-                .await;
-            this.update(cx, |view, cx| view.laid_out(generation, built, cx))
-                .ok();
+            let mut width = width;
+            loop {
+                let text = text.clone();
+                let built = cx
+                    .background_executor()
+                    .spawn(async move {
+                        let rows = RowMap::build(&text, width, gutter);
+                        let parsed = parse_with.map(|language| Parsed::parse(&text, language));
+                        (text, rows, parsed)
+                    })
+                    .await;
+                let next = this
+                    .update(cx, |view, cx| view.laid_out(generation, width, built, cx))
+                    .ok()
+                    .flatten();
+                match next {
+                    Some(newer) => {
+                        width = newer;
+                        parse_with = None;
+                    }
+                    None => break,
+                }
+            }
         }));
     }
 
+    /// Shows rows laid out for `width`. Returns the width to lay out again for when the view's
+    /// width changed meanwhile.
     fn laid_out(
         &mut self,
         generation: u64,
+        width: Option<usize>,
         (text, rows, parsed): (Arc<str>, RowMap, Option<Parsed>),
         cx: &mut Context<Self>,
-    ) {
+    ) -> Option<Option<usize>> {
         if generation != self.generation {
-            return;
+            return None;
         }
         let previous = self.shown.take();
         let same_text = previous
@@ -236,16 +260,22 @@ impl CodeView {
         };
         let needs_parse = parsed.is_none() && !same_text && self.look.language.is_some();
         let rows = Arc::new(rows);
-        if let Some(line) = top_line {
-            let row = rows.first_row_of_line(line);
+        let top_row = top_line.map(|line| rows.first_row_of_line(line));
+        self.shown = Some(Shown { text, rows, parsed });
+        if let Some(row) = top_row {
             self.set_scroll_y(-(self.metrics.row_height * row as f32));
         }
-        self.shown = Some(Shown { text, rows, parsed });
         self.styles.clear();
         if needs_parse {
             self.parse(cx);
         }
         cx.notify();
+        let wanted = self.layout_width();
+        if wanted.is_some_and(|wanted| wanted != width) {
+            return wanted;
+        }
+        self.laying_out = false;
+        None
     }
 
     /// Parses the text on screen off the UI thread and colours it when done.
@@ -283,7 +313,10 @@ impl CodeView {
         let cols = (usable / self.metrics.advance).floor().max(1.) as usize;
         if self.metrics.width_cols != Some(cols) {
             self.metrics.width_cols = Some(cols);
-            self.lay_out(cx);
+            // A layout in flight picks the new width up when it lands.
+            if !self.laying_out {
+                self.lay_out(cx);
+            }
         }
     }
 

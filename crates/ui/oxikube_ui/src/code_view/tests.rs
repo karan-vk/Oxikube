@@ -234,14 +234,34 @@ fn a_new_text_replaces_the_shown_one_only_when_laid_out_and_coloured(cx: &mut Te
     );
 }
 
+/// The line at the top of the view.
+fn top_line(view: &Entity<CodeView>, cx: &mut VisualTestContext) -> Option<usize> {
+    view.read_with(cx, |v, _| {
+        v.shown
+            .as_ref()
+            .and_then(|shown| shown.rows.row(v.top_row()))
+            .map(|row| row.line)
+    })
+}
+
 #[gpui::test]
-fn a_narrower_view_rewraps_off_the_ui_thread(cx: &mut TestAppContext) {
+fn a_narrower_view_rewraps_off_the_ui_thread_and_keeps_the_top_line(cx: &mut TestAppContext) {
     let (view, cx) = mount(cx, Look::YAML);
     let long = format!("key: {}\n", "word ".repeat(200));
     let text: Arc<str> = long.repeat(50).into();
     set_text(&view, &text, cx);
     settle(cx);
     let (wide_cols, wide_rows) = view.read_with(cx, |v, _| (v.wrap_cols(), v.row_count()));
+    // Scroll to the first row of line 10.
+    cx.update(|_, cx| {
+        view.update(cx, |v, _| {
+            let row = v.shown.as_ref().unwrap().rows.first_row_of_line(10);
+            v.set_scroll_y(-(v.metrics.row_height * row as f32));
+        })
+    });
+    draw(cx);
+    assert_eq!(top_line(&view, cx), Some(10));
+
     cx.simulate_resize(size(px(450.), px(600.)));
     draw(cx);
     assert_eq!(
@@ -249,10 +269,23 @@ fn a_narrower_view_rewraps_off_the_ui_thread(cx: &mut TestAppContext) {
         wide_rows,
         "the old rows stay until the new ones are ready"
     );
+    // A second width while that layout runs: picked up when it lands, not lost.
+    cx.simulate_resize(size(px(500.), px(600.)));
+    draw(cx);
     cx.run_until_parked();
+    draw(cx);
     let (narrow_cols, narrow_rows) = view.read_with(cx, |v, _| (v.wrap_cols(), v.row_count()));
     assert!(narrow_cols < wide_cols, "{narrow_cols:?} < {wide_cols:?}");
     assert!(narrow_rows > wide_rows, "{narrow_rows} > {wide_rows}");
+    let expected = view
+        .read_with(cx, |v, _| v.metrics.width_cols)
+        .map(|width| RowMap::build(&text, Some(width), true).cols());
+    assert_eq!(narrow_cols, expected, "laid out for the last width");
+    assert_eq!(
+        top_line(&view, cx),
+        Some(10),
+        "the same line stays at the top"
+    );
 }
 
 #[gpui::test]
