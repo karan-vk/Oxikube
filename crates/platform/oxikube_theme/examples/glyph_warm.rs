@@ -9,7 +9,8 @@
 //! - with warm-up: the worker's job (timed, off the frame) has prepared them; the frame's bounds
 //!   and bitmap requests are answered from the prepared store.
 //!
-//! The atlas upload (a copy into a Metal texture) is the same in both and not included.
+//! The atlas upload (a copy into a Metal texture) is the same in both and not included. Last, it
+//! checks that every prepared bitmap is byte for byte the one the platform makes in the frame.
 //!
 //! `cargo run --release -p oxikube_theme --example glyph_warm`
 #![allow(clippy::print_stdout)]
@@ -155,5 +156,29 @@ fn main() {
         "switch frame, warmed:       {warm:>10.2?} ({} served, {} rasterised in the frame)",
         stats.served,
         stats.rasterised - glyphs.len() as u64
+    );
+
+    // What is drawn does not change: a prepared bitmap is the one the platform makes in the frame.
+    let check = GlyphWarmer::manual(inner.clone());
+    let decorated = check.text_system();
+    frame(&*decorated, &glyphs, from);
+    check.set_plan(DilationPlan::for_switch(dark, [dark, light], level));
+    check.warm_pending();
+    let mut same = 0;
+    for params in &glyphs {
+        let params = at(params, to);
+        let bounds = inner.glyph_raster_bounds(&params).expect("bounds");
+        if bounds.is_empty() {
+            same += 1;
+            continue;
+        }
+        let served = decorated.rasterize_glyph(&params, bounds).expect("served");
+        let direct = inner.rasterize_glyph(&params, bounds).expect("direct");
+        assert_eq!(served, direct, "{params:?}");
+        same += 1;
+    }
+    println!(
+        "prepared bitmaps identical to the platform's: {same}/{}",
+        glyphs.len()
     );
 }

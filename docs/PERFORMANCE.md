@@ -472,7 +472,9 @@ other builds (load average about 100):
 | the worker's warm-up, off the frame (117 glyphs, 33 KiB kept) | 0.83 ms | 0.96 ms | 0.84 ms |
 
 (The worker's figure is its second rasterisation of those glyphs in the process, after the
-no-warm-up frame's; CoreText's own caches make it lower than a first one would be.)
+no-warm-up frame's; CoreText's own caches make it lower than a first one would be.) The example
+also checks that what is drawn does not change: every prepared bitmap is byte for byte the one
+CoreText makes in the frame (117 of 117).
 
 **The windowed `theme` scenario**, 5 valid runs of each build, one after the other (the same
 scenario, themes, switch rate and table under churn; nothing excluded): `release-fast` with
