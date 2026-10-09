@@ -289,10 +289,19 @@ impl Shared {
         }
     }
 
-    /// Rasterises the next job, if any, outside the lock.
+    /// Rasterises the next job, if any, outside the lock. A job GPUI has meanwhile drawn itself
+    /// (it is in the atlas, nobody would ask for it) is dropped.
     fn warm_one(&self) -> bool {
-        let Some(job) = self.state.lock().queue.pop_front() else {
-            return false;
+        let job = {
+            let mut state = self.state.lock();
+            let Some(job) = state.queue.pop_front() else {
+                return false;
+            };
+            if is_drawn(&state, &job) {
+                state.stats.skipped += 1;
+                return true;
+            }
+            job
         };
         let raster = match self.inner.glyph_raster_bounds(&job) {
             Ok(bounds) if !bounds.is_empty() => {
@@ -310,7 +319,8 @@ impl Shared {
         let mut state = self.state.lock();
         match raster {
             Some(prepared)
-                if state.stats.prepared_bytes + prepared.bytes.len() <= PREPARED_BUDGET =>
+                if !is_drawn(&state, &job)
+                    && state.stats.prepared_bytes + prepared.bytes.len() <= PREPARED_BUDGET =>
             {
                 state.stats.prepared += 1;
                 state.stats.prepared_bytes += prepared.bytes.len();
@@ -320,6 +330,18 @@ impl Shared {
         }
         true
     }
+}
+
+/// Whether GPUI drew `params` itself (at its level).
+fn is_drawn(state: &State, params: &RenderGlyphParams) -> bool {
+    let key = RenderGlyphParams {
+        dilation: 0,
+        ..params.clone()
+    };
+    state
+        .glyphs
+        .get(&key)
+        .is_some_and(|glyph| glyph.drawn & (1 << params.dilation) != 0)
 }
 
 /// Marks `params`'s level drawn and queues the plan's levels it is not known at; whether it

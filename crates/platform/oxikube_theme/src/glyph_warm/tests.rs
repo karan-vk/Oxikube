@@ -329,3 +329,21 @@ fn the_plan_follows_the_active_theme(cx: &mut TestAppContext) {
     assert!(levels(from_light, level(light.colors.text)).contains(&level(dark.colors.text)));
     assert!(cx.read(|cx| cx.has_global::<GlyphWarm>()));
 }
+
+#[test]
+fn a_job_the_frame_drew_first_is_dropped() {
+    let (fake, warmer, text) = setup();
+    warmer.set_plan(plan(&[(3, 0)]));
+    draw(&text, &glyph(7, 3));
+    assert_eq!(warmer.stats().pending, 1);
+    // The switch comes before the worker got to it: the platform draws it in the frame.
+    draw(&text, &glyph(7, 0));
+    let before = fake.rasterised.lock().len();
+    assert_eq!(warmer.warm_pending(), 1);
+    assert_eq!(fake.rasterised.lock().len(), before, "not rasterised again");
+    let stats = warmer.stats();
+    assert_eq!(
+        (stats.prepared, stats.skipped, stats.prepared_bytes),
+        (0, 1, 0)
+    );
+}
