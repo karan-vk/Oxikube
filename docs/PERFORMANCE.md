@@ -547,11 +547,30 @@ the same minutes as two discarded runs whose calibration measured the display re
 Hz, so the display pipeline itself was throttled then; the change removes work (107 fewer notifies
 per run) and adds none to a resize frame. Re-measure on the quiet machine.
 
-`terminal`: no run on this machine could finish the 50 MB flood within its 120 s deadline (the
-stray `yes` processes compete with the PTY), so no run is a measurement. The `--perf` line of each
-attempt still covers 88-123 s of `yes-flood` (4 500 to 12 600 frames each): the most coalesced
-notifies one view received between two frames was 2, 5, 2, 2 and 5 in the five `before` attempts
-and 1, 1 and 1 in the three `after` attempts (11 300 to 11 800 frames each).
+`terminal`, valid runs with the shell in a busybox pod on `kind-oxikube` (`--perf-exec`, what
+`cargo xtask perf --windowed terminal` does when that context answers), alternating `before` and
+`after`, load average 47 to 73 on 18 cores (the same stray `yes` processes, other agents' test
+runs):
+
+| Build | Runs | per view per frame (each run) | `yes-flood` s | scripted max / p99 / p95 ms | dropped | notifies | input max ms | CPU % | peak RSS MiB |
+|---|---|---|---|---|---|---|---|---|---|
+| before | 5 | 2, 11, 2, 2, 2 (each in `yes-flood`) | 15.9-111.4 | 4.90-10.65 / 3.40-6.31 / 2.85-5.26 | 175-1102 | 1745-3160 | 4.93-10.69 | 17.6-41.7 | 220-267 |
+| after | 5 | **1, 1, 1, 1, 1** | 12.0-58.8 | 4.90-8.99 / 3.20-6.20 / 2.64-5.16 | 213-1755 | 1961-2796 | 4.93-9.11 | 27.6-43.7 | 251-289 |
+
+One more `after` attempt, the first, started at load 67 and is not a measurement: its flood did not
+end within the 120 s deadline. The `yes-flood` time is the machine's: the first runs, at load 62 to
+69, took longest (97.0 and 111.4 s before, 58.8 s after); the other seven took 12 to 20 s. The frames
+over 8.33 ms (at most 4 per run, in both builds) are all in `resize`; the dropped refreshes are in
+`yes-flood` and `resize` in both builds, and peak RSS is taken at the end of `resize`. Re-measure on
+the quiet machine.
+
+The first attempts at `terminal` ran the shell on this machine (no `--perf-exec`) and none
+finished the flood within the deadline: the local PTY itself is that slow here, `script -q
+/dev/null sh -c 'yes | head -c 5242880'` (a tenth of the flood, nothing of Oxikube involved) takes
+108 s. Over the 88-123 s of `yes-flood` they did cover, the most notifies one view received between
+two frames was 2, 5, 2, 2 and 5 before and 1, 1 and 1 after. The pacing of the terminal's notifies
+is also pinned by `oxikube_terminal`'s `tests/state/frame_paced.rs`: a flood with frames one to
+three refreshes late gives at most one notify per frame (the timer gave up to 4).
 
 ## Startup: cold start to the first interactive frame
 
