@@ -349,7 +349,7 @@ another Space): the run then stops after 5 s without a refresh and says so.
 | `sidebar` | 10 000 pods churning, the cluster's first screen (Workloads overview) with the sidebar's count badges | `churn` (30 s, every refresh watched, nothing driven) |
 | `logs` | a pod writing 5 000 lines/s (the mixed JSON / plain stream of the headless `logs-stream`) | `stream-json` (10 s, JSON mode, the default), `type-search` (10 s: `logs::Find`, then `slow` typed and erased), `stream-raw` (10 s, `logs::ToggleJsonMode` off) |
 | `terminal` | a real shell: `LocalPty` running `/bin/sh` (`SHELL=/bin/sh` from xtask), or `pod::Shell` in a busybox pod on kind | `yes-flood` (until a 50 MB `yes` ends), `redraw-60hz` (8 s: an `awk` script rewriting every row in colour 60 times a second), `resize` (8 s, the window swept every refresh during the redraw) |
-| `idle` | two clusters, 1 000 pods each, no churn, both pods tables open | `idle` (30 s): the idle CPU and idle memory (< 150 MB, judged on the run's peak RSS) budgets |
+| `idle` | two clusters, 1 000 pods each created 1 to 6 minutes before the run (ages read in seconds, as on a real cluster whose pods are young: #605), no churn, both pods tables open | `idle` (60 s; the script fails unless an age on screen reads in seconds): the idle CPU and idle memory (< 150 MB, judged on the run's peak RSS) budgets |
 
 The synthetic clusters are only what a cluster would send (contexts, watches, lists, gets, logs,
 describe text); every view, store, service, the session manager and the command bus are the app's.
@@ -775,7 +775,8 @@ frames/s.
    at the current time (re-reading about one screen of cells, no redraw) and notifies only then.
    Most ages are days old and change once a day (kubectl's format: `30d`), so a table of them
    draws nothing; a pod a few minutes old still redraws each second its seconds show. Covered by
-   `table::tests::ages` and `CellCache::ages_moved`.
+   `table::tests::ages`. (Since E07-P605 the table wakes only when an age moves, see
+   [Young ages](#young-ages-one-shared-cheaper-frame-a-second-e07-p605).)
 
 **Numbers** (Apple M5 Max, `release-fast`, `kind-oxikube`; load average 35 to 57 from other
 builds, so a tenth of a percent is noise; 10 000 `Pending` load pods in my own namespace, no churn,
@@ -817,6 +818,61 @@ ticks each second its seconds show. A hidden detail and one with a pinned clock 
 redraw for ages. Pinned by `detail::tests::ages` (render counts over 30 ticks of an old object, one
 redraw on a day rollover, a young object, condition and event ticking only on their own tab) and
 `detail::ages::tests`.
+
+### Young ages: one shared, cheaper frame a second (E07-P605)
+
+A real cluster whose pods were created minutes ago shows ages in seconds (`3m12s`), so the table
+redraws once a second, and that redraw was the whole window: request-layout, prepaint and paint of
+the workspace, the docks, the sidebar and every visible cell (#605). The windowed `idle` scenario
+did not see it (its pods were two days old); it now creates its pods 1 to 6 minutes before the run,
+checks that an age on screen reads in seconds, and idles 60 s.
+
+**What changed** (`oxikube_resources_ui::table::{age_tick, cell_cache}`, `oxikube_ui::table::line`,
+`Age::until_text_changes`, `Cell::moves_in`):
+
+1. *Wake when an age moves.* A cell that moves with the clock (an age, `3 (5m ago)`) says when its
+   text next changes (`Cell::moves_in`, from `Age::until_text_changes`: a second while it reads in
+   seconds, a minute in minutes, an hour in hours). After every frame the table arms one timer for
+   the first drawn cell that moves, rounded up to the whole second of the wall clock (Kubernetes
+   stamps whole seconds), instead of a free-running 1 s timer at an arbitrary phase. Every table
+   wakes on the same boundary, so they share one frame; none wakes more than once a second; a
+   screen of minute ages wakes once a minute and of day ages once an hour; a table that is not
+   drawn (another cluster tab in front) wakes once and stops until it is drawn again.
+2. *Re-read only what moved.* `CellCache` keeps each cell until the moment it moves instead of
+   dropping every cell each second: the tick re-reads the moved cells (`refresh_moved`) and the
+   frame that shows them reads every other cell from the cache (before: the tick re-read a screen
+   of cells to decide, and the frame re-read and re-allocated all of them again).
+3. *A cheaper cell.* A text cell that fits its column is one `LineCell`: a leaf the size of its
+   cell, never measured by the layout, that paints its line from the line cache (before: a flex box
+   around a `StyledText` measured on every layout). Same pixels (the screenshot goldens match).
+
+Headless, the table alone redrawing on a new second (`scroll-10k`'s table, 1 s apart, 40 frames):
+p50 2.8 to 3.1 ms before, 2.1 to 2.2 ms after.
+
+**Numbers** (`cargo xtask perf --windowed idle`, release-fast, Apple M5 Max, 120 Hz built-in
+display, load average 26 to 31 from other agents' builds, before and after alternating, one run
+each per round; the verify stage re-measures on a quiet machine):
+
+| Build | CPU % (idle phase, 60 s) | frames | frame p50 / p95 / max ms | presented p50 ms | dropped | peak RSS MiB |
+|---|---|---|---|---|---|---|
+| before (`ea1fce2d` + the young-pod scenario) | 1.17, 1.23, 1.27 | 58, 58, 59 | 4.25-4.41 / 4.51-4.61 / 4.58-5.10 | 4.96-5.12 | 0 | 185-187 |
+| after | 1.13, 1.15, 1.21 | 60, 62, 60 | 3.70-3.76 / 3.87-3.94 / 3.93-4.77 | 4.37-4.44 | 0 | 183-184 |
+
+On kind (two contexts on the kind cluster, both pods tables, 1 000 `Pending` pods created two
+minutes before, `oxikube --perf-table kind-oxikube --perf-also kind-oxikube-b --perf-scroll 0`, CPU
+from `ps` over 60 s): the one run whose window stayed in front read 1.17 % at one frame a second.
+
+**Still over the 1 % budget, and why.** A frame now costs about 3.7 ms of drawing and 0.7 ms of
+present; the rest of the per-second cost (about 0.3 % more) is the display link, Metal and the
+compositor around a frame. The drawing is the whole cluster tab, not the table: in gpui-pre 0.3.7 a
+cached view that is dirty re-renders its whole subtree (`prepaint_view` sets `window.refreshing`
+for it, so no cached view below it is reused), and gpui-component's `TabPanel` caches the active
+panel, so the cluster tab's own panel, an ancestor of every table, is dirty whenever a table
+notifies. Caching the sidebar, the dock or the table's rows (tried here: the rows as a cached view
+with the moving cells drawn over them) is therefore never reused on an age frame. In the real window
+the table is about 40 % of the frame (sample of the idle phase), the sidebar about 15 %, the dock,
+tab bars and toolbars the rest. Under 1 % at this load needs a redraw that reuses the rest of the
+cluster tab, which this GPUI snapshot cannot do from inside it.
 
 ### Memory: 10 000 pods under 400 MB (E07-F508)
 
