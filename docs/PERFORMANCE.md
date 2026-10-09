@@ -437,8 +437,8 @@ is its command-line sampler).
 | `theme` | 4 frames, 9.4 to 15.8 ms, at theme switches | The frame after a switch re-renders every view of the window with the new colours (the pods table's visible cells included). The quiet profile (#602) placed the long one at the **first** switch: about 4 ms of it rasterising every visible glyph again, because the new theme's text colours have another glyph dilation. Fixed by the glyph warm-up, see [Theme switch](#theme-switch-glyph-warm-up-e05-p602). |
 | `logs` | 17 frames, 8.5 to 14.1 ms, in bursts at 5 s intervals (5.0 s, 10.1 s, 15.0 s, 20.0 s, ...) in every mode | They come with the pods churn (100 pods every 5 s) of the cluster behind the log view, not with the log stream: the churn's store updates and the sidebar's badge redraw land in the frames the log view draws. To profile on the quiet machine. |
 | `pods-table` | 459 frames, 8.4 to 19.8 ms; 1 199 refreshes dropped (the scroll drew at 60 Hz) | The scroll's frames drew in 5 ms at p50 but presented at 16.5 ms: `present` waited two refreshes for a drawable, the window composited at half rate. On the less loaded machine the same scroll presented every refresh (0 dropped, max 5.39 ms), so this run's drops and its long tail are the machine's contention, not the table. Re-measure quiet. |
-| `tabs-panes` | 71 frames, 8.4 to 15.3 ms (most while resizing the window); 812 refreshes dropped (resize-dock drew at 60 Hz); a view received 2 coalesced notifies in one frame | Resizing lays out every pane at the new size in the frame (the window resize lays out three cluster tabs' visible views); the dock resize presented at half rate as in `pods-table` (contention). The 2 notifies per view: `notify_coalesced` is paced by an 8.33 ms timer, not by frames, so when a frame is late (or the display runs at 60 Hz) one view gets two notifies before it draws. Fix: deliver coalesced notifies once per frame (the window's next frame), not on a timer. |
-| `terminal` | none over 8.33 ms; 984 refreshes dropped in `yes-flood` (presented at 60 Hz) and 48 in `resize`; 2 notifies per view per frame in `yes-flood` | The flood's frames drew in 4 ms but presented at 16.5 ms (as `pods-table`: contention, re-measure); the 2 notifies per view are the timer-paced coalescing above, with the PTY reader notifying the terminal view. |
+| `tabs-panes` | 71 frames, 8.4 to 15.3 ms (most while resizing the window); 812 refreshes dropped (resize-dock drew at 60 Hz); a view received 2 coalesced notifies in one frame | Resizing lays out every pane at the new size in the frame (the window resize lays out three cluster tabs' visible views); the dock resize presented at half rate as in `pods-table` (contention). The 2 notifies per view: `notify_coalesced` is paced by an 8.33 ms timer, not by frames, so when a frame is late (or the display runs at 60 Hz) one view gets two notifies before it draws. Fix: deliver coalesced notifies once per frame (the window's next frame), not on a timer. Done in E05-P599 (below), which also found that the `switch-tabs` case is a different one: the pods table of a background cluster tab, notified at two refreshes between two drawn frames. |
+| `terminal` | none over 8.33 ms; 984 refreshes dropped in `yes-flood` (presented at 60 Hz) and 48 in `resize`; 2 notifies per view per frame in `yes-flood` | The flood's frames drew in 4 ms but presented at 16.5 ms (as `pods-table`: contention, re-measure); the 2 notifies per view are the timer-paced coalescing above, with the PTY reader notifying the terminal view (fixed in E05-P599, below). |
 | `catalog` | 1 frame, 9.46 ms, at a keystroke | p95 4.08 ms: a contention outlier; re-measure quiet. |
 | `idle` (memory) | none (no scripted frames); peak RSS 180.8 MiB, over the 150 MB (143 MiB) idle budget by about 38 MiB | Two connected clusters of 1 000 pods each with both pods tables open, after setup. Not yet placed: the quiet run's RSS at the idle phase's start and end (steady state against peak) and a heap profile say whether it is the stores, the two tables' cached rows, the fonts and atlas, or allocator slack. |
 
@@ -510,6 +510,48 @@ input 9.0 to 9.7 ms); every `after` run is within every ADR 0016 budget, its lon
 unchanged (the prepared glyphs of a screen are tens of KiB). The first interactive frame of the
 same runs: 314 to 410 ms before, 328 to 364 ms after (the wrapper and the warmer cost nothing
 measurable at startup). The verify stage re-measures on a quiet machine.
+
+### E05-P599: coalesced notifies paced by frames
+
+`notify_coalesced` delivered on an 8.33 ms timer started by the first event, so when a frame came
+late a view could be notified twice before it drew. It now delivers at the start of the window's
+next frame (`Window::on_next_frame`, before the draw), with a backstop timer only for windows that
+draw no frame (see "max_notifies_per_frame" above). The `tabs-panes` runs then showed a second,
+unrelated case in `switch-tabs`, where the window draws only about 10 frames a second: the pods
+table of a **background** cluster tab was notified at two refreshes between two drawn frames
+(instrumented run: 3 to 4 deliveries since the last drawn frame, the same `ResourceTable` twice).
+Its feed redraw now goes through `oxikube_runtime::RenderGate`: a view that has not rendered its
+last notify is not notified again (on screen the window is already drawing it; off screen it is
+rendered fresh when shown).
+
+Measured with `oxikube --perf-scenario-window`, `release-fast` + `perf-window`, Apple M5 Max, 120 Hz
+built-in display, window 1440 x 900 pt, desktop lock held, each run after at least 20 s without
+input. The machine was **not** quiet: load average 17 to 41 on 18 cores (other agents building),
+eight stray `yes` processes not ours each holding most of a core, and the user returned to the
+machine during the session (runs that lost the window or the display are discarded, as the harness
+says). The verify stage re-measures on a quiet machine.
+
+`tabs-panes`, valid runs (`before` = `origin/main` `ea1fce2d`; `after` = this story):
+
+| Build | Runs | per view per frame (each run) | scripted max / p99 / p95 ms | dropped | notifies | input max ms | CPU % | peak RSS MiB |
+|---|---|---|---|---|---|---|---|---|
+| before | 6 | 2, 1, 1, 2, 1, 2 (each 2 in `switch-tabs`) | 6.82-9.89 / 4.34-5.96 / 4.09-5.39 | 1-44 | 253 | 13.4-15.0 | 42.1-50.9 | 352-366 |
+| frame-paced only | 5 | 2, 1, 1, 1, 2 (each 2 in `switch-tabs`) | 6.96-7.46 / 4.46-5.23 / 4.20-4.61 | 2-23 | 253 | 13.2-14.7 | 41.7-44.0 | 364-366 |
+| after | 5 | **1, 1, 1, 1, 1** | 7.49-8.07 / 5.15-5.59 / 4.66-4.97 | 226-298 | 146-149 | 13.3-15.1 | 42.3-43.6 | 355-369 |
+
+The `after` runs' dropped refreshes are in `resize-window` (49-113) and `resize-dock` (168-189),
+whose frames drew at p95 4.3-5.2 ms (before: 3.7-5.7 ms over its six runs) but presented at p95
+20-24 ms in `resize-dock`: the window composited at half rate, as in the E01-P587 baseline under
+contention. They were taken in
+the same minutes as two discarded runs whose calibration measured the display refreshing at 24-25
+Hz, so the display pipeline itself was throttled then; the change removes work (107 fewer notifies
+per run) and adds none to a resize frame. Re-measure on the quiet machine.
+
+`terminal`: no run on this machine could finish the 50 MB flood within its 120 s deadline (the
+stray `yes` processes compete with the PTY), so no run is a measurement. The `--perf` line of each
+attempt still covers 88-123 s of `yes-flood` (4 500 to 12 600 frames each): the most coalesced
+notifies one view received between two frames was 2, 5, 2, 2 and 5 in the five `before` attempts
+and 1, 1 and 1 in the three `after` attempts (11 300 to 11 800 frames each).
 
 ## Startup: cold start to the first interactive frame
 
