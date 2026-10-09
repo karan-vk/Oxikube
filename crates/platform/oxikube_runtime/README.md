@@ -13,8 +13,11 @@ tokio <-> GPUI bridge (gpui_tokio), spawn_kube with abort-on-drop, frame-coalesc
   task when dropped; panics come back as `KubeTaskError::Panicked` (redacted). `live_tasks(cx)`
   counts this app's `spawn_kube` futures that have not ended (E09-S12): the leak tests assert it
   returns to its baseline after open/close cycles.
-- `notify` (E05-S01): `notify_coalesced(cx)` / `cx.notify_coalesced()`, one `cx.notify()` per
-  `FRAME_INTERVAL` (8.333 ms), counted by `perf::record_notify`.
+- `notify` (E05-S01, frame-paced since E05-P599): `notify_coalesced(cx)` / `cx.notify_coalesced()`,
+  one `cx.notify()` per entity at the start of the window's next frame (`Window::on_next_frame`),
+  counted by `perf::record_view_notify`. `notify/pacer.rs` holds the batch, the windows' frame
+  hooks and the backstop timer that delivers when no frame comes (`FRAME_INTERVAL` without a
+  presenting window, `FRAME_STALL` while frames flow).
 - `channel` (E05-S01): `batch_channel(capacity)`, a bounded tokio channel whose receiver drains
   into an entity in batches (`BatchReceiver::drain_into`).
 - The task rules (nothing blocking the UI thread, owned tasks, the self-dropping task pitfall and

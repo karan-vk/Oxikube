@@ -5,6 +5,7 @@
 //! from foreign threads, which the deterministic scheduler otherwise rejects.
 
 mod channel;
+mod frame_paced;
 mod kube_task;
 mod notify;
 mod task_slot;

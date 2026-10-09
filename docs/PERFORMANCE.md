@@ -114,8 +114,11 @@ delivered between two consecutive frames. A streaming view is coalesced to frame
 adds at most one per frame whatever the event rate; the figure is therefore at most the number of
 streaming views on screen (the pods table, the sidebar's count badges and the Workloads overview's
 tiles under churn: 2 to 3), and 1 in the `scroll-10k` scenario, which has only the table and fails
-otherwise. On a display slower than 120 Hz a view can land two notifies in one frame (the coalescing
-interval is one 120 Hz frame, see `notify_coalesced`); GPUI folds them into one redraw.
+otherwise. `max_view_notifies_per_frame` is at most 1 by construction since E05-P599:
+`notify_coalesced` delivers at the start of the window's next frame (`Window::on_next_frame`), not
+on a timer, so a late frame or a 60 Hz display cannot land two notifies on one view before it
+draws. A backstop timer delivers only when no frame comes (no window, a window macOS stopped
+presenting), and the frame after a backstop delivery leaves the next batch for the frame after it.
 
 Recorder overhead (M-series, release, `cargo run --release -p oxikube_runtime --example
 perf_overhead`): a frame push is about 3 ns and the hook's timing pair about 45 ns; a feed or
@@ -1362,8 +1365,8 @@ no such number has been verified here. Do not put "10 k Running" in a report wit
 
 1. Never block the UI thread: all I/O in `oxikube_app`/adapters on Tokio via
    `oxikube_runtime::spawn_kube`; results are posted as batched deltas.
-2. Coalesce notifications: `notify_coalesced` batches `cx.notify()` to frame cadence; feeds
-   batch watch events (E04-S02).
+2. Coalesce notifications: `notify_coalesced` batches `cx.notify()` to the window's frames (one
+   per entity per drawn frame, E05-P599); feeds batch watch events (E04-S02).
 3. Virtualise everything that scrolls: `uniform_list`, `oxikube_ui::Table`, virtual log and
    thread views; never build off-screen rows.
 4. Incremental state: `ResourceStore` applies deltas and keeps sorted indices; no full
