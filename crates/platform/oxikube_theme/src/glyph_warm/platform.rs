@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
-/// The platform `inner` with `warmer`'s text system; see the [module docs](self).
+/// The platform `inner` with `warmer`'s text system; see the `glyph_warm` module docs.
 pub struct GlyphWarmPlatform {
     inner: Rc<dyn Platform>,
     text_system: Arc<dyn PlatformTextSystem>,
