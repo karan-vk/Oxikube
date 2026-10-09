@@ -2,8 +2,6 @@
 //! so 10 000 pods are not kept twice (the store's cache would otherwise hold a second
 //! `serde_json::Value` tree of every object, about 16 KB per small pod).
 
-use std::sync::Arc;
-
 use oxikube_domain::session::WatchScope;
 use oxikube_ports::{Delta, WatchOptions};
 
@@ -44,7 +42,7 @@ fn assert_shared(feed: &ReflectorFeed, resources: &[Resource]) {
             .find(|o| o.name() == resource.name())
             .unwrap_or_else(|| panic!("{} is in the reflector store", resource.name()));
         assert!(
-            Arc::ptr_eq(&entry.json, &resource.json),
+            entry.doc().ptr_eq(resource.doc()),
             "{} was copied on its way to the consumer",
             resource.name()
         );

@@ -1,7 +1,7 @@
 //! Which pods a drain evicts, skips or refuses: kubectl's drain filters, as a pure function.
 
 use oxikube_domain::Resource;
-use serde_json::Value;
+use oxikube_domain::json::JsonRef;
 
 use super::options::{
     BlockReason, BlockedPod, DrainOptions, DrainPlan, PodRef, SkipReason, SkippedPod,
@@ -73,7 +73,7 @@ fn classify(pod: &Resource, options: &DrainOptions) -> Verdict {
 
 fn uses_empty_dir(pod: &Resource) -> bool {
     pod.get("/spec/volumes")
-        .and_then(Value::as_array)
+        .and_then(JsonRef::as_array)
         .is_some_and(|volumes| volumes.iter().any(|v| v.get("emptyDir").is_some()))
 }
 

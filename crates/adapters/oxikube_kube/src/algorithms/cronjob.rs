@@ -35,6 +35,7 @@
 //! owned by the CronJob (`controller` and `blockOwnerDeletion` true), so deleting the CronJob
 //! deletes the Jobs it triggered and the CronJob's history limits apply to them.
 
+use oxikube_domain::json::JsonRef;
 use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::{ResourcePort, WriteOptions};
 use serde_json::{Map, Value, json};
@@ -88,7 +89,9 @@ pub async fn trigger_cronjob(
 /// `Validation` if the CronJob has no `spec.jobTemplate.spec`, no uid, or its template labels or
 /// annotations are not objects.
 pub fn job_from_cronjob(cronjob: &Resource) -> OxiResult<Value> {
-    let template = cronjob.get("/spec/jobTemplate").and_then(Value::as_object);
+    // A user action on one CronJob, so decoding its template to a tree is fine.
+    let template_value = cronjob.get("/spec/jobTemplate").map(JsonRef::to_value);
+    let template = template_value.as_ref().and_then(Value::as_object);
     let Some(spec) = template
         .and_then(|t| t.get("spec"))
         .filter(|s| s.is_object())

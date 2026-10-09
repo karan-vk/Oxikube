@@ -4,8 +4,8 @@
 //! StatefulSet, DaemonSet, ReplicaSet and Job, and a plain `key: value` map on Service and
 //! ReplicationController. Pure functions over the JSON of the object.
 
+use oxikube_domain::json::JsonRef;
 use oxikube_domain::{OxiError, OxiResult, Resource};
-use serde_json::Value;
 
 /// The label selector (`a=b,c in (d,e),!f`) of the pods `object` selects.
 ///
@@ -16,7 +16,7 @@ use serde_json::Value;
 /// express.
 pub fn selector_of(object: &Resource) -> OxiResult<String> {
     let what = format!("{} {}", object.kind.kind, object.name());
-    let Some(selector) = object.json.pointer("/spec/selector") else {
+    let Some(selector) = object.json().pointer("/spec/selector") else {
         return Err(OxiError::validation(format!("{what} has no selector")));
     };
     let mut terms = Vec::new();
@@ -24,7 +24,7 @@ pub fn selector_of(object: &Resource) -> OxiResult<String> {
         if let Some(labels) = selector.get("matchLabels") {
             terms.extend(equality_terms(labels));
         }
-        if let Some(Value::Array(expressions)) = selector.get("matchExpressions") {
+        if let Some(expressions) = selector.get("matchExpressions").and_then(JsonRef::as_array) {
             for expression in expressions {
                 terms.push(expression_term(expression, &what)?);
             }
@@ -49,7 +49,7 @@ pub fn and_selectors(a: &str, b: Option<&str>) -> String {
 }
 
 /// `key=value` for each string entry of a map, sorted by key.
-fn equality_terms(map: &Value) -> Vec<String> {
+fn equality_terms(map: JsonRef<'_>) -> Vec<String> {
     let Some(map) = map.as_object() else {
         return Vec::new();
     };
@@ -61,13 +61,13 @@ fn equality_terms(map: &Value) -> Vec<String> {
     terms
 }
 
-fn expression_term(expression: &Value, what: &str) -> OxiResult<String> {
-    let key = expression.get("key").and_then(Value::as_str);
-    let operator = expression.get("operator").and_then(Value::as_str);
+fn expression_term(expression: JsonRef<'_>, what: &str) -> OxiResult<String> {
+    let key = expression.get("key").and_then(JsonRef::as_str);
+    let operator = expression.get("operator").and_then(JsonRef::as_str);
     let values: Vec<&str> = expression
         .get("values")
-        .and_then(Value::as_array)
-        .map(|values| values.iter().filter_map(Value::as_str).collect())
+        .and_then(JsonRef::as_array)
+        .map(|values| values.iter().filter_map(JsonRef::as_str).collect())
         .unwrap_or_default();
     match (key, operator) {
         (Some(key), Some("In")) if !values.is_empty() => {
@@ -79,7 +79,8 @@ fn expression_term(expression: &Value, what: &str) -> OxiResult<String> {
         (Some(key), Some("Exists")) => Ok(key.to_owned()),
         (Some(key), Some("DoesNotExist")) => Ok(format!("!{key}")),
         _ => Err(OxiError::validation(format!(
-            "{what} has a selector expression this cannot read: {expression}"
+            "{what} has a selector expression this cannot read: {}",
+            expression.to_value()
         ))),
     }
 }
@@ -87,7 +88,7 @@ fn expression_term(expression: &Value, what: &str) -> OxiResult<String> {
 #[cfg(test)]
 mod tests {
     use oxikube_domain::ErrorKind;
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::*;
 

@@ -26,8 +26,8 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
+use crate::json::{Array, JsonRef};
 use jiff::Timestamp;
-use serde_json::Value;
 
 use super::{
     ViewError, arc_of, arr_of, bool_of, check_kind, count_of, i32_of, obj_of, str_of, sub, ts_of,
@@ -153,8 +153,8 @@ impl PodSummary {
     /// fail; they fall back to defaults.
     pub fn from_resource(res: &Resource) -> Result<Self, ViewError> {
         check_kind(res, "Pod", &[("", "Pod")])?;
-        let spec = sub(&res.json, "spec");
-        let status = sub(&res.json, "status");
+        let spec = sub(res.json(), "spec");
+        let status = sub(res.json(), "status");
         let row = StatusRow::compute(spec, status, res.meta.deletion.is_some());
         let ip = arr_of(status, "podIPs")
             .first()
@@ -208,7 +208,7 @@ struct StatusRow<'a> {
 }
 
 impl<'a> StatusRow<'a> {
-    fn compute(spec: &'a Value, status: &'a Value, deleting: bool) -> Self {
+    fn compute(spec: JsonRef<'a>, status: JsonRef<'a>, deleting: bool) -> Self {
         let phase = str_of(status, "phase");
         let status_reason = str_of(status, "reason");
         let mut reason = Cow::Borrowed(status_reason.or(phase).unwrap_or("Unknown"));
@@ -222,7 +222,7 @@ impl<'a> StatusRow<'a> {
         }
 
         let init_specs = arr_of(spec, "initContainers");
-        let sidecars = init_specs.iter().filter(|c| is_restartable(c)).count();
+        let sidecars = init_specs.iter().filter(|&c| is_restartable(c)).count();
         let total = len_u32(arr_of(spec, "containers").len() + sidecars);
 
         let mut ready = 0u32;
@@ -238,7 +238,7 @@ impl<'a> StatusRow<'a> {
             restarts = restarts.saturating_add(count);
             last_restart = later(last_restart, finished);
             let restartable = str_of(cs, "name")
-                .and_then(|name| init_specs.iter().find(|c| str_of(c, "name") == Some(name)))
+                .and_then(|name| init_specs.iter().find(|&c| str_of(c, "name") == Some(name)))
                 .is_some_and(is_restartable);
             if restartable {
                 sidecar_restarts = sidecar_restarts.saturating_add(count);
@@ -276,7 +276,7 @@ impl<'a> StatusRow<'a> {
             last_restart = sidecar_last_restart;
             let mut has_running = false;
             let mut error_reason = None;
-            for cs in arr_of(status, "containerStatuses").iter().rev() {
+            for cs in arr_of(status, "containerStatuses").iter_rev() {
                 restarts = restarts.saturating_add(count_of(cs, "restartCount"));
                 last_restart = later(last_restart, last_finished_at(cs));
                 let state = StateView::of(cs);
@@ -326,20 +326,20 @@ impl<'a> StatusRow<'a> {
 }
 
 /// The first `Initialized` condition is `True`.
-fn initialized(conditions: &[Value]) -> bool {
+fn initialized(conditions: Array<'_>) -> bool {
     conditions
         .iter()
-        .find(|c| str_of(c, "type") == Some("Initialized"))
+        .find(|&c| str_of(c, "type") == Some("Initialized"))
         .is_some_and(|c| str_of(c, "status") == Some("True"))
 }
 
 /// An init container spec with `restartPolicy: Always` (a sidecar).
-pub(super) fn is_restartable(spec: &Value) -> bool {
+pub(super) fn is_restartable(spec: JsonRef<'_>) -> bool {
     str_of(spec, "restartPolicy") == Some("Always")
 }
 
 /// `Signal:N` or `ExitCode:N` (with `prefix`) for a terminated state with no reason.
-fn exit_text(prefix: &str, terminated: &Value) -> String {
+fn exit_text(prefix: &str, terminated: JsonRef<'_>) -> String {
     match i32_of(terminated, "signal") {
         0 => format!("{prefix}ExitCode:{}", i32_of(terminated, "exitCode")),
         sig => format!("{prefix}Signal:{sig}"),
@@ -347,7 +347,7 @@ fn exit_text(prefix: &str, terminated: &Value) -> String {
 }
 
 /// `lastState.terminated.finishedAt` of a container status.
-fn last_finished_at(cs: &Value) -> Option<Timestamp> {
+fn last_finished_at(cs: JsonRef<'_>) -> Option<Timestamp> {
     obj_of(sub(cs, "lastState"), "terminated").and_then(|t| ts_of(t, "finishedAt"))
 }
 
@@ -361,13 +361,13 @@ fn len_u32(n: usize) -> u32 {
 
 /// Borrowed view of a container status's `state` (each key present only when set).
 pub(super) struct StateView<'a> {
-    pub(super) waiting: Option<&'a Value>,
-    pub(super) running: Option<&'a Value>,
-    pub(super) terminated: Option<&'a Value>,
+    pub(super) waiting: Option<JsonRef<'a>>,
+    pub(super) running: Option<JsonRef<'a>>,
+    pub(super) terminated: Option<JsonRef<'a>>,
 }
 
 impl<'a> StateView<'a> {
-    pub(super) fn of(container_status: &'a Value) -> Self {
+    pub(super) fn of(container_status: JsonRef<'a>) -> Self {
         let state = sub(container_status, "state");
         Self {
             waiting: obj_of(state, "waiting"),
@@ -408,7 +408,7 @@ pub struct TerminatedState {
 }
 
 impl TerminatedState {
-    fn from_json(v: &Value) -> Self {
+    fn from_json(v: JsonRef<'_>) -> Self {
         Self {
             exit_code: i32_of(v, "exitCode"),
             signal: i32_of(v, "signal"),
@@ -501,8 +501,8 @@ impl ContainerSummary {
     /// [`ViewError::WrongKind`] when `res` is not a core `Pod`.
     pub fn list_from_resource(res: &Resource) -> Result<Vec<Self>, ViewError> {
         check_kind(res, "Pod", &[("", "Pod")])?;
-        let spec = sub(&res.json, "spec");
-        let status = sub(&res.json, "status");
+        let spec = sub(res.json(), "spec");
+        let status = sub(res.json(), "status");
         let groups = [
             (
                 "initContainers",
@@ -529,14 +529,19 @@ impl ContainerSummary {
                 } else {
                     kind
                 };
-                let cs = statuses.iter().find(|s| str_of(s, "name") == Some(name));
+                let cs = statuses.iter().find(|&s| str_of(s, "name") == Some(name));
                 out.push(Self::build(name, c, cs, kind));
             }
         }
         Ok(out)
     }
 
-    fn build(name: &str, spec: &Value, status: Option<&Value>, kind: ContainerKind) -> Self {
+    fn build(
+        name: &str,
+        spec: JsonRef<'_>,
+        status: Option<JsonRef<'_>>,
+        kind: ContainerKind,
+    ) -> Self {
         let image = arc_of(spec, "image").or_else(|| status.and_then(|s| arc_of(s, "image")));
         let Some(cs) = status else {
             return Self {

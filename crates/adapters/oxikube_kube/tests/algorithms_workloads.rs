@@ -29,7 +29,7 @@ async fn deployed_image(env: &Env, name: &str) -> String {
         .get(&deployment_gvk(), Some(env.namespace()), name)
         .await
         .expect("get deployment");
-    live.json["spec"]["template"]["spec"]["containers"][0]["image"]
+    live.to_value()["spec"]["template"]["spec"]["containers"][0]["image"]
         .as_str()
         .expect("image")
         .to_owned()
@@ -73,11 +73,11 @@ async fn triggering_a_cronjob_creates_an_owned_job_from_its_template() {
     assert!(owner.block_owner_deletion);
     // The job runs what the template says.
     assert_eq!(
-        job.json["spec"]["template"]["spec"]["containers"][0]["image"],
+        job.to_value()["spec"]["template"]["spec"]["containers"][0]["image"],
         json!(images::PAUSE)
     );
     assert_eq!(
-        job.json["spec"]["template"]["spec"]["restartPolicy"],
+        job.to_value()["spec"]["template"]["spec"]["restartPolicy"],
         json!("Never")
     );
 
@@ -210,7 +210,7 @@ async fn rollout_undo_returns_the_deployment_to_the_previous_template() {
     );
     let shown = preview.deployment.expect("the deployment as it would be");
     assert_eq!(
-        shown.json["spec"]["template"]["spec"]["containers"][0]["image"],
+        shown.to_value()["spec"]["template"]["spec"]["containers"][0]["image"],
         json!(V1)
     );
     assert_eq!(deployed_image(&env, "web").await, V2);
@@ -238,7 +238,9 @@ async fn rollout_undo_returns_the_deployment_to_the_previous_template() {
         .get(&deployment_gvk(), ns, "web")
         .await
         .expect("get");
-    assert!(live.json["spec"]["template"]["metadata"]["labels"]["pod-template-hash"].is_null());
+    assert!(
+        live.to_value()["spec"]["template"]["metadata"]["labels"]["pod-template-hash"].is_null()
+    );
 
     // Undoing to the template that already runs changes nothing.
     let same = rollout_undo(&env.resources, env.namespace(), "web", Some(3), &options)

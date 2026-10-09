@@ -28,7 +28,10 @@ fn names(page: &oxikube_ports::ListPage) -> Vec<String> {
 /// Typed and dynamic reads of one stored object agree on everything but explicit `null`s
 /// (see `without_nulls`): same metadata, same kind, same JSON.
 fn assert_same(typed: &oxikube_domain::Resource, dynamic: &oxikube_domain::Resource, name: &str) {
-    let (t, d) = (without_nulls(&typed.json), without_nulls(&dynamic.json));
+    let (t, d) = (
+        without_nulls(&typed.to_value()),
+        without_nulls(&dynamic.to_value()),
+    );
     assert_eq!(
         first_difference(&t, &d),
         None,

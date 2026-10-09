@@ -1,9 +1,10 @@
 //! Reads a [`Src`] out of a [`Resource`]: the allocation-light path every cell goes through.
 //!
 //! Strings at a JSON pointer are borrowed from the object. Numbers allocate their text once.
-//! Nothing here parses a pointer: `serde_json`'s `pointer` walks the tokens in place.
+//! Nothing here parses a pointer: [`JsonRef::pointer`] walks the tokens in place.
 
 use jiff::Timestamp;
+use oxikube_domain::json::{JsonKind, JsonRef};
 use oxikube_domain::{Age, ObjectMeta, Quantity, Resource};
 use serde_json::Value;
 
@@ -18,18 +19,18 @@ pub(super) fn read<'a>(src: Src, res: &'a Resource, now: Timestamp) -> Cell<'a> 
         Src::Namespace => namespace(&res.meta),
         Src::Age => age(&res.meta, now),
         Src::Labels => labels(&res.meta),
-        Src::Text(ptr) => res.json.pointer(ptr).map_or_else(Cell::empty, scalar),
+        Src::Text(ptr) => res.json().pointer(ptr).map_or_else(Cell::empty, scalar),
         Src::Int(ptr) => res
-            .json
+            .json()
             .pointer(ptr)
-            .and_then(Value::as_i64)
+            .and_then(JsonRef::as_i64)
             .map_or_else(Cell::empty, Cell::int),
         Src::Qty(ptr) => res
-            .json
+            .json()
             .pointer(ptr)
-            .and_then(Value::as_str)
+            .and_then(JsonRef::as_str)
             .map_or_else(Cell::empty, quantity),
-        Src::Len(ptr) => Cell::int(len_at(&res.json, ptr)),
+        Src::Len(ptr) => Cell::int(len_at(res.json(), ptr)),
         Src::Func(f) => f(res, now),
         Src::Metric(_) => Cell::Pending,
     }
@@ -73,7 +74,25 @@ pub(crate) fn key_values<'a>(pairs: impl IntoIterator<Item = (&'a str, &'a str)>
 }
 
 /// A scalar JSON value as a text cell; arrays and objects are blank.
-pub(crate) fn scalar(v: &Value) -> Cell<'_> {
+pub(crate) fn scalar(v: JsonRef<'_>) -> Cell<'_> {
+    match v.kind() {
+        JsonKind::String => Cell::text(v.as_str().unwrap_or_default()),
+        JsonKind::Number => match (v.as_i64(), v.as_f64()) {
+            (Some(i), _) => Cell::int(i),
+            (None, Some(f)) => Cell::float(float_text(f), f),
+            (None, None) => Cell::empty(),
+        },
+        JsonKind::Bool => Cell::text(if v.as_bool().unwrap_or(false) {
+            "true"
+        } else {
+            "false"
+        }),
+        JsonKind::Null | JsonKind::Array | JsonKind::Object => Cell::empty(),
+    }
+}
+
+/// A scalar of a server-side Table cell (a [`Value`], not part of a stored object).
+pub(crate) fn value_scalar(v: &Value) -> Cell<'_> {
     match v {
         Value::String(s) => Cell::text(s.as_str()),
         Value::Number(n) => match (n.as_i64(), n.as_f64()) {
@@ -86,6 +105,11 @@ pub(crate) fn scalar(v: &Value) -> Cell<'_> {
     }
 }
 
+/// A float as JSON writes it (`1.5`, `1e21`).
+fn float_text(f: f64) -> String {
+    serde_json::Number::from_f64(f).map_or_else(|| f.to_string(), |n| n.to_string())
+}
+
 /// A quantity string shown as written and sorted by value; unparseable text sorts as text.
 pub(crate) fn quantity(text: &str) -> Cell<'_> {
     match Quantity::parse(text) {
@@ -95,10 +119,14 @@ pub(crate) fn quantity(text: &str) -> Cell<'_> {
 }
 
 /// Entries of the array or object at `ptr`.
-pub(crate) fn len_at(json: &Value, ptr: &str) -> i64 {
-    let n = match json.pointer(ptr) {
-        Some(Value::Array(a)) => a.len(),
-        Some(Value::Object(o)) => o.len(),
+pub(crate) fn len_at(json: JsonRef<'_>, ptr: &str) -> i64 {
+    let at = json.pointer(ptr);
+    let n = match (
+        at.and_then(JsonRef::as_array),
+        at.and_then(JsonRef::as_object),
+    ) {
+        (Some(a), _) => a.len(),
+        (_, Some(o)) => o.len(),
         _ => 0,
     };
     i64::try_from(n).unwrap_or(i64::MAX)

@@ -5,9 +5,9 @@
 //! `apimachinery/pkg/labels`. The store uses the equality terms to pick a candidate set from its
 //! label index before evaluating the whole selector.
 
-use std::collections::BTreeMap;
 use std::fmt;
-use std::sync::Arc;
+
+use oxikube_domain::StrMap;
 
 /// One term of a [`LabelSelector`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -27,7 +27,7 @@ pub enum LabelTerm {
 }
 
 impl LabelTerm {
-    fn matches(&self, labels: &BTreeMap<Arc<str>, Arc<str>>) -> bool {
+    fn matches(&self, labels: &StrMap) -> bool {
         let get = |key: &str| labels.get(key).map(|v| &**v);
         match self {
             LabelTerm::Eq(k, v) => get(k) == Some(v.as_str()),
@@ -88,7 +88,7 @@ impl LabelSelector {
     }
 
     /// Whether `labels` satisfy every term.
-    pub fn matches(&self, labels: &BTreeMap<Arc<str>, Arc<str>>) -> bool {
+    pub fn matches(&self, labels: &StrMap) -> bool {
         self.terms.iter().all(|t| t.matches(labels))
     }
 
@@ -192,9 +192,11 @@ fn parse_term(term: &str) -> Result<LabelTerm, SelectorError> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
-    fn labels(pairs: &[(&str, &str)]) -> BTreeMap<Arc<str>, Arc<str>> {
+    fn labels(pairs: &[(&str, &str)]) -> StrMap {
         pairs
             .iter()
             .map(|(k, v)| (Arc::from(*k), Arc::from(*v)))

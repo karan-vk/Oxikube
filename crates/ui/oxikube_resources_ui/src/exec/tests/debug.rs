@@ -61,7 +61,7 @@ fn debug_audit(f: &Fixture) -> Vec<(AuditOutcome, String)> {
 }
 
 fn annotated(pod: Resource, default: &str) -> Resource {
-    let mut json = pod.into_json();
+    let mut json = pod.to_value();
     json["metadata"]["annotations"] = json!({ DEFAULT_CONTAINER_ANNOTATION: default });
     Resource::from_json(json).expect("a pod")
 }

@@ -423,22 +423,20 @@ fn a_crd_with_printer_columns_is_browsable_from_the_sidebar_to_its_schema(cx: &m
         oxikube_app::command_bus::DispatchContext::new(Initiator::Ui, "kind test"),
     ));
     assert!(outcome.is_ok(), "{outcome:?}");
-    wait(
-        &mut vcx,
-        "the CRD's detail to be live with its schema",
-        |vcx| {
-            vcx.update(|_, cx| {
-                let view = inner
-                    .read(cx)
-                    .panel::<DetailDrawer>()
-                    .and_then(|drawer| drawer.read(cx).view().cloned());
-                view.is_some_and(|view| {
-                    let view = view.read(cx);
-                    view.state() == &DetailState::Live && view.crd_info().is_some()
-                })
+    // The drawer opens on Overview, where the CRD is not decoded; the schema is read when the
+    // Schema tab is opened.
+    wait(&mut vcx, "the CRD's detail to be live", |vcx| {
+        vcx.update(|_, cx| {
+            let view = inner
+                .read(cx)
+                .panel::<DetailDrawer>()
+                .and_then(|drawer| drawer.read(cx).view().cloned());
+            view.is_some_and(|view| {
+                let view = view.read(cx);
+                view.state() == &DetailState::Live && view.model().is_some()
             })
-        },
-    );
+        })
+    });
     let view = vcx.update(|_, cx| {
         inner
             .read(cx)
@@ -446,9 +444,12 @@ fn a_crd_with_printer_columns_is_browsable_from_the_sidebar_to_its_schema(cx: &m
             .and_then(|drawer| drawer.read(cx).view().cloned())
             .expect("the drawer")
     });
+    vcx.update(|_, cx| view.update(cx, |view, cx| view.set_tab(DetailTab::Schema, cx)));
+    wait(&mut vcx, "the CRD's schema to be read", |vcx| {
+        vcx.update(|_, cx| view.read(cx).crd_info().is_some())
+    });
     vcx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            view.set_tab(DetailTab::Schema, cx);
             assert!(view.toggle_schema("spec", cx), "spec has fields to open");
         })
     });

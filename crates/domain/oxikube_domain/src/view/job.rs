@@ -3,8 +3,8 @@
 use std::fmt;
 use std::sync::Arc;
 
+use crate::json::Array;
 use jiff::Timestamp;
-use serde_json::Value;
 
 use super::{
     ViewError, arc_of, arr_of, bool_of, check_kind, count_of, opt_count, str_of, sub, ts_of,
@@ -91,8 +91,8 @@ impl JobSummary {
     /// never fail; they fall back to defaults.
     pub fn from_resource(res: &Resource) -> Result<Self, ViewError> {
         check_kind(res, "Job", &[("batch", "Job")])?;
-        let spec = sub(&res.json, "spec");
-        let status = sub(&res.json, "status");
+        let spec = sub(res.json(), "spec");
+        let status = sub(res.json(), "status");
         let conditions = arr_of(status, "conditions");
         let has = |kind: &str| job_condition(conditions, kind);
         let job_status = if has("Complete") {
@@ -150,10 +150,10 @@ impl JobSummary {
 }
 
 /// The first condition of `kind` decides, as in the printer.
-fn job_condition(conditions: &[Value], kind: &str) -> bool {
+fn job_condition(conditions: Array<'_>, kind: &str) -> bool {
     conditions
         .iter()
-        .find(|c| str_of(c, "type") == Some(kind))
+        .find(|&c| str_of(c, "type") == Some(kind))
         .is_some_and(|c| str_of(c, "status") == Some("True"))
 }
 
@@ -189,8 +189,8 @@ impl CronJobSummary {
     /// never fail; they fall back to defaults.
     pub fn from_resource(res: &Resource) -> Result<Self, ViewError> {
         check_kind(res, "CronJob", &[("batch", "CronJob")])?;
-        let spec = sub(&res.json, "spec");
-        let status = sub(&res.json, "status");
+        let spec = sub(res.json(), "spec");
+        let status = sub(res.json(), "status");
         let active = arr_of(status, "active").len();
         Ok(Self {
             name: res.meta.name.clone(),

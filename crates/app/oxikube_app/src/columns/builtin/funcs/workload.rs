@@ -4,8 +4,8 @@
 use std::borrow::Cow;
 
 use jiff::Timestamp;
+use oxikube_domain::json::JsonRef;
 use oxikube_domain::{Resource, WorkloadSummary};
-use serde_json::Value;
 
 use super::{images_text, ready_tone, selector_text};
 use crate::columns::{Cell, CellSort};
@@ -59,38 +59,41 @@ pub(crate) fn workload_available<'a>(res: &'a Resource, _now: Timestamp) -> Cell
 /// `IMAGES` of the pod template, comma-separated.
 pub(crate) fn workload_images<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     let spec = res
-        .json
+        .json()
         .pointer("/spec/template/spec")
-        .unwrap_or(&Value::Null);
+        .unwrap_or(JsonRef::NULL);
     Cell::text(images_text(spec))
 }
 
 /// `SELECTOR`: the pod selector's `matchLabels`.
 pub(crate) fn workload_selector<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     Cell::text(selector_text(
-        res.json.pointer("/spec/selector/matchLabels"),
+        res.json().pointer("/spec/selector/matchLabels"),
     ))
 }
 
 /// `NODE SELECTOR` of a DaemonSet's pod template.
 pub(crate) fn node_selector<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     Cell::text(selector_text(
-        res.json.pointer("/spec/template/spec/nodeSelector"),
+        res.json().pointer("/spec/template/spec/nodeSelector"),
     ))
 }
 
 /// ReplicationController `DESIRED`: `spec.replicas`, default 1.
 pub(crate) fn rc_desired<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let n = res.json.pointer("/spec/replicas").and_then(Value::as_i64);
+    let n = res
+        .json()
+        .pointer("/spec/replicas")
+        .and_then(JsonRef::as_i64);
     Cell::int(n.unwrap_or(1))
 }
 
 /// ReplicationController `CURRENT`: `status.replicas`.
 pub(crate) fn rc_current<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     Cell::int(
-        res.json
+        res.json()
             .pointer("/status/replicas")
-            .and_then(Value::as_i64)
+            .and_then(JsonRef::as_i64)
             .unwrap_or(0),
     )
 }
@@ -98,9 +101,9 @@ pub(crate) fn rc_current<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
 /// ReplicationController `READY`: `status.readyReplicas`.
 pub(crate) fn rc_ready<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     Cell::int(
-        res.json
+        res.json()
             .pointer("/status/readyReplicas")
-            .and_then(Value::as_i64)
+            .and_then(JsonRef::as_i64)
             .unwrap_or(0),
     )
 }
@@ -108,7 +111,7 @@ pub(crate) fn rc_ready<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
 /// ReplicationController `SELECTOR`: `spec.selector` is a plain label map.
 pub(crate) fn rc_selector<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     Cell::text(Cow::Owned(selector_text(
-        res.json.pointer("/spec/selector"),
+        res.json().pointer("/spec/selector"),
     )))
 }
 

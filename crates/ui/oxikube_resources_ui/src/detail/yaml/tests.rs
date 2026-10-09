@@ -124,7 +124,7 @@ fn the_output_is_stable_and_reads_back() {
     }));
     let text = yaml_text(&tricky, YamlOptions::default()).unwrap();
     let back: Value = serde_saphyr::from_str(&text).unwrap();
-    assert_eq!(back["data"], tricky.json["data"], "{text}");
+    assert_eq!(back["data"], tricky.to_value()["data"], "{text}");
 }
 
 #[test]

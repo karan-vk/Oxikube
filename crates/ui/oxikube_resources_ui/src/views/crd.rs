@@ -55,7 +55,7 @@ impl ResourceViews {
         let lookup = name.clone();
         let find = spawn_kube(cx, async move {
             let crd = reader.get(&crd_gvk(), None, &lookup).await?;
-            let info = CrdInfo::parse(&crd.json)
+            let info = CrdInfo::parse(&crd.to_value())
                 .ok_or_else(|| OxiError::validation(format!("{lookup} is not a CRD")))?;
             let Some(version) = info.display_version() else {
                 return Ok(Err(info));

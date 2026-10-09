@@ -53,7 +53,7 @@ fn client(pod: Value) -> (Client, Arc<Mutex<Vec<String>>>) {
 
 #[tokio::test]
 async fn a_recorded_pod_is_described_natively() {
-    let (client, seen) = client(fixtures::pod_running().into_json());
+    let (client, seen) = client(fixtures::pod_running().to_value());
     let describer = NativeDescribe::new(client, discovery());
     let output = describer.describe(&pod_ref()).await.unwrap();
     assert_eq!(output.source, DescribeSource::Native);
@@ -78,7 +78,7 @@ async fn a_recorded_pod_is_described_natively() {
 
 #[tokio::test]
 async fn a_missing_object_is_not_found() {
-    let (client, _) = client(fixtures::pod_running().into_json());
+    let (client, _) = client(fixtures::pod_running().to_value());
     let describer = NativeDescribe::new(client, discovery());
     let missing = ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "demo", "nope");
     let error = describer.describe(&missing).await.unwrap_err();
@@ -87,7 +87,7 @@ async fn a_missing_object_is_not_found() {
 
 #[tokio::test]
 async fn a_kind_the_cluster_does_not_serve_is_unsupported() {
-    let (client, seen) = client(fixtures::pod_running().into_json());
+    let (client, seen) = client(fixtures::pod_running().to_value());
     let describer = NativeDescribe::new(client, discovery());
     let unknown =
         ResourceRef::namespaced(cluster(), Gvk::new("x.dev", "v1", "Gadget"), "demo", "g");

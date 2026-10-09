@@ -1,5 +1,6 @@
 //! `rollout undo`: put the Deployment's pod template back to an earlier revision.
 
+use oxikube_domain::json::JsonRef;
 use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::{Patch, ResourcePort, WriteOptions};
 use serde_json::{Map, Value, json};
@@ -125,7 +126,7 @@ fn restored_template(rs: &Resource) -> OxiResult<Value> {
     let mut template = rs
         .get("/spec/template")
         .filter(|t| t.is_object())
-        .cloned()
+        .map(JsonRef::to_value)
         .ok_or_else(|| {
             OxiError::validation(format!("replicaset {} has no pod template", rs.name()))
         })?;
@@ -143,9 +144,9 @@ fn remove_hash(template: &mut Value) {
 }
 
 /// Whether the Deployment already runs `restored` (both compared without the hash label).
-fn same_template(restored: &Value, current: Option<&Value>) -> bool {
+fn same_template(restored: &Value, current: Option<JsonRef<'_>>) -> bool {
     current.is_some_and(|current| {
-        let mut current = current.clone();
+        let mut current = current.to_value();
         remove_hash(&mut current);
         current == *restored
     })

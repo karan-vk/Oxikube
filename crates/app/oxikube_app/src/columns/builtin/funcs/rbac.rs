@@ -8,7 +8,7 @@ use crate::columns::Cell;
 
 /// `ROLE`: `Kind/name` of `roleRef`.
 pub(crate) fn binding_role<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let Some(role) = res.json.get("roleRef") else {
+    let Some(role) = res.json().get("roleRef") else {
         return Cell::empty();
     };
     match (str_at(role, "kind"), str_at(role, "name")) {
@@ -20,7 +20,7 @@ pub(crate) fn binding_role<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
 
 /// `SUBJECTS`: the bound names, in order, comma-separated.
 pub(crate) fn binding_subjects<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let names: Vec<&str> = arr_at(&res.json, "subjects")
+    let names: Vec<&str> = arr_at(res.json(), "subjects")
         .iter()
         .filter_map(|s| str_at(s, "name"))
         .collect();
@@ -30,7 +30,7 @@ pub(crate) fn binding_subjects<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'
 /// `SUBJECT KINDS`: the distinct kinds of the subjects (`User`, `Group`, `ServiceAccount`).
 pub(crate) fn binding_kinds<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     let mut kinds: Vec<&str> = Vec::new();
-    for kind in arr_at(&res.json, "subjects")
+    for kind in arr_at(res.json(), "subjects")
         .iter()
         .filter_map(|s| str_at(s, "kind"))
     {

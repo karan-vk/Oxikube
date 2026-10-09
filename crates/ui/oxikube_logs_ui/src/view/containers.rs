@@ -95,8 +95,7 @@ fn shorten(name: &str) -> String {
 /// default-container` annotation when it names one, else the first regular container.
 pub fn default_container(pod: &Resource, choices: &[ContainerChoice]) -> Option<Arc<str>> {
     let annotated = pod
-        .json
-        .pointer("/metadata/annotations/kubectl.kubernetes.io~1default-container")
+        .get("/metadata/annotations/kubectl.kubernetes.io~1default-container")
         .and_then(|value| value.as_str())
         .filter(|name| choices.iter().any(|c| &*c.name == *name));
     annotated.map(Arc::from).or_else(|| {
@@ -234,7 +233,7 @@ mod tests {
         let choices = choices_of(&pod);
         assert_eq!(default_container(&pod, &choices).as_deref(), Some("app"));
         let mut plain = pod;
-        plain.json_mut()["metadata"]["annotations"] = json!({});
+        plain.edit_json(|json| json["metadata"]["annotations"] = json!({}));
         assert_eq!(
             default_container(&plain, &choices).as_deref(),
             Some("sidecar")

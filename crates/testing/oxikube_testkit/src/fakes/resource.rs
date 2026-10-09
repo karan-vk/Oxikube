@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use oxikube_domain::ids::Gvk;
+use oxikube_domain::json::JsonRef;
 use oxikube_domain::{ObjectMeta, OxiError, OxiResult, Resource};
 use oxikube_ports::{
     ClockPort, DeleteCollectionOutcome, DeleteOptions, DeleteOutcome, Delta, DeltaBatch,
@@ -472,13 +473,11 @@ fn object_from_body(object: &Value, namespace: Option<&str>) -> OxiResult<Resour
     if res.meta.namespace.is_none() {
         if let Some(ns) = namespace {
             res.meta.namespace = Some(Arc::from(ns));
-            if let Some(meta) = res
-                .json_mut()
-                .get_mut("metadata")
-                .and_then(Value::as_object_mut)
-            {
-                meta.insert("namespace".into(), Value::String(ns.to_owned()));
-            }
+            res.edit_json(|json| {
+                if let Some(meta) = json.get_mut("metadata").and_then(Value::as_object_mut) {
+                    meta.insert("namespace".into(), Value::String(ns.to_owned()));
+                }
+            });
         }
     }
     Ok(res)
@@ -894,9 +893,9 @@ impl ResourceWriter for FakeResourcePort {
 /// [partial](Resource::is_partial).
 fn metadata_only(object: Resource) -> Resource {
     let json = serde_json::json!({
-        "apiVersion": object.json["apiVersion"],
-        "kind": object.json["kind"],
-        "metadata": object.json["metadata"],
+        "apiVersion": object.get("/apiVersion").map(JsonRef::to_value),
+        "kind": object.get("/kind").map(JsonRef::to_value),
+        "metadata": object.get("/metadata").map(JsonRef::to_value),
     });
     // The identity fields are copied from a valid `Resource`, so this cannot fail.
     Resource::from_json(json).map_or(object, Resource::into_partial)

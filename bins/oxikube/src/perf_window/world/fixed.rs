@@ -181,7 +181,7 @@ mod tests {
             .iter()
             .find(|o| o.name() == BIG_CONFIG_MAP)
             .expect("the big ConfigMap");
-        let size = serde_json::to_string(&big.json).unwrap().len();
+        let size = serde_json::to_string(&big.doc()).unwrap().len();
         assert!(
             (BIG_CONFIG_MAP_BYTES..BIG_CONFIG_MAP_BYTES + 200_000).contains(&size),
             "{size}"

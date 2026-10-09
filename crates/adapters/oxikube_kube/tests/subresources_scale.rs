@@ -47,7 +47,7 @@ async fn scaling_a_deployment_goes_through_the_scale_subresource_and_reads_back(
     assert_eq!(again.replicas, 2);
     assert_eq!(again.selector.as_deref(), Some("app=web"));
     let object = r.get(&deployment_gvk(), ns, "web").await.expect("get");
-    assert_eq!(object.json["spec"]["replicas"], 2);
+    assert_eq!(object.to_value()["spec"]["replicas"], 2);
 
     // A dry run answers with the would-be scale and changes nothing.
     let dry = r
@@ -65,7 +65,7 @@ async fn scaling_a_deployment_goes_through_the_scale_subresource_and_reads_back(
         .await
         .expect("scale to zero");
     let object = r.get(&deployment_gvk(), ns, "web").await.expect("get");
-    assert_eq!(object.json["spec"]["replicas"], 0);
+    assert_eq!(object.to_value()["spec"]["replicas"], 0);
 }
 
 #[tokio::test]
@@ -135,7 +135,7 @@ async fn a_crd_with_scale_and_status_subresources_serves_both() {
         .expect("scale a CRD");
     assert_eq!(scaled.replicas, 4);
     assert_eq!(
-        r.get(gvk, ns, "w1").await.expect("get").json["spec"]["size"],
+        r.get(gvk, ns, "w1").await.expect("get").to_value()["spec"]["size"],
         4
     );
 

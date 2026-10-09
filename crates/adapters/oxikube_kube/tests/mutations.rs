@@ -41,7 +41,7 @@ async fn create_replace_and_the_three_patch_kinds_round_trip() {
         )
         .await
         .expect("create");
-    assert_eq!(created.json["data"]["a"], "1");
+    assert_eq!(created.to_value()["data"]["a"], "1");
     assert!(
         managers(&created).contains(&"oxikube".to_owned()),
         "{:?}",
@@ -68,7 +68,7 @@ async fn create_replace_and_the_three_patch_kinds_round_trip() {
         )
         .await
         .expect("merge patch");
-    assert_eq!(merged.json["data"], json!({"a": "1", "b": "2"}));
+    assert_eq!(merged.to_value()["data"], json!({"a": "1", "b": "2"}));
 
     let strategic = r
         .patch(
@@ -80,7 +80,7 @@ async fn create_replace_and_the_three_patch_kinds_round_trip() {
         )
         .await
         .expect("strategic patch");
-    assert_eq!(strategic.json["data"]["c"], "3");
+    assert_eq!(strategic.to_value()["data"]["c"], "3");
 
     let json_patched = r
         .patch(
@@ -96,17 +96,17 @@ async fn create_replace_and_the_three_patch_kinds_round_trip() {
         .await
         .expect("json patch");
     assert_eq!(
-        json_patched.json["data"],
+        json_patched.to_value()["data"],
         json!({"b": "2", "c": "3", "d": "4"})
     );
 
-    let mut next = (*json_patched.json).clone();
+    let mut next = json_patched.to_value();
     next["data"] = json!({"only": "this"});
     let replaced = r
         .replace(&configmap_gvk(), ns, "cm", &next, &write)
         .await
         .expect("replace");
-    assert_eq!(replaced.json["data"], json!({"only": "this"}));
+    assert_eq!(replaced.to_value()["data"], json!({"only": "this"}));
 }
 
 #[tokio::test]
@@ -135,7 +135,7 @@ async fn replace_with_a_stale_resource_version_is_a_stale_version_conflict() {
     .await
     .expect("concurrent edit");
 
-    let mut stale = (*first.json).clone();
+    let mut stale = first.to_value();
     stale["data"]["a"] = json!("mine");
     let err = r
         .replace(&configmap_gvk(), ns, "cm", &stale, &write)
@@ -145,7 +145,7 @@ async fn replace_with_a_stale_resource_version_is_a_stale_version_conflict() {
     let details = err.conflict_details().expect("conflict details");
     assert_eq!(details.reason, ConflictReason::StaleVersion);
     assert_eq!(
-        live(&r, ns_name, "cm").await.unwrap().unwrap().json["data"]["a"],
+        live(&r, ns_name, "cm").await.unwrap().unwrap().to_value()["data"]["a"],
         "2"
     );
 }
@@ -183,7 +183,11 @@ async fn server_side_apply_conflicts_name_the_other_manager_and_force_takes_over
     assert_eq!(details.managers(), ["alpha"]);
     assert_eq!(details.causes[0].field, ".data.k");
     assert_eq!(
-        live(&r, ns_name, "shared").await.unwrap().unwrap().json["data"]["k"],
+        live(&r, ns_name, "shared")
+            .await
+            .unwrap()
+            .unwrap()
+            .to_value()["data"]["k"],
         "from-alpha",
         "a refused apply changes nothing"
     );
@@ -198,7 +202,7 @@ async fn server_side_apply_conflicts_name_the_other_manager_and_force_takes_over
         )
         .await
         .expect("forced apply");
-    assert_eq!(forced.json["data"]["k"], "from-oxikube");
+    assert_eq!(forced.to_value()["data"]["k"], "from-oxikube");
     assert!(managers(&forced).contains(&"oxikube".to_owned()));
 }
 
@@ -219,7 +223,7 @@ async fn dry_run_returns_the_would_be_object_and_changes_nothing() {
         )
         .await
         .expect("dry-run create");
-    assert_eq!(preview.json["data"]["a"], "1");
+    assert_eq!(preview.to_value()["data"]["a"], "1");
     assert!(preview.meta.uid.is_some());
     assert!(live(&r, ns_name, "ghost").await.unwrap().is_none());
 
@@ -243,9 +247,9 @@ async fn dry_run_returns_the_would_be_object_and_changes_nothing() {
         )
         .await
         .expect("dry-run apply");
-    assert_eq!(applied.json["data"]["b"], "2");
+    assert_eq!(applied.to_value()["data"]["b"], "2");
     let after = live(&r, ns_name, "shared").await.unwrap().unwrap();
-    assert_eq!(after.json["data"], json!({"a": "1"}));
+    assert_eq!(after.to_value()["data"], json!({"a": "1"}));
     assert_eq!(after.meta.resource_version, real.meta.resource_version);
 
     // A dry-run patch and replace likewise.
@@ -259,7 +263,7 @@ async fn dry_run_returns_the_would_be_object_and_changes_nothing() {
         )
         .await
         .expect("dry-run patch");
-    assert_eq!(patched.json["data"]["c"], "3");
+    assert_eq!(patched.to_value()["data"]["c"], "3");
     let unchanged: Resource = live(&r, ns_name, "shared").await.unwrap().unwrap();
     assert_eq!(unchanged.meta.resource_version, real.meta.resource_version);
 }
@@ -329,7 +333,7 @@ async fn custom_resources_accept_merge_and_apply_but_not_strategic_patches() {
         },
     )
     .await;
-    assert_eq!(merged.json["spec"]["size"], 2);
+    assert_eq!(merged.to_value()["spec"]["size"], 2);
 
     let applied = r
         .patch(
@@ -346,7 +350,7 @@ async fn custom_resources_accept_merge_and_apply_but_not_strategic_patches() {
         )
         .await
         .expect("apply to a custom resource");
-    assert_eq!(applied.json["spec"]["size"], 3);
+    assert_eq!(applied.to_value()["spec"]["size"], 3);
 
     let err = r
         .patch(

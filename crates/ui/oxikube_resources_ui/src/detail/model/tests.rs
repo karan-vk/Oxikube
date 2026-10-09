@@ -16,7 +16,7 @@ fn pod_gvk() -> Gvk {
 
 /// `base` with `edit` applied to its JSON.
 fn edited(base: Resource, edit: impl FnOnce(&mut Value)) -> Resource {
-    let mut json = base.into_json();
+    let mut json = base.to_value();
     edit(&mut json);
     Resource::from_json(json).expect("still a resource")
 }
@@ -337,7 +337,7 @@ fn masking_removes_every_value_and_keeps_the_keys() {
     let mut full = secret();
     let keys = mask_secret(&mut full).expect("a secret");
     assert_eq!(keys, ["password", "token", "username"]);
-    let text = full.json.to_string();
+    let text = full.to_value().to_string();
     for value in ["YWRtaW4=", "c3VwZXItc2VjcmV0", "plain-token-value"] {
         assert!(!text.contains(value), "{value} survived masking");
     }
@@ -356,9 +356,9 @@ fn masking_removes_every_value_and_keeps_the_keys() {
 #[test]
 fn masking_leaves_other_kinds_alone() {
     let mut pod = pod().build();
-    let before = pod.json.clone();
+    let before = pod.to_value();
     assert_eq!(mask_secret(&mut pod), None);
-    assert_eq!(pod.json, before);
+    assert_eq!(pod.to_value(), before);
     assert!(is_secret(&Gvk::new("", "v1", "Secret")));
     assert!(!is_secret(&Gvk::new("example.com", "v1", "Secret")));
     assert!(!is_secret(&pod_gvk()));

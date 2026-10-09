@@ -24,7 +24,7 @@ pub use self::def::Metric;
 use self::def::{ColumnDef, GENERIC, KindDef, Src};
 pub(super) use self::funcs::status_tone;
 pub use self::metrics::MetricsSource;
-pub(super) use self::read::scalar;
+pub(super) use self::read::value_scalar;
 use super::{Cell, Column, ColumnId, ColumnProvider};
 use crate::store::StoreObject;
 

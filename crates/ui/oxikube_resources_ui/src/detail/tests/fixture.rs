@@ -54,7 +54,7 @@ pub(crate) fn kinds() -> Vec<ResourceKind> {
 
 /// `base` with `edit` applied to its JSON.
 pub(crate) fn edited(base: Resource, edit: impl FnOnce(&mut Value)) -> Resource {
-    let mut json = base.into_json();
+    let mut json = base.to_value();
     edit(&mut json);
     Resource::from_json(json).expect("still a resource")
 }

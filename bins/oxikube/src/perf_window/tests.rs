@@ -26,8 +26,17 @@ type Outcome = Rc<RefCell<Option<Result<WindowedSummary>>>>;
 /// Starts `scenario` in a test window and drives it refresh by refresh until it hands back its
 /// summary.
 fn run(cx: &mut TestAppContext, scenario: Scenario) -> Result<WindowedSummary> {
+    run_in(cx, scenario, &scenario.world())
+}
+
+/// [`run`] over a world of the caller's choosing (the heap probe sizes it).
+pub(super) fn run_in(
+    cx: &mut TestAppContext,
+    scenario: Scenario,
+    world: &world::WorldSpec,
+) -> Result<WindowedSummary> {
     TEST_TIME_PERCENT.store(10, std::sync::atomic::Ordering::Relaxed);
-    let ports = world::ports_with(&scenario.world(), Arc::new(FakeClockPort::default()), None);
+    let ports = world::ports_with(world, Arc::new(FakeClockPort::default()), None);
     let env = StartupEnv {
         config: ConfigSource::Memory,
         runtime: RuntimeChoice::Deterministic,

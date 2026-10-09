@@ -23,7 +23,7 @@ async fn rollout_restart_stamps_the_template_and_bumps_the_generation() {
         .create(&deployment_gvk(), ns, &deployment("web", 0), &write)
         .await
         .expect("create");
-    let generation = created.json["metadata"]["generation"].as_i64();
+    let generation = created.to_value()["metadata"]["generation"].as_i64();
 
     let at: Timestamp = "2026-10-06T12:34:56Z".parse().expect("timestamp");
     let restarted = r
@@ -37,16 +37,17 @@ async fn rollout_restart_stamps_the_template_and_bumps_the_generation() {
         .await
         .expect("restart");
     assert_eq!(
-        restarted.json["spec"]["template"]["metadata"]["annotations"][RESTARTED_AT_ANNOTATION],
+        restarted.to_value()["spec"]["template"]["metadata"]["annotations"]
+            [RESTARTED_AT_ANNOTATION],
         "2026-10-06T12:34:56Z"
     );
     assert!(
-        restarted.json["metadata"]["generation"].as_i64() > generation,
+        restarted.to_value()["metadata"]["generation"].as_i64() > generation,
         "a changed pod template is a new generation"
     );
     // Other template fields survive the merge.
     assert_eq!(
-        restarted.json["spec"]["template"]["spec"]["containers"][0]["name"],
+        restarted.to_value()["spec"]["template"]["spec"]["containers"][0]["name"],
         "pause"
     );
 }
@@ -62,7 +63,7 @@ async fn cordon_and_uncordon_flip_unschedulable_on_a_node() {
         .get(&node_gvk(), None, &node.name)
         .await
         .expect("get node");
-    assert!(before.json["spec"]["unschedulable"].is_null());
+    assert!(before.to_value()["spec"]["unschedulable"].is_null());
 
     let cordoned = r
         .patch(
@@ -74,7 +75,7 @@ async fn cordon_and_uncordon_flip_unschedulable_on_a_node() {
         )
         .await
         .expect("cordon");
-    assert_eq!(cordoned.json["spec"]["unschedulable"], true);
+    assert_eq!(cordoned.to_value()["spec"]["unschedulable"], true);
 
     // A dry-run uncordon answers with the result and leaves the node cordoned.
     let dry = r
@@ -87,12 +88,12 @@ async fn cordon_and_uncordon_flip_unschedulable_on_a_node() {
         )
         .await
         .expect("dry-run uncordon");
-    assert_ne!(dry.json["spec"]["unschedulable"], true);
+    assert_ne!(dry.to_value()["spec"]["unschedulable"], true);
     let still = r
         .get(&node_gvk(), None, &node.name)
         .await
         .expect("get node");
-    assert_eq!(still.json["spec"]["unschedulable"], true);
+    assert_eq!(still.to_value()["spec"]["unschedulable"], true);
 
     let uncordoned = r
         .patch(
@@ -104,7 +105,7 @@ async fn cordon_and_uncordon_flip_unschedulable_on_a_node() {
         )
         .await
         .expect("uncordon");
-    assert_ne!(uncordoned.json["spec"]["unschedulable"], true);
+    assert_ne!(uncordoned.to_value()["spec"]["unschedulable"], true);
 }
 
 #[tokio::test]
@@ -126,7 +127,7 @@ async fn a_cronjob_is_suspended_and_resumed() {
         )
         .await
         .expect("suspend");
-    assert_eq!(suspended.json["spec"]["suspend"], true);
+    assert_eq!(suspended.to_value()["spec"]["suspend"], true);
 
     let resumed = r
         .patch(
@@ -138,6 +139,6 @@ async fn a_cronjob_is_suspended_and_resumed() {
         )
         .await
         .expect("resume");
-    assert_eq!(resumed.json["spec"]["suspend"], false);
-    assert_eq!(resumed.json["spec"]["schedule"], "0 0 29 2 1");
+    assert_eq!(resumed.to_value()["spec"]["suspend"], false);
+    assert_eq!(resumed.to_value()["spec"]["schedule"], "0 0 29 2 1");
 }

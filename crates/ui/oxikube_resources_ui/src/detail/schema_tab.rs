@@ -5,11 +5,18 @@
 //! visible rows and a list state; a click on a row opens or closes it, which re-walks the open
 //! nodes once and tells the list which rows changed, so the scroll stays where it was. Nothing is
 //! computed in render. The rows are rebuilt when the CRD changes, never per frame.
+//!
+//! The walk wants the CRD as a [`Value`] tree, which is several times the size of the stored
+//! document, so the tree is decoded once per CRD version and kept for as long as the Schema tab is
+//! up: a click on a row or a version chip re-walks the cached tree and decodes nothing. While
+//! another tab is shown nothing is decoded or kept, and the tab is rebuilt when it is opened.
 
 use gpui::{Context, ListAlignment, ListState, px};
+use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use serde_json::Value;
 
+use super::tabs::DetailTab;
 use super::view::DetailView;
 use crate::crds::{CrdInfo, SchemaRow, SchemaRows, SchemaTree, schema_root, version_names};
 
@@ -24,6 +31,13 @@ pub(super) struct SchemaPane {
     pub(super) tree: SchemaTree,
     pub(super) rows: SchemaRows,
     pub(super) list: ListState,
+    /// The CRD decoded for the walk: set while the Schema tab is up, dropped when it is left.
+    crd: Option<Value>,
+    /// The CRD changed (or arrived) while another tab was shown: the tab reads it when opened.
+    stale: bool,
+    /// How many times the CRD was decoded into a tree.
+    #[cfg(test)]
+    pub(super) decodes: usize,
 }
 
 impl Default for SchemaPane {
@@ -35,6 +49,10 @@ impl Default for SchemaPane {
             tree: SchemaTree::new(),
             rows: SchemaRows::default(),
             list: ListState::new(0, ListAlignment::Top, px(120.)),
+            crd: None,
+            stale: false,
+            #[cfg(test)]
+            decodes: 0,
         }
     }
 }
@@ -47,6 +65,12 @@ impl SchemaPane {
             .and_then(|v| schema_root(crd, v))
             .map(|root| self.tree.rows(root))
             .unwrap_or_default()
+    }
+
+    /// Whether the decoded CRD is held (only while the Schema tab is up).
+    #[cfg(test)]
+    pub(super) fn is_decoded(&self) -> bool {
+        self.crd.is_some()
     }
 
     /// Takes `rows` as the visible ones, and tells the list what changed.
@@ -75,23 +99,43 @@ fn sync_list(list: &ListState, old: &[SchemaRow], new: &[SchemaRow]) {
 }
 
 impl DetailView {
-    /// The CRD's JSON, once the object is complete (a Table-feed CRD waits for its full read).
-    fn crd_json(&self) -> Option<&Value> {
+    /// Decodes the CRD into the pane's cache, once the object is complete (a Table-feed CRD waits
+    /// for its full read). `false` when there is nothing to decode yet.
+    fn decode_crd(&mut self) -> bool {
         let from_feed = self
             .object
             .as_deref()
             .and_then(|object| object.resource())
             .filter(|resource| !resource.is_partial());
-        from_feed.or(self.full.resource()).map(|r| &*r.json)
+        let Some(resource) = from_feed.or(self.full.resource()) else {
+            return false;
+        };
+        self.schema.crd = Some(Resource::to_value(resource));
+        #[cfg(test)]
+        {
+            self.schema.decodes += 1;
+        }
+        true
     }
 
     /// Reads the CRD again after the object changed: its versions, the one shown (kept when it is
     /// still there, else the CRD's display version) and the rows. Does nothing for another kind.
+    /// While another tab is shown this only notes that the Schema tab is out of date: decoding a
+    /// multi-megabyte CRD for a tab nobody looks at would be a stall on the UI thread for nothing.
     pub(super) fn rebuild_schema(&mut self) {
         if !crate::crds::is_crd_kind(&self.target.gvk) {
             return;
         }
-        let Some(json) = self.crd_json() else {
+        if self.tab != DetailTab::Schema {
+            self.schema.stale = true;
+            self.schema.crd = None;
+            return;
+        }
+        if !self.decode_crd() {
+            return;
+        }
+        self.schema.stale = false;
+        let Some(json) = self.schema.crd.as_ref() else {
             return;
         };
         let info = CrdInfo::parse(json);
@@ -109,6 +153,18 @@ impl DetailView {
         self.schema.versions = versions;
         self.schema.version = version;
         self.schema.replace_rows(rows);
+    }
+
+    /// Called when the Schema tab is shown: reads the CRD if it changed while the tab was away.
+    pub(super) fn schema_tab_opened(&mut self) {
+        if self.schema.stale || self.schema.info.is_none() {
+            self.rebuild_schema();
+        }
+    }
+
+    /// Called when the Schema tab is left: the decoded tree is not kept for a tab nobody shows.
+    pub(super) fn schema_tab_closed(&mut self) {
+        self.schema.crd = None;
     }
 
     /// The CRD as read for the Schema tab (`None` for another kind, and until the object is known).
@@ -168,7 +224,10 @@ impl DetailView {
 
     /// Walks the open nodes of the shown version again.
     fn reread_schema_rows(&mut self) {
-        let Some(json) = self.crd_json() else {
+        if self.schema.crd.is_none() && !self.decode_crd() {
+            return;
+        }
+        let Some(json) = self.schema.crd.as_ref() else {
             return;
         };
         let rows = self.schema.walk(json, self.schema.version.as_deref());

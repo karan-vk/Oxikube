@@ -80,6 +80,7 @@ mod entry;
 mod feed;
 pub mod filter;
 mod index;
+mod keyset;
 mod mailbox;
 mod object;
 mod policy;

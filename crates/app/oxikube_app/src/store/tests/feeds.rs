@@ -299,20 +299,17 @@ fn secrets_are_watched_metadata_only() {
     m.drain(&mut sub);
     let cached = m.rows[0].resource().expect("a resource");
     assert!(cached.is_partial());
-    assert!(
-        cached.json.get("data").is_none(),
-        "no Secret data in the cache"
-    );
+    assert!(cached.get("/data").is_none(), "no Secret data in the cache");
     assert!(!format!("{:?}", m.rows[0]).contains("c2VjcmV0"));
 }
 
-/// #508: the cache keeps the JSON tree the feed delivered, so the store adds no copy of an
+/// #508: the cache keeps the JSON document the feed delivered, so the store adds no copy of an
 /// object to the one the feed's own cache (the kube reflector store) already holds.
 #[test]
-fn the_cache_keeps_the_feeds_json_tree_without_copying_it() {
+fn the_cache_keeps_the_feeds_json_document_without_copying_it() {
     let listed = p("x", "a", "1");
     let applied = p("x", "b", "1");
-    let (listed_json, applied_json) = (listed.json.clone(), applied.json.clone());
+    let (listed_json, applied_json) = (listed.doc().clone(), applied.doc().clone());
     let mut h = Harness::new();
     h.resources.script().watch.push_ok(timeline(vec![
         batch(vec![Delta::Restarted(vec![listed])]),
@@ -325,7 +322,7 @@ fn the_cache_keeps_the_feeds_json_tree_without_copying_it() {
     m.drain(&mut sub);
     assert_eq!(m.names(), ["x/a", "x/b"]);
 
-    let json = |row: &Arc<StoreObject>| row.resource().expect("a resource").json.clone();
-    assert!(Arc::ptr_eq(&json(&m.rows[0]), &listed_json), "listed");
-    assert!(Arc::ptr_eq(&json(&m.rows[1]), &applied_json), "applied");
+    let json = |row: &Arc<StoreObject>| row.resource().expect("a resource").doc().clone();
+    assert!(json(&m.rows[0]).ptr_eq(&listed_json), "listed");
+    assert!(json(&m.rows[1]).ptr_eq(&applied_json), "applied");
 }

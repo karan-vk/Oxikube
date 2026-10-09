@@ -831,9 +831,10 @@ allocations as a `Value` (serde_json `preserve_order`), plus 1.7 KB for its type
 **Fix:** `Resource::json` is an `Arc<Value>` (ADR 0005, amendment), so the reflector's clone and the
 store's copy are one tree; a `Resource` clone now costs its `ObjectMeta` (about 1 KB, two
 allocations) instead of about 17 KB. No port changed. Tests that hold it: the domain's
-`a_clone_shares_the_json_tree`, the feed's `feed::tests::sharing` (the opening list, live changes
-and both relist deliveries hand the consumer the reflector store's own tree) and the store's
-`the_cache_keeps_the_feeds_json_tree_without_copying_it`.
+`a_clone_shares_the_json_document`, the feed's `feed::tests::sharing` (the opening list, live changes
+and both relist deliveries hand the consumer the reflector store's own document) and the store's
+`the_cache_keeps_the_feeds_json_document_without_copying_it` (the tree itself is gone since E07-P603:
+see [Memory: compact object storage](#memory-compact-object-storage-e07-p603)).
 
 **Allocator retention** (the issue's third hypothesis) is not the cause: `vmmap` of the running app
 with the table listed shows 224 MiB allocated in the default malloc zone with 7 % fragmentation,
@@ -860,6 +861,72 @@ The headless `scroll-10k` scenario does not change (`peak_rss_mib` 182.8 before,
 samples each): it feeds testkit pods straight into one store, so it never held the second copy.
 The remaining cost is the one tree per pod; keeping only column fields hot and the JSON compact or
 lazy (the issue's second option) would cut it further but is not needed for the budget.
+
+### Memory: compact object storage (E07-P603)
+
+The idle scenario (two clusters of 1 000 pods, both pods tables open) peaked at 186 MiB against 143
+([#603](https://github.com/karan-vk/Oxikube/issues/603)); the two clusters cost about 35.5 MB of
+heap, about 17 KB per pod object in 277 000 more allocations, the signature of `serde_json::Value`
+trees (one node per field, a `String` per key and per text, a table per object). Since E07-F508 the
+tree is shared between the feed's cache and the store's, but it is still a tree.
+
+**What changed** (ADR 0005, second amendment). The issue's fourth idea, handing the allocator's free
+pages back after a relist (`malloc_zone_pressure_relief`, `malloc_trim`), was tried and dropped: on macOS
+the allocator has already marked the pages of freed blocks reusable by then (a process that freed 90 %
+of 400 000 small blocks had a 33 MB footprint against 57 MB resident, and the relief released 0 bytes more),
+and resident size, the figure the budget reads, does not move until the kernel needs the pages. The lever
+is how many blocks a pod takes, which is what this change cuts:
+
+- `Resource` holds its JSON as a `JsonDoc` (`oxikube_domain::json`): one immutable byte buffer,
+  shared between clones, in a tagged varint format with the common Kubernetes keys as one byte and
+  every container carrying its byte length. Reads (`Resource::json()`, `get`, `get_str`, the column
+  functions, the view-models, the health tally) walk the bytes through `JsonRef` and borrow strings
+  from them: no allocation, no decoding. A full `Value` tree is built only on cold paths (the
+  editor's `edit_json`, CRD schemas, an event row about the open object, one `status` summary).
+- `ObjectMeta` shrank with it: `labels` and `annotations` are `StrMap`s (a sorted shared slice; the
+  label set every pod of a ReplicaSet repeats is one allocation, an empty map none) instead of
+  `BTreeMap`s (a 380-byte node per map), and the texts many objects repeat (namespace, label keys
+  and values, owner references, the `Gvk`) are `intern`ed: one `Arc<str>` per distinct text while an
+  object uses it (a weak table, cleaned when it doubles).
+- The store's name, namespace and label indices hold a single key inline (`KeySet`) instead of a
+  one-element `HashSet` (100 to 150 bytes each, one per pod for the unique names).
+- Lists were already streamed into the store (`InitialListStrategy::StreamingList`, paged lists as the
+  fallback), one object at a time; each object is now encoded into its compact document as it arrives, so
+  nothing list-sized is held as a tree while a list lands.
+- No metadata-only mode below the 25 000-object threshold, no fewer pods, nothing dropped but
+  `managedFields` (already stripped at ingest by default).
+
+**Measured, in the test suite** (no window needed; exact byte counts, not sampled RSS):
+
+| What | Before | After |
+|---|---|---|
+| `oxikube_testkit` `heap_per_pod`: one pod as a `Value` tree | 8 450 B in 122 blocks | the document: 533 B in 1 block |
+| the same, the whole `Resource` (typed metadata and `Gvk` included) | about 9 400 B (tree + about 1 000 B) | 869 B in 3 blocks |
+| `bins/oxikube` `heap_probe`: live heap per pod over the idle scenario's real services, stores and tables, both clusters | 10 400 B | 2 100 to 2 300 B (about 1 000 B of it is the synthetic server's own copy of the pods, which a user's app does not hold) |
+
+That is a cut of about 78 % in what one pod costs across the app, and 90 % in the object itself.
+Reproduce with `cargo test -p oxikube_testkit --test heap_per_pod -- --nocapture` and
+`cargo test -p oxikube --lib heap_probe -- --nocapture`
+(`OXIKUBE_HEAP_PODS=1000 ... heap_probe -- --ignored --nocapture` prints the live bytes the idle
+scenario adds at that size, to subtract two sizes by hand). `heap_probe` asserts a ceiling of 5 000 B
+per pod, so growth of the per-pod cost fails the suite. The before figure was measured with the same
+test on `origin/main` (`ea1fce2d`).
+
+**What it costs in time** (`cargo test -p oxikube_domain --profile release-fast --test json_cost --
+--ignored --nocapture`, M-series): encoding a pod when a feed converts it, 5.0 us for `Resource::from_json`
+including metadata and a clone of the input tree (10 000 pods: about 50 ms across the feed's task, off the UI
+thread); `PodSummary::from_resource` 160 ns; a pointer read of one field 30 to 80 ns; `Resource::clone` 49 ns.
+The cell cache means the table reads each visible cell once a second at most.
+
+**Windowed runs** (`cargo xtask perf --windowed idle`, the numbers the budget is judged on) could not
+be taken on the machine this story was built on: its screen was locked for the whole session, and
+macOS stops refreshing a window nobody can see (the harness reports "not a measurement" and exits).
+The verify stage re-measures `idle`, `pods-table` and the 10 000-pod real-kind list on a quiet,
+unlocked machine. The per-pod figures above are what those runs should move by: 2 000 pods at about
+8 KB less is about 16 MB by this harness's count and up to about 27 MB by the issue's 17 KB per pod
+(the harness does not see everything the release app holds), and the 20.8 MB the allocator held dirty but free shrinks with the blocks it
+was fragmented by (there are about 40 times fewer of them per pod); the 43 MiB the idle scenario was over is shared with
+#604's drawables.
 
 ## Log viewer: streaming 5 000 lines/s (E08-S02)
 

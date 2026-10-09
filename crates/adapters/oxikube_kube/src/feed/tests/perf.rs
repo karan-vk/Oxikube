@@ -157,7 +157,10 @@ async fn memory_of_ten_thousand_pods(metadata: bool) {
     };
     assert_eq!(all.len(), PODS_IN_LIST);
     assert_eq!(all[0].is_partial(), metadata);
-    let held: usize = all.iter().map(|r| r.json.to_string().len()).sum();
+    let held: usize = all
+        .iter()
+        .map(|r| serde_json::to_string(r.doc()).map_or(0, |text| text.len()))
+        .sum();
     let grown = rss_kib().saturating_sub(before);
     eprintln!(
         "{} feed, {PODS_IN_LIST} pods: list response {:.1} MiB; consumer JSON {:.1} MiB; \

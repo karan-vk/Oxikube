@@ -67,7 +67,8 @@ fn about(
     uid: Option<&str>,
     object: &StoreObject,
 ) -> Option<EventRow> {
-    let json = &object.resource()?.json;
+    let resource = object.resource()?;
+    let json = resource.json();
     // Cheap pre-check on the raw JSON: most events in the namespace are about other objects.
     let named = json
         .pointer("/involvedObject/name")
@@ -76,7 +77,8 @@ fn about(
     if named != &*target.name {
         return None;
     }
-    let event = Event::from_json(cluster, json).ok()?;
+    // Decoded only for the events that name the target: most events in the namespace do not.
+    let event = Event::from_json(cluster, &json.to_value()).ok()?;
     let same_object = event.regarding.gvk.kind == target.gvk.kind
         && event.regarding.namespace() == target.namespace();
     let same_uid = match (uid, event.regarding_uid.as_deref()) {

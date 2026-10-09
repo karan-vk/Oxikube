@@ -82,7 +82,10 @@ async fn next_batch(feed: &mut ReflectorFeed) -> DeltaBatch<Resource> {
 }
 
 fn json_bytes(resources: &[Resource]) -> usize {
-    resources.iter().map(|r| r.json.to_string().len()).sum()
+    resources
+        .iter()
+        .map(|r| serde_json::to_string(r.doc()).map_or(0, |text| text.len()))
+        .sum()
 }
 
 #[tokio::test]
