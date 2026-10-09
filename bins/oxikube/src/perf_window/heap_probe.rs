@@ -70,9 +70,11 @@ const BUDGET_PER_POD: f64 = 5_000.0;
 
 fn world(pods: usize) -> WorldSpec {
     WorldSpec {
+        // Young pods, as `Scenario::Idle`'s own world (#605): its script checks that an age on
+        // screen reads in seconds.
         clusters: vec![
-            ClusterSpec::still(super::MAIN_CONTEXT, pods),
-            ClusterSpec::still("perf-b", pods),
+            ClusterSpec::still(super::MAIN_CONTEXT, pods).young(),
+            ClusterSpec::still("perf-b", pods).young(),
         ],
         listed_only: 0,
     }
