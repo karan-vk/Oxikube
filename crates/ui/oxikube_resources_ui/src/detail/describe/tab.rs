@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
-use gpui::{Context, Entity, Task};
+use gpui::{AppContext as _, Context, Entity, Task};
 use oxikube_domain::command::Command;
 use oxikube_domain::{ErrorKind, OxiError, OxiResult};
-use oxikube_ports::{DescribeOutput, DescribeSource};
+use oxikube_ports::DescribeSource;
 use oxikube_runtime::spawn_kube;
-use oxikube_ui::editor::EditorState;
+use oxikube_ui::code_view::{CodeView, Look};
 
 use crate::detail::view::DetailView;
 
@@ -33,12 +33,10 @@ pub enum DescribeState {
     },
 }
 
-/// A describe text read, with the number of the answer that brought it (the editor is given a
-/// text again only when this changes).
+/// A describe text read.
 pub(in crate::detail) struct DescribeText {
     pub(in crate::detail) text: Arc<str>,
     pub(in crate::detail) source: DescribeSource,
-    pub(in crate::detail) serial: u64,
 }
 
 /// The Describe tab of a [`DetailView`].
@@ -49,9 +47,9 @@ pub(in crate::detail) struct DescribeTab {
     pub(in crate::detail) output: Option<DescribeText>,
     /// Counts requests: only the answer to the latest one is applied.
     pub(in crate::detail) generation: u64,
-    /// The `serial` of the text the editor holds.
-    pub(in crate::detail) pushed: Option<u64>,
-    pub(in crate::detail) editor: Option<Entity<EditorState>>,
+    /// The read-only view of the text, made with the first answer. It lays the text out off the
+    /// UI thread.
+    pub(in crate::detail) view: Option<Entity<CodeView>>,
     /// The request in flight; dropping it cancels it (and `kubectl`).
     pub(in crate::detail) task: Option<Task<()>>,
 }
@@ -103,7 +101,12 @@ impl DetailView {
         let generation = self.describe.generation;
         self.describe.state = DescribeState::Loading;
         let target = self.target.clone();
-        let work = spawn_kube(cx, async move { port.describe(&target).await });
+        // The text becomes an `Arc<str>` on the Tokio thread: no copy of it on the UI thread.
+        let work = spawn_kube(cx, async move {
+            port.describe(&target)
+                .await
+                .map(|output| (Arc::<str>::from(output.text), output.source))
+        });
         self.describe.task = Some(cx.spawn(async move |this, cx| {
             let result = match work.await {
                 Ok(result) => result,
@@ -119,27 +122,23 @@ impl DetailView {
     fn described(
         &mut self,
         generation: u64,
-        result: OxiResult<DescribeOutput>,
+        result: OxiResult<(Arc<str>, DescribeSource)>,
         cx: &mut Context<Self>,
     ) {
         if generation != self.describe.generation {
             return;
         }
         match result {
-            Ok(output) => {
-                self.describe.state = DescribeState::Ready {
-                    source: output.source,
-                };
-                let serial = self
+            Ok((text, source)) => {
+                self.describe.state = DescribeState::Ready { source };
+                let view = self
                     .describe
-                    .output
-                    .as_ref()
-                    .map_or(1, |old| old.serial + 1);
-                self.describe.output = Some(DescribeText {
-                    text: Arc::from(output.text),
-                    source: output.source,
-                    serial,
-                });
+                    .view
+                    .get_or_insert_with(|| cx.new(|cx| CodeView::new(Look::TEXT, cx)))
+                    .clone();
+                let shown = text.clone();
+                view.update(cx, |view, cx| view.set_text(shown, cx));
+                self.describe.output = Some(DescribeText { text, source });
             }
             Err(error) => {
                 tracing::debug!(%error, target = %self.target, "describe failed");

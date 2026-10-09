@@ -11,7 +11,8 @@ impl Global for Initialised {}
 
 /// Initialises `oxikube_ui`:
 ///
-/// 1. initialises gpui-component (themes, key bindings, overlay plugins, tables, docks);
+/// 1. initialises gpui-component (themes, key bindings, overlay plugins, tables, docks) and binds
+///    the [`crate::code_view`] keys;
 /// 2. resets the UI zoom to 100 %;
 /// 3. installs the built-in tokens for the system appearance and projects them onto the
 ///    component library's theme (see [`crate::theme_bridge`]).
@@ -30,6 +31,7 @@ pub fn init(cx: &mut App) {
     }
     cx.set_global(Initialised);
     gpui_component::init(cx);
+    crate::code_view::init(cx);
     crate::size::reset(cx);
     if cx.has_global::<TokensGlobal>() {
         // Tokens were chosen before init (e.g. restored from settings): apply those.

@@ -1,15 +1,16 @@
-//! Drawing the Describe tab: the toolbar, the text, the spinner and the error.
+//! Drawing the Describe tab: the toolbar, the text (a read-only code view), the spinner and the
+//! error.
 
 use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
-    Window, div, px,
+    div, prelude::FluentBuilder as _, px,
 };
 use oxikube_domain::ErrorKind;
 use oxikube_ports::DescribeSource;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{h_flex, v_flex};
 use oxikube_ui::spinner::Spinner;
-use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, editor, u};
+use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::tab::DescribeState;
 use crate::detail::view::DetailView;
@@ -25,12 +26,8 @@ fn source_label(source: DescribeSource) -> &'static str {
 
 impl DetailView {
     /// The Describe tab.
-    pub(in crate::detail) fn describe_body(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let body = self.describe_content(window, cx);
+    pub(in crate::detail) fn describe_body(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let body = self.describe_content(cx);
         v_flex()
             .id("detail-describe")
             .debug_selector(|| "detail-describe".to_owned())
@@ -82,29 +79,32 @@ impl DetailView {
             )
     }
 
-    fn describe_content(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    fn describe_content(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();
         let tones = ToneColors::current(cx);
-        let output = self
+        let spinner = || {
+            div()
+                .debug_selector(|| "describe-loading".to_owned())
+                .p(u(tokens.spacing.xl))
+                .child(
+                    Spinner::new()
+                        .icon(Icon::new(IconName::LoaderCircle))
+                        .large()
+                        .color(tokens.colors.accent),
+                )
+        };
+        let Some(view) = self
             .describe
             .output
-            .as_ref()
-            .map(|output| (output.text.clone(), output.serial));
-        let Some((text, serial)) = output else {
+            .is_some()
+            .then(|| self.describe.view.clone())
+            .flatten()
+        else {
             return match &self.describe.state {
                 DescribeState::Failed { kind, message } => {
                     self.describe_failure(*kind, message, cx)
                 }
-                _ => div()
-                    .debug_selector(|| "describe-loading".to_owned())
-                    .p(u(tokens.spacing.xl))
-                    .child(
-                        Spinner::new()
-                            .icon(Icon::new(IconName::LoaderCircle))
-                            .large()
-                            .color(tokens.colors.accent),
-                    )
-                    .into_any_element(),
+                _ => spinner().into_any_element(),
             };
         };
         let banner = match &self.describe.state {
@@ -121,29 +121,23 @@ impl DetailView {
             ),
             _ => None,
         };
-        let state = match &self.describe.editor {
-            Some(state) => state.clone(),
-            None => {
-                let state = editor::read_only_state(editor::ReadOnly::TEXT, window, cx);
-                self.describe.editor = Some(state.clone());
-                state
-            }
-        };
-        // The editor is given the text again only when a new answer arrived.
-        if self.describe.pushed != Some(serial) {
-            editor::set_text(&state, &text, window, cx);
-            self.describe.pushed = Some(serial);
-        }
+        // The view lays the text out off the UI thread; the spinner covers it until its first
+        // text is on screen.
+        let ready = view.read(cx).is_ready();
         v_flex()
             .size_full()
             .children(banner)
             .child(
                 div()
                     .debug_selector(|| "detail-describe-text".to_owned())
+                    .relative()
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
-                    .child(editor::code_view(&state).h_full()),
+                    .child(view)
+                    .when(!ready, |this| {
+                        this.child(spinner().absolute().inset_0().bg(tokens.colors.surface))
+                    }),
             )
             .into_any_element()
     }

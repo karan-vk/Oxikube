@@ -1,27 +1,23 @@
-//! Drawing the YAML tab: the toolbar and the read-only editor.
+//! Drawing the YAML tab: the toolbar and the read-only code view.
 
 use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
-    Window, div, px,
+    div, prelude::FluentBuilder as _, px,
 };
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{Disableable as _, h_flex, v_flex};
-use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, editor, u};
+use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use crate::detail::parts::skeleton;
 use crate::detail::state::FullState;
 use crate::detail::view::DetailView;
 
 impl DetailView {
-    /// The YAML tab: the toolbar over the editor, or a skeleton while the object is read in
-    /// full, or why it could not be.
-    pub(in crate::detail) fn yaml_body(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    /// The YAML tab: the toolbar over the code view, or a skeleton while the object is read in
+    /// full and its text made, or why it could not be.
+    pub(in crate::detail) fn yaml_body(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();
-        let body = self.yaml_content(window, cx);
+        let body = self.yaml_content(cx);
         v_flex()
             .id("detail-yaml")
             .debug_selector(|| "detail-yaml".to_owned())
@@ -98,7 +94,7 @@ impl DetailView {
             )
     }
 
-    fn yaml_content(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    fn yaml_content(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();
         let note = |selector: &'static str, text: String| {
             div()
@@ -108,43 +104,44 @@ impl DetailView {
                 .child(text)
                 .into_any_element()
         };
-        // The text is made outside render (`refresh_yaml`); a missing text means the object is
-        // not complete yet, or could not be read.
-        let Some(text) = self.yaml.text.as_ref() else {
-            if let FullState::Failed(message) = &self.full {
-                return note(
-                    "detail-yaml-error",
-                    format!("The object could not be read in full: {message}"),
-                );
-            }
-            return skeleton(&tokens, "detail-yaml-loading", &[320., 260., 300., 200.]);
-        };
-        let (key, result) = (text.key.clone(), text.result.clone());
-        let text = match result {
-            Ok(text) => text,
-            Err(message) => return note("detail-yaml-error", message),
-        };
-        let state = match &self.yaml.editor {
-            Some(state) => state.clone(),
-            None => {
-                let state = editor::read_only_state(editor::ReadOnly::YAML, window, cx);
-                self.yaml.editor = Some(state.clone());
-                state
-            }
-        };
-        if self.yaml.pushed.as_ref() != Some(&key) {
-            editor::set_text(&state, &text, window, cx);
-            self.yaml.pushed = Some(key);
-            #[cfg(test)]
-            {
-                self.yaml.pushes += 1;
-            }
+        if let Some(Err(message)) = self.yaml.text.as_ref().map(|text| &text.result) {
+            return note("detail-yaml-error", message.clone());
         }
+        if self.yaml.text.is_none()
+            && let FullState::Failed(message) = &self.full
+        {
+            return note(
+                "detail-yaml-error",
+                format!("The object could not be read in full: {message}"),
+            );
+        }
+        // The text is made and laid out off the UI thread (`refresh_yaml`, `CodeView`); the
+        // skeleton covers the view until its first text is on screen. The view is mounted from
+        // the start so it is measured (and wraps) before that text arrives.
+        let view = self.yaml.view.clone();
+        let ready = view.as_ref().is_some_and(|view| view.read(cx).is_ready());
         div()
-            .debug_selector(|| "detail-yaml-editor".to_owned())
+            .relative()
             .size_full()
-            .overflow_hidden()
-            .child(editor::code_view(&state).h_full())
+            .children(view.map(|view| {
+                div()
+                    .debug_selector(|| "detail-yaml-editor".to_owned())
+                    .size_full()
+                    .child(view)
+            }))
+            .when(!ready, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .bg(tokens.colors.surface)
+                        .child(skeleton(
+                            &tokens,
+                            "detail-yaml-loading",
+                            &[320., 260., 300., 200.],
+                        )),
+                )
+            })
             .into_any_element()
     }
 }

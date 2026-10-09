@@ -54,15 +54,19 @@ fn describe_starts_when_the_tab_is_first_shown_and_shows_the_text(cx: &mut TestA
     );
     assert!(d.shown("detail-describe-text"));
     assert!(d.shown("describe-source"));
-    let editor = d
-        .read(&view, |v| v.describe.editor.clone())
-        .expect("an editor");
-    let (readonly, text) = d.f.vcx.update(|_, cx| {
-        let state = editor.read(cx);
-        (!state.is_editable(), state.value().to_string())
+    let code = d
+        .read(&view, |v| v.describe.view.clone())
+        .expect("a code view");
+    let (text, language) = d.f.vcx.update(|_, cx| {
+        let code = code.read(cx);
+        (code.text().map(|t| t.to_string()), code.language())
     });
-    assert!(readonly);
-    assert_eq!(text, POD_TEXT);
+    assert_eq!(
+        text.as_deref(),
+        Some(POD_TEXT),
+        "laid out off the UI thread"
+    );
+    assert_eq!(language, None, "plain text");
 
     // Back and forth between tabs does not describe again.
     d.click("detail-tab-overview");
@@ -186,11 +190,14 @@ fn refresh_keeps_the_text_on_screen_and_replaces_it_with_the_new_answer(cx: &mut
             .as_deref(),
         Some("Status: Running\n")
     );
-    let editor = d.read(&view, |v| v.describe.editor.clone()).unwrap();
-    let shown = d.f.vcx.update(|_, cx| editor.read(cx).value().to_string());
+    let code = d.read(&view, |v| v.describe.view.clone()).unwrap();
+    let shown =
+        d.f.vcx
+            .update(|_, cx| code.read(cx).text().map(|t| t.to_string()))
+            .unwrap_or_default();
     assert_eq!(
         shown, "Status: Running\n",
-        "the editor was given the new text"
+        "the view was given the new text"
     );
 }
 

@@ -19,7 +19,7 @@ use super::view::DetailView;
 use crate::table::ToneColors;
 
 impl Render for DetailView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(test)]
         {
             self.renders += 1;
@@ -33,8 +33,8 @@ impl Render for DetailView {
             DetailTab::Overview => self.overview_body(cx),
             DetailTab::Events => self.events_body(cx),
             DetailTab::Schema => self.schema_body(cx),
-            DetailTab::Yaml => self.yaml_body(window, cx),
-            DetailTab::Describe => self.describe_body(window, cx),
+            DetailTab::Yaml => self.yaml_body(cx),
+            DetailTab::Describe => self.describe_body(cx),
         };
         v_flex()
             .id("detail-view")

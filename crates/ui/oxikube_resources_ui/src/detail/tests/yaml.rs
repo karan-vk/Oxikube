@@ -58,12 +58,19 @@ fn managed_pod() -> Resource {
     })
 }
 
+/// The text the YAML tab's code view has on screen.
+fn on_screen(d: &mut Detail, view: &gpui::Entity<DetailView>) -> Option<String> {
+    let code = d.read(view, |v| v.yaml.view.clone())?;
+    d.f.vcx
+        .update(|_, cx| code.read(cx).text().map(|text| text.to_string()))
+}
+
 fn clipboard(d: &mut Detail) -> Option<String> {
     d.f.vcx.read_from_clipboard().and_then(|item| item.text())
 }
 
 #[gpui::test]
-fn the_yaml_tab_shows_the_object_in_a_read_only_highlighted_editor(cx: &mut TestAppContext) {
+fn the_yaml_tab_shows_the_object_in_a_read_only_highlighted_view(cx: &mut TestAppContext) {
     let mut d = Detail::new(cx, [managed_pod()]);
     let view = d.open(&pod_ref("web-0"));
     assert_eq!(
@@ -79,20 +86,25 @@ fn the_yaml_tab_shows_the_object_in_a_read_only_highlighted_editor(cx: &mut Test
         .expect("the YAML");
     assert!(yaml.contains("kind: Pod"), "{yaml}");
     assert!(yaml.contains("name: web-0"), "{yaml}");
-    assert!(d.shown("detail-yaml-editor"), "the editor is on screen");
+    assert!(d.shown("detail-yaml-editor"), "the code view is on screen");
+    assert!(
+        !d.shown("detail-yaml-loading"),
+        "no skeleton once it is laid out"
+    );
 
-    let editor = d.read(&view, |v| v.yaml.editor.clone()).expect("an editor");
-    let (readonly, language, text) = d.f.vcx.update(|_, cx| {
-        let state = editor.read(cx);
-        (
-            !state.is_editable(),
-            state.language_name(),
-            state.value().to_string(),
-        )
+    // The code view is read-only by construction (E10 is the editor).
+    let code = d.read(&view, |v| v.yaml.view.clone()).expect("a code view");
+    let (language, coloured) = d.f.vcx.update(|_, cx| {
+        let code = code.read(cx);
+        (code.language(), code.is_highlighted())
     });
-    assert!(readonly, "no editing here (E10 is the editor)");
-    assert_eq!(&*language, "yaml", "tree-sitter YAML highlighting");
-    assert_eq!(text, yaml, "the editor holds exactly the text");
+    assert_eq!(language, Some("yaml"), "tree-sitter YAML highlighting");
+    assert!(coloured, "parsed off the UI thread");
+    assert_eq!(
+        on_screen(&mut d, &view).as_deref(),
+        Some(yaml.as_str()),
+        "the view holds exactly the text"
+    );
 }
 
 #[gpui::test]
@@ -123,10 +135,12 @@ fn managed_fields_are_hidden_until_toggled_and_the_cached_object_is_untouched(
     let shown = yaml(&mut d, &view);
     assert!(shown.contains("managedFields"), "{shown}");
     assert!(shown.contains("kubectl-client-side-apply"), "{shown}");
-    let editor = d.read(&view, |v| v.yaml.editor.clone()).unwrap();
     d.draw();
-    let in_editor = d.f.vcx.update(|_, cx| editor.read(cx).value().to_string());
-    assert_eq!(in_editor, shown, "the editor follows the toggle");
+    assert_eq!(
+        on_screen(&mut d, &view),
+        Some(shown),
+        "the view follows the toggle"
+    );
 
     // The object the store (and the Overview) hold never lost its managedFields.
     let kept = d.read(&view, |v| {
@@ -173,9 +187,11 @@ fn the_yaml_follows_the_object_when_it_changes(cx: &mut TestAppContext) {
     d.draw();
     let yaml = d.read(&view, |v| v.yaml().map(str::to_owned)).unwrap();
     assert!(yaml.contains("app: web-v2"), "{yaml}");
-    let editor = d.read(&view, |v| v.yaml.editor.clone()).unwrap();
-    let held = d.f.vcx.update(|_, cx| editor.read(cx).value().to_string());
-    assert_eq!(held, yaml, "the editor was given the new text");
+    assert_eq!(
+        on_screen(&mut d, &view),
+        Some(yaml),
+        "the view was given the new text"
+    );
 }
 
 #[gpui::test]
@@ -199,9 +215,7 @@ fn a_secrets_yaml_is_masked_in_the_view_the_clipboard_and_the_file(cx: &mut Test
     }
     assert!(!yaml.contains("last-applied-configuration"), "{yaml}");
     assert!(yaml.contains("team: blue"), "{yaml}");
-    let editor = d.read(&view, |v| v.yaml.editor.clone()).unwrap();
-    let shown = d.f.vcx.update(|_, cx| editor.read(cx).value().to_string());
-    assert_eq!(shown, yaml);
+    assert_eq!(on_screen(&mut d, &view).as_deref(), Some(yaml.as_str()));
 
     // Copy: the masked text, on the (fake) clipboard.
     d.f.dispatcher.clear();
@@ -335,7 +349,7 @@ fn big_config_map() -> Resource {
 }
 
 #[gpui::test]
-fn a_100_kb_object_is_made_once_per_version_and_drawn_in_one_frame(cx: &mut TestAppContext) {
+fn a_100_kb_object_is_made_once_per_version_off_the_ui_thread(cx: &mut TestAppContext) {
     let mut d = Detail::new(cx, [big_config_map()]);
     let target = ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "ConfigMap"), "shop", "big");
     let view = d.open(&target);
@@ -358,28 +372,68 @@ fn a_100_kb_object_is_made_once_per_version_and_drawn_in_one_frame(cx: &mut Test
         std::sync::Arc::ptr_eq(&first, &again),
         "one text per object version"
     );
-    // Drawing frames does not push the text to the editor again (each push is a re-parse).
-    let editor = d.read(&view, |v| v.yaml.editor.clone()).expect("an editor");
+    // The view holds that same text (no copy), laid out once.
+    let code = d.read(&view, |v| v.yaml.view.clone()).expect("a code view");
     let held =
         d.f.vcx
-            .update(|_, cx| oxikube_ui::editor::text(&editor, cx));
-    assert_eq!(held.len(), first.len(), "the editor holds the text");
-    let pushes = d.read(&view, |v| v.yaml.pushes);
-    assert_eq!(pushes, 1, "pushed once, when the text was made");
+            .update(|_, cx| code.read(cx).text().cloned())
+            .expect("laid out");
+    assert!(
+        std::sync::Arc::ptr_eq(&held, &first),
+        "the view shares the text"
+    );
+    assert_eq!(
+        d.read(&view, |v| v.yaml.made),
+        1,
+        "made once, off the UI thread"
+    );
     let started = std::time::Instant::now();
     for _ in 0..10 {
         d.draw();
     }
     let elapsed = started.elapsed();
     assert_eq!(
-        d.read(&view, |v| v.yaml.pushes),
-        pushes,
-        "a frame must not push the text again"
+        d.read(&view, |v| v.yaml.made),
+        1,
+        "a frame must not make the text again"
     );
+    let drawn = d.f.vcx.update(|_, cx| code.read(cx).rows_drawn());
+    assert!(drawn < 200, "only the visible rows are built: {drawn}");
     // A re-parse of 100 KB per frame would take far longer than this (debug build, loaded CI).
     assert!(
         elapsed < Duration::from_secs(2),
         "10 frames with a 100 KB YAML tab took {elapsed:?}"
+    );
+}
+
+#[gpui::test]
+fn switching_to_yaml_writes_and_lays_out_nothing_on_the_ui_thread(cx: &mut TestAppContext) {
+    let mut d = Detail::new(cx, [big_config_map()]);
+    let target = ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "ConfigMap"), "shop", "big");
+    let view = d.open(&target);
+    d.settle();
+    // The switch itself (what `resource_detail::ShowTab` does), without letting tasks run.
+    d.f.vcx
+        .update(|_, cx| view.update(cx, |v, cx| v.set_tab(DetailTab::Yaml, cx)));
+    assert_eq!(
+        d.read(&view, |v| v.yaml().map(str::len)),
+        None,
+        "the YAML is written on the background executor, not in the switch"
+    );
+    assert!(d.read(&view, |v| v.yaml.making.is_some()));
+    // The frame that shows the tab draws the skeleton; it neither writes nor lays out the text.
+    assert!(d.shown("detail-yaml-loading"));
+    assert_eq!(d.read(&view, |v| v.yaml.made), 0);
+    let code = d.read(&view, |v| v.yaml.view.clone()).expect("a code view");
+    assert!(!d.f.vcx.update(|_, cx| code.read(cx).is_ready()));
+
+    d.settle();
+    d.draw();
+    assert!(d.read(&view, |v| v.yaml().is_some_and(|y| y.len() > 100_000)));
+    assert!(d.f.vcx.update(|_, cx| code.read(cx).is_current()));
+    assert!(
+        !d.shown("detail-yaml-loading"),
+        "the text replaced the skeleton"
     );
 }
 

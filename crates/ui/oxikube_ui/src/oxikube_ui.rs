@@ -17,7 +17,9 @@
 //! - [`icon`]: [`IconName`] (Lucide, embedded by `oxikube_assets`) and the [`Icon`] element.
 //! - [`assets`]: [`Assets`], the application asset source to pass to `Application::with_assets`.
 //! - [`table`]: [`Table`] over our own [`TableDelegate`] trait (virtualised, uniform rows).
-//! - [`editor`]: the read-only, tree-sitter highlighted code view the YAML tab shows.
+//! - [`editor`]: gpui-component's editor glue (rope text, tree-sitter parse), set up read-only.
+//! - [`code_view`]: [`code_view::CodeView`], the read-only, virtualised, tree-sitter coloured text
+//!   view the resource detail's YAML and Describe tabs show (laid out off the UI thread, any size).
 //! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`chart`], [`markdown`],
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
 //! - [`error_details`]: the Details toggle and raw-text box every error notice shares.
@@ -33,6 +35,7 @@
 pub mod assets;
 pub mod button;
 pub mod chart;
+pub mod code_view;
 pub mod dialog;
 pub mod dock;
 pub mod editor;
