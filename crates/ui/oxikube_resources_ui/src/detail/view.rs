@@ -230,9 +230,7 @@ impl DetailView {
         }
         match tab {
             DetailTab::Events => self.start_events(cx),
-            DetailTab::Yaml => {
-                self.refresh_yaml();
-            }
+            DetailTab::Yaml => self.refresh_yaml(cx),
             DetailTab::Describe => self.start_describe(cx),
             DetailTab::Schema => self.schema_tab_opened(),
             DetailTab::Overview => {}
@@ -333,6 +331,7 @@ impl DetailView {
         self.full_task = None;
         self.owners_task = None;
         self.describe.task = None;
+        self.yaml.task = None;
         self.events.task = None;
         self.events.subscription = None;
     }

@@ -9,7 +9,7 @@
 //! | File | Holds |
 //! |---|---|
 //! | `model` | [`DetailModel`]: header, labels, annotations, owners, finalizers, conditions, the `status` summary and a Secret's key names; plain Rust, no GPUI |
-//! | `yaml` | the YAML tab (E07-S06): [`yaml_text`] (managedFields, Secret masking) as a pure function, the read-only highlighted editor, the toolbar |
+//! | `yaml` | the YAML tab (E07-S06): [`yaml_text`] (managedFields, Secret masking) as a pure function run off the UI thread, the read-only code view, the toolbar |
 //! | `describe` | the Describe tab (E07-S06): `DescribePort` read on the Tokio bridge, spinner, error with Retry, refresh |
 //! | `events` | [`EventRow`], [`events_about`]: the events of the object from the namespace's `Event` feed |
 //! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, and a CRD's Schema |

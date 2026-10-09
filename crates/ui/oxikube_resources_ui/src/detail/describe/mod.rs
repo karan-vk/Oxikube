@@ -3,7 +3,7 @@
 //! | File | Holds |
 //! |---|---|
 //! | `tab` | [`DescribeState`], [`DescribeTab`] and the view's methods: starting on first show, refresh, the result applied |
-//! | `render` | the toolbar (which backend rendered it, refresh) and the body: text in the read-only editor, a spinner while it is read, an error with Retry |
+//! | `render` | the toolbar (which backend rendered it, refresh) and the body: the text in a plain-text `oxikube_ui::code_view::CodeView` (laid out off the UI thread), a spinner while it is read, an error with Retry |
 //!
 //! The text comes from the cluster's [`DescribePort`](oxikube_ports::DescribePort): deskribe
 //! renders it natively, and `kubectl describe` is the fallback for a kind deskribe does not cover

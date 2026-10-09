@@ -395,12 +395,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   for metadata-only and Table feeds (Secret values removed inside that read), and draws header, labels/annotations (copy through
   `resource::CopyLabel`), owner links (`resource::Open`), finalizers, conditions, the `status` summary and the Events tab
   (the namespace's `Event` feed, started on first show) in virtualised lists. The YAML tab (E07-S06, `detail::yaml`) shows
-  the complete object as read-only YAML in `oxikube_ui::editor` (gpui-component's editor with tree-sitter YAML): the text is
+  the complete object as read-only YAML in an `oxikube_ui::code_view::CodeView` (virtualised, tree-sitter YAML colours): the text is
   `yaml_text`, a pure function over a copy of the object (`metadata.managedFields` hidden unless `resource::ToggleManagedFields`,
   a Secret's `data`/`stringData` values and `last-applied-configuration` replaced by `(hidden)`), made once per object version
-  when the tab is shown, never in render; `resource::CopyYaml` and `resource::SaveYaml` (file dialog, then `FsPort::write`) write
+  when the tab is shown, on the background executor (E07-P598), never in render or on the UI thread; a skeleton covers the
+  view until it is laid out; `resource::CopyYaml` and `resource::SaveYaml` (file dialog, then `FsPort::write`) write
   exactly that text. The Describe tab (`detail::describe`) reads the connection's `DescribePort` on the Tokio bridge on first
-  show (spinner, error with Retry, `resource::RefreshDescribe`), the previous text staying while it refreshes. The view carries the `Detail` key context (E07-U559, `detail::keys`, `mount == drawer|tab`): `escape` closes the drawer and the workspace refocuses the table, `j` / `k` and the arrows call `ResourceTable::step_detail` on the table it was opened from (the cursor moves and `resource::Open` shows the new object), `1`-`5` switch tabs; conditions are two lines (type, status, age; then the muted reason and message) and label, annotation and status keys are cut with a tooltip. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
+  show (spinner, error with Retry, `resource::RefreshDescribe`), the previous text staying while it refreshes; its text is shown in a
+  plain-text `CodeView`. The view carries the `Detail` key context (E07-U559, `detail::keys`, `mount == drawer|tab`): `escape` closes the drawer and the workspace refocuses the table, `j` / `k` and the arrows call `ResourceTable::step_detail` on the table it was opened from (the cursor moves and `resource::Open` shows the new object), `1`-`5` switch tabs; conditions are two lines (type, status, age; then the muted reason and message) and label, annotation and status keys are cut with a tooltip. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
   (a workspace `Item`): one `oxikube_ui::tile::StatTile` per `Tile` of the `TileRegistry` (Deployments, StatefulSets,
   DaemonSets, ReplicaSets, Jobs, CronJobs, Pods) with total and healthy from a `CountsLease`, read once a second and redrawn
   coalesced only on change; a click sends `resource::OpenList`. Module `navigate`: the `resource::OpenList` handler and the
@@ -420,9 +422,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `describe.kubectl_path` settings, hot reloaded by the binary). `oxikube_kube::KubeConnector::set_describe_factory` hands each
   connection's client and discovery to the factory the binary supplies (`bins/oxikube::kube_ports::SourcesConnector`), which
   fills `ClusterPorts::describe` and points `kubectl` at the file that defines the context.
-- `oxikube_ui::editor` (E07-S06) — the read-only code view (`read_only_state`, `set_text`, `code_view`) over gpui-component's
-  editor with the `tree-sitter-yaml` feature; the manifest editor (E10) builds on the same state type. gpui-component links
-  tree-sitter 0.26, so the workspace pins `tree-sitter = "0.26"` (one native library may be linked).
+- `oxikube_ui::editor` (E07-S06) — glue over gpui-component's editor with the `tree-sitter-yaml` feature (`read_only_state`,
+  `set_text`, `code_view`); the manifest editor (E10) builds on the same state type. gpui-component links tree-sitter 0.26, so
+  the workspace pins `tree-sitter = "0.26"` (one native library may be linked).
+- `oxikube_ui::code_view` (E07-P598) — `CodeView`, the read-only text view of the detail's YAML and Describe tabs: the text as
+  an `Arc<str>`, its display rows (`RowMap`: soft wrap at the measured width, or lines cut at `MAX_ROW_COLS`) and its
+  tree-sitter parse (gpui-component's `SyntaxHighlighter`) made on the background executor; a `uniform_list` shapes only the
+  visible rows, colours come from the parse for the rows on screen, and a new width re-wraps off the UI thread. Selection
+  (click, drag, double/triple click), copy, select all and key scrolling are the view's own keys (`CodeView` context, bound by
+  `oxikube_ui::init` as the component library binds its inputs'). A multi-megabyte object costs no UI-thread work per line.
 - `oxikube_catalog_ui` — the cluster catalog UI. Module `sources` (E06-S05): `SourcesView`, the
   kubeconfig sources screen (a workspace `Item`): one row per entry of `kubeconfig.sources` with its
   status (found with N contexts, or the error inline next to that one source), add file / add folder
