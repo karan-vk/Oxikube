@@ -10,85 +10,86 @@
 //! texts (annotation payloads, messages) are never shared; unique ones (names, uids, resource
 //! versions) are not worth a lookup and callers do not pass them.
 
+use std::borrow::Borrow;
 use std::collections::HashSet;
+use std::hash::Hash;
 use std::sync::{Arc, Mutex, PoisonError};
 
 /// Texts longer than this are not interned.
 const MAX_LEN: usize = 128;
-/// The table is first cleaned at this size.
+/// Pair lists beyond this many text bytes are not shared (an annotation set with an applied
+/// manifest in it is unique anyway, and hashing it would cost more than it saves).
+const MAX_PAIRS_BYTES: usize = 512;
+/// A table is first cleaned at this size.
 const MIN_PRUNE_AT: usize = 4_096;
 
-struct Table {
-    texts: HashSet<Arc<str>>,
+type Pair = (Arc<str>, Arc<str>);
+
+/// The values handed out so far, each kept while anything but the table holds it.
+struct Table<T: ?Sized> {
+    shared: HashSet<Arc<T>>,
     prune_at: usize,
 }
 
-static TABLE: Mutex<Option<Table>> = Mutex::new(None);
+impl<T: ?Sized + Hash + Eq> Table<T> {
+    fn new() -> Self {
+        Self {
+            shared: HashSet::new(),
+            prune_at: MIN_PRUNE_AT,
+        }
+    }
+
+    /// The shared allocation equal to `key`, made with `make` on a miss.
+    fn get_or_insert<Q>(&mut self, key: &Q, make: impl FnOnce() -> Arc<T>) -> Arc<T>
+    where
+        Arc<T>: Borrow<Q>,
+        Q: ?Sized + Hash + Eq,
+    {
+        if let Some(shared) = self.shared.get(key) {
+            return shared.clone();
+        }
+        if self.shared.len() >= self.prune_at {
+            // Only the table holds these: nothing uses them any more.
+            self.shared.retain(|shared| Arc::strong_count(shared) > 1);
+            self.prune_at = (self.shared.len() * 2).max(MIN_PRUNE_AT);
+        }
+        let shared = make();
+        self.shared.insert(shared.clone());
+        shared
+    }
+}
+
+static TEXTS: Mutex<Option<Table<str>>> = Mutex::new(None);
+static PAIRS: Mutex<Option<Table<[Pair]>>> = Mutex::new(None);
 
 /// The shared `Arc<str>` for `text`: the same allocation for equal texts while one is alive.
 pub fn intern(text: &str) -> Arc<str> {
     if text.len() > MAX_LEN {
         return Arc::from(text);
     }
-    let mut guard = TABLE.lock().unwrap_or_else(PoisonError::into_inner);
-    let table = guard.get_or_insert_with(|| Table {
-        texts: HashSet::new(),
-        prune_at: MIN_PRUNE_AT,
-    });
-    if let Some(shared) = table.texts.get(text) {
-        return shared.clone();
-    }
-    if table.texts.len() >= table.prune_at {
-        // Only the table holds these: nothing uses them any more.
-        table.texts.retain(|shared| Arc::strong_count(shared) > 1);
-        table.prune_at = (table.texts.len() * 2).max(MIN_PRUNE_AT);
-    }
-    let shared: Arc<str> = Arc::from(text);
-    table.texts.insert(shared.clone());
-    shared
-}
-
-type Pair = (Arc<str>, Arc<str>);
-
-/// Pair lists beyond this many text bytes are not shared (an annotation set with an applied
-/// manifest in it is unique anyway, and hashing it would cost more than it saves).
-const MAX_PAIRS_BYTES: usize = 512;
-
-static PAIRS: Mutex<Option<PairTable>> = Mutex::new(None);
-
-struct PairTable {
-    sets: HashSet<Arc<[Pair]>>,
-    prune_at: usize,
+    let mut guard = TEXTS.lock().unwrap_or_else(PoisonError::into_inner);
+    guard
+        .get_or_insert_with(Table::new)
+        .get_or_insert(text, || Arc::from(text))
 }
 
 /// The shared slice for `pairs` (already sorted by key): the same allocation for equal contents
 /// while one is alive. Used for label sets, which every pod of a ReplicaSet repeats.
-pub fn intern_pairs(pairs: Vec<Pair>) -> Arc<[Pair]> {
+pub(crate) fn intern_pairs(pairs: Vec<Pair>) -> Arc<[Pair]> {
     let bytes: usize = pairs.iter().map(|(k, v)| k.len() + v.len()).sum();
     if bytes > MAX_PAIRS_BYTES {
         return Arc::from(pairs);
     }
     let mut guard = PAIRS.lock().unwrap_or_else(PoisonError::into_inner);
-    let table = guard.get_or_insert_with(|| PairTable {
-        sets: HashSet::new(),
-        prune_at: MIN_PRUNE_AT,
-    });
-    if let Some(shared) = table.sets.get(pairs.as_slice()) {
-        return shared.clone();
-    }
-    if table.sets.len() >= table.prune_at {
-        table.sets.retain(|shared| Arc::strong_count(shared) > 1);
-        table.prune_at = (table.sets.len() * 2).max(MIN_PRUNE_AT);
-    }
-    let shared: Arc<[Pair]> = Arc::from(pairs);
-    table.sets.insert(shared.clone());
-    shared
+    guard
+        .get_or_insert_with(Table::new)
+        .get_or_insert(pairs.as_slice(), || Arc::from(pairs.as_slice()))
 }
 
-/// How many distinct texts the table holds (tests and diagnostics).
-pub fn interned_len() -> usize {
-    let guard = TABLE.lock().unwrap_or_else(PoisonError::into_inner);
-    guard.as_ref().map_or(0, |table| table.texts.len())
+#[cfg(test)]
+fn interned_len() -> usize {
+    let guard = TEXTS.lock().unwrap_or_else(PoisonError::into_inner);
+    guard.as_ref().map_or(0, |table| table.shared.len())
 }
 
 #[cfg(test)]

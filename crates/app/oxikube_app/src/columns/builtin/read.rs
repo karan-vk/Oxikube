@@ -1,7 +1,7 @@
 //! Reads a [`Src`] out of a [`Resource`]: the allocation-light path every cell goes through.
 //!
 //! Strings at a JSON pointer are borrowed from the object. Numbers allocate their text once.
-//! Nothing here parses a pointer: `serde_json`'s `pointer` walks the tokens in place.
+//! Nothing here parses a pointer: [`JsonRef::pointer`] walks the tokens in place.
 
 use jiff::Timestamp;
 use oxikube_domain::json::{JsonKind, JsonRef};

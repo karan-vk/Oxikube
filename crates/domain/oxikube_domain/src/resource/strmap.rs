@@ -31,9 +31,16 @@ impl StrMap {
     /// The map of `pairs` (a repeated key keeps its last value), sharing storage with every equal
     /// map built the same way.
     pub fn shared(pairs: impl IntoIterator<Item = Pair>) -> Self {
+        Self::from_pairs(pairs, true)
+    }
+
+    /// Sorts `pairs`, keeping the last of any repeated key (as inserting one by one would).
+    fn from_pairs(pairs: impl IntoIterator<Item = Pair>, share: bool) -> Self {
         let mut pairs: Vec<Pair> = pairs.into_iter().collect();
-        sort_unique(&mut pairs);
-        Self::from_sorted(pairs, true)
+        pairs.reverse();
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        pairs.dedup_by(|later, earlier| later.0 == earlier.0);
+        Self::from_sorted(pairs, share)
     }
 
     fn from_sorted(pairs: Vec<Pair>, share: bool) -> Self {
@@ -121,18 +128,9 @@ impl StrMap {
     }
 }
 
-/// Sorts by key and keeps the last of any repeated key (as inserting one by one would).
-fn sort_unique(pairs: &mut Vec<Pair>) {
-    pairs.reverse();
-    pairs.sort_by(|a, b| a.0.cmp(&b.0));
-    pairs.dedup_by(|later, earlier| later.0 == earlier.0);
-}
-
 impl FromIterator<Pair> for StrMap {
     fn from_iter<I: IntoIterator<Item = Pair>>(iter: I) -> Self {
-        let mut pairs: Vec<Pair> = iter.into_iter().collect();
-        sort_unique(&mut pairs);
-        Self::from_sorted(pairs, false)
+        Self::from_pairs(iter, false)
     }
 }
 

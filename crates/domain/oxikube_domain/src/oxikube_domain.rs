@@ -9,7 +9,6 @@
 //! | [`kinds`] | [`ResourceKind`](kinds::ResourceKind), [`Verb`](kinds::Verb), [`VerbSet`](kinds::VerbSet) |
 //! | [`access`] | [`AccessRules`](access::AccessRules): what the user may do per resource (a rules review as data), [`AccessRequirement`](access::AccessRequirement) |
 //! | [`resource`] | the thin [`Resource`] model: [`ObjectMeta`] + the object's JSON |
-//! | [`intern`] | [`intern`](intern::intern): one shared `Arc<str>` per short repeated text |
 //! | [`json`] | [`JsonDoc`](json::JsonDoc): compact immutable JSON read in place through [`JsonRef`](json::JsonRef) |
 //! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
 //! | [`quantity`], [`age`] | [`Quantity`] parsing/formatting and [`Age`] formatting |
@@ -47,7 +46,7 @@ pub mod error_details;
 pub mod event;
 pub mod human_error;
 pub mod ids;
-pub mod intern;
+pub(crate) mod intern;
 pub mod json;
 pub mod kinds;
 pub mod log;
