@@ -818,6 +818,45 @@ redraw for ages. Pinned by `detail::tests::ages` (render counts over 30 ticks of
 redraw on a day rollover, a young object, condition and event ticking only on their own tab) and
 `detail::ages::tests`.
 
+### The detail's YAML and Describe off the UI thread (E07-P598)
+
+The `detail-drawer` scenario (a 5 MB ConfigMap, its tabs cycled with their keys every half second)
+had two frames over budget in every run of the #587 baseline: about 330 ms at the first switch to
+YAML and about 40 ms at the first switch to Describe, 44 to 45 refreshes dropped. The YAML tab
+serialised the object on the UI thread (`refresh_yaml`) and pushed the text into gpui-component's
+editor from `render`, whose `DisplayMap` wrapped every line of the document, twice (once on
+`set_value`, again when the font arrived in the first prepaint); the Describe text took the same
+path.
+
+Now neither tab does per-line work on the UI thread:
+
+- `yaml_text` runs on the background executor over the `Arc` of the object the view already holds;
+  the describe text becomes an `Arc<str>` on the Tokio thread.
+- The text is shown in `oxikube_ui::code_view::CodeView`: its row map (soft wrap at the measured
+  width, or lines cut at 1 000 columns) and its tree-sitter parse are built on the background
+  executor; a `uniform_list` slices, colours and shapes only the rows in the viewport (one run each);
+  the colours of the rows around the viewport come from the parse through a two-entry cache. The
+  view is mounted under the skeleton from the tab's first frame, so the rows are built once, for the
+  final width; a new width re-wraps off the UI thread.
+- Memory: one copy of each text (shared by the tab, copy/save and the view), a row map of 24 bytes a
+  row and the parser's rope and tree, instead of the editor's rope, display map and per-line wrap
+  boundaries.
+
+Switching tabs (`DetailView::set_tab`) costs 0.01 to 0.04 ms. Supplementary, headless (the same
+5.5 MB YAML and 5.3 MB describe text, the real macOS text system and Metal renderer, `release-fast`,
+busy machine): every draw of the cycle, including the frames that swap in the rows and the colours,
+0.1 to 2.0 ms. This is not the acceptance measure; the real-window runs are:
+
+| `detail-drawer`, 5 real-window runs each | frames | max ms | p99 ms | p95 ms | over 8.33 ms | dropped | input max ms | peak RSS MiB |
+|---|---|---|---|---|---|---|---|---|
+| before (`ea1fce2d`, the #587 baseline in #598) | 131 to 135 | 327.4 to 339.2 | 39.1 to 40.6 | 3.81 to 4.06 | 2 | 44 to 45 | 338.0 to 349.7 | 579.9 to 587.3 |
+| after | pending | pending | pending | pending | pending | pending | pending | pending |
+
+The "after" row is taken by the story's verify stage on a quiet machine: during the story's own
+session the machine's screen stayed locked, and macOS does not refresh a window on a locked
+screen, so every windowed run there reported itself as not a measurement (no frame was taken from
+a headless or shortened run instead).
+
 ### Memory: 10 000 pods under 400 MB (E07-F508)
 
 Measured on the story branch of E07-S09 the windowed app read **504 MiB** RSS with the 10 000 pods
