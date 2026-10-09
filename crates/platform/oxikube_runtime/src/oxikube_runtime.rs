@@ -12,7 +12,7 @@
 //!   [`init_deterministic`] for tests, [`handle`]); ported from Zed's `gpui_tokio`.
 //! - [`kube_task`]: [`spawn_kube`], which runs a future on that runtime and returns a GPUI task
 //!   that aborts the tokio task when dropped.
-//! - [`notify`]: [`notify_coalesced`], one `cx.notify()` per [`FRAME_INTERVAL`] however many
+//! - [`notify`]: [`notify_coalesced`], one `cx.notify()` per drawn frame however many
 //!   times it is called.
 //! - [`channel`]: [`batch_channel`], a bounded tokio channel whose receiver drains into an entity
 //!   in batches.
@@ -87,4 +87,6 @@ pub use gpui_tokio::{
 };
 pub use kube_task::{KubeTask, KubeTaskError, live_tasks, spawn_kube};
 pub use lazy::{LazyService, LazyServices, StartedService};
-pub use notify::{FRAME_INTERVAL, NotifyCoalescedExt, notify_coalesced, notify_pending};
+pub use notify::{
+    FRAME_INTERVAL, FRAME_STALL, NotifyCoalescedExt, RenderGate, notify_coalesced, notify_pending,
+};

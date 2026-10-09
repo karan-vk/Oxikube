@@ -2,6 +2,7 @@
 //! `FakeTerminalBackend` on the deterministic runtime (no OS threads).
 
 mod coalescing;
+mod frame_paced;
 mod io;
 mod lifecycle;
 mod settings;

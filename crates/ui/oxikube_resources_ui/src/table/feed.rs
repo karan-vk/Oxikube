@@ -5,7 +5,8 @@
 //! task the view owns (replaced, never cleared from inside, when the view re-subscribes). Each
 //! wake drains everything pending (the store hands over one coalesced delta per poll) and
 //! applies it in one update, then redraws through `notify_coalesced`, so a burst of feed events
-//! costs at most one redraw per frame.
+//! costs at most one redraw per frame. The redraw goes through a `RenderGate`: while the table has
+//! not rendered the last one (it is in a background cluster tab) it is not notified again.
 //!
 //! The view follows its session: a namespace change rescopes the subscription (shared feeds,
 //! rows kept for namespaces that stay), a reconnect (a new store) re-subscribes, a capability
@@ -23,7 +24,6 @@ use oxikube_app::store::{
 };
 use oxikube_app::{ColumnProvider, TableColumns};
 use oxikube_domain::ids::ClusterId;
-use oxikube_runtime::notify_coalesced;
 
 use super::states::{poll_warnings, scope_label};
 use super::view::{ResourceTable, ResourceTableDeps};
@@ -132,7 +132,7 @@ impl ResourceTable {
             for delta in deltas {
                 self.apply(delta, cx);
             }
-            notify_coalesced(cx);
+            self.redraw.notify(cx);
         }
         live
     }
