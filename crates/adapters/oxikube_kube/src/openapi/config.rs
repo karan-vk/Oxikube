@@ -8,6 +8,11 @@ pub const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
 /// Deadline for the `/version` read that keys the disk cache.
 pub(super) const VERSION_TIMEOUT: Duration = Duration::from_secs(3);
 
+/// Deadline for a settle re-check's index read. Shorter than the request deadline: the re-check
+/// sits in front of every lookup, memory hits included, so a hung server must not hold them for
+/// the full request timeout.
+pub(super) const RECHECK_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// How old the in-memory index must be before a miss re-reads it (a CRD that
 /// was just created reaches the server's OpenAPI document a moment after its
 /// discovery event).
@@ -35,7 +40,7 @@ pub struct OpenApiConfig {
     /// change is replaced (the first lookup after the invalidate cannot tell).
     pub settle_after_invalidate: Duration,
     /// While settling, the youngest index a lookup re-reads: at most one index request per
-    /// this interval.
+    /// this interval, a failed one included.
     pub recheck_every: Duration,
 }
 
