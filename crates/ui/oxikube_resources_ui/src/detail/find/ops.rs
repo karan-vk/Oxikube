@@ -171,11 +171,16 @@ impl DetailView {
         if let Some(input) = &self.find.input {
             input.update(cx, |input, cx| input.set_value(String::new(), window, cx));
         }
+        self.clear_code_view_matches(cx);
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    /// Takes the match colouring off the YAML and Describe code views.
+    fn clear_code_view_matches(&self, cx: &mut Context<Self>) {
         for view in [&self.yaml.view, &self.describe.view].into_iter().flatten() {
             view.update(cx, |view, cx| view.clear_matches(cx));
         }
-        window.focus(&self.focus, cx);
-        cx.notify();
     }
 
     /// Searches the text of the tab shown again: the text changed (a new object version, a tab
@@ -189,9 +194,7 @@ impl DetailView {
         else {
             self.find.task = None;
             self.find.clear_matches();
-            for view in [&self.yaml.view, &self.describe.view].into_iter().flatten() {
-                view.update(cx, |view, cx| view.clear_matches(cx));
-            }
+            self.clear_code_view_matches(cx);
             cx.notify();
             return;
         };
