@@ -88,7 +88,10 @@ impl HelpHost {
         hosts.0.insert(id, self.clone());
     }
 
-    /// Opens the overlay over the focused view, or closes it when it is open.
+    /// Opens the overlay over the focused view, or closes it when it is open. Another modal that
+    /// is open (a pending confirmation, a running delete) is left alone: the overlay only lists
+    /// keys, so it never takes the place of a decision, and the modal layer would replace the
+    /// modal without asking it.
     ///
     /// The bindings are resolved first, from the focus path as it is now (the overlay takes the
     /// focus), once: the overlay's first frame already lists them.
@@ -96,14 +99,16 @@ impl HelpHost {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
-        let open = workspace
-            .read(cx)
-            .modal_layer()
-            .read(cx)
-            .active_modal::<HelpOverlay>()
-            .is_some();
+        let (open, other_modal) = {
+            let layer = workspace.read(cx).modal_layer().read(cx);
+            let open = layer.active_modal::<HelpOverlay>().is_some();
+            (open, !open && layer.has_active_modal())
+        };
         if open {
             workspace.update(cx, |workspace, cx| workspace.hide_modal(window, cx));
+            return;
+        }
+        if other_modal {
             return;
         }
         let model = Arc::new(HelpModel::capture(window, cx));

@@ -87,3 +87,48 @@ fn opening_it_twice_does_not_stack_overlays(cx: &mut gpui::TestAppContext) {
         "a fresh overlay per open"
     );
 }
+
+#[gpui::test]
+fn help_never_replaces_another_open_modal(cx: &mut gpui::TestAppContext) {
+    use oxikube_workspace::DialogModal;
+
+    let mut f = Fixture::new(cx, Where::Table);
+    let workspace = f.workspace.clone();
+    f.vcx.update(|window, cx| {
+        workspace.update(cx, |ws, cx| {
+            ws.toggle_modal(window, cx, |_, cx| DialogModal::new("Delete pod?", cx));
+        });
+    });
+    f.settle();
+    let dialog_open = |f: &mut Fixture| {
+        let workspace = f.workspace.clone();
+        f.vcx.update(|_, cx| {
+            workspace
+                .read(cx)
+                .modal_layer()
+                .read(cx)
+                .active_modal::<DialogModal>()
+                .is_some()
+        })
+    };
+    assert!(dialog_open(&mut f));
+
+    // The bus door and the key door both end in `toggle`.
+    let workspace = f.workspace.clone();
+    f.vcx.update(|window, cx| {
+        crate::help::HelpHost::new(&workspace).toggle(window, cx);
+    });
+    f.settle();
+    assert!(f.overlay().is_none(), "no overlay over a pending dialog");
+    assert!(dialog_open(&mut f), "the dialog is still the open modal");
+
+    // Once the dialog is gone, help opens as usual.
+    f.keys("escape");
+    assert!(!dialog_open(&mut f));
+    let workspace = f.workspace.clone();
+    f.vcx.update(|window, cx| {
+        crate::help::HelpHost::new(&workspace).toggle(window, cx);
+    });
+    f.settle();
+    assert!(f.overlay().is_some());
+}
