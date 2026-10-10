@@ -8,7 +8,7 @@ use std::sync::Arc;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::schema::{JsonSchema, root_schema_for};
 use oxikube_editor::validate::{
-    Diagnostic, DiagnosticCode, Severity, ValidateOptions, validate, validate_buffer,
+    Diagnostic, DiagnosticCode, ValidateOptions, validate, validate_buffer,
 };
 use oxikube_editor::yaml::{ParseResult, parse};
 use oxikube_testkit::fixtures::openapi;
@@ -98,14 +98,11 @@ pub fn render(text: &str, diags: &[Diagnostic]) -> String {
         let before = &text[..d.span.start];
         let line = before.matches('\n').count() + 1;
         let col = before.len() - before.rfind('\n').map_or(0, |i| i + 1) + 1;
-        let severity = match d.severity {
-            Severity::Error => "error",
-            Severity::Warning => "warning",
-        };
         let _ = writeln!(
             out,
-            "{line}:{col} doc{} {severity} {} {:?} {} [{}]",
+            "{line}:{col} doc{} {} {} {:?} {} [{}]",
             d.doc,
+            d.severity.as_str(),
             d.code,
             underlined(text, d),
             d.message,

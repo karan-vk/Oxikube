@@ -79,6 +79,18 @@ impl Walk<'_> {
         });
     }
 
+    /// [`report`](Self::report) underlining the whole of `node`.
+    pub(super) fn report_node(
+        &mut self,
+        node: NodeId,
+        severity: Severity,
+        code: DiagnosticCode,
+        message: String,
+    ) {
+        let span = self.doc.node(node).span.clone();
+        self.report(node, span, severity, code, message);
+    }
+
     /// Whether a syntax error sits in or right after `span`: the mapping there may have lost
     /// keys to the recovery, so a missing one proves nothing.
     pub(super) fn near_error(&self, span: &Range<usize>) -> bool {
@@ -123,18 +135,11 @@ impl Walk<'_> {
             .map(|t| t.as_str())
             .collect::<Vec<_>>()
             .join(" or ");
-        let found = match ty {
-            ValueType::String => format!("string {}", quote(text)),
-            ValueType::Int | ValueType::Float | ValueType::Bool => format!("{} {text}", ty.name()),
-            ValueType::Null | ValueType::Object | ValueType::Array => ty.name().to_owned(),
-        };
-        let span = self.doc.node(id).span.clone();
-        self.report(
+        self.report_node(
             id,
-            span,
             Severity::Error,
             DiagnosticCode::TypeMismatch,
-            format!("expected {expected}, found {found}"),
+            format!("expected {expected}, found {}", describe(ty, text)),
         );
         false
     }
@@ -153,7 +158,6 @@ impl Walk<'_> {
         if ty == ValueType::Null || !self.check_type(id, schema, ty, text) {
             return;
         }
-        let span = self.doc.node(id).span.clone();
         if !schema.enum_values.is_empty()
             && !schema
                 .enum_values
@@ -161,21 +165,14 @@ impl Walk<'_> {
                 .any(|allowed| matches_enum(ty, text, allowed))
         {
             let message = enum_message(text, ty, schema);
-            self.report(
-                id,
-                span.clone(),
-                Severity::Error,
-                DiagnosticCode::Enum,
-                message,
-            );
+            self.report_node(id, Severity::Error, DiagnosticCode::Enum, message);
         }
         if ty == ValueType::String
             && let Some(pattern) = &schema.pattern
             && !self.patterns.is_match(pattern, text)
         {
-            self.report(
+            self.report_node(
                 id,
-                span,
                 Severity::Error,
                 DiagnosticCode::Pattern,
                 format!("{} does not match the pattern {pattern}", quote(text)),
@@ -189,14 +186,32 @@ impl Walk<'_> {
         if let Some(near) = nearest(name, schema.properties.keys()) {
             message.push_str(&format!(" (did you mean {}?)", quote(near)));
         }
-        let span = self.doc.node(key).span.clone();
-        self.report(
+        self.report_node(
             key,
-            span,
             Severity::Warning,
             DiagnosticCode::UnknownField,
             message,
         );
+    }
+}
+
+/// The entry of mapping `map` whose key reads `name`: the key node and its value, if any.
+pub(super) fn find_entry(
+    doc: &DocTree,
+    text: &str,
+    map: NodeId,
+    name: &str,
+) -> Option<(NodeId, Option<NodeId>)> {
+    doc.entries(map)
+        .find(|(key, _)| doc.scalar_value(*key, text) == name)
+}
+
+/// How a value is named in a `type-mismatch` message: `string "x"`, `integer 3`, `object`.
+pub(super) fn describe(ty: ValueType, text: &str) -> String {
+    match ty {
+        ValueType::String => format!("string {}", quote(text)),
+        ValueType::Int | ValueType::Float | ValueType::Bool => format!("{} {text}", ty.name()),
+        ValueType::Null | ValueType::Object | ValueType::Array => ty.name().to_owned(),
     }
 }
 

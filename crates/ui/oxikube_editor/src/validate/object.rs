@@ -6,7 +6,7 @@ use oxikube_domain::schema::{AdditionalProperties, JsonSchema};
 
 use super::diagnostic::{DiagnosticCode, Severity};
 use super::scalar::{ValueType, scalar_type};
-use super::walk::{Walk, quote};
+use super::walk::{Walk, describe, find_entry, quote};
 use crate::yaml::{NodeId, NodeKind, Role};
 
 impl Walk<'_> {
@@ -47,20 +47,13 @@ impl Walk<'_> {
             if is_root && self.opts.skip_status && name == "status" {
                 continue;
             }
-            if !self.has_key(id, name) {
+            if find_entry(doc, text, id, name).is_none() {
                 self.missing(id, name);
             }
         }
         if schema.xk8s.embedded_resource {
             self.embedded_resource(id);
         }
-    }
-
-    /// Whether mapping `id` has an entry named `name`.
-    fn has_key(&self, id: NodeId, name: &str) -> bool {
-        self.doc
-            .entries(id)
-            .any(|(key, _)| self.doc.scalar_value(key, self.text) == name)
     }
 
     /// Reports `required` for the key `name` missing from mapping `id`, unless a syntax error
@@ -97,19 +90,13 @@ impl Walk<'_> {
     /// to look up; `validate` has only this one.)
     fn embedded_resource(&mut self, id: NodeId) {
         for field in ["apiVersion", "kind"] {
-            let entry = self
-                .doc
-                .entries(id)
-                .find(|(key, _)| self.doc.scalar_value(*key, self.text) == field);
-            let Some((_, value)) = entry else {
+            let Some((_, value)) = find_entry(self.doc, self.text, id, field) else {
                 self.missing(id, field);
                 continue;
             };
             let Some(value) = value else { continue };
-            let node = self.doc.node(value);
-            let span = node.span.clone();
             let text = self.doc.scalar_value(value, self.text);
-            let found = match node.kind {
+            let found = match self.doc.node(value).kind {
                 NodeKind::Mapping(_) => ValueType::Object,
                 NodeKind::Sequence(_) => ValueType::Array,
                 NodeKind::Alias { .. } => continue,
@@ -118,19 +105,11 @@ impl Walk<'_> {
             match found {
                 ValueType::String => {}
                 ValueType::Null => self.missing(id, field),
-                ValueType::Object | ValueType::Array => self.report(
+                _ => self.report_node(
                     value,
-                    span,
                     Severity::Error,
                     DiagnosticCode::TypeMismatch,
-                    format!("expected string, found {}", found.name()),
-                ),
-                ValueType::Bool | ValueType::Int | ValueType::Float => self.report(
-                    value,
-                    span,
-                    Severity::Error,
-                    DiagnosticCode::TypeMismatch,
-                    format!("expected string, found {} {text}", found.name()),
+                    format!("expected string, found {}", describe(found, text)),
                 ),
             }
         }

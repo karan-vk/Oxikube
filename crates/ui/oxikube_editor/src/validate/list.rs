@@ -6,7 +6,7 @@ use oxikube_domain::schema::JsonSchema;
 
 use super::diagnostic::{DiagnosticCode, Severity};
 use super::scalar::{ValueType, scalar_type};
-use super::walk::Walk;
+use super::walk::{Walk, find_entry};
 use crate::yaml::{NodeId, NodeKind};
 
 impl Walk<'_> {
@@ -41,10 +41,7 @@ impl Walk<'_> {
             let values: Option<Vec<(NodeId, &str)>> = keys
                 .iter()
                 .map(|wanted| {
-                    let (_, value) = doc
-                        .entries(item)
-                        .find(|(key, _)| doc.scalar_value(*key, text) == wanted)?;
-                    let value = value?;
+                    let value = find_entry(doc, text, item, wanted)?.1?;
                     let node = doc.node(value);
                     (matches!(node.kind, NodeKind::Scalar(_)) && !node.is_implicit_null())
                         .then(|| (value, doc.scalar_value(value, text)))
@@ -61,10 +58,8 @@ impl Walk<'_> {
                 shown.join(", ")
             );
             let (first, _) = values[0];
-            let span = doc.node(first).span.clone();
-            self.report(
+            self.report_node(
                 first,
-                span,
                 Severity::Warning,
                 DiagnosticCode::DuplicateKey,
                 message,
@@ -85,10 +80,8 @@ impl Walk<'_> {
             if ty == ValueType::Null || seen.insert((ty == ValueType::String, value)) {
                 continue;
             }
-            let span = doc.node(item).span.clone();
-            self.report(
+            self.report_node(
                 item,
-                span,
                 Severity::Warning,
                 DiagnosticCode::DuplicateItem,
                 format!("duplicate list item {value:?}"),

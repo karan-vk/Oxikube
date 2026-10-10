@@ -32,10 +32,6 @@
 //! `additionalProperties` is a schema validates every other value against it. Subtrees the
 //! schema flattening cut off ([`JsonSchema::truncated`]) are not judged. The root `status` is
 //! skipped by default ([`ValidateOptions::skip_status`]).
-//!
-//! Layout: `diagnostic` (types), `options`, `run` (entry points), `walk` (the paired walk and
-//! scalar checks), `object` (mappings), `list` (sequences), `scalar` (YAML typing), `suggest`
-//! (edit distance).
 
 mod diagnostic;
 mod list;

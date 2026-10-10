@@ -8,7 +8,7 @@ use oxikube_domain::schema::JsonSchema;
 use super::diagnostic::{Diagnostic, DiagnosticCode, Severity};
 use super::options::ValidateOptions;
 use super::scalar::{ValueType, scalar_type};
-use super::walk::{PatternCache, Walk};
+use super::walk::{PatternCache, Walk, find_entry};
 use crate::yaml::{DocTree, JsonPath, NodeKind, ParseResult};
 
 /// Validates one document of `parsed` against `schema`: unknown fields, wrong types, enums,
@@ -121,10 +121,7 @@ pub fn document_gvk(parsed: &ParseResult, doc: &DocTree) -> Option<Gvk> {
         return None;
     }
     let field = |name: &str| {
-        let (_, value) = doc
-            .entries(root)
-            .find(|(key, _)| doc.scalar_value(*key, parsed.text()) == name)?;
-        let value = value?;
+        let value = find_entry(doc, parsed.text(), root, name)?.1?;
         let NodeKind::Scalar(style) = doc.node(value).kind else {
             return None;
         };
