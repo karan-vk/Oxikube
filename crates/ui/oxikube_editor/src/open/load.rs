@@ -99,12 +99,20 @@ impl ManifestEditor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self
+            .binding
+            .as_ref()
+            .is_none_or(|b| b.generation != generation)
+        {
+            return;
+        }
+        if self.is_dirty(cx) {
+            self.keep_edits(resource, cx);
+            return;
+        }
         let Some(binding) = self.binding.as_mut() else {
             return;
         };
-        if binding.generation != generation {
-            return;
-        }
         let first = resource.is_some();
         if first {
             binding.resource = resource;
@@ -130,6 +138,22 @@ impl ManifestEditor {
         self.clean_version = self.editor.read(cx).version();
         self.schedule_validation(std::time::Duration::ZERO, window, cx);
         cx.emit(ItemEvent::UpdateTab);
+        cx.notify();
+    }
+
+    /// A result arrived after the user typed: the buffer is kept as it is. The object read is
+    /// held (the toggles can use it once the edits are undone) and the options go back to what
+    /// the text shows.
+    fn keep_edits(&mut self, resource: Option<Arc<Resource>>, cx: &mut Context<Self>) {
+        let Some(binding) = self.binding.as_mut() else {
+            return;
+        };
+        if resource.is_some() {
+            binding.resource = resource;
+            binding.load = ResourceLoad::Ready;
+        }
+        binding.options = binding.shown_options;
+        binding.notice = Some(DIRTY_NOTICE.into());
         cx.notify();
     }
 
@@ -211,7 +235,8 @@ impl ManifestEditor {
 
     /// The editor is opened again for the object it shows: "Edit" on a tab that was opened
     /// read-only makes it editable (unless the cluster is read-only); a tab whose read failed
-    /// reads again with `reader`. The buffer's edits are never touched.
+    /// reads again with `reader`. The buffer's edits are never touched, and a tab still reading
+    /// stays locked until the object arrives.
     pub fn reopen(
         &mut self,
         mode: OpenMode,
@@ -233,6 +258,9 @@ impl ManifestEditor {
             binding.mode = OpenMode::Edit;
             if binding.cluster_read_only {
                 binding.notice = Some(READ_ONLY_NOTICE.into());
+            } else if binding.load == ResourceLoad::Loading {
+                // The buffer is still empty: `show` unlocks it with the object, so nothing
+                // typed in between can be replaced.
             } else {
                 self.editor
                     .update(cx, |editor, cx| editor.api(window, cx).set_read_only(false));

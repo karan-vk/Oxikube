@@ -54,6 +54,8 @@ pub struct ResourceBinding {
     pub(crate) target: ResourceRef,
     pub(crate) mode: OpenMode,
     pub(crate) options: RenderOptions,
+    /// The options of the text in the buffer (`options` runs ahead while a render is in flight).
+    pub(crate) shown_options: RenderOptions,
     pub(crate) load: ResourceLoad,
     pub(crate) cluster_read_only: bool,
     pub(crate) reader: Option<Arc<dyn ResourceReader>>,
@@ -72,6 +74,7 @@ impl ResourceBinding {
             target: open.target,
             mode: open.mode,
             options: RenderOptions::default(),
+            shown_options: RenderOptions::default(),
             load: ResourceLoad::Loading,
             cluster_read_only: open.cluster_read_only,
             reader: open.reader,
@@ -143,6 +146,7 @@ impl ResourceBinding {
 
     pub(crate) fn rendered(&mut self, rendered: &RenderedManifest) {
         self.hidden_managed_fields = rendered.hidden_managed_fields();
+        self.shown_options = self.options;
         self.load = ResourceLoad::Ready;
     }
 }

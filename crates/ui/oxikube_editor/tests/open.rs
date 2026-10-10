@@ -9,20 +9,25 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use futures::channel::oneshot;
 use gpui::{App, Entity, TestAppContext, VisualTestContext, WeakEntity, Window};
-use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
+use oxikube_domain::{OxiResult, Resource};
 use oxikube_editor::open::{MASKED, OpenMode, ResourceLoad};
 use oxikube_editor::view::{
     EditorHost, EditorRequest, EditorViewSink, EditorViews, EditorViewsDeps, ManifestEditor,
     SchemaSource, VALIDATION_DEBOUNCE,
 };
-use oxikube_ports::{ResourceReader, SchemaPort};
+use oxikube_ports::{
+    ListOptions, ListPage, ResourceReader, SchemaPort, Subresource, WatchFeed, WatchOptions,
+};
 use oxikube_testkit::fakes::{FakeResourcePort, FakeSchemaPort, ResourceCall};
 use oxikube_ui::editor::{DecorationStyle, EditorApi as _};
 use oxikube_workspace::test_support::open_workspace;
 use oxikube_workspace::{CommandDispatcher, Item as _, Workspace};
+use parking_lot::Mutex;
 use serde_json::json;
 
 fn cluster() -> ClusterId {
@@ -102,9 +107,78 @@ impl SchemaSource for Schemas {
     }
 }
 
+/// The fake reader whose next `get` waits until the test lets it through (the object is "being
+/// read" for as long as the test wants).
+struct GatedReader {
+    inner: Arc<FakeResourcePort>,
+    gate: Mutex<Option<oneshot::Receiver<()>>>,
+}
+
+#[async_trait]
+impl ResourceReader for GatedReader {
+    async fn list(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        options: &ListOptions,
+    ) -> OxiResult<ListPage<Resource>> {
+        self.inner.list(kind, namespace, options).await
+    }
+    async fn list_metadata(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        options: &ListOptions,
+    ) -> OxiResult<ListPage<oxikube_domain::ObjectMeta>> {
+        self.inner.list_metadata(kind, namespace, options).await
+    }
+    async fn get(&self, kind: &Gvk, namespace: Option<&str>, name: &str) -> OxiResult<Resource> {
+        let gate = self.gate.lock().take();
+        if let Some(gate) = gate {
+            let _ = gate.await;
+        }
+        self.inner.get(kind, namespace, name).await
+    }
+    async fn get_opt(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+    ) -> OxiResult<Option<Resource>> {
+        self.inner.get_opt(kind, namespace, name).await
+    }
+    async fn watch(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        options: &WatchOptions,
+    ) -> OxiResult<WatchFeed<Resource>> {
+        self.inner.watch(kind, namespace, options).await
+    }
+    async fn get_scale(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+    ) -> OxiResult<oxikube_ports::Scale> {
+        self.inner.get_scale(kind, namespace, name).await
+    }
+    async fn get_subresource(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+        subresource: &Subresource,
+    ) -> OxiResult<serde_json::Value> {
+        self.inner
+            .get_subresource(kind, namespace, name, subresource)
+            .await
+    }
+}
+
 struct Host {
     workspace: WeakEntity<Workspace>,
-    resources: Arc<FakeResourcePort>,
+    reader: Arc<GatedReader>,
     schemas: Arc<FakeSchemaPort>,
     read_only: bool,
 }
@@ -121,7 +195,7 @@ impl EditorHost for Host {
         Rc::new(Schemas(self.schemas.clone()))
     }
     fn reader(&self, _: &ClusterId) -> Option<Arc<dyn ResourceReader>> {
-        Some(self.resources.clone())
+        Some(self.reader.clone())
     }
     fn cluster_read_only(&self, _: &ClusterId) -> bool {
         self.read_only
@@ -134,6 +208,7 @@ struct Fixture {
     sink: EditorViewSink,
     sent: Rc<RefCell<Vec<Command>>>,
     resources: Arc<FakeResourcePort>,
+    reader: Arc<GatedReader>,
     _views: Entity<EditorViews>,
 }
 
@@ -148,9 +223,13 @@ fn setup(cx: &mut TestAppContext, read_only: bool) -> Fixture {
         sink: sink.clone(),
         sent: sent.clone(),
     });
+    let reader = Arc::new(GatedReader {
+        inner: resources.clone(),
+        gate: Mutex::new(None),
+    });
     let host = Rc::new(Host {
         workspace: workspace.downgrade(),
-        resources: resources.clone(),
+        reader: reader.clone(),
         schemas: Arc::new(FakeSchemaPort::new()),
         read_only,
     });
@@ -173,11 +252,19 @@ fn setup(cx: &mut TestAppContext, read_only: bool) -> Fixture {
         sink,
         sent,
         resources,
+        reader,
         _views: views,
     }
 }
 
 impl Fixture {
+    /// The next `get` waits for the returned sender.
+    fn hold_next_get(&self) -> oneshot::Sender<()> {
+        let (release, gate) = oneshot::channel();
+        *self.reader.gate.lock() = Some(gate);
+        release
+    }
+
     fn open(&mut self, target: ResourceRef, mode: OpenMode) {
         self.sink
             .send(EditorRequest::Open { target, mode })
@@ -521,4 +608,61 @@ fn the_open_commands_map_to_requests(_: &mut TestAppContext) {
             mode: OpenMode::View
         })
     );
+}
+
+#[gpui::test]
+fn edit_while_the_object_is_still_being_read_keeps_the_tab_locked(cx: &mut TestAppContext) {
+    let mut f = setup(cx, false);
+    let release = f.hold_next_get();
+    f.open(deployment_ref(), OpenMode::View);
+    let editor = f.only_editor();
+    assert_eq!(f.text(&editor), "", "the get has not returned");
+
+    // "Edit" on the row while the tab reads: nothing can be typed into the empty buffer.
+    f.open(deployment_ref(), OpenMode::Edit);
+    assert!(f.read_only(&editor), "still locked while reading");
+    f.vcx.simulate_input("# lost?\n");
+    assert_eq!(
+        f.text(&editor),
+        "",
+        "typing is refused until the object is there"
+    );
+
+    release.send(()).expect("the get is waiting");
+    f.vcx.run_until_parked();
+    assert!(f.text(&editor).contains("replicas: 2"));
+    assert!(!f.read_only(&editor), "and the tab is editable once it is");
+    assert!(!f.dirty(&editor));
+}
+
+#[gpui::test]
+fn an_edit_typed_while_a_toggle_renders_is_kept(cx: &mut TestAppContext) {
+    let mut f = setup(cx, false);
+    f.open(deployment_ref(), OpenMode::Edit);
+    let editor = f.only_editor();
+    assert!(!f.text(&editor).contains("managedFields"));
+
+    // The render is asked for, and the user types before it comes back.
+    f.vcx
+        .update(|window, cx| editor.update(cx, |e, cx| e.toggle_managed_fields(window, cx)));
+    let code = f.vcx.read(|cx| editor.read(cx).editor().clone());
+    f.vcx.update(|window, cx| {
+        code.update(cx, |code, cx| {
+            code.api(window, cx).set_text("# typed meanwhile\n")
+        })
+    });
+    f.vcx.run_until_parked();
+
+    assert_eq!(
+        f.text(&editor),
+        "# typed meanwhile\n",
+        "the late render is dropped"
+    );
+    assert!(f.dirty(&editor), "and the edit still counts");
+    let (shown, notice) = f.vcx.read(|cx| {
+        let binding = editor.read(cx).binding().unwrap();
+        (binding.options().managed_fields, binding.notice().cloned())
+    });
+    assert!(!shown, "the option goes back to what the buffer shows");
+    assert!(notice.is_some(), "and the toolbar says why");
 }
