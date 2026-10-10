@@ -32,11 +32,6 @@ const TOAST_KEY: &str = "keymap-diagnostics";
 /// Where `keymap::OpenUser` sends the file it created or found, to be opened on the UI thread.
 pub type OpenSink = mpsc::UnboundedSender<PathBuf>;
 
-/// A channel for [`OpenSink`] and its receiver for [`open_requests`].
-pub fn channel() -> (OpenSink, mpsc::UnboundedReceiver<PathBuf>) {
-    mpsc::unbounded()
-}
-
 /// `keymap::OpenUser`: creates `file` from the template when it does not exist (off the UI
 /// thread: the bus runs handlers elsewhere), then asks the window to open it. `file` is the keymap's
 /// own path (`oxikube_keymap::user_keymap_file`); `None` when the app runs without a config

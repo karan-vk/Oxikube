@@ -225,7 +225,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (kinds_tx, kinds_rx) = mpsc::unbounded();
     let (resources_sink, resources_rx) = ResourceCommandSink::channel();
     let (logs_sink, logs_rx) = oxikube_logs_ui::LogCommandSink::channel();
-    let (keymap_sink, keymap_rx) = keymap::channel();
+    let (keymap_sink, keymap_rx) = mpsc::unbounded();
     let (links_sink, links_rx) = LinkSink::channel();
     let (terminal_input_sink, terminal_input_rx) = TerminalInputSink::channel();
     let (terminal_views_sink, terminal_views_rx) = TerminalViewSink::channel();
@@ -241,7 +241,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         prefs: Arc::new(SettingsPrefsWriter::new(cx)),
         tabs: sink.clone(),
         views: views_tx,
-        keymap: (oxikube_keymap::user_keymap_file(cx), keymap_sink),
+        keymap_file: oxikube_keymap::user_keymap_file(cx),
+        keymap_open: keymap_sink,
         kinds: kinds_tx,
         resources: resources_sink,
         logs: logs_sink,

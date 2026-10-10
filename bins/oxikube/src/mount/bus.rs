@@ -84,9 +84,10 @@ pub struct BusParts {
     pub tabs: CommandSink,
     /// Where `view::Open` sends the view to open (applied on the UI thread).
     pub views: mpsc::UnboundedSender<String>,
-    /// The user's `keymap.json` (`None` without a config directory) and where `keymap::OpenUser`
-    /// sends it to be opened (applied on the UI thread).
-    pub keymap: (Option<std::path::PathBuf>, super::keymap::OpenSink),
+    /// The user's `keymap.json`; `None` without a config directory.
+    pub keymap_file: Option<std::path::PathBuf>,
+    /// Where `keymap::OpenUser` sends the file to open (applied on the UI thread).
+    pub keymap_open: super::keymap::OpenSink,
     /// Where `resource::OpenList` sends the list to open (applied on the UI thread).
     pub kinds: mpsc::UnboundedSender<OpenKind>,
     /// The resource views' queue (the table commands, applied on the UI thread).
@@ -139,7 +140,7 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube", |r| {
         register_view_commands(r, parts.views)?;
-        super::keymap::register_commands(r, parts.keymap.0, parts.keymap.1)
+        super::keymap::register_commands(r, parts.keymap_file, parts.keymap_open)
     })?;
     registry.install(
         "oxikube_app::actions",
