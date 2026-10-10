@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 use gpui::App;
 use oxikube_domain::ids::ClusterId;
 use oxikube_settings::{Settings, SettingsLocation, SettingsStore};
-use oxikube_ui::editor::EditorFont;
+use oxikube_ui::editor::{DEFAULT_TAB_SIZE, EditorFont};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -17,8 +17,6 @@ pub const KEY: &str = "editor";
 pub const MIN_TAB_SIZE: usize = 1;
 /// The largest `editor.tab_size`.
 pub const MAX_TAB_SIZE: usize = 16;
-/// `editor.tab_size` when it says nothing valid.
-pub const DEFAULT_TAB_SIZE: usize = 2;
 /// The smallest `editor.font_size`, in points.
 pub const MIN_FONT_SIZE: f32 = 6.0;
 /// The largest `editor.font_size`, in points.
@@ -165,7 +163,7 @@ fn lenient<T: DeserializeOwned>(
     wrong: &mut Vec<&'static str>,
 ) -> Option<T> {
     let value = section.get(key).filter(|value| !value.is_null())?;
-    match serde_json::from_value(value.clone()) {
+    match T::deserialize(value) {
         Ok(value) => Some(value),
         Err(_) => {
             wrong.push(key);

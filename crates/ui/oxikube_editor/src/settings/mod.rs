@@ -48,6 +48,6 @@ mod tests;
 pub use apply::apply_changes;
 pub use content::EditorSettingsContent;
 pub use resolved::{
-    DEFAULT_FIELD_MANAGER, DEFAULT_TAB_SIZE, EditorSettings, MAX_FIELD_MANAGER_LEN, MAX_FONT_SIZE,
-    MAX_TAB_SIZE, MIN_FONT_SIZE, MIN_TAB_SIZE, valid_field_manager,
+    DEFAULT_FIELD_MANAGER, EditorSettings, MAX_FIELD_MANAGER_LEN, MAX_FONT_SIZE, MAX_TAB_SIZE,
+    MIN_FONT_SIZE, MIN_TAB_SIZE, valid_field_manager,
 };

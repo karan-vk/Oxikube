@@ -23,7 +23,7 @@ use super::model::Problems;
 use super::{ToggleReadOnly, ToggleSoftWrap};
 
 /// What the problem count says while `editor.validation` is off.
-pub(crate) const VALIDATION_OFF: &str = "Validation off";
+const VALIDATION_OFF: &str = "Validation off";
 
 /// "2 errors · 1 warning", "No problems".
 pub(crate) fn problems_text(problems: Problems) -> String {

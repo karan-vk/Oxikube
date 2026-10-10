@@ -183,11 +183,12 @@ impl CodeEditor {
     /// The size the text is drawn at now, in pixels: the font size (or the theme's monospace
     /// size) times the UI zoom.
     pub fn text_size(&self, cx: &gpui::App) -> Pixels {
-        let base = match self.font.size {
-            Some(points) => px(points),
-            None => cx.tokens().font.mono,
-        };
-        u(base)
+        u(self.font_size(cx))
+    }
+
+    /// The font size before the UI zoom.
+    fn font_size(&self, cx: &gpui::App) -> Pixels {
+        self.font.size.map_or_else(|| cx.tokens().font.mono, px)
     }
 
     /// The buffer now, to turn into text off the UI thread.
@@ -248,7 +249,7 @@ impl Render for CodeEditor {
                     .readonly(self.read_only)
                     .appearance(false)
                     .bordered(false)
-                    .text_size(self.text_size(cx))
+                    .text_size(u(self.font_size(cx)))
                     .when_some(self.font.family.clone(), |editor, family| {
                         editor.font_family(SharedString::from(family))
                     })

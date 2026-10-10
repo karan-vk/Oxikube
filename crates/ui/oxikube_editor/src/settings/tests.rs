@@ -3,7 +3,7 @@
 
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_settings::{SettingsLocation, SettingsStore};
-use oxikube_ui::editor::EditorFont;
+use oxikube_ui::editor::{DEFAULT_TAB_SIZE, EditorFont};
 use schemars::schema_for;
 use serde_json::{Value, json};
 

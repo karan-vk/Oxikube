@@ -8,7 +8,7 @@ use oxikube_workspace::Toast;
 use super::EditorSettings;
 
 /// The deduplication key of the toast: a new problem list replaces the one on screen.
-pub const NOTICE_KEY: &str = "editor-settings";
+const NOTICE_KEY: &str = "editor-settings";
 
 /// The problems of the global `editor` settings and of every cluster's override, sorted, each
 /// once. Empty when every value is valid (or there is no settings store).

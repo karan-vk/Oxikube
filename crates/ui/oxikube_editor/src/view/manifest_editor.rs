@@ -167,9 +167,10 @@ impl ManifestEditor {
             return;
         }
         let next = next.clone();
-        let previous = std::mem::replace(&mut self.applied_settings, next.clone());
+        let previous = std::mem::replace(&mut self.applied_settings, next);
+        let next = &self.applied_settings;
         self.editor.update(cx, |editor, cx| {
-            apply_changes(Some(&previous), &next, &mut editor.api(window, cx));
+            apply_changes(Some(&previous), next, &mut editor.api(window, cx));
         });
         if previous.validation != next.validation {
             self.schedule_validation(Duration::ZERO, window, cx);
