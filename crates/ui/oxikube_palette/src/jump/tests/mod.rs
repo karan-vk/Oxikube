@@ -7,6 +7,7 @@
 //! | `run.rs` | typing a line and Enter: the commands that go out, errors that stay in the bar |
 //! | `complete.rs` | the list of completions, Tab, arrows and Enter on a completion |
 //! | `history.rs` | `[`, `]`, `-` in a table and from the bar |
+//! | `persist.rs` | the lines are kept between runs through the state store (E11-S11) |
 //! | `connect.rs` | a jump to a context that is not connected |
 //! | `large.rs` | a cluster with enough kinds that matching runs off the UI thread |
 //! | `bus.rs` | the commands on a real `CommandBus` |
@@ -17,6 +18,7 @@ mod connect;
 mod history;
 mod large;
 mod open;
+mod persist;
 mod run;
 
 use std::cell::RefCell;
@@ -31,7 +33,7 @@ use gpui::{
 };
 use oxikube_app::search::aliases::AliasRegistry;
 use oxikube_app::session::namespaces::NamespaceService;
-use oxikube_app::{ClusterCatalog, ClusterSessionManager};
+use oxikube_app::{ClusterCatalog, ClusterSessionManager, JumpRecents};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName};
@@ -139,6 +141,10 @@ pub(super) struct Fixture {
     pub connector: Arc<FakeClusterConnectorPort>,
     pub aliases: AliasRegistry,
     pub table_focus: FocusHandle,
+    /// The state store behind [`Self::recents`].
+    pub state: Arc<FakeStatePort>,
+    /// The persisted lines the host records into and reads from.
+    pub recents: Arc<JumpRecents>,
 }
 
 impl Fixture {
@@ -165,7 +171,7 @@ impl Fixture {
         let state = Arc::new(FakeStatePort::new());
         let sessions = ClusterSessionManager::new(connector.clone(), source.clone(), clock.clone());
         let catalog = ClusterCatalog::new(source, state.clone(), clock.clone());
-        let namespaces = NamespaceService::new(sessions.clone(), state, clock);
+        let namespaces = NamespaceService::new(sessions.clone(), state.clone(), clock);
         let aliases = AliasRegistry::new();
 
         // `dev`: connected, serving the stock types and four namespaces.
@@ -186,7 +192,9 @@ impl Fixture {
             aliases: aliases.clone(),
             namespaces,
         };
-        let host = Rc::new(JumpHost::new(&workspace, Rc::new(recorder), sources));
+        let recents = Arc::new(JumpRecents::new(state.clone()));
+        let host =
+            Rc::new(JumpHost::new(&workspace, Rc::new(recorder), sources).persist(recents.clone()));
         vcx.update(|window, cx| host.install(window, cx));
 
         let table_focus = vcx.update(|window, cx| {
@@ -206,6 +214,8 @@ impl Fixture {
             connector,
             aliases,
             table_focus,
+            state,
+            recents,
         }
     }
 

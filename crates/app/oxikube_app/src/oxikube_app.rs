@@ -10,7 +10,7 @@
 //! | Module | Story | Holds |
 //! |---|---|---|
 //! | [`catalog`] | E06-S03 | [`ClusterCatalog`]: the kubeconfig contexts with favourites and last-used, and [`ClusterCommands`], the handler of `cluster::Connect`, `cluster::Disconnect` and `cluster::ToggleFavourite` |
-//! | [`search`] | E11-S04, E11-S11 | [`search::fuzzy`]: [`FuzzyService`], the one fuzzy ranking engine; [`search::recents`]: [`StateRecents`] and [`JumpHistory`], persisted through `StatePort`; [`search::aliases`]: [`AliasTable`], the words the `:` jump bar understands (built-in k9s aliases, aliases derived from API discovery, the user's `aliases.json`, collisions listed, never silent), and [`AliasRegistry`], one table per cluster kept in step with the sessions' discovery |
+//! | [`search`] | E11-S04, E11-S11 | [`search::fuzzy`]: [`FuzzyService`], the one fuzzy ranking engine; [`search::recents`]: [`StateRecents`] and [`JumpRecents`], persisted through `StatePort`; [`search::aliases`]: [`AliasTable`], the words the `:` jump bar understands (built-in k9s aliases, aliases derived from API discovery, the user's `aliases.json`, collisions listed, never silent), and [`AliasRegistry`], one table per cluster kept in step with the sessions' discovery |
 //! | [`session`] | E06-S01 | [`ClusterSessionManager`]: connect / disconnect / reconnect, the session state machine, capabilities, namespace selection, read-only flag, colour, and the [`SessionUpdates`] stream |
 //! | [`session`] `prefs` | E06-S08 | per-cluster settings: `set_prefs_table` pushes the resolved `clusters.<id>` values; new sessions start from them, open ones follow them live |
 //! | [`sources`] | E06-S05 | [`KubeconfigSourcesService`]: the user's kubeconfig sources (add a file or folder, paste, remove, reload) over the settings list, the `ClusterSourcePort` and `FsPort`, and the `kubeconfig::*` command handlers |
@@ -85,7 +85,7 @@ pub use search::aliases::{
     Resolution,
 };
 pub use search::fuzzy::{FuzzyService, Match, QueryGeneration};
-pub use search::recents::{COMMAND_CAPACITY, JumpHistory, RecentList, StateRecents};
+pub use search::recents::{COMMAND_CAPACITY, JumpRecents, RecentList, StateRecents};
 pub use session::{
     ClusterSession, ClusterSessionManager, SessionChange, SessionUpdate, SessionUpdates,
 };

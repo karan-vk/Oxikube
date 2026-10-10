@@ -1,4 +1,4 @@
-//! [`JumpHistory`]: what was typed into the `:` jump bar, per cluster.
+//! [`JumpRecents`]: what was typed into the `:` jump bar, per cluster.
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -42,14 +42,14 @@ struct History {
 /// [`StateRecents`](super::StateRecents) (same writer, same failure handling). The bar calls
 /// [`load`](Self::load) when a cluster's tab opens, [`record`](Self::record) after a jump ran and
 /// [`recent`](Self::recent) to complete from.
-pub struct JumpHistory {
+pub struct JumpRecents {
     state: Arc<dyn StatePort>,
     clusters: Mutex<HashMap<ClusterId, History>>,
     writeback: Writeback,
     writing: tokio::sync::Mutex<()>,
 }
 
-impl JumpHistory {
+impl JumpRecents {
     /// An empty history over `state`.
     pub fn new(state: Arc<dyn StatePort>) -> Self {
         Self {
@@ -196,9 +196,9 @@ impl History {
     }
 }
 
-impl std::fmt::Debug for JumpHistory {
+impl std::fmt::Debug for JumpRecents {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("JumpHistory")
+        f.debug_struct("JumpRecents")
             .field("clusters", &self.clusters.lock().len())
             .field("dirty", &self.writeback.is_dirty())
             .finish()

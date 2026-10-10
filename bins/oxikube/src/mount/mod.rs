@@ -405,6 +405,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
             catalog: services.catalog.clone(),
             aliases: services.aliases.clone(),
             namespaces: services.namespaces.clone(),
+            history: state.jump_history().clone(),
         },
         jump_rx,
         window,

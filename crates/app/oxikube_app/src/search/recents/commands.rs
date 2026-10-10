@@ -102,7 +102,7 @@ impl StateRecents {
     }
 
     /// Writes the recents after each change, for as long as the future is polled: waits for a
-    /// change, calls `pause` with [`DEBOUNCE`] so a burst of commands is one write, then
+    /// change, calls `pause` with [`DEBOUNCE`](super::DEBOUNCE) so a burst of commands is one write, then
     /// [`flush`](Self::flush)es. `pause` is the runtime's timer (the caller owns the runtime).
     /// Hold the task that runs it; dropping the task stops it.
     pub async fn run_writer<P, F>(&self, pause: P)

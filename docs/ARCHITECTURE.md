@@ -71,7 +71,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `QueryGeneration` to drop stale async results. 2 000 candidates rank in well under a millisecond (budget 5 ms,
   `cargo bench -p oxikube_app --bench fuzzy_rank`). Module `search::recents` (E11-S11): `StateRecents` (the
   `RecentsStore` behind the palette's recents-first order, key `recents.commands`, 50 command ids, global) and
-  `JumpHistory` (the `:` bar's lines, key `history.jump/<cluster>`, 100 per cluster, deduplicated by whitespace-normalised
+  `JumpRecents` (the `:` bar's lines, key `history.jump/<cluster>`, 100 per cluster, deduplicated by whitespace-normalised
   text, a line the redaction patterns would change is never kept) over `StatePort` kv: every call answers from memory,
   a writer task (`run_writer`, started by the binary's `history` module) writes behind a 500 ms pause and the app
   flushes on quit; an unavailable state db leaves them in memory and logs one line (the error's kind, never its text).
@@ -94,7 +94,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `Command`s that do it (`resource::OpenList`, `namespace::Select`, `table::SetFilter`, `cluster::Select` or
   `cluster::Connect` with the rest after the connection, `view::Open catalog`, `app::Quit`, `jump::Back|Forward|Last`),
   with suggestions for an unknown alias, namespace or context and a user alias that is a command line expanded
-  (loops stop at four levels). `JumpHistory` is the session ring (`[` back, `]` forward, `-` previous view and back);
+  (loops stop at four levels). `JumpHistory` is the session ring (`[` back, `]` forward, `-` previous view and back; E11-S11 `seed`s it from the stored `JumpRecents` of the shown cluster when the bar first opens, and the bar records every confirmed line there);
   `site` / `candidates` / `accept` are the completion of the word under the caret. Module `sidebar` (E06-S10):
   `review_access` (the rules reviews the cluster sidebar hides sections by; fails open) and
   `discover_custom_resources`; module `integrations`: the `IntegrationRegistry` stub. Module `session` (E06-S01):

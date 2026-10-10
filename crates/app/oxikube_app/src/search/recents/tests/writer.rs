@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::*;
 use crate::command_bus::RecentsStore;
-use crate::search::recents::{DEBOUNCE, JumpHistory, RECENTS_KEY};
+use crate::search::recents::{DEBOUNCE, JumpRecents, RECENTS_KEY};
 
 async fn settle() {
     // Let the spawned writer reach its wait.
@@ -74,7 +74,7 @@ async fn the_quit_flush_writes_what_the_pause_had_not_yet() {
 #[tokio::test(start_paused = true)]
 async fn the_jump_history_writer_debounces_too() {
     let state = fake();
-    let history = Arc::new(JumpHistory::new(state.clone()));
+    let history = Arc::new(JumpRecents::new(state.clone()));
     let writer = tokio::spawn({
         let history = history.clone();
         async move { history.run_writer(tokio::time::sleep).await }

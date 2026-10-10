@@ -4,7 +4,7 @@
 //! | Piece | Where |
 //! |---|---|
 //! | [`StateRecents`]: the [`RecentsStore`](crate::RecentsStore) of the command palette, key `recents.commands` | `commands` |
-//! | [`JumpHistory`]: the jump bar's history, one list per cluster, key `history.jump/<cluster>` | `jump` |
+//! | [`JumpRecents`]: the jump bar's history, one list per cluster, key `history.jump/<cluster>` | `jump` |
 //! | [`RecentList`]: the ordered, deduplicated, capped list both are made of | `list` |
 //! | `Writeback`: the dirty flag, the wake-up and the log-once for failed writes | `writeback` |
 //!
@@ -24,7 +24,7 @@
 //!
 //! # Never in the way
 //!
-//! [`RecentsStore::record`](crate::RecentsStore::record) and [`JumpHistory::record`] only touch
+//! [`RecentsStore::record`](crate::RecentsStore::record) and [`JumpRecents::record`] only touch
 //! memory and wake the writer; the palette never waits for the disk. The binary runs
 //! [`StateRecents::run_writer`] (and the jump history's) on the runtime: it waits for a change,
 //! pauses a moment so a burst becomes one write, then writes, and the app flushes once more on
@@ -39,6 +39,6 @@ mod tests;
 mod writeback;
 
 pub use commands::{COMMAND_CAPACITY, RECENTS_KEY, StateRecents};
-pub use jump::{JUMP_CAPACITY, JUMP_KEY_PREFIX, JUMP_TEXT_MAX_CHARS, JumpHistory};
+pub use jump::{JUMP_CAPACITY, JUMP_KEY_PREFIX, JUMP_TEXT_MAX_CHARS, JumpRecents};
 pub use list::RecentList;
 pub use writeback::DEBOUNCE;

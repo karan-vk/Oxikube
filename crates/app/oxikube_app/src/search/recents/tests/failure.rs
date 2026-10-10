@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::*;
 use crate::command_bus::RecentsStore;
-use crate::search::recents::{JumpHistory, RECENTS_KEY};
+use crate::search::recents::{JumpRecents, RECENTS_KEY};
 
 /// A database whose next `reads` reads and `writes` writes fail.
 fn broken(reads: usize, writes: usize) -> Arc<FakeStatePort> {
@@ -70,7 +70,7 @@ fn a_store_that_works_again_logs_its_next_failure() {
 #[test]
 fn the_jump_history_degrades_the_same_way() {
     let state = broken(1, 2);
-    let history = JumpHistory::new(state.clone());
+    let history = JumpRecents::new(state.clone());
     let me = cluster("prod");
     block_on(history.load(&me));
     assert!(history.record(&me, "deploy kube-system"));

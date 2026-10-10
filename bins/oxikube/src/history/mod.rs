@@ -1,14 +1,14 @@
 //! The palette's recent commands and the jump bar's history, kept across runs (E11-S11).
 //!
-//! [`StateRecents`] and [`JumpHistory`] (`oxikube_app::search::recents`) answer every call from
+//! [`StateRecents`] and [`JumpRecents`] (`oxikube_app::search::recents`) answer every call from
 //! memory; this module is what moves them to and from the state database, on the background
 //! executor, never on the UI thread and never on the first frame's path:
 //!
 //! - [`start`] runs with the feature `init`s. It reads the stored command recents (the state
 //!   database opens in the background; the read waits for it, not the UI), and starts one writer
-//!   task per store: a task that waits for a change, pauses [`DEBOUNCE`] so a burst of commands is
+//!   task per store: a task that waits for a change, pauses [`DEBOUNCE`](oxikube_app::search::recents::DEBOUNCE) so a burst of commands is
 //!   one write, and writes. A jump history is read per cluster by the jump bar when it opens in a
-//!   cluster ([`JumpHistory::load`]).
+//!   cluster ([`JumpRecents::load`]).
 //! - on quit both are flushed inside the quit's bounded wait, so the command that ran just before
 //!   closing the window is remembered.
 //!
@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{App, AppContext as _, BackgroundExecutor, Global, Task};
-use oxikube_app::{JumpHistory, StateRecents};
+use oxikube_app::{JumpRecents, StateRecents};
 
 use crate::app_state::AppState;
 
@@ -72,7 +72,7 @@ fn pause(executor: &BackgroundExecutor) -> impl Fn(Duration) -> Task<()> + use<>
 
 /// Writes whatever changed since the last write when the app quits. The quit waits a bounded time
 /// for the future (GPUI's `SHUTDOWN_TIMEOUT`); a write takes a few milliseconds.
-fn flush_on_quit(recents: Arc<StateRecents>, jump: Arc<JumpHistory>, cx: &mut App) {
+fn flush_on_quit(recents: Arc<StateRecents>, jump: Arc<JumpRecents>, cx: &mut App) {
     cx.on_app_quit(move |_| {
         let (recents, jump) = (recents.clone(), jump.clone());
         async move {

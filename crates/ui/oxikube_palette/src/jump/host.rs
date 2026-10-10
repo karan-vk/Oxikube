@@ -15,12 +15,14 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{AnyWindowHandle, App, Global, Subscription, Task, WeakEntity, Window, WindowId};
-use oxikube_app::ClusterSessionManager;
 use oxikube_app::search::jump::{self, HistoryStep, JumpHistory, JumpPlan};
+use oxikube_app::{ClusterSessionManager, JumpRecents};
+use oxikube_domain::ids::ClusterId;
 use oxikube_workspace::modal::ModalLayerEvent;
 use oxikube_workspace::{CommandDispatcher, Toast, Workspace};
 
@@ -33,8 +35,10 @@ use super::{Back, Forward, Last, OpenJump, connect};
 /// State the bar, the host and the connect wait share.
 #[derive(Default)]
 pub(super) struct Shared {
-    /// The lines run this session.
+    /// The lines run this session, behind those of earlier runs once they are read.
     pub history: RefCell<JumpHistory>,
+    /// Where confirmed lines are remembered between runs, per cluster (E11-S11).
+    pub persisted: RefCell<Option<Arc<JumpRecents>>>,
     /// Contexts and namespaces found by earlier opens.
     pub loaded: RefCell<Loaded>,
     /// The plan a confirm left for the host to run once the bar has closed.
@@ -44,10 +48,14 @@ pub(super) struct Shared {
 }
 
 impl Shared {
-    /// A confirmed line: it goes into the history and its commands wait for the bar to close.
-    pub fn submit(&self, plan: JumpPlan) {
+    /// A confirmed line in `cluster`: it goes into the history (in memory, and behind it the state
+    /// store) and its commands wait for the bar to close.
+    pub fn submit(&self, plan: JumpPlan, cluster: Option<&ClusterId>) {
         if let Some(line) = &plan.record {
             self.history.borrow_mut().record(line);
+            if let (Some(persisted), Some(cluster)) = (&*self.persisted.borrow(), cluster) {
+                persisted.record(cluster, line);
+            }
         }
         *self.outbox.borrow_mut() = Some(plan);
     }
@@ -111,6 +119,8 @@ pub struct JumpHost {
     shared: Rc<Shared>,
     /// Sends the confirmed plan when the bar closes; replaced by the next open.
     sender: RefCell<Option<Subscription>>,
+    /// Reads the stored lines of the shown cluster; replaced by the next open.
+    loading: RefCell<Option<Task<()>>>,
 }
 
 impl JumpHost {
@@ -133,7 +143,16 @@ impl JumpHost {
             sources,
             shared,
             sender: RefCell::new(None),
+            loading: RefCell::new(None),
         }
+    }
+
+    /// Remembers the lines run in the bar between runs: they are recorded in `recents` (written
+    /// behind a pause by the app) and the stored ones of the shown cluster are read when the bar
+    /// opens, so `[` reaches the lines of the last run.
+    pub fn persist(self, recents: Arc<JumpRecents>) -> Self {
+        *self.shared.persisted.borrow_mut() = Some(recents);
+        self
     }
 
     /// Makes this the jump bar of `window`: `:` and the history keys act on it.
@@ -170,6 +189,7 @@ impl JumpHost {
             workspace.update(cx, |workspace, cx| workspace.hide_modal(window, cx));
             return;
         }
+        self.load_stored(cx);
         let env = LiveEnv::snapshot(&self.sources, &self.shared.loaded.borrow(), cx);
         let delegate = JumpDelegate::new(Rc::new(env), self.shared.clone());
         let sources = self.sources.clone();
@@ -180,6 +200,31 @@ impl JumpHost {
                 JumpBar::new(delegate, sources, shared, window, cx)
             });
         });
+    }
+
+    /// Reads the lines stored for the shown cluster off the UI thread and puts them behind this
+    /// run's, once (the store answers later calls from memory). Nothing waits for it: until it
+    /// arrives `[` knows the lines of this run only.
+    fn load_stored(&self, cx: &mut App) {
+        let Some(persisted) = self.shared.persisted.borrow().clone() else {
+            return;
+        };
+        let Some(cluster) = (self.sources.active)(cx) else {
+            return;
+        };
+        let shared = self.shared.clone();
+        let task = cx.spawn(async move |cx| {
+            let latest_first = cx
+                .background_executor()
+                .spawn(async move {
+                    persisted.load(&cluster).await;
+                    persisted.recent(&cluster)
+                })
+                .await;
+            let oldest_first = latest_first.iter().rev().map(String::as_str);
+            shared.history.borrow_mut().seed(oldest_first);
+        });
+        *self.loading.borrow_mut() = Some(task);
     }
 
     /// `[`, `]`, `-`: runs an earlier line again. A line that cannot be planned now (its cluster

@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use oxikube_app::{COMMAND_CAPACITY, JumpHistory, RecentsStore, StateRecents};
+use oxikube_app::{COMMAND_CAPACITY, JumpRecents, RecentsStore, StateRecents};
 use oxikube_domain::command::{self, CommandId};
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{StateKey, StatePort};
@@ -97,14 +97,14 @@ async fn jump_history_survives_a_restart_per_cluster() {
     let prod = ClusterId::new("/kubeconfig", &ContextName::new("prod"));
     let staging = ClusterId::new("/kubeconfig", &ContextName::new("staging"));
     {
-        let history = JumpHistory::new(open(&dir).await);
+        let history = JumpRecents::new(open(&dir).await);
         history.record(&prod, "deploy kube-system");
         history.record(&prod, "pod app=nginx");
         history.record(&prod, "deploy  kube-system");
         history.record(&staging, "ns");
         history.flush().await;
     }
-    let history = JumpHistory::new(open(&dir).await);
+    let history = JumpRecents::new(open(&dir).await);
     history.load(&prod).await;
     history.load(&staging).await;
     assert_eq!(
@@ -120,7 +120,7 @@ async fn only_ids_and_jump_text_reach_the_database() {
     let state = open(&dir).await;
     let prod = ClusterId::new("/kubeconfig", &ContextName::new("prod"));
     let recents = StateRecents::new(state.clone());
-    let history = JumpHistory::new(state.clone());
+    let history = JumpRecents::new(state.clone());
     recents.record(CommandId::POD_DELETE);
     history.record(&prod, "pod app=nginx");
     assert!(!history.record(&prod, "password=hunter2"));

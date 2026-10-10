@@ -1,12 +1,12 @@
-//! `JumpHistory`: per cluster, deduplicated by text, capped, persisted.
+//! `JumpRecents`: per cluster, deduplicated by text, capped, persisted.
 
 use serde_json::json;
 
 use super::*;
-use crate::search::recents::{JUMP_CAPACITY, JUMP_TEXT_MAX_CHARS, JumpHistory};
+use crate::search::recents::{JUMP_CAPACITY, JUMP_TEXT_MAX_CHARS, JumpRecents};
 
-fn history(state: &Arc<FakeStatePort>) -> JumpHistory {
-    JumpHistory::new(state.clone())
+fn history(state: &Arc<FakeStatePort>) -> JumpRecents {
+    JumpRecents::new(state.clone())
 }
 
 fn key(cluster: &oxikube_domain::ids::ClusterId) -> String {
