@@ -220,3 +220,84 @@ fn properties_are_sorted_searchable_and_merge_with_the_later_winning() {
     );
     assert!(properties.contains_key("zeta"));
 }
+
+#[test]
+fn nullable_adds_null_to_a_typed_node_including_an_all_of_wrapper() {
+    let schema = JsonSchema::from_value(&json!({"type": "string", "nullable": true}));
+    assert_eq!(schema.types, [SchemaType::String, SchemaType::Null]);
+
+    let components = json!({"Time": {"type": "string", "format": "date-time"}});
+    let wrapper = json!({"allOf": [{"$ref": "#/components/schemas/Time"}], "nullable": true});
+    let schema = flatten_schema(&wrapper, components.as_object().unwrap());
+    assert_eq!(schema.types, [SchemaType::String, SchemaType::Null]);
+    assert_eq!(schema.format.as_deref(), Some("date-time"));
+
+    // An unconstrained node stays unconstrained: `null` is already allowed.
+    assert!(
+        JsonSchema::from_value(&json!({"nullable": true}))
+            .types
+            .is_empty()
+    );
+}
+
+#[test]
+fn any_of_and_one_of_union_the_types_only_when_every_alternative_has_one() {
+    let union = JsonSchema::from_value(&json!({
+        "anyOf": [{"type": "integer"}, {"type": "string"}]
+    }));
+    assert_eq!(union.types, [SchemaType::Integer, SchemaType::String]);
+
+    let one_of = JsonSchema::from_value(&json!({
+        "oneOf": [{"type": "boolean"}, {"type": "string"}, {"type": "boolean"}]
+    }));
+    assert_eq!(one_of.types, [SchemaType::Boolean, SchemaType::String]);
+
+    // One alternative with no type (or an unresolved reference) leaves the node open.
+    let open = JsonSchema::from_value(&json!({
+        "anyOf": [{"type": "string"}, {"properties": {"a": {"type": "string"}}}]
+    }));
+    assert!(open.types.is_empty());
+    let unresolved = JsonSchema::from_value(&json!({
+        "anyOf": [{"type": "string"}, {"$ref": "#/components/schemas/Gone"}]
+    }));
+    assert!(unresolved.types.is_empty());
+
+    // The node's own type wins over its alternatives.
+    let typed = JsonSchema::from_value(&json!({
+        "type": "string", "anyOf": [{"type": "integer"}]
+    }));
+    assert_eq!(typed.types, [SchemaType::String]);
+}
+
+#[test]
+fn depth_counts_references_per_path_and_structure_separately() {
+    // 40 properties deep, no references: well inside the structural limit.
+    let mut node = json!({"type": "string"});
+    for _ in 0..40 {
+        node = json!({"type": "object", "properties": {"next": node}});
+    }
+    let mut at = &JsonSchema::from_value(&node);
+    let mut levels = 0;
+    while let Some(next) = at.properties.get("next") {
+        at = next;
+        levels += 1;
+    }
+    assert_eq!(levels, 40);
+    assert!(!at.truncated, "deep inline structure is not cut");
+
+    // A chain of 70 distinct references exceeds MAX_REF_DEPTH and is cut, open.
+    let mut components = serde_json::Map::new();
+    for n in 0..70 {
+        components.insert(
+            format!("C{n}"),
+            json!({"type": "object", "properties": {"next": {"$ref": format!("#/components/schemas/C{}", n + 1)}}}),
+        );
+    }
+    components.insert("C70".to_owned(), json!({"type": "string"}));
+    let schema = flatten_schema(&json!({"$ref": "#/components/schemas/C0"}), &components);
+    let mut at = &schema;
+    while let Some(next) = at.properties.get("next") {
+        at = next;
+    }
+    assert!(at.truncated, "an over-long reference chain ends open");
+}

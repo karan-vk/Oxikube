@@ -15,7 +15,7 @@
 //! Kubernetes wraps a single `$ref` in `allOf` to attach a description, and CRD
 //! schemas can be recursive. [`flatten_schema`] resolves local
 //! `#/components/schemas/<name>` references and merges `allOf` entries; a
-//! reference cycle (or a nesting deeper than [`MAX_REF_DEPTH`]) stops with an
+//! reference cycle (or a nesting deeper than [`MAX_REF_DEPTH`] references or [`MAX_NESTING_DEPTH`] levels) stops with an
 //! open node whose [`truncated`](JsonSchema::truncated) flag is set, so the
 //! validator treats the subtree as unknown instead of looping.
 
@@ -29,10 +29,15 @@ pub use flatten::flatten_schema;
 pub use properties::Properties;
 pub use root::root_schema_for;
 
-/// How deep `$ref`/`allOf` flattening may nest before it stops with an open node.
-/// Real schemas nest a handful of levels; anything deeper is a cycle or a
-/// pathological document.
-pub const MAX_REF_DEPTH: usize = 32;
+/// How many `$ref`s may nest on one path before flattening stops with an open
+/// node. The deepest real chains (a Pod inside a Deployment inside ...) are in
+/// the teens; anything deeper is a cycle or a pathological document.
+pub const MAX_REF_DEPTH: usize = 64;
+
+/// How deep schema structure (properties, items, `allOf` entries) may nest
+/// before flattening stops with an open node, bounding recursion on a hostile
+/// document. References do not count; real schemas nest under a hundred levels.
+pub const MAX_NESTING_DEPTH: usize = 256;
 
 /// One JSON type of a [`JsonSchema`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -46,16 +46,16 @@ pub(crate) fn parse_index(document: &serde_json::Value) -> Index {
         return index;
     };
     for (key, value) in paths {
+        let key = key.trim_start_matches('/');
+        // An entry without a URL (never seen from a real server) is fetched from the
+        // conventional path; it has no hash, so it is never cached on disk.
         let url = value
             .get("serverRelativeURL")
             .and_then(serde_json::Value::as_str)
-            .unwrap_or(key)
-            .to_owned();
-        if url.is_empty() {
-            continue;
-        }
+            .filter(|url| !url.is_empty())
+            .map_or_else(|| format!("/openapi/v3/{key}"), str::to_owned);
         index.entries.insert(
-            key.trim_start_matches('/').to_owned(),
+            key.to_owned(),
             IndexEntry {
                 hash: hash_of(&url),
                 url,
@@ -107,9 +107,8 @@ mod tests {
         assert!(parse_index(&json!({})).entries.is_empty());
         assert!(parse_index(&json!({"paths": []})).entries.is_empty());
         let index = parse_index(&json!({"paths": {"api/v1": {}}}));
-        assert_eq!(
-            index.entry_for("", "v1").expect("key fallback").url,
-            "api/v1"
-        );
+        let fallback = index.entry_for("", "v1").expect("key fallback");
+        assert_eq!(fallback.url, "/openapi/v3/api/v1");
+        assert_eq!(fallback.hash, "", "no hash, so never cached on disk");
     }
 }

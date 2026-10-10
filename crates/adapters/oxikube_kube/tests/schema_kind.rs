@@ -69,6 +69,16 @@ fn node_count(schema: &JsonSchema) -> usize {
         + schema.items.as_deref().map_or(0, node_count)
 }
 
+fn truncated_nodes(schema: &JsonSchema) -> usize {
+    usize::from(schema.truncated)
+        + schema
+            .properties
+            .values()
+            .map(truncated_nodes)
+            .sum::<usize>()
+        + schema.items.as_deref().map_or(0, truncated_nodes)
+}
+
 #[tokio::test]
 async fn deployment_and_widget_schemas_come_from_the_server() {
     let Some(kind) = common::kind().await else {
@@ -98,6 +108,18 @@ async fn deployment_and_widget_schemas_come_from_the_server() {
     );
     assert_eq!(replicas.format.as_deref(), Some("int32"));
     assert!(deployment.required.contains(&"spec".to_owned()) || deployment.has_property("spec"));
+
+    assert_eq!(
+        truncated_nodes(&deployment),
+        0,
+        "a built-in kind flattens completely (no cycle, no depth cut)"
+    );
+    let pod = svc
+        .schema_for(&id, &Gvk::new("", "v1", "Pod"))
+        .await
+        .expect("pod schema");
+    assert_eq!(truncated_nodes(&pod), 0);
+    assert!(pod.has_property("spec") && pod.has_property("metadata"));
 
     let widget = svc
         .schema_for(&id, &Gvk::new("test.oxikube.dev", "v1", "Widget"))
@@ -155,10 +177,11 @@ async fn deployment_and_widget_schemas_come_from_the_server() {
     eprintln!(
         "E10-S01 perf: first schema (index + version + apps/v1 fetch + parse + flatten) {first:?}; \
          warm disk-cache start {warm_time:?}; apps/v1 document {} KiB; flatten best of 5 {best:?}; \
-         Deployment schema {} nodes, retained {} KiB",
+         Deployment schema {} nodes, retained {} KiB; Pod schema {} nodes",
         text.len() / 1024,
         node_count(&flat),
         retained / 1024,
+        node_count(&pod),
     );
     assert!(first < DEADLINE * 4, "first schemas arrive promptly");
 }

@@ -351,3 +351,45 @@ async fn disk_cache_holds_one_public_document_per_group_version() {
         files[0].path
     );
 }
+
+#[tokio::test]
+async fn the_disk_file_is_exactly_the_public_group_document() {
+    let fs = Arc::new(FakeFsPort::new());
+    service(&server(), &fs)
+        .schema_for(&cluster(), &deployment())
+        .await
+        .expect("schema");
+    let dir = PathBuf::from("/cache")
+        .join(cluster().as_str())
+        .join("v1.31.0");
+    let file = fs.list(&dir).await.expect("list").remove(0).path;
+    let stored: serde_json::Value =
+        serde_json::from_slice(&fs.read(&file).await.expect("read")).expect("json");
+    assert_eq!(
+        stored,
+        apps_document(),
+        "schemas only: no wrapper, no object data"
+    );
+}
+
+#[tokio::test]
+async fn an_index_without_hashes_is_never_cached_on_disk() {
+    let fs = Arc::new(FakeFsPort::new());
+    let api = FakeApi::new();
+    api.reply(
+        "/openapi/v3",
+        200,
+        json!({"paths": {"apis/apps/v1": {"serverRelativeURL": "/openapi/v3/apis/apps/v1"}}}),
+    );
+    api.reply("/version", 200, version_body("v1.31.0"));
+    api.reply("/openapi/v3/apis/apps/v1", 200, apps_document());
+    service(&api, &fs)
+        .schema_for(&cluster(), &deployment())
+        .await
+        .expect("schema");
+    let root = PathBuf::from("/cache");
+    assert!(
+        fs.list(&root).await.map_or(true, |files| files.is_empty()),
+        "nothing validates a hashless file, so nothing is written"
+    );
+}

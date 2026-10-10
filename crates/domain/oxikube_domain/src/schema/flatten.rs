@@ -1,16 +1,17 @@
 //! `$ref` and `allOf` flattening: the pure parse of an OpenAPI v3 schema node
 //! into a [`JsonSchema`] (E10-S01).
 
-use super::{AdditionalProperties, JsonSchema, MAX_REF_DEPTH, SchemaType, XK8s};
+use super::{AdditionalProperties, JsonSchema, MAX_NESTING_DEPTH, MAX_REF_DEPTH, SchemaType, XK8s};
 
 /// Flattens one schema `node` with `$ref`/`allOf` resolved against `components`
 /// (the `components.schemas` map of the group document).
 ///
 /// Only local references (`#/components/schemas/<name>`, with `~0`/`~1`
 /// escapes) resolve; anything else becomes an open [`truncated`](JsonSchema::truncated)
-/// node. A reference already on the resolution `stack`, or nesting deeper than
-/// [`MAX_REF_DEPTH`], also stops with an open truncated node, so recursive CRD
-/// schemas always terminate.
+/// node. A reference already on the resolution `stack`, more than
+/// [`MAX_REF_DEPTH`] references nested on one path, or structure nested deeper
+/// than [`MAX_NESTING_DEPTH`], also stops with an open truncated node, so
+/// recursive CRD schemas always terminate.
 pub fn flatten_schema(
     node: &serde_json::Value,
     components: &serde_json::Map<String, serde_json::Value>,
@@ -90,7 +91,7 @@ fn flatten_node(
     stack: &mut Vec<String>,
     depth: usize,
 ) -> JsonSchema {
-    if depth > MAX_REF_DEPTH {
+    if depth > MAX_NESTING_DEPTH || stack.len() > MAX_REF_DEPTH {
         return truncated_any();
     }
     let Some(object) = node.as_object() else {
@@ -103,8 +104,9 @@ fn flatten_node(
         let Some(target) = components.get(&name) else {
             return truncated_any();
         };
+        // A reference adds no structural depth: the target is the same position.
         stack.push(name);
-        let resolved = flatten_node(target, components, stack, depth + 1);
+        let resolved = flatten_node(target, components, stack, depth);
         stack.pop();
         return resolved;
     }
@@ -129,6 +131,8 @@ fn flatten_node(
         if sibling_xk8s.int_or_string && merged.types.is_empty() {
             merged.types = vec![SchemaType::Integer, SchemaType::String];
         }
+        apply_unions(&mut merged, object, components, stack, depth);
+        apply_nullable(&mut merged, object);
         return merged;
     }
     parse_node(object, components, stack, depth)
@@ -214,12 +218,56 @@ fn parse_node(
     }
     schema.additional_properties = parse_additional(object, components, stack, depth);
     schema.xk8s = parse_xk8s(object);
+    apply_unions(&mut schema, object, components, stack, depth);
+    apply_nullable(&mut schema, object);
     if schema.xk8s.int_or_string && schema.types.is_empty() {
         // `x-kubernetes-int-or-string` with an `anyOf` of integer/string and no
         // `type` of its own: the value is an integer or a string.
         schema.types = vec![SchemaType::Integer, SchemaType::String];
     }
     schema
+}
+
+/// `anyOf`/`oneOf`: when the node names no type of its own and every alternative
+/// constrains the type, the node's types are the union of the alternatives'
+/// (`anyOf: [{type: integer}, {type: string}]`). Any other union stays
+/// unconstrained: the validator must not reject what one alternative allows.
+fn apply_unions(
+    schema: &mut JsonSchema,
+    object: &serde_json::Map<String, serde_json::Value>,
+    components: &serde_json::Map<String, serde_json::Value>,
+    stack: &mut Vec<String>,
+    depth: usize,
+) {
+    let alternatives: Vec<JsonSchema> = ["anyOf", "oneOf"]
+        .into_iter()
+        .filter_map(|keyword| object.get(keyword)?.as_array())
+        .flatten()
+        .map(|entry| flatten_node(entry, components, stack, depth + 1))
+        .collect();
+    if alternatives.is_empty() || !schema.types.is_empty() {
+        return;
+    }
+    if alternatives.iter().all(|alt| !alt.types.is_empty()) {
+        for alt in &alternatives {
+            for ty in &alt.types {
+                if !schema.types.contains(ty) {
+                    schema.types.push(*ty);
+                }
+            }
+        }
+    }
+}
+
+/// `nullable: true` additionally allows `null` for a typed node.
+fn apply_nullable(schema: &mut JsonSchema, object: &serde_json::Map<String, serde_json::Value>) {
+    let nullable = object
+        .get("nullable")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    if nullable && !schema.types.is_empty() && !schema.types.contains(&SchemaType::Null) {
+        schema.types.push(SchemaType::Null);
+    }
 }
 
 fn parse_additional(
