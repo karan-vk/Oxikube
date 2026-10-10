@@ -1,0 +1,8 @@
+---
+source: crates/ui/oxikube_editor/tests/validate_buffer.rs
+expression: "render(MULTI, &diags)"
+---
+8:7 doc0 warning unknown-field "imag" unknown field "imag" (did you mean "image"?) [spec.containers[0].imag]
+13:13 doc1 error type-mismatch "true" expected integer or string, found boolean true [spec.replicas]
+15:11 doc1 error enum "Recreat" invalid value "Recreat", expected one of "Recreate", "RollingUpdate" (did you mean "Recreate"?) [spec.strategy.type]
+20:13 doc2 error type-mismatch "x" expected integer, found string "x" [spec.replicas]
