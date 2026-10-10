@@ -137,22 +137,6 @@ impl MatchIndex {
         self.matches.back().copied()
     }
 
-    /// The first match at or after `seq`.
-    pub fn at_or_after(&self, seq: u64) -> Option<u64> {
-        self.get(self.matches.partition_point(|&m| m < seq))
-    }
-
-    /// The first match after `seq`.
-    pub fn after(&self, seq: u64) -> Option<u64> {
-        self.get(self.matches.partition_point(|&m| m <= seq))
-    }
-
-    /// The last match before `seq`.
-    pub fn before(&self, seq: u64) -> Option<u64> {
-        let at = self.matches.partition_point(|&m| m < seq);
-        at.checked_sub(1).and_then(|at| self.get(at))
-    }
-
     /// The match to go to for "next": the first one after `current` (which may have been dropped
     /// from the ring meanwhile: the next retained one is found by seq), else the first at or
     /// after `anchor` (the line at the top of the screen), wrapping to the first match at the
