@@ -97,7 +97,8 @@
       "enter": "catalog::ConnectSelected",
       "home": "catalog::SelectFirst",
       "end": "catalog::SelectLast",
-      "/": "catalog::FocusSearch"
+      "/": "catalog::FocusSearch",
+      "?": "help::Show"
     }
   },
   {

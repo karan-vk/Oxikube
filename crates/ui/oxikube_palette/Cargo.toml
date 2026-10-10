@@ -75,6 +75,8 @@ required-features = ["test-support"]
 # `cargo run -p oxikube_palette --features test-support --profile release-fast --example jump_bench`
 [[example]]
 name = "jump_bench"
+required-features = ["test-support"]
+
 # Resolving the focused view's bindings, opening the help overlay and a keystroke in its search
 # field, over the shipped keymap and over a 2 000-binding one:
 # `cargo run -p oxikube_palette --features test-support --profile release-fast --example help_bench`

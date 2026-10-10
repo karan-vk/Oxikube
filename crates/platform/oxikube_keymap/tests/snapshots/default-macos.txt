@@ -39,6 +39,7 @@
   up               catalog::SelectPrevious
 [Catalog && !Input]
   /                catalog::FocusSearch
+  ?                help::Show
   end              catalog::SelectLast
   enter            catalog::ConnectSelected
   home             catalog::SelectFirst

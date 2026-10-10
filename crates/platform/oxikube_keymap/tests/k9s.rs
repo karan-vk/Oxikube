@@ -232,6 +232,19 @@ fn the_prompts_open_from_a_cluster_tab_and_are_characters_where_text_is_typed(
             press(cx, ":", &["Workspace", "Catalog"]),
             Resolution::Unbound
         );
+        // `?` is always useful: the catalog home opens the help overlay too, but its search field
+        // keeps `?` as a character.
+        assert_eq!(
+            runs(cx, "shift-/->?", &["Workspace", "Catalog"]),
+            Some("help::Show"),
+            "{platform:?}"
+        );
+        assert_eq!(runs(cx, "?", &["Workspace", "Catalog"]), Some("help::Show"));
+        assert_eq!(
+            press(cx, "?", &["Workspace", "Catalog", "Input"]),
+            Resolution::Unbound,
+            "a character in the catalog search field"
+        );
 
         // Text is typed in the shell, the editor, the palette and jump bar fields, and any input.
         let editor = [
@@ -394,9 +407,9 @@ fn the_palette_finds_the_keys_of_a_command_through_its_view_actions(cx: &mut Tes
         keys(cx, CommandId::PALETTE_TOGGLE),
         [format!("{CMD}-shift-p")]
     );
-    // `?` opens the help overlay from a cluster tab and, in the overlay's empty search field
-    // (E11-S10), closes it again: two bindings, one key.
-    assert_eq!(keys(cx, CommandId::HELP_SHOW), ["?", "?"]);
+    // `?` opens the help overlay from a cluster tab and from the catalog home and, in the
+    // overlay's empty search field (E11-S10), closes it again: three bindings, one key.
+    assert_eq!(keys(cx, CommandId::HELP_SHOW), ["?", "?", "?"]);
     // No key for a command nobody bound.
     assert!(keys(cx, CommandId::POD_EXEC).is_empty());
 }
