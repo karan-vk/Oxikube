@@ -10,8 +10,8 @@ use oxikube_domain::safety::ConfirmTier;
 use super::availability::{CommandContext, Unavailable, check};
 
 /// One registered command as the palette sees it: the declared metadata plus who registered
-/// it and whether it has an MCP tool stub. Two words wide and `Copy`, so a list of 2 000 is
-/// cheap to build and to hand to a picker.
+/// it and whether it has an MCP tool stub. A 32-byte `Copy` value (two references and a
+/// flag), so a list of 2 000 is cheap to build and to hand to a picker.
 #[derive(Debug, Clone, Copy)]
 pub struct CommandInfo {
     meta: &'static CommandMeta,

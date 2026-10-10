@@ -342,6 +342,12 @@ proptest! {
 }
 
 #[test]
+fn a_command_info_stays_a_small_copy_value() {
+    // The `CommandInfo` rustdoc and the PR description quote this size; keep them honest.
+    assert_eq!(std::mem::size_of::<CommandInfo>(), 32);
+}
+
+#[test]
 fn listing_two_thousand_commands_is_well_inside_the_palette_budget() {
     let metas = fixture_commands(2_000);
     let index =
