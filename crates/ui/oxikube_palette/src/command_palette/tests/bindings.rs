@@ -7,10 +7,9 @@ use oxikube_keymap::KeymapOptions;
 use super::{Fixture, OPEN_KEY, SHOW_ALL_KEY};
 use crate::command_palette::render::binding_strokes;
 
-// The view action the shipped keymap binds to Copy Name. The resource table (a crate this one does
-// not depend on) declares the real one; the keymap skips a binding whose action is not registered
-// in the build, so the test registers a stand-in under the same name.
-gpui::actions!(resource_table, [CopyName]);
+// The shipped keymap binds Copy Name through `resource_table::CopyName`, an action the resource
+// table crate owns. This crate does not link it; the `help` tests declare a stand-in under the real
+// name (one per name per test binary), so the binding is live here too.
 
 /// The width the key caps of the row listing `id` take, `None` when the row is not drawn.
 fn caps_width(f: &mut Fixture, id: CommandId) -> Option<f32> {
