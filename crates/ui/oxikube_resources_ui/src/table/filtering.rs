@@ -32,6 +32,16 @@ impl ResourceTable {
                 self.save_filter(text, cx);
             }
             FilterBarEvent::Returned => window.focus(&self.focus, cx),
+            // The chip's cross: the command the jump bar and an agent use to set (here: remove)
+            // the filter; it comes back through the bus and clears the bar.
+            FilterBarEvent::ClearRequested => {
+                let command = Command::TableSetFilter {
+                    cluster: self.cluster.clone(),
+                    gvk: self.kind.gvk.clone(),
+                    text: String::new(),
+                };
+                self.deps.dispatcher.dispatch(command, cx);
+            }
             // The flag itself is read from the window when the table renders (`filter_focused`).
             FilterBarEvent::Editing(_) => cx.notify(),
         }
@@ -129,7 +139,8 @@ impl ResourceTable {
         if !Self::persists_filter(cx) {
             return;
         }
-        let Ok(saved) = SavedFilter::new(self.deps.state.clone(), &self.kind.gvk) else {
+        let Ok(saved) = SavedFilter::new(self.deps.state.clone(), &self.cluster, &self.kind.gvk)
+        else {
             return;
         };
         let load = cx.background_spawn(async move { saved.load().await });
@@ -160,7 +171,9 @@ impl ResourceTable {
             return;
         }
         if self.filter_writer.is_none() {
-            let Ok(saved) = SavedFilter::new(self.deps.state.clone(), &self.kind.gvk) else {
+            let Ok(saved) =
+                SavedFilter::new(self.deps.state.clone(), &self.cluster, &self.kind.gvk)
+            else {
                 return;
             };
             self.filter_writer = Some(FilterWriter::spawn(saved, cx));

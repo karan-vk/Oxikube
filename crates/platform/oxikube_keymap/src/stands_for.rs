@@ -43,6 +43,14 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     // dispatches `view::Open` with the view `port_forwards`, list it here and drop it from
     // `PLACEHOLDER_VERBS` in `tests/k9s.rs`.
     ("resource_table::ToggleWide", CommandId::TABLE_TOGGLE_WIDE),
+    // The resource detail's find in the YAML and Describe text (E11-S06). `resource_detail::CloseFind`
+    // only closes the field and gives the keys back to the detail, so it is view-local.
+    ("resource_detail::Find", CommandId::RESOURCE_FIND),
+    ("resource_detail::NextMatch", CommandId::RESOURCE_NEXT_MATCH),
+    (
+        "resource_detail::PreviousMatch",
+        CommandId::RESOURCE_PREVIOUS_MATCH,
+    ),
     // The catalog home (E06-S03).
     ("catalog::ConnectSelected", CommandId::CLUSTER_CONNECT),
     ("catalog::DisconnectSelected", CommandId::CLUSTER_DISCONNECT),

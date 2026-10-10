@@ -392,6 +392,29 @@ pub enum Command {
         /// The resource whose YAML tab is changed.
         target: ResourceRef,
     },
+    /// Open the find field of the resource detail's YAML or Describe text, optionally with
+    /// `pattern` already typed (`/` in the detail). The search is a view of the text on screen:
+    /// it reads nothing from the cluster.
+    #[serde(rename = "resource::Find")]
+    ResourceFind {
+        /// The resource whose detail is searched.
+        target: ResourceRef,
+        /// The text or regular expression to search for; `None` just opens the field.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pattern: Option<String>,
+    },
+    /// Go to the next match of the detail's find, wrapping from the last to the first (`n`).
+    #[serde(rename = "resource::NextMatch")]
+    ResourceNextMatch {
+        /// The resource whose detail is searched.
+        target: ResourceRef,
+    },
+    /// Go to the previous match of the detail's find, wrapping from the first to the last (`N`).
+    #[serde(rename = "resource::PreviousMatch")]
+    ResourcePreviousMatch {
+        /// The resource whose detail is searched.
+        target: ResourceRef,
+    },
     /// Read the resource's describe text again (the Describe tab's refresh).
     #[serde(rename = "resource::RefreshDescribe")]
     ResourceRefreshDescribe {
@@ -905,6 +928,9 @@ impl Command {
             Command::ResourceToggleManagedFields { .. } => {
                 CommandId::RESOURCE_TOGGLE_MANAGED_FIELDS
             }
+            Command::ResourceFind { .. } => CommandId::RESOURCE_FIND,
+            Command::ResourceNextMatch { .. } => CommandId::RESOURCE_NEXT_MATCH,
+            Command::ResourcePreviousMatch { .. } => CommandId::RESOURCE_PREVIOUS_MATCH,
             Command::ResourceRefreshDescribe { .. } => CommandId::RESOURCE_REFRESH_DESCRIBE,
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
             Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
@@ -990,6 +1016,9 @@ impl Command {
             | Command::ResourceCopyYaml { target }
             | Command::ResourceSaveYaml { target }
             | Command::ResourceToggleManagedFields { target }
+            | Command::ResourceFind { target, .. }
+            | Command::ResourceNextMatch { target }
+            | Command::ResourcePreviousMatch { target }
             | Command::ResourceRefreshDescribe { target }
             | Command::ResourceViewYaml { target }
             | Command::ResourceViewDescribe { target }
@@ -1200,6 +1229,12 @@ mod tests {
             Command::ResourceCopyYaml { target: pod() },
             Command::ResourceSaveYaml { target: pod() },
             Command::ResourceToggleManagedFields { target: pod() },
+            Command::ResourceFind {
+                target: pod(),
+                pattern: Some("image".into()),
+            },
+            Command::ResourceNextMatch { target: pod() },
+            Command::ResourcePreviousMatch { target: pod() },
             Command::ResourceRefreshDescribe { target: pod() },
             Command::ResourceSelectAll {
                 cluster: cluster(),
@@ -1552,6 +1587,9 @@ mod tests {
                     | Command::ResourceCopyYaml { .. }
                     | Command::ResourceSaveYaml { .. }
                     | Command::ResourceToggleManagedFields { .. }
+                    | Command::ResourceFind { .. }
+                    | Command::ResourceNextMatch { .. }
+                    | Command::ResourcePreviousMatch { .. }
                     | Command::ResourceRefreshDescribe { .. }
                     | Command::ResourceSelectAll { .. }
                     | Command::TableFocusFilter { .. }

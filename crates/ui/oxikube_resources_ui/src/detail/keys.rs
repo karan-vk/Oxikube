@@ -4,7 +4,9 @@
 //! returns to the table, `j` / `k` and the arrows step the table's selection to the next or
 //! previous object and show it, and `1` to `5` switch Overview, YAML, Describe, Events and (for a
 //! CustomResourceDefinition) Schema. The bindings are in the per-OS keymap files of
-//! `oxikube_assets`, so users rebind them in `keymap.json`.
+//! `oxikube_assets`, so users rebind them in `keymap.json`. On the YAML and Describe tabs `/` opens a
+//! find field (E11-S06), `n` / `N` step through its matches and `escape` in the field closes it; while
+//! the field has the focus the context says `Editing`, so the bare keys are text.
 //!
 //! These are view-local moves like the table's own cursor keys and the close button; what they
 //! open (the next object) is the `resource::Open` command through the usual dispatcher.
@@ -27,6 +29,14 @@ actions!(
         SelectNext,
         /// Selects the previous row of the table and shows its detail in the drawer.
         SelectPrevious,
+        /// Opens the find field over the YAML or Describe text (`resource::Find`).
+        Find,
+        /// Goes to the next match of the find, wrapping (`resource::NextMatch`).
+        NextMatch,
+        /// Goes to the previous match of the find, wrapping (`resource::PreviousMatch`).
+        PreviousMatch,
+        /// Closes the find field, forgets the matches and returns to the detail.
+        CloseFind,
     ]
 );
 
@@ -48,6 +58,9 @@ impl KeyContextual for DetailView {
             Mount::Tab => "tab",
         };
         context.value("mount", mount);
+        // A text field inside has the focus: bare keys are text. `finding`: the strip is open.
+        context.flag_if(self.find.editing, contexts::EDITING);
+        context.flag_if(self.find.open, "finding");
         context.value("kind", self.target.gvk.kind.to_string());
     }
 }
@@ -75,6 +88,32 @@ impl DetailView {
         cx: &mut Context<Self>,
     ) {
         self.step(-1, cx);
+    }
+
+    pub(super) fn on_find(&mut self, _: &Find, window: &mut Window, cx: &mut Context<Self>) {
+        self.request_find(None, window, cx);
+    }
+
+    pub(super) fn on_next_match(&mut self, _: &NextMatch, _: &mut Window, cx: &mut Context<Self>) {
+        self.request_next_match(cx);
+    }
+
+    pub(super) fn on_previous_match(
+        &mut self,
+        _: &PreviousMatch,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.request_previous_match(cx);
+    }
+
+    pub(super) fn on_close_find(
+        &mut self,
+        _: &CloseFind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.close_find(window, cx);
     }
 
     pub(super) fn on_show_tab(&mut self, action: &ShowTab, _: &mut Window, cx: &mut Context<Self>) {

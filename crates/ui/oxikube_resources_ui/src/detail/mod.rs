@@ -9,6 +9,7 @@
 //! | File | Holds |
 //! |---|---|
 //! | `model` | [`DetailModel`]: header, labels, annotations, owners, finalizers, conditions, the `status` summary and a Secret's key names; plain Rust, no GPUI |
+//! | `find` | find in the YAML and Describe text (E11-S06): `/`, the strip, `n` / `N` through the shared `oxikube_app::search::find` |
 //! | `yaml` | the YAML tab (E07-S06): [`yaml_text`] (managedFields, Secret masking) as a pure function run off the UI thread, the read-only code view, the toolbar |
 //! | `describe` | the Describe tab (E07-S06): `DescribePort` read on the Tokio bridge, spinner, error with Retry, refresh |
 //! | `events` | [`EventRow`], [`events_about`]: the events of the object from the namespace's `Event` feed |
@@ -51,6 +52,7 @@ mod events;
 mod events_feed;
 mod events_tab;
 mod exec;
+mod find;
 mod follow;
 mod full;
 mod keys;
@@ -71,7 +73,9 @@ pub(crate) mod tests;
 pub use describe::DescribeState;
 pub use drawer::{DEFAULT_WIDTH, DetailDrawer, ToggleDrawer};
 pub use events::{EventRow, MAX_EVENTS, events_about};
-pub use keys::{Close, SelectNext, SelectPrevious, ShowTab};
+pub use keys::{
+    Close, CloseFind, Find, NextMatch, PreviousMatch, SelectNext, SelectPrevious, ShowTab,
+};
 pub use model::DetailModel;
 pub use state::{DetailDeps, DetailEvent, DetailState, Mount};
 pub use tabs::DetailTab;

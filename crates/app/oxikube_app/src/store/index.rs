@@ -253,12 +253,14 @@ impl SortedIndex {
     /// only the members that still pass: one pass over the rows already in the index instead of a
     /// scan of the whole cache. Rows are re-ranked and re-sorted only when the sort changed or
     /// the filter ranks (a fuzzy query's scores move with the query); otherwise the surviving
-    /// rows keep their order.
-    pub fn narrow(&mut self, filter: StoreFilter, sort: SortKey) {
+    /// rows keep their order. Returns how many rows it examined (the rows the old filter let
+    /// through), so a test can tell a pass over the survivors from a scan of the cache.
+    pub fn narrow(&mut self, filter: StoreFilter, sort: SortKey) -> usize {
         let resort = sort != self.sort || filter.pattern.as_ref().is_some_and(|p| p.ranks());
         self.filter = filter;
         self.sort = sort;
         let mut members = std::mem::take(&mut self.members);
+        let scanned = members.len();
         members.retain(|_, m| self.filter.matches(&m.object));
         if resort {
             for member in members.values_mut() {
@@ -272,6 +274,7 @@ impl SortedIndex {
             let members = &self.members;
             self.rows.retain(|slot| members.contains_key(&slot.key));
         }
+        scanned
     }
 
     /// Clears everything and adopts a new filter and sort.

@@ -289,6 +289,12 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "resource::CopyYaml" => Command::ResourceCopyYaml { target: target() },
         "resource::RefreshDescribe" => Command::ResourceRefreshDescribe { target: target() },
         "resource::SaveYaml" => Command::ResourceSaveYaml { target: target() },
+        "resource::Find" => Command::ResourceFind {
+            target: target(),
+            pattern: Some("image".into()),
+        },
+        "resource::NextMatch" => Command::ResourceNextMatch { target: target() },
+        "resource::PreviousMatch" => Command::ResourcePreviousMatch { target: target() },
         "resource::ToggleManagedFields" => {
             Command::ResourceToggleManagedFields { target: target() }
         }

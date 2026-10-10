@@ -7,12 +7,13 @@
 
 use std::time::Duration;
 
+use super::chip::render_error_chip;
 use gpui::{
     AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable,
     InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
     Subscription, Task, Window, div, px,
 };
-use oxikube_app::store::filter::{FilterError, FilterParts};
+use oxikube_app::search::filter::{FilterError, FilterParts, FilterState};
 use oxikube_ui::input::{Input, InputEvent, InputState};
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
@@ -37,6 +38,8 @@ pub enum FilterBarEvent {
     },
     /// Enter or Escape: give the focus back to the table.
     Returned,
+    /// The chip's cross was pressed: the table clears the filter through `table::SetFilter`.
+    ClearRequested,
     /// The field gained or lost the focus (the table's key context says `Editing` meanwhile, so
     /// bare keys such as `j` and `/` are text).
     Editing(bool),
@@ -51,11 +54,13 @@ pub(super) struct Pending {
 /// The filter bar of one table. See the module docs.
 pub struct FilterBar {
     pub(super) input: Entity<InputState>,
-    /// The text last parsed: the input's own change event after `set_text` is ignored.
-    pub(super) text: String,
+    /// The text last parsed, the last good parse and the error of the text: the input's own
+    /// change event after `set_text` is ignored.
+    pub(super) state: FilterState,
     /// The last good filter, as told to the table.
     pub(super) applied: FilterParts,
-    pub(super) error: Option<FilterError>,
+    /// The text of `applied`, for the chip.
+    pub(super) applied_text: String,
     pub(super) pending: Option<Pending>,
     /// Whether an edit was applied less than a debounce ago (later ones wait for the timer).
     pub(super) throttled: bool,
@@ -78,9 +83,9 @@ impl FilterBar {
         let subscription = cx.subscribe_in(&input, window, Self::on_input_event);
         Self {
             input,
-            text: String::new(),
+            state: FilterState::new(),
             applied: FilterParts::default(),
-            error: None,
+            applied_text: String::new(),
             pending: None,
             throttled: false,
             timer: None,
@@ -120,12 +125,12 @@ impl FilterBar {
 
     /// The text in the bar.
     pub fn text(&self) -> &str {
-        &self.text
+        self.state.text()
     }
 
     /// The parse error of the text in the bar, if it has one.
     pub fn error(&self) -> Option<&FilterError> {
-        self.error.as_ref()
+        self.state.error()
     }
 
     /// Whether the field has the keyboard focus.
@@ -162,7 +167,8 @@ impl Render for FilterBar {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.colors();
         let count = self.count_label();
-        let error: Option<SharedString> = self.error.as_ref().map(|e| e.to_string().into());
+        let error: Option<SharedString> = self.state.error().map(|e| e.to_string().into());
+        let chip = self.chip_label();
         h_flex()
             .id("resource-filter")
             .gap(u(px(6.)))
@@ -186,17 +192,8 @@ impl Render for FilterBar {
                     .text_size(u(px(12.)))
                     .child(SharedString::from(count))
             }))
-            .children(error.map(|message| {
-                div()
-                    .debug_selector(|| "resource-filter-error".into())
-                    .max_w(u(px(360.)))
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .whitespace_nowrap()
-                    .text_color(colors.error)
-                    .text_size(u(px(12.)))
-                    .child(message)
-            }))
+            .children(chip.map(|label| self.render_chip(label, cx)))
+            .children(error.map(|message| render_error_chip(message, cx)))
     }
 }
 

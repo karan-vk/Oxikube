@@ -4,6 +4,7 @@
 
 mod complete;
 mod execute;
+mod filter;
 mod history;
 mod parse;
 mod plan;

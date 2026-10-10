@@ -125,6 +125,19 @@ impl CodeView {
             background_color: Some(tokens.colors.selection),
             ..HighlightStyle::default()
         };
+        let found = self
+            .matches
+            .as_ref()
+            .filter(|m| std::sync::Arc::ptr_eq(&m.text, &text))
+            .cloned();
+        let match_style = HighlightStyle {
+            background_color: Some(tokens.colors.warning.opacity(0.35)),
+            ..HighlightStyle::default()
+        };
+        let current_style = HighlightStyle {
+            background_color: Some(tokens.colors.accent.opacity(0.6)),
+            ..HighlightStyle::default()
+        };
         let row_height = self.metrics.row_height;
         let padding = self.metrics.padding;
         let gutter = self
@@ -142,6 +155,28 @@ impl CodeView {
                     let span =
                         sel.start.max(row.start) - row.start..sel.end.min(row.end) - row.start;
                     runs = combine_highlights(runs, [(span, selection)]).collect();
+                }
+                if let Some(found) = found.as_ref() {
+                    let first = found.ranges.partition_point(|r| r.end <= row.start);
+                    let spans: Vec<(Range<usize>, HighlightStyle)> = found.ranges[first..]
+                        .iter()
+                        .enumerate()
+                        .take_while(|(_, r)| r.start < row.end)
+                        .map(|(i, r)| {
+                            let style = if found.current == Some(first + i) {
+                                current_style
+                            } else {
+                                match_style
+                            };
+                            (
+                                r.start.max(row.start) - row.start..r.end.min(row.end) - row.start,
+                                style,
+                            )
+                        })
+                        .collect();
+                    if !spans.is_empty() {
+                        runs = combine_highlights(runs, spans).collect();
+                    }
                 }
                 let words = SharedString::from(text.get(row.start..row.end)?.to_owned());
                 let number = (gutter.is_some() && rows.starts_line(ix))

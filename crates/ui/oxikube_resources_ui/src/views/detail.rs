@@ -150,6 +150,38 @@ impl ResourceViews {
         }
     }
 
+    /// Opens the find field of `target`'s open detail (on its YAML or Describe text), with
+    /// `pattern` typed when there is one.
+    pub(super) fn find_in_detail(
+        &self,
+        target: &ResourceRef,
+        pattern: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(view) = self.detail_view(target, cx) {
+            view.update(cx, |view, cx| view.find_on_command(pattern, window, cx));
+        }
+    }
+
+    /// Goes to the next (or previous) match of the find in `target`'s open detail.
+    pub(super) fn step_detail_match(
+        &self,
+        target: &ResourceRef,
+        forward: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(view) = self.detail_view(target, cx) {
+            view.update(cx, |view, cx| {
+                if forward {
+                    view.next_match(cx);
+                } else {
+                    view.previous_match(cx);
+                }
+            });
+        }
+    }
+
     /// Reads the describe text of `target`'s open detail again.
     pub(super) fn refresh_describe(&self, target: &ResourceRef, cx: &mut Context<Self>) {
         if let Some(view) = self.detail_view(target, cx) {

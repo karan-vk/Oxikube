@@ -97,6 +97,7 @@ const VIEW_LOCAL: &[&str] = &[
     "resource_detail::SelectNext",
     "resource_detail::SelectPrevious",
     "resource_detail::ShowTab",
+    "resource_detail::CloseFind",
     // The catalog home's list.
     "catalog::SelectNext",
     "catalog::SelectPrevious",

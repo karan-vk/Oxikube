@@ -109,7 +109,8 @@
   y                resource_table::ViewYaml
 [ResourceTable && Editing]
   escape           resource_table::ClearFilter
-[DetailDrawer]
+[DetailDrawer && !Editing]
+  /                resource_detail::Find
   1                resource_detail::ShowTab {"index":1}
   2                resource_detail::ShowTab {"index":2}
   3                resource_detail::ShowTab {"index":3}
@@ -120,8 +121,12 @@
   escape           resource_detail::Close
   j                resource_detail::SelectNext
   k                resource_detail::SelectPrevious
+  n                resource_detail::NextMatch
+  shift-n          resource_detail::PreviousMatch
   up               resource_detail::SelectPrevious
   y                resource_detail::ShowTab {"index":2}
+[DetailDrawer && Editing]
+  escape           resource_detail::CloseFind
 [LogView && !Editing]
   /                log_view::Find
   0                log_view::Tail

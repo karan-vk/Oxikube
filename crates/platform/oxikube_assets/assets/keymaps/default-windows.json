@@ -234,8 +234,8 @@
     // The detail drawer (E07-U559) has the focus (Enter on a table row moves it there): escape
     // closes it and returns to the table, j / k and the arrows step the table's selection to the
     // next or previous object and show it, 1 to 5 switch Overview, YAML, Describe, Events and a
-    // CRD's Schema. Rebind in keymap.json, e.g. { "context": "DetailDrawer", "bindings": { "j": null } }.
-    "context": "DetailDrawer",
+    // CRD's Schema. Rebind in keymap.json, e.g. { "context": "DetailDrawer && !Editing", "bindings": { "j": null } }.
+    "context": "DetailDrawer && !Editing",
     "bindings": {
       "escape": "resource_detail::Close",
       "j": "resource_detail::SelectNext",
@@ -249,7 +249,20 @@
       "5": ["resource_detail::ShowTab", { "index": 5 }],
       // k9s: y shows the YAML tab, d the Describe tab.
       "y": ["resource_detail::ShowTab", { "index": 2 }],
-      "d": ["resource_detail::ShowTab", { "index": 3 }]
+      "d": ["resource_detail::ShowTab", { "index": 3 }],
+      // Find in the YAML and Describe text (E11-S06): `/` opens the field, `n` / `N` step through
+      // the matches, wrapping at the ends.
+      "/": "resource_detail::Find",
+      "n": "resource_detail::NextMatch",
+      "shift-n": "resource_detail::PreviousMatch"
+    }
+  },
+  {
+    // The find field of the detail has the focus: its keys are text; escape closes it and drops
+    // the matches (enter keeps them and returns to the detail).
+    "context": "DetailDrawer && Editing",
+    "bindings": {
+      "escape": "resource_detail::CloseFind"
     }
   },
   {
