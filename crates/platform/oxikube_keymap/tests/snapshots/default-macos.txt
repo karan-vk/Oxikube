@@ -70,6 +70,8 @@
   pagedown         picker::SelectLast
   pageup           picker::SelectFirst
   up               picker::SelectPrevious
+[Palette]
+  cmd-shift-a      palette::ToggleShowAll
 [ResourceTable]
   cmd-a            resource_table::SelectAll
   cmd-c            resource_table::CopyName
