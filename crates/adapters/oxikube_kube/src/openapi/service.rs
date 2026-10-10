@@ -14,7 +14,7 @@ use oxikube_ports::{FsPort, SchemaPort};
 use parking_lot::Mutex;
 use tracing::{debug, warn};
 
-use super::cache::{DiskCache, Key};
+use super::cache::{DiskCache, Key, UNKNOWN_VERSION};
 use super::fetch::{fetch_document, fetch_index, fetch_server_version};
 use super::index::{Index, IndexEntry};
 
@@ -60,6 +60,13 @@ struct Loaded {
 struct Memory {
     loaded: Option<Arc<Loaded>>,
     schemas: HashMap<Gvk, Arc<JsonSchema>>,
+    /// Raw group documents (by index key, with the hash they were read under) that could not
+    /// be kept on disk: no disk cache, an unwritable one, or a server without hashes. Without
+    /// them every further kind of the group would download the document again.
+    documents: HashMap<String, (String, Arc<Vec<u8>>)>,
+    /// The server has no `/openapi/v3`: remembered until `invalidate`, so a validator asking on
+    /// every edit does not repeat two doomed requests.
+    unsupported: bool,
     epoch: u64,
 }
 
@@ -123,22 +130,30 @@ impl OpenApiSchemas {
 
     /// The index and server version, fetched once and shared.
     async fn loaded(&self) -> OxiResult<Arc<Loaded>> {
-        if let Some(loaded) = self.memory.lock().loaded.clone() {
-            return Ok(loaded);
+        if let Some(known) = self.known_index()? {
+            return Ok(known);
         }
         let _gate = self.index_gate.lock().await;
-        if let Some(loaded) = self.memory.lock().loaded.clone() {
-            return Ok(loaded);
+        if let Some(known) = self.known_index()? {
+            return Ok(known);
         }
         let epoch = self.memory.lock().epoch;
         let timeout = self.config.request_timeout;
-        let (index, version) = tokio::join!(
-            fetch_index(&self.client, timeout),
-            fetch_server_version(&self.client, timeout)
-        );
+        // Concurrent, but an index failure returns at once instead of waiting for `/version`.
+        let (index, version) = futures::try_join!(fetch_index(&self.client, timeout), async {
+            Ok(fetch_server_version(&self.client, timeout).await)
+        })
+        .inspect_err(|err| {
+            if err.kind() == ErrorKind::Unsupported {
+                let mut memory = self.memory.lock();
+                if memory.epoch == epoch {
+                    memory.unsupported = true;
+                }
+            }
+        })?;
         let loaded = Arc::new(Loaded {
-            index: index?,
-            server_version: version.unwrap_or_else(|| "unknown".to_owned()),
+            index,
+            server_version: version.unwrap_or_else(|| UNKNOWN_VERSION.to_owned()),
             at: Instant::now(),
         });
         let mut memory = self.memory.lock();
@@ -148,9 +163,23 @@ impl OpenApiSchemas {
         Ok(loaded)
     }
 
+    /// The index in memory, `Unsupported` when the server is known to lack OpenAPI v3, or
+    /// `None` when it has not been read yet.
+    fn known_index(&self) -> OxiResult<Option<Arc<Loaded>>> {
+        let memory = self.memory.lock();
+        if memory.unsupported {
+            return Err(OxiError::unsupported(
+                "the API server has no /openapi/v3 endpoint",
+            ));
+        }
+        Ok(memory.loaded.clone())
+    }
+
     /// Looks `gvk` up through the cached index. `NotFound` when the server
     /// lists no document or the document names no such kind.
     async fn resolve(&self, gvk: &Gvk) -> OxiResult<Arc<JsonSchema>> {
+        // Before any await: an `invalidate` from here on discards this lookup's result.
+        let epoch = self.memory.lock().epoch;
         let loaded = self.loaded().await?;
         let Some(entry) = loaded.index.entry_for(&gvk.group, &gvk.version) else {
             return Err(OxiError::not_found(format!(
@@ -167,8 +196,7 @@ impl OpenApiSchemas {
         if let Some(hit) = self.cached(gvk) {
             return Ok(hit);
         }
-        let epoch = self.memory.lock().epoch;
-        let schema = Arc::new(self.load_group(&loaded, entry, gvk).await?);
+        let schema = Arc::new(self.load_group(&loaded, entry, gvk, epoch).await?);
         let mut memory = self.memory.lock();
         if memory.epoch == epoch {
             memory.schemas.insert(gvk.clone(), schema.clone());
@@ -176,23 +204,37 @@ impl OpenApiSchemas {
         Ok(schema)
     }
 
-    /// The flattened root of `gvk` from the disk cache or, failing that, the
-    /// server (then stored on disk).
+    /// The flattened root of `gvk` from the document held in memory or on disk or, failing
+    /// those, from the server (then kept on disk, or in memory when that is not possible).
     async fn load_group(
         &self,
         loaded: &Loaded,
         entry: &IndexEntry,
         gvk: &Gvk,
+        epoch: u64,
     ) -> OxiResult<JsonSchema> {
+        let group_version = Index::key_for(&gvk.group, &gvk.version);
         let key = Key {
             server_version: &loaded.server_version,
-            group_version: &Index::key_for(&gvk.group, &gvk.version),
+            group_version: &group_version,
             hash: &entry.hash,
         };
+        let held = self
+            .memory
+            .lock()
+            .documents
+            .get(&group_version)
+            .filter(|(hash, _)| *hash == entry.hash)
+            .map(|(_, bytes)| bytes.clone());
+        if let Some(bytes) = held {
+            if let Ok(root) = flatten_root(bytes, gvk).await {
+                return root.ok_or_else(|| no_schema(gvk));
+            }
+        }
         if let Some(disk) = &self.disk {
             if let Some(bytes) = disk.read(&self.cluster, &key).await {
-                match flatten_root(bytes, gvk).await {
-                    Ok((root, _)) => {
+                match flatten_root(Arc::new(bytes), gvk).await {
+                    Ok(root) => {
                         debug!(kind = %gvk, "openapi: group document from disk cache");
                         return root.ok_or_else(|| no_schema(gvk));
                     }
@@ -201,12 +243,28 @@ impl OpenApiSchemas {
             }
         }
         let text = fetch_document(&self.client, &entry.url, self.config.request_timeout).await?;
-        let (root, bytes) = flatten_root(text.into_bytes(), gvk)
+        let bytes = Arc::new(text.into_bytes());
+        let root = flatten_root(bytes.clone(), gvk)
             .await
             .map_err(|e| OxiError::internal(format!("openapi: group document is not JSON: {e}")))?;
-        if let Some(disk) = &self.disk {
-            if let Err(err) = disk.write(&self.cluster, &key, &bytes).await {
-                warn!(error = %err, kind = %gvk, "openapi: disk cache write failed");
+        let stored = match &self.disk {
+            Some(disk) if !entry.hash.is_empty() => {
+                match disk.write(&self.cluster, &key, &bytes).await {
+                    Ok(()) => true,
+                    Err(err) => {
+                        warn!(error = %err, kind = %gvk, "openapi: disk cache write failed");
+                        false
+                    }
+                }
+            }
+            _ => false,
+        };
+        if !stored {
+            let mut memory = self.memory.lock();
+            if memory.epoch == epoch {
+                memory
+                    .documents
+                    .insert(group_version, (entry.hash.clone(), bytes));
             }
         }
         root.ok_or_else(|| no_schema(gvk))
@@ -244,14 +302,13 @@ fn no_schema(gvk: &Gvk) -> OxiError {
 
 /// Parses a group document and flattens `gvk`'s root on the blocking pool (a
 /// large document takes tens of milliseconds, too long for an async worker).
-/// Hands the bytes back so the caller can store them without a copy; the error
-/// is why the document did not parse.
-async fn flatten_root(bytes: Vec<u8>, gvk: &Gvk) -> Result<(Option<JsonSchema>, Vec<u8>), String> {
+/// The error is why the document did not parse.
+async fn flatten_root(bytes: Arc<Vec<u8>>, gvk: &Gvk) -> Result<Option<JsonSchema>, String> {
     let gvk = gvk.clone();
     tokio::task::spawn_blocking(move || {
         let document: serde_json::Value =
             serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-        Ok((root_schema_for(&document, &gvk), bytes))
+        Ok(root_schema_for(&document, &gvk))
     })
     .await
     .map_err(|e| format!("parse task ended: {e}"))?
@@ -278,6 +335,8 @@ impl SchemaPort for OpenApiSchemas {
         memory.epoch += 1;
         memory.loaded = None;
         memory.schemas.clear();
+        memory.documents.clear();
+        memory.unsupported = false;
         Ok(())
     }
 }

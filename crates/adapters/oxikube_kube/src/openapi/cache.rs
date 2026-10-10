@@ -22,6 +22,9 @@ use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::{EntryKind, FsPort};
 
+/// The server version used as the cache key when `/version` could not be read.
+pub(super) const UNKNOWN_VERSION: &str = "unknown";
+
 /// Where the raw documents of one cluster live. See the module docs.
 pub(super) struct DiskCache {
     fs: Arc<dyn FsPort>,
@@ -102,7 +105,10 @@ impl DiskCache {
                 let _ = self.fs.remove(&entry.path).await;
             }
         }
-        if self.pruned_versions.swap(true, Ordering::Relaxed) {
+        // Under the fallback key the real version is unknown, so its files are not stale.
+        if key.server_version == UNKNOWN_VERSION
+            || self.pruned_versions.swap(true, Ordering::Relaxed)
+        {
             return;
         }
         let current = segment(key.server_version);
@@ -123,18 +129,20 @@ impl DiskCache {
     }
 }
 
-/// One safe path segment: slashes and anything outside `[A-Za-z0-9._-]` (the
-/// `=`, `+` and `/` of a base64 hash, the `+` of `v1.31.0+k3s1`) become `_`.
+/// One safe path segment, injective: bytes outside `[A-Za-z0-9.-]` (and `_`
+/// itself) become `_` plus two hex digits, so `a=` and `a/` never share a file
+/// (`A/b+c=` is `A_2fb_2bc_3d`).
 fn segment(text: &str) -> String {
-    text.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-') {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
+    use std::fmt::Write as _;
+    let mut out = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-') {
+            out.push(char::from(byte));
+        } else {
+            let _ = write!(out, "_{byte:02x}");
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -232,8 +240,14 @@ mod tests {
 
     #[test]
     fn segments_are_one_safe_path_component() {
-        assert_eq!(segment("v1.31.0+k3s1"), "v1.31.0_k3s1");
-        assert_eq!(segment("apis/apps/v1"), "apis_apps_v1");
-        assert_eq!(segment("A/b+c="), "A_b_c_");
+        assert_eq!(segment("v1.31.0+k3s1"), "v1.31.0_2bk3s1");
+        assert_eq!(segment("apis/apps/v1"), "apis_2fapps_2fv1");
+        assert_eq!(segment("A/b+c="), "A_2fb_2bc_3d");
+        assert_ne!(
+            segment("a="),
+            segment("a/"),
+            "distinct inputs never collide"
+        );
+        assert_ne!(segment("a_"), segment("a/"), "an underscore is escaped too");
     }
 }

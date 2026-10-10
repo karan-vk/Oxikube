@@ -301,3 +301,26 @@ fn depth_counts_references_per_path_and_structure_separately() {
     }
     assert!(at.truncated, "an over-long reference chain ends open");
 }
+
+#[test]
+fn keywords_beside_all_of_merge_with_the_entries() {
+    let components = json!({
+        "Base": {
+            "type": "object",
+            "properties": {"a": {"type": "string"}},
+            "required": ["a"]
+        }
+    });
+    let node = json!({
+        "type": "object",
+        "description": "wrapper",
+        "properties": {"b": {"type": "integer"}},
+        "required": ["b"],
+        "allOf": [{"$ref": "#/components/schemas/Base"}]
+    });
+    let schema = flatten_schema(&node, components.as_object().unwrap());
+    assert_eq!(schema.types, [SchemaType::Object]);
+    assert_eq!(schema.properties.keys().collect::<Vec<_>>(), ["a", "b"]);
+    assert_eq!(schema.required, ["a", "b"]);
+    assert_eq!(schema.description.as_deref(), Some("wrapper"));
+}

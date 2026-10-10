@@ -21,7 +21,7 @@ pub fn flatten_schema(
 
 /// Merges `allOf` entries into one node: Kubernetes wraps a single `$ref` in
 /// `allOf` to attach a description, so the common case is one resolved
-/// reference plus sibling annotations.
+/// reference plus the wrapper's own keywords (the last entry).
 ///
 /// Merge rules: types are the first non-empty list; properties merge with later
 /// entries winning on name clashes; `required` unions; `items` is the last
@@ -115,23 +115,11 @@ fn flatten_node(
             .iter()
             .map(|entry| flatten_node(entry, components, stack, depth + 1))
             .collect();
-        let mut merged = merge_all_of(flattened);
-        // Sibling annotations beside `allOf` (the description the wrapper carries)
-        // win over the merged entries.
-        if let Some(description) = object
-            .get("description")
-            .and_then(serde_json::Value::as_str)
-        {
-            merged.description = Some(description.to_owned());
-        }
-        let sibling_xk8s = parse_xk8s(object);
-        if sibling_xk8s.preserve_unknown_fields {
-            merged.xk8s.preserve_unknown_fields = true;
-        }
-        if sibling_xk8s.int_or_string && merged.types.is_empty() {
-            merged.types = vec![SchemaType::Integer, SchemaType::String];
-        }
-        apply_unions(&mut merged, object, components, stack, depth);
+        // The node's own keywords (its description, `required`, `properties`, ...) merge
+        // last, so siblings of `allOf` win over the entries.
+        let mut entries = flattened;
+        entries.push(parse_node(object, components, stack, depth));
+        let mut merged = merge_all_of(entries);
         apply_nullable(&mut merged, object);
         return merged;
     }

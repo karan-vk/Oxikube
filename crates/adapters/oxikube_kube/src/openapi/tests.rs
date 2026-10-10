@@ -346,7 +346,7 @@ async fn disk_cache_holds_one_public_document_per_group_version() {
     let files = fs.list(&dir).await.expect("list");
     assert_eq!(files.len(), 1);
     assert!(
-        files[0].path.ends_with("apis_apps_v1-BBB_.json"),
+        files[0].path.ends_with("apis_2fapps_2fv1-BBB_3d.json"),
         "{:?}",
         files[0].path
     );
@@ -392,4 +392,69 @@ async fn an_index_without_hashes_is_never_cached_on_disk() {
         fs.list(&root).await.map_or(true, |files| files.is_empty()),
         "nothing validates a hashless file, so nothing is written"
     );
+}
+
+#[tokio::test]
+async fn kinds_of_one_group_download_it_once_even_without_a_disk_cache() {
+    let api = server();
+    let svc = memory_only(&api);
+    svc.schema_for(&cluster(), &deployment())
+        .await
+        .expect("deployment");
+    svc.schema_for(&cluster(), &stateful_set())
+        .await
+        .expect("stateful set");
+    assert_eq!(api.hits("/openapi/v3/apis/apps/v1"), 1);
+
+    // An invalidate drops the held document with the rest of the memory state.
+    svc.invalidate(&cluster()).await.expect("invalidate");
+    svc.schema_for(&cluster(), &deployment())
+        .await
+        .expect("deployment");
+    assert_eq!(api.hits("/openapi/v3/apis/apps/v1"), 2);
+}
+
+#[tokio::test]
+async fn a_server_without_openapi_v3_is_asked_once_until_invalidated() {
+    let api = FakeApi::new();
+    let svc = memory_only(&api);
+    for _ in 0..3 {
+        let err = svc
+            .schema_for(&cluster(), &deployment())
+            .await
+            .expect_err("unsupported");
+        assert_eq!(err.kind(), ErrorKind::Unsupported);
+    }
+    assert_eq!(api.hits("/openapi/v3"), 1);
+    svc.invalidate(&cluster()).await.expect("invalidate");
+    svc.schema_for(&cluster(), &deployment())
+        .await
+        .expect_err("still unsupported");
+    assert_eq!(
+        api.hits("/openapi/v3"),
+        2,
+        "asked again after an invalidate"
+    );
+}
+
+#[tokio::test]
+async fn a_lookup_started_before_an_invalidate_does_not_cache_its_result() {
+    let api = server();
+    let svc = Arc::new(memory_only(&api));
+    // The invalidate lands while the lookup is awaiting its fetches.
+    let lookup = tokio::spawn({
+        let svc = svc.clone();
+        async move { svc.schema_for(&cluster(), &deployment()).await }
+    });
+    tokio::task::yield_now().await;
+    svc.invalidate(&cluster()).await.expect("invalidate");
+    lookup
+        .await
+        .expect("task")
+        .expect("the caller still gets its schema");
+    // Nothing from the pre-invalidate lookup was kept: the next one fetches again.
+    svc.schema_for(&cluster(), &deployment())
+        .await
+        .expect("schema");
+    assert_eq!(api.hits("/openapi/v3/apis/apps/v1"), 2);
 }
