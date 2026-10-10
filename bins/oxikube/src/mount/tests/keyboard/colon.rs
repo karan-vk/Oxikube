@@ -168,9 +168,22 @@ fn a_custom_resource_opens_by_its_discovered_short_name(cx: &mut TestAppContext)
         shown == Some(("Widget".into(), vec!["gizmo".into()])),
         "`:wd` is the Widget CRD's short name, got {shown:?}"
     );
-    // Its plural works too.
+    // Its plural works too: leave for another kind first, so reaching Widget needs a real jump.
+    app.focus_table();
+    app.colon("po");
+    check!(app, app.jump_bar_open().is_none(), "`:po` closed the bar");
+    check!(
+        app,
+        app.shown().map(|(kind, _)| kind) == Some("Pod".into()),
+        "`:po` left the Widget table"
+    );
     app.focus_table();
     app.colon("widgets");
+    check!(
+        app,
+        app.jump_bar_open().is_none(),
+        "`:widgets` was accepted and closed the bar"
+    );
     assert_eq!(app.shown().map(|(kind, _)| kind), Some("Widget".into()));
 }
 
