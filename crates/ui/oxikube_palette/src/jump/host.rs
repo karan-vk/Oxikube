@@ -35,8 +35,9 @@ use super::{Back, Forward, Last, OpenJump, connect};
 /// State the bar, the host and the connect wait share.
 #[derive(Default)]
 pub(super) struct Shared {
-    /// The lines run this session, behind those of earlier runs once they are read.
-    pub history: RefCell<JumpHistory>,
+    /// The lines run this session, one ring per cluster (`None`: no cluster was shown), each
+    /// behind those of earlier runs once they are read.
+    pub history: RefCell<HashMap<Option<ClusterId>, JumpHistory>>,
     /// Where confirmed lines are remembered between runs, per cluster (E11-S11).
     pub persisted: RefCell<Option<Arc<JumpRecents>>>,
     /// Contexts and namespaces found by earlier opens.
@@ -52,7 +53,11 @@ impl Shared {
     /// store) and its commands wait for the bar to close.
     pub fn submit(&self, plan: JumpPlan, cluster: Option<&ClusterId>) {
         if let Some(line) = &plan.record {
-            self.history.borrow_mut().record(line);
+            self.history
+                .borrow_mut()
+                .entry(cluster.cloned())
+                .or_default()
+                .record(line);
             if let (Some(persisted), Some(cluster)) = (&*self.persisted.borrow(), cluster) {
                 persisted.record(cluster, line);
             }
@@ -164,9 +169,13 @@ impl JumpHost {
         hosts.0.insert(id, self.clone());
     }
 
-    /// The lines run so far (for the tests and the help overlay).
-    pub fn history(&self) -> JumpHistory {
-        self.shared.history.borrow().clone()
+    /// The lines run so far in `cluster` (for the tests and the help overlay).
+    pub fn history(&self, cluster: &ClusterId) -> JumpHistory {
+        let rings = self.shared.history.borrow();
+        rings
+            .get(&Some(cluster.clone()))
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Does what a door asked, in `window`.
@@ -216,13 +225,21 @@ impl JumpHost {
         let task = cx.spawn(async move |cx| {
             let latest_first = cx
                 .background_executor()
-                .spawn(async move {
-                    persisted.load(&cluster).await;
-                    persisted.recent(&cluster)
+                .spawn({
+                    let cluster = cluster.clone();
+                    async move {
+                        persisted.load(&cluster).await;
+                        persisted.recent(&cluster)
+                    }
                 })
                 .await;
             let oldest_first = latest_first.iter().rev().map(String::as_str);
-            shared.history.borrow_mut().seed(oldest_first);
+            shared
+                .history
+                .borrow_mut()
+                .entry(Some(cluster))
+                .or_default()
+                .seed(oldest_first);
         });
         *self.loading.borrow_mut() = Some(task);
     }
@@ -230,8 +247,10 @@ impl JumpHost {
     /// `[`, `]`, `-`: runs an earlier line again. A line that cannot be planned now (its cluster
     /// is gone) says so in a toast.
     pub fn step(&self, step: HistoryStep, window: &mut Window, cx: &mut App) {
+        let cluster = (self.sources.active)(cx);
         let line = {
-            let mut history = self.shared.history.borrow_mut();
+            let mut rings = self.shared.history.borrow_mut();
+            let history = rings.entry(cluster).or_default();
             match step {
                 HistoryStep::Back => history.back(),
                 HistoryStep::Forward => history.forward(),

@@ -100,12 +100,18 @@ impl JumpRecents {
 
     /// Reads the stored history of `cluster` and puts it behind what was run since. Once per
     /// cluster: later calls do nothing. A store that cannot be read leaves the history in memory,
-    /// logs once, and the next call tries again; a value of the wrong shape counts as empty.
+    /// logs once, and the next call tries again (so does [`flush`](Self::flush), which writes
+    /// nothing for a cluster whose stored history was not read); a value of the wrong shape counts
+    /// as empty.
     pub async fn load(&self, cluster: &ClusterId) {
         if self.clusters.lock().get(cluster).is_some_and(|h| h.loaded) {
             return;
         }
         let Some(key) = key_of(cluster) else {
+            // Nothing can be stored for it, so there is nothing to wait for.
+            if let Some(history) = self.clusters.lock().get_mut(cluster) {
+                history.loaded = true;
+            }
             return;
         };
         let stored = match self.state.kv_get(&key).await {
@@ -128,22 +134,41 @@ impl JumpRecents {
     }
 
     /// Writes the histories that changed. The app calls it as it quits. A failed one is kept for
-    /// the next attempt and logged once.
+    /// the next attempt and logged once. A history whose stored lines were not read is read again
+    /// first and, if that fails, left alone: the stored lines are never replaced by this run's.
     pub async fn flush(&self) {
         let _writing = self.writing.lock().await;
         if !self.writeback.take() {
             return;
         }
+        let unread: Vec<ClusterId> = self
+            .clusters
+            .lock()
+            .iter()
+            .filter(|(_, history)| history.dirty && !history.loaded)
+            .map(|(cluster, _)| cluster.clone())
+            .collect();
+        for cluster in &unread {
+            self.load(cluster).await;
+        }
+        let mut held_back = false;
         let pending: Vec<(ClusterId, Value)> = self
             .clusters
             .lock()
             .iter_mut()
             .filter(|(_, history)| history.dirty)
-            .map(|(cluster, history)| {
+            .filter_map(|(cluster, history)| {
+                if !history.loaded {
+                    held_back = true;
+                    return None;
+                }
                 history.dirty = false;
-                (cluster.clone(), encode(&history.list))
+                Some((cluster.clone(), encode(&history.list)))
             })
             .collect();
+        if held_back {
+            self.writeback.retry_later();
+        }
         for (cluster, value) in pending {
             let Some(key) = key_of(&cluster) else {
                 continue;

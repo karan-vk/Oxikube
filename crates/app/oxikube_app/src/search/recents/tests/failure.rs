@@ -84,3 +84,76 @@ fn the_jump_history_degrades_the_same_way() {
     assert!(!history.is_dirty());
     assert!(stored(&state, &format!("history.jump/{me}")).is_some());
 }
+
+fn stored_ids(ids: &[&str]) -> serde_json::Value {
+    json!({ "v": 1, "ids": ids })
+}
+
+#[test]
+fn a_failed_read_never_lets_the_flush_replace_the_stored_recents() {
+    let state = fake();
+    let old = ["pod::Attach", "view::ZoomIn", "pod::Delete"];
+    block_on(state.kv_set(&StateKey::new(RECENTS_KEY).unwrap(), stored_ids(&old))).unwrap();
+    // The startup read and the flush's second try both fail.
+    state.script().kv_get.push_err(OxiError::internal("busy"));
+    state.script().kv_get.push_err(OxiError::internal("busy"));
+    let recents = recents(&state);
+    block_on(recents.load());
+    recents.record(DELETE);
+    block_on(recents.flush());
+    assert!(recents.is_dirty(), "held back, not dropped");
+    assert_eq!(
+        stored(&state, RECENTS_KEY),
+        Some(stored_ids(&old)),
+        "the stored list is untouched"
+    );
+    // The store answers again: the flush merges the stored list in before it writes.
+    block_on(recents.flush());
+    assert!(!recents.is_dirty());
+    assert_eq!(
+        stored(&state, RECENTS_KEY),
+        Some(stored_ids(&["pod::Delete", "pod::Attach", "view::ZoomIn"]))
+    );
+}
+
+#[test]
+fn the_flush_retries_a_failed_read_once_before_it_writes() {
+    let state = fake();
+    block_on(state.kv_set(
+        &StateKey::new(RECENTS_KEY).unwrap(),
+        stored_ids(&["pod::Attach"]),
+    ))
+    .unwrap();
+    state.script().kv_get.push_err(OxiError::internal("busy"));
+    let recents = recents(&state);
+    block_on(recents.load());
+    recents.record(ZOOM);
+    block_on(recents.flush());
+    assert_eq!(
+        stored(&state, RECENTS_KEY),
+        Some(stored_ids(&["view::ZoomIn", "pod::Attach"]))
+    );
+}
+
+#[test]
+fn a_failed_read_never_lets_the_flush_replace_the_stored_jump_history() {
+    let state = fake();
+    let me = cluster("prod");
+    let key = StateKey::new(format!("history.jump/{me}")).unwrap();
+    let old = json!({ "v": 1, "jumps": ["ns", "pods"] });
+    block_on(state.kv_set(&key, old.clone())).unwrap();
+    state.script().kv_get.push_err(OxiError::internal("busy"));
+    state.script().kv_get.push_err(OxiError::internal("busy"));
+    let history = JumpRecents::new(state.clone());
+    block_on(history.load(&me));
+    assert!(history.record(&me, "deploy web"));
+    block_on(history.flush());
+    assert!(history.is_dirty(), "held back, not dropped");
+    assert_eq!(stored(&state, key.as_str()), Some(old));
+    block_on(history.flush());
+    assert!(!history.is_dirty());
+    assert_eq!(
+        stored(&state, key.as_str()),
+        Some(json!({ "v": 1, "jumps": ["deploy web", "ns", "pods"] }))
+    );
+}

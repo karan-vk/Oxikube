@@ -145,6 +145,8 @@ pub(super) struct Fixture {
     pub state: Arc<FakeStatePort>,
     /// The persisted lines the host records into and reads from.
     pub recents: Arc<JumpRecents>,
+    /// The context the host reports as shown; [`Self::show`] changes it.
+    pub shown: Rc<RefCell<ClusterId>>,
 }
 
 impl Fixture {
@@ -185,8 +187,12 @@ impl Fixture {
 
         let recorder = Recorder::default();
         let sent = recorder.0.clone();
+        let shown = Rc::new(RefCell::new(id("dev")));
         let sources = JumpSources {
-            active: Rc::new(|_| Some(id("dev"))),
+            active: Rc::new({
+                let shown = shown.clone();
+                move |_| Some(shown.borrow().clone())
+            }),
             sessions: sessions.clone(),
             catalog,
             aliases: aliases.clone(),
@@ -216,7 +222,13 @@ impl Fixture {
             table_focus,
             state,
             recents,
+            shown,
         }
+    }
+
+    /// Makes the host report the context `name` as the shown cluster.
+    pub fn show(&mut self, name: &str) {
+        *self.shown.borrow_mut() = id(name);
     }
 
     pub fn settle(&mut self) {

@@ -46,7 +46,7 @@ fn the_lines_of_the_last_run_come_back_when_the_bar_opens(cx: &mut TestAppContex
     wait_for_data(&mut f);
     f.keys("escape");
     assert_eq!(
-        f.host.history().lines(),
+        f.host.history(&id("dev")).lines(),
         ["pods", "deploy web", "ns"],
         "oldest first, the way the ring runs"
     );
@@ -73,5 +73,24 @@ fn a_ring_that_has_lines_is_not_reordered_by_the_stored_ones(cx: &mut TestAppCon
     .expect("stored");
     f.open();
     wait_for_data(&mut f);
-    assert_eq!(f.host.history().lines(), ["pods"]);
+    assert_eq!(f.host.history(&id("dev")).lines(), ["pods"]);
+}
+
+#[gpui::test]
+fn each_cluster_has_its_own_ring_of_lines(cx: &mut TestAppContext) {
+    let mut f = Fixture::new(cx);
+    block_on(f.state.kv_set(
+        &key("prod"),
+        json!({ "v": 1, "jumps": ["nodes", "deploy web"] }),
+    ))
+    .expect("stored");
+    // A line is run in `dev`; then `prod` is shown: its stored lines still arrive, and the line
+    // of `dev` is not in its ring.
+    f.run_line("pods");
+    f.show("prod");
+    f.open();
+    wait_for_data(&mut f);
+    f.keys("escape");
+    assert_eq!(f.host.history(&id("prod")).lines(), ["deploy web", "nodes"]);
+    assert_eq!(f.host.history(&id("dev")).lines(), ["pods"]);
 }

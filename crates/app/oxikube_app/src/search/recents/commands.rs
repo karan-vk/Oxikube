@@ -2,6 +2,7 @@
 
 use std::future::Future;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use oxikube_domain::command::CommandId;
@@ -28,6 +29,9 @@ pub struct StateRecents {
     state: Arc<dyn StatePort>,
     key: StateKey,
     list: Mutex<RecentList<CommandId>>,
+    /// The stored list was read (or there was none) and merged. Until then nothing is written, so
+    /// a failed read cannot lead to the stored list being replaced by this run's alone.
+    loaded: AtomicBool,
     writeback: Writeback,
     /// One write at a time, so the latest list is the last one written.
     writing: tokio::sync::Mutex<()>,
@@ -40,6 +44,7 @@ impl StateRecents {
             state,
             key: StateKey::new(RECENTS_KEY).expect("a valid state key"),
             list: Mutex::new(RecentList::new(RECENTS_CAPACITY)),
+            loaded: AtomicBool::new(false),
             writeback: Writeback::default(),
             writing: tokio::sync::Mutex::new(()),
         }
@@ -48,18 +53,27 @@ impl StateRecents {
     /// Reads the stored list and puts it behind whatever was run since the app started. A missing
     /// value is an empty list; an unreadable one (the wrong shape) too, and ids that no longer
     /// name a registered command are dropped. A store that cannot be read leaves the recents in
-    /// memory and logs once.
+    /// memory, logs once and holds back writes: [`flush`](Self::flush) tries the read again first,
+    /// so the stored list is never replaced by one that was not merged with it.
     pub async fn load(&self) {
+        if self.loaded.load(Ordering::Acquire) {
+            return;
+        }
         let stored = match self.state.kv_get(&self.key).await {
             Ok(Some(value)) => match decode(&value) {
                 Some(ids) => ids,
                 None => {
+                    // Nothing usable is stored: what is written next replaces it.
                     self.writeback
                         .failed("the stored recents are unreadable", "bad shape");
+                    self.loaded.store(true, Ordering::Release);
                     return;
                 }
             },
-            Ok(None) => return,
+            Ok(None) => {
+                self.loaded.store(true, Ordering::Release);
+                return;
+            }
             Err(error) => {
                 self.writeback
                     .failed("the recents could not be read", error.kind());
@@ -67,13 +81,20 @@ impl StateRecents {
             }
         };
         self.list.lock().append_older(stored);
+        self.loaded.store(true, Ordering::Release);
     }
 
     /// Writes the recents now if they changed since the last write. The app calls it as it quits.
-    /// A failure keeps the change for the next attempt and is logged once.
+    /// A failure keeps the change for the next attempt and is logged once. When the stored list
+    /// has not been read yet it is read first; if that fails again nothing is written.
     pub async fn flush(&self) {
         let _writing = self.writing.lock().await;
         if !self.writeback.take() {
+            return;
+        }
+        self.load().await;
+        if !self.loaded.load(Ordering::Acquire) {
+            self.writeback.retry_later();
             return;
         }
         let value = encode(&self.list.lock());
