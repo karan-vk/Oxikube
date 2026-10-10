@@ -12,7 +12,7 @@ use gpui::{
 };
 pub use gpui_component::tooltip::Tooltip;
 
-use crate::kbd::{Kbd, binding_hint};
+use crate::kbd::{Kbd, binding_keystroke};
 use crate::layout::h_flex;
 use crate::size::u;
 use crate::tokens::ActiveTokens as _;
@@ -30,7 +30,7 @@ pub fn tooltip_for_action(
     let action = action.boxed_clone();
     let context: Option<SharedString> = context.map(|context| context.to_owned().into());
     move |window, cx| {
-        let hint: Option<Kbd> = binding_hint(action.as_ref(), context.as_deref(), window);
+        let hint = binding_keystroke(action.as_ref(), context.as_deref(), window).map(Kbd::new);
         let title = title.clone();
         Tooltip::element(move |_, cx| {
             let colors = cx.colors();

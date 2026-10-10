@@ -35,12 +35,6 @@ pub fn binding_keystroke(
         .map(|stroke| stroke.as_keystroke().clone())
 }
 
-/// The key cap of [`binding_keystroke`]: what a tooltip shows next to its title
-/// ([`crate::tooltip::tooltip_for_action`]).
-pub fn binding_hint(action: &dyn Action, context: Option<&str>, window: &Window) -> Option<Kbd> {
-    binding_keystroke(action, context, window).map(Kbd::new)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -57,7 +57,7 @@ impl HelpOverlay {
         }
     }
 
-    /// The picker inside, for tests and the host.
+    /// The picker inside, for tests.
     pub fn picker(&self) -> &Entity<Picker<HelpDelegate>> {
         &self.picker
     }
