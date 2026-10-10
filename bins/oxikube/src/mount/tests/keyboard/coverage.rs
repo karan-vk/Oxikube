@@ -85,14 +85,19 @@ const SCENARIOS: &[(&str, &str, &str)] = &[
 ];
 
 /// The source of each file of the suite.
+const SOURCES: [(&str, &str); 4] = [
+    ("palette.rs", include_str!("palette.rs")),
+    ("colon.rs", include_str!("colon.rs")),
+    ("vim.rs", include_str!("vim.rs")),
+    ("history.rs", include_str!("history.rs")),
+];
+
 fn source(file: &str) -> &'static str {
-    match file {
-        "palette.rs" => include_str!("palette.rs"),
-        "colon.rs" => include_str!("colon.rs"),
-        "vim.rs" => include_str!("vim.rs"),
-        "history.rs" => include_str!("history.rs"),
-        other => panic!("{other} is not a file of the keyboard suite"),
-    }
+    SOURCES
+        .iter()
+        .find(|(name, _)| *name == file)
+        .unwrap_or_else(|| panic!("{file} is not a file of the keyboard suite"))
+        .1
 }
 
 /// Whether `file` declares a `#[gpui::test]` called `name`.
@@ -122,9 +127,9 @@ fn every_e11_acceptance_scenario_has_a_test() {
 #[test]
 fn every_test_of_the_suite_is_listed_as_a_scenario() {
     // The other direction: a new test must be named in `SCENARIOS`, so the list stays the map.
-    for file in ["palette.rs", "colon.rs", "vim.rs", "history.rs"] {
-        for (at, _) in source(file).match_indices("#[gpui::test]") {
-            let rest = &source(file)[at..];
+    for (file, source) in SOURCES {
+        for (at, _) in source.match_indices("#[gpui::test]") {
+            let rest = &source[at..];
             let name = rest
                 .split("fn ")
                 .nth(1)

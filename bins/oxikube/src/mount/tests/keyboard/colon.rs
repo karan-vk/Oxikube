@@ -4,6 +4,7 @@
 
 use gpui::TestAppContext;
 use oxikube_domain::ids::Gvk;
+use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::{ResourceCall, TestPorts};
 
 use super::{DEFAULT_PODS, SYSTEM_PODS, check};
@@ -190,12 +191,9 @@ fn an_unknown_alias_stays_in_the_bar_as_an_error_and_nothing_navigates(cx: &mut 
     );
     check!(app, app.shown() == before, "the table did not change");
     let tables = app.tab_workspace();
-    let open = app.vcx.update(|_, cx| {
-        tables
-            .read(cx)
-            .items_of_type::<oxikube_resources_ui::table::ResourceTable>()
-            .len()
-    });
+    let open = app
+        .vcx
+        .update(|_, cx| tables.read(cx).items_of_type::<ResourceTable>().len());
     assert_eq!(open, 1, "no new table opened");
     // Escape gives the keys back to the table.
     app.press("escape");
