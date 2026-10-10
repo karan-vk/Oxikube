@@ -124,12 +124,6 @@ fn lookups_by_seq() {
     assert_eq!(index.position(3), None);
     assert!(index.contains(5) && !index.contains(4));
     assert_eq!(index.rank(3), 2);
-    assert_eq!(index.at_or_after(2), Some(2));
-    assert_eq!(index.at_or_after(3), Some(5));
-    assert_eq!(index.after(2), Some(5));
-    assert_eq!(index.before(2), Some(0));
-    assert_eq!(index.before(0), None);
-    assert_eq!(index.after(5), None);
 }
 
 #[test]

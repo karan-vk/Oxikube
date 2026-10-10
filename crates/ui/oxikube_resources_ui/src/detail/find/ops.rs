@@ -25,10 +25,7 @@ impl DetailView {
     /// The text of the tab shown, as the code view was given it.
     fn find_text(&self) -> Option<Arc<str>> {
         match self.tab {
-            DetailTab::Yaml => match self.yaml.text.as_ref()?.result.as_ref() {
-                Ok(text) => Some(text.clone()),
-                Err(_) => None,
-            },
+            DetailTab::Yaml => self.yaml.text.as_ref()?.result.as_ref().ok().cloned(),
             DetailTab::Describe => self.describe.output.as_ref().map(|o| o.text.clone()),
             _ => None,
         }

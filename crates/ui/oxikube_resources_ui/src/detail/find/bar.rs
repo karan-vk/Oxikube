@@ -1,8 +1,8 @@
 //! The find strip under the tab strip: the field, how many matches, previous and next, close.
 
 use gpui::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
-    div, px,
+    AnyElement, App, ClickEvent, Context, InteractiveElement as _, IntoElement, ParentElement as _,
+    Styled as _, Window, div, px,
 };
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::input::Input;
@@ -24,7 +24,6 @@ impl DetailView {
         let label = self.find_label();
         let error = self.find.error.as_ref().map(ToString::to_string);
         let none = self.find.nav.is_empty();
-        let icon = |name| Icon::new(name).size(u(px(12.)));
         Some(
             h_flex()
                 .id("detail-find")
@@ -65,49 +64,42 @@ impl DetailView {
                         .child(message)
                 }))
                 .child(div().flex_1())
-                .child(
-                    div()
-                        .debug_selector(|| "detail-find-previous".to_owned())
-                        .child(
-                            Button::new("detail-find-previous")
-                                .xsmall()
-                                .ghost()
-                                .icon(icon(IconName::ChevronUp))
-                                .tooltip("Previous match (shift-n)")
-                                .on_click(
-                                    cx.listener(|this, _, _, cx| this.request_previous_match(cx)),
-                                ),
-                        ),
-                )
-                .child(
-                    div()
-                        .debug_selector(|| "detail-find-next".to_owned())
-                        .child(
-                            Button::new("detail-find-next")
-                                .xsmall()
-                                .ghost()
-                                .icon(icon(IconName::ChevronDown))
-                                .tooltip("Next match (n)")
-                                .on_click(
-                                    cx.listener(|this, _, _, cx| this.request_next_match(cx)),
-                                ),
-                        ),
-                )
-                .child(
-                    div()
-                        .debug_selector(|| "detail-find-close".to_owned())
-                        .child(
-                            Button::new("detail-find-close")
-                                .xsmall()
-                                .ghost()
-                                .icon(icon(IconName::X))
-                                .tooltip("Close (escape)")
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.close_find(window, cx)),
-                                ),
-                        ),
-                )
+                .child(icon_button(
+                    "detail-find-previous",
+                    IconName::ChevronUp,
+                    "Previous match (shift-n)",
+                    cx.listener(|this, _, _, cx| this.request_previous_match(cx)),
+                ))
+                .child(icon_button(
+                    "detail-find-next",
+                    IconName::ChevronDown,
+                    "Next match (n)",
+                    cx.listener(|this, _, _, cx| this.request_next_match(cx)),
+                ))
+                .child(icon_button(
+                    "detail-find-close",
+                    IconName::X,
+                    "Close (escape)",
+                    cx.listener(|this, _, window, cx| this.close_find(window, cx)),
+                ))
                 .into_any_element(),
         )
     }
+}
+
+/// A ghost icon button of the strip; `id` is also its test selector.
+fn icon_button(
+    id: &'static str,
+    icon: IconName,
+    tooltip: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div().debug_selector(|| id.to_owned()).child(
+        Button::new(id)
+            .xsmall()
+            .ghost()
+            .icon(Icon::new(icon).size(u(px(12.))))
+            .tooltip(tooltip)
+            .on_click(on_click),
+    )
 }
