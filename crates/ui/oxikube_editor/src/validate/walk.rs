@@ -215,15 +215,36 @@ pub(super) fn describe(ty: ValueType, text: &str) -> String {
     }
 }
 
+/// Most bytes `explicit_tag` looks back over: a tag or anchor is never this long, and the bound
+/// keeps validation linear on a whitespace-free (minified JSON) buffer.
+const TAG_LOOKBACK: usize = 256;
+
+/// Whether `byte` ends the token before it: whitespace, or a flow-collection indicator.
+fn ends_token(byte: u8) -> bool {
+    matches!(
+        byte,
+        b' ' | b'\t' | b'\n' | b'\r' | b',' | b'[' | b']' | b'{' | b'}'
+    )
+}
+
 /// The explicit tag (`!!str`, `!custom`) written before the scalar starting at `start`, on its
-/// line, past any anchors. The model's spans exclude tags and anchors.
+/// line, past any anchors. The model's spans exclude tags and anchors. Only the
+/// [`TAG_LOOKBACK`] bytes before `start` are read, so the cost per scalar is constant.
 fn explicit_tag(text: &str, start: usize) -> Option<&str> {
-    let mut before = text.get(..start)?.trim_end_matches([' ', '\t']);
+    let bytes = text.as_bytes().get(..start)?;
+    let floor = start.saturating_sub(TAG_LOOKBACK);
+    let mut end = start;
     loop {
-        let token_start = before.rfind([' ', '\t', '\n']).map_or(0, |at| at + 1);
-        let token = &before[token_start..];
-        if token.starts_with('&') {
-            before = before[..token_start].trim_end_matches([' ', '\t']);
+        while end > floor && matches!(bytes[end - 1], b' ' | b'\t') {
+            end -= 1;
+        }
+        let token_start = bytes[floor..end]
+            .iter()
+            .rposition(|b| ends_token(*b))
+            .map_or(floor, |at| floor + at + 1);
+        let token = text.get(token_start..end)?;
+        if token.starts_with('&') && token_start > floor {
+            end = token_start;
         } else {
             return token.starts_with('!').then_some(token);
         }
@@ -284,5 +305,48 @@ pub(super) fn quote(text: &str) -> String {
     match text.char_indices().nth(MAX) {
         Some((cut, _)) => format!("{:?}...", &text[..cut]),
         None => format!("{text:?}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tag_before(text: &str, value: &str) -> Option<String> {
+        let start = text.rfind(value).expect("value in text");
+        explicit_tag(text, start).map(str::to_owned)
+    }
+
+    #[test]
+    fn finds_tags_past_anchors() {
+        assert_eq!(tag_before("s: !!str 3", "3").as_deref(), Some("!!str"));
+        assert_eq!(tag_before("s: &a !!str 3", "3").as_deref(), Some("!!str"));
+        assert_eq!(tag_before("s: !!int &b 3", "3").as_deref(), Some("!!int"));
+        assert_eq!(tag_before("s: 3", "3"), None);
+        assert_eq!(tag_before("[!!str 3]", "3").as_deref(), Some("!!str"));
+        assert_eq!(
+            tag_before("{a: !custom 3}", "3").as_deref(),
+            Some("!custom")
+        );
+        assert_eq!(tag_before("3", "3"), None);
+    }
+
+    #[test]
+    fn does_not_look_past_the_lookback_or_the_line() {
+        // A tag on an earlier line is not this scalar's tag.
+        assert_eq!(tag_before("a: !!str\n3", "3"), None);
+        // A whitespace-free prefix much longer than the bound reads only the bound.
+        let long = format!("{{\"{}\":3}}", "k".repeat(10 * TAG_LOOKBACK));
+        assert_eq!(tag_before(&long, "3"), None);
+        let tagged = format!("!{} 3", "t".repeat(10 * TAG_LOOKBACK));
+        assert_eq!(tag_before(&tagged, "3"), None);
+    }
+
+    #[test]
+    fn lookback_lands_on_char_boundaries() {
+        let text = format!("{}é 3", "é".repeat(TAG_LOOKBACK));
+        assert_eq!(tag_before(&text, "3"), None);
+        let text = format!("{}3", "é".repeat(TAG_LOOKBACK));
+        assert_eq!(tag_before(&text, "3"), None);
     }
 }

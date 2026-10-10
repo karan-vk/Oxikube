@@ -311,3 +311,27 @@ fn explicit_tags_decide_the_type() {
     // Tags the validator does not know are not judged.
     assert_eq!(check("s: !custom 3\ni: !custom x\n", &schema), []);
 }
+
+/// A minified single-line manifest (`jq -c`) has no whitespace to stop a backward tag scan, so
+/// validation used to be quadratic in its length: 1 MB took over ten seconds.
+#[test]
+fn whitespace_free_buffers_validate_in_linear_time() {
+    let schema = pod_schema();
+    let containers: Vec<String> = (0..8_000)
+        .map(|i| format!("{{\"name\":\"c{i}\",\"image\":\"nginx\"}}"))
+        .collect();
+    let text = format!(
+        "{{\"apiVersion\":\"v1\",\"kind\":\"Pod\",\"spec\":{{\"containers\":[{}]}}}}",
+        containers.join(",")
+    );
+    assert!(!text.contains(' ') && !text.contains('\n'));
+    let started = std::time::Instant::now();
+    assert_eq!(check(&text, &schema), []);
+    let took = started.elapsed();
+    // Generous: the quadratic scan took ~700 ms here in release at a quarter of this size.
+    assert!(
+        took < std::time::Duration::from_secs(3),
+        "validating {} bytes took {took:?}",
+        text.len()
+    );
+}
