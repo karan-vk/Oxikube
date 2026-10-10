@@ -119,6 +119,20 @@ on `oxikube` with `test-support`; crates that only need ports use `TestPorts` di
 clock (`FakeClockPort::advance`) and GPUI's clock (`advance_clock`) are separate: advance the one
 that drives what you are waiting for.
 
+### Drive the real window with keys: the keyboard suite
+
+When the thing under test is "press these keys and the app does X" (the command palette, the `:`
+jump bar, a base keymap), a view over stand-ins is not enough: the binding, key context, focus,
+modal layer, `CommandBus` and the view that ends up on screen all have to agree. The app's own
+main window over fakes (`mount/tests`, `App::start`) is the harness, and
+`bins/oxikube/src/mount/tests/keyboard/` is the worked example (E11-S12): `App::keyboard(cx, vim)`
+starts it over a fixture cluster with its Pods table focused; the scenarios press keys with
+`app.press(..)` / `app.type_text(..)` and assert on the audit log, the tables the tab shows and the
+calls the cluster port saw. `check!(app, cond, "..")` appends `app.diagnostics()` (focused view,
+key-context stack, modal, cursor) to a failed assertion so a keymap regression names its context.
+Settings edits (`base_keymap`) go through `SettingsStore::set_user_settings`, the path a hot
+reload takes. Run with `cargo test -p oxikube keyboard`.
+
 ### Take a screenshot and compare it with a golden: `ScreenshotApp`
 
 Pictures need the real text system and a GPU renderer, which `TestAppContext` does not have, so a

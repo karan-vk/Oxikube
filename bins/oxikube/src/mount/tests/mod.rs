@@ -13,6 +13,7 @@ mod help;
 mod immediate;
 mod introspection;
 mod jump;
+mod keyboard;
 mod keymap;
 mod logs;
 mod node_shell;
