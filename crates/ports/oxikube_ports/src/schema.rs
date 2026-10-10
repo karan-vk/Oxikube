@@ -4,9 +4,9 @@
 //!
 //! Implemented by `oxikube_kube::openapi` (E10-S01), which fetches `/openapi/v3`
 //! lazily per group-version over the cluster's own client, flattens `$ref` and
-//! `allOf` into [`JsonSchema`], and caches
-//! the result in memory and on disk. `oxikube_testkit` ships
-//! `FakeSchemaPort` with scripted schemas for the validator (E10-S03) onwards.
+//! `allOf` into [`JsonSchema`], and caches the result in memory and on disk.
+//! `oxikube_testkit` ships `FakeSchemaPort` with scripted schemas for the
+//! validator (E10-S03) onwards.
 //!
 //! The call is read-only and runs off the UI thread: fetching and flattening
 //! never block typing (the editor budget in `docs/PERFORMANCE.md`).

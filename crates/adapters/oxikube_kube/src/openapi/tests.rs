@@ -10,7 +10,7 @@ use oxikube_ports::{FsPort, SchemaPort};
 use oxikube_testkit::FakeFsPort;
 use serde_json::json;
 
-use super::service::{OpenApiConfig, OpenApiSchemas};
+use super::{OpenApiConfig, OpenApiSchemas};
 use crate::fake_api::{FakeApi, version_body};
 
 fn cluster() -> ClusterId {

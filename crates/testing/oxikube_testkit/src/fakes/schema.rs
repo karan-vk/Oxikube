@@ -1,5 +1,6 @@
 //! Fake [`SchemaPort`](oxikube_ports::SchemaPort) with scripted schemas.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -38,7 +39,7 @@ pub enum SchemaCall {
 pub struct FakeSchemaPort {
     script: SchemaScripts,
     calls: CallLog<SchemaCall>,
-    schemas: parking_lot::Mutex<std::collections::HashMap<(ClusterId, Gvk), Arc<JsonSchema>>>,
+    schemas: parking_lot::Mutex<HashMap<(ClusterId, Gvk), Arc<JsonSchema>>>,
 }
 
 fake_plumbing!(FakeSchemaPort, SchemaScripts, SchemaCall);

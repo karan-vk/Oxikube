@@ -15,7 +15,7 @@ use crate::auth::classify;
 pub(super) async fn fetch_index(client: &Client, timeout: Duration) -> OxiResult<Index> {
     let text = get(client, "/openapi/v3", timeout).await.map_err(|err| {
         if err.kind() == ErrorKind::NotFound {
-            OxiError::unsupported("the API server has no /openapi/v3 endpoint")
+            no_openapi_v3()
         } else {
             err
         }
@@ -23,6 +23,11 @@ pub(super) async fn fetch_index(client: &Client, timeout: Duration) -> OxiResult
     let document: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| OxiError::internal(format!("openapi: index is not JSON: {e}")))?;
     Ok(parse_index(&document))
+}
+
+/// The error for a server without `/openapi/v3`.
+pub(super) fn no_openapi_v3() -> OxiError {
+    OxiError::unsupported("the API server has no /openapi/v3 endpoint")
 }
 
 /// `GET /version`: the server's `gitVersion`, which keys the disk cache. `None`

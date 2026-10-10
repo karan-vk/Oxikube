@@ -164,21 +164,6 @@ impl JsonSchema {
         Self::default()
     }
 
-    /// Whether the node constrains nothing (no types, no properties, no enum,
-    /// additional properties allowed, no extensions).
-    pub fn is_any(&self) -> bool {
-        self.types.is_empty()
-            && self.properties.is_empty()
-            && self.items.is_none()
-            && self.enum_values.is_empty()
-            && self.required.is_empty()
-            && self.pattern.is_none()
-            && self.format.is_none()
-            && matches!(self.additional_properties, AdditionalProperties::Allowed)
-            && self.xk8s == XK8s::default()
-            && !self.truncated
-    }
-
     /// Whether `name` is a known property of this node.
     pub fn has_property(&self, name: &str) -> bool {
         self.properties.contains_key(name)

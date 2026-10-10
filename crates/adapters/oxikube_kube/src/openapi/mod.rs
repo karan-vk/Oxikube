@@ -12,6 +12,7 @@
 //! | index parsing (`paths` → group-version → URL with `?hash=`) | `index` |
 //! | the three GETs (index, `/version`, one group document) | `fetch` |
 //! | disk cache (raw group documents keyed by cluster + server version + index hash) | `cache` |
+//! | [`OpenApiConfig`]: the request and miss deadlines | `config` |
 //! | [`OpenApiSchemas`]: `SchemaPort` impl, single-flight, memory cache | `service` |
 //!
 //! # Caching
@@ -48,6 +49,7 @@
 //! thread.
 
 mod cache;
+mod config;
 mod fetch;
 mod index;
 mod service;
@@ -55,6 +57,5 @@ mod service;
 #[cfg(test)]
 mod tests;
 
-pub use service::{
-    DEFAULT_REFRESH_ON_MISS_SECS, DEFAULT_REQUEST_TIMEOUT_SECS, OpenApiConfig, OpenApiSchemas,
-};
+pub use config::{DEFAULT_REFRESH_ON_MISS_SECS, DEFAULT_REQUEST_TIMEOUT_SECS, OpenApiConfig};
+pub use service::OpenApiSchemas;

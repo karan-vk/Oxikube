@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use async_trait::async_trait;
 use kube::Client;
@@ -15,39 +15,9 @@ use parking_lot::Mutex;
 use tracing::{debug, warn};
 
 use super::cache::{DiskCache, Key, UNKNOWN_VERSION};
-use super::fetch::{fetch_document, fetch_index, fetch_server_version};
+use super::config::{OpenApiConfig, VERSION_TIMEOUT};
+use super::fetch::{fetch_document, fetch_index, fetch_server_version, no_openapi_v3};
 use super::index::{Index, IndexEntry};
-
-/// Default per-request deadline for the index and group-document fetches.
-pub const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
-
-/// Deadline for the `/version` read that keys the disk cache.
-const VERSION_TIMEOUT: Duration = Duration::from_secs(3);
-
-/// How old the in-memory index must be before a miss re-reads it (a CRD that
-/// was just created reaches the server's OpenAPI document a moment after its
-/// discovery event).
-pub const DEFAULT_REFRESH_ON_MISS_SECS: u64 = 5;
-
-/// Settings of [`OpenApiSchemas`].
-#[derive(Debug, Clone)]
-pub struct OpenApiConfig {
-    /// Deadline for one index or group-document fetch.
-    pub request_timeout: Duration,
-    /// A lookup that finds no schema re-reads the index first when the one in
-    /// memory is at least this old, so a kind added since is found without an
-    /// explicit invalidate. Younger indexes answer `NotFound` immediately.
-    pub refresh_on_miss_after: Duration,
-}
-
-impl Default for OpenApiConfig {
-    fn default() -> Self {
-        Self {
-            request_timeout: Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS),
-            refresh_on_miss_after: Duration::from_secs(DEFAULT_REFRESH_ON_MISS_SECS),
-        }
-    }
-}
 
 /// The index and server version read together, and when.
 struct Loaded {
@@ -184,9 +154,7 @@ impl OpenApiSchemas {
             .unsupported_at
             .is_some_and(|at| at.elapsed() < self.config.refresh_on_miss_after);
         if recent {
-            return Err(OxiError::unsupported(
-                "the API server has no /openapi/v3 endpoint",
-            ));
+            return Err(no_openapi_v3());
         }
         Ok(memory.loaded.clone())
     }
@@ -202,17 +170,21 @@ impl OpenApiSchemas {
                 "no OpenAPI v3 document lists {gvk}"
             )));
         };
+        let group_version = Index::key_for(&gvk.group, &gvk.version);
         let gate = self
             .groups
             .lock()
-            .entry(Index::key_for(&gvk.group, &gvk.version))
+            .entry(group_version.clone())
             .or_default()
             .clone();
         let _flight = gate.lock().await;
         if let Some(hit) = self.cached(gvk) {
             return Ok(hit);
         }
-        let schema = Arc::new(self.load_group(&loaded, entry, gvk, epoch).await?);
+        let schema = Arc::new(
+            self.load_group(&loaded, entry, group_version, gvk, epoch)
+                .await?,
+        );
         let mut memory = self.memory.lock();
         if memory.epoch == epoch {
             memory.schemas.insert(gvk.clone(), schema.clone());
@@ -226,10 +198,10 @@ impl OpenApiSchemas {
         &self,
         loaded: &Loaded,
         entry: &IndexEntry,
+        group_version: String,
         gvk: &Gvk,
         epoch: u64,
     ) -> OxiResult<JsonSchema> {
-        let group_version = Index::key_for(&gvk.group, &gvk.version);
         let key = Key {
             server_version: &loaded.server_version,
             group_version: &group_version,

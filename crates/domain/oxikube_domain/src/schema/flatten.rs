@@ -36,11 +36,7 @@ fn merge_all_of(entries: Vec<JsonSchema>) -> JsonSchema {
             merged.types = entry.types;
         }
         merged.properties.merge(entry.properties);
-        for name in entry.required {
-            if !merged.required.contains(&name) {
-                merged.required.push(name);
-            }
-        }
+        merged.required.extend(entry.required);
         if entry.items.is_some() {
             merged.items = entry.items;
         }
@@ -82,6 +78,7 @@ fn merge_all_of(entries: Vec<JsonSchema>) -> JsonSchema {
         merged.truncated |= entry.truncated;
     }
     merged.required.sort();
+    merged.required.dedup();
     merged
 }
 
@@ -111,15 +108,14 @@ fn flatten_node(
         return resolved;
     }
     if let Some(entries) = object.get("allOf").and_then(serde_json::Value::as_array) {
-        let flattened: Vec<JsonSchema> = entries
+        let mut flattened: Vec<JsonSchema> = entries
             .iter()
             .map(|entry| flatten_node(entry, components, stack, depth + 1))
             .collect();
         // The node's own keywords (its description, `required`, `properties`, ...) merge
         // last, so siblings of `allOf` win over the entries.
-        let mut entries = flattened;
-        entries.push(parse_node(object, components, stack, depth));
-        let mut merged = merge_all_of(entries);
+        flattened.push(parse_node(object, components, stack, depth));
+        let mut merged = merge_all_of(flattened);
         apply_nullable(&mut merged, object);
         return merged;
     }
@@ -185,12 +181,13 @@ fn parse_node(
         schema.enum_values = values.clone();
     }
     if let Some(required) = object.get("required").and_then(serde_json::Value::as_array) {
-        for name in required.iter().filter_map(serde_json::Value::as_str) {
-            if !schema.required.contains(&name.to_owned()) {
-                schema.required.push(name.to_owned());
-            }
-        }
+        schema.required = required
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .map(str::to_owned)
+            .collect();
         schema.required.sort();
+        schema.required.dedup();
     }
     if let Some(pattern) = object.get("pattern").and_then(serde_json::Value::as_str) {
         schema.pattern = Some(pattern.to_owned());
@@ -265,8 +262,7 @@ fn parse_additional(
     depth: usize,
 ) -> AdditionalProperties {
     match object.get("additionalProperties") {
-        None => AdditionalProperties::Allowed,
-        Some(serde_json::Value::Bool(true)) => AdditionalProperties::Allowed,
+        None | Some(serde_json::Value::Bool(true)) => AdditionalProperties::Allowed,
         Some(serde_json::Value::Bool(false)) => AdditionalProperties::Forbidden,
         Some(schema) => AdditionalProperties::Schema(Box::new(flatten_node(
             schema,

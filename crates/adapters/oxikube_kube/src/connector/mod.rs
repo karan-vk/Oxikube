@@ -45,6 +45,7 @@ mod connection;
 mod describe;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
@@ -125,7 +126,7 @@ struct Shared {
     budget: Mutex<Option<Arc<BudgetFor>>>,
     /// Where each connection's `SchemaPort` keeps raw OpenAPI documents (set by
     /// [`KubeConnector::set_schema_cache`]); memory only until then.
-    schema_cache: Mutex<Option<(Arc<dyn FsPort>, std::path::PathBuf)>>,
+    schema_cache: Mutex<Option<(Arc<dyn FsPort>, PathBuf)>>,
 }
 
 impl KubeConnector {
@@ -183,7 +184,7 @@ impl KubeConnector {
     /// Sets where each new connection's `SchemaPort` keeps the raw OpenAPI documents it fetched:
     /// under `dir` through `fs`, keyed by cluster, server version and document hash. Until it is
     /// set schemas are cached in memory only. Live connections keep the port they were made with.
-    pub fn set_schema_cache(&self, fs: Arc<dyn FsPort>, dir: std::path::PathBuf) {
+    pub fn set_schema_cache(&self, fs: Arc<dyn FsPort>, dir: PathBuf) {
         *self.shared.schema_cache.lock() = Some((fs, dir));
     }
 

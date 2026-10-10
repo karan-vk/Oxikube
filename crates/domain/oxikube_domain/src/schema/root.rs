@@ -16,25 +16,20 @@ pub fn root_schema_for(document: &serde_json::Value, gvk: &Gvk) -> Option<JsonSc
         schema
             .get("x-kubernetes-group-version-kind")
             .and_then(serde_json::Value::as_array)
-            .is_some_and(|gvks| {
-                gvks.iter().any(|entry| {
-                    entry
-                        .get("group")
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or("")
-                        == &*gvk.group
-                        && entry
-                            .get("kind")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or("")
-                            == &*gvk.kind
-                        && entry
-                            .get("version")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or("")
-                            == &*gvk.version
-                })
-            })
+            .is_some_and(|entries| entries.iter().any(|entry| names(entry, gvk)))
     })?;
     Some(flatten_schema(root, schemas))
+}
+
+/// Whether a `x-kubernetes-group-version-kind` entry spells `gvk` (a missing field reads as empty).
+fn names(entry: &serde_json::Value, gvk: &Gvk) -> bool {
+    let field = |key: &str| {
+        entry
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+    };
+    field("group") == &*gvk.group
+        && field("kind") == &*gvk.kind
+        && field("version") == &*gvk.version
 }

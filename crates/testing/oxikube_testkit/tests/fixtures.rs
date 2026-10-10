@@ -143,6 +143,7 @@ fn every_openapi_fixture_is_registered_and_shaped() {
             .is_some_and(|config| config.xk8s.preserve_unknown_fields)
     );
 }
+
 #[test]
 fn pod_fixtures_have_the_expected_status_strings() {
     let cases = [
