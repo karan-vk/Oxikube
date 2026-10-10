@@ -126,15 +126,29 @@ fn the_k9s_verbs_run_in_a_focused_table_on_both_oses(cx: &mut TestAppContext) {
     }
 }
 
+/// Verbs whose handler only toasts "not available yet" (port forwarding has not landed), so they
+/// stand for no command.
+const PLACEHOLDER_VERBS: &[&str] = &["resource_table::ShowPortForwards"];
+
 #[gpui::test]
 fn every_verb_is_a_command_or_stands_for_one(cx: &mut TestAppContext) {
     use oxikube_keymap::ActionRegistry;
     install(cx, MAC, "");
     for (keys, action) in VERBS {
-        assert!(
-            !ActionRegistry::commands_of(action).is_empty(),
-            "{keys} -> {action} dispatches no command"
-        );
+        let commands = ActionRegistry::commands_of(action);
+        if PLACEHOLDER_VERBS.contains(&action) {
+            // A placeholder must not claim a command it does not dispatch; once it does, it
+            // leaves this list.
+            assert!(
+                commands.is_empty(),
+                "{keys} -> {action} now stands for a command: drop it from PLACEHOLDER_VERBS"
+            );
+        } else {
+            assert!(
+                !commands.is_empty(),
+                "{keys} -> {action} dispatches no command"
+            );
+        }
     }
 }
 

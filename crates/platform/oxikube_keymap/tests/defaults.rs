@@ -113,6 +113,11 @@ const VIEW_LOCAL: &[&str] = &[
     "oxikube::OpenPreferences",
 ];
 
+/// Actions bound by a default whose handler only toasts "not available yet" (port forwarding has
+/// not landed): they stand for no command and are not view navigation either. An entry leaves this
+/// list when its handler dispatches a command and `stands_for` names it.
+const PLACEHOLDERS: &[&str] = &["resource_table::ShowPortForwards"];
+
 fn action_names(platform: KeymapPlatform) -> Vec<String> {
     let mut names = Vec::new();
     for section in defaults(platform) {
@@ -133,6 +138,13 @@ fn every_default_binding_dispatches_a_command_or_moves_inside_a_view() {
         for name in action_names(platform) {
             let is_command = !ActionRegistry::commands_of(&name).is_empty();
             let is_local = VIEW_LOCAL.contains(&name.as_str());
+            if PLACEHOLDERS.contains(&name.as_str()) {
+                assert!(
+                    !is_command && !is_local,
+                    "{os}: `{name}` now stands for a command: remove it from PLACEHOLDERS"
+                );
+                continue;
+            }
             assert!(
                 is_command || is_local,
                 "{os}: `{name}` dispatches no command: declare the command and add the action to \

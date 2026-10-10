@@ -38,8 +38,10 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ("resource_table::ViewLogs", CommandId::POD_VIEW_LOGS),
     ("resource_table::ViewLogs", CommandId::WORKLOAD_VIEW_LOGS),
     ("resource_table::PortForward", CommandId::POD_PORT_FORWARD),
-    // `f` lists the active port forwards: `view::Open` with the view `port_forwards`.
-    ("resource_table::ShowPortForwards", CommandId::VIEW_OPEN),
+    // `resource_table::ShowPortForwards` (`f`) is deliberately absent: its handler only toasts
+    // "not available yet" until port forwarding lands, so it stands for no command. Once it
+    // dispatches `view::Open` with the view `port_forwards`, list it here and drop it from
+    // `PLACEHOLDER_VERBS` in `tests/k9s.rs`.
     ("resource_table::ToggleWide", CommandId::TABLE_TOGGLE_WIDE),
     // The catalog home (E06-S03).
     ("catalog::ConnectSelected", CommandId::CLUSTER_CONNECT),
