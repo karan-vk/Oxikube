@@ -169,6 +169,100 @@ async fn a_crd_change_updates_only_what_it_names() {
     assert!(h.registry.table(&id("a")).resolve(STOCK_ONLY).is_known());
 }
 
+/// A CRD served at `v1` (preferred) and `v1beta1`; discovery reports a removal per version.
+fn two_version_widget() -> (Vec<oxikube_domain::kinds::ResourceKind>, Gvk) {
+    let mut kinds = core_kinds();
+    kinds.push(
+        kind("example.io", "v1", "Widget", "widgets")
+            .short("wg")
+            .build(),
+    );
+    kinds.push(
+        kind("example.io", "v1beta1", "Widget", "widgets")
+            .short("wg")
+            .not_preferred()
+            .build(),
+    );
+    (kinds, Gvk::new("example.io", "v1beta1", "Widget"))
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dropping_a_non_preferred_version_keeps_the_type() {
+    let h = Harness::new();
+    let discovery = h.connector.ports_for(&id("a")).discovery;
+    let (kinds, beta) = two_version_widget();
+    discovery.set_kinds(kinds);
+    h.connect("a").await;
+    h.until("a", |t| t.resolve("wg").is_known()).await;
+
+    // v1beta1 stops being served; v1 stays. The change names only the removed version.
+    let mut kinds = core_kinds();
+    kinds.push(
+        kind("example.io", "v1", "Widget", "widgets")
+            .short("wg")
+            .build(),
+    );
+    discovery.set_kinds(kinds);
+    discovery.emit(DiscoveryEvent::KindsChanged(KindsChange {
+        removed: vec![beta],
+        ..KindsChange::default()
+    }));
+    // A later, unrelated removal proves the first change has been applied (jobs run in order).
+    let gizmo = kind("b.io", "v1", "Gizmo", "gizmos").build();
+    discovery.emit(DiscoveryEvent::KindsChanged(KindsChange {
+        removed: vec![gizmo.gvk.clone()],
+        ..KindsChange::default()
+    }));
+    let calls = || {
+        discovery
+            .recorded_calls()
+            .iter()
+            .filter(|c| matches!(c, oxikube_testkit::DiscoveryCall::Resolve(g) if g == &gizmo.gvk))
+            .count()
+    };
+    for _ in 0..200 {
+        if calls() > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let table = h.registry.table(&id("a"));
+    for word in ["wg", "widgets", "widgets.example.io"] {
+        let Resolution::Exact(entry) = table.resolve(word) else {
+            panic!("`{word}` should still be exact");
+        };
+        assert_eq!(entry.target, gvr("example.io", "v1", "widgets"));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dropping_the_preferred_version_moves_the_type_to_the_one_left() {
+    let h = Harness::new();
+    let discovery = h.connector.ports_for(&id("a")).discovery;
+    let (kinds, _) = two_version_widget();
+    discovery.set_kinds(kinds);
+    h.connect("a").await;
+    h.until("a", |t| t.resolve("wg").is_known()).await;
+
+    // v1 goes; v1beta1 becomes the version the server prefers.
+    let mut kinds = core_kinds();
+    kinds.push(
+        kind("example.io", "v1beta1", "Widget", "widgets")
+            .short("wg")
+            .build(),
+    );
+    discovery.set_kinds(kinds);
+    discovery.emit(DiscoveryEvent::KindsChanged(KindsChange {
+        removed: vec![Gvk::new("example.io", "v1", "Widget")],
+        ..KindsChange::default()
+    }));
+    h.until("a", |t| {
+        matches!(t.resolve("wg"), Resolution::Exact(e)
+            if matches!(&e.target, AliasTarget::Gvr(g) if &*g.version == "v1beta1"))
+    })
+    .await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_change_without_details_lists_everything_again() {
     let h = Harness::new();

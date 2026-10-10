@@ -18,7 +18,9 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc;
+use oxikube_domain::OxiResult;
 use oxikube_domain::ids::{ClusterId, Gvk};
+use oxikube_domain::kinds::ResourceKind;
 use oxikube_ports::{DiscoveryPort, KindsChange};
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
@@ -174,8 +176,11 @@ async fn reload(cluster: &ClusterId, table: &AliasTable, discovery: &dyn Discove
     }
 }
 
-/// Applies a CRD change by asking about exactly the kinds it names. A removed kind that the
-/// server still serves (one version of a CRD went, another stays) is kept.
+/// Applies a CRD change by asking about exactly the kinds it names.
+///
+/// Discovery reports a removal per served version, so a removed version that no longer resolves
+/// may leave the type served at another one (`v1beta1` dropped, `v1` stays). Such a type is asked
+/// about again without a version and kept; only a type the server no longer serves at all goes.
 async fn apply(
     cluster: &ClusterId,
     table: &AliasTable,
@@ -184,13 +189,12 @@ async fn apply(
 ) {
     let mut upserted = Vec::new();
     let mut gone: Vec<Gvk> = Vec::new();
-    for gvk in change
-        .added
-        .iter()
-        .chain(&change.changed)
-        .chain(&change.removed)
+    let named = change.added.iter().chain(&change.changed);
+    for (gvk, removed) in named
+        .map(|gvk| (gvk, false))
+        .chain(change.removed.iter().map(|gvk| (gvk, true)))
     {
-        match discovery.resolve(gvk).await {
+        match resolve_named(discovery, gvk, removed).await {
             Ok(Some(kind)) => upserted.push(kind),
             Ok(None) => gone.push(gvk.clone()),
             Err(error) => {
@@ -202,4 +206,20 @@ async fn apply(
         }
     }
     table.apply_kinds_change(&gone, &upserted);
+}
+
+/// Resolves one kind a change names. A `removed` version that is gone falls back to the type's
+/// preferred remaining version.
+async fn resolve_named(
+    discovery: &dyn DiscoveryPort,
+    gvk: &Gvk,
+    removed: bool,
+) -> OxiResult<Option<ResourceKind>> {
+    let found = discovery.resolve(gvk).await?;
+    if found.is_some() || !removed || gvk.version.is_empty() {
+        return Ok(found);
+    }
+    discovery
+        .resolve(&Gvk::new(&*gvk.group, "", &*gvk.kind))
+        .await
 }

@@ -99,8 +99,11 @@ async fn the_table_follows_the_clusters_discovery_and_its_crds() {
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.subsec_nanos());
     let suffix = std::process::id() ^ nanos;
+    // Every word is per-run: the cluster is shared, and a bare word two CRDs claim is ambiguous.
     let group = format!("alias-{suffix:x}.test.oxikube.dev");
-    let name = format!("cogs.{group}");
+    let (plural, singular) = (format!("cogs{suffix:x}"), format!("cog{suffix:x}"));
+    let (cog_kind, short) = (format!("Cog{suffix:x}"), format!("cg{suffix:x}"));
+    let name = format!("{plural}.{group}");
     let _cleanup = Cleanup {
         context: kind.context.to_string(),
         name: name.clone(),
@@ -112,8 +115,8 @@ async fn the_table_follows_the_clusters_discovery_and_its_crds() {
         "spec": {
             "group": group,
             "scope": "Namespaced",
-            "names": {"plural": "cogs", "singular": "cog", "kind": "Cog",
-                      "listKind": "CogList", "shortNames": ["cg"]},
+            "names": {"plural": plural, "singular": singular, "kind": cog_kind,
+                      "listKind": format!("{cog_kind}List"), "shortNames": [short]},
             "versions": [{
                 "name": "v1", "served": true, "storage": true,
                 "schema": {"openAPIV3Schema": {"type": "object",
@@ -131,13 +134,18 @@ async fn the_table_follows_the_clusters_discovery_and_its_crds() {
         "the CRD's short name to resolve",
         || format!("{table:?}"),
         || {
-            let known = table.resolve("cg").is_known();
+            let known = table.resolve(&short).is_known();
             async move { known }
         },
     )
     .await;
-    for word in ["cogs", "cog", "CG", &format!("cogs.{group}")] {
-        let Resolution::Exact(entry) = table.resolve(word) else {
+    for word in [
+        plural.clone(),
+        singular.clone(),
+        short.to_uppercase(),
+        format!("{plural}.{group}"),
+    ] {
+        let Resolution::Exact(entry) = table.resolve(&word) else {
             panic!("`{word}` should be exact");
         };
         let AliasTarget::Gvr(gvr) = &entry.target else {
@@ -145,7 +153,7 @@ async fn the_table_follows_the_clusters_discovery_and_its_crds() {
         };
         assert_eq!(
             (&*gvr.group, &*gvr.version, &*gvr.resource),
-            (group.as_str(), "v1", "cogs")
+            (group.as_str(), "v1", plural.as_str())
         );
         assert_eq!(entry.source, AliasSource::Discovery);
     }
@@ -157,7 +165,7 @@ async fn the_table_follows_the_clusters_discovery_and_its_crds() {
         "the CRD's names to go",
         || format!("{table:?}"),
         || {
-            let gone = !table.resolve("cg").is_known();
+            let gone = !table.resolve(&short).is_known();
             async move { gone }
         },
     )
