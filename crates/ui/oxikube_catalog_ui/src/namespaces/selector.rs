@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use gpui::{
     AppContext as _, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable, Pixels,
-    SharedString, Task, UniformListScrollHandle, Window,
+    SharedString, Subscription, Task, UniformListScrollHandle, Window,
 };
 use oxikube_app::session::namespaces::{
     NamespaceCatalog, NamespacePrefs, NamespaceService, NamespaceSource, slot_selection,
@@ -53,6 +53,8 @@ pub struct NamespaceSelector {
     pub(super) _load: Option<Task<()>>,
     /// Keeps the session subscription alive; dropped with the view.
     pub(super) _watch: Option<Task<()>>,
+    /// Follows the session updates of commands run on the UI thread, in their update.
+    pub(super) _echo: Option<Subscription>,
 }
 
 impl EventEmitter<NamespaceSelectorEvent> for NamespaceSelector {}
@@ -116,8 +118,10 @@ impl NamespaceSelector {
             dirty: false,
             _load: None,
             _watch: None,
+            _echo: None,
         };
         this.rebuild();
+        this._echo = Some(this.follow_session_echo(cx));
         this._watch = Some(this.watch_session(cx));
         this._load = Some(this.load(cx));
         this
@@ -262,7 +266,7 @@ impl NamespaceSelector {
         // The command supersedes a pending tick: drop it.
         self.commit = None;
         self.dirty = false;
-        self.run(
+        self.select_now(
             Command::NamespaceSelect {
                 cluster: self.cluster.clone(),
                 namespaces: selection.names().map(str::to_owned).collect(),

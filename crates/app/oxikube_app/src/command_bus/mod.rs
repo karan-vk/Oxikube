@@ -22,11 +22,21 @@
 //!
 //! Plain async Rust: the bus spawns nothing and never waits for the UI. Its checks are
 //! synchronous; the caller drives the returned future on a background task.
+//!
+//! # Immediate commands
+//!
+//! A command that only changes UI or session state in memory (the cluster tabs, the namespace
+//! selection) registers an [`ImmediateHandler`] instead
+//! ([`CommandRegistry::register_immediate`]). The UI runs it inside the update that dispatched
+//! it with [`CommandBus::dispatch_now`], so its effect is in the very next frame, and runs the
+//! I/O that completes it ([`Immediate::rest`]) off the UI thread. Guarded commands can never be
+//! immediate. See [`immediate`].
 
 mod bus;
 mod context;
 mod error;
 mod handler;
+pub mod immediate;
 mod registry;
 
 #[cfg(test)]
@@ -36,4 +46,5 @@ pub use bus::CommandBus;
 pub use context::{CommandOutput, DispatchContext, Outcome};
 pub use error::DispatchError;
 pub use handler::{CommandHandler, HandlerContext, HandlerFuture};
+pub use immediate::{Immediate, ImmediateHandler};
 pub use registry::{CommandRegistry, RegisterError};

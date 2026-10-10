@@ -62,6 +62,9 @@ pub(super) struct Shared {
     pub(super) tickets: Mutex<HashMap<ClusterId, u64>>,
     /// Serialises writes so the last one to start is the last one stored.
     pub(super) write: AsyncMutex<()>,
+    /// How many selections were applied to each cluster's session, so the prefs remember the
+    /// last one applied whatever order the writes run in (see `now`).
+    pub(super) applied: Mutex<HashMap<ClusterId, u64>>,
 }
 
 impl std::fmt::Debug for NamespaceService {
@@ -88,6 +91,7 @@ impl NamespaceService {
                 stored: Mutex::new(HashSet::new()),
                 tickets: Mutex::new(HashMap::new()),
                 write: AsyncMutex::new(()),
+                applied: Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -215,7 +219,7 @@ impl NamespaceService {
         selection: NamespaceSelection,
     ) -> OxiResult<NamespaceOutcome> {
         self.next_ticket(cluster);
-        self.apply_selection(cluster, selection).await
+        self.apply_now(cluster, selection)?.remember().await
     }
 
     /// Like [`select`](Self::select), but waits [`DEBOUNCE`] first and does
@@ -236,7 +240,10 @@ impl NamespaceService {
         if self.shared.tickets.lock().get(cluster) != Some(&ticket) {
             return Ok(None);
         }
-        self.apply_selection(cluster, selection).await.map(Some)
+        self.apply_now(cluster, selection)?
+            .remember()
+            .await
+            .map(Some)
     }
 
     /// Pins `namespace`, or unpins it when it is pinned. Whether it is a favourite now is in

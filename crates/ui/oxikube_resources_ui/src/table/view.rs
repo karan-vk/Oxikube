@@ -204,6 +204,7 @@ impl ResourceTable {
         let filter_events = cx.subscribe_in(&filter, window, Self::on_filter_event);
 
         let session_task = Self::follow_session(&cluster, &deps, cx);
+        let session_echo = Self::follow_session_echo(cx);
         let tick = cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(TICK).await;
@@ -247,7 +248,7 @@ impl ResourceTable {
             _session_task: session_task,
             prefs_task: None,
             _tick: tick,
-            _subscriptions: vec![events, refocus, filter_events],
+            _subscriptions: vec![events, refocus, filter_events, session_echo],
             redraw: RenderGate::default(),
             #[cfg(test)]
             renders: 0,

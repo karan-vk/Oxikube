@@ -113,3 +113,40 @@ fn the_selector_actions_are_not_named_like_commands() {
         );
     }
 }
+
+#[gpui::test]
+fn a_digit_changes_the_session_in_the_key_update_and_remembers_it_after(cx: &mut TestAppContext) {
+    let env = Env::new(&["dev", "prod"]);
+    env.remember(&prefs(&[], &["prod"]));
+    let mut window = open(cx, &env);
+    window.run_until_parked();
+
+    // E05-P600: no executor turn between the key and the check, as for the frame after the key.
+    let root = window.root();
+    window.update(|_, cx| root.update(cx, |s, cx| s.select_slot(1, cx)));
+    assert_eq!(env.session_selection(), NamespaceSelection::single("prod"));
+    assert_eq!(window.read_root(|s, _| s.label()), "prod");
+
+    window.run_until_parked();
+    assert_eq!(env.stored().selection, NamespaceSelection::single("prod"));
+}
+
+#[gpui::test]
+fn a_selection_echoed_by_a_command_on_the_ui_thread_shows_in_that_update(cx: &mut TestAppContext) {
+    let env = Env::new(&["dev", "prod"]);
+    let mut window = open(cx, &env);
+    window.run_until_parked();
+
+    // What the command runner does for `namespace::Select` (E05-P600).
+    let (service, cluster) = (env.service.clone(), env.cluster.clone());
+    window.update(move |_, cx| {
+        let echo = oxikube_workspace::cluster::SessionEcho::begin(service.manager());
+        let selected = service
+            .select_now(&cluster, NamespaceSelection::single("dev"))
+            .unwrap();
+        echo.finish(cx);
+        drop(selected.remember());
+    });
+
+    assert_eq!(window.read_root(|s, _| s.label()), "dev");
+}

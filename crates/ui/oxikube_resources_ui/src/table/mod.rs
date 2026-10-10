@@ -12,6 +12,7 @@
 //! | `columns` | the column provider (core catalogue or a Table feed's columns) and the saved layout |
 //! | `crd` | what a custom resource table adds (E07-S07): the version switcher and the note that its columns are the basic ones |
 //! | `feed` | the store subscription: deltas applied in one update, coalesced redraws, rescoping on a namespace change, re-subscribing on a reconnect |
+//! | `scope` | a namespace change shown in the input's frame: the session echo, the held rows of the new scope (E05-P600) |
 //! | `filtering` | the filter bar's side: applying a parsed filter to the subscription, `/` focus, saving and restoring the text |
 //! | `interact` | clicks, keys, column picker, and the commands they dispatch |
 //! | `step` | [`ResourceTable::step_detail`]: the detail drawer's `j` / `k` moving the selection |
@@ -57,6 +58,7 @@ mod render;
 mod row_actions;
 mod row_feedback;
 mod runtime;
+mod scope;
 mod selection;
 pub mod states;
 mod step;

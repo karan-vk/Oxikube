@@ -10,6 +10,8 @@ use oxikube_ports::ToolDef;
 use serde_json::json;
 
 use super::handler::CommandHandler;
+use super::immediate::{AwaitRest, ImmediateHandler};
+use crate::guard::policy;
 
 /// The owner recorded for handlers registered outside [`CommandRegistry::install`].
 const UNNAMED_OWNER: &str = "(unnamed)";
@@ -38,6 +40,11 @@ pub enum RegisterError {
     /// command to weaken them.
     #[error("{0}: registered metadata differs from its declaration")]
     MetaMismatch(CommandId),
+    /// [`CommandRegistry::register_immediate`] for a command the guard has a pipeline for (a
+    /// mutation, an exec, a privileged or a posture command): those are always dispatched
+    /// asynchronously, through the guard.
+    #[error("{0} is guarded, so it cannot run immediately")]
+    NotImmediate(CommandId),
     /// The MCP tool stub could not be built.
     #[error("{id}: tool stub rejected: {source}")]
     ToolStub {
@@ -52,6 +59,9 @@ pub enum RegisterError {
 pub(crate) struct Registered {
     pub(crate) meta: CommandMeta,
     pub(crate) handler: Arc<dyn CommandHandler>,
+    /// The handler [`CommandBus::dispatch_now`](super::CommandBus::dispatch_now) runs, for an
+    /// immediate command; `handler` then runs the same one and awaits its rest.
+    pub(crate) immediate: Option<Arc<dyn ImmediateHandler>>,
     pub(crate) tool: Option<ToolDef>,
     pub(crate) owner: &'static str,
 }
@@ -131,6 +141,37 @@ impl CommandRegistry {
         meta: CommandMeta,
         handler: impl CommandHandler + 'static,
     ) -> Result<(), RegisterError> {
+        self.insert(meta, Arc::new(handler), None)
+    }
+
+    /// Registers `handler` as an immediate command (see
+    /// [`immediate`](super::immediate)): the UI runs it on its own thread with
+    /// [`CommandBus::dispatch_now`](super::CommandBus::dispatch_now), every other caller through
+    /// [`CommandBus::dispatch`](super::CommandBus::dispatch), which also awaits its rest. The MCP
+    /// tool stub is registered as for [`register`](Self::register).
+    ///
+    /// # Errors
+    ///
+    /// As [`register`](Self::register), and [`RegisterError::NotImmediate`] for a mutating,
+    /// exec, privileged or posture command.
+    pub fn register_immediate(
+        &mut self,
+        meta: CommandMeta,
+        handler: impl ImmediateHandler + 'static,
+    ) -> Result<(), RegisterError> {
+        if meta.mutating || meta.exec || meta.privileged || policy::is_posture_id(meta.id) {
+            return Err(RegisterError::NotImmediate(meta.id));
+        }
+        let handler: Arc<dyn ImmediateHandler> = Arc::new(handler);
+        self.insert(meta, Arc::new(AwaitRest(handler.clone())), Some(handler))
+    }
+
+    fn insert(
+        &mut self,
+        meta: CommandMeta,
+        handler: Arc<dyn CommandHandler>,
+        immediate: Option<Arc<dyn ImmediateHandler>>,
+    ) -> Result<(), RegisterError> {
         let id = meta.id;
         if let Some(first) = self.entries.get(&id) {
             return Err(RegisterError::Duplicate {
@@ -148,7 +189,8 @@ impl CommandRegistry {
             id,
             Registered {
                 meta,
-                handler: Arc::new(handler),
+                handler,
+                immediate,
                 tool,
                 owner: self.owner,
             },

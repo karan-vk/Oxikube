@@ -26,6 +26,10 @@ pub enum DispatchError {
         /// Who asked.
         initiator: Initiator,
     },
+    /// [`CommandBus::dispatch_now`](super::CommandBus::dispatch_now) for a command whose
+    /// handler is async: dispatch it with [`CommandBus::dispatch`](super::CommandBus::dispatch).
+    #[error("{0} is not an immediate command")]
+    NotImmediate(CommandId),
     /// A mutating command names no cluster and the context has no active cluster.
     #[error("{0} needs a cluster")]
     NoCluster(CommandId),
@@ -84,6 +88,7 @@ impl From<DispatchError> for OxiError {
                 ErrorKind::Forbidden
             }
             DispatchError::NoCluster(_) | DispatchError::Confirmation(_) => ErrorKind::Validation,
+            DispatchError::NotImmediate(_) => ErrorKind::Unsupported,
             DispatchError::NotConnected { .. } => ErrorKind::Conflict,
             DispatchError::AuditUnavailable(_) | DispatchError::AuditFailed(_) => {
                 ErrorKind::Internal

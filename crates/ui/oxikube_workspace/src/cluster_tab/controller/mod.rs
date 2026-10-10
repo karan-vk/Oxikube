@@ -7,7 +7,7 @@
 //! | `sessions.rs` | following the session manager: tabs open, refresh and close with sessions |
 //! | `switch.rs` | the tab order, `cmd-1..9`, next and previous, activation |
 //! | `close.rs` | closing a tab: the running-operations confirmation, then `cluster::Disconnect` |
-//! | `commands.rs` | the command queue, `apply`, and the `CommandBus` registration |
+//! | `commands.rs` | the command queue, `apply`, `apply_queued`, and the `CommandBus` registration |
 //! | `persist.rs` | saving which tabs are open, in what order, which is displayed |
 //! | `restore.rs` | session restore: placeholder tabs, lazy connect, the dropped-clusters notice (E06-S11) |
 //!
@@ -34,12 +34,14 @@ mod sessions;
 mod switch;
 
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, HashMap, HashSet},
     rc::Rc,
     sync::Arc,
 };
 
 use futures::StreamExt as _;
+use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{
     App, AppContext as _, Entity, EntityId, EventEmitter, Global, Subscription, Task, WeakEntity,
     Window, WindowId,
@@ -47,10 +49,12 @@ use gpui::{
 use indexmap::IndexMap;
 use oxikube_app::session::restore::RestoreSkips;
 use oxikube_app::{ClusterSession, ClusterSessionManager};
+use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::StatePort;
 
 pub use commands::register_commands;
+pub(crate) use commands::{apply_before_next_frame, apply_queued};
 use persist::DebouncedSave;
 
 use super::{
@@ -129,18 +133,26 @@ struct TabEntry {
     _subscription: Subscription,
 }
 
-/// The windows' command queues, so the global key handlers find the controller of the window a
-/// key was pressed in.
+/// The windows' controllers and their command queues, so the global key handlers and the
+/// command runner find the controller of the window a key was pressed or a command run in.
 #[derive(Default)]
-pub(super) struct TabsWindows(HashMap<WindowId, CommandSink>);
+pub(super) struct TabsWindows(HashMap<WindowId, (CommandSink, WeakEntity<ClusterTabs>)>);
 
 impl Global for TabsWindows {}
 
 impl TabsWindows {
     pub(super) fn sink(cx: &App, window: WindowId) -> Option<CommandSink> {
-        cx.try_global::<Self>()?.0.get(&window).cloned()
+        Some(cx.try_global::<Self>()?.0.get(&window)?.0.clone())
+    }
+
+    pub(super) fn controller(cx: &App, window: WindowId) -> Option<WeakEntity<ClusterTabs>> {
+        Some(cx.try_global::<Self>()?.0.get(&window)?.1.clone())
     }
 }
+
+/// The controller's command queue: the receiving half, shared by the task that applies it when
+/// woken and [`ClusterTabs::apply_queued`], which applies it at once.
+type CommandQueue = Rc<RefCell<UnboundedReceiver<Command>>>;
 
 /// See the module docs.
 pub struct ClusterTabs {
@@ -150,6 +162,8 @@ pub struct ClusterTabs {
     tabs: IndexMap<ClusterId, TabEntry>,
     active: Option<ClusterId>,
     sink: CommandSink,
+    /// What `sink` queued and nothing has applied yet.
+    queue: CommandQueue,
     save: DebouncedSave,
     /// Restored clusters whose tab is shown before they connect (session restore, E06-S11).
     pending: HashSet<ClusterId>,
@@ -184,11 +198,9 @@ impl ClusterTabs {
     ) -> Entity<Self> {
         let store = ClusterTabsStore::new(deps.state.clone(), &deps.window_id)
             .expect("the window id is a valid state key");
-        let (sink, mut commands) = CommandSink::channel();
+        let (sink, commands) = CommandSink::channel();
+        let queue: CommandQueue = Rc::new(RefCell::new(commands));
         let window_id = window.window_handle().window_id();
-        cx.default_global::<TabsWindows>()
-            .0
-            .insert(window_id, sink.clone());
 
         let this = cx.new(|cx| {
             // Subscribe before reading the sessions, so no update falls between the two.
@@ -205,10 +217,20 @@ impl ClusterTabs {
                     }
                 }
             });
+            // Woken by a command queued from anywhere (a bus handler on another thread); a
+            // command run on the UI thread is usually applied already (`apply_queued`). The
+            // receiver is borrowed only while it is polled, never across the await.
+            let commands = queue.clone();
             let watch_commands = cx.spawn_in(window, async move |this: WeakEntity<Self>, cx| {
-                while let Some(command) = commands.next().await {
+                loop {
+                    let next = futures::future::poll_fn(|task_cx| {
+                        commands.borrow_mut().poll_next_unpin(task_cx)
+                    })
+                    .await;
+                    let Some(command) = next else { break };
                     let alive = this.update_in(cx, |this, window, cx| {
                         this.apply(&command, window, cx);
+                        this.apply_queued(window, cx);
                     });
                     if alive.is_err() {
                         break;
@@ -231,7 +253,8 @@ impl ClusterTabs {
                 store,
                 tabs: IndexMap::new(),
                 active: None,
-                sink,
+                sink: sink.clone(),
+                queue,
                 save: DebouncedSave::default(),
                 pending: HashSet::new(),
                 restore_active: None,
@@ -242,6 +265,9 @@ impl ClusterTabs {
                 _subscriptions: subscriptions,
             }
         });
+        cx.default_global::<TabsWindows>()
+            .0
+            .insert(window_id, (sink, this.downgrade()));
         this.update(cx, |this, cx| this.sync_sessions(window, cx));
         workspace.update(cx, |ws, _| ws.attach(this.clone()));
         this

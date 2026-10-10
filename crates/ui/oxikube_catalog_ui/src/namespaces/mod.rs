@@ -26,7 +26,9 @@
 //!
 //! Nothing here touches the cluster or opens a feed: the service does its work through the
 //! runtime bridge off the UI thread, and the `ResourceStore` re-scopes from the session's
-//! `NamespaceChanged`. The view updates itself first, so input costs one frame.
+//! `NamespaceChanged`. The view updates itself first, so input costs one frame. A digit or All
+//! sets the session's selection in the same update (`NamespaceService::select_now`) and echoes it
+//! to the views (`SessionEcho`), so the table narrows in that frame too (E05-P600).
 
 mod actions;
 mod background;

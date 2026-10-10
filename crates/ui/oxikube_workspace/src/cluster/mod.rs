@@ -12,12 +12,15 @@
 //! * [`cluster_menu`]: the "Read-only" toggle and the prod / staging / dev / none presets for a
 //!   tab or hotbar context menu; each row is a [`Command`](oxikube_domain::command::Command).
 //! * [`ClusterCommandRunner`]: dispatches those commands through the `CommandBus` and shows the
-//!   outcome (toast, confirmation dialog, denial toast).
+//!   outcome (toast, confirmation dialog, denial toast). Immediate commands run in the update
+//!   that dispatched them, and [`SessionEcho`] hands the session updates they made to the views
+//!   ([`observe_session_echo`]) in that same update (E05-P600).
 //!
 //! Nothing here enforces read-only mode. Hiding a button is a convenience; the check lives in
 //! `oxikube_app::MutationGuard` and applies to every initiator.
 
 mod colour;
+mod echo;
 mod follow;
 mod mark;
 mod menu;
@@ -27,6 +30,7 @@ mod status;
 mod tests;
 
 pub use colour::badge_colour;
+pub use echo::{EchoItem, SessionEcho, namespace_changed, observe_session_echo};
 pub use follow::follow_session;
 pub use mark::{BadgeSurface, ClusterBadge, ClusterMark};
 pub use menu::{MenuEntry, cluster_menu, cluster_menu_entries};

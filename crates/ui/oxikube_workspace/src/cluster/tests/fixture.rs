@@ -11,7 +11,9 @@ use gpui::{
     InteractiveElement as _, IntoElement, ParentElement as _, Pixels, Render, SharedString,
     Styled as _, Task, TestAppContext, VisualTestContext, Window, div,
 };
+use oxikube_app::command_bus::Immediate;
 use oxikube_app::session::SessionOptions;
+use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
     ClusterSession, ClusterSessionManager, CommandBus, CommandOutput, CommandRegistry,
     HandlerContext, MutationGuard, PrefsPatch, PrefsWriter,
@@ -284,6 +286,19 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
             },
         )
         .unwrap();
+    // `namespace::Select` (E05-P600): immediate, as the binary registers it.
+    let namespaces = NamespaceService::new(manager.clone(), state.clone(), clock.clone());
+    registry
+        .register_immediate(
+            *command::lookup(CommandId::NAMESPACE_SELECT).unwrap(),
+            move |command: Command, _: HandlerContext| {
+                let remember = namespaces.execute_now(&command)?.remember();
+                Ok(Immediate::then(CommandOutput::none(), async move {
+                    remember.await.map(|_| ())
+                }))
+            },
+        )
+        .unwrap();
     let bus = CommandBus::new(
         registry,
         MutationGuard::new(manager.clone(), state.clone(), clock),
@@ -303,7 +318,8 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
         });
         (status, tab)
     });
-    let runner = ClusterCommandRunner::new(bus, "me", &ws).with_status_item(&status);
+    let runner =
+        ClusterCommandRunner::new(bus, manager.clone(), "me", &ws).with_status_item(&status);
     vcx.run_until_parked();
     Fixture {
         ws,

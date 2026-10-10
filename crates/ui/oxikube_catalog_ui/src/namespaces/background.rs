@@ -2,13 +2,14 @@
 //! follows the session. All Kubernetes and state work goes through `spawn_kube`, off the UI
 //! thread.
 
-use gpui::{Context, SharedString, Task};
+use gpui::{Context, SharedString, Subscription, Task};
 use oxikube_app::SessionChange;
 use oxikube_app::session::namespaces::Reconciled;
 use oxikube_domain::command::Command;
 use oxikube_domain::session::NamespaceSelection;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_runtime::{KubeTaskError, spawn_kube};
+use oxikube_workspace::cluster::{EchoItem, SessionEcho, namespace_changed, observe_session_echo};
 
 use super::events::NamespaceSelectorEvent;
 use super::selector::NamespaceSelector;
@@ -63,6 +64,36 @@ impl NamespaceSelector {
             this.update(cx, |this, cx| this.answered(result, cx)).ok();
         })
         .detach();
+    }
+
+    /// Runs `namespace::Select` now (E05-P600): the session's selection changes in this update
+    /// and its update is echoed to the views ([`SessionEcho`]), so the table narrows in the frame
+    /// after the key; remembering it runs off the UI thread.
+    pub(super) fn select_now(&mut self, command: Command, cx: &mut Context<Self>) {
+        self.error = None;
+        let echo = SessionEcho::begin(self.service.manager());
+        let selected = self.service.execute_now(&command);
+        echo.finish(cx);
+        match selected {
+            Ok(selected) => {
+                let remember = selected.remember();
+                cx.spawn(async move |this, cx| {
+                    let result = flatten(spawn_kube(cx, remember).await);
+                    this.update(cx, |this, cx| this.answered(result, cx)).ok();
+                })
+                .detach();
+            }
+            Err(err) => self.failed(err, cx),
+        }
+    }
+
+    /// Follows the session echo: a selection changed on the UI thread shows in that update.
+    pub(super) fn follow_session_echo(&mut self, cx: &mut Context<Self>) -> Subscription {
+        observe_session_echo(cx, |this: &mut Self, items: &[EchoItem], cx| {
+            if namespace_changed(items, &this.cluster) {
+                this.session_changed(cx);
+            }
+        })
     }
 
     /// Shows a failed answer; a success needs nothing, the view already moved.

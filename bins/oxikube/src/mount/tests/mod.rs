@@ -9,6 +9,7 @@ mod actions;
 mod agent;
 mod chrome;
 mod exec;
+mod immediate;
 mod logs;
 mod node_shell;
 mod resources;
