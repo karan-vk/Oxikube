@@ -5,7 +5,7 @@
 //! |---|---|
 //! | `actions` | [`exec_row_actions`]: "Shell" and "Attach" on a Pod's context menu and in the palette's list for the selection, and "Shell" (`node::Shell`) on a Node |
 //! | `flow` | [`ExecFlow`]: reads the pod, then either dispatches the command at once (one container, or the default) or opens the picker; [`ExecKind`] |
-//! | `picker` | [`ContainerPicker`]: the modal that asks which container, the default (or the last choice for this pod) preselected |
+//! | `picker` | [`ContainerPicker`]: the modal that asks which container, the default (or the last choice for this pod) preselected; the generic picker (`oxikube_palette::Picker`, E11-S02) over a [`ContainerPickerDelegate`], so typing filters the containers |
 //!
 //! # How a user gets here
 //!
@@ -40,4 +40,4 @@ pub use actions::{ATTACH_ORDER, DEBUG_ORDER, NODE_SHELL_ORDER, SHELL_ORDER, exec
 pub(crate) use actions::{acts_on_cursor_row, availability_hint};
 pub use debug::{DebugDialog, DebugStage, PERMANENCE_NOTE};
 pub use flow::{ExecFlow, ExecKind};
-pub use picker::ContainerPicker;
+pub use picker::{ContainerPicker, ContainerPickerDelegate};

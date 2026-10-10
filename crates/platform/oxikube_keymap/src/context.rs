@@ -13,6 +13,7 @@
 //! | `Table` | a resource table | `Editing` while its filter field has focus, `selection == none\|one\|many` |
 //! | `List` | any other list or tree | `Editing` |
 //! | `Palette` | the command palette | |
+//! | `Picker` | a picker (E11-S02): the palette, the container chooser, ... (its query field is `Picker > Input`) | |
 //! | `Modal` | a dialog or sheet | |
 //! | `Editor` | the YAML editor | `mode == yaml\|diff`, `Editing` |
 //! | `Terminal` | a terminal pane | |
@@ -59,6 +60,8 @@ pub mod contexts {
     pub const LIST: &str = "List";
     /// The command palette.
     pub const PALETTE: &str = "Palette";
+    /// A picker (`oxikube_palette::Picker`): a query field over a list of matches.
+    pub const PICKER: &str = "Picker";
     /// A dialog or sheet.
     pub const MODAL: &str = "Modal";
     /// The YAML editor.

@@ -28,15 +28,15 @@ fn annotated(pod: Resource, default: &str) -> Resource {
 fn names(f: &mut Fixture) -> (Vec<String>, usize) {
     let picker = picker(f).expect("the picker is open");
     f.vcx.update(|_, cx| {
-        let picker = picker.read(cx);
+        let delegate = &picker.read(cx).delegate;
         (
-            picker
+            delegate
                 .choices()
                 .containers
                 .iter()
                 .map(|c| c.name.to_string())
                 .collect(),
-            picker.selected(),
+            delegate.selected().expect("a container is selected"),
         )
     })
 }
@@ -61,6 +61,7 @@ fn several_containers_ask_first_with_the_default_container_preselected(cx: &mut 
     // The rows are on screen.
     f.vcx.update(|window, cx| window.draw(cx).clear(cx));
     for row in [
+        "picker",
         "container-picker",
         "container-row-0",
         "container-row-1",
@@ -91,16 +92,47 @@ fn without_an_annotation_the_first_container_is_preselected_and_enter_opens_it(
 fn the_arrow_keys_move_the_choice_and_enter_opens_that_container(cx: &mut TestAppContext) {
     let mut f = Fixture::with_exec(cx);
     press_shell(&mut f, pod_with("x", "web-0", &["app", "proxy", "logger"]));
-    f.vcx.simulate_keystrokes("down down down");
-    assert_eq!(names(&mut f).1, 2, "stops at the last one");
-    f.vcx.simulate_keystrokes("up");
-    assert_eq!(names(&mut f).1, 1);
+    f.vcx.simulate_keystrokes("down down");
+    assert_eq!(names(&mut f).1, 2);
+    f.vcx.simulate_keystrokes("down");
+    assert_eq!(names(&mut f).1, 0, "wraps to the first one");
+    f.vcx.simulate_keystrokes("up up");
+    assert_eq!(names(&mut f).1, 1, "and back round");
     f.vcx.simulate_keystrokes("enter");
     f.settle();
     let sent = sent_exec(&f);
     assert!(
         matches!(sent.as_slice(), [Command::PodShell { target, container: Some(c) }]
             if *target == web_ref() && c == "proxy"),
+        "{sent:?}"
+    );
+}
+
+#[gpui::test]
+fn typing_filters_the_containers_and_enter_opens_the_best_match(cx: &mut TestAppContext) {
+    let mut f = Fixture::with_exec(cx);
+    press_shell(
+        &mut f,
+        annotated(pod_with("x", "web-0", &["app", "proxy", "logger"]), "proxy"),
+    );
+    f.vcx.simulate_input("log");
+    f.settle();
+    let picker = picker(&mut f).expect("the picker is open");
+    let only = f.vcx.update(|_, cx| {
+        use oxikube_palette::PickerDelegate as _;
+        let delegate = &picker.read(cx).delegate;
+        (delegate.match_count(), delegate.selected())
+    });
+    assert_eq!(
+        only,
+        (1, Some(2)),
+        "only logger matches, and it is selected"
+    );
+    f.vcx.simulate_keystrokes("enter");
+    f.settle();
+    let sent = sent_exec(&f);
+    assert!(
+        matches!(sent.as_slice(), [Command::PodShell { container: Some(c), .. }] if c == "logger"),
         "{sent:?}"
     );
 }

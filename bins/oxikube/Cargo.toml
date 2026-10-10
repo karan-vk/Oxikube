@@ -72,6 +72,8 @@ oxikube_runtime = { workspace = true, features = ["perf-window"] }
 gpui = { workspace = true, features = ["test-support"] }
 # `gpui-test`: the `TestApp` harness (E05-S11) for the `app_state` harness example.
 oxikube_testkit = { workspace = true, features = ["gpui-test"] }
+# `kind_exec`: reads the container picker's matches through `PickerDelegate` (E11-S02).
+oxikube_palette.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 

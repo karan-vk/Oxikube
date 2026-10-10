@@ -18,7 +18,7 @@
 //!   (E07-S07) with `spec` and `spec.containers` open.
 //!
 //! - `exec_picker_dark`, `exec_picker_light` (`exec`): the container picker of a pod with three
-//!   containers, the default one selected (E09-S08).
+//!   containers, the default one selected (E09-S08; the generic picker of E11-S02 since).
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
 //!   containers, with the defaults (busybox, `sh`) and the note that the container is permanent
 //!   (E09-S10).
