@@ -21,6 +21,9 @@ use super::index::{Index, IndexEntry};
 /// Default per-request deadline for the index and group-document fetches.
 pub const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
 
+/// Deadline for the `/version` read that keys the disk cache.
+const VERSION_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// How old the in-memory index must be before a miss re-reads it (a CRD that
 /// was just created reaches the server's OpenAPI document a moment after its
 /// discovery event).
@@ -64,9 +67,14 @@ struct Memory {
     /// be kept on disk: no disk cache, an unwritable one, or a server without hashes. Without
     /// them every further kind of the group would download the document again.
     documents: HashMap<String, (String, Arc<Vec<u8>>)>,
-    /// The server has no `/openapi/v3`: remembered until `invalidate`, so a validator asking on
-    /// every edit does not repeat two doomed requests.
-    unsupported: bool,
+    /// When the server last answered "no `/openapi/v3`": remembered for
+    /// [`OpenApiConfig::refresh_on_miss_after`], so a validator asking on every edit does not
+    /// repeat doomed requests, while a gateway that blipped a 404 recovers on its own.
+    unsupported_at: Option<Instant>,
+    /// Kinds the server had no schema for, and when: answered `NotFound` without a request for
+    /// [`OpenApiConfig::refresh_on_miss_after`] (a CRD kind with no schema is asked about on
+    /// every edit).
+    misses: HashMap<Gvk, Instant>,
     epoch: u64,
 }
 
@@ -141,13 +149,18 @@ impl OpenApiSchemas {
         let timeout = self.config.request_timeout;
         // Concurrent, but an index failure returns at once instead of waiting for `/version`.
         let (index, version) = futures::try_join!(fetch_index(&self.client, timeout), async {
-            Ok(fetch_server_version(&self.client, timeout).await)
+            // The version only keys the disk cache, so without one it is not asked, and it gets
+            // a short deadline: a slow `/version` must not stall the first schema.
+            Ok(match self.disk {
+                Some(_) => fetch_server_version(&self.client, timeout.min(VERSION_TIMEOUT)).await,
+                None => None,
+            })
         })
         .inspect_err(|err| {
             if err.kind() == ErrorKind::Unsupported {
                 let mut memory = self.memory.lock();
                 if memory.epoch == epoch {
-                    memory.unsupported = true;
+                    memory.unsupported_at = Some(Instant::now());
                 }
             }
         })?;
@@ -167,7 +180,10 @@ impl OpenApiSchemas {
     /// `None` when it has not been read yet.
     fn known_index(&self) -> OxiResult<Option<Arc<Loaded>>> {
         let memory = self.memory.lock();
-        if memory.unsupported {
+        let recent = memory
+            .unsupported_at
+            .is_some_and(|at| at.elapsed() < self.config.refresh_on_miss_after);
+        if recent {
             return Err(OxiError::unsupported(
                 "the API server has no /openapi/v3 endpoint",
             ));
@@ -284,6 +300,15 @@ impl OpenApiSchemas {
         old
     }
 
+    /// Whether the server was found to have no schema for `gvk` within the miss window.
+    fn recent_miss(&self, gvk: &Gvk) -> bool {
+        self.memory
+            .lock()
+            .misses
+            .get(gvk)
+            .is_some_and(|at| at.elapsed() < self.config.refresh_on_miss_after)
+    }
+
     fn check_cluster(&self, cluster: &ClusterId) -> OxiResult<()> {
         if *cluster == self.cluster {
             Ok(())
@@ -321,12 +346,22 @@ impl SchemaPort for OpenApiSchemas {
         if let Some(hit) = self.cached(gvk) {
             return Ok(hit);
         }
-        match self.resolve(gvk).await {
+        if self.recent_miss(gvk) {
+            return Err(no_schema(gvk));
+        }
+        let result = match self.resolve(gvk).await {
             Err(err) if err.kind() == ErrorKind::NotFound && self.forget_old_index() => {
                 self.resolve(gvk).await
             }
             other => other,
+        };
+        if matches!(&result, Err(err) if err.kind() == ErrorKind::NotFound) {
+            self.memory
+                .lock()
+                .misses
+                .insert(gvk.clone(), Instant::now());
         }
+        result
     }
 
     async fn invalidate(&self, cluster: &ClusterId) -> OxiResult<()> {
@@ -336,7 +371,8 @@ impl SchemaPort for OpenApiSchemas {
         memory.loaded = None;
         memory.schemas.clear();
         memory.documents.clear();
-        memory.unsupported = false;
+        memory.unsupported_at = None;
+        memory.misses.clear();
         Ok(())
     }
 }

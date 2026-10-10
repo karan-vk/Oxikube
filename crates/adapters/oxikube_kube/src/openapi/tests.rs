@@ -458,3 +458,21 @@ async fn a_lookup_started_before_an_invalidate_does_not_cache_its_result() {
         .expect("schema");
     assert_eq!(api.hits("/openapi/v3/apis/apps/v1"), 2);
 }
+
+#[tokio::test]
+async fn unsupported_and_misses_are_retried_once_their_window_has_passed() {
+    let config = OpenApiConfig {
+        refresh_on_miss_after: std::time::Duration::ZERO,
+        ..OpenApiConfig::default()
+    };
+    let api = FakeApi::new();
+    let svc = OpenApiSchemas::with_config(api.client(), cluster(), config);
+    for _ in 0..2 {
+        let err = svc
+            .schema_for(&cluster(), &deployment())
+            .await
+            .expect_err("unsupported");
+        assert_eq!(err.kind(), ErrorKind::Unsupported);
+    }
+    assert_eq!(api.hits("/openapi/v3"), 2, "a blip does not stick");
+}

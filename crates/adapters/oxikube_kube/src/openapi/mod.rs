@@ -33,8 +33,9 @@
 //! the fresh index and re-fetches only the documents whose hash changed. A
 //! lookup that finds nothing also re-reads an index older than
 //! [`OpenApiConfig::refresh_on_miss_after`], since a new CRD reaches the OpenAPI
-//! document a moment after discovery reports it. A server without `/openapi/v3`
-//! (`Unsupported`) is remembered until the next invalidate.
+//! document a moment after discovery reports it. For that same window a kind
+//! with no schema, and a server without `/openapi/v3` (`Unsupported`), answer
+//! without a request, so a validator asking on every edit costs nothing.
 //!
 //! # Concurrency
 //!
