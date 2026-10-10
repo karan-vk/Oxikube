@@ -10,6 +10,7 @@ mod agent;
 mod chrome;
 mod exec;
 mod immediate;
+mod introspection;
 mod logs;
 mod node_shell;
 mod resources;

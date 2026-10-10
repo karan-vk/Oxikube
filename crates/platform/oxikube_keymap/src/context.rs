@@ -141,6 +141,25 @@ mod tests {
     use gpui::KeyBindingContextPredicate;
 
     use super::*;
+    use oxikube_domain::command::ViewContext;
+
+    /// A command's availability names a view by the keymap context it runs in, so a binding in
+    /// `LogView` and a command available in `ViewContext::Logs` agree on where they apply.
+    #[test]
+    fn every_view_context_is_a_standard_key_context() {
+        let standard = [
+            contexts::WORKSPACE,
+            contexts::CATALOG,
+            contexts::TABLE,
+            contexts::DETAIL,
+            contexts::LOGS,
+            contexts::TERMINAL,
+            contexts::EDITOR,
+            contexts::PALETTE,
+        ];
+        let named: Vec<_> = ViewContext::ALL.iter().map(|v| v.key_context()).collect();
+        assert_eq!(named, standard);
+    }
 
     struct Table {
         filtering: bool,

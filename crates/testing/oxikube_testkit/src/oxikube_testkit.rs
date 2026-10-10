@@ -16,6 +16,8 @@
 //! - [`builders`]: `pod().running().restarts(3).build()`, `deployment().replicas(3).ready(2)`,
 //!   `node().cordoned()`, ... producing the same `Resource` shape as the fixtures. The entry
 //!   points are re-exported here.
+//! - [`commands`]: `fixture_commands(n)`, a deterministic mix of command metadata (every view,
+//!   selection shape and category) for palette, help and keymap tests.
 //! - [`images`]: the container images the kind suites run (one list, pre-pulled by `kind-up`).
 //! - [`script`]: the [`Script`] / [`CallLog`] / [`Timeline`] helpers the fakes share.
 //! - [`scripted_feed`]: [`ScriptedFeed`], objects added / modified / deleted at chosen ticks as the
@@ -35,6 +37,7 @@
 //!   `gpui-headless` and `gpui-test`.
 
 pub mod builders;
+pub mod commands;
 pub mod fakes;
 pub mod fixtures;
 #[cfg(feature = "gpui-test")]

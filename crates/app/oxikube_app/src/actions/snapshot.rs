@@ -69,7 +69,7 @@ impl RowActions {
             .specs()
             .iter()
             .filter_map(|spec| {
-                let meta = *bus.commands().find(|meta| meta.id == spec.command)?;
+                let meta = *bus.get(spec.command)?.meta();
                 Some(RowAction {
                     meta,
                     label: spec.label.unwrap_or(meta.title),

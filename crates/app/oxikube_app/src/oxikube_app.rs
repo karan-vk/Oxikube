@@ -14,6 +14,7 @@
 //! | [`session`] `prefs` | E06-S08 | per-cluster settings: `set_prefs_table` pushes the resolved `clusters.<id>` values; new sessions start from them, open ones follow them live |
 //! | [`sources`] | E06-S05 | [`KubeconfigSourcesService`]: the user's kubeconfig sources (add a file or folder, paste, remove, reload) over the settings list, the `ClusterSourcePort` and `FsPort`, and the `kubeconfig::*` command handlers |
 //! | [`command_bus`] | E06-S02 | [`CommandBus`]: dispatch by command id, the per-crate [`CommandRegistry`], MCP tool stubs |
+//! | [`command_bus`] `availability`, `index` | E11-S01 | introspection for the palette, help overlay and keymap: [`CommandBus::list`] (the commands runnable in a [`CommandContext`]), `all`, `get`; [`CommandInfo`] / [`CommandIndex`] (sorted once, category then title), [`Selection`] and [`Unavailable`] |
 //! | [`guard`] | E06-S02 | [`MutationGuard`]: read-only check, confirmation tier and token, dry-run stage (stub), the [`Mutation`] permit, audit |
 //! | [`guard::posture`] | E06-S09 | read-only mode, colour and presets as commands (`cluster::ToggleReadOnly`, `cluster::SetColour`, `cluster::ApplyPreset`): confirm when lifting read-only on a production-flagged cluster, audit, the [`PrefsWriter`] port to the settings; the guard also re-checks the flag right before each request |
 //! | [`sidebar`] | E06-S10 | [`review_access`](sidebar::review_access) (the rules reviews the cluster sidebar hides sections by, failing open) and [`discover_custom_resources`](sidebar::discover_custom_resources) |
@@ -61,8 +62,9 @@ pub use catalog::{
 };
 pub use columns::{Cell, Column, ColumnId, ColumnProvider, CoreColumns, TableColumns};
 pub use command_bus::{
-    CommandBus, CommandHandler, CommandOutput, CommandRegistry, DispatchContext, DispatchError,
-    HandlerContext, Outcome, RegisterError,
+    CommandBus, CommandContext, CommandHandler, CommandIndex, CommandInfo, CommandOutput,
+    CommandRegistry, DispatchContext, DispatchError, DuplicateCommand, HandlerContext, Outcome,
+    RegisterError, Selection, Unavailable,
 };
 pub use context::{ContextRegistry, LogContextProvider, PendingContext, selection_context};
 pub use exec::{

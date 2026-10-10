@@ -2,4 +2,5 @@
 
 mod dispatch;
 mod immediate;
+mod introspection;
 mod registry;

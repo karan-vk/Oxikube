@@ -6,6 +6,14 @@
 //! files live in `oxikube_keymap`; MCP tool definitions are built from this
 //! vocabulary by `oxikube_app::tools`.
 //!
+//! # Metadata for every surface
+//!
+//! [`CommandMeta`] also describes *where* a command can run, for the palette, the help overlay
+//! and the keymap: a [`CommandCategory`] (derived from the id's namespace), the keymap action
+//! name ([`CommandMeta::keymap_action`], the id) and an [`Availability`] (views, the selection
+//! it needs, and whether it needs a writable session). It is plain data; the app layer
+//! evaluates it (`CommandBus::list`).
+//!
 //! # One name per action
 //!
 //! The command id is the keymap action name, the serde `type` tag of the
@@ -25,7 +33,9 @@
 //! `{"action":"workload::Scale","args":{...}}` carries the same fields. Renaming
 //! an id is a breaking change for both.
 
+mod availability;
 mod capability;
+mod category;
 mod id;
 mod kubeconfig;
 mod meta;
@@ -33,7 +43,9 @@ mod payload;
 mod registry;
 mod risk;
 
+pub use availability::{Availability, SelectionKind, ViewContext};
 pub use capability::{Capabilities, Capability, UnknownCapability};
+pub use category::CommandCategory;
 pub use id::{CommandId, UnknownCommandId, is_well_formed};
 pub use kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource, PastedText};
 pub use meta::{CommandMeta, CommandScope};

@@ -57,7 +57,7 @@ pub enum RegisterError {
 
 /// One registered command.
 pub(crate) struct Registered {
-    pub(crate) meta: CommandMeta,
+    pub(crate) meta: &'static CommandMeta,
     pub(crate) handler: Arc<dyn CommandHandler>,
     /// The handler [`CommandBus::dispatch_now`](super::CommandBus::dispatch_now) runs, for an
     /// immediate command; `handler` then runs the same one and awaits its rest.
@@ -188,7 +188,7 @@ impl CommandRegistry {
         self.entries.insert(
             id,
             Registered {
-                meta,
+                meta: declared,
                 handler,
                 immediate,
                 tool,

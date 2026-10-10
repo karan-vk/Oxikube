@@ -7,6 +7,7 @@
 //! catch an unsorted slice, a duplicate id, a malformed id, a colliding tool
 //! name and a mutating command without a deliberate confirmation tier.
 
+use super::availability::{SelectionKind, ViewContext};
 use super::capability::Capabilities;
 use super::id::CommandId;
 use super::meta::{CommandMeta, CommandScope};
@@ -226,6 +227,17 @@ impl CommandId {
 
 const NONE: Capabilities = Capabilities::empty();
 
+/// The views a selection of resources is acted on from: a table row or the detail view of one.
+const TABLE_VIEWS: &[ViewContext] = &[ViewContext::Table, ViewContext::Detail];
+/// Commands of the resource table only.
+const TABLE_VIEW: &[ViewContext] = &[ViewContext::Table];
+/// Commands of the detail view only.
+const DETAIL_VIEW: &[ViewContext] = &[ViewContext::Detail];
+/// Commands of the log viewer.
+const LOG_VIEW: &[ViewContext] = &[ViewContext::Logs];
+/// Commands of a terminal.
+const TERMINAL_VIEW: &[ViewContext] = &[ViewContext::Terminal];
+
 /// Every declared command, **sorted by id** (lookup is a binary search; a test
 /// enforces the order).
 pub static COMMANDS: &[CommandMeta] = &[
@@ -332,7 +344,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Open Custom Resources",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "apiextensions.k8s.io",
+        kind: "CustomResourceDefinition",
+    }),
     // The kubeconfig commands change the user's settings list and Oxikube's own files, never a
     // cluster: not `mutating`, no guard tier. Removing a pasted kubeconfig deletes a file, so
     // the UI confirms it first and the handler refuses it for agents.
@@ -365,86 +382,100 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Logs: Clear",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_CLOSE_SEARCH,
         "Logs: Close Search",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_COLLAPSE_LINE,
         "Logs: Collapse Line",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_COPY,
         "Logs: Copy Lines",
         CommandScope::Selection,
         Capabilities::LOGS,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_FIND,
         "Logs: Find",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_FOLLOW_REPLACEMENT,
         "Logs: Follow Replacement Pod",
         CommandScope::Selection,
         Capabilities::LOGS,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_MARK,
         "Logs: Mark Line",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_NEXT_MATCH,
         "Logs: Next Match",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_PREVIOUS_MATCH,
         "Logs: Previous Match",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_RECONNECT,
         "Logs: Reconnect",
         CommandScope::Selection,
         Capabilities::LOGS,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_SAVE,
         "Logs: Save to File",
         CommandScope::Selection,
         Capabilities::LOGS,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_SELECT_CONTAINER,
         "Logs: Select Container",
         CommandScope::Selection,
         Capabilities::LOGS,
-    ),
+    )
+    .in_views(LOG_VIEW),
     // Queues local context for the agent panel; the lines are read from the view's own buffer.
     CommandMeta::read(
         CommandId::LOGS_SEND_TO_AGENT,
         "Logs: Send to Agent",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_SET_RANGE,
         "Logs: Set Range",
         CommandScope::Selection,
         Capabilities::LOGS,
-    ),
+    )
+    .in_views(LOG_VIEW),
     // Starts kubectl on this machine in a terminal tab, with the cluster's kubeconfig in its
     // environment; `kubectl logs` only reads. It is an interactive action: it has a tool stub like
     // every command, but no agent runs processes on the user's machine until the agent phase
@@ -454,79 +485,92 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Logs: Tail in Terminal (kubectl)",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_AUTOSCROLL,
         "Logs: Toggle Autoscroll",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_CASE,
         "Logs: Toggle Case Sensitivity",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_FILTER_MODE,
         "Logs: Toggle Filter Mode",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_FULLSCREEN,
         "Logs: Toggle Fullscreen",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_INVERSE,
         "Logs: Toggle Inverse Match",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_JSON_MODE,
         "Logs: Toggle JSON Mode",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_LEVEL,
         "Logs: Toggle Level",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_LINE,
         "Logs: Expand or Collapse Line",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_PREVIOUS,
         "Logs: Toggle Previous Container",
         CommandScope::Selection,
         Capabilities::LOGS,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_SOURCE,
         "Logs: Toggle Source",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_TIMESTAMPS,
         "Logs: Toggle Timestamps",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::LOGS_TOGGLE_WRAP,
         "Logs: Toggle Wrap",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(LOG_VIEW),
     CommandMeta::read(
         CommandId::NAMESPACE_SELECT,
         "Select Namespaces",
@@ -545,14 +589,18 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         Risk::Medium,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Node")),
     CommandMeta::mutation(
         CommandId::NODE_DRAIN,
         "Drain Node",
         CommandScope::Selection,
         Risk::High,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Node")),
     // A shell on a node is root on it: the command creates a privileged pod (a mutation, blocked
     // on a read-only cluster, a confirmation that names the node and the image) and opens a
     // session in it; its tool stub is unsafe, interactive and hidden from agents.
@@ -561,14 +609,18 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Node Shell",
         CommandScope::Selection,
         Risk::Medium,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Node")),
     CommandMeta::mutation(
         CommandId::NODE_UNCORDON,
         "Uncordon Node",
         CommandScope::Selection,
         Risk::Low,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Node")),
     CommandMeta::read(
         CommandId::PALETTE_TOGGLE,
         "Toggle Command Palette",
@@ -577,7 +629,9 @@ pub static COMMANDS: &[CommandMeta] = &[
     ),
     // The exec class (`CommandMeta::exec`): not mutations, no confirmation, blocked on a
     // read-only cluster unless `exec_in_read_only` allows it, audited on every open.
-    CommandMeta::exec(CommandId::POD_ATTACH, "Attach", CommandScope::Selection),
+    CommandMeta::exec(CommandId::POD_ATTACH, "Attach", CommandScope::Selection)
+        .in_views(TABLE_VIEWS)
+        .selecting(SelectionKind::core("Pod")),
     // Adds an ephemeral container to the pod (`patch` on `pods/ephemeralcontainers`), which cannot
     // be removed or edited until the pod is deleted: a mutation, so read-only blocks it, a simple
     // confirmation names the pod, image and target (low risk, E09-S10), and it is audited. It is
@@ -588,32 +642,44 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Debug",
         CommandScope::Selection,
         Risk::Low,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
     CommandMeta::mutation(
         CommandId::POD_DELETE,
         "Delete Pod",
         CommandScope::Selection,
         Risk::Medium,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
     CommandMeta::exec(
         CommandId::POD_EXEC,
         "Exec into Container",
         CommandScope::Selection,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
     CommandMeta::read(
         CommandId::POD_PORT_FORWARD,
         "Port-Forward",
         CommandScope::Selection,
         Capabilities::PORTFORWARD,
-    ),
-    CommandMeta::exec(CommandId::POD_SHELL, "Shell", CommandScope::Selection),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
+    CommandMeta::exec(CommandId::POD_SHELL, "Shell", CommandScope::Selection)
+        .in_views(TABLE_VIEWS)
+        .selecting(SelectionKind::core("Pod")),
     CommandMeta::read(
         CommandId::POD_VIEW_LOGS,
         "View Logs",
         CommandScope::Selection,
         Capabilities::LOGS,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
     CommandMeta::mutation(
         CommandId::RESOURCE_APPLY,
         "Apply Manifest",
@@ -627,21 +693,27 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Copy Label",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     // Writes the user's clipboard, never the cluster.
     CommandMeta::read(
         CommandId::RESOURCE_COPY_NAME,
         "Copy Resource Name",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::Many),
     // Writes the user's clipboard, never the cluster: the text is what the YAML tab shows.
     CommandMeta::read(
         CommandId::RESOURCE_COPY_YAML,
         "Copy YAML",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     CommandMeta::mutation(
         CommandId::RESOURCE_DELETE,
         "Delete Resource",
@@ -650,13 +722,17 @@ pub static COMMANDS: &[CommandMeta] = &[
         // delete: `Command::effective_risk`), so an ordinary object takes a simple confirm.
         Risk::Medium,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::Many),
     CommandMeta::read(
         CommandId::RESOURCE_OPEN,
         "Open Resource",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     CommandMeta::read(
         CommandId::RESOURCE_OPEN_LIST,
         "Open Resource List",
@@ -669,74 +745,90 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Pin Detail as Tab",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(DETAIL_VIEW)
+    .selecting(SelectionKind::One),
     // Reads the object and its events again (`kubectl describe`); changes nothing.
     CommandMeta::read(
         CommandId::RESOURCE_REFRESH_DESCRIBE,
         "Refresh Describe",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(DETAIL_VIEW)
+    .selecting(SelectionKind::One),
     CommandMeta::read(
         CommandId::RESOURCE_RETRY_FEED,
         "Retry Resource Feed",
         CommandScope::ResourceKind,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEW),
     // Writes a local file the user picks, never the cluster: the text is what the YAML tab shows.
     CommandMeta::read(
         CommandId::RESOURCE_SAVE_YAML,
         "Save YAML as File",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     CommandMeta::read(
         CommandId::RESOURCE_SELECT_ALL,
         "Select All Resources",
         CommandScope::ResourceKind,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEW),
     // A display option of the open YAML tab; changes nothing in the cluster.
     CommandMeta::read(
         CommandId::RESOURCE_TOGGLE_MANAGED_FIELDS,
         "Toggle Managed Fields",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(DETAIL_VIEW)
+    .selecting(SelectionKind::One),
     CommandMeta::read(
         CommandId::RESOURCE_VIEW_YAML,
         "View YAML",
         CommandScope::Selection,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     // Moves focus inside a window, never touches the cluster: allowed in read-only mode.
     CommandMeta::read(
         CommandId::TABLE_FOCUS_FILTER,
         "Focus Table Filter",
         CommandScope::ResourceKind,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEW),
     // Drops the scrollback this machine holds for the user's own session; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_CLEAR,
         "Clear Terminal",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Ends a shell on this machine the user opened; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_CLOSE,
         "Close Terminal",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Copies text the user sees to the clipboard; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_COPY,
         "Copy Terminal Selection",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Starts the user's own shell on this machine (with the cluster's kubeconfig in its
     // environment); the cluster is only touched by what the user then types, outside the guard.
     CommandMeta::read(
@@ -751,7 +843,8 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Open Terminal Link",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Types the clipboard into the user's own session (a multi-line paste asks first); the
     // cluster is only touched by what the user's shell then does, outside the guard's reach.
     CommandMeta::read(
@@ -759,7 +852,8 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Paste into Terminal",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Opens the pod session again through the exec service, which re-checks read-only mode and
     // the exec capability itself; the command only asks the terminal to start over.
     CommandMeta::read(
@@ -767,84 +861,96 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Reconnect Terminal",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Starts the user's own shell on this machine again; never touches a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_RESTART,
         "Restart Terminal",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Moves the view of a terminal's own history; never touches a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SCROLL_LINE_DOWN,
         "Scroll Terminal Line Down",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Moves the view of a terminal's own history; never touches a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SCROLL_LINE_UP,
         "Scroll Terminal Line Up",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Moves the view of a terminal's own history; never touches a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SCROLL_PAGE_DOWN,
         "Scroll Terminal Page Down",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Moves the view of a terminal's own history; never touches a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SCROLL_PAGE_UP,
         "Scroll Terminal Page Up",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SEARCH,
         "Search Terminal Scrollback",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SEARCH_CLOSE,
         "Close Terminal Search",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SEARCH_NEXT,
         "Next Terminal Search Match",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Searches the text a terminal shows, on this machine; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SEARCH_PREVIOUS,
         "Previous Terminal Search Match",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Selects text a terminal shows; never reads or changes a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SELECT_ALL,
         "Select All in Terminal",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     // Starts another shell on this machine beside the active pane; never touches a cluster.
     CommandMeta::read(
         CommandId::TERMINAL_SPLIT,
         "Split Terminal",
         CommandScope::Global,
         NONE,
-    ),
+    )
+    .in_views(TERMINAL_VIEW),
     CommandMeta::read(
         CommandId::VIEW_OPEN,
         "Open View",
@@ -881,20 +987,26 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         Risk::Medium,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     CommandMeta::mutation(
         CommandId::WORKLOAD_SCALE,
         "Scale Workload",
         CommandScope::Selection,
         Risk::Medium,
         NONE,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     CommandMeta::read(
         CommandId::WORKLOAD_VIEW_LOGS,
         "View Logs",
         CommandScope::Selection,
         Capabilities::LOGS,
-    ),
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
 ];
 
 /// Find a command's metadata by id (binary search, no allocation).
