@@ -84,6 +84,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceSelectAll { cluster, .. }
         | Command::TableFocusFilter { cluster, .. }
         | Command::TableToggleWide { cluster, .. }
+        | Command::TableSetFilter { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::TerminalNew { cluster } => cluster.as_ref(),
         Command::ResourceOpen { target }
@@ -151,6 +152,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::HelpShow
         | Command::PaletteToggleShowAll
         | Command::AppQuit
+        | Command::JumpBack
+        | Command::JumpForward
+        | Command::JumpLast
         | Command::WindowNew
         | Command::ViewZoomIn
         | Command::ViewZoomOut

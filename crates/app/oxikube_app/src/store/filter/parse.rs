@@ -1,11 +1,14 @@
 //! The filter grammar: [`parse`] turns what the user typed into a [`FilterExpr`].
 //!
 //! ```text
-//! input    = [ "/" ] ( "" | "!" body | body )
+//! input    = [ "/" ] ( "" | "!" body | body ) [ "-l" selector ]
 //! body     = "-l" selector            label selector (server-side)
 //!          | "-f" text                fuzzy name match
 //!          | text                     name regex, or substring when it has no regex syntax
 //! ```
+//!
+//! A name filter may be followed by `-l selector` (`api -l app=x`): both apply. That is how the
+//! `:` jump bar's `:pod /api app=x` fills the bar.
 //!
 //! This is k9s's grammar (`/regex`, `/!regex`, `/-l k=v`, `/-f text`). One leading `/` is
 //! accepted and ignored, so a filter pasted from k9s works. Names never start with `-` or
@@ -33,6 +36,14 @@ pub enum FilterExpr {
     LabelSelector(LabelSelector),
     /// `/-f text`: names containing the characters in order, ranked by closeness.
     Fuzzy(Fuzzy),
+    /// A name filter and a label selector together: `api -l app=x`. `name` is never a
+    /// `LabelSelector` or another `Narrowed`.
+    Narrowed {
+        /// The name filter (`Text`, `Inverse` or `Fuzzy`).
+        name: Box<FilterExpr>,
+        /// The selector the server applies.
+        selector: LabelSelector,
+    },
 }
 
 /// Why an input is not a filter. The messages are shown in the filter bar.
@@ -61,9 +72,49 @@ pub enum FilterError {
 pub fn parse(input: &str) -> Result<FilterExpr, FilterError> {
     let text = input.trim();
     let text = text.strip_prefix('/').unwrap_or(text).trim_start();
+    match split_selector(text) {
+        Some((name, selector)) => {
+            let selector = LabelSelector::parse(selector).map_err(FilterError::Selector)?;
+            let name = parse_name(name)?;
+            Ok(match name {
+                FilterExpr::Empty => FilterExpr::LabelSelector(selector),
+                name if selector.is_empty() => name,
+                name => FilterExpr::Narrowed {
+                    name: Box::new(name),
+                    selector,
+                },
+            })
+        }
+        None => parse_name_or_selector(text),
+    }
+}
+
+/// Splits `name -l selector` at the `-l` word that follows a name. `None` when `-l` is the first
+/// word (a plain selector filter) or absent.
+fn split_selector(text: &str) -> Option<(&str, &str)> {
+    let mut offset = 0;
+    for word in text.split_inclusive(char::is_whitespace) {
+        let at = offset;
+        offset += word.len();
+        if at > 0 && word.trim_end() == "-l" {
+            return Some((text[..at].trim_end(), text[offset..].trim()));
+        }
+    }
+    None
+}
+
+fn parse_name_or_selector(text: &str) -> Result<FilterExpr, FilterError> {
     match text.strip_prefix('!') {
         Some(rest) => parse_inverse(rest.trim_start()),
         None => parse_body(text),
+    }
+}
+
+/// The name part of `name -l selector`: a name filter, never a selector.
+fn parse_name(text: &str) -> Result<FilterExpr, FilterError> {
+    match parse_name_or_selector(text)? {
+        FilterExpr::LabelSelector(_) => Err(FilterError::UnknownFlag("-l".to_owned())),
+        name => Ok(name),
     }
 }
 

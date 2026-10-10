@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use oxikube_domain::AliasTarget;
-use oxikube_domain::ids::Gvk;
+use oxikube_domain::ids::{Gvk, Gvr};
 use oxikube_domain::kinds::ResourceKind;
 use parking_lot::{Mutex, RwLock};
 
@@ -78,6 +78,15 @@ impl AliasTable {
                 suggestions: suggest(&index, key),
             })
         })
+    }
+
+    /// The `Gvk` to open the list of `gvr` by: the Kind of that type, as the cluster serves it
+    /// (or, before it has answered, as the built-in table knows it), at `gvr`'s version. `None`
+    /// for a type nobody knows the Kind of (a user alias to a resource the cluster does not
+    /// serve). O(1).
+    pub fn gvk_of(&self, gvr: &Gvr) -> Option<Gvk> {
+        let kind = self.inner.index.read().kind_of(&gvr.group, &gvr.resource)?;
+        Some(Gvk::new(gvr.group.clone(), gvr.version.clone(), kind))
     }
 
     /// Replaces the discovery layer with everything the cluster serves.
@@ -157,7 +166,17 @@ impl AliasTable {
 /// Merges the layers of `inputs`.
 fn build(inputs: &Inputs) -> Index {
     let builtin = builtin::entries(&inputs.discovered);
-    Index::build(&inputs.user, &builtin, inputs.discovered.entries())
+    let mut kinds: HashMap<(Arc<str>, Arc<str>), Arc<str>> = builtin::BUILTINS
+        .iter()
+        .map(|row| ((row.group.into(), row.resource.into()), row.kind.into()))
+        .collect();
+    for kind in inputs.discovered.kinds() {
+        kinds.insert(
+            (kind.gvk.group.clone(), Arc::from(kind.plural.as_str())),
+            kind.gvk.kind.clone(),
+        );
+    }
+    Index::build(&inputs.user, &builtin, inputs.discovered.entries()).with_kinds(kinds)
 }
 
 /// Calls `f` with `name` in lower case, without allocating for the usual short names.

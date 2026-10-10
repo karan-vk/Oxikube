@@ -111,6 +111,8 @@ const VIEW_LOCAL: &[&str] = &[
     "picker::Confirm",
     "picker::SecondaryConfirm",
     "picker::Cancel",
+    // The `:` jump bar's Tab (E11-S05): replaces the word being typed by the selected completion.
+    "jump_bar::Complete",
     // The log viewer's selection.
     "log_view::ClearSelection",
     // The bottom dock's terminal panel and the OS application menu.

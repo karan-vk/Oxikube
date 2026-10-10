@@ -152,6 +152,22 @@
     }
   },
   {
+    // The `:` jump bar (E11-S05), around its picker (whose own keys are bound in `Picker` above):
+    // Tab replaces the word being typed by the selected completion. Bound in `JumpBar > Input`
+    // too, because the query field has the focus and its own bindings for Tab are as deep as the
+    // bar's (the later binding wins).
+    "context": "JumpBar",
+    "bindings": {
+      "tab": "jump_bar::Complete"
+    }
+  },
+  {
+    "context": "JumpBar > Input",
+    "bindings": {
+      "tab": "jump_bar::Complete"
+    }
+  },
+  {
     // Resource tables (E07-S03): move the cursor and the selection, select all, copy the name.
     "context": "ResourceTable",
     "bindings": {
@@ -197,7 +213,12 @@
       "l": "resource_table::ViewLogs",
       "shift-f": "resource_table::PortForward",
       "f": "resource_table::ShowPortForwards",
-      "ctrl-w": "resource_table::ToggleWide"
+      "ctrl-w": "resource_table::ToggleWide",
+      // The jump bar's history (E11-S05; `:` itself is bound in `ClusterTab`): `[` and `]` run
+      // the jump history back and forward, `-` goes to the view before this one and back again.
+      "[": "jump::Back",
+      "]": "jump::Forward",
+      "-": "jump::Last"
     }
   },
   {

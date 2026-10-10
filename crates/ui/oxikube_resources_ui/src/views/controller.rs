@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
@@ -30,6 +31,17 @@ pub struct ResourceViewsDeps {
     pub fs: Arc<dyn FsPort>,
 }
 
+/// How long a [`ResourceViews::set_filter`] waits for its table to open. The jump bar sends the
+/// list and its filter together, so a table that has not opened by then never will for this
+/// jump (no discovery yet, no tab): a later, unrelated open must not take the filter.
+pub(crate) const PENDING_FILTER_TTL: Duration = Duration::from_secs(10);
+
+/// A filter that arrived before its table, and when.
+struct PendingFilter {
+    text: String,
+    at: Instant,
+}
+
 /// A cluster's discovered kinds, with the discovery port they came from (a reconnect hands out
 /// a new port, and the cache starts over).
 pub(super) struct Kinds {
@@ -49,6 +61,14 @@ pub struct ResourceViews {
     navigate_task: Option<Task<()>>,
     /// The `resource::OpenList` waiting on discovery (a newer one replaces, and so cancels, it).
     open_task: Option<Task<()>>,
+    /// Filters (`table::SetFilter`) that arrived before their table was open: the jump bar sends
+    /// the list and its filter together, and either may be applied first. The newest per kind
+    /// wins; a table takes its filter when it opens, and one older than [`PENDING_FILTER_TTL`] is
+    /// dropped unused.
+    pending_filters: HashMap<(ClusterId, Gvk), PendingFilter>,
+    /// When the open of a kind's list failed (no discovery yet, no tab): a filter that arrives
+    /// right after it, from the same jump, has no table to wait for and is dropped.
+    failed_opens: HashMap<(ClusterId, Gvk), Instant>,
     /// The "save YAML" in flight: the dialog, then the write (a newer one replaces it).
     pub(super) save_task: Option<Task<()>>,
     _requests: Task<()>,
@@ -81,6 +101,8 @@ impl ResourceViews {
                 crds: Default::default(),
                 navigate_task: None,
                 open_task: None,
+                pending_filters: HashMap::new(),
+                failed_opens: HashMap::new(),
                 save_task: None,
                 _requests: pump,
             }
@@ -120,6 +142,9 @@ impl ResourceViews {
                 if let Some(table) = self.tables(&cluster, &gvk, cx).into_iter().next() {
                     table.update(cx, |table, cx| table.focus_filter_on_command(window, cx));
                 }
+            }
+            ViewRequest::SetFilter { cluster, gvk, text } => {
+                self.set_filter(cluster, gvk, text, window, cx);
             }
             ViewRequest::OpenCrdResources { cluster, name } => {
                 self.open_crd_resources(&cluster, name, window, cx);
@@ -174,8 +199,8 @@ impl ResourceViews {
                     table.update(cx, |table, cx| table.select_all(cx));
                 }
             }
-            // Needs the window; see `apply_in`.
-            ViewRequest::FocusFilter { .. } => {}
+            // Need the window; see `apply_in`.
+            ViewRequest::FocusFilter { .. } | ViewRequest::SetFilter { .. } => {}
         }
     }
 
@@ -207,6 +232,7 @@ impl ResourceViews {
             .get(cluster)
             .and_then(|s| s.discovery())
         else {
+            self.open_failed(cluster, gvk, cx);
             return false;
         };
         let port = port_id(&discovery);
@@ -240,6 +266,8 @@ impl ResourceViews {
                     views.open_list(&cluster, kind, window, cx);
                 }
                 None => {
+                    // Nothing will open for a filter to wait for.
+                    views.open_failed(&cluster, &gvk, cx);
                     let toast = Toast::info(format!("The cluster does not serve {}.", gvk.kind));
                     workspace
                         .update(cx, |ws, cx| {
@@ -253,6 +281,47 @@ impl ResourceViews {
         true
     }
 
+    /// `table::SetFilter`: types `text` into the filter bar of the table of `gvk` in `cluster`, or
+    /// keeps it for the table that is about to open.
+    fn set_filter(
+        &mut self,
+        cluster: ClusterId,
+        gvk: Gvk,
+        text: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match self.tables(&cluster, &gvk, cx).into_iter().next() {
+            Some(table) => {
+                self.pending_filters.remove(&(cluster, gvk));
+                table.update(cx, |table, cx| table.set_filter_text(&text, window, cx));
+            }
+            None => {
+                let at = cx.background_executor().now();
+                self.pending_filters.retain(|_, p| fresh(p, at));
+                let failed = self
+                    .failed_opens
+                    .remove(&(cluster.clone(), gvk.clone()))
+                    .is_some_and(|failed| within_ttl(failed, at));
+                // The list of this jump could not open: nothing for the filter to wait for.
+                if !failed {
+                    self.pending_filters
+                        .insert((cluster, gvk), PendingFilter { text, at });
+                }
+            }
+        }
+    }
+
+    /// The open of `gvk`'s list in `cluster` failed: the filter that came with it (before or
+    /// after) must not wait for an unrelated later table.
+    fn open_failed(&mut self, cluster: &ClusterId, gvk: &Gvk, cx: &App) {
+        let now = cx.background_executor().now();
+        self.pending_filters.remove(&(cluster.clone(), gvk.clone()));
+        self.failed_opens.retain(|_, at| within_ttl(*at, now));
+        self.failed_opens
+            .insert((cluster.clone(), gvk.clone()), now);
+    }
+
     /// Shows `cluster`'s tab and, in it, the table of `kind` (the open one, else a new one).
     /// `None` when the cluster has no tab.
     pub fn open_list(
@@ -262,9 +331,18 @@ impl ResourceViews {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Entity<ResourceTable>> {
-        let tabs = self.deps.tabs.upgrade()?;
-        let tab = tabs.read(cx).tab(cluster)?.clone();
-        tabs.update(cx, |tabs, cx| tabs.activate(cluster, window, cx));
+        let Some(tab) = self
+            .deps
+            .tabs
+            .upgrade()
+            .and_then(|tabs| tabs.read(cx).tab(cluster).cloned())
+        else {
+            self.open_failed(cluster, &kind.gvk, cx);
+            return None;
+        };
+        if let Some(tabs) = self.deps.tabs.upgrade() {
+            tabs.update(cx, |tabs, cx| tabs.activate(cluster, window, cx));
+        }
         let workspace = tab.read(cx).workspace().clone();
         if let Some(open) = self.tables(cluster, &kind.gvk, cx).into_iter().next() {
             let key = item_key(&kind.gvk).into();
@@ -274,6 +352,13 @@ impl ResourceViews {
             return Some(open);
         }
         let deps = self.deps.table.clone();
+        self.failed_opens
+            .remove(&(cluster.clone(), kind.gvk.clone()));
+        let pending = self
+            .pending_filters
+            .remove(&(cluster.clone(), kind.gvk.clone()))
+            .filter(|p| fresh(p, cx.background_executor().now()))
+            .map(|p| p.text);
         let cluster = cluster.clone();
         let table = cx.new(|cx| ResourceTable::new(cluster, kind, deps, window, cx));
         // The tab's workspace hosts the table's dialogs (delete) and toasts.
@@ -296,6 +381,9 @@ impl ResourceViews {
             ws.open_item_with(Box::new(table.clone()), options, window, cx)
         });
         self.load_versions(&table, cx);
+        if let Some(text) = pending {
+            table.update(cx, |table, cx| table.set_filter_text(&text, window, cx));
+        }
         Some(table)
     }
 
@@ -402,4 +490,13 @@ fn warning_toast(warning: &oxikube_ports::ApiWarning) -> Toast {
     Toast::warning(warning.text.clone())
         .title("API server warning")
         .key(format!("api-warning/{}/{}", warning.code, warning.text))
+}
+
+/// Whether `pending` is still young enough to be applied at `now`.
+fn fresh(pending: &PendingFilter, now: Instant) -> bool {
+    within_ttl(pending.at, now)
+}
+
+fn within_ttl(at: Instant, now: Instant) -> bool {
+    now.saturating_duration_since(at) < PENDING_FILTER_TTL
 }

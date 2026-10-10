@@ -216,6 +216,9 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "palette::OpenJump" => Command::PaletteOpenJump,
         "help::Show" => Command::HelpShow,
         "palette::ToggleShowAll" => Command::PaletteToggleShowAll,
+        "jump::Back" => Command::JumpBack,
+        "jump::Forward" => Command::JumpForward,
+        "jump::Last" => Command::JumpLast,
         "pod::Delete" => Command::PodDelete {
             target: target(),
             grace_period_seconds: None,
@@ -300,6 +303,11 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "table::FocusFilter" => Command::TableFocusFilter {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),
+        },
+        "table::SetFilter" => Command::TableSetFilter {
+            cluster,
+            gvk: Gvk::new("", "v1", "Pod"),
+            text: "/web".to_owned(),
         },
         "resource::ViewYaml" => Command::ResourceViewYaml { target: target() },
         "resource::ViewDescribe" => Command::ResourceViewDescribe { target: target() },

@@ -10,10 +10,10 @@ use oxikube_keymap::{ActionRegistry, KeymapAction, KeymapLayer, Resolution, pars
 use crate::startup::{StartupEnv, init};
 
 /// Actions the default keymaps name that no crate of this build registers yet. Their bindings are
-/// skipped silently until the owning story declares the action: the `:` jump bar (E11-S05) and
-/// the help overlay (E11-S10). Remove an entry when its story lands; the
-/// test fails the other way too, so the list cannot go stale.
-const NOT_YET_REGISTERED: [&str; 2] = ["help::Show", "palette::OpenJump"];
+/// skipped silently until the owning story declares the action: the help overlay (E11-S10).
+/// Remove an entry when its story lands; the test fails the other way too, so the list cannot go
+/// stale.
+const NOT_YET_REGISTERED: [&str; 1] = ["help::Show"];
 
 fn named_actions(text: &str) -> BTreeSet<String> {
     let parsed = oxikube_keymap::file::parse_keymap(text, KeymapLayer::Default).unwrap();

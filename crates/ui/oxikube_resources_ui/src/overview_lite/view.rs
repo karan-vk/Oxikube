@@ -171,6 +171,7 @@ impl Render for WorkloadsOverview {
         v_flex()
             .id("workloads-overview")
             .debug_selector(|| "workloads-overview".to_owned())
+            .key_context("Overview")
             .track_focus(&self.focus)
             .size_full()
             .overflow_hidden()

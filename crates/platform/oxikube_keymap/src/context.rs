@@ -18,8 +18,8 @@
 //! | `Terminal` | a terminal pane | `searching` |
 //! | `ManifestEditor` | the YAML manifest editor (E10) | `mode == yaml\|diff\|json`, `Editing` |
 //! | `Palette` | the command palette (E11-S03) | |
+//! | `JumpBar` | the `:` jump bar (E11-S05); its query field is `JumpBar > Picker > Input` | |
 //! | `Picker` | a picker (E11-S02): the palette, the container chooser, ... (its query field is `Picker > Input`) | |
-//! | `JumpBar` | the `:` jump bar (E11-S05) | |
 //! | `Modal` | a dialog or sheet | |
 //! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
 //!

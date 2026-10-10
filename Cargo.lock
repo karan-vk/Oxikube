@@ -5981,11 +5981,16 @@ dependencies = [
  "gpui-pre-platform",
  "nucleo-matcher",
  "oxikube_app",
+ "oxikube_assets",
  "oxikube_domain",
  "oxikube_keymap",
+ "oxikube_ports",
+ "oxikube_runtime",
  "oxikube_testkit",
  "oxikube_ui",
  "oxikube_workspace",
+ "parking_lot",
+ "serde_json",
  "tracing",
 ]
 

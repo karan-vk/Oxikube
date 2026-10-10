@@ -17,6 +17,12 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 
 ## Modules
 
+- `jump` (E11-S05): the `:` jump bar. `JumpHost` per window, `JumpBar` (a modal over a `Picker`, key context
+  `JumpBar`), `JumpDelegate` (completions of the word under the caret; Enter plans and runs the line), `JumpSources` /
+  `LiveEnv` (what a line is resolved against), the wait for a context that was not connected. Its grammar, parser,
+  planner, history and completion are `oxikube_app::search::jump`. `:` in a resource table opens it; `[`, `]`, `-`
+  replay the history. Actions `palette::OpenJump`, `jump::Back`, `jump::Forward`, `jump::Last`, `jump_bar::Complete`
+  (Tab); bus commands of the same names.
 - `picker` (E11-S02): `Picker<D: PickerDelegate>`, a fuzzy query field over a virtualised list
   of matches with keyboard selection, confirm / secondary confirm and dismissal, presented
   through the workspace's modal layer; `picker::fuzzy` (nucleo string matching and match

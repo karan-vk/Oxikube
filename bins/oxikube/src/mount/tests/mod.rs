@@ -11,6 +11,7 @@ mod chrome;
 mod exec;
 mod immediate;
 mod introspection;
+mod jump;
 mod logs;
 mod node_shell;
 mod palette;

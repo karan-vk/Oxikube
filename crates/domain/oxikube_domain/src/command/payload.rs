@@ -205,6 +205,15 @@ pub enum Command {
     /// Quit the application; asks first while operations are running.
     #[serde(rename = "app::Quit")]
     AppQuit,
+    /// Run the previous command of the jump bar's history again (`[`).
+    #[serde(rename = "jump::Back")]
+    JumpBack,
+    /// Run the next command of the jump bar's history again (`]`).
+    #[serde(rename = "jump::Forward")]
+    JumpForward,
+    /// Go back to the view before the current one (`-`), and back again on a second use.
+    #[serde(rename = "jump::Last")]
+    JumpLast,
     /// Open another main window.
     #[serde(rename = "window::New")]
     WindowNew,
@@ -401,6 +410,19 @@ pub enum Command {
         cluster: ClusterId,
         /// The kind listed.
         gvk: Gvk,
+    },
+    /// Put `text` in the filter bar of a kind's resource table and apply it, as if typed:
+    /// `/text`, `/!text`, `/-l selector`, `/-f fuzzy`, or `text -l selector` for a name filter and
+    /// a selector together. An empty `text` clears the filter. When the table is not open yet,
+    /// the filter is waiting for it. This is what the jump bar's `:pod /api app=x` ends in.
+    #[serde(rename = "table::SetFilter")]
+    TableSetFilter {
+        /// Cluster of the list.
+        cluster: ClusterId,
+        /// The kind listed.
+        gvk: Gvk,
+        /// The filter, in the filter bar's grammar.
+        text: String,
     },
     /// Open a resource's YAML.
     #[serde(rename = "resource::ViewYaml")]
@@ -840,6 +862,9 @@ impl Command {
             Command::HelpShow => CommandId::HELP_SHOW,
             Command::PaletteToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
             Command::AppQuit => CommandId::APP_QUIT,
+            Command::JumpBack => CommandId::JUMP_BACK,
+            Command::JumpForward => CommandId::JUMP_FORWARD,
+            Command::JumpLast => CommandId::JUMP_LAST,
             Command::WindowNew => CommandId::WINDOW_NEW,
             Command::ViewZoomIn => CommandId::VIEW_ZOOM_IN,
             Command::ViewZoomOut => CommandId::VIEW_ZOOM_OUT,
@@ -878,6 +903,7 @@ impl Command {
             Command::ResourceRefreshDescribe { .. } => CommandId::RESOURCE_REFRESH_DESCRIBE,
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
             Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
+            Command::TableSetFilter { .. } => CommandId::TABLE_SET_FILTER,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
             Command::ResourceViewDescribe { .. } => CommandId::RESOURCE_VIEW_DESCRIBE,
             Command::ResourceEdit { .. } => CommandId::RESOURCE_EDIT,
@@ -1114,6 +1140,9 @@ mod tests {
             Command::HelpShow,
             Command::PaletteToggleShowAll,
             Command::AppQuit,
+            Command::JumpBack,
+            Command::JumpForward,
+            Command::JumpLast,
             Command::WindowNew,
             Command::ViewZoomIn,
             Command::ViewZoomOut,
@@ -1173,6 +1202,11 @@ mod tests {
             Command::TableFocusFilter {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
+            },
+            Command::TableSetFilter {
+                cluster: cluster(),
+                gvk: Gvk::new("", "v1", "Pod"),
+                text: "/api -l app=x".to_owned(),
             },
             Command::ResourceViewYaml { target: pod() },
             Command::ResourceViewDescribe { target: pod() },
@@ -1475,6 +1509,9 @@ mod tests {
                     | Command::HelpShow
                     | Command::PaletteToggleShowAll
                     | Command::AppQuit
+                    | Command::JumpBack
+                    | Command::JumpForward
+                    | Command::JumpLast
                     | Command::WindowNew
                     | Command::ViewZoomIn
                     | Command::ViewZoomOut
@@ -1511,6 +1548,7 @@ mod tests {
                     | Command::ResourceRefreshDescribe { .. }
                     | Command::ResourceSelectAll { .. }
                     | Command::TableFocusFilter { .. }
+                    | Command::TableSetFilter { .. }
                     | Command::ResourceViewYaml { .. }
                     | Command::ResourceViewDescribe { .. }
                     | Command::ResourceEdit { .. }
