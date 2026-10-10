@@ -44,11 +44,23 @@ pub(super) fn start(
     sessions: ClusterSessionManager,
     runtime: Handle,
 ) -> AliasFollow {
+    let follower = follower(registry, sessions, runtime.clone());
+    AliasFollow(runtime.spawn(follower))
+}
+
+/// The follower loop as a plain future: it reads the session updates and hands the work to the
+/// per-cluster workers (which run on `runtime`, and only exist once a cluster has a session).
+/// Dropping the future aborts every worker. The app runs it as a GPUI task so an idle app holds
+/// no task of its own on the Tokio runtime.
+pub(super) fn follower(
+    registry: AliasRegistry,
+    sessions: ClusterSessionManager,
+    runtime: Handle,
+) -> impl std::future::Future<Output = ()> + Send + 'static {
     // Subscribe before reading the sessions, so no update falls between the two.
     let mut updates = sessions.subscribe();
-    let handle = runtime.clone();
-    AliasFollow(runtime.spawn(async move {
-        let mut workers = Workers::new(registry, handle);
+    async move {
+        let mut workers = Workers::new(registry, runtime);
         workers.resync(&sessions);
         while let Some(item) = updates.next().await {
             match item {
@@ -57,7 +69,7 @@ pub(super) fn start(
                 Err(_) => workers.resync(&sessions),
             }
         }
-    }))
+    }
 }
 
 /// What a cluster's worker does next.

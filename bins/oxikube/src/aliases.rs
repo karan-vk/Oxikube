@@ -3,9 +3,10 @@
 //! [`start`] runs with the feature `init`s (see `startup::features`) and does two things, neither
 //! on the first frame's path:
 //!
-//! - [`AliasRegistry::follow`] on the session manager: a cluster that connects gets the aliases
-//!   its discovery serves (plural, singular, short names, Kind, CRDs included), a CRD change
-//!   updates only the groups it touches, a disconnect drops them. It runs on the Tokio runtime.
+//! - [`AliasRegistry::follower`] on the session manager, run as a GPUI task owned by
+//!   [`AliasWiring`]: a cluster that connects gets the aliases its discovery serves (plural,
+//!   singular, short names, Kind, CRDs included), a CRD change updates only the groups it
+//!   touches, a disconnect drops them. Each cluster's discovery work runs on the Tokio runtime.
 //! - the user's `aliases.json` next to `settings.json`: read and watched on the background
 //!   executor, every save pushed into the registry from the watcher's thread. Invalid entries
 //!   are logged with their line and skipped; the rest load. In tests the file is read once and
@@ -15,7 +16,7 @@
 //! table of the active cluster and resolves each word through that.
 
 use gpui::{App, AppContext as _, BorrowAppContext as _, Global};
-use oxikube_app::{AliasFollow, AliasRegistry};
+use oxikube_app::AliasRegistry;
 use oxikube_settings::aliases::{LoadedAliases, UserAliasesFile, user_aliases_path};
 
 use crate::app_state::AppState;
@@ -23,7 +24,7 @@ use crate::startup::ConfigSource;
 
 /// What keeps the alias machinery alive for the life of the app.
 pub struct AliasWiring {
-    _follow: Option<AliasFollow>,
+    _follow: Option<gpui::Task<()>>,
     file: Option<UserAliasesFile>,
 }
 
@@ -50,8 +51,15 @@ pub fn start(cx: &mut App) {
         return;
     };
     let registry = state.services().aliases.clone();
-    let follow = oxikube_runtime::handle(cx)
-        .map(|runtime| registry.follow(&state.services().sessions, &runtime));
+    // A GPUI task owned by the wiring (dropped with it), not a Tokio task of its own: the idle app
+    // holds none (the startup scenario checks), and a cluster's work runs on the runtime once it
+    // has a session.
+    let follow = oxikube_runtime::handle(cx).map(|runtime| {
+        cx.spawn({
+            let follower = registry.follower(&state.services().sessions, &runtime);
+            async move |_| follower.await
+        })
+    });
     cx.set_global(AliasWiring {
         _follow: follow,
         file: None,

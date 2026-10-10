@@ -92,4 +92,15 @@ impl AliasRegistry {
     pub fn follow(&self, sessions: &ClusterSessionManager, runtime: &Handle) -> AliasFollow {
         follow::start(self.clone(), sessions.clone(), runtime.clone())
     }
+
+    /// [`Self::follow`] as a future the caller runs itself (a GPUI task in the app, so the idle
+    /// app holds no Tokio task of its own). The per-cluster work still runs on `runtime`.
+    /// Dropping the future stops it.
+    pub fn follower(
+        &self,
+        sessions: &ClusterSessionManager,
+        runtime: &Handle,
+    ) -> impl std::future::Future<Output = ()> + Send + 'static {
+        follow::follower(self.clone(), sessions.clone(), runtime.clone())
+    }
 }
