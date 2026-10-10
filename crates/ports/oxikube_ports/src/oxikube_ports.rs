@@ -107,6 +107,7 @@ pub mod notifier;
 pub mod portforward;
 pub mod promql;
 pub mod resource;
+pub mod schema;
 pub mod secrets;
 pub mod state;
 pub mod table;
@@ -167,6 +168,7 @@ pub use resource::{
     Preconditions, PropagationPolicy, ResourcePort, ResourceReader, ResourceWriter, Scale,
     Subresource, VersionMatch, WatchOptions, WriteOptions,
 };
+pub use schema::SchemaPort;
 pub use secrets::{SecretKey, SecretStorePort};
 pub use state::{AuditQuery, StateKey, StatePort, StatePortExt, StateTable};
 pub use table::{
@@ -205,6 +207,7 @@ mod tests {
         access: Arc<dyn AccessReviewPort>,
         warnings: Arc<dyn WarningPort>,
         health: Arc<dyn HealthReporter>,
+        schema: Arc<dyn SchemaPort>,
     }
 
     /// Ports must be shareable across threads: `Arc<dyn Port>` is `Send + Sync`.
@@ -226,6 +229,7 @@ mod tests {
         assert_send_sync::<dyn ClockPort>();
         assert_send_sync::<dyn ClusterConnectorPort>();
         assert_send_sync::<dyn AccessReviewPort>();
+        assert_send_sync::<dyn SchemaPort>();
         assert_send_sync::<ClusterPorts>();
         assert_send_sync::<ClusterConnection>();
     }
@@ -233,7 +237,7 @@ mod tests {
     /// Every port's source file must name the adapter expected to implement it.
     #[test]
     fn every_port_docs_name_an_adapter() {
-        let ports: [(&str, &str, &str); 15] = [
+        let ports: [(&str, &str, &str); 16] = [
             (
                 "cluster_source",
                 include_str!("cluster_source.rs"),
@@ -253,6 +257,7 @@ mod tests {
             ("clock", include_str!("clock.rs"), "oxikube_runtime"),
             ("connector", include_str!("connector.rs"), "oxikube_kube"),
             ("access", include_str!("access.rs"), "oxikube_kube"),
+            ("schema", include_str!("schema.rs"), "oxikube_kube::openapi"),
         ];
         for (module, source, adapter) in ports {
             let docs: String = source

@@ -42,7 +42,7 @@ use oxikube_ports::{CrdWatchStatus, DiscoveryEvents, DiscoveryPort, ServerVersio
 use parking_lot::RwLock;
 use tokio::sync::{Mutex, broadcast, watch};
 use tokio::time::Instant;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::auth::classify;
 
@@ -89,6 +89,10 @@ struct Shared {
     /// Serialises refreshes; holds when the last `resolve` miss triggered one (for the cooldown).
     refresh: Mutex<Option<Instant>>,
     changes: broadcast::Sender<Arc<RegistryDiff>>,
+    /// One `()` per CRD-triggered re-discovery, whatever it changed: a CRD's schema is not part
+    /// of a kind's record, so an in-place schema edit leaves `changes` silent. See
+    /// [`KubeDiscovery::schema_changes`].
+    schema_changes: broadcast::Sender<()>,
     /// Whether the CRD watch runs or was refused; see [`KubeDiscovery::crd_watch_status`].
     crd_status: watch::Sender<CrdWatchStatus>,
 }
@@ -103,6 +107,7 @@ impl KubeDiscovery {
     /// Discovery over `client` with explicit tuning.
     pub fn with_config(client: Client, config: DiscoveryConfig) -> Self {
         let (changes, _) = broadcast::channel(CHANGE_CHANNEL_CAPACITY);
+        let (schema_changes, _) = broadcast::channel(CHANGE_CHANNEL_CAPACITY);
         Self {
             client,
             shared: Arc::new(Shared {
@@ -111,6 +116,7 @@ impl KubeDiscovery {
                 generation: AtomicU64::new(0),
                 refresh: Mutex::new(None),
                 changes,
+                schema_changes,
                 crd_status: watch::channel(CrdWatchStatus::Watching).0,
             }),
         }
@@ -127,6 +133,32 @@ impl KubeDiscovery {
     /// [`registry`](Self::registry).
     pub fn registry_changes(&self) -> broadcast::Receiver<Arc<RegistryDiff>> {
         self.shared.changes.subscribe()
+    }
+
+    /// Receives one signal per re-discovery that a CRD change (or a CRD re-listing) triggered,
+    /// also when the registry did not change. A CRD's `openAPIV3Schema` is not part of a kind's
+    /// record, so editing it in place changes no [`RegistryDiff`] while schemas cached for the
+    /// kind go stale; this is the signal to drop them. A receiver that falls behind gets
+    /// `RecvError::Lagged`, which means the same thing.
+    pub fn schema_changes(&self) -> broadcast::Receiver<()> {
+        self.shared.schema_changes.subscribe()
+    }
+
+    /// Re-runs discovery for a CRD change and signals [`schema_changes`](Self::schema_changes)
+    /// receivers once it succeeded (a failed re-run is retried by the caller, which signals then).
+    /// Whether it succeeded.
+    pub(super) async fn refresh_after_crd_change(&self) -> bool {
+        match self.refresh().await {
+            Ok(_) => {
+                // No subscribers is fine.
+                let _ = self.shared.schema_changes.send(());
+                true
+            }
+            Err(error) => {
+                warn!(%error, "discovery: refresh after CRD change failed");
+                false
+            }
+        }
     }
 
     /// Whether the CRD watch is running or the server refused it (`Forbidden`). `Watching` until

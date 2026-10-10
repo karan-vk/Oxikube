@@ -204,6 +204,59 @@ pub fn load(path: &str) -> Resource {
     }
 }
 
+/// Trimmed OpenAPI v3 group documents (E10-S01): the `components.schemas` the
+/// manifest editor flattens per GVK. These are schema documents, not cluster
+/// objects, so they live outside the [`Resource`] fixture set above: every
+/// file parses as a JSON object with a `components.schemas` map (checked by
+/// `tests/fixtures.rs`).
+pub mod openapi {
+    macro_rules! documents {
+        ($($(#[$doc:meta])* $fn_name:ident => $path:literal,)*) => {
+            /// Every OpenAPI document path, relative to `fixtures/openapi/`.
+            pub const ALL: &[&str] = &[$($path),*];
+
+            /// The raw text of the document `name`, or `None` when there is none.
+            pub fn raw(name: &str) -> Option<&'static str> {
+                match name {
+                    $($path => Some(include_str!(concat!("../fixtures/openapi/", $path))),)*
+                    _ => None,
+                }
+            }
+
+            $(
+                $(#[$doc])*
+                pub fn $fn_name() -> serde_json::Value {
+                    json($path)
+                }
+            )*
+        };
+    }
+
+    documents! {
+        /// Trimmed `apps/v1` group document (Deployment with nested `$ref`s and an
+        /// `allOf` wrapper, plus `IntOrString`).
+        deployment_apps_v1 => "deployment-apps-v1.json",
+        /// Trimmed core `v1` group document (Pod with list-maps, patterns, enums).
+        pod_core_v1 => "pod-core-v1.json",
+        /// Custom-resource group document: `Widget` with an
+        /// `x-kubernetes-preserve-unknown-fields` stump and a recursive `template`
+        /// reference.
+        widget_crd => "widget-crd.json",
+        /// `IntOrString` (`x-kubernetes-int-or-string` with an integer/string `anyOf`).
+        int_or_string => "int-or-string.json",
+    }
+
+    /// The document `name` as JSON.
+    ///
+    /// # Panics
+    ///
+    /// When there is no such document or it is not valid JSON.
+    pub fn json(name: &str) -> serde_json::Value {
+        let text = raw(name).unwrap_or_else(|| panic!("unknown OpenAPI fixture {name:?}"));
+        serde_json::from_str(text).unwrap_or_else(|e| panic!("fixture {name}: invalid JSON: {e}"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

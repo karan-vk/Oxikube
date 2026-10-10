@@ -24,14 +24,16 @@ fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures")
 }
 
-/// Every `*.json` under `fixtures/`, relative, skipping the kind manifests.
+/// Every `*.json` under `fixtures/`, relative, skipping the kind manifests and the
+/// OpenAPI schema documents (which are not `Resource`s; see
+/// `every_openapi_fixture_is_registered_and_shaped`).
 fn json_files_on_disk(dir: &Path, root: &Path, out: &mut Vec<String>) {
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
         if path.is_dir() {
             if path
                 .file_name()
-                .is_some_and(|n| n == "cluster" || n == "metrics-server")
+                .is_some_and(|n| n == "cluster" || n == "metrics-server" || n == "openapi")
             {
                 continue;
             }
@@ -91,6 +93,55 @@ fn every_fixture_parses_into_a_resource_and_its_view_model() {
             _ => {}
         }
     }
+}
+
+#[test]
+fn every_openapi_fixture_is_registered_and_shaped() {
+    let root = fixtures_dir().join("openapi");
+    let mut on_disk = Vec::new();
+    for entry in std::fs::read_dir(&root).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|e| e == "json") {
+            on_disk.push(path.file_name().unwrap().to_string_lossy().into_owned());
+        }
+    }
+    on_disk.sort();
+    let mut registered: Vec<String> = fixtures::openapi::ALL
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
+    registered.sort();
+    assert_eq!(on_disk, registered);
+    for name in fixtures::openapi::ALL {
+        let document = fixtures::openapi::json(name);
+        assert!(
+            document
+                .get("components")
+                .and_then(|c| c.get("schemas"))
+                .and_then(Value::as_object)
+                .is_some_and(|schemas| !schemas.is_empty()),
+            "{name}: an OpenAPI group document with components.schemas"
+        );
+    }
+    // The documents the story calls out resolve through the domain lookup.
+    let deployment = oxikube_domain::schema::root_schema_for(
+        &fixtures::openapi::deployment_apps_v1(),
+        &"apps/v1/Deployment".parse().unwrap(),
+    )
+    .expect("deployment schema");
+    assert!(deployment.has_property("spec"));
+    let widget = oxikube_domain::schema::root_schema_for(
+        &fixtures::openapi::widget_crd(),
+        &"example.com/v1/Widget".parse().unwrap(),
+    )
+    .expect("widget schema");
+    assert!(
+        widget
+            .properties
+            .get("spec")
+            .and_then(|spec| spec.properties.get("config"))
+            .is_some_and(|config| config.xk8s.preserve_unknown_fields)
+    );
 }
 
 #[test]

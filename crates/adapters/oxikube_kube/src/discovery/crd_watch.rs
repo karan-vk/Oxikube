@@ -119,15 +119,7 @@ impl KubeDiscovery {
                     },
                     config,
                     attempts,
-                    || async {
-                        match discovery.refresh().await {
-                            Ok(_) => true,
-                            Err(err) => {
-                                warn!(error = %err, "discovery: refresh after CRD change failed");
-                                false
-                            }
-                        }
-                    },
+                    || discovery.refresh_after_crd_change(),
                     |status| discovery.set_crd_watch_status(status),
                 )
                 .await;

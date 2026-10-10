@@ -115,13 +115,14 @@ impl Shared {
             Err(Aborted) => return e.state.clone(),
             Ok(Ok(established)) => {
                 let kind_events = established.kind_events;
+                let schemas = established.connection.ports.schemas.clone();
                 e.install(
                     established.connection,
                     established.capabilities,
                     &self.updates,
                 );
-                e.kind_watch =
-                    kind_events.and_then(|events| self.follow_kinds(&e.id, generation, events));
+                e.kind_watch = kind_events
+                    .and_then(|events| self.follow_kinds(&e.id, generation, events, schemas));
                 SessionEvent::Connected
             }
             // The state already says "authentication"; the reason is the adapter's message

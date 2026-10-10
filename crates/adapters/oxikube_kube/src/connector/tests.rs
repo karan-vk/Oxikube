@@ -270,6 +270,36 @@ async fn the_describe_factory_gets_the_connections_context_and_its_port_is_used(
 }
 
 #[tokio::test]
+async fn a_connection_carries_a_schema_port_bound_to_its_cluster() {
+    let connector = KubeConnector::new(
+        one_context_kubeconfig(),
+        PoolConfig::default(),
+        ConnectorConfig::default(),
+    );
+    // Memory-only until a cache is set; the cache setter is accepted at any time.
+    connector.set_schema_cache(
+        Arc::new(oxikube_testkit::FakeFsPort::new()),
+        std::path::PathBuf::from("/cache"),
+    );
+    let connection = connector
+        .connect(request("only", ExecInteractivity::Never))
+        .await
+        .unwrap();
+    // Asked about another cluster the port refuses before any request.
+    let other = ClusterId::new("other", &ContextName::new("elsewhere"));
+    let err = connection
+        .ports
+        .schemas
+        .schema_for(
+            &other,
+            &oxikube_domain::ids::Gvk::new("apps", "v1", "Deployment"),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::Validation);
+}
+
+#[tokio::test]
 async fn a_connections_feeds_go_through_its_watch_budget_set_per_cluster() {
     let connector = empty_connector();
     connector.replace_loaded(loaded_with("budgeted"));

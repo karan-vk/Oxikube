@@ -108,6 +108,8 @@ fn glossary_types_exist() {
         name::<oxikube_domain::view::JobSummary>(),
         name::<oxikube_domain::view::CronJobSummary>(),
         name::<oxikube_domain::quantity::Quantity>(),
+        name::<oxikube_domain::schema::JsonSchema>(),
+        name::<oxikube_domain::schema::SchemaType>(),
         name::<oxikube_domain::age::Age>(),
         name::<oxikube_domain::age::AgeStyle>(),
         name::<oxikube_domain::log::LogLine>(),
@@ -158,6 +160,7 @@ fn glossary_types_exist() {
         name::<dyn oxikube_ports::context::ContextProviderPort>(),
         name::<dyn oxikube_ports::agent::AgentPort>(),
         name::<dyn oxikube_ports::agent::AgentClient>(),
+        name::<dyn oxikube_ports::schema::SchemaPort>(),
     ];
     // Every name that appears in the table as a bold term or a code span must be a real type.
     for n in names {

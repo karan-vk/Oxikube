@@ -28,6 +28,7 @@
 //! | [`warnings`] | E07-S10 | [`WarningLayer`](warnings::WarningLayer) on the client: the API server's `Warning:` headers, redacted, published per context as `WarningPort` |
 //! | [`sources`] | E03-S02 | `ClusterSourcePort` over kubeconfig files, directories and pasted text, with hot reload |
 //! | [`table`] | E04-S04 | `TableFeedPort` on [`KubeResources`]: hand-rolled server Table API list + watch feed with refresh, diffing and plain-JSON fallback |
+//! | [`openapi`] | E10-S01 | [`SchemaPort`](oxikube_ports::SchemaPort) on [`OpenApiSchemas`]: lazy per-group OpenAPI v3 fetches with memory + disk caches |
 
 pub mod algorithms;
 pub mod auth;
@@ -41,6 +42,7 @@ pub mod kubeconfig;
 pub mod logs;
 pub mod metrics;
 pub mod mutate;
+pub mod openapi;
 pub mod pool;
 pub mod remote;
 pub mod resources;
@@ -77,6 +79,10 @@ pub use feed::{
 pub use logs::{ContainerSelection, KubeLogs, LogsConfig};
 pub use metrics::KubeMetrics;
 pub use mutate::DEFAULT_FIELD_MANAGER;
+pub use openapi::{
+    DEFAULT_RECHECK_EVERY_MILLIS, DEFAULT_REFRESH_ON_MISS_SECS, DEFAULT_REQUEST_TIMEOUT_SECS,
+    DEFAULT_SETTLE_AFTER_INVALIDATE_MILLIS, OpenApiConfig, OpenApiSchemas,
+};
 pub use pool::{
     ClientFactory, ClientPool, Clock, ContextDefinition, EvictionPolicy, KubeClientFactory,
     PoolConfig, ProxyEnv, RetryMode, SystemClock,

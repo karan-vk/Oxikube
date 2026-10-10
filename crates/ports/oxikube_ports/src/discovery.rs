@@ -86,6 +86,12 @@ pub enum DiscoveryEvent {
     KindsChanged(KindsChange),
     /// The CRD watch moved to a new status (sent on changes only).
     CrdWatch(CrdWatchStatus),
+    /// A `CustomResourceDefinition` changed (or the watch re-listed them) and discovery re-ran.
+    /// Sent after every such re-run, also when the served kinds are identical: editing a CRD's
+    /// schema in place changes no kind record, so [`KindsChanged`](Self::KindsChanged) is silent
+    /// while every cached schema of the kind is stale. A [`KindsChanged`](Self::KindsChanged) from
+    /// the same re-run may come as well.
+    SchemasChanged,
 }
 
 /// The stream of [`DiscoveryEvent`]s. Dropping it stops the watch that feeds it.

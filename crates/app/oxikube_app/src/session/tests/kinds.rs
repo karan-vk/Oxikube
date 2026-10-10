@@ -5,7 +5,7 @@
 
 use oxikube_domain::ids::Gvk;
 use oxikube_ports::{CrdWatchStatus, DiscoveryEvent, KindsChange};
-use oxikube_testkit::DiscoveryCall;
+use oxikube_testkit::{DiscoveryCall, SchemaCall};
 
 use super::{Harness, SessionChange, id};
 
@@ -64,6 +64,40 @@ async fn a_crd_added_while_connected_becomes_a_session_update() {
         .map(|u| u.change)
         .collect();
     assert_eq!(changes, [SessionChange::KindsChanged(added("Widget"))]);
+}
+
+#[tokio::test]
+async fn a_kinds_change_invalidates_the_connections_schemas_but_a_watch_status_does_not() {
+    let h = Harness::new();
+    let a = id("a");
+    h.connect("a");
+    let ports = h.connector.ports_for(&a);
+
+    ports.discovery.emit(DiscoveryEvent::CrdWatch(forbidden()));
+    settle().await;
+    assert!(ports.schemas.recorded_calls().is_empty());
+
+    ports
+        .discovery
+        .emit(DiscoveryEvent::KindsChanged(added("Widget")));
+    settle().await;
+    assert_eq!(ports.schemas.recorded_calls(), [SchemaCall::Invalidate(a)]);
+}
+
+#[tokio::test]
+async fn a_crd_schema_edit_invalidates_the_schemas_without_announcing_a_kinds_change() {
+    let mut h = Harness::new();
+    let a = id("a");
+    h.connect("a");
+    h.drain();
+    let ports = h.connector.ports_for(&a);
+
+    // An in-place schema edit changes no kind record: discovery reports only this.
+    ports.discovery.emit(DiscoveryEvent::SchemasChanged);
+    settle().await;
+
+    assert_eq!(ports.schemas.recorded_calls(), [SchemaCall::Invalidate(a)]);
+    assert!(h.drain().is_empty(), "nothing for the sidebar to redraw");
 }
 
 #[tokio::test]

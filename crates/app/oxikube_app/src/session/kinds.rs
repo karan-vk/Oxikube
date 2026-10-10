@@ -6,6 +6,9 @@
 //! anything else that follows the session see a CRD appear or disappear without reconnecting,
 //! and see when the watch is refused (`Forbidden`) instead of finding out by absence.
 //!
+//! A kinds change, or a CRD edit that left every kind record as it was (its schema changed), also invalidates the connection's [`SchemaPort`] (E10-S01), before the change is
+//! announced, so a listener that asks for a schema in response reads the server's current one.
+//!
 //! The forwarder is the one task the manager spawns. It belongs to the session entry
 //! ([`KindWatch`]): releasing the connection (disconnect, close, reconnect, a connection that
 //! went to `Error`) aborts it, which drops the subscription and with it the adapter's watch.
@@ -14,7 +17,7 @@ use std::sync::{Arc, Weak};
 
 use futures::StreamExt as _;
 use oxikube_domain::ids::ClusterId;
-use oxikube_ports::{DiscoveryEvent, DiscoveryEvents, DiscoveryPort};
+use oxikube_ports::{DiscoveryEvent, DiscoveryEvents, DiscoveryPort, SchemaPort};
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
@@ -45,12 +48,22 @@ impl Shared {
         cluster: &ClusterId,
         generation: u64,
         mut events: DiscoveryEvents,
+        schemas: Arc<dyn SchemaPort>,
     ) -> Option<KindWatch> {
         let handle = Handle::try_current().ok()?;
         let shared = Arc::downgrade(self);
         let cluster = cluster.clone();
         Some(KindWatch(handle.spawn(async move {
             while let Some(event) = events.next().await {
+                // A CRD's schema is no part of its kind record, so an in-place schema edit
+                // arrives as `SchemasChanged` alone.
+                if matches!(
+                    event,
+                    DiscoveryEvent::KindsChanged(_) | DiscoveryEvent::SchemasChanged
+                ) {
+                    // Local bookkeeping only; a failure cannot matter to the session.
+                    let _ = schemas.invalidate(&cluster).await;
+                }
                 if !forward(&shared, &cluster, generation, event) {
                     break;
                 }
@@ -83,6 +96,8 @@ fn forward(
                 .send(cluster, SessionChange::KindsChanged(change));
         }
         DiscoveryEvent::CrdWatch(status) => e.set_crd_watch(status, &shared.updates),
+        // Handled before forwarding: the schemas were dropped; there is nothing to announce.
+        DiscoveryEvent::SchemasChanged => {}
     }
     true
 }
