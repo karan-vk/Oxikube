@@ -213,6 +213,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             target: node(name, "worker-1"),
         },
         "palette::Toggle" => Command::PaletteToggle,
+        "palette::ClearRecents" => Command::PaletteClearRecents,
         "palette::OpenJump" => Command::PaletteOpenJump,
         "help::Show" => Command::HelpShow,
         "palette::ToggleShowAll" => Command::PaletteToggleShowAll,

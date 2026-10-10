@@ -25,8 +25,8 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   (Tab); bus commands of the same names.
 - `picker` (E11-S02): `Picker<D: PickerDelegate>`, a fuzzy query field over a virtualised list
   of matches with keyboard selection, confirm / secondary confirm and dismissal, presented
-  through the workspace's modal layer; `picker::fuzzy` (nucleo string matching and match
-  highlighting for delegates). Derived from Zed's `crates/picker` (GPL-3.0-or-later; headers in
+  through the workspace's modal layer; `picker::fuzzy` (the picker-shaped face of
+  `oxikube_app::FuzzyService`, E11-S11: string matching with recents and match highlighting for delegates). Derived from Zed's `crates/picker` (GPL-3.0-or-later; headers in
   the files, entry in `THIRD_PARTY_NOTICES.md`). Keys: `picker::*` actions in the `Picker` and
   `Picker > Input` contexts of the per-OS keymaps. First delegate: the container chooser of a pod
   shell (`oxikube_resources_ui::exec::ContainerPickerDelegate`).
@@ -41,7 +41,8 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   (a modal with the `Palette` key context) over a `Picker<CommandPaletteDelegate>`, one `PaletteHost` per window
   (installed by `bins/oxikube`'s mount, also reached by the bus commands `palette::Toggle` and
   `palette::ToggleShowAll`). Lists `CommandBus` commands for the focused view, selection and session, with
-  binding hints and recents first; "Show all" (`cmd-shift-a` / `ctrl-shift-a`) adds the unavailable ones, marked;
+  binding hints and recents first (kept across restarts through the state store, E11-S11;
+  `palette::ClearRecents` forgets them); "Show all" (`cmd-shift-a` / `ctrl-shift-a`) adds the unavailable ones, marked;
   confirm runs the command through the bus path. Benchmark:
   `cargo run -p oxikube_palette --features test-support --profile release-fast --example command_palette_bench`;
   scenario: `cargo xtask perf palette`.

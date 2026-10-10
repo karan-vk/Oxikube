@@ -191,6 +191,7 @@ fn the_bus_commands_open_and_toggle_the_palette(cx: &mut TestAppContext) {
     for id in [
         CommandId::PALETTE_TOGGLE,
         CommandId::PALETTE_TOGGLE_SHOW_ALL,
+        CommandId::PALETTE_CLEAR_RECENTS,
     ] {
         assert!(bus.is_registered(id), "{id} is on the bus");
         assert!(bus.tool(id).is_some(), "{id} has its MCP tool stub");
@@ -222,4 +223,27 @@ fn the_bus_commands_open_and_toggle_the_palette(cx: &mut TestAppContext) {
         .update(|window, cx| runner.run(Command::PaletteToggle, window, cx));
     app.tick();
     assert!(app.palette().is_none(), "palette::Toggle closes it");
+}
+
+#[gpui::test]
+fn palette_clear_recents_forgets_the_recent_commands(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    let state = app.vcx.update(|_, cx| AppState::global(cx));
+    let bus = state.command_bus().expect("the mount set the bus").clone();
+    let workspace = app.workspace();
+    let runner = oxikube_workspace::ClusterCommandRunner::new(
+        bus,
+        state.services().sessions.clone(),
+        "agent",
+        &workspace,
+    );
+    state.recents().record(CommandId::POD_VIEW_LOGS);
+    assert_eq!(state.recents().recent(), [CommandId::POD_VIEW_LOGS]);
+    app.vcx
+        .update(|window, cx| runner.run(Command::PaletteClearRecents, window, cx));
+    app.tick();
+    assert!(
+        state.recents().recent().is_empty(),
+        "palette::ClearRecents empties them"
+    );
 }

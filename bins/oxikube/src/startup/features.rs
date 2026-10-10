@@ -53,6 +53,10 @@ pub const FEATURES: &[Feature] = &[
         name: "aliases",
         init: crate::aliases::start,
     },
+    Feature {
+        name: "history",
+        init: crate::history::start,
+    },
 ];
 
 /// The per-cluster settings (`clusters.<id>`) follow into the session manager (E06-S08) and the

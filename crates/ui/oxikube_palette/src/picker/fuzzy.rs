@@ -1,21 +1,23 @@
-//! Fuzzy matching of strings for picker delegates, with `nucleo-matcher`.
+//! Fuzzy matching of strings for picker delegates: the picker-shaped face of
+//! [`oxikube_app::FuzzyService`], the one ranking engine the palette, the pickers and the jump bar
+//! share (E11-S11, built on `nucleo-matcher`).
 //!
 //! The shape follows Zed's `fuzzy::match_strings` (candidates with an id, matches with a score and
-//! the matched positions for highlighting); the code is written from scratch on nucleo. E11-S11
-//! moves fuzzy matching into a shared service; delegates call it through
-//! [`super::PickerDelegate::update_matches`], so that swap stays local to them.
+//! the matched positions for highlighting); the ranking itself lives in `oxikube_app` (plain Rust,
+//! tested with fakes) and this file only adapts the types and decides, per list, whether the match
+//! runs on the calling thread or on the background executor.
 
-use std::ops::Range;
 use std::sync::Arc;
 
 use gpui::{BackgroundExecutor, HighlightStyle, SharedString, StyledText, Task};
-use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
-use nucleo_matcher::{Config, Matcher, Utf32Str};
-use unicode_segmentation::UnicodeSegmentation;
+use oxikube_app::FuzzyService;
+use oxikube_app::search::fuzzy::highlight;
+
+pub use oxikube_app::QueryGeneration;
 
 /// Up to this many candidates are matched on the calling thread: well under a millisecond
-/// (`examples/picker_bench.rs`), and no frame shows the previous query's matches. Larger sets are
-/// matched on the background executor.
+/// (`examples/picker_bench.rs`, `cargo bench -p oxikube_app --bench fuzzy_rank`), and no frame
+/// shows the previous query's matches. Larger sets are matched on the background executor.
 pub const INLINE_MATCH_LIMIT: usize = 512;
 
 /// A string to match, with the caller's id for it (its index in the caller's list, usually).
@@ -50,53 +52,42 @@ pub struct StringMatch {
     pub string: SharedString,
 }
 
-/// The candidates that match `query`, best first; equal scores keep the candidates' order. A blank
-/// query matches every candidate in order. The query is split on whitespace and every word must
-/// match; case is ignored unless the query has capitals. At most `max_results` are returned.
+/// The candidates that match `query`, best first; equal scores order alphabetically (see
+/// [`FuzzyService`] for the rules). A blank query matches every candidate in order. The query is
+/// split on whitespace and every word must match; case is ignored unless the query has capitals.
+/// At most `max_results` are returned.
 pub fn match_strings(
     candidates: &[StringMatchCandidate],
     query: &str,
     max_results: usize,
 ) -> Vec<StringMatch> {
-    let query = query.trim();
-    if query.is_empty() {
-        return candidates
-            .iter()
-            .take(max_results)
-            .map(|candidate| StringMatch {
-                candidate_id: candidate.id,
-                score: 0,
-                positions: Vec::new(),
-                string: candidate.string.clone(),
-            })
-            .collect();
-    }
-    let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
-    let mut matcher = Matcher::new(Config::DEFAULT);
-    let mut buffer = Vec::new();
-    let mut scored: Vec<(u32, usize)> = Vec::new();
-    for (ix, candidate) in candidates.iter().enumerate() {
-        let haystack = Utf32Str::new(&candidate.string, &mut buffer);
-        if let Some(score) = pattern.score(haystack, &mut matcher) {
-            scored.push((score, ix));
-        }
-    }
-    // Stable: equal scores keep the candidates' order.
-    scored.sort_by_key(|&(score, _)| std::cmp::Reverse(score));
-    scored.truncate(max_results);
-    let mut indices = Vec::new();
-    scored
+    match_strings_by(candidates, query, max_results, |_| None)
+}
+
+/// [`match_strings`] with a boost for the candidates used lately: `recency` maps a candidate's id
+/// to its place among the recents (`Some(0)` is the latest) and decides between near-equal
+/// matches; a blank query lists the recent candidates first.
+pub fn match_strings_by(
+    candidates: &[StringMatchCandidate],
+    query: &str,
+    max_results: usize,
+    recency: impl Fn(usize) -> Option<usize>,
+) -> Vec<StringMatch> {
+    FuzzyService::shared()
+        .rank_with(
+            query,
+            candidates,
+            max_results,
+            |candidate| candidate.string.as_ref(),
+            |candidate| recency(candidate.id),
+        )
         .into_iter()
-        .map(|(score, ix)| {
-            let candidate = &candidates[ix];
-            indices.clear();
-            let haystack = Utf32Str::new(&candidate.string, &mut buffer);
-            let ascii_haystack = matches!(haystack, Utf32Str::Ascii(_));
-            pattern.indices(haystack, &mut matcher, &mut indices);
+        .map(|found| {
+            let candidate = &candidates[found.index];
             StringMatch {
                 candidate_id: candidate.id,
-                score,
-                positions: match_indices_to_bytes(&candidate.string, ascii_haystack, &mut indices),
+                score: found.score,
+                positions: found.positions,
                 string: candidate.string.clone(),
             }
         })
@@ -111,42 +102,22 @@ pub fn match_strings_async(
     max_results: usize,
     executor: &BackgroundExecutor,
 ) -> Task<Vec<StringMatch>> {
-    if candidates.len() <= INLINE_MATCH_LIMIT {
-        Task::ready(match_strings(&candidates, &query, max_results))
-    } else {
-        executor.spawn(async move { match_strings(&candidates, &query, max_results) })
-    }
+    match_strings_async_by(candidates, query, max_results, |_| None, executor)
 }
 
-/// Nucleo's match indices to sorted, deduplicated byte offsets into `text`.
-///
-/// Nucleo counts in the units of the haystack `Utf32Str::new` built: bytes of `text` when that is
-/// [`Utf32Str::Ascii`] (also chosen when every grapheme merely *starts* with an ASCII char, as in
-/// `e` + a combining accent), and extended grapheme clusters otherwise (one char per grapheme).
-/// Neither is a Rust char index once a grapheme spans several codepoints.
-fn match_indices_to_bytes(text: &str, ascii_haystack: bool, indices: &mut Vec<u32>) -> Vec<usize> {
-    indices.sort_unstable();
-    indices.dedup();
-    if ascii_haystack {
-        return indices
-            .iter()
-            .map(|&ix| ix as usize)
-            .filter(|&byte| byte < text.len() && text.is_char_boundary(byte))
-            .collect();
+/// [`match_strings_by`] as a task, placed like [`match_strings_async`].
+pub fn match_strings_async_by(
+    candidates: Arc<[StringMatchCandidate]>,
+    query: String,
+    max_results: usize,
+    recency: impl Fn(usize) -> Option<usize> + Send + 'static,
+    executor: &BackgroundExecutor,
+) -> Task<Vec<StringMatch>> {
+    if candidates.len() <= INLINE_MATCH_LIMIT {
+        Task::ready(match_strings_by(&candidates, &query, max_results, recency))
+    } else {
+        executor.spawn(async move { match_strings_by(&candidates, &query, max_results, recency) })
     }
-    let mut wanted = indices.iter().copied().peekable();
-    let mut bytes = Vec::with_capacity(indices.len());
-    for (grapheme_ix, (byte, _)) in text.grapheme_indices(true).enumerate() {
-        match wanted.peek() {
-            Some(&next) if next as usize == grapheme_ix => {
-                bytes.push(byte);
-                wanted.next();
-            }
-            Some(_) => {}
-            None => break,
-        }
-    }
-    bytes
 }
 
 /// `text` with the characters at `positions` (byte offsets, as in [`StringMatch::positions`])
@@ -155,52 +126,10 @@ fn match_indices_to_bytes(text: &str, ascii_haystack: bool, indices: &mut Vec<u3
 pub fn highlighted_text(
     text: SharedString,
     positions: &[usize],
-    highlight: HighlightStyle,
+    style: HighlightStyle,
 ) -> StyledText {
-    let ranges = highlight_ranges(&text, positions);
-    StyledText::new(text).with_highlights(ranges.into_iter().map(|range| (range, highlight)))
-}
-
-/// The byte ranges covering the graphemes that start at `positions`, merged where they touch.
-fn highlight_ranges(text: &str, positions: &[usize]) -> Vec<Range<usize>> {
-    let mut ranges: Vec<Range<usize>> = Vec::new();
-    for &start in positions {
-        let Some(grapheme) = text
-            .get(start..)
-            .and_then(|rest| rest.graphemes(true).next())
-        else {
-            continue;
-        };
-        let end = start + grapheme.len();
-        match ranges.last_mut() {
-            Some(last) if last.end == start => last.end = end,
-            _ => ranges.push(start..end),
-        }
-    }
-    ranges
-}
-
-/// A latest-wins counter for asynchronous match results: take [`Self::next`] when a query starts,
-/// and write its result only while [`Self::is_current`] says it is still the newest.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct QueryGeneration(u64);
-
-impl QueryGeneration {
-    /// Starts a new query and returns its generation.
-    pub fn next(&mut self) -> u64 {
-        self.0 += 1;
-        self.0
-    }
-
-    /// The newest generation handed out.
-    pub fn current(&self) -> u64 {
-        self.0
-    }
-
-    /// Whether `generation` is still the newest query.
-    pub fn is_current(&self, generation: u64) -> bool {
-        self.0 == generation
-    }
+    let ranges = highlight::matched_ranges(&text, positions);
+    StyledText::new(text).with_highlights(ranges.into_iter().map(|range| (range, style)))
 }
 
 #[cfg(test)]
@@ -258,46 +187,24 @@ mod tests {
         let found = match_strings(&list, "pod", 10);
         assert_eq!(found[0].positions, [10, 11, 12]);
         assert_eq!(
-            highlight_ranges("ünïcode-pod", &found[0].positions),
+            highlight::matched_ranges("ünïcode-pod", &found[0].positions),
             [10..13]
         );
     }
 
     #[test]
-    fn positions_count_graphemes_when_an_accent_is_a_combining_mark() {
-        // Every grapheme starts with an ASCII char, so nucleo matches the raw bytes.
-        let decomposed = "cafe\u{301}-pod";
-        let found = match_strings(&candidates(&[decomposed]), "pod", 10);
-        assert_eq!(found[0].positions, [7, 8, 9]);
-        assert_eq!(highlight_ranges(decomposed, &found[0].positions), [7..10]);
-
-        // A non-ASCII grapheme start: nucleo matches one char per grapheme.
-        let mixed = "\u{fc}e\u{301}-pod";
-        let found = match_strings(&candidates(&[mixed]), "pod", 10);
-        assert_eq!(found[0].positions, [6, 7, 8]);
-        assert_eq!(highlight_ranges(mixed, &found[0].positions), [6..9]);
-    }
-
-    #[test]
-    fn a_highlight_covers_the_whole_grapheme() {
-        let found = match_strings(&candidates(&["cafe\u{301}"]), "cafe", 10);
-        assert_eq!(found[0].positions, [0, 1, 2, 3]);
-        assert_eq!(highlight_ranges("cafe\u{301}", &found[0].positions), [0..6]);
-    }
-
-    #[test]
-    fn highlight_ranges_merge_neighbours_and_skip_bad_offsets() {
-        assert_eq!(highlight_ranges("abcdef", &[0, 1, 3, 99]), [0..2, 3..4]);
-        assert_eq!(highlight_ranges("é", &[1]), Vec::<Range<usize>>::new());
-    }
-
-    #[test]
-    fn generations_are_latest_wins() {
-        let mut generation = QueryGeneration::default();
-        let first = generation.next();
-        let second = generation.next();
-        assert!(!generation.is_current(first));
-        assert!(generation.is_current(second));
-        assert_eq!(generation.current(), second);
+    fn recents_lead_a_blank_query_and_decide_near_ties() {
+        let list = candidates(&["Pod Delete", "Pod Describe", "Node Drain"]);
+        let recent = |id: usize| (id == 2).then_some(0);
+        let blank: Vec<_> = match_strings_by(&list, "", 10, recent)
+            .iter()
+            .map(|m| m.candidate_id)
+            .collect();
+        assert_eq!(blank, [2, 0, 1]);
+        let typed = match_strings_by(&list, "pod de", 10, |id| (id == 1).then_some(0));
+        assert_eq!(
+            typed[0].candidate_id, 1,
+            "the recent one of two equal matches"
+        );
     }
 }

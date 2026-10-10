@@ -12,7 +12,7 @@
 //! | log service | set once by the main window's mount (`LogService`: the log sessions of every cluster, bounded by `logs.buffer_lines`) | [`AppState::log_service`] |
 //! | exec service | set once by the main window's mount (`ExecService`: shells, attaches and commands in pod containers, the last container chosen per pod) | [`AppState::exec_service`] |
 //! | agent hooks | set once by the main window's mount (`AgentHooks`: the `@`-mention `ContextRegistry` with `@logs`, the `ToolRegistry` with `k8s.get_logs`, and the queue "Send to agent" fills) | [`AppState::agent_hooks`] |
-//! | recent commands | the state itself (`RecentsStore`: the commands the palette ran lately, in memory until E11-S11 persists them) | [`AppState::recents`] |
+//! | recent commands, jump history | the state itself (`StateRecents`: the commands the palette ran lately, `JumpRecents`: the `:` bar's lines per cluster; both in memory for every call and written to the state db behind it by [`crate::history`]) | [`AppState::recents`], [`AppState::state_recents`], [`AppState::jump_history`] |
 //! | state db | `ports.state`: the SQLite adapter, opened off the UI thread | [`AppState::state`] |
 //! | settings | `oxikube_settings::SettingsStore` global | [`AppState::settings`] |
 //! | theme | `oxikube_theme::ThemeRegistry` + `ActiveTheme` globals | [`AppState::theme_registry`], [`AppState::active_theme`] |
@@ -55,7 +55,9 @@ use std::sync::{Arc, OnceLock};
 
 use gpui::{App, Global};
 use oxikube_app::logs::LogService;
-use oxikube_app::{CommandBus, ExecService, MemoryRecents, RecentsStore, ResourceStores};
+use oxikube_app::{
+    CommandBus, ExecService, JumpRecents, RecentsStore, ResourceStores, StateRecents,
+};
 use oxikube_keymap::KeymapStore;
 use oxikube_ports::StatePort;
 use oxikube_runtime::RuntimeMode;
@@ -86,7 +88,8 @@ pub struct AppState {
     logs: OnceLock<Arc<LogService>>,
     exec: OnceLock<Arc<ExecService>>,
     agent: OnceLock<AgentHooks>,
-    recents: Arc<dyn RecentsStore>,
+    recents: Arc<StateRecents>,
+    jump: Arc<JumpRecents>,
     data_dir: Option<PathBuf>,
 }
 
@@ -101,6 +104,8 @@ impl AppState {
     ///
     /// Builds the [`ClusterServices`] over the ports (cheap: nothing is read or spawned).
     pub fn new(ports: AppPorts, data_dir: Option<PathBuf>) -> Self {
+        let recents = Arc::new(StateRecents::new(ports.state.clone()));
+        let jump = Arc::new(JumpRecents::new(ports.state.clone()));
         Self {
             services: ClusterServices::new(&ports),
             ports,
@@ -109,7 +114,8 @@ impl AppState {
             logs: OnceLock::new(),
             exec: OnceLock::new(),
             agent: OnceLock::new(),
-            recents: Arc::new(MemoryRecents::new()),
+            recents,
+            jump,
             data_dir,
         }
     }
@@ -220,8 +226,18 @@ impl AppState {
     }
 
     /// The commands the palette ran lately, shared by every window.
-    pub fn recents(&self) -> &Arc<dyn RecentsStore> {
+    pub fn recents(&self) -> Arc<dyn RecentsStore> {
+        self.recents.clone()
+    }
+
+    /// The same recents as the persisted store: what [`crate::history`] loads, writes and flushes.
+    pub fn state_recents(&self) -> &Arc<StateRecents> {
         &self.recents
+    }
+
+    /// The `:` jump bar's history, one list per cluster, persisted like the recents.
+    pub fn jump_history(&self) -> &Arc<JumpRecents> {
+        &self.jump
     }
 
     /// The state db port (`ports().state`). In the app it is the SQLite adapter, opened in the

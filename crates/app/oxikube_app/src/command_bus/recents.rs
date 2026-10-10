@@ -2,17 +2,17 @@
 //! palette to list at the top.
 //!
 //! A trait so the store can change without touching the palette: [`MemoryRecents`] keeps a small
-//! ring in memory (this story, E11-S03); E11-S11 adds an implementation over the state store so
-//! recents survive a restart. Only command ids are remembered: never arguments, targets or
-//! anything typed.
+//! ring in memory (E11-S03: the fallback and the tests' store); `StateRecents`
+//! (`search::recents`, E11-S11) keeps them through the state store so they survive a restart. Only
+//! command ids are remembered: never arguments, targets or anything typed.
 
 use std::collections::VecDeque;
 
 use oxikube_domain::command::CommandId;
 use parking_lot::Mutex;
 
-/// How many recent commands [`MemoryRecents`] keeps.
-pub const RECENTS_CAPACITY: usize = 20;
+/// How many recent commands are kept: [`MemoryRecents`] and, persisted, `StateRecents`.
+pub const RECENTS_CAPACITY: usize = 50;
 
 /// The commands run lately. Shared between windows, so `Send + Sync`; every call is quick and
 /// in memory (an implementation that persists does so off the calling thread).
@@ -22,6 +22,9 @@ pub trait RecentsStore: Send + Sync {
 
     /// Notes that `id` has just been run: it becomes the most recent.
     fn record(&self, id: CommandId);
+
+    /// Forgets every recent command (`palette::ClearRecents`).
+    fn clear(&self);
 }
 
 /// A [`RecentsStore`] in memory: the last [`RECENTS_CAPACITY`] distinct commands.
@@ -48,6 +51,10 @@ impl RecentsStore for MemoryRecents {
         ring.push_front(id);
         ring.truncate(RECENTS_CAPACITY);
     }
+
+    fn clear(&self) {
+        self.ring.lock().clear();
+    }
 }
 
 #[cfg(test)]
@@ -65,6 +72,14 @@ mod tests {
             recents.recent(),
             [CommandId::POD_DELETE, CommandId::VIEW_ZOOM_IN]
         );
+    }
+
+    #[test]
+    fn clearing_forgets_everything() {
+        let recents = MemoryRecents::new();
+        recents.record(CommandId::POD_DELETE);
+        recents.clear();
+        assert!(recents.recent().is_empty());
     }
 
     #[test]

@@ -42,7 +42,7 @@ fn the_history_keeps_the_canonical_lines_that_were_run(cx: &mut TestAppContext) 
     f.run_line("deploy /api web");
     f.run_line("q");
     f.run_line("-");
-    assert_eq!(f.host.history().lines(), ["deploy web /api"]);
+    assert_eq!(f.host.history(&id("dev")).lines(), ["deploy web /api"]);
 }
 
 #[gpui::test]
@@ -60,7 +60,11 @@ fn the_bracket_keys_step_back_and_forward_through_the_lines(cx: &mut TestAppCont
     assert_eq!(f.take_sent(), deploy_web());
     f.keys("] ]");
     assert_eq!(f.take_sent(), [open("", "Namespace")], "the newest, once");
-    assert_eq!(f.host.history().len(), 3, "stepping adds no lines");
+    assert_eq!(
+        f.host.history(&id("dev")).len(),
+        3,
+        "stepping adds no lines"
+    );
 }
 
 #[gpui::test]
@@ -99,7 +103,7 @@ fn the_history_words_in_the_bar_send_the_history_commands(cx: &mut TestAppContex
         assert_eq!(f.take_sent(), [command], ":{line}");
     }
     assert_eq!(
-        f.host.history().len(),
+        f.host.history(&id("dev")).len(),
         3,
         "a history word is not a line to come back to"
     );

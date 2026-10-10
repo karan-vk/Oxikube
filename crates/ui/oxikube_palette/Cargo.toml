@@ -14,7 +14,6 @@ doctest = false
 [dependencies]
 futures.workspace = true
 gpui.workspace = true
-nucleo-matcher.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
@@ -22,7 +21,6 @@ oxikube_runtime.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
 tracing.workspace = true
-unicode-segmentation.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

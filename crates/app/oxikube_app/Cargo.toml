@@ -18,6 +18,8 @@ bytes.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 jiff.workspace = true
+# The fuzzy ranking engine (`search::fuzzy`, E11-S11): one `Matcher` pool for every surface.
+nucleo-matcher.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true
 parking_lot.workspace = true
@@ -29,8 +31,10 @@ serde_json.workspace = true
 thiserror.workspace = true
 # `tokio::sync::broadcast` (the session update stream) and one spawned task per connected session:
 # the forwarder of the adapter's kind events (`session::kinds`, E03-F544).
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
 tracing.workspace = true
+# Grapheme clusters: nucleo counts matched characters in them (`search::fuzzy`).
+unicode-segmentation.workspace = true
 
 [dev-dependencies]
 oxikube_testkit.workspace = true
@@ -43,6 +47,9 @@ jiff.workspace = true
 k8s-openapi.workspace = true
 kube.workspace = true
 oxikube_kube.workspace = true
+# The recents survive a restart of the real SQLite adapter (`tests/recents_sqlite.rs`, E11-S11).
+oxikube_state_sqlite.workspace = true
+tempfile.workspace = true
 
 # `cargo bench -p oxikube_app --bench store_apply` (E07-S01): a 500-event batch into a 10k cache.
 [[bench]]
@@ -94,4 +101,9 @@ harness = false
 # `cargo bench -p oxikube_app --bench alias_resolve` (E11-S04): a jump-bar lookup and a table rebuild.
 [[bench]]
 name = "alias_resolve"
+harness = false
+
+# `cargo bench -p oxikube_app --bench fuzzy_rank` (E11-S11): ranking 2 000 command titles per keystroke.
+[[bench]]
+name = "fuzzy_rank"
 harness = false

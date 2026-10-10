@@ -108,3 +108,18 @@ fn the_oldest_lines_go_when_the_history_is_full() {
         Some(format!("pods ns-{}", HISTORY_CAPACITY + 4))
     );
 }
+
+#[test]
+fn stored_lines_seed_an_empty_ring_oldest_first_and_only_then() {
+    let mut h = JumpHistory::new();
+    h.seed(["pods", "deploy web", "ns"]);
+    assert_eq!(h.lines(), ["pods", "deploy web", "ns"]);
+    assert_eq!(h.current(), Some("ns"));
+    assert_eq!(h.back(), Some("deploy web"));
+
+    // A ring that has lines this run keeps them as they are.
+    let mut h = JumpHistory::new();
+    h.record("svc");
+    h.seed(["pods", "ns"]);
+    assert_eq!(h.lines(), ["svc"]);
+}

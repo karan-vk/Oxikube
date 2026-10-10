@@ -61,7 +61,21 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `oxikube_domain::AliasTarget` (a `Gvr` or a `Command { name, args }`) is the one type both sides share.
 - `oxikube_app` — services: `ClusterSessionManager`, `ResourceStore`, `CommandBus`,
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
-  `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `search::aliases` (E11-S04): `AliasTable`, the words
+  `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `search::fuzzy` (E11-S11): `FuzzyService`, the one
+  fuzzy ranking engine (`nucleo-matcher`, smart case, normalisation on, the query is plain text) the command palette, the
+  pickers and the jump bar share: `rank(query, candidates, limit) -> Vec<Match { index, score, positions }>` (`rank_with`
+  adds a per-candidate recents place), `&self` over a pool of matchers (each call borrows one; scratch buffers are
+  reused, so a keystroke allocates only the pattern and the result), a total deterministic order (score, then recents,
+  then alphabetical, then the caller's order), the weights of the exact / prefix / recents boosts in `search::fuzzy::score`
+  (all small next to nucleo's per-character score; the ranking tests pin them), `highlight::matched_ranges` for the views and
+  `QueryGeneration` to drop stale async results. 2 000 candidates rank in well under a millisecond (budget 5 ms,
+  `cargo bench -p oxikube_app --bench fuzzy_rank`). Module `search::recents` (E11-S11): `StateRecents` (the
+  `RecentsStore` behind the palette's recents-first order, key `recents.commands`, 50 command ids, global) and
+  `JumpRecents` (the `:` bar's lines, key `history.jump/<cluster>`, 100 per cluster, deduplicated by whitespace-normalised
+  text, a line the redaction patterns would change is never kept) over `StatePort` kv: every call answers from memory,
+  a writer task (`run_writer`, started by the binary's `history` module) writes behind a 500 ms pause and the app
+  flushes on quit; an unavailable state db leaves them in memory and logs one line (the error's kind, never its text).
+  Module `search::aliases` (E11-S04): `AliasTable`, the words
   the `:` jump bar understands, in three layers with the precedence user `aliases.json` > built-in k9s names (`po`, `dp`,
   `svc`, ... as a data table that follows the version the cluster prefers) > discovery (plural, singular, short names,
   lower-cased Kind and `plural.group` of every served type, CRDs included, preferred version only). `resolve` is a hash
@@ -80,7 +94,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `Command`s that do it (`resource::OpenList`, `namespace::Select`, `table::SetFilter`, `cluster::Select` or
   `cluster::Connect` with the rest after the connection, `view::Open catalog`, `app::Quit`, `jump::Back|Forward|Last`),
   with suggestions for an unknown alias, namespace or context and a user alias that is a command line expanded
-  (loops stop at four levels). `JumpHistory` is the session ring (`[` back, `]` forward, `-` previous view and back);
+  (loops stop at four levels). `JumpHistory` is the session ring (`[` back, `]` forward, `-` previous view and back; E11-S11 `seed`s it from the stored `JumpRecents` of the shown cluster when the bar first opens, and the bar records every confirmed line there);
   `site` / `candidates` / `accept` are the completion of the word under the caret. Module `sidebar` (E06-S10):
   `review_access` (the rules reviews the cluster sidebar hides sections by; fails open) and
   `discover_custom_resources`; module `integrations`: the `IntegrationRegistry` stub. Module `session` (E06-S01):
@@ -429,9 +443,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
   of fixed-height rows (only the visible ones are built), keyboard selection that wraps and skips what
   `can_select` refuses, confirm / secondary confirm (a confirm asked for while matches are updating waits for them),
   cancel, clicks. The delegate owns the data and `update_matches(query) -> Task<()>`; a newer query drops the older
-  task and a query generation keeps a late result from revealing or confirming anything. `picker::fuzzy` matches
-  strings with nucleo (inline up to 512 candidates, on the background executor above) and highlights the matched
-  characters. Presented through the workspace's modal layer (`Picker` is a `ModalView`, focus returns on close). The
+  task and a query generation keeps a late result from revealing or confirming anything. `picker::fuzzy` adapts
+  `oxikube_app::FuzzyService` (inline up to 512 candidates, on the background executor above) and highlights the
+  matched characters. Presented through the workspace's modal layer (`Picker` is a `ModalView`, focus returns on close). The
   keys are `picker::SelectNext` .. `picker::Cancel` in the `Picker` / `Picker > Input` key contexts of the per-OS
   keymaps. The container chooser of a pod shell is its first delegate.
   Module `command_palette` (E11-S03): the command palette, `cmd-shift-p` (`ctrl-shift-p` elsewhere), a `Picker` over
@@ -441,13 +455,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   key context) and the session (`PaletteEnv`); unavailable commands are hidden unless "Show all"
   (`palette::ToggleShowAll`, `cmd-shift-a` / `ctrl-shift-a`, or the footer) lists them dimmed with the reason, and
   confirming one does nothing. Rows show a category chip, the title and the live key binding (`oxikube_ui::kbd`);
-  order is recents first for an empty query, score then recency for a typed one (`RecentsStore`, in memory until
-  E11-S11). Confirm builds `Command`s with `oxikube_app::commands_for` (one per selected object, operands from the
+  order is recents first for an empty query, score (with a small recents boost) then recency for a typed one, by
+  `oxikube_app::FuzzyService` through `picker::fuzzy` (the recents are `StateRecents`: they survive a restart;
+  `palette::ClearRecents` forgets them). Confirm builds `Command`s with `oxikube_app::commands_for` (one per selected object, operands from the
   focused view; a command that needs one the palette cannot supply says so in a toast) and the `PaletteHost` sends them
   through the window's `CommandDispatcher` (the bus, so the guard, confirmations and audit apply) once the modal layer
   reports the palette closed, after the focus is back. `palette::Toggle` is bound to a global action
-  (`PaletteHost` per window) and is also a bus command with a tool stub, as is `palette::ToggleShowAll`.
-- `oxikube_palette` — module `help` (E11-S10): the `?` overlay. `HelpModel` (pure: the bindings from `oxikube_keymap::active_bindings` along `window.context_stack()`, plus the defaults a user `null` hid, or `all_bindings` when nothing is focused; `HelpEntry` titles and `HelpCategory` from the command registry, `Navigation` for keys that run no command; one-word queries match field by field), `HelpDelegate` (the S02 picker: headers are unselectable rows, virtualised), `HelpOverlay` (modal, role `Dialog`, key context `Help` with `empty` so `?` closes it while the search field is empty), `HelpHost` (one per window; the `help::Show` action and bus command, `register_commands`). Mounted by `bins/oxikube` `mount/help.rs`; chips mark `User` and `Base` (vim) bindings and `Unbound by you`. `oxikube_keymap::dispatch` gained `all_bindings` and `suppressed_bindings`; `oxikube_ui::tooltip::tooltip_for_action` (with `kbd::binding_keystroke`) puts the live key next to a tooltip title (rolled out to the log toolbar toggles and the detail drawer's Close button).
+  (`PaletteHost` per window) and is also a bus command with a tool stub, as are `palette::ToggleShowAll` and
+  `palette::ClearRecents`.
 - `oxikube_resources_ui` — module `exec` (E09-S08): `exec_row_actions` ("Shell" and "Attach" on a Pod's context menu and the palette's list, keys `s` / `a`, the pod detail's header buttons), `ExecFlow` (reads the pod through `ExecService::plan` on `spawn_kube`, then dispatches `pod::Shell` / `pod::Attach` with the container chosen, or asks first) and `ContainerPicker` (since E11-S02 the generic `oxikube_palette::Picker` over a `ContainerPickerDelegate`: typing filters the containers, up / down wrap, enter or click opens, escape sends nothing, so cancelling leaves no audit record of an open that never happened). Module `exec::debug` (E09-S10): "Debug" on a Pod's row (order 130, key `shift-d`, the detail header's bug button) opens `DebugDialog` through `ExecFlow::begin_debug` (it reads the pod for the defaults on `spawn_kube`): image, the container to share processes with, command, optional name, the note that the container is permanent; the button runs `DebugRunner` on `spawn_kube`, shows progress while the container starts and an API refusal under the fields, and closes on success (the terminal opens in the bottom dock). Module `table::verbs` and `views::row_actions` (E11-S07): the k9s verbs of a table, each a view action that stands for a command: `y` / `d` dispatch `resource::ViewYaml` / `resource::ViewDescribe` (the window's `ResourceViews` opens the detail drawer on that tab; "View YAML" and "Describe" lead a row's menu), `l` the pod's or the workload's logs, `ctrl-w` `table::ToggleWide` (`ColumnLayout::toggle_wide`: every wide column, or back), and `e` / `shift-f` / `f` the editor's and port forwarding's row actions, which say they are not installed until those crates register them. Module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the same list), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   Node rows (E09-S09): `exec_row_actions` also offers "Shell" on a Node (`node::Shell`, key `s` on a node table, a button in
   the node detail's header), greyed out on every read-only cluster; the runner confirms with the node and the image named.

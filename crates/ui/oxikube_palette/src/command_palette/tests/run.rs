@@ -2,7 +2,6 @@
 //! need an operand.
 
 use gpui::{Modifiers, TestAppContext};
-use oxikube_app::RecentsStore as _;
 use oxikube_domain::command::{Command, CommandId};
 
 use super::{Fixture, pod};

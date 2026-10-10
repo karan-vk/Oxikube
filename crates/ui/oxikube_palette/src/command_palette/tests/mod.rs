@@ -8,6 +8,7 @@
 //! | `availability.rs` | unavailable commands hidden, "Show all" lists them marked with the reason, confirming one does nothing |
 //! | `run.rs` | typing and confirming dispatches the command, recents first, focus returns, a command that needs input |
 //! | `order.rs` | the order of matches (unit) |
+//! | `persist.rs` | recents kept through the state store: first after a restart, written as commands run, cleared by `palette::ClearRecents` |
 //! | `capture.rs` | what the palette reads from the focused view and the session |
 //! | `surface.rs` | a command the focused view runs through its own flow is handed back to it |
 //! | `speed.rs` | 2 000 commands: virtualised, first frame, keystrokes |
@@ -17,6 +18,7 @@ mod bindings;
 mod capture;
 mod open;
 mod order;
+mod persist;
 mod run;
 mod speed;
 mod surface;
@@ -197,7 +199,8 @@ pub(super) struct Fixture {
     pub(super) vcx: VisualTestContext,
     pub(super) item_focus: FocusHandle,
     pub(super) dispatched: Recorder,
-    pub(super) recents: Arc<MemoryRecents>,
+    pub(super) recents: Arc<dyn RecentsStore>,
+    pub(super) host: Rc<PaletteHost>,
     pub(super) env: FakeEnv,
     pub(super) surface: Entity<FakeSurface>,
 }
@@ -205,6 +208,16 @@ pub(super) struct Fixture {
 impl Fixture {
     /// A table of pods with `selected` pods selected, on a writable, connected cluster.
     pub(super) fn new(cx: &mut TestAppContext, index: CommandIndex, selected: &[&str]) -> Self {
+        Self::with_recents(cx, index, selected, Arc::new(MemoryRecents::new()))
+    }
+
+    /// [`Fixture::new`] over the given recents store.
+    pub(super) fn with_recents(
+        cx: &mut TestAppContext,
+        index: CommandIndex,
+        selected: &[&str],
+        recents: Arc<dyn RecentsStore>,
+    ) -> Self {
         let (workspace, mut vcx) = open_workspace(cx);
         // As the binary does: the shipped keymap is bound after the component library.
         vcx.update(|_, cx| {
@@ -212,13 +225,12 @@ impl Fixture {
             crate::command_palette::init(cx);
         });
         let dispatched = Recorder::default();
-        let recents = Arc::new(MemoryRecents::new());
         let env = FakeEnv::connected();
         let target = CommandTarget::none()
             .in_cluster(cluster())
             .of_kind(Gvk::new("", "v1", "Pod"))
             .selecting(selected.iter().map(|name| pod(name)).collect());
-        let (item_focus, surface) = vcx.update(|window, cx| {
+        let (item_focus, surface, host) = vcx.update(|window, cx| {
             let item = TestItem::build("Pods", cx);
             workspace.update(cx, |ws, cx| ws.open_item(item.clone(), window, cx));
             let focus = item.read(cx).focus_handle(cx);
@@ -237,11 +249,11 @@ impl Fixture {
                 &workspace,
                 index,
                 Rc::new(dispatched.clone()),
-                recents.clone() as Arc<dyn RecentsStore>,
+                recents.clone(),
                 Rc::new(env.clone()),
             ));
             host.install(window, cx);
-            (focus, surface)
+            (focus, surface, host)
         });
         vcx.run_until_parked();
         Self {
@@ -250,6 +262,7 @@ impl Fixture {
             item_focus,
             dispatched,
             recents,
+            host,
             env,
             surface,
         }

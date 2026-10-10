@@ -5,7 +5,6 @@
 //! index: 2 000 commands take well under a millisecond) and shared with the matching task by
 //! `Arc`, so a keystroke filters off the UI thread without copying the commands.
 
-use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -101,19 +100,11 @@ pub struct Found {
     pub positions: Vec<usize>,
 }
 
-/// Orders `matches` for display: best score first; among equal scores the recent commands first
-/// (most recent first), then the display order. An empty query scores every command alike, so it
-/// lists the recent commands first and the rest by category and title.
-pub fn order(
-    mut matches: Vec<StringMatch>,
-    rows: &[Row],
-    recent: &HashMap<CommandId, usize>,
-) -> Vec<Found> {
-    // Stable: ties keep the candidates' (display) order.
-    matches.sort_by_key(|found| {
-        let rank = recent.get(&rows[found.candidate_id].info.id()).copied();
-        (Reverse(found.score), rank.unwrap_or(usize::MAX))
-    });
+/// The matches as the palette lists them. [`FuzzyService`](oxikube_app::FuzzyService) has already
+/// ordered them: best score first (the recent commands get a small boost), among equal scores the
+/// recent commands first (most recent first), then alphabetically. An empty query scores every
+/// command alike, so it lists the recent commands first and the rest by category and title.
+pub fn into_found(matches: Vec<StringMatch>) -> Vec<Found> {
     matches
         .into_iter()
         .map(|found| Found {
@@ -121,6 +112,14 @@ pub fn order(
             positions: found.positions,
         })
         .collect()
+}
+
+/// The recents boost of a candidate: its place among the recent commands, by the candidate's row.
+pub fn recency_of(
+    rows: Arc<[Row]>,
+    recent: Arc<HashMap<CommandId, usize>>,
+) -> impl Fn(usize) -> Option<usize> + Send + 'static {
+    move |row| recent.get(&rows[row].info.id()).copied()
 }
 
 /// `recent` (most recent first) as a rank per command.
