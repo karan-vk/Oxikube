@@ -154,6 +154,37 @@
     // A name or an absolute path. Empty uses the default. Applies to shells opened afterwards.
     "exec_shells": ["bash", "sh"]
   },
+  // The manifest editor (E10-S12). Every key can also be set under "clusters.<id>.editor" (a
+  // cluster that already uses another field manager name, say). A value out of range or of the
+  // wrong type is replaced by the default for that key alone, with a notice.
+  //   tab_size             spaces one indent is: the tab key, indent and outdent (1 to 16).
+  //                        Applies to open editors at once; the text and undo history stay.
+  //   font_family          the font of the text; null uses the theme's monospace font. Applies to
+  //                        open editors at once.
+  //   font_size            points at 100 % UI zoom (6 to 72; the zoom scales it like every other
+  //                        size); null uses the theme's monospace size. Applies at once.
+  //   soft_wrap            wrap long lines at the editor's width instead of scrolling sideways.
+  //                        Applies at once to open editors (the editor's Wrap toggle changes one
+  //                        editor only).
+  //   show_managed_fields  keep metadata.managedFields in the text of a live object you open.
+  //   mask_secrets         show the values of a Secret's data as ******** when you open it. With
+  //                        false the values show in the editor, in memory only: decoded Secret data
+  //                        is never written to disk, logs or the audit trail, whatever this says.
+  //   validation           check the manifest against the cluster's schemas as you type. Turning it
+  //                        off clears the squiggles; on checks every open editor at once.
+  //   field_manager        the name server-side apply records for the fields you set: 1 to 128
+  //                        characters, no whitespace; invalid is replaced by "oxikube". Applies to
+  //                        the next apply.
+  "editor": {
+    "tab_size": 2,
+    "font_family": null,
+    "font_size": null,
+    "soft_wrap": false,
+    "show_managed_fields": false,
+    "mask_secrets": true,
+    "validation": true,
+    "field_manager": "oxikube"
+  },
   // Per-cluster settings. Each key below is a default for every cluster; write the same key under
   // `clusters.<id>` (below) to override it for one cluster. Layers merge field by field:
   // this file, then your top-level values, then the cluster's own.

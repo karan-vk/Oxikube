@@ -7,10 +7,11 @@ use gpui::{Bounds, Pixels};
 use oxikube_domain::OxiError;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::schema::JsonSchema;
-use oxikube_ui::editor::{Decoration, DiagnosticLevel, EditorApi, EditorDiagnostic};
+use oxikube_ui::editor::{Decoration, DiagnosticLevel, EditorApi, EditorDiagnostic, EditorFont};
 use serde_json::json;
 
 use super::{Accepted, ManifestModel, Problems};
+use crate::settings::{EditorSettings, apply_changes};
 use crate::view::validation::validate_text;
 
 /// An editor that is a string and a few flags.
@@ -23,6 +24,10 @@ struct FakeEditor {
     diagnostics: Vec<EditorDiagnostic>,
     decorations: Vec<Decoration>,
     selection: Range<usize>,
+    tab_size: usize,
+    font: EditorFont,
+    /// The setters called, in order, to see what `apply_changes` touched.
+    calls: Vec<&'static str>,
 }
 
 impl FakeEditor {
@@ -69,7 +74,22 @@ impl EditorApi for FakeEditor {
         self.soft_wrap
     }
     fn set_soft_wrap(&mut self, wrap: bool) {
+        self.calls.push("soft_wrap");
         self.soft_wrap = wrap;
+    }
+    fn tab_size(&self) -> usize {
+        self.tab_size
+    }
+    fn set_tab_size(&mut self, spaces: usize) {
+        self.calls.push("tab_size");
+        self.tab_size = spaces;
+    }
+    fn font(&self) -> EditorFont {
+        self.font.clone()
+    }
+    fn set_font(&mut self, font: EditorFont) {
+        self.calls.push("font");
+        self.font = font;
     }
     fn set_diagnostics(&mut self, diagnostics: Vec<EditorDiagnostic>) {
         self.diagnostics = diagnostics;
@@ -197,4 +217,73 @@ fn syntax_errors_show_without_any_schema() {
     assert_eq!(validate(&mut model, &mut editor), Accepted::Shown);
     assert_eq!(model.problems().errors, editor.diagnostics.len());
     assert!(model.problems().errors >= 1);
+}
+
+#[test]
+fn clearing_drops_what_is_shown_and_costs_nothing_when_nothing_is() {
+    let mut editor = FakeEditor::with_text("kind: [\n");
+    let mut model = ManifestModel::new();
+    validate(&mut model, &mut editor);
+    assert!(!editor.diagnostics.is_empty());
+    model.clear(&mut editor);
+    assert!(editor.diagnostics.is_empty());
+    assert_eq!(model.problems(), Problems::default());
+    assert_eq!(model.shown_version(), None);
+    // Typing with validation off: the editor dropped its squiggles itself; no second clear.
+    editor.diagnostics = vec![EditorDiagnostic::new(0..1, DiagnosticLevel::Error, "kept")];
+    model.clear(&mut editor);
+    assert_eq!(
+        editor.diagnostics.len(),
+        1,
+        "nothing was shown, nothing is cleared"
+    );
+}
+
+#[test]
+fn applying_settings_touches_only_what_changed_and_never_the_text() {
+    let defaults = EditorSettings::default();
+    let mut editor = FakeEditor::with_text("a: 1\n");
+    editor.type_text("b: 2\n");
+    let version = editor.version();
+
+    apply_changes(None, &defaults, &mut editor);
+    assert_eq!(
+        editor.calls,
+        ["soft_wrap", "tab_size", "font"],
+        "a new editor gets all"
+    );
+
+    editor.calls.clear();
+    let wider = EditorSettings {
+        tab_size: 8,
+        ..defaults.clone()
+    };
+    apply_changes(Some(&defaults), &wider, &mut editor);
+    assert_eq!(editor.calls, ["tab_size"]);
+    assert_eq!(editor.tab_size, 8);
+
+    editor.calls.clear();
+    let styled = EditorSettings {
+        soft_wrap: true,
+        font_family: Some("Menlo".into()),
+        font_size: Some(14.0),
+        ..wider.clone()
+    };
+    apply_changes(Some(&wider), &styled, &mut editor);
+    assert_eq!(editor.calls, ["soft_wrap", "font"]);
+    assert!(editor.soft_wrap);
+    assert_eq!(editor.font, styled.font());
+
+    // The settings that are not about the look change nothing in the editor.
+    editor.calls.clear();
+    let other = EditorSettings {
+        validation: false,
+        mask_secrets: false,
+        field_manager: "other".into(),
+        ..styled.clone()
+    };
+    apply_changes(Some(&styled), &other, &mut editor);
+    assert!(editor.calls.is_empty());
+    assert_eq!(editor.version(), version, "the buffer was not touched");
+    assert_eq!(&*editor.text(), "a: 1\nb: 2\n");
 }

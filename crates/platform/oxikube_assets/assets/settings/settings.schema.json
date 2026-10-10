@@ -95,6 +95,9 @@
             "null"
           ]
         },
+        "editor": {
+          "$ref": "#/$defs/EditorSettingsContent"
+        },
         "exec_in_read_only": {
           "description": "Allow a shell, attach or exec into a pod (`pod::Shell`, `pod::Attach`) while `read_only`\nis on. Off by default: a shell can change anything the container's user can, so a\nread-only cluster blocks it. Takes effect at once. Set it under `clusters.<id>` to let one\nread-only cluster keep its shells.",
           "type": [
@@ -401,6 +404,78 @@
           "description": "Path of the `kubectl` binary; unset looks `kubectl` up on `PATH`.",
           "type": [
             "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "EditorSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about the manifest editor: the `editor` object of `settings.json`\n(and of `clusters.<id>`, where it overrides the layers above for that cluster's editors).\n\nEvery field is optional: a layer sets any subset. The shipped `default.json` spells out all of\nthem. A value out of range or of the wrong type is rejected with a notice and the default is\nused for that field alone; the rest of the block still applies.",
+      "properties": {
+        "field_manager": {
+          "description": "The field manager name server-side apply records for the fields this editor sets\n(`kubectl apply --server-side --field-manager`). 1 to 128 characters, no whitespace; an\ninvalid name is replaced by `oxikube` with a notice. A change applies to the next apply.\nSet it under `clusters.<id>.editor` to use another name on one cluster.",
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "font_family": {
+          "description": "The font family of the text, such as \"JetBrains Mono\". `null` uses the theme's monospace\nfont. A change applies to open editors at once.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "font_size": {
+          "description": "The font size in points (6 to 72), at 100 % UI zoom: the UI zoom scales it like every\nother size, so 14 is 21 pixels at a zoom of 1.5. `null` uses the theme's monospace size.\nA change applies to open editors at once.",
+          "format": "double",
+          "maximum": 72,
+          "minimum": 6,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "mask_secrets": {
+          "description": "Show the values of a Secret's `data` as `********` when the object is opened. Turning it\noff shows the values in the editor, in memory only: Oxikube never writes decoded Secret\ndata to disk, logs or the audit trail, whatever this says.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "show_managed_fields": {
+          "description": "Show `metadata.managedFields` when a live object is opened. They are long and rarely\nuseful, so they are hidden (stripped from the text) unless this is `true`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "soft_wrap": {
+          "description": "Wrap long lines at the editor's width instead of scrolling sideways. A change applies to\nopen editors at once (the editor's Wrap toggle changes one editor only, until the next\nchange of this setting).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "tab_size": {
+          "description": "Spaces one indent is (the tab key, indent and outdent): 1 to 16. Kubernetes manifests\nconventionally use 2. A change applies to open editors at once and keeps their text and\nundo history.",
+          "format": "int64",
+          "maximum": 16,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "validation": {
+          "description": "Check the manifest against the cluster's schemas as you type (squiggles, the problem\ncount). Turn it off for a very large manifest or a cluster whose schemas are slow. Turning\nit on checks every open editor at once.",
+          "type": [
+            "boolean",
             "null"
           ]
         }
@@ -1223,6 +1298,9 @@
         "string",
         "null"
       ]
+    },
+    "editor": {
+      "$ref": "#/$defs/EditorSettingsContent"
     },
     "exec_in_read_only": {
       "description": "Allow a shell, attach or exec into a pod (`pod::Shell`, `pod::Attach`) while `read_only`\nis on. Off by default: a shell can change anything the container's user can, so a\nread-only cluster blocks it. Takes effect at once. Set it under `clusters.<id>` to let one\nread-only cluster keep its shells.",

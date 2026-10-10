@@ -22,6 +22,9 @@ use super::manifest_editor::ManifestEditor;
 use super::model::Problems;
 use super::{ToggleReadOnly, ToggleSoftWrap};
 
+/// What the problem count says while `editor.validation` is off.
+const VALIDATION_OFF: &str = "Validation off";
+
 /// "2 errors · 1 warning", "No problems".
 pub(crate) fn problems_text(problems: Problems) -> String {
     let plural = |n: usize, word: &str| match n {
@@ -40,7 +43,10 @@ impl ManifestEditor {
     pub(super) fn toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let problems = self.model.problems();
-        let problems_color = if problems.errors > 0 {
+        let validating = self.settings(cx).validation;
+        let problems_color = if !validating {
+            tokens.colors.text_muted
+        } else if problems.errors > 0 {
             tokens.colors.error
         } else if problems.warnings > 0 {
             tokens.colors.warning
@@ -77,7 +83,11 @@ impl ManifestEditor {
                     .debug_selector(|| "manifest-problems".into())
                     .flex_none()
                     .text_color(problems_color)
-                    .child(problems_text(problems)),
+                    .child(if validating {
+                        problems_text(problems)
+                    } else {
+                        VALIDATION_OFF.to_owned()
+                    }),
             )
             .child(self.toggle(
                 "manifest-read-only",

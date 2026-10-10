@@ -99,6 +99,15 @@ impl ManifestModel {
         Accepted::Shown
     }
 
+    /// Validation is off: drops the diagnostics shown and the problem counts.
+    pub fn clear(&mut self, editor: &mut dyn EditorApi) {
+        // After an edit nothing is shown (the editor dropped it): nothing to do per keystroke.
+        if self.shown.take().is_some() {
+            self.problems = Problems::default();
+            editor.set_diagnostics(Vec::new());
+        }
+    }
+
     /// Which of `missing` to fetch now: those neither known nor already being fetched. They are
     /// marked as being fetched.
     pub fn to_fetch(&mut self, missing: &[Gvk]) -> Vec<Gvk> {

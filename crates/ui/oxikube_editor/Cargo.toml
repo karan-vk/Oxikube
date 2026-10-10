@@ -22,6 +22,8 @@ oxikube_keymap.workspace = true
 oxikube_ports.workspace = true
 # Schema fetches on the Kubernetes runtime (`spawn_kube`).
 oxikube_runtime.workspace = true
+# The `editor` settings (E10-S12).
+oxikube_settings.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
 tracing.workspace = true
@@ -29,11 +31,14 @@ tracing.workspace = true
 oxikube_domain.workspace = true
 # Schema `pattern` checks (RE2-compatible syntax, which is what Kubernetes patterns use).
 regex.workspace = true
+schemars.workspace = true
+serde.workspace = true
 # Schema `enum` values are JSON.
 serde_json.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
+oxikube_assets.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 insta.workspace = true

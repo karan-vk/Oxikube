@@ -22,8 +22,12 @@ mod live;
 mod overlay;
 mod positions;
 
-pub use api::{Decoration, DecorationStyle, DiagnosticLevel, EditorApi, EditorDiagnostic};
-pub use code_editor::{CodeEditor, CodeEditorEvent, CodeEditorOptions, TextSnapshot};
+pub use api::{
+    Decoration, DecorationStyle, DiagnosticLevel, EditorApi, EditorDiagnostic, EditorFont,
+};
+pub use code_editor::{
+    CodeEditor, CodeEditorEvent, CodeEditorOptions, DEFAULT_TAB_SIZE, TextSnapshot,
+};
 pub use live::LiveEditor;
 
 use gpui::{App, AppContext as _, Entity, Pixels, Point, Window};
