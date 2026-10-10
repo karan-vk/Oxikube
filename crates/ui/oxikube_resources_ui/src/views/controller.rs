@@ -225,6 +225,9 @@ impl ResourceViews {
         if !ours {
             return false;
         }
+        // A new open supersedes an earlier failure: only a failure of *this* open may make the
+        // filter that follows it give up (a bare `:pods` that failed must not eat the next jump's).
+        self.failed_opens.remove(&(cluster.clone(), gvk.clone()));
         let Some(discovery) = self
             .deps
             .table

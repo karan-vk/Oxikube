@@ -202,6 +202,42 @@ fn a_filter_before_a_list_that_could_not_open_is_not_kept_for_a_later_open(
 }
 
 #[gpui::test]
+fn a_failed_open_without_a_filter_does_not_drop_the_filter_of_a_later_jump(
+    cx: &mut TestAppContext,
+) {
+    let mut f = Fixture::new(cx);
+    dropped_cluster(&mut f);
+    // A bare `:pods` (or a sidebar click) that could not open: no filter followed to consume it.
+    open_list(&mut f);
+    block_on(f.sessions.reconnect(&cluster())).expect("reconnect");
+    f.vcx.run_until_parked();
+    // `:pods ^web` right after the reconnect: the discovery is new, so the list resolves
+    // asynchronously and the filter is applied before the table exists.
+    let dispatcher = f.deps.dispatcher.clone();
+    f.vcx.update(|_, cx| {
+        dispatcher.dispatch(
+            Command::ResourceOpenList {
+                cluster: cluster(),
+                gvk: pods(),
+            },
+            cx,
+        );
+        dispatcher.dispatch(
+            Command::TableSetFilter {
+                cluster: cluster(),
+                gvk: pods(),
+                text: "^web".to_owned(),
+            },
+            cx,
+        );
+    });
+    f.settle();
+    let table = only_table(&mut f);
+    assert_eq!(f.names(&table), ["web-1", "web-2"]);
+    assert_eq!(bar_text(&mut f, &table), "^web");
+}
+
+#[gpui::test]
 fn a_waiting_filter_expires(cx: &mut TestAppContext) {
     let mut f = Fixture::new(cx);
     f.connect_with(fixtures());

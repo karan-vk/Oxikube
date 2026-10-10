@@ -171,6 +171,49 @@ fn a_context_that_is_not_connected_connects_first() {
 }
 
 #[test]
+fn a_crd_alias_for_a_context_that_is_not_connected_is_planned_once_it_is() {
+    // Its discovery is unknown until it connects: connect, then plan the line again.
+    for line in ["certs @staging", "certs all /web @staging"] {
+        let plan = planned(line);
+        let staging = cluster("staging");
+        assert_eq!(
+            plan.commands,
+            [Command::ClusterConnect {
+                cluster: staging.clone()
+            }],
+            "{line}"
+        );
+        let after = plan.after_connect.expect(line);
+        assert_eq!(after.cluster, staging);
+        assert!(after.commands.is_empty(), "{line}");
+        assert_eq!(after.replan.as_deref(), Some(line), "{line}");
+        assert_eq!(plan.record.as_deref(), Some(line), "{line}");
+    }
+    // A built-in name needs no discovery: planned now.
+    assert!(
+        planned("pods @staging")
+            .after_connect
+            .unwrap()
+            .replan
+            .is_none()
+    );
+    // A context that is connected knows its aliases: an unknown one is an error to underline.
+    assert_eq!(failed("certs @prod-eu").kind, ParseErrorKind::UnknownAlias);
+    // The line planned again against the connected cluster opens the list.
+    let mut env = Env::new();
+    env.contexts[3].connected = true;
+    let mut kinds = oxikube_testkit::kinds::core_kinds();
+    kinds.extend(oxikube_testkit::kinds::cert_manager_kinds());
+    env.tables[&cluster("staging")].set_discovered(&kinds);
+    let plan = plan("certs @staging", &env).unwrap();
+    assert!(plan.after_connect.is_none());
+    assert!(matches!(
+        plan.commands.as_slice(),
+        [Command::ClusterSelect { .. }, Command::ResourceOpenList { gvk, .. }] if &*gvk.kind == "Certificate"
+    ));
+}
+
+#[test]
 fn a_context_matches_by_exact_name_then_case_then_a_unique_prefix() {
     for word in ["prod-eu", "PROD-EU", "prod-e"] {
         let plan = planned(&format!("pods @{word}"));

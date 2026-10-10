@@ -50,7 +50,7 @@ mod sources;
 mod tests;
 
 pub use bar::JumpBar;
-pub use connect::CONNECT_WAIT;
+pub use connect::{ALIAS_WAIT, CONNECT_WAIT};
 pub use delegate::JumpDelegate;
 pub use host::JumpHost;
 pub use request::{JumpRequest, JumpSink, register_commands};

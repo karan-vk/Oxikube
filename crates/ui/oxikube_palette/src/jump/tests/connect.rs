@@ -7,7 +7,7 @@ use oxikube_domain::command::Command;
 use oxikube_domain::ids::Gvk;
 
 use super::{Fixture, id, wait_for_data};
-use crate::jump::CONNECT_WAIT;
+use crate::jump::{ALIAS_WAIT, CONNECT_WAIT};
 
 fn jump_to_staging(f: &mut Fixture) {
     f.open();
@@ -187,4 +187,82 @@ fn a_retry_that_fails_again_still_says_so_at_once(cx: &mut TestAppContext) {
     f.settle();
     assert_eq!(f.toasts(), [NOT_CONNECTED], "no wait for the timeout");
     assert_eq!(f.take_sent(), []);
+}
+
+/// Starts `:certs @staging` (a CRD alias only the connected cluster's discovery knows).
+fn jump_to_crd_on_staging(f: &mut Fixture) {
+    f.open();
+    wait_for_data(f);
+    f.type_text("certs @staging");
+    f.keys("enter");
+    assert_eq!(
+        f.take_sent(),
+        [Command::ClusterConnect {
+            cluster: id("staging")
+        }],
+        "a CRD alias cannot be checked before the connection: connect, then plan"
+    );
+    assert_eq!(f.toasts(), Vec::<String>::new());
+}
+
+fn staging_serves_cert_manager(f: &mut Fixture) -> Vec<oxikube_domain::kinds::ResourceKind> {
+    let mut kinds = oxikube_testkit::kinds::core_kinds();
+    kinds.extend(oxikube_testkit::kinds::cert_manager_kinds());
+    f.connector
+        .ports_for(&id("staging"))
+        .discovery
+        .set_kinds(kinds.clone());
+    kinds
+}
+
+#[gpui::test]
+fn a_crd_alias_is_resolved_against_the_cluster_once_it_is_connected(cx: &mut TestAppContext) {
+    let mut f = Fixture::new(cx);
+    jump_to_crd_on_staging(&mut f);
+    let kinds = staging_serves_cert_manager(&mut f);
+    block_on(f.sessions.connect(&id("staging"))).expect("connect staging");
+    // The alias table follows the connection a moment later.
+    f.settle();
+    assert_eq!(f.take_sent(), [], "the alias is not known yet");
+    f.aliases.table(&id("staging")).set_discovered(&kinds);
+    f.vcx
+        .executor()
+        .advance_clock(std::time::Duration::from_millis(300));
+    f.settle();
+    let sent = f.take_sent();
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [
+                Command::ClusterSelect { .. },
+                Command::ResourceOpenList { gvk, .. }
+            ] if &*gvk.kind == "Certificate"
+        ),
+        "{sent:?}"
+    );
+    assert_eq!(f.toasts(), Vec::<String>::new());
+}
+
+#[gpui::test]
+fn an_alias_the_connected_cluster_does_not_have_is_reported(cx: &mut TestAppContext) {
+    let mut f = Fixture::new(cx);
+    jump_to_crd_on_staging(&mut f);
+    f.connector
+        .ports_for(&id("staging"))
+        .discovery
+        .set_kinds(oxikube_testkit::kinds::core_kinds());
+    block_on(f.sessions.connect(&id("staging"))).expect("connect staging");
+    f.settle();
+    f.vcx
+        .executor()
+        .advance_clock(ALIAS_WAIT + std::time::Duration::from_secs(1));
+    f.settle();
+    assert_eq!(f.take_sent(), [], "nothing opens");
+    let toasts = f.toasts();
+    assert!(
+        toasts
+            .iter()
+            .any(|t| t.contains("Unknown resource `certs`")),
+        "{toasts:?}"
+    );
 }
