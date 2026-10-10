@@ -57,8 +57,8 @@ pub(crate) fn to_library(rope: &Rope, diagnostic: &EditorDiagnostic) -> Diagnost
     out
 }
 
-/// What the overlay draws for one line: the worst level among the line's diagnostics, the first
-/// message and how many there are.
+/// What the overlay draws for one line: the worst level among the line's diagnostics, the message
+/// of the first diagnostic at that level, and how many there are.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LineSummary {
     /// Zero-based buffer line.
@@ -69,7 +69,8 @@ pub(crate) struct LineSummary {
     pub(crate) line_end: usize,
     /// The most severe level on the line.
     pub(crate) level: DiagnosticLevel,
-    /// The first diagnostic's message, on one line.
+    /// The message of the leftmost diagnostic with the worst level, on one line, so the text
+    /// always matches the colour it is painted in.
     pub(crate) message: String,
     /// How many diagnostics start on the line.
     pub(crate) count: usize,
@@ -84,7 +85,11 @@ pub(crate) fn line_summaries(rope: &Rope, diagnostics: &[EditorDiagnostic]) -> V
         match out.last_mut() {
             Some(last) if last.line == line => {
                 last.count += 1;
-                last.level = last.level.min(diagnostic.level);
+                // `Error < Warning < ...`: a strictly worse diagnostic takes over the message.
+                if diagnostic.level < last.level {
+                    last.level = diagnostic.level;
+                    last.message = first_line(&diagnostic.message);
+                }
             }
             _ => out.push(LineSummary {
                 line,
@@ -172,5 +177,23 @@ mod tests {
         assert_eq!(summaries[0].message, "bad");
         assert_eq!(summaries[0].line_end, 4);
         assert_eq!(summaries[1].line, 2);
+    }
+
+    #[test]
+    fn the_summary_message_belongs_to_the_worst_diagnostic() {
+        let rope = Rope::from("key: value\n");
+        let summaries = line_summaries(
+            &rope,
+            &[
+                EditorDiagnostic::new(0..3, DiagnosticLevel::Warning, "unknown field"),
+                EditorDiagnostic::new(5..10, DiagnosticLevel::Error, "expected integer\nmore"),
+                EditorDiagnostic::new(6..7, DiagnosticLevel::Error, "second error"),
+                EditorDiagnostic::new(8..9, DiagnosticLevel::Hint, "a hint"),
+            ],
+        );
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].level, DiagnosticLevel::Error);
+        assert_eq!(summaries[0].message, "expected integer");
+        assert_eq!(summaries[0].count, 4);
     }
 }

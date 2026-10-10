@@ -37,7 +37,7 @@ pub(crate) fn level_color(level: DiagnosticLevel, colors: &Colors) -> Hsla {
     }
 }
 
-/// The text drawn after a line: the first message, and how many more the line has.
+/// The text drawn after a line: the worst diagnostic's message, and how many more the line has.
 pub(crate) fn message_text(summary: &LineSummary) -> String {
     let mut text: String = summary.message.chars().take(MESSAGE_MAX_CHARS).collect();
     if summary.message.chars().count() > MESSAGE_MAX_CHARS {
