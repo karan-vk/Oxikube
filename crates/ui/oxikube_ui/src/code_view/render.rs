@@ -35,6 +35,7 @@ impl Render for CodeView {
         self.metrics.row_height = row_height;
         self.metrics.padding = u(tokens.spacing.sm);
         self.rows_drawn = 0;
+        self.matches_drawn.clear();
 
         let view = cx.entity().downgrade();
         let list = self.shown.as_ref().map(|shown| {
@@ -144,6 +145,7 @@ impl CodeView {
             .look
             .line_numbers
             .then(|| self.metrics.advance * rows.gutter_cols() as f32);
+        let mut painted = Vec::new();
         let elements: Vec<AnyElement> = range
             .filter_map(|ix| {
                 let row = rows.row(ix)?;
@@ -175,6 +177,9 @@ impl CodeView {
                         })
                         .collect();
                     if !spans.is_empty() {
+                        painted.extend(spans.iter().map(|(span, style)| {
+                            (row.start + span.start, *style == current_style)
+                        }));
                         runs = combine_highlights(runs, spans).collect();
                     }
                 }
@@ -208,6 +213,7 @@ impl CodeView {
             })
             .collect();
         self.rows_drawn += elements.len();
+        self.matches_drawn.extend(painted);
         elements
     }
 }

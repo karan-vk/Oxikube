@@ -228,6 +228,11 @@ impl DetailView {
             return;
         }
         let starts = found.ranges.iter().map(|r| r.start as u64).collect();
+        // An edit starts the search over: the match the last pattern had current is not kept
+        // (`set` would keep it and `next` would then step past it).
+        if select_from.is_some() {
+            self.find.nav.clear();
+        }
         self.find.nav.set(starts, found.truncated);
         self.find.ranges = found.ranges.into();
         if let Some(anchor) = select_from {

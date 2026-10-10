@@ -67,7 +67,7 @@ impl FilterBar {
                             .xsmall()
                             .ghost()
                             .icon(Icon::new(IconName::X).size(u(px(10.))))
-                            .tooltip("Clear the filter (escape in the field)")
+                            .tooltip("Clear the filter (escape)")
                             .on_click(cx.listener(|bar, _, _, cx| bar.request_clear(cx))),
                     ),
             )
