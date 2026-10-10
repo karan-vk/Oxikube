@@ -42,8 +42,8 @@
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
-pub mod base_keymap;
 pub mod actions;
+pub mod base_keymap;
 pub mod build;
 pub mod conflicts;
 pub mod context;
@@ -60,8 +60,8 @@ pub mod registry;
 pub mod stands_for;
 pub mod store;
 
-pub use base_keymap::{BaseKeymap, KeymapSettings, KeymapSettingsContent};
 pub use actions::OpenUser;
+pub use base_keymap::{BaseKeymap, KeymapSettings, KeymapSettingsContent};
 pub use conflicts::{ConflictEntry, KeymapConflict};
 pub use context::{KeyContextBuilder, KeyContextual, contexts};
 pub use diagnostics::{KeymapDiagnostic, KeymapDiagnosticsEvent, KeymapProblem};

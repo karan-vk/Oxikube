@@ -95,8 +95,7 @@ impl CommandId {
         match ns {
             "helm" | "argo" => format!("{ns}.{verb}"),
             "cluster" | "namespace" | "kubeconfig" | "view" | "palette" | "jump" | "help"
-            | "keymap"
-            | "settings" | "app" | "window" | "terminal" => {
+            | "keymap" | "settings" | "app" | "window" | "terminal" => {
                 format!("app.{ns}_{verb}")
             }
             _ => format!("k8s.{ns}_{verb}"),
