@@ -5992,6 +5992,7 @@ dependencies = [
  "parking_lot",
  "serde_json",
  "tracing",
+ "unicode-segmentation",
 ]
 
 [[package]]
