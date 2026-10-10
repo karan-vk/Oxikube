@@ -2,11 +2,10 @@
 //! `g g` / `shift-g` move the cursor, `d d` meets the guard's confirmation instead of deleting,
 //! `/` and `:` keep their jobs, and switching the setting rebinds without a restart.
 
-use gpui::{BorrowAppContext as _, TestAppContext};
-use oxikube_settings::SettingsStore;
+use gpui::TestAppContext;
 use oxikube_testkit::TestPorts;
 
-use super::check;
+use super::{check, set_user_settings};
 use crate::mount::tests::App;
 
 impl App {
@@ -15,18 +14,9 @@ impl App {
         self.shown().expect("a table is shown").1
     }
 
-    /// The name of the object under the cursor.
-    fn cursor_name(&mut self) -> Option<String> {
-        self.cursor().map(|object| object.name.to_string())
-    }
-
     /// Writes `settings.json` the way a user edit lands (the store notifies its observers).
     fn set_settings(&mut self, json: &str) {
-        self.vcx.update(|_, cx| {
-            cx.update_global::<SettingsStore, _>(|store, _| {
-                store.set_user_settings(json).expect("valid settings");
-            });
-        });
+        self.vcx.update(|_, cx| set_user_settings(cx, json));
         self.vcx.run_until_parked();
     }
 }

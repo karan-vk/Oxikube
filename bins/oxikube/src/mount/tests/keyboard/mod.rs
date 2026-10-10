@@ -38,7 +38,7 @@ mod history;
 mod palette;
 mod vim;
 
-use gpui::{Entity, TestAppContext};
+use gpui::{BorrowAppContext as _, Entity, TestAppContext};
 use oxikube_domain::Resource;
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
@@ -46,6 +46,7 @@ use oxikube_palette::CommandPalette;
 use oxikube_palette::jump::JumpBar;
 use oxikube_resources_ui::actions::DeleteDialog;
 use oxikube_resources_ui::table::ResourceTable;
+use oxikube_settings::SettingsStore;
 use oxikube_testkit::{TestPorts, deployment, pod};
 
 use super::App;
@@ -105,20 +106,20 @@ fn namespace(name: &str) -> Resource {
     .expect("namespace json")
 }
 
+/// Writes `settings.json` the way a user edit lands (the store notifies its observers).
+fn set_user_settings(cx: &mut gpui::App, json: &str) {
+    cx.update_global::<SettingsStore, _>(|store, _| {
+        store.set_user_settings(json).expect("valid settings");
+    });
+}
+
 impl App {
     /// The app over the fixture cluster, connected, with its Pods table open, focused and no row
     /// under the cursor yet. `vim` turns on `base_keymap: "vim"` the way `settings.json` does.
     pub(super) fn keyboard(cx: &mut TestAppContext, vim: bool) -> Self {
-        use gpui::BorrowAppContext as _;
-        use oxikube_settings::SettingsStore;
-
         let mut app = App::start_with(cx, TestPorts::seeded(), |cx| {
             if vim {
-                cx.update_global::<SettingsStore, _>(|store, _| {
-                    store
-                        .set_user_settings(r#"{ "base_keymap": "vim" }"#)
-                        .expect("valid settings");
-                });
+                set_user_settings(cx, r#"{ "base_keymap": "vim" }"#);
             }
         });
         app.serve(fixture_kinds());
@@ -211,6 +212,11 @@ impl App {
             .update(|_, cx| table.read(cx).selected_refs(cx).into_iter().next())
     }
 
+    /// The name of the object under the cursor of the shown table.
+    pub(super) fn cursor_name(&mut self) -> Option<String> {
+        self.cursor().map(|object| object.name.to_string())
+    }
+
     pub(super) fn palette_open(&mut self) -> Option<Entity<CommandPalette>> {
         let ws = self.workspace();
         self.vcx.update(|_, cx| {
@@ -261,7 +267,7 @@ impl App {
         } else {
             "none"
         };
-        let cursor = self.cursor().map(|object| object.name.to_string());
+        let cursor = self.cursor_name();
         let shown = self.shown();
         format!(
             "  focused view: {}\n  key context stack: {}\n  modal: {modal}\n  shown table: {shown:?}\n  cursor: {cursor:?}",

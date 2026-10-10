@@ -7,9 +7,8 @@ use super::{SYSTEM_PODS, check};
 use crate::mount::tests::App;
 
 impl App {
-    fn view(&mut self) -> (String, usize) {
-        let (kind, rows) = self.shown().expect("a table is shown");
-        (kind, rows.len())
+    fn view_kind(&mut self) -> String {
+        self.shown().expect("a table is shown").0
     }
 }
 
@@ -21,13 +20,17 @@ fn bracket_keys_replay_the_jumps_and_dash_flips_between_the_last_two_views(
     app.colon("pods kube-system");
     app.colon("deploy");
     app.colon("cm");
-    check!(app, app.view().0 == "ConfigMap", "the last jump is shown");
+    check!(
+        app,
+        app.view_kind() == "ConfigMap",
+        "the last jump is shown"
+    );
 
     // `[` steps back through the lines: `deploy`, then `pods kube-system`, whose namespace is
     // applied again.
     app.press("[");
     app.tick();
-    check!(app, app.view().0 == "Deployment", "`[` replays `deploy`");
+    check!(app, app.view_kind() == "Deployment", "`[` replays `deploy`");
     app.press("[");
     app.tick();
     let shown = app.shown();
@@ -40,24 +43,24 @@ fn bracket_keys_replay_the_jumps_and_dash_flips_between_the_last_two_views(
     // `]` goes forward again.
     app.press("]");
     app.tick();
-    check!(app, app.view().0 == "Deployment", "`]` replays `deploy`");
+    check!(app, app.view_kind() == "Deployment", "`]` replays `deploy`");
     app.press("]");
     app.tick();
-    check!(app, app.view().0 == "ConfigMap", "`]` replays `cm`");
+    check!(app, app.view_kind() == "ConfigMap", "`]` replays `cm`");
 
     // `-` flips between the last two views.
     app.press("-");
     app.tick();
     check!(
         app,
-        app.view().0 == "Deployment",
+        app.view_kind() == "Deployment",
         "`-` goes back to the view before"
     );
     app.press("-");
     app.tick();
     check!(
         app,
-        app.view().0 == "ConfigMap",
+        app.view_kind() == "ConfigMap",
         "and again to where it was"
     );
     assert!(
