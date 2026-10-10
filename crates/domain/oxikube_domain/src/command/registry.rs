@@ -48,6 +48,12 @@ impl CommandId {
     pub const CRD_OPEN_RESOURCES: CommandId = CommandId::new("crd::OpenResources");
     /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
+    /// `jump::Back`: run the previous command of the `:` jump bar's history again.
+    pub const JUMP_BACK: CommandId = CommandId::new("jump::Back");
+    /// `jump::Forward`: run the next command of the `:` jump bar's history again.
+    pub const JUMP_FORWARD: CommandId = CommandId::new("jump::Forward");
+    /// `jump::Last`: go back to the view before the current one (`-` in the jump bar).
+    pub const JUMP_LAST: CommandId = CommandId::new("jump::Last");
     /// `kubeconfig::AddSource`: add a kubeconfig file, directory or pasted text as a source.
     pub const KUBECONFIG_ADD_SOURCE: CommandId = CommandId::new("kubeconfig::AddSource");
     /// `kubeconfig::Reload`: re-read every kubeconfig source.
@@ -183,6 +189,8 @@ impl CommandId {
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
     /// `table::ToggleWide`: show or hide the wide columns (`kubectl -o wide`) of a kind's tables.
     pub const TABLE_TOGGLE_WIDE: CommandId = CommandId::new("table::ToggleWide");
+    /// `table::SetFilter`: put a filter in a resource table's filter bar and apply it.
+    pub const TABLE_SET_FILTER: CommandId = CommandId::new("table::SetFilter");
     /// `terminal::Close`: close the focused terminal, ending its process.
     pub const TERMINAL_CLOSE: CommandId = CommandId::new("terminal::Close");
     /// `terminal::Clear`: clear the focused terminal's scrollback and the screen above the cursor.
@@ -367,6 +375,27 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::HELP_SHOW,
         "Show Key Bindings",
+        CommandScope::Global,
+        NONE,
+    ),
+    // The `:` jump bar's history only moves around the app: they read and change nothing in
+    // a cluster, and run in read-only mode. What a typed line does is done by the navigation
+    // commands it turns into (`resource::OpenList`, `namespace::Select`, `cluster::Select`, ...).
+    CommandMeta::read(
+        CommandId::JUMP_BACK,
+        "Jump: Back in History",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::JUMP_FORWARD,
+        "Jump: Forward in History",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::JUMP_LAST,
+        "Jump: Previous View",
         CommandScope::Global,
         NONE,
     ),
@@ -854,6 +883,14 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::TABLE_FOCUS_FILTER,
         "Focus Table Filter",
+        CommandScope::ResourceKind,
+        NONE,
+    )
+    .in_views(TABLE_VIEW),
+    // Changes what one view shows on this machine, never the cluster: allowed in read-only mode.
+    CommandMeta::read(
+        CommandId::TABLE_SET_FILTER,
+        "Set Table Filter",
         CommandScope::ResourceKind,
         NONE,
     )

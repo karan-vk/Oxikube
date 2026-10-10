@@ -1,6 +1,7 @@
 //! The table and detail commands on the `CommandBus`: `resource::Open`, `resource::CopyName`,
 //! `resource::RetryFeed` (E07-S10), `resource::SelectAll` (E07-S03), `resource::PinDetail`,
-//! `resource::CopyLabel` (E07-S05), `table::FocusFilter` (E07-S04), the CRD navigation
+//! `resource::CopyLabel` (E07-S05), `table::FocusFilter` (E07-S04), `table::SetFilter` (E11-S05, the
+//! `:` jump bar's filter), the CRD navigation
 //! `crd::OpenList`, `crd::OpenResources` (E07-S07) and the YAML and Describe tabs'
 //! `resource::CopyYaml`, `resource::SaveYaml`, `resource::ToggleManagedFields`,
 //! `resource::RefreshDescribe` (E07-S06), and the k9s verbs `resource::ViewYaml`,
@@ -25,7 +26,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 16] = [
+pub const RESOURCE_COMMANDS: [CommandId; 17] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -33,6 +34,7 @@ pub const RESOURCE_COMMANDS: [CommandId; 16] = [
     CommandId::RESOURCE_PIN_DETAIL,
     CommandId::RESOURCE_COPY_LABEL,
     CommandId::TABLE_FOCUS_FILTER,
+    CommandId::TABLE_SET_FILTER,
     CommandId::CRD_OPEN_LIST,
     CommandId::CRD_OPEN_RESOURCES,
     CommandId::RESOURCE_COPY_YAML,
@@ -114,6 +116,17 @@ pub enum ViewRequest {
         /// The kind.
         gvk: Gvk,
     },
+    /// Put `text` in the filter bar of the table of `gvk` in `cluster` and apply it
+    /// (`table::SetFilter`, the `:` jump bar's `/filter` and `k=v`). A table that is not open yet
+    /// gets it when it opens.
+    SetFilter {
+        /// The cluster.
+        cluster: ClusterId,
+        /// The kind.
+        gvk: Gvk,
+        /// The filter, in the filter bar's grammar.
+        text: String,
+    },
 }
 
 /// A handle on a window's request queue. Cheap to clone; usable from any thread.
@@ -179,6 +192,11 @@ impl ResourceCommandSink {
             Command::TableFocusFilter { cluster, gvk } => ViewRequest::FocusFilter {
                 cluster: cluster.clone(),
                 gvk: gvk.clone(),
+            },
+            Command::TableSetFilter { cluster, gvk, text } => ViewRequest::SetFilter {
+                cluster: cluster.clone(),
+                gvk: gvk.clone(),
+                text: text.clone(),
             },
             _ => return None,
         })

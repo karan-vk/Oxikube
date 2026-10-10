@@ -7,6 +7,7 @@
 //! | `!foo` | names that do not match | in the store |
 //! | `-l app=web` | label selector, kubectl syntax | **on the server**: the feed is re-keyed with the selector |
 //! | `-f wb` | fuzzy: `wb` as a subsequence of the name, best match first | in the store, ranked by [`Fuzzy::score`] |
+//! | `foo -l app=web` | a name filter and a selector together | both, as above |
 //!
 //! [`parse`] is pure and compiles the pattern once per edit. [`FilterExpr::parts`] turns the
 //! expression into [`FilterParts`]: a [`StoreFilter`] (text, inverse and fuzzy are client-side,
@@ -81,6 +82,10 @@ impl FilterExpr {
             FilterExpr::LabelSelector(selector) => {
                 parts.selector = Some(selector.clone()).filter(|s| !s.is_empty());
                 return;
+            }
+            FilterExpr::Narrowed { name, selector } => {
+                parts.selector = Some(selector.clone()).filter(|s| !s.is_empty());
+                return name.fill(parts, inverse);
             }
             FilterExpr::Text(text) => NameMatcher::Text(text.clone()),
             FilterExpr::Fuzzy(fuzzy) => NameMatcher::Fuzzy(fuzzy.clone()),

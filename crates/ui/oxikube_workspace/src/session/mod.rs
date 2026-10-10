@@ -14,6 +14,8 @@
 //!   operations (exec sessions, port-forwards, applies); a quit while any is running opens a
 //!   confirm dialog on the window instead of quitting. The dialog is an overlay on the `Root`, so
 //!   nothing blocks the UI thread.
+//! - [`quit_command`]: `app::Quit` on the command bus (the palette, `:q`, agents), ending in the
+//!   same quit guard.
 //! - [`windows`]: `window::New` opens another main window with its own `Workspace`, and the
 //!   per-window close guard (closing the last window on Linux and Windows quits, so it asks like
 //!   `Quit` does; on macOS the app stays alive).
@@ -29,6 +31,7 @@
 
 pub mod motion;
 pub mod quit;
+pub mod quit_command;
 pub mod settings;
 pub mod windows;
 pub mod zoom;
@@ -43,6 +46,7 @@ pub use quit::{
     OperationProviderId, Quit, RunningOperation, register_operation_provider, request_quit,
     running_operations, unregister_operation_provider,
 };
+pub use quit_command::{QuitSink, register_command as register_quit_command, serve as serve_quit};
 pub use settings::{ReduceMotionSetting, SessionSettings, SessionSettingsContent};
 pub use windows::{New as NewWindow, main_windows, open_new_window};
 pub use zoom::{ZoomIn, ZoomOut, ZoomReset};

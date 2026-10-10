@@ -36,6 +36,9 @@ impl Slot {
 pub(super) struct Index {
     map: HashMap<Arc<str>, Slot>,
     conflicts: Vec<AliasConflict>,
+    /// The Kind of each type by (group, plural): a list is opened by Kind, an alias leads to a
+    /// plural.
+    kinds: HashMap<(Arc<str>, Arc<str>), Arc<str>>,
 }
 
 /// The entries of every layer that claim one name.
@@ -72,6 +75,7 @@ impl Index {
         let mut index = Self {
             map: HashMap::with_capacity(claims.len()),
             conflicts: Vec::new(),
+            kinds: HashMap::new(),
         };
         for (name, claim) in claims {
             index.settle(name, claim);
@@ -130,6 +134,20 @@ impl Index {
                 self.map.insert(name, Slot::Many(candidates.into()));
             }
         }
+    }
+
+    /// Attaches the Kind of every type the table can open.
+    pub(super) fn with_kinds(mut self, kinds: HashMap<(Arc<str>, Arc<str>), Arc<str>>) -> Self {
+        self.kinds = kinds;
+        self
+    }
+
+    /// The Kind of the type `resource` of `group`.
+    pub(super) fn kind_of(&self, group: &str, resource: &str) -> Option<Arc<str>> {
+        // The key owns its strings, so a probe allocates: this runs once per executed jump.
+        self.kinds
+            .get(&(Arc::from(group), Arc::from(resource)))
+            .cloned()
     }
 
     /// The entry or entries called `name` (already lower-case).

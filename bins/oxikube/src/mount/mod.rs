@@ -47,6 +47,11 @@
 //!     in the cluster tab's bottom dock; quitting the app deletes the pods of the shells still
 //!     open and writes their closing records (`terminal::close_node_shells_on_quit`).
 //!
+//! 13. the `:` jump bar (E11-S05, `jump`): `:pods`, `:deploy kube-system`, `:pod /re app=x`,
+//!     `:ctx prod`, `:ns`, `:q`, opened by `:` in a resource table or `palette::OpenJump`; a line
+//!     runs as `resource::OpenList`, `namespace::Select`, `table::SetFilter`, `cluster::Select` and
+//!     `app::Quit` through the window's dispatcher; `[`, `]` and `-` replay the history.
+//!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
 //! (ADR 0013, `startup::deferred`). What must live as long as the window is held by a
@@ -54,6 +59,7 @@
 
 pub mod bus;
 mod describe;
+mod jump;
 mod logs;
 mod palette;
 mod resources;
@@ -125,6 +131,12 @@ pub struct Wiring {
     /// Applies `palette::Toggle` and `palette::ToggleShowAll` from the bus to this window's
     /// command palette (E11-S03).
     _palette: Task<()>,
+    /// Applies `palette::OpenJump` and the jump history commands from the bus to this window's `:`
+    /// jump bar (E11-S05).
+    _jump: Task<()>,
+    /// Applies `app::Quit` from the bus (`:q`, the palette): the quit guard asks first while
+    /// operations are running.
+    _quit: Task<()>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -208,6 +220,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (terminal_input_sink, terminal_input_rx) = TerminalInputSink::channel();
     let (terminal_views_sink, terminal_views_rx) = TerminalViewSink::channel();
     let (palette_sink, palette_rx) = oxikube_palette::command_palette::PaletteSink::channel();
+    let (jump_sink, jump_rx) = oxikube_palette::jump::JumpSink::channel();
+    let (quit_sink, quit_rx) = oxikube_workspace::session::QuitSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -224,6 +238,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         terminal_views: terminal_views_sink.clone(),
         exec: exec_service.clone(),
         palette: palette_sink,
+        jump: jump_sink,
+        quit: quit_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -356,7 +372,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         palette::PaletteDeps {
             workspace: workspace.clone(),
             bus: bus.clone(),
-            dispatcher,
+            dispatcher: dispatcher.clone(),
             recents: state.recents().clone(),
             tabs: tabs.downgrade(),
             sessions: services.sessions.clone(),
@@ -365,6 +381,22 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // The `:` jump bar (E11-S05): `:` in a resource table opens it over the focused view.
+    let jump = jump::mount(
+        jump::JumpDeps {
+            workspace: workspace.clone(),
+            dispatcher,
+            tabs: tabs.downgrade(),
+            sessions: services.sessions.clone(),
+            catalog: services.catalog.clone(),
+            aliases: services.aliases.clone(),
+            namespaces: services.namespaces.clone(),
+        },
+        jump_rx,
+        window,
+        cx,
+    );
+    let quit = oxikube_workspace::session::serve_quit(quit_rx, window, cx);
 
     let open_views = open_views(views_rx, view_deps, &workspace, window, cx);
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
@@ -385,6 +417,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _follow_kubectl: follow_kubectl,
         _terminal_views: terminal_views,
         _palette: palette,
+        _jump: jump,
+        _quit: quit,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

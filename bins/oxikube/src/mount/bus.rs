@@ -21,6 +21,8 @@
 //! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
 //! | `oxikube_app::exec` | `node::Shell` (guarded: blocked read-only, a confirmation naming the node and the image, a server dry run of the pod, audit; E09-S09) |
 //! | `oxikube_palette` | `palette::Toggle` (the palette: opens or closes it, E11-S03), `palette::ToggleShowAll` (lists the commands that cannot run here too) |
+//! | `oxikube_palette` | `palette::OpenJump` (the `:` jump bar, E11-S05), `jump::Back`, `jump::Forward`, `jump::Last` (its history: `[`, `]`, `-`) |
+//! | `oxikube_workspace` (quit) | `app::Quit`: asks first while operations run, like `cmd-q` (E11-S05, for `:q`, the palette and agents) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
 //! `pod::Debug` (E09-S10, registered by `oxikube_terminal` over the app's `ExecService`) adds an
@@ -50,12 +52,14 @@ use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_logs_ui::LogCommandSink;
 use oxikube_palette::command_palette::PaletteSink;
+use oxikube_palette::jump::JumpSink;
 use oxikube_resources_ui::ResourceCommandSink;
 use oxikube_resources_ui::navigate::OpenKind;
 use oxikube_terminal::input::TerminalInputSink;
 use oxikube_terminal::open_link::LinkSink;
 use oxikube_terminal::view::TerminalViewSink;
 use oxikube_workspace::cluster_tab::CommandSink;
+use oxikube_workspace::session::QuitSink;
 use oxikube_workspace::{ClusterCommandRunner, CommandDispatcher};
 use serde_json::json;
 
@@ -97,6 +101,11 @@ pub struct BusParts {
     /// Where `palette::Toggle` and `palette::ToggleShowAll` send their request (applied on the UI
     /// thread by the window's palette host).
     pub palette: PaletteSink,
+    /// Where `palette::OpenJump` and the jump history commands send their request (applied on the
+    /// UI thread by the window's jump host).
+    pub jump: JumpSink,
+    /// Where `app::Quit` sends its request (applied on the UI thread).
+    pub quit: QuitSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -135,6 +144,12 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_palette", |r| {
         oxikube_palette::command_palette::register_commands(r, parts.palette)
+    })?;
+    registry.install("oxikube_palette::jump", |r| {
+        oxikube_palette::jump::register_commands(r, parts.jump)
+    })?;
+    registry.install("oxikube_workspace::quit", |r| {
+        oxikube_workspace::session::register_quit_command(r, parts.quit)
     })?;
     registry.install("oxikube_terminal", |r| {
         oxikube_terminal::open_link::register_commands(r, parts.links)?;

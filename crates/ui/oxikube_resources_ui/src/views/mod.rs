@@ -26,6 +26,8 @@ mod row_actions;
 mod sidebar;
 
 pub use commands::{RESOURCE_COMMANDS, ResourceCommandSink, ViewRequest, register_commands};
+#[cfg(test)]
+pub(crate) use controller::PENDING_FILTER_TTL;
 pub use controller::{ResourceViews, ResourceViewsDeps, find_kind};
 pub use row_actions::view_row_actions;
 pub use sidebar::{ResourceViewsSlot, sidebar_navigation};

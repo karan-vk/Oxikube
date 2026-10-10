@@ -24,6 +24,8 @@ pub(super) struct Row {
     pub version: &'static str,
     /// Plural resource name.
     pub resource: &'static str,
+    /// The Kind (`Pod`), which a list is opened by.
+    pub kind: &'static str,
 }
 
 const fn row(
@@ -31,61 +33,87 @@ const fn row(
     group: &'static str,
     version: &'static str,
     resource: &'static str,
+    kind: &'static str,
 ) -> Row {
     Row {
         names,
         group,
         version,
         resource,
+        kind,
     }
 }
 
 /// The table. Names are unique across rows (a test checks it).
 pub(super) static BUILTINS: &[Row] = &[
     // Core.
-    row(&["po", "pod", "pods"], "", "v1", "pods"),
-    row(&["svc", "service", "services"], "", "v1", "services"),
-    row(&["cm", "configmap", "configmaps"], "", "v1", "configmaps"),
-    row(&["sec", "secret", "secrets"], "", "v1", "secrets"),
+    row(&["po", "pod", "pods"], "", "v1", "pods", "Pod"),
+    row(
+        &["svc", "service", "services"],
+        "",
+        "v1",
+        "services",
+        "Service",
+    ),
+    row(
+        &["cm", "configmap", "configmaps"],
+        "",
+        "v1",
+        "configmaps",
+        "ConfigMap",
+    ),
+    row(&["sec", "secret", "secrets"], "", "v1", "secrets", "Secret"),
     row(
         &["sa", "serviceaccount", "serviceaccounts"],
         "",
         "v1",
         "serviceaccounts",
+        "ServiceAccount",
     ),
-    row(&["ns", "namespace", "namespaces"], "", "v1", "namespaces"),
-    row(&["no", "node", "nodes"], "", "v1", "nodes"),
-    row(&["ev", "event", "events"], "", "v1", "events"),
-    row(&["ep", "endpoints"], "", "v1", "endpoints"),
+    row(
+        &["ns", "namespace", "namespaces"],
+        "",
+        "v1",
+        "namespaces",
+        "Namespace",
+    ),
+    row(&["no", "node", "nodes"], "", "v1", "nodes", "Node"),
+    row(&["ev", "event", "events"], "", "v1", "events", "Event"),
+    row(&["ep", "endpoints"], "", "v1", "endpoints", "Endpoints"),
     row(
         &["pv", "persistentvolume", "persistentvolumes"],
         "",
         "v1",
         "persistentvolumes",
+        "PersistentVolume",
     ),
     row(
         &["pvc", "persistentvolumeclaim", "persistentvolumeclaims"],
         "",
         "v1",
         "persistentvolumeclaims",
+        "PersistentVolumeClaim",
     ),
     row(
         &["rc", "replicationcontroller", "replicationcontrollers"],
         "",
         "v1",
         "replicationcontrollers",
+        "ReplicationController",
     ),
     row(
         &["rq", "quota", "resourcequota", "resourcequotas"],
         "",
         "v1",
         "resourcequotas",
+        "ResourceQuota",
     ),
     row(
         &["limits", "limitrange", "limitranges"],
         "",
         "v1",
         "limitranges",
+        "LimitRange",
     ),
     // Workloads.
     row(
@@ -93,57 +121,72 @@ pub(super) static BUILTINS: &[Row] = &[
         "apps",
         "v1",
         "deployments",
+        "Deployment",
     ),
     row(
         &["sts", "statefulset", "statefulsets"],
         "apps",
         "v1",
         "statefulsets",
+        "StatefulSet",
     ),
     row(
         &["ds", "daemonset", "daemonsets"],
         "apps",
         "v1",
         "daemonsets",
+        "DaemonSet",
     ),
     row(
         &["rs", "replicaset", "replicasets"],
         "apps",
         "v1",
         "replicasets",
+        "ReplicaSet",
     ),
-    row(&["job", "jobs"], "batch", "v1", "jobs"),
-    row(&["cj", "cronjob", "cronjobs"], "batch", "v1", "cronjobs"),
+    row(&["job", "jobs"], "batch", "v1", "jobs", "Job"),
+    row(
+        &["cj", "cronjob", "cronjobs"],
+        "batch",
+        "v1",
+        "cronjobs",
+        "CronJob",
+    ),
     // Networking and storage.
     row(
         &["ing", "ingress", "ingresses"],
         "networking.k8s.io",
         "v1",
         "ingresses",
+        "Ingress",
     ),
     row(
         &["np", "netpol", "networkpolicy", "networkpolicies"],
         "networking.k8s.io",
         "v1",
         "networkpolicies",
+        "NetworkPolicy",
     ),
     row(
         &["ingressclass", "ingressclasses"],
         "networking.k8s.io",
         "v1",
         "ingressclasses",
+        "IngressClass",
     ),
     row(
         &["eps", "endpointslice", "endpointslices"],
         "discovery.k8s.io",
         "v1",
         "endpointslices",
+        "EndpointSlice",
     ),
     row(
         &["sc", "storageclass", "storageclasses"],
         "storage.k8s.io",
         "v1",
         "storageclasses",
+        "StorageClass",
     ),
     // RBAC.
     row(
@@ -151,24 +194,28 @@ pub(super) static BUILTINS: &[Row] = &[
         "rbac.authorization.k8s.io",
         "v1",
         "roles",
+        "Role",
     ),
     row(
         &["rb", "rob", "rolebinding", "rolebindings"],
         "rbac.authorization.k8s.io",
         "v1",
         "rolebindings",
+        "RoleBinding",
     ),
     row(
         &["cr", "clusterrole", "clusterroles"],
         "rbac.authorization.k8s.io",
         "v1",
         "clusterroles",
+        "ClusterRole",
     ),
     row(
         &["crb", "clusterrolebinding", "clusterrolebindings"],
         "rbac.authorization.k8s.io",
         "v1",
         "clusterrolebindings",
+        "ClusterRoleBinding",
     ),
     // Policy, scaling, scheduling, extension points.
     row(
@@ -176,18 +223,21 @@ pub(super) static BUILTINS: &[Row] = &[
         "autoscaling",
         "v2",
         "horizontalpodautoscalers",
+        "HorizontalPodAutoscaler",
     ),
     row(
         &["pdb", "poddisruptionbudget", "poddisruptionbudgets"],
         "policy",
         "v1",
         "poddisruptionbudgets",
+        "PodDisruptionBudget",
     ),
     row(
         &["pc", "priorityclass", "priorityclasses"],
         "scheduling.k8s.io",
         "v1",
         "priorityclasses",
+        "PriorityClass",
     ),
     row(
         &[
@@ -199,6 +249,7 @@ pub(super) static BUILTINS: &[Row] = &[
         "apiextensions.k8s.io",
         "v1",
         "customresourcedefinitions",
+        "CustomResourceDefinition",
     ),
 ];
 

@@ -101,6 +101,11 @@ impl Discovered {
             .map(|kind| kind.gvk.version.clone())
     }
 
+    /// Every served type, group by group.
+    pub(super) fn kinds(&self) -> impl Iterator<Item = &ResourceKind> {
+        self.groups.values().flat_map(|group| group.kinds.values())
+    }
+
     /// Every discovery alias, group by group.
     pub(super) fn entries(&self) -> impl Iterator<Item = &AliasEntry> {
         self.groups.values().flat_map(|group| group.entries.iter())

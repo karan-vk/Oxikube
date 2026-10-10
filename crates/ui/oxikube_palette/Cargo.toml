@@ -18,6 +18,7 @@ nucleo-matcher.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
+oxikube_runtime.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
 tracing.workspace = true
@@ -26,6 +27,10 @@ tracing.workspace = true
 anyhow.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
+oxikube_assets.workspace = true
+oxikube_ports.workspace = true
+parking_lot.workspace = true
+serde_json.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 
@@ -55,6 +60,13 @@ required-features = ["test-support"]
 # `cargo run -p oxikube_palette --features test-support --profile release-fast --example command_palette_bench`
 [[example]]
 name = "command_palette_bench"
+required-features = ["test-support"]
+
+# Open, keystroke-to-matches, parse/plan and redraw cost of the `:` jump bar over about 2 400 alias
+# names on the test platform:
+# `cargo run -p oxikube_palette --features test-support --profile release-fast --example jump_bench`
+[[example]]
+name = "jump_bench"
 required-features = ["test-support"]
 
 [lints]

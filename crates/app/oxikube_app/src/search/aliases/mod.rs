@@ -44,4 +44,5 @@ pub use entry::{AliasConflict, AliasEntry, AliasSource, ConflictKind, Resolution
 pub use follow::AliasFollow;
 pub use registry::AliasRegistry;
 pub use suggest::MAX_SUGGESTIONS;
+pub(crate) use suggest::closest_names;
 pub use table::AliasTable;

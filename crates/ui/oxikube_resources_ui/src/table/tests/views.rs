@@ -250,7 +250,26 @@ fn the_commands_reach_the_views_through_the_bus() {
         requests.try_recv().ok(),
         Some(ViewRequest::FocusFilter {
             cluster: cluster(),
+            gvk: pods.clone(),
+        })
+    );
+    // `table::SetFilter` (the `:` bar's filter) changes what one view shows, not the cluster: it
+    // runs in read-only mode too.
+    block_on(bus.dispatch(
+        Command::TableSetFilter {
+            cluster: cluster(),
+            gvk: pods.clone(),
+            text: "api -l app=x".to_owned(),
+        },
+        ctx(),
+    ))
+    .unwrap();
+    assert_eq!(
+        requests.try_recv().ok(),
+        Some(ViewRequest::SetFilter {
+            cluster: cluster(),
             gvk: pods,
+            text: "api -l app=x".to_owned(),
         })
     );
 }

@@ -14,6 +14,15 @@ pub const MAX_SUGGESTIONS: usize = 5;
 /// Longest name compared by edit distance; longer inputs only get prefix matches.
 const MAX_COMPARED: usize = 48;
 
+/// How many edits away a name may be for an input of `len` bytes: none for a short input.
+fn allowed_edits(len: usize) -> usize {
+    match len {
+        0..=2 => 0,
+        3..=5 => 1,
+        _ => 2,
+    }
+}
+
 /// Close names for `input` (lower-case), best first: names that start with it (shortest first),
 /// then names within a small edit distance (closest first, built-in and user names before
 /// discovered ones, then alphabetical).
@@ -21,11 +30,7 @@ pub(super) fn suggest(index: &Index, input: &str) -> Vec<Arc<str>> {
     if input.is_empty() {
         return Vec::new();
     }
-    let allowed = match input.len() {
-        0..=2 => 0,
-        3..=5 => 1,
-        _ => 2,
-    };
+    let allowed = allowed_edits(input.len());
     let check_distance = allowed > 0 && input.len() <= MAX_COMPARED;
 
     // Sorts by (class, closeness, source, name): a prefix match is closer when shorter, an edit
@@ -46,6 +51,40 @@ pub(super) fn suggest(index: &Index, input: &str) -> Vec<Arc<str>> {
         .into_iter()
         .take(MAX_SUGGESTIONS)
         .map(|f| f.3.clone())
+        .collect()
+}
+
+/// Close names for `input` among `names` (any list, not the alias table): names that start with
+/// it, then names that contain it (shortest first), then names a few edits away (closest first),
+/// at most [`MAX_SUGGESTIONS`]. For an unknown namespace or context in the jump bar.
+pub(crate) fn closest_names<'a>(
+    input: &str,
+    names: impl IntoIterator<Item = &'a str>,
+) -> Vec<Arc<str>> {
+    let needle = input.to_ascii_lowercase();
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    let allowed = allowed_edits(needle.len());
+    let mut found: Vec<(u8, usize, &str)> = Vec::new();
+    for name in names {
+        let lower = name.to_ascii_lowercase();
+        if lower.starts_with(&needle) {
+            found.push((0, name.len(), name));
+        } else if lower.contains(&needle) {
+            found.push((1, name.len(), name));
+        } else if allowed > 0
+            && name.len() <= MAX_COMPARED
+            && let Some(distance) = bounded_distance(needle.as_bytes(), lower.as_bytes(), allowed)
+        {
+            found.push((2, distance, name));
+        }
+    }
+    found.sort();
+    found
+        .into_iter()
+        .take(MAX_SUGGESTIONS)
+        .map(|(_, _, name)| Arc::from(name))
         .collect()
 }
 

@@ -71,7 +71,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   in `conflicts()` (`Shadowed`: a higher layer hides lower entries that lead elsewhere; `Ambiguous`), never silent.
   `AliasRegistry` holds one table per cluster and the user's aliases for all; `follow(sessions, runtime)` fills a table
   when its session connects, applies a CRD change by resolving only the kinds it names (one cluster's worker task each),
-  and clears discovery on disconnect. Module `sidebar` (E06-S10):
+  and clears discovery on disconnect. Module `search::jump` (E11-S05): the `:` jump bar's grammar and planner, plain Rust.
+  `parse` is a hand-written tokenizer and a loop (`:<alias> [ns] [/filter] [k=v,..] [@ctx]`, `:ctx [name]`, `:ns [name]`,
+  `:q`, `-` `[` `]`) returning a `JumpCommand` or a `ParseError` with the `Span` to underline; the `/filter` stays an
+  uninterpreted `RawFilter` for the filter bar's grammar (`store::filter`, which now also reads `name -l selector`).
+  `plan(line, &dyn JumpEnv)` resolves a line against the shown cluster's alias table (`AliasTable::gvk_of` gives the
+  Kind a list is opened by), its namespace list and the cluster contexts, and returns a `JumpPlan`: the navigation
+  `Command`s that do it (`resource::OpenList`, `namespace::Select`, `table::SetFilter`, `cluster::Select` or
+  `cluster::Connect` with the rest after the connection, `view::Open catalog`, `app::Quit`, `jump::Back|Forward|Last`),
+  with suggestions for an unknown alias, namespace or context and a user alias that is a command line expanded
+  (loops stop at four levels). `JumpHistory` is the session ring (`[` back, `]` forward, `-` previous view and back);
+  `site` / `candidates` / `accept` are the completion of the word under the caret. Module `sidebar` (E06-S10):
   `review_access` (the rules reviews the cluster sidebar hides sections by; fails open) and
   `discover_custom_resources`; module `integrations`: the `IntegrationRegistry` stub. Module `session` (E06-S01):
   `ClusterSessionManager` connects a context through `ClusterConnectorPort`, holds the returned
@@ -403,7 +413,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   the same container and range) or "Reconnect" (`logs::Reconnect`, `r`: `LogSession::reconnect`, the lines kept; a
   multi-pod view reopens). The multi-pod banner lists the streams that reconnect ("web-7d9/app reconnecting (1/5)").
   `logs.reconnect_retries` is the setting (default.json, schema, hot reload).
-- `oxikube_palette` — module `picker` (E11-S02): `Picker<D: PickerDelegate>`, Zed's picker design (GPL-3.0-or-later code
+- `oxikube_palette` — module `jump` (E11-S05): the `:` jump bar. `JumpHost` (one per window, `install`ed like the
+  palette's host) opens `JumpBar` (a modal over a `Picker<JumpDelegate>`, key context `JumpBar`, Tab is
+  `jump_bar::Complete`) from three doors that end in `JumpHost::apply`: the `palette::OpenJump`, `jump::Back`,
+  `jump::Forward` and `jump::Last` GPUI actions (`:` `[` `]` `-` in a table, `Table && !Editing` in the keymap files) and
+  the bus commands of the same names (`JumpSink`, `register_commands`). Each keystroke parses the line (a problem so far
+  is shown quietly) and matches the word under the caret off the UI thread above a few hundred candidates; Enter plans
+  the line against a `LiveEnv` snapshot (the cluster contexts and the shown cluster's namespaces are read on the
+  Tokio bridge when the bar opens), keeps a mistake in the bar with the word underlined and close names, and sends a
+  good line's commands through the window's `CommandDispatcher` once the bar has closed and given the focus back. A jump
+  to a context that is not connected sends `cluster::Connect` and the rest when the session is up (`connect.rs`).
+  `app::Quit` is on the bus too (`oxikube_workspace::session::quit_command`) so `:q` ends in the same quit guard as `cmd-q`.
+  Module `picker` (E11-S02): `Picker<D: PickerDelegate>`, Zed's picker design (GPL-3.0-or-later code
   derived from `crates/picker`, see THIRD_PARTY_NOTICES.md): a query field (`oxikube_ui`'s input) over a `uniform_list`
   of fixed-height rows (only the visible ones are built), keyboard selection that wraps and skips what
   `can_select` refuses, confirm / secondary confirm (a confirm asked for while matches are updating waits for them),
@@ -772,6 +793,9 @@ weaken `cargo xtask lint-deps`.
   `ClockPort`. They join the state db in `AppPorts` (`AppPorts::clusters`).
 - `app_state::ClusterServices`: the session manager, catalog, cluster commands, namespace service
   and integration registry over those ports, held by `AppState`.
+- `jump` (E11-S05): `mount::jump` installs the window's `JumpHost` over `JumpSources` (the shown cluster from
+  `ClusterTabs`, the sessions, the catalog, the alias registry, the namespace service) and serves the bus's
+  `palette::OpenJump` / `jump::*` requests; `oxikube_palette::jump::init` (a feature init) binds the actions.
 - `aliases` (E11-S04): `ClusterServices::aliases` is the `AliasRegistry` the jump bar reads
   (`aliases.table(&cluster).resolve(word)`). The `aliases` feature init (`startup::features`, after the first
   frame's path) follows the session manager on the Tokio runtime and opens the user's `aliases.json` on the

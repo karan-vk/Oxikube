@@ -157,3 +157,63 @@ fn unicode_matches_case_insensitively() {
     let parts = parts("-f ñ");
     assert!(parts.filter.pattern.unwrap().matches("PEÑA"));
 }
+
+#[test]
+fn a_name_filter_and_a_selector_apply_together() {
+    // What `:pod /api app=x` types into the bar.
+    let p = parts("api -l app=x");
+    assert!(
+        p.filter
+            .pattern
+            .as_ref()
+            .is_some_and(|n| n.matches("api-1"))
+    );
+    assert!(
+        p.filter
+            .pattern
+            .as_ref()
+            .is_some_and(|n| !n.matches("web-1"))
+    );
+    assert_eq!(
+        p.selector,
+        Some(LabelSelector::from_terms(vec![LabelTerm::Eq(
+            "app".into(),
+            "x".into()
+        )]))
+    );
+    assert_eq!(parts("/api -l app=x"), p, "a leading slash is ignored");
+
+    let inverse = parts("!api -l app=x");
+    assert!(
+        inverse
+            .filter
+            .pattern
+            .as_ref()
+            .is_some_and(|n| n.matches("web-1"))
+    );
+    assert!(inverse.selector.is_some());
+
+    let fuzzy = parts("-f ap -l app=x,env=y");
+    assert!(fuzzy.ranks(), "a fuzzy name filter still ranks");
+    assert_eq!(fuzzy.selector.map(|s| s.terms().len()), Some(2));
+}
+
+#[test]
+fn a_selector_after_a_name_with_nothing_else_is_just_the_other_part() {
+    assert_eq!(ok("web -l"), ok("web"));
+    assert_eq!(ok("web -l   "), ok("web"));
+    assert_eq!(
+        parts("-l app=x").filter.pattern,
+        None,
+        "a selector alone has no name filter"
+    );
+}
+
+#[test]
+fn a_bad_selector_after_a_name_is_reported() {
+    assert!(matches!(
+        parse("web -l zone in ("),
+        Err(FilterError::Selector(_))
+    ));
+    assert!(matches!(parse("web(-l app=x"), Err(FilterError::Regex(_))));
+}

@@ -72,6 +72,10 @@
   up               picker::SelectPrevious
 [Palette]
   cmd-shift-a      palette::ToggleShowAll
+[JumpBar]
+  tab              jump_bar::Complete
+[JumpBar > Input]
+  tab              jump_bar::Complete
 [ResourceTable]
   cmd-a            resource_table::SelectAll
   cmd-c            resource_table::CopyName
@@ -84,7 +88,10 @@
   shift-up         resource_table::ExtendPrevious
   up               resource_table::SelectPrevious
 [ResourceTable && !Editing]
+  -                jump::Last
   /                resource_table::FocusFilter
+  [                jump::Back
+  ]                jump::Forward
   a                resource_table::AttachSelected
   cmd-backspace    resource_table::DeleteSelected
   ctrl-d           resource_table::DeleteSelected

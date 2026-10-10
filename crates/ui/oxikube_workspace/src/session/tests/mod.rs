@@ -4,6 +4,7 @@
 mod commands;
 mod motion;
 mod quit;
+mod quit_command;
 mod windows;
 mod zoom;
 
