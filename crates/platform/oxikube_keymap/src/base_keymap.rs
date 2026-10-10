@@ -80,15 +80,16 @@ pub(crate) fn follow_base_keymap(cx: &mut App) {
         return;
     }
     KeymapSettings::observe(cx, |cx| {
-        if let Some(settings) = KeymapSettings::try_get(cx) {
-            let wanted = settings.base_keymap.is_vim();
-            if cx
-                .try_global::<KeymapStore>()
-                .is_some_and(|store| store.vim_enabled() != wanted)
-            {
-                tracing::info!(base_keymap = ?settings.base_keymap, "base keymap changed");
-                set_vim_layer(cx, wanted);
-            }
+        let Some(settings) = KeymapSettings::try_get(cx) else {
+            return;
+        };
+        let wanted = settings.base_keymap.is_vim();
+        if cx
+            .try_global::<KeymapStore>()
+            .is_some_and(|store| store.vim_enabled() != wanted)
+        {
+            tracing::info!(base_keymap = ?settings.base_keymap, "base keymap changed");
+            set_vim_layer(cx, wanted);
         }
     })
     .detach();

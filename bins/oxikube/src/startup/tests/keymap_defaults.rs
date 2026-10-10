@@ -20,7 +20,7 @@ fn named_actions(text: &str) -> BTreeSet<String> {
     let mut names = BTreeSet::new();
     for (_, section) in parsed.sections {
         for value in section.bindings.values() {
-            if let Ok(KeymapAction::Action { name, .. }) = KeymapAction::from_json(&value.clone()) {
+            if let Ok(KeymapAction::Action { name, .. }) = KeymapAction::from_json(value) {
                 names.insert(name);
             }
         }

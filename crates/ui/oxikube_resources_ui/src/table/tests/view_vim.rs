@@ -102,7 +102,7 @@ fn d_then_j_is_just_j(cx: &mut TestAppContext) {
         "and the d did not describe: {:?}",
         f.dispatcher.sent()
     );
-    // The same for y and g.
+    // The same for y.
     f.keys(&table, "y j");
     assert_eq!(cursor(&mut f, &table), "c");
     assert!(f.dispatcher.sent().is_empty(), "y j copied nothing");
