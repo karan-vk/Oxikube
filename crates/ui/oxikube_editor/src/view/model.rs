@@ -2,8 +2,8 @@
 //! it is tested without a window (`tests` below use a plain struct as the editor).
 //!
 //! It keeps the schemas the buffer's kinds need (which to fetch, which arrived, which the cluster
-//! does not have), drops a validation result computed for an older buffer version, counts the
-//! problems the toolbar shows, and flips the view toggles.
+//! does not have), drops a validation result computed for an older buffer version and counts the
+//! problems the toolbar shows.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -128,20 +128,6 @@ impl ManifestModel {
                 self.known.insert(gvk, None);
             }
         }
-    }
-
-    /// Flips read-only; returns the new state.
-    pub fn toggle_read_only(&mut self, editor: &mut dyn EditorApi) -> bool {
-        let read_only = !editor.is_read_only();
-        editor.set_read_only(read_only);
-        read_only
-    }
-
-    /// Flips soft wrap; returns the new state.
-    pub fn toggle_soft_wrap(&mut self, editor: &mut dyn EditorApi) -> bool {
-        let wrap = !editor.soft_wrap();
-        editor.set_soft_wrap(wrap);
-        wrap
     }
 }
 
