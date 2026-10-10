@@ -2,6 +2,9 @@
 //! the same with a syntax error in the middle (recovery path), a 5 MB `kubectl get -o yaml`
 //! style dump, and 5 MB buffers with hundreds of errors (recovery stays linear).
 //!
+//! Every case asserts that the whole buffer reached the model (the last line's key is in the
+//! tree), so a case that hits the parser's diagnostic cap fails instead of timing a prefix.
+//!
 //! `cargo bench -p oxikube_editor --bench yaml_parse` prints min / median / p95 per parse. Under
 //! `cargo test --all-targets` (no `--bench` flag) it runs one small iteration as a smoke test.
 
@@ -107,9 +110,23 @@ fn dump(bytes: usize) -> String {
     out
 }
 
+/// Offset of the key on the last line of `text` (after its indentation and `- ` markers).
+fn last_line_key(text: &str) -> usize {
+    let body = text.trim_end_matches('\n');
+    let start = body.rfind('\n').map_or(0, |i| i + 1);
+    let line = &body[start..];
+    start + line.len() - line.trim_start_matches([' ', '-']).len()
+}
+
 fn bench(label: &str, text: &str, samples: usize) {
     let text: Arc<str> = Arc::from(text);
     let first = parse_shared(Arc::clone(&text));
+    assert!(
+        first.key_at(last_line_key(&text)).is_some(),
+        "{label}: the last line is not in the model ({} diagnostics): recovery stopped early, \
+         so the timing would cover only a prefix of the buffer",
+        first.diagnostics().len(),
+    );
     let nodes: usize = first.docs().iter().map(|d| d.nodes().len()).sum();
     let mut times: Vec<Duration> = (0..samples)
         .map(|_| {
@@ -169,16 +186,20 @@ fn main() {
     }
     bench("5 MB dump, error / 25 pods", &many, samples.min(10));
 
+    // One error per 1000 lines: ~490 at 5 MB, under the parser's 1000-diagnostic cap, so the
+    // whole buffer is parsed (`bench` asserts it).
     let mut flat = String::with_capacity(big + 64);
     for i in 0.. {
         if flat.len() >= big {
             break;
         }
-        if i % 100 == 99 {
-            flat.push_str("a: b: c\n");
+        if i % 1_000 == 999 {
+            // A unique key, so each error line adds one syntax diagnostic and no duplicate key.
+            let _ = writeln!(flat, "e{i}: b: c");
         } else {
             let _ = writeln!(flat, "k{i}: v");
         }
     }
-    bench("5 MB flat, error / 100 lines", &flat, samples.min(10));
+    flat.push_str("last: v\n");
+    bench("5 MB flat, error / 1000 lines", &flat, samples.min(10));
 }
