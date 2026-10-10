@@ -5,7 +5,7 @@
 
 use gpui::SharedString;
 use oxikube_domain::command::{self, CommandCategory};
-use oxikube_keymap::{ActiveBinding, KeymapLayer, SuppressedBinding, stands_for};
+use oxikube_keymap::{ActiveBinding, BindingInfo, KeymapLayer, SuppressedBinding, stands_for};
 
 /// The group a binding is listed under: the category of the command it runs (E11-S01's
 /// [`CommandCategory`], in its display order), or `Navigation` for a key that only moves a cursor
@@ -91,29 +91,25 @@ pub struct HelpEntry {
 impl HelpEntry {
     /// The entry of a binding in force.
     pub fn active(binding: &ActiveBinding) -> Self {
-        let (category, title) = describe(binding.action);
-        Self {
-            category,
-            title,
-            keystrokes: binding.binding.keystrokes.clone(),
-            action: binding.action,
-            source: HelpSource::of(binding.binding.layer),
-            state: HelpState::Active,
-            context: binding.binding.context.clone(),
-        }
+        Self::of(binding.action, &binding.binding, HelpState::Active)
     }
 
     /// The entry of a default binding a `null` hides.
     pub fn unbound(binding: &SuppressedBinding) -> Self {
-        let (category, title) = describe(binding.action);
+        let state = HelpState::Unbound(HelpSource::of(Some(binding.by)));
+        Self::of(binding.action, &binding.binding, state)
+    }
+
+    fn of(action: &'static str, binding: &BindingInfo, state: HelpState) -> Self {
+        let (category, title) = describe(action);
         Self {
             category,
             title,
-            keystrokes: binding.binding.keystrokes.clone(),
-            action: binding.action,
-            source: HelpSource::of(binding.binding.layer),
-            state: HelpState::Unbound(HelpSource::of(Some(binding.by))),
-            context: binding.binding.context.clone(),
+            keystrokes: binding.keystrokes.clone(),
+            action,
+            source: HelpSource::of(binding.layer),
+            state,
+            context: binding.context.clone(),
         }
     }
 

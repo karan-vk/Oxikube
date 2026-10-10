@@ -129,10 +129,7 @@ pub fn active_bindings(cx: &App, stack: &[KeyContext]) -> Vec<ActiveBinding> {
             if !wins {
                 continue;
             }
-            let entry = ActiveBinding {
-                action: binding.action().name(),
-                binding: BindingInfo::of(binding),
-            };
+            let entry = active_entry(binding);
             let key = (
                 entry.action,
                 entry.binding.keystrokes_text(),
@@ -200,10 +197,7 @@ pub fn all_bindings(cx: &App) -> Vec<ActiveBinding> {
         if hidden {
             continue;
         }
-        let entry = ActiveBinding {
-            action: binding.action().name(),
-            binding: BindingInfo::of(binding),
-        };
+        let entry = active_entry(binding);
         if !out.contains(&entry) {
             out.push(entry);
         }
@@ -274,6 +268,13 @@ pub fn suppressed_bindings(cx: &App, stack: &[KeyContext]) -> Vec<SuppressedBind
 /// added with `cx.bind_keys` ranks below every layer.
 fn rank(binding: &KeyBinding) -> usize {
     binding.meta().map_or(usize::MAX, |meta| meta.0 as usize)
+}
+
+fn active_entry(binding: &KeyBinding) -> ActiveBinding {
+    ActiveBinding {
+        action: binding.action().name(),
+        binding: BindingInfo::of(binding),
+    }
 }
 
 fn sort(out: &mut [ActiveBinding]) {

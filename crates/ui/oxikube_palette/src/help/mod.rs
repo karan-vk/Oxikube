@@ -28,8 +28,8 @@ mod delegate;
 mod entry;
 mod host;
 mod model;
-pub(crate) mod overlay;
-pub(crate) mod render;
+mod overlay;
+mod render;
 #[cfg(test)]
 mod tests;
 

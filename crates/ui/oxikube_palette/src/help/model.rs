@@ -5,6 +5,7 @@
 //! and filtering are pure too ([`HelpModel::rows`]), so the overlay's behaviour is tested without
 //! a window.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use gpui::{SharedString, Window};
@@ -196,7 +197,7 @@ impl HelpModel {
     /// `entry * FIELDS + field` (field 0 is the title), else they are the entries' indexes.
     fn fold(&self, matches: &[StringMatch], per_field: bool) -> Vec<Folded> {
         let mut folded: Vec<Folded> = Vec::new();
-        let mut at: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+        let mut at: HashMap<usize, usize> = HashMap::new();
         for found in matches {
             let (entry, field) = if per_field {
                 (found.candidate_id / FIELDS, found.candidate_id % FIELDS)
