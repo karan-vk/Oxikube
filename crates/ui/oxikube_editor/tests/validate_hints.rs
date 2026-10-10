@@ -238,6 +238,30 @@ fn merge_keys_and_aliases_are_left_alone() {
 }
 
 #[test]
+fn merge_keys_may_supply_required_and_embedded_resource_fields() {
+    let schema = inline(json!({
+        "type": "object",
+        "properties": {
+            "base": {"x-kubernetes-preserve-unknown-fields": true},
+            "containers": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}, "image": {"type": "string"}},
+                    "required": ["name", "image"],
+                },
+            },
+            "object": {"type": "object", "x-kubernetes-embedded-resource": true},
+        },
+    }));
+    let text = "base: &b {name: x, image: y}\ncontainers:\n- <<: *b\nobject:\n  <<: *b\n";
+    assert_eq!(check(text, &schema), []);
+    // Without a merge key the same items are still reported.
+    let diags = check("containers:\n- {name: x}\n", &schema);
+    assert_eq!(codes(&diags), ["required"]);
+}
+
+#[test]
 fn diagnostics_are_capped() {
     let schema = inline(json!({"type": "object", "properties": {"ok": {"type": "string"}}}));
     let text: String = (0..500).map(|i| format!("k{i}: v\n")).collect();

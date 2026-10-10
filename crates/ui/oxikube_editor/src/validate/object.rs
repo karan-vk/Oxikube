@@ -43,6 +43,11 @@ impl Walk<'_> {
                 self.unknown_field(key, name, schema);
             }
         }
+        // A `<<` merge key pulls in keys from an anchored mapping, which the model does not
+        // expand; any key could come from it, so a mapping that merges is never "missing" one.
+        if find_entry(doc, text, id, "<<").is_some() {
+            return;
+        }
         for name in &schema.required {
             if is_root && self.opts.skip_status && name == "status" {
                 continue;
