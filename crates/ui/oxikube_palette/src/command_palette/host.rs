@@ -20,7 +20,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_workspace::command_surface::run_on_focused;
 use oxikube_workspace::modal::ModalLayerEvent;
-use oxikube_workspace::{CommandDispatcher, Workspace};
+use oxikube_workspace::{CommandDispatcher, Toast, Workspace};
 
 use super::capture::capture;
 use super::delegate::PaletteParts;
@@ -35,6 +35,8 @@ pub enum PaletteRequest {
     Toggle,
     /// List the unavailable commands too, or hide them (`palette::ToggleShowAll`).
     ToggleShowAll,
+    /// Forget the recent commands (`palette::ClearRecents`).
+    ClearRecents,
 }
 
 impl PaletteRequest {
@@ -43,16 +45,18 @@ impl PaletteRequest {
         match command {
             Command::PaletteToggle => Some(Self::Toggle),
             Command::PaletteToggleShowAll => Some(Self::ToggleShowAll),
+            Command::PaletteClearRecents => Some(Self::ClearRecents),
             _ => None,
         }
     }
 
-    const ALL: [Self; 2] = [Self::Toggle, Self::ToggleShowAll];
+    const ALL: [Self; 3] = [Self::Toggle, Self::ToggleShowAll, Self::ClearRecents];
 
     fn id(self) -> CommandId {
         match self {
             Self::Toggle => CommandId::PALETTE_TOGGLE,
             Self::ToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
+            Self::ClearRecents => CommandId::PALETTE_CLEAR_RECENTS,
         }
     }
 }
@@ -71,8 +75,9 @@ impl PaletteSink {
     }
 }
 
-/// Registers `palette::Toggle` and `palette::ToggleShowAll` on `registry`, each with its MCP tool
-/// stub: `registry.install("oxikube_palette", |r| register_commands(r, sink))`. The handlers only
+/// Registers `palette::Toggle`, `palette::ToggleShowAll` and `palette::ClearRecents` on
+/// `registry`, each with its MCP tool stub:
+/// `registry.install("oxikube_palette", |r| register_commands(r, sink))`. The handlers only
 /// queue the request; the window applies it on the UI thread.
 ///
 /// # Errors
@@ -149,6 +154,21 @@ impl PaletteHost {
         match request {
             PaletteRequest::Toggle => self.toggle(window, cx),
             PaletteRequest::ToggleShowAll => self.toggle_show_all(window, cx),
+            PaletteRequest::ClearRecents => self.clear_recents(cx),
+        }
+    }
+
+    /// Forgets the recent commands (the store persists the empty list) and says so. An open
+    /// palette keeps the order it was opened with: the next open lists the commands by category.
+    fn clear_recents(&self, cx: &mut App) {
+        self.recents.clear();
+        if let Some(workspace) = self.workspace.upgrade() {
+            workspace.update(cx, |workspace, cx| {
+                workspace.show_toast(
+                    Toast::info("Recent commands cleared").key("palette-clear-recents"),
+                    cx,
+                );
+            });
         }
     }
 

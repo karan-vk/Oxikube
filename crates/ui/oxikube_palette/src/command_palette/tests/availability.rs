@@ -2,7 +2,6 @@
 //! never run from the palette.
 
 use gpui::TestAppContext;
-use oxikube_app::RecentsStore as _;
 use oxikube_domain::command::CommandId;
 
 use super::{Fixture, SHOW_ALL_KEY};

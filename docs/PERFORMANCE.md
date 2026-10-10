@@ -205,7 +205,7 @@ Two rules keep a scenario measuring what the app does (E07-F509, see
 |---|---|---|
 | `startup` | measured | the real init order to the main window's first interactive frame (E05-S13, see [Startup](#startup-cold-start-to-the-first-interactive-frame)): `first_frame_ms` (first line of `main` to the end of the update that drew the first frame), `launch_to_first_frame_ms` (process spawn to the first-frame marker on stdout, so exec and dynamic loading are included; timed by xtask), `config_load_ms` (settings + theme + keymap on the main thread), `init_<stage>_ms` (every stage of `oxikube::startup`), `state_db_open_ms` (creating and migrating the SQLite state db, off the UI thread in the app); then `frame_ms` / `draw_ms` (120 idle redraws of the main view: hook time, and wall time of the whole update measured outside GPUI) and `rss_mib` / `peak_rss_mib` (headless resident memory after the redraws, MiB; see [Memory (RSS)](#memory-rss)) |
 | `scroll-10k` (alias `table-scroll-10k`) | measured (E07-S09, see [Resource table](#resource-table-10-000-pods-under-churn-e07-s09)) | `first_rows_ms` (table created on a warm feed to the first frame showing all 10 000 pods), `frame_ms` / `draw_ms` scrolling 3 rows a frame while the feed delivers a 10-event batch a frame, `rss_mib` / `peak_rss_mib`; fails unless every batch is counted as feed deltas and `max_notifies_per_frame` ≤ 1 |
-| `palette` | measured (E11-S03) | the command palette over 2 000 registered commands (fixture commands in every category, view and selection shape; 1 500 available for a table with a pod selected): `open_ms` (building the view, which classifies the commands and puts the recents first, to the end of the first frame listing them; a fresh process, so it includes the real text system's first glyph shaping), then 120 scripted frames typing `fixture 19 pod` one character a frame (cleared after the last): `frame_ms` / `draw_ms` (the matches of 2 000 candidates, above 512 on the background executor, and the frame showing them), `rss_mib` / `peak_rss_mib`. Local macOS, `release-fast`, median of 5: `open_ms` 20 (the palette's own part is 1.5 ms: `cargo run -p oxikube_palette --features test-support --profile release-fast --example command_palette_bench` reports classify 0.18, open 1.3, keystroke to matches 0.75, frame 0.28, all p50 ms), `frame_ms` p50 0.31 / p95 1.45, `draw_ms` p95 0.72. Baseline: seeded from the nightly run like the others |
+| `palette` | measured (E11-S03) | the command palette over 2 000 registered commands (fixture commands in every category, view and selection shape; 1 500 available for a table with a pod selected): `open_ms` (building the view, which classifies the commands and puts the recents first, to the end of the first frame listing them; a fresh process, so it includes the real text system's first glyph shaping), then 120 scripted frames typing `fixture 19 pod` one character a frame (cleared after the last): `frame_ms` / `draw_ms` (the matches of 2 000 candidates, above 512 on the background executor, and the frame showing them), `rss_mib` / `peak_rss_mib`. Local macOS, `release-fast`, median of 5: `open_ms` 20 (the palette's own part is 1.5 ms: `cargo run -p oxikube_palette --features test-support --profile release-fast --example command_palette_bench` reports classify 0.18, open 1.3, keystroke to matches 0.75, frame 0.28, all p50 ms), `frame_ms` p50 0.31 / p95 1.45, `draw_ms` p95 0.72. Baseline: seeded from the nightly run like the others. Since E11-S11 the matching is `oxikube_app::FuzzyService` (see "Palette fuzzy ranking" below) |
 | `logs-stream` | measured (E08-S02, see [Log viewer](#log-viewer-streaming-5-000-liness-e08-s02)) | the log view streaming 5 000 lines/s after a 1 000-line tail, 120 scripted frames per mode: `frame_ms` / `draw_ms` (wrap off, following), `paused_*`, `wrap_*`, `wrap_paused_*`, `search_*` / `filter_*` (E08-S03: a regex search highlighting / filtering while it streams), `merged_*`, `merged_wrap_*` (E08-S04: the same lines merged from 10 pods of a Deployment), `rss_mib` / `peak_rss_mib`; fails unless every mode receives the lines at that rate and `max_notifies_per_frame` ≤ 1 |
 | `editor-5mb` | unavailable: `oxikube_editor` has no manifest editor view yet; needs E05-S11 #93 (GPUI test harness), E10-S04 #146 (ManifestEditor view), and E10-S11 #153 (large-file and performance hardening) | open time, typing latency |
 
@@ -1405,6 +1405,43 @@ RSS 157-159 MiB. Process CPU (`ps %cpu`, 1 s samples) was 13-18 % while streamin
 restart and 5-18 % during it (it dips while the old pods stop): no reconnect spike. The headless
 `cargo xtask perf logs-stream` scenario stays inside its budgets with the dedupe on the hot path
 (p95 `frame_ms` 3.3 ms, `merged_frame_ms` 4.2 ms on a machine busy with other builds).
+
+## Palette fuzzy ranking (E11-S11)
+
+`oxikube_app::FuzzyService` ranks the palette's commands, every `Picker` delegate and (later) the jump bar's
+completions. Budget: 2 000 candidates in at most 5 ms; the number is in the tens to hundreds of microseconds.
+
+```
+cargo bench -p oxikube_app --bench fuzzy_rank                 # 500 rounds per keystroke, fails above 5 ms p95
+cargo bench -p oxikube_app --bench fuzzy_rank -- --recents    # with 50 recent commands boosted
+```
+
+2 000 titles shaped like the palette's rows (`"Pod Delete"`, `"Workload Scale extension-007"`), `release`, Apple M5 Max,
+`FuzzyService::rank_with` over the whole list (no limit), p50 / p95 per keystroke of a query:
+
+| query | matched | p50 | p95 |
+|---|---|---|---|
+| `p` | 688 | 183 us | 213 us |
+| `po` | 671 | 233 us | 255 us |
+| `pod` | 345 | 112 us | 119 us |
+| `pod s` | 330 | 117 us | 122 us |
+| `pod sh` | 13 | 33 us | 33 us |
+| `scale` | 294 | 119 us | 126 us |
+| `wl scale` | 72 | 58 us | 62 us |
+| `drain nd` | 73 | 68 us | 70 us |
+| `zzz` | 0 | 18 us | 20 us |
+
+With recents the numbers are the same within noise. The worst keystroke is about 5 % of the budget, so the picker keeps
+its rule (inline up to 512 candidates, the background executor above) without a measurable cost either way. What keeps
+it cheap: matchers are pooled and reused (nothing allocated per candidate; a call allocates the compiled pattern and the
+result vector), positions are computed only for the kept matches, a `limit` below the match count selects the best
+before sorting, and the recents lists are read from memory, never from the state db (`StateRecents` writes behind a
+500 ms pause on the background executor). The unit test `two_thousand_candidates_rank_inside_the_budget` holds the
+budget in `cargo test` with slack for debug builds.
+
+Unchanged by the swap (`cargo xtask perf palette`, median of 5, release-fast): `open_ms` 21, `frame_ms` p50 0.30 / p95
+1.45, `draw_ms` p95 0.71, 0 dropped frames; `cargo xtask perf startup`: `init_features_ms` 0.055 (the history loader and
+writers are background GPUI tasks, none on Tokio, so the idle app still holds no Tokio task), first frame p50 130 ms.
 
 ## Load fixture: `cargo xtask load-pods`
 

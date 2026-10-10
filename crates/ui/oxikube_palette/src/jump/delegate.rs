@@ -17,7 +17,7 @@ use gpui::{
     SharedString, Styled as _, Task, Window,
 };
 use oxikube_app::search::jump::{
-    self, Candidate, CompletionSite, ParseError, ParseErrorKind, Slot, accept,
+    self, Candidate, CompletionSite, JumpEnv as _, ParseError, ParseErrorKind, Slot, accept,
 };
 use oxikube_ui::layout::h_flex;
 
@@ -244,7 +244,7 @@ impl PickerDelegate for JumpDelegate {
         }
         match jump::plan(&self.line, &*self.env) {
             Ok(plan) => {
-                self.shared.submit(plan);
+                self.shared.submit(plan, self.env.active_cluster().as_ref());
                 cx.emit(DismissEvent);
             }
             Err(error) => {

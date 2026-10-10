@@ -148,6 +148,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::KubeconfigReload
         | Command::ViewOpen { .. }
         | Command::PaletteToggle
+        | Command::PaletteClearRecents
         | Command::PaletteOpenJump
         | Command::HelpShow
         | Command::PaletteToggleShowAll

@@ -6,8 +6,9 @@
 //!
 //! A line run from the bar is [`record`](JumpHistory::record)ed after the current position and
 //! drops the lines that were ahead of it. Running a line *because* of a move does not record it:
-//! the move already put the position there. In memory only; saving it between sessions is the
-//! recents story (E11-S11).
+//! the move already put the position there. The ring itself is in memory; the lines of earlier runs
+//! come from [`JumpRecents`](crate::JumpRecents) (E11-S11) through [`seed`](JumpHistory::seed), and
+//! the bar records every confirmed line there.
 
 /// How many lines are kept. The oldest go first.
 pub const CAPACITY: usize = 100;
@@ -64,6 +65,18 @@ impl JumpHistory {
             self.before = self.before.and_then(|i| i.checked_sub(1));
         }
         self.at = Some(self.lines.len() - 1);
+    }
+
+    /// Puts the lines of earlier runs (`oldest_first`) behind what was run this session, so `[`
+    /// reaches them. A ring that already has lines this run is left alone: the user moved on
+    /// before the stored lines arrived.
+    pub fn seed<'a>(&mut self, oldest_first: impl IntoIterator<Item = &'a str>) {
+        if !self.is_empty() {
+            return;
+        }
+        for line in oldest_first {
+            self.record(line);
+        }
     }
 
     /// `[`: moves one line back and returns it; `None` at the oldest line.

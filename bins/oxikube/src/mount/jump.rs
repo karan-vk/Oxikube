@@ -8,11 +8,12 @@
 //! [`BusDispatcher`](super::bus::BusDispatcher), exactly like a key or a button.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{App, Entity, Task, WeakEntity, Window};
 use oxikube_app::session::namespaces::NamespaceService;
-use oxikube_app::{AliasRegistry, ClusterCatalog, ClusterSessionManager};
+use oxikube_app::{AliasRegistry, ClusterCatalog, ClusterSessionManager, JumpRecents};
 use oxikube_palette::jump::{JumpHost, JumpRequest, JumpSources};
 use oxikube_workspace::{ClusterTabs, CommandDispatcher, Workspace};
 
@@ -32,6 +33,8 @@ pub struct JumpDeps {
     pub aliases: AliasRegistry,
     /// The namespace lists.
     pub namespaces: NamespaceService,
+    /// The lines run in the bar, kept between runs (E11-S11).
+    pub history: Arc<JumpRecents>,
 }
 
 /// Installs the jump bar of `window` and starts serving the bus's requests (`palette::OpenJump`,
@@ -50,7 +53,8 @@ pub fn mount(
         aliases: deps.aliases,
         namespaces: deps.namespaces,
     };
-    let host = Rc::new(JumpHost::new(&deps.workspace, deps.dispatcher, sources));
+    let host =
+        Rc::new(JumpHost::new(&deps.workspace, deps.dispatcher, sources).persist(deps.history));
     host.install(window, cx);
     host.serve(requests, window, cx)
 }

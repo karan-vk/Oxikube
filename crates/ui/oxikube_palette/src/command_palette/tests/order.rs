@@ -1,12 +1,14 @@
 //! The order of matches: recents first on an empty query, score first on a typed one.
 
+use std::sync::Arc;
+
 use oxikube_app::{CommandContext, Selection};
 use oxikube_domain::Capabilities;
 use oxikube_domain::command::{CommandId, ViewContext};
 
 use super::{declared_index, pod};
-use crate::command_palette::rows::{Snapshot, order, ranks};
-use crate::picker::fuzzy::match_strings;
+use crate::command_palette::rows::{Snapshot, into_found, ranks, recency_of};
+use crate::picker::fuzzy::match_strings_by;
 
 fn snapshot() -> Snapshot {
     let mut context = CommandContext::new(ViewContext::Table)
@@ -17,11 +19,16 @@ fn snapshot() -> Snapshot {
 }
 
 fn listed(snapshot: &Snapshot, query: &str, recent: &[CommandId]) -> Vec<CommandId> {
-    let matches = match_strings(&snapshot.available, query, usize::MAX);
-    order(matches, &snapshot.rows, &ranks(recent))
-        .into_iter()
-        .map(|found| snapshot.rows[found.row].info.id())
-        .collect()
+    let recency = recency_of(snapshot.rows.clone(), Arc::new(ranks(recent)));
+    into_found(match_strings_by(
+        &snapshot.available,
+        query,
+        usize::MAX,
+        recency,
+    ))
+    .into_iter()
+    .map(|found| snapshot.rows[found.row].info.id())
+    .collect()
 }
 
 #[test]
