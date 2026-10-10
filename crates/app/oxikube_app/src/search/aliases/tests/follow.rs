@@ -5,10 +5,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use oxikube_domain::AliasTarget;
+use oxikube_domain::OxiError;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_ports::{ClusterContext, DiscoveryEvent, KindsChange, SourceId};
 use oxikube_testkit::kinds::{cert_manager_kinds, core_kinds, kind};
-use oxikube_testkit::{FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort};
+use oxikube_testkit::{
+    DiscoveryCall, FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort,
+    FakeDiscoveryPort,
+};
 
 use super::gvr;
 use crate::search::aliases::{AliasRegistry, AliasTable, Resolution};
@@ -71,6 +75,31 @@ impl Harness {
         }
         panic!("the table of {name} never reached the expected state");
     }
+}
+
+fn count_calls(discovery: &FakeDiscoveryPort, wanted: impl Fn(&DiscoveryCall) -> bool) -> usize {
+    discovery
+        .recorded_calls()
+        .iter()
+        .filter(|c| wanted(c))
+        .count()
+}
+
+/// Waits until the follower has asked about `gvk`. A cluster's worker runs its jobs in order, so
+/// every job queued before the one that asks has finished by then. Panics when it never asks, so
+/// a test cannot pass by running its assertions before the change under test was applied.
+async fn wait_for_resolve(discovery: &FakeDiscoveryPort, gvk: &Gvk) {
+    for _ in 0..400 {
+        if count_calls(
+            discovery,
+            |c| matches!(c, DiscoveryCall::Resolve(g) if g == gvk),
+        ) > 0
+        {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("the follower never resolved {gvk}");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -213,19 +242,7 @@ async fn dropping_a_non_preferred_version_keeps_the_type() {
         removed: vec![gizmo.gvk.clone()],
         ..KindsChange::default()
     }));
-    let calls = || {
-        discovery
-            .recorded_calls()
-            .iter()
-            .filter(|c| matches!(c, oxikube_testkit::DiscoveryCall::Resolve(g) if g == &gizmo.gvk))
-            .count()
-    };
-    for _ in 0..200 {
-        if calls() > 0 {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
+    wait_for_resolve(&discovery, &gizmo.gvk).await;
     let table = h.registry.table(&id("a"));
     for word in ["wg", "widgets", "widgets.example.io"] {
         let Resolution::Exact(entry) = table.resolve(word) else {
@@ -321,4 +338,103 @@ fn a_table_is_made_once_per_cluster_and_forgotten_on_request() {
         !registry.table(&id("a")).resolve("x").is_known(),
         "a fresh one"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_listing_keeps_the_tables_as_they_were() {
+    let h = Harness::new();
+    let discovery = h.connector.ports_for(&id("a")).discovery;
+    discovery.set_kinds(core_kinds());
+    h.connect("a").await;
+    h.until("a", |t| t.resolve(STOCK_ONLY).is_known()).await;
+
+    // The server would now answer differently, but the listing fails: nothing may change.
+    discovery.set_kinds(cert_manager_kinds());
+    discovery
+        .script()
+        .discover
+        .push_err(OxiError::network("discovery is down"));
+    discovery.emit(DiscoveryEvent::KindsChanged(KindsChange::default()));
+    // A later job proves the failed listing has been handled (jobs run in order).
+    let gizmo = Gvk::new("b.io", "v1", "Gizmo");
+    discovery.emit(DiscoveryEvent::KindsChanged(KindsChange {
+        removed: vec![gizmo.clone()],
+        ..KindsChange::default()
+    }));
+    wait_for_resolve(&discovery, &gizmo).await;
+
+    let table = h.registry.table(&id("a"));
+    assert!(
+        table.resolve(STOCK_ONLY).is_known(),
+        "a failed listing does not wipe the discovery layer"
+    );
+    assert!(table.resolve("po").is_known(), "built-ins stay");
+    assert!(
+        !table.resolve("certificates").is_known(),
+        "and the new answer was not applied"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_resolve_lists_everything_again_instead_of_guessing() {
+    let h = Harness::new();
+    let discovery = h.connector.ports_for(&id("a")).discovery;
+    discovery.set_kinds(core_kinds());
+    h.connect("a").await;
+    h.until("a", |t| t.resolve(STOCK_ONLY).is_known()).await;
+
+    let widget = kind("example.io", "v1", "Widget", "widgets")
+        .short("wg")
+        .build();
+    let mut kinds = core_kinds();
+    kinds.push(widget.clone());
+    discovery.set_kinds(kinds);
+    discovery
+        .script()
+        .resolve
+        .push_err(OxiError::network("discovery is down"));
+    let lists_before = count_calls(&discovery, |c| matches!(c, DiscoveryCall::Discover));
+    discovery.emit(DiscoveryEvent::KindsChanged(KindsChange {
+        added: vec![widget.gvk.clone()],
+        ..KindsChange::default()
+    }));
+    // The added kind is not dropped as "gone": the full listing brings it in.
+    h.until("a", |t| t.resolve("wg").is_known()).await;
+    assert!(h.registry.table(&id("a")).resolve(STOCK_ONLY).is_known());
+    assert_eq!(
+        count_calls(&discovery, |c| matches!(c, DiscoveryCall::Discover)),
+        lists_before + 1,
+        "one full listing replaced the failed resolve"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_resolve_does_not_drop_a_kind_that_is_still_served() {
+    let h = Harness::new();
+    let discovery = h.connector.ports_for(&id("a"));
+    let discovery = discovery.discovery;
+    let (kinds, beta) = two_version_widget();
+    discovery.set_kinds(kinds);
+    h.connect("a").await;
+    h.until("a", |t| t.resolve("wg").is_known()).await;
+
+    // The change names a removed version, the resolve fails, and the type is still served.
+    discovery
+        .script()
+        .resolve
+        .push_err(OxiError::network("discovery is down"));
+    discovery.emit(DiscoveryEvent::KindsChanged(KindsChange {
+        removed: vec![beta],
+        ..KindsChange::default()
+    }));
+    let gizmo = Gvk::new("b.io", "v1", "Gizmo");
+    discovery.emit(DiscoveryEvent::KindsChanged(KindsChange {
+        removed: vec![gizmo.clone()],
+        ..KindsChange::default()
+    }));
+    wait_for_resolve(&discovery, &gizmo).await;
+    let table = h.registry.table(&id("a"));
+    for word in ["wg", "widgets", "widgets.example.io"] {
+        assert!(table.resolve(word).is_known(), "`{word}` must survive");
+    }
 }
