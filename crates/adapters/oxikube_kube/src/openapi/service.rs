@@ -49,6 +49,10 @@ pub(super) struct Memory {
     /// [`OpenApiConfig::settle_after_invalidate`] later has been compared with the cache (see
     /// `settle.rs`): the server may still have been serving the old index when it ran.
     pub(super) unsettled_since: Option<Instant>,
+    /// When a settle re-check last failed to read the index: the next attempt waits
+    /// [`OpenApiConfig::recheck_every`] from here, so an unreachable server is not asked (and
+    /// waited for) on every lookup.
+    pub(super) recheck_failed_at: Option<Instant>,
     pub(super) epoch: u64,
 }
 
@@ -355,6 +359,7 @@ impl SchemaPort for OpenApiSchemas {
         memory.unsupported_at = None;
         memory.misses.clear();
         memory.unsettled_since = Some(Instant::now());
+        memory.recheck_failed_at = None;
         Ok(())
     }
 }

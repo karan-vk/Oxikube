@@ -634,3 +634,161 @@ async fn nothing_is_rechecked_without_an_invalidate_or_inside_the_interval() {
     }
     assert_eq!(api.hits("/openapi/v3"), 3, "one load after the invalidate");
 }
+
+#[tokio::test]
+async fn a_lookup_in_flight_across_a_settle_recheck_cannot_cache_the_old_document() {
+    let gizmo = Gvk::new("example.dev", "v1", "Gizmo");
+    let group_path = "/openapi/v3/apis/example.dev/v1";
+    // Index reads in order: the lookup that stays in flight; the re-check, which lists the new
+    // hash. Documents in order: the old one (the in-flight lookup's), then the new one.
+    let api = FakeApi::new();
+    api.reply("/openapi/v3", 200, example_index("OLD="));
+    api.reply("/openapi/v3", 200, example_index("NEW="));
+    api.reply(group_path, 200, gizmo_document(None));
+    api.reply(group_path, 200, gizmo_document(Some("color")));
+    let svc = Arc::new(OpenApiSchemas::with_config(
+        api.client(),
+        cluster(),
+        OpenApiConfig {
+            settle_after_invalidate: std::time::Duration::from_secs(60),
+            recheck_every: std::time::Duration::ZERO,
+            ..OpenApiConfig::default()
+        },
+    ));
+    svc.invalidate(&cluster()).await.expect("invalidate");
+
+    // The lookup read the old index and waits for the group's document.
+    let flight = Arc::new(tokio::sync::Mutex::new(()));
+    let parked = flight.clone().lock_owned().await;
+    svc.groups
+        .lock()
+        .insert(Index::key_for("example.dev", "v1"), flight);
+    let lookup = tokio::spawn({
+        let svc = svc.clone();
+        let gizmo = gizmo.clone();
+        async move { svc.schema_for(&cluster(), &gizmo).await }
+    });
+    while api.hits("/openapi/v3") == 0 {
+        tokio::task::yield_now().await;
+    }
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+
+    // The re-check sees the changed hash and purges the group while the lookup is parked.
+    svc.recheck_unsettled_index().await;
+    assert_eq!(api.hits("/openapi/v3"), 2);
+    drop(parked);
+    let old = lookup
+        .await
+        .expect("task")
+        .expect("the caller still gets its schema");
+    assert!(!has_color(&old), "that lookup read the old document");
+
+    // The old document was not cached over the purge: the next lookup gets the new one.
+    let fresh = svc.schema_for(&cluster(), &gizmo).await.expect("schema");
+    assert!(
+        has_color(&fresh),
+        "the purged group was not repopulated with stale data"
+    );
+}
+
+/// A service whose index reads succeed twice (the first lookup, and the one after the
+/// invalidate); a service for the settle re-check tests below.
+fn settling_service(api: &FakeApi, request_timeout: std::time::Duration) -> OpenApiSchemas {
+    OpenApiSchemas::with_config(
+        api.client(),
+        cluster(),
+        OpenApiConfig {
+            request_timeout,
+            settle_after_invalidate: std::time::Duration::from_secs(60),
+            recheck_every: std::time::Duration::from_millis(50),
+            ..OpenApiConfig::default()
+        },
+    )
+}
+
+async fn settling_after_invalidate(svc: &OpenApiSchemas, gizmo: &Gvk) {
+    svc.schema_for(&cluster(), gizmo).await.expect("schema");
+    svc.invalidate(&cluster()).await.expect("invalidate");
+    svc.schema_for(&cluster(), gizmo).await.expect("schema");
+    tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+}
+
+fn gizmo_server() -> FakeApi {
+    let api = FakeApi::new();
+    api.reply("/openapi/v3", 200, example_index("OLD="));
+    api.reply("/openapi/v3/apis/example.dev/v1", 200, gizmo_document(None));
+    api
+}
+
+#[tokio::test]
+async fn a_failed_settle_recheck_is_not_repeated_on_every_lookup() {
+    let gizmo = Gvk::new("example.dev", "v1", "Gizmo");
+    // Index reads in order: the first lookup, the one after the invalidate, then the server
+    // is gone for every re-check.
+    let api = gizmo_server();
+    api.reply("/openapi/v3", 200, example_index("OLD="));
+    api.reply(
+        "/openapi/v3",
+        500,
+        crate::fake_api::status_body(500, "InternalError", "down"),
+    );
+    let svc = settling_service(&api, std::time::Duration::from_secs(30));
+    settling_after_invalidate(&svc, &gizmo).await;
+    assert_eq!(api.hits("/openapi/v3"), 2);
+
+    // The first re-check fails; the lookups after it, inside the interval, do not try again.
+    svc.schema_for(&cluster(), &gizmo).await.expect("cached");
+    let before = api.hits("/openapi/v3");
+    for _ in 0..4 {
+        svc.schema_for(&cluster(), &gizmo).await.expect("cached");
+    }
+    assert_eq!(
+        api.hits("/openapi/v3"),
+        before,
+        "no attempt inside the interval"
+    );
+    let attempts = api.hits("/openapi/v3");
+    tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+    svc.schema_for(&cluster(), &gizmo).await.expect("cached");
+    assert!(
+        api.hits("/openapi/v3") > attempts,
+        "retried after the interval"
+    );
+}
+
+#[tokio::test]
+async fn lookups_queued_behind_a_hung_settle_recheck_do_not_each_wait_for_their_own() {
+    let gizmo = Gvk::new("example.dev", "v1", "Gizmo");
+    let api = gizmo_server();
+    let svc = Arc::new(settling_service(
+        &api,
+        std::time::Duration::from_millis(150),
+    ));
+    settling_after_invalidate(&svc, &gizmo).await;
+
+    api.stall("/openapi/v3");
+    let before = api.hits("/openapi/v3");
+    let started = std::time::Instant::now();
+    let lookups = (0..3).map(|_| {
+        let svc = svc.clone();
+        let gizmo = gizmo.clone();
+        tokio::spawn(async move { svc.schema_for(&cluster(), &gizmo).await })
+    });
+    for result in futures::future::join_all(lookups).await {
+        result
+            .expect("task")
+            .expect("a cached schema is still served");
+    }
+    assert_eq!(
+        api.hits("/openapi/v3"),
+        before + 1,
+        "one hung read, not three"
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(400),
+        "the waiters did not each wait out a timeout: {:?}",
+        started.elapsed()
+    );
+}
