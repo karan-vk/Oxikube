@@ -412,6 +412,11 @@ fn matches_are_drawn_over_their_text_and_scrolled_to(cx: &mut TestAppContext) {
         top + visible
     );
     assert!(top > 0, "it was below the first screen");
+    assert_eq!(
+        view.read_with(cx, |v, _| v.matches_drawn()),
+        (1, 1),
+        "the one match on screen is painted, as the current one"
+    );
 
     // A match already in view does not move the screen.
     view.update(cx, |view, cx| view.scroll_to_byte(at, cx));
@@ -421,6 +426,7 @@ fn matches_are_drawn_over_their_text_and_scrolled_to(cx: &mut TestAppContext) {
     // Cleared matches draw nothing and a newer text ignores the ranges of the older one.
     view.update(cx, |view, cx| view.clear_matches(cx));
     settle(cx);
+    assert_eq!(view.read_with(cx, |v, _| v.matches_drawn()), (0, 0));
 }
 
 #[gpui::test]
@@ -433,9 +439,17 @@ fn ranges_found_in_an_older_text_are_not_drawn_on_a_newer_one(cx: &mut TestAppCo
     view.update(cx, |view, cx| {
         view.set_matches(first.clone(), ranges, None, cx);
     });
+    settle(cx);
+    assert_eq!(
+        view.read_with(cx, |v, _| v.matches_drawn()),
+        (1, 0),
+        "found in the text on screen: painted, not as the current match"
+    );
     let second: Arc<str> = "gamma delta\n".into();
     set_text(&view, &second, cx);
-    // Must not panic or slice a char boundary of the new text: the ranges are for the old one.
+    // The ranges are valid offsets of the new text too (0..5 is "gamma"), so only the guard on
+    // the text they were found in keeps them from being painted on it.
     settle(cx);
     assert!(view.read_with(cx, |v, _| v.is_current()));
+    assert_eq!(view.read_with(cx, |v, _| v.matches_drawn()), (0, 0));
 }

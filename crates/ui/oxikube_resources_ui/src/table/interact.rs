@@ -318,7 +318,19 @@ impl ResourceTable {
         self.request_select_all(cx);
     }
 
-    pub(super) fn on_clear(&mut self, _: &ClearSelection, _: &mut Window, cx: &mut Context<Self>) {
-        self.clear_selection(cx);
+    /// `escape` in the rows: clears the selection; with nothing selected it clears the filter,
+    /// as k9s does (the filter and its stored value go, the chip with them).
+    pub(super) fn on_clear(
+        &mut self,
+        _: &ClearSelection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let nothing_selected = self.table.read(cx, |d| d.selection.is_empty());
+        if nothing_selected && !self.filter.read(cx).text().is_empty() {
+            self.filter.update(cx, |bar, cx| bar.clear(window, cx));
+        } else {
+            self.clear_selection(cx);
+        }
     }
 }

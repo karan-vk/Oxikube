@@ -75,6 +75,28 @@ fn slash_opens_the_field_and_typing_finds_and_colours_the_matches(cx: &mut TestA
 }
 
 #[gpui::test]
+fn each_character_typed_keeps_the_first_match_current(cx: &mut TestAppContext) {
+    let (mut d, view) = drawer_on_yaml(cx);
+    press(&mut d, "/");
+    // One key at a time, with the scan settling in between: a longer pattern whose first match
+    // starts where the last one's did must not step on to the next match.
+    let mut seen = Vec::new();
+    for key in ["n", "a", "m", "e"] {
+        press(&mut d, key);
+        let total = d.read(&view, |v| v.find_match_count());
+        assert!(total >= 2, "{key}: {total} matches make the step visible");
+        seen.push(d.read(&view, |v| v.find_position()).map(|(n, _)| n));
+    }
+    assert_eq!(seen, vec![Some(1); 4]);
+    // A backspace widens the pattern again: still the first.
+    press(&mut d, "backspace");
+    assert_eq!(
+        d.read(&view, |v| v.find_position()).map(|(n, _)| n),
+        Some(1)
+    );
+}
+
+#[gpui::test]
 fn n_and_shift_n_step_through_the_matches_and_wrap_around(cx: &mut TestAppContext) {
     let (mut d, view) = drawer_on_yaml(cx);
     press(&mut d, "/ e");

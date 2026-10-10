@@ -143,6 +143,51 @@ fn escape_removes_the_stored_filter_and_a_reopened_table_is_unfiltered(cx: &mut 
 }
 
 #[gpui::test]
+fn escape_in_the_rows_clears_the_filter_and_the_stored_value(cx: &mut TestAppContext) {
+    let state = Arc::new(FakeStatePort::new());
+    let mut f = Fixture::with_state(cx, state.clone());
+    set_persist(&mut f, true);
+    f.connect_with(pods());
+    let table = f.open_pods();
+    f.keys(&table, "/ w e b enter");
+    f.settle();
+    assert_eq!(f.names(&table).len(), 2, "filtered");
+    assert_eq!(saved(&f).as_deref(), Some("web"));
+
+    // Enter returned the focus to the rows: escape is the rows' escape now.
+    f.vcx.simulate_keystrokes("escape");
+    f.settle();
+    assert_eq!(f.names(&table).len(), 3, "the filter is gone");
+    assert!(
+        !key_exists(&state, &cluster()),
+        "and so is the stored value"
+    );
+}
+
+#[gpui::test]
+fn escape_in_the_rows_clears_a_selection_before_the_filter(cx: &mut TestAppContext) {
+    let mut f = Fixture::new(cx);
+    set_persist(&mut f, true);
+    f.connect_with(pods());
+    let table = f.open_pods();
+    f.keys(&table, "/ w e b enter");
+    f.update(&table, |t, cx| t.select_all(cx));
+    assert_eq!(f.selected(&table).len(), 2);
+
+    f.vcx.simulate_keystrokes("escape");
+    f.settle();
+    assert!(
+        f.selected(&table).is_empty(),
+        "the first escape drops the selection"
+    );
+    assert_eq!(f.names(&table).len(), 2, "the filter stays");
+
+    f.vcx.simulate_keystrokes("escape");
+    f.settle();
+    assert_eq!(f.names(&table).len(), 3, "the second one clears the filter");
+}
+
+#[gpui::test]
 fn with_the_setting_on_the_filter_is_saved_and_restored_after_a_restart(cx: &mut TestAppContext) {
     let state = Arc::new(FakeStatePort::new());
     let mut f = Fixture::with_state(cx, state.clone());
