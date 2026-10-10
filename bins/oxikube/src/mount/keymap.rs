@@ -103,6 +103,8 @@ pub fn open_requests(mut files: mpsc::UnboundedReceiver<PathBuf>, cx: &mut App) 
 ///
 /// The action is app-wide (GPUI offers it to the app after the focused view declined it), and
 /// every window installs this once, so each only answers while its own window is the active one.
+/// GPUI runs app-level listeners newest first and stops at the first that does not call
+/// `cx.propagate()`, so a window that is not the active one passes the action on to the others.
 /// The handler lives as long as the app, so it holds the window's dispatcher weakly: a closed
 /// window's views and bus are not kept alive by it.
 pub fn install_action(
@@ -116,6 +118,8 @@ pub fn install_action(
             && let Some(dispatcher) = dispatcher.upgrade()
         {
             dispatcher.dispatch(Command::KeymapOpenUser, cx);
+        } else {
+            cx.propagate();
         }
     });
 }

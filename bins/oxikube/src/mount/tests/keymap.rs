@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use futures::executor::block_on;
-use gpui::TestAppContext;
+use gpui::{AppContext as _, TestAppContext};
 use oxikube_app::command_bus::DispatchContext;
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::{Command, CommandId};
@@ -179,4 +179,49 @@ fn the_command_is_in_the_apps_bus_with_a_tool_stub_and_a_key_can_run_it(cx: &mut
     app.press("ctrl-alt-shift-k");
     app.vcx.run_until_parked();
     assert_eq!(*opened.borrow(), [dir.path().join("keymap.json")]);
+}
+
+/// A dispatcher that only counts what it is asked to run.
+struct Counting(Rc<std::cell::Cell<usize>>);
+
+impl oxikube_workspace::CommandDispatcher for Counting {
+    fn dispatch(&self, _: Command, _: &mut gpui::App) {
+        self.0.set(self.0.get() + 1);
+    }
+}
+
+/// With a second window mounted after the first, the key pressed in the first (active) window
+/// still reaches the first window's handler: the newer window's handler passes it on.
+#[gpui::test]
+fn a_newer_windows_handler_does_not_shadow_the_active_windows(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, opened) = start(cx, dir.path());
+    let ignored = Rc::new(std::cell::Cell::new(0));
+    let other: Rc<dyn oxikube_workspace::CommandDispatcher> = Rc::new(Counting(ignored.clone()));
+    let second = app.vcx.update(|_, cx| {
+        let second = cx
+            .open_window(gpui::WindowOptions::default(), |_, cx| {
+                cx.new(|_| gpui::Empty)
+            })
+            .expect("a second window")
+            .into();
+        crate::mount::keymap::install_action(second, &other, cx);
+        second
+    });
+    let _ = second;
+    app.vcx.update(|_, cx| {
+        oxikube_keymap::reload_user_keymap(
+            cx,
+            r#"[{"bindings": {"ctrl-alt-shift-k": "keymap::OpenUser"}}]"#,
+        );
+    });
+    app.vcx.update(|window, _| window.activate_window());
+    app.press("ctrl-alt-shift-k");
+    app.vcx.run_until_parked();
+    assert_eq!(*opened.borrow(), [dir.path().join("keymap.json")]);
+    assert_eq!(
+        ignored.get(),
+        0,
+        "the inactive window's dispatcher stayed idle"
+    );
 }

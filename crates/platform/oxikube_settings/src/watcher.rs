@@ -195,7 +195,10 @@ fn run(
         };
         // After a failure the text is reported even when unchanged: the caller is showing the
         // failure and must be told that it is over.
-        if text != last_text || failed.take().is_some() {
+        // Take first: `||` would skip the take when the text changed and leave the failure armed
+        // as already reported, swallowing the next identical one.
+        let recovered = failed.take().is_some();
+        if recovered || text != last_text {
             last_text.clone_from(&text);
             if !on_change(Ok(text)) {
                 return;
@@ -357,6 +360,54 @@ mod tests {
         // Back to the text from before the failure: reported although unchanged.
         std::fs::write(&path, "{}").unwrap();
         assert_eq!(wait(false), Some(Ok("{}".to_owned())));
+    }
+
+    /// Recovering to *different* text clears the reported failure too, so the same failure
+    /// after that is reported again instead of being taken for the one already shown.
+    #[test]
+    fn a_failure_after_a_recovery_to_new_text_is_reported_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("keymap.json");
+        std::fs::write(&path, "{}").unwrap();
+        // Whole-file replacement, so a read never sees a half-written file.
+        let put = {
+            let path = path.clone();
+            move |bytes: &[u8]| {
+                let tmp = path.with_extension("tmp");
+                std::fs::write(&tmp, bytes).unwrap();
+                std::fs::rename(&tmp, &path).unwrap();
+            }
+        };
+        let bad = [0xFF, 0xFE, b'{', 0];
+        // The failure is already there when the thread starts, so its first read reports it.
+        put(&bad);
+        let (event_tx, event_rx) = mpsc::channel::<()>();
+        let (out_tx, out_rx) = mpsc::channel::<Result<String, String>>();
+        let thread_path = path;
+        let thread = std::thread::spawn(move || {
+            run(
+                &thread_path,
+                "{}".into(),
+                Duration::from_millis(1),
+                &event_rx,
+                |read| out_tx.send(read.map_err(|err| err.to_string())).is_ok(),
+            );
+        });
+        let next = || out_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+
+        assert!(next().is_err(), "first failure reported");
+        put(b"{\"a\": 1}");
+        event_tx.send(()).unwrap();
+        assert_eq!(next(), Ok("{\"a\": 1}".to_owned()));
+        put(&bad);
+        event_tx.send(()).unwrap();
+        assert!(
+            next().is_err(),
+            "the same failure after a recovery is reported again"
+        );
+
+        drop(event_tx);
+        thread.join().unwrap();
     }
 
     #[test]
