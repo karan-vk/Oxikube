@@ -85,3 +85,8 @@ workspace = true
 [[bench]]
 name = "log_parse"
 harness = false
+
+# `cargo bench -p oxikube_app --bench command_list` (E11-S01): `CommandBus::list` over 2 000 commands.
+[[bench]]
+name = "command_list"
+harness = false

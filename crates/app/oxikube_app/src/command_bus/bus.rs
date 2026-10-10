@@ -7,10 +7,12 @@ use indexmap::IndexMap;
 use oxikube_domain::command::{Command, CommandId, CommandMeta};
 use oxikube_ports::ToolDef;
 
+use super::availability::CommandContext;
 use super::context::{DispatchContext, Outcome};
 use super::error::DispatchError;
 use super::handler::HandlerContext;
 use super::immediate::Immediate;
+use super::index::{CommandIndex, CommandInfo};
 use super::registry::{CommandRegistry, Registered};
 use crate::guard::{ConfirmationToken, MutationGuard, policy};
 
@@ -25,6 +27,7 @@ pub struct CommandBus {
 
 struct Inner {
     entries: IndexMap<CommandId, Registered>,
+    index: CommandIndex,
     guard: MutationGuard,
 }
 
@@ -39,9 +42,18 @@ impl fmt::Debug for CommandBus {
 impl CommandBus {
     /// A bus over every handler in `registry`, guarding mutations with `guard`.
     pub fn new(registry: CommandRegistry, guard: MutationGuard) -> Self {
+        // Ids are unique by construction: the registry rejects a duplicate.
+        let index = CommandIndex::new(
+            registry
+                .entries
+                .values()
+                .map(|e| CommandInfo::new(e.meta, e.owner, e.tool.is_some())),
+        )
+        .expect("the registry holds each command id once");
         Self {
             inner: Arc::new(Inner {
                 entries: registry.entries,
+                index,
                 guard,
             }),
         }
@@ -193,7 +205,37 @@ impl CommandBus {
 
     /// The registered commands' metadata, in registration order (for the palette).
     pub fn commands(&self) -> impl Iterator<Item = &CommandMeta> {
-        self.inner.entries.values().map(|e| &e.meta)
+        self.inner.entries.values().map(|e| e.meta)
+    }
+
+    /// The commands that can run in `ctx`, in display order (category, then title): what the
+    /// palette offers by default.
+    ///
+    /// "Can run" is availability, not the guard's verdict: the focused view, the session's
+    /// capabilities, a selection of the right size and kind, and (for a mutation) a session
+    /// that is not read-only. A command the guard would block on a read-only session is
+    /// *hidden*, so the palette never offers a certain refusal; [`all`](Self::all) with
+    /// [`CommandInfo::check`] shows it with the reason. One pass over a presorted index, no
+    /// lock, one allocation for the result.
+    pub fn list(&self, ctx: &CommandContext) -> Vec<CommandInfo> {
+        self.inner.index.list(ctx)
+    }
+
+    /// Every registered command in display order, available or not (the palette's "show all"
+    /// toggle and the help overlay).
+    pub fn all(&self) -> &[CommandInfo] {
+        self.inner.index.all()
+    }
+
+    /// The registered command `id`, if any.
+    pub fn get(&self, id: CommandId) -> Option<CommandInfo> {
+        self.inner.index.get(id)
+    }
+
+    /// The index behind [`list`](Self::list), [`all`](Self::all) and [`get`](Self::get): clone
+    /// it to filter off the UI thread without holding the bus.
+    pub fn index(&self) -> &CommandIndex {
+        &self.inner.index
     }
 
     /// The crate that registered `id`.

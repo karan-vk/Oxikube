@@ -2,7 +2,9 @@
 
 use serde::Serialize;
 
+use super::availability::{Availability, SelectionKind, ViewContext};
 use super::capability::Capabilities;
+use super::category::CommandCategory;
 use super::id::CommandId;
 use crate::safety::{ConfirmTier, Initiator, Risk};
 
@@ -30,6 +32,10 @@ pub enum CommandScope {
 /// on read-only clusters and must carry a `risk`; `confirm` is the default
 /// confirmation tier (the guard may raise it for a sensitive target, never
 /// lower it); `needs` lets the palette hide commands a session cannot run.
+///
+/// The palette, the help overlay and the keymap read the rest: `category` groups the command,
+/// [`keymap_action`](Self::keymap_action) names it in `keymap.json`, and `availability` says
+/// in which views, with which selection and (for mutations) on which sessions it runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct CommandMeta {
     /// The command's id (also its keymap action name).
@@ -62,9 +68,35 @@ pub struct CommandMeta {
     /// user types next cannot be described by a schema, so the MCP tool stub is unsafe,
     /// interactive and hidden from agents by default.
     pub interactive: bool,
+    /// The palette group, derived from the id's namespace ([`CommandCategory::of`]).
+    pub category: CommandCategory,
+    /// Where the command can run: the views, the selection it needs and whether it needs a
+    /// writable session. Plain data, evaluated by `CommandBus::list`.
+    pub availability: Availability,
 }
 
 impl CommandMeta {
+    /// The action name keymap files use to bind this command (`pod::Delete`). It is the
+    /// command id: one name for the palette, the keymap and the tool call, so a rebind can
+    /// never point at a command the palette does not list.
+    pub const fn keymap_action(&self) -> &'static str {
+        self.id.as_str()
+    }
+
+    /// The same command, available only in `views` (empty: every view).
+    #[must_use]
+    pub const fn in_views(mut self, views: &'static [ViewContext]) -> Self {
+        self.availability = self.availability.in_views(views);
+        self
+    }
+
+    /// The same command, available only with `selection` selected.
+    #[must_use]
+    pub const fn selecting(mut self, selection: SelectionKind) -> Self {
+        self.availability = self.availability.selecting(selection);
+        self
+    }
+
     /// A read-only or UI-local command: no confirmation, no risk.
     pub const fn read(
         id: CommandId,
@@ -83,6 +115,8 @@ impl CommandMeta {
             privileged: false,
             exec: false,
             interactive: false,
+            category: CommandCategory::of(id),
+            availability: Availability::EVERYWHERE,
         }
     }
 
@@ -156,6 +190,8 @@ impl CommandMeta {
             privileged: false,
             exec: false,
             interactive: false,
+            category: CommandCategory::of(id),
+            availability: Availability::EVERYWHERE.writable(),
         }
     }
 }
