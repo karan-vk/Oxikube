@@ -25,6 +25,15 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   `Picker > Input` contexts of the per-OS keymaps. First delegate: the container chooser of a pod
   shell (`oxikube_resources_ui::exec::ContainerPickerDelegate`).
 
+- `command_palette` (E11-S03): the command palette, `cmd-shift-p` / `ctrl-shift-p` (`palette::Toggle`): `CommandPalette`
+  (a modal with the `Palette` key context) over a `Picker<CommandPaletteDelegate>`, one `PaletteHost` per window
+  (installed by `bins/oxikube`'s mount, also reached by the bus commands `palette::Toggle` and
+  `palette::ToggleShowAll`). Lists `CommandBus` commands for the focused view, selection and session, with
+  binding hints and recents first; "Show all" (`cmd-shift-a` / `ctrl-shift-a`) adds the unavailable ones, marked;
+  confirm runs the command through the bus path. Benchmark:
+  `cargo run -p oxikube_palette --features test-support --profile release-fast --example command_palette_bench`;
+  scenario: `cargo xtask perf palette`.
+
 ## Owning epics
 
 See `docs/ROADMAP.md` and the GitHub Project for the epics and stories that build this crate.

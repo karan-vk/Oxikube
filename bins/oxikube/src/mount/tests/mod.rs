@@ -13,6 +13,7 @@ mod immediate;
 mod introspection;
 mod logs;
 mod node_shell;
+mod palette;
 mod resources;
 mod signin;
 mod tail;

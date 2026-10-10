@@ -29,6 +29,14 @@
 //! mutation is *hidden* from `list` on a read-only session (the guard would refuse it), and
 //! [`CommandInfo::check`] says why it is unavailable for a "show all" row.
 //!
+//! # Running a listed command
+//!
+//! A listed command is an id; the bus dispatches `Command` payloads with their operands.
+//! [`commands_for`] builds the payloads from a [`CommandTarget`] (the active cluster, the focused
+//! table's kind and selected objects), so the palette runs any command it lists without knowing
+//! any of them; a command that needs more ([`InvokeError::NeedsInput`]) opens its own dialog.
+//! [`RecentsStore`] remembers which commands ran lately, for the palette to list first.
+//!
 //! # Threading
 //!
 //! Plain async Rust: the bus spawns nothing and never waits for the UI. Its checks are
@@ -50,6 +58,8 @@ mod error;
 mod handler;
 pub mod immediate;
 mod index;
+pub mod invoke;
+pub mod recents;
 mod registry;
 
 #[cfg(test)]
@@ -62,4 +72,6 @@ pub use error::DispatchError;
 pub use handler::{CommandHandler, HandlerContext, HandlerFuture};
 pub use immediate::{Immediate, ImmediateHandler};
 pub use index::{CommandIndex, CommandInfo, DuplicateCommand};
+pub use invoke::{CommandTarget, InvokeError, commands_for};
+pub use recents::{MemoryRecents, RECENTS_CAPACITY, RecentsStore};
 pub use registry::{CommandRegistry, RegisterError};

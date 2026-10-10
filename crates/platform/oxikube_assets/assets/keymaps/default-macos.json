@@ -134,6 +134,16 @@
     }
   },
   {
+    // The command palette (E11-S03), around its picker: the picker's own keys are bound in
+    // `Picker` above. `cmd-shift-a` lists the commands that cannot run here too (dimmed, with
+    // the reason) or hides them again; typing reaches the query field. (Not `ctrl-shift-a`: the
+    // query field binds it to select-to-start-of-line.)
+    "context": "Palette",
+    "bindings": {
+      "cmd-shift-a": "palette::ToggleShowAll"
+    }
+  },
+  {
     // Resource tables (E07-S03): move the cursor and the selection, select all, copy the name.
     "context": "ResourceTable",
     "bindings": {

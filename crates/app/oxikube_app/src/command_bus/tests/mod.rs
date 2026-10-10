@@ -3,4 +3,5 @@
 mod dispatch;
 mod immediate;
 mod introspection;
+mod invoke;
 mod registry;

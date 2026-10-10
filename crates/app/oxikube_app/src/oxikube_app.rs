@@ -65,8 +65,9 @@ pub use catalog::{
 pub use columns::{Cell, Column, ColumnId, ColumnProvider, CoreColumns, TableColumns};
 pub use command_bus::{
     CommandBus, CommandContext, CommandHandler, CommandIndex, CommandInfo, CommandOutput,
-    CommandRegistry, DispatchContext, DispatchError, DuplicateCommand, HandlerContext, Outcome,
-    RegisterError, Selection, Unavailable,
+    CommandRegistry, CommandTarget, DispatchContext, DispatchError, DuplicateCommand,
+    HandlerContext, InvokeError, MemoryRecents, Outcome, RECENTS_CAPACITY, RecentsStore,
+    RegisterError, Selection, Unavailable, commands_for,
 };
 pub use context::{ContextRegistry, LogContextProvider, PendingContext, selection_context};
 pub use exec::{

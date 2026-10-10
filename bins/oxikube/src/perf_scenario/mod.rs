@@ -13,6 +13,8 @@
 //!   placeholder, the first interactive frame and the per-stage breakdown (E05-S13).
 //! - `scroll-10k` ([`scroll_10k`], also `table-scroll-10k`): the resource table scrolling
 //!   10 000 pods under feed churn, first rows after the feed is warm (E07-S09).
+//! - `palette` ([`palette`]): the command palette over 2 000 registered commands, open and typing
+//!   a query (E11-S03).
 //! - `logs-stream` ([`logs_stream`]): the log view streaming 5 000 lines/s, wrap off/on and
 //!   autoscroll on/paused (E08-S02), and with a search highlighting or filtering (E08-S03).
 //!
@@ -23,6 +25,7 @@
 //! and the numbers stop being comparable, so a sample warns about it on stderr.
 
 mod logs_stream;
+mod palette;
 mod scroll_10k;
 mod startup;
 mod window_root;
@@ -54,11 +57,7 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
     let sample = match name {
         "startup" => startup::run(launched, probe),
         scroll_10k::NAME | "table-scroll-10k" => scroll_10k::run(probe),
-        "palette" => Ok(ScenarioSample::unavailable(
-            name,
-            "crate not built yet: oxikube_palette has no command palette view",
-            &[NEEDS_TEST_APP, "E11-S03 #158"],
-        )),
+        palette::NAME => palette::run(probe),
         logs_stream::NAME => logs_stream::run(probe),
         "editor-5mb" => Ok(ScenarioSample::unavailable(
             name,

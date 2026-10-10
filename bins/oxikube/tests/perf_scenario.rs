@@ -146,14 +146,33 @@ fn logs_stream_measures_ten_modes_with_coalesced_notifies() {
 }
 
 #[test]
+fn palette_opens_and_types_over_two_thousand_commands() {
+    let (out, sample) = run("palette");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let s = sample.expect("sample written");
+    assert_eq!(s["status"], "ok");
+    assert_eq!(s["scenario"], "palette");
+    // A frame per scripted frame, and the hook's frame for each redraw the matches cause.
+    assert!(s["metrics"]["frame_ms"]["count"].as_u64().unwrap() >= 120);
+    assert_eq!(s["metrics"]["draw_ms"]["count"], 120);
+    let open = s["metrics"]["open_ms"]["p50"].as_f64().unwrap();
+    assert!(open > 0.0, "{open}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("oxikube palette: opened"), "{stderr}");
+}
+
+#[test]
 fn scenarios_without_views_are_unavailable_and_exit_0() {
-    for scenario in ["palette", "editor-5mb"] {
-        let (out, sample) = run(scenario);
-        assert!(out.status.success(), "{scenario}");
-        let s = sample.expect("sample written");
-        assert_eq!(s["status"], "unavailable", "{scenario}");
-        assert!(s["enabled_by"][0].as_str().unwrap().starts_with("E05-S11"));
-    }
+    let scenario = "editor-5mb";
+    let (out, sample) = run(scenario);
+    assert!(out.status.success(), "{scenario}");
+    let s = sample.expect("sample written");
+    assert_eq!(s["status"], "unavailable", "{scenario}");
+    assert!(s["enabled_by"][0].as_str().unwrap().starts_with("E05-S11"));
 }
 
 #[test]

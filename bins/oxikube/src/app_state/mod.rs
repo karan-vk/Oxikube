@@ -12,6 +12,7 @@
 //! | log service | set once by the main window's mount (`LogService`: the log sessions of every cluster, bounded by `logs.buffer_lines`) | [`AppState::log_service`] |
 //! | exec service | set once by the main window's mount (`ExecService`: shells, attaches and commands in pod containers, the last container chosen per pod) | [`AppState::exec_service`] |
 //! | agent hooks | set once by the main window's mount (`AgentHooks`: the `@`-mention `ContextRegistry` with `@logs`, the `ToolRegistry` with `k8s.get_logs`, and the queue "Send to agent" fills) | [`AppState::agent_hooks`] |
+//! | recent commands | the state itself (`RecentsStore`: the commands the palette ran lately, in memory until E11-S11 persists them) | [`AppState::recents`] |
 //! | state db | `ports.state`: the SQLite adapter, opened off the UI thread | [`AppState::state`] |
 //! | settings | `oxikube_settings::SettingsStore` global | [`AppState::settings`] |
 //! | theme | `oxikube_theme::ThemeRegistry` + `ActiveTheme` globals | [`AppState::theme_registry`], [`AppState::active_theme`] |
@@ -54,7 +55,7 @@ use std::sync::{Arc, OnceLock};
 
 use gpui::{App, Global};
 use oxikube_app::logs::LogService;
-use oxikube_app::{CommandBus, ExecService, ResourceStores};
+use oxikube_app::{CommandBus, ExecService, MemoryRecents, RecentsStore, ResourceStores};
 use oxikube_keymap::KeymapStore;
 use oxikube_ports::StatePort;
 use oxikube_runtime::RuntimeMode;
@@ -85,6 +86,7 @@ pub struct AppState {
     logs: OnceLock<Arc<LogService>>,
     exec: OnceLock<Arc<ExecService>>,
     agent: OnceLock<AgentHooks>,
+    recents: Arc<dyn RecentsStore>,
     data_dir: Option<PathBuf>,
 }
 
@@ -107,6 +109,7 @@ impl AppState {
             logs: OnceLock::new(),
             exec: OnceLock::new(),
             agent: OnceLock::new(),
+            recents: Arc::new(MemoryRecents::new()),
             data_dir,
         }
     }
@@ -214,6 +217,11 @@ impl AppState {
     /// Stores the agent hooks. The first ones stay: `false` when some were set already.
     pub fn set_agent_hooks(&self, hooks: AgentHooks) -> bool {
         self.agent.set(hooks).is_ok()
+    }
+
+    /// The commands the palette ran lately, shared by every window.
+    pub fn recents(&self) -> &Arc<dyn RecentsStore> {
+        &self.recents
     }
 
     /// The state db port (`ports().state`). In the app it is the SQLite adapter, opened in the
