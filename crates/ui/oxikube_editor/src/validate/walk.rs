@@ -54,7 +54,7 @@ fn allowed_types(schema: &JsonSchema) -> &[SchemaType] {
 }
 
 impl Walk<'_> {
-    pub(super) fn full(&self) -> bool {
+    fn full(&self) -> bool {
         self.out.len() >= self.opts.max_diagnostics
     }
 
