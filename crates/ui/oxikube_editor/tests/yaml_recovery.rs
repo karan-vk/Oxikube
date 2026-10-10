@@ -122,6 +122,33 @@ fn half_typed_key_mid_edit() {
 }
 
 #[test]
+fn half_typed_key_before_a_sibling_keeps_the_sibling() {
+    let text = "metadata:\n  name: web\n  lab\n  namespace: x\n  uid: y\nspec:\n  replicas: 1\n";
+    let result = parse(text);
+    check_invariants(&result);
+    // One diagnostic, on the half-typed key, none on the valid line after it.
+    assert_eq!(
+        messages(&result),
+        [(0, "lab", "simple key expected ':'")],
+        "{:?}",
+        result.diagnostics()
+    );
+    assert_eq!(
+        resolves(&result, 0, "metadata.namespace").as_deref(),
+        Some("x")
+    );
+    assert_eq!(resolves(&result, 0, "metadata.uid").as_deref(), Some("y"));
+    assert_eq!(resolves(&result, 0, "spec.replicas").as_deref(), Some("1"));
+
+    let result = parse("a: 1\nb\nc: 3\nd: 4\n");
+    check_invariants(&result);
+    assert_eq!(result.diagnostics().len(), 1, "{:?}", result.diagnostics());
+    assert_eq!(resolves(&result, 0, "a").as_deref(), Some("1"));
+    assert_eq!(resolves(&result, 0, "c").as_deref(), Some("3"));
+    assert_eq!(resolves(&result, 0, "d").as_deref(), Some("4"));
+}
+
+#[test]
 fn three_documents_one_broken() {
     let text = "kind: A\nspec: {x: 1}\n---\nkind: B\nspec:\n  list: [1, 2\n  other: 3\n---\nkind: C\nspec:\n  ok: true\n";
     let result = parse(text);

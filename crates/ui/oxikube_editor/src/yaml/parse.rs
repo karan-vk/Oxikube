@@ -8,7 +8,7 @@ use granit_parser::{Event, Parser, ScalarStyle as GScalar, Span, StructureStyle,
 use super::builder::{Builder, Shape};
 use super::dupes::duplicate_keys;
 use super::node::{CollectionStyle, NodeKind, ScalarStyle};
-use super::recover::{Resume, find_resume, scan_start, segment_end};
+use super::recover::{Resume, SegmentEnds, find_resume, scan_start};
 use super::result::{ParseResult, SyntaxDiagnostic};
 
 /// Diagnostics per buffer; recovery gives up on the rest of the text when it reaches this many.
@@ -38,6 +38,7 @@ pub fn parse_shared(text: Arc<str>) -> ParseResult {
     let mut diagnostics = Vec::new();
     let mut span = 0..text.len();
     let mut continuing = false;
+    let mut segments = SegmentEnds::default();
     let end = loop {
         let outcome = run(&text, span.clone(), continuing, &mut builder);
         builder.end_run();
@@ -69,7 +70,7 @@ pub fn parse_shared(text: Arc<str>) -> ParseResult {
         match resume {
             Some(Resume::Attach { at, depth }) => {
                 builder.attach(depth);
-                span = at..segment_end(&text, at, &open, depth);
+                span = at..segments.get(&text, at, &open, depth);
                 continuing = true;
             }
             Some(Resume::Adopt { at }) => {

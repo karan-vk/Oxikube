@@ -1,6 +1,6 @@
 //! Benchmark (E10-S02; E10-S11 reuses it): `yaml::parse` over a 2k-line multi-document manifest,
-//! the same with a syntax error in the middle (recovery path), and a 5 MB `kubectl get -o yaml`
-//! style dump.
+//! the same with a syntax error in the middle (recovery path), a 5 MB `kubectl get -o yaml`
+//! style dump, and 5 MB buffers with hundreds of errors (recovery stays linear).
 //!
 //! `cargo bench -p oxikube_editor --bench yaml_parse` prints min / median / p95 per parse. Under
 //! `cargo test --all-targets` (no `--bench` flag) it runs one small iteration as a smoke test.
@@ -152,5 +152,33 @@ fn main() {
     );
     bench("2k-line manifest, 1 error", &broken, samples * 4);
 
-    bench("5 MB get -o yaml dump", &dump(big), samples.min(10));
+    let dump = dump(big);
+    bench("5 MB get -o yaml dump", &dump, samples.min(10));
+
+    // Recovery must stay linear in the buffer size however many errors it hits.
+    let mut pods = 0;
+    let mut many = String::with_capacity(dump.len() + dump.len() / 1_000);
+    for line in dump.split_inclusive('\n') {
+        many.push_str(line);
+        if line.starts_with("- apiVersion") {
+            pods += 1;
+            if pods % 25 == 0 {
+                many.push_str("  bad: x: y\n");
+            }
+        }
+    }
+    bench("5 MB dump, error / 25 pods", &many, samples.min(10));
+
+    let mut flat = String::with_capacity(big + 64);
+    for i in 0.. {
+        if flat.len() >= big {
+            break;
+        }
+        if i % 100 == 99 {
+            flat.push_str("a: b: c\n");
+        } else {
+            let _ = writeln!(flat, "k{i}: v");
+        }
+    }
+    bench("5 MB flat, error / 100 lines", &flat, samples.min(10));
 }
