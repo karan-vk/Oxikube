@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 /// `settings.json`.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ResourceTableContent {
-    /// Remember the filter typed in each kind's table (the `/` bar) and restore it the next time
-    /// that table opens, like Freelens' persistent search. Off by default: a filter you forgot
-    /// about is a table that looks empty. The filter text is saved per kind (not per cluster).
+    /// Remember the filter typed in each table (the `/` bar) and restore it the next time that
+    /// table opens, like Freelens' persistent search. On by default; the filter shows as a chip
+    /// with a cross and `escape` in the bar removes it, so a forgotten filter is one key away.
+    /// The filter text is saved per cluster and kind, and clearing the filter removes it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persist_filter: Option<bool>,
 }
@@ -28,7 +29,7 @@ impl Settings for ResourceTableSettings {
 
     fn from_content(content: ResourceTableContent) -> Self {
         Self {
-            persist_filter: content.persist_filter.unwrap_or(false),
+            persist_filter: content.persist_filter.unwrap_or(true),
         }
     }
 }
@@ -40,13 +41,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn saving_the_filter_is_off_unless_the_setting_says_so() {
+    fn saving_the_filter_is_on_unless_the_setting_says_so() {
         assert!(
-            !ResourceTableSettings::from_content(ResourceTableContent::default()).persist_filter
+            ResourceTableSettings::from_content(ResourceTableContent::default()).persist_filter
         );
-        let on = ResourceTableContent {
-            persist_filter: Some(true),
+        let off = ResourceTableContent {
+            persist_filter: Some(false),
         };
-        assert!(ResourceTableSettings::from_content(on).persist_filter);
+        assert!(!ResourceTableSettings::from_content(off).persist_filter);
     }
 }

@@ -167,6 +167,10 @@ impl DetailView {
             view.update(cx, |view, cx| view.set_text(text, cx));
         }
         self.yaml.text = Some(made);
+        // A new version of the object is a new text: the matches are found in it again.
+        if self.find.query.is_some() && self.tab == DetailTab::Yaml {
+            self.rescan_find(false, cx);
+        }
         cx.notify();
     }
 

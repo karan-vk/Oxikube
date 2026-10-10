@@ -8,7 +8,7 @@
 use std::time::Duration;
 
 use gpui::{Context, Window};
-use oxikube_app::store::filter::{FilterParts, parse};
+use oxikube_app::search::filter::FilterParts;
 
 use super::bar::{DEBOUNCE, FilterBar, FilterBarEvent, Pending, SELECTOR_DEBOUNCE};
 
@@ -16,16 +16,11 @@ impl FilterBar {
     /// The input's text changed: parse it, show the error or queue the filter.
     pub(super) fn on_change(&mut self, cx: &mut Context<Self>) {
         let text = self.input.read(cx).value().to_string();
-        if text == self.text {
+        if text == self.state.text() {
             return;
         }
-        self.text.clone_from(&text);
-        match parse(&text) {
-            Err(error) => self.error = Some(error),
-            Ok(expr) => {
-                self.error = None;
-                self.queue(expr.parts(), text, cx);
-            }
+        if self.state.edit(&text) {
+            self.queue(self.state.parts().clone(), text, cx);
         }
         cx.notify();
     }
@@ -67,6 +62,7 @@ impl FilterBar {
             return;
         }
         self.applied = parts.clone();
+        self.applied_text.clone_from(&text);
         cx.emit(FilterBarEvent::Changed { parts, text });
         cx.notify();
     }
@@ -93,19 +89,14 @@ impl FilterBar {
     /// Puts `text` in the bar and applies it at once, as if typed and confirmed (restoring a
     /// saved filter, or a test). Without a filter the table shows every row.
     pub fn set_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.text = text.to_owned();
         self.input
             .update(cx, |input, cx| input.set_value(text.to_owned(), window, cx));
-        match parse(text) {
-            Err(error) => self.error = Some(error),
-            Ok(expr) => {
-                self.error = None;
-                self.pending = Some(Pending {
-                    parts: expr.parts(),
-                    text: text.to_owned(),
-                });
-                self.settle(cx);
-            }
+        if self.state.edit(text) {
+            self.pending = Some(Pending {
+                parts: self.state.parts().clone(),
+                text: text.to_owned(),
+            });
+            self.settle(cx);
         }
         cx.notify();
     }

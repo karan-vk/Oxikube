@@ -21,13 +21,16 @@ use super::view::DetailView;
 use crate::table::ToneColors;
 
 impl Render for DetailView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(test)]
         {
             self.renders += 1;
         }
         // The age tick compares against this frame's clock.
         self.drawn_at = self.now();
+        // Before the key context below: `Editing` turns the bare-key bindings off, from the
+        // first key after `/` on (the focus is read here, not from the field's focus events).
+        self.find.editing = self.find_focused(window, cx);
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let deleted = matches!(self.state, DetailState::Deleted);
@@ -47,6 +50,10 @@ impl Render for DetailView {
             .on_action(cx.listener(Self::on_select_next))
             .on_action(cx.listener(Self::on_select_previous))
             .on_action(cx.listener(Self::on_show_tab))
+            .on_action(cx.listener(Self::on_find))
+            .on_action(cx.listener(Self::on_next_match))
+            .on_action(cx.listener(Self::on_previous_match))
+            .on_action(cx.listener(Self::on_close_find))
             .size_full()
             .overflow_hidden()
             .bg(colors.surface)
@@ -55,6 +62,7 @@ impl Render for DetailView {
             .child(self.header(cx))
             .children(self.banner(cx))
             .child(self.tab_strip(cx))
+            .children(self.find_bar(cx))
             .child(
                 div()
                     .id("detail-body")

@@ -3,6 +3,8 @@
 //! | Module | Story | Holds |
 //! |---|---|---|
 //! | [`aliases`] | E11-S04 | [`aliases::AliasTable`]: built-in k9s aliases, aliases derived from API discovery, the user's `aliases.json`; [`aliases::AliasRegistry`], one table per cluster |
+//! | [`filter`] | E11-S06 | [`filter::parse`], [`filter::FilterState`]: the `/` filter grammar of tables (`re`, `!re`, `-l selector`, `-f fuzzy`), shared by the filter bar and the jump bar; the grammar itself is `crate::store::filter` |
+//! | [`find`] | E11-S06 | [`find::FindNavigator`]: `n` / `N` over the matches of a text, wrapping, shared by the log and YAML views |
 //! | [`jump`] | E11-S05 | [`jump::parse`], [`jump::plan`]: the `:` bar's grammar, parser, the navigation `Command`s a line stands for, history (`-`, `[`, `]`) and completion |
 //! | [`fuzzy`] | E11-S11 | [`fuzzy::FuzzyService`]: the one fuzzy ranking engine (`nucleo-matcher`) the palette, the pickers and the jump bar share, with match positions and the [`fuzzy::highlight`] helper |
 //! | [`recents`] | E11-S11 | [`recents::StateRecents`] and [`recents::JumpRecents`]: the command recents and the `:` history, persisted through `StatePort` |
@@ -11,6 +13,8 @@
 //! read the same tables.
 
 pub mod aliases;
+pub mod filter;
+pub mod find;
 pub mod fuzzy;
 pub mod jump;
 pub mod recents;

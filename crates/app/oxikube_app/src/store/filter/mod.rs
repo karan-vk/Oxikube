@@ -28,7 +28,7 @@ mod tests;
 
 pub use fuzzy::Fuzzy;
 pub use name::{NameFilter, NameMatcher, TextPattern};
-pub use parse::{FilterError, FilterExpr, parse};
+pub use parse::{FilterError, FilterExpr, MAX_FILTER_LEN, parse};
 
 use super::query::StoreFilter;
 use super::selector::LabelSelector;

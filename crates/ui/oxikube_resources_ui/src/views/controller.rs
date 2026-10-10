@@ -137,6 +137,9 @@ impl ResourceViews {
             ViewRequest::ViewDescribe(target) => {
                 self.show_detail_tab(&target, DetailTab::Describe, window, cx);
             }
+            ViewRequest::Find { target, pattern } => {
+                self.find_in_detail(&target, pattern.as_deref(), window, cx);
+            }
             ViewRequest::FocusFilter { cluster, gvk } => {
                 // The tab's active table (a kind has one table per cluster tab).
                 if let Some(table) = self.tables(&cluster, &gvk, cx).into_iter().next() {
@@ -186,6 +189,8 @@ impl ResourceViews {
             ViewRequest::SaveYaml(target) => self.save_yaml(&target, cx),
             ViewRequest::ToggleManagedFields(target) => self.toggle_managed_fields(&target, cx),
             ViewRequest::RefreshDescribe(target) => self.refresh_describe(&target, cx),
+            ViewRequest::NextMatch(target) => self.step_detail_match(&target, true, cx),
+            ViewRequest::PreviousMatch(target) => self.step_detail_match(&target, false, cx),
             ViewRequest::CopyName(target) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(target.name.to_string()));
             }
@@ -200,7 +205,9 @@ impl ResourceViews {
                 }
             }
             // Need the window; see `apply_in`.
-            ViewRequest::FocusFilter { .. } | ViewRequest::SetFilter { .. } => {}
+            ViewRequest::FocusFilter { .. }
+            | ViewRequest::SetFilter { .. }
+            | ViewRequest::Find { .. } => {}
         }
     }
 

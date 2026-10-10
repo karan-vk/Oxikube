@@ -172,6 +172,14 @@ impl RowMap {
         self.widest
     }
 
+    /// The row that holds byte `byte` of the text (the last row for a byte past the end; a
+    /// newline belongs to the row it ends).
+    pub fn row_of_byte(&self, byte: usize) -> usize {
+        self.rows
+            .partition_point(|row| row.start <= byte)
+            .saturating_sub(1)
+    }
+
     /// The first row of line `line` (the last row for a line past the end).
     pub fn first_row_of_line(&self, line: usize) -> usize {
         self.rows

@@ -9,6 +9,7 @@ use oxikube_ports::DescribeSource;
 use oxikube_runtime::spawn_kube;
 use oxikube_ui::code_view::{CodeView, Look};
 
+use crate::detail::tabs::DetailTab;
 use crate::detail::view::DetailView;
 
 /// How the Describe tab stands.
@@ -139,6 +140,9 @@ impl DetailView {
                 let shown = text.clone();
                 view.update(cx, |view, cx| view.set_text(shown, cx));
                 self.describe.output = Some(DescribeText { text, source });
+                if self.find.query.is_some() && self.tab == DetailTab::Describe {
+                    self.rescan_find(false, cx);
+                }
             }
             Err(error) => {
                 tracing::debug!(%error, target = %self.target, "describe failed");
