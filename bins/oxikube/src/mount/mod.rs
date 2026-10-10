@@ -59,8 +59,8 @@
 
 pub mod bus;
 mod describe;
-mod jump;
 mod help;
+mod jump;
 mod logs;
 mod palette;
 mod resources;

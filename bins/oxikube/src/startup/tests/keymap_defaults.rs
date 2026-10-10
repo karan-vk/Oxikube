@@ -10,10 +10,10 @@ use oxikube_keymap::{ActionRegistry, KeymapAction, KeymapLayer, Resolution, pars
 use crate::startup::{StartupEnv, init};
 
 /// Actions the default keymaps name that no crate of this build registers yet. Their bindings are
-/// skipped silently until the owning story declares the action: the help overlay (E11-S10).
-/// Remove an entry when its story lands; the test fails the other way too, so the list cannot go
-/// stale.
-const NOT_YET_REGISTERED: [&str; 1] = ["help::Show"];
+/// skipped silently until the owning story declares the action. None are left: every story that
+/// named a key has landed. Add an entry when a keymap names an action whose story has not; the
+/// test fails the other way too, so the list cannot go stale.
+const NOT_YET_REGISTERED: [&str; 0] = [];
 
 fn named_actions(text: &str) -> BTreeSet<String> {
     let parsed = oxikube_keymap::file::parse_keymap(text, KeymapLayer::Default).unwrap();

@@ -97,7 +97,10 @@ fn the_help_command_is_on_the_bus_with_a_tool_stub_and_opens_the_overlay(cx: &mu
     app.open_pods_table();
     let state = app.vcx.update(|_, cx| AppState::global(cx));
     let bus = state.command_bus().expect("the bus").clone();
-    assert_eq!(bus.owner(CommandId::HELP_SHOW), Some("oxikube_palette"));
+    assert_eq!(
+        bus.owner(CommandId::HELP_SHOW),
+        Some("oxikube_palette::help")
+    );
     assert!(bus.tool(CommandId::HELP_SHOW).is_some(), "an MCP tool stub");
 
     let outcome = futures::executor::block_on(bus.dispatch(

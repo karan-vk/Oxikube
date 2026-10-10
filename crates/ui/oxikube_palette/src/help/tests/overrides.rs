@@ -57,14 +57,19 @@ fn the_vim_base_keymap_shows_the_base_chip(cx: &mut TestAppContext) {
     };
     let mut f = Fixture::with_keymap(cx, Where::Table, "", options);
     f.keys("?");
+    // The vim layer's own keys, one of them a two-key sequence.
     assert_eq!(
-        entry_for(&mut f, "table::SelectNext", "j"),
+        entry_for(&mut f, "resource_table::SelectPageDown", "ctrl-f"),
         Some((HelpSource::Base, HelpState::Active))
     );
-    // A shipped default has no chip.
+    assert_eq!(
+        entry_for(&mut f, "resource_table::SelectFirst", "g g"),
+        Some((HelpSource::Base, HelpState::Active))
+    );
+    // A shipped default has no chip; the vim layer unbinds the bare `y` for `y y`.
     assert_eq!(
         entry_for(&mut f, "resource_table::ViewYaml", "y"),
-        Some((HelpSource::Default, HelpState::Active))
+        Some((HelpSource::Default, HelpState::Unbound(HelpSource::Base)))
     );
     f.set_query("base");
     assert!(f.vcx.debug_bounds("help-chip-base").is_some());

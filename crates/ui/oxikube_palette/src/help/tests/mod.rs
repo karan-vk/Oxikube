@@ -47,7 +47,14 @@ mod declared {
             FocusFilter,
             ToggleWide,
             SelectNext,
-            SelectPrevious
+            SelectPrevious,
+            SelectFirst,
+            SelectLast,
+            SelectHalfPageDown,
+            SelectHalfPageUp,
+            SelectPageDown,
+            SelectPageUp,
+            CopyName
         ]
     );
     actions!(
@@ -60,12 +67,6 @@ mod declared {
             ToggleTimestamps
         ]
     );
-    actions!(palette, [OpenJump, Toggle]);
-    mod vim {
-        use gpui::actions;
-
-        actions!(table, [SelectNext, SelectPrevious]);
-    }
 }
 
 /// What the probe view pretends to be.
