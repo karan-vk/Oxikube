@@ -48,9 +48,6 @@ const WINDOW_SIZE: Size<Pixels> = size(px(1280.0), px(800.0));
 /// Scripted redraws measured after the first frame.
 const FRAMES: usize = 120;
 
-/// The gpui `TestApp` harness every view-driving scenario needs.
-const NEEDS_TEST_APP: &str = "E05-S11 #93";
-
 /// Runs scenario `name`, writes its sample to `report` (or stdout). Exit 0 on success and for
 /// `unavailable`, 1 on failure, 2 for an unknown scenario.
 pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) -> ExitCode {
@@ -61,8 +58,10 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
         logs_stream::NAME => logs_stream::run(probe),
         "editor-5mb" => Ok(ScenarioSample::unavailable(
             name,
-            "crate not built yet: oxikube_editor has no manifest editor view",
-            &[NEEDS_TEST_APP, "E10-S04 #146", "E10-S11 #153"],
+            "not scripted yet: the manifest editor view exists (E10-S04, `cargo run -p \
+             oxikube_editor --profile release-fast --example typing_bench` for 2k lines); the \
+             5 MB open-and-type scenario is E10-S11's",
+            &["E10-S11 #153"],
         )),
         other => {
             eprintln!(

@@ -39,13 +39,15 @@ pub enum CommandCategory {
     Logs,
     /// Terminals (`terminal::*`).
     Terminal,
+    /// The manifest editor (`editor::*`).
+    Editor,
     /// A namespace no category claims (an extension's command, until it declares one).
     Other,
 }
 
 impl CommandCategory {
     /// Every category, in display order.
-    pub const ALL: [CommandCategory; 12] = [
+    pub const ALL: [CommandCategory; 13] = [
         CommandCategory::App,
         CommandCategory::Window,
         CommandCategory::View,
@@ -57,12 +59,13 @@ impl CommandCategory {
         CommandCategory::Node,
         CommandCategory::Logs,
         CommandCategory::Terminal,
+        CommandCategory::Editor,
         CommandCategory::Other,
     ];
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 18] = [
+        const NAMESPACES: [(&str, CommandCategory); 19] = [
             ("app", CommandCategory::App),
             ("window", CommandCategory::Window),
             ("view", CommandCategory::View),
@@ -81,6 +84,7 @@ impl CommandCategory {
             ("node", CommandCategory::Node),
             ("logs", CommandCategory::Logs),
             ("terminal", CommandCategory::Terminal),
+            ("editor", CommandCategory::Editor),
         ];
         let mut i = 0;
         while i < NAMESPACES.len() {
@@ -106,6 +110,7 @@ impl CommandCategory {
             CommandCategory::Node => "Node",
             CommandCategory::Logs => "Logs",
             CommandCategory::Terminal => "Terminal",
+            CommandCategory::Editor => "Editor",
             CommandCategory::Other => "Other",
         }
     }

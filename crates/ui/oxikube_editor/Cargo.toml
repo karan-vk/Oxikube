@@ -12,8 +12,19 @@ path = "src/oxikube_editor.rs"
 doctest = false
 
 [dependencies]
+futures.workspace = true
+gpui.workspace = true
 # Spanned YAML 1.2 events for `yaml` (E10-S02); confined to `yaml/parse.rs`.
 granit-parser.workspace = true
+# `view` (E10-S04): the session manager (schemas), the command bus registry.
+oxikube_app.workspace = true
+oxikube_keymap.workspace = true
+oxikube_ports.workspace = true
+# Schema fetches on the Kubernetes runtime (`spawn_kube`).
+oxikube_runtime.workspace = true
+oxikube_ui.workspace = true
+oxikube_workspace.workspace = true
+tracing.workspace = true
 # `Gvk` of a document (schema lookup) and `JsonSchema` for `validate` (E10-S03).
 oxikube_domain.workspace = true
 # Schema `pattern` checks (RE2-compatible syntax, which is what Kubernetes patterns use).
@@ -22,9 +33,27 @@ regex.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+anyhow.workspace = true
+gpui = { workspace = true, features = ["test-support"] }
+gpui_platform = { workspace = true, features = ["test-support"] }
 insta.workspace = true
-oxikube_testkit.workspace = true
+oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
+oxikube_workspace = { workspace = true, features = ["test-support"] }
+parking_lot.workspace = true
 proptest.workspace = true
+
+[features]
+default = []
+# Headless GPU screenshot of the editor (`tests/screenshot.rs`, harness = false so it runs on the
+# process main thread). Needs Metal / Vulkan, so never part of the default gate; the nightly
+# workflow runs it: `cargo test -p oxikube_editor --features screenshot --test screenshot`.
+screenshot = []
+
+[[test]]
+name = "screenshot"
+path = "tests/screenshot.rs"
+harness = false
+required-features = ["screenshot"]
 
 # `cargo bench -p oxikube_editor --bench yaml_parse` (E10-S02, reused by E10-S11): parse time of a
 # 2k-line manifest and a 5 MB dump.
@@ -37,6 +66,11 @@ harness = false
 [[bench]]
 name = "validate"
 harness = false
+
+# Keystroke-to-frame cost of typing in a 2 000-line manifest, and the validation it debounces
+# (test platform): `cargo run -p oxikube_editor --profile release-fast --example typing_bench`
+[[example]]
+name = "typing_bench"
 
 [lints]
 workspace = true
