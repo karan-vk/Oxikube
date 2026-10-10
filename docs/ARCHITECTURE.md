@@ -435,6 +435,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_ui::editor` (E07-S06) — glue over gpui-component's editor with the `tree-sitter-yaml` feature (`read_only_state`,
   `set_text`, `code_view`); the manifest editor (E10) builds on the same state type. gpui-component links tree-sitter 0.26, so
   the workspace pins `tree-sitter = "0.26"` (one native library may be linked).
+- `oxikube_editor::yaml` (E10-S02) — the spanned YAML model the manifest editor's intelligence works on, pure Rust (no gpui) so
+  it runs on the background executor and in plain unit tests. `parse(text) -> ParseResult` (granit-parser 1.3 events, comments
+  off; its types stay in `yaml/parse.rs`): one `DocTree` per `---` document, each a flat pre-order `Vec<Node>` (byte `span` in
+  the whole buffer, `parent`, `role` key / value / item, `kind` mapping / sequence / scalar with its notation / alias with its
+  anchored target) plus `SyntaxDiagnostic`s. Lookups: `offset_to_path` (binary search + parent walk), `path_to_span`, `key_at`,
+  `JsonPath` (`spec.containers[0].image`, `["app.kubernetes.io/name"]`) with a document index (`DocPath`). The text is never
+  re-serialised; scalars keep text and style only (YAML 1.2: bare `yes` is a string, typing is the validator's). Broken YAML
+  keeps its partial tree: the parser restarts at the next line whose indentation is that of a collection still open at the error
+  (its block is parsed as that collection's continuation) or at the next `---`; duplicate keys are diagnosed (lookups take the
+  first); at most 1 000 diagnostics. `ParseCache` memoises the last parse by buffer version. Bench: `cargo bench -p
+  oxikube_editor --bench yaml_parse` (2k lines under 1 ms, 5 MB about 110 ms).
 - `oxikube_ui::code_view` (E07-P598) — `CodeView`, the read-only text view of the detail's YAML and Describe tabs: the text as
   an `Arc<str>`, its display rows (`RowMap`: soft wrap at the measured width, or lines cut at `MAX_ROW_COLS`) and its
   tree-sitter parse (gpui-component's `SyntaxHighlighter`) made on the background executor; a `uniform_list` shapes only the
