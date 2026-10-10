@@ -1,9 +1,12 @@
 //! A command the focused view runs through its own flow (a table's delete dialog) goes to that
 //! view, not to the bus once per object.
 
+use oxikube_app::CommandTarget;
 use oxikube_domain::command::{Command, CommandId};
+use oxikube_domain::ids::Gvk;
 
 use super::{Fixture, pod};
+use crate::command_palette::Launch;
 
 fn pick_delete(f: &mut Fixture) {
     f.open();
@@ -70,4 +73,40 @@ fn recents_record_a_command_the_table_ran(cx: &mut gpui::TestAppContext) {
     f.surface_runs(&[CommandId::RESOURCE_DELETE], true);
     pick_delete(&mut f);
     assert_eq!(f.recents.recent(), [CommandId::RESOURCE_DELETE]);
+}
+
+#[test]
+fn a_launch_for_the_view_builds_no_commands_until_the_view_declines() {
+    let target = CommandTarget::none()
+        .in_cluster(super::cluster())
+        .of_kind(Gvk::new("", "v1", "Pod"))
+        .selecting(vec![pod("a"), pod("b")]);
+    let launch = Launch::on_surface(CommandId::RESOURCE_DELETE, target);
+    assert!(launch.commands.is_empty(), "nothing built at confirm");
+    let commands = launch.fallback();
+    assert_eq!(
+        commands.len(),
+        2,
+        "one per pod, made when the view declined"
+    );
+    assert!(matches!(commands[0], Command::ResourceDelete { .. }));
+}
+
+#[gpui::test]
+fn confirming_a_table_command_over_a_select_all_does_not_stall(cx: &mut gpui::TestAppContext) {
+    let names: Vec<String> = (0..10_000).map(|i| format!("pod-{i}")).collect();
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    let mut f = Fixture::declared(cx, &names);
+    f.surface_runs(&[CommandId::RESOURCE_DELETE], true);
+    f.open();
+    f.type_text("resource delete");
+    assert_eq!(f.selected(), Some(CommandId::RESOURCE_DELETE));
+    let started = std::time::Instant::now();
+    f.keys("enter");
+    let elapsed = started.elapsed();
+    assert_eq!(f.surface_ran().len(), 1, "the table got the selection once");
+    assert!(
+        elapsed < std::time::Duration::from_secs(2),
+        "confirm over 10k selected pods took {elapsed:?}"
+    );
 }

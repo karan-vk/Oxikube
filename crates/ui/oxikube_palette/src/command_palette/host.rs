@@ -190,8 +190,8 @@ impl PaletteHost {
     /// Escape leaves the outbox empty and runs nothing.
     ///
     /// A command the view runs through its own flow ([`Launch::surface`]) is handed to it one
-    /// turn later, with the window (the event carries none); the commands go to the bus only if
-    /// the view declines.
+    /// turn later, with the window (the event carries none); the commands are built and go to the bus only
+    /// if the view declines.
     fn send_when_closed(
         &self,
         workspace: &gpui::Entity<Workspace>,
@@ -206,8 +206,8 @@ impl PaletteHost {
                 return;
             }
             for launch in outbox.take() {
-                let Some(targets) = launch.surface else {
-                    for command in launch.commands {
+                let Some(targets) = launch.surface.as_ref().map(|t| t.targets.clone()) else {
+                    for command in launch.fallback() {
                         dispatcher.dispatch(command, cx);
                     }
                     continue;
@@ -219,7 +219,7 @@ impl PaletteHost {
                             if run_on_focused(launch.id, targets, window, cx) {
                                 return;
                             }
-                            for command in launch.commands {
+                            for command in launch.fallback() {
                                 dispatcher.dispatch(command, cx);
                             }
                         })
