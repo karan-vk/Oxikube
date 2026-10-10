@@ -97,14 +97,42 @@ fails on a shadowed one. The shipped defaults: `ctrl-shift-w` close tab, `ctrl-s
 `ActionRegistry::from_app(cx)` lists names by namespace; `bindings_for_action_name(cx, name, data)`
 lists an action's effective bindings (for the palette, E11).
 
+## The vim base keymap (E11-S09)
+
+`"base_keymap": "vim"` in `settings.json` (`"default"` is the default; schema in
+`settings.schema.json`, default in `default.json`) layers `vim.json` between the per-OS defaults
+and the user's `keymap.json`. `init*` reads the setting before the first merge and follows it, so
+editing `settings.json` swaps the layer and rebinds without a restart (a reload that leaves the
+value equal rebinds nothing). The setting is `oxikube_keymap::KeymapSettings` (module
+`base_keymap`).
+
+The layer is one section, `ResourceTable && !Editing`, so it never reaches a text field, the
+terminal, the manifest editor, the palette or the jump bar (`tests/vim.rs` resolves every vim key
+in those contexts with and without the layer and requires the same answer):
+
+| Key | Action |
+|---|---|
+| `j` / `k`, `g g` / `shift-g` | next / previous row, first / last row |
+| `ctrl-d` / `ctrl-u`, `ctrl-f` / `ctrl-b` | half a page / a page down and up |
+| `/` | focus the table's filter (the E07-S04 bar) |
+| `:` | the jump bar: the defaults' `ClusterTab` binding, nothing vim-specific |
+| `d d` | `resource_table::DeleteSelected`: the delete dialog, so read-only, the confirmation tier and the audit record apply |
+| `y y` | `resource_table::CopyName` (`resource::CopyName`) |
+| `g d` / `g y` | describe / YAML, which move off `d` / `y` |
+
+Overrides of the defaults, stated in the file: `ctrl-d` (k9s delete) becomes half a page, and the
+single `d` / `y` are `null` so they stay pending for their second key instead of firing the k9s
+verb first. GPUI replays a pair that does not complete as two fresh keys: `d` then `j` is `j`,
+never a delete. The detail drawer keeps `d` / `y` / `j` / `k`. The k9s base keymap (E21-S09) is
+the next value of the same setting.
+
 ## Wiring
 
 `oxikube_keymap::init(cx)` after the settings store (it reads `<config dir>/keymap.json`, starts
 the watcher). Bindings other crates added with `cx.bind_keys` survive reloads and rank below the
 keymap layers; if such a crate initialises after the keymap, call `rebind(cx)` at the end of
-start-up. The vim flag is `KeymapOptions::vim` / `set_vim_layer(cx, bool)`; the user-facing
-`vim_mode` setting that drives it is wired once the settings schema generator links every
-settings crate (E05-S06b, #454). Tests use `init_with_text` / `init_with_dir` (no watcher thread).
+start-up. The vim layer is the `base_keymap` setting (below); `set_vim_layer(cx, bool)` and
+`KeymapOptions::vim` are what it drives (and what tests use without a settings store). Tests use `init_with_text` / `init_with_dir` (no watcher thread).
 
 ## Allowed internal dependencies
 

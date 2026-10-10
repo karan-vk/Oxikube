@@ -661,7 +661,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `view::bell`.
 - `oxikube_keymap` — layered key bindings (platform layer; E05-S07, E11-S07). Default keymaps per OS
   (`default-macos.json`, `default-linux.json`, `default-windows.json` = Linux's, in `oxikube_assets`),
-  optional `vim.json`, then the user's `keymap.json`, merged into GPUI `KeyBinding`s (`store`,
+  optional `vim.json` (the `base_keymap: "vim"` setting, module `base_keymap`, E11-S09: `ResourceTable &&
+  !Editing` only, hot-reloaded), then the user's `keymap.json`, merged into GPUI `KeyBinding`s (`store`,
   `global`, `build`). Module `context` (E11-S07): the Phase 1 key contexts (`contexts::PHASE_1`:
   `Workspace`, `ClusterTab`, `ResourceTable`, `DetailDrawer`, `LogView`, `Terminal`, `ManifestEditor`,
   `Palette`, `JumpBar`) and `KeyContextual`; the owning view sets its context, with `Editing` while

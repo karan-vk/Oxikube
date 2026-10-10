@@ -24,6 +24,12 @@
   "reduce_motion": "system",
   // Ask before quitting while exec sessions, port-forwards or applies are running.
   "confirm_quit": true,
+  // The keymap layered under your keymap.json: "default" (the per-OS defaults) or "vim". "vim"
+  // adds j/k, gg/G, ctrl-d/ctrl-u (half a page), / (filter), : (jump bar), dd (delete, with the
+  // usual confirmation) and yy (copy the name) to resource tables, and moves describe/YAML from
+  // d/y to gd/gy. Text fields, the terminal and the manifest editor are not changed. Switching
+  // takes effect at once.
+  "base_keymap": "default",
   // Log filter, `RUST_LOG` syntax. Logs go to rolling files in `<data dir>/oxikube/logs`
   // (daily, seven kept) with secrets redacted; a `RUST_LOG` set at launch wins for that run.
   // Keep hyper, h2, tower and rustls at `warn`: at debug and trace they log request headers.

@@ -248,22 +248,25 @@ fn reload_replaces_bindings_and_unchanged_text_rebinds_nothing(cx: &mut TestAppC
 fn the_vim_layer_applies_only_when_the_flag_is_set(cx: &mut TestAppContext) {
     install(cx, mac(), "");
     let (table, table_log) = probe(cx, "ResourceTable");
-    assert!(press(cx, table, &table_log, "j").is_empty(), "flag off");
+    assert!(press(cx, table, &table_log, "g g").is_empty(), "flag off");
 
     cx.update(|cx| set_vim_layer(cx, true));
-    assert_eq!(press(cx, table, &table_log, "j"), ["SelectNext"]);
-    assert_eq!(press(cx, table, &table_log, "k"), ["SelectPrevious"]);
+    assert_eq!(press(cx, table, &table_log, "g g"), ["SelectFirst"]);
+    assert_eq!(press(cx, table, &table_log, "shift-g"), ["SelectLast"]);
     let (editing, editing_log) = probe(cx, "ResourceTable Editing");
     assert!(
-        press(cx, editing, &editing_log, "j").is_empty(),
+        press(cx, editing, &editing_log, "g g").is_empty(),
         "typing in a field"
     );
     let (pane, pane_log) = probe(cx, "Pane");
-    assert!(press(cx, pane, &pane_log, "j").is_empty(), "wrong context");
+    assert!(
+        press(cx, pane, &pane_log, "g g").is_empty(),
+        "wrong context"
+    );
 
     cx.update(|cx| set_vim_layer(cx, false));
     assert!(
-        press(cx, table, &table_log, "j").is_empty(),
+        press(cx, table, &table_log, "g g").is_empty(),
         "flag off again"
     );
 }
@@ -274,11 +277,15 @@ fn the_vim_flag_can_be_set_at_init_and_the_user_layer_still_wins(cx: &mut TestAp
     install(
         cx,
         options,
-        r#"[{"context": "ResourceTable", "bindings": {"j": "kmtest::Alpha"}}]"#,
+        r#"[{"context": "ResourceTable", "bindings": {"shift-g": "kmtest::Alpha"}}]"#,
     );
     let (table, log) = probe(cx, "ResourceTable");
-    assert_eq!(press(cx, table, &log, "j"), ["Alpha"], "user beats vim");
-    assert_eq!(press(cx, table, &log, "k"), ["SelectPrevious"]);
+    assert_eq!(
+        press(cx, table, &log, "shift-g"),
+        ["Alpha"],
+        "user beats vim"
+    );
+    assert_eq!(press(cx, table, &log, "g g"), ["SelectFirst"]);
 }
 
 #[gpui::test]

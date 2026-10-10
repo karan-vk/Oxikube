@@ -99,7 +99,7 @@ fn the_registry_groups_declared_actions_by_namespace(cx: &mut TestAppContext) {
         ]
     );
     let namespaces: Vec<_> = registry.namespaces().collect();
-    assert!(namespaces.contains(&"kmtest") && namespaces.contains(&"table"));
+    assert!(namespaces.contains(&"kmtest") && namespaces.contains(&"resource_table"));
     assert!(
         namespaces.windows(2).all(|w| w[0] < w[1]),
         "sorted: {namespaces:?}"

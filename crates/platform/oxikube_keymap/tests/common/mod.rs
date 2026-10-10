@@ -16,7 +16,7 @@ actions!(oxikube, [Hide]);
 actions!(app, [Quit]);
 actions!(palette, [Toggle]);
 // Actions of the vim layer.
-actions!(table, [SelectNext, SelectPrevious]);
+actions!(resource_table, [SelectFirst, SelectLast]);
 // Plain test actions.
 actions!(kmtest, [Alpha, Beta, Gamma]);
 
@@ -59,8 +59,8 @@ impl Render for Probe {
             .on_action(log_action!(cx, Quit))
             .on_action(log_action!(cx, Hide))
             .on_action(log_action!(cx, Toggle))
-            .on_action(log_action!(cx, SelectNext))
-            .on_action(log_action!(cx, SelectPrevious))
+            .on_action(log_action!(cx, SelectFirst))
+            .on_action(log_action!(cx, SelectLast))
             .on_action(log_action!(cx, Alpha))
             .on_action(log_action!(cx, Beta))
             .on_action(log_action!(cx, Gamma))
