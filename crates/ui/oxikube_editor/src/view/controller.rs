@@ -8,8 +8,8 @@
 //!   object in the object's cluster tab, titled `kind/name`, or focuses the tab that already
 //!   holds the object. The object is read fresh, off the UI thread, by the editor itself.
 //! - **ToggleReadOnly** / **ToggleSoftWrap** / **ToggleManagedFields** / **ToggleSecretMask** act
-//!   on the focused editor, else the active pane's item when it is one. The toolbar's toggles focus their own editor before they send, so a
-//!   click acts on the editor clicked.
+//!   on the focused editor, else the active pane's item when it is one. The toolbar's toggles
+//!   focus their own editor before they send, so a click acts on the editor clicked.
 //!
 //! It also tells the user, with a warning toast, about an `editor` setting that was rejected
 //! (E10-S12).
@@ -23,7 +23,8 @@ use std::sync::Arc;
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{
-    App, AppContext as _, Context, Entity, Focusable as _, Subscription, Task, WeakEntity, Window,
+    App, AppContext as _, Context, Entity, Focusable as _, SharedString, Subscription, Task,
+    WeakEntity, Window,
 };
 use oxikube_app::ClusterSessionManager;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
@@ -52,14 +53,12 @@ pub trait EditorHost: 'static {
     fn schemas(&self, cluster: &ClusterId) -> Rc<dyn SchemaSource>;
 
     /// The reader to `get` objects of `cluster` with; `None` while it is not connected.
-    fn reader(&self, cluster: &ClusterId) -> Option<Arc<dyn ResourceReader>> {
-        let _ = cluster;
+    fn reader(&self, _: &ClusterId) -> Option<Arc<dyn ResourceReader>> {
         None
     }
 
     /// Whether `cluster` is in read-only mode (an edit tab then opens read-only).
-    fn cluster_read_only(&self, cluster: &ClusterId) -> bool {
-        let _ = cluster;
+    fn cluster_read_only(&self, _: &ClusterId) -> bool {
         false
     }
 }
@@ -278,7 +277,8 @@ impl EditorViews {
             return;
         }
         let parts = ManifestEditorParts {
-            title: format!("{}/{}", target.gvk.kind, target.name).into(),
+            // The editor titles itself `kind/name` from the binding.
+            title: SharedString::default(),
             text: String::new(),
             schemas: Some(host.schemas(cluster)),
             dispatcher: self.deps.dispatcher.clone(),

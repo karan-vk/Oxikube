@@ -13,7 +13,7 @@ use oxikube_domain::Resource;
 use oxikube_domain::ids::ResourceRef;
 use oxikube_ports::ResourceReader;
 
-use super::render::{HiddenKind, HiddenRegion, MaskedRegion, RenderOptions, RenderedManifest};
+use super::render::{RenderOptions, RenderedManifest};
 
 /// How the user asked for the object.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,8 +59,8 @@ pub struct ResourceBinding {
     pub(crate) reader: Option<Arc<dyn ResourceReader>>,
     /// The object as read, values included: the toggles render it again.
     pub(crate) resource: Option<Arc<Resource>>,
-    pub(crate) hidden: Vec<HiddenRegion>,
-    pub(crate) masked: Vec<MaskedRegion>,
+    /// How many `managedFields` entries the text leaves out.
+    hidden_managed_fields: usize,
     pub(crate) notice: Option<SharedString>,
     /// Counts the renders asked for; a result for an older one is dropped.
     pub(crate) generation: u64,
@@ -76,8 +76,7 @@ impl ResourceBinding {
             cluster_read_only: open.cluster_read_only,
             reader: open.reader,
             resource: None,
-            hidden: Vec::new(),
-            masked: Vec::new(),
+            hidden_managed_fields: 0,
             notice: None,
             generation: 0,
         }
@@ -99,11 +98,6 @@ impl ResourceBinding {
             Some(namespace) => format!("{} · namespace {namespace}", self.title()).into(),
             None => self.title(),
         }
-    }
-
-    /// Editable or read-only, as asked for.
-    pub fn mode(&self) -> OpenMode {
-        self.mode
     }
 
     /// What the text shows of the object.
@@ -128,27 +122,18 @@ impl ResourceBinding {
 
     /// How many `managedFields` entries the text leaves out.
     pub fn hidden_managed_fields(&self) -> usize {
-        self.hidden
-            .iter()
-            .filter(|region| region.kind == HiddenKind::ManagedFields)
-            .map(|region| region.count)
-            .sum()
+        self.hidden_managed_fields
     }
 
     /// Whether the object has `managedFields` at all (the toggle has something to show): leaves
     /// out some now, or shows them.
     pub fn has_managed_fields(&self) -> bool {
         self.options.managed_fields
-            || self.hidden_managed_fields() > 0
+            || self.hidden_managed_fields > 0
             || self
                 .resource
                 .as_ref()
                 .is_some_and(|r| r.get("/metadata/managedFields").is_some())
-    }
-
-    /// How many Secret values the text masks.
-    pub fn masked_values(&self) -> usize {
-        self.masked.len()
     }
 
     /// Whether the text masks Secret values now (a placeholder left in it is an error).
@@ -156,14 +141,8 @@ impl ResourceBinding {
         self.is_secret() && !self.options.reveal_secrets
     }
 
-    /// The hidden parts the last render left out.
-    pub fn hidden(&self) -> &[HiddenRegion] {
-        &self.hidden
-    }
-
     pub(crate) fn rendered(&mut self, rendered: &RenderedManifest) {
-        self.hidden = rendered.hidden.clone();
-        self.masked = rendered.masked.clone();
+        self.hidden_managed_fields = rendered.hidden_managed_fields();
         self.load = ResourceLoad::Ready;
     }
 }

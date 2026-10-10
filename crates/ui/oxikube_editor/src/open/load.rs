@@ -15,12 +15,17 @@ use oxikube_ports::ResourceReader;
 use oxikube_ui::editor::{Decoration, DecorationStyle, EditorApi as _};
 use oxikube_workspace::ItemEvent;
 
-use super::binding::{OpenMode, ResourceLoad};
-use super::render::{RenderedManifest, render_resource};
+use super::binding::{OpenMode, ResourceBinding, ResourceLoad};
+use super::render::{RenderOptions, RenderedManifest, render_resource};
 use crate::view::ManifestEditor;
 
 /// The notice shown when a toggle is refused because the buffer has edits.
 const DIRTY_NOTICE: &str = "Undo your edits before changing what the text shows.";
+/// The notice of an edit tab on a read-only cluster.
+const READ_ONLY_NOTICE: &str =
+    "This cluster is read-only: the tab is read-only and cannot be applied.";
+/// Why nothing was read.
+const NOT_CONNECTED: &str = "The cluster is not connected.";
 
 impl ManifestEditor {
     /// Reads the object (a fresh `get`) and shows it. Called when the editor opens and again when
@@ -33,8 +38,8 @@ impl ManifestEditor {
         let generation = binding.generation;
         binding.notice = None;
         let (Some(reader), Some(_)) = (binding.reader.clone(), oxikube_runtime::mode(cx)) else {
-            binding.load = ResourceLoad::Failed("The cluster is not connected.".to_owned());
-            binding.notice = Some("The cluster is not connected.".into());
+            binding.load = ResourceLoad::Failed(NOT_CONNECTED.to_owned());
+            binding.notice = Some(NOT_CONNECTED.into());
             return;
         };
         binding.load = ResourceLoad::Loading;
@@ -101,14 +106,13 @@ impl ManifestEditor {
             return;
         }
         let first = resource.is_some();
-        if resource.is_some() {
+        if first {
             binding.resource = resource;
         }
         binding.rendered(&rendered);
         let read_only = binding.mode == OpenMode::View || binding.cluster_read_only;
-        binding.notice = (binding.mode == OpenMode::Edit && binding.cluster_read_only).then(|| {
-            "This cluster is read-only: the tab is read-only and cannot be applied.".into()
-        });
+        binding.notice = (binding.mode == OpenMode::Edit && binding.cluster_read_only)
+            .then(|| READ_ONLY_NOTICE.into());
         self.editor.update(cx, |editor, cx| {
             let mut api = editor.api(window, cx);
             api.clear_decorations();
@@ -163,38 +167,44 @@ impl ManifestEditor {
     /// Shows or hides `metadata.managedFields` (`editor::ToggleManagedFields`). Does nothing
     /// until the object is read, and while the buffer has edits (a notice says so).
     pub fn toggle_managed_fields(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(binding) = self.binding.as_mut() else {
-            return;
-        };
-        if binding.load != ResourceLoad::Ready {
-            return;
-        }
-        if self.is_dirty(cx) {
-            self.rerender(window, cx);
-            return;
-        }
-        if let Some(binding) = self.binding.as_mut() {
-            binding.options.managed_fields = !binding.options.managed_fields;
-        }
-        self.rerender(window, cx);
+        self.toggle_option(
+            |_| true,
+            |options| options.managed_fields ^= true,
+            window,
+            cx,
+        );
     }
 
     /// Shows the values of a Secret, or masks them again (`editor::ToggleSecretMask`). The values
     /// come from the object held in memory. Does nothing for another kind, until the object is
     /// read, and while the buffer has edits (a notice says so).
     pub fn toggle_secret_mask(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.toggle_option(
+            ResourceBinding::is_secret,
+            |options| options.reveal_secrets ^= true,
+            window,
+            cx,
+        );
+    }
+
+    /// Flips one render option and renders again, when the object is read and `applies`; with
+    /// edits in the buffer only the notice changes.
+    fn toggle_option(
+        &mut self,
+        applies: fn(&ResourceBinding) -> bool,
+        flip: fn(&mut RenderOptions),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let dirty = self.is_dirty(cx);
         let Some(binding) = self.binding.as_mut() else {
             return;
         };
-        if binding.load != ResourceLoad::Ready || !binding.is_secret() {
+        if binding.load != ResourceLoad::Ready || !applies(binding) {
             return;
         }
-        if self.is_dirty(cx) {
-            self.rerender(window, cx);
-            return;
-        }
-        if let Some(binding) = self.binding.as_mut() {
-            binding.options.reveal_secrets = !binding.options.reveal_secrets;
+        if !dirty {
+            flip(&mut binding.options);
         }
         self.rerender(window, cx);
     }
@@ -221,14 +231,11 @@ impl ManifestEditor {
         }
         if mode == OpenMode::Edit && binding.mode == OpenMode::View {
             binding.mode = OpenMode::Edit;
-            if !binding.cluster_read_only {
+            if binding.cluster_read_only {
+                binding.notice = Some(READ_ONLY_NOTICE.into());
+            } else {
                 self.editor
                     .update(cx, |editor, cx| editor.api(window, cx).set_read_only(false));
-            }
-            if binding.cluster_read_only {
-                binding.notice = Some(
-                    "This cluster is read-only: the tab is read-only and cannot be applied.".into(),
-                );
             }
             cx.notify();
         }

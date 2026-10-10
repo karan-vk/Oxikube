@@ -15,7 +15,7 @@ use super::view::DetailView;
 
 impl DetailView {
     /// Sends `resource::Edit` for this object: an editable manifest tab.
-    pub fn request_edit(&mut self, cx: &mut Context<Self>) {
+    fn request_edit(&mut self, cx: &mut Context<Self>) {
         let command = Command::ResourceEdit {
             target: self.target.clone(),
         };
@@ -23,7 +23,7 @@ impl DetailView {
     }
 
     /// Sends `resource::ViewYamlInEditor` for this object: a read-only manifest tab.
-    pub fn request_view_in_editor(&mut self, cx: &mut Context<Self>) {
+    fn request_view_in_editor(&mut self, cx: &mut Context<Self>) {
         let command = Command::ResourceViewYamlInEditor {
             target: self.target.clone(),
         };
