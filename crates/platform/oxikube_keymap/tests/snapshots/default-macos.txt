@@ -42,6 +42,34 @@
   end              catalog::SelectLast
   enter            catalog::ConnectSelected
   home             catalog::SelectFirst
+[Picker]
+  cmd-down         picker::SelectLast
+  cmd-enter        picker::SecondaryConfirm
+  cmd-up           picker::SelectFirst
+  ctrl-n           picker::SelectNext
+  ctrl-p           picker::SelectPrevious
+  down             picker::SelectNext
+  end              picker::SelectLast
+  enter            picker::Confirm
+  escape           picker::Cancel
+  home             picker::SelectFirst
+  pagedown         picker::SelectLast
+  pageup           picker::SelectFirst
+  up               picker::SelectPrevious
+[Picker > Input]
+  cmd-down         picker::SelectLast
+  cmd-enter        picker::SecondaryConfirm
+  cmd-up           picker::SelectFirst
+  ctrl-n           picker::SelectNext
+  ctrl-p           picker::SelectPrevious
+  down             picker::SelectNext
+  end              picker::SelectLast
+  enter            picker::Confirm
+  escape           picker::Cancel
+  home             picker::SelectFirst
+  pagedown         picker::SelectLast
+  pageup           picker::SelectFirst
+  up               picker::SelectPrevious
 [ResourceTable]
   cmd-a            resource_table::SelectAll
   cmd-c            resource_table::CopyName

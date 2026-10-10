@@ -103,6 +103,14 @@ const VIEW_LOCAL: &[&str] = &[
     "catalog::SelectFirst",
     "catalog::SelectLast",
     "catalog::FocusSearch",
+    // A picker's selection, confirm and cancel (E11-S02): the palette, the container chooser.
+    "picker::SelectNext",
+    "picker::SelectPrevious",
+    "picker::SelectFirst",
+    "picker::SelectLast",
+    "picker::Confirm",
+    "picker::SecondaryConfirm",
+    "picker::Cancel",
     // The log viewer's selection.
     "log_view::ClearSelection",
     // The bottom dock's terminal panel and the OS application menu.

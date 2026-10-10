@@ -183,11 +183,11 @@ mod tests {
         let standard = [
             contexts::WORKSPACE,
             contexts::CATALOG,
-            contexts::TABLE,
-            contexts::DETAIL,
+            contexts::RESOURCE_TABLE,
+            contexts::DETAIL_DRAWER,
             contexts::LOGS,
             contexts::TERMINAL,
-            contexts::EDITOR,
+            contexts::MANIFEST_EDITOR,
             contexts::PALETTE,
         ];
         let named: Vec<_> = ViewContext::ALL.iter().map(|v| v.key_context()).collect();
