@@ -68,7 +68,7 @@ impl CommandPaletteDelegate {
                 .text_color(colors.text_muted)
                 .child(reason.to_string())
                 .into_any_element(),
-            None => binding_caps(id.as_str(), cx).into_any_element(),
+            None => binding_caps(id.as_str(), format!("palette-keys-{ix}"), cx).into_any_element(),
         };
         Some(
             h_flex()
@@ -134,25 +134,37 @@ impl CommandPaletteDelegate {
                         .size(u(px(12.))),
                     )
                     .child("Show all")
-                    .child(binding_caps(TOGGLE_SHOW_ALL_ACTION, cx)),
+                    .child(binding_caps(
+                        TOGGLE_SHOW_ALL_ACTION,
+                        "palette-show-all-keys".into(),
+                        cx,
+                    )),
             )
             .into_any_element()
     }
 }
 
-/// The key caps of the first binding of `action`, empty when it has none. The binding is read
-/// from the live keymap, so a rebind in `keymap.json` shows up in the next frame.
-fn binding_caps(action: &str, cx: &gpui::App) -> gpui::Div {
-    let caps = bindings_for_action_name(cx, action, None)
+/// The keystrokes of the first binding of `action`, in the keymap's spelling (`cmd-shift-p`);
+/// empty when it has none. Read from the live keymap, so a rebind in `keymap.json` shows up in
+/// the next frame.
+pub(super) fn binding_strokes(action: &str, cx: &gpui::App) -> Vec<String> {
+    bindings_for_action_name(cx, action, None)
         .into_iter()
         .next()
-        .map(|binding| {
-            binding
-                .keystrokes
-                .iter()
-                .filter_map(|stroke| keycap(stroke))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    h_flex().flex_none().gap(u(px(2.))).children(caps)
+        .map(|binding| binding.keystrokes)
+        .unwrap_or_default()
+}
+
+/// The key caps of the first binding of `action` (none when it has none), selectable as
+/// `selector` in tests.
+fn binding_caps(action: &str, selector: String, cx: &gpui::App) -> gpui::Div {
+    let caps = binding_strokes(action, cx)
+        .iter()
+        .filter_map(|stroke| keycap(stroke))
+        .collect::<Vec<_>>();
+    h_flex()
+        .debug_selector(move || selector)
+        .flex_none()
+        .gap(u(px(2.)))
+        .children(caps)
 }

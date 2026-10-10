@@ -133,3 +133,45 @@ fn a_read_only_cluster_refuses_each_object_even_when_the_dialog_was_open(cx: &mu
             .all(|r| r.outcome == AuditOutcome::Denied)
     );
 }
+
+/// The command palette (E11-S03) hands a confirmed row action back to the focused table, which
+/// opens the one delete dialog for the selection: not one guarded `resource::Delete` (and one
+/// confirmation, each replacing the last) per object.
+#[gpui::test]
+fn the_palette_runs_delete_on_the_selection_through_the_one_dialog(cx: &mut TestAppContext) {
+    use oxikube_domain::command::CommandId;
+    use oxikube_workspace::command_surface::{focused, run_on_focused};
+
+    let mut f = Fixture::with_actions(cx);
+    f.connect_with((0..3).map(|i| p("x", &format!("web-{i}"), "1")));
+    let table = f.open_pods();
+    f.keys(&table, SELECT_ALL);
+
+    // What the palette reads when it opens: the table offers Delete as its own.
+    let snapshot = f
+        .vcx
+        .update(|window, cx| focused(window, cx))
+        .expect("the focused table is a command surface");
+    assert!(snapshot.own_commands.contains(&CommandId::RESOURCE_DELETE));
+    assert_eq!(snapshot.target.targets.len(), 3);
+
+    // What the palette's host does once it has closed: hand the command back to the table.
+    let targets = snapshot.target.targets;
+    let ran = f
+        .vcx
+        .update(|window, cx| run_on_focused(CommandId::RESOURCE_DELETE, targets, window, cx));
+    f.settle();
+    assert!(ran, "the table took the command");
+
+    let d = dialog(&mut f).expect("one dialog for the whole selection");
+    let (items, kinds) = d.read_with(&f.vcx, |d, _| {
+        (d.plan().items().len(), d.plan().kinds().to_vec())
+    });
+    assert_eq!(items, 3);
+    assert_eq!(kinds, [("Pod".into(), 3)]);
+    assert!(
+        f.ports().resources.mutating_calls().is_empty(),
+        "nothing is deleted before the dialog is confirmed"
+    );
+    assert!(f.state.audit_log().is_empty());
+}

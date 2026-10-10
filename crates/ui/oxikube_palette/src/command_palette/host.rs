@@ -18,11 +18,13 @@ use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, R
 use oxikube_app::{CommandIndex, RecentsStore};
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::{OxiError, OxiResult};
+use oxikube_workspace::command_surface::run_on_focused;
 use oxikube_workspace::modal::ModalLayerEvent;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
 use super::capture::capture;
-use super::delegate::{Outbox, PaletteParts};
+use super::delegate::PaletteParts;
+use super::outbox::Outbox;
 use super::rows::Snapshot;
 use super::{CommandPalette, PaletteEnv, Toggle};
 
@@ -164,7 +166,7 @@ impl PaletteHost {
             return;
         }
         let captured = capture(window, self.env.as_ref(), cx);
-        let outbox = Outbox::default();
+        let outbox = Outbox::for_surface(captured.own_commands);
         let parts = PaletteParts {
             snapshot: Snapshot::take(&self.index, &captured.context),
             target: captured.target,
@@ -172,7 +174,7 @@ impl PaletteHost {
             recents: self.recents.clone(),
             workspace: self.workspace.clone(),
         };
-        self.send_when_closed(&workspace, outbox, cx);
+        self.send_when_closed(&workspace, outbox, window.window_handle(), cx);
         workspace.update(cx, |workspace, cx| {
             workspace.toggle_modal(window, cx, move |window, cx| {
                 CommandPalette::new(parts, window, cx)
@@ -180,21 +182,49 @@ impl PaletteHost {
         });
     }
 
-    /// Sends what a confirm leaves in `outbox` once the modal layer reports the palette closed.
+    /// Runs what a confirm leaves in `outbox` once the modal layer reports the palette closed.
     ///
     /// The layer hands the focus back in a step it queues just before it announces the close, so
     /// by the time this runs the view the palette opened over has the focus again and the command
     /// acts on it (a terminal command reaches the terminal, a dialog opens over the table).
-    /// Escape leaves the outbox empty and sends nothing.
-    fn send_when_closed(&self, workspace: &gpui::Entity<Workspace>, outbox: Outbox, cx: &mut App) {
+    /// Escape leaves the outbox empty and runs nothing.
+    ///
+    /// A command the view runs through its own flow ([`Launch::surface`]) is handed to it one
+    /// turn later, with the window (the event carries none); the commands go to the bus only if
+    /// the view declines.
+    fn send_when_closed(
+        &self,
+        workspace: &gpui::Entity<Workspace>,
+        outbox: Outbox,
+        window: gpui::AnyWindowHandle,
+        cx: &mut App,
+    ) {
         let layer = workspace.read(cx).modal_layer().clone();
         let dispatcher = self.dispatcher.clone();
         let subscription = cx.subscribe(&layer, move |_, event: &ModalLayerEvent, cx| {
             if *event != ModalLayerEvent::Hidden {
                 return;
             }
-            for command in outbox.take() {
-                dispatcher.dispatch(command, cx);
+            for launch in outbox.take() {
+                let Some(targets) = launch.surface else {
+                    for command in launch.commands {
+                        dispatcher.dispatch(command, cx);
+                    }
+                    continue;
+                };
+                let dispatcher = dispatcher.clone();
+                cx.defer(move |cx| {
+                    window
+                        .update(cx, |_, window, cx| {
+                            if run_on_focused(launch.id, targets, window, cx) {
+                                return;
+                            }
+                            for command in launch.commands {
+                                dispatcher.dispatch(command, cx);
+                            }
+                        })
+                        .ok();
+                });
             }
         });
         *self.sender.borrow_mut() = Some(subscription);

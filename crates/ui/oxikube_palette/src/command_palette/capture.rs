@@ -8,6 +8,7 @@
 
 use gpui::{App, Window};
 use oxikube_app::{CommandContext, CommandTarget, Selection};
+use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::Gvk;
 use oxikube_workspace::command_surface::{focused, view_of_focus};
 
@@ -20,13 +21,15 @@ pub struct Captured {
     pub context: CommandContext,
     /// The cluster, kind and objects a command runs on.
     pub target: CommandTarget,
+    /// The commands the focused view runs through its own flow.
+    pub own_commands: Vec<CommandId>,
 }
 
 /// Reads the focused view and the session. Call it before the palette's own view takes the focus.
 pub fn capture(window: &Window, env: &dyn PaletteEnv, cx: &App) -> Captured {
-    let (view, mut target) = match focused(window, cx) {
-        Some(surface) => (surface.view, surface.target),
-        None => (view_of_focus(window), CommandTarget::none()),
+    let (view, mut target, own_commands) = match focused(window, cx) {
+        Some(surface) => (surface.view, surface.target, surface.own_commands),
+        None => (view_of_focus(window), CommandTarget::none(), Vec::new()),
     };
     if target.cluster.is_none() {
         target.cluster = env.active_cluster(cx);
@@ -40,7 +43,11 @@ pub fn capture(window: &Window, env: &dyn PaletteEnv, cx: &App) -> Captured {
         None => CommandContext::new(view),
     }
     .selecting(selection_of(&target));
-    Captured { context, target }
+    Captured {
+        context,
+        target,
+        own_commands,
+    }
 }
 
 /// The selection the objects of `target` make: none, or `n` objects of one kind or of several.

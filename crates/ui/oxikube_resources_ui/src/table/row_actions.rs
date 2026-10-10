@@ -204,7 +204,10 @@ impl ResourceTable {
 }
 
 /// The command palette (E11-S03) reads a focused table as a `Table` view acting on its selected
-/// rows, else its cursor row: the objects its own row actions and keys act on.
+/// rows, else its cursor row: the objects its own row actions and keys act on. It runs the table's
+/// row actions through [`ResourceTable::run_action`], so a palette `Delete` opens the one delete
+/// dialog for the whole selection (plan, propagation, type-the-name) as the key and the menu do,
+/// and Shell, Attach and Debug choose their container first.
 impl CommandSurface for ResourceTable {
     fn view_context(&self) -> ViewContext {
         ViewContext::Table
@@ -215,5 +218,24 @@ impl CommandSurface for ResourceTable {
             .in_cluster(self.cluster.clone())
             .of_kind(self.kind.gvk.clone())
             .selecting(self.action_targets(cx))
+    }
+
+    fn own_commands(&self, cx: &gpui::App) -> Vec<CommandId> {
+        self.action_entries(cx)
+            .into_iter()
+            .filter(|entry| entry.reason().is_none())
+            .map(|entry| entry.command())
+            .collect()
+    }
+
+    fn run_command(
+        &mut self,
+        command: CommandId,
+        targets: Vec<ResourceRef>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.run_action(command, targets, window, cx);
+        true
     }
 }

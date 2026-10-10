@@ -10,6 +10,7 @@
 //! | `host.rs` | [`PaletteHost`]: one per window, the doors that open it ([`register_commands`], the action), [`PaletteRequest`] |
 //! | `view.rs` | [`CommandPalette`]: the modal with the `Palette` key context and `palette::ToggleShowAll` |
 //! | `delegate.rs` | [`CommandPaletteDelegate`]: matching, ordering, confirm |
+//! | `outbox.rs` | [`Outbox`], [`Launch`]: what a confirm leaves for the host to run after the palette closes |
 //! | `rows.rs` | [`Snapshot`], [`Row`]: the commands classified for the context, the order of matches |
 //! | `render.rs` | rows (category chip, title, key caps or the reason) and the footer |
 //! | `capture.rs`, `env.rs` | [`capture`]: where the user is when it opens; [`PaletteEnv`]: the session lookup |
@@ -37,7 +38,10 @@
 //! the `MutationGuard`, its confirmation and the audit apply as always; the palette never confirms
 //! for anyone. A command that needs an operand it cannot ask for (a replica count) says so in a
 //! toast: it has its own dialog. The commands run after the palette has closed and handed the
-//! focus back, so they act on the same view.
+//! focus back, so they act on the same view. A command the focused view runs through its own
+//! flow (`CommandSurface::own_commands`) is handed back to that view instead: `Delete` on a
+//! selection of pods opens the table's one delete dialog, with the plan and the propagation
+//! choice, not one guarded `resource::Delete` per pod.
 //!
 //! # Speed
 //!
@@ -49,6 +53,7 @@ mod capture;
 mod delegate;
 mod env;
 mod host;
+mod outbox;
 mod render;
 mod rows;
 mod view;
@@ -57,9 +62,10 @@ mod view;
 mod tests;
 
 pub use capture::{Captured, capture, selection_of};
-pub use delegate::{CommandPaletteDelegate, Outbox, PaletteParts};
+pub use delegate::{CommandPaletteDelegate, PaletteParts};
 pub use env::PaletteEnv;
 pub use host::{PaletteHost, PaletteRequest, PaletteSink, register_commands};
+pub use outbox::{Launch, Outbox};
 pub use rows::{Found, Row, Snapshot};
 pub use view::CommandPalette;
 

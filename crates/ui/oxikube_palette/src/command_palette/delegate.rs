@@ -5,18 +5,18 @@
 //! service: confirming turns the selected id into `Command`s with [`commands_for`] and hands them
 //! to the [`CommandDispatcher`] every other surface uses, so the guard, the audit log and the tool
 //! stubs apply as for a key or a button (non-negotiable 4); a mutation asks its own confirmation
-//! there, the palette never answers it.
+//! there, the palette never answers it. A command the focused view runs through its own flow (a
+//! table's delete dialog) is left for that view instead ([`Launch::surface`]).
 
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{App, Context, DismissEvent, SharedString, Task, WeakEntity, Window};
 use oxikube_app::{CommandTarget, InvokeError, RecentsStore, commands_for};
-use oxikube_domain::command::{Command, CommandId};
+use oxikube_domain::command::CommandId;
 use oxikube_workspace::{Toast, Workspace};
 
+use super::outbox::{Launch, Outbox};
 use super::rows::{Found, Row, Snapshot, order, ranks};
 use crate::picker::fuzzy::{self, INLINE_MATCH_LIMIT};
 use crate::picker::{Picker, PickerDelegate};
@@ -34,10 +34,6 @@ pub struct PaletteParts {
     /// The workspace that shows the palette's toasts.
     pub workspace: WeakEntity<Workspace>,
 }
-
-/// The commands a confirm leaves for the host to send once the palette has closed and the
-/// modal layer has handed the focus back (see [`PaletteHost`](super::PaletteHost)).
-pub type Outbox = Rc<RefCell<Vec<Command>>>;
 
 /// The palette's picker delegate. See the [module docs](self).
 pub struct CommandPaletteDelegate {
@@ -193,12 +189,29 @@ impl PickerDelegate for CommandPaletteDelegate {
             cx.emit(DismissEvent);
             return;
         }
+        let surface = self
+            .outbox
+            .runs_on_surface(id)
+            .then(|| self.target.targets.clone());
         match commands_for(id, &self.target) {
             Ok(commands) => {
                 self.recents.record(id);
                 // Sent by the host once the palette has closed and the focus is back, so the
                 // command acts on the view the palette opened over.
-                self.outbox.borrow_mut().extend(commands);
+                self.outbox.push(Launch {
+                    id,
+                    commands,
+                    surface,
+                });
+            }
+            // The view runs it through its own flow, which asks for what is missing.
+            Err(InvokeError::NeedsInput { .. }) if surface.is_some() => {
+                self.recents.record(id);
+                self.outbox.push(Launch {
+                    id,
+                    commands: Vec::new(),
+                    surface,
+                });
             }
             Err(InvokeError::NeedsInput { .. }) => {
                 // The palette is generic: a command that needs an operand has its own dialog.

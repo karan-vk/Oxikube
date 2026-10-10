@@ -4,18 +4,22 @@
 //! | File | Covers |
 //! |---|---|
 //! | `open.rs` | the key opens and closes it, the `Palette` key context, what is listed with bindings and categories |
+//! | `bindings.rs` | the key caps on a row: bound, unbound, the shipped keys, a `keymap.json` override |
 //! | `availability.rs` | unavailable commands hidden, "Show all" lists them marked with the reason, confirming one does nothing |
 //! | `run.rs` | typing and confirming dispatches the command, recents first, focus returns, a command that needs input |
 //! | `order.rs` | the order of matches (unit) |
 //! | `capture.rs` | what the palette reads from the focused view and the session |
+//! | `surface.rs` | a command the focused view runs through its own flow is handed back to it |
 //! | `speed.rs` | 2 000 commands: virtualised, first frame, keystrokes |
 
 mod availability;
+mod bindings;
 mod capture;
 mod open;
 mod order;
 mod run;
 mod speed;
+mod surface;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -151,6 +155,13 @@ impl PaletteEnv for FakeEnv {
 pub(super) struct FakeSurface {
     pub(super) view: ViewContext,
     pub(super) target: CommandTarget,
+    /// The commands it runs through its own flow (like a table's delete dialog).
+    pub(super) own: Vec<CommandId>,
+    /// Whether it takes the commands it is handed (`run_command` returns this).
+    pub(super) accepts: bool,
+    /// What it was handed: the command, the objects, and whether it had the focus.
+    pub(super) ran: Vec<(CommandId, Vec<ResourceRef>, bool)>,
+    pub(super) focus: Option<FocusHandle>,
 }
 
 impl CommandSurface for FakeSurface {
@@ -160,6 +171,22 @@ impl CommandSurface for FakeSurface {
 
     fn command_target(&self, _: &App) -> CommandTarget {
         self.target.clone()
+    }
+
+    fn own_commands(&self, _: &App) -> Vec<CommandId> {
+        self.own.clone()
+    }
+
+    fn run_command(
+        &mut self,
+        command: CommandId,
+        targets: Vec<ResourceRef>,
+        window: &mut gpui::Window,
+        _: &mut gpui::Context<Self>,
+    ) -> bool {
+        let focused = self.focus.as_ref().is_some_and(|f| f.is_focused(window));
+        self.ran.push((command, targets, focused));
+        self.accepts
     }
 }
 
@@ -199,6 +226,10 @@ impl Fixture {
             let surface = cx.new(|_| FakeSurface {
                 view: ViewContext::Table,
                 target,
+                own: Vec::new(),
+                accepts: true,
+                ran: Vec::new(),
+                focus: Some(focus.clone()),
             });
             command_surface::register(&surface, &focus, cx);
             *dispatched.watched.borrow_mut() = Some(focus.clone());
@@ -227,6 +258,24 @@ impl Fixture {
     /// The declared commands with `selected` pods selected.
     pub(super) fn declared(cx: &mut TestAppContext, selected: &[&str]) -> Self {
         Self::new(cx, declared_index(), selected)
+    }
+
+    /// Makes the table run `own` through its own flow, accepting them or not.
+    pub(super) fn surface_runs(&mut self, own: &[CommandId], accepts: bool) {
+        let surface = self.surface.clone();
+        let own = own.to_vec();
+        self.vcx.update(|_, cx| {
+            surface.update(cx, |surface, _| {
+                surface.own = own;
+                surface.accepts = accepts;
+            });
+        });
+    }
+
+    /// What the table was handed to run itself.
+    pub(super) fn surface_ran(&mut self) -> Vec<(CommandId, Vec<ResourceRef>, bool)> {
+        let surface = self.surface.clone();
+        self.vcx.update(|_, cx| surface.read(cx).ran.clone())
     }
 
     pub(super) fn open(&mut self) {
