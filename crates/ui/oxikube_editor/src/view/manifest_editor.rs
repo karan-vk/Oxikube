@@ -42,8 +42,12 @@ pub struct ManifestEditorParts {
     pub dispatcher: Rc<dyn CommandDispatcher>,
 }
 
-/// The manifest editor: a YAML buffer with schema diagnostics, as a workspace item. See the
-/// [module docs](self).
+/// The manifest editor: a YAML buffer with schema diagnostics, as a workspace item.
+///
+/// Every change restarts a [`VALIDATION_DEBOUNCE`] timer; the buffer is then validated on the
+/// background executor and the result shown only if the buffer has not changed since. The
+/// schemas its kinds need are fetched once, through the cluster's `SchemaPort` on the Kubernetes
+/// runtime. Nothing blocks the UI thread.
 pub struct ManifestEditor {
     pub(super) editor: Entity<CodeEditor>,
     pub(super) model: ManifestModel,

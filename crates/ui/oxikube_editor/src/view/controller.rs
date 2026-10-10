@@ -5,7 +5,8 @@
 //!   checks only when no cluster tab is shown. A request naming a cluster without a tab here does
 //!   nothing.
 //! - **ToggleReadOnly** / **ToggleSoftWrap** act on the focused editor, else the active pane's
-//!   item when it is one.
+//!   item when it is one. The toolbar's toggles focus their own editor before they send, so a
+//!   click acts on the editor clicked.
 //!
 //! Each request waits one turn first, so a palette that just closed has handed the focus back to
 //! the editor it was opened over.

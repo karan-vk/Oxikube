@@ -1,10 +1,15 @@
 //! The editor's toolbar: what is checked against what (the cluster, or syntax only), the problem
 //! count, and the Read-only and Wrap toggles. Each toggle sends its `editor::*` command, like the
 //! keys and the palette.
+//!
+//! The bus commands carry no target: [`EditorViews`](super::EditorViews) acts on the focused
+//! editor. gpui-component's `Button` keeps the focus where it was on mouse-down, so a toggle
+//! first focuses its own editor's buffer: a click on one editor's toolbar never toggles another
+//! editor (a split pane, or the one typed in last).
 
 use gpui::{
-    Action, AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, div,
+    Action, AnyElement, Context, Focusable as _, InteractiveElement as _, IntoElement,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div,
 };
 use oxikube_domain::command::Command;
 use oxikube_keymap::contexts;
@@ -104,7 +109,10 @@ impl ManifestEditor {
         }
     }
 
-    /// A toggle button; its tooltip names the key bound to the same action.
+    /// A toggle button; its tooltip names the key bound to the same action. Tagged
+    /// `<id>-<title>` for `debug_bounds` ("manifest-wrap-Untitled-1"). A click focuses this
+    /// editor's buffer before sending `command`, so the toggle acts on this editor (see the
+    /// module docs).
     fn toggle(
         &self,
         id: &'static str,
@@ -114,10 +122,11 @@ impl ManifestEditor {
         command: Command,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let title = self.title.clone();
         div()
             .id(id)
             .flex_none()
-            .debug_selector(move || id.to_owned())
+            .debug_selector(move || format!("{id}-{title}"))
             .tooltip(tooltip_for_action(
                 label,
                 action,
@@ -129,7 +138,10 @@ impl ManifestEditor {
                     .ghost()
                     .xsmall()
                     .selected(on)
-                    .on_click(cx.listener(move |view, _, _, cx| view.send(command.clone(), cx))),
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        window.focus(&view.editor.focus_handle(cx), cx);
+                        view.send(command.clone(), cx);
+                    })),
             )
             .into_any_element()
     }

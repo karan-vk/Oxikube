@@ -1,7 +1,8 @@
 //! The manifest editor in a workspace (E10-S04): opened by `editor::NewManifest` through the
 //! shipped keymap and the window's `EditorViews`, typed into, validated after the debounce
 //! against the cluster's schemas (a fake `SchemaPort` on the deterministic runtime), toggled
-//! through the keys, and its key context.
+//! through the keys and through its own toolbar (split beside another editor), and its key
+//! context.
 
 use std::cell::RefCell;
 use std::ops::Range;
@@ -26,7 +27,9 @@ use oxikube_testkit::fakes::FakeSchemaPort;
 use oxikube_ui::editor::EditorApi as _;
 use oxikube_workspace::command_surface::view_of_focus;
 use oxikube_workspace::test_support::open_workspace;
-use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent, Workspace};
+use oxikube_workspace::{
+    CommandDispatcher, Item, ItemEvent, SplitDirection, TabContent, Workspace,
+};
 use serde_json::json;
 
 fn cluster() -> ClusterId {
@@ -168,12 +171,18 @@ fn read_only_key() -> &'static str {
 impl Fixture {
     /// Opens a manifest editor with the shipped key and returns it.
     fn open_editor(&mut self) -> Entity<ManifestEditor> {
+        let editors = |f: &mut Self| {
+            f.vcx
+                .read(|cx| f.workspace.read(cx).items_of_type::<ManifestEditor>())
+        };
+        let before = editors(self);
         self.vcx.simulate_keystrokes(new_manifest_key());
         self.vcx.run_until_parked();
-        let editors = self
-            .vcx
-            .read(|cx| self.workspace.read(cx).items_of_type::<ManifestEditor>());
-        editors.last().cloned().expect("an editor opened")
+        // `items_of_type` has no order: the new editor is the one that was not there.
+        editors(self)
+            .into_iter()
+            .find(|editor| !before.contains(editor))
+            .expect("an editor opened")
     }
 
     fn type_text(&mut self, text: &str) {
@@ -274,6 +283,79 @@ fn the_keys_toggle_soft_wrap_and_read_only_through_the_bus(cx: &mut TestAppConte
     f.vcx.run_until_parked();
     f.type_text("a");
     assert_eq!(f.text(&editor), "a");
+}
+
+impl Fixture {
+    fn focus(&mut self, editor: &Entity<ManifestEditor>) {
+        let focus = self.vcx.read(|cx| editor.read(cx).focus_handle(cx));
+        self.vcx.update(|window, cx| window.focus(&focus, cx));
+        self.vcx.run_until_parked();
+    }
+
+    /// Clicks the toolbar button tagged `selector` (`<id>-<editor title>`).
+    fn click(&mut self, selector: &'static str) {
+        let bounds = self
+            .vcx
+            .debug_bounds(selector)
+            .unwrap_or_else(|| panic!("{selector} is shown"));
+        self.vcx
+            .simulate_click(bounds.center(), gpui::Modifiers::default());
+        self.vcx.run_until_parked();
+    }
+
+    fn soft_wrap(&mut self, editor: &Entity<ManifestEditor>) -> bool {
+        self.vcx
+            .read(|cx| editor.read(cx).editor().read(cx).soft_wrap())
+    }
+
+    fn read_only(&mut self, editor: &Entity<ManifestEditor>) -> bool {
+        self.vcx
+            .read(|cx| editor.read(cx).editor().read(cx).is_read_only())
+    }
+}
+
+/// The toolbar's buttons keep the focus where it was on mouse-down, and the bus commands carry
+/// no target: the click must still act on the editor whose toolbar was clicked, not on the one
+/// being typed in.
+#[gpui::test]
+fn a_toolbar_toggle_acts_on_its_own_editor_not_the_focused_one(cx: &mut TestAppContext) {
+    let mut f = setup(cx, false);
+    let left = f.open_editor();
+    let right = f.open_editor();
+    let workspace = f.workspace.clone();
+    f.vcx.update(|window, cx| {
+        workspace.update(cx, |ws, cx| {
+            ws.split_active_pane(SplitDirection::Right, window, cx)
+                .expect("Untitled-2 moves to a pane on the right");
+        });
+    });
+    f.vcx.run_until_parked();
+
+    // Typing in the left editor, then clicking Wrap on the right one's toolbar.
+    f.focus(&left);
+    f.type_text("a");
+    f.click("manifest-wrap-Untitled-2");
+    assert!(f.sent.borrow().contains(&Command::EditorToggleSoftWrap));
+    assert!(f.soft_wrap(&right), "the clicked editor wraps");
+    assert!(!f.soft_wrap(&left), "the editor typed in is untouched");
+
+    // The same for Read-only: the editor typed in stays editable.
+    f.focus(&left);
+    f.click("manifest-read-only-Untitled-2");
+    assert!(f.read_only(&right), "the clicked editor is read-only");
+    assert!(!f.read_only(&left), "the editor typed in is untouched");
+    f.focus(&left);
+    f.type_text("b");
+    assert_eq!(f.text(&left), "ab");
+    f.focus(&right);
+    f.type_text("z");
+    assert_eq!(f.text(&right), "", "the clicked editor refuses typing");
+
+    // And back on the left editor's own toolbar.
+    f.focus(&right);
+    f.click("manifest-wrap-Untitled-1");
+    assert!(f.soft_wrap(&left));
+    assert!(f.soft_wrap(&right), "the other editor keeps its wrap");
 }
 
 /// Stands for the palette: a focusable item with the `Palette` key context.
