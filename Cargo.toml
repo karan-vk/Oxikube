@@ -114,6 +114,8 @@ jiff = { version = "0.2", features = ["serde"] }
 humantime = "2"
 regex = "1"
 nucleo-matcher = "0.3"
+# Grapheme boundaries, to map nucleo's match indices (one per grapheme) back to byte offsets.
+unicode-segmentation = "1.10"
 thiserror = "2"
 anyhow = "1"
 bitflags = "2"

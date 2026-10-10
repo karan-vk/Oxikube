@@ -22,6 +22,7 @@ oxikube_runtime.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
 tracing.workspace = true
+unicode-segmentation.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

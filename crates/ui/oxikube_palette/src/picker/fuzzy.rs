@@ -11,6 +11,7 @@ use std::sync::Arc;
 use gpui::{BackgroundExecutor, HighlightStyle, SharedString, StyledText, Task};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Up to this many candidates are matched on the calling thread: well under a millisecond
 /// (`examples/picker_bench.rs`), and no frame shows the previous query's matches. Larger sets are
@@ -90,11 +91,12 @@ pub fn match_strings(
             let candidate = &candidates[ix];
             indices.clear();
             let haystack = Utf32Str::new(&candidate.string, &mut buffer);
+            let ascii_haystack = matches!(haystack, Utf32Str::Ascii(_));
             pattern.indices(haystack, &mut matcher, &mut indices);
             StringMatch {
                 candidate_id: candidate.id,
                 score,
-                positions: char_indices_to_bytes(&candidate.string, &mut indices),
+                positions: match_indices_to_bytes(&candidate.string, ascii_haystack, &mut indices),
                 string: candidate.string.clone(),
             }
         })
@@ -116,15 +118,27 @@ pub fn match_strings_async(
     }
 }
 
-/// Char indices (what nucleo reports) to sorted, deduplicated byte offsets into `text`.
-fn char_indices_to_bytes(text: &str, indices: &mut Vec<u32>) -> Vec<usize> {
+/// Nucleo's match indices to sorted, deduplicated byte offsets into `text`.
+///
+/// Nucleo counts in the units of the haystack `Utf32Str::new` built: bytes of `text` when that is
+/// [`Utf32Str::Ascii`] (also chosen when every grapheme merely *starts* with an ASCII char, as in
+/// `e` + a combining accent), and extended grapheme clusters otherwise (one char per grapheme).
+/// Neither is a Rust char index once a grapheme spans several codepoints.
+fn match_indices_to_bytes(text: &str, ascii_haystack: bool, indices: &mut Vec<u32>) -> Vec<usize> {
     indices.sort_unstable();
     indices.dedup();
+    if ascii_haystack {
+        return indices
+            .iter()
+            .map(|&ix| ix as usize)
+            .filter(|&byte| byte < text.len() && text.is_char_boundary(byte))
+            .collect();
+    }
     let mut wanted = indices.iter().copied().peekable();
     let mut bytes = Vec::with_capacity(indices.len());
-    for (char_ix, (byte, _)) in text.char_indices().enumerate() {
+    for (grapheme_ix, (byte, _)) in text.grapheme_indices(true).enumerate() {
         match wanted.peek() {
-            Some(&next) if next as usize == char_ix => {
+            Some(&next) if next as usize == grapheme_ix => {
                 bytes.push(byte);
                 wanted.next();
             }
@@ -136,7 +150,8 @@ fn char_indices_to_bytes(text: &str, indices: &mut Vec<u32>) -> Vec<usize> {
 }
 
 /// `text` with the characters at `positions` (byte offsets, as in [`StringMatch::positions`])
-/// drawn in `highlight`; consecutive characters share one run.
+/// drawn in `highlight`, each with the rest of its grapheme (a combining accent, say); consecutive
+/// characters share one run.
 pub fn highlighted_text(
     text: SharedString,
     positions: &[usize],
@@ -146,14 +161,17 @@ pub fn highlighted_text(
     StyledText::new(text).with_highlights(ranges.into_iter().map(|range| (range, highlight)))
 }
 
-/// The byte ranges covering the characters at `positions`, merged where they touch.
+/// The byte ranges covering the graphemes that start at `positions`, merged where they touch.
 fn highlight_ranges(text: &str, positions: &[usize]) -> Vec<Range<usize>> {
     let mut ranges: Vec<Range<usize>> = Vec::new();
     for &start in positions {
-        let Some(ch) = text.get(start..).and_then(|rest| rest.chars().next()) else {
+        let Some(grapheme) = text
+            .get(start..)
+            .and_then(|rest| rest.graphemes(true).next())
+        else {
             continue;
         };
-        let end = start + ch.len_utf8();
+        let end = start + grapheme.len();
         match ranges.last_mut() {
             Some(last) if last.end == start => last.end = end,
             _ => ranges.push(start..end),
@@ -243,6 +261,28 @@ mod tests {
             highlight_ranges("ünïcode-pod", &found[0].positions),
             [10..13]
         );
+    }
+
+    #[test]
+    fn positions_count_graphemes_when_an_accent_is_a_combining_mark() {
+        // Every grapheme starts with an ASCII char, so nucleo matches the raw bytes.
+        let decomposed = "cafe\u{301}-pod";
+        let found = match_strings(&candidates(&[decomposed]), "pod", 10);
+        assert_eq!(found[0].positions, [7, 8, 9]);
+        assert_eq!(highlight_ranges(decomposed, &found[0].positions), [7..10]);
+
+        // A non-ASCII grapheme start: nucleo matches one char per grapheme.
+        let mixed = "\u{fc}e\u{301}-pod";
+        let found = match_strings(&candidates(&[mixed]), "pod", 10);
+        assert_eq!(found[0].positions, [6, 7, 8]);
+        assert_eq!(highlight_ranges(mixed, &found[0].positions), [6..9]);
+    }
+
+    #[test]
+    fn a_highlight_covers_the_whole_grapheme() {
+        let found = match_strings(&candidates(&["cafe\u{301}"]), "cafe", 10);
+        assert_eq!(found[0].positions, [0, 1, 2, 3]);
+        assert_eq!(highlight_ranges("cafe\u{301}", &found[0].positions), [0..6]);
     }
 
     #[test]
