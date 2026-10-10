@@ -20,6 +20,7 @@
 //! - [`editor`]: gpui-component's editor glue (rope text, tree-sitter parse), set up read-only.
 //! - [`code_view`]: [`code_view::CodeView`], the read-only, virtualised, tree-sitter coloured text
 //!   view the resource detail's YAML and Describe tabs show (laid out off the UI thread, any size).
+//! - [`kbd`]: [`kbd::Kbd`] key caps and [`kbd::keycap`] (a keybinding next to a command).
 //! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`chart`], [`markdown`],
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
 //! - [`error_details`]: the Details toggle and raw-text box every error notice shares.
@@ -42,6 +43,7 @@ pub mod editor;
 pub mod error_details;
 pub mod icon;
 pub mod input;
+pub mod kbd;
 pub mod layout;
 pub mod markdown;
 pub mod menu;

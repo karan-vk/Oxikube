@@ -198,6 +198,10 @@ pub enum Command {
     /// Show the key bindings that apply where the focus is (`?`).
     #[serde(rename = "help::Show")]
     HelpShow,
+    /// List the commands that cannot run in the open command palette too (marked, with the
+    /// reason), or hide them again.
+    #[serde(rename = "palette::ToggleShowAll")]
+    PaletteToggleShowAll,
     /// Quit the application; asks first while operations are running.
     #[serde(rename = "app::Quit")]
     AppQuit,
@@ -834,6 +838,7 @@ impl Command {
             Command::PaletteToggle => CommandId::PALETTE_TOGGLE,
             Command::PaletteOpenJump => CommandId::PALETTE_OPEN_JUMP,
             Command::HelpShow => CommandId::HELP_SHOW,
+            Command::PaletteToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
             Command::AppQuit => CommandId::APP_QUIT,
             Command::WindowNew => CommandId::WINDOW_NEW,
             Command::ViewZoomIn => CommandId::VIEW_ZOOM_IN,
@@ -1107,6 +1112,7 @@ mod tests {
             Command::PaletteToggle,
             Command::PaletteOpenJump,
             Command::HelpShow,
+            Command::PaletteToggleShowAll,
             Command::AppQuit,
             Command::WindowNew,
             Command::ViewZoomIn,
@@ -1467,6 +1473,7 @@ mod tests {
                     | Command::PaletteToggle
                     | Command::PaletteOpenJump
                     | Command::HelpShow
+                    | Command::PaletteToggleShowAll
                     | Command::AppQuit
                     | Command::WindowNew
                     | Command::ViewZoomIn

@@ -12,11 +12,15 @@ path = "src/oxikube_palette.rs"
 doctest = false
 
 [dependencies]
+futures.workspace = true
 gpui.workspace = true
 nucleo-matcher.workspace = true
+oxikube_app.workspace = true
+oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
@@ -45,6 +49,12 @@ required-features = ["screenshot"]
 # `cargo run -p oxikube_palette --features test-support --profile release-fast --example picker_bench`
 [[example]]
 name = "picker_bench"
+required-features = ["test-support"]
+
+# The same for the command palette over 2 000 commands (classify, open, keystroke, redraw):
+# `cargo run -p oxikube_palette --features test-support --profile release-fast --example command_palette_bench`
+[[example]]
+name = "command_palette_bench"
 required-features = ["test-support"]
 
 [lints]

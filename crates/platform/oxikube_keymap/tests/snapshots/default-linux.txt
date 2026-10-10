@@ -66,6 +66,8 @@
   pagedown         picker::SelectLast
   pageup           picker::SelectFirst
   up               picker::SelectPrevious
+[Palette]
+  ctrl-shift-a     palette::ToggleShowAll
 [ResourceTable]
   ctrl-a           resource_table::SelectAll
   ctrl-c           resource_table::CopyName

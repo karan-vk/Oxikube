@@ -55,6 +55,7 @@
 pub mod bus;
 mod describe;
 mod logs;
+mod palette;
 mod resources;
 mod tabs;
 mod terminal;
@@ -121,6 +122,9 @@ pub struct Wiring {
     _follow_kubectl: oxikube_logs_ui::KubectlFollow,
     /// Opens, splits and closes the terminals.
     _terminal_views: Entity<TerminalViews>,
+    /// Applies `palette::Toggle` and `palette::ToggleShowAll` from the bus to this window's
+    /// command palette (E11-S03).
+    _palette: Task<()>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -203,6 +207,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (links_sink, links_rx) = LinkSink::channel();
     let (terminal_input_sink, terminal_input_rx) = TerminalInputSink::channel();
     let (terminal_views_sink, terminal_views_rx) = TerminalViewSink::channel();
+    let (palette_sink, palette_rx) = oxikube_palette::command_palette::PaletteSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -218,6 +223,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         terminal_input: terminal_input_sink,
         terminal_views: terminal_views_sink.clone(),
         exec: exec_service.clone(),
+        palette: palette_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -323,7 +329,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     workspace.update(cx, |ws, cx| ws.open_item(catalog, window, cx));
 
     let strip_dispatcher: Rc<dyn CommandDispatcher> =
-        Rc::new(TabsDispatcher::new(dispatcher, sink));
+        Rc::new(TabsDispatcher::new(dispatcher.clone(), sink));
     let hotbar_deps = HotbarDeps::new(
         services.catalog.clone(),
         services.sessions.clone(),
@@ -345,6 +351,21 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         tabs.restore_session(restorer, persistence, window, cx);
     });
 
+    // The command palette (E11-S03): `cmd-shift-p` / `ctrl-shift-p` opens it over the focused view.
+    let palette = palette::mount(
+        palette::PaletteDeps {
+            workspace: workspace.clone(),
+            bus: bus.clone(),
+            dispatcher,
+            recents: state.recents().clone(),
+            tabs: tabs.downgrade(),
+            sessions: services.sessions.clone(),
+        },
+        palette_rx,
+        window,
+        cx,
+    );
+
     let open_views = open_views(views_rx, view_deps, &workspace, window, cx);
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
     let open_links = terminal::open_links(links_rx, cx);
@@ -363,6 +384,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _log_views: log_views,
         _follow_kubectl: follow_kubectl,
         _terminal_views: terminal_views,
+        _palette: palette,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

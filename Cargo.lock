@@ -5976,13 +5976,17 @@ name = "oxikube_palette"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "futures",
  "gpui-pre",
  "gpui-pre-platform",
  "nucleo-matcher",
+ "oxikube_app",
+ "oxikube_domain",
  "oxikube_keymap",
  "oxikube_testkit",
  "oxikube_ui",
  "oxikube_workspace",
+ "tracing",
 ]
 
 [[package]]

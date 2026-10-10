@@ -34,6 +34,10 @@ pub const FEATURES: &[Feature] = &[
         init: oxikube_terminal::init,
     },
     Feature {
+        name: "oxikube_palette",
+        init: oxikube_palette::command_palette::init,
+    },
+    Feature {
         name: "cluster_prefs",
         init: follow_cluster_prefs,
     },

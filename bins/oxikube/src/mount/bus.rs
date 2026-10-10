@@ -20,6 +20,7 @@
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
 //! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
 //! | `oxikube_app::exec` | `node::Shell` (guarded: blocked read-only, a confirmation naming the node and the image, a server dry run of the pod, audit; E09-S09) |
+//! | `oxikube_palette` | `palette::Toggle` (the palette: opens or closes it, E11-S03), `palette::ToggleShowAll` (lists the commands that cannot run here too) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
 //! `pod::Debug` (E09-S10, registered by `oxikube_terminal` over the app's `ExecService`) adds an
@@ -48,6 +49,7 @@ use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_logs_ui::LogCommandSink;
+use oxikube_palette::command_palette::PaletteSink;
 use oxikube_resources_ui::ResourceCommandSink;
 use oxikube_resources_ui::navigate::OpenKind;
 use oxikube_terminal::input::TerminalInputSink;
@@ -92,6 +94,9 @@ pub struct BusParts {
     /// `node::Shell`'s handler dry-runs the shell pod and leaves the permit the node's terminal
     /// opens with (E09-S09).
     pub exec: Arc<ExecService>,
+    /// Where `palette::Toggle` and `palette::ToggleShowAll` send their request (applied on the UI
+    /// thread by the window's palette host).
+    pub palette: PaletteSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -127,6 +132,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_logs_ui", |r| {
         oxikube_logs_ui::register_commands(r, parts.logs)
+    })?;
+    registry.install("oxikube_palette", |r| {
+        oxikube_palette::command_palette::register_commands(r, parts.palette)
     })?;
     registry.install("oxikube_terminal", |r| {
         oxikube_terminal::open_link::register_commands(r, parts.links)?;

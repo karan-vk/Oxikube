@@ -129,6 +129,9 @@ impl CommandId {
     pub const PALETTE_OPEN_JUMP: CommandId = CommandId::new("palette::OpenJump");
     /// `palette::Toggle`: show or hide the command palette.
     pub const PALETTE_TOGGLE: CommandId = CommandId::new("palette::Toggle");
+    /// `palette::ToggleShowAll`: list the commands that cannot run here too, marked, in the open
+    /// command palette.
+    pub const PALETTE_TOGGLE_SHOW_ALL: CommandId = CommandId::new("palette::ToggleShowAll");
     /// `pod::Attach`: attach to a container's main process.
     pub const POD_ATTACH: CommandId = CommandId::new("pod::Attach");
     /// `pod::Debug`: add an ephemeral debug container to a pod and open a terminal in it.
@@ -651,6 +654,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    CommandMeta::read(
+        CommandId::PALETTE_TOGGLE_SHOW_ALL,
+        "Show Unavailable Commands",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(&[ViewContext::Palette]),
     // The exec class (`CommandMeta::exec`): not mutations, no confirmation, blocked on a
     // read-only cluster unless `exec_in_read_only` allows it, audited on every open.
     CommandMeta::exec(CommandId::POD_ATTACH, "Attach", CommandScope::Selection)

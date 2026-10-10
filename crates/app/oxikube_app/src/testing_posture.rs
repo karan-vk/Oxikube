@@ -215,6 +215,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "palette::Toggle" => Command::PaletteToggle,
         "palette::OpenJump" => Command::PaletteOpenJump,
         "help::Show" => Command::HelpShow,
+        "palette::ToggleShowAll" => Command::PaletteToggleShowAll,
         "pod::Delete" => Command::PodDelete {
             target: target(),
             grace_period_seconds: None,

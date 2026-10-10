@@ -1,15 +1,17 @@
 //! Row actions on a table (E07-S08): what the selection offers, running an action, and the
 //! delete key.
 //!
-//! The list comes from `oxikube_app::actions` through [`ResourceActions`]; the menu, the
-//! palette ([`ResourceTable::action_entries`]) and the delete key all end in
+//! The list comes from `oxikube_app::actions` through [`ResourceActions`]; the menu
+//! ([`ResourceTable::action_entries`]) and the delete key all end in
 //! [`ResourceTable::run_action`], which opens the delete dialog for `resource::Delete` and sends
 //! any other action's command through the table's dispatcher (the bus). Nothing here calls a
 //! mutating port.
 
 use gpui::{AppContext as _, Context, Window};
-use oxikube_domain::command::CommandId;
+use oxikube_app::CommandTarget;
+use oxikube_domain::command::{CommandId, ViewContext};
 use oxikube_domain::ids::ResourceRef;
+use oxikube_workspace::command_surface::CommandSurface;
 use oxikube_workspace::{Toast, Workspace};
 
 use super::actions::{AttachSelected, DebugSelected, DeleteSelected, ShellSelected};
@@ -36,8 +38,9 @@ impl ResourceTable {
             .collect()
     }
 
-    /// The actions the palette lists for the current selection: the list of the context menu
-    /// (same registry, same session state), with a disabled action carrying its reason.
+    /// The actions the context menu lists for the current selection (same registry, same session
+    /// state), with a disabled action carrying its reason. The command palette (E11-S03) lists
+    /// through `CommandBus::list` and this table's [`CommandSurface`] impl instead.
     pub fn action_entries(&self, cx: &gpui::App) -> Vec<ActionEntry> {
         let Some(actions) = &self.deps.actions else {
             return Vec::new();
@@ -197,5 +200,42 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::POD_DEBUG, targets, window, cx);
+    }
+}
+
+/// The command palette (E11-S03) reads a focused table as a `Table` view acting on its selected
+/// rows, else its cursor row: the objects its own row actions and keys act on. It runs the table's
+/// row actions through [`ResourceTable::run_action`], so a palette `Delete` opens the one delete
+/// dialog for the whole selection (plan, propagation, type-the-name) as the key and the menu do,
+/// and Shell, Attach and Debug choose their container first.
+impl CommandSurface for ResourceTable {
+    fn view_context(&self) -> ViewContext {
+        ViewContext::Table
+    }
+
+    fn command_target(&self, cx: &gpui::App) -> CommandTarget {
+        CommandTarget::none()
+            .in_cluster(self.cluster.clone())
+            .of_kind(self.kind.gvk.clone())
+            .selecting(self.action_targets(cx))
+    }
+
+    fn own_commands(&self, cx: &gpui::App) -> Vec<CommandId> {
+        self.action_entries(cx)
+            .into_iter()
+            .filter(|entry| entry.reason().is_none())
+            .map(|entry| entry.command())
+            .collect()
+    }
+
+    fn run_command(
+        &mut self,
+        command: CommandId,
+        targets: Vec<ResourceRef>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.run_action(command, targets, window, cx);
+        true
     }
 }

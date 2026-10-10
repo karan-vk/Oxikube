@@ -28,6 +28,8 @@
 //! - [`sidebar`]: the cluster sidebar (E06-S10): [`SidebarPanel`](sidebar::SidebarPanel) in the left dock of a
 //!   cluster tab, its sections registered through [`SidebarRegistry`](sidebar::SidebarRegistry) and
 //!   hidden by what the user may list (`SelfSubjectRulesReview`), integrations' sections appended.
+//! - [`command_surface`]: [`CommandSurface`](command_surface::CommandSurface), how the command palette
+//!   learns the kind of view and the objects it acts on (E11-S03).
 //! - [`actions`]: `workspace::*` actions and their default key bindings.
 //! - [`session`]: window and session basics (E05-S12): `window::New`, UI zoom (`view::ZoomIn`,
 //!   `view::ZoomOut`, `view::ZoomReset`), reduce-motion, and the quit confirmation while
@@ -51,6 +53,7 @@ pub mod actions;
 pub mod closed;
 pub mod cluster;
 pub mod cluster_tab;
+pub mod command_surface;
 pub mod dock;
 pub mod item;
 pub mod modal;

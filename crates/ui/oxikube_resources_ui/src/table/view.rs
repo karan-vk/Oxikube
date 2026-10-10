@@ -258,6 +258,8 @@ impl ResourceTable {
         this.load_prefs(cx);
         this.load_filter(window, cx);
         this.resubscribe(cx);
+        // The command palette asks the focused table what it acts on (E11-S03).
+        oxikube_workspace::command_surface::register(&cx.entity(), &this.focus, cx);
         this
     }
 

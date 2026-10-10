@@ -154,6 +154,8 @@ impl DetailView {
             _tick: tick,
         };
         this.resubscribe(cx);
+        // The command palette asks the focused detail what it acts on (E11-S03).
+        oxikube_workspace::command_surface::register(&cx.entity(), &this.focus, cx);
         this
     }
 
@@ -365,4 +367,18 @@ impl Item for DetailView {
 /// The item key of the detail of `target` (one per object in a cluster's workspace).
 pub fn item_key(target: &ResourceRef) -> String {
     format!("detail:{target}")
+}
+
+/// The command palette (E11-S03) reads a focused detail as a `Detail` view acting on its object.
+impl oxikube_workspace::command_surface::CommandSurface for DetailView {
+    fn view_context(&self) -> oxikube_domain::command::ViewContext {
+        oxikube_domain::command::ViewContext::Detail
+    }
+
+    fn command_target(&self, _: &App) -> oxikube_app::CommandTarget {
+        oxikube_app::CommandTarget::none()
+            .in_cluster(self.target.cluster.clone())
+            .of_kind(self.target.gvk.clone())
+            .selecting(vec![self.target.clone()])
+    }
 }
