@@ -172,7 +172,7 @@ fn scenarios_without_views_are_unavailable_and_exit_0() {
     assert!(out.status.success(), "{scenario}");
     let s = sample.expect("sample written");
     assert_eq!(s["status"], "unavailable", "{scenario}");
-    assert!(s["enabled_by"][0].as_str().unwrap().starts_with("E05-S11"));
+    assert!(s["enabled_by"][0].as_str().unwrap().starts_with("E10-S11"));
 }
 
 #[test]
