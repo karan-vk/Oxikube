@@ -1,7 +1,8 @@
 //! Look up the bindings of an action, for the command palette (E11) and menus to show next to
 //! it.
 
-use gpui::{Action, App};
+use gpui::{Action, App, KeyBinding};
+use oxikube_domain::command::CommandId;
 use serde_json::Value;
 
 use crate::layer::KeymapLayer;
@@ -19,6 +20,19 @@ pub struct BindingInfo {
 }
 
 impl BindingInfo {
+    /// The description of one GPUI binding.
+    pub fn of(binding: &KeyBinding) -> Self {
+        Self {
+            keystrokes: binding
+                .keystrokes()
+                .iter()
+                .map(|keystroke| keystroke.unparse())
+                .collect(),
+            context: binding.predicate().map(|predicate| predicate.to_string()),
+            layer: KeymapLayer::from_meta(binding.meta()),
+        }
+    }
+
     /// The keystrokes joined by spaces, as written in `keymap.json` (`ctrl-k ctrl-s`).
     pub fn keystrokes_text(&self) -> String {
         self.keystrokes.join(" ")
@@ -33,16 +47,23 @@ pub fn bindings_for_action(cx: &App, action: &dyn Action) -> Vec<BindingInfo> {
     keymap
         .bindings_for_action(action)
         .rev()
-        .map(|binding| BindingInfo {
-            keystrokes: binding
-                .keystrokes()
-                .iter()
-                .map(|keystroke| keystroke.unparse())
-                .collect(),
-            context: binding.predicate().map(|predicate| predicate.to_string()),
-            layer: KeymapLayer::from_meta(binding.meta()),
-        })
+        .map(BindingInfo::of)
         .collect()
+}
+
+/// The bindings that run `command`: those of the action named like it, then those of the view
+/// actions that stand for it ([`stands_for`](crate::stands_for)), each list strongest first. What
+/// the palette (E11-S03) shows next to a command; empty when nothing is bound.
+pub fn bindings_for_command(cx: &App, command: CommandId) -> Vec<BindingInfo> {
+    let mut out = bindings_for_action_name(cx, command.as_str(), None);
+    for name in crate::stands_for::view_actions_of(command) {
+        for info in bindings_for_action_name(cx, name, None) {
+            if !out.contains(&info) {
+                out.push(info);
+            }
+        }
+    }
+    out
 }
 
 /// [`bindings_for_action`] for an action given by name and optional data, as the palette and

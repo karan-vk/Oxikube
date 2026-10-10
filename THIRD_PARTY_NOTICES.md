@@ -23,6 +23,10 @@ Entries (file → upstream path @ rev):
 - `crates/platform/oxikube_settings/src/json_edit/tests.rs`: the `object_replace`,
   `object_replace_escapes_new_key`, `object_remove_and_rename_find_an_escaped_key_by_its_own_range`
   and `test_infer_json_indent_size` tests from the same file @ a84689073d.
+- `crates/platform/oxikube_keymap/tests/dispatch.rs`: the context-precedence, `null`-disables,
+  pending-sequence, layer-rank and targeted-unbind tests of `crates/gpui/src/keymap.rs` (`mod tests`)
+  @ the `gpui-pre` 0.3.7 snapshot of Zed's gpui (Apache-2.0 upstream, taken under GPL-3.0-or-later
+  here), renamed to Oxikube's contexts and layers (E11-S07). The assertions are Zed's.
 - `crates/platform/oxikube_settings/src/settings.rs`, `store/mod.rs`, `store/value.rs`,
   `update/mod.rs`: the `Settings` trait shape, the type-erased `SettingValue`/`AnySettingValue`
   slots, inventory registration and `edits_for_update`, derived from

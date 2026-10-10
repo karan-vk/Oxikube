@@ -199,3 +199,89 @@ fn choosing_a_sort_forgets_a_saved_sort_on_an_absent_column() {
         Some("age".to_owned())
     );
 }
+
+#[test]
+fn toggle_wide_shows_every_wide_column_then_hides_them_again() {
+    let all = pod_columns();
+    let wide: Vec<ColumnId> = all
+        .iter()
+        .filter(|c| c.wide)
+        .map(|c| c.id.clone())
+        .collect();
+    assert!(wide.len() > 1, "pods have wide columns");
+    let mut layout = ColumnLayout::new(all, &ColumnPrefs::default());
+    let default_shown = ids(&layout);
+    assert!(!layout.wide_shown());
+
+    assert!(layout.toggle_wide(), "the first toggle changes the layout");
+    assert!(layout.wide_shown());
+    for id in &wide {
+        assert!(layout.is_shown(id), "{id} shows");
+    }
+
+    assert!(layout.toggle_wide());
+    assert!(!layout.wide_shown());
+    assert_eq!(ids(&layout), default_shown, "back to the default columns");
+}
+
+#[test]
+fn toggle_wide_with_one_wide_column_shown_shows_the_rest() {
+    // The user showed `qos` from the picker; `ctrl-w` completes the set, it does not hide it.
+    let prefs = ColumnPrefs {
+        visible: [("qos".to_owned(), true)].into(),
+        ..ColumnPrefs::default()
+    };
+    let mut layout = ColumnLayout::new(pod_columns(), &prefs);
+    assert!(layout.is_shown(&ColumnId::new("qos")) && !layout.wide_shown());
+    assert!(layout.toggle_wide());
+    assert!(layout.wide_shown());
+}
+
+#[test]
+fn toggle_wide_keeps_the_default_columns_and_the_users_order() {
+    let prefs = ColumnPrefs {
+        order: vec!["status".into(), "name".into()],
+        visible: [("node".to_owned(), false)].into(),
+        ..ColumnPrefs::default()
+    };
+    let mut layout = ColumnLayout::new(pod_columns(), &prefs);
+    let before = ids(&layout);
+    layout.toggle_wide();
+    let after = ids(&layout);
+    assert_eq!(&after[..2], ["status", "name"]);
+    assert!(
+        !after.contains(&"node".to_owned()),
+        "a default column the user hid stays hidden"
+    );
+    assert!(after.len() > before.len());
+    layout.toggle_wide();
+    assert_eq!(ids(&layout), before);
+}
+
+#[test]
+fn toggle_wide_drops_a_sort_on_a_column_it_hides() {
+    let prefs = ColumnPrefs {
+        visible: [("qos".to_owned(), true)].into(),
+        sort: Some(SavedSort {
+            column: "qos".into(),
+            descending: false,
+        }),
+        ..ColumnPrefs::default()
+    };
+    let mut layout = ColumnLayout::new(pod_columns(), &prefs);
+    assert!(layout.sort().is_some());
+    layout.toggle_wide(); // shows the rest
+    assert!(layout.sort().is_some());
+    layout.toggle_wide(); // hides them all, the sorted one too
+    assert_eq!(layout.sort(), None);
+}
+
+#[test]
+fn toggle_wide_does_nothing_for_a_kind_without_wide_columns() {
+    let narrow: Arc<[Column]> = pod_columns().iter().filter(|c| !c.wide).cloned().collect();
+    let mut layout = ColumnLayout::new(narrow, &ColumnPrefs::default());
+    let before = layout.clone();
+    assert!(!layout.toggle_wide());
+    assert!(!layout.wide_shown());
+    assert_eq!(layout, before);
+}

@@ -40,7 +40,7 @@ mod suite;
 pub use describe_settings::{DescribeBackendSetting, DescribeSettings};
 pub use views::{
     RESOURCE_COMMANDS, ResourceCommandSink, ResourceViews, ResourceViewsDeps, ResourceViewsSlot,
-    ViewRequest, register_commands, sidebar_navigation,
+    ViewRequest, register_commands, sidebar_navigation, view_row_actions,
 };
 
 /// Registers what this crate puts in the app: the Workloads overview's tiles. Called once from

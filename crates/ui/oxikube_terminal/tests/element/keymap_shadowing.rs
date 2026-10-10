@@ -74,6 +74,20 @@ fn terminal_stacks(os: &str) -> Vec<(&'static str, Vec<KeyContext>)> {
     let terminal = build(contexts::TERMINAL, &|_| {});
     vec![
         (
+            // The cluster tab hosts a workspace of its own (E11-S07): its prompt keys (`:`, `?`)
+            // are bound at the `ClusterTab` context, above the terminal.
+            "a terminal in a cluster tab",
+            vec![
+                workspace.clone(),
+                build(contexts::CLUSTER_TAB, &|b| {
+                    b.flag("connected");
+                }),
+                workspace.clone(),
+                build(contexts::PANE, &|_| {}),
+                terminal.clone(),
+            ],
+        ),
+        (
             "a terminal in a pane",
             vec![
                 workspace.clone(),
@@ -309,4 +323,64 @@ fn the_shell_keys_reach_the_process_under_the_off_macos_keymap(cx: &mut gpui::Te
         );
         assert_eq!(h.commands().len(), 0, "{os}: no application command ran");
     }
+}
+
+/// A terminal types what the keyboard types: every printable character reaches the process, so no
+/// binding (the jump bar's `:`, the help overlay's `?`, a table's verbs) may take one while a
+/// terminal has the focus (E11-S07). The sweep covers the plain and shifted printable ASCII keys,
+/// in a terminal in a cluster tab, a pane and the bottom dock, on every OS keymap.
+#[test]
+fn no_binding_takes_a_character_typed_into_a_terminal() {
+    let mut typed: Vec<Keystroke> = (0x21u8..=0x7e)
+        .filter_map(|b| Keystroke::parse(&(b as char).to_string()).ok())
+        .collect();
+    // The keypress of a US keyboard for the symbols the prompts use: the shifted key, typing
+    // the character (GPUI matches the character).
+    typed.extend(["shift-;->:", "shift-/->?"].map(|k| Keystroke::parse(k).unwrap()));
+    assert!(typed.len() > 90);
+    let mut taken = Vec::new();
+    for (platform, os) in OFF_MACOS {
+        let keymap = Keymap::new(installed_bindings(platform));
+        for (place, stack) in terminal_stacks(os) {
+            for keystroke in &typed {
+                let (bound, pending) =
+                    keymap.bindings_for_input(std::slice::from_ref(keystroke), &stack);
+                for binding in &bound {
+                    taken.push(format!(
+                        "{os}, {place}: `{}` is bound to {}",
+                        keystroke.unparse(),
+                        describe(binding)
+                    ));
+                }
+                if pending {
+                    taken.push(format!(
+                        "{os}, {place}: `{}` starts a chord",
+                        keystroke.unparse()
+                    ));
+                }
+            }
+        }
+    }
+    taken.sort();
+    taken.dedup();
+    assert!(
+        taken.is_empty(),
+        "these bindings take characters a terminal should receive; unbind them (`null`) in the \
+         `Terminal` context:\n{}",
+        taken.join("\n")
+    );
+}
+
+/// The check can fail: a prompt key bound at the cluster tab without the terminal's `null` is
+/// caught.
+#[test]
+fn the_character_sweep_catches_a_prompt_key_without_its_null() {
+    let keymap = Keymap::new(vec![KeyBinding::new(":", OldProbe, Some("ClusterTab"))]);
+    let (_, stack) = terminal_stacks("linux").remove(0);
+    let (bound, _) = keymap.bindings_for_input(&[Keystroke::parse(":").unwrap()], &stack);
+    assert_eq!(
+        bound.len(),
+        1,
+        "the unguarded binding reaches the terminal's stack"
+    );
 }

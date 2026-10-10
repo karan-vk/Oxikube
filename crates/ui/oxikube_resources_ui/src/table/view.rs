@@ -378,7 +378,7 @@ impl Focusable for ResourceTable {
 }
 
 impl KeyContextual for ResourceTable {
-    const KEY_CONTEXT: &'static str = contexts::TABLE;
+    const KEY_CONTEXT: &'static str = contexts::RESOURCE_TABLE;
 
     fn extend_key_context(&self, context: &mut KeyContextBuilder) {
         let selection = match self.selected {
@@ -387,6 +387,16 @@ impl KeyContextual for ResourceTable {
             _ => "many",
         };
         context.value("selection", selection);
+        // Per-kind bindings (`s` is a shell on Pods and Nodes, scale on Deployments) scope on
+        // `kind == Pod`; the kind's name is all a keymap section needs.
+        context.value("kind", self.kind.gvk.kind.to_string());
+        context.value(
+            "scope",
+            match self.kind.scope() {
+                oxikube_domain::ids::Scope::Cluster => "cluster",
+                oxikube_domain::ids::Scope::Namespaced => "namespaced",
+            },
+        );
         // Bare keys (`a`, `s`, `j`, `k`, `/`, enter) are text while the filter field has the focus.
         context.flag_if(self.editing, contexts::EDITING);
     }

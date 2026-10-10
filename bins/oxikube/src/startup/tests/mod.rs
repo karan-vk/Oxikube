@@ -2,6 +2,7 @@
 //! one-shot config, no watchers), testkit fakes for the ports.
 
 mod budget;
+mod keymap_defaults;
 mod order;
 mod quit;
 mod state_db;

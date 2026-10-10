@@ -61,17 +61,27 @@ pub fn exec_row_actions() -> Vec<RowActionSpec> {
     ]
 }
 
-/// Whether `command` is one of the exec-class row actions, which act on a single object (none is
-/// bulk): with several rows selected, the table's key runs it on the cursor row and says so.
+/// Whether `command` is a row action of a single object (none is bulk): the exec-class ones and
+/// the k9s verbs `l`, `e` and `shift-f` (E11-S07). With several rows selected, the table's key
+/// runs it on the cursor row and says so.
 pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
     matches!(
         command,
-        CommandId::POD_SHELL | CommandId::POD_ATTACH | CommandId::POD_DEBUG | CommandId::NODE_SHELL
+        CommandId::POD_SHELL
+            | CommandId::POD_ATTACH
+            | CommandId::POD_DEBUG
+            | CommandId::NODE_SHELL
+            | CommandId::POD_VIEW_LOGS
+            | CommandId::WORKLOAD_VIEW_LOGS
+            | CommandId::RESOURCE_EDIT
+            | CommandId::POD_PORT_FORWARD
     )
 }
 
-/// The line that says which kinds an exec-class command is for, shown when its key is pressed in
-/// a table of another kind ("Shell is available for Pods and Nodes").
+/// The line that says which kinds a single-object command is for, or why it is not there, shown
+/// when its key is pressed in a table that does not offer it ("Shell is available for Pods and
+/// Nodes"). `resource::Edit` and `pod::PortForward` are rows the editor and port forwarding
+/// register; until they do, the key says so.
 pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
     match command {
         CommandId::POD_SHELL | CommandId::NODE_SHELL => {
@@ -79,6 +89,11 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
         }
         CommandId::POD_ATTACH => Some("Attach is available for Pods"),
         CommandId::POD_DEBUG => Some("Debug is available for Pods"),
+        CommandId::POD_VIEW_LOGS | CommandId::WORKLOAD_VIEW_LOGS => {
+            Some("Logs are available for Pods, workloads and Services")
+        }
+        CommandId::RESOURCE_EDIT => Some("Editing is not available yet"),
+        CommandId::POD_PORT_FORWARD => Some("Port forwarding is not available yet"),
         _ => None,
     }
 }

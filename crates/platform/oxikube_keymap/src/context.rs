@@ -1,6 +1,6 @@
 //! Key contexts: how views tell the keymap where they are.
 //!
-//! A binding with `"context": "Table && !Editing"` is active when the focused element, or an
+//! A binding with `"context": "ResourceTable && !Editing"` is active when the focused element, or an
 //! ancestor of it, carries a [`KeyContext`] that satisfies the expression. Views set theirs with
 //! `.key_context(...)`; this module keeps the vocabulary uniform so keymap authors can rely on
 //! it:
@@ -8,18 +8,30 @@
 //! | Context | Set by | Flags and values |
 //! |---|---|---|
 //! | `Workspace` | the workspace root | |
+//! | `ClusterTab` | a cluster tab; an ancestor of every view inside it | `connected` once the session is up |
 //! | `Dock` | a dock | `position == left\|right\|bottom` |
 //! | `Pane` | a pane of the centre group | |
-//! | `Table` | a resource table | `Editing` while its filter field has focus, `selection == none\|one\|many` |
+//! | `ResourceTable` | a resource table | `Editing` while its filter field has focus, `selection == none\|one\|many`, `kind` is the listed kind (`Pod`, `Deployment`), `scope == namespaced\|cluster` |
 //! | `List` | any other list or tree | `Editing` |
-//! | `Palette` | the command palette | |
+//! | `DetailDrawer` | the resource detail: the drawer of a cluster tab, or its pinned tab (E07-U559) | `mount == drawer\|tab`, `kind` |
+//! | `LogView` | the log viewer (E08-S02) | `Editing` while its search field has focus, `searching`, `wrap`, `autoscroll` |
+//! | `Terminal` | a terminal pane | `searching` |
+//! | `ManifestEditor` | the YAML manifest editor (E10) | `mode == yaml\|diff\|json`, `Editing` |
+//! | `Palette` | the command palette (E11-S03) | |
 //! | `Picker` | a picker (E11-S02): the palette, the container chooser, ... (its query field is `Picker > Input`) | |
+//! | `JumpBar` | the `:` jump bar (E11-S05) | |
 //! | `Modal` | a dialog or sheet | |
-//! | `Editor` | the YAML editor | `mode == yaml\|diff`, `Editing` |
-//! | `Terminal` | a terminal pane | |
-//! | `LogView` | the log viewer (E08-S02) | `Editing` while its search field has focus, `wrap`, `autoscroll` |
 //! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
-//! | `Detail` | the resource detail drawer or its pinned tab (E07-U559) | `mount == drawer\|tab` |
+//!
+//! The stack of a focused table is `Workspace > Dock > ClusterTab > Workspace > Pane >
+//! ResourceTable` (each cluster tab hosts a workspace of its own), so a binding in `ClusterTab`
+//! reaches every view inside the tab and nothing outside it (the catalog home, settings).
+//!
+//! The deeper context wins, so the same key can mean different things per view. Bare-letter
+//! verbs (k9s's `y`, `d`, `e`, `l`, `s`) are bound only in `ResourceTable` and `DetailDrawer`,
+//! always with `!Editing`, so a letter typed into a filter or search field is text. The
+//! text-entry contexts (`Terminal`, `ManifestEditor`, `Palette`, `JumpBar`, an `Input`) bind
+//! modifier chords only, and never `ctrl-d` in a `Terminal`: it is EOF.
 //!
 //! A terminal in focus gets every plain `ctrl-` chord (`ctrl-w`, `ctrl-k`, `ctrl-q`, ...): GPUI
 //! matches bindings before the focused element sees the key, so a binding in `Workspace` or with
@@ -30,13 +42,13 @@
 //! `oxikube_terminal` checks the shipped defaults.
 //!
 //! Every context built with [`KeyContextBuilder`] also carries `os == macos|linux|windows`, so a
-//! section can be limited to one OS (`"context": "Table && os == macos"`).
+//! section can be limited to one OS (`"context": "ResourceTable && os == macos"`).
 //!
 //! A view implements [`KeyContextual`] once and uses the result in `render`:
 //!
 //! ```ignore
 //! impl KeyContextual for ResourceTable {
-//!     const KEY_CONTEXT: &'static str = contexts::TABLE;
+//!     const KEY_CONTEXT: &'static str = contexts::RESOURCE_TABLE;
 //!     fn extend_key_context(&self, context: &mut KeyContextBuilder) {
 //!         context.flag_if(self.filter_focused, contexts::EDITING);
 //!     }
@@ -50,30 +62,48 @@ use gpui::{KeyContext, SharedString};
 pub mod contexts {
     /// The workspace root.
     pub const WORKSPACE: &str = "Workspace";
+    /// A cluster tab; an ancestor of every view inside it.
+    pub const CLUSTER_TAB: &str = "ClusterTab";
     /// A dock; carries `position`.
     pub const DOCK: &str = "Dock";
     /// A pane of the centre group.
     pub const PANE: &str = "Pane";
-    /// A resource table.
-    pub const TABLE: &str = "Table";
+    /// A resource table; carries `kind`, `scope` and `selection`.
+    pub const RESOURCE_TABLE: &str = "ResourceTable";
     /// Any other list or tree.
     pub const LIST: &str = "List";
+    /// The resource detail view: the drawer of a cluster tab, or its pinned tab.
+    pub const DETAIL_DRAWER: &str = "DetailDrawer";
+    /// The log viewer.
+    pub const LOGS: &str = "LogView";
+    /// A terminal pane.
+    pub const TERMINAL: &str = "Terminal";
+    /// The YAML manifest editor.
+    pub const MANIFEST_EDITOR: &str = "ManifestEditor";
     /// The command palette.
     pub const PALETTE: &str = "Palette";
     /// A picker (`oxikube_palette::Picker`): a query field over a list of matches.
     pub const PICKER: &str = "Picker";
+    /// The `:` jump bar.
+    pub const JUMP_BAR: &str = "JumpBar";
     /// A dialog or sheet.
     pub const MODAL: &str = "Modal";
-    /// The YAML editor.
-    pub const EDITOR: &str = "Editor";
-    /// A terminal pane.
-    pub const TERMINAL: &str = "Terminal";
-    /// The log viewer.
-    pub const LOGS: &str = "LogView";
     /// The cluster catalog home.
     pub const CATALOG: &str = "Catalog";
-    /// The resource detail view: the drawer of a cluster tab, or its pinned tab.
-    pub const DETAIL: &str = "Detail";
+    /// The contexts of the Phase 1 views, the ones the default keymaps define sections for
+    /// (E11-S07), in the order of the table in the [module docs](super). A new view that takes
+    /// keys adds its name here so the defaults tests cover it.
+    pub const PHASE_1: [&str; 9] = [
+        WORKSPACE,
+        CLUSTER_TAB,
+        RESOURCE_TABLE,
+        DETAIL_DRAWER,
+        LOGS,
+        TERMINAL,
+        MANIFEST_EDITOR,
+        PALETTE,
+        JUMP_BAR,
+    ];
     /// Flag: a text field inside the context has focus, so bare-letter bindings (vim layer)
     /// must not fire.
     pub const EDITING: &str = "Editing";
@@ -169,7 +199,7 @@ mod tests {
     }
 
     impl KeyContextual for Table {
-        const KEY_CONTEXT: &'static str = contexts::TABLE;
+        const KEY_CONTEXT: &'static str = contexts::RESOURCE_TABLE;
 
         fn extend_key_context(&self, context: &mut KeyContextBuilder) {
             context
@@ -187,14 +217,14 @@ mod tests {
     #[test]
     fn a_view_declares_its_context_once() {
         let browsing = Table { filtering: false }.key_context();
-        assert!(matches("Table", &browsing));
-        assert!(matches("Table && !Editing", &browsing));
+        assert!(matches("ResourceTable", &browsing));
+        assert!(matches("ResourceTable && !Editing", &browsing));
         assert!(matches("selection == one", &browsing));
         assert!(!matches("Pane", &browsing));
 
         let filtering = Table { filtering: true }.key_context();
-        assert!(matches("Table && Editing", &filtering));
-        assert!(!matches("Table && !Editing", &filtering));
+        assert!(matches("ResourceTable && Editing", &filtering));
+        assert!(!matches("ResourceTable && !Editing", &filtering));
     }
 
     #[test]

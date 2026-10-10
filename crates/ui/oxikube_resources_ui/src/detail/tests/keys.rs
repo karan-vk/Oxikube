@@ -191,3 +191,32 @@ fn a_pinned_tab_ignores_escape_and_stepping(cx: &mut TestAppContext) {
         "its tabs still switch"
     );
 }
+
+#[gpui::test]
+fn the_drawers_key_context_is_detail_drawer_with_its_mount_and_kind(cx: &mut TestAppContext) {
+    let (mut d, _table) = drawer_on_b(cx);
+    d.f.vcx.update(|window, cx| window.draw(cx).clear(cx));
+    let context = d.f.vcx.update(|window, _| {
+        window
+            .context_stack()
+            .into_iter()
+            .find(|context| context.contains("DetailDrawer"))
+            .expect("the focus is inside the drawer")
+    });
+    assert_eq!(context.get("mount").map(|v| v.as_ref()), Some("drawer"));
+    assert_eq!(context.get("kind").map(|v| v.as_ref()), Some("Pod"));
+}
+
+#[gpui::test]
+fn y_and_d_show_the_yaml_and_the_describe_tab_like_the_table_keys(cx: &mut TestAppContext) {
+    let (mut d, _table) = drawer_on_b(cx);
+    let view = d.drawer_view().expect("opened");
+    assert_eq!(d.read(&view, |v| v.tab()), DetailTab::Overview);
+    press(&mut d, "y");
+    assert_eq!(d.read(&view, |v| v.tab()), DetailTab::Yaml);
+    press(&mut d, "d");
+    assert_eq!(d.read(&view, |v| v.tab()), DetailTab::Describe);
+    press(&mut d, "1");
+    assert_eq!(d.read(&view, |v| v.tab()), DetailTab::Overview);
+    assert_eq!(shown_name(&mut d), "b", "the object did not change");
+}

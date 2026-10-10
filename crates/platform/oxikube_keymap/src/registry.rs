@@ -87,6 +87,16 @@ impl ActionRegistry {
         command::lookup_str(name)
     }
 
+    /// The commands `name` stands for: the command of that id when it is one, else the commands
+    /// of the view action it names ([`stands_for`](crate::stands_for)). Empty for a plain
+    /// navigation action.
+    pub fn commands_of(name: &str) -> Vec<CommandId> {
+        match Self::command(name) {
+            Some(meta) => vec![meta.id],
+            None => crate::stands_for::commands_of_action(name).collect(),
+        }
+    }
+
     /// Every declared command that has no registered action, so no key can be bound to it yet.
     /// A binary's start-up check can log these: a command nobody can bind is a missing wiring.
     pub fn commands_without_action(&self) -> Vec<CommandId> {

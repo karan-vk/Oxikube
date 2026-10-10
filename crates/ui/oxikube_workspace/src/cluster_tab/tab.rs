@@ -26,6 +26,7 @@ use gpui::{
 };
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::{ClusterSessionState, SessionPhase};
+use oxikube_keymap::{KeyContextBuilder, KeyContextual, contexts};
 use oxikube_ui::{ActiveTokens as _, layout::v_flex, u};
 
 use super::colour::cluster_hsla;
@@ -245,6 +246,17 @@ impl Item for ClusterTab {
     }
 }
 
+/// The `ClusterTab` key context (E11-S07): an ancestor of every view in the tab, so one binding
+/// reaches the table, the drawer, the logs and the terminal of the cluster and no other screen.
+/// `connected` is set once the session is up.
+impl KeyContextual for ClusterTab {
+    const KEY_CONTEXT: &'static str = contexts::CLUSTER_TAB;
+
+    fn extend_key_context(&self, context: &mut KeyContextBuilder) {
+        context.flag_if(self.info.state.phase().is_connected(), "connected");
+    }
+}
+
 impl Render for ClusterTab {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.colors();
@@ -317,6 +329,7 @@ impl Render for ClusterTab {
         };
         v_flex()
             .id("cluster-tab")
+            .key_context(self.key_context())
             .debug_selector(|| format!("cluster-tab-{title}"))
             .size_full()
             .bg(colors.background)

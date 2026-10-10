@@ -18,6 +18,7 @@ mod view_rows;
 mod view_scope;
 mod view_select;
 mod view_states;
+mod view_verbs;
 mod views;
 
 use std::sync::Arc;

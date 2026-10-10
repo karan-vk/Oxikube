@@ -128,12 +128,13 @@ pub fn start_views(
 }
 
 /// The resource tables' row actions: the core ones (delete), the CRD list's (E07-S07), "View
-/// Logs" on pods (E08-S02) and on workloads and Services (E08-S04), and "Shell" and "Attach" on
-/// pods (E09-S08).
+/// Logs" on pods (E08-S02) and on workloads and Services (E08-S04), "Shell" and "Attach" on
+/// pods (E09-S08), and "View YAML" and "Describe" on every kind (E11-S07).
 pub fn row_actions() -> RowActionRegistry {
     let mut registry = RowActionRegistry::core();
     let specs = oxikube_resources_ui::crds::crd_row_actions()
         .into_iter()
+        .chain(oxikube_resources_ui::view_row_actions())
         .chain(log_row_actions())
         .chain(oxikube_resources_ui::exec::exec_row_actions());
     for spec in specs {

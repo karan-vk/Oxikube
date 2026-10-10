@@ -49,7 +49,7 @@ fn table_context(f: &mut Fixture) -> KeyContext {
         window
             .context_stack()
             .into_iter()
-            .find(|context| context.contains("Table"))
+            .find(|context| context.contains("ResourceTable"))
             .expect("the focus is inside the table")
     })
 }

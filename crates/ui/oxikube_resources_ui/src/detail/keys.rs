@@ -1,4 +1,4 @@
-//! The detail view's keys (E07-U559): the `Detail` key context and the actions bound in it.
+//! The detail view's keys (E07-U559): the `DetailDrawer` key context and the actions bound in it.
 //!
 //! With the drawer focused (Enter on a table row moves the focus into it), `escape` closes it and
 //! returns to the table, `j` / `k` and the arrows step the table's selection to the next or
@@ -40,7 +40,7 @@ pub struct ShowTab {
 }
 
 impl KeyContextual for DetailView {
-    const KEY_CONTEXT: &'static str = contexts::DETAIL;
+    const KEY_CONTEXT: &'static str = contexts::DETAIL_DRAWER;
 
     fn extend_key_context(&self, context: &mut KeyContextBuilder) {
         let mount = match self.mount {
@@ -48,6 +48,7 @@ impl KeyContextual for DetailView {
             Mount::Tab => "tab",
         };
         context.value("mount", mount);
+        context.value("kind", self.target.gvk.kind.to_string());
     }
 }
 

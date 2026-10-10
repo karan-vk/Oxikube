@@ -6,8 +6,8 @@
 //! echo and does nothing. From the palette or an agent the command focuses the bar. `escape`
 //! while typing ([`ClearFilter`]) clears the filter and returns focus to the table; `enter`
 //! returns focus without clearing (the bar handles it on the input's `PressEnter`). The default
-//! bindings are in the keymap files of `oxikube_assets`: `/` in `Table && !Editing`, `escape` in
-//! `Table && Editing`.
+//! bindings are in the keymap files of `oxikube_assets`: `/` in `ResourceTable && !Editing`, `escape` in
+//! `ResourceTable && Editing`.
 
 use gpui::actions;
 

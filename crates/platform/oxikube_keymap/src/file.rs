@@ -31,7 +31,7 @@ use crate::layer::KeymapLayer;
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct KeymapSection {
-    /// Key-context expression (`Workspace`, `Table && !Editing`) the bindings are active in;
+    /// Key-context expression (`Workspace`, `ResourceTable && !Editing`) the bindings are active in;
     /// absent or empty means everywhere.
     #[serde(default)]
     pub context: Option<String>,

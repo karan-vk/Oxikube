@@ -6,6 +6,7 @@ mod bus;
 mod close;
 mod connect_ui;
 mod immediate;
+mod key_context;
 mod layout;
 mod restore;
 mod restore_races;
