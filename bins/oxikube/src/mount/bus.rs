@@ -24,6 +24,7 @@
 //! | `oxikube_palette` | `palette::OpenJump` (the `:` jump bar, E11-S05), `jump::Back`, `jump::Forward`, `jump::Last` (its history: `[`, `]`, `-`) |
 //! | `oxikube_workspace` (quit) | `app::Quit`: asks first while operations run, like `cmd-q` (E11-S05, for `:q`, the palette and agents) |
 //! | `oxikube_palette` | `help::Show` (the `?` overlay of the keys that apply where the focus is; read-only, E11-S10) |
+//! | `oxikube_editor` | `editor::NewManifest` (an empty manifest editor in the shown cluster's tab, its YAML checked against that cluster's schemas), `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (the focused editor's view toggles; E10-S04) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
 //! `pod::Debug` (E09-S10, registered by `oxikube_terminal` over the app's `ExecService`) adds an
@@ -51,6 +52,7 @@ use oxikube_catalog_ui::catalog::CATALOG_VIEW;
 use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
+use oxikube_editor::view::EditorViewSink;
 use oxikube_logs_ui::LogCommandSink;
 use oxikube_palette::command_palette::PaletteSink;
 use oxikube_palette::help::HelpSink;
@@ -114,6 +116,8 @@ pub struct BusParts {
     pub jump: JumpSink,
     /// Where `app::Quit` sends its request (applied on the UI thread).
     pub quit: QuitSink,
+    /// The manifest editors' queue (`editor::*`, applied on the UI thread).
+    pub editors: EditorViewSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -164,6 +168,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_palette::help", |r| {
         oxikube_palette::help::register_commands(r, parts.help)
+    })?;
+    registry.install("oxikube_editor", |r| {
+        oxikube_editor::view::register_commands(r, parts.editors)
     })?;
     registry.install("oxikube_terminal", |r| {
         oxikube_terminal::open_link::register_commands(r, parts.links)?;

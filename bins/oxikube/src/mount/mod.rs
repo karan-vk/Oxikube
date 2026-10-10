@@ -47,7 +47,11 @@
 //!     in the cluster tab's bottom dock; quitting the app deletes the pods of the shells still
 //!     open and writes their closing records (`terminal::close_node_shells_on_quit`).
 //!
-//! 13. the `:` jump bar (E11-S05, `jump`): `:pods`, `:deploy kube-system`, `:pod /re app=x`,
+//! 13. the manifest editor (E10-S04, `editor`): `editor::NewManifest` (palette "New Manifest",
+//!     `cmd-shift-e` / `ctrl-shift-e`) opens an empty editor in the shown cluster's tab, checked
+//!     against that cluster's schemas; the window's `EditorViews` also applies the focused editor's
+//!     `editor::ToggleReadOnly` and `editor::ToggleSoftWrap`.
+//! 14. the `:` jump bar (E11-S05, `jump`): `:pods`, `:deploy kube-system`, `:pod /re app=x`,
 //!     `:ctx prod`, `:ns`, `:q`, opened by `:` in a resource table or `palette::OpenJump`; a line
 //!     runs as `resource::OpenList`, `namespace::Select`, `table::SetFilter`, `cluster::Select` and
 //!     `app::Quit` through the window's dispatcher; `[`, `]` and `-` replay the history.
@@ -59,6 +63,7 @@
 
 pub mod bus;
 mod describe;
+mod editor;
 mod help;
 mod jump;
 mod keymap;
@@ -136,6 +141,8 @@ pub struct Wiring {
     _follow_kubectl: oxikube_logs_ui::KubectlFollow,
     /// Opens, splits and closes the terminals.
     _terminal_views: Entity<TerminalViews>,
+    /// Opens the manifest editors and applies their toggles.
+    _editor_views: Entity<oxikube_editor::view::EditorViews>,
     /// Applies `palette::Toggle` and `palette::ToggleShowAll` from the bus to this window's
     /// command palette (E11-S03).
     _palette: Task<()>,
@@ -233,6 +240,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (jump_sink, jump_rx) = oxikube_palette::jump::JumpSink::channel();
     let (quit_sink, quit_rx) = oxikube_workspace::session::QuitSink::channel();
     let (help_sink, help_rx) = oxikube_palette::help::HelpSink::channel();
+    let (editor_sink, editor_rx) = oxikube_editor::view::EditorViewSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -254,6 +262,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         palette: palette_sink,
         jump: jump_sink,
         quit: quit_sink,
+        editors: editor_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -323,6 +332,16 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         tabs.downgrade(),
         &workspace,
         terminal_views_rx,
+        window,
+        cx,
+    );
+
+    let editor_views = editor::start_views(
+        services.sessions.clone(),
+        tabs.downgrade(),
+        &workspace,
+        dispatcher.clone(),
+        editor_rx,
         window,
         cx,
     );
@@ -441,6 +460,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _palette: palette,
         _jump: jump,
         _quit: quit,
+        _editor_views: editor_views,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

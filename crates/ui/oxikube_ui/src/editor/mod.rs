@@ -1,12 +1,30 @@
-//! The code view: gpui-component's editor, read-only, with tree-sitter highlighting.
+//! The code editors: gpui-component's editor behind our own API.
 //!
-//! The resource detail's YAML tab shows an object this way, and its Describe tab shows text the
-//! same way without a language. The editor is the library's (rope text, tree-sitter parse, line
-//! numbers, search, selection and copy); this module fixes the settings every read-only view
-//! wants and keeps the library out of the feature crates. Editing (apply, validation, diff) is
-//! the manifest editor's job (`oxikube_editor`, E10).
+//! - [`CodeEditor`] (`code_editor`): the editable editor the manifest editor (`oxikube_editor`,
+//!   E10-S04) is built on: line numbers, folding, search and replace, multiple cursors, undo,
+//!   read-only and soft wrap from the library; a version counter, diagnostics (squiggles, gutter
+//!   markers, end-of-line messages) and decorations from us.
+//! - [`EditorApi`] (`api`): the trait feature views drive it through, in byte offsets and our own
+//!   types ([`EditorDiagnostic`], [`Decoration`]), so no feature crate imports gpui-component.
+//!   [`LiveEditor`] implements it over a [`CodeEditor`]; tests implement it with a plain struct.
+//! - `positions`: the one place byte offsets become the library's line/character positions.
+//! - `overlay`: the gutter markers and end-of-line messages, painted in a canvas over the visible
+//!   lines (the library has no inline widgets).
+//! - The read-only setup below ([`read_only_state`], [`code_view`]): what a view that only shows
+//!   text wants.
 //!
-//! The text is set with [`set_text`], which re-parses once; nothing here runs per frame.
+//! The text is set with [`set_text`] / [`EditorApi::set_text`], which re-parse once; nothing here
+//! runs per frame beyond painting the visible lines.
+
+mod api;
+mod code_editor;
+mod live;
+mod overlay;
+mod positions;
+
+pub use api::{Decoration, DecorationStyle, DiagnosticLevel, EditorApi, EditorDiagnostic};
+pub use code_editor::{CodeEditor, CodeEditorEvent, CodeEditorOptions, TextSnapshot};
+pub use live::LiveEditor;
 
 use gpui::{App, AppContext as _, Entity, Pixels, Point, Window};
 pub use gpui_component::input::{Editor, EditorState};

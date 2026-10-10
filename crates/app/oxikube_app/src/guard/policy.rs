@@ -86,7 +86,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::TableToggleWide { cluster, .. }
         | Command::TableSetFilter { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
-        Command::TerminalNew { cluster } => cluster.as_ref(),
+        Command::TerminalNew { cluster } | Command::EditorNewManifest { cluster } => {
+            cluster.as_ref()
+        }
         Command::ResourceOpen { target }
         | Command::ResourceCopyName { target }
         | Command::ResourcePinDetail { target }
@@ -176,7 +178,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::TerminalSearchClose
         | Command::TerminalSearchNext
         | Command::TerminalSearchPrevious
-        | Command::TerminalSelectAll => None,
+        | Command::TerminalSelectAll
+        | Command::EditorToggleReadOnly
+        | Command::EditorToggleSoftWrap => None,
     }
 }
 

@@ -36,6 +36,8 @@ oxikube_catalog_ui.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
 oxikube_describe.workspace = true
+# The manifest editor (E10-S04): `editor::NewManifest` opens it in the shown cluster's tab.
+oxikube_editor.workspace = true
 oxikube_kube.workspace = true
 oxikube_logs_ui.workspace = true
 oxikube_logging.workspace = true
