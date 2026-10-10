@@ -12,7 +12,7 @@
 //!
 //! Command recents are **global**: the same commands are handy in every cluster, and a command id
 //! says nothing about one. Jump history is **per cluster** (`ClusterId`): `:deploy kube-system` is
-//! useful where that namespace exists. Both are capped ([`COMMAND_CAPACITY`] 50,
+//! useful where that namespace exists. Both are capped ([`RECENTS_CAPACITY`](crate::RECENTS_CAPACITY) 50,
 //! [`JUMP_CAPACITY`] 100 per cluster) and deduplicated (a repeat moves to the front).
 //!
 //! # What is stored
@@ -38,7 +38,7 @@ mod list;
 mod tests;
 mod writeback;
 
-pub use commands::{COMMAND_CAPACITY, RECENTS_KEY, StateRecents};
-pub use jump::{JUMP_CAPACITY, JUMP_KEY_PREFIX, JUMP_TEXT_MAX_CHARS, JumpRecents};
+pub use commands::{RECENTS_KEY, StateRecents};
+pub use jump::{JUMP_CAPACITY, JUMP_TEXT_MAX_CHARS, JumpRecents};
 pub use list::RecentList;
 pub use writeback::DEBOUNCE;

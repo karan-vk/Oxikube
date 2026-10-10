@@ -16,7 +16,7 @@ use super::list::RecentList;
 use super::writeback::Writeback;
 
 /// The state key of a cluster's history is this, then the cluster id (`history.jump/<id>`).
-pub const JUMP_KEY_PREFIX: &str = "history.jump/";
+const JUMP_KEY_PREFIX: &str = "history.jump/";
 
 /// How many jumps are kept per cluster.
 pub const JUMP_CAPACITY: usize = 100;

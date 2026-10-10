@@ -60,21 +60,20 @@ pub fn recent_bonus(recency: Option<usize>) -> u32 {
 /// Classifies `text` against `query` (already trimmed): `case_sensitive` when the query has a
 /// capital, as in nucleo's smart case.
 pub fn shape(text: &str, query: &str, case_sensitive: bool) -> Shape {
+    if query.is_empty() {
+        // A blank query has no shape.
+        return Shape::Fuzzy;
+    }
     let mut text = text.chars();
-    let mut matched = 0usize;
     for want in query.chars() {
-        let Some(have) = text.next() else {
-            return Shape::Fuzzy;
-        };
-        if !same(have, want, case_sensitive) {
+        if !text
+            .next()
+            .is_some_and(|have| same(have, want, case_sensitive))
+        {
             return Shape::Fuzzy;
         }
-        matched += 1;
     }
-    if matched == 0 {
-        // A blank query has no shape.
-        Shape::Fuzzy
-    } else if text.next().is_none() {
+    if text.next().is_none() {
         Shape::Exact
     } else {
         Shape::Prefix

@@ -5,8 +5,9 @@ use oxikube_ports::StateKey;
 use serde_json::json;
 
 use super::*;
+use crate::command_bus::RECENTS_CAPACITY;
 use crate::command_bus::RecentsStore;
-use crate::search::recents::{COMMAND_CAPACITY, RECENTS_KEY};
+use crate::search::recents::RECENTS_KEY;
 
 #[test]
 fn the_latest_command_comes_first_without_repeats() {
@@ -38,18 +39,18 @@ fn the_list_is_capped_keeping_the_latest() {
     let recents = recents(&state);
     let all: Vec<_> = command::COMMANDS.iter().map(|meta| meta.id).collect();
     assert!(
-        all.len() > COMMAND_CAPACITY + 5,
+        all.len() > RECENTS_CAPACITY + 5,
         "the registry has enough commands"
     );
     for id in &all {
         recents.record(*id);
     }
     let kept = recents.recent();
-    assert_eq!(kept.len(), COMMAND_CAPACITY);
+    assert_eq!(kept.len(), RECENTS_CAPACITY);
     assert_eq!(kept[0], *all.last().unwrap());
     assert_eq!(
-        kept[COMMAND_CAPACITY - 1],
-        all[all.len() - COMMAND_CAPACITY]
+        kept[RECENTS_CAPACITY - 1],
+        all[all.len() - RECENTS_CAPACITY]
     );
 }
 

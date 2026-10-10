@@ -96,12 +96,12 @@ impl CommandPaletteDelegate {
     /// Matches `query` on this thread (fine for the empty query and for short lists).
     fn match_now(&self, query: &str) -> Vec<Found> {
         let candidates = self.snapshot.candidates(self.show_all);
-        let recency = recency_of(self.snapshot.rows.clone(), self.recent_rank.clone());
+        let (rows, recent) = (&self.snapshot.rows, &self.recent_rank);
         into_found(fuzzy::match_strings_by(
             &candidates,
             query,
             usize::MAX,
-            recency,
+            |row| recent.get(&rows[row].info.id()).copied(),
         ))
     }
 

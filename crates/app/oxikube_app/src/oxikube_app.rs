@@ -85,7 +85,7 @@ pub use search::aliases::{
     Resolution,
 };
 pub use search::fuzzy::{FuzzyService, Match, QueryGeneration};
-pub use search::recents::{COMMAND_CAPACITY, JumpRecents, RecentList, StateRecents};
+pub use search::recents::{JumpRecents, RecentList, StateRecents};
 pub use session::{
     ClusterSession, ClusterSessionManager, SessionChange, SessionUpdate, SessionUpdates,
 };

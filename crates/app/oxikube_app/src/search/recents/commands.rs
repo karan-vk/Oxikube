@@ -16,9 +16,6 @@ use crate::command_bus::{RECENTS_CAPACITY, RecentsStore};
 /// The state key of the command recents.
 pub const RECENTS_KEY: &str = "recents.commands";
 
-/// How many recent commands are kept (and listed first by the palette).
-pub const COMMAND_CAPACITY: usize = RECENTS_CAPACITY;
-
 /// The version written with the list, so a later shape can be told apart.
 const VERSION: u64 = 1;
 
@@ -42,7 +39,7 @@ impl StateRecents {
         Self {
             state,
             key: StateKey::new(RECENTS_KEY).expect("a valid state key"),
-            list: Mutex::new(RecentList::new(COMMAND_CAPACITY)),
+            list: Mutex::new(RecentList::new(RECENTS_CAPACITY)),
             writeback: Writeback::default(),
             writing: tokio::sync::Mutex::new(()),
         }

@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use oxikube_app::{COMMAND_CAPACITY, JumpRecents, RecentsStore, StateRecents};
+use oxikube_app::{JumpRecents, RECENTS_CAPACITY, RecentsStore, StateRecents};
 use oxikube_domain::command::{self, CommandId};
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{StateKey, StatePort};
@@ -43,7 +43,7 @@ async fn command_recents_survive_a_restart() {
 async fn the_stored_list_is_capped_and_deduplicated() {
     let dir = tempfile::tempdir().unwrap();
     let ids: Vec<_> = command::COMMANDS.iter().map(|meta| meta.id).collect();
-    assert!(ids.len() > COMMAND_CAPACITY);
+    assert!(ids.len() > RECENTS_CAPACITY);
     {
         let recents = StateRecents::new(open(&dir).await);
         for id in ids.iter().chain(ids.iter().take(10)) {
@@ -54,7 +54,7 @@ async fn the_stored_list_is_capped_and_deduplicated() {
     let recents = StateRecents::new(open(&dir).await);
     recents.load().await;
     let kept = recents.recent();
-    assert_eq!(kept.len(), COMMAND_CAPACITY);
+    assert_eq!(kept.len(), RECENTS_CAPACITY);
     let unique: std::collections::HashSet<_> = kept.iter().collect();
     assert_eq!(unique.len(), kept.len());
     assert_eq!(kept[0], ids[9], "the last one touched is first");

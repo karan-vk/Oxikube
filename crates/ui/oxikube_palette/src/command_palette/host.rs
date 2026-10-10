@@ -160,7 +160,7 @@ impl PaletteHost {
 
     /// Forgets the recent commands (the store persists the empty list) and says so. An open
     /// palette keeps the order it was opened with: the next open lists the commands by category.
-    pub fn clear_recents(&self, cx: &mut App) {
+    fn clear_recents(&self, cx: &mut App) {
         self.recents.clear();
         if let Some(workspace) = self.workspace.upgrade() {
             workspace.update(cx, |workspace, cx| {
