@@ -6,6 +6,9 @@
 //! busybox has no `bash`, an `sh` session opens over the real websocket (the terminal's first
 //! line says so) and a typed command's output lands in the grid.
 //!
+//! The third test (E11-S02) takes a pod with two containers through the generic picker: it opens in
+//! the cluster tab's modal layer, typing filters the containers and Enter opens the one chosen.
+//!
 //! The second test is the same path for a debug container (E09-S10): "Debug" on the pod's row opens the
 //! dialog, its button runs `pod::Debug` through the bus and the guard (confirmed on the dialog's
 //! behalf, audited with the image and target), the ephemeral container is added to the pod, a terminal
@@ -24,14 +27,17 @@ use oxikube::app_state::AppState;
 use oxikube_domain::audit::{AuditOutcome, Initiator};
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_palette::PickerDelegate as _;
 use oxikube_ports::AuditQuery;
-use oxikube_resources_ui::exec::DebugDialog;
+use oxikube_resources_ui::exec::{ContainerPicker, DebugDialog};
 use oxikube_terminal::view::{BackendDescriptor, TerminalPanel, TerminalView};
 use oxikube_testkit::images::BUSYBOX;
 use oxikube_testkit::integration::{TestNamespace, ensure_kind_context, test_context};
 use oxikube_workspace::DockPosition;
 
-use kind_common::{Launched, create_pod, ephemeral_containers, launch, screen, wait, wait_value};
+use kind_common::{
+    Launched, create_pod, create_pod_from, ephemeral_containers, launch, screen, wait, wait_value,
+};
 
 #[gpui::test]
 fn a_shell_opens_in_a_pod_from_its_row_through_the_guard_and_runs_a_command(
@@ -295,6 +301,120 @@ fn a_debug_container_is_added_from_the_pods_row_and_opens_a_terminal_in_it(
         ephemeral_containers(&context, ns.name(), "debug-target").len(),
         1
     );
+    app.services().sessions.disconnect(&cluster).ok();
+    vcx.run_until_parked();
+}
+
+/// A pod with two containers asks which one (E11-S02): "Shell" on its row opens the generic picker
+/// in the cluster tab's modal layer, typing filters the containers, Enter opens a shell in the one
+/// left, and the guard's audit names that container.
+#[gpui::test]
+fn a_pod_with_two_containers_asks_in_the_picker_and_typing_chooses_the_container(
+    cx: &mut TestAppContext,
+) {
+    let Some(context) = test_context() else {
+        return;
+    };
+    ensure_kind_context(&context).expect("a kind context");
+    cx.executor().allow_parking();
+
+    let ns = TestNamespace::create(&context).expect("namespace");
+    let mut manifest = oxikube_testkit::integration::pods::sleeper("two-containers");
+    let mut side = manifest["spec"]["containers"][0].clone();
+    side["name"] = "side".into();
+    manifest["spec"]["containers"]
+        .as_array_mut()
+        .expect("containers")
+        .push(side);
+    create_pod_from(&context, ns.name(), manifest);
+    let Launched {
+        mut vcx,
+        tab,
+        cluster,
+        table,
+        dir: _dir,
+    } = launch(cx, &context);
+    let target = ResourceRef::namespaced(
+        cluster.clone(),
+        Gvk::new("", "v1", "Pod"),
+        ns.name(),
+        "two-containers",
+    );
+
+    vcx.update(|window, cx| {
+        table.update(cx, |table, cx| {
+            table.run_action(CommandId::POD_SHELL, vec![target.clone()], window, cx);
+        });
+    });
+    // The pod is read off the UI thread first, then the picker opens with both containers.
+    let inner = vcx.update(|_, cx| tab.read(cx).workspace().clone());
+    let picker = wait_value(&mut vcx, "the container picker to open", |vcx| {
+        vcx.update(|_, cx| {
+            inner
+                .read(cx)
+                .modal_layer()
+                .read(cx)
+                .active_modal::<ContainerPicker>()
+        })
+    });
+    let names = vcx.update(|_, cx| {
+        picker
+            .read(cx)
+            .delegate
+            .choices()
+            .containers
+            .iter()
+            .map(|c| c.name.to_string())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(names, ["main", "side"]);
+    assert!(
+        vcx.update(|_, cx| inner.read(cx).items_of_type::<TerminalView>().is_empty()),
+        "nothing opens before the user picks"
+    );
+
+    // The query field has the focus: typing filters, Enter opens the one left.
+    vcx.simulate_input("sid");
+    wait(&mut vcx, "the filter to leave only `side`", |vcx| {
+        vcx.update(|_, cx| {
+            let delegate = &picker.read(cx).delegate;
+            delegate.match_count() == 1 && delegate.selected() == Some(1)
+        })
+    });
+    vcx.simulate_keystrokes("enter");
+    let terminal = wait_value(&mut vcx, "the pod terminal to open", |vcx| {
+        vcx.update(|_, cx| {
+            inner
+                .read(cx)
+                .items_of_type::<TerminalView>()
+                .first()
+                .cloned()
+        })
+    });
+    let descriptor = vcx.update(|_, cx| terminal.read(cx).descriptor().clone());
+    let BackendDescriptor::Exec { container, .. } = descriptor else {
+        panic!("a pod shell");
+    };
+    assert_eq!(container.as_deref(), Some("side"), "the container picked");
+    assert!(
+        vcx.update(|_, cx| !inner.read(cx).modal_layer().read(cx).has_active_modal()),
+        "the picker closed"
+    );
+
+    let app = vcx.update(|_, cx| AppState::global(cx));
+    let records = futures::executor::block_on(app.state().query_audit(&AuditQuery::default()))
+        .expect("the audit log");
+    let shells: Vec<_> = records.iter().filter(|r| &*r.cmd == "pod::Shell").collect();
+    assert_eq!(shells.len(), 1, "{records:?}");
+    assert_eq!(
+        shells[0].detail.as_deref(),
+        Some("session=shell container=side")
+    );
+
+    vcx.update(|window, cx| {
+        let id = terminal.entity_id();
+        inner.update(cx, |ws, cx| ws.close_item(id, window, cx));
+    });
     app.services().sessions.disconnect(&cluster).ok();
     vcx.run_until_parked();
 }

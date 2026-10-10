@@ -29,6 +29,19 @@ Entries (file → upstream path @ rev):
   `crates/settings/src/settings_store.rs` @ a84689073d (rewritten for per-crate content types,
   a cluster layer and change-tracking generations).
 
+- `crates/ui/oxikube_palette/src/picker/mod.rs`, `picker/delegate.rs`, `picker/selection.rs`: the
+  `Picker<D: PickerDelegate>` design, the `PickerDelegate` method set, `set_selected_index` /
+  `select_next` / `select_previous` / `select_first` / `select_last` (wrapping, skipping matches
+  `can_select` refuses), `confirm_on_update` and `update_matches` from `crates/picker/src/picker.rs`
+  @ a84689073d296dfd39987bc7dd478e43ef76d83a (E11-S02). Adapted to `oxikube_ui` (input, tokens,
+  modal layer); no preview, multi-select, resizing or persistence; a query generation replaces
+  the task that cleared itself.
+- `crates/ui/oxikube_palette/src/picker/tests/matching.rs`:
+  `a_confirm_while_matching_waits_for_the_newest_matches` adapts Zed's
+  `test_refresh_waits_for_latest_matches_before_confirming`, and `tests/keys.rs`
+  `keyboard_selection_skips_matches_that_cannot_be_selected` adapts
+  `test_keyboard_navigation_skips_non_selectable_items`, from the same file @ a84689073d.
+
 ### Zed's Apache-2.0 crates
 Zed's GPUI crates (`gpui`, `gpui_tokio`, ...) are Apache-2.0, not GPL. Ported files keep the
 Apache-2.0 notice (Copyright 2022 - 2025 Zed Industries, Inc.) and state their modifications.

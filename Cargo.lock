@@ -5670,6 +5670,7 @@ dependencies = [
  "oxikube_kube",
  "oxikube_logging",
  "oxikube_logs_ui",
+ "oxikube_palette",
  "oxikube_ports",
  "oxikube_resources_ui",
  "oxikube_runtime",
@@ -5968,6 +5969,16 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_palette"
 version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "gpui-pre",
+ "gpui-pre-platform",
+ "nucleo-matcher",
+ "oxikube_keymap",
+ "oxikube_testkit",
+ "oxikube_ui",
+ "oxikube_workspace",
+]
 
 [[package]]
 name = "oxikube_portforward_ui"
@@ -6010,6 +6021,7 @@ dependencies = [
  "oxikube_app",
  "oxikube_domain",
  "oxikube_keymap",
+ "oxikube_palette",
  "oxikube_ports",
  "oxikube_runtime",
  "oxikube_settings",

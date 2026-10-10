@@ -11,7 +11,7 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_runtime::spawn_kube;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
-use super::picker::ContainerPicker;
+use super::picker::ContainerPickerDelegate;
 
 /// The two ways into a container from a row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,7 +152,8 @@ impl ExecFlow {
         };
         let flow = self.clone();
         workspace.update(cx, |workspace, cx| {
-            let picker = cx.new(|cx| ContainerPicker::new(kind, target, choices, flow, cx));
+            let picker = cx
+                .new(|cx| ContainerPickerDelegate::picker(kind, target, choices, flow, window, cx));
             workspace.show_modal(picker.clone(), window, cx);
             picker.update(cx, |picker, cx| picker.focus(window, cx));
         });

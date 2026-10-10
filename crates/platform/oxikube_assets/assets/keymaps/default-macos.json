@@ -75,6 +75,48 @@
     }
   },
   {
+    // Pickers (E11-S02): the command palette, the container chooser of a pod shell and every
+    // other list with a query field. Up / down (and ctrl-p / ctrl-n) move the selection and wrap,
+    // home / end and page up / page down jump to the first / last match, enter confirms, cmd-enter
+    // confirms the alternative way the picker offers, escape closes. The same keys are bound in
+    // `Picker > Input` because the query field has the focus and its own bindings for them (as
+    // deep as these, and the later binding wins).
+    "context": "Picker",
+    "bindings": {
+      "up": "picker::SelectPrevious",
+      "down": "picker::SelectNext",
+      "ctrl-p": "picker::SelectPrevious",
+      "ctrl-n": "picker::SelectNext",
+      "home": "picker::SelectFirst",
+      "end": "picker::SelectLast",
+      "pageup": "picker::SelectFirst",
+      "pagedown": "picker::SelectLast",
+      "cmd-up": "picker::SelectFirst",
+      "cmd-down": "picker::SelectLast",
+      "enter": "picker::Confirm",
+      "cmd-enter": "picker::SecondaryConfirm",
+      "escape": "picker::Cancel"
+    }
+  },
+  {
+    "context": "Picker > Input",
+    "bindings": {
+      "up": "picker::SelectPrevious",
+      "down": "picker::SelectNext",
+      "ctrl-p": "picker::SelectPrevious",
+      "ctrl-n": "picker::SelectNext",
+      "home": "picker::SelectFirst",
+      "end": "picker::SelectLast",
+      "pageup": "picker::SelectFirst",
+      "pagedown": "picker::SelectLast",
+      "cmd-up": "picker::SelectFirst",
+      "cmd-down": "picker::SelectLast",
+      "enter": "picker::Confirm",
+      "cmd-enter": "picker::SecondaryConfirm",
+      "escape": "picker::Cancel"
+    }
+  },
+  {
     // Resource tables (E07-S03): move the cursor and the selection, select all, copy the name.
     "context": "Table",
     "bindings": {

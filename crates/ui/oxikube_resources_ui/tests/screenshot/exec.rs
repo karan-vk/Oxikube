@@ -13,7 +13,7 @@ use oxikube_app::{
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::view::ContainerKind;
 use oxikube_ports::{ClusterContext, SourceId};
-use oxikube_resources_ui::exec::{ContainerPicker, DebugDialog, ExecFlow, ExecKind};
+use oxikube_resources_ui::exec::{ContainerPickerDelegate, DebugDialog, ExecFlow, ExecKind};
 use oxikube_testkit::{
     FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeStatePort,
     screenshot::RgbaImage,
@@ -22,7 +22,7 @@ use oxikube_testkit::{
 use super::{Ignore, check, headless};
 
 const WIDTH: f32 = 420.0;
-const HEIGHT: f32 = 280.0;
+const HEIGHT: f32 = 172.0;
 
 fn container(name: &str, kind: ContainerKind, running: bool) -> ExecContainer {
     ExecContainer {
@@ -51,7 +51,7 @@ fn render(light: bool) -> anyhow::Result<RgbaImage> {
         preselected: 1,
     };
     let mut cx = headless();
-    let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |_, cx| {
+    let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
         oxikube_ui::init(cx);
         let tokens = if light {
             oxikube_ui::Tokens::light()
@@ -66,7 +66,9 @@ fn render(light: bool) -> anyhow::Result<RgbaImage> {
             Rc::new(Ignore),
             WeakEntity::new_invalid(),
         );
-        cx.new(|cx| ContainerPicker::new(ExecKind::Shell, target, choices, flow, cx))
+        cx.new(|cx| {
+            ContainerPickerDelegate::picker(ExecKind::Shell, target, choices, flow, window, cx)
+        })
     })?;
     cx.run_until_parked();
     cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;

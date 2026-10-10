@@ -149,10 +149,14 @@ fn pods_api(client: kube::Client, namespace: &str) -> kube::Api<kube::api::Dynam
 /// A busybox pod `name` with one container `main` that sleeps
 /// (`oxikube_testkit::integration::pods::sleeper`), created in `namespace` and `Running`.
 pub fn create_pod(context: &str, namespace: &str, name: &str) {
+    create_pod_from(context, namespace, pods::sleeper(name));
+}
+
+/// The pod `manifest` (a `Pod` as JSON), created in `namespace` and `Running`.
+pub fn create_pod_from(context: &str, namespace: &str, manifest: serde_json::Value) {
     on_cluster(context, async |client| {
         let pods = pods_api(client, namespace);
-        let pod: kube::api::DynamicObject =
-            serde_json::from_value(pods::sleeper(name)).expect("a pod");
+        let pod: kube::api::DynamicObject = serde_json::from_value(manifest).expect("a pod");
         let name = pod.metadata.name.clone().expect("a pod name");
         pods.create(&kube::api::PostParams::default(), &pod)
             .await
