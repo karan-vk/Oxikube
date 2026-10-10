@@ -164,14 +164,4 @@ impl DocTree {
         }
         Some(id)
     }
-
-    /// The span of a mapping entry's key, for a key node or a value node.
-    #[must_use]
-    pub fn key_span(&self, id: NodeId) -> Option<Range<usize>> {
-        match self.node(id).role {
-            Role::Key => Some(self.node(id).span.clone()),
-            Role::Value { key } => Some(self.node(key).span.clone()),
-            Role::Root | Role::Item { .. } => None,
-        }
-    }
 }
