@@ -4,7 +4,8 @@
 //! `:` jump bar's filter), the CRD navigation
 //! `crd::OpenList`, `crd::OpenResources` (E07-S07) and the YAML and Describe tabs'
 //! `resource::CopyYaml`, `resource::SaveYaml`, `resource::ToggleManagedFields`,
-//! `resource::RefreshDescribe` (E07-S06), and the k9s verbs `resource::ViewYaml`,
+//! `resource::RefreshDescribe` (E07-S06), `resource::Find`, `resource::NextMatch` and
+//! `resource::PreviousMatch` (E11-S06, find in the YAML and Describe text), and the k9s verbs `resource::ViewYaml`,
 //! `resource::ViewDescribe` and `table::ToggleWide` (E11-S07).
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, pin it
@@ -26,7 +27,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 17] = [
+pub const RESOURCE_COMMANDS: [CommandId; 20] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -41,6 +42,9 @@ pub const RESOURCE_COMMANDS: [CommandId; 17] = [
     CommandId::RESOURCE_SAVE_YAML,
     CommandId::RESOURCE_TOGGLE_MANAGED_FIELDS,
     CommandId::RESOURCE_REFRESH_DESCRIBE,
+    CommandId::RESOURCE_FIND,
+    CommandId::RESOURCE_NEXT_MATCH,
+    CommandId::RESOURCE_PREVIOUS_MATCH,
     CommandId::RESOURCE_VIEW_YAML,
     CommandId::RESOURCE_VIEW_DESCRIBE,
     CommandId::TABLE_TOGGLE_WIDE,
@@ -71,6 +75,18 @@ pub enum ViewRequest {
     ToggleManagedFields(ResourceRef),
     /// Read the describe text of `target` again.
     RefreshDescribe(ResourceRef),
+    /// Open the find field of the YAML or Describe text in `target`'s detail, with `pattern`
+    /// typed when there is one.
+    Find {
+        /// The object whose detail is searched.
+        target: ResourceRef,
+        /// What to search for.
+        pattern: Option<String>,
+    },
+    /// Go to the next match of the find in `target`'s detail (`n`).
+    NextMatch(ResourceRef),
+    /// Go to the previous match of the find in `target`'s detail (`N`).
+    PreviousMatch(ResourceRef),
     /// Copy `target`'s name to the clipboard.
     CopyName(ResourceRef),
     /// Show `target`'s detail on its YAML tab (`resource::ViewYaml`, `y`).
@@ -185,6 +201,12 @@ impl ResourceCommandSink {
             Command::ResourceRefreshDescribe { target } => {
                 ViewRequest::RefreshDescribe(target.clone())
             }
+            Command::ResourceFind { target, pattern } => ViewRequest::Find {
+                target: target.clone(),
+                pattern: pattern.clone(),
+            },
+            Command::ResourceNextMatch { target } => ViewRequest::NextMatch(target.clone()),
+            Command::ResourcePreviousMatch { target } => ViewRequest::PreviousMatch(target.clone()),
             Command::ResourceSelectAll { cluster, gvk } => ViewRequest::SelectAll {
                 cluster: cluster.clone(),
                 gvk: gvk.clone(),

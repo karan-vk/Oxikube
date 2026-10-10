@@ -1,5 +1,6 @@
 //! [`CodeView`]: the entity, the text it is given and the layout work it sends off the UI thread.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use gpui::{
@@ -45,6 +46,17 @@ pub(super) struct Shown {
     pub(super) parsed: Option<Arc<Parsed>>,
 }
 
+/// The matches of a find, drawn over the text they were found in.
+#[derive(Clone)]
+pub(super) struct Matches {
+    /// The text the ranges index: they are drawn only while this is the text on screen.
+    pub(super) text: Arc<str>,
+    /// The byte ranges, sorted and not overlapping.
+    pub(super) ranges: Arc<[Range<usize>]>,
+    /// The index of the current match, drawn apart.
+    pub(super) current: Option<usize>,
+}
+
 /// What the last frame measured.
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct Metrics {
@@ -80,6 +92,11 @@ pub struct CodeView {
     pub(super) selection: Selection,
     /// How many rows the last frame built (only the visible ones are).
     pub(super) rows_drawn: usize,
+    /// The matches the last frame painted, by the start byte of the match and whether it was the
+    /// current one (a set: the list may build a row more than once per frame).
+    pub(super) matches_drawn: std::collections::BTreeSet<(usize, bool)>,
+    /// The matches of a find to colour (see `find`).
+    pub(super) matches: Option<Matches>,
 }
 
 impl CodeView {
@@ -99,6 +116,8 @@ impl CodeView {
             styles: StyleCache::default(),
             selection: Selection::default(),
             rows_drawn: 0,
+            matches_drawn: std::collections::BTreeSet::new(),
+            matches: None,
         }
     }
 
@@ -165,6 +184,17 @@ impl CodeView {
     /// How many rows the last frame built: the visible ones, never the whole text.
     pub fn rows_drawn(&self) -> usize {
         self.rows_drawn
+    }
+
+    /// `(painted, current)`: how many matches the last frame painted over its rows, and how
+    /// many of those were the current match (for tests).
+    pub fn matches_drawn(&self) -> (usize, usize) {
+        let current = self
+            .matches_drawn
+            .iter()
+            .filter(|(_, current)| *current)
+            .count();
+        (self.matches_drawn.len(), current)
     }
 
     /// The columns of the view's width the rows were wrapped at (gutter excluded), if wrapped.

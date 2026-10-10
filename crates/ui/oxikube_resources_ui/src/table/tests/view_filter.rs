@@ -365,3 +365,83 @@ fn nothing_matching_says_so(cx: &mut TestAppContext) {
         "the state names the filter, not the cluster"
     );
 }
+
+fn chip(f: &mut Fixture, table: &Entity<ResourceTable>) -> Option<String> {
+    let bar = bar(f, table);
+    f.vcx
+        .update(|_, cx| bar.read(cx).chip_label().map(|c| c.to_string()))
+}
+
+#[gpui::test]
+fn the_active_filter_shows_as_a_chip_that_stays_after_enter(cx: &mut TestAppContext) {
+    let (mut f, table) = open(cx);
+    assert_eq!(chip(&mut f, &table), None, "no filter, no chip");
+    f.vcx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(f.vcx.debug_bounds("resource-filter-chip").is_none());
+
+    type_in_bar(&mut f, &table, "w e b");
+    f.vcx.simulate_keystrokes("enter");
+    f.settle();
+    assert!(!editing(&mut f, &table), "the focus is back on the rows");
+    assert_eq!(chip(&mut f, &table).as_deref(), Some("web"));
+    f.vcx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(f.vcx.debug_bounds("resource-filter-chip").is_some());
+    assert!(f.vcx.debug_bounds("resource-filter-chip-clear").is_some());
+}
+
+#[gpui::test]
+fn the_chip_keeps_the_last_good_filter_while_the_text_is_an_error(cx: &mut TestAppContext) {
+    let (mut f, table) = open(cx);
+    type_in_bar(&mut f, &table, "w e b");
+    f.settle();
+    f.vcx.simulate_keystrokes("(");
+    f.settle();
+    assert_eq!(
+        chip(&mut f, &table).as_deref(),
+        Some("web"),
+        "the rows are those of `web`, and so is the chip"
+    );
+    f.vcx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(f.vcx.debug_bounds("resource-filter-error").is_some());
+}
+
+#[gpui::test]
+fn the_chips_cross_clears_the_filter_through_the_command(cx: &mut TestAppContext) {
+    let (mut f, table) = open(cx);
+    type_in_bar(&mut f, &table, "w e b");
+    f.settle();
+    assert_eq!(f.names(&table).len(), 3);
+    f.dispatcher.clear();
+
+    let bar = bar(&mut f, &table);
+    f.vcx
+        .update(|_, cx| bar.update(cx, |b, cx| b.request_clear(cx)));
+    f.settle();
+    assert_eq!(
+        f.dispatcher.sent(),
+        [Command::TableSetFilter {
+            cluster: cluster(),
+            gvk: super::pods_kind().gvk,
+            text: String::new(),
+        }],
+        "the cross is the table::SetFilter command with no text"
+    );
+    assert_eq!(f.names(&table).len(), 5, "every row is back");
+    assert_eq!(chip(&mut f, &table), None);
+    assert_eq!(
+        f.vcx.update(|_, cx| bar.read(cx).text().to_owned()),
+        "",
+        "the field is empty too"
+    );
+}
+
+#[gpui::test]
+fn a_selector_filter_shows_its_text_in_the_chip(cx: &mut TestAppContext) {
+    let (mut f, table) = open(cx);
+    f.vcx.update(|window, cx| {
+        table.update(cx, |t, cx| t.set_filter_text("-l app=web", window, cx));
+    });
+    f.settle();
+    assert_eq!(chip(&mut f, &table).as_deref(), Some("-l app=web"));
+    assert_eq!(f.names(&table), ["web-1", "web-2"]);
+}

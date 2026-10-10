@@ -3,10 +3,11 @@
 //! | File | Holds |
 //! |---|---|
 //! | `bar` | [`FilterBar`]: the text field, the parse error and the `123 of 4,812` count; [`FilterBarEvent`] |
+//! | `chip` | the removable chip of the active filter and the error chip |
 //! | `apply` | parsing each edit, the debounce (first keystroke at once, the rest once per frame, selectors after a pause) |
 //! | `actions` | `resource_table::FocusFilter` and `ClearFilter` |
 //! | `settings` | [`ResourceTableSettings`]: `resource_table.persist_filter` |
-//! | `saved` | [`SavedFilter`]: the filter text of a kind in the `StatePort`, while that setting is on |
+//! | `saved` | [`SavedFilter`]: the filter text of a kind in a cluster in the `StatePort`, while that setting is on (the default); clearing removes it |
 //!
 //! The grammar, the matching and the server-side selector live in
 //! `oxikube_app::store::filter`; the bar only parses (to show errors) and tells the table the
@@ -18,6 +19,7 @@
 mod actions;
 mod apply;
 mod bar;
+mod chip;
 mod saved;
 mod settings;
 

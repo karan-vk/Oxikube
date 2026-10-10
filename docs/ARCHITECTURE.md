@@ -984,8 +984,16 @@ edit (to show the first error and keep the last good rows), applies the first ke
 collapses the rest to one application per ~frame, and waits a quarter second before a label
 selector re-keys the feeds. While it has the focus the table's key context says `Editing`, so bare
 keys are text; `escape` clears and returns to the rows, `enter` returns without clearing. With
-`resource_table.persist_filter` on (default off) the filter text is saved per kind under
-`table.filter.<group>/<Kind>` and restored when the table opens.
+`resource_table.persist_filter` on (the default, E11-S06) the filter text is saved per cluster and
+kind under `table.filter.<cluster>/<group>/<Kind>`, restored when the table opens and removed when
+the filter is cleared. A filter in effect shows as a chip with a cross next to the bar (the cross
+sends `table::SetFilter` with no text) and a bad text shows an error chip while the rows of the last
+good filter stay. The grammar is `oxikube_app::search::filter` (one `parse` for the bar and the `:`
+jump bar; the matcher lives in `store::filter`); `n` / `N` over matches is
+`oxikube_app::search::find` (`FindNavigator`, `next_match`, `previous_match`), used by the log view's
+`MatchIndex` and by the detail's find (`/`, `n`, `N`, `escape` on the YAML and Describe tabs, commands
+`resource::Find`, `resource::NextMatch`, `resource::PreviousMatch`; the matches are coloured by
+`oxikube_ui::code_view::CodeView::set_matches`).
 
 Core kinds use typed/metadata reflectors plus our own column definitions; CRDs and unknown kinds
 use the server-side Table API (kubectl-identical columns incl. `additionalPrinterColumns`).

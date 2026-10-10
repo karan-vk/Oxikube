@@ -25,7 +25,10 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 - `table::states` (E07-S10): `TableState` (the pure derivation), the state views, the stale badge, Retry and the API server warnings.
 - `filter` (E07-S04): `FilterBar`, the `/` filter of a table (`foo`, `!foo`, `-l k=v`, `-f fuzzy`):
   parse errors, the `123 of 4,812` count, debounce, `table::FocusFilter`, and the saved filter
-  (`resource_table.persist_filter`).
+  (`resource_table.persist_filter`, on by default, per cluster and kind; clearing removes it), the
+  removable chip of the active filter (E11-S06).
+- `detail::find` (E11-S06): `/`, `n` / `N` and `escape` over the YAML and Describe text, through
+  `oxikube_app::search::find`.
 - `views` (E07-S03): `ResourceViews`, which opens tables in cluster tabs from the sidebar and
   `resource::OpenList`, and runs `resource::Open`, `CopyName`, `SelectAll` and `RetryFeed` (E07-S10).
 - `detail` (E07-S05): `DetailView`, the generic detail of one object (header, labels and

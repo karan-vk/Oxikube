@@ -3,11 +3,13 @@
 
 use proptest::prelude::*;
 
-use super::parts;
 use crate::store::StoreFilter;
 
 fn filter(input: &str) -> StoreFilter {
-    parts(input).filter
+    // A half-typed `!` is an error: the bar keeps showing the last good filter, which is none.
+    super::super::parse(input)
+        .map(|expr| expr.parts().filter)
+        .unwrap_or_default()
 }
 
 #[test]

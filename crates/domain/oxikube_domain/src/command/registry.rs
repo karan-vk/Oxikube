@@ -184,6 +184,13 @@ impl CommandId {
     /// `resource::ToggleManagedFields`: show or hide `metadata.managedFields` in a resource's YAML.
     pub const RESOURCE_TOGGLE_MANAGED_FIELDS: CommandId =
         CommandId::new("resource::ToggleManagedFields");
+    /// `resource::Find`: open the find field of a resource detail's YAML or Describe text,
+    /// optionally with the pattern already typed.
+    pub const RESOURCE_FIND: CommandId = CommandId::new("resource::Find");
+    /// `resource::NextMatch`: go to the next match of a resource detail's find, wrapping.
+    pub const RESOURCE_NEXT_MATCH: CommandId = CommandId::new("resource::NextMatch");
+    /// `resource::PreviousMatch`: go to the previous match of a resource detail's find, wrapping.
+    pub const RESOURCE_PREVIOUS_MATCH: CommandId = CommandId::new("resource::PreviousMatch");
     /// `resource::ViewDescribe`: open a resource's `kubectl describe` text.
     pub const RESOURCE_VIEW_DESCRIBE: CommandId = CommandId::new("resource::ViewDescribe");
     /// `resource::ViewYaml`: open a resource's YAML.
@@ -809,6 +816,23 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Find in the text a detail shows (YAML, Describe): a view-local search, changes nothing.
+    CommandMeta::read(
+        CommandId::RESOURCE_FIND,
+        "Find in Resource Text",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(DETAIL_VIEW)
+    .selecting(SelectionKind::One),
+    CommandMeta::read(
+        CommandId::RESOURCE_NEXT_MATCH,
+        "Next Match in Resource Text",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(DETAIL_VIEW)
+    .selecting(SelectionKind::One),
     CommandMeta::read(
         CommandId::RESOURCE_OPEN,
         "Open Resource",
@@ -827,6 +851,14 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::RESOURCE_PIN_DETAIL,
         "Pin Detail as Tab",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(DETAIL_VIEW)
+    .selecting(SelectionKind::One),
+    CommandMeta::read(
+        CommandId::RESOURCE_PREVIOUS_MATCH,
+        "Previous Match in Resource Text",
         CommandScope::Selection,
         NONE,
     )

@@ -31,8 +31,9 @@ fn fixtures() -> Vec<Resource> {
     ]
 }
 
+/// The parts of `input`; a half-typed `!` is no filter (the bar keeps the last good one).
 fn parts(input: &str) -> FilterParts {
-    parse(input).expect("parses").parts()
+    parse(input).map(|expr| expr.parts()).unwrap_or_default()
 }
 
 /// Applies `input` as the filter bar would (the sort follows a fuzzy filter).
