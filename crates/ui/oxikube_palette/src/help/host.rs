@@ -66,7 +66,7 @@ fn send(sink: &HelpSink) -> OxiResult<()> {
         .map_err(|_| OxiError::internal("the window with the help overlay is gone"))
 }
 
-/// The help overlay of one window. See the [module docs](self).
+/// The help overlay of one window. See the module docs.
 pub struct HelpHost {
     workspace: WeakEntity<Workspace>,
 }

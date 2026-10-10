@@ -31,7 +31,7 @@ const MAX_HEIGHT: f32 = 460.;
 /// The accessible name of the overlay.
 pub const ACCESSIBLE_NAME: &str = "Keyboard shortcuts";
 
-/// The help overlay. See the [module docs](self).
+/// The help overlay. See the module docs.
 pub struct HelpOverlay {
     picker: Entity<Picker<HelpDelegate>>,
     _dismiss: Subscription,
