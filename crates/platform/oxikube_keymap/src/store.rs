@@ -6,10 +6,10 @@
 //! favour of the binding added last (and a `null` hides lower layers through the metadata of
 //! [`KeymapLayer::meta`]), so the user's file wins without any per-key bookkeeping here.
 
+use std::path::{Path, PathBuf};
+
 use gpui::{App, KeyBinding};
 use oxikube_assets::KeymapPlatform;
-
-use std::path::{Path, PathBuf};
 
 use crate::build::build_layer;
 use crate::conflicts::{KeymapConflict, find_conflicts};

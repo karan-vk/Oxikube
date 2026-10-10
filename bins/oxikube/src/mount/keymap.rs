@@ -75,7 +75,7 @@ pub fn register_commands(
 
 /// Make sure `file` exists, creating its directory and the commented template when it does not.
 /// Returns the path and whether it was created. An existing file is never touched.
-fn create_if_missing(file: &std::path::Path) -> Result<(PathBuf, bool), OxiError> {
+fn create_if_missing(file: &Path) -> Result<(PathBuf, bool), OxiError> {
     let existed = file.exists();
     let dir = file
         .parent()

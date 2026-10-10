@@ -61,7 +61,7 @@ pub mod bus;
 mod describe;
 mod help;
 mod jump;
-pub mod keymap;
+mod keymap;
 mod logs;
 mod palette;
 mod resources;

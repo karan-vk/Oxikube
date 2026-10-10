@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui::{App, Global, KeyBinding, Task, UpdateGlobal as _};
+use oxikube_domain::OxiError;
 use oxikube_settings::paths::config_dir;
 use oxikube_settings::watcher::{DEFAULT_DEBOUNCE, SettingsFileWatcher};
 
@@ -105,12 +106,16 @@ fn load_initial(store: &mut KeymapStore, path: &Path) -> String {
         }
         Err(err) => {
             tracing::warn!(%err, "could not read keymap.json; using the defaults");
-            let reason = std::error::Error::source(&err)
-                .map_or_else(|| err.to_string(), |source| format!("{err}: {source}"));
-            store.set_user_unreadable(&reason);
+            store.set_user_unreadable(&unreadable_reason(&err));
             String::new()
         }
     }
+}
+
+/// The error and its cause on one line, for the diagnostic of an unreadable file.
+fn unreadable_reason(err: &OxiError) -> String {
+    std::error::Error::source(err)
+        .map_or_else(|| err.to_string(), |source| format!("{err}: {source}"))
 }
 
 fn start_watch(cx: &mut App, path: PathBuf, initial_text: String) {
@@ -167,9 +172,9 @@ pub fn reload(cx: &mut App) {
     match read_or_empty(&path) {
         Ok(text) => reload_user_keymap(cx, &text),
         Err(err) => {
-            let reason = std::error::Error::source(&err)
-                .map_or_else(|| err.to_string(), |source| format!("{err}: {source}"));
-            KeymapStore::update_global(cx, |store, _| store.set_user_unreadable(&reason));
+            KeymapStore::update_global(cx, |store, _| {
+                store.set_user_unreadable(&unreadable_reason(&err));
+            });
             apply(cx, false);
         }
     }

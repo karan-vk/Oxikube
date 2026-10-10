@@ -73,9 +73,9 @@ pub fn find_conflicts(
     sections: &[(usize, KeymapSection)],
     lines: &SourceLines,
 ) -> Vec<KeymapConflict> {
-    let mut order: Vec<(Option<String>, String)> = Vec::new();
-    let mut groups: HashMap<(Option<String>, String), Vec<ConflictEntry>> = HashMap::new();
-    for (index, section) in sections {
+    let mut found: Vec<KeymapConflict> = Vec::new();
+    let mut index: HashMap<(Option<String>, String), usize> = HashMap::new();
+    for (section_index, section) in sections {
         let context = section
             .context_expr()
             .map(|c| c.split_whitespace().collect::<Vec<_>>().join(" "));
@@ -86,31 +86,25 @@ pub fn find_conflicts(
             let key = (context.clone(), normalise(keystrokes));
             let entry = ConflictEntry {
                 action: describe(&action),
-                section: *index,
-                line: lines.binding(*index, keystrokes),
+                section: *section_index,
+                line: lines.binding(*section_index, keystrokes),
             };
-            match groups.get_mut(&key) {
-                Some(entries) => entries.push(entry),
+            match index.get(&key) {
+                Some(&at) => found[at].entries.push(entry),
                 None => {
-                    order.push(key.clone());
-                    groups.insert(key, vec![entry]);
+                    index.insert(key.clone(), found.len());
+                    found.push(KeymapConflict {
+                        layer,
+                        context: key.0,
+                        keystrokes: key.1,
+                        entries: vec![entry],
+                    });
                 }
             }
         }
     }
-    order
-        .into_iter()
-        .filter_map(|key| {
-            let entries = groups.remove(&key)?;
-            let differs = entries.iter().any(|e| e.action != entries[0].action);
-            differs.then(|| KeymapConflict {
-                layer,
-                context: key.0,
-                keystrokes: key.1,
-                entries,
-            })
-        })
-        .collect()
+    found.retain(|c| c.entries.iter().any(|e| e.action != c.entries[0].action));
+    found
 }
 
 #[cfg(test)]
