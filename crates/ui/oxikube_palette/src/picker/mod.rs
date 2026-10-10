@@ -19,7 +19,7 @@
 //! | `mod.rs` | the struct, construction, the query and match updates |
 //! | `delegate.rs` | [`PickerDelegate`], [`Direction`] |
 //! | `selection.rs` | keyboard selection (wrapping, skipping unselectable matches), confirm, cancel, clicks |
-//! | `render.rs` | the frame: query field, header, `uniform_list` of fixed-height rows, empty text, footer |
+//! | `render.rs` | the frame: query field, header, `uniform_list` of fixed-height rows, empty text, footer; [`match_label`] for delegates' rows |
 //! | `actions.rs` | `picker::SelectNext` .. `picker::Cancel`, bound in the `Picker` key context |
 //! | `fuzzy.rs` | [`fuzzy::match_strings`] and friends for delegates over strings |
 //!
@@ -46,6 +46,7 @@ pub use actions::{
     Cancel, Confirm, SecondaryConfirm, SelectFirst, SelectLast, SelectNext, SelectPrevious,
 };
 pub use delegate::{Direction, PickerDelegate};
+pub use render::match_label;
 
 use gpui::{
     App, AppContext as _, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
@@ -183,7 +184,7 @@ impl<D: PickerDelegate> Picker<D> {
         self.settled = generation;
         self.matches_updated(cx);
         if let Some(secondary) = self.confirm_on_update.take() {
-            self.do_confirm(secondary, window, cx);
+            self.delegate.confirm(secondary, window, cx);
         }
     }
 

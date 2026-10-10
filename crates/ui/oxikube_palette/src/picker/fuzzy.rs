@@ -147,7 +147,7 @@ pub fn highlighted_text(
 }
 
 /// The byte ranges covering the characters at `positions`, merged where they touch.
-pub fn highlight_ranges(text: &str, positions: &[usize]) -> Vec<Range<usize>> {
+fn highlight_ranges(text: &str, positions: &[usize]) -> Vec<Range<usize>> {
     let mut ranges: Vec<Range<usize>> = Vec::new();
     for &start in positions {
         let Some(ch) = text.get(start..).and_then(|rest| rest.chars().next()) else {

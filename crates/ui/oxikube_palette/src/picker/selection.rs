@@ -131,11 +131,7 @@ impl<D: PickerDelegate> Picker<D> {
 
     /// Confirms the selected match, or, while matches are being updated, once they arrive.
     pub fn confirm(&mut self, _: &Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_matching() {
-            self.confirm_on_update = Some(false);
-        } else {
-            self.do_confirm(false, window, cx);
-        }
+        self.confirm_or_wait(false, window, cx);
     }
 
     /// [`Self::confirm`] with `secondary` set.
@@ -145,10 +141,14 @@ impl<D: PickerDelegate> Picker<D> {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.confirm_or_wait(true, window, cx);
+    }
+
+    fn confirm_or_wait(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.is_matching() {
-            self.confirm_on_update = Some(true);
+            self.confirm_on_update = Some(secondary);
         } else {
-            self.do_confirm(true, window, cx);
+            self.delegate.confirm(secondary, window, cx);
         }
     }
 
@@ -166,15 +166,7 @@ impl<D: PickerDelegate> Picker<D> {
             return;
         }
         self.set_selected_index(ix, None, false, window, cx);
-        self.do_confirm(event.modifiers().secondary(), window, cx);
-    }
-
-    pub(super) fn do_confirm(
-        &mut self,
-        secondary: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.delegate.confirm(secondary, window, cx);
+        self.delegate
+            .confirm(event.modifiers().secondary(), window, cx);
     }
 }

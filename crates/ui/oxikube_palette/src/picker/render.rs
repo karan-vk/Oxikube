@@ -9,16 +9,36 @@
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, InteractiveElement as _, IntoElement, ListSizingBehavior,
-    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, uniform_list,
+    AnyElement, App, ClickEvent, Context, Div, FontWeight, HighlightStyle, InteractiveElement as _,
+    IntoElement, ListSizingBehavior, ParentElement as _, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _,
+    uniform_list,
 };
 use oxikube_keymap::KeyContextual as _;
 use oxikube_ui::input::Input;
 use oxikube_ui::layout::{h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, u};
 
-use super::{Picker, PickerDelegate, ROW_HEIGHT};
+use super::{Picker, PickerDelegate, ROW_HEIGHT, fuzzy};
+
+/// The text of a match for [`PickerDelegate::render_match`]: `text` with the characters at
+/// `positions` (byte offsets, as in [`fuzzy::StringMatch::positions`]) in the accent colour and
+/// bold, muted unless `selected`. Delegates add their own selector or id to the returned box.
+pub fn match_label(text: SharedString, positions: &[usize], selected: bool, cx: &App) -> Div {
+    let colors = cx.colors();
+    let highlight = HighlightStyle {
+        color: Some(colors.accent),
+        font_weight: Some(FontWeight::BOLD),
+        ..HighlightStyle::default()
+    };
+    div()
+        .text_color(if selected {
+            colors.text
+        } else {
+            colors.text_muted
+        })
+        .child(fuzzy::highlighted_text(text, positions, highlight))
+}
 
 impl<D: PickerDelegate> Render for Picker<D> {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

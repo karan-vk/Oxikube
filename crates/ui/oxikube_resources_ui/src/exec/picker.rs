@@ -4,13 +4,13 @@
 use std::sync::Arc;
 
 use gpui::{
-    App, Context, DismissEvent, FontWeight, HighlightStyle, InteractiveElement as _, IntoElement,
+    App, Context, DismissEvent, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, SharedString, Styled as _, Task, Window, div, px,
 };
 use oxikube_app::ContainerChoices;
 use oxikube_domain::ids::ResourceRef;
 use oxikube_palette::picker::fuzzy::{self, StringMatch, StringMatchCandidate};
-use oxikube_palette::{Picker, PickerDelegate};
+use oxikube_palette::{Picker, PickerDelegate, match_label};
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, u};
 
@@ -153,27 +153,11 @@ impl PickerDelegate for ContainerPickerDelegate {
     ) -> Option<Self::ListItem> {
         let found = self.matches.get(ix)?;
         let container = self.choices.containers.get(found.candidate_id)?;
-        let colors = cx.colors();
-        let highlight = HighlightStyle {
-            color: Some(colors.accent),
-            font_weight: Some(FontWeight::BOLD),
-            ..HighlightStyle::default()
-        };
         let id = found.candidate_id;
         // The label starts with the name, so the name's matched positions hold in it.
         Some(
-            div()
-                .debug_selector(move || format!("container-row-{id}"))
-                .text_color(if selected {
-                    colors.text
-                } else {
-                    colors.text_muted
-                })
-                .child(fuzzy::highlighted_text(
-                    container.label().into(),
-                    &found.positions,
-                    highlight,
-                )),
+            match_label(container.label().into(), &found.positions, selected, cx)
+                .debug_selector(move || format!("container-row-{id}")),
         )
     }
 

@@ -9,13 +9,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-    App, Context, DismissEvent, FontWeight, HighlightStyle, InteractiveElement as _,
-    ParentElement as _, SharedString, Stateful, Styled as _, Task, Window, div,
+    App, Context, DismissEvent, InteractiveElement as _, SharedString, Stateful, Task, Window,
 };
-use oxikube_ui::ActiveTokens as _;
 
 use super::fuzzy::{self, StringMatch, StringMatchCandidate};
-use super::{Picker, PickerDelegate};
+use super::{Picker, PickerDelegate, match_label};
 
 /// What a [`TestDelegate`] saw, shared so a test can read it after the picker closed.
 #[derive(Clone, Default)]
@@ -168,27 +166,11 @@ impl PickerDelegate for TestDelegate {
     ) -> Option<Self::ListItem> {
         let found = self.matches.get(ix)?;
         self.record.rendered.set(self.record.rendered.get() + 1);
-        let colors = cx.colors();
-        let highlight = HighlightStyle {
-            color: Some(colors.accent),
-            font_weight: Some(FontWeight::BOLD),
-            ..HighlightStyle::default()
-        };
         let id = found.candidate_id;
         Some(
-            div()
+            match_label(found.string.clone(), &found.positions, selected, cx)
                 .id(("test-item", id))
-                .debug_selector(move || format!("test-item-{id}"))
-                .text_color(if selected {
-                    colors.text
-                } else {
-                    colors.text_muted
-                })
-                .child(fuzzy::highlighted_text(
-                    found.string.clone(),
-                    &found.positions,
-                    highlight,
-                )),
+                .debug_selector(move || format!("test-item-{id}")),
         )
     }
 }

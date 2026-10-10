@@ -11,4 +11,4 @@
 
 pub mod picker;
 
-pub use picker::{Picker, PickerDelegate};
+pub use picker::{Picker, PickerDelegate, match_label};
