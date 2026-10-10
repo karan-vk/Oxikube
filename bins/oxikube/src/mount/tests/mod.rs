@@ -9,6 +9,7 @@ mod actions;
 mod agent;
 mod chrome;
 mod exec;
+mod help;
 mod immediate;
 mod introspection;
 mod jump;

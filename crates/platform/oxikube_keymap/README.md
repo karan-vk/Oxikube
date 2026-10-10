@@ -60,6 +60,7 @@ Each view sets its own context with `KeyContextual`; the deeper context wins. Th
 | `Terminal` | a terminal | `searching` |
 | `ManifestEditor` | the manifest editor (E10) | |
 | `Palette`, `JumpBar` | the command palette and `:` bar (E11-S03, S05) | |
+| `Help` | the help overlay (E11-S10) | `empty` while its search field is empty |
 
 Bare-letter verbs are bound only where a letter is not text, and only while no field has the focus
 (`ResourceTable && !Editing`): `y` YAML, `d` describe, `e` edit, `ctrl-d` delete, `l` logs, `s`

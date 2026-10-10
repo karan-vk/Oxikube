@@ -1,6 +1,6 @@
 //! Key caps: how a keybinding is drawn next to a command, a menu item or a hint.
 
-use gpui::Keystroke;
+use gpui::{Action, AsKeystroke as _, KeyContext, Keystroke, Window};
 pub use gpui_component::kbd::Kbd;
 
 /// The key cap of one keystroke written as in `keymap.json` (`cmd-shift-p`), drawn with the
@@ -11,6 +11,34 @@ pub fn keycap(keystroke: &str) -> Option<Kbd> {
         .ok()
         .filter(|stroke| !stroke.key.is_empty())
         .map(Kbd::new)
+}
+
+/// The first keystroke of the strongest binding of `action` when the key context `context` is in
+/// force (`None`: a binding without a context predicate), read from the installed keymap.
+pub fn binding_keystroke(
+    action: &dyn Action,
+    context: Option<&str>,
+    window: &Window,
+) -> Option<Keystroke> {
+    let binding = match context {
+        Some(context) => window.highest_precedence_binding_for_action_in_context(
+            action,
+            KeyContext::parse(context).ok()?,
+        ),
+        None => {
+            window.highest_precedence_binding_for_action_in_context(action, KeyContext::default())
+        }
+    }?;
+    binding
+        .keystrokes()
+        .first()
+        .map(|stroke| stroke.as_keystroke().clone())
+}
+
+/// The key cap of [`binding_keystroke`]: what a tooltip shows next to its title
+/// ([`crate::tooltip::tooltip_for_action`]).
+pub fn binding_hint(action: &dyn Action, context: Option<&str>, window: &Window) -> Option<Kbd> {
+    binding_keystroke(action, context, window).map(Kbd::new)
 }
 
 #[cfg(test)]

@@ -51,6 +51,13 @@ path = "tests/screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# Headless GPU screenshots of the help overlay (E11-S10): the same job as above.
+[[test]]
+name = "help_screenshot"
+path = "tests/help_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 # Open, keystroke-to-matches and redraw cost of a 2 000-entry picker on the test platform:
 # `cargo run -p oxikube_palette --features test-support --profile release-fast --example picker_bench`
 [[example]]
@@ -68,6 +75,11 @@ required-features = ["test-support"]
 # `cargo run -p oxikube_palette --features test-support --profile release-fast --example jump_bench`
 [[example]]
 name = "jump_bench"
+# Resolving the focused view's bindings, opening the help overlay and a keystroke in its search
+# field, over the shipped keymap and over a 2 000-binding one:
+# `cargo run -p oxikube_palette --features test-support --profile release-fast --example help_bench`
+[[example]]
+name = "help_bench"
 required-features = ["test-support"]
 
 [lints]

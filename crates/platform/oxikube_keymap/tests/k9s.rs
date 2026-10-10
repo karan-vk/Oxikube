@@ -394,7 +394,9 @@ fn the_palette_finds_the_keys_of_a_command_through_its_view_actions(cx: &mut Tes
         keys(cx, CommandId::PALETTE_TOGGLE),
         [format!("{CMD}-shift-p")]
     );
-    assert_eq!(keys(cx, CommandId::HELP_SHOW), ["?"]);
+    // `?` opens the help overlay from a cluster tab and, in the overlay's empty search field
+    // (E11-S10), closes it again: two bindings, one key.
+    assert_eq!(keys(cx, CommandId::HELP_SHOW), ["?", "?"]);
     // No key for a command nobody bound.
     assert!(keys(cx, CommandId::POD_EXEC).is_empty());
 }

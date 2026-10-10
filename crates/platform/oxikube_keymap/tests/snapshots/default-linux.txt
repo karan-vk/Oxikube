@@ -186,3 +186,5 @@
 [Terminal || ManifestEditor || Palette || JumpBar || Input || Editing]
   :                null
   ?                null
+[(Help && empty) > Input]
+  ?                help::Show

@@ -381,5 +381,14 @@
       ":": null,
       "?": null
     }
+  },
+  {
+    // The help overlay (E11-S10) toggles with the key that opened it, but only while its search
+    // field is empty (the overlay's `Help` context says `empty`): with text in the field `?` is a
+    // character to search for. After the section above so that, at the same depth, this one wins.
+    "context": "(Help && empty) > Input",
+    "bindings": {
+      "?": "help::Show"
+    }
   }
 ]

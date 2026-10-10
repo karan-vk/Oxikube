@@ -30,6 +30,12 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   the files, entry in `THIRD_PARTY_NOTICES.md`). Keys: `picker::*` actions in the `Picker` and
   `Picker > Input` contexts of the per-OS keymaps. First delegate: the container chooser of a pod
   shell (`oxikube_resources_ui::exec::ContainerPickerDelegate`).
+- `help` (E11-S10): the `?` overlay (`HelpOverlay`, a `Picker` over `HelpDelegate`): the active key
+  context's bindings grouped by command category, searchable, user (`User`) and vim (`Base`)
+  bindings marked, unbound defaults listed. `help::Show` is a command; `HelpHost` is one per window,
+  mounted by `bins/oxikube`. `?` opens it in a cluster tab where no text field has the focus, and
+  closes it while its search field is empty; Escape always closes. Benches:
+  `cargo run -p oxikube_palette --features test-support --profile release-fast --example help_bench`.
 
 - `command_palette` (E11-S03): the command palette, `cmd-shift-p` / `ctrl-shift-p` (`palette::Toggle`): `CommandPalette`
   (a modal with the `Palette` key context) over a `Picker<CommandPaletteDelegate>`, one `PaletteHost` per window

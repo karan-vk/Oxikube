@@ -39,6 +39,8 @@ oxikube_describe.workspace = true
 oxikube_kube.workspace = true
 oxikube_logs_ui.workspace = true
 oxikube_logging.workspace = true
+# The `?` help overlay (E11-S10); `kind_exec` also reads the container picker's matches through
+# `PickerDelegate` (E11-S02).
 oxikube_palette.workspace = true
 oxikube_ports.workspace = true
 oxikube_resources_ui.workspace = true

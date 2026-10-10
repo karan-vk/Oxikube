@@ -20,6 +20,7 @@
 //! | `Palette` | the command palette (E11-S03) | |
 //! | `JumpBar` | the `:` jump bar (E11-S05); its query field is `JumpBar > Picker > Input` | |
 //! | `Picker` | a picker (E11-S02): the palette, the container chooser, ... (its query field is `Picker > Input`) | |
+//! | `Help` | the help overlay (E11-S10); its search field is `Help > Picker > Input` | `empty` while the field is empty |
 //! | `Modal` | a dialog or sheet | |
 //! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
 //!
@@ -86,6 +87,8 @@ pub mod contexts {
     pub const PICKER: &str = "Picker";
     /// The `:` jump bar.
     pub const JUMP_BAR: &str = "JumpBar";
+    /// The help overlay (E11-S10); carries `empty` while its search field is empty.
+    pub const HELP: &str = "Help";
     /// A dialog or sheet.
     pub const MODAL: &str = "Modal";
     /// The cluster catalog home.
