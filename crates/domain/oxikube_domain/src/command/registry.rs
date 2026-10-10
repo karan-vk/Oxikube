@@ -54,6 +54,9 @@ impl CommandId {
     pub const JUMP_FORWARD: CommandId = CommandId::new("jump::Forward");
     /// `jump::Last`: go back to the view before the current one (`-` in the jump bar).
     pub const JUMP_LAST: CommandId = CommandId::new("jump::Last");
+    /// `keymap::OpenUser`: open the user's `keymap.json`, creating it from a commented template
+    /// first when it does not exist.
+    pub const KEYMAP_OPEN_USER: CommandId = CommandId::new("keymap::OpenUser");
     /// `kubeconfig::AddSource`: add a kubeconfig file, directory or pasted text as a source.
     pub const KUBECONFIG_ADD_SOURCE: CommandId = CommandId::new("kubeconfig::AddSource");
     /// `kubeconfig::Reload`: re-read every kubeconfig source.
@@ -396,6 +399,14 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::JUMP_LAST,
         "Jump: Previous View",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Creates `keymap.json` in the user's config directory when it is missing (a commented
+    // template, no secrets) and opens it in an editor; never reads or changes a cluster.
+    CommandMeta::read(
+        CommandId::KEYMAP_OPEN_USER,
+        "Open User Keymap",
         CommandScope::Global,
         NONE,
     ),

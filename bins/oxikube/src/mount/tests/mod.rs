@@ -13,6 +13,7 @@ mod help;
 mod immediate;
 mod introspection;
 mod jump;
+mod keymap;
 mod logs;
 mod node_shell;
 mod palette;
@@ -52,7 +53,19 @@ impl App {
         ports: TestPorts,
         before_window: impl FnOnce(&mut gpui::App),
     ) -> Self {
-        cx.update(|cx| init(cx, StartupEnv::test_with(&ports)))
+        Self::start_with_env(cx, ports, |_| {}, before_window)
+    }
+
+    /// [`Self::start_with`] over a `StartupEnv` that `env` adjusts (a config directory on disk).
+    fn start_with_env(
+        cx: &mut TestAppContext,
+        ports: TestPorts,
+        env: impl FnOnce(&mut StartupEnv),
+        before_window: impl FnOnce(&mut gpui::App),
+    ) -> Self {
+        let mut startup = StartupEnv::test_with(&ports);
+        env(&mut startup);
+        cx.update(|cx| init(cx, startup))
             .expect("the init order runs");
         cx.update(before_window);
         let handle = cx

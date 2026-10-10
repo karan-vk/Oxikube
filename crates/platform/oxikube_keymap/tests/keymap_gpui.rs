@@ -398,7 +398,7 @@ fn an_unreadable_user_file_is_reported_and_a_later_fix_applies(cx: &mut TestAppC
     assert!(
         found[0]
             .to_string()
-            .starts_with("keymap.json could not be read")
+            .starts_with("keymap.json: could not be read")
     );
 
     // What the watcher delivers once the file is saved as UTF-8.

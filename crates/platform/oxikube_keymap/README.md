@@ -127,6 +127,27 @@ verb first. GPUI replays a pair that does not complete as two fresh keys: `d` th
 never a delete. The detail drawer keeps `d` / `y` / `j` / `k`. The k9s base keymap (E21-S09) is
 the next value of the same setting.
 
+## The user's keymap.json (E11-S08)
+
+`<config dir>/keymap.json` (`$OXIKUBE_CONFIG_DIR` or the OS default) layers over the defaults and
+the optional vim layer. `keymap::OpenUser` ("Open User Keymap" in the palette) creates it from a
+commented template and opens it; an existing file is never overwritten.
+
+- **Failure policy**: a bad binding is skipped and the others apply; a file that is not JSON keeps
+  the previous keymap. `null` on a key nobody bound is fine.
+- **Notification**: every problem has a line (`KeymapDiagnostic::line`, displayed
+  `keymap.json:12: unknown action `x::Y` (binding `cmd-k`)`). `subscribe_diagnostics` raises a
+  `KeymapDiagnosticsEvent` when the list changes (empty when fixed) and
+  `KeymapDiagnosticsEvent::message` is the text of the one summarising toast; the binary shows it
+  (the keymap is platform code and cannot).
+- **Hot reload**: the watcher (the settings crate's, on the parent directory, debounced) reads and
+  parses the file on its own thread (`ParsedUserKeymap`); the UI thread checks the actions and
+  replaces the keymap's layers in one call. Tests use `init_with_dir` (no watcher) and `reload(cx)`
+  or `reload_user_keymap(cx, text)`.
+- **Sources and conflicts**: each resolved binding keeps its layer (`KeybindSource`: default, vim
+  base or user) in `BindingInfo::layer`; `conflicts(cx)` lists keys bound twice, to different
+  things, in one context of one layer (the later wins).
+
 ## Wiring
 
 `oxikube_keymap::init(cx)` after the settings store (it reads `<config dir>/keymap.json`, starts

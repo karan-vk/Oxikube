@@ -26,6 +26,7 @@ use serde_json::{Map, Value};
 
 use crate::diagnostics::{KeymapDiagnostic, KeymapProblem};
 use crate::layer::KeymapLayer;
+use crate::lines::SourceLines;
 
 /// One entry of the keymap list: bindings that share a context.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
@@ -109,8 +110,10 @@ fn json_kind(value: &Value) -> &'static str {
 pub struct ParsedKeymap {
     /// The sections that parsed, in file order. Each keeps its index in the file for reports.
     pub sections: Vec<(usize, KeymapSection)>,
-    /// Problems with individual sections.
+    /// Problems with individual sections, with their lines.
     pub diagnostics: Vec<KeymapDiagnostic>,
+    /// Where each section, context and binding is in the text, to locate later problems.
+    pub lines: SourceLines,
 }
 
 /// Parse a keymap file. `Err` is a whole-file problem (not JSON, not a list): the caller keeps
@@ -120,14 +123,15 @@ pub fn parse_keymap(text: &str, layer: KeymapLayer) -> Result<ParsedKeymap, Keym
         return Ok(ParsedKeymap::default());
     }
     let mut deserializer = serde_json_lenient::Deserializer::from_str(text);
-    let value = Value::deserialize(&mut deserializer)
-        .map_err(|err| KeymapDiagnostic::file(layer, err.to_string()))?;
-    deserializer
-        .end()
-        .map_err(|err| KeymapDiagnostic::file(layer, err.to_string()))?;
+    let syntax = |err: serde_json_lenient::Error| {
+        KeymapDiagnostic::file(layer, Some(err.line()), err.to_string())
+    };
+    let value = Value::deserialize(&mut deserializer).map_err(syntax)?;
+    deserializer.end().map_err(syntax)?;
     let Value::Array(entries) = value else {
         return Err(KeymapDiagnostic::file(
             layer,
+            None,
             format!(
                 "the keymap must be a list of sections, found {}",
                 json_kind(&value)
@@ -135,17 +139,24 @@ pub fn parse_keymap(text: &str, layer: KeymapLayer) -> Result<ParsedKeymap, Keym
         ));
     };
 
-    let mut parsed = ParsedKeymap::default();
+    let mut parsed = ParsedKeymap {
+        lines: SourceLines::scan(text),
+        ..ParsedKeymap::default()
+    };
     for (index, entry) in entries.into_iter().enumerate() {
         match serde_json::from_value::<KeymapSection>(entry) {
             Ok(section) => parsed.sections.push((index, section)),
-            Err(err) => parsed.diagnostics.push(KeymapDiagnostic::section(
-                layer,
-                index,
-                KeymapProblem::InvalidSection {
-                    message: err.to_string(),
-                },
-            )),
+            Err(err) => {
+                let mut diagnostic = KeymapDiagnostic::section(
+                    layer,
+                    index,
+                    KeymapProblem::InvalidSection {
+                        message: err.to_string(),
+                    },
+                );
+                diagnostic.locate(&parsed.lines);
+                parsed.diagnostics.push(diagnostic);
+            }
         }
     }
     Ok(parsed)
@@ -225,6 +236,26 @@ mod tests {
         assert_eq!(parsed.diagnostics.len(), 2);
         assert_eq!(parsed.diagnostics[0].section, Some(1));
         assert_eq!(parsed.diagnostics[1].section, Some(2));
+        assert_eq!(
+            parsed.diagnostics[0].line,
+            Some(1),
+            "one line: every section is on it"
+        );
+    }
+
+    #[test]
+    fn problems_carry_their_line() {
+        let parsed = parse_keymap(
+            "[\n  {\"bindings\": {}},\n  7,\n  {\"bindngs\": {}}\n]",
+            KeymapLayer::User,
+        )
+        .unwrap();
+        let lines: Vec<_> = parsed.diagnostics.iter().map(|d| d.line).collect();
+        assert_eq!(lines, [Some(3), Some(4)]);
+        let err = parse_keymap("[\n  {\n    \"bindings\": {\n", KeymapLayer::User).unwrap_err();
+        assert!(err.line.is_some_and(|line| line >= 3), "{err}");
+        let err = parse_keymap("{}", KeymapLayer::User).unwrap_err();
+        assert_eq!(err.line, None);
     }
 
     #[test]

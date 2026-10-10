@@ -1,17 +1,20 @@
 // Oxikube keymap: your key bindings, layered on top of the built-in defaults.
+// Saving this file applies it at once. A binding that cannot be used (an unknown action, a
+// keystroke that does not parse) is skipped and listed in a notification with its line
+// (keymap.json:<line>); every other binding still applies.
 //
 // Each section has an optional "context" (where the binding is active), an optional
 // "use_key_equivalents" (keep shortcuts working on non-US keyboard layouts) and "bindings".
 // A binding maps a keystroke (or a sequence such as "ctrl-k ctrl-s") to an action name, to
-// ["action name", { ...data }], or to null to unbind a default key.
+// ["action name", { ...data }], or to null to unbind a default key. Later sections and later
+// bindings win. The command palette lists every action name.
 //
 // [
 //   {
-//     "context": "ResourceTable",
+//     "context": "ResourceTable && !Editing",
 //     "bindings": {
-//       "ctrl-n": "table::SelectNext",
-//       "ctrl-p": "table::SelectPrevious",
-//       "ctrl-x": null
+//       "y": "resource_table::ViewDescribe",   // y now opens Describe instead of YAML
+//       "ctrl-d": null                          // free the key
 //     }
 //   }
 // ]
