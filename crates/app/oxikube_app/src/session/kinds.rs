@@ -6,7 +6,7 @@
 //! anything else that follows the session see a CRD appear or disappear without reconnecting,
 //! and see when the watch is refused (`Forbidden`) instead of finding out by absence.
 //!
-//! A kinds change also invalidates the connection's [`SchemaPort`] (E10-S01), before the change is
+//! A kinds change, or a CRD edit that left every kind record as it was (its schema changed), also invalidates the connection's [`SchemaPort`] (E10-S01), before the change is
 //! announced, so a listener that asks for a schema in response reads the server's current one.
 //!
 //! The forwarder is the one task the manager spawns. It belongs to the session entry
@@ -55,7 +55,12 @@ impl Shared {
         let cluster = cluster.clone();
         Some(KindWatch(handle.spawn(async move {
             while let Some(event) = events.next().await {
-                if matches!(event, DiscoveryEvent::KindsChanged(_)) {
+                // A CRD's schema is no part of its kind record, so an in-place schema edit
+                // arrives as `SchemasChanged` alone.
+                if matches!(
+                    event,
+                    DiscoveryEvent::KindsChanged(_) | DiscoveryEvent::SchemasChanged
+                ) {
                     // Local bookkeeping only; a failure cannot matter to the session.
                     let _ = schemas.invalidate(&cluster).await;
                 }
@@ -91,6 +96,8 @@ fn forward(
                 .send(cluster, SessionChange::KindsChanged(change));
         }
         DiscoveryEvent::CrdWatch(status) => e.set_crd_watch(status, &shared.updates),
+        // Handled before forwarding: the schemas were dropped; there is nothing to announce.
+        DiscoveryEvent::SchemasChanged => {}
     }
     true
 }

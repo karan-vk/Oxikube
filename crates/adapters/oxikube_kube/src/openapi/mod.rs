@@ -30,7 +30,7 @@
 //! cache, a failed write, no hash) is held in memory instead, so every further kind
 //! of its group parses it without another download.
 //! [`SchemaPort::invalidate`](oxikube_ports::SchemaPort::invalidate) (called on
-//! discovery's `KindsChanged`) drops the memory state, so the next lookup reads
+//! discovery's `KindsChanged` or `SchemasChanged`, the latter for an in-place CRD schema edit) drops the memory state, so the next lookup reads
 //! the fresh index and re-fetches only the documents whose hash changed. A
 //! lookup that finds nothing also re-reads an index older than
 //! [`OpenApiConfig::refresh_on_miss_after`], since a new CRD reaches the OpenAPI

@@ -85,6 +85,22 @@ async fn a_kinds_change_invalidates_the_connections_schemas_but_a_watch_status_d
 }
 
 #[tokio::test]
+async fn a_crd_schema_edit_invalidates_the_schemas_without_announcing_a_kinds_change() {
+    let mut h = Harness::new();
+    let a = id("a");
+    h.connect("a");
+    h.drain();
+    let ports = h.connector.ports_for(&a);
+
+    // An in-place schema edit changes no kind record: discovery reports only this.
+    ports.discovery.emit(DiscoveryEvent::SchemasChanged);
+    settle().await;
+
+    assert_eq!(ports.schemas.recorded_calls(), [SchemaCall::Invalidate(a)]);
+    assert!(h.drain().is_empty(), "nothing for the sidebar to redraw");
+}
+
+#[tokio::test]
 async fn a_refused_watch_is_visible_on_the_session_and_announced_once() {
     let mut h = Harness::new();
     let a = id("a");

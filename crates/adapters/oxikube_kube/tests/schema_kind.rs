@@ -214,3 +214,85 @@ async fn a_crd_created_while_running_is_found_after_invalidate() {
 
     crd.delete(&client).await;
 }
+
+/// Editing a CRD's schema in place changes no kind record, so discovery reports no
+/// `KindsChanged`; `SchemasChanged` is what tells the session to invalidate. Without it the
+/// schema held in memory stays the old one.
+#[tokio::test]
+async fn a_crd_schema_edit_is_reported_and_the_new_schema_is_read_after_invalidate() {
+    use futures::StreamExt as _;
+    use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+    use kube::Api;
+    use kube::api::{Patch, PatchParams};
+    use oxikube_kube::KubeDiscovery;
+    use oxikube_ports::{DiscoveryEvent, DiscoveryPort};
+
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let client = kind.admin_client().await;
+    let id = cluster(&kind);
+    let svc = OpenApiSchemas::with_config((*client).clone(), id.clone(), config());
+    let discovery = KubeDiscovery::new((*client).clone());
+    discovery.discover().await.expect("discover");
+    let mut events = discovery.subscribe();
+
+    let crd = TestCrd::create(&client, kind.context.as_str()).await;
+    let old = common::wait_until("the new CRD's schema", DEADLINE, || async {
+        svc.invalidate(&id).await.expect("invalidate");
+        svc.schema_for(&id, &crd.gvk).await.ok()
+    })
+    .await;
+    assert!(!old.has_property("spec"));
+    // The creation's own reports are history; only what follows the edit counts.
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    while tokio::time::timeout(Duration::from_millis(200), events.next())
+        .await
+        .is_ok()
+    {}
+
+    let patch = serde_json::json!({"spec": {"versions": [{
+        "name": "v1", "served": true, "storage": true,
+        "schema": {"openAPIV3Schema": {
+            "type": "object",
+            "properties": {"spec": {"type": "object", "properties": {"color": {"type": "string"}}}},
+        }},
+    }]}});
+    Api::<CustomResourceDefinition>::all((*client).clone())
+        .patch(&crd.name, &PatchParams::default(), &Patch::Merge(&patch))
+        .await
+        .expect("edit the CRD's schema");
+
+    let started = Instant::now();
+    loop {
+        let remaining = DEADLINE.saturating_sub(started.elapsed());
+        match tokio::time::timeout(remaining, events.next()).await {
+            Ok(Some(DiscoveryEvent::SchemasChanged)) => break,
+            Ok(Some(DiscoveryEvent::KindsChanged(change))) => {
+                assert!(
+                    !change.changed.contains(&crd.gvk),
+                    "the kind record did not change: {change:?}"
+                );
+            }
+            Ok(Some(_)) => {}
+            Ok(None) | Err(_) => panic!("no SchemasChanged within {DEADLINE:?} of the edit"),
+        }
+    }
+
+    // As the session does; the server's OpenAPI document may trail the CRD by a moment.
+    let new = common::wait_until("the edited schema", DEADLINE, || async {
+        svc.invalidate(&id).await.expect("invalidate");
+        svc.schema_for(&id, &crd.gvk)
+            .await
+            .ok()
+            .filter(|schema| schema.has_property("spec"))
+    })
+    .await;
+    let color = new
+        .properties
+        .get("spec")
+        .and_then(|s| s.properties.get("color"));
+    assert!(color.is_some(), "spec.color is in the schema: {new:?}");
+
+    crd.delete(&client).await;
+}

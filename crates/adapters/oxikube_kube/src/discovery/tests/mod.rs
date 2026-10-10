@@ -8,4 +8,5 @@ mod fetch;
 mod forbidden;
 mod registry;
 mod resolve;
+mod schema_changes;
 mod serves_group;

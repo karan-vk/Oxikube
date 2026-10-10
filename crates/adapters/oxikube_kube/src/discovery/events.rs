@@ -17,6 +17,7 @@ use super::{CrdWatch, CrdWatchConfig, KubeDiscovery, RegistryDiff};
 /// What the stream owns while it is polled.
 struct Follow {
     diffs: broadcast::Receiver<Arc<RegistryDiff>>,
+    schemas: broadcast::Receiver<()>,
     status: watch::Receiver<CrdWatchStatus>,
     /// Keeps the watch running; aborted when the stream is dropped.
     _watch: CrdWatch,
@@ -27,6 +28,7 @@ impl KubeDiscovery {
     pub(super) fn events(&self) -> DiscoveryEvents {
         // Receivers first, so nothing the watch publishes is missed.
         let diffs = self.registry_changes();
+        let schemas = self.schema_changes();
         let mut status = self.shared.crd_status.subscribe();
         // A refusal left by an earlier watch is news to this subscriber; `Watching` is the
         // assumed state and is only announced when it comes back after a refusal.
@@ -36,6 +38,7 @@ impl KubeDiscovery {
             .then(|| DiscoveryEvent::CrdWatch(initial));
         let follow = Follow {
             diffs,
+            schemas,
             status,
             _watch: self.watch_crds(CrdWatchConfig::default()),
         };
@@ -47,6 +50,13 @@ impl KubeDiscovery {
                         // Missed some: an empty change tells the subscriber to re-read.
                         Err(broadcast::error::RecvError::Lagged(_)) => {
                             DiscoveryEvent::KindsChanged(KindsChange::default())
+                        }
+                        Err(broadcast::error::RecvError::Closed) => return None,
+                    },
+                    // Lagged or not, "something changed" is all it says.
+                    schemas = follow.schemas.recv() => match schemas {
+                        Ok(()) | Err(broadcast::error::RecvError::Lagged(_)) => {
+                            DiscoveryEvent::SchemasChanged
                         }
                         Err(broadcast::error::RecvError::Closed) => return None,
                     },

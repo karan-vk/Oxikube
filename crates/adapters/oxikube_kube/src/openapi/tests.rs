@@ -10,6 +10,7 @@ use oxikube_ports::{FsPort, SchemaPort};
 use oxikube_testkit::FakeFsPort;
 use serde_json::json;
 
+use super::index::Index;
 use super::{OpenApiConfig, OpenApiSchemas};
 use crate::fake_api::{FakeApi, version_body};
 
@@ -457,6 +458,70 @@ async fn a_lookup_started_before_an_invalidate_does_not_cache_its_result() {
         .await
         .expect("schema");
     assert_eq!(api.hits("/openapi/v3/apis/apps/v1"), 2);
+}
+
+fn example_index(hash: &str) -> serde_json::Value {
+    json!({"paths": {"apis/example.dev/v1": {
+        "serverRelativeURL": format!("/openapi/v3/apis/example.dev/v1?hash={hash}")
+    }}})
+}
+
+fn example_document(kind: &str) -> serde_json::Value {
+    json!({"components": {"schemas": {format!("dev.example.v1.{kind}"): {
+        "type": "object",
+        "properties": {"spec": {"type": "object"}},
+        "x-kubernetes-group-version-kind": [{"group": "example.dev", "kind": kind, "version": "v1"}]
+    }}}})
+}
+
+#[tokio::test]
+async fn a_miss_from_a_lookup_that_an_invalidate_overtook_is_not_remembered() {
+    let gizmo = Gvk::new("example.dev", "v1", "Gizmo");
+    // Replies are served in order: the lookup below reads the index and document as they were
+    // before the CRD was applied, the next lookup the current ones.
+    let api = FakeApi::new();
+    api.reply("/openapi/v3", 200, example_index("OLD="));
+    api.reply(
+        "/openapi/v3/apis/example.dev/v1",
+        200,
+        example_document("Sprocket"),
+    );
+    api.reply("/openapi/v3", 200, example_index("NEW="));
+    api.reply(
+        "/openapi/v3/apis/example.dev/v1",
+        200,
+        example_document("Gizmo"),
+    );
+    let svc = Arc::new(memory_only(&api));
+
+    // The lookup holds the old index and waits for the group's document when the invalidate
+    // lands, so its NotFound is about documents the invalidate discarded.
+    let group = Index::key_for("example.dev", "v1");
+    let flight = Arc::new(tokio::sync::Mutex::new(()));
+    let parked = flight.clone().lock_owned().await;
+    svc.groups.lock().insert(group, flight);
+    let lookup = tokio::spawn({
+        let svc = svc.clone();
+        let gizmo = gizmo.clone();
+        async move { svc.schema_for(&cluster(), &gizmo).await }
+    });
+    while api.hits("/openapi/v3") == 0 {
+        tokio::task::yield_now().await;
+    }
+    tokio::task::yield_now().await;
+    svc.invalidate(&cluster()).await.expect("invalidate");
+    drop(parked);
+    let err = lookup
+        .await
+        .expect("task")
+        .expect_err("the old document has no Gizmo");
+    assert_eq!(err.kind(), ErrorKind::NotFound);
+
+    // The re-read the invalidate asked for happens: the stale miss is not answered from memory.
+    svc.schema_for(&cluster(), &gizmo)
+        .await
+        .expect("the new kind is found at once");
+    assert_eq!(api.hits("/openapi/v3"), 2);
 }
 
 #[tokio::test]

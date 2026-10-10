@@ -62,8 +62,9 @@ pub struct OpenApiSchemas {
     memory: Mutex<Memory>,
     /// Serialises the index load so two first callers fetch it once.
     index_gate: tokio::sync::Mutex<()>,
-    /// One gate per group-version document (single-flight per document).
-    groups: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// One gate per group-version document (single-flight per document). (`pub(super)`: tests
+    /// hold one to park a lookup between the index and the document.)
+    pub(super) groups: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 impl std::fmt::Debug for OpenApiSchemas {
@@ -321,6 +322,9 @@ impl SchemaPort for OpenApiSchemas {
         if self.recent_miss(gvk) {
             return Err(no_schema(gvk));
         }
+        // Before any await, like the other writes: a miss that an `invalidate` overtook was
+        // answered from the old index and must not hide the re-read the invalidate asked for.
+        let epoch = self.memory.lock().epoch;
         let result = match self.resolve(gvk).await {
             Err(err) if err.kind() == ErrorKind::NotFound && self.forget_old_index() => {
                 self.resolve(gvk).await
@@ -328,10 +332,10 @@ impl SchemaPort for OpenApiSchemas {
             other => other,
         };
         if matches!(&result, Err(err) if err.kind() == ErrorKind::NotFound) {
-            self.memory
-                .lock()
-                .misses
-                .insert(gvk.clone(), Instant::now());
+            let mut memory = self.memory.lock();
+            if memory.epoch == epoch {
+                memory.misses.insert(gvk.clone(), Instant::now());
+            }
         }
         result
     }
