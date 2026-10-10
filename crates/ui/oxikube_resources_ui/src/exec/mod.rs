@@ -37,7 +37,7 @@ mod picker;
 mod tests;
 
 pub use actions::{ATTACH_ORDER, DEBUG_ORDER, NODE_SHELL_ORDER, SHELL_ORDER, exec_row_actions};
-pub(crate) use actions::{acts_on_cursor_row, availability_hint};
+pub(crate) use actions::{PORT_FORWARDING_UNAVAILABLE, acts_on_cursor_row, availability_hint};
 pub use debug::{DebugDialog, DebugStage, PERMANENCE_NOTE};
 pub use flow::{ExecFlow, ExecKind};
 pub use picker::{ContainerPicker, ContainerPickerDelegate};

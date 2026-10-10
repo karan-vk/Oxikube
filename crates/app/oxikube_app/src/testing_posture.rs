@@ -213,6 +213,8 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             target: node(name, "worker-1"),
         },
         "palette::Toggle" => Command::PaletteToggle,
+        "palette::OpenJump" => Command::PaletteOpenJump,
+        "help::Show" => Command::HelpShow,
         "pod::Delete" => Command::PodDelete {
             target: target(),
             grace_period_seconds: None,
@@ -299,6 +301,12 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             gvk: Gvk::new("", "v1", "Pod"),
         },
         "resource::ViewYaml" => Command::ResourceViewYaml { target: target() },
+        "resource::ViewDescribe" => Command::ResourceViewDescribe { target: target() },
+        "resource::Edit" => Command::ResourceEdit { target: target() },
+        "table::ToggleWide" => Command::TableToggleWide {
+            cluster,
+            gvk: Gvk::new("", "v1", "Pod"),
+        },
         "view::Open" => Command::ViewOpen {
             view: "overview".into(),
         },

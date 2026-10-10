@@ -247,13 +247,13 @@ fn reload_replaces_bindings_and_unchanged_text_rebinds_nothing(cx: &mut TestAppC
 #[gpui::test]
 fn the_vim_layer_applies_only_when_the_flag_is_set(cx: &mut TestAppContext) {
     install(cx, mac(), "");
-    let (table, table_log) = probe(cx, "Table");
+    let (table, table_log) = probe(cx, "ResourceTable");
     assert!(press(cx, table, &table_log, "j").is_empty(), "flag off");
 
     cx.update(|cx| set_vim_layer(cx, true));
     assert_eq!(press(cx, table, &table_log, "j"), ["SelectNext"]);
     assert_eq!(press(cx, table, &table_log, "k"), ["SelectPrevious"]);
-    let (editing, editing_log) = probe(cx, "Table Editing");
+    let (editing, editing_log) = probe(cx, "ResourceTable Editing");
     assert!(
         press(cx, editing, &editing_log, "j").is_empty(),
         "typing in a field"
@@ -274,9 +274,9 @@ fn the_vim_flag_can_be_set_at_init_and_the_user_layer_still_wins(cx: &mut TestAp
     install(
         cx,
         options,
-        r#"[{"context": "Table", "bindings": {"j": "kmtest::Alpha"}}]"#,
+        r#"[{"context": "ResourceTable", "bindings": {"j": "kmtest::Alpha"}}]"#,
     );
-    let (table, log) = probe(cx, "Table");
+    let (table, log) = probe(cx, "ResourceTable");
     assert_eq!(press(cx, table, &log, "j"), ["Alpha"], "user beats vim");
     assert_eq!(press(cx, table, &log, "k"), ["SelectPrevious"]);
 }

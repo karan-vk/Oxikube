@@ -8,7 +8,14 @@
 // to unbind the key.
 //
 // An entry whose action no crate has registered is skipped silently: the crate that owns the
-// action may not be part of this build.
+// action may not be part of this build (the editor, port forwarding, the jump bar and the help
+// overlay register theirs as they land).
+//
+// Where a key applies is the section's `context`, set by the view that owns the keys: Workspace,
+// ClusterTab, ResourceTable, DetailDrawer, LogView, Terminal, ManifestEditor, Palette and
+// JumpBar (`oxikube_keymap::contexts`). The deeper context wins. Bare letters are bound only in
+// ResourceTable and DetailDrawer and only while no text field has the focus (`!Editing`); the
+// views that take text bind modifier chords only.
 [
   {
     "bindings": {
@@ -42,6 +49,16 @@
       "ctrl-shift-tab": "cluster::PreviousTab",
       "cmd-shift-]": "cluster::NextTab",
       "cmd-shift-[": "cluster::PreviousTab"
+    }
+  },
+  {
+    // k9s's two prompts, from anywhere in a cluster tab: `:` opens the jump bar (`:pods`,
+    // `:deploy kube-system`), `?` lists the keys that apply where the focus is. Typing keeps
+    // them: the section after the Terminal's nulls them in every view that takes text.
+    "context": "ClusterTab",
+    "bindings": {
+      ":": "palette::OpenJump",
+      "?": "help::Show"
     }
   },
   {
@@ -118,7 +135,7 @@
   },
   {
     // Resource tables (E07-S03): move the cursor and the selection, select all, copy the name.
-    "context": "Table",
+    "context": "ResourceTable",
     "bindings": {
       "down": "resource_table::SelectNext",
       "up": "resource_table::SelectPrevious",
@@ -134,7 +151,7 @@
   },
   {
     // Bare keys stay off while a text field inside the table (its filter) has the focus.
-    "context": "Table && !Editing",
+    "context": "ResourceTable && !Editing",
     "bindings": {
       "j": "resource_table::SelectNext",
       "k": "resource_table::SelectPrevious",
@@ -152,13 +169,24 @@
       "a": "resource_table::AttachSelected",
       // shift-d adds an ephemeral debug container (Pods only; blocked on a read-only cluster).
       "shift-d": "resource_table::DebugSelected",
-      "/": "resource_table::FocusFilter"
+      "/": "resource_table::FocusFilter",
+      // k9s verbs on the cursor row (E11-S07): y the YAML, d describe, e edit, l logs (a pod's, or
+      // a workload's pods), shift-f forward a port, f the active forwards. `ctrl-w` shows or hides
+      // the wide columns. `s` above is a shell on a Pod or a Node; E12 binds scale on workloads
+      // with a `kind == Deployment` section.
+      "y": "resource_table::ViewYaml",
+      "d": "resource_table::ViewDescribe",
+      "e": "resource_table::EditSelected",
+      "l": "resource_table::ViewLogs",
+      "shift-f": "resource_table::PortForward",
+      "f": "resource_table::ShowPortForwards",
+      "ctrl-w": "resource_table::ToggleWide"
     }
   },
   {
     // The table's filter field has the focus: escape clears the filter and returns to the rows
     // (enter returns without clearing; the field handles it).
-    "context": "Table && Editing",
+    "context": "ResourceTable && Editing",
     "bindings": {
       "escape": "resource_table::ClearFilter"
     }
@@ -167,8 +195,8 @@
     // The detail drawer (E07-U559) has the focus (Enter on a table row moves it there): escape
     // closes it and returns to the table, j / k and the arrows step the table's selection to the
     // next or previous object and show it, 1 to 5 switch Overview, YAML, Describe, Events and a
-    // CRD's Schema. Rebind in keymap.json, e.g. { "context": "Detail", "bindings": { "j": null } }.
-    "context": "Detail",
+    // CRD's Schema. Rebind in keymap.json, e.g. { "context": "DetailDrawer", "bindings": { "j": null } }.
+    "context": "DetailDrawer",
     "bindings": {
       "escape": "resource_detail::Close",
       "j": "resource_detail::SelectNext",
@@ -179,7 +207,10 @@
       "2": ["resource_detail::ShowTab", { "index": 2 }],
       "3": ["resource_detail::ShowTab", { "index": 3 }],
       "4": ["resource_detail::ShowTab", { "index": 4 }],
-      "5": ["resource_detail::ShowTab", { "index": 5 }]
+      "5": ["resource_detail::ShowTab", { "index": 5 }],
+      // k9s: y shows the YAML tab, d the Describe tab.
+      "y": ["resource_detail::ShowTab", { "index": 2 }],
+      "d": ["resource_detail::ShowTab", { "index": 3 }]
     }
   },
   {
@@ -293,6 +324,17 @@
       "escape": "terminal::SearchClose",
       "cmd-g": "terminal::SearchNext",
       "cmd-shift-g": "terminal::SearchPrevious"
+    }
+  },
+  {
+    // Where text is typed, `:` and `?` are characters, not the jump bar and the help overlay of
+    // the ClusterTab section above: the shell, the manifest editor, the palette and jump bar's
+    // own fields, any text field (`Input`) inside a view, and any view whose own text field has
+    // the focus (it says `Editing`).
+    "context": "Terminal || ManifestEditor || Palette || JumpBar || Input || Editing",
+    "bindings": {
+      ":": null,
+      "?": null
     }
   }
 ]

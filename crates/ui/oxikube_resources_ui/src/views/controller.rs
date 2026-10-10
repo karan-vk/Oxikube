@@ -15,6 +15,7 @@ use oxikube_runtime::spawn_kube;
 use oxikube_workspace::{ClusterTabs, OpenOptions, Toast, Workspace};
 
 use super::commands::ViewRequest;
+use crate::detail::DetailTab;
 use crate::navigate::{KindViews, OpenKind};
 use crate::table::{ResourceTable, ResourceTableDeps, ResourceTableEvent, item_key};
 
@@ -96,8 +97,9 @@ impl ResourceViews {
     }
 
     /// Applies one request, with the window it opens views in: what [`Self::apply`] does, plus
-    /// opening the detail drawer for `Open`, pinning it for `PinDetail` and focusing the filter bar
-    /// for `FocusFilter`.
+    /// opening the detail drawer for `Open`, pinning it for `PinDetail`, showing its YAML or
+    /// Describe tab for `ViewYaml` and `ViewDescribe`, and focusing the filter bar for
+    /// `FocusFilter`.
     pub fn apply_in(&mut self, request: ViewRequest, window: &mut Window, cx: &mut Context<Self>) {
         match request {
             ViewRequest::Open(target) => {
@@ -106,6 +108,12 @@ impl ResourceViews {
             }
             ViewRequest::PinDetail(target) => {
                 self.pin_detail(&target, window, cx);
+            }
+            ViewRequest::ViewYaml(target) => {
+                self.show_detail_tab(&target, DetailTab::Yaml, window, cx);
+            }
+            ViewRequest::ViewDescribe(target) => {
+                self.show_detail_tab(&target, DetailTab::Describe, window, cx);
             }
             ViewRequest::FocusFilter { cluster, gvk } => {
                 // The tab's active table (a kind has one table per cluster tab).
@@ -122,10 +130,19 @@ impl ResourceViews {
 
     /// Applies one request that needs no window: tells the tables, writes the clipboard.
     /// `Open` only reaches the tables here (their `OpenDetail` event); [`Self::apply_in`] also
-    /// opens the drawer, and `PinDetail` and `FocusFilter` need it, so they do nothing here.
+    /// opens the drawer, and `PinDetail`, `ViewYaml`, `ViewDescribe` and `FocusFilter` need it, so
+    /// they do nothing here.
     pub fn apply(&mut self, request: ViewRequest, cx: &mut Context<Self>) {
         match request {
-            ViewRequest::PinDetail(_) | ViewRequest::OpenCrdResources { .. } => {}
+            ViewRequest::PinDetail(_)
+            | ViewRequest::ViewYaml(_)
+            | ViewRequest::ViewDescribe(_)
+            | ViewRequest::OpenCrdResources { .. } => {}
+            ViewRequest::ToggleWide { cluster, gvk } => {
+                for table in self.tables(&cluster, &gvk, cx) {
+                    table.update(cx, |table, cx| table.toggle_wide(cx));
+                }
+            }
             ViewRequest::OpenCrdList(cluster) => {
                 self.open_command(&cluster, &crate::crds::crd_gvk(), cx)
             }

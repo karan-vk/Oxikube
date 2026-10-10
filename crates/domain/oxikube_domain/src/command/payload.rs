@@ -192,6 +192,12 @@ pub enum Command {
     /// Show or hide the command palette.
     #[serde(rename = "palette::Toggle")]
     PaletteToggle,
+    /// Open the `:` jump bar (`:` in a cluster tab).
+    #[serde(rename = "palette::OpenJump")]
+    PaletteOpenJump,
+    /// Show the key bindings that apply where the focus is (`?`).
+    #[serde(rename = "help::Show")]
+    HelpShow,
     /// Quit the application; asks first while operations are running.
     #[serde(rename = "app::Quit")]
     AppQuit,
@@ -397,6 +403,28 @@ pub enum Command {
     ResourceViewYaml {
         /// The resource to show.
         target: ResourceRef,
+    },
+    /// Open a resource's `kubectl describe` text (`d` in a resource table).
+    #[serde(rename = "resource::ViewDescribe")]
+    ResourceViewDescribe {
+        /// The resource to describe.
+        target: ResourceRef,
+    },
+    /// Open a resource's manifest in the editor (`e` in a resource table). The edit reaches the
+    /// cluster only through `resource::Apply`.
+    #[serde(rename = "resource::Edit")]
+    ResourceEdit {
+        /// The resource to edit.
+        target: ResourceRef,
+    },
+    /// Show or hide the wide columns (`kubectl -o wide`) of a kind's resource tables (`ctrl-w`
+    /// in a table, k9s's wide toggle).
+    #[serde(rename = "table::ToggleWide")]
+    TableToggleWide {
+        /// Cluster of the list.
+        cluster: ClusterId,
+        /// The kind listed.
+        gvk: Gvk,
     },
     /// Delete any resource.
     #[serde(rename = "resource::Delete")]
@@ -804,6 +832,8 @@ impl Command {
             Command::KubeconfigReload => CommandId::KUBECONFIG_RELOAD,
             Command::ViewOpen { .. } => CommandId::VIEW_OPEN,
             Command::PaletteToggle => CommandId::PALETTE_TOGGLE,
+            Command::PaletteOpenJump => CommandId::PALETTE_OPEN_JUMP,
+            Command::HelpShow => CommandId::HELP_SHOW,
             Command::AppQuit => CommandId::APP_QUIT,
             Command::WindowNew => CommandId::WINDOW_NEW,
             Command::ViewZoomIn => CommandId::VIEW_ZOOM_IN,
@@ -844,6 +874,9 @@ impl Command {
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
             Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
+            Command::ResourceViewDescribe { .. } => CommandId::RESOURCE_VIEW_DESCRIBE,
+            Command::ResourceEdit { .. } => CommandId::RESOURCE_EDIT,
+            Command::TableToggleWide { .. } => CommandId::TABLE_TOGGLE_WIDE,
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
             Command::ResourceApply { .. } => CommandId::RESOURCE_APPLY,
             Command::PodDelete { .. } => CommandId::POD_DELETE,
@@ -923,6 +956,8 @@ impl Command {
             | Command::ResourceToggleManagedFields { target }
             | Command::ResourceRefreshDescribe { target }
             | Command::ResourceViewYaml { target }
+            | Command::ResourceViewDescribe { target }
+            | Command::ResourceEdit { target }
             | Command::ResourceDelete { target, .. }
             | Command::PodDelete { target, .. }
             | Command::PodShell { target, .. }
@@ -1070,6 +1105,8 @@ mod tests {
                 view: "overview".into(),
             },
             Command::PaletteToggle,
+            Command::PaletteOpenJump,
+            Command::HelpShow,
             Command::AppQuit,
             Command::WindowNew,
             Command::ViewZoomIn,
@@ -1132,6 +1169,12 @@ mod tests {
                 gvk: Gvk::new("", "v1", "Pod"),
             },
             Command::ResourceViewYaml { target: pod() },
+            Command::ResourceViewDescribe { target: pod() },
+            Command::ResourceEdit { target: pod() },
+            Command::TableToggleWide {
+                cluster: cluster(),
+                gvk: Gvk::new("", "v1", "Pod"),
+            },
             Command::ResourceDelete {
                 target: deployment(),
                 propagation: Propagation::Foreground,
@@ -1422,6 +1465,8 @@ mod tests {
                     | Command::NamespaceToggleFavourite { .. }
                     | Command::ViewOpen { .. }
                     | Command::PaletteToggle
+                    | Command::PaletteOpenJump
+                    | Command::HelpShow
                     | Command::AppQuit
                     | Command::WindowNew
                     | Command::ViewZoomIn
@@ -1460,6 +1505,9 @@ mod tests {
                     | Command::ResourceSelectAll { .. }
                     | Command::TableFocusFilter { .. }
                     | Command::ResourceViewYaml { .. }
+                    | Command::ResourceViewDescribe { .. }
+                    | Command::ResourceEdit { .. }
+                    | Command::TableToggleWide { .. }
                     | Command::LogsClear { .. }
                     | Command::LogsCopy { .. }
                     | Command::LogsMark { .. }

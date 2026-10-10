@@ -11,7 +11,7 @@ Layered, hot-reloading key bindings in Zed's `keymap.json` format (E05-S07): per
 ```jsonc
 [
   {
-    "context": "Table && !Editing",          // optional key-context expression
+    "context": "ResourceTable && !Editing",   // optional key-context expression
     "use_key_equivalents": true,            // optional, for non-US layouts
     "bindings": {
       "ctrl-n": "table::SelectNext",                       // action
@@ -44,6 +44,41 @@ registered (the owning crate may not be in the build); the user's file reports t
    names are in `oxikube_keymap::contexts`.
 3. Add default bindings to `crates/platform/oxikube_assets/assets/keymaps/default-{macos,linux,windows}.json`
    (and `vim.json` when they make sense there).
+
+### Contexts and the k9s verbs (E11-S07)
+
+Each view sets its own context with `KeyContextual`; the deeper context wins. The Phase 1 names
+(`contexts::PHASE_1`) and what sets them:
+
+| Context | Set by | Also carries |
+|---|---|---|
+| `Workspace` | the workspace root (and each cluster tab's own workspace) | |
+| `ClusterTab` | a cluster tab, above everything in it | `connected` |
+| `ResourceTable` | a resource table | `Editing`, `selection`, `kind` (`Pod`), `scope` |
+| `DetailDrawer` | the resource detail (drawer or pinned tab) | `mount`, `kind` |
+| `LogView` | the log viewer | `Editing`, `searching` |
+| `Terminal` | a terminal | `searching` |
+| `ManifestEditor` | the manifest editor (E10) | |
+| `Palette`, `JumpBar` | the command palette and `:` bar (E11-S03, S05) | |
+
+Bare-letter verbs are bound only where a letter is not text, and only while no field has the focus
+(`ResourceTable && !Editing`): `y` YAML, `d` describe, `e` edit, `ctrl-d` delete, `l` logs, `s`
+shell, `shift-f` forward a port, `f` the forwards, `ctrl-w` wide columns, `/` filter. `:` (jump bar)
+and `?` (help) are bound in `ClusterTab` and set to `null` in `Terminal || ManifestEditor || Palette
+|| JumpBar || Input || Editing`, so they are characters wherever text is typed. A key bound to an
+action nobody registered yet (the editor, port forwarding, the jump bar, the help overlay) is
+skipped in the embedded layers and starts working when its crate declares the action.
+
+Scope a binding to a kind with the context values: `{ "context": "ResourceTable && !Editing && kind
+== Deployment", "bindings": { "s": "..." } }`. `ctrl-w` is wide columns in a table and
+close-the-tab (`cmd-w` on macOS, `ctrl-shift-w` elsewhere) never collide: the table section is
+`ResourceTable`, the tab key is the workspace's.
+
+A view's action *stands for* a command (`resource_table::ViewYaml` is `resource::ViewYaml`); the
+pairing is `stands_for::STANDS_FOR`, which `bindings_for_command(cx, id)` reads to find the key of a
+command and `tests/defaults.rs` reads to fail on a default that dispatches nothing.
+`dispatch::resolve(cx, "y", &parse_stack(&["Workspace", "ResourceTable kind=Pod"])?)` says what a key
+does in a context stack written as data, and `active_bindings` lists what is in force there.
 
 ### Off macOS, keep the terminal's keys
 

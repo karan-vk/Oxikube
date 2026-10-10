@@ -54,16 +54,16 @@ impl ViewContext {
         ViewContext::Palette,
     ];
 
-    /// The keymap key context name of this view (`LogView`, `Table`, ...).
+    /// The keymap key context name of this view (`LogView`, `ResourceTable`, ...).
     pub const fn key_context(self) -> &'static str {
         match self {
             ViewContext::Workspace => "Workspace",
             ViewContext::Catalog => "Catalog",
-            ViewContext::Table => "Table",
-            ViewContext::Detail => "Detail",
+            ViewContext::Table => "ResourceTable",
+            ViewContext::Detail => "DetailDrawer",
             ViewContext::Logs => "LogView",
             ViewContext::Terminal => "Terminal",
-            ViewContext::Editor => "Editor",
+            ViewContext::Editor => "ManifestEditor",
             ViewContext::Palette => "Palette",
         }
     }

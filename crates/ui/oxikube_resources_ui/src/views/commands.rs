@@ -3,7 +3,8 @@
 //! `resource::CopyLabel` (E07-S05), `table::FocusFilter` (E07-S04), the CRD navigation
 //! `crd::OpenList`, `crd::OpenResources` (E07-S07) and the YAML and Describe tabs'
 //! `resource::CopyYaml`, `resource::SaveYaml`, `resource::ToggleManagedFields`,
-//! `resource::RefreshDescribe` (E07-S06).
+//! `resource::RefreshDescribe` (E07-S06), and the k9s verbs `resource::ViewYaml`,
+//! `resource::ViewDescribe` and `table::ToggleWide` (E11-S07).
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, pin it
 //! as a tab, select rows, restart a feed (a read) or write the user's clipboard. Each is declared
@@ -24,7 +25,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 13] = [
+pub const RESOURCE_COMMANDS: [CommandId; 16] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -38,6 +39,9 @@ pub const RESOURCE_COMMANDS: [CommandId; 13] = [
     CommandId::RESOURCE_SAVE_YAML,
     CommandId::RESOURCE_TOGGLE_MANAGED_FIELDS,
     CommandId::RESOURCE_REFRESH_DESCRIBE,
+    CommandId::RESOURCE_VIEW_YAML,
+    CommandId::RESOURCE_VIEW_DESCRIBE,
+    CommandId::TABLE_TOGGLE_WIDE,
 ];
 
 /// A resource command, resolved, for the UI thread.
@@ -67,6 +71,18 @@ pub enum ViewRequest {
     RefreshDescribe(ResourceRef),
     /// Copy `target`'s name to the clipboard.
     CopyName(ResourceRef),
+    /// Show `target`'s detail on its YAML tab (`resource::ViewYaml`, `y`).
+    ViewYaml(ResourceRef),
+    /// Show `target`'s detail on its Describe tab (`resource::ViewDescribe`, `d`).
+    ViewDescribe(ResourceRef),
+    /// Show or hide the wide columns of the tables of `gvk` in `cluster` (`table::ToggleWide`,
+    /// `ctrl-w`).
+    ToggleWide {
+        /// The cluster.
+        cluster: ClusterId,
+        /// The kind.
+        gvk: Gvk,
+    },
     /// Open the list of `cluster`'s CustomResourceDefinitions (`crd::OpenList`, E07-S07).
     OpenCrdList(ClusterId),
     /// Open the table of the custom resources the CRD `name` defines, for its served storage
@@ -123,6 +139,12 @@ impl ResourceCommandSink {
         Some(match command {
             Command::ResourceOpen { target } => ViewRequest::Open(target.clone()),
             Command::ResourceCopyName { target } => ViewRequest::CopyName(target.clone()),
+            Command::ResourceViewYaml { target } => ViewRequest::ViewYaml(target.clone()),
+            Command::ResourceViewDescribe { target } => ViewRequest::ViewDescribe(target.clone()),
+            Command::TableToggleWide { cluster, gvk } => ViewRequest::ToggleWide {
+                cluster: cluster.clone(),
+                gvk: gvk.clone(),
+            },
             Command::CrdOpenList { cluster } => ViewRequest::OpenCrdList(cluster.clone()),
             Command::CrdOpenResources { cluster, name } => ViewRequest::OpenCrdResources {
                 cluster: cluster.clone(),

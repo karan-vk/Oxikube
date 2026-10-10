@@ -7,11 +7,18 @@
 //! behaviour (non-negotiable 4).
 //!
 //! The default bindings live in the per-OS keymap files of `oxikube_assets`, in the sections
-//! for the `Table` key context (`oxikube_keymap::contexts::TABLE`): `j` / `k` and the arrows
+//! for the `ResourceTable` key context (`oxikube_keymap::contexts::RESOURCE_TABLE`): `j` / `k` and the arrows
 //! move, shift extends, `enter` opens, `escape` clears, `cmd-a` / `ctrl-a` selects all,
 //! `cmd-c` / `ctrl-c` copies the name, `delete` (and k9s's `ctrl-d`) opens the delete dialog,
 //! `s` opens a shell in the pod, `a` attaches to it (E09-S08) and `shift-d` adds a debug
 //! container (E09-S10).
+//!
+//! The k9s verbs of E11-S07 live next to them: `y` shows the YAML, `d` describes, `e` edits, `l`
+//! opens the logs, `shift-f` forwards a port, `f` lists the forwards and `ctrl-w` toggles the wide
+//! columns. Each is a view action that stands for a command of the same meaning (the table in
+//! `table/verbs.rs`), so the key, the context menu, the palette and an agent run
+//! one behaviour.
+//!
 //! Users rebind them in `keymap.json`.
 
 use gpui::actions;
@@ -55,5 +62,25 @@ actions!(
         /// Add a debug container to the cursor row's pod (`pod::Debug`, through the debug dialog;
         /// `shift-d`). A toast says why not for a kind that is not a pod, or on a read-only cluster.
         DebugSelected,
+        /// Show the cursor row's YAML in the detail drawer (`resource::ViewYaml`; k9s's `y`).
+        ViewYaml,
+        /// Show the cursor row's `kubectl describe` text in the detail drawer
+        /// (`resource::ViewDescribe`; k9s's `d`).
+        ViewDescribe,
+        /// Open the cursor row's manifest in the editor (`resource::Edit`; k9s's `e`). A toast
+        /// says so while no editor is installed.
+        EditSelected,
+        /// Open the logs of the cursor row's pod, or of the pods of its workload
+        /// (`pod::ViewLogs` / `workload::ViewLogs`; k9s's `l`).
+        ViewLogs,
+        /// Forward a local port to the cursor row's pod (`pod::PortForward`; k9s's `shift-f`). A
+        /// toast says so while port forwarding is not installed.
+        PortForward,
+        /// List the active port forwards (k9s's `f`). A toast says so while port forwarding is
+        /// not installed.
+        ShowPortForwards,
+        /// Show or hide the wide columns of this kind's tables (`table::ToggleWide`; k9s's
+        /// `ctrl-w`).
+        ToggleWide,
     ]
 );

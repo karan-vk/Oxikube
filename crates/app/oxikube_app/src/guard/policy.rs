@@ -83,6 +83,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceRetryFeed { cluster, .. }
         | Command::ResourceSelectAll { cluster, .. }
         | Command::TableFocusFilter { cluster, .. }
+        | Command::TableToggleWide { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::TerminalNew { cluster } => cluster.as_ref(),
         Command::ResourceOpen { target }
@@ -94,6 +95,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceToggleManagedFields { target }
         | Command::ResourceRefreshDescribe { target }
         | Command::ResourceViewYaml { target }
+        | Command::ResourceViewDescribe { target }
+        | Command::ResourceEdit { target }
         | Command::ResourceDelete { target, .. }
         | Command::PodDelete { target, .. }
         | Command::PodShell { target, .. }
@@ -144,6 +147,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::KubeconfigReload
         | Command::ViewOpen { .. }
         | Command::PaletteToggle
+        | Command::PaletteOpenJump
+        | Command::HelpShow
         | Command::AppQuit
         | Command::WindowNew
         | Command::ViewZoomIn

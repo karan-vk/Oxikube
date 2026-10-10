@@ -46,6 +46,8 @@ impl CommandId {
     pub const CRD_OPEN_LIST: CommandId = CommandId::new("crd::OpenList");
     /// `crd::OpenResources`: open the table of the custom resources a CRD defines.
     pub const CRD_OPEN_RESOURCES: CommandId = CommandId::new("crd::OpenResources");
+    /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
+    pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `kubeconfig::AddSource`: add a kubeconfig file, directory or pasted text as a source.
     pub const KUBECONFIG_ADD_SOURCE: CommandId = CommandId::new("kubeconfig::AddSource");
     /// `kubeconfig::Reload`: re-read every kubeconfig source.
@@ -123,6 +125,8 @@ impl CommandId {
     pub const NODE_SHELL: CommandId = CommandId::new("node::Shell");
     /// `node::Uncordon`: mark a node schedulable again.
     pub const NODE_UNCORDON: CommandId = CommandId::new("node::Uncordon");
+    /// `palette::OpenJump`: open the `:` jump bar.
+    pub const PALETTE_OPEN_JUMP: CommandId = CommandId::new("palette::OpenJump");
     /// `palette::Toggle`: show or hide the command palette.
     pub const PALETTE_TOGGLE: CommandId = CommandId::new("palette::Toggle");
     /// `pod::Attach`: attach to a container's main process.
@@ -149,6 +153,8 @@ impl CommandId {
     pub const RESOURCE_COPY_YAML: CommandId = CommandId::new("resource::CopyYaml");
     /// `resource::Delete`: delete any resource.
     pub const RESOURCE_DELETE: CommandId = CommandId::new("resource::Delete");
+    /// `resource::Edit`: open a resource's manifest in the editor.
+    pub const RESOURCE_EDIT: CommandId = CommandId::new("resource::Edit");
     /// `resource::Open`: open a resource's detail view.
     pub const RESOURCE_OPEN: CommandId = CommandId::new("resource::Open");
     /// `resource::OpenList`: open the list view of a resource kind.
@@ -166,10 +172,14 @@ impl CommandId {
     /// `resource::ToggleManagedFields`: show or hide `metadata.managedFields` in a resource's YAML.
     pub const RESOURCE_TOGGLE_MANAGED_FIELDS: CommandId =
         CommandId::new("resource::ToggleManagedFields");
+    /// `resource::ViewDescribe`: open a resource's `kubectl describe` text.
+    pub const RESOURCE_VIEW_DESCRIBE: CommandId = CommandId::new("resource::ViewDescribe");
     /// `resource::ViewYaml`: open a resource's YAML.
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
+    /// `table::ToggleWide`: show or hide the wide columns (`kubectl -o wide`) of a kind's tables.
+    pub const TABLE_TOGGLE_WIDE: CommandId = CommandId::new("table::ToggleWide");
     /// `terminal::Close`: close the focused terminal, ending its process.
     pub const TERMINAL_CLOSE: CommandId = CommandId::new("terminal::Close");
     /// `terminal::Clear`: clear the focused terminal's scrollback and the screen above the cursor.
@@ -350,6 +360,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         group: "apiextensions.k8s.io",
         kind: "CustomResourceDefinition",
     }),
+    // Lists the bindings of the focused view; reads nothing from a cluster.
+    CommandMeta::read(
+        CommandId::HELP_SHOW,
+        "Show Key Bindings",
+        CommandScope::Global,
+        NONE,
+    ),
     // The kubeconfig commands change the user's settings list and Oxikube's own files, never a
     // cluster: not `mutating`, no guard tier. Removing a pasted kubeconfig deletes a file, so
     // the UI confirms it first and the handler refuses it for agents.
@@ -621,6 +638,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Node")),
+    // Opens the `:` bar; what is typed in it runs other commands, each with its own guard tier.
+    CommandMeta::read(
+        CommandId::PALETTE_OPEN_JUMP,
+        "Open Jump Bar",
+        CommandScope::Global,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::PALETTE_TOGGLE,
         "Toggle Command Palette",
@@ -725,6 +749,16 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::Many),
+    // Opens the manifest in the editor; the change reaches the cluster only through
+    // `resource::Apply`, which is guarded.
+    CommandMeta::read(
+        CommandId::RESOURCE_EDIT,
+        "Edit Resource",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     CommandMeta::read(
         CommandId::RESOURCE_OPEN,
         "Open Resource",
@@ -789,6 +823,15 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(DETAIL_VIEW)
     .selecting(SelectionKind::One),
+    // Shows the describe tab of the detail; reads the object and its events, changes nothing.
+    CommandMeta::read(
+        CommandId::RESOURCE_VIEW_DESCRIBE,
+        "Describe",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     CommandMeta::read(
         CommandId::RESOURCE_VIEW_YAML,
         "View YAML",
@@ -801,6 +844,14 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::TABLE_FOCUS_FILTER,
         "Focus Table Filter",
+        CommandScope::ResourceKind,
+        NONE,
+    )
+    .in_views(TABLE_VIEW),
+    // A display option of the open tables of a kind; changes nothing in the cluster.
+    CommandMeta::read(
+        CommandId::TABLE_TOGGLE_WIDE,
+        "Toggle Wide Columns",
         CommandScope::ResourceKind,
         NONE,
     )

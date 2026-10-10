@@ -18,6 +18,7 @@ gpui.workspace = true
 indexmap.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
+oxikube_keymap.workspace = true
 oxikube_ports.workspace = true
 oxikube_runtime.workspace = true
 oxikube_settings.workspace = true
@@ -30,7 +31,6 @@ tracing.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
-oxikube_keymap.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_state_sqlite.workspace = true

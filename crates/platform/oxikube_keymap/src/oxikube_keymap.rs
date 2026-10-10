@@ -25,7 +25,10 @@
 //! - [`store`]: [`KeymapStore`], the layers and their merge; [`layer`], [`mod@diagnostics`].
 //! - [`global`]: [`init`], hot reload, [`rebind`]; [`paths`]: where `keymap.json` lives.
 //! - [`context`]: key-context helpers and the standard context names.
-//! - [`query`]: the bindings of an action, for the palette.
+//! - [`query`]: the bindings of an action or a command, for the palette.
+//! - [`mod@dispatch`]: what a key does in a context stack written as data, and the bindings in
+//!   force there (tests, the help overlay).
+//! - [`stands_for`]: which commands the view actions (`resource_table::ViewYaml`) stand for.
 //!
 //! The design (sections, `null`, context predicates, layering) follows Zed's `keymap_file.rs`;
 //! the code is written from scratch, so no Zed licence header applies.
@@ -36,16 +39,19 @@
 pub mod build;
 pub mod context;
 pub mod diagnostics;
+pub mod dispatch;
 pub mod file;
 pub mod global;
 pub mod layer;
 pub mod paths;
 pub mod query;
 pub mod registry;
+pub mod stands_for;
 pub mod store;
 
 pub use context::{KeyContextBuilder, KeyContextual, contexts};
 pub use diagnostics::{KeymapDiagnostic, KeymapProblem};
+pub use dispatch::{ActiveBinding, Resolution, active_bindings, parse_stack, resolve};
 pub use file::{KeymapAction, KeymapSection};
 pub use global::{
     diagnostics, init, init_with_dir, init_with_options, init_with_text, rebind,
@@ -53,6 +59,6 @@ pub use global::{
 };
 pub use layer::KeymapLayer;
 pub use oxikube_assets::KeymapPlatform;
-pub use query::{BindingInfo, bindings_for_action, bindings_for_action_name};
+pub use query::{BindingInfo, bindings_for_action, bindings_for_action_name, bindings_for_command};
 pub use registry::ActionRegistry;
 pub use store::{KeymapOptions, KeymapStore};

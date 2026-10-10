@@ -15,7 +15,7 @@ use oxikube_runtime::spawn_kube;
 use oxikube_workspace::{OpenOptions, Toast, Workspace};
 
 use super::controller::ResourceViews;
-use crate::detail::{DetailDeps, DetailDrawer, DetailView, item_key};
+use crate::detail::{DetailDeps, DetailDrawer, DetailTab, DetailView, item_key};
 use crate::exec::ExecFlow;
 
 impl ResourceViews {
@@ -76,6 +76,21 @@ impl ResourceViews {
         // `j` / `k` in the drawer step the table this was opened from.
         view.update(cx, |view, _| view.set_origin(origin));
         Some(view)
+    }
+
+    /// Shows the detail of `target` (the drawer opens on it, or its pinned tab is activated) on
+    /// `tab`: `resource::ViewYaml` and `resource::ViewDescribe`. A kind without that tab keeps the
+    /// tab it has.
+    pub fn show_detail_tab(
+        &mut self,
+        target: &ResourceRef,
+        tab: DetailTab,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(view) = self.open_detail(target, window, cx) {
+            view.update(cx, |view, cx| view.set_tab(tab, cx));
+        }
     }
 
     /// Pins the drawer's detail of `target` as a tab: the same entity moves from the drawer to

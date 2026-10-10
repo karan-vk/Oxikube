@@ -7,7 +7,7 @@
 //
 // [
 //   {
-//     "context": "Table",
+//     "context": "ResourceTable",
 //     "bindings": {
 //       "ctrl-n": "table::SelectNext",
 //       "ctrl-p": "table::SelectPrevious",

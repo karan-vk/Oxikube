@@ -1,11 +1,11 @@
 // Oxikube vim layer: extra bindings for people who navigate lists with hjkl.
 //
 // Optional: it is layered between the defaults and your `keymap.json` only when the vim flag
-// is on, so your own bindings still win. Bindings are scoped to the `Table` and `List` key
+// is on, so your own bindings still win. Bindings are scoped to the `ResourceTable` and `List` key
 // contexts and are inactive while a text field has focus (`!Editing`).
 [
   {
-    "context": "Table && !Editing",
+    "context": "ResourceTable && !Editing",
     "bindings": {
       "j": "table::SelectNext",
       "k": "table::SelectPrevious",

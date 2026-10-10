@@ -15,7 +15,7 @@ use oxikube_domain::command::Command;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
 use oxikube_ports::{DescribeOutput, DescribeSource};
-use oxikube_resources_ui::detail::{DescribeState, DetailDrawer, DetailView, Mount};
+use oxikube_resources_ui::detail::{DescribeState, DetailDrawer, DetailTab, DetailView, Mount};
 use oxikube_resources_ui::overview_lite::WorkloadsOverview;
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::TestPorts;
@@ -354,7 +354,7 @@ fn keys_typed_right_after_slash_are_filter_text_even_in_an_inactive_window(
     assert!(
         stack
             .iter()
-            .any(|c| c.contains("Table") && c.contains("Editing")),
+            .any(|c| c.contains("ResourceTable") && c.contains("Editing")),
         "the table's key context says Editing: {stack:?}"
     );
     app.press("escape");
@@ -561,6 +561,81 @@ fn the_yaml_and_describe_tabs_of_a_row_show_the_object_and_its_description(
     );
     assert!(text.is_some_and(|t| t.contains("Status:       Running")));
     assert_eq!(ports.describe.recorded_calls().len(), 1);
+}
+
+#[gpui::test]
+fn the_k9s_verbs_work_through_the_real_keymap_and_bus(cx: &mut TestAppContext) {
+    // E11-S07: `y` and `d` open the drawer on the YAML and Describe tab of the cursor row, and
+    // `ctrl-w` shows the wide columns, all through the shipped keymap, the real `CommandBus` and
+    // the window's views. (Port forwarding and editing are not installed: their keys say so.)
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.serve([kind("", "v1", "Pod", "pods")]);
+    let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
+    ports
+        .resources
+        .insert(oxikube_testkit::fixtures::pod_running());
+    ports.describe.script().describe.push_ok(DescribeOutput {
+        text: "Name:         web-running\nStatus:       Running\n".into(),
+        source: DescribeSource::Native,
+    });
+    app.press("enter");
+    app.tick();
+    app.click("sidebar-entry-workloads/pods");
+    app.tick();
+    app.click("td-0-0");
+
+    let ws = app.tab_workspace();
+    let tab_of_drawer = |app: &mut App| {
+        app.vcx.update(|_, cx| {
+            ws.read(cx)
+                .panel::<DetailDrawer>()
+                .and_then(|drawer| drawer.read(cx).view().cloned())
+                .map(|view| view.read(cx).tab())
+        })
+    };
+    assert_eq!(tab_of_drawer(&mut app), None, "no drawer yet");
+
+    app.press("y");
+    app.tick();
+    assert_eq!(tab_of_drawer(&mut app), Some(DetailTab::Yaml), "y");
+    assert!(app.drawn("detail-yaml-editor"));
+
+    // The drawer opened without taking the focus: the table still has the keys.
+    app.press("d");
+    app.tick();
+    assert_eq!(tab_of_drawer(&mut app), Some(DetailTab::Describe), "d");
+    assert!(app.drawn("detail-describe-text"));
+
+    // `ctrl-w`: the wide columns of the pods table (QoS is one).
+    let table = app
+        .vcx
+        .update(|_, cx| ws.read(cx).items_of_type::<ResourceTable>().remove(0));
+    let qos = |app: &mut App| {
+        app.vcx.update(|_, cx| {
+            table.read(cx).read_rows(cx, |d| {
+                d.layout().is_shown(&oxikube_app::ColumnId::new("qos"))
+            })
+        })
+    };
+    assert!(!qos(&mut app));
+    app.vcx.update(|window, cx| {
+        let focus = gpui::Focusable::focus_handle(table.read(cx), cx);
+        window.focus(&focus, cx);
+    });
+    app.press("ctrl-w");
+    app.tick();
+    assert!(qos(&mut app), "ctrl-w showed the wide columns");
+    app.press("ctrl-w");
+    app.tick();
+    assert!(!qos(&mut app), "and a second one hid them");
+
+    // `e` and `shift-f` name what is missing instead of doing nothing.
+    app.press("e");
+    app.tick();
+    app.expect_toast("Editing is not available yet");
+    app.press("shift-f");
+    app.tick();
+    app.expect_toast("Port forwarding is not available yet");
 }
 
 #[gpui::test]

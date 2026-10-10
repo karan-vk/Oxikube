@@ -154,11 +154,46 @@ impl ColumnLayout {
             return false;
         }
         self.shown[ix] = shown;
-        if !shown && self.sort.as_ref().is_some_and(|(s, _)| s == id) {
-            self.sort = None;
+        if !shown {
+            self.forget_sort_on(ix);
         }
         self.reindex();
         true
+    }
+
+    /// Whether every wide column (`kubectl -o wide`) the kind has is shown. `false` when it has
+    /// none, so the toggle has nothing to do.
+    pub fn wide_shown(&self) -> bool {
+        let mut wide = self
+            .all
+            .iter()
+            .zip(&self.shown)
+            .filter(|(c, _)| c.wide)
+            .peekable();
+        wide.peek().is_some() && wide.all(|(_, shown)| *shown)
+    }
+
+    /// k9s's `ctrl-w`: shows every wide column, or hides them all again when they all show. The
+    /// default columns keep their state. Returns whether anything changed (a kind without wide
+    /// columns changes nothing).
+    pub fn toggle_wide(&mut self) -> bool {
+        if !self.all.iter().any(|c| c.wide) {
+            return false;
+        }
+        let show = !self.wide_shown();
+        let mut changed = false;
+        for ix in 0..self.all.len() {
+            if self.all[ix].wide && self.shown[ix] != show {
+                self.shown[ix] = show;
+                changed = true;
+                if !show {
+                    self.forget_sort_on(ix);
+                }
+            }
+        }
+        self.ensure_one_shown();
+        self.reindex();
+        changed
     }
 
     /// The shown column at display position `from` moved to `to` (a header drag). Hidden
@@ -290,6 +325,14 @@ impl ColumnLayout {
         }
         out.extend(present);
         out
+    }
+
+    /// Falls back to the default order when the sort column (`all[ix]`) has just been hidden.
+    fn forget_sort_on(&mut self, ix: usize) {
+        let id = &self.all[ix].id;
+        if self.sort.as_ref().is_some_and(|(s, _)| s == id) {
+            self.sort = None;
+        }
     }
 
     fn ensure_one_shown(&mut self) {

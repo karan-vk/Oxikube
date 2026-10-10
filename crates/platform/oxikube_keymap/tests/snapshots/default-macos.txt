@@ -1,0 +1,179 @@
+[(everywhere)]
+  alt-cmd-h        oxikube::HideOthers
+  cmd-+            view::ZoomIn
+  cmd-,            oxikube::OpenPreferences
+  cmd--            view::ZoomOut
+  cmd-0            view::ZoomReset
+  cmd-=            view::ZoomIn
+  cmd-h            oxikube::Hide
+  cmd-m            oxikube::Minimize
+  cmd-q            app::Quit
+  cmd-shift-n      window::New
+  cmd-shift-p      palette::Toggle
+[(everywhere)]
+  cmd-1            cluster::SwitchTab {"index":1}
+  cmd-2            cluster::SwitchTab {"index":2}
+  cmd-3            cluster::SwitchTab {"index":3}
+  cmd-4            cluster::SwitchTab {"index":4}
+  cmd-5            cluster::SwitchTab {"index":5}
+  cmd-6            cluster::SwitchTab {"index":6}
+  cmd-7            cluster::SwitchTab {"index":7}
+  cmd-8            cluster::SwitchTab {"index":8}
+  cmd-9            cluster::SwitchTab {"index":9}
+  cmd-shift-[      cluster::PreviousTab
+  cmd-shift-]      cluster::NextTab
+  ctrl-shift-tab   cluster::PreviousTab
+  ctrl-tab         cluster::NextTab
+[ClusterTab]
+  :                palette::OpenJump
+  ?                help::Show
+[Catalog]
+  cmd-d            catalog::ToggleFavouriteSelected
+  cmd-shift-d      catalog::DisconnectSelected
+  ctrl-n           catalog::SelectNext
+  ctrl-p           catalog::SelectPrevious
+  down             catalog::SelectNext
+  up               catalog::SelectPrevious
+[Catalog > Input]
+  down             catalog::SelectNext
+  up               catalog::SelectPrevious
+[Catalog && !Input]
+  /                catalog::FocusSearch
+  end              catalog::SelectLast
+  enter            catalog::ConnectSelected
+  home             catalog::SelectFirst
+[Picker]
+  cmd-down         picker::SelectLast
+  cmd-enter        picker::SecondaryConfirm
+  cmd-up           picker::SelectFirst
+  ctrl-n           picker::SelectNext
+  ctrl-p           picker::SelectPrevious
+  down             picker::SelectNext
+  end              picker::SelectLast
+  enter            picker::Confirm
+  escape           picker::Cancel
+  home             picker::SelectFirst
+  pagedown         picker::SelectLast
+  pageup           picker::SelectFirst
+  up               picker::SelectPrevious
+[Picker > Input]
+  cmd-down         picker::SelectLast
+  cmd-enter        picker::SecondaryConfirm
+  cmd-up           picker::SelectFirst
+  ctrl-n           picker::SelectNext
+  ctrl-p           picker::SelectPrevious
+  down             picker::SelectNext
+  end              picker::SelectLast
+  enter            picker::Confirm
+  escape           picker::Cancel
+  home             picker::SelectFirst
+  pagedown         picker::SelectLast
+  pageup           picker::SelectFirst
+  up               picker::SelectPrevious
+[ResourceTable]
+  cmd-a            resource_table::SelectAll
+  cmd-c            resource_table::CopyName
+  down             resource_table::SelectNext
+  end              resource_table::SelectLast
+  home             resource_table::SelectFirst
+  pagedown         resource_table::SelectPageDown
+  pageup           resource_table::SelectPageUp
+  shift-down       resource_table::ExtendNext
+  shift-up         resource_table::ExtendPrevious
+  up               resource_table::SelectPrevious
+[ResourceTable && !Editing]
+  /                resource_table::FocusFilter
+  a                resource_table::AttachSelected
+  cmd-backspace    resource_table::DeleteSelected
+  ctrl-d           resource_table::DeleteSelected
+  ctrl-w           resource_table::ToggleWide
+  d                resource_table::ViewDescribe
+  delete           resource_table::DeleteSelected
+  e                resource_table::EditSelected
+  enter            resource_table::OpenSelected
+  escape           resource_table::ClearSelection
+  f                resource_table::ShowPortForwards
+  j                resource_table::SelectNext
+  k                resource_table::SelectPrevious
+  l                resource_table::ViewLogs
+  s                resource_table::ShellSelected
+  shift-d          resource_table::DebugSelected
+  shift-f          resource_table::PortForward
+  shift-j          resource_table::ExtendNext
+  shift-k          resource_table::ExtendPrevious
+  y                resource_table::ViewYaml
+[ResourceTable && Editing]
+  escape           resource_table::ClearFilter
+[DetailDrawer]
+  1                resource_detail::ShowTab {"index":1}
+  2                resource_detail::ShowTab {"index":2}
+  3                resource_detail::ShowTab {"index":3}
+  4                resource_detail::ShowTab {"index":4}
+  5                resource_detail::ShowTab {"index":5}
+  d                resource_detail::ShowTab {"index":3}
+  down             resource_detail::SelectNext
+  escape           resource_detail::Close
+  j                resource_detail::SelectNext
+  k                resource_detail::SelectPrevious
+  up               resource_detail::SelectPrevious
+  y                resource_detail::ShowTab {"index":2}
+[LogView && !Editing]
+  /                log_view::Find
+  0                log_view::Tail
+  1                log_view::Head
+  2                log_view::Since1m
+  3                log_view::Since5m
+  4                log_view::Since15m
+  5                log_view::Since30m
+  6                log_view::Since1h
+  a                log_view::SendToAgent
+  c                log_view::Copy
+  ctrl-s           log_view::SaveAll
+  ctrl-shift-s     log_view::SaveVisible
+  escape           log_view::ClearSelection
+  f                log_view::ToggleFullscreen
+  j                log_view::ToggleJsonMode
+  m                log_view::Mark
+  n                log_view::NextMatch
+  p                log_view::TogglePrevious
+  r                log_view::Reconnect
+  s                log_view::ToggleAutoscroll
+  shift-c          log_view::Clear
+  shift-n          log_view::PreviousMatch
+  shift-r          log_view::FollowReplacement
+  shift-t          log_view::TailInTerminal
+  t                log_view::ToggleTimestamps
+  w                log_view::ToggleWrap
+[LogView]
+  cmd-f            log_view::Find
+[LogView && searching]
+  alt-c            log_view::ToggleCase
+  alt-f            log_view::ToggleFilterMode
+  alt-i            log_view::ToggleInverse
+  escape           log_view::CloseSearch
+[(everywhere)]
+  ctrl-`           terminal_panel::TogglePanel
+  ctrl-~           terminal::New
+[Terminal]
+  cmd-a            terminal::SelectAll
+  cmd-c            terminal::Copy
+  cmd-d            terminal::Split
+  cmd-f            terminal::Search
+  cmd-k            terminal::Clear
+  cmd-t            terminal::New
+  cmd-v            terminal::Paste
+  cmd-w            terminal::Close
+  shift-down       terminal::ScrollLineDown
+  shift-pagedown   terminal::ScrollPageDown
+  shift-pageup     terminal::ScrollPageUp
+  shift-up         terminal::ScrollLineUp
+[Terminal && searching]
+  cmd-g            terminal::SearchNext
+  cmd-shift-g      terminal::SearchPrevious
+[TerminalSearch > Input]
+  cmd-g            terminal::SearchNext
+  cmd-shift-g      terminal::SearchPrevious
+  escape           terminal::SearchClose
+[Terminal || ManifestEditor || Palette || JumpBar || Input || Editing]
+  :                null
+  ?                null
