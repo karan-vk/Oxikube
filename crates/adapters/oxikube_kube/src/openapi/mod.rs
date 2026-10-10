@@ -14,6 +14,7 @@
 //! | disk cache (raw group documents keyed by cluster + server version + index hash) | `cache` |
 //! | [`OpenApiConfig`]: the request and miss deadlines | `config` |
 //! | [`OpenApiSchemas`]: `SchemaPort` impl, single-flight, memory cache | `service` |
+//! | re-checking the index just after an `invalidate`, for a server that lags | `settle` |
 //!
 //! # Caching
 //!
@@ -34,7 +35,12 @@
 //! the fresh index and re-fetches only the documents whose hash changed. A
 //! lookup that finds nothing also re-reads an index older than
 //! [`OpenApiConfig::refresh_on_miss_after`], since a new CRD reaches the OpenAPI
-//! document a moment after discovery reports it. For that same window a kind
+//! document a moment after discovery reports it. The same lag can hit an `invalidate`: a
+//! CRD edit reaches the aggregated index a fraction of a second after the CRD watch reports
+//! it, so the first lookup may read the old index and cache the old schema as a plain hit.
+//! For [`OpenApiConfig::settle_after_invalidate`] after an invalidate, lookups therefore
+//! re-read the index (at most once per [`OpenApiConfig::recheck_every`]) and drop what
+//! changed, until one read has been made after that settling time. For that same window a kind
 //! with no schema, and a server without `/openapi/v3` (`Unsupported`), answer
 //! without a request, so a validator asking on every edit costs nothing.
 //!
@@ -53,9 +59,13 @@ mod config;
 mod fetch;
 mod index;
 mod service;
+mod settle;
 
 #[cfg(test)]
 mod tests;
 
-pub use config::{DEFAULT_REFRESH_ON_MISS_SECS, DEFAULT_REQUEST_TIMEOUT_SECS, OpenApiConfig};
+pub use config::{
+    DEFAULT_RECHECK_EVERY_MILLIS, DEFAULT_REFRESH_ON_MISS_SECS, DEFAULT_REQUEST_TIMEOUT_SECS,
+    DEFAULT_SETTLE_AFTER_INVALIDATE_MILLIS, OpenApiConfig,
+};
 pub use service::OpenApiSchemas;

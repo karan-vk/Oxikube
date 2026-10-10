@@ -541,3 +541,96 @@ async fn unsupported_and_misses_are_retried_once_their_window_has_passed() {
     }
     assert_eq!(api.hits("/openapi/v3"), 2, "a blip does not stick");
 }
+
+fn gizmo_document(extra_field: Option<&str>) -> serde_json::Value {
+    let mut spec = json!({"type": "object", "properties": {}});
+    if let Some(field) = extra_field {
+        spec["properties"][field] = json!({"type": "string"});
+    }
+    json!({"components": {"schemas": {"dev.example.v1.Gizmo": {
+        "type": "object",
+        "properties": {"spec": spec},
+        "x-kubernetes-group-version-kind": [{"group": "example.dev", "kind": "Gizmo", "version": "v1"}]
+    }}}})
+}
+
+fn has_color(schema: &oxikube_domain::schema::JsonSchema) -> bool {
+    schema
+        .properties
+        .get("spec")
+        .and_then(|spec| spec.properties.get("color"))
+        .is_some()
+}
+
+#[tokio::test]
+async fn a_schema_cached_from_an_index_that_lagged_the_invalidate_is_replaced() {
+    let gizmo = Gvk::new("example.dev", "v1", "Gizmo");
+    let group = "/openapi/v3/apis/example.dev/v1";
+    // Index reads in order: the first lookup; the one right after the invalidate, which still
+    // lists the old hash (the server's document lags the CRD edit); the re-check, which lists
+    // the new one.
+    let api = FakeApi::new();
+    api.reply("/openapi/v3", 200, example_index("OLD="));
+    api.reply("/openapi/v3", 200, example_index("OLD="));
+    api.reply("/openapi/v3", 200, example_index("NEW="));
+    api.reply(group, 200, gizmo_document(None));
+    api.reply(group, 200, gizmo_document(None));
+    api.reply(group, 200, gizmo_document(Some("color")));
+    let config = OpenApiConfig {
+        settle_after_invalidate: std::time::Duration::from_millis(200),
+        recheck_every: std::time::Duration::ZERO,
+        ..OpenApiConfig::default()
+    };
+    let svc = OpenApiSchemas::with_config(api.client(), cluster(), config);
+
+    let first = svc.schema_for(&cluster(), &gizmo).await.expect("schema");
+    assert!(!has_color(&first));
+    svc.invalidate(&cluster()).await.expect("invalidate");
+    let stale = svc.schema_for(&cluster(), &gizmo).await.expect("schema");
+    assert!(!has_color(&stale), "the index still lagged");
+
+    // The next lookup is inside the settling time: it re-reads the index and finds the change.
+    let fresh = svc.schema_for(&cluster(), &gizmo).await.expect("schema");
+    assert!(has_color(&fresh), "the stale hit was replaced");
+    assert_eq!(api.hits("/openapi/v3"), 3);
+
+    // Once an index read is older than the settling time nothing is re-read any more.
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    svc.schema_for(&cluster(), &gizmo).await.expect("hit");
+    assert_eq!(api.hits("/openapi/v3"), 4, "one last comparison");
+    svc.schema_for(&cluster(), &gizmo).await.expect("hit");
+    svc.schema_for(&cluster(), &gizmo).await.expect("hit");
+    assert_eq!(api.hits("/openapi/v3"), 4, "settled: memory hits only");
+}
+
+#[tokio::test]
+async fn nothing_is_rechecked_without_an_invalidate_or_inside_the_interval() {
+    let api = server();
+    let svc = OpenApiSchemas::with_config(
+        api.client(),
+        cluster(),
+        OpenApiConfig {
+            recheck_every: std::time::Duration::ZERO,
+            ..OpenApiConfig::default()
+        },
+    );
+    for _ in 0..3 {
+        svc.schema_for(&cluster(), &deployment())
+            .await
+            .expect("schema");
+    }
+    assert_eq!(api.hits("/openapi/v3"), 1, "never invalidated: no re-check");
+
+    // Settling, but the index is younger than the interval: no request either.
+    let slow = OpenApiSchemas::new(api.client(), cluster());
+    slow.schema_for(&cluster(), &deployment())
+        .await
+        .expect("schema");
+    slow.invalidate(&cluster()).await.expect("invalidate");
+    for _ in 0..3 {
+        slow.schema_for(&cluster(), &deployment())
+            .await
+            .expect("schema");
+    }
+    assert_eq!(api.hits("/openapi/v3"), 3, "one load after the invalidate");
+}

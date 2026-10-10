@@ -80,7 +80,8 @@ pub use logs::{ContainerSelection, KubeLogs, LogsConfig};
 pub use metrics::KubeMetrics;
 pub use mutate::DEFAULT_FIELD_MANAGER;
 pub use openapi::{
-    DEFAULT_REFRESH_ON_MISS_SECS, DEFAULT_REQUEST_TIMEOUT_SECS, OpenApiConfig, OpenApiSchemas,
+    DEFAULT_RECHECK_EVERY_MILLIS, DEFAULT_REFRESH_ON_MISS_SECS, DEFAULT_REQUEST_TIMEOUT_SECS,
+    DEFAULT_SETTLE_AFTER_INVALIDATE_MILLIS, OpenApiConfig, OpenApiSchemas,
 };
 pub use pool::{
     ClientFactory, ClientPool, Clock, ContextDefinition, EvictionPolicy, KubeClientFactory,

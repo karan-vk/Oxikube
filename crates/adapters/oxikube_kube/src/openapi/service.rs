@@ -20,23 +20,23 @@ use super::fetch::{fetch_document, fetch_index, fetch_server_version, no_openapi
 use super::index::{Index, IndexEntry};
 
 /// The index and server version read together, and when.
-struct Loaded {
-    index: Index,
+pub(super) struct Loaded {
+    pub(super) index: Index,
     /// The server's `gitVersion` (`unknown` when `/version` could not be read).
-    server_version: String,
-    at: Instant,
+    pub(super) server_version: String,
+    pub(super) at: Instant,
 }
 
 /// What `invalidate` clears. `epoch` makes a fetch that was in flight during
 /// an invalidate drop its result instead of caching stale data.
 #[derive(Default)]
-struct Memory {
-    loaded: Option<Arc<Loaded>>,
-    schemas: HashMap<Gvk, Arc<JsonSchema>>,
+pub(super) struct Memory {
+    pub(super) loaded: Option<Arc<Loaded>>,
+    pub(super) schemas: HashMap<Gvk, Arc<JsonSchema>>,
     /// Raw group documents (by index key, with the hash they were read under) that could not
     /// be kept on disk: no disk cache, an unwritable one, or a server without hashes. Without
     /// them every further kind of the group would download the document again.
-    documents: HashMap<String, (String, Arc<Vec<u8>>)>,
+    pub(super) documents: HashMap<String, (String, Arc<Vec<u8>>)>,
     /// When the server last answered "no `/openapi/v3`": remembered for
     /// [`OpenApiConfig::refresh_on_miss_after`], so a validator asking on every edit does not
     /// repeat doomed requests, while a gateway that blipped a 404 recovers on its own.
@@ -44,8 +44,12 @@ struct Memory {
     /// Kinds the server had no schema for, and when: answered `NotFound` without a request for
     /// [`OpenApiConfig::refresh_on_miss_after`] (a CRD kind with no schema is asked about on
     /// every edit).
-    misses: HashMap<Gvk, Instant>,
-    epoch: u64,
+    pub(super) misses: HashMap<Gvk, Instant>,
+    /// When the last `invalidate` ran, until an index read at least
+    /// [`OpenApiConfig::settle_after_invalidate`] later has been compared with the cache (see
+    /// `settle.rs`): the server may still have been serving the old index when it ran.
+    pub(super) unsettled_since: Option<Instant>,
+    pub(super) epoch: u64,
 }
 
 /// `SchemaPort` over OpenAPI v3: one instance serves one cluster session.
@@ -55,13 +59,13 @@ struct Memory {
 /// thread: the editor calls through `spawn_kube`), with the CPU-bound parse on
 /// the blocking pool; concurrent callers of one group-version share one fetch.
 pub struct OpenApiSchemas {
-    client: Client,
+    pub(super) client: Client,
     cluster: ClusterId,
     disk: Option<DiskCache>,
-    config: OpenApiConfig,
-    memory: Mutex<Memory>,
+    pub(super) config: OpenApiConfig,
+    pub(super) memory: Mutex<Memory>,
     /// Serialises the index load so two first callers fetch it once.
-    index_gate: tokio::sync::Mutex<()>,
+    pub(super) index_gate: tokio::sync::Mutex<()>,
     /// One gate per group-version document (single-flight per document). (`pub(super)`: tests
     /// hold one to park a lookup between the index and the document.)
     pub(super) groups: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
@@ -316,6 +320,7 @@ async fn flatten_root(bytes: Arc<Vec<u8>>, gvk: &Gvk) -> Result<Option<JsonSchem
 impl SchemaPort for OpenApiSchemas {
     async fn schema_for(&self, cluster: &ClusterId, gvk: &Gvk) -> OxiResult<Arc<JsonSchema>> {
         self.check_cluster(cluster)?;
+        self.recheck_unsettled_index().await;
         if let Some(hit) = self.cached(gvk) {
             return Ok(hit);
         }
@@ -349,6 +354,7 @@ impl SchemaPort for OpenApiSchemas {
         memory.documents.clear();
         memory.unsupported_at = None;
         memory.misses.clear();
+        memory.unsettled_since = Some(Instant::now());
         Ok(())
     }
 }

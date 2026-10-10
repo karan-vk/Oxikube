@@ -61,6 +61,7 @@ fn config() -> OpenApiConfig {
     OpenApiConfig {
         request_timeout: Duration::from_secs(30),
         refresh_on_miss_after: Duration::ZERO,
+        ..OpenApiConfig::default()
     }
 }
 
@@ -279,9 +280,11 @@ async fn a_crd_schema_edit_is_reported_and_the_new_schema_is_read_after_invalida
         }
     }
 
-    // As the session does; the server's OpenAPI document may trail the CRD by a moment.
+    // As the session does: one invalidate. The server's OpenAPI document may trail the CRD by
+    // a moment, so the first lookup can still be answered from the old index; the adapter's
+    // re-check while settling must replace it without a second invalidate.
+    svc.invalidate(&id).await.expect("invalidate");
     let new = common::wait_until("the edited schema", DEADLINE, || async {
-        svc.invalidate(&id).await.expect("invalidate");
         svc.schema_for(&id, &crd.gvk)
             .await
             .ok()
