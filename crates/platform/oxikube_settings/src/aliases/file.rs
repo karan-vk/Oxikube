@@ -136,11 +136,6 @@ impl UserAliasesFile {
         })
     }
 
-    /// The file this reads.
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     /// Applies `text` as the file's new contents, as the watcher does.
     pub fn reload(&self, text: &str) {
         self.shared.apply(text);

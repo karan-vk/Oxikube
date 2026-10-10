@@ -36,7 +36,7 @@ pub use parse::{
 };
 
 /// File name of the user aliases inside the config dir.
-pub const ALIASES_FILE_NAME: &str = "aliases.json";
+const ALIASES_FILE_NAME: &str = "aliases.json";
 
 /// The user aliases inside `config_dir`.
 pub fn user_aliases_path(config_dir: &std::path::Path) -> std::path::PathBuf {

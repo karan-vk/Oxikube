@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use oxikube_domain::AliasTarget;
 
-/// Where an alias comes from. The order is the precedence: a lower variant hides a higher one
+/// Where an alias comes from. The order is the precedence: an earlier variant hides a later one
 /// (`User` over `BuiltIn` over `Discovery`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AliasSource {
@@ -15,17 +15,6 @@ pub enum AliasSource {
     BuiltIn,
     /// The cluster's API discovery: plural, singular, short names and Kind of every served type.
     Discovery,
-}
-
-impl AliasSource {
-    /// A short word for logs and the help overlay.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::User => "user",
-            Self::BuiltIn => "built-in",
-            Self::Discovery => "discovery",
-        }
-    }
 }
 
 /// One name and what it stands for.

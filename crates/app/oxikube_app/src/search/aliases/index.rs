@@ -21,6 +21,16 @@ enum Slot {
     Many(Arc<[AliasEntry]>),
 }
 
+impl Slot {
+    /// The entry that decides the name (the first candidate of an ambiguous one).
+    fn winner(&self) -> &AliasEntry {
+        match self {
+            Self::One(entry) => entry,
+            Self::Many(candidates) => &candidates[0],
+        }
+    }
+}
+
 /// The merged table. Immutable once built; the table swaps whole indexes.
 #[derive(Debug, Default)]
 pub(super) struct Index {
@@ -135,10 +145,7 @@ impl Index {
         let mut all: Vec<AliasEntry> = self
             .map
             .values()
-            .map(|slot| match slot {
-                Slot::One(entry) => entry.clone(),
-                Slot::Many(candidates) => candidates[0].clone(),
-            })
+            .map(|slot| slot.winner().clone())
             .collect();
         all.sort_by(|a, b| a.name.cmp(&b.name));
         all
@@ -159,10 +166,7 @@ impl Index {
 
     /// The source of the entry called `name`, for ordering suggestions.
     pub(super) fn source_of(&self, name: &str) -> Option<AliasSource> {
-        self.map.get(name).map(|slot| match slot {
-            Slot::One(entry) => entry.source,
-            Slot::Many(candidates) => candidates[0].source,
-        })
+        self.map.get(name).map(|slot| slot.winner().source)
     }
 }
 
