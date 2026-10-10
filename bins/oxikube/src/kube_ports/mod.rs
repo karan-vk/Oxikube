@@ -38,11 +38,14 @@ use crate::app_state::ClusterAdapters;
 
 /// The app's cluster adapters: the kubeconfig catalog over `initial` (the user's source list from
 /// settings), the kube connector over it, the wall clock on `runtime`, the local file system, and
-/// `kubeconfigs_dir` for pasted kubeconfigs. Constructs only; see the [module docs](self).
+/// `kubeconfigs_dir` for pasted kubeconfigs. `schema_cache_dir` is where each connection's
+/// `SchemaPort` keeps the raw OpenAPI documents it fetched (public API schemas only; `None` keeps
+/// them in memory). Constructs only; see the [module docs](self).
 pub fn kube_adapters(
     initial: Vec<UserSource>,
     runtime: Handle,
     kubeconfigs_dir: PathBuf,
+    schema_cache_dir: Option<PathBuf>,
 ) -> ClusterAdapters {
     let sources = Arc::new(LazyKubeSources::new(
         initial,
@@ -52,13 +55,17 @@ pub fn kube_adapters(
     let describe = DescribePreference::default();
     let connector = SourcesConnector::new(sources.clone(), describe.clone());
     let budgets = WatchBudgets::new(connector.kube());
+    let fs = Arc::new(StdFs);
+    if let Some(dir) = schema_cache_dir {
+        connector.kube().set_schema_cache(fs.clone(), dir);
+    }
     ClusterAdapters {
         connector: Arc::new(connector),
         budgets,
         describe,
         source: sources,
         clock: Arc::new(SystemClock::new(runtime)),
-        fs: Arc::new(StdFs),
+        fs,
         kubeconfigs_dir,
     }
 }

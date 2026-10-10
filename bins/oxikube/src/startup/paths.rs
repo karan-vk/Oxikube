@@ -51,6 +51,12 @@ pub fn state_db_path(data_dir: &Path) -> PathBuf {
     data_dir.join("state.db")
 }
 
+/// `<data dir>/cache/openapi`: the raw OpenAPI v3 documents of connected clusters (public API
+/// schemas only, never object data), keyed by cluster, server version and document hash.
+pub fn schema_cache_dir(data_dir: &Path) -> PathBuf {
+    data_dir.join("cache").join("openapi")
+}
+
 /// Where pasted kubeconfigs are stored: `<config dir>/kubeconfigs` (ADR 0015). For the embedded
 /// defaults (tests, no config dir) a directory under the system temp dir, which nothing writes to
 /// unless the user pastes a kubeconfig in such a run.

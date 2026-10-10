@@ -31,8 +31,9 @@ pub enum SchemaCall {
 /// Fake `SchemaPort` with scripted schemas for the validator (E10-S03) onwards.
 ///
 /// Fallbacks: `schema_for` serves the stored schemas under (cluster, GVK) and
-/// fails `NotFound` otherwise; `invalidate` drops the stored schemas of the
-/// cluster. A scripted response replaces the fallback for that call entirely.
+/// fails `NotFound` otherwise; `invalidate` only records the call (the stored
+/// schemas stand for the server, which still has them). A scripted response
+/// replaces the fallback for that call entirely.
 #[derive(Debug, Default)]
 pub struct FakeSchemaPort {
     script: SchemaScripts,
@@ -70,10 +71,7 @@ impl SchemaPort for FakeSchemaPort {
 
     async fn invalidate(&self, cluster: &ClusterId) -> OxiResult<()> {
         self.calls.record(SchemaCall::Invalidate(cluster.clone()));
-        self.script.invalidate.next_or_else(|| {
-            self.schemas.lock().retain(|(owner, _), _| owner != cluster);
-            Ok(())
-        })
+        self.script.invalidate.next_or_else(|| Ok(()))
     }
 }
 
@@ -90,7 +88,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_schemas_serve_and_invalidate_drops_them() {
+    fn stored_schemas_serve_and_survive_invalidate() {
         let fake = FakeSchemaPort::new();
         let gvk = Gvk::new("apps", "v1", "Deployment");
         let schema = Arc::new(JsonSchema::any());
@@ -100,8 +98,12 @@ mod tests {
             &schema
         ));
         block_on(fake.invalidate(&cluster())).unwrap();
+        assert!(Arc::ptr_eq(
+            &block_on(fake.schema_for(&cluster(), &gvk)).unwrap(),
+            &schema
+        ));
         assert_eq!(
-            block_on(fake.schema_for(&cluster(), &gvk))
+            block_on(fake.schema_for(&cluster(), &Gvk::new("apps", "v1", "StatefulSet")))
                 .unwrap_err()
                 .kind(),
             ErrorKind::NotFound
@@ -112,6 +114,7 @@ mod tests {
                 SchemaCall::SchemaFor(cluster(), gvk.clone()),
                 SchemaCall::Invalidate(cluster()),
                 SchemaCall::SchemaFor(cluster(), gvk),
+                SchemaCall::SchemaFor(cluster(), Gvk::new("apps", "v1", "StatefulSet")),
             ]
         );
     }

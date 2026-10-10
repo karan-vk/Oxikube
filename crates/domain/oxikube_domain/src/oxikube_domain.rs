@@ -80,7 +80,7 @@ pub use quantity::{Quantity, QuantityError, QuantityFormat};
 pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError, StrMap};
 pub use safety::{ConfirmTier, Initiator, Risk};
 pub use schema::{
-    AdditionalProperties, JsonSchema, SchemaType, XK8s, flatten_schema, root_schema_for,
+    AdditionalProperties, JsonSchema, Properties, SchemaType, XK8s, flatten_schema, root_schema_for,
 };
 pub use view::{
     ContainerSummary, CronJobSummary, JobSummary, NodeSummary, PodSummary, ViewError,

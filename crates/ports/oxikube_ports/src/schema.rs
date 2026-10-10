@@ -21,7 +21,9 @@ use oxikube_domain::schema::JsonSchema;
 /// Per-GVK JSON Schemas of one cluster's API. Read-only.
 ///
 /// One adapter instance serves one cluster session (E10-S01); `cluster` still
-/// travels on every call so fakes and shared instances stay unambiguous.
+/// travels on every call so fakes and shared instances stay unambiguous. An
+/// adapter bound to one cluster answers [`Validation`](oxikube_domain::ErrorKind::Validation)
+/// for another.
 #[async_trait]
 pub trait SchemaPort: Send + Sync {
     /// The flattened schema for `gvk`: `$ref` and `allOf` resolved against the
@@ -43,9 +45,11 @@ pub trait SchemaPort: Send + Sync {
     /// connection failures.
     async fn schema_for(&self, cluster: &ClusterId, gvk: &Gvk) -> OxiResult<Arc<JsonSchema>>;
 
-    /// Forgets everything cached for `cluster` (memory and disk), so the next
-    /// [`schema_for`](Self::schema_for) re-reads the server. Called when
-    /// discovery reports kinds changed (a CRD was added, changed or removed).
-    /// Local bookkeeping only: it never fails because of the cluster.
+    /// Forgets what is cached in memory for `cluster`, so the next
+    /// [`schema_for`](Self::schema_for) re-reads the server's index. Anything an
+    /// adapter keeps on disk is re-validated against that fresh index (a
+    /// changed group document is fetched again, an unchanged one is not).
+    /// Called when discovery reports kinds changed (a CRD was added, changed or
+    /// removed). Local bookkeeping only: it never fails because of the cluster.
     async fn invalidate(&self, cluster: &ClusterId) -> OxiResult<()>;
 }

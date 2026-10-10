@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AccessReviewPort, DescribePort, DiscoveryPort, ExecPort, LogPort, MetricsPort, PortForwardPort,
-    ResourcePort, TableFeedPort, WarningPort,
+    ResourcePort, SchemaPort, TableFeedPort, WarningPort,
 };
 
 /// How interactive an exec credential plugin may be (a per-cluster setting, E06-S08).
@@ -168,6 +168,9 @@ pub struct ClusterPorts {
     pub warnings: Arc<dyn WarningPort>,
     /// `kubectl describe`-style text for one object (read-only).
     pub describe: Arc<dyn DescribePort>,
+    /// Per-kind JSON Schemas from the cluster's OpenAPI v3 (read-only). The session manager
+    /// calls [`SchemaPort::invalidate`] when discovery reports kinds changed.
+    pub schemas: Arc<dyn SchemaPort>,
 }
 
 impl fmt::Debug for ClusterPorts {

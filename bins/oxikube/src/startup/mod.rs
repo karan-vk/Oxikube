@@ -221,6 +221,7 @@ fn build_ports(cx: &mut App, env: &StartupEnv) -> Result<AppPorts, StartupError>
                 user_sources(cx),
                 runtime,
                 paths::kubeconfigs_dir(&env.config),
+                path.parent().map(paths::schema_cache_dir),
             );
             Ok(AppPorts::new(Arc::new(state), clusters))
         }

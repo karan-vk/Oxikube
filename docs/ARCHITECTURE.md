@@ -512,7 +512,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   pod, in the log viewer or the terminal, offers Close instead of Reconnect.
 - `oxikube_kube` — the kube-rs adapter (connection, discovery, reflectors, Table API feed,
   mutations, subresources, kubectl-equivalent algorithms, logs, exec, port-forward, metrics,
-  events).
+  events, and `openapi` (E10-S01): `OpenApiSchemas`, the `SchemaPort` over `/openapi/v3`, fetching
+  one group-version document on first use, flattening `$ref`/`allOf` through
+  `oxikube_domain::schema`, with a memory cache, single-flight per document and a disk cache of the
+  raw documents under `<data dir>/cache/openapi/<cluster>/<server version>/` keyed by the index's
+  document hash).
 - `oxikube_state_sqlite` — the `StatePort` adapter (ADR 0010): rusqlite (bundled) on a dedicated
   thread, embedded ordered migrations, one `kv` table for the kv store and typed tables, the
   append-only audit log, corrupt-file fallback (`state.db.corrupt-<timestamp>`).
@@ -713,6 +717,7 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | App editing the user's kubeconfig source list (`kubeconfig.sources`) | `SourceListStore` (a trait in `oxikube_app::sources`, async `load` / `save`) | `oxikube_catalog_ui::sources::SettingsSourceList` over `oxikube_settings::update_user_settings` | `oxikube_app::sources::KubeconfigSourcesService` |
 | Local files by path (pasted kubeconfigs: owner-only write, delete; streamed chunked writes for log exports) | `FsPort` | `oxikube_runtime::StdFs` (tests: `FakeFsPort`) | `oxikube_app::sources` |
 | Per-cluster ports for a connected context | `ClusterConnectorPort` (returns `ClusterPorts` + `AccessReviewPort`; health via the `HealthReporter` callback) | `oxikube_kube` (wired by `bins/oxikube`) | `oxikube_app::session` |
+| Per-kind JSON Schemas of a connected cluster (manifest editor validation, hover, completion) | `SchemaPort` (`schema_for`, `invalidate`; part of `ClusterPorts`) | `oxikube_kube::openapi` (`OpenApiSchemas`; tests: `FakeSchemaPort`) | `oxikube_editor` (E10-S03 onwards); `oxikube_app::session` calls `invalidate` on `KindsChanged` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`), opened by `ExecPort` (`exec`, `attach`, `create_debug_container`, `node_shell`) | `oxikube_terminal` (local PTY), `oxikube_kube` (`KubeExec` handing out `KubeStream`), `oxikube_argocd` | `oxikube_terminal` element, `oxikube_app` `ExecService` |
 
 If a story's crate list implies a forbidden edge, follow this table and say so in the PR; do not

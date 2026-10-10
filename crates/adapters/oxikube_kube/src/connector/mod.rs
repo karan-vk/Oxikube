@@ -3,7 +3,8 @@
 //! The session manager (`oxikube_app::session`) asks the connector for one connection per
 //! kubeconfig context. The connector assembles what the other modules of this crate provide into
 //! the [`ClusterPorts`] bundle: the pooled client, discovery, resource reads and writes, Table
-//! feeds, logs, exec, port-forward, metrics and the access review.
+//! feeds, logs, exec, port-forward, metrics, the access review and the OpenAPI schemas
+//! (`SchemaPort`, E10-S01; raw documents are cached on disk once [`KubeConnector::set_schema_cache`] is set).
 //!
 //! | Piece | Where |
 //! |---|---|
@@ -52,7 +53,7 @@ use oxikube_domain::OxiResult;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{
     ClusterConnection, ClusterConnectorPort, ClusterPorts, ConnectRequest, ConnectionGuard,
-    DescribePort, DiscoveryPort, ExecInteractivity,
+    DescribePort, DiscoveryPort, ExecInteractivity, FsPort,
 };
 use parking_lot::Mutex;
 
@@ -66,6 +67,7 @@ use crate::health::{DEFAULT_RULES_TTL, LivenessConfig, RulesCache};
 use crate::kubeconfig::LoadedKubeconfig;
 use crate::logs::KubeLogs;
 use crate::metrics::KubeMetrics;
+use crate::openapi::OpenApiSchemas;
 use crate::pool::{ClientPool, PoolConfig};
 use crate::remote::exec::KubeExec;
 use crate::remote::portforward::KubePortForward;
@@ -121,6 +123,9 @@ struct Shared {
     describe: Mutex<Option<Arc<DescribeFactory>>>,
     /// Each new connection's watch budget (set by [`KubeConnector::set_budget_for`]).
     budget: Mutex<Option<Arc<BudgetFor>>>,
+    /// Where each connection's `SchemaPort` keeps raw OpenAPI documents (set by
+    /// [`KubeConnector::set_schema_cache`]); memory only until then.
+    schema_cache: Mutex<Option<(Arc<dyn FsPort>, std::path::PathBuf)>>,
 }
 
 impl KubeConnector {
@@ -162,6 +167,7 @@ impl KubeConnector {
                 latest: Mutex::new(None),
                 describe: Mutex::new(None),
                 budget: Mutex::new(None),
+                schema_cache: Mutex::new(None),
             }),
         }
     }
@@ -172,6 +178,13 @@ impl KubeConnector {
     /// were made with.
     pub fn set_describe_factory(&self, factory: Arc<DescribeFactory>) {
         *self.shared.describe.lock() = Some(factory);
+    }
+
+    /// Sets where each new connection's `SchemaPort` keeps the raw OpenAPI documents it fetched:
+    /// under `dir` through `fs`, keyed by cluster, server version and document hash. Until it is
+    /// set schemas are cached in memory only. Live connections keep the port they were made with.
+    pub fn set_schema_cache(&self, fs: Arc<dyn FsPort>, dir: std::path::PathBuf) {
+        *self.shared.schema_cache.lock() = Some((fs, dir));
     }
 
     /// Sets the watch budget each new connection starts with: `budget` is called with the
@@ -302,6 +315,11 @@ impl ClusterConnectorPort for KubeConnector {
 
         let discovery: Arc<dyn DiscoveryPort> = Arc::new(discovery);
         let describe = self.describe_port(&request, &client, &discovery);
+        let schemas = OpenApiSchemas::new(client.clone(), request.cluster.clone());
+        let schemas = match self.shared.schema_cache.lock().clone() {
+            Some((fs, dir)) => schemas.with_disk_cache(fs, dir),
+            None => schemas,
+        };
         let ports = ClusterPorts {
             resources: budgeted.clone(),
             discovery,
@@ -313,6 +331,7 @@ impl ClusterConnectorPort for KubeConnector {
             metrics: Arc::new(KubeMetrics::new(client, request.cluster.clone())),
             access: Arc::new(access),
             warnings: Arc::new(WarningHub::global().port(&request.context)),
+            schemas: Arc::new(schemas),
         };
         Ok(ClusterConnection {
             ports,
