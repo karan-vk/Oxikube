@@ -184,6 +184,8 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 proptest = "1"
 insta = { version = "1", features = ["json", "yaml"] }
 tempfile = "3"
+# Names gpui's `FxHashMap` in a test keyboard mapper (already in the lock through gpui).
+rustc-hash = "2"
 wiremock = "0.6"
 
 # --- xtask ---

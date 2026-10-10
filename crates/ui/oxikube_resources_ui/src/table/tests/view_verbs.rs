@@ -8,13 +8,14 @@ use gpui::{KeyContext, TestAppContext};
 use oxikube_app::columns::ColumnId;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_ports::StatePort as _;
 
 use super::fixture::{Fixture, cluster};
 use super::p;
 use crate::actions::tests::{nodes_kind, toasts};
 use crate::detail::DetailTab;
 use crate::detail::tests::fixture::{Detail, pod_ref, web_pod};
-use crate::table::ResourceTable;
+use crate::table::{ColumnPrefs, ResourceTable, prefs_key};
 
 fn apple() -> ResourceRef {
     ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "x", "apple-1")
@@ -112,20 +113,44 @@ fn l_on_a_kind_without_logs_says_which_have_them(cx: &mut TestAppContext) {
     assert!(f.dispatcher.sent().is_empty());
 }
 
+const PORT_FORWARDS: &str = "Port forwarding is not available yet";
+
+/// Takes the toast with `key` off the screen (the layer keeps toasts until they expire).
+fn dismiss_toast(f: &mut Fixture, key: &str) {
+    let tabs = f.tabs.clone();
+    f.vcx.update(|_, cx| {
+        let tab = tabs
+            .read(cx)
+            .tab(&cluster())
+            .cloned()
+            .expect("the cluster tab");
+        let layer = tab.read(cx).workspace().read(cx).toast_layer().clone();
+        let gone = layer.update(cx, |layer, cx| layer.dismiss_key(key, cx));
+        assert!(gone, "the toast was showing");
+    });
+}
+
 #[gpui::test]
 fn e_and_the_port_forward_keys_say_when_their_feature_is_not_installed(cx: &mut TestAppContext) {
     let (mut f, table) = open(cx);
     f.keys(&table, "e");
     assert_eq!(messages(&mut f), ["Editing is not available yet"]);
     f.keys(&table, "shift-f");
-    assert!(messages(&mut f).contains(&"Port forwarding is not available yet".to_owned()));
+    assert_eq!(
+        messages(&mut f),
+        ["Editing is not available yet", PORT_FORWARDS]
+    );
+
+    // `f` is checked on its own: with the `shift-f` toast gone, only `f` can bring it back.
+    dismiss_toast(
+        &mut f,
+        &format!("action-unavailable:{}", CommandId::POD_PORT_FORWARD),
+    );
+    assert_eq!(messages(&mut f), ["Editing is not available yet"]);
     f.keys(&table, "f");
-    assert!(
-        messages(&mut f)
-            .iter()
-            .filter(|m| *m == "Port forwarding is not available yet")
-            .count()
-            >= 1
+    assert_eq!(
+        messages(&mut f),
+        ["Editing is not available yet", PORT_FORWARDS]
     );
     assert!(f.dispatcher.sent().is_empty(), "nothing ran");
 }
@@ -182,10 +207,17 @@ fn the_wide_toggle_is_saved_with_the_layout(cx: &mut TestAppContext) {
     let (mut f, table) = open(cx);
     f.keys(&table, "ctrl-w");
     f.settle();
-    let prefs = f
+    let key = prefs_key(&Gvk::new("", "v1", "Pod")).unwrap();
+    let live = f
         .vcx
         .update(|_, cx| table.read(cx).read_rows(cx, |d| d.layout.prefs()));
-    assert_eq!(prefs.visible.get("qos"), Some(&true), "{prefs:?}");
+    assert_eq!(live.visible.get("qos"), Some(&true), "{live:?}");
+    // And the copy in the state store, which is what the next launch reads.
+    let saved: ColumnPrefs = futures::executor::block_on(f.state.kv_get(&key))
+        .unwrap()
+        .map(|v| serde_json::from_value(v).unwrap())
+        .expect("the wide toggle was saved");
+    assert_eq!(saved.visible.get("qos"), Some(&true), "{saved:?}");
 }
 
 #[gpui::test]

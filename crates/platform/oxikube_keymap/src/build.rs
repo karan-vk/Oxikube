@@ -5,7 +5,9 @@
 //! section, and an action nobody registered is an error in the user's file but silently
 //! skipped in the embedded layers (see [`KeymapLayer::tolerates_unknown_actions`]).
 
-use gpui::{App, KeyBinding, KeyBindingContextPredicate, NoAction, SharedString};
+use gpui::{
+    App, KeyBinding, KeyBindingContextPredicate, NoAction, PlatformKeyboardMapper, SharedString,
+};
 use serde_json::Value;
 use std::rc::Rc;
 
@@ -31,6 +33,17 @@ pub fn build_layer(
     layer: KeymapLayer,
     sections: &[(usize, KeymapSection)],
 ) -> BuiltLayer {
+    build_layer_with(cx, cx.keyboard_mapper().as_ref(), layer, sections)
+}
+
+/// [`build_layer`] with the platform keyboard mapper given, so a test can stand in for a
+/// non-US layout (the mapper is what a section's `use_key_equivalents` flag feeds).
+pub fn build_layer_with(
+    cx: &App,
+    mapper: &dyn PlatformKeyboardMapper,
+    layer: KeymapLayer,
+    sections: &[(usize, KeymapSection)],
+) -> BuiltLayer {
     let mut built = BuiltLayer::default();
     for (index, section) in sections {
         let predicate = match parse_context(section) {
@@ -45,6 +58,7 @@ pub fn build_layer(
         for (keystrokes, value) in &section.bindings {
             let result = build_binding(
                 cx,
+                mapper,
                 layer,
                 section.use_key_equivalents,
                 predicate.clone(),
@@ -92,6 +106,7 @@ fn parse_context(
 
 fn build_binding(
     cx: &App,
+    mapper: &dyn PlatformKeyboardMapper,
     layer: KeymapLayer,
     use_key_equivalents: bool,
     predicate: Option<Rc<KeyBindingContextPredicate>>,
@@ -133,7 +148,7 @@ fn build_binding(
         predicate,
         use_key_equivalents,
         input,
-        cx.keyboard_mapper().as_ref(),
+        mapper,
     )
     .map(|binding| binding.with_meta(layer.meta()))
     .map_err(|err| {
@@ -142,4 +157,73 @@ fn build_binding(
         }
         .into()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::{
+        DummyKeyboardMapper, KeyContext, KeybindingKeystroke, Keymap, Keystroke, TestAppContext,
+        actions,
+    };
+
+    actions!(build_test, [Alpha]);
+
+    /// A stand-in for a non-US layout (AZERTY-like): with key equivalents on, the key the
+    /// binding names (`a`) is the physical key that types `q`.
+    struct SwapsAForQ(DummyKeyboardMapper);
+
+    impl PlatformKeyboardMapper for SwapsAForQ {
+        fn map_key_equivalent(
+            &self,
+            mut keystroke: Keystroke,
+            use_key_equivalents: bool,
+        ) -> KeybindingKeystroke {
+            if use_key_equivalents && keystroke.key == "a" {
+                keystroke.key = "q".to_owned();
+            }
+            KeybindingKeystroke::from_keystroke(keystroke)
+        }
+
+        fn get_key_equivalents(&self) -> Option<&rustc_hash::FxHashMap<char, char>> {
+            self.0.get_key_equivalents()
+        }
+    }
+
+    fn sections(use_key_equivalents: bool) -> Vec<(usize, KeymapSection)> {
+        let json = format!(
+            r#"[{{"use_key_equivalents": {use_key_equivalents}, "bindings": {{"ctrl-a": "build_test::Alpha"}}}}]"#
+        );
+        crate::file::parse_keymap(&json, KeymapLayer::User)
+            .unwrap()
+            .sections
+    }
+
+    /// Whether typing `ctrl-<key>` runs `Alpha` under a keymap built with the flag set to `flag`.
+    fn fires(cx: &mut TestAppContext, flag: bool, key: &str) -> bool {
+        let built = cx.update(|cx| {
+            build_layer_with(
+                cx,
+                &SwapsAForQ(DummyKeyboardMapper),
+                KeymapLayer::User,
+                &sections(flag),
+            )
+        });
+        assert!(built.diagnostics.is_empty(), "{:?}", built.diagnostics);
+        let mut keymap = Keymap::default();
+        keymap.add_bindings(built.bindings);
+        let typed = Keystroke::parse(&format!("ctrl-{key}")).unwrap();
+        let (matches, _) = keymap.bindings_for_input(&[typed], &[KeyContext::default()]);
+        matches.iter().any(|b| b.action().partial_eq(&Alpha))
+    }
+
+    #[gpui::test]
+    fn use_key_equivalents_reaches_the_keyboard_mapper(cx: &mut TestAppContext) {
+        // Flag on: the layout's mapping applies, so the binding answers to the remapped key.
+        assert!(fires(cx, true, "q"));
+        assert!(!fires(cx, true, "a"));
+        // Flag off: the key is taken literally, whatever the layout.
+        assert!(fires(cx, false, "a"));
+        assert!(!fires(cx, false, "q"));
+    }
 }
