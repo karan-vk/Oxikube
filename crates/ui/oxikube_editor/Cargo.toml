@@ -12,6 +12,17 @@ path = "src/oxikube_editor.rs"
 doctest = false
 
 [dependencies]
+# Spanned YAML 1.2 events for `yaml` (E10-S02); confined to `yaml/parse.rs`.
+granit-parser.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+# `cargo bench -p oxikube_editor --bench yaml_parse` (E10-S02, reused by E10-S11): parse time of a
+# 2k-line manifest and a 5 MB dump.
+[[bench]]
+name = "yaml_parse"
+harness = false
 
 [lints]
 workspace = true
