@@ -15,7 +15,7 @@
 //! | `oxikube_app::sources` | `kubeconfig::AddSource`, `RemoveSource`, `Reload` |
 //! | `oxikube_app::posture` | `cluster::ToggleReadOnly`, `SetColour`, `ApplyPreset` (guarded posture) |
 //! | `oxikube_workspace` | `cluster::Select`, `SwitchTab`, `NextTab`, `PreviousTab`, `CloseTab` |
-//! | `oxikube` | `view::Open` for the catalog home and the kubeconfig sources screen |
+//! | `oxikube` | `view::Open` for the catalog home and the kubeconfig sources screen; `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
 //! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
@@ -84,6 +84,9 @@ pub struct BusParts {
     pub tabs: CommandSink,
     /// Where `view::Open` sends the view to open (applied on the UI thread).
     pub views: mpsc::UnboundedSender<String>,
+    /// The user's `keymap.json` (`None` without a config directory) and where `keymap::OpenUser`
+    /// sends it to be opened (applied on the UI thread).
+    pub keymap: (Option<std::path::PathBuf>, super::keymap::OpenSink),
     /// Where `resource::OpenList` sends the list to open (applied on the UI thread).
     pub kinds: mpsc::UnboundedSender<OpenKind>,
     /// The resource views' queue (the table commands, applied on the UI thread).
@@ -134,7 +137,10 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_workspace", |r| {
         oxikube_workspace::cluster_tab::register_commands(r, parts.tabs)
     })?;
-    registry.install("oxikube", |r| register_view_commands(r, parts.views))?;
+    registry.install("oxikube", |r| {
+        register_view_commands(r, parts.views)?;
+        super::keymap::register_commands(r, parts.keymap.0, parts.keymap.1)
+    })?;
     registry.install(
         "oxikube_app::actions",
         oxikube_app::actions::register_commands,

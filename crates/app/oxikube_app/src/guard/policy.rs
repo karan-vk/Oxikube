@@ -151,6 +151,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PaletteOpenJump
         | Command::HelpShow
         | Command::PaletteToggleShowAll
+        | Command::KeymapOpenUser
         | Command::AppQuit
         | Command::JumpBack
         | Command::JumpForward

@@ -202,6 +202,10 @@ pub enum Command {
     /// reason), or hide them again.
     #[serde(rename = "palette::ToggleShowAll")]
     PaletteToggleShowAll,
+    /// Open the user's `keymap.json` in an editor, creating it from a commented template first
+    /// when it does not exist.
+    #[serde(rename = "keymap::OpenUser")]
+    KeymapOpenUser,
     /// Quit the application; asks first while operations are running.
     #[serde(rename = "app::Quit")]
     AppQuit,
@@ -861,6 +865,7 @@ impl Command {
             Command::PaletteOpenJump => CommandId::PALETTE_OPEN_JUMP,
             Command::HelpShow => CommandId::HELP_SHOW,
             Command::PaletteToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
+            Command::KeymapOpenUser => CommandId::KEYMAP_OPEN_USER,
             Command::AppQuit => CommandId::APP_QUIT,
             Command::JumpBack => CommandId::JUMP_BACK,
             Command::JumpForward => CommandId::JUMP_FORWARD,
@@ -1139,6 +1144,7 @@ mod tests {
             Command::PaletteOpenJump,
             Command::HelpShow,
             Command::PaletteToggleShowAll,
+            Command::KeymapOpenUser,
             Command::AppQuit,
             Command::JumpBack,
             Command::JumpForward,
@@ -1508,6 +1514,7 @@ mod tests {
                     | Command::PaletteOpenJump
                     | Command::HelpShow
                     | Command::PaletteToggleShowAll
+                    | Command::KeymapOpenUser
                     | Command::AppQuit
                     | Command::JumpBack
                     | Command::JumpForward

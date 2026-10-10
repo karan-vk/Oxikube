@@ -678,7 +678,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   "what does this key do in this context stack" as data, for tests and the help overlay. The shipped
   files are checked by `tests/defaults.rs` (no key twice per context, every action a command or view
   navigation, a snapshot per context), `tests/k9s.rs` (the verbs per context and OS) and
-  `tests/dispatch.rs` (precedence, adapted from Zed's keymap tests).
+  `tests/dispatch.rs` (precedence, adapted from Zed's keymap tests). The user's `keymap.json`
+  (E11-S08): a bad binding is skipped and the rest apply, and each problem carries its line
+  (`lines` rescans the parsed text for the line of each section, `context` and binding;
+  `KeymapDiagnostic::line`, shown as `keymap.json:12`). The watcher thread reads *and parses* the
+  file (`ParsedUserKeymap`); the UI thread validates the actions and swaps the keymap in one
+  call (3 ms for 500 bindings in a debug build). Module `events`: `subscribe_diagnostics` raises a
+  `KeymapDiagnosticsEvent` when the list of problems changes (empty once fixed), so the binary
+  shows one toast without a platform-to-ui dependency. `KeybindSource` (= `KeymapLayer`) stays on
+  every binding for the help overlay; `conflicts` lists a key bound twice in one context of a
+  layer. `reload(cx)` is the explicit reload for tests (no watcher thread), `user_keymap_file(cx)`
+  the file's path, and `keymap::OpenUser` the action of the command that creates the file from its
+  commented template and opens it.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's
@@ -821,6 +832,12 @@ weaken `cargo xtask lint-deps`.
   (`oxikube_app::exec::register_command`); the mount gives the service the guard's audit log once the bus is built.
   Views dispatch through `mount::bus::BusDispatcher`, which runs each command on the bus through
   the window's `ClusterCommandRunner` (toasts, confirmations, denials).
+  The user's keymap (E11-S08, `mount::keymap`): `keymap::OpenUser` is registered under `oxikube`
+  (creates `keymap.json` from its template when missing, then the UI thread opens it through
+  `KeymapFileOpener`, the system editor until the manifest editor's JSON mode, E10-S10); the
+  `keymap::OpenUser` action reaches the bus from the active window; and `follow_diagnostics`
+  shows the one persistent toast ("Open keymap" button) for problems in the file and removes it
+  when the file is fixed.
 
 ## App start-up and init order
 

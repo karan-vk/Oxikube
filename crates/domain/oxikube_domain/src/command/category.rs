@@ -20,8 +20,8 @@ pub enum CommandCategory {
     App,
     /// Windows (`window::*`).
     Window,
-    /// Views, zoom, the palette, the jump bar and the key-binding help (`view::*`, `palette::*`,
-    /// `jump::*`, `help::*`).
+    /// Views, zoom, the palette, the jump bar, the key-binding help and the keymap file
+    /// (`view::*`, `palette::*`, `jump::*`, `help::*`, `keymap::*`).
     View,
     /// Clusters and kubeconfig sources (`cluster::*`, `kubeconfig::*`).
     Cluster,
@@ -69,6 +69,7 @@ impl CommandCategory {
             ("palette", CommandCategory::View),
             ("help", CommandCategory::View),
             ("jump", CommandCategory::View),
+            ("keymap", CommandCategory::View),
             ("cluster", CommandCategory::Cluster),
             ("kubeconfig", CommandCategory::Cluster),
             ("namespace", CommandCategory::Namespace),

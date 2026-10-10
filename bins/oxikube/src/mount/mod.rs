@@ -61,6 +61,7 @@ pub mod bus;
 mod describe;
 mod help;
 mod jump;
+pub mod keymap;
 mod logs;
 mod palette;
 mod resources;
@@ -120,6 +121,10 @@ pub struct Wiring {
     _open_links: Task<()>,
     /// Shows the `?` help overlay for `help::Show`. Lives as long as the window.
     _help: Task<()>,
+    /// Opens the `keymap.json` that `keymap::OpenUser` prepared.
+    _open_keymap: Task<()>,
+    /// Shows the toast for problems in the user's `keymap.json` (E11-S08).
+    _follow_keymap: Subscription,
     /// Runs `terminal::Copy` / `terminal::Paste` on the focused terminal. Lives as long as the
     /// window.
     _terminal_input: Task<()>,
@@ -162,6 +167,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // The views' dispatcher: the bus, once it exists (right after the tabs it routes to).
     let bus_dispatcher = bus::BusDispatcher::new(window.window_handle());
     let dispatcher: Rc<dyn CommandDispatcher> = Rc::new(bus_dispatcher.clone());
+    let dispatcher_for_keymap = dispatcher.clone();
 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
@@ -219,6 +225,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (kinds_tx, kinds_rx) = mpsc::unbounded();
     let (resources_sink, resources_rx) = ResourceCommandSink::channel();
     let (logs_sink, logs_rx) = oxikube_logs_ui::LogCommandSink::channel();
+    let (keymap_sink, keymap_rx) = keymap::channel();
     let (links_sink, links_rx) = LinkSink::channel();
     let (terminal_input_sink, terminal_input_rx) = TerminalInputSink::channel();
     let (terminal_views_sink, terminal_views_rx) = TerminalViewSink::channel();
@@ -234,6 +241,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         prefs: Arc::new(SettingsPrefsWriter::new(cx)),
         tabs: sink.clone(),
         views: views_tx,
+        keymap: (oxikube_keymap::user_keymap_file(cx), keymap_sink),
         kinds: kinds_tx,
         resources: resources_sink,
         logs: logs_sink,
@@ -407,6 +415,10 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
     let open_links = terminal::open_links(links_rx, cx);
     let help = help::mount(&workspace, help_rx, window, cx);
+    let open_keymap = keymap::open_requests(keymap_rx, cx);
+    keymap::install_action(window.window_handle(), &dispatcher_for_keymap, cx);
+    let follow_keymap =
+        keymap::follow_diagnostics(workspace.downgrade(), dispatcher_for_keymap, cx);
     let terminal_input = terminal::terminal_input(terminal_input_rx, window, cx);
     let wiring = cx.new(|_| Wiring {
         tabs,
@@ -418,6 +430,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _open_kinds: open_kinds,
         _open_links: open_links,
         _help: help,
+        _open_keymap: open_keymap,
+        _follow_keymap: follow_keymap,
         _terminal_input: terminal_input,
         _resource_views: resource_views,
         _log_views: log_views,

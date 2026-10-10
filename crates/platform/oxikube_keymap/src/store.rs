@@ -9,10 +9,14 @@
 use gpui::{App, KeyBinding};
 use oxikube_assets::KeymapPlatform;
 
+use std::path::{Path, PathBuf};
+
 use crate::build::build_layer;
+use crate::conflicts::{KeymapConflict, find_conflicts};
 use crate::diagnostics::KeymapDiagnostic;
 use crate::file::{KeymapSection, parse_keymap};
 use crate::layer::KeymapLayer;
+use crate::lines::SourceLines;
 
 /// Sections of one layer plus the problems found reading them.
 #[derive(Default)]
@@ -20,6 +24,8 @@ struct LayerState {
     sections: Vec<(usize, KeymapSection)>,
     /// Section problems, plus the whole-file error that made the layer keep older sections.
     parse_diagnostics: Vec<KeymapDiagnostic>,
+    /// Where the sections are in the text, to give later problems their lines.
+    lines: SourceLines,
 }
 
 impl LayerState {
@@ -28,12 +34,28 @@ impl LayerState {
             Ok(parsed) => Self {
                 sections: parsed.sections,
                 parse_diagnostics: parsed.diagnostics,
+                lines: parsed.lines,
             },
             Err(diagnostic) => Self {
                 sections: Vec::new(),
                 parse_diagnostics: vec![diagnostic],
+                lines: SourceLines::default(),
             },
         }
+    }
+}
+
+/// The text of a user `keymap.json`, parsed: JSON with comments to sections, with their lines.
+///
+/// Nothing in it touches GPUI, so it is `Send`: the file watcher builds it on its own thread and
+/// hands it to the UI thread, which only has to validate the actions (they need the app's action
+/// registry) and swap the keymap ([`KeymapStore::set_user_parsed`]).
+pub struct ParsedUserKeymap(LayerState);
+
+impl ParsedUserKeymap {
+    /// Parse `text`, the contents of a `keymap.json` (blank for none).
+    pub fn parse(text: &str) -> Self {
+        Self(LayerState::parse(text, KeymapLayer::User))
     }
 }
 
@@ -69,7 +91,9 @@ pub struct KeymapStore {
     default: LayerState,
     vim: Option<LayerState>,
     user: LayerState,
+    user_path: Option<PathBuf>,
     diagnostics: Vec<KeymapDiagnostic>,
+    conflicts: Vec<KeymapConflict>,
 }
 
 impl KeymapStore {
@@ -83,7 +107,9 @@ impl KeymapStore {
             ),
             vim: None,
             user: LayerState::default(),
+            user_path: None,
             diagnostics: Vec::new(),
+            conflicts: Vec::new(),
         };
         store.set_vim(options.vim);
         store
@@ -119,7 +145,12 @@ impl KeymapStore {
     /// A file that is not valid keeps the previous user sections (and records why); a valid
     /// file with bad sections loads the good ones. Either way the problems are reported.
     pub fn set_user_text(&mut self, text: &str) -> bool {
-        let next = LayerState::parse(text, KeymapLayer::User);
+        self.set_user_parsed(ParsedUserKeymap::parse(text))
+    }
+
+    /// [`Self::set_user_text`] for text that was parsed elsewhere (the watcher's thread).
+    pub fn set_user_parsed(&mut self, parsed: ParsedUserKeymap) -> bool {
+        let next = parsed.0;
         let whole_file_error =
             next.sections.is_empty() && next.parse_diagnostics.iter().any(|d| d.section.is_none());
         if whole_file_error {
@@ -130,6 +161,17 @@ impl KeymapStore {
         let changed = next.sections != self.user.sections;
         self.user = next;
         changed
+    }
+
+    /// Remember where the user's file is (`None` when the keymap has no file, as in memory).
+    pub fn set_user_path(&mut self, path: Option<PathBuf>) {
+        self.user_path = path;
+    }
+
+    /// The user's `keymap.json`, when the keymap was installed from a config directory. The file
+    /// may not exist yet.
+    pub fn user_path(&self) -> Option<&Path> {
+        self.user_path.as_deref()
     }
 
     /// Record that the user file exists but could not be read. The previous user sections stay
@@ -146,6 +188,7 @@ impl KeymapStore {
     pub fn merge(&mut self, cx: &App) -> MergedKeymap {
         let mut bindings = Vec::new();
         let mut diagnostics = Vec::new();
+        let mut conflicts = Vec::new();
         let mut skipped_embedded = 0;
         for layer in KeymapLayer::ORDER {
             let state = match layer {
@@ -156,11 +199,16 @@ impl KeymapStore {
             let Some(state) = state else { continue };
             diagnostics.extend(state.parse_diagnostics.iter().cloned());
             let built = build_layer(cx, layer, &state.sections);
-            diagnostics.extend(built.diagnostics);
+            diagnostics.extend(built.diagnostics.into_iter().map(|mut diagnostic| {
+                diagnostic.locate(&state.lines);
+                diagnostic
+            }));
+            conflicts.extend(find_conflicts(layer, &state.sections, &state.lines));
             skipped_embedded += built.skipped;
             bindings.extend(built.bindings);
         }
         self.diagnostics = diagnostics;
+        self.conflicts = conflicts;
         MergedKeymap {
             bindings,
             skipped_embedded,
@@ -170,5 +218,20 @@ impl KeymapStore {
     /// The problems found by the last merge, for the UI to surface.
     pub fn diagnostics(&self) -> &[KeymapDiagnostic] {
         &self.diagnostics
+    }
+
+    /// The problems of the user's file alone, which is what the notification reports: the
+    /// embedded layers' are bugs of ours, logged, not something for the user to fix.
+    pub fn user_diagnostics(&self) -> Vec<KeymapDiagnostic> {
+        self.diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.layer == KeymapLayer::User)
+            .cloned()
+            .collect()
+    }
+
+    /// Keys given two meanings in one context of one layer by the last merge.
+    pub fn conflicts(&self) -> &[KeymapConflict] {
+        &self.conflicts
     }
 }

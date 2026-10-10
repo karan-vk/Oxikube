@@ -21,7 +21,11 @@
 //!
 //! Module map:
 //! - [`base_keymap`]: the `base_keymap` setting (`default` | `vim`) that drives the vim layer.
-//! - [`mod@file`]: the `keymap.json` format and its lenient parser.
+//! - [`mod@file`]: the `keymap.json` format and its lenient parser; [`lines`]: where each section
+//!   and binding is in the text, for `keymap.json:12` in a diagnostic.
+//! - [`events`]: [`subscribe_diagnostics`], how the binary learns that the user's file has
+//!   problems (it shows one toast); [`conflicts`]: keys bound twice in one context.
+//! - [`actions`]: `keymap::OpenUser`, the action of the command that opens the user's file.
 //! - [`registry`]: [`ActionRegistry`], names by namespace and the action-to-`Command` mapping.
 //! - [`build`]: sections to `KeyBinding`s, with validation.
 //! - [`store`]: [`KeymapStore`], the layers and their merge; [`layer`], [`mod@diagnostics`].
@@ -39,13 +43,17 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod base_keymap;
+pub mod actions;
 pub mod build;
+pub mod conflicts;
 pub mod context;
 pub mod diagnostics;
 pub mod dispatch;
+pub mod events;
 pub mod file;
 pub mod global;
 pub mod layer;
+pub mod lines;
 pub mod paths;
 pub mod query;
 pub mod registry;
@@ -53,19 +61,27 @@ pub mod stands_for;
 pub mod store;
 
 pub use base_keymap::{BaseKeymap, KeymapSettings, KeymapSettingsContent};
+pub use actions::OpenUser;
+pub use conflicts::{ConflictEntry, KeymapConflict};
 pub use context::{KeyContextBuilder, KeyContextual, contexts};
-pub use diagnostics::{KeymapDiagnostic, KeymapProblem};
+pub use diagnostics::{KeymapDiagnostic, KeymapDiagnosticsEvent, KeymapProblem};
 pub use dispatch::{
     ActiveBinding, Resolution, SuppressedBinding, active_bindings, all_bindings, parse_stack,
     resolve, suppressed_bindings,
 };
+pub use events::subscribe_diagnostics;
 pub use file::{KeymapAction, KeymapSection};
 pub use global::{
-    diagnostics, init, init_with_dir, init_with_options, init_with_text, rebind,
-    reload_user_keymap, set_vim_layer,
+    conflicts, diagnostics, init, init_with_dir, init_with_options, init_with_text, rebind, reload,
+    reload_user_keymap, set_vim_layer, user_diagnostics, user_keymap_file,
 };
 pub use layer::KeymapLayer;
+/// Where a resolved binding came from (default, base keymap or the user's file): the layer it was
+/// loaded from, kept on every binding GPUI holds ([`BindingInfo::layer`]) so the help overlay can
+/// mark the ones the user overrode. `Vim` is the base keymap.
+pub type KeybindSource = KeymapLayer;
 pub use oxikube_assets::KeymapPlatform;
+pub use paths::{ensure_user_keymap, user_keymap_path};
 pub use query::{BindingInfo, bindings_for_action, bindings_for_action_name, bindings_for_command};
 pub use registry::ActionRegistry;
-pub use store::{KeymapOptions, KeymapStore};
+pub use store::{KeymapOptions, KeymapStore, ParsedUserKeymap};

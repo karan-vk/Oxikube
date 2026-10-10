@@ -19,6 +19,7 @@ mod view_scope;
 mod view_select;
 mod view_set_filter;
 mod view_states;
+mod view_user_keymap;
 mod view_verbs;
 mod view_vim;
 mod views;

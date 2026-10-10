@@ -84,7 +84,7 @@ impl CommandId {
     /// | id namespace | tool name | example |
     /// |---|---|---|
     /// | `helm`, `argo` | `<ns>.<verb_snake>` | `helm::Rollback` -> `helm.rollback` |
-    /// | app-level (`cluster`, `namespace`, `kubeconfig`, `view`, `palette`, `jump`, `help`, `settings`, `app`, `window`, `terminal`) | `app.<ns>_<verb_snake>` | `cluster::ToggleReadOnly` -> `app.cluster_toggle_read_only` |
+    /// | app-level (`cluster`, `namespace`, `kubeconfig`, `view`, `palette`, `jump`, `help`, `keymap`, `settings`, `app`, `window`, `terminal`) | `app.<ns>_<verb_snake>` | `cluster::ToggleReadOnly` -> `app.cluster_toggle_read_only` |
     /// | everything else (resource verbs) | `k8s.<ns>_<verb_snake>` | `workload::Scale` -> `k8s.workload_scale` |
     ///
     /// Extension tools (`ext.<id>.*`) are not commands and do not go through
@@ -95,6 +95,7 @@ impl CommandId {
         match ns {
             "helm" | "argo" => format!("{ns}.{verb}"),
             "cluster" | "namespace" | "kubeconfig" | "view" | "palette" | "jump" | "help"
+            | "keymap"
             | "settings" | "app" | "window" | "terminal" => {
                 format!("app.{ns}_{verb}")
             }

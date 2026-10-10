@@ -2,9 +2,11 @@
 //! `keymap.json`.
 //!
 //! Start-up reads the (small, local) user file synchronously so the first frame already has the
-//! user's bindings. After that the watcher thread reads the file and the UI thread only parses
-//! and rebinds, which costs well under a millisecond per section (see the `merge_cost` test).
-//! Keystroke dispatch itself is GPUI's and allocates nothing here.
+//! user's bindings. After that the watcher thread reads the file *and parses it* (JSON with
+//! comments to sections, with their lines, [`ParsedUserKeymap`]); the UI thread only checks each
+//! binding against the action registry (which needs the app) and swaps the keymap in one call, a
+//! fraction of a millisecond per ten bindings (see the `reload_cost` test). Keystroke dispatch
+//! itself is GPUI's and allocates nothing here.
 //!
 //! # Init order
 //!
@@ -22,10 +24,11 @@ use gpui::{App, Global, KeyBinding, Task, UpdateGlobal as _};
 use oxikube_settings::paths::config_dir;
 use oxikube_settings::watcher::{DEFAULT_DEBOUNCE, SettingsFileWatcher};
 
+use crate::conflicts::KeymapConflict;
 use crate::diagnostics::KeymapDiagnostic;
 use crate::layer::KeymapLayer;
 use crate::paths::{read_or_empty, user_keymap_path};
-use crate::store::{KeymapOptions, KeymapStore};
+use crate::store::{KeymapOptions, KeymapStore, ParsedUserKeymap};
 
 impl Global for KeymapStore {}
 
@@ -78,6 +81,7 @@ fn install(cx: &mut App, options: KeymapOptions, dir: Option<&Path>, watch: bool
     if let Some(dir) = dir {
         let path = user_keymap_path(dir);
         let text = load_initial(&mut store, &path);
+        store.set_user_path(Some(path.clone()));
         watched = Some((path, text));
     }
     crate::base_keymap::apply_to_new_store(cx, &mut store);
@@ -116,10 +120,11 @@ fn start_watch(cx: &mut App, path: PathBuf, initial_text: String) {
         tracing::warn!(%err, "keymap hot reload is off");
         return;
     }
-    let (tx, mut rx) = mpsc::unbounded::<String>();
+    let (tx, mut rx) = mpsc::unbounded::<ParsedUserKeymap>();
     let watcher =
         match SettingsFileWatcher::spawn(path, initial_text, DEFAULT_DEBOUNCE, move |text| {
-            tx.unbounded_send(text).is_ok()
+            // On the watcher's thread: the parse costs nothing the UI thread sees.
+            tx.unbounded_send(ParsedUserKeymap::parse(&text)).is_ok()
         }) {
             Ok(watcher) => watcher,
             Err(err) => {
@@ -128,8 +133,8 @@ fn start_watch(cx: &mut App, path: PathBuf, initial_text: String) {
             }
         };
     let apply = cx.spawn(async move |cx| {
-        while let Some(text) = rx.next().await {
-            cx.update(|cx| reload_user_keymap(cx, &text));
+        while let Some(parsed) = rx.next().await {
+            cx.update(|cx| apply_parsed(cx, parsed));
         }
     });
     cx.set_global(KeymapWatch {
@@ -141,8 +146,33 @@ fn start_watch(cx: &mut App, path: PathBuf, initial_text: String) {
 /// Apply new `keymap.json` text, as the watcher does: parse, keep the previous keymap when the
 /// text is not valid, otherwise rebind. Reloads that leave the sections equal rebind nothing.
 pub fn reload_user_keymap(cx: &mut App, text: &str) {
-    let changed = KeymapStore::update_global(cx, |store, _| store.set_user_text(text));
+    apply_parsed(cx, ParsedUserKeymap::parse(text));
+}
+
+fn apply_parsed(cx: &mut App, parsed: ParsedUserKeymap) {
+    let changed = KeymapStore::update_global(cx, |store, _| store.set_user_parsed(parsed));
     apply(cx, changed);
+}
+
+/// Read `keymap.json` again and apply it, as the watcher does after a save: the explicit reload
+/// for tests and tools, which run without a watcher. It reads the file on the calling thread, so
+/// the UI never calls it. Does nothing when the keymap has no file (installed from text).
+pub fn reload(cx: &mut App) {
+    let Some(path) = cx
+        .try_global::<KeymapStore>()
+        .and_then(|store| store.user_path().map(Path::to_path_buf))
+    else {
+        return;
+    };
+    match read_or_empty(&path) {
+        Ok(text) => reload_user_keymap(cx, &text),
+        Err(err) => {
+            let reason = std::error::Error::source(&err)
+                .map_or_else(|| err.to_string(), |source| format!("{err}: {source}"));
+            KeymapStore::update_global(cx, |store, _| store.set_user_unreadable(&reason));
+            apply(cx, false);
+        }
+    }
 }
 
 /// Turn the vim layer on or off and rebind. The user-facing flag (a setting) calls this when it
@@ -163,6 +193,17 @@ fn apply(cx: &mut App, rebind: bool) {
     for diagnostic in cx.global::<KeymapStore>().diagnostics() {
         tracing::warn!(%diagnostic, "keymap");
     }
+    for conflict in cx.global::<KeymapStore>().conflicts() {
+        tracing::info!(
+            layer = %conflict.layer,
+            context = conflict.context.as_deref().unwrap_or("(everywhere)"),
+            keystrokes = %conflict.keystrokes,
+            winner = %conflict.winner().action,
+            "the same key is bound more than once; the last binding wins"
+        );
+    }
+    let user = cx.global::<KeymapStore>().user_diagnostics();
+    crate::events::publish(cx, user);
     if merged.skipped_embedded > 0 {
         tracing::debug!(
             skipped = merged.skipped_embedded,
@@ -191,11 +232,35 @@ fn replace_layers(cx: &mut App, bindings: Vec<KeyBinding>) {
     cx.bind_keys(bindings);
 }
 
-/// The problems found by the last load, for a toast or the keymap editor.
+/// The problems found by the last load, in every layer, for the keymap editor.
 pub fn diagnostics(cx: &App) -> Vec<KeymapDiagnostic> {
     cx.try_global::<KeymapStore>()
         .map(|store| store.diagnostics().to_vec())
         .unwrap_or_default()
+}
+
+/// The problems with the user's `keymap.json` found by the last load: what the notification
+/// lists. Read it after subscribing ([`crate::subscribe_diagnostics`]) to catch the start-up load.
+pub fn user_diagnostics(cx: &App) -> Vec<KeymapDiagnostic> {
+    cx.try_global::<KeymapStore>()
+        .map(KeymapStore::user_diagnostics)
+        .unwrap_or_default()
+}
+
+/// Keys bound more than once, to different things, in one context of one layer (the later
+/// binding wins): what the help overlay lists as conflicts.
+pub fn conflicts(cx: &App) -> Vec<KeymapConflict> {
+    cx.try_global::<KeymapStore>()
+        .map(|store| store.conflicts().to_vec())
+        .unwrap_or_default()
+}
+
+/// The user's `keymap.json`, when the keymap was installed from a config directory (the file may
+/// not exist yet; [`crate::ensure_user_keymap`] creates it).
+pub fn user_keymap_file(cx: &App) -> Option<PathBuf> {
+    cx.try_global::<KeymapStore>()?
+        .user_path()
+        .map(Path::to_path_buf)
 }
 
 #[cfg(test)]
