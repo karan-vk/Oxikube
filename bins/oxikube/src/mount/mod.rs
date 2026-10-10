@@ -59,6 +59,7 @@
 
 pub mod bus;
 mod describe;
+mod help;
 mod jump;
 mod logs;
 mod palette;
@@ -117,6 +118,8 @@ pub struct Wiring {
     _open_kinds: Task<()>,
     /// Opens the links `terminal::OpenLink` validated. Lives as long as the window.
     _open_links: Task<()>,
+    /// Shows the `?` help overlay for `help::Show`. Lives as long as the window.
+    _help: Task<()>,
     /// Runs `terminal::Copy` / `terminal::Paste` on the focused terminal. Lives as long as the
     /// window.
     _terminal_input: Task<()>,
@@ -222,6 +225,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (palette_sink, palette_rx) = oxikube_palette::command_palette::PaletteSink::channel();
     let (jump_sink, jump_rx) = oxikube_palette::jump::JumpSink::channel();
     let (quit_sink, quit_rx) = oxikube_workspace::session::QuitSink::channel();
+    let (help_sink, help_rx) = oxikube_palette::help::HelpSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -236,6 +240,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         links: links_sink,
         terminal_input: terminal_input_sink,
         terminal_views: terminal_views_sink.clone(),
+        help: help_sink,
         exec: exec_service.clone(),
         palette: palette_sink,
         jump: jump_sink,
@@ -401,6 +406,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let open_views = open_views(views_rx, view_deps, &workspace, window, cx);
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
     let open_links = terminal::open_links(links_rx, cx);
+    let help = help::mount(&workspace, help_rx, window, cx);
     let terminal_input = terminal::terminal_input(terminal_input_rx, window, cx);
     let wiring = cx.new(|_| Wiring {
         tabs,
@@ -411,6 +417,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _open_views: open_views,
         _open_kinds: open_kinds,
         _open_links: open_links,
+        _help: help,
         _terminal_input: terminal_input,
         _resource_views: resource_views,
         _log_views: log_views,

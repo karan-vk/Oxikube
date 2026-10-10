@@ -55,7 +55,10 @@ pub mod store;
 pub use base_keymap::{BaseKeymap, KeymapSettings, KeymapSettingsContent};
 pub use context::{KeyContextBuilder, KeyContextual, contexts};
 pub use diagnostics::{KeymapDiagnostic, KeymapProblem};
-pub use dispatch::{ActiveBinding, Resolution, active_bindings, parse_stack, resolve};
+pub use dispatch::{
+    ActiveBinding, Resolution, SuppressedBinding, active_bindings, all_bindings, parse_stack,
+    resolve, suppressed_bindings,
+};
 pub use file::{KeymapAction, KeymapSection};
 pub use global::{
     diagnostics, init, init_with_dir, init_with_options, init_with_text, rebind,

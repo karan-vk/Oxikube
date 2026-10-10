@@ -513,3 +513,28 @@ fn a_failed_scope_lookup_is_asked_again_not_remembered(cx: &mut TestAppContext) 
         "a transient failure is not cached as 'kind not served'"
     );
 }
+
+#[gpui::test]
+fn the_close_button_names_its_key_in_its_tooltip(cx: &mut TestAppContext) {
+    // E11-S10: hover the drawer's close button and the tooltip shows the key bound to
+    // `resource_detail::Close` (escape) in the shipped keymap.
+    let mut d = Detail::new(cx, [web_pod(), web_replicaset()]);
+    d.open(&pod_ref("web-0"));
+    d.draw();
+    let at =
+        d.f.vcx
+            .debug_bounds("detail-close")
+            .expect("the close button is on screen")
+            .center();
+    d.f.vcx
+        .simulate_mouse_move(at, None, gpui::Modifiers::default());
+    for _ in 0..2 {
+        d.f.vcx.executor().advance_clock(Duration::from_secs(2));
+        d.draw();
+    }
+    assert!(d.shown("action-tooltip-title"), "the tooltip opened");
+    assert!(
+        d.shown("action-tooltip-key"),
+        "escape is bound to Close in a DetailDrawer"
+    );
+}

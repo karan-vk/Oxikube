@@ -126,7 +126,10 @@ impl<D: PickerDelegate> Picker<D> {
     fn render_row(&self, ix: usize, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
-        let selected = ix == self.delegate.selected_index();
+        // A match the delegate cannot select (a group header) is a label: no hover, no pointer,
+        // no click.
+        let selectable = self.delegate.can_select(ix, window, cx);
+        let selected = selectable && ix == self.delegate.selected_index();
         let content = self.delegate.render_match(ix, selected, window, cx);
         // The outer box spans the list's width (the inset), the inner one is the row itself.
         div()
@@ -142,14 +145,16 @@ impl<D: PickerDelegate> Picker<D> {
                     .items_center()
                     .overflow_hidden()
                     .rounded(u(tokens.radius.sm))
-                    .cursor_pointer()
+                    .when(selectable, |row| row.cursor_pointer())
                     .when(selected, |row| row.bg(colors.element_selected))
-                    .when(!selected, |row| {
+                    .when(selectable && !selected, |row| {
                         row.hover(|style| style.bg(colors.element_hover))
                     })
-                    .on_click(cx.listener(move |picker, event: &ClickEvent, window, cx| {
-                        picker.handle_click(ix, event, window, cx);
-                    }))
+                    .when(selectable, |row| {
+                        row.on_click(cx.listener(move |picker, event: &ClickEvent, window, cx| {
+                            picker.handle_click(ix, event, window, cx);
+                        }))
+                    })
                     .children(content),
             )
             .into_any_element()

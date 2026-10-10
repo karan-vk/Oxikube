@@ -8,11 +8,13 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
-use oxikube_keymap::KeyContextual as _;
+use oxikube_keymap::{KeyContextual as _, contexts};
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
+use oxikube_ui::tooltip::tooltip_for_action;
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
+use super::keys::Close;
 use super::state::{DetailState, Mount};
 use super::tabs::DetailTab;
 use super::view::DetailView;
@@ -145,14 +147,24 @@ impl DetailView {
                             ),
                         )
                         .child(
-                            div().debug_selector(|| "detail-close".to_owned()).child(
-                                Button::new("detail-close")
-                                    .xsmall()
-                                    .ghost()
-                                    .icon(Icon::new(IconName::X).size(u(px(14.))))
-                                    .tooltip("Close")
-                                    .on_click(cx.listener(|this, _, _, cx| this.request_close(cx))),
-                            ),
+                            div()
+                                .id("detail-close")
+                                .debug_selector(|| "detail-close".to_owned())
+                                // Names the key too (`escape`, read from the keymap, E11-S10).
+                                .tooltip(tooltip_for_action(
+                                    "Close",
+                                    &Close,
+                                    Some(contexts::DETAIL_DRAWER),
+                                ))
+                                .child(
+                                    Button::new("detail-close")
+                                        .xsmall()
+                                        .ghost()
+                                        .icon(Icon::new(IconName::X).size(u(px(14.))))
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.request_close(cx)),
+                                        ),
+                                ),
                         )
                     }),
             )

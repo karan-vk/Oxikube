@@ -18,14 +18,17 @@ mod overflow;
 mod picker;
 
 use gpui::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
-    div, px,
+    Action, AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _,
+    StatefulInteractiveElement as _, Styled as _, div, px,
 };
+use oxikube_keymap::contexts;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{Selectable as _, h_flex};
+use oxikube_ui::tooltip::tooltip_for_action;
 use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
 
 use super::LogView;
+use super::actions::{Find, ToggleAutoscroll, TogglePrevious, ToggleWrap};
 
 impl LogView {
     pub(crate) fn toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -59,27 +62,25 @@ impl LogView {
             .child(self.range_menu(cx))
             .child(div().flex_1())
             .child(self.toggle(
-                "log-find",
-                "Search",
+                Toggle::new("log-find", "Search", &Find),
                 self.search.state.is_open(),
                 cx,
                 |view, cx| view.request_find(cx),
             ))
             .child(self.toggle(
-                "log-previous",
-                "Previous",
+                Toggle::new("log-previous", "Previous", &TogglePrevious),
                 self.options.previous,
                 cx,
                 |view, cx| view.request_previous(cx),
             ))
-            .child(
-                self.toggle("log-wrap", "Wrap", self.options.wrap, cx, |view, cx| {
-                    view.request_wrap(cx)
-                }),
-            )
             .child(self.toggle(
-                "log-autoscroll",
-                "Autoscroll",
+                Toggle::new("log-wrap", "Wrap", &ToggleWrap),
+                self.options.wrap,
+                cx,
+                |view, cx| view.request_wrap(cx),
+            ))
+            .child(self.toggle(
+                Toggle::new("log-autoscroll", "Autoscroll", &ToggleAutoscroll),
                 self.follow.is_on(),
                 cx,
                 |view, cx| view.request_autoscroll(cx),
@@ -107,17 +108,25 @@ impl LogView {
         }
     }
 
+    /// A toggle button of the primary row. Its tooltip names the key that does the same
+    /// (E11-S10): the binding is read from the keymap when the tooltip opens, so a rebind shows.
     fn toggle(
         &self,
-        id: &'static str,
-        label: &'static str,
+        toggle: Toggle,
         on: bool,
         cx: &mut Context<Self>,
         request: fn(&mut LogView, &mut Context<LogView>),
     ) -> AnyElement {
+        let Toggle { id, label, action } = toggle;
         div()
+            .id(id)
             .flex_none()
             .debug_selector(move || id.to_owned())
+            .tooltip(tooltip_for_action(
+                label,
+                action.as_ref(),
+                Some(contexts::LOGS),
+            ))
             .child(
                 Button::new(id)
                     .label(label)
@@ -127,5 +136,22 @@ impl LogView {
                     .on_click(cx.listener(move |view, _, _, cx| request(view, cx))),
             )
             .into_any_element()
+    }
+}
+
+/// What a toggle of the primary row is: its id, its label and the action its key runs.
+struct Toggle {
+    id: &'static str,
+    label: &'static str,
+    action: Box<dyn Action>,
+}
+
+impl Toggle {
+    fn new(id: &'static str, label: &'static str, action: &dyn Action) -> Self {
+        Self {
+            id,
+            label,
+            action: action.boxed_clone(),
+        }
     }
 }

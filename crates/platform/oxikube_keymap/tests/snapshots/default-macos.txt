@@ -39,6 +39,7 @@
   up               catalog::SelectPrevious
 [Catalog && !Input]
   /                catalog::FocusSearch
+  ?                help::Show
   end              catalog::SelectLast
   enter            catalog::ConnectSelected
   home             catalog::SelectFirst
@@ -186,3 +187,5 @@
 [Terminal || ManifestEditor || Palette || JumpBar || Input || Editing]
   :                null
   ?                null
+[(Help && empty) > Input]
+  ?                help::Show

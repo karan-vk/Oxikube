@@ -295,3 +295,66 @@ fn the_oldest_row_on_screen_is_whole_under_the_toolbar(cx: &mut TestAppContext) 
     );
     fx.vcx.update(|_, cx| set_ui_scale(cx, UiScale::IDENTITY));
 }
+
+/// Hovers the control `selector`, long enough for its tooltip to open.
+fn hover(fx: &mut Fx, selector: &'static str) {
+    let at = bounds(fx, selector).center();
+    fx.vcx
+        .simulate_mouse_move(at, None, gpui::Modifiers::default());
+    for _ in 0..2 {
+        fx.vcx
+            .executor()
+            .advance_clock(std::time::Duration::from_secs(2));
+        fx.draw();
+    }
+}
+
+#[gpui::test]
+fn the_toggles_name_their_keys_in_their_tooltips(cx: &mut TestAppContext) {
+    // E11-S10: hover a primary-row button and its tooltip carries the binding of the action.
+    let mut fx = Fx::new(cx);
+    let _view = open(&mut fx);
+    fx.draw();
+    for selector in ["log-find", "log-previous", "log-wrap", "log-autoscroll"] {
+        hover(&mut fx, selector);
+        assert!(
+            fx.drawn("action-tooltip-title"),
+            "{selector}: the tooltip opened"
+        );
+        assert!(
+            fx.drawn("action-tooltip-key"),
+            "{selector}: the shipped keymap binds its action, so its key is shown"
+        );
+        // Away again: the tooltip closes before the next control.
+        fx.vcx.simulate_mouse_move(
+            gpui::point(px(1.), px(1.)),
+            None,
+            gpui::Modifiers::default(),
+        );
+        fx.vcx
+            .executor()
+            .advance_clock(std::time::Duration::from_secs(2));
+        fx.draw();
+    }
+}
+
+#[gpui::test]
+fn a_rebind_changes_the_key_the_tooltip_shows(cx: &mut TestAppContext) {
+    let mut fx = Fx::new(cx);
+    let _view = open(&mut fx);
+    fx.draw();
+    // Unbinding Wrap's key leaves the tooltip with its title alone.
+    fx.vcx.update(|_, cx| {
+        oxikube_keymap::reload_user_keymap(
+            cx,
+            r#"[{ "context": "LogView && !Editing", "bindings": { "w": null } }]"#,
+        )
+    });
+    fx.settle();
+    hover(&mut fx, "log-wrap");
+    assert!(fx.drawn("action-tooltip-title"));
+    assert!(
+        !fx.drawn("action-tooltip-key"),
+        "no binding, no key in the tooltip"
+    );
+}
