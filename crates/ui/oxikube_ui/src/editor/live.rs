@@ -41,13 +41,7 @@ impl EditorApi for LiveEditor<'_, '_> {
     }
 
     fn set_text(&mut self, text: &str) {
-        let text = text.to_owned();
-        let window = &mut *self.window;
-        self.editor.state.update(self.cx, |state, cx| {
-            let offset = state.scroll_offset();
-            state.set_value(text, window, cx);
-            state.set_scroll_offset(offset, cx);
-        });
+        super::set_text(&self.editor.state, text, self.window, self.cx);
         // `set_value` emits no change event: count it here.
         self.editor.changed(self.cx);
     }

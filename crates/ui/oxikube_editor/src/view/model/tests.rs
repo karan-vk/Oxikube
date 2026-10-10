@@ -191,17 +191,6 @@ fn a_kind_the_cluster_lacks_is_known_as_schemaless_and_failures_are_kept() {
 }
 
 #[test]
-fn toggles_flip_the_editor() {
-    let mut editor = FakeEditor::default();
-    let mut model = ManifestModel::new();
-    assert!(model.toggle_read_only(&mut editor));
-    assert!(editor.read_only);
-    assert!(!model.toggle_read_only(&mut editor));
-    assert!(model.toggle_soft_wrap(&mut editor));
-    assert!(editor.soft_wrap);
-}
-
-#[test]
 fn syntax_errors_show_without_any_schema() {
     let mut editor = FakeEditor::with_text("kind: [\n");
     let mut model = ManifestModel::new();

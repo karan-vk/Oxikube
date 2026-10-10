@@ -56,7 +56,7 @@ pub fn validate_text(version: u64, text: Arc<str>, known: &KnownSchemas) -> Vali
 }
 
 /// The editor's form of a validator finding.
-pub fn to_editor(found: &validate::Diagnostic) -> EditorDiagnostic {
+fn to_editor(found: &validate::Diagnostic) -> EditorDiagnostic {
     let level = match found.severity {
         Severity::Error => DiagnosticLevel::Error,
         Severity::Warning => DiagnosticLevel::Warning,

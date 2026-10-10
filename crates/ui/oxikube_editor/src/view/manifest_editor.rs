@@ -104,18 +104,20 @@ impl ManifestEditor {
 
     /// Makes the buffer read-only, or editable again (`editor::ToggleReadOnly`).
     pub fn toggle_read_only(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let model = &mut self.model;
         self.editor.update(cx, |editor, cx| {
-            model.toggle_read_only(&mut editor.api(window, cx));
+            let mut api = editor.api(window, cx);
+            let read_only = !api.is_read_only();
+            api.set_read_only(read_only);
         });
         cx.notify();
     }
 
     /// Wraps long lines, or lets them scroll sideways (`editor::ToggleSoftWrap`).
     pub fn toggle_soft_wrap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let model = &mut self.model;
         self.editor.update(cx, |editor, cx| {
-            model.toggle_soft_wrap(&mut editor.api(window, cx));
+            let mut api = editor.api(window, cx);
+            let wrap = !api.soft_wrap();
+            api.set_soft_wrap(wrap);
         });
         cx.notify();
     }
@@ -172,13 +174,13 @@ impl ManifestEditor {
             }) else {
                 return;
             };
-            let result = cx
+            let mut result = cx
                 .background_spawn(async move {
                     validate_text(snapshot.version(), snapshot.to_text(), &known)
                 })
                 .await;
             let _ = this.update_in(cx, |view, window, cx| {
-                let missing = result.missing.clone();
+                let missing = std::mem::take(&mut result.missing);
                 let model = &mut view.model;
                 view.editor.update(cx, |editor, cx| {
                     model.accept(&mut editor.api(window, cx), result);
@@ -193,18 +195,15 @@ impl ManifestEditor {
 
     /// Fetches `gvk`'s schema off the UI thread and validates again when it arrives.
     fn fetch_schema(&mut self, gvk: Gvk, window: &mut Window, cx: &mut Context<Self>) {
-        let source = self.schemas.clone();
-        let port = source.as_ref().and_then(|source| source.port(cx));
-        let (Some(source), Some(port), Some(_)) = (source, port, oxikube_runtime::mode(cx)) else {
-            // No cluster: syntax only. Not connected yet: asked again on the next validation.
-            let outcome = match self.schemas {
-                None => Err(OxiError::not_found("no cluster")),
-                Some(_) => {
-                    self.model.forget_fetch(&gvk);
-                    return;
-                }
-            };
-            self.model.schema_arrived(gvk, outcome);
+        let Some(source) = self.schemas.clone() else {
+            // No cluster: syntax only.
+            self.model
+                .schema_arrived(gvk, Err(OxiError::not_found("no cluster")));
+            return;
+        };
+        let (Some(port), Some(_)) = (source.port(cx), oxikube_runtime::mode(cx)) else {
+            // Not connected yet: asked again on the next validation.
+            self.model.forget_fetch(&gvk);
             return;
         };
         let cluster = source.cluster().clone();
