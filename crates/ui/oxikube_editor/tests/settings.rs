@@ -284,8 +284,15 @@ fn validation_can_be_turned_off_and_on_live(cx: &mut TestAppContext) {
     let problems = f.vcx.read(|cx| editor.read(cx).model().problems());
     assert_eq!((problems.errors, problems.warnings), (0, 0));
 
+    let (_, _, version_before, _) = f.code_state(&editor);
     f.vcx.simulate_input("# note\n");
     f.advance(VALIDATION_DEBOUNCE * 2);
+    let (_, _, version_after, typed) = f.code_state(&editor);
+    assert_ne!(
+        version_after, version_before,
+        "the typing reached the editor"
+    );
+    assert!(typed.contains("# note"), "{typed}");
     assert_eq!(
         f.squiggles(&editor),
         0,
@@ -294,7 +301,7 @@ fn validation_can_be_turned_off_and_on_live(cx: &mut TestAppContext) {
     assert_eq!(
         f.port.recorded_calls().len(),
         calls,
-        "and no schema is asked for"
+        "no schema is asked for (the cached ConfigMap schema would not be asked for anyway)"
     );
 
     f.settings(r#"{ "editor": { "validation": true } }"#);
@@ -390,22 +397,44 @@ fn a_rejected_value_is_told_in_one_notice_that_names_the_default(cx: &mut TestAp
     assert!(message.contains("oxikube"), "names the default: {message}");
     assert!(!message.contains("has space"), "never echoes the value");
 
-    // The defaults were used, and an unrelated settings change does not repeat the notice.
+    // The defaults were used, and an unrelated settings change does not repeat the notice. The
+    // toast carries a key (a repeated push would replace it, not add a second), so the first one
+    // is dismissed: a repeat would then bring it back.
     let settings = f.vcx.read(|cx| EditorSettings::resolve(None, cx).clone());
     assert_eq!(
         (settings.tab_size, settings.field_manager.as_str()),
         (2, "oxikube")
     );
+    let dismiss = |f: &mut Fixture| {
+        let layer = f.vcx.read(|cx| f.workspace.read(cx).toast_layer().clone());
+        f.vcx
+            .update(|_, cx| layer.update(cx, |layer, cx| layer.dismiss_key("editor-settings", cx)))
+    };
+    assert!(dismiss(&mut f), "the notice was on screen");
     f.settings(
         r#"{ "editor": { "tab_size": -2, "field_manager": "has space" }, "ui_scale": 1.0 }"#,
     );
-    assert_eq!(toasts(&mut f).len(), 1);
+    f.vcx.run_until_parked();
+    assert!(
+        toasts(&mut f).is_empty(),
+        "an unrelated change does not tell it again: {:?}",
+        toasts(&mut f)
+    );
 
-    // Fixing the file clears the problems; nothing new is shown.
+    // Fixing the file clears the problems; nothing is shown.
     f.settings(r#"{ "editor": { "tab_size": 4 } }"#);
+    f.vcx.run_until_parked();
     assert_eq!(
         f.vcx.read(|cx| EditorSettings::resolve(None, cx).tab_size),
         4
     );
+    assert!(toasts(&mut f).is_empty(), "no problems, no notice");
+
+    // The same mistake made again is news again.
+    f.settings(r#"{ "editor": { "tab_size": -2 } }"#);
+    f.vcx.run_until_parked();
+    let again = toasts(&mut f);
+    assert_eq!(again.len(), 1, "{again:?}");
+    assert!(again[0].message.to_string().contains("editor.tab_size"));
     drop(views);
 }
