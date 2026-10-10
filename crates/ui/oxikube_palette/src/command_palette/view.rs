@@ -41,11 +41,8 @@ impl CommandPalette {
 
     /// Lists the unavailable commands too, or hides them again (`palette::ToggleShowAll`).
     pub fn toggle_show_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.picker.update(cx, |picker, cx| {
-            picker.delegate.show_all = !picker.delegate.show_all;
-            picker.refresh(window, cx);
-            cx.notify();
-        });
+        self.picker
+            .update(cx, |picker, cx| picker.toggle_show_all(window, cx));
     }
 }
 

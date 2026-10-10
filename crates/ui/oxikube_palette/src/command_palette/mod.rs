@@ -59,7 +59,7 @@ mod tests;
 pub use capture::{Captured, capture, selection_of};
 pub use delegate::{CommandPaletteDelegate, Outbox, PaletteParts};
 pub use env::PaletteEnv;
-pub use host::{PaletteHost, PaletteRequest, PaletteSink, host_of, register_commands};
+pub use host::{PaletteHost, PaletteRequest, PaletteSink, register_commands};
 pub use rows::{Found, Row, Snapshot};
 pub use view::CommandPalette;
 

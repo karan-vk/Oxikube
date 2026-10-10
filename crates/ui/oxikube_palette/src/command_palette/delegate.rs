@@ -113,6 +113,15 @@ impl CommandPaletteDelegate {
     }
 }
 
+impl Picker<CommandPaletteDelegate> {
+    /// Lists the unavailable commands too, or hides them again, and re-matches the query.
+    pub(super) fn toggle_show_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.delegate.show_all = !self.delegate.show_all;
+        self.refresh(window, cx);
+        cx.notify();
+    }
+}
+
 impl PickerDelegate for CommandPaletteDelegate {
     type ListItem = gpui::Stateful<gpui::Div>;
 

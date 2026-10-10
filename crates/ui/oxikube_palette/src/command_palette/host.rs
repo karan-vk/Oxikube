@@ -159,13 +159,7 @@ impl PaletteHost {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
-        let open = workspace
-            .read(cx)
-            .modal_layer()
-            .read(cx)
-            .active_modal::<CommandPalette>()
-            .is_some();
-        if open {
+        if open_palette(&workspace, cx).is_some() {
             workspace.update(cx, |workspace, cx| workspace.hide_modal(window, cx));
             return;
         }
@@ -199,8 +193,7 @@ impl PaletteHost {
             if *event != ModalLayerEvent::Hidden {
                 return;
             }
-            let commands: Vec<Command> = outbox.take();
-            for command in commands {
+            for command in outbox.take() {
                 dispatcher.dispatch(command, cx);
             }
         });
@@ -212,12 +205,7 @@ impl PaletteHost {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
-        let palette = workspace
-            .read(cx)
-            .modal_layer()
-            .read(cx)
-            .active_modal::<CommandPalette>();
-        if let Some(palette) = palette {
+        if let Some(palette) = open_palette(&workspace, cx) {
             palette.update(cx, |palette, cx| palette.toggle_show_all(window, cx));
         }
     }
@@ -242,6 +230,18 @@ impl PaletteHost {
     }
 }
 
+/// The palette open in `workspace`'s modal layer, if any.
+fn open_palette(
+    workspace: &gpui::Entity<Workspace>,
+    cx: &App,
+) -> Option<gpui::Entity<CommandPalette>> {
+    workspace
+        .read(cx)
+        .modal_layer()
+        .read(cx)
+        .active_modal::<CommandPalette>()
+}
+
 /// The palettes of the open windows.
 #[derive(Default)]
 struct Hosts(HashMap<WindowId, Rc<PaletteHost>>);
@@ -264,11 +264,6 @@ fn active_host(cx: &App) -> Option<(gpui::AnyWindowHandle, Rc<PaletteHost>)> {
     let mut windows = cx.windows().into_iter().filter_map(pick);
     let only = windows.next()?;
     windows.next().is_none().then_some(only)
-}
-
-/// The host of `window`, for the binary and tests.
-pub fn host_of(window: WindowId, cx: &App) -> Option<Rc<PaletteHost>> {
-    cx.try_global::<Hosts>()?.0.get(&window).cloned()
 }
 
 /// Binds the `palette::Toggle` action: it opens the palette of the active window. The key itself

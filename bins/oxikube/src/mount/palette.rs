@@ -7,6 +7,7 @@
 //! [`BusDispatcher`](super::bus::BusDispatcher), exactly like a key or a button.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{App, Entity, Task, WeakEntity, Window};
@@ -14,7 +15,6 @@ use oxikube_app::{ActionContext, ClusterSessionManager, CommandBus, RecentsStore
 use oxikube_domain::ids::ClusterId;
 use oxikube_palette::command_palette::{PaletteEnv, PaletteHost, PaletteRequest};
 use oxikube_workspace::{ClusterTabs, CommandDispatcher, Workspace};
-use std::sync::Arc;
 
 /// The session facts the palette reads when it opens: the shown cluster's tab and its session.
 struct MountEnv {

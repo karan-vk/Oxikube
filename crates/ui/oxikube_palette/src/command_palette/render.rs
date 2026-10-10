@@ -123,9 +123,7 @@ impl CommandPaletteDelegate {
                     .hover(|style| style.bg(colors.element_hover))
                     .text_color(if on { colors.text } else { colors.text_muted })
                     .on_click(cx.listener(|picker, _, window, cx| {
-                        picker.delegate.show_all = !picker.delegate.show_all;
-                        picker.refresh(window, cx);
-                        cx.notify();
+                        picker.toggle_show_all(window, cx);
                     }))
                     .child(
                         Icon::new(if on {

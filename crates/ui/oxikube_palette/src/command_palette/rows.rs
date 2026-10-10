@@ -105,11 +105,10 @@ pub struct Found {
 /// (most recent first), then the display order. An empty query scores every command alike, so it
 /// lists the recent commands first and the rest by category and title.
 pub fn order(
-    matches: Vec<StringMatch>,
+    mut matches: Vec<StringMatch>,
     rows: &[Row],
     recent: &HashMap<CommandId, usize>,
 ) -> Vec<Found> {
-    let mut matches = matches;
     // Stable: ties keep the candidates' (display) order.
     matches.sort_by_key(|found| {
         let rank = recent.get(&rows[found.candidate_id].info.id()).copied();
