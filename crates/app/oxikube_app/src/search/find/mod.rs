@@ -3,7 +3,7 @@
 //!
 //! | Module | Holds |
 //! |---|---|
-//! | `query` | [`FindQuery`]: a pattern compiled once (a plain substring, or a regex when it has regex syntax; case-insensitive); [`TextSource`], [`find_in_text`], [`find_lines`] |
+//! | `query` | [`FindQuery`]: a pattern compiled once (a plain substring, or a regex when it has regex syntax; case-insensitive); [`find_in_text`]: the byte ranges of its matches in a text |
 //! | `navigator` | [`MatchList`], [`next_match`], [`previous_match`]: the rule; [`FindNavigator`]: the matches of one text and the current one |
 //!
 //! # The rule
@@ -16,11 +16,11 @@
 //! match that is gone (a log line the ring dropped) is skipped by position, not by index.
 //!
 //! The log view's [`MatchIndex`](crate::logs::MatchIndex) keeps its sequence numbers in a
-//! list and calls [`next_match`] and [`previous_match`] on it; the YAML and Describe tabs of the resource detail
-//! hold a [`FindNavigator`]. The editor (E10) takes the same helper when it gets a search bar:
-//! give it [`find_in_text`]'s ranges.
+//! list and calls [`next_match`] and [`previous_match`] on it; the YAML and Describe tabs of the
+//! resource detail hold a [`FindNavigator`] over [`find_in_text`]'s ranges. The editor (E10) takes
+//! the same helper when it gets a search bar.
 //!
-//! Plain Rust, no gpui: a text source is a trait, so the tests use a fake.
+//! Plain Rust, no gpui.
 
 mod navigator;
 mod query;
@@ -29,4 +29,4 @@ mod query;
 mod tests;
 
 pub use navigator::{FindNavigator, MatchList, next_match, previous_match};
-pub use query::{FindMatches, FindQuery, MAX_MATCHES, TextSource, find_in_text, find_lines};
+pub use query::{FindMatches, FindQuery, MAX_MATCHES, find_in_text};

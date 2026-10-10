@@ -7,7 +7,6 @@
 
 use std::time::Duration;
 
-use super::chip::render_error_chip;
 use gpui::{
     AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable,
     InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
@@ -17,6 +16,8 @@ use oxikube_app::search::filter::{FilterError, FilterParts, FilterState};
 use oxikube_ui::input::{Input, InputEvent, InputState};
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
+
+use super::chip::render_error_chip;
 
 /// How long a client-side edit waits for more typing: about one frame at 60 Hz. The first
 /// keystroke after a pause is applied at once, so typing feels instant.

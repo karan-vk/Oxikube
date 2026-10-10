@@ -1,41 +1,28 @@
-//! The find rule, the scans and the navigator, over a fake text source.
-
-use std::borrow::Cow;
+//! The find rule, the scan and the navigator.
 
 use super::{
-    FindNavigator, FindQuery, MAX_MATCHES, TextSource, find_in_text, find_lines, next_match,
-    previous_match,
+    FindMatches, FindNavigator, FindQuery, MAX_MATCHES, find_in_text, next_match, previous_match,
 };
 use crate::search::filter::FilterError;
 
-/// A text source that counts the lines it was asked for.
-struct Fake {
-    lines: Vec<&'static str>,
-    reads: std::cell::Cell<usize>,
-}
-
-impl Fake {
-    fn new(lines: &[&'static str]) -> Self {
-        Self {
-            lines: lines.to_vec(),
-            reads: std::cell::Cell::new(0),
-        }
-    }
-}
-
-impl TextSource for Fake {
-    fn line_count(&self) -> usize {
-        self.lines.len()
-    }
-
-    fn line(&self, index: usize) -> Option<Cow<'_, str>> {
-        self.reads.set(self.reads.get() + 1);
-        self.lines.get(index).map(|l| Cow::Borrowed(*l))
-    }
-}
-
 fn query(text: &str) -> FindQuery {
     FindQuery::new(text).expect("compiles").expect("not empty")
+}
+
+fn ranges_in(query: &FindQuery, line: &str) -> Vec<std::ops::Range<usize>> {
+    let mut out = Vec::new();
+    query.ranges_in(line, &mut out);
+    out
+}
+
+/// A navigator over the start of every match of a scan, as the detail builds it.
+fn navigator(found: &FindMatches) -> FindNavigator {
+    let mut nav = FindNavigator::new();
+    nav.set(
+        found.ranges.iter().map(|r| r.start as u64).collect(),
+        found.truncated,
+    );
+    nav
 }
 
 #[test]
@@ -50,15 +37,11 @@ fn an_empty_query_finds_nothing_and_a_bad_one_is_an_error() {
 
 #[test]
 fn text_matches_as_a_case_insensitive_substring_and_regex_syntax_as_a_regex() {
-    let q = query("a.b");
-    assert!(q.is_match("xA-Bx") || q.is_match("xa.bx"), "a regex dot");
-    let literal = query("web");
-    assert!(literal.is_match("my-WEB-1"));
-    let mut out = Vec::new();
-    literal.ranges_in("web web", &mut out);
-    assert_eq!(out, [0..3, 4..7]);
-    // A literal that would be regex syntax if it were not escaped for substrings.
-    assert!(query("pod-1").is_match("pod-1"));
+    let regex = query("a.b");
+    assert_eq!(ranges_in(&regex, "xA-Bx"), [1..4], "a regex dot");
+    assert_eq!(ranges_in(&regex, "xa.bx"), [1..4]);
+    assert_eq!(ranges_in(&query("web"), "web WEB"), [0..3, 4..7]);
+    assert_eq!(ranges_in(&query("pod-1"), "my-pod-1"), [3..8]);
 }
 
 #[test]
@@ -74,15 +57,6 @@ fn find_in_text_reports_ranges_into_the_whole_text() {
 }
 
 #[test]
-fn find_lines_reports_the_line_of_each_match() {
-    let fake = Fake::new(&["alpha", "beta", "alphabet", "gamma"]);
-    let found = find_lines(&fake, &query("alpha"));
-    assert_eq!(found.lines, [0, 2]);
-    assert_eq!(found.ranges, [0..5, 0..5]);
-    assert_eq!(fake.reads.get(), 4, "every line read once");
-}
-
-#[test]
 fn a_scan_is_capped() {
     let text = "a".repeat(MAX_MATCHES * 3);
     let found = find_in_text(&text, &query("a"));
@@ -92,32 +66,32 @@ fn a_scan_is_capped() {
 
 #[test]
 fn next_and_previous_wrap_around() {
-    let list: Vec<u64> = vec![10, 20, 30];
+    let list: &[u64] = &[10, 20, 30];
     // From nothing: next starts at the anchor, previous at the last.
-    assert_eq!(next_match(&list, None, 15), Some(20));
-    assert_eq!(next_match(&list, None, 20), Some(20));
-    assert_eq!(next_match(&list, None, 99), Some(10), "nothing after: wrap");
-    assert_eq!(previous_match(&list, None), Some(30));
+    assert_eq!(next_match(list, None, 15), Some(20));
+    assert_eq!(next_match(list, None, 20), Some(20));
+    assert_eq!(next_match(list, None, 99), Some(10), "nothing after: wrap");
+    assert_eq!(previous_match(list, None), Some(30));
     // Walking forward wraps from the last to the first.
-    assert_eq!(next_match(&list, Some(10), 0), Some(20));
-    assert_eq!(next_match(&list, Some(20), 0), Some(30));
-    assert_eq!(next_match(&list, Some(30), 0), Some(10));
+    assert_eq!(next_match(list, Some(10), 0), Some(20));
+    assert_eq!(next_match(list, Some(20), 0), Some(30));
+    assert_eq!(next_match(list, Some(30), 0), Some(10));
     // And backward from the first to the last.
-    assert_eq!(previous_match(&list, Some(30)), Some(20));
-    assert_eq!(previous_match(&list, Some(10)), Some(30));
+    assert_eq!(previous_match(list, Some(30)), Some(20));
+    assert_eq!(previous_match(list, Some(10)), Some(30));
     // A current match that is gone is skipped by position.
-    assert_eq!(next_match(&list, Some(15), 0), Some(20));
-    assert_eq!(previous_match(&list, Some(15)), Some(10));
+    assert_eq!(next_match(list, Some(15), 0), Some(20));
+    assert_eq!(previous_match(list, Some(15)), Some(10));
     // No matches: nowhere to go.
-    let none: Vec<u64> = Vec::new();
-    assert_eq!(next_match(&none, None, 0), None);
-    assert_eq!(previous_match(&none, Some(3)), None);
+    let none: &[u64] = &[];
+    assert_eq!(next_match(none, None, 0), None);
+    assert_eq!(previous_match(none, Some(3)), None);
 }
 
 #[test]
-fn n_wraps_at_the_last_match_on_a_fake_source() {
-    let fake = Fake::new(&["error a", "ok", "error b", "ok", "error c"]);
-    let mut nav = FindNavigator::from_matches(&find_lines(&fake, &query("error")));
+fn n_wraps_at_the_last_match() {
+    let mut nav = FindNavigator::new();
+    nav.set(vec![0, 2, 4], false);
     assert_eq!(nav.len(), 3);
     assert_eq!(nav.position(), None, "none is current until n is pressed");
 
@@ -142,9 +116,9 @@ fn n_wraps_at_the_last_match_on_a_fake_source() {
 #[test]
 fn n_and_shift_n_on_a_text_with_two_matches_per_line_stop_at_each() {
     let text = "web web\nx\nweb\n";
-    let mut nav = FindNavigator::from_matches(&find_in_text(text, &query("web")));
-    let starts: Vec<usize> = (0..4).filter_map(|_| nav.next(0)).collect();
-    assert_eq!(starts, [0, 1, 2, 0], "three stops, then the wrap");
+    let mut nav = navigator(&find_in_text(text, &query("web")));
+    let stops: Vec<usize> = (0..4).filter_map(|_| nav.next(0)).collect();
+    assert_eq!(stops, [0, 1, 2, 0], "three stops, then the wrap");
 }
 
 #[test]

@@ -2,8 +2,6 @@
 
 use std::collections::VecDeque;
 
-use super::query::FindMatches;
-
 /// Sorted match positions: a log's sequence numbers, line numbers, or the starting bytes of the
 /// matches in a text.
 pub trait MatchList {
@@ -14,16 +12,6 @@ pub trait MatchList {
 }
 
 impl MatchList for [u64] {
-    fn count(&self) -> usize {
-        self.len()
-    }
-
-    fn at(&self, index: usize) -> Option<u64> {
-        self.get(index).copied()
-    }
-}
-
-impl MatchList for Vec<u64> {
     fn count(&self) -> usize {
         self.len()
     }
@@ -84,8 +72,7 @@ pub fn previous_match(list: &(impl MatchList + ?Sized), current: Option<u64>) ->
 
 /// The matches of one text and the one the user is on: what a view keeps for `n` / `N`.
 ///
-/// A view builds it from a scan ([`FindNavigator::from_matches`] or [`FindNavigator::set`]), asks
-/// for [`next`](Self::next) / [`previous`](Self::previous) and draws [`position`](Self::position)
+/// A view hands it the start of every match of a scan ([`FindNavigator::set`]), asks for [`next`](Self::next) / [`previous`](Self::previous) and draws [`position`](Self::position)
 /// as `3 / 12`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FindNavigator {
@@ -98,24 +85,6 @@ impl FindNavigator {
     /// No matches.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// The navigator over the matches of a scan, positioned on none. The position of a match is
-    /// where it starts in the text (for [`find_in_text`](super::find_in_text)) or its line (for
-    /// [`find_lines`](super::find_lines)).
-    pub fn from_matches(found: &FindMatches) -> Self {
-        let mut positions: Vec<u64> = if found.lines.is_empty() {
-            found.ranges.iter().map(|r| r.start as u64).collect()
-        } else {
-            found.lines.iter().map(|&line| line as u64).collect()
-        };
-        // Two matches on one line are one stop for a line-based scan.
-        positions.dedup();
-        Self {
-            positions,
-            current: None,
-            truncated: found.truncated,
-        }
     }
 
     /// Replaces the matches (sorted positions). The current match is kept when its position is
@@ -167,13 +136,13 @@ impl FindNavigator {
     /// Goes to the next match (see the [module](super) rule) and returns its index; `anchor` is
     /// where to start when no match is current.
     pub fn next(&mut self, anchor: u64) -> Option<usize> {
-        let to = next_match(&self.positions, self.current(), anchor)?;
+        let to = next_match(self.positions.as_slice(), self.current(), anchor)?;
         self.go(to)
     }
 
     /// Goes to the previous match and returns its index.
     pub fn previous(&mut self) -> Option<usize> {
-        let to = previous_match(&self.positions, self.current())?;
+        let to = previous_match(self.positions.as_slice(), self.current())?;
         self.go(to)
     }
 
