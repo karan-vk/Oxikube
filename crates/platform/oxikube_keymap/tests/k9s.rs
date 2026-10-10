@@ -47,6 +47,14 @@ struct ShowTab {
 }
 
 const MAC: KeymapPlatform = KeymapPlatform::MacOs;
+
+/// How GPUI prints the macOS `cmd` modifier: `cmd` on macOS, `super` on the other hosts, whatever
+/// platform the keymap under test is for.
+const CMD: &str = if cfg!(target_os = "macos") {
+    "cmd"
+} else {
+    "super"
+};
 const LINUX: KeymapPlatform = KeymapPlatform::Linux;
 
 fn install(cx: &mut TestAppContext, platform: KeymapPlatform, user: &str) {
@@ -382,7 +390,10 @@ fn the_palette_finds_the_keys_of_a_command_through_its_view_actions(cx: &mut Tes
     assert_eq!(keys(cx, CommandId::POD_SHELL), ["s"]);
     // A command named by its own action: the jump bar's `:` and the palette's chord.
     assert_eq!(keys(cx, CommandId::PALETTE_OPEN_JUMP), [":"]);
-    assert_eq!(keys(cx, CommandId::PALETTE_TOGGLE), ["cmd-shift-p"]);
+    assert_eq!(
+        keys(cx, CommandId::PALETTE_TOGGLE),
+        [format!("{CMD}-shift-p")]
+    );
     assert_eq!(keys(cx, CommandId::HELP_SHOW), ["?"]);
     // No key for a command nobody bound.
     assert!(keys(cx, CommandId::POD_EXEC).is_empty());
@@ -423,7 +434,7 @@ fn the_bindings_in_force_follow_the_context_stack(cx: &mut TestAppContext) {
     );
 
     let in_terminal = in_force(cx, &TERMINAL);
-    assert!(in_terminal.contains(&("terminal::Copy", "cmd-c".to_owned())));
+    assert!(in_terminal.contains(&("terminal::Copy", format!("{CMD}-c"))));
     assert!(
         !in_terminal
             .iter()
