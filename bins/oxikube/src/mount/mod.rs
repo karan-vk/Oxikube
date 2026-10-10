@@ -387,7 +387,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
             workspace: workspace.clone(),
             bus: bus.clone(),
             dispatcher: dispatcher.clone(),
-            recents: state.recents().clone(),
+            recents: state.recents(),
             tabs: tabs.downgrade(),
             sessions: services.sessions.clone(),
         },

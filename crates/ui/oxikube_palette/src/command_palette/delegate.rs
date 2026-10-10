@@ -17,7 +17,7 @@ use oxikube_domain::command::CommandId;
 use oxikube_workspace::{Toast, Workspace};
 
 use super::outbox::{Launch, Outbox};
-use super::rows::{Found, Row, Snapshot, order, ranks};
+use super::rows::{Found, Row, Snapshot, into_found, ranks, recency_of};
 use crate::picker::fuzzy::{self, INLINE_MATCH_LIMIT};
 use crate::picker::{Picker, PickerDelegate};
 
@@ -96,8 +96,13 @@ impl CommandPaletteDelegate {
     /// Matches `query` on this thread (fine for the empty query and for short lists).
     fn match_now(&self, query: &str) -> Vec<Found> {
         let candidates = self.snapshot.candidates(self.show_all);
-        let matches = fuzzy::match_strings(&candidates, query, usize::MAX);
-        order(matches, &self.snapshot.rows, &self.recent_rank)
+        let recency = recency_of(self.snapshot.rows.clone(), self.recent_rank.clone());
+        into_found(fuzzy::match_strings_by(
+            &candidates,
+            query,
+            usize::MAX,
+            recency,
+        ))
     }
 
     fn say(&self, toast: Toast, cx: &mut App) {
@@ -159,13 +164,13 @@ impl PickerDelegate for CommandPaletteDelegate {
             return Task::ready(());
         }
         // A long list matches on the background executor; a newer keystroke drops this task.
-        let rows = self.snapshot.rows.clone();
-        let recent = self.recent_rank.clone();
+        let recency = recency_of(self.snapshot.rows.clone(), self.recent_rank.clone());
         cx.spawn_in(window, async move |picker, cx| {
             let executor = cx.background_executor().clone();
             let matches =
-                fuzzy::match_strings_async(candidates, query, usize::MAX, &executor).await;
-            let found = order(matches, &rows, &recent);
+                fuzzy::match_strings_async_by(candidates, query, usize::MAX, recency, &executor)
+                    .await;
+            let found = into_found(matches);
             picker
                 .update(cx, |picker, _| {
                     picker.delegate.found = found;

@@ -192,6 +192,9 @@ pub enum Command {
     /// Show or hide the command palette.
     #[serde(rename = "palette::Toggle")]
     PaletteToggle,
+    /// Forget the commands the palette lists first because they ran lately.
+    #[serde(rename = "palette::ClearRecents")]
+    PaletteClearRecents,
     /// Open the `:` jump bar (`:` in a cluster tab).
     #[serde(rename = "palette::OpenJump")]
     PaletteOpenJump,
@@ -862,6 +865,7 @@ impl Command {
             Command::KubeconfigReload => CommandId::KUBECONFIG_RELOAD,
             Command::ViewOpen { .. } => CommandId::VIEW_OPEN,
             Command::PaletteToggle => CommandId::PALETTE_TOGGLE,
+            Command::PaletteClearRecents => CommandId::PALETTE_CLEAR_RECENTS,
             Command::PaletteOpenJump => CommandId::PALETTE_OPEN_JUMP,
             Command::HelpShow => CommandId::HELP_SHOW,
             Command::PaletteToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
@@ -1141,6 +1145,7 @@ mod tests {
                 view: "overview".into(),
             },
             Command::PaletteToggle,
+            Command::PaletteClearRecents,
             Command::PaletteOpenJump,
             Command::HelpShow,
             Command::PaletteToggleShowAll,
@@ -1511,6 +1516,7 @@ mod tests {
                     | Command::NamespaceToggleFavourite { .. }
                     | Command::ViewOpen { .. }
                     | Command::PaletteToggle
+                    | Command::PaletteClearRecents
                     | Command::PaletteOpenJump
                     | Command::HelpShow
                     | Command::PaletteToggleShowAll

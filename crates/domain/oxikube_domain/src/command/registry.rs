@@ -134,6 +134,9 @@ impl CommandId {
     pub const NODE_SHELL: CommandId = CommandId::new("node::Shell");
     /// `node::Uncordon`: mark a node schedulable again.
     pub const NODE_UNCORDON: CommandId = CommandId::new("node::Uncordon");
+    /// `palette::ClearRecents`: forget the commands the palette lists first because they ran
+    /// lately.
+    pub const PALETTE_CLEAR_RECENTS: CommandId = CommandId::new("palette::ClearRecents");
     /// `palette::OpenJump`: open the `:` jump bar.
     pub const PALETTE_OPEN_JUMP: CommandId = CommandId::new("palette::OpenJump");
     /// `palette::Toggle`: show or hide the command palette.
@@ -681,6 +684,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Node")),
+    // Forgets the palette's recent commands (a list of ids on this machine); touches no cluster.
+    CommandMeta::read(
+        CommandId::PALETTE_CLEAR_RECENTS,
+        "Clear Recent Commands",
+        CommandScope::Global,
+        NONE,
+    ),
     // Opens the `:` bar; what is typed in it runs other commands, each with its own guard tier.
     CommandMeta::read(
         CommandId::PALETTE_OPEN_JUMP,

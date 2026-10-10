@@ -68,7 +68,6 @@ fn a_command_the_table_does_not_own_still_goes_to_the_bus(cx: &mut gpui::TestApp
 
 #[gpui::test]
 fn recents_record_a_command_the_table_ran(cx: &mut gpui::TestAppContext) {
-    use oxikube_app::RecentsStore as _;
     let mut f = Fixture::declared(cx, &["web"]);
     f.surface_runs(&[CommandId::RESOURCE_DELETE], true);
     pick_delete(&mut f);

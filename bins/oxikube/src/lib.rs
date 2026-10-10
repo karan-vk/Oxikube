@@ -11,6 +11,8 @@
 //!
 //! - [`aliases`]: keeps the `:` jump bar's alias tables in step with the clusters' discovery and
 //!   the user's `aliases.json`, hot reloaded (E11-S04).
+//! - [`history`]: loads the command recents and the jump history from the state db, writes them back
+//!   after changes and flushes them on quit (E11-S11).
 //! - [`cluster_prefs`]: pushes the per-cluster settings into the `ClusterSessionManager` and
 //!   keeps them in sync with hot reload (E06-S08).
 //! - [`kube_ports`]: the cluster adapters of the app (`oxikube_kube`: the kubeconfig catalog,
@@ -33,6 +35,7 @@
 pub mod aliases;
 pub mod app_state;
 pub mod cluster_prefs;
+pub mod history;
 pub mod kube_ports;
 pub mod mount;
 pub mod os_motion;
