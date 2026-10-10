@@ -3,9 +3,10 @@
 //! Layered, hot-reloading key bindings in Zed's `keymap.json` format (E05-S07).
 //!
 //! Layers, lowest first: the embedded per-OS `default-*.json` ([`oxikube_assets::default_keymap`]),
-//! the optional embedded `vim.json` (a flag, [`KeymapOptions::vim`] / [`set_vim_layer`]), then
-//! the user's `keymap.json` next to `settings.json`. The layers are merged into one flat list of
-//! GPUI `KeyBinding`s and bound with `cx.bind_keys`; later layers win, and `null` unbinds.
+//! the optional embedded `vim.json` (the `base_keymap: "vim"` setting, [`KeymapOptions::vim`] /
+//! [`set_vim_layer`]), then the user's `keymap.json` next to `settings.json`. The layers are
+//! merged into one flat list of GPUI `KeyBinding`s and bound with `cx.bind_keys`; later layers
+//! win, and `null` unbinds.
 //!
 //! A feature crate takes part by:
 //! 1. declaring its actions (`actions!(table, [SelectNext])` or `#[derive(Action)]
@@ -19,6 +20,7 @@
 //! the MCP tool run one behaviour ([`ActionRegistry::command`]).
 //!
 //! Module map:
+//! - [`base_keymap`]: the `base_keymap` setting (`default` | `vim`) that drives the vim layer.
 //! - [`mod@file`]: the `keymap.json` format and its lenient parser.
 //! - [`registry`]: [`ActionRegistry`], names by namespace and the action-to-`Command` mapping.
 //! - [`build`]: sections to `KeyBinding`s, with validation.
@@ -36,6 +38,7 @@
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
+pub mod base_keymap;
 pub mod build;
 pub mod context;
 pub mod diagnostics;
@@ -49,6 +52,7 @@ pub mod registry;
 pub mod stands_for;
 pub mod store;
 
+pub use base_keymap::{BaseKeymap, KeymapSettings, KeymapSettingsContent};
 pub use context::{KeyContextBuilder, KeyContextual, contexts};
 pub use diagnostics::{KeymapDiagnostic, KeymapProblem};
 pub use dispatch::{ActiveBinding, Resolution, active_bindings, parse_stack, resolve};

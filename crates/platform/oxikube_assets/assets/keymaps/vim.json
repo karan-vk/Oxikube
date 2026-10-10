@@ -1,26 +1,52 @@
-// Oxikube vim layer: extra bindings for people who navigate lists with hjkl.
+// Oxikube vim base keymap (E11-S09), selected with `"base_keymap": "vim"` in settings.json.
 //
-// Optional: it is layered between the defaults and your `keymap.json` only when the vim flag
-// is on, so your own bindings still win. Bindings are scoped to the `ResourceTable` and `List` key
-// contexts and are inactive while a text field has focus (`!Editing`).
+// It is a layer, not a mode: it sits between the per-OS defaults and your own `keymap.json`, so
+// your bindings still win, and it adds vim's movement and its doubled operators to the resource
+// table. There is no modal emulation: typing in a field, the terminal and the manifest editor is
+// exactly as without it, because every section below is scoped to `ResourceTable && !Editing`
+// (the table's rows are focused, no text field has the focus) and nothing is bound in `Terminal`,
+// `ManifestEditor`, `Palette`, `JumpBar` or any `Input`.
+//
+// What it gives the table:
+//   j / k            next / previous row               (also in the defaults)
+//   g g / shift-g    first / last row
+//   ctrl-d / ctrl-u  half a page down / up
+//   ctrl-f / ctrl-b  a page down / up
+//   /                search: focus the table's filter  (also in the defaults)
+//   :                the jump bar                      (the defaults' `ClusterTab` binding; this
+//                    layer needs none of its own)
+//   d d              delete the row or selection: the same dialog as `delete`, so the read-only
+//                    block, the confirmation tier and the audit record apply unchanged
+//   y y              copy the name of the cursor row
+//
+// Conflicts with the defaults, and what happens to them (the keymap editor shows each as an
+// override of the default layer):
+//   ctrl-d   the defaults (k9s) delete the selection; here it scrolls and `d d` deletes.
+//   d, y     the defaults describe (`d`) and show the YAML (`y`). A bare `d` or `y` would fire
+//            before its second key could arrive, so the single keys are unbound here and the two
+//            views move to `g d` and `g y`. `d` and `y` keep their defaults in the detail drawer.
+//
+// A key that does not complete a pair does nothing destructive: `d` then `j` is `j` (the `d` is
+// dropped), and an unfinished `d` times out the same way.
 [
   {
     "context": "ResourceTable && !Editing",
     "bindings": {
-      "j": "table::SelectNext",
-      "k": "table::SelectPrevious",
-      "g g": "table::SelectFirst",
-      "shift-g": "table::SelectLast",
-      "/": "table::Search"
-    }
-  },
-  {
-    "context": "List && !Editing",
-    "bindings": {
-      "j": "list::SelectNext",
-      "k": "list::SelectPrevious",
-      "g g": "list::SelectFirst",
-      "shift-g": "list::SelectLast"
+      "g g": "resource_table::SelectFirst",
+      "shift-g": "resource_table::SelectLast",
+      "ctrl-d": "resource_table::SelectHalfPageDown",
+      "ctrl-u": "resource_table::SelectHalfPageUp",
+      "ctrl-f": "resource_table::SelectPageDown",
+      "ctrl-b": "resource_table::SelectPageUp",
+      "j": "resource_table::SelectNext",
+      "k": "resource_table::SelectPrevious",
+      "/": "resource_table::FocusFilter",
+      "d d": "resource_table::DeleteSelected",
+      "y y": "resource_table::CopyName",
+      "d": null,
+      "y": null,
+      "g d": "resource_table::ViewDescribe",
+      "g y": "resource_table::ViewYaml"
     }
   }
 ]

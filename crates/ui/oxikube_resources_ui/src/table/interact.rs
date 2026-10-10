@@ -17,7 +17,8 @@ use oxikube_ui::table::{RowClick, TableEvent};
 
 use super::actions::{
     ClearSelection, CopyName, ExtendNext, ExtendPrevious, OpenSelected, SelectAll, SelectFirst,
-    SelectLast, SelectNext, SelectPageDown, SelectPageUp, SelectPrevious,
+    SelectHalfPageDown, SelectHalfPageUp, SelectLast, SelectNext, SelectPageDown, SelectPageUp,
+    SelectPrevious,
 };
 use super::selection::ClickMode;
 use super::view::{ResourceTable, ResourceTableEvent};
@@ -110,6 +111,11 @@ impl ResourceTable {
     fn page(&self, cx: &gpui::App) -> isize {
         let visible = self.table.visible_rows(cx).len();
         isize::try_from(visible.saturating_sub(1).max(1)).unwrap_or(1)
+    }
+
+    /// Half of [`Self::page`], at least one row.
+    fn half_page(&self, cx: &gpui::App) -> isize {
+        (self.page(cx) / 2).max(1)
     }
 
     /// Opens row `row`'s detail: dispatches `resource::Open`.
@@ -274,6 +280,26 @@ impl ResourceTable {
     pub(super) fn on_page_up(&mut self, _: &SelectPageUp, _: &mut Window, cx: &mut Context<Self>) {
         let page = self.page(cx);
         self.move_cursor(-page, false, cx);
+    }
+
+    pub(super) fn on_half_page_down(
+        &mut self,
+        _: &SelectHalfPageDown,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let half = self.half_page(cx);
+        self.move_cursor(half, false, cx);
+    }
+
+    pub(super) fn on_half_page_up(
+        &mut self,
+        _: &SelectHalfPageUp,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let half = self.half_page(cx);
+        self.move_cursor(-half, false, cx);
     }
 
     pub(super) fn on_open(&mut self, _: &OpenSelected, _: &mut Window, cx: &mut Context<Self>) {

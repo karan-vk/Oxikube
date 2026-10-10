@@ -1,5 +1,20 @@
 {
   "$defs": {
+    "BaseKeymap": {
+      "description": "The base keymap a user chooses: the layer under their own `keymap.json`.",
+      "oneOf": [
+        {
+          "const": "default",
+          "description": "The per-OS defaults only.",
+          "type": "string"
+        },
+        {
+          "const": "vim",
+          "description": "The defaults plus the vim layer (`vim.json`): `j` / `k` / `g g` / `shift-g` / `ctrl-d` /\n`ctrl-u` in tables, `d d` to delete, `y y` to copy the name. Nothing changes in text\nfields, the terminal or the manifest editor.",
+          "type": "string"
+        }
+      ]
+    },
     "BellSetting": {
       "description": "`terminal.bell`: what a bell (`BEL`, `^G`) from the process does.",
       "oneOf": [
@@ -33,6 +48,17 @@
             "array",
             "null"
           ]
+        },
+        "base_keymap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BaseKeymap"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched)."
         },
         "colour": {
           "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb` or `#rgb`.",
@@ -408,6 +434,24 @@
           "type": "string"
         }
       ]
+    },
+    "KeymapSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about the base keymap.",
+      "properties": {
+        "base_keymap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BaseKeymap"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched)."
+        }
+      },
+      "type": "object"
     },
     "KubeconfigSettingsContent": {
       "additionalProperties": false,
@@ -1112,6 +1156,17 @@
         "array",
         "null"
       ]
+    },
+    "base_keymap": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BaseKeymap"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched)."
     },
     "clusters": {
       "additionalProperties": {

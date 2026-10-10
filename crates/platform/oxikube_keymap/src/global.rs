@@ -65,8 +65,10 @@ pub fn init_with_dir(config_dir: &Path, options: KeymapOptions, cx: &mut App) {
 pub fn init_with_text(user_text: &str, options: KeymapOptions, cx: &mut App) {
     let mut store = KeymapStore::new(options);
     store.set_user_text(user_text);
+    crate::base_keymap::apply_to_new_store(cx, &mut store);
     cx.set_global(store);
     rebind(cx);
+    crate::base_keymap::follow_base_keymap(cx);
 }
 
 fn install(cx: &mut App, options: KeymapOptions, dir: Option<&Path>, watch: bool) {
@@ -78,8 +80,10 @@ fn install(cx: &mut App, options: KeymapOptions, dir: Option<&Path>, watch: bool
         let text = load_initial(&mut store, &path);
         watched = Some((path, text));
     }
+    crate::base_keymap::apply_to_new_store(cx, &mut store);
     cx.set_global(store);
     rebind(cx);
+    crate::base_keymap::follow_base_keymap(cx);
 
     if watch && let Some((path, text)) = watched {
         start_watch(cx, path, text);

@@ -20,7 +20,7 @@ fn named_actions(text: &str) -> BTreeSet<String> {
     let mut names = BTreeSet::new();
     for (_, section) in parsed.sections {
         for value in section.bindings.values() {
-            if let Ok(KeymapAction::Action { name, .. }) = KeymapAction::from_json(&value.clone()) {
+            if let Ok(KeymapAction::Action { name, .. }) = KeymapAction::from_json(value) {
                 names.insert(name);
             }
         }
@@ -94,4 +94,85 @@ fn the_default_keymap_loads_clean_and_binds_the_verbs(cx: &mut TestAppContext) {
         let resolution = cx.read(|cx| resolve(cx, keys, &terminal).unwrap());
         assert_eq!(resolution, Resolution::Unbound, "{keys} in a terminal");
     }
+}
+
+/// The vim base keymap (E11-S09): every action `vim.json` names is registered by a crate of the
+/// app, so none of its bindings is silently skipped.
+#[gpui::test]
+fn the_apps_crates_register_every_action_the_vim_keymap_names(cx: &mut TestAppContext) {
+    cx.update(|cx| init(cx, StartupEnv::test())).expect("init");
+    let registry = cx.read(ActionRegistry::from_app);
+    let parsed =
+        oxikube_keymap::file::parse_keymap(oxikube_assets::vim_keymap(), KeymapLayer::Vim).unwrap();
+    assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    let mut checked = 0;
+    for (_, section) in parsed.sections {
+        for value in section.bindings.values() {
+            if let Ok(KeymapAction::Action { name, .. }) = KeymapAction::from_json(&value.clone()) {
+                assert!(
+                    registry.contains(&name),
+                    "vim.json names `{name}`; no crate registers it"
+                );
+                checked += 1;
+            }
+        }
+    }
+    assert!(checked >= 10, "vim.json binds {checked} actions");
+}
+
+/// Starts the app over a config dir whose `settings.json` is `settings` and checks the vim keys
+/// of the story in a table (on exactly when `vim`) and in a terminal (never).
+fn check_base_keymap(cx: &mut TestAppContext, settings: &str, vim: bool) {
+    let stack = |last: &str| {
+        parse_stack(&[
+            "Workspace",
+            "ClusterTab connected",
+            "Workspace",
+            "Pane",
+            last,
+        ])
+        .unwrap()
+    };
+    let (table, terminal) = (
+        stack("ResourceTable kind=Pod selection=one"),
+        stack("Terminal"),
+    );
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("settings.json"), settings).unwrap();
+    cx.update(|cx| {
+        let mut env = StartupEnv::test();
+        env.config = crate::startup::ConfigSource::Dir(dir.path().to_owned());
+        init(cx, env).unwrap();
+    });
+    let problems = cx.read(oxikube_keymap::diagnostics);
+    assert!(problems.is_empty(), "{problems:?}");
+    for (keys, action) in [
+        ("g g", "resource_table::SelectFirst"),
+        ("shift-g", "resource_table::SelectLast"),
+        ("ctrl-d", "resource_table::SelectHalfPageDown"),
+        ("ctrl-u", "resource_table::SelectHalfPageUp"),
+        ("d d", "resource_table::DeleteSelected"),
+        ("y y", "resource_table::CopyName"),
+    ] {
+        let found = cx.read(|cx| resolve(cx, keys, &table).unwrap());
+        assert_eq!(found.action() == Some(action), vim, "{keys}: {settings}");
+        // The terminal is never touched: ctrl-d is EOF there, the rest is typing.
+        let in_terminal = cx.read(|cx| resolve(cx, keys, &terminal).unwrap());
+        assert_eq!(in_terminal, Resolution::Unbound, "{keys} in a terminal");
+    }
+}
+
+#[gpui::test]
+fn the_vim_layer_is_off_unless_settings_json_asks_for_it(cx: &mut TestAppContext) {
+    check_base_keymap(cx, "{}", false);
+}
+
+#[gpui::test]
+fn base_keymap_default_in_settings_json_is_the_plain_defaults(cx: &mut TestAppContext) {
+    check_base_keymap(cx, r#"{ "base_keymap": "default" }"#, false);
+}
+
+#[gpui::test]
+fn base_keymap_vim_in_settings_json_turns_the_vim_layer_on(cx: &mut TestAppContext) {
+    check_base_keymap(cx, "// vim, please\n{ \"base_keymap\": \"vim\" }", true);
 }

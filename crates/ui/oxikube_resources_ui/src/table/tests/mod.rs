@@ -20,6 +20,7 @@ mod view_select;
 mod view_set_filter;
 mod view_states;
 mod view_verbs;
+mod view_vim;
 mod views;
 
 use std::sync::Arc;

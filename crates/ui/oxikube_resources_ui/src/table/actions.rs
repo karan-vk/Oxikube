@@ -19,6 +19,10 @@
 //! `table/verbs.rs`), so the key, the context menu, the palette and an agent run
 //! one behaviour.
 //!
+//! The vim base keymap (`base_keymap: "vim"`, E11-S09) adds `g g` / `shift-g` (first / last row),
+//! `ctrl-d` / `ctrl-u` (half a page), `d d` (the delete dialog, like `delete`) and `y y` (copy the
+//! name) in the same key context, on these same actions.
+//!
 //! Users rebind them in `keymap.json`.
 
 use gpui::actions;
@@ -38,6 +42,10 @@ actions!(
         SelectPageDown,
         /// Move the cursor one page up.
         SelectPageUp,
+        /// Move the cursor half a page down (the vim base keymap's `ctrl-d`).
+        SelectHalfPageDown,
+        /// Move the cursor half a page up (the vim base keymap's `ctrl-u`).
+        SelectHalfPageUp,
         /// Extend the selection to the next row.
         ExtendNext,
         /// Extend the selection to the previous row.

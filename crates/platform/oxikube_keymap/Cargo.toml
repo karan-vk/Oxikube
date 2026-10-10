@@ -17,6 +17,7 @@ gpui.workspace = true
 oxikube_assets.workspace = true
 oxikube_domain.workspace = true
 oxikube_settings.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_json_lenient.workspace = true
@@ -25,7 +26,6 @@ tracing.workspace = true
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
 rustc-hash.workspace = true
-schemars.workspace = true
 tempfile.workspace = true
 
 [lints]

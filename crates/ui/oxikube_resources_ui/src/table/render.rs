@@ -92,6 +92,8 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_select_last))
             .on_action(cx.listener(Self::on_page_down))
             .on_action(cx.listener(Self::on_page_up))
+            .on_action(cx.listener(Self::on_half_page_down))
+            .on_action(cx.listener(Self::on_half_page_up))
             .on_action(cx.listener(Self::on_open))
             .on_action(cx.listener(Self::on_copy_name))
             .on_action(cx.listener(Self::on_select_all))
