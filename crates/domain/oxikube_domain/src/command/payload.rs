@@ -307,6 +307,24 @@ pub enum Command {
         /// The URL or absolute path.
         target: String,
     },
+    /// Open an empty manifest editor (E10-S04): a tab of `cluster`'s tab (the displayed cluster
+    /// tab when `None`), whose YAML is checked against that cluster's schemas, or a tab of the
+    /// window with syntax checks only when no cluster tab is shown. Edits text only; applying it
+    /// is `resource::Apply`.
+    #[serde(rename = "editor::NewManifest")]
+    EditorNewManifest {
+        /// The cluster whose tab gets the editor; the displayed cluster tab when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+    },
+    /// Make the focused manifest editor read-only, or editable again (E10-S04); the active
+    /// pane's editor when focus is elsewhere. A view state, not the cluster's read-only mode.
+    #[serde(rename = "editor::ToggleReadOnly")]
+    EditorToggleReadOnly,
+    /// Wrap the focused manifest editor's long lines at its width, or let them scroll sideways
+    /// (E10-S04); the active pane's editor when focus is elsewhere.
+    #[serde(rename = "editor::ToggleSoftWrap")]
+    EditorToggleSoftWrap,
     /// Open the list of the cluster's CustomResourceDefinitions (the sidebar's "Definitions").
     /// Read-only.
     #[serde(rename = "crd::OpenList")]
@@ -892,6 +910,9 @@ impl Command {
             Command::TerminalSearchNext => CommandId::TERMINAL_SEARCH_NEXT,
             Command::TerminalSearchPrevious => CommandId::TERMINAL_SEARCH_PREVIOUS,
             Command::TerminalSelectAll => CommandId::TERMINAL_SELECT_ALL,
+            Command::EditorNewManifest { .. } => CommandId::EDITOR_NEW_MANIFEST,
+            Command::EditorToggleReadOnly => CommandId::EDITOR_TOGGLE_READ_ONLY,
+            Command::EditorToggleSoftWrap => CommandId::EDITOR_TOGGLE_SOFT_WRAP,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -1176,6 +1197,12 @@ mod tests {
             Command::TerminalSearchNext,
             Command::TerminalSearchPrevious,
             Command::TerminalSelectAll,
+            Command::EditorNewManifest { cluster: None },
+            Command::EditorNewManifest {
+                cluster: Some(cluster()),
+            },
+            Command::EditorToggleReadOnly,
+            Command::EditorToggleSoftWrap,
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -1541,6 +1568,9 @@ mod tests {
                     | Command::TerminalSearchNext
                     | Command::TerminalSearchPrevious
                     | Command::TerminalSelectAll
+                    | Command::EditorNewManifest { .. }
+                    | Command::EditorToggleReadOnly
+                    | Command::EditorToggleSoftWrap
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }

@@ -8,6 +8,7 @@
 mod actions;
 mod agent;
 mod chrome;
+mod editor;
 mod exec;
 mod help;
 mod immediate;

@@ -28,8 +28,10 @@ app.run(|cx| {
   `set_text(Arc<str>, cx)`: a read-only, virtualised text view of any size (the detail's YAML and
   Describe tabs). Rows are laid out and the YAML parsed (tree-sitter) on the background executor;
   a frame shapes only the visible rows. Selection, copy and key scrolling in the `CodeView` key
-  context. `oxikube_ui::editor` keeps the glue for gpui-component's full editor (E10), which wraps
-  every line on the UI thread when given its text: not for large read-only documents.
+  context. `oxikube_ui::editor` is gpui-component's full editor behind our `EditorApi` trait
+  (`CodeEditor`, E10-S04: diagnostics as squiggles plus a gutter/end-of-line overlay,
+  decorations, read-only, soft wrap); it wraps every line on the UI thread when given its text,
+  so it is not for large read-only documents.
 - **Zoom**: wrap every literal pixel size in `u(px(..))`; persist dock and panel sizes as
   `Unscaled`. `set_ui_scale(cx, UiScale::new(1.25))` changes the zoom. Table column widths are the
   exception: give `TableColumn` design-time widths and the table applies (and re-applies) the zoom

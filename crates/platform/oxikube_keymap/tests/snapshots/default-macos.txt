@@ -184,6 +184,11 @@
   cmd-g            terminal::SearchNext
   cmd-shift-g      terminal::SearchPrevious
   escape           terminal::SearchClose
+[(everywhere)]
+  cmd-shift-e      editor::NewManifest
+[ManifestEditor]
+  alt-z            editor::ToggleSoftWrap
+  cmd-alt-r        editor::ToggleReadOnly
 [Terminal || ManifestEditor || Palette || JumpBar || Input || Editing]
   :                null
   ?                null

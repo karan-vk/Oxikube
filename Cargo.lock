@@ -5666,6 +5666,7 @@ dependencies = [
  "oxikube_catalog_ui",
  "oxikube_describe",
  "oxikube_domain",
+ "oxikube_editor",
  "oxikube_keymap",
  "oxikube_kube",
  "oxikube_logging",
@@ -5817,13 +5818,25 @@ dependencies = [
 name = "oxikube_editor"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
+ "futures",
+ "gpui-pre",
+ "gpui-pre-platform",
  "granit-parser 1.3.0",
  "insta",
+ "oxikube_app",
  "oxikube_domain",
+ "oxikube_keymap",
+ "oxikube_ports",
+ "oxikube_runtime",
  "oxikube_testkit",
+ "oxikube_ui",
+ "oxikube_workspace",
+ "parking_lot",
  "proptest",
  "regex",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

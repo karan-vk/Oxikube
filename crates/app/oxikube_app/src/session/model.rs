@@ -8,7 +8,7 @@ use oxikube_domain::{Capabilities, Capability, ClusterColour};
 use oxikube_ports::{
     AccessReviewPort, ClusterPorts, ClusterPrefs, CrdWatchStatus, DescribePort, DiscoveryPort,
     ExecInteractivity, ExecPort, LogPort, MetricsPort, PortForwardPort, ResourceReader,
-    ResourceWriter, TableFeedPort, WarningPort,
+    ResourceWriter, SchemaPort, TableFeedPort, WarningPort,
 };
 
 use super::reconnect::AutoReconnect;
@@ -198,6 +198,12 @@ impl ClusterSession {
     /// `kubectl describe`-style text for one object (`None` while not connected).
     pub fn describe(&self) -> Option<Arc<dyn DescribePort>> {
         self.ports.as_ref().map(|p| p.describe.clone())
+    }
+
+    /// Per-kind JSON Schemas from the cluster's OpenAPI v3, for the manifest editor's
+    /// validation (`None` while not connected). Read-only.
+    pub fn schemas(&self) -> Option<Arc<dyn SchemaPort>> {
+        self.ports.as_ref().map(|p| p.schemas.clone())
     }
 
     /// The access review port, to re-probe capabilities for a namespace.

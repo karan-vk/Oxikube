@@ -184,6 +184,11 @@
   escape           terminal::SearchClose
   f3               terminal::SearchNext
   shift-f3         terminal::SearchPrevious
+[(everywhere)]
+  ctrl-shift-e     editor::NewManifest
+[ManifestEditor]
+  alt-z            editor::ToggleSoftWrap
+  ctrl-alt-r       editor::ToggleReadOnly
 [Terminal || ManifestEditor || Palette || JumpBar || Input || Editing]
   :                null
   ?                null

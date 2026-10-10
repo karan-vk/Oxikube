@@ -373,6 +373,25 @@
     }
   },
   {
+    // The manifest editor (E10-S04): a new, empty manifest from anywhere (in the shown cluster's
+    // tab, checked against its schemas).
+    "bindings": {
+      "ctrl-shift-e": "editor::NewManifest"
+    }
+  },
+  {
+    // Inside the manifest editor the buffer takes text, so only modifier chords: alt-z wraps long
+    // lines, ctrl-alt-r makes the buffer read-only (a view state; the cluster's read-only mode is
+    // separate). The editor's own keys stay as they are: ctrl-f / ctrl-h search and replace,
+    // ctrl-z / ctrl-y undo and redo, shift-alt-up / shift-alt-down add a cursor (ctrl-alt-up /
+    // ctrl-alt-down on Windows).
+    "context": "ManifestEditor",
+    "bindings": {
+      "alt-z": "editor::ToggleSoftWrap",
+      "ctrl-alt-r": "editor::ToggleReadOnly"
+    }
+  },
+  {
     // Where text is typed, `:` and `?` are characters, not the jump bar and the help overlay of
     // the ClusterTab section above: the shell, the manifest editor, the palette and jump bar's
     // own fields, any text field (`Input`) inside a view, and any view whose own text field has

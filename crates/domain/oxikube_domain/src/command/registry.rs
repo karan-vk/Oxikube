@@ -46,6 +46,12 @@ impl CommandId {
     pub const CRD_OPEN_LIST: CommandId = CommandId::new("crd::OpenList");
     /// `crd::OpenResources`: open the table of the custom resources a CRD defines.
     pub const CRD_OPEN_RESOURCES: CommandId = CommandId::new("crd::OpenResources");
+    /// `editor::NewManifest`: open an empty manifest editor tab.
+    pub const EDITOR_NEW_MANIFEST: CommandId = CommandId::new("editor::NewManifest");
+    /// `editor::ToggleReadOnly`: make the focused manifest editor read-only, or editable again.
+    pub const EDITOR_TOGGLE_READ_ONLY: CommandId = CommandId::new("editor::ToggleReadOnly");
+    /// `editor::ToggleSoftWrap`: wrap the focused manifest editor's long lines, or not.
+    pub const EDITOR_TOGGLE_SOFT_WRAP: CommandId = CommandId::new("editor::ToggleSoftWrap");
     /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `jump::Back`: run the previous command of the `:` jump bar's history again.
@@ -261,6 +267,8 @@ const DETAIL_VIEW: &[ViewContext] = &[ViewContext::Detail];
 const LOG_VIEW: &[ViewContext] = &[ViewContext::Logs];
 /// Commands of a terminal.
 const TERMINAL_VIEW: &[ViewContext] = &[ViewContext::Terminal];
+/// Commands of the manifest editor.
+const EDITOR_VIEW: &[ViewContext] = &[ViewContext::Editor];
 
 /// Every declared command, **sorted by id** (lookup is a binary search; a test
 /// enforces the order).
@@ -374,6 +382,30 @@ pub static COMMANDS: &[CommandMeta] = &[
         group: "apiextensions.k8s.io",
         kind: "CustomResourceDefinition",
     }),
+    // The manifest editor (E10-S04) only edits text in this window: a new buffer and the view's
+    // own toggles read and change nothing in a cluster. What reaches the cluster goes through
+    // `resource::Apply`, which is guarded.
+    CommandMeta::read(
+        CommandId::EDITOR_NEW_MANIFEST,
+        "New Manifest",
+        CommandScope::Global,
+        NONE,
+    ),
+    // "Read-only" here is the editor's view state, not the cluster's read-only guard.
+    CommandMeta::read(
+        CommandId::EDITOR_TOGGLE_READ_ONLY,
+        "Toggle Editor Read-Only",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_TOGGLE_SOFT_WRAP,
+        "Toggle Editor Soft Wrap",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
     // Lists the bindings of the focused view; reads nothing from a cluster.
     CommandMeta::read(
         CommandId::HELP_SHOW,
