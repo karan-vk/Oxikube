@@ -159,6 +159,15 @@ impl Builder {
         self.anchors.get(&id).copied()
     }
 
+    /// Whether the next node is a block mapping's value (its key has been seen).
+    pub fn awaits_value(&self) -> bool {
+        self.frames.last().is_some_and(|f| {
+            f.shape == Shape::Mapping
+                && f.style == CollectionStyle::Block
+                && f.pending_key.is_some()
+        })
+    }
+
     /// The open block collections, outermost first.
     pub fn open_blocks(&self) -> impl Iterator<Item = OpenBlock> + '_ {
         let doc = self.doc.as_ref();

@@ -143,7 +143,7 @@ fn run(
             Event::SequenceStart(style, anchor, _) => {
                 let style = collection_style(style);
                 let range = match style {
-                    CollectionStyle::Block => sequence_range(text, range),
+                    CollectionStyle::Block => sequence_range(text, range, builder.awaits_value()),
                     CollectionStyle::Flow => range,
                 };
                 builder.collection_start(Shape::Sequence, style, range, anchor);
@@ -186,20 +186,28 @@ fn scalar_range(text: &str, range: Range<usize>, style: ScalarStyle) -> Range<us
 }
 
 /// A block sequence starts at its first `-`. granit-parser starts an indentless sequence
-/// (`key:\n- item`, items at the key's column) at its first item instead; move it back to the
-/// nearest `-` indicator on the same line.
-fn sequence_range(text: &str, range: Range<usize>) -> Range<usize> {
+/// (`key:\n- item`, items at the key's column) at its first item instead, which may itself start
+/// with `-` (`- -c`, `- - x`). A block sequence that is a mapping value begins its line, so it
+/// moves back to a `-` indicator that is the line's first token; otherwise to the nearest `-`
+/// indicator before its start on the same line, unless it already starts at one.
+fn sequence_range(text: &str, range: Range<usize>, mapping_value: bool) -> Range<usize> {
     let bytes = text.as_bytes();
-    if bytes.get(range.start) == Some(&b'-') {
-        return range;
-    }
     let line_start = text[..range.start].rfind('\n').map_or(0, |i| i + 1);
-    let indicator = (line_start..range.start).rev().find(|&i| {
-        bytes[i] == b'-'
+    let indicator = |i: usize| {
+        bytes.get(i) == Some(&b'-')
             && (i == line_start || matches!(bytes[i - 1], b' ' | b'\t'))
-            && matches!(bytes.get(i + 1), Some(b' ' | b'\t' | b'\r' | b'\n'))
-    });
-    indicator.map_or(range.clone(), |start| start..range.end.max(start))
+            && matches!(bytes.get(i + 1), None | Some(b' ' | b'\t' | b'\r' | b'\n'))
+    };
+    let first_token = (line_start..range.start).find(|&i| !matches!(bytes[i], b' ' | b'\t'));
+    let start = match first_token.filter(|&i| mapping_value && indicator(i)) {
+        Some(start) => start,
+        None if indicator(range.start) => return range,
+        None => match (line_start..range.start).rev().find(|&i| indicator(i)) {
+            Some(start) => start,
+            None => return range,
+        },
+    };
+    start..range.end.max(start)
 }
 
 /// From the error position to the end of its line, or one character when the error is at a

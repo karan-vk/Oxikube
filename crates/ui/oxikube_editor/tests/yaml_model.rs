@@ -350,3 +350,33 @@ fn complex_keys_and_roles() {
     let inner = doc.node_at(offset_of(text, "b]")).unwrap();
     assert_eq!(doc.path_of(inner, text).to_string(), r#"["[a, b]"]"#);
 }
+
+#[test]
+fn indentless_sequences_start_at_their_first_indicator() {
+    // (buffer, path of the sequence, expected span text)
+    let cases = [
+        (
+            "command:\n- -c\n- echo hi\n",
+            r#"["command"]"#,
+            "- -c\n- echo hi",
+        ),
+        ("args:\n- --port=8080\n", r#"["args"]"#, "- --port=8080"),
+        ("a:\n- - x\n- y\n", r#"["a"]"#, "- - x\n- y"),
+        ("a:\n- - x\n", r#"["a"][0]"#, "- x"),
+        ("a:\n  - -c\n", r#"["a"]"#, "- -c"),
+        ("a:\n- plain\n", r#"["a"]"#, "- plain"),
+        ("- -c\n- - x\n", "", "- -c\n- - x"),
+        ("- -c\n- - x\n", "[1]", "- x"),
+        ("? k\n: - -c\n", r#"["k"]"#, "- -c"),
+    ];
+    for (text, p, want) in cases {
+        let result = parse(text);
+        assert!(
+            result.diagnostics().is_empty(),
+            "{text:?}: {:?}",
+            result.diagnostics()
+        );
+        check_invariants(&result);
+        assert_eq!(span_text(&result, 0, p), want, "{text:?} at {p}");
+    }
+}
