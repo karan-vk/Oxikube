@@ -25,7 +25,7 @@
 //! [`CommandBus::list`] (the commands that can run in a [`CommandContext`]: the focused view,
 //! the session's read-only flag and capabilities, the selection), [`CommandBus::all`] (every
 //! registered command, for a "show all" toggle) and [`CommandBus::get`]. Each command's
-//! `availability` is plain data in `oxikube_domain::command`, evaluated by [`check`]; a
+//! `availability` is plain data in `oxikube_domain::command`, evaluated by [`CommandInfo::check`]; a
 //! mutation is *hidden* from `list` on a read-only session (the guard would refuse it), and
 //! [`CommandInfo::check`] says why it is unavailable for a "show all" row.
 //!
@@ -55,7 +55,7 @@ mod registry;
 #[cfg(test)]
 mod tests;
 
-pub use availability::{CommandContext, Selection, Unavailable, check};
+pub use availability::{CommandContext, Selection, Unavailable};
 pub use bus::CommandBus;
 pub use context::{CommandOutput, DispatchContext, Outcome};
 pub use error::DispatchError;

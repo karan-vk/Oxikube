@@ -1,4 +1,4 @@
-//! [`CommandContext`]: what is true right now, and [`check`]: can a command run in it.
+//! [`CommandContext`]: what is true right now, and `check`: can a command run in it.
 //!
 //! The palette, the help overlay, context menus and hosted agents all ask the same question,
 //! "which commands can run here?", of the same data: a command's
@@ -191,7 +191,7 @@ impl fmt::Display for Unavailable {
 ///
 /// The checks run from the cheapest and most telling to the most specific: cluster, view,
 /// capabilities, read-only, selection.
-pub fn check(meta: &CommandMeta, ctx: &CommandContext) -> Result<(), Unavailable> {
+pub(super) fn check(meta: &CommandMeta, ctx: &CommandContext) -> Result<(), Unavailable> {
     if meta.scope != CommandScope::Global && !ctx.cluster_active {
         return Err(Unavailable::NoCluster);
     }

@@ -22,8 +22,6 @@ const NAMESPACES: [&str; 8] = [
     "app", "cluster", "resource", "pod", "logs", "terminal", "node", "workload",
 ];
 
-const LOG_VIEW: &[ViewContext] = &[ViewContext::Logs];
-const TERMINAL_VIEW: &[ViewContext] = &[ViewContext::Terminal];
 const TABLE_VIEWS: &[ViewContext] = &[ViewContext::Table, ViewContext::Detail];
 
 /// `n` distinct fixture commands, ids `<namespace>::Fx<i>`, titles `Fixture <i> ...`. The
@@ -52,7 +50,9 @@ pub fn fixture_command(i: usize) -> &'static CommandMeta {
     let none = Capabilities::empty();
     let meta = match i % 8 {
         0 => CommandMeta::read(id, title, CommandScope::Global, none),
-        1 => CommandMeta::read(id, title, CommandScope::Cluster, none).in_views(LOG_VIEW),
+        1 => {
+            CommandMeta::read(id, title, CommandScope::Cluster, none).in_views(&[ViewContext::Logs])
+        }
         2 => CommandMeta::read(id, title, CommandScope::Selection, none)
             .in_views(TABLE_VIEWS)
             .selecting(SelectionKind::One),
@@ -64,7 +64,8 @@ pub fn fixture_command(i: usize) -> &'static CommandMeta {
             .in_views(TABLE_VIEWS)
             .selecting(SelectionKind::core("Pod")),
         6 => CommandMeta::read(id, title, CommandScope::ResourceKind, none).in_views(TABLE_VIEWS),
-        _ => CommandMeta::read(id, title, CommandScope::Global, none).in_views(TERMINAL_VIEW),
+        _ => CommandMeta::read(id, title, CommandScope::Global, none)
+            .in_views(&[ViewContext::Terminal]),
     };
     Box::leak(Box::new(meta))
 }
