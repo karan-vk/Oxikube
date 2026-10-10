@@ -5,12 +5,12 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement as _, ParentElement as _, Stateful,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
-use oxikube_keymap::bindings_for_action_name;
+use oxikube_domain::command::CommandId;
+use oxikube_keymap::bindings_for_command;
 use oxikube_ui::kbd::keycap;
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, u};
 
-use super::TOGGLE_SHOW_ALL_ACTION;
 use super::delegate::CommandPaletteDelegate;
 use crate::picker::fuzzy::highlighted_text;
 use crate::picker::{Picker, match_label};
@@ -68,7 +68,7 @@ impl CommandPaletteDelegate {
                 .text_color(colors.text_muted)
                 .child(reason.to_string())
                 .into_any_element(),
-            None => binding_caps(id.as_str(), format!("palette-keys-{ix}"), cx).into_any_element(),
+            None => binding_caps(id, format!("palette-keys-{ix}"), cx).into_any_element(),
         };
         Some(
             h_flex()
@@ -135,7 +135,7 @@ impl CommandPaletteDelegate {
                     )
                     .child("Show all")
                     .child(binding_caps(
-                        TOGGLE_SHOW_ALL_ACTION,
+                        CommandId::PALETTE_TOGGLE_SHOW_ALL,
                         "palette-show-all-keys".into(),
                         cx,
                     )),
@@ -144,21 +144,23 @@ impl CommandPaletteDelegate {
     }
 }
 
-/// The keystrokes of the first binding of `action`, in the keymap's spelling (`cmd-shift-p`);
-/// empty when it has none. Read from the live keymap, so a rebind in `keymap.json` shows up in
-/// the next frame.
-pub(super) fn binding_strokes(action: &str, cx: &gpui::App) -> Vec<String> {
-    bindings_for_action_name(cx, action, None)
+/// The keystrokes of the first binding that runs `command`, in the keymap's spelling
+/// (`cmd-shift-p`); empty when it has none. That is a binding of the action named like the command
+/// or of a view action that stands for it (`resource_table::CopyName` for `resource::CopyName`,
+/// see [`bindings_for_command`]). Read from the live keymap, so a rebind in `keymap.json` shows up
+/// in the next frame.
+pub(super) fn binding_strokes(command: CommandId, cx: &gpui::App) -> Vec<String> {
+    bindings_for_command(cx, command)
         .into_iter()
         .next()
         .map(|binding| binding.keystrokes)
         .unwrap_or_default()
 }
 
-/// The key caps of the first binding of `action` (none when it has none), selectable as
+/// The key caps of the first binding of `command` (none when it has none), selectable as
 /// `selector` in tests.
-fn binding_caps(action: &str, selector: String, cx: &gpui::App) -> gpui::Div {
-    let caps = binding_strokes(action, cx)
+fn binding_caps(command: CommandId, selector: String, cx: &gpui::App) -> gpui::Div {
+    let caps = binding_strokes(command, cx)
         .iter()
         .filter_map(|stroke| keycap(stroke))
         .collect::<Vec<_>>();

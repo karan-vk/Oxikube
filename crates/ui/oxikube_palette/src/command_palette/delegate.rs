@@ -189,29 +189,22 @@ impl PickerDelegate for CommandPaletteDelegate {
             cx.emit(DismissEvent);
             return;
         }
-        let surface = self
-            .outbox
-            .runs_on_surface(id)
-            .then(|| self.target.targets.clone());
+        if self.outbox.runs_on_surface(id) {
+            // The view runs it through its own flow, which asks for what is missing: nothing is
+            // built here (a select-all of a big table would stall the frame), and the bus
+            // commands are made only if the view declines.
+            self.recents.record(id);
+            self.outbox
+                .push(Launch::on_surface(id, self.target.clone()));
+            cx.emit(DismissEvent);
+            return;
+        }
         match commands_for(id, &self.target) {
             Ok(commands) => {
                 self.recents.record(id);
                 // Sent by the host once the palette has closed and the focus is back, so the
                 // command acts on the view the palette opened over.
-                self.outbox.push(Launch {
-                    id,
-                    commands,
-                    surface,
-                });
-            }
-            // The view runs it through its own flow, which asks for what is missing.
-            Err(InvokeError::NeedsInput { .. }) if surface.is_some() => {
-                self.recents.record(id);
-                self.outbox.push(Launch {
-                    id,
-                    commands: Vec::new(),
-                    surface,
-                });
+                self.outbox.push(Launch::on_bus(id, commands));
             }
             Err(InvokeError::NeedsInput { .. }) => {
                 // The palette is generic: a command that needs an operand has its own dialog.

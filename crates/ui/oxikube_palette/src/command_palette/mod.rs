@@ -82,9 +82,6 @@ actions!(
     ]
 );
 
-/// The action name of [`ToggleShowAll`], for the footer's key hint.
-pub(crate) const TOGGLE_SHOW_ALL_ACTION: &str = "palette::ToggleShowAll";
-
 /// Registers the `palette::Toggle` action handler. Call once at start-up, after the keymap; the
 /// binary then installs a [`PaletteHost`] per window.
 pub fn init(cx: &mut gpui::App) {

@@ -3,8 +3,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use oxikube_app::{CommandTarget, commands_for};
 use oxikube_domain::command::{Command, CommandId};
-use oxikube_domain::ids::ResourceRef;
 
 /// One confirmed command, waiting for the palette to close and hand the focus back.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -12,14 +12,48 @@ pub struct Launch {
     /// The command the user picked.
     pub id: CommandId,
     /// What the bus is sent for it: one `Command` per selected object, as
-    /// [`commands_for`](oxikube_app::commands_for) builds them. Empty when the command needs an
-    /// operand the palette cannot supply and only the surface's own flow can run it.
+    /// [`commands_for`](oxikube_app::commands_for) builds them. Empty when
+    /// [`surface`](Self::surface) is set: those are built by [`fallback`](Self::fallback) only if
+    /// the view declines, so a select-all of a big table costs nothing on confirm.
     pub commands: Vec<Command>,
-    /// `Some(objects)` when the view the palette opened over runs this command through its own
+    /// `Some(target)` when the view the palette opened over runs this command through its own
     /// flow ([`CommandSurface::own_commands`](oxikube_workspace::command_surface::CommandSurface::own_commands)):
-    /// one delete dialog for the whole selection, a container picker. The host asks that view
-    /// first and sends [`commands`](Self::commands) only if it declines.
-    pub surface: Option<Vec<ResourceRef>>,
+    /// one delete dialog for the whole selection (`target.targets`), a container picker. The host
+    /// asks that view first and sends the [`fallback`](Self::fallback) commands only if it
+    /// declines.
+    pub surface: Option<CommandTarget>,
+}
+
+impl Launch {
+    /// A command the bus runs: `commands` are ready.
+    pub fn on_bus(id: CommandId, commands: Vec<Command>) -> Self {
+        Self {
+            id,
+            commands,
+            surface: None,
+        }
+    }
+
+    /// A command the view runs through its own flow, over `target`; nothing is built yet.
+    pub fn on_surface(id: CommandId, target: CommandTarget) -> Self {
+        Self {
+            id,
+            commands: Vec::new(),
+            surface: Some(target),
+        }
+    }
+
+    /// What the bus is sent when the view declined: the commands built at confirm, else those
+    /// [`commands_for`] makes from the view's target (none when it needs an operand the palette
+    /// cannot supply: only the view's own flow can run it).
+    pub fn fallback(self) -> Vec<Command> {
+        if !self.commands.is_empty() {
+            return self.commands;
+        }
+        self.surface
+            .and_then(|target| commands_for(self.id, &target).ok())
+            .unwrap_or_default()
+    }
 }
 
 #[derive(Default)]

@@ -18,6 +18,8 @@
 //! shape a keymap entry or an MCP tool call has, so "palette entry", "key" and "tool call" cannot
 //! drift apart. Plain Rust: no UI, no I/O.
 
+use std::collections::HashSet;
+
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use serde_json::{Map, Value, json};
@@ -92,11 +94,17 @@ pub fn commands_for(id: CommandId, target: &CommandTarget) -> Result<Vec<Command
     if target.targets.is_empty() {
         commands.push(build(id, target, None)?);
     } else {
+        // A command that does not act on objects (`resource::OpenList`) comes out the same for
+        // every selected object: it runs once. Seen commands are kept by their serde form, so the
+        // dedup is linear in the selection (a select-all of 10k pods), not quadratic.
+        let mut seen: HashSet<String> = HashSet::with_capacity(target.targets.len());
         for object in &target.targets {
             let command = build(id, target, Some(object))?;
-            // A command that does not act on objects (`resource::OpenList`) comes out the same
-            // for every selected object: it runs once.
-            if !commands.contains(&command) {
+            let fresh = match serde_json::to_string(&command) {
+                Ok(key) => seen.insert(key),
+                Err(_) => !commands.contains(&command),
+            };
+            if fresh {
                 commands.push(command);
             }
         }

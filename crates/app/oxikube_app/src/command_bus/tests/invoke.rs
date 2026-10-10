@@ -116,3 +116,22 @@ fn every_declared_command_builds_or_asks_for_input() {
     }
     assert!(built > 30, "most commands build from a selection: {built}");
 }
+
+/// A select-all of a 10k-pod table is turned into commands in time linear in the selection: the
+/// palette does it on the UI thread (the dedup of identical commands used to be quadratic).
+#[test]
+fn a_select_all_of_ten_thousand_objects_builds_in_linear_time() {
+    let pods: Vec<_> = (0..10_000).map(|i| pod(&format!("pod-{i}"))).collect();
+    let target = CommandTarget::none().in_cluster(cluster()).selecting(pods);
+    let started = std::time::Instant::now();
+    let per_object = commands_for(CommandId::POD_VIEW_LOGS, &target).unwrap();
+    let once = commands_for(CommandId::VIEW_ZOOM_IN, &target).unwrap();
+    let elapsed = started.elapsed();
+    assert_eq!(per_object.len(), 10_000, "one per selected object");
+    assert_eq!(once, [Command::ViewZoomIn], "once, not once per object");
+    // Quadratic dedup takes tens of seconds here in a debug build; linear takes well under one.
+    assert!(
+        elapsed < std::time::Duration::from_secs(5),
+        "10k objects took {elapsed:?}"
+    );
+}
