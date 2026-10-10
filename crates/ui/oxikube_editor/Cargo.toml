@@ -14,14 +14,28 @@ doctest = false
 [dependencies]
 # Spanned YAML 1.2 events for `yaml` (E10-S02); confined to `yaml/parse.rs`.
 granit-parser.workspace = true
+# `Gvk` of a document (schema lookup) and `JsonSchema` for `validate` (E10-S03).
+oxikube_domain.workspace = true
+# Schema `pattern` checks (RE2-compatible syntax, which is what Kubernetes patterns use).
+regex.workspace = true
+# Schema `enum` values are JSON.
+serde_json.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
+oxikube_testkit.workspace = true
 proptest.workspace = true
 
 # `cargo bench -p oxikube_editor --bench yaml_parse` (E10-S02, reused by E10-S11): parse time of a
 # 2k-line manifest and a 5 MB dump.
 [[bench]]
 name = "yaml_parse"
+harness = false
+
+# `cargo bench -p oxikube_editor --bench validate` (E10-S03): schema validation of a 2k-line
+# Deployment manifest (budget 50 ms, epic goal squiggles within 100 ms of typing).
+[[bench]]
+name = "validate"
 harness = false
 
 [lints]

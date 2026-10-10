@@ -499,6 +499,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   (its block is parsed as that collection's continuation) or at the next `---`; duplicate keys are diagnosed (lookups take the
   first); at most 1 000 diagnostics. `ParseCache` memoises the last parse by buffer version. Bench: `cargo bench -p
   oxikube_editor --bench yaml_parse` (2k lines under 1 ms, 5 MB about 110 ms).
+- `oxikube_editor::validate` (E10-S03) — schema validation of the spanned model, pure and synchronous (no gpui, no kube, no
+  `SchemaPort` call: the caller fetches the `Arc<JsonSchema>` off the UI thread and runs this on the background executor,
+  dropping stale results). `validate(&ParseResult, &DocTree, &JsonSchema, &ValidateOptions) -> Vec<Diagnostic>` walks tree and
+  schema together by path; `validate_buffer(&ParseResult, schema_for, opts)` looks each document's schema up by its
+  `apiVersion`/`kind` (`document_gvk`), adds the syntax errors and sorts by position. A `Diagnostic` is `{doc, span (buffer
+  bytes), severity, message, code, path}`; codes are stable strings (`syntax`, `unknown-field`, `type-mismatch`, `enum`,
+  `required`, `pattern`, `duplicate-key`, `duplicate-item`) for the squiggles (S04), hover (S05) and the apply flow's
+  error-to-field mapper (S08). Scalars are typed by the YAML 1.2 core schema (`replicas: "3"` is a string; `500m`, `1Gi`, `5s`
+  are strings; an empty value is a null and never reported; explicit `!!str`-style tags win); an object that lists `properties`
+  and does not preserve unknown fields rejects other keys (warning, with a "did you mean" by edit distance), as does
+  `additionalProperties: false`; int-or-string, `x-kubernetes-list-type: map|set` duplicates and `embedded-resource`
+  (`apiVersion`/`kind`) are checked; root `status` is skipped by default; `required` is not judged on objects a syntax error
+  touched. Bench: `cargo bench -p oxikube_editor --bench validate` (2k-line Deployment: validate about 0.1 ms, with the parse
+  about 1 ms; budget 50 ms).
 - `oxikube_ui::code_view` (E07-P598) — `CodeView`, the read-only text view of the detail's YAML and Describe tabs: the text as
   an `Arc<str>`, its display rows (`RowMap`: soft wrap at the measured width, or lines cut at `MAX_ROW_COLS`) and its
   tree-sitter parse (gpui-component's `SyntaxHighlighter`) made on the background executor; a `uniform_list` shapes only the

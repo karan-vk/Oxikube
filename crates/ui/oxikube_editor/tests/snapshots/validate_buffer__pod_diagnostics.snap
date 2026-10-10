@@ -1,0 +1,9 @@
+---
+source: crates/ui/oxikube_editor/tests/validate_buffer.rs
+expression: "render(broken, &diags)"
+---
+6:3 doc0 warning unknown-field "restartPolcy" unknown field "restartPolcy" (did you mean "restartPolicy"?) [spec.restartPolcy]
+9:14 doc0 error type-mismatch "1.27" expected string, found number 1.27 [spec.containers[0].image]
+11:26 doc0 error type-mismatch "\"80\"" expected integer, found string "80" [spec.containers[0].ports[0].containerPort]
+12:21 doc0 error enum "TCPP" invalid value "TCPP", expected one of "SCTP", "TCP", "UDP" (did you mean "TCP"?) [spec.containers[0].ports[0].protocol]
+13:13 doc0 warning duplicate-key "nginx" duplicate list entry with the same name (nginx) [spec.containers[1].name]
