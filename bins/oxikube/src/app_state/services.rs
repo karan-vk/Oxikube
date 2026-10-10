@@ -2,7 +2,8 @@
 
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
-    ClusterCatalog, ClusterCommands, ClusterSessionManager, IntegrationRegistry, MutationGuard,
+    AliasRegistry, ClusterCatalog, ClusterCommands, ClusterSessionManager, IntegrationRegistry,
+    MutationGuard,
 };
 
 use super::AppPorts;
@@ -26,6 +27,10 @@ pub struct ClusterServices {
     pub namespaces: NamespaceService,
     /// Optional integrations (Argo CD later) and their sidebar sections.
     pub integrations: IntegrationRegistry,
+    /// The `:` jump bar's words, one table per cluster (E11-S04): built-in k9s aliases, what each
+    /// cluster's discovery serves, the user's `aliases.json`. Kept in step by
+    /// [`crate::aliases`]; the jump bar reads `aliases.table(&cluster).resolve(word)`.
+    pub aliases: AliasRegistry,
 }
 
 impl ClusterServices {
@@ -53,6 +58,7 @@ impl ClusterServices {
             catalog,
             namespaces,
             integrations: IntegrationRegistry::new(),
+            aliases: AliasRegistry::new(),
         }
     }
 

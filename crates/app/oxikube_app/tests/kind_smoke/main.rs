@@ -15,6 +15,7 @@
 //! per-run label, so suites running concurrently on the cluster never show up here.
 #![cfg(feature = "integration")]
 
+mod aliases;
 mod auth_required;
 mod auto_reconnect;
 mod clock;

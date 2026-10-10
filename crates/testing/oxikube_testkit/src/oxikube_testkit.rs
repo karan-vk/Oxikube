@@ -18,6 +18,7 @@
 //!   points are re-exported here.
 //! - [`commands`]: `fixture_commands(n)`, a deterministic mix of command metadata (every view,
 //!   selection shape and category) for palette, help and keymap tests.
+//! - [`kinds`]: discovery fixtures, `ResourceKind`s as an API server reports them (`kind(..).short(..)`, `core_kinds()`, CRDs that collide).
 //! - [`images`]: the container images the kind suites run (one list, pre-pulled by `kind-up`).
 //! - [`script`]: the [`Script`] / [`CallLog`] / [`Timeline`] helpers the fakes share.
 //! - [`scripted_feed`]: [`ScriptedFeed`], objects added / modified / deleted at chosen ticks as the
@@ -48,6 +49,7 @@ pub mod images;
 /// kind-backed integration test helpers (`OXIKUBE_TEST_CONTEXT`, `oxi-test-<rand>` namespaces).
 #[cfg(feature = "integration")]
 pub mod integration;
+pub mod kinds;
 #[cfg(feature = "screenshot")]
 pub mod screenshot;
 pub mod script;

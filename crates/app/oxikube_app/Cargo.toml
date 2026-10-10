@@ -90,3 +90,8 @@ harness = false
 [[bench]]
 name = "command_list"
 harness = false
+
+# `cargo bench -p oxikube_app --bench alias_resolve` (E11-S04): a jump-bar lookup and a table rebuild.
+[[bench]]
+name = "alias_resolve"
+harness = false

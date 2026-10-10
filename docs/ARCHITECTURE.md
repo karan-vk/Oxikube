@@ -51,9 +51,27 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_testkit` — a `Fake*` for every port, fixtures and builders, `TestPorts` (the seeded fakes
   `AppState::test` is built from), and the GPUI test harness (`gpui_test::TestApp` / `TestWindow`,
   `ScreenshotApp` with golden compare; `docs/testing-gpui.md`; the logs test matrix is `docs/testing-logs.md`).
+- `oxikube_settings::aliases` (E11-S04) — the user's `aliases.json` next to `settings.json`: a JSON-with-comments
+  object from alias to a resource (`"apps/v1/deployments"`, `{ "gvr": .. }`) or a command line (`"pod fred app=blee"`,
+  `{ "command": "pod", "args": [..] }`). `parse_aliases` skips a bad entry and reports it with its line (names the jump
+  bar would misread, wrong types, unknown fields, repeats); a file that is not JSON keeps the last good aliases.
+  `UserAliasesFile::open(path, watch, on_change)` reads, watches (`watch: false` in tests plus an explicit `reload`) and
+  calls back from the watcher's thread; `oxikube_assets::aliases_schema()` is the schema editors use. The app layer
+  cannot depend on this crate, so `bins/oxikube::aliases` pushes the result into `AliasRegistry::set_user_aliases`.
+  `oxikube_domain::AliasTarget` (a `Gvr` or a `Command { name, args }`) is the one type both sides share.
 - `oxikube_app` — services: `ClusterSessionManager`, `ResourceStore`, `CommandBus`,
   `MutationGuard`, `LogService`, `PortForwardManager`, `IntegrationRegistry`, `ToolRegistry`,
-  `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `sidebar` (E06-S10):
+  `ContextRegistry`, `AgentSessionManager`. No gpui, no kube. Module `search::aliases` (E11-S04): `AliasTable`, the words
+  the `:` jump bar understands, in three layers with the precedence user `aliases.json` > built-in k9s names (`po`, `dp`,
+  `svc`, ... as a data table that follows the version the cluster prefers) > discovery (plural, singular, short names,
+  lower-cased Kind and `plural.group` of every served type, CRDs included, preferred version only). `resolve` is a hash
+  lookup, case-insensitive, allocation-free for a known word (a test counts allocations; about 15 ns) and returns
+  `Exact`, `Ambiguous` (two groups with one plural; candidates in a fixed order, core group first, then by group, so the
+  first never depends on discovery's order) or `Unknown { suggestions }` (prefix and edit distance). Every collision is
+  in `conflicts()` (`Shadowed`: a higher layer hides lower entries that lead elsewhere; `Ambiguous`), never silent.
+  `AliasRegistry` holds one table per cluster and the user's aliases for all; `follow(sessions, runtime)` fills a table
+  when its session connects, applies a CRD change by resolving only the kinds it names (one cluster's worker task each),
+  and clears discovery on disconnect. Module `sidebar` (E06-S10):
   `review_access` (the rules reviews the cluster sidebar hides sections by; fails open) and
   `discover_custom_resources`; module `integrations`: the `IntegrationRegistry` stub. Module `session` (E06-S01):
   `ClusterSessionManager` connects a context through `ClusterConnectorPort`, holds the returned
@@ -718,6 +736,11 @@ weaken `cargo xtask lint-deps`.
   `ClockPort`. They join the state db in `AppPorts` (`AppPorts::clusters`).
 - `app_state::ClusterServices`: the session manager, catalog, cluster commands, namespace service
   and integration registry over those ports, held by `AppState`.
+- `aliases` (E11-S04): `ClusterServices::aliases` is the `AliasRegistry` the jump bar reads
+  (`aliases.table(&cluster).resolve(word)`). The `aliases` feature init (`startup::features`, after the first
+  frame's path) follows the session manager on the Tokio runtime and opens the user's `aliases.json` on the
+  background executor (watched under `ConfigSource::UserDir`, read once under `Dir`, not at all in memory); a save
+  reaches every cluster's table within the watcher's debounce, and invalid entries are logged with their line.
 - `mount`: `mount_main_window` runs inside the main window's construction
   (`oxikube_workspace::window::open_main_window_mounted`): the cluster tabs with their setup
   (sidebar, connect views, namespace selector in the tab toolbar, `ClusterTab::set_toolbar`), the

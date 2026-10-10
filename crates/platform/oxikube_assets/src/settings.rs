@@ -20,3 +20,9 @@ pub fn initial_user_settings_content() -> &'static str {
 pub fn settings_schema() -> &'static str {
     include_str!("../assets/settings/settings.schema.json")
 }
+
+/// The JSON schema for the user's `aliases.json` (`assets/settings/aliases.schema.json`, E11-S04),
+/// for editors; `oxikube_settings::aliases` is the validator the app runs.
+pub fn aliases_schema() -> &'static str {
+    include_str!("../assets/settings/aliases.schema.json")
+}

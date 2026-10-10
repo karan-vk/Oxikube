@@ -37,6 +37,10 @@ pub const FEATURES: &[Feature] = &[
         name: "cluster_prefs",
         init: follow_cluster_prefs,
     },
+    Feature {
+        name: "aliases",
+        init: crate::aliases::start,
+    },
 ];
 
 /// The per-cluster settings (`clusters.<id>`) follow into the session manager (E06-S08) and the
