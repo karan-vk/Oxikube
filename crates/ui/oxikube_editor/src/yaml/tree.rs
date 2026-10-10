@@ -51,7 +51,7 @@ impl DocTree {
             }
             let child = next;
             next = (self.nodes[child].subtree_end as usize).max(child + 1);
-            Some(NodeId::from_index(child))
+            Some(NodeId::new(child))
         })
     }
 
@@ -85,7 +85,7 @@ impl DocTree {
         // `offset` is the deepest candidate; every node containing `offset` is one of its
         // ancestors (or itself).
         let after = self.nodes.partition_point(|n| n.span.start <= offset);
-        let mut id = after.checked_sub(1).map(NodeId::from_index);
+        let mut id = after.checked_sub(1).map(NodeId::new);
         while let Some(current) = id {
             let span = &self.node(current).span;
             if span.start <= offset && offset < span.end {
@@ -112,7 +112,7 @@ impl DocTree {
     /// The value node of the entry a key belongs to, if any.
     #[must_use]
     pub fn value_of_key(&self, key: NodeId) -> Option<NodeId> {
-        let next = NodeId::from_index(self.node(key).subtree_end as usize);
+        let next = NodeId::new(self.node(key).subtree_end as usize);
         (next.index() < self.nodes.len() && self.node(next).role == Role::Value { key })
             .then_some(next)
     }

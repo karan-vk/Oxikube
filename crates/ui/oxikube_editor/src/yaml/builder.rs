@@ -135,8 +135,7 @@ impl Builder {
             self.skip_depth -= 1;
             return;
         }
-        let flow_end = range.end;
-        self.close_top(Some(flow_end));
+        self.close_top(Some(range.end));
     }
 
     pub fn leaf(
@@ -237,7 +236,7 @@ impl Builder {
             self.doc_start(span.start..span.start, false);
         }
         let doc = self.doc.as_mut()?;
-        let id = NodeId::from_index(doc.nodes.len());
+        let id = NodeId::new(doc.nodes.len());
         let (parent, role) = match self.frames.last_mut() {
             None if doc.nodes.is_empty() => (None, Role::Root),
             None => return None,

@@ -36,12 +36,6 @@ impl JsonPath {
         Self::default()
     }
 
-    /// Whether this is the root path.
-    #[must_use]
-    pub fn is_root(&self) -> bool {
-        self.0.is_empty()
-    }
-
     /// The segments, root first.
     #[must_use]
     pub fn segments(&self) -> &[PathSegment] {

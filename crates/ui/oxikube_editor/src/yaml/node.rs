@@ -19,10 +19,6 @@ impl NodeId {
     /// The id of the node at `index` in [`DocTree::nodes`](super::DocTree::nodes).
     #[must_use]
     pub fn new(index: usize) -> Self {
-        Self::from_index(index)
-    }
-
-    pub(crate) fn from_index(index: usize) -> Self {
         Self(u32::try_from(index).unwrap_or(u32::MAX))
     }
 }
@@ -118,11 +114,5 @@ impl Node {
     #[must_use]
     pub fn is_implicit_null(&self) -> bool {
         matches!(self.kind, NodeKind::Scalar(ScalarStyle::Plain)) && self.span.is_empty()
-    }
-
-    /// Whether this node is a mapping or a sequence.
-    #[must_use]
-    pub fn is_collection(&self) -> bool {
-        matches!(self.kind, NodeKind::Mapping(_) | NodeKind::Sequence(_))
     }
 }

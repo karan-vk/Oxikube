@@ -11,8 +11,8 @@
 //! granit-parser types never leave `parse.rs`.
 //!
 //! Layout: `parse` (granit-parser events → builder, recovery loop), `builder` (event → tree),
-//! `recover` (re-sync lines), `dupes` (duplicate keys), `tree` (`DocTree` lookups), `result` (`ParseResult`), `path`
-//! (`JsonPath`), `node`, `cache`.
+//! `recover` (re-sync lines), `dupes` (duplicate keys), `tree` (`DocTree` lookups), `result`
+//! (`ParseResult`), `path` (`JsonPath`), `node`, `cache`.
 
 mod builder;
 mod cache;
