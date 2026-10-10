@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use gpui::{
     AppContext as _, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable, Pixels,
-    SharedString, Task, UniformListScrollHandle, Window,
+    SharedString, Subscription, Task, UniformListScrollHandle, Window,
 };
 use oxikube_app::session::namespaces::{
     NamespaceCatalog, NamespacePrefs, NamespaceService, NamespaceSource, slot_selection,
@@ -54,7 +54,7 @@ pub struct NamespaceSelector {
     /// Keeps the session subscription alive; dropped with the view.
     pub(super) _watch: Option<Task<()>>,
     /// Follows the session updates of commands run on the UI thread, in their update.
-    pub(super) _echo: Option<gpui::Subscription>,
+    pub(super) _echo: Option<Subscription>,
 }
 
 impl EventEmitter<NamespaceSelectorEvent> for NamespaceSelector {}

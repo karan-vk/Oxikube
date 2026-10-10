@@ -18,10 +18,24 @@ use std::rc::Rc;
 use futures::{FutureExt as _, StreamExt as _};
 use gpui::{App, Context, Global, Subscription};
 use oxikube_app::session::SessionLagged;
-use oxikube_app::{ClusterSessionManager, SessionUpdate, SessionUpdates};
+use oxikube_app::{ClusterSessionManager, SessionChange, SessionUpdate, SessionUpdates};
+use oxikube_domain::ids::ClusterId;
 
 /// One echoed item: an update, or a note that the recording missed some (re-read the sessions).
 pub type EchoItem = Result<SessionUpdate, SessionLagged>;
+
+/// Whether `items` hold a namespace change of `cluster`'s session, or a note that some were
+/// missed (then the sessions must be re-read). What the views that follow the namespace selection
+/// ask of an echo.
+pub fn namespace_changed(items: &[EchoItem], cluster: &ClusterId) -> bool {
+    items.iter().any(|item| match item {
+        Ok(update) => {
+            update.cluster == *cluster
+                && matches!(update.change, SessionChange::NamespaceChanged(_))
+        }
+        Err(_) => true,
+    })
+}
 
 /// Records the session updates sent while a command runs on the UI thread. See the
 /// [module docs](self).

@@ -21,10 +21,9 @@
 use std::sync::Arc;
 
 use gpui::{Context, Subscription};
-use oxikube_app::SessionChange;
 use oxikube_app::store::{FeedState, StoreObject};
 use oxikube_domain::session::WatchScope;
-use oxikube_workspace::cluster::{EchoItem, observe_session_echo};
+use oxikube_workspace::cluster::{EchoItem, namespace_changed, observe_session_echo};
 
 use super::view::ResourceTable;
 
@@ -33,15 +32,7 @@ impl ResourceTable {
     /// rescopes the table in that update.
     pub(super) fn follow_session_echo(cx: &mut Context<Self>) -> Subscription {
         observe_session_echo(cx, |view: &mut Self, items: &[EchoItem], cx| {
-            let changed = items.iter().any(|item| match item {
-                Ok(update) => {
-                    update.cluster == view.cluster
-                        && matches!(update.change, SessionChange::NamespaceChanged(_))
-                }
-                // Missed some: re-read, as the stream's follower does.
-                Err(_) => true,
-            });
-            if changed {
+            if namespace_changed(items, &view.cluster) {
                 // As the stream's follower does: the scope, then the columns (one namespace hides
                 // the Namespace column), so both change in this frame and not in two.
                 view.resubscribe(cx);

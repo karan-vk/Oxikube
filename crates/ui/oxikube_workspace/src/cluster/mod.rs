@@ -30,7 +30,7 @@ mod status;
 mod tests;
 
 pub use colour::badge_colour;
-pub use echo::{EchoItem, SessionEcho, observe_session_echo};
+pub use echo::{EchoItem, SessionEcho, namespace_changed, observe_session_echo};
 pub use follow::follow_session;
 pub use mark::{BadgeSurface, ClusterBadge, ClusterMark};
 pub use menu::{MenuEntry, cluster_menu, cluster_menu_entries};

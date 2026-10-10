@@ -9,7 +9,7 @@ use oxikube_domain::command::Command;
 use oxikube_domain::session::NamespaceSelection;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_runtime::{KubeTaskError, spawn_kube};
-use oxikube_workspace::cluster::{EchoItem, SessionEcho, observe_session_echo};
+use oxikube_workspace::cluster::{EchoItem, SessionEcho, namespace_changed, observe_session_echo};
 
 use super::events::NamespaceSelectorEvent;
 use super::selector::NamespaceSelector;
@@ -90,14 +90,7 @@ impl NamespaceSelector {
     /// Follows the session echo: a selection changed on the UI thread shows in that update.
     pub(super) fn follow_session_echo(&mut self, cx: &mut Context<Self>) -> Subscription {
         observe_session_echo(cx, |this: &mut Self, items: &[EchoItem], cx| {
-            let relevant = items.iter().any(|item| match item {
-                Ok(update) => {
-                    update.cluster == this.cluster
-                        && matches!(update.change, SessionChange::NamespaceChanged(_))
-                }
-                Err(_) => true,
-            });
-            if relevant {
+            if namespace_changed(items, &this.cluster) {
                 this.session_changed(cx);
             }
         })
