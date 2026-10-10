@@ -78,6 +78,9 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
     )
 }
 
+/// What the port forwarding keys say while port forwarding is not installed.
+pub(crate) const PORT_FORWARDING_UNAVAILABLE: &str = "Port forwarding is not available yet";
+
 /// The line that says which kinds a single-object command is for, or why it is not there, shown
 /// when its key is pressed in a table that does not offer it ("Shell is available for Pods and
 /// Nodes"). `resource::Edit` and `pod::PortForward` are rows the editor and port forwarding
@@ -93,7 +96,7 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
             Some("Logs are available for Pods, workloads and Services")
         }
         CommandId::RESOURCE_EDIT => Some("Editing is not available yet"),
-        CommandId::POD_PORT_FORWARD => Some("Port forwarding is not available yet"),
+        CommandId::POD_PORT_FORWARD => Some(PORT_FORWARDING_UNAVAILABLE),
         _ => None,
     }
 }

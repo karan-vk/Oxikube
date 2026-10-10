@@ -10,9 +10,9 @@ use oxikube_app::RowActionSpec;
 use oxikube_domain::command::{Command, CommandId};
 
 /// Where "View YAML" sits in a row's menu: first, before "Describe" and the per-kind actions.
-pub const VIEW_YAML_ORDER: u16 = 10;
+const VIEW_YAML_ORDER: u16 = 10;
 /// Where "Describe" sits: after "View YAML".
-pub const VIEW_DESCRIBE_ORDER: u16 = 20;
+const VIEW_DESCRIBE_ORDER: u16 = 20;
 
 /// The row actions this module adds: `resource::ViewYaml` and `resource::ViewDescribe`, for every
 /// kind, one object at a time.

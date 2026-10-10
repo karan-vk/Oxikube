@@ -27,5 +27,5 @@ mod sidebar;
 
 pub use commands::{RESOURCE_COMMANDS, ResourceCommandSink, ViewRequest, register_commands};
 pub use controller::{ResourceViews, ResourceViewsDeps, find_kind};
-pub use row_actions::{VIEW_DESCRIBE_ORDER, VIEW_YAML_ORDER, view_row_actions};
+pub use row_actions::view_row_actions;
 pub use sidebar::{ResourceViewsSlot, sidebar_navigation};

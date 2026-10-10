@@ -18,25 +18,21 @@
 //! `ctrl-d` (delete), `s` (shell) and `a` (attach) are in [`row_actions`](super::row_actions).
 //! The row-bound verbs act on the cursor row of a multi-selection and say so.
 
-use gpui::{Context, Window};
+use gpui::{App, Context, Window};
 use oxikube_domain::command::{Command, CommandId};
+use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::Toast;
 
 use super::actions::{
     EditSelected, PortForward, ShowPortForwards, ToggleWide, ViewDescribe, ViewLogs, ViewYaml,
 };
 use super::view::ResourceTable;
+use crate::exec::PORT_FORWARDING_UNAVAILABLE;
 
 impl ResourceTable {
     /// `y`: dispatches `resource::ViewYaml` for the cursor row.
     pub(super) fn on_view_yaml(&mut self, _: &ViewYaml, _: &mut Window, cx: &mut Context<Self>) {
-        let Some(target) = self.cursor_ref(cx) else {
-            self.say_no_row(cx);
-            return;
-        };
-        self.deps
-            .dispatcher
-            .dispatch(Command::ResourceViewYaml { target }, cx);
+        self.dispatch_for_cursor(|target| Command::ResourceViewYaml { target }, cx);
     }
 
     /// `d`: dispatches `resource::ViewDescribe` for the cursor row.
@@ -46,13 +42,7 @@ impl ResourceTable {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(target) = self.cursor_ref(cx) else {
-            self.say_no_row(cx);
-            return;
-        };
-        self.deps
-            .dispatcher
-            .dispatch(Command::ResourceViewDescribe { target }, cx);
+        self.dispatch_for_cursor(|target| Command::ResourceViewDescribe { target }, cx);
     }
 
     /// `e`: the `resource::Edit` row action, which the manifest editor registers.
@@ -103,7 +93,7 @@ impl ResourceTable {
         cx: &mut Context<Self>,
     ) {
         self.toast(
-            Toast::info(PORT_FORWARDS_UNAVAILABLE).key("action-unavailable:port-forwards"),
+            Toast::info(PORT_FORWARDING_UNAVAILABLE).key("action-unavailable:port-forwards"),
             cx,
         );
     }
@@ -135,11 +125,21 @@ impl ResourceTable {
         }
     }
 
+    /// Dispatches `command(cursor row)`, or says there is no row.
+    fn dispatch_for_cursor(
+        &mut self,
+        command: impl FnOnce(ResourceRef) -> Command,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = self.cursor_ref(cx) else {
+            self.say_no_row(cx);
+            return;
+        };
+        self.deps.dispatcher.dispatch(command(target), cx);
+    }
+
     /// The object of the cursor row.
-    fn cursor_ref(&self, cx: &gpui::App) -> Option<oxikube_domain::ids::ResourceRef> {
+    fn cursor_ref(&self, cx: &App) -> Option<ResourceRef> {
         self.cursor_row(cx).and_then(|row| self.row_ref(row, cx))
     }
 }
-
-/// What `f` says while port forwarding is not installed.
-const PORT_FORWARDS_UNAVAILABLE: &str = "Port forwarding is not available yet";
