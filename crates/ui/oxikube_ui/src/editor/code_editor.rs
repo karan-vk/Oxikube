@@ -11,9 +11,10 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
+use gpui::prelude::FluentBuilder as _;
 use gpui::{
     AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement,
-    ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
+    ParentElement as _, Pixels, Render, SharedString, Styled as _, Subscription, Window, div, px,
 };
 use gpui_component::input::{
     Editor, EditorState, InputEvent, RangeDecorationCollection, Rope, TextDecorationCollection,
@@ -21,7 +22,7 @@ use gpui_component::input::{
 
 #[cfg(doc)]
 use super::api::EditorApi;
-use super::api::EditorDiagnostic;
+use super::api::{EditorDiagnostic, EditorFont};
 use super::live::LiveEditor;
 use super::overlay::{diagnostics_overlay, status_label};
 use super::positions::LineSummary;
@@ -50,6 +51,9 @@ impl CodeEditorOptions {
         read_only: false,
     };
 }
+
+/// The indent width a new editor starts with (the library's own default).
+pub const DEFAULT_TAB_SIZE: usize = 2;
 
 /// What a [`CodeEditor`] tells its owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,6 +96,8 @@ pub struct CodeEditor {
     pub(super) version: u64,
     pub(super) read_only: bool,
     pub(super) soft_wrap: bool,
+    pub(super) tab_size: usize,
+    pub(super) font: EditorFont,
     pub(super) diagnostics: Vec<EditorDiagnostic>,
     pub(super) summaries: Rc<Vec<LineSummary>>,
     pub(super) status: SharedString,
@@ -131,6 +137,8 @@ impl CodeEditor {
             version: 0,
             read_only: options.read_only,
             soft_wrap: options.soft_wrap,
+            tab_size: DEFAULT_TAB_SIZE,
+            font: EditorFont::default(),
             diagnostics: Vec::new(),
             summaries: Rc::default(),
             status: status_label(&[], 0, 0).into(),
@@ -160,6 +168,26 @@ impl CodeEditor {
     /// Whether long lines wrap (see [`EditorApi::soft_wrap`]).
     pub fn soft_wrap(&self) -> bool {
         self.soft_wrap
+    }
+
+    /// The indent width (see [`EditorApi::tab_size`]).
+    pub fn tab_size(&self) -> usize {
+        self.tab_size
+    }
+
+    /// The font settings (see [`EditorApi::font`]).
+    pub fn font(&self) -> &EditorFont {
+        &self.font
+    }
+
+    /// The size the text is drawn at now, in pixels: the font size (or the theme's monospace
+    /// size) times the UI zoom.
+    pub fn text_size(&self, cx: &gpui::App) -> Pixels {
+        let base = match self.font.size {
+            Some(points) => px(points),
+            None => cx.tokens().font.mono,
+        };
+        u(base)
     }
 
     /// The buffer now, to turn into text off the UI thread.
@@ -211,7 +239,6 @@ impl Focusable for CodeEditor {
 
 impl Render for CodeEditor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let tokens = cx.tokens();
         div()
             .relative()
             .size_full()
@@ -221,7 +248,10 @@ impl Render for CodeEditor {
                     .readonly(self.read_only)
                     .appearance(false)
                     .bordered(false)
-                    .text_size(u(tokens.font.mono))
+                    .text_size(self.text_size(cx))
+                    .when_some(self.font.family.clone(), |editor, family| {
+                        editor.font_family(SharedString::from(family))
+                    })
                     .size_full(),
             )
             .child(diagnostics_overlay(

@@ -549,6 +549,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `editor::ToggleSoftWrap` (`alt-z`); the bus handlers queue an `EditorRequest` on the window's `EditorViewSink`, applied by
   `EditorViews` through an `EditorHost` (`ClusterEditorHost`). The editor is never serialised with the layout (a manifest
   can hold Secret data). Bench: `cargo run -p oxikube_editor --profile release-fast --example typing_bench`.
+- `oxikube_editor::settings` (E10-S12) — the `editor` settings (`EditorSettings`, registered with `register_settings!`; content
+  `EditorSettingsContent`, free of gpui): `tab_size`, `font_family`, `font_size`, `soft_wrap`, `show_managed_fields`,
+  `mask_secrets`, `validation`, `field_manager`, with defaults in `default.json` and the schema in `settings.schema.json`. Read
+  only through `EditorSettings::resolve(cluster, cx)` (a `clusters.<id>.editor` block overrides the user's values). Each open
+  `ManifestEditor` observes the store (`observe_global_in`, dropped with the tab) and `apply_changes` pushes the fields that
+  changed through `EditorApi` (`set_tab_size`, `set_font`, `set_soft_wrap`), never replacing the buffer, so selections and undo
+  survive; `validation: false` clears the squiggles and stops the work. An invalid value (a negative `tab_size`, a
+  `field_manager` with whitespace or of the wrong type) is replaced by the default for that key alone (`salvage`), listed in
+  `EditorSettings::problems` and shown once as a warning toast by `EditorViews`. `show_managed_fields` and `mask_secrets` are
+  read by E10-S06 when a live object opens, `field_manager` by E10-S08 at apply time. Font size is in points at 100 % zoom and
+  goes through `u()`.
 - `oxikube_ui::code_view` (E07-P598) — `CodeView`, the read-only text view of the detail's YAML and Describe tabs: the text as
   an `Arc<str>`, its display rows (`RowMap`: soft wrap at the measured width, or lines cut at `MAX_ROW_COLS`) and its
   tree-sitter parse (gpui-component's `SyntaxHighlighter`) made on the background executor; a `uniform_list` shapes only the

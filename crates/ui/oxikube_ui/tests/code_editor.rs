@@ -11,7 +11,7 @@ use gpui::{
 use oxikube_testkit::gpui_test::{TestApp, TestWindow};
 use oxikube_ui::editor::{
     CodeEditor, CodeEditorEvent, CodeEditorOptions, Decoration, DecorationStyle, DiagnosticLevel,
-    EditorApi as _, EditorDiagnostic,
+    EditorApi as _, EditorDiagnostic, EditorFont,
 };
 
 /// A 320 px wide window around one editor, focused.
@@ -275,4 +275,64 @@ fn decorations_follow_edits(cx: &mut TestAppContext) {
     );
     with_api(&mut window, |api| api.clear_decorations());
     assert!(with_api(&mut window, |api| api.decorations()).is_empty());
+}
+
+#[gpui::test]
+fn tab_size_changes_the_indent_without_touching_the_text_or_undo(cx: &mut TestAppContext) {
+    let mut window = open(cx, "");
+    window.simulate_input("a:");
+    assert_eq!(with_api(&mut window, |api| api.tab_size()), 2);
+    window.simulate_keystrokes("tab");
+    assert_eq!(text(&mut window), "a:  ");
+
+    let version = with_api(&mut window, |api| {
+        api.set_tab_size(4);
+        api.version()
+    });
+    assert_eq!(with_api(&mut window, |api| api.tab_size()), 4);
+    assert_eq!(with_api(&mut window, |api| api.version()), version);
+    assert_eq!(text(&mut window), "a:  ", "the text is as it was");
+    window.simulate_keystrokes("tab");
+    assert_eq!(
+        text(&mut window),
+        "a:      ",
+        "the next indent is four spaces"
+    );
+
+    let (undo, _) = undo_keys();
+    window.simulate_keystrokes(undo);
+    window.simulate_keystrokes(undo);
+    assert_eq!(
+        text(&mut window),
+        "a:",
+        "the history from before the change is intact"
+    );
+}
+
+#[gpui::test]
+fn the_font_sets_the_text_size_in_zoomed_pixels(cx: &mut TestAppContext) {
+    let mut window = open(cx, "a: 1\n");
+    let size = |window: &mut TestWindow<Host>| {
+        window.read_root(|host, cx| f32::from(host.editor.read(cx).text_size(cx)))
+    };
+    let theme = size(&mut window);
+    assert_eq!(
+        with_api(&mut window, |api| api.font()),
+        EditorFont::default()
+    );
+
+    let font = EditorFont {
+        family: Some("Menlo".into()),
+        size: Some(14.0),
+    };
+    with_api(&mut window, |api| api.set_font(font.clone()));
+    assert_eq!(with_api(&mut window, |api| api.font()), font);
+    assert_eq!(size(&mut window), 14.0);
+
+    window.update_root(|_, _, cx| oxikube_ui::set_ui_scale(cx, oxikube_ui::UiScale::new(1.5)));
+    assert_eq!(size(&mut window), 21.0, "14 points at a zoom of 1.5");
+
+    window.update_root(|_, _, cx| oxikube_ui::set_ui_scale(cx, oxikube_ui::UiScale::IDENTITY));
+    with_api(&mut window, |api| api.set_font(EditorFont::default()));
+    assert_eq!(size(&mut window), theme, "back to the theme's size");
 }

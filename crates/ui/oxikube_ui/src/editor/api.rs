@@ -81,6 +81,18 @@ pub struct Decoration {
     pub style: DecorationStyle,
 }
 
+/// The font of a code editor's text. `None` fields leave the theme's monospace font and size.
+///
+/// The size is in points at 100 % UI zoom: the editor scales it with the zoom like every other
+/// size, so `font_size: 14` is 21 px at a zoom of 1.5.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EditorFont {
+    /// The font family; `None` is the theme's monospace font.
+    pub family: Option<String>,
+    /// The size in points; `None` is the theme's monospace size.
+    pub size: Option<f32>,
+}
+
 /// What a code editor offers a feature view. Offsets are UTF-8 byte offsets.
 pub trait EditorApi {
     /// The whole buffer as one string. Allocates: call it when the text is needed (a debounced
@@ -114,6 +126,18 @@ pub trait EditorApi {
 
     /// Wraps long lines at the editor's width, or lets them scroll sideways.
     fn set_soft_wrap(&mut self, wrap: bool);
+
+    /// How many spaces one indent (the tab key, `indent` / `outdent`) is.
+    fn tab_size(&self) -> usize;
+
+    /// Sets the indent width. Touches neither the text nor the undo history.
+    fn set_tab_size(&mut self, spaces: usize);
+
+    /// The font the text is drawn in.
+    fn font(&self) -> EditorFont;
+
+    /// Sets the font. Touches neither the text nor the undo history; the next frame draws it.
+    fn set_font(&mut self, font: EditorFont);
 
     /// Replaces the diagnostics: squiggles, gutter markers and end-of-line messages. They are
     /// dropped by the next edit, so set them for the [`version`](EditorApi::version) they were

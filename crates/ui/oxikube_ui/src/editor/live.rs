@@ -8,7 +8,9 @@ use std::sync::Arc;
 use gpui::{Bounds, Context, Pixels, Window};
 use gpui_component::input::{RangeDecoration, RangeDecorationStyle, TextDecoration};
 
-use super::api::{Decoration, DecorationStyle, DiagnosticLevel, EditorApi, EditorDiagnostic};
+use super::api::{
+    Decoration, DecorationStyle, DiagnosticLevel, EditorApi, EditorDiagnostic, EditorFont,
+};
 use super::code_editor::CodeEditor;
 use super::overlay::status_label;
 use super::positions::{line_summaries, to_library};
@@ -79,6 +81,34 @@ impl EditorApi for LiveEditor<'_, '_> {
             .state
             .update(self.cx, |state, cx| state.set_soft_wrap(wrap, window, cx));
         self.cx.notify();
+    }
+
+    fn tab_size(&self) -> usize {
+        self.editor.tab_size
+    }
+
+    fn set_tab_size(&mut self, spaces: usize) {
+        self.editor.tab_size = spaces;
+        self.editor.state.update(self.cx, |state, cx| {
+            state.set_tab_size(
+                gpui_component::input::TabSize {
+                    tab_size: spaces,
+                    hard_tabs: false,
+                },
+                cx,
+            )
+        });
+    }
+
+    fn font(&self) -> EditorFont {
+        self.editor.font.clone()
+    }
+
+    fn set_font(&mut self, font: EditorFont) {
+        if self.editor.font != font {
+            self.editor.font = font;
+            self.cx.notify();
+        }
     }
 
     fn set_diagnostics(&mut self, mut diagnostics: Vec<EditorDiagnostic>) {

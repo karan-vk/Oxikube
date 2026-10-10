@@ -18,8 +18,9 @@ use gpui::{
 };
 use oxikube_domain::OxiError;
 use oxikube_domain::command::Command;
-use oxikube_domain::ids::Gvk;
+use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_keymap::{KeyContextBuilder, KeyContextual, contexts};
+use oxikube_settings::SettingsStore;
 use oxikube_ui::ActiveTokens as _;
 use oxikube_ui::editor::{CodeEditor, CodeEditorEvent, CodeEditorOptions, EditorApi as _};
 use oxikube_ui::layout::v_flex;
@@ -29,6 +30,7 @@ use super::model::ManifestModel;
 use super::schemas::SchemaSource;
 use super::validation::{VALIDATION_DEBOUNCE, validate_text};
 use super::{ToggleReadOnly, ToggleSoftWrap};
+use crate::settings::{EditorSettings, apply_changes};
 
 /// What a [`ManifestEditor`] opens with.
 pub struct ManifestEditorParts {
@@ -57,6 +59,10 @@ pub struct ManifestEditor {
     /// The buffer version that counts as unchanged (the text it opened with).
     pub(super) clean_version: u64,
     editor_focused: bool,
+    /// The `editor` settings the buffer was last given (E10-S12): the next change is applied as
+    /// the difference to this, so one setting changing leaves what another did to the editor
+    /// alone. Never read to decide anything else: [`EditorSettings::resolve`] is the source.
+    applied_settings: EditorSettings,
     /// The pending or running validation; replacing it cancels the old one.
     validation: Option<Task<()>>,
     /// Schema fetches in flight; dropped (and aborted) with the editor.
@@ -68,13 +74,27 @@ impl ManifestEditor {
     /// A new editor holding `parts.text`, validated at once.
     pub fn new(parts: ManifestEditorParts, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| CodeEditor::new(CodeEditorOptions::YAML, window, cx));
+        let cluster = parts
+            .schemas
+            .as_ref()
+            .map(|source| source.cluster().clone());
+        let settings = EditorSettings::resolve(cluster.as_ref(), cx).clone();
+        editor.update(cx, |editor, cx| {
+            apply_changes(None, &settings, &mut editor.api(window, cx));
+        });
         if !parts.text.is_empty() {
             editor.update(cx, |editor, cx| {
                 editor.api(window, cx).set_text(&parts.text)
             });
         }
         let clean_version = editor.read(cx).version();
-        let subscriptions = vec![cx.subscribe_in(&editor, window, Self::on_editor_event)];
+        let subscriptions = vec![
+            cx.subscribe_in(&editor, window, Self::on_editor_event),
+            // Hot reload: dropped with the view, so a closed tab stops observing.
+            cx.observe_global_in::<SettingsStore>(window, |this, window, cx| {
+                this.settings_changed(window, cx);
+            }),
+        ];
         let mut this = Self {
             editor,
             model: ManifestModel::new(),
@@ -83,6 +103,7 @@ impl ManifestEditor {
             dispatcher: parts.dispatcher,
             clean_version,
             editor_focused: false,
+            applied_settings: settings,
             validation: None,
             schema_fetches: Vec::new(),
             _subscriptions: subscriptions,
@@ -99,6 +120,17 @@ impl ManifestEditor {
     /// The view's state beyond the buffer (problems, schemas).
     pub fn model(&self) -> &ManifestModel {
         &self.model
+    }
+
+    /// The cluster whose schemas the buffer is checked against, and whose `clusters.<id>.editor`
+    /// settings apply.
+    pub fn cluster(&self) -> Option<&ClusterId> {
+        self.schemas.as_deref().map(SchemaSource::cluster)
+    }
+
+    /// The `editor` settings in effect for this editor, read from the store now.
+    pub fn settings<'a>(&self, cx: &'a gpui::App) -> &'a EditorSettings {
+        EditorSettings::resolve(self.cluster(), cx)
     }
 
     /// Whether the buffer differs from what the editor opened with.
@@ -123,6 +155,25 @@ impl ManifestEditor {
             let wrap = !api.soft_wrap();
             api.set_soft_wrap(wrap);
         });
+        cx.notify();
+    }
+
+    /// The settings store changed: applies what differs for this editor, at once. The buffer, its
+    /// selections and its undo history are untouched. Turning `validation` off clears the
+    /// squiggles; turning it on checks the buffer again.
+    fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let next = self.settings(cx);
+        if *next == self.applied_settings {
+            return;
+        }
+        let next = next.clone();
+        let previous = std::mem::replace(&mut self.applied_settings, next.clone());
+        self.editor.update(cx, |editor, cx| {
+            apply_changes(Some(&previous), &next, &mut editor.api(window, cx));
+        });
+        if previous.validation != next.validation {
+            self.schedule_validation(Duration::ZERO, window, cx);
+        }
         cx.notify();
     }
 
@@ -166,6 +217,15 @@ impl ManifestEditor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.settings(cx).validation {
+            // Off: no squiggles, no work, no schema fetches.
+            self.validation = None;
+            let model = &mut self.model;
+            self.editor.update(cx, |editor, cx| {
+                model.clear(&mut editor.api(window, cx));
+            });
+            return;
+        }
         self.validation = Some(cx.spawn_in(window, async move |this, cx| {
             if !delay.is_zero() {
                 cx.background_executor().timer(delay).await;

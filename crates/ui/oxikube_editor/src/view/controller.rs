@@ -8,6 +8,9 @@
 //!   item when it is one. The toolbar's toggles focus their own editor before they send, so a
 //!   click acts on the editor clicked.
 //!
+//! It also tells the user, with a warning toast, about an `editor` setting that was rejected
+//! (E10-S12).
+//!
 //! Each request waits one turn first, so a palette that just closed has handed the focus back to
 //! the editor it was opened over.
 
@@ -15,14 +18,18 @@ use std::rc::Rc;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
-use gpui::{App, AppContext as _, Context, Entity, Focusable as _, Task, WeakEntity, Window};
+use gpui::{
+    App, AppContext as _, Context, Entity, Focusable as _, Subscription, Task, WeakEntity, Window,
+};
 use oxikube_app::ClusterSessionManager;
 use oxikube_domain::ids::ClusterId;
+use oxikube_settings::SettingsStore;
 use oxikube_workspace::{ClusterTabs, CommandDispatcher, Workspace};
 
 use super::commands::EditorRequest;
 use super::manifest_editor::{ManifestEditor, ManifestEditorParts};
 use super::schemas::{SchemaSource, SessionSchemas};
+use crate::settings::notice;
 
 /// Where a window's editors go, and the schemas of a cluster.
 pub trait EditorHost: 'static {
@@ -93,7 +100,12 @@ pub struct EditorViews {
     deps: EditorViewsDeps,
     /// How many editors this window has opened (the "Untitled-N" titles).
     opened: usize,
+    /// The setting problems the last notice was about, so an unrelated change of the settings
+    /// does not show it again.
+    reported: Vec<String>,
     _requests: Task<()>,
+    /// Watches the settings for values the editor rejected (E10-S12).
+    _settings: Subscription,
 }
 
 impl EditorViews {
@@ -116,10 +128,20 @@ impl EditorViews {
                     }
                 }
             });
+            // A bad value in `settings.json` is told once when the window opens (after the
+            // workspace exists) and again whenever the list of problems changes.
+            cx.defer_in(window, |this: &mut Self, _, cx| {
+                this.report_setting_problems(cx)
+            });
+            let settings = cx.observe_global::<SettingsStore>(|this, cx| {
+                this.report_setting_problems(cx);
+            });
             Self {
                 deps,
                 opened: 0,
+                reported: Vec::new(),
                 _requests: pump,
+                _settings: settings,
             }
         })
     }
@@ -135,6 +157,23 @@ impl EditorViews {
                 editor.toggle_soft_wrap(window, cx);
             }),
         });
+    }
+
+    /// Shows a notice for the editor settings the store rejected, unless it already has.
+    fn report_setting_problems(&mut self, cx: &mut Context<Self>) {
+        let problems = notice::problems(cx);
+        if problems == self.reported {
+            return;
+        }
+        self.reported = problems;
+        let Some(toast) = notice::notice(&self.reported) else {
+            return;
+        };
+        if let Some(workspace) = self.deps.window_workspace.upgrade() {
+            workspace.update(cx, |workspace, cx| {
+                workspace.show_toast(toast, cx);
+            });
+        }
     }
 
     /// Opens an empty editor: see the [module docs](self).
