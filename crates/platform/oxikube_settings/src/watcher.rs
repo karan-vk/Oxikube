@@ -7,6 +7,10 @@
 //! * **Bursts are debounced.** One save produces several events; the thread waits for a
 //!   quiet period (capped at ten periods so a chatty directory cannot starve reloads), then
 //!   reads the file once and calls back only if the text changed.
+//! * **Read failures can be reported.** [`SettingsFileWatcher::spawn_reporting`] also calls
+//!   back with the error of a failed read (invalid UTF-8, permission denied, a directory), once
+//!   per distinct error, and again with the text when the file reads again, even if that text is
+//!   the one from before the failure, so the caller can clear what it showed.
 //! * **The thread does the I/O.** The callback receives the new text, so the UI thread never
 //!   touches the disk on reload. A missing file reads as empty text (no overrides).
 //! * **Owned, not detached.** Dropping [`SettingsFileWatcher`] drops the `notify` watcher,
@@ -55,7 +59,25 @@ impl SettingsFileWatcher {
         path: PathBuf,
         initial_text: String,
         debounce: Duration,
-        on_change: impl FnMut(String) -> bool + Send + 'static,
+        mut on_change: impl FnMut(String) -> bool + Send + 'static,
+    ) -> OxiResult<Self> {
+        Self::spawn_reporting(path, initial_text, debounce, move |read| match read {
+            Ok(text) => on_change(text),
+            Err(err) => {
+                tracing::warn!(%err, "could not read settings file");
+                true
+            }
+        })
+    }
+
+    /// [`Self::spawn`] for callers that surface a file they cannot read: `on_change` gets
+    /// `Err` when a read fails (once per distinct error, not on every event) and `Ok` with the
+    /// text when the file changed or reads again after a failure.
+    pub fn spawn_reporting(
+        path: PathBuf,
+        initial_text: String,
+        debounce: Duration,
+        on_change: impl FnMut(OxiResult<String>) -> bool + Send + 'static,
     ) -> OxiResult<Self> {
         // The link's own name in its directory, plus the resolved file in its directory
         // when the settings file is a symlink.
@@ -140,8 +162,10 @@ fn run(
     mut last_text: String,
     debounce: Duration,
     rx: &Receiver<()>,
-    mut on_change: impl FnMut(String) -> bool,
+    mut on_change: impl FnMut(OxiResult<String>) -> bool,
 ) {
+    // The message of the failure last reported and not yet followed by a good read.
+    let mut failed: Option<String> = None;
     // Catch a change made before the watch was registered.
     let mut pending = true;
     loop {
@@ -157,13 +181,23 @@ fn run(
         let text = match paths::read_or_empty(path) {
             Ok(text) => text,
             Err(err) => {
-                tracing::warn!(path = %path.display(), %err, "could not read settings file");
+                let message = err.to_string();
+                if failed.as_deref() != Some(&message) {
+                    failed = Some(message);
+                    let err = OxiError::internal(format!("could not read {}", path.display()))
+                        .with_source(err);
+                    if !on_change(Err(err)) {
+                        return;
+                    }
+                }
                 continue;
             }
         };
-        if text != last_text {
+        // After a failure the text is reported even when unchanged: the caller is showing the
+        // failure and must be told that it is over.
+        if text != last_text || failed.take().is_some() {
             last_text.clone_from(&text);
-            if !on_change(text) {
+            if !on_change(Ok(text)) {
                 return;
             }
         }
@@ -272,6 +306,57 @@ mod tests {
         std::fs::write(&tmp, "{\"a\": 2}").unwrap();
         std::fs::rename(&tmp, &real).unwrap();
         assert!(wait_for(&rx, "{\"a\": 2}", Duration::from_secs(10)));
+    }
+
+    /// A read that fails is reported once, not on every event, and the same text that was there
+    /// before the failure is reported again when the file reads fine, so a caller showing the
+    /// failure can clear it.
+    #[test]
+    fn reports_a_failed_read_once_and_the_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("keymap.json");
+        std::fs::write(&path, "{}").unwrap();
+        let (tx, rx) = mpsc::channel::<Result<String, String>>();
+        let _watcher = SettingsFileWatcher::spawn_reporting(
+            path.clone(),
+            "{}".into(),
+            DEFAULT_DEBOUNCE,
+            move |read| tx.send(read.map_err(|err| err.to_string())).is_ok(),
+        )
+        .unwrap();
+
+        let wait = |want_err: bool| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+                match rx.recv_timeout(left) {
+                    Ok(read) if read.is_err() == want_err => return Some(read),
+                    Ok(_) => {}
+                    Err(_) => return None,
+                }
+            }
+            None
+        };
+        // Invalid UTF-8; rewrite until the platform watch is live.
+        let failed = (0..20).find_map(|_| {
+            std::fs::write(&path, [0xFF, 0xFE, b'{', 0]).unwrap();
+            let deadline = Instant::now() + Duration::from_millis(500);
+            while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+                if matches!(rx.recv_timeout(left), Ok(Err(_))) {
+                    return Some(());
+                }
+            }
+            None
+        });
+        assert!(failed.is_some(), "the failed read was not reported");
+        // The same failure again (another event for the same bytes) is not reported twice.
+        std::fs::write(&path, [0xFF, 0xFE, b'{', 0]).unwrap();
+        assert!(
+            rx.recv_timeout(Duration::from_millis(600)).is_err(),
+            "one report per failure"
+        );
+        // Back to the text from before the failure: reported although unchanged.
+        std::fs::write(&path, "{}").unwrap();
+        assert_eq!(wait(false), Some(Ok("{}".to_owned())));
     }
 
     #[test]

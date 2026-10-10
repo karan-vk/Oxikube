@@ -26,6 +26,10 @@ struct LayerState {
     parse_diagnostics: Vec<KeymapDiagnostic>,
     /// Where the sections are in the text, to give later problems their lines.
     lines: SourceLines,
+    /// The sections come from an earlier text than the diagnostics: the file on disk is
+    /// currently unreadable or invalid. Their binding problems were reported when that text
+    /// loaded, and their lines no longer match the file, so a merge does not repeat them.
+    stale: bool,
 }
 
 impl LayerState {
@@ -35,11 +39,13 @@ impl LayerState {
                 sections: parsed.sections,
                 parse_diagnostics: parsed.diagnostics,
                 lines: parsed.lines,
+                stale: false,
             },
             Err(diagnostic) => Self {
                 sections: Vec::new(),
                 parse_diagnostics: vec![diagnostic],
                 lines: SourceLines::default(),
+                stale: false,
             },
         }
     }
@@ -156,6 +162,7 @@ impl KeymapStore {
         if whole_file_error {
             // Keep the sections of the last good file; only the problem is new.
             self.user.parse_diagnostics = next.parse_diagnostics;
+            self.user.stale = true;
             return false;
         }
         let changed = next.sections != self.user.sections;
@@ -181,6 +188,7 @@ impl KeymapStore {
             KeymapLayer::User,
             message.to_owned(),
         )];
+        self.user.stale = true;
     }
 
     /// Merge every enabled layer into one list of GPUI bindings, in layer order, and record the
@@ -199,11 +207,20 @@ impl KeymapStore {
             let Some(state) = state else { continue };
             diagnostics.extend(state.parse_diagnostics.iter().cloned());
             let built = build_layer(cx, layer, &state.sections);
-            diagnostics.extend(built.diagnostics.into_iter().map(|mut diagnostic| {
-                diagnostic.locate(&state.lines);
-                diagnostic
-            }));
-            conflicts.extend(find_conflicts(layer, &state.sections, &state.lines));
+            if state.stale {
+                // Sections of an earlier file: their problems and line numbers are history.
+                conflicts.extend(find_conflicts(
+                    layer,
+                    &state.sections,
+                    &SourceLines::default(),
+                ));
+            } else {
+                diagnostics.extend(built.diagnostics.into_iter().map(|mut diagnostic| {
+                    diagnostic.locate(&state.lines);
+                    diagnostic
+                }));
+                conflicts.extend(find_conflicts(layer, &state.sections, &state.lines));
+            }
             skipped_embedded += built.skipped;
             bindings.extend(built.bindings);
         }

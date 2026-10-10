@@ -147,6 +147,72 @@ fn a_syntax_error_reports_the_parsers_line_and_keeps_the_previous_keymap(cx: &mu
 }
 
 #[gpui::test]
+fn a_syntax_error_does_not_repeat_the_previous_files_problems_with_stale_lines(
+    cx: &mut TestAppContext,
+) {
+    // The unknown action is on line 5 of the file that loaded.
+    install(
+        cx,
+        "[\n  {\n    \"bindings\": {\n      \"ctrl-a\": \"kmtest::Alpha\",\n      \"ctrl-x\": \"nope::Missing\"\n    }\n  }\n]",
+    );
+    assert_eq!(cx.read(user_diagnostics)[0].line, Some(5));
+    let (window, log) = probe(cx, "Pane");
+    // A header comment and a syntax error on line 2: line 5 of the old text means nothing now.
+    cx.update(|cx| reload_user_keymap(cx, "// header\n[ oops\n"));
+    let found = cx.read(user_diagnostics);
+    assert!(
+        matches!(found[..], [ref d] if matches!(d.problem, KeymapProblem::InvalidFile { .. })),
+        "only the new error is reported: {found:?}"
+    );
+    assert_eq!(
+        press(cx, window, &log, "ctrl-a"),
+        ["Alpha"],
+        "the previous keymap stays in effect"
+    );
+    // Fixing the file brings back an honest report for the text that is there now.
+    cx.update(|cx| {
+        reload_user_keymap(cx, "[{\"bindings\": {\n\"ctrl-x\": \"nope::Missing\"}}]");
+    });
+    let found = cx.read(user_diagnostics);
+    assert!(
+        matches!(found[..], [ref d] if d.line == Some(2)
+            && matches!(d.problem, KeymapProblem::UnknownAction { .. })),
+        "{found:?}"
+    );
+}
+
+#[gpui::test]
+fn a_file_that_becomes_unreadable_while_running_is_reported_and_the_old_keymap_stays(
+    cx: &mut TestAppContext,
+) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("keymap.json");
+    std::fs::write(&path, r#"[{"bindings": {"ctrl-a": "kmtest::Alpha"}}]"#).unwrap();
+    cx.update(|cx| init_with_dir(dir.path(), mac(), cx));
+    let (events, _subscription) = listen(cx);
+    let (window, log) = probe(cx, "Pane");
+    assert!(cx.read(user_diagnostics).is_empty());
+
+    // Saved as UTF-16 (invalid UTF-8): the watcher reports the failed read, which `reload`
+    // reproduces without the watcher's thread.
+    std::fs::write(&path, [0xFF, 0xFE, b'[', 0, b']', 0]).unwrap();
+    cx.update(reload);
+    let found = cx.read(user_diagnostics);
+    assert!(
+        matches!(found[..], [ref d] if matches!(d.problem, KeymapProblem::Unreadable { .. })),
+        "{found:?}"
+    );
+    assert_eq!(events.borrow().len(), 1, "the notification is raised");
+    assert_eq!(press(cx, window, &log, "ctrl-a"), ["Alpha"]);
+
+    // Saved again as the same UTF-8 text as before: the notification clears.
+    std::fs::write(&path, r#"[{"bindings": {"ctrl-a": "kmtest::Alpha"}}]"#).unwrap();
+    cx.update(reload);
+    assert!(cx.read(user_diagnostics).is_empty());
+    assert_eq!(events.borrow().len(), 2);
+}
+
+#[gpui::test]
 fn one_notification_summarises_every_problem_and_a_fix_clears_it(cx: &mut TestAppContext) {
     install(cx, "[]");
     let (events, _subscription) = listen(cx);

@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui::{App, Global, KeyBinding, Task, UpdateGlobal as _};
-use oxikube_domain::OxiError;
+use oxikube_domain::{OxiError, OxiResult};
 use oxikube_settings::paths::config_dir;
 use oxikube_settings::watcher::{DEFAULT_DEBOUNCE, SettingsFileWatcher};
 
@@ -118,6 +118,31 @@ fn unreadable_reason(err: &OxiError) -> String {
         .map_or_else(|| err.to_string(), |source| format!("{err}: {source}"))
 }
 
+/// What the watcher's thread hands to the UI thread after a settled change of the file.
+enum Update {
+    /// The new text, parsed on the watcher's thread.
+    Parsed(ParsedUserKeymap),
+    /// The file could not be read (saved as UTF-16, permissions changed, it became a directory).
+    Unreadable(String),
+}
+
+/// The watcher's callback: parse each new text off the UI thread and forward it, or forward the
+/// reason a read failed. Returns `false` once the receiver is gone, which stops the watcher.
+fn forward(
+    tx: mpsc::UnboundedSender<Update>,
+) -> impl FnMut(OxiResult<String>) -> bool + Send + 'static {
+    move |read| {
+        let update = match read {
+            Ok(text) => Update::Parsed(ParsedUserKeymap::parse(&text)),
+            Err(err) => {
+                tracing::warn!(%err, "could not read keymap.json; the previous keymap stays");
+                Update::Unreadable(unreadable_reason(&err))
+            }
+        };
+        tx.unbounded_send(update).is_ok()
+    }
+}
+
 fn start_watch(cx: &mut App, path: PathBuf, initial_text: String) {
     if let Some(dir) = path.parent()
         && let Err(err) = std::fs::create_dir_all(dir)
@@ -125,21 +150,23 @@ fn start_watch(cx: &mut App, path: PathBuf, initial_text: String) {
         tracing::warn!(%err, "keymap hot reload is off");
         return;
     }
-    let (tx, mut rx) = mpsc::unbounded::<ParsedUserKeymap>();
-    let watcher =
-        match SettingsFileWatcher::spawn(path, initial_text, DEFAULT_DEBOUNCE, move |text| {
-            // On the watcher's thread: the parse costs nothing the UI thread sees.
-            tx.unbounded_send(ParsedUserKeymap::parse(&text)).is_ok()
-        }) {
-            Ok(watcher) => watcher,
-            Err(err) => {
-                tracing::warn!(%err, "keymap hot reload is off");
-                return;
-            }
-        };
+    let (tx, mut rx) = mpsc::unbounded::<Update>();
+    // The callback runs on the watcher's thread: the parse costs nothing the UI thread sees.
+    let watcher = match SettingsFileWatcher::spawn_reporting(
+        path,
+        initial_text,
+        DEFAULT_DEBOUNCE,
+        forward(tx),
+    ) {
+        Ok(watcher) => watcher,
+        Err(err) => {
+            tracing::warn!(%err, "keymap hot reload is off");
+            return;
+        }
+    };
     let apply = cx.spawn(async move |cx| {
-        while let Some(parsed) = rx.next().await {
-            cx.update(|cx| apply_parsed(cx, parsed));
+        while let Some(update) = rx.next().await {
+            cx.update(|cx| apply_update(cx, update));
         }
     });
     cx.set_global(KeymapWatch {
@@ -151,11 +178,17 @@ fn start_watch(cx: &mut App, path: PathBuf, initial_text: String) {
 /// Apply new `keymap.json` text, as the watcher does: parse, keep the previous keymap when the
 /// text is not valid, otherwise rebind. Reloads that leave the sections equal rebind nothing.
 pub fn reload_user_keymap(cx: &mut App, text: &str) {
-    apply_parsed(cx, ParsedUserKeymap::parse(text));
+    apply_update(cx, Update::Parsed(ParsedUserKeymap::parse(text)));
 }
 
-fn apply_parsed(cx: &mut App, parsed: ParsedUserKeymap) {
-    let changed = KeymapStore::update_global(cx, |store, _| store.set_user_parsed(parsed));
+fn apply_update(cx: &mut App, update: Update) {
+    let changed = KeymapStore::update_global(cx, |store, _| match update {
+        Update::Parsed(parsed) => store.set_user_parsed(parsed),
+        Update::Unreadable(message) => {
+            store.set_user_unreadable(&message);
+            false
+        }
+    });
     apply(cx, changed);
 }
 
@@ -171,12 +204,7 @@ pub fn reload(cx: &mut App) {
     };
     match read_or_empty(&path) {
         Ok(text) => reload_user_keymap(cx, &text),
-        Err(err) => {
-            KeymapStore::update_global(cx, |store, _| {
-                store.set_user_unreadable(&unreadable_reason(&err));
-            });
-            apply(cx, false);
-        }
+        Err(err) => apply_update(cx, Update::Unreadable(unreadable_reason(&err))),
     }
 }
 
@@ -281,5 +309,25 @@ mod tests {
         let mut store = KeymapStore::new(KeymapOptions::default());
         // `install` starts the watcher with whatever this returns, so it must not be skipped.
         assert_eq!(load_initial(&mut store, &path), "");
+    }
+
+    #[test]
+    fn the_watchers_callback_forwards_parsed_text_and_read_failures() {
+        let (tx, mut rx) = mpsc::unbounded();
+        let mut callback = forward(tx);
+        assert!(callback(Ok("[]".into())));
+        let err = OxiError::internal("could not read keymap.json")
+            .with_source(std::io::Error::other("stream did not contain valid UTF-8"));
+        assert!(callback(Err(err)));
+        assert!(matches!(rx.try_recv(), Ok(Update::Parsed(_))));
+        let Ok(Update::Unreadable(message)) = rx.try_recv() else {
+            panic!("expected the failure to be forwarded");
+        };
+        assert!(message.contains("valid UTF-8"), "{message}");
+        drop(rx);
+        assert!(
+            !callback(Ok(String::new())),
+            "a gone receiver stops the watcher"
+        );
     }
 }
