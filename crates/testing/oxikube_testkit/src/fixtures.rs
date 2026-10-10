@@ -204,6 +204,67 @@ pub fn load(path: &str) -> Resource {
     }
 }
 
+/// Trimmed OpenAPI v3 group documents (E10-S01): the `components.schemas` the
+/// manifest editor flattens per GVK. These are schema documents, not cluster
+/// objects, so they live outside the [`Resource`] fixture set above: every
+/// file parses as a JSON object with a `components.schemas` map (checked by
+/// `tests/fixtures.rs`).
+pub mod openapi {
+    /// Every OpenAPI document path, relative to `fixtures/openapi/`.
+    pub const ALL: &[&str] = &[
+        "deployment-apps-v1.json",
+        "pod-core-v1.json",
+        "widget-crd.json",
+        "int-or-string.json",
+    ];
+
+    /// The raw text of the document `name`, or `None` when there is none.
+    pub fn raw(name: &str) -> Option<&'static str> {
+        match name {
+            "deployment-apps-v1.json" => {
+                Some(include_str!("../fixtures/openapi/deployment-apps-v1.json"))
+            }
+            "pod-core-v1.json" => Some(include_str!("../fixtures/openapi/pod-core-v1.json")),
+            "widget-crd.json" => Some(include_str!("../fixtures/openapi/widget-crd.json")),
+            "int-or-string.json" => Some(include_str!("../fixtures/openapi/int-or-string.json")),
+            _ => None,
+        }
+    }
+
+    /// The document `name` as JSON.
+    ///
+    /// # Panics
+    ///
+    /// When there is no such document or it is not valid JSON.
+    pub fn json(name: &str) -> serde_json::Value {
+        let text = raw(name).unwrap_or_else(|| panic!("unknown OpenAPI fixture {name:?}"));
+        serde_json::from_str(text).unwrap_or_else(|e| panic!("fixture {name}: invalid JSON: {e}"))
+    }
+
+    /// Trimmed `apps/v1` group document (Deployment with nested `$ref`s and an
+    /// `allOf` wrapper, plus `IntOrString`).
+    pub fn deployment_apps_v1() -> serde_json::Value {
+        json("deployment-apps-v1.json")
+    }
+
+    /// Trimmed core `v1` group document (Pod with list-maps, patterns, enums).
+    pub fn pod_core_v1() -> serde_json::Value {
+        json("pod-core-v1.json")
+    }
+
+    /// Custom-resource group document: `Widget` with an
+    /// `x-kubernetes-preserve-unknown-fields` stump and a recursive `template`
+    /// reference.
+    pub fn widget_crd() -> serde_json::Value {
+        json("widget-crd.json")
+    }
+
+    /// `IntOrString` (`x-kubernetes-int-or-string` with an integer/string `anyOf`).
+    pub fn int_or_string() -> serde_json::Value {
+        json("int-or-string.json")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

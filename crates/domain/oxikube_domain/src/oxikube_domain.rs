@@ -19,6 +19,7 @@
 //! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
+//! | [`schema`] | [`JsonSchema`]: the flattened per-GVK OpenAPI v3 view the manifest editor validates against |
 //! | [`portforward`] | [`ForwardSpec`], [`ForwardStatus`]: what a port-forward targets and how it is doing |
 //! | [`agent`] | [`ContextBlock`](agent::ContextBlock), the bounded context handed to agents |
 //! | [`error`], [`error_details`] | [`OxiError`], [`ErrorKind`], [`OxiResult`]; [`ConflictDetails`] and [`ValidationDetails`] (field managers and field paths of a rejected write) |
@@ -59,6 +60,7 @@ pub mod quantity;
 pub mod redact;
 pub mod resource;
 pub mod safety;
+pub mod schema;
 pub mod session;
 pub mod view;
 
@@ -77,6 +79,9 @@ pub use preset::ClusterPreset;
 pub use quantity::{Quantity, QuantityError, QuantityFormat};
 pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError, StrMap};
 pub use safety::{ConfirmTier, Initiator, Risk};
+pub use schema::{
+    AdditionalProperties, JsonSchema, SchemaType, XK8s, flatten_schema, root_schema_for,
+};
 pub use view::{
     ContainerSummary, CronJobSummary, JobSummary, NodeSummary, PodSummary, ViewError,
     WorkloadSummary,

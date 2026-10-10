@@ -48,6 +48,7 @@
 //! | `ClusterConnectorPort` | [`FakeClusterConnectorPort`] (ports bundle: [`FakeClusterPorts`]) |
 //! | `AccessReviewPort` | [`FakeAccessReviewPort`] |
 //! | `WarningPort` | [`FakeWarningPort`] |
+//! | `SchemaPort` | [`FakeSchemaPort`] |
 
 /// Implements `script()`, `recorded_calls()` and `clear_calls()` for a fake with fields
 /// `script: $scripts` and `calls: CallLog<$call>`.
@@ -79,6 +80,7 @@ mod data;
 mod infra;
 mod integration;
 mod resource;
+mod schema;
 mod session;
 mod storage;
 mod stream_io;
@@ -108,6 +110,7 @@ pub use integration::{
     FakeToolPort, IntegrationCall, IntegrationScripts, ToolCall, ToolScripts,
 };
 pub use resource::{FakeResourcePort, ResourceCall, ResourceScripts};
+pub use schema::{FakeSchemaPort, SchemaCall, SchemaScripts};
 pub use session::{
     AccessCall, AccessScripts, ConnectorCall, ConnectorScripts, FakeAccessReviewPort,
     FakeClusterConnectorPort, FakeClusterPorts,
