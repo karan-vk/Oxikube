@@ -9,6 +9,8 @@
 //! - [`app_state`]: [`app_state::AppState`], the typed dependency container (a GPUI global), the
 //!   [`app_state::AppPorts`] bundle and `AppState::test` (feature `test-support`).
 //!
+//! - [`aliases`]: keeps the `:` jump bar's alias tables in step with the clusters' discovery and
+//!   the user's `aliases.json`, hot reloaded (E11-S04).
 //! - [`cluster_prefs`]: pushes the per-cluster settings into the `ClusterSessionManager` and
 //!   keeps them in sync with hot reload (E06-S08).
 //! - [`kube_ports`]: the cluster adapters of the app (`oxikube_kube`: the kubeconfig catalog,
@@ -28,6 +30,7 @@
 //! Everything else (command line, the `--perf` session, screenshot and perf scenarios) stays
 //! private to the binary.
 
+pub mod aliases;
 pub mod app_state;
 pub mod cluster_prefs;
 pub mod kube_ports;

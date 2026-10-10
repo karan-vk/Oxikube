@@ -140,6 +140,8 @@ pub(crate) fn init_with_features(
         return Err(StartupError::AlreadyInitialised);
     }
     cx.set_global(Initialised);
+    // The feature inits take only the `App`; the ones that read files need to know where.
+    cx.set_global(crate::aliases::ConfigSourceGlobal(env.config.clone()));
     let mut report = env.earlier.clone();
 
     report.time(Stage::Runtime, || match env.runtime {

@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Oxikube aliases.json",
+  "description": "Your own names for the ':' jump bar. Each key is an alias (case-insensitive, no spaces and none of / @ = ,); the value is where it leads. Your aliases win over the built-in k9s ones (po, dp, svc, ...) and over names the cluster's API discovery adds.",
+  "type": "object",
+  "propertyNames": {
+    "anyOf": [
+      { "const": "$schema" },
+      { "pattern": "^[^\\s/@=,]+$", "maxLength": 63 }
+    ]
+  },
+  "properties": {
+    "$schema": { "type": "string" }
+  },
+  "additionalProperties": {
+    "oneOf": [
+      {
+        "type": "string",
+        "minLength": 1,
+        "description": "A resource as group/version/plural (\"apps/v1/deployments\", \"v1/pods\" for the core group), or a jump-bar command line (\"pod fred app=blee\", \"ctx prod\"). A string with a '/' and no spaces is a resource; anything else is a command line."
+      },
+      {
+        "type": "object",
+        "description": "A resource.",
+        "required": ["gvr"],
+        "additionalProperties": false,
+        "properties": {
+          "gvr": {
+            "type": "string",
+            "description": "group/version/plural (\"apps/v1/deployments\"); \"v1/pods\" for the core group."
+          }
+        }
+      },
+      {
+        "type": "object",
+        "description": "A command with arguments: the first word of a jump-bar command line and the rest.",
+        "required": ["command"],
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The first word: a resource alias (\"pod\"), a jump-bar word (\"ctx\") or a command id (\"pod::Delete\")."
+          },
+          "args": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The words after it."
+          }
+        }
+      }
+    ]
+  },
+  "examples": [
+    {
+      "prodpods": "v1/pods",
+      "dep": { "gvr": "apps/v1/deployments" },
+      "fred": "pod fred app=blee",
+      "blee": { "command": "pod", "args": ["fred", "app=blee"] }
+    }
+  ]
+}

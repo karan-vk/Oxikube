@@ -6,6 +6,7 @@
 //! | Module | Holds |
 //! |---|---|
 //! | [`ids`] | [`ClusterId`](ids::ClusterId), [`ContextName`](ids::ContextName), [`Gvk`](ids::Gvk) / [`Gvr`](ids::Gvr), [`Scope`](ids::Scope), [`ResourceRef`](ids::ResourceRef) |
+//! | [`alias`] | [`AliasTarget`]: what a jump-bar alias (`deploy`, a user's `prodpods`) resolves to |
 //! | [`kinds`] | [`ResourceKind`](kinds::ResourceKind), [`Verb`](kinds::Verb), [`VerbSet`](kinds::VerbSet) |
 //! | [`access`] | [`AccessRules`](access::AccessRules): what the user may do per resource (a rules review as data), [`AccessRequirement`](access::AccessRequirement) |
 //! | [`resource`] | the thin [`Resource`] model: [`ObjectMeta`] + the object's JSON |
@@ -37,6 +38,7 @@
 pub mod access;
 pub mod age;
 pub mod agent;
+pub mod alias;
 pub mod audit;
 mod bounds;
 pub mod colour;
@@ -61,6 +63,7 @@ pub mod session;
 pub mod view;
 
 pub use age::{Age, AgeStyle};
+pub use alias::AliasTarget;
 pub use colour::{ClusterColour, InvalidColour};
 pub use command::{
     Capabilities, Capability, Command, CommandId, CommandMeta, CommandScope, Propagation,

@@ -17,6 +17,7 @@
 //! [`update_user_settings`], which rewrites only the changed values of the file.
 //!
 //! Module map:
+//! - [`aliases`]: the user's `aliases.json` (E11-S04): parse with line-numbered diagnostics, hot reload.
 //! - [`cluster`]: the per-cluster settings (`clusters.<id>`: name, colour, read-only, ...), E06-S08.
 //! - [`kubeconfig`]: the `kubeconfig.sources` setting, the kubeconfig files and folders to read (E06-S05).
 //! - [`settings`]: the [`Settings`] trait, [`SettingsLocation`], registration.
@@ -31,6 +32,7 @@
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
+pub mod aliases;
 pub mod cluster;
 pub mod diagnostics;
 pub mod global;

@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 641df8179f2912f647bf2d7fcd7c58ea34eb6a7dce1513b35437b1d95e4bd570 # shrinks to kinds = [ResourceKind { gvk: Gvk { group: "", version: "v1", kind: "Thing" }, preferred: true, plural: "things", singular: "", short_names: ["y"], categories: [], verbs: VerbSet(255), namespaced: true }, ResourceKind { gvk: Gvk { group: "", version: "v2", kind: "Thing" }, preferred: true, plural: "things", singular: "", short_names: ["x"], categories: [], verbs: VerbSet(255), namespaced: true }], seed = 9557951670890649472
