@@ -58,6 +58,7 @@ impl Shared {
 #[derive(Clone)]
 pub(super) struct Runner {
     dispatcher: Rc<dyn CommandDispatcher>,
+    sources: JumpSources,
     sessions: ClusterSessionManager,
     workspace: WeakEntity<Workspace>,
     shared: Rc<Shared>,
@@ -71,8 +72,15 @@ impl Runner {
         }
         // A newer jump replaces (and so cancels) the wait of an older one: the user went on.
         let waiting = plan.after_connect.as_ref().map(|after| {
+            let sources = self.sources.clone();
+            let shared = self.shared.clone();
+            let replan: connect::Replan = Rc::new(move |line, cx| {
+                let env = LiveEnv::snapshot(&sources, &shared.loaded.borrow(), cx);
+                jump::plan(line, &env)
+            });
             connect::when_connected(
                 after.clone(),
+                replan,
                 self.dispatcher.clone(),
                 self.sessions.clone(),
                 self.workspace.clone(),
@@ -117,6 +125,7 @@ impl JumpHost {
             workspace: workspace.downgrade(),
             runner: Runner {
                 dispatcher,
+                sources: sources.clone(),
                 sessions: sources.sessions.clone(),
                 workspace: workspace.downgrade(),
                 shared: shared.clone(),

@@ -9,6 +9,7 @@ use oxikube_domain::kinds::{ResourceKind, VerbSet};
 use oxikube_palette::jump::JumpBar;
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::TestPorts;
+use oxikube_ui::dialog::OverlayExt as _;
 
 use super::App;
 use crate::app_state::AppState;
@@ -166,13 +167,13 @@ fn the_bracket_keys_replay_the_history(cx: &mut TestAppContext) {
     app.tick();
     assert!(!app.bar_is_open());
     assert_eq!(app.shown_kind().as_deref(), Some("ConfigMap"));
+    assert_eq!(app.toasts(), Vec::<String>::new());
     app.press("[");
     app.tick();
-    assert_eq!(
-        app.shown_kind().as_deref(),
-        None.or(Some("ConfigMap")),
-        "nothing before `cm`"
-    );
+    // Nothing before `cm`: the table stays, `cm` is not run again, and the user is told.
+    assert_eq!(app.shown_kind().as_deref(), Some("ConfigMap"));
+    assert_eq!(app.toasts(), ["Nothing earlier in the jump history."]);
+    assert_eq!(app.table_kinds().len(), 3, "no table was added");
     // `]` goes forward again, and `-` flips between the last two views.
     app.press("]");
     app.tick();
@@ -205,15 +206,26 @@ fn the_jump_commands_and_quit_are_on_the_bus_with_tool_stubs(cx: &mut TestAppCon
 }
 
 #[gpui::test]
-fn q_runs_the_quit_command_without_an_error(cx: &mut TestAppContext) {
+fn q_reaches_the_quit_guard_through_the_apps_bus_and_window(cx: &mut TestAppContext) {
     let mut app = App::with_pods_table(cx);
+    // With an operation running, a quit asks first: the dialog is how the test sees that `:q`
+    // went bar -> `app::Quit` on the bus -> the window's quit queue (`serve_quit`) ->
+    // `request_quit` (the platform's own quit does nothing observable in a test).
+    app.vcx.update(|_, cx| {
+        oxikube_workspace::session::register_operation_provider(cx, |_| {
+            vec![oxikube_workspace::session::RunningOperation::new(
+                "Exec session",
+                "pod/web-0 in prod",
+            )]
+        });
+    });
+    assert!(!app.vcx.update(|window, cx| window.has_active_dialog(cx)));
     app.jump("q");
+    app.tick();
     assert!(!app.bar_is_open());
     assert!(
-        app.toasts()
-            .iter()
-            .all(|t| !t.contains("no handler") && !t.contains("unknown")),
-        "{:?}",
+        app.vcx.update(|window, cx| window.has_active_dialog(cx)),
+        "the quit asked before ending the running exec session; toasts: {:?}",
         app.toasts()
     );
 }

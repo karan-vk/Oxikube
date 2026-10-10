@@ -137,6 +137,7 @@ pub(super) struct Fixture {
     pub sent: Rc<RefCell<Vec<Command>>>,
     pub sessions: ClusterSessionManager,
     pub connector: Arc<FakeClusterConnectorPort>,
+    pub aliases: AliasRegistry,
     pub table_focus: FocusHandle,
 }
 
@@ -182,7 +183,7 @@ impl Fixture {
             active: Rc::new(|_| Some(id("dev"))),
             sessions: sessions.clone(),
             catalog,
-            aliases,
+            aliases: aliases.clone(),
             namespaces,
         };
         let host = Rc::new(JumpHost::new(&workspace, Rc::new(recorder), sources));
@@ -203,6 +204,7 @@ impl Fixture {
             sent,
             sessions,
             connector,
+            aliases,
             table_focus,
         }
     }

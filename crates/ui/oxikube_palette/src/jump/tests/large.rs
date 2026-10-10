@@ -116,3 +116,24 @@ fn a_query_that_goes_back_to_the_inline_path_drops_a_waiting_tab(cx: &mut TestAp
     f.type_text("widgets5");
     assert_eq!(f.query(), "widgets5");
 }
+
+#[gpui::test]
+fn enter_after_an_arrow_while_matching_runs_the_line_not_a_completion(cx: &mut TestAppContext) {
+    let mut f = open_large(cx);
+    f.type_text("widgets7");
+    // The user types on and presses Down then Enter before the new matches land.
+    set_query_unsettled(&mut f, "widgets77");
+    let picker = f.picker();
+    f.vcx.update(|window, cx| {
+        picker.update(cx, |p, cx| {
+            p.select_next(&crate::picker::SelectNext, window, cx);
+            p.confirm(&crate::picker::Confirm, window, cx);
+        });
+    });
+    assert_eq!(f.query(), "widgets77", "nothing is replaced yet");
+    f.settle();
+    // The Down chose from the list that was replaced: Enter runs the typed line, which closes
+    // the bar (the line is planned, not completed into `widgets77 `).
+    assert!(f.bar().is_none(), "the line ran");
+    assert_eq!(f.take_sent().len(), 1, "its list opened");
+}

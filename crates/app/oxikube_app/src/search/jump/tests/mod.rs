@@ -25,7 +25,8 @@ pub(super) fn cluster(name: &str) -> ClusterId {
 }
 
 /// Three contexts (`dev` and `prod-eu` connected, `staging` not), `dev` shown. `dev` serves the
-/// stock types and cert-manager's CRDs; `prod-eu` the stock types only.
+/// stock types and cert-manager's CRDs; `prod-eu` the stock types only; the contexts that are not connected have discovered
+/// nothing.
 pub(super) struct Env {
     pub active: Option<ClusterId>,
     pub contexts: Vec<JumpContext>,
@@ -61,9 +62,10 @@ impl Env {
             ],
             tables: HashMap::from([
                 (cluster("dev"), dev),
-                (cluster("prod-eu"), stock.clone()),
-                (cluster("prod-us"), stock.clone()),
-                (cluster("staging"), stock),
+                (cluster("prod-eu"), stock),
+                // Not connected: nothing discovered yet.
+                (cluster("prod-us"), AliasTable::new()),
+                (cluster("staging"), AliasTable::new()),
             ]),
             namespaces: HashMap::from([
                 (

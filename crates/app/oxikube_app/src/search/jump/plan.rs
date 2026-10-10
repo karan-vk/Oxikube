@@ -11,6 +11,7 @@
 //! | `:deploy kube-system` | `namespace::Select { [kube-system] }`, `resource::OpenList { Deployment }` |
 //! | `:pod /re app=x` | `resource::OpenList { Pod }`, `table::SetFilter { "re -l app=x" }` |
 //! | `:pod @prod` | `cluster::Select { prod }` first (or `cluster::Connect`, then the rest once connected) |
+//! | `:certs @staging` (an alias only the cluster's discovery knows, cluster not connected) | `cluster::Connect`, then the line is planned again once connected |
 //! | `:ctx` | `view::Open { catalog }` |
 //! | `:ctx prod` | `cluster::Select { prod }` (or `cluster::Connect`) |
 //! | `:ns` | `resource::OpenList { Namespace }` |
@@ -20,6 +21,8 @@
 //!
 //! A user alias that expands to a command line (`fred: pod fred app=blee`) is expanded and
 //! planned again, up to [`MAX_EXPANSIONS`] levels deep.
+
+use std::sync::Arc;
 
 use oxikube_domain::AliasTarget;
 use oxikube_domain::command::Command;
@@ -31,7 +34,7 @@ use super::error::{ParseError, ParseErrorKind};
 use super::lookup::{find_context, namespace_names, no_cluster, unknown_alias};
 use super::parse::parse;
 use super::span::{Span, Spanned};
-use crate::search::aliases::Resolution;
+use crate::search::aliases::{AliasTable, Resolution};
 
 /// The view id of the cluster catalog home (`oxikube_catalog_ui::catalog::CATALOG_VIEW`), where
 /// the contexts are listed.
@@ -60,6 +63,11 @@ pub struct AfterConnect {
     pub cluster: ClusterId,
     /// What to send once it is.
     pub commands: Vec<Command>,
+    /// A line to plan again once it is connected, and send in place of `commands`: the alias
+    /// of `:certs @staging` may be a CRD that only the cluster's own discovery knows, so it
+    /// cannot be resolved before the connection. The host plans it against the connected
+    /// cluster and says why when that fails.
+    pub replan: Option<String>,
 }
 
 impl JumpPlan {
@@ -133,30 +141,18 @@ fn resource_plan(
     };
 
     let table = env.aliases(&cluster);
-    let alias = &jump.alias;
-    let entry = match table.resolve(&alias.value) {
-        Resolution::Unknown { suggestions } => {
-            return Err(unknown_alias(alias, suggestions));
-        }
-        resolution => resolution.target().cloned(),
-    };
-    let gvr = match entry {
-        Some(AliasTarget::Gvr(gvr)) => gvr,
-        Some(AliasTarget::Command { name, args }) => {
+    let gvk = match resolve_alias(jump, &table) {
+        Ok(Aliased::Gvk(gvk)) => gvk,
+        Ok(Aliased::Command { name, args }) => {
             return expand(jump, &name, &args, env, depth);
         }
-        None => return Err(unknown_alias(alias, Vec::new())),
+        // A context that is not connected has no discovery yet, so only the built-in and the
+        // user's aliases are known: a CRD alias is resolved once it is connected.
+        Err(_) if target.is_some_and(|context| !context.connected) => {
+            return Ok(connect_then_plan(jump, cluster));
+        }
+        Err(error) => return Err(error),
     };
-    let gvk = table.gvk_of(&gvr).ok_or_else(|| {
-        ParseError::new(
-            ParseErrorKind::NotServed,
-            alias.span,
-            format!(
-                "`{}` leads to {gvr}, which this cluster does not serve",
-                alias.value
-            ),
-        )
-    })?;
 
     let mut rest = Vec::new();
     if let Some(ns) = &jump.namespace {
@@ -177,6 +173,53 @@ fn resource_plan(
         });
     }
     Ok(switch_cluster(target, cluster, rest))
+}
+
+/// What an alias leads to.
+enum Aliased {
+    Gvk(Gvk),
+    Command { name: Arc<str>, args: Arc<[String]> },
+}
+
+/// Looks `jump`'s alias up in `table`.
+fn resolve_alias(jump: &ResourceJump, table: &AliasTable) -> Result<Aliased, ParseError> {
+    let alias = &jump.alias;
+    let entry = match table.resolve(&alias.value) {
+        Resolution::Unknown { suggestions } => {
+            return Err(unknown_alias(alias, suggestions));
+        }
+        resolution => resolution.target().cloned(),
+    };
+    let gvr = match entry {
+        Some(AliasTarget::Gvr(gvr)) => gvr,
+        Some(AliasTarget::Command { name, args }) => return Ok(Aliased::Command { name, args }),
+        None => return Err(unknown_alias(alias, Vec::new())),
+    };
+    table.gvk_of(&gvr).map(Aliased::Gvk).ok_or_else(|| {
+        ParseError::new(
+            ParseErrorKind::NotServed,
+            alias.span,
+            format!(
+                "`{}` leads to {gvr}, which this cluster does not serve",
+                alias.value
+            ),
+        )
+    })
+}
+
+/// Connects `cluster` and plans `jump` again once it is.
+fn connect_then_plan(jump: &ResourceJump, cluster: ClusterId) -> JumpPlan {
+    JumpPlan {
+        commands: vec![Command::ClusterConnect {
+            cluster: cluster.clone(),
+        }],
+        after_connect: Some(AfterConnect {
+            cluster,
+            commands: Vec::new(),
+            replan: Some(jump.to_string()),
+        }),
+        record: None,
+    }
 }
 
 /// Puts the cluster switch in front of `rest`: show the tab when it is open, connect first when
@@ -205,6 +248,7 @@ fn switch_cluster(
         after_connect: Some(AfterConnect {
             cluster,
             commands: rest,
+            replan: None,
         }),
         record: None,
     }

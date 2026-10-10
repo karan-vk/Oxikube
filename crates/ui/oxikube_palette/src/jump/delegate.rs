@@ -205,6 +205,9 @@ impl PickerDelegate for JumpDelegate {
                 .update_in(cx, |picker, window, cx| {
                     picker.delegate.matches = matches;
                     picker.delegate.selected = 0;
+                    // An arrow pressed while these were pending chose from the list they
+                    // replace: nothing here has been chosen.
+                    picker.delegate.picked = false;
                     if std::mem::take(&mut picker.delegate.complete_when_matched)
                         && let Some((line, site, text)) = picker.delegate.completion()
                     {
