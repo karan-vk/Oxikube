@@ -79,8 +79,11 @@ impl ClusterTabs {
             return false;
         }
         let len = order.len() as isize;
-        let current = self
-            .active
+        // What the window shows now: the dock tells the tabs they are shown a turn later, so two
+        // steps in one update (an immediate command, then another) must not both start from the
+        // tab shown before the first.
+        let shown = self.displayed(cx);
+        let current = shown
             .as_ref()
             .and_then(|active| order.iter().position(|cluster| cluster == active));
         let target = match current {
@@ -89,6 +92,19 @@ impl ClusterTabs {
             None => len - 1,
         } as usize;
         self.activate(&order[target].clone(), window, cx)
+    }
+
+    /// The cluster whose tab the window's workspace displays now (`None` for the catalog or
+    /// another item). Without the workspace, the last tab reported shown.
+    fn displayed(&self, cx: &App) -> Option<ClusterId> {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return self.active.clone();
+        };
+        let item = workspace.read(cx).active_item(cx)?.item_id();
+        self.tabs
+            .iter()
+            .find(|(_, entry)| entry.item == item)
+            .map(|(cluster, _)| cluster.clone())
     }
 
     pub(super) fn set_active(&mut self, active: Option<ClusterId>, cx: &mut Context<Self>) {

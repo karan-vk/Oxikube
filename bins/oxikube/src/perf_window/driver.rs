@@ -57,7 +57,8 @@ impl<'a> Driver<'a> {
             .command_bus()
             .cloned()
             .context("the main window has no command bus")?;
-        let runner = ClusterCommandRunner::new(bus, WHO, &workspace);
+        let runner =
+            ClusterCommandRunner::new(bus, state.services().sessions.clone(), WHO, &workspace);
         Ok(Self {
             cx,
             window,

@@ -3,7 +3,15 @@
 //! Buttons, menus and the tab context menu never call the guard or a port: they build a
 //! [`Command`] and call [`ClusterCommandRunner::run`]. The runner dispatches it on the bus as
 //! [`Initiator::Ui`], off the UI thread (`oxikube_runtime::spawn_kube`, abort-on-drop), and turns
-//! the answer into UI:
+//! the answer into UI.
+//!
+//! An immediate command (the cluster tab commands, `namespace::Select`: UI and session state in
+//! memory, never guarded) runs in the caller's update instead (E05-P600):
+//! [`CommandBus::dispatch_now`], then the cluster tabs' queue is applied and the session updates
+//! it made are echoed to the views ([`SessionEcho`]), so the frame drawn right after the input
+//! shows its effect. Its rest (a state store write) runs off the UI thread; a failure is a toast.
+//!
+//! The answers:
 //!
 //! * completed: a toast with the handler's message, if it had one;
 //! * needs confirmation: a [`DialogModal`] with the guard's one-line summary; confirming
@@ -15,14 +23,16 @@ use std::sync::Arc;
 
 use gpui::{App, AppContext as _, Entity, WeakEntity, Window};
 use oxikube_app::{
-    CommandBus, Confirmation, ConfirmationRequest, ConfirmationToken, DispatchContext,
-    DispatchError, Outcome,
+    ClusterSessionManager, CommandBus, Confirmation, ConfirmationRequest, ConfirmationToken,
+    DispatchContext, DispatchError, Outcome,
 };
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_runtime::spawn_kube;
 
+use super::echo::SessionEcho;
 use super::status::ClusterStatusItem;
+use crate::cluster_tab::apply_queued;
 use crate::modal::DialogModal;
 use crate::toast::Toast;
 use crate::workspace::Workspace;
@@ -58,6 +68,7 @@ fn confirm_copy(command: &Command) -> (&'static str, &'static str, bool) {
 #[derive(Clone)]
 pub struct ClusterCommandRunner {
     bus: CommandBus,
+    sessions: ClusterSessionManager,
     who: Arc<str>,
     workspace: WeakEntity<Workspace>,
     status: Option<WeakEntity<ClusterStatusItem>>,
@@ -65,10 +76,17 @@ pub struct ClusterCommandRunner {
 
 impl ClusterCommandRunner {
     /// A runner dispatching on `bus` as `who` (the local user's name for the audit log), showing
-    /// toasts and dialogs in `workspace`.
-    pub fn new(bus: CommandBus, who: impl Into<Arc<str>>, workspace: &Entity<Workspace>) -> Self {
+    /// toasts and dialogs in `workspace`. `sessions` are the sessions its immediate commands
+    /// change (their updates are echoed to the views at once).
+    pub fn new(
+        bus: CommandBus,
+        sessions: ClusterSessionManager,
+        who: impl Into<Arc<str>>,
+        workspace: &Entity<Workspace>,
+    ) -> Self {
         Self {
             bus,
+            sessions,
             who: who.into(),
             workspace: workspace.downgrade(),
             status: None,
@@ -95,6 +113,10 @@ impl ClusterCommandRunner {
         cx: &mut App,
     ) {
         let mut context = DispatchContext::new(Initiator::Ui, self.who.clone());
+        if confirmation.is_none() && self.bus.runs_now(command.id()) {
+            self.dispatch_now(command, context, window, cx);
+            return;
+        }
         context.confirmation = confirmation;
         let runner = self.clone();
         let bus = self.bus.clone();
@@ -109,6 +131,44 @@ impl ClusterCommandRunner {
                     .ok();
             })
             .detach();
+    }
+
+    /// Runs an immediate command in this update (see the module docs).
+    fn dispatch_now(
+        &self,
+        command: Command,
+        context: DispatchContext,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let echo = SessionEcho::begin(&self.sessions);
+        let result = self.bus.dispatch_now(command.clone(), context);
+        apply_queued(window, cx);
+        echo.finish(cx);
+        let output = match result {
+            Ok(done) => {
+                if let Some(rest) = done.rest {
+                    let runner = self.clone();
+                    // Detached: the rest completes the command the user asked for, and only a
+                    // failure has something to show.
+                    window
+                        .spawn(cx, async move |cx| {
+                            let result = spawn_kube(cx, rest)
+                                .await
+                                .map_err(|err| DispatchError::Handler(err.into()))
+                                .and_then(|r| r.map_err(DispatchError::Handler));
+                            if let Err(error) = result {
+                                cx.update(|_, cx| runner.toast(denial_toast(&error), cx))
+                                    .ok();
+                            }
+                        })
+                        .detach();
+                }
+                Ok(Outcome::Completed(done.output))
+            }
+            Err(error) => Err(error),
+        };
+        self.finish(command, output, window, cx);
     }
 
     fn finish(

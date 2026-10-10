@@ -2,7 +2,7 @@
 //!
 //! Each action stands for a `Command` (`cluster::SwitchTab`, `cluster::NextTab`,
 //! `cluster::PreviousTab`, same names) and does nothing but send it to the controller of the
-//! window the key was pressed in. The bindings are in the per-OS keymap files of
+//! window the key was pressed in, which applies it before the next frame. The bindings are in the per-OS keymap files of
 //! `oxikube_assets` (`cmd-1` to `cmd-9` on macOS, `ctrl-shift-1` to `ctrl-shift-9` on Linux and
 //! Windows, `ctrl-tab` and `ctrl-shift-tab` everywhere), so users rebind them in `keymap.json` like any
 //! other key.
@@ -56,13 +56,18 @@ pub(super) fn register(cx: &mut App) {
     });
 }
 
-/// Queues `command` for the cluster tabs of the active window; nothing happens in a window
-/// without them.
+/// Queues `command` for the cluster tabs of the active window and applies it before this update
+/// ends, so the frame after the key shows the other tab (E05-P600); nothing happens in a window
+/// without them. The window is busy dispatching the key here, so the queue is applied when the
+/// dispatch returns, still before the next frame.
 fn send(command: Command, cx: &mut App) {
     let Some(window) = cx.active_window() else {
         return;
     };
-    if let Some(sink) = TabsWindows::sink(cx, window.window_id()) {
-        sink.send(command);
+    let Some(sink) = TabsWindows::sink(cx, window.window_id()) else {
+        return;
+    };
+    if sink.send(command) {
+        super::apply_before_next_frame(window, cx);
     }
 }

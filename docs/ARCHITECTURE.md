@@ -629,7 +629,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
   Module `cluster` (E06-S09): `ClusterMark` / `ClusterBadge` (colour dot + read-only lock drawn on a
   cluster tab via `TabContent::cluster`, a hotbar entry and the status bar), `ClusterStatusItem`,
   `cluster_menu` (read-only toggle and presets as commands) and `ClusterCommandRunner` (dispatch on the
-  `CommandBus`, toast / confirmation dialog / denial toast).
+  `CommandBus`, toast / confirmation dialog / denial toast; immediate commands run in the dispatching
+  update, E05-P600), `SessionEcho` / `observe_session_echo` (the session updates an immediate
+  command made, handed to the views in that update).
   Module `persistence`
   (E05-S05): `SerializedWorkspace` (versioned `DockAreaState` + item descriptors + window place),
   `LayoutStore` over `StatePort`, `LayoutPersistence` (async restore, 500 ms debounced save, flush

@@ -26,12 +26,15 @@
 //!   ([`NamespaceSource::Forbidden`]) so the user can still pick.
 //! * **Shortcuts.** `0` is All, `1`-`9` the first nine favourites ([`slot_selection`]).
 //! * **Commands.** `namespace::Select` and `namespace::ToggleFavourite` run through
-//!   [`NamespaceService::execute`], the handler a `CommandBus` registers.
+//!   [`NamespaceService::execute`], the handler a `CommandBus` registers. `namespace::Select` is
+//!   immediate (E05-P600): [`NamespaceService::execute_now`] sets the session's selection on the
+//!   caller's thread and hands back the `StatePort` write ([`SelectedNow`]) to run off it.
 //!
 //! Plain async Rust: no gpui, no kube, nothing spawned. Callers run it on the Tokio bridge.
 
 mod catalog;
 mod command;
+mod now;
 mod prefs;
 mod scope;
 mod service;
@@ -42,6 +45,7 @@ mod store;
 mod tests;
 
 pub use catalog::{NamespaceCatalog, NamespaceSource, is_valid_namespace_name};
+pub use now::SelectedNow;
 pub use prefs::{NamespacePrefs, prefs_key};
 pub use scope::{ClusterWide, ScopeDelta};
 pub use service::{DEBOUNCE, NamespaceOutcome, NamespaceService, Reconciled};

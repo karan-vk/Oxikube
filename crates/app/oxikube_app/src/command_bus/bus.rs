@@ -10,6 +10,7 @@ use oxikube_ports::ToolDef;
 use super::context::{DispatchContext, Outcome};
 use super::error::DispatchError;
 use super::handler::HandlerContext;
+use super::immediate::Immediate;
 use super::registry::{CommandRegistry, Registered};
 use crate::guard::{ConfirmationToken, MutationGuard, policy};
 
@@ -121,6 +122,57 @@ impl CommandBus {
             .guard
             .run(meta, command, ctx, entry.handler.clone())
             .await
+    }
+
+    /// Whether `id` is an immediate command ([`dispatch_now`](Self::dispatch_now) runs it).
+    pub fn runs_now(&self, id: CommandId) -> bool {
+        self.inner
+            .entries
+            .get(&id)
+            .is_some_and(|entry| entry.immediate.is_some())
+    }
+
+    /// Runs an immediate command on this thread, now (see [`immediate`](super::immediate)):
+    /// the UI calls it inside the update that dispatched, so the command's effect is in the frame
+    /// drawn right after the input. Returns what the handler did; the caller runs its
+    /// [`rest`](Immediate::rest) off the UI thread.
+    ///
+    /// The same checks as [`dispatch`](Self::dispatch) apply (an unknown id, an initiator the
+    /// command does not allow). An immediate command is never guarded, so nothing is audited
+    /// and no confirmation is asked, exactly as when it is dispatched.
+    ///
+    /// # Errors
+    ///
+    /// [`DispatchError::NotImmediate`] when `command` has an async handler (dispatch it instead),
+    /// [`DispatchError::UnknownCommand`], [`DispatchError::NotPermitted`], or the handler's error
+    /// as [`DispatchError::Handler`].
+    pub fn dispatch_now(
+        &self,
+        command: Command,
+        ctx: DispatchContext,
+    ) -> Result<Immediate, DispatchError> {
+        let id = command.id();
+        let entry = self
+            .inner
+            .entries
+            .get(&id)
+            .ok_or(DispatchError::UnknownCommand(id))?;
+        let handler = entry
+            .immediate
+            .as_ref()
+            .ok_or(DispatchError::NotImmediate(id))?;
+        tracing::debug!(command = %id, initiator = %ctx.initiator, "dispatch now");
+        if !command.meta().allows(ctx.initiator) {
+            return Err(DispatchError::NotPermitted {
+                command: id,
+                initiator: ctx.initiator,
+            });
+        }
+        let cluster = policy::cluster_of(&command).cloned().or(ctx.cluster);
+        let cx = HandlerContext::new(ctx.initiator, ctx.who, cluster, None);
+        handler
+            .handle_now(command, cx)
+            .map_err(DispatchError::Handler)
     }
 
     /// Declines a pending confirmation: the request is forgotten and an audit record

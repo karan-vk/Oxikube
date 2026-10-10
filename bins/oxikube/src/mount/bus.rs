@@ -4,7 +4,9 @@
 //! it, and [`BusDispatcher`] is the [`CommandDispatcher`] the views send their commands through:
 //! it hands each command to the workspace's [`ClusterCommandRunner`], which dispatches on the bus
 //! as `Initiator::Ui` off the UI thread and shows what came back (a toast, a confirmation
-//! dialog, a denial). The palette, MCP and extensions will dispatch on the same bus.
+//! dialog, a denial). The palette, MCP and extensions will dispatch on the same bus. The cluster
+//! tab commands and `namespace::Select` are immediate (E05-P600): the runner runs them in the
+//! update that dispatched them, so their effect is in the next frame.
 //!
 //! | Owner | Commands |
 //! |---|---|
@@ -34,7 +36,9 @@ use std::sync::Arc;
 use futures::channel::mpsc;
 use gpui::{AnyWindowHandle, App};
 use oxikube_app::catalog::ClusterCommandOutcome;
-use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
+use oxikube_app::command_bus::{
+    CommandOutput, CommandRegistry, HandlerContext, Immediate, RegisterError,
+};
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
     ClusterCommands, ClusterSessionManager, ExecService, KubeconfigSourcesService, PrefsWriter,
@@ -188,24 +192,36 @@ fn register_cluster_commands(
 }
 
 /// `namespace::Select` and `namespace::ToggleFavourite` over the [`NamespaceService`].
+///
+/// `namespace::Select` is immediate (E05-P600): the session's selection changes in the call, so
+/// the UI's runner shows it in the frame after the input, and remembering it is the rest, run off
+/// the UI thread. Its `changed` is whether the session's selection changed.
 fn register_namespace_commands(
     registry: &mut CommandRegistry,
     service: NamespaceService,
 ) -> Result<(), RegisterError> {
-    for id in [
-        CommandId::NAMESPACE_SELECT,
-        CommandId::NAMESPACE_TOGGLE_FAVOURITE,
-    ] {
-        let service = service.clone();
-        registry.register(meta(id)?, move |command: Command, _: HandlerContext| {
+    let select = service.clone();
+    registry.register_immediate(
+        meta(CommandId::NAMESPACE_SELECT)?,
+        move |command: Command, _: HandlerContext| {
+            let selected = select.execute_now(&command)?;
+            let output = CommandOutput::data(json!({ "changed": selected.session_changed }));
+            let remember = selected.remember();
+            Ok(Immediate::then(output, async move {
+                remember.await.map(|_| ())
+            }))
+        },
+    )?;
+    registry.register(
+        meta(CommandId::NAMESPACE_TOGGLE_FAVOURITE)?,
+        move |command: Command, _: HandlerContext| {
             let service = service.clone();
             async move {
                 let outcome = service.execute(&command).await?;
                 Ok(CommandOutput::data(json!({ "changed": outcome.changed })))
             }
-        })?;
-    }
-    Ok(())
+        },
+    )
 }
 
 /// `view::Open` for the [`VIEWS`] of the main window: the view id goes to `views`, whose receiver

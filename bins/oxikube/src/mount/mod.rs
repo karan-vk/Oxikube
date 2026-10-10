@@ -296,7 +296,13 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         ws.register_status_item(StatusSide::Left, STATUS_PRIORITY, status.clone(), cx);
     });
     bus_dispatcher.set_runner(
-        ClusterCommandRunner::new(bus.clone(), local_user(), &workspace).with_status_item(&status),
+        ClusterCommandRunner::new(
+            bus.clone(),
+            services.sessions.clone(),
+            local_user(),
+            &workspace,
+        )
+        .with_status_item(&status),
     );
     let follow_active = cx.subscribe(&tabs, move |_, event: &ClusterTabsEvent, cx| {
         if let ClusterTabsEvent::ActiveChanged(active) = event {

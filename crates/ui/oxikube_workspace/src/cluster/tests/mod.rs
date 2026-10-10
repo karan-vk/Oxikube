@@ -2,6 +2,7 @@
 //! over the real session manager, guard and command bus with testkit fakes.
 
 mod badges;
+mod echo;
 mod fixture;
 mod menu;
 mod runner;

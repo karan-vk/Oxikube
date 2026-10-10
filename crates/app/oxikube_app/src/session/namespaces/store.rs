@@ -2,7 +2,6 @@
 //! debounce tickets.
 
 use oxikube_domain::ids::ClusterId;
-use oxikube_domain::session::NamespaceSelection;
 use oxikube_domain::{OxiError, OxiResult};
 
 use super::prefs::{self, NamespacePrefs};
@@ -14,30 +13,6 @@ impl NamespaceService {
             .manager
             .get(cluster)
             .ok_or_else(|| OxiError::not_found(format!("no cluster session {cluster}")))
-    }
-
-    pub(super) async fn apply_selection(
-        &self,
-        cluster: &ClusterId,
-        selection: NamespaceSelection,
-    ) -> OxiResult<NamespaceOutcome> {
-        let session_changed = self
-            .shared
-            .manager
-            .set_namespace_selection(cluster, selection.clone())?;
-        self.ensure_loaded(cluster).await?;
-        // An explicit choice is remembered even when it equals the selection the session
-        // opened with (the cache is seeded from it), so it outlives a changed default.
-        let unremembered = !self.shared.stored.lock().contains(cluster);
-        let mut outcome = self
-            .mutate_inner(cluster, unremembered, |prefs| {
-                let changed = prefs.selection != selection;
-                prefs.selection = selection;
-                changed
-            })
-            .await?;
-        outcome.changed |= session_changed;
-        Ok(outcome)
     }
 
     pub(super) fn next_ticket(&self, cluster: &ClusterId) -> u64 {
@@ -101,7 +76,7 @@ impl NamespaceService {
     }
 
     /// [`mutate`](Self::mutate), storing the prefs even when `change` reports none if `force`.
-    async fn mutate_inner(
+    pub(super) async fn mutate_inner(
         &self,
         cluster: &ClusterId,
         force: bool,

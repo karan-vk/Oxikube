@@ -22,7 +22,9 @@
 //! each has an MCP tool stub, and [`register_commands`] puts them on the `CommandBus`. The key
 //! bindings in the per-OS keymaps (`cmd-1` to `cmd-9`, `ctrl-shift-1` to `ctrl-shift-9` on
 //! Linux and Windows, `ctrl-tab`) reach them through the actions in [`actions`]. None changes a cluster,
-//! so none goes through `MutationGuard`; closing a tab sends `cluster::Disconnect`.
+//! so none goes through `MutationGuard`; closing a tab sends `cluster::Disconnect`. They are
+//! immediate commands (E05-P600): run from the UI (the command runner, the keys) they are applied
+//! in the update that took the input, so the next frame shows the other tab.
 //!
 //! # Saved state
 //!
@@ -61,6 +63,7 @@ mod tests;
 
 pub use colour::{cluster_hsla, initials};
 pub use controller::{ClusterTabs, ClusterTabsDeps, ClusterTabsEvent, TabSetup, register_commands};
+pub(crate) use controller::{apply_before_next_frame, apply_queued};
 pub use dispatch::{CommandDispatcher, CommandSink, TabsDispatcher, is_tab_command};
 pub use restore_settings::{RestoreConnectSetting, SessionRestoreContent, SessionRestoreSettings};
 pub use store::{

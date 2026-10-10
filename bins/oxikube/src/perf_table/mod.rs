@@ -177,7 +177,7 @@ pub(crate) fn run_command(
         .command_bus()
         .cloned()
         .context("the main window has no command bus")?;
-    let runner = ClusterCommandRunner::new(bus, WHO, workspace);
+    let runner = ClusterCommandRunner::new(bus, state.services().sessions.clone(), WHO, workspace);
     window.update(cx, |_, window, cx| runner.run(command, window, cx))?;
     Ok(())
 }

@@ -7,13 +7,20 @@
 //! `app.cluster_select` and so on) and registered on the bus by [`register_commands`], whose
 //! handlers push the command into the controller's queue; the keys (`cmd-1..9`, `ctrl-tab`),
 //! the hotbar and the tab's close button reach the same `apply`.
+//!
+//! They are immediate commands (E05-P600): when the UI runs one (`ClusterCommandRunner`, the
+//! keys), the queue is applied in that same update ([`apply_queued`]), so the frame drawn right
+//! after the input shows the other tab. A command queued from another thread (an agent) is
+//! applied by the controller's task when it wakes.
 
-use gpui::{Context, Window};
-use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
+use gpui::{AnyWindowHandle, App, Context, Window};
+use oxikube_app::command_bus::{
+    CommandOutput, CommandRegistry, HandlerContext, Immediate, RegisterError,
+};
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command};
 
-use super::ClusterTabs;
+use super::{ClusterTabs, TabsWindows};
 use crate::cluster_tab::dispatch::{CommandSink, TAB_COMMANDS};
 
 impl ClusterTabs {
@@ -44,10 +51,43 @@ impl ClusterTabs {
             }
         }
     }
+
+    /// Applies every command queued and not applied yet, now. The receiver is borrowed only to
+    /// take one command at a time (applying one may queue another), and `try_recv` leaves the
+    /// waker of the controller's task in place.
+    pub(crate) fn apply_queued(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        loop {
+            let next = self.queue.borrow_mut().try_recv();
+            let Ok(command) = next else { break };
+            self.apply(&command, window, cx);
+        }
+    }
 }
 
-/// Registers the tab commands on `registry` (MCP tool stubs included), with handlers that push
-/// the command into `sink` ([`ClusterTabs::command_sink`]). Call it from the binary's command
+/// Applies the tab commands queued for `window`'s controller before the current update ends, for
+/// callers that cannot borrow the window (a key handler while the window dispatches the key, a
+/// view inside its own update): the deferred callback runs when that update returns, still before
+/// the next frame.
+pub(crate) fn apply_before_next_frame(window: AnyWindowHandle, cx: &mut App) {
+    cx.defer(move |cx| {
+        window
+            .update(cx, |_, window, cx| apply_queued(window, cx))
+            .ok();
+    });
+}
+
+/// Applies the tab commands queued for `window`'s controller now, inside the caller's update
+/// (the window must not be borrowed elsewhere). Does nothing in a window without cluster tabs.
+pub(crate) fn apply_queued(window: &mut Window, cx: &mut App) {
+    let id = window.window_handle().window_id();
+    if let Some(tabs) = TabsWindows::controller(cx, id).and_then(|tabs| tabs.upgrade()) {
+        tabs.update(cx, |tabs, cx| tabs.apply_queued(window, cx));
+    }
+}
+
+/// Registers the tab commands on `registry` as immediate commands (MCP tool stubs included), with
+/// handlers that push the command into `sink` ([`ClusterTabs::command_sink`]); the runner then
+/// applies the queue in the same update. Call it from the binary's command
 /// setup: `registry.install("oxikube_workspace", |r| register_commands(r, sink))`.
 ///
 /// # Errors
@@ -60,16 +100,13 @@ pub fn register_commands(
     for id in TAB_COMMANDS {
         let meta = *command::lookup(id).ok_or(RegisterError::Undeclared(id))?;
         let sink = sink.clone();
-        registry.register(meta, move |command: Command, _: HandlerContext| {
-            let sink = sink.clone();
-            async move {
-                if sink.send(command) {
-                    Ok(CommandOutput::none())
-                } else {
-                    Err(OxiError::internal(
-                        "the window with the cluster tabs is gone",
-                    ))
-                }
+        registry.register_immediate(meta, move |command: Command, _: HandlerContext| {
+            if sink.send(command) {
+                Ok(Immediate::done(CommandOutput::none()))
+            } else {
+                Err(OxiError::internal(
+                    "the window with the cluster tabs is gone",
+                ))
             }
         })?;
     }

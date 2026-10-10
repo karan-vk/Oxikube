@@ -1,7 +1,7 @@
 //! Pure guard policy: the confirmation tier of a command, the cluster it acts on, and
 //! what its audit record names as the target.
 
-use oxikube_domain::command::{Command, CommandMeta, DEFAULT_DEBUG_IMAGE};
+use oxikube_domain::command::{Command, CommandId, CommandMeta, DEFAULT_DEBUG_IMAGE};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::safety::{ConfirmTier, Risk};
 use oxikube_ports::{ClusterPrefs, NodeShellSpec};
@@ -45,12 +45,17 @@ pub fn confirm_tier_for(meta: &CommandMeta, command: &Command) -> ConfirmTier {
 /// off). It still goes through the guard's posture pipeline: confirmation when it lowers
 /// protection on a production cluster, and an audit record.
 pub fn is_posture(command: &Command) -> bool {
-    matches!(
-        command,
-        Command::ClusterToggleReadOnly { .. }
-            | Command::ClusterSetColour { .. }
-            | Command::ClusterApplyPreset { .. }
-    )
+    is_posture_id(command.id())
+}
+
+/// Whether the command `id` names is a posture command ([`is_posture`]).
+pub fn is_posture_id(id: CommandId) -> bool {
+    [
+        CommandId::CLUSTER_TOGGLE_READ_ONLY,
+        CommandId::CLUSTER_SET_COLOUR,
+        CommandId::CLUSTER_APPLY_PRESET,
+    ]
+    .contains(&id)
 }
 
 /// The cluster a command names in its payload, if any.

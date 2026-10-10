@@ -9,8 +9,8 @@
 //! not rendered the last one (it is in a background cluster tab) it is not notified again.
 //!
 //! The view follows its session: a namespace change rescopes the subscription (shared feeds,
-//! rows kept for namespaces that stay), a reconnect (a new store) re-subscribes, a capability
-//! change re-reads the columns.
+//! rows kept for namespaces that stay) and shows the held rows of the new scope at once (`scope`),
+//! a reconnect (a new store) re-subscribes, a capability change re-reads the columns.
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -75,8 +75,10 @@ impl ResourceTable {
             .as_ref()
             .is_some_and(|current| current.is_same(&store));
         if same_store && let Some(subscription) = &mut self.subscription {
-            if subscription.query().scope != scope {
-                subscription.rescope(scope);
+            let before = subscription.query().scope.clone();
+            if before != scope {
+                subscription.rescope(scope.clone());
+                self.show_held_rows(&before, &scope, cx);
             }
             return;
         }
@@ -201,7 +203,7 @@ impl ResourceTable {
 
     /// Re-reads the provider's columns (the session's capabilities may have changed: metrics
     /// columns come and go), keeping the layout.
-    fn refresh_columns(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn refresh_columns(&mut self, cx: &mut Context<Self>) {
         self.relayout(None, cx);
     }
 }

@@ -572,6 +572,59 @@ two frames was 2, 5, 2, 2 and 5 before and 1, 1 and 1 after. The pacing of the t
 is also pinned by `oxikube_terminal`'s `tests/state/frame_paced.rs`: a flood with frames one to
 three refreshes late gives at most one notify per frame (the timer gave up to 4).
 
+### E05-P600: UI-only commands land in the input's frame
+
+`namespace::Select` and the cluster tab commands (`cluster::NextTab`, the `ctrl-tab` command, and
+`Select`, `SwitchTab`, `PreviousTab`, `CloseTab`) went through the command bus on a Tokio task and
+came back to the UI thread in a later update, so the frame drawn right after the input could not
+show them: input latency was one refresh plus the frame (12-13 ms at p50). They are now **immediate
+commands** (`CommandRegistry::register_immediate`, see `oxikube_app::command_bus::immediate`):
+`ClusterCommandRunner` runs them with
+`CommandBus::dispatch_now` inside the dispatching update, applies the cluster tabs' queue at once,
+and hands the session updates they made to the views in that update (`SessionEcho`). The pods
+table keeps the held rows of the new scope and relayouts its columns in the same update (one
+namespace hides the Namespace column); the store's reseed snapshot reconciles the rows in a later
+frame. The I/O that completes `namespace::Select` (remembering the selection in `StatePort`) runs
+off the UI thread. The keys (`ctrl-tab`, `cmd-1..9`), a hotbar click and the namespace selector's
+digits apply in the same way. The scripts are unchanged: they still mark the input and dispatch
+through `ClusterCommandRunner::run`.
+
+Measured with `cargo xtask perf --windowed <scenario> --samples 1 --bin <binary>`, `release-fast` +
+`perf-window`, Apple M5 Max, 120 Hz built-in display, window 1440 x 900 pt, desktop lock held, each
+run after at least 20 s without input, `before` (`origin/main` `62115b39`) and `after` alternating
+run by run. The machine was **not** quiet: load average 7 to 22 on 18 cores (other agents building
+and testing; no cargo or rustc process of this story ran during the runs). An earlier `tabs-panes`
+batch at load 40 to 50 had the same latencies with a longer tail (`switch-tabs` input max up to 13.8
+ms, from switch frames of 11 to 13.6 ms that the `before` build also drew under that load). The
+verify stage re-measures on a quiet machine.
+
+`namespaces` (`namespace::Select` four times a second under 10 000-pod churn), 5 valid runs each:
+
+| Build | `switch-namespace` input p50 / p95 / max ms | frames | frame max / p99 / p95 ms | dropped | notifies per view per frame | CPU % | peak RSS MiB |
+|---|---|---|---|---|---|---|---|
+| before | 12.65-13.12 / 13.41-14.23 / **14.77-16.55** | 94-98 | 5.58-7.24 / 5.58-7.24 / 4.86-5.53 | 0 | 1 | 4.35-4.98 | 195-198 |
+| after | 2.34-2.62 / 4.00-4.61 / **4.49-5.55** | 153-157 | 5.24-6.18 / 4.79-5.99 / 4.46-5.13 | 0 | 1 | 5.53-6.42 | 196-199 |
+
+The after build draws about one more frame per selection (153-157 against 94-98 in 15 s, 60
+selections): the input's own frame, which shows the held rows of the new scope (or the loading
+state when the table held none of them), and then the frame of the store's snapshot. That frame is
+the price of showing the input at once and costs about 1.2 % of a core at four selections a second.
+A first `after` build that rescoped the rows but left the columns to the session stream's later
+update had a frame of 8.4 to 16 ms after most selections (the column change re-laid every visible
+cell a frame after the rows had); the column relayout now happens in the input's frame too.
+
+`tabs-panes` (three clusters; `switch-tabs`: `cluster::NextTab` four times a second), 5 valid runs
+each:
+
+| Build | `switch-tabs` input p50 / p95 / max ms | `switch-tabs` frame max ms | scripted frame max / p99 / p95 ms | scripted dropped | scripted input max ms | CPU % | peak RSS MiB |
+|---|---|---|---|---|---|---|---|
+| before | 11.78-12.34 / 12.80-13.18 / **12.94-13.53** | 4.28-4.57 | 5.82-8.24 / 4.11-4.29 / 3.87-4.03 | 16-76 | 12.94-13.53 | 39.85-41.17 | 211-215 |
+| after | 3.65-3.72 / 4.11-4.49 / **4.19-5.80** | 4.13-5.65 | 5.83-8.69 / 4.09-5.34 / 3.84-4.96 | 11-78 | 4.33-6.12 | 39.63-44.10 | 214-216 |
+
+`switch-tabs` dropped no refresh in either build. The dropped refreshes, and the one frame over
+8.33 ms (8.69 ms, `after` run 5), are in `resize-window` in both builds (window resize under
+contention, unchanged by this story).
+
 ## Startup: cold start to the first interactive frame
 
 Built in E05-S13 (ADR 0013). Budgets: **≤ 400 ms** from launch to the first interactive frame with

@@ -9,8 +9,8 @@
 //!   window it needs. This is the bridge from the bus to the tab UI.
 //! - [`TabsDispatcher`]: a dispatcher that sends the tab commands (`cluster::Select`,
 //!   `cluster::SwitchTab`, `cluster::NextTab`, `cluster::PreviousTab`, `cluster::CloseTab`) to
-//!   the controller and hands every other command to the dispatcher it wraps (the catalog's
-//!   service dispatcher, in the app).
+//!   the controller, applied before the next frame, and hands every other command to the
+//!   dispatcher it wraps (the catalog's service dispatcher, in the app).
 
 use std::rc::Rc;
 
@@ -85,6 +85,9 @@ impl CommandDispatcher for TabsDispatcher {
         if is_tab_command(&command) {
             if !self.sink.send(command) {
                 tracing::debug!("the cluster tabs are gone: command dropped");
+            } else if let Some(window) = cx.active_window() {
+                // A click on the hotbar: shown in the frame after it, as the keys are (E05-P600).
+                super::apply_before_next_frame(window, cx);
             }
         } else {
             self.inner.dispatch(command, cx);
