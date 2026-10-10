@@ -24,7 +24,7 @@
 //! - [`mod@file`]: the `keymap.json` format and its lenient parser; [`lines`]: where each section
 //!   and binding is in the text, for `keymap.json:12` in a diagnostic.
 //! - [`events`]: [`subscribe_diagnostics`], how the binary learns that the user's file has
-//!   problems (it shows one toast); [`conflicts`]: keys bound twice in one context.
+//!   problems (it shows one toast); [`conflicts()`]: keys bound twice in one context.
 //! - [`actions`]: `keymap::OpenUser`, the action of the command that opens the user's file.
 //! - [`registry`]: [`ActionRegistry`], names by namespace and the action-to-`Command` mapping.
 //! - [`build`]: sections to `KeyBinding`s, with validation.
