@@ -33,7 +33,10 @@ pub enum Accepted {
     Stale,
 }
 
-/// The manifest editor's state beyond the buffer. See the [module docs](self).
+/// The manifest editor's state beyond the buffer: the schemas the buffer's kinds need (which to
+/// fetch, which arrived, which the cluster does not have), the buffer version whose diagnostics
+/// are shown (a result computed for an older version is dropped) and the problem counts the
+/// toolbar shows. Written against [`EditorApi`] only, so it is tested without a window.
 #[derive(Debug, Default)]
 pub struct ManifestModel {
     known: KnownSchemas,
