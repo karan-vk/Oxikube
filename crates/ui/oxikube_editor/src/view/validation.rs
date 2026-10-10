@@ -10,6 +10,7 @@ use oxikube_domain::ids::Gvk;
 use oxikube_domain::schema::JsonSchema;
 use oxikube_ui::editor::{DiagnosticLevel, EditorDiagnostic};
 
+use crate::open::masked_diagnostics;
 use crate::validate::{self, Severity, ValidateOptions};
 use crate::yaml::parse_shared;
 
@@ -33,6 +34,17 @@ pub struct Validation {
 
 /// Validates `text` (the buffer at `version`) against the `known` schemas.
 pub fn validate_text(version: u64, text: Arc<str>, known: &KnownSchemas) -> Validation {
+    validate_text_with(version, text, known, false)
+}
+
+/// [`validate_text`], and when `masking` (the buffer is a Secret opened with its values masked,
+/// E10-S06), an error on each placeholder still in it: it must never be applied as a value.
+pub fn validate_text_with(
+    version: u64,
+    text: Arc<str>,
+    known: &KnownSchemas,
+    masking: bool,
+) -> Validation {
     let parsed = parse_shared(text);
     let mut missing: Vec<Gvk> = Vec::new();
     let found = validate::validate_buffer(
@@ -48,9 +60,14 @@ pub fn validate_text(version: u64, text: Arc<str>, known: &KnownSchemas) -> Vali
         },
         &ValidateOptions::default(),
     );
+    let mut diagnostics: Vec<EditorDiagnostic> = found.iter().map(to_editor).collect();
+    if masking {
+        diagnostics.extend(masked_diagnostics(&parsed));
+        diagnostics.sort_by_key(|d| d.range.start);
+    }
     Validation {
         version,
-        diagnostics: found.iter().map(to_editor).collect(),
+        diagnostics,
         missing,
     }
 }

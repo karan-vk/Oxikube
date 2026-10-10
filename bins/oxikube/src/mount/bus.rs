@@ -24,7 +24,7 @@
 //! | `oxikube_palette` | `palette::OpenJump` (the `:` jump bar, E11-S05), `jump::Back`, `jump::Forward`, `jump::Last` (its history: `[`, `]`, `-`) |
 //! | `oxikube_workspace` (quit) | `app::Quit`: asks first while operations run, like `cmd-q` (E11-S05, for `:q`, the palette and agents) |
 //! | `oxikube_palette` | `help::Show` (the `?` overlay of the keys that apply where the focus is; read-only, E11-S10) |
-//! | `oxikube_editor` | `editor::NewManifest` (an empty manifest editor in the shown cluster's tab, its YAML checked against that cluster's schemas), `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (the focused editor's view toggles; E10-S04) |
+//! | `oxikube_editor` | `editor::NewManifest` (an empty manifest editor in the shown cluster's tab, its YAML checked against that cluster's schemas), `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (the focused editor's view toggles; E10-S04), `resource::Edit`, `resource::ViewYamlInEditor` (a `kind/name` editor tab on a freshly read object, E10-S06), `editor::ToggleManagedFields`, `editor::ToggleSecretMask` (E10-S06) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
 //! `pod::Debug` (E09-S10, registered by `oxikube_terminal` over the app's `ExecService`) adds an

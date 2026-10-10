@@ -4,6 +4,11 @@
 //!   the Deployment schema (a fake `SchemaPort`): one error squiggle under `three`, its gutter
 //!   marker and its end-of-line message, the toolbar saying "1 error".
 //!
+//! - `manifest_editor_open_deployment_dark` and `manifest_editor_open_secret_dark` (E10-S06): an
+//!   editor opened from a live object through the fake reader. The Deployment is read-only
+//!   ("View YAML in Editor"), kubectl's key order, `managedFields` hidden, `status` dimmed; the
+//!   Secret is masked, the placeholders underlined as errors.
+//!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
 //! thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so it only builds
 //! with `--features screenshot` and runs in the nightly job:
@@ -17,14 +22,17 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use gpui::{App, AppContext as _, Entity, SharedString, px, size};
+use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
+use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_domain::schema::JsonSchema;
+use oxikube_editor::open::{OpenMode, ResourceOpen};
 use oxikube_editor::view::{
     ManifestEditor, ManifestEditorParts, SchemaSource, VALIDATION_DEBOUNCE,
 };
-use oxikube_ports::SchemaPort;
-use oxikube_testkit::fakes::FakeSchemaPort;
+use oxikube_ports::{ResourceReader, SchemaPort};
+use oxikube_testkit::fakes::{FakeResourcePort, FakeSchemaPort};
 use oxikube_testkit::gpui_test::{GoldenCase, ScreenshotApp, run_golden_cases};
 use oxikube_testkit::screenshot::RgbaImage;
 use oxikube_ui::root::Root;
@@ -146,6 +154,7 @@ fn render_error_dark() -> Result<RgbaImage> {
             text: DEPLOYMENT.to_owned(),
             schemas: Some(Rc::new(Schemas { cluster, port })),
             dispatcher: Rc::new(NoBus),
+            resource: None,
         };
         let entity = cx.new(|cx| ManifestEditor::new(parts, window, cx));
         editor = Some(entity.clone());
@@ -160,13 +169,106 @@ fn render_error_dark() -> Result<RgbaImage> {
     app.capture(window)
 }
 
+/// An editor opened on `object` (read through a fake reader), settled and captured.
+fn render_opened(object: Resource, mode: OpenMode, errors: usize) -> Result<RgbaImage> {
+    let mut app = ScreenshotApp::with_assets(Arc::new(oxikube_ui::Assets));
+    app.update(|cx| {
+        oxikube_ui::init(cx);
+        oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
+        cx.set_reduce_motion(true);
+        oxikube_runtime::init_deterministic(cx);
+        oxikube_editor::init(cx);
+    });
+    let cluster = ClusterId::new("/kubeconfig", &ContextName::new("kind-oxikube"));
+    let reader = Arc::new(FakeResourcePort::new());
+    reader.insert(object.clone());
+    let target = ResourceRef::new(
+        cluster.clone(),
+        object.kind.clone(),
+        object.meta.namespace.clone(),
+        object.name(),
+    );
+    let mut editor: Option<Entity<ManifestEditor>> = None;
+    let window = app.open_window(size(px(SIZE.0 as f32), px(SIZE.1 as f32)), |window, cx| {
+        let reader: Arc<dyn ResourceReader> = reader;
+        let parts = ManifestEditorParts {
+            title: "".into(),
+            text: String::new(),
+            schemas: Some(Rc::new(Schemas {
+                cluster,
+                port: Arc::new(FakeSchemaPort::new()),
+            })),
+            dispatcher: Rc::new(NoBus),
+            resource: Some(ResourceOpen {
+                target,
+                mode,
+                reader: Some(reader),
+                cluster_read_only: false,
+            }),
+        };
+        let entity = cx.new(|cx| ManifestEditor::new(parts, window, cx));
+        editor = Some(entity.clone());
+        cx.new(|cx| Root::new(entity, window, cx))
+    })?;
+    app.run_until_parked();
+    app.advance_clock(VALIDATION_DEBOUNCE);
+    app.run_until_parked();
+    let editor = editor.expect("built");
+    let found = app.update(|cx| editor.read(cx).model().problems().errors);
+    anyhow::ensure!(found == errors, "{found} errors, wanted {errors}");
+    app.capture(window)
+}
+
+fn render_open_deployment_dark() -> Result<RgbaImage> {
+    let object = Resource::from_json(json!({
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": {
+            "name": "web",
+            "namespace": "default",
+            "labels": {"app": "web"},
+            "managedFields": [{"manager": "kubectl", "operation": "Apply"}]
+        },
+        "spec": {
+            "replicas": 2,
+            "selector": {"matchLabels": {"app": "web"}},
+            "template": {"spec": {"containers": [{"name": "web", "image": "nginx:1.27"}]}}
+        },
+        "status": {"availableReplicas": 2, "readyReplicas": 2, "replicas": 2}
+    }))?;
+    render_opened(object, OpenMode::View, 0)
+}
+
+fn render_open_secret_dark() -> Result<RgbaImage> {
+    let object = Resource::from_json(json!({
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "type": "Opaque",
+        "metadata": {"name": "db", "namespace": "default"},
+        "data": {"password": "c2VjcmV0LXBhc3N3b3Jk", "username": "YWRtaW4="}
+    }))?;
+    render_opened(object, OpenMode::Edit, 2)
+}
+
 fn main() -> ExitCode {
     run_golden_cases(
         env!("CARGO_MANIFEST_DIR"),
-        &[GoldenCase {
-            name: "manifest_editor_error_dark",
-            size: SIZE,
-            render: render_error_dark,
-        }],
+        &[
+            GoldenCase {
+                name: "manifest_editor_error_dark",
+                size: SIZE,
+                render: render_error_dark,
+            },
+            GoldenCase {
+                name: "manifest_editor_open_deployment_dark",
+                size: SIZE,
+                render: render_open_deployment_dark,
+            },
+            GoldenCase {
+                name: "manifest_editor_open_secret_dark",
+                size: SIZE,
+                render: render_open_secret_dark,
+            },
+        ],
     )
 }

@@ -560,6 +560,21 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `EditorSettings::problems` and shown once as a warning toast by `EditorViews`. `show_managed_fields` and `mask_secrets` are
   read by E10-S06 when a live object opens, `field_manager` by E10-S08 at apply time. Font size is in points at 100 % zoom and
   goes through `u()`.
+- `oxikube_editor::open` (E10-S06) — opening a live object in the editor. `render_resource(&Resource, RenderOptions) ->
+  RenderedManifest { text, hidden, masked, dimmed }` is a pure function: keys sorted at every level like kubectl,
+  `metadata.managedFields` removed unless asked for (`HiddenRegion`s say what and where), a Secret's `data` / `stringData`
+  values replaced by the `(hidden)` placeholder (`MaskedRegion`s) with the `last-applied-configuration` annotation that embeds
+  them, `status` returned as a `dimmed` range (drawn with `Decoration::Dimmed`); `List` kinds item by item; written with
+  `serde-saphyr`, ranges found with the spanned YAML model. `resource::Edit` (also `e` in a table) and
+  `resource::ViewYamlInEditor` (the row menu, the palette and the detail header's buttons) are row actions
+  (`editor_row_actions`) and bus commands handled by `EditorViews`, which opens a `ManifestEditor` titled `kind/name` in the
+  object's cluster tab or focuses the tab that already holds it (`Item::item_key`). The editor reads the object with a fresh
+  `get` on `spawn_kube` (a table row may be metadata only) and renders it on the background executor; only `set_text` runs on
+  the UI thread. "View" opens read-only; "Edit" on a read-only cluster opens read-only with a notice (applying is
+  `resource::Apply`, guarded). `editor::ToggleManagedFields` (`alt-m`) and `editor::ToggleSecretMask` (`alt-v`, Secrets only)
+  render the object held in memory again (refused while the buffer has edits). A placeholder still in a Secret's buffer is an
+  error diagnostic (`masked-secret-value`), so the problem count blocks an apply: a masked value is never sent as a value.
+  Revealed values live in the editor's memory only (the item is never serialised, the object's `Debug` prints no JSON).
 - `oxikube_ui::code_view` (E07-P598) — `CodeView`, the read-only text view of the detail's YAML and Describe tabs: the text as
   an `Arc<str>`, its display rows (`RowMap`: soft wrap at the measured width, or lines cut at `MAX_ROW_COLS`) and its
   tree-sitter parse (gpui-component's `SyntaxHighlighter`) made on the background executor; a `uniform_list` shapes only the

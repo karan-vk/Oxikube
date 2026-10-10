@@ -35,6 +35,8 @@ schemars.workspace = true
 serde.workspace = true
 # Schema `enum` values are JSON.
 serde_json.workspace = true
+# `open::render_resource` writes the object as YAML (the repo's writer, not serde_yml).
+serde-saphyr.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

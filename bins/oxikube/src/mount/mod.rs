@@ -50,7 +50,11 @@
 //! 13. the manifest editor (E10-S04, `editor`): `editor::NewManifest` (palette "New Manifest",
 //!     `cmd-shift-e` / `ctrl-shift-e`) opens an empty editor in the shown cluster's tab, checked
 //!     against that cluster's schemas; the window's `EditorViews` also applies the focused editor's
-//!     `editor::ToggleReadOnly` and `editor::ToggleSoftWrap`.
+//!     `editor::ToggleReadOnly` and `editor::ToggleSoftWrap`. From a resource (E10-S06) `e` in a
+//!     table, the row menu's "Edit" / "View YAML in Editor" and the detail header's buttons
+//!     (`resource::Edit`, `resource::ViewYamlInEditor`) open a `kind/name` tab in the cluster's tab,
+//!     reading the object fresh, Secret values masked and `managedFields` hidden
+//!     (`editor::ToggleSecretMask` `alt-v`, `editor::ToggleManagedFields` `alt-m`).
 //! 14. the `:` jump bar (E11-S05, `jump`): `:pods`, `:deploy kube-system`, `:pod /re app=x`,
 //!     `:ctx prod`, `:ns`, `:q`, opened by `:` in a resource table or `palette::OpenJump`; a line
 //!     runs as `resource::OpenList`, `namespace::Select`, `table::SetFilter`, `cluster::Select` and

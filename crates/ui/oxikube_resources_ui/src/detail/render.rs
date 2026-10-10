@@ -143,6 +143,7 @@ impl DetailView {
                             .child(name.to_string()),
                     )
                     .children(self.exec_buttons(cx))
+                    .child(self.editor_buttons(cx))
                     .when(mount == Mount::Drawer, |row| {
                         row.child(
                             div().debug_selector(|| "detail-pin".to_owned()).child(

@@ -48,8 +48,15 @@ impl CommandId {
     pub const CRD_OPEN_RESOURCES: CommandId = CommandId::new("crd::OpenResources");
     /// `editor::NewManifest`: open an empty manifest editor tab.
     pub const EDITOR_NEW_MANIFEST: CommandId = CommandId::new("editor::NewManifest");
+    /// `editor::ToggleManagedFields`: show or hide `metadata.managedFields` in the focused
+    /// manifest editor of a resource.
+    pub const EDITOR_TOGGLE_MANAGED_FIELDS: CommandId =
+        CommandId::new("editor::ToggleManagedFields");
     /// `editor::ToggleReadOnly`: make the focused manifest editor read-only, or editable again.
     pub const EDITOR_TOGGLE_READ_ONLY: CommandId = CommandId::new("editor::ToggleReadOnly");
+    /// `editor::ToggleSecretMask`: show or hide the values of a Secret in the focused manifest
+    /// editor of a resource.
+    pub const EDITOR_TOGGLE_SECRET_MASK: CommandId = CommandId::new("editor::ToggleSecretMask");
     /// `editor::ToggleSoftWrap`: wrap the focused manifest editor's long lines, or not.
     pub const EDITOR_TOGGLE_SOFT_WRAP: CommandId = CommandId::new("editor::ToggleSoftWrap");
     /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
@@ -204,6 +211,9 @@ impl CommandId {
     pub const RESOURCE_VIEW_DESCRIBE: CommandId = CommandId::new("resource::ViewDescribe");
     /// `resource::ViewYaml`: open a resource's YAML.
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
+    /// `resource::ViewYamlInEditor`: open a resource's YAML read-only in a manifest editor tab.
+    pub const RESOURCE_VIEW_YAML_IN_EDITOR: CommandId =
+        CommandId::new("resource::ViewYamlInEditor");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
     /// `table::ToggleWide`: show or hide the wide columns (`kubectl -o wide`) of a kind's tables.
@@ -402,9 +412,27 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     // "Read-only" here is the editor's view state, not the cluster's read-only guard.
+    // Re-renders the text of an opened resource without `managedFields`; reads nothing more
+    // from the cluster.
+    CommandMeta::read(
+        CommandId::EDITOR_TOGGLE_MANAGED_FIELDS,
+        "Toggle Editor managedFields",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
     CommandMeta::read(
         CommandId::EDITOR_TOGGLE_READ_ONLY,
         "Toggle Editor Read-Only",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    // Shows the Secret values the editor already holds in memory (or masks them again); the
+    // revealed text is never written anywhere.
+    CommandMeta::read(
+        CommandId::EDITOR_TOGGLE_SECRET_MASK,
+        "Toggle Editor Secret Values",
         CommandScope::Global,
         NONE,
     )
@@ -959,6 +987,15 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::RESOURCE_VIEW_YAML,
         "View YAML",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
+    // Reads the object and shows it in a read-only editor tab; allowed in read-only mode.
+    CommandMeta::read(
+        CommandId::RESOURCE_VIEW_YAML_IN_EDITOR,
+        "View YAML in Editor",
         CommandScope::Selection,
         NONE,
     )

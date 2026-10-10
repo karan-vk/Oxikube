@@ -382,10 +382,13 @@
     // Inside the manifest editor the buffer takes text, so only modifier chords: alt-z wraps long
     // lines, cmd-alt-r makes the buffer read-only (a view state; the cluster's read-only mode is
     // separate). The editor's own keys stay as they are: cmd-f / cmd-shift-f search and replace,
-    // cmd-z / cmd-shift-z undo and redo, cmd-alt-up / cmd-alt-down add a cursor.
+    // cmd-z / cmd-shift-z undo and redo, cmd-alt-up / cmd-alt-down add a cursor. In an editor opened
+    // from an object (E10-S06) alt-m shows or hides managedFields and alt-v the values of a Secret.
     "context": "ManifestEditor",
     "bindings": {
       "alt-z": "editor::ToggleSoftWrap",
+      "alt-m": "editor::ToggleManagedFields",
+      "alt-v": "editor::ToggleSecretMask",
       "cmd-alt-r": "editor::ToggleReadOnly"
     }
   },

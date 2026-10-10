@@ -14,13 +14,14 @@ use gpui::{
 use oxikube_domain::command::Command;
 use oxikube_keymap::contexts;
 use oxikube_ui::button::{Button, ButtonVariants as _};
-use oxikube_ui::layout::{Selectable as _, h_flex};
+use oxikube_ui::layout::{Disableable as _, Selectable as _, h_flex};
 use oxikube_ui::tooltip::tooltip_for_action;
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::manifest_editor::ManifestEditor;
 use super::model::Problems;
-use super::{ToggleReadOnly, ToggleSoftWrap};
+use super::{ToggleManagedFields, ToggleReadOnly, ToggleSecretMask, ToggleSoftWrap};
+use crate::open::{ResourceBinding, ResourceLoad};
 
 /// What the problem count says while `editor.validation` is off.
 const VALIDATION_OFF: &str = "Validation off";
@@ -76,6 +77,7 @@ impl ManifestEditor {
                     .text_color(tokens.colors.text_muted)
                     .child(self.checked_against(cx)),
             )
+            .children(self.notice(cx))
             .child(div().flex_1())
             .child(
                 div()
@@ -89,12 +91,14 @@ impl ManifestEditor {
                         VALIDATION_OFF.to_owned()
                     }),
             )
+            .children(self.resource_toggles(cx))
             .child(self.toggle(
                 "manifest-read-only",
                 "Read-only",
                 &ToggleReadOnly,
                 read_only,
                 Command::EditorToggleReadOnly,
+                false,
                 cx,
             ))
             .child(self.toggle(
@@ -103,15 +107,84 @@ impl ManifestEditor {
                 &ToggleSoftWrap,
                 wrap,
                 Command::EditorToggleSoftWrap,
+                false,
                 cx,
             ))
     }
 
+    /// The line after the subject: why the buffer is read-only, that the object is being read,
+    /// what failed.
+    fn notice(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let binding = self.binding.as_ref()?;
+        let tokens = cx.tokens();
+        let (text, color) = match (binding.load(), binding.notice()) {
+            (ResourceLoad::Loading, _) => {
+                ("Reading the object...".into(), tokens.colors.text_muted)
+            }
+            (ResourceLoad::Failed(_), Some(notice)) => (notice.clone(), tokens.colors.error),
+            (_, Some(notice)) => (notice.clone(), tokens.colors.warning),
+            _ => return None,
+        };
+        Some(
+            div()
+                .id("manifest-notice")
+                .debug_selector(|| "manifest-notice".into())
+                .min_w_0()
+                .truncate()
+                .text_color(color)
+                .child(text)
+                .into_any_element(),
+        )
+    }
+
+    /// The managedFields and Secret-values toggles of an editor opened from an object. Off while
+    /// the object is being read and while the buffer has edits (showing another rendering would
+    /// throw them away).
+    fn resource_toggles(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let Some(binding) = self.binding.as_ref() else {
+            return Vec::new();
+        };
+        let locked = *binding.load() != ResourceLoad::Ready || self.is_dirty(cx);
+        let mut toggles = Vec::new();
+        if binding.has_managed_fields() {
+            toggles.push(self.toggle(
+                "manifest-managed-fields",
+                "managedFields",
+                &ToggleManagedFields,
+                binding.options().managed_fields,
+                Command::EditorToggleManagedFields,
+                locked,
+                cx,
+            ));
+        }
+        if binding.is_secret() {
+            let revealed = binding.options().reveal_secrets;
+            toggles.push(self.toggle(
+                "manifest-secret-values",
+                if revealed {
+                    "Hide values"
+                } else {
+                    "Reveal values"
+                },
+                &ToggleSecretMask,
+                revealed,
+                Command::EditorToggleSecretMask,
+                locked,
+                cx,
+            ));
+        }
+        toggles
+    }
+
     /// "kind-oxikube schemas", "Syntax only (no cluster)", plus a schema that could not be had.
     fn checked_against(&self, cx: &gpui::App) -> SharedString {
+        let subject = self
+            .binding
+            .as_ref()
+            .map_or_else(|| self.title.clone(), ResourceBinding::subject);
         let base = match &self.schemas {
-            Some(source) => format!("{} · {} schemas", self.title, source.label(cx)),
-            None => format!("{} · syntax only (no cluster)", self.title),
+            Some(source) => format!("{subject} · {} schemas", source.label(cx)),
+            None => format!("{subject} · syntax only (no cluster)"),
         };
         match self.model.unavailable().first() {
             Some((gvk, _)) => format!("{base} · no schema for {gvk}").into(),
@@ -130,6 +203,7 @@ impl ManifestEditor {
         action: &dyn Action,
         on: bool,
         command: Command,
+        disabled: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let title = self.title.clone();
@@ -148,6 +222,7 @@ impl ManifestEditor {
                     .ghost()
                     .xsmall()
                     .selected(on)
+                    .disabled(disabled)
                     .on_click(cx.listener(move |view, _, window, cx| {
                         window.focus(&view.editor.focus_handle(cx), cx);
                         view.send(command.clone(), cx);

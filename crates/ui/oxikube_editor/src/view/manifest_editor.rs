@@ -28,8 +28,9 @@ use oxikube_workspace::{CommandDispatcher, ItemEvent};
 
 use super::model::ManifestModel;
 use super::schemas::SchemaSource;
-use super::validation::{VALIDATION_DEBOUNCE, validate_text};
-use super::{ToggleReadOnly, ToggleSoftWrap};
+use super::validation::{VALIDATION_DEBOUNCE, validate_text_with};
+use super::{ToggleManagedFields, ToggleReadOnly, ToggleSecretMask, ToggleSoftWrap};
+use crate::open::{ResourceBinding, ResourceOpen};
 use crate::settings::{EditorSettings, apply_changes};
 
 /// What a [`ManifestEditor`] opens with.
@@ -42,6 +43,9 @@ pub struct ManifestEditorParts {
     pub schemas: Option<Rc<dyn SchemaSource>>,
     /// Where the editor's actions go as commands (`editor::ToggleSoftWrap`, ...): the bus.
     pub dispatcher: Rc<dyn CommandDispatcher>,
+    /// The live object to read and show (E10-S06); `None` for an editor on free text. The tab is
+    /// then titled `kind/name` and `text` is ignored: the buffer fills when the object is read.
+    pub resource: Option<ResourceOpen>,
 }
 
 /// The manifest editor: a YAML buffer with schema diagnostics, as a workspace item.
@@ -51,13 +55,17 @@ pub struct ManifestEditorParts {
 /// schemas its kinds need are fetched once, through the cluster's `SchemaPort` on the Kubernetes
 /// runtime. Nothing blocks the UI thread.
 pub struct ManifestEditor {
-    pub(super) editor: Entity<CodeEditor>,
-    pub(super) model: ManifestModel,
-    pub(super) title: SharedString,
-    pub(super) schemas: Option<Rc<dyn SchemaSource>>,
+    pub(crate) editor: Entity<CodeEditor>,
+    pub(crate) model: ManifestModel,
+    pub(crate) title: SharedString,
+    pub(crate) schemas: Option<Rc<dyn SchemaSource>>,
     dispatcher: Rc<dyn CommandDispatcher>,
     /// The buffer version that counts as unchanged (the text it opened with).
-    pub(super) clean_version: u64,
+    pub(crate) clean_version: u64,
+    /// The object this editor shows, when it was opened from one (E10-S06).
+    pub(crate) binding: Option<ResourceBinding>,
+    /// The `get` and render of the object in flight; replacing it cancels it.
+    pub(crate) load_task: Option<Task<()>>,
     editor_focused: bool,
     /// The `editor` settings the buffer was last given (E10-S12): the next change is applied as
     /// the difference to this, so one setting changing leaves what another did to the editor
@@ -88,6 +96,8 @@ impl ManifestEditor {
             });
         }
         let clean_version = editor.read(cx).version();
+        let binding = parts.resource.map(ResourceBinding::new);
+        let title = binding.as_ref().map_or(parts.title, ResourceBinding::title);
         let subscriptions = vec![
             cx.subscribe_in(&editor, window, Self::on_editor_event),
             // Hot reload: dropped with the view, so a closed tab stops observing.
@@ -98,16 +108,24 @@ impl ManifestEditor {
         let mut this = Self {
             editor,
             model: ManifestModel::new(),
-            title: parts.title,
+            title,
             schemas: parts.schemas,
             dispatcher: parts.dispatcher,
             clean_version,
+            binding,
+            load_task: None,
             editor_focused: false,
             applied_settings: settings,
             validation: None,
             schema_fetches: Vec::new(),
             _subscriptions: subscriptions,
         };
+        if this.binding.is_some() {
+            // Nothing to type into until the object is read.
+            this.editor
+                .update(cx, |editor, cx| editor.api(window, cx).set_read_only(true));
+            this.begin_load(window, cx);
+        }
         this.schedule_validation(Duration::ZERO, window, cx);
         this
     }
@@ -115,6 +133,16 @@ impl ManifestEditor {
     /// The code editor inside.
     pub fn editor(&self) -> &Entity<CodeEditor> {
         &self.editor
+    }
+
+    /// The object this editor was opened on (E10-S06), `None` for free text.
+    pub fn resource_ref(&self) -> Option<&oxikube_domain::ids::ResourceRef> {
+        self.binding.as_ref().map(ResourceBinding::target)
+    }
+
+    /// The object binding: how the object was opened and what the text shows of it.
+    pub fn binding(&self) -> Option<&ResourceBinding> {
+        self.binding.as_ref()
     }
 
     /// The view's state beyond the buffer (problems, schemas).
@@ -179,7 +207,7 @@ impl ManifestEditor {
     }
 
     /// Sends `command` to the bus (the keys, the toolbar and the palette all end up here).
-    pub(super) fn send(&self, command: Command, cx: &mut Context<Self>) {
+    pub(crate) fn send(&self, command: Command, cx: &mut Context<Self>) {
         self.dispatcher.dispatch(command, cx);
     }
 
@@ -212,7 +240,7 @@ impl ManifestEditor {
     }
 
     /// Validates the buffer after `delay`; a later call cancels this one.
-    fn schedule_validation(
+    pub(crate) fn schedule_validation(
         &mut self,
         delay: Duration,
         window: &mut Window,
@@ -231,17 +259,18 @@ impl ManifestEditor {
             if !delay.is_zero() {
                 cx.background_executor().timer(delay).await;
             }
-            let Ok((snapshot, known)) = this.update(cx, |view, cx| {
+            let Ok((snapshot, known, masking)) = this.update(cx, |view, cx| {
                 (
                     view.editor.read(cx).snapshot(cx),
                     view.model.known().clone(),
+                    view.binding.as_ref().is_some_and(ResourceBinding::masking),
                 )
             }) else {
                 return;
             };
             let mut result = cx
                 .background_spawn(async move {
-                    validate_text(snapshot.version(), snapshot.to_text(), &known)
+                    validate_text_with(snapshot.version(), snapshot.to_text(), &known, masking)
                 })
                 .await;
             let _ = this.update_in(cx, |view, window, cx| {
@@ -311,6 +340,12 @@ impl Render for ManifestEditor {
             }))
             .on_action(cx.listener(|this, _: &ToggleSoftWrap, _, cx| {
                 this.send(Command::EditorToggleSoftWrap, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleManagedFields, _, cx| {
+                this.send(Command::EditorToggleManagedFields, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleSecretMask, _, cx| {
+                this.send(Command::EditorToggleSecretMask, cx);
             }))
             .size_full()
             .bg(colors.background)

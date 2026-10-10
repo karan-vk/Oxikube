@@ -11,7 +11,9 @@
 //! | [`validate`] | E10-S03 | schema validation into diagnostics |
 //! | [`view`] | E10-S04 | [`view::ManifestEditor`], the `editor::*` commands |
 //! | [`settings`] | E10-S12 | the `editor` settings: tab size, font, wrap, validation, masking, field manager |
+//! | [`open`] | E10-S06 | an editor opened from a live object: [`open::render_resource`], Secret masking, the `resource::Edit` row actions |
 
+pub mod open;
 pub mod settings;
 pub mod validate;
 pub mod view;

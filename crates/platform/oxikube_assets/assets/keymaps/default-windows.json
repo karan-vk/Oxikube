@@ -401,6 +401,8 @@
     "context": "ManifestEditor",
     "bindings": {
       "alt-z": "editor::ToggleSoftWrap",
+      "alt-m": "editor::ToggleManagedFields",
+      "alt-v": "editor::ToggleSecretMask",
       "ctrl-alt-r": "editor::ToggleReadOnly"
     }
   },

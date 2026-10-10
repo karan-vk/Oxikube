@@ -4,8 +4,11 @@
 //!   buffer checked against that cluster's schemas), or of the window's own workspace with syntax
 //!   checks only when no cluster tab is shown. A request naming a cluster without a tab here does
 //!   nothing.
-//! - **ToggleReadOnly** / **ToggleSoftWrap** act on the focused editor, else the active pane's
-//!   item when it is one. The toolbar's toggles focus their own editor before they send, so a
+//! - **Open** (`resource::Edit`, `resource::ViewYamlInEditor`, E10-S06) opens an editor on a live
+//!   object in the object's cluster tab, titled `kind/name`, or focuses the tab that already
+//!   holds the object. The object is read fresh, off the UI thread, by the editor itself.
+//! - **ToggleReadOnly** / **ToggleSoftWrap** / **ToggleManagedFields** / **ToggleSecretMask** act
+//!   on the focused editor, else the active pane's item when it is one. The toolbar's toggles focus their own editor before they send, so a
 //!   click acts on the editor clicked.
 //!
 //! It also tells the user, with a warning toast, about an `editor` setting that was rejected
@@ -15,6 +18,7 @@
 //! the editor it was opened over.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
@@ -22,13 +26,15 @@ use gpui::{
     App, AppContext as _, Context, Entity, Focusable as _, Subscription, Task, WeakEntity, Window,
 };
 use oxikube_app::ClusterSessionManager;
-use oxikube_domain::ids::ClusterId;
+use oxikube_domain::ids::{ClusterId, ResourceRef};
+use oxikube_ports::ResourceReader;
 use oxikube_settings::SettingsStore;
 use oxikube_workspace::{ClusterTabs, CommandDispatcher, Workspace};
 
 use super::commands::EditorRequest;
 use super::manifest_editor::{ManifestEditor, ManifestEditorParts};
 use super::schemas::{SchemaSource, SessionSchemas};
+use crate::open::{OpenMode, ResourceOpen};
 use crate::settings::notice;
 
 /// Where a window's editors go, and the schemas of a cluster.
@@ -44,6 +50,18 @@ pub trait EditorHost: 'static {
 
     /// The schemas of `cluster`.
     fn schemas(&self, cluster: &ClusterId) -> Rc<dyn SchemaSource>;
+
+    /// The reader to `get` objects of `cluster` with; `None` while it is not connected.
+    fn reader(&self, cluster: &ClusterId) -> Option<Arc<dyn ResourceReader>> {
+        let _ = cluster;
+        None
+    }
+
+    /// Whether `cluster` is in read-only mode (an edit tab then opens read-only).
+    fn cluster_read_only(&self, cluster: &ClusterId) -> bool {
+        let _ = cluster;
+        false
+    }
 }
 
 /// The app's [`EditorHost`]: the window's [`ClusterTabs`] and the sessions' schema ports.
@@ -81,6 +99,16 @@ impl EditorHost for ClusterEditorHost {
 
     fn schemas(&self, cluster: &ClusterId) -> Rc<dyn SchemaSource> {
         Rc::new(SessionSchemas::new(self.sessions.clone(), cluster.clone()))
+    }
+
+    fn reader(&self, cluster: &ClusterId) -> Option<Arc<dyn ResourceReader>> {
+        self.sessions.get(cluster)?.resources()
+    }
+
+    fn cluster_read_only(&self, cluster: &ClusterId) -> bool {
+        self.sessions
+            .get(cluster)
+            .is_some_and(|session| session.read_only())
     }
 }
 
@@ -150,6 +178,15 @@ impl EditorViews {
     pub fn apply(&mut self, request: EditorRequest, window: &mut Window, cx: &mut Context<Self>) {
         cx.defer_in(window, move |this, window, cx| match request {
             EditorRequest::New { cluster } => this.open_new(cluster, window, cx),
+            EditorRequest::Open { target, mode } => this.open_resource(&target, mode, window, cx),
+            EditorRequest::ToggleManagedFields => {
+                this.on_target(window, cx, |editor, window, cx| {
+                    editor.toggle_managed_fields(window, cx);
+                })
+            }
+            EditorRequest::ToggleSecretMask => this.on_target(window, cx, |editor, window, cx| {
+                editor.toggle_secret_mask(window, cx);
+            }),
             EditorRequest::ToggleReadOnly => this.on_target(window, cx, |editor, window, cx| {
                 editor.toggle_read_only(window, cx);
             }),
@@ -204,6 +241,53 @@ impl EditorViews {
             text: String::new(),
             schemas: cluster.map(|cluster| self.deps.host.schemas(&cluster)),
             dispatcher: self.deps.dispatcher.clone(),
+            resource: None,
+        };
+        let editor = cx.new(|cx| ManifestEditor::new(parts, window, cx));
+        workspace.update(cx, |ws, cx| ws.open_item(editor, window, cx));
+    }
+
+    /// Opens an editor on `target` in its cluster's tab, or focuses the one that holds it (and
+    /// makes it editable when this is "Edit" on a tab opened read-only). A target whose cluster
+    /// has no tab in this window does nothing.
+    fn open_resource(
+        &mut self,
+        target: &ResourceRef,
+        mode: OpenMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let host = self.deps.host.clone();
+        let cluster = &target.cluster;
+        let Some(workspace) = host.workspace(cluster, cx) else {
+            tracing::debug!(%target, "the editor cannot open: the cluster has no tab in this window");
+            return;
+        };
+        host.show(cluster, window, cx);
+        let held = workspace
+            .read(cx)
+            .items_of_type::<ManifestEditor>()
+            .into_iter()
+            .find(|editor| editor.read(cx).resource_ref() == Some(target));
+        if let Some(editor) = held {
+            let reader = host.reader(cluster);
+            editor.update(cx, |editor, cx| editor.reopen(mode, reader, window, cx));
+            workspace.update(cx, |ws, cx| {
+                ws.activate_item(editor.entity_id(), true, window, cx);
+            });
+            return;
+        }
+        let parts = ManifestEditorParts {
+            title: format!("{}/{}", target.gvk.kind, target.name).into(),
+            text: String::new(),
+            schemas: Some(host.schemas(cluster)),
+            dispatcher: self.deps.dispatcher.clone(),
+            resource: Some(ResourceOpen {
+                target: target.clone(),
+                mode,
+                reader: host.reader(cluster),
+                cluster_read_only: host.cluster_read_only(cluster),
+            }),
         };
         let editor = cx.new(|cx| ManifestEditor::new(parts, window, cx));
         workspace.update(cx, |ws, cx| ws.open_item(editor, window, cx));

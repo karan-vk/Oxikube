@@ -9,7 +9,7 @@
 //! |---|---|---|---|
 //! | `y` | `ViewYaml` | `resource::ViewYaml` | the detail drawer opens on its YAML tab |
 //! | `d` | `ViewDescribe` | `resource::ViewDescribe` | the detail drawer opens on its Describe tab |
-//! | `e` | `EditSelected` | `resource::Edit` | the row action the editor registers; a toast says so until then |
+//! | `e` | `EditSelected` | `resource::Edit` | the row action the manifest editor registers (E10-S06): an editable `kind/name` tab; a toast says so when the editor is not installed |
 //! | `l` | `ViewLogs` | `pod::ViewLogs`, `workload::ViewLogs` | the log viewer, for the pod or for the workload's pods |
 //! | `shift-f` | `PortForward` | `pod::PortForward` | the row action port forwarding registers; a toast says so until then |
 //! | `f` | `ShowPortForwards` | | a toast says so until port forwarding is installed |

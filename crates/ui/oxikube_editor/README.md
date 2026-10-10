@@ -20,10 +20,11 @@ Manifest editor: YAML/JSON on gpui-component editor, spanned YAML (granit-parser
 | `yaml` | E10-S02 | the spanned YAML model (granit-parser) |
 | `validate` | E10-S03 | schema validation into diagnostics |
 | `settings` | E10-S12 | the `editor` settings (`tab_size`, `font_family`, `font_size`, `soft_wrap`, `show_managed_fields`, `mask_secrets`, `validation`, `field_manager`), hot reload into open editors, the notice for a rejected value |
+| `open` | E10-S06 | an editor opened from a live object: `render_resource` (kubectl key order, managedFields hidden, Secret values masked, `status` dimmed), the `resource::Edit` / `resource::ViewYamlInEditor` row actions, `editor::ToggleManagedFields` / `ToggleSecretMask` |
 | `view` | E10-S04 | `ManifestEditor` (workspace item over `oxikube_ui::editor::CodeEditor`), debounced background validation against the cluster's `SchemaPort`, `editor::NewManifest` / `ToggleReadOnly` / `ToggleSoftWrap` |
 
 Tests: `cargo test -p oxikube_editor` (unit, the view logic against a fake `EditorApi`, `#[gpui::test]`s in
-`tests/view.rs`); screenshot: `cargo test -p oxikube_editor --features screenshot --test screenshot`;
+`tests/view.rs`, `tests/open.rs`); screenshot: `cargo test -p oxikube_editor --features screenshot --test screenshot`;
 typing bench: `cargo run -p oxikube_editor --profile release-fast --example typing_bench`.
 
 See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps` fails CI when this crate depends on anything outside its layer rules.
