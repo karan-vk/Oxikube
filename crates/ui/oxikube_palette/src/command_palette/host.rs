@@ -105,7 +105,7 @@ fn send(sink: &PaletteSink, request: PaletteRequest) -> OxiResult<()> {
         .map_err(|_| OxiError::internal("the window with the palette is gone"))
 }
 
-/// The palette of one window. See the [module docs](self).
+/// The palette of one window. See the [`command_palette`](crate::command_palette) module docs.
 pub struct PaletteHost {
     workspace: gpui::WeakEntity<Workspace>,
     index: CommandIndex,

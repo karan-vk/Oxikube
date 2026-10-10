@@ -35,7 +35,7 @@ pub struct PaletteParts {
     pub workspace: WeakEntity<Workspace>,
 }
 
-/// The palette's picker delegate. See the [module docs](self).
+/// The palette's picker delegate. See the [`command_palette`](crate::command_palette) module docs.
 pub struct CommandPaletteDelegate {
     pub(super) snapshot: Snapshot,
     target: CommandTarget,
