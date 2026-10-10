@@ -6,12 +6,78 @@ use crate::store::{LabelSelector, LabelTerm};
 
 #[test]
 fn empty_and_pending_inputs_are_no_filter() {
-    for input in [
-        "", "   ", "/", " / ", "!", "/!", "-", "/-", "! ", "!-f", "/!-f", "!-f  ", "! -f",
-    ] {
-        assert_eq!(ok(input), FilterExpr::Empty, "{input:?}");
+    for input in ["", "   ", "/", " / ", "-", "/-", "-f", "-f  ", "-l", "/-l "] {
+        assert_eq!(ok(input).parts(), FilterParts::default(), "{input:?}");
         assert!(parts(input).is_empty(), "{input:?}");
     }
+}
+
+#[test]
+fn a_slash_alone_clears_the_filter() {
+    assert_eq!(ok("/"), FilterExpr::Empty);
+    assert_eq!(ok("/"), ok(""));
+}
+
+#[test]
+fn a_bang_with_no_pattern_is_an_error() {
+    for input in ["!", "/!", "! ", "!-f", "/!-f", "!-f  ", "! -f", "!-"] {
+        assert_eq!(
+            parse(input),
+            Err(FilterError::NothingToInvert),
+            "{input:?}: nothing to invert"
+        );
+    }
+    let message = FilterError::NothingToInvert.to_string();
+    assert!(message.contains("pattern"), "{message}");
+}
+
+#[test]
+fn a_pattern_with_spaces_is_kept_whole() {
+    // Names have no spaces, but a regex may (`a b` never matches a name; the pattern is not split
+    // into words), so the text must reach the matcher untouched.
+    let FilterExpr::Text(pattern) = ok("/my app") else {
+        panic!("a text pattern");
+    };
+    assert_eq!(pattern.as_str(), "my app");
+    assert!(passes("web  x", "web  x"));
+    assert!(!passes("web x", "web-x"));
+}
+
+#[test]
+fn a_pattern_longer_than_the_cap_is_rejected_without_compiling() {
+    use crate::store::filter::MAX_FILTER_LEN;
+    let at_cap = "a".repeat(MAX_FILTER_LEN);
+    assert!(parse(&at_cap).is_ok());
+    for input in [
+        "a".repeat(MAX_FILTER_LEN + 1),
+        format!("({})", "a|".repeat(MAX_FILTER_LEN)),
+        format!("-l app={}", "x".repeat(MAX_FILTER_LEN)),
+        "é".repeat(MAX_FILTER_LEN + 1),
+    ] {
+        assert_eq!(
+            parse(&input),
+            Err(FilterError::TooLong(MAX_FILTER_LEN)),
+            "{} chars",
+            input.chars().count()
+        );
+    }
+    assert!(
+        parse(&"é".repeat(MAX_FILTER_LEN)).is_ok(),
+        "the cap counts characters, not bytes"
+    );
+}
+
+#[test]
+fn a_pathological_pattern_is_bounded_and_never_blocks() {
+    // The regex engine has no backtracking, so the classic blow-ups are linear; nested counted
+    // repeats are refused by its size limit. Either way the call returns at once.
+    let started = std::time::Instant::now();
+    for input in ["(a*)*b", "(a|aa)+$", "(x+x+)+y", "((a{100}){100}){100}"] {
+        let _ = parse(input);
+    }
+    let name = "a".repeat(5_000);
+    assert!(!passes("(a*)*b", &name));
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
 }
 
 #[test]

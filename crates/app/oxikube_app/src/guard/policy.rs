@@ -94,6 +94,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceCopyYaml { target }
         | Command::ResourceSaveYaml { target }
         | Command::ResourceToggleManagedFields { target }
+        | Command::ResourceFind { target, .. }
+        | Command::ResourceNextMatch { target }
+        | Command::ResourcePreviousMatch { target }
         | Command::ResourceRefreshDescribe { target }
         | Command::ResourceViewYaml { target }
         | Command::ResourceViewDescribe { target }

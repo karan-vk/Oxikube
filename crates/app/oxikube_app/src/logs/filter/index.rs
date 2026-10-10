@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use super::pattern::LogMatcher;
 use crate::logs::LogBuffer;
+use crate::search::find::{next_match, previous_match};
 
 /// How a [`MatchIndex::scan`] changed the index: the viewer keeps the rows of a filtered list in
 /// step with it (remove `dropped_front` rows at the top, add `appended` at the bottom).
@@ -136,39 +137,17 @@ impl MatchIndex {
         self.matches.back().copied()
     }
 
-    /// The first match at or after `seq`.
-    pub fn at_or_after(&self, seq: u64) -> Option<u64> {
-        self.get(self.matches.partition_point(|&m| m < seq))
-    }
-
-    /// The first match after `seq`.
-    pub fn after(&self, seq: u64) -> Option<u64> {
-        self.get(self.matches.partition_point(|&m| m <= seq))
-    }
-
-    /// The last match before `seq`.
-    pub fn before(&self, seq: u64) -> Option<u64> {
-        let at = self.matches.partition_point(|&m| m < seq);
-        at.checked_sub(1).and_then(|at| self.get(at))
-    }
-
     /// The match to go to for "next": the first one after `current` (which may have been dropped
     /// from the ring meanwhile: the next retained one is found by seq), else the first at or
     /// after `anchor` (the line at the top of the screen), wrapping to the first match at the
     /// end. `None` when nothing matches.
     pub fn next(&self, current: Option<u64>, anchor: u64) -> Option<u64> {
-        let found = match current {
-            Some(current) => self.after(current),
-            None => self.at_or_after(anchor),
-        };
-        found.or_else(|| self.first())
+        next_match(&self.matches, current, anchor)
     }
 
     /// The match to go to for "previous": the last one before `current` (else the newest match),
     /// wrapping to the newest at the start. `None` when nothing matches.
     pub fn prev(&self, current: Option<u64>) -> Option<u64> {
-        current
-            .and_then(|current| self.before(current))
-            .or_else(|| self.last())
+        previous_match(&self.matches, current)
     }
 }

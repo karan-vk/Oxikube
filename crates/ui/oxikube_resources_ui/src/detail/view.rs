@@ -19,6 +19,7 @@ use oxikube_workspace::{Item, ItemEvent, TabContent};
 use super::ages::TICK;
 use super::describe::DescribeTab;
 use super::events::EventRow;
+use super::find::FindPane;
 use super::model::{DetailModel, OwnerLink, Row};
 use super::schema_tab::SchemaPane;
 use super::state::{DetailDeps, DetailEvent, DetailState, EventsTab, FullState, Mount};
@@ -63,6 +64,8 @@ pub struct DetailView {
     pub(super) events: EventsTab,
     pub(super) yaml: YamlTab,
     pub(super) describe: DescribeTab,
+    /// Find in the YAML and Describe text.
+    pub(super) find: FindPane,
     pub(super) events_list: ListState,
     /// The Schema tab of a CRD (E07-S07).
     pub(super) schema: SchemaPane,
@@ -135,6 +138,7 @@ impl DetailView {
             events: EventsTab::default(),
             yaml: YamlTab::default(),
             describe: DescribeTab::default(),
+            find: FindPane::default(),
             events_list: ListState::new(0, ListAlignment::Top, px(240.)),
             schema: SchemaPane::default(),
             store: None,
@@ -236,6 +240,10 @@ impl DetailView {
             DetailTab::Describe => self.start_describe(cx),
             DetailTab::Schema => self.schema_tab_opened(),
             DetailTab::Overview => {}
+        }
+        // The find follows the tab: its text is another text.
+        if self.find.query.is_some() {
+            self.rescan_find(false, cx);
         }
         cx.notify();
     }

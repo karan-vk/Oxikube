@@ -14,13 +14,21 @@
 //! accepted and ignored, so a filter pasted from k9s works. Names never start with `-` or
 //! contain whitespace, so `-l` and `-f` cannot clash with a name; to match a name by a pattern
 //! that starts with `-` or `!`, escape it (`\-x`, `\!x`). A bare `!` or `-` is a filter being
-//! typed and means no filter.
+//! typed and means no filter. A bare `!` (or `!-f`) is different: it inverts nothing, so it is
+//! an error that keeps the last good filter (`/!` alone never means "hide every row").
+//!
+//! The whole input is capped at [`MAX_FILTER_LEN`] characters: the pattern is recompiled on every
+//! keystroke, and a name filter never needs more.
 
 use thiserror::Error;
 
 use super::fuzzy::Fuzzy;
 use super::name::TextPattern;
 use crate::store::{LabelSelector, SelectorError};
+
+/// The longest filter (in characters, `/` and `-l` selector included) [`parse`] accepts. A longer
+/// one is an error, so a pasted blob never reaches the regex compiler on the typing path.
+pub const MAX_FILTER_LEN: usize = 512;
 
 /// A parsed filter. Patterns are compiled; building one is the once-per-edit cost.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,16 +69,27 @@ pub enum FilterError {
     /// `!` in front of `-l`.
     #[error("a label selector cannot be inverted (use != or notin)")]
     InvertedSelector,
+    /// `!` with no pattern after it.
+    #[error("`!` needs a pattern to invert (`!web`)")]
+    NothingToInvert,
+    /// The input is longer than [`MAX_FILTER_LEN`].
+    #[error("the filter is too long ({0} characters at most)")]
+    TooLong(usize),
 }
 
 /// Parses `input` as the text of the filter bar. See the [`filter`](super) module for the grammar.
 ///
 /// # Errors
 ///
-/// [`FilterError`] when the regex or the selector is malformed or the flag is unknown. The
-/// caller keeps showing the rows of the last good filter.
+/// [`FilterError`] when the regex or the selector is malformed, the flag is unknown, the input
+/// is longer than [`MAX_FILTER_LEN`] or a `!` has nothing to invert. The caller keeps showing the
+/// rows of the last good filter.
 pub fn parse(input: &str) -> Result<FilterExpr, FilterError> {
     let text = input.trim();
+    // Bytes first (cheap): a text this long in bytes is only long in characters if it is ASCII.
+    if text.len() > MAX_FILTER_LEN && text.chars().count() > MAX_FILTER_LEN {
+        return Err(FilterError::TooLong(MAX_FILTER_LEN));
+    }
     let text = text.strip_prefix('/').unwrap_or(text).trim_start();
     match split_selector(text) {
         Some((name, selector)) => {
@@ -120,12 +139,12 @@ fn parse_name(text: &str) -> Result<FilterExpr, FilterError> {
 
 fn parse_inverse(rest: &str) -> Result<FilterExpr, FilterError> {
     if rest.is_empty() {
-        return Ok(FilterExpr::Empty);
+        return Err(FilterError::NothingToInvert);
     }
     match parse_body(rest)? {
-        FilterExpr::Empty => Ok(FilterExpr::Empty),
-        // `!-f` with no text is a filter being typed, not "exclude everything".
-        FilterExpr::Fuzzy(fuzzy) if fuzzy.is_empty() => Ok(FilterExpr::Empty),
+        // `!-` / `!-f` with no text: nothing to invert, and never "exclude everything".
+        FilterExpr::Empty => Err(FilterError::NothingToInvert),
+        FilterExpr::Fuzzy(fuzzy) if fuzzy.is_empty() => Err(FilterError::NothingToInvert),
         FilterExpr::LabelSelector(_) => Err(FilterError::InvertedSelector),
         inner => Ok(FilterExpr::Inverse(Box::new(inner))),
     }

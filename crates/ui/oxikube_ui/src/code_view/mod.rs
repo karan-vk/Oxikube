@@ -11,6 +11,7 @@
 //! | `highlight` | the tree-sitter parse (off the UI thread) and the styles of the rows on screen, cached while they stay on screen |
 //! | `view` | [`CodeView`], [`Look`]: the text given, the layout and parse sent to the background executor, the scroll |
 //! | `selection` | click, shift-click, drag, double- and triple-click; copy and select all; key scrolling |
+//! | `find` | the matches of a find, coloured over the text they were found in, and scrolling to one |
 //! | `render` | the `uniform_list` of the visible rows, the gutter, the scrollbar, the probe that measures the width |
 //!
 //! # What runs where
@@ -31,6 +32,7 @@
 //! [`crate::init`] like the component library binds its inputs' keys; every other key reaches the
 //! enclosing view.
 
+mod find;
 mod highlight;
 mod render;
 mod rows;

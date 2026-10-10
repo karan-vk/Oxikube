@@ -368,3 +368,88 @@ fn dragging_selects_and_the_copy_keys_copy_it(cx: &mut TestAppContext) {
         Some(&*text)
     );
 }
+
+#[test]
+fn the_row_of_a_byte_follows_the_wrapped_rows() {
+    let text = "short\nthe quick brown fox jumps over\n";
+    let map = RowMap::build(text, Some(MIN_WRAP_COLS + 3), true);
+    assert_eq!(map.row_of_byte(0), 0);
+    assert_eq!(
+        map.row_of_byte(5),
+        0,
+        "the newline belongs to the row it ends"
+    );
+    assert_eq!(map.row_of_byte(6), 1);
+    assert_eq!(map.row_of_byte(22), 2, "the wrapped continuation");
+    assert_eq!(map.row_of_byte(10_000), 2, "past the end: the last row");
+}
+
+#[gpui::test]
+fn matches_are_drawn_over_their_text_and_scrolled_to(cx: &mut TestAppContext) {
+    let (view, cx) = mount(cx, Look::YAML);
+    draw(cx);
+    let text: Arc<str> = config_map_yaml(200 * 1024).into();
+    set_text(&view, &text, cx);
+    settle(cx);
+
+    // The last "route.51" of the first block, deep below the first screen.
+    let needle = "service.1.route.51";
+    let at = text.find(needle).expect("in the text");
+    let ranges: Arc<[std::ops::Range<usize>]> = vec![at..at + needle.len()].into();
+    view.update(cx, |view, cx| {
+        view.set_matches(text.clone(), ranges, Some(0), cx);
+        view.scroll_to_byte(at, cx);
+    });
+    settle(cx);
+    let (top, visible, rows) = view.read_with(cx, |v, _| {
+        (v.top_visible_row(), v.visible_rows(), v.row_count())
+    });
+    let row = text[..at].matches('\n').count();
+    assert!(visible > 0 && rows > visible);
+    assert!(
+        (top..top + visible).contains(&row),
+        "the match is on screen: row {row}, screen {top}..{}",
+        top + visible
+    );
+    assert!(top > 0, "it was below the first screen");
+    assert_eq!(
+        view.read_with(cx, |v, _| v.matches_drawn()),
+        (1, 1),
+        "the one match on screen is painted, as the current one"
+    );
+
+    // A match already in view does not move the screen.
+    view.update(cx, |view, cx| view.scroll_to_byte(at, cx));
+    settle(cx);
+    assert_eq!(view.read_with(cx, |v, _| v.top_visible_row()), top);
+
+    // Cleared matches draw nothing and a newer text ignores the ranges of the older one.
+    view.update(cx, |view, cx| view.clear_matches(cx));
+    settle(cx);
+    assert_eq!(view.read_with(cx, |v, _| v.matches_drawn()), (0, 0));
+}
+
+#[gpui::test]
+fn ranges_found_in_an_older_text_are_not_drawn_on_a_newer_one(cx: &mut TestAppContext) {
+    let (view, cx) = mount(cx, Look::TEXT);
+    let first: Arc<str> = "alpha beta\n".into();
+    set_text(&view, &first, cx);
+    settle(cx);
+    let ranges: Arc<[std::ops::Range<usize>]> = vec![0..5].into();
+    view.update(cx, |view, cx| {
+        view.set_matches(first.clone(), ranges, None, cx);
+    });
+    settle(cx);
+    assert_eq!(
+        view.read_with(cx, |v, _| v.matches_drawn()),
+        (1, 0),
+        "found in the text on screen: painted, not as the current match"
+    );
+    let second: Arc<str> = "gamma delta\n".into();
+    set_text(&view, &second, cx);
+    // The ranges are valid offsets of the new text too (0..5 is "gamma"), so only the guard on
+    // the text they were found in keeps them from being painted on it.
+    settle(cx);
+    assert!(view.read_with(cx, |v, _| v.is_current()));
+    assert_eq!(view.read_with(cx, |v, _| v.matches_drawn()), (0, 0));
+}
