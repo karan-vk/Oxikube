@@ -40,6 +40,22 @@ Entries (file → upstream path @ rev):
   `oxikube_runtime::spawn_kube` in `kube_task.rs`). The `gpui_tokio` crate is not published in the
   `gpui-pre` snapshot family, so it is ported rather than depended on.
 
+### GPUI patch overlay (Apache-2.0 crates, GPL-3.0-or-later patches)
+`patches/gpui/` holds unified diffs against the exact pinned `gpui-pre-macos` and `gpui-pre-apple`
+0.3.7 crates from crates.io (snapshots of Zed's `crates/gpui_macos` and `crates/gpui_apple` @
+1a28cff, Apache-2.0, Copyright Zed Industries, Inc. and contributors). `scripts/gpui-overlay.sh`
+applies them to the downloaded crates in the gitignored `.gpui-overlay/` (ADR 0017); the crates'
+own `LICENSE-APACHE` files stay in place there. The patches are Copyright Oxikube contributors,
+GPL-3.0-or-later (each patch header says so, names the upstream draft, and states the change);
+the patched crates as built into Oxikube are distributed under GPL-3.0-or-later with the
+Apache-2.0 notices of the originals. Entries (patch → upstream path @ rev):
+- `patches/gpui/gpui-pre-macos-0.3.7/0001-overlay-allow-warnings.patch`,
+  `0002-draw-late-resize-in-its-transaction.patch` → `crates/gpui_macos/src/{gpui_macos.rs,
+  window.rs, display_link.rs}` @ 1a28cff.
+- `patches/gpui/gpui-pre-apple-0.3.7/0001-overlay-allow-warnings.patch`,
+  `0002-prefetch-next-drawable.patch` → `crates/gpui_apple/src/{gpui_apple.rs,
+  metal_renderer.rs}` @ 1a28cff, plus the new `drawable_prefetch.rs`.
+
 ## deskribe (Apache-2.0) — https://github.com/nklmilojevic/deskribe
 Copyright 2026 Nikola Milojevic. The native `kubectl describe` renderer behind
 `oxikube_describe::NativeDescribe` (E07-S06). It is used as a crate dependency (`deskribe` in

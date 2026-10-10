@@ -12,3 +12,6 @@
 # golden-image comparison failures (see oxikube_testkit::screenshot)
 **/tests/goldens/**/*.actual.png
 **/tests/goldens/**/*.diff.png
+# GPUI patch overlay (ADR 0017): built by scripts/gpui-overlay.sh, never committed
+/.gpui-overlay/*
+!/.gpui-overlay/README.md

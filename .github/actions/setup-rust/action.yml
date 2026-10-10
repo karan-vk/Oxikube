@@ -1,7 +1,9 @@
 name: setup-rust
 description: >-
   Install the Rust toolchain pinned in rust-toolchain.toml (channel, components, targets), so CI
-  builds with exactly the toolchain a local checkout uses. Run after actions/checkout.
+  builds with exactly the toolchain a local checkout uses, and build the GPUI patch overlay
+  (ADR 0017) that the workspace's [patch.crates-io] points at, before any cargo command can run.
+  Run after actions/checkout.
 
 runs:
   using: composite
@@ -14,3 +16,8 @@ runs:
         rustup toolchain install --no-self-update
         rustup show active-toolchain
         rustc -vV
+    - name: Build the GPUI patch overlay (scripts/gpui-overlay.sh)
+      shell: bash
+      # The pinned gpui-pre crates plus patches/gpui/, into .gpui-overlay/. Cargo cannot resolve
+      # the workspace without it (and the cargo-deny container reads it from the workspace).
+      run: bash scripts/gpui-overlay.sh

@@ -71,6 +71,77 @@ fn the_setup_action_installs_what_rust_toolchain_toml_pins() {
     }
 }
 
+/// The lines of `text` that execute `cargo` in a step's `run:` (one-line or block), with the line
+/// number, ignoring `env:` values and comments.
+fn cargo_run_lines(text: &str) -> Vec<(usize, &str)> {
+    let mut out = Vec::new();
+    let mut block_indent: Option<usize> = None;
+    for (number, line) in text.lines().enumerate() {
+        let indent = line.len() - line.trim_start().len();
+        let trimmed = line.trim_start();
+        if let Some(block) = block_indent {
+            if trimmed.is_empty() || indent > block {
+                if trimmed.contains("cargo ") && !trimmed.starts_with('#') {
+                    out.push((number, line));
+                }
+                continue;
+            }
+            block_indent = None;
+        }
+        let step = trimmed.trim_start_matches("- ");
+        if let Some(command) = step.strip_prefix("run:") {
+            let command = command.trim();
+            if command.starts_with('|') || command.starts_with('>') {
+                block_indent = Some(indent);
+            } else if command.contains("cargo ") {
+                out.push((number, line));
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn every_job_builds_the_gpui_overlay_before_cargo() {
+    // ADR 0017: cargo cannot resolve the workspace before scripts/gpui-overlay.sh has built
+    // .gpui-overlay/; setup-rust runs it, so each job that runs cargo uses setup-rust first.
+    let action = read(".github/actions/setup-rust/action.yml");
+    assert!(
+        action.contains("scripts/gpui-overlay.sh"),
+        "setup-rust must build the GPUI patch overlay"
+    );
+    for (name, text) in workflows() {
+        let lines: Vec<&str> = text.lines().collect();
+        // Each job: from its `  <id>:` line under `jobs:` to the next one.
+        let Some(jobs) = lines.iter().position(|l| l.trim_end() == "jobs:") else {
+            continue;
+        };
+        let starts: Vec<usize> = (jobs + 1..lines.len())
+            .filter(|&i| {
+                let l = lines[i];
+                l.starts_with("  ") && !l.starts_with("   ") && l.trim_end().ends_with(':')
+            })
+            .chain([lines.len()])
+            .collect();
+        for window in starts.windows(2) {
+            let job = lines[window[0]..window[1]].join("\n");
+            let Some(&(first_cargo, cargo_line)) = cargo_run_lines(&job).first() else {
+                continue;
+            };
+            let setup = job
+                .lines()
+                .position(|l| l.contains("./.github/actions/setup-rust"));
+            assert!(
+                setup.is_some_and(|s| s < first_cargo),
+                "{name} job `{}` runs `{}` before ./.github/actions/setup-rust (which builds the \
+                 GPUI overlay)",
+                lines[window[0]].trim(),
+                cargo_line.trim()
+            );
+        }
+    }
+}
+
 #[test]
 fn pr_ci_runs_the_gates_the_nightly_used_to_find_alone() {
     let ci = read(".github/workflows/ci.yml");

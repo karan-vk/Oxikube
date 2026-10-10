@@ -1,0 +1,265 @@
+Oxikube GPUI overlay patch: draw a late resize at once, in the resize's own transaction
+Crate: gpui-pre-macos 0.3.7 (crates.io, Apache-2.0; snapshot of zed-industries/zed@1a28cff,
+Copyright Zed Industries, Inc. and contributors). Zed path: crates/gpui_macos/src/{window.rs,display_link.rs}
+Upstream: Zed PR draft "gpui_macos: Draw a resized window at once when its display pass is late"
+(not yet filed; Oxikube issue karan-vk/Oxikube#601). Drop this patch at the first gpui-pre bump
+that contains the fix.
+Patch: Copyright Oxikube contributors, GPL-3.0-or-later (see patches/gpui/README.md).
+
+Why: during a live resize every frame is drawn by the layer's display pass (`display_layer`,
+presented with the Core Animation transaction), which AppKit runs once per refresh after the
+window's frame changed. When the main thread comes back late from the previous frame's commit
+(the window server answers late), the new size arrives after that refresh's pass and its frame
+waits a whole further pass: the window misses a refresh (E05-P601: 53 to 129 per 10 s sweep).
+`set_frame_size` now draws the frame itself, presented in the same transaction as the new
+size, when a refresh or more has passed since the window last asked for a frame. Otherwise the
+display pass draws it as before, so a window never draws faster than its display refreshes.
+`WindowFrameSource::refresh_interval` reads the display link's period for that test.
+diff --git a/src/display_link.rs b/src/display_link.rs
+index 5387cb6..43ffd9c 100644
+--- a/src/display_link.rs
++++ b/src/display_link.rs
+@@ -60,6 +60,7 @@ use std::{
+     collections::{BTreeMap, btree_map},
+     ffi::c_void,
+     sync::{Mutex, MutexGuard, PoisonError},
++    time::Duration,
+ };
+ 
+ static REGISTRY: Mutex<Registry> = Mutex::new(Registry::new());
+@@ -231,6 +232,8 @@ fn unsubscribe(display_id: CGDirectDisplayID, subscriber_id: SubscriberId) {
+ pub struct WindowFrameSource {
+     frame_requests: DispatchRetained<DispatchSource>,
+     registration: Option<(CGDirectDisplayID, SubscriberId)>,
++    /// The display of the last `start`, kept across `stop` for [`Self::refresh_interval`].
++    display_id: Option<CGDirectDisplayID>,
+ }
+ 
+ impl WindowFrameSource {
+@@ -252,6 +255,7 @@ impl WindowFrameSource {
+         Self {
+             frame_requests,
+             registration: None,
++            display_id: None,
+         }
+     }
+ 
+@@ -259,6 +263,7 @@ impl WindowFrameSource {
+         self.stop();
+         let subscriber_id = subscribe(display_id, self.frame_requests.clone())?;
+         self.registration = Some((display_id, subscriber_id));
++        self.display_id = Some(display_id);
+         Ok(())
+     }
+ 
+@@ -267,6 +272,19 @@ impl WindowFrameSource {
+             unsubscribe(display_id, subscriber_id);
+         }
+     }
++
++    /// The refresh interval of the display this source was last started on: the display link's
++    /// measured period, else its nominal one. `None` before the first start.
++    pub fn refresh_interval(&self) -> Option<Duration> {
++        let display_id = self.display_id?;
++        // Cloned under the lock, queried outside it (see the lock ordering note above).
++        let mut link = lock_registry()
++            .displays
++            .get(&display_id)
++            .map(|entry| entry.link.clone())?;
++        let seconds = unsafe { link.refresh_period() };
++        (seconds > 0.0).then(|| Duration::from_secs_f64(seconds))
++    }
+ }
+ 
+ impl Drop for WindowFrameSource {
+@@ -357,6 +375,17 @@ mod sys {
+         pub frames: i16,
+     }
+ 
++    /// Apple docs: [CVTime](https://developer.apple.com/documentation/corevideo/cvtime)
++    #[repr(C)]
++    #[derive(Clone, Copy)]
++    pub struct CVTime {
++        pub time_value: i64,
++        pub time_scale: i32,
++        pub flags: i32,
++    }
++
++    pub const kCVTimeIsIndefinite: i32 = 1 << 0;
++
+     pub type CVSMPTETimeType = u32;
+ 
+     pub const kCVSMPTETimeType24: CVSMPTETimeType = 0;
+@@ -405,6 +434,11 @@ mod sys {
+         ) -> i32;
+         pub fn CVDisplayLinkStart(display_link: &mut DisplayLinkRef) -> i32;
+         pub fn CVDisplayLinkStop(display_link: &mut DisplayLinkRef) -> i32;
++        pub fn CVDisplayLinkGetActualOutputVideoRefreshPeriod(display_link: &mut DisplayLinkRef)
++        -> f64;
++        pub fn CVDisplayLinkGetNominalOutputVideoRefreshPeriod(
++            display_link: &mut DisplayLinkRef,
++        ) -> CVTime;
+         pub fn CVDisplayLinkRelease(display_link: *mut CVDisplayLink);
+         pub fn CVDisplayLinkRetain(display_link: *mut CVDisplayLink) -> *mut CVDisplayLink;
+     }
+@@ -449,6 +483,22 @@ mod sys {
+             }
+         }
+ 
++        /// The display's refresh period in seconds: measured while the link runs, else nominal;
++        /// 0 when neither is known.
++        pub unsafe fn refresh_period(&mut self) -> f64 {
++            unsafe {
++                let actual = CVDisplayLinkGetActualOutputVideoRefreshPeriod(self);
++                if actual > 0.0 {
++                    return actual;
++                }
++                let nominal = CVDisplayLinkGetNominalOutputVideoRefreshPeriod(self);
++                if nominal.flags & kCVTimeIsIndefinite != 0 || nominal.time_scale <= 0 {
++                    return 0.0;
++                }
++                nominal.time_value as f64 / nominal.time_scale as f64
++            }
++        }
++
+         /// Apple docs: [CVDisplayLinkStop](https://developer.apple.com/documentation/corevideo/1457281-cvdisplaylinkstop?language=objc)
+         pub unsafe fn stop(&mut self) -> Result<()> {
+             unsafe {
+diff --git a/src/window.rs b/src/window.rs
+index 12a75e7..732e1c8 100644
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -77,7 +77,7 @@ use std::{
+         Arc, Once, Weak,
+         atomic::{AtomicBool, Ordering},
+     },
+-    time::Duration,
++    time::{Duration, Instant},
+ };
+ 
+ const WINDOW_STATE_IVAR: &str = "windowState";
+@@ -665,6 +665,8 @@ struct MacWindowState {
+     cursor_style: CursorStyle,
+     cursor_visible: Arc<AtomicBool>,
+     frame_source: Option<WindowFrameSource>,
++    /// When the window last asked for a frame (display link, display pass or resize).
++    last_frame_request: Option<Instant>,
+     renderer: renderer::Renderer,
+     request_frame_callback: Option<Box<dyn FnMut(RequestFrameOptions)>>,
+     event_callback: Option<Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>>,
+@@ -1098,6 +1100,7 @@ impl MacWindow {
+                 cursor_style: CursorStyle::Arrow,
+                 cursor_visible,
+                 frame_source: None,
++                last_frame_request: None,
+                 renderer: renderer::new_renderer(
+                     renderer_context,
+                     native_window as *mut _,
+@@ -3281,14 +3284,86 @@ extern "C" fn set_frame_size(this: &Object, _: Sel, size: NSSize) {
+         callback(content_size, scale_factor);
+         window_state.lock().resize_callback = Some(callback);
+     };
++
++    // The new size is otherwise drawn by the next display pass (`display_layer`), which comes at
++    // the next refresh. When the last frame was a refresh or more ago, that pass is late: the window
++    // would miss a refresh while it waits. Draw now instead, in the transaction that carries the
++    // new size, so the frame and the size still land together.
++    let due = frame_is_due(&window_state.lock());
++    if due {
++        draw_synchronized(&window_state);
++    }
+ }
+ 
+-extern "C" fn display_layer(this: &Object, _: Sel, _: id) {
+-    let window_state = unsafe { get_window_state(this) };
++/// Whether a refresh or more has passed since the window last asked for a frame.
++fn frame_is_due(state: &MacWindowState) -> bool {
++    let visible = unsafe {
++        state
++            .native_window
++            .occlusionState()
++            .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible)
++    };
++    let interval = state
++        .frame_source
++        .as_ref()
++        .and_then(WindowFrameSource::refresh_interval);
++    frame_due_at(visible, interval, state.last_frame_request, Instant::now())
++}
++
++/// [`frame_is_due`]'s rule: a visible window whose last frame request is at least one refresh
++/// interval old. Without a known interval or a previous request, the display pass decides.
++fn frame_due_at(
++    visible: bool,
++    interval: Option<Duration>,
++    last_request: Option<Instant>,
++    now: Instant,
++) -> bool {
++    match (visible, interval, last_request) {
++        (true, Some(interval), Some(last)) => now.saturating_duration_since(last) >= interval,
++        _ => false,
++    }
++}
++
++#[cfg(test)]
++mod frame_due_tests {
++    use super::frame_due_at;
++    use std::time::{Duration, Instant};
++
++    const REFRESH: Duration = Duration::from_micros(8_333);
++
++    #[test]
++    fn a_resize_a_refresh_after_the_last_frame_is_drawn_at_once() {
++        let last = Instant::now();
++        assert!(frame_due_at(true, Some(REFRESH), Some(last), last + REFRESH));
++        assert!(frame_due_at(true, Some(REFRESH), Some(last), last + REFRESH * 2));
++    }
++
++    #[test]
++    fn an_early_resize_waits_for_the_display_pass() {
++        let last = Instant::now();
++        let early = last + REFRESH - Duration::from_micros(1);
++        assert!(!frame_due_at(true, Some(REFRESH), Some(last), early));
++        assert!(!frame_due_at(true, Some(REFRESH), Some(last), last));
++    }
++
++    #[test]
++    fn a_hidden_window_or_an_unknown_refresh_never_draws_early() {
++        let last = Instant::now();
++        let late = last + REFRESH * 3;
++        assert!(!frame_due_at(false, Some(REFRESH), Some(last), late));
++        assert!(!frame_due_at(true, None, Some(last), late));
++        assert!(!frame_due_at(true, Some(REFRESH), None, late));
++    }
++}
++
++/// Draws a frame now and presents it in the current Core Animation transaction, so it shows
++/// together with the window's new size. The display link is paused meanwhile.
++fn draw_synchronized(window_state: &Arc<Mutex<MacWindowState>>) {
+     let mut lock = window_state.lock();
+     if let Some(mut callback) = lock.request_frame_callback.take() {
+         lock.renderer.set_presents_with_transaction(true);
+         lock.stop_display_link();
++        lock.last_frame_request = Some(Instant::now());
+         drop(lock);
+         callback(Default::default());
+ 
+@@ -3299,12 +3374,18 @@ extern "C" fn display_layer(this: &Object, _: Sel, _: id) {
+     }
+ }
+ 
++extern "C" fn display_layer(this: &Object, _: Sel, _: id) {
++    let window_state = unsafe { get_window_state(this) };
++    draw_synchronized(&window_state);
++}
++
+ extern "C" fn step(view: *mut c_void) {
+     let view = view as id;
+     let window_state = unsafe { get_window_state(&*view) };
+     let mut lock = window_state.lock();
+ 
+     if let Some(mut callback) = lock.request_frame_callback.take() {
++        lock.last_frame_request = Some(Instant::now());
+         drop(lock);
+         callback(Default::default());
+         window_state.lock().request_frame_callback = Some(callback);

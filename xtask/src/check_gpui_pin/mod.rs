@@ -3,9 +3,21 @@
 //! `gpui-component` is compiled against exactly one `gpui-pre` snapshot. The
 //! [`PAIRS`] mirrors the pairing table in docs/adr/0003-gpui-dependency.md (the
 //! source of truth); bump all pins, the table and `PAIRS` together in one PR.
+//!
+//! It also checks the GPUI patch overlay (ADR 0017, [`overlay`]): every patch directory matches
+//! the pinned version and has its `[patch.crates-io]` entry, and every overlay crate is exactly
+//! its pinned crate plus its patches (`scripts/gpui-overlay.sh --check`, which re-applies them).
+
+mod overlay;
+#[cfg(test)]
+mod overlay_tests;
+#[cfg(test)]
+mod script_tests;
 
 use anyhow::{Context, Result, bail};
 use std::fs;
+use std::path::Path;
+use std::process::Command;
 
 /// (gpui-pre version, gpui-component version, zed commit named by the snapshot)
 const PAIRS: &[(&str, &str, &str)] = &[("0.3.7", "0.7.0", "1a28cff")];
@@ -15,18 +27,105 @@ const GPUI_KIT_PACKAGES: &[&str] = &["gpui-component", "gpui-base", "gpui-kit-as
 
 pub fn run() -> Result<()> {
     let text = fs::read_to_string("Cargo.toml").context("read workspace Cargo.toml")?;
-    match check(&text)? {
+    let lock = fs::read_to_string("Cargo.lock").context("read workspace Cargo.lock")?;
+    let readme =
+        fs::read_to_string(Path::new(overlay::PATCHES_DIR).join("README.md")).unwrap_or_default();
+    let dirs = read_patch_dirs(Path::new(overlay::PATCHES_DIR))?;
+    let pinned = pinned_gpui_pre(&text);
+    let mut errors = match check(&text)? {
         Ok(summary) => {
             println!("{summary}");
-            Ok(())
+            Vec::new()
         }
-        Err(errors) => {
-            for e in &errors {
-                eprintln!("error: {e}");
-            }
-            bail!("check-gpui-pin: {} problem(s)", errors.len())
+        Err(errors) => errors,
+    };
+    errors.extend(overlay::check(&overlay::Inputs {
+        manifest: &text,
+        lock: &lock,
+        readme: &readme,
+        dirs: &dirs,
+        pinned_gpui_pre: pinned.as_deref(),
+    }));
+    if !dirs.is_empty() {
+        // The script rebuilds each overlay from its pinned crate in a scratch dir, re-applies the
+        // patches (failing when one does not apply) and compares the result with `.gpui-overlay/`.
+        let status = Command::new("bash")
+            .args(["scripts/gpui-overlay.sh", "--check"])
+            .status()
+            .context("run scripts/gpui-overlay.sh --check (needs bash, tar, git, curl)")?;
+        if !status.success() {
+            errors.push(
+                "the GPUI overlay is not its pinned crates plus their patches (see above); \
+                 run scripts/gpui-overlay.sh"
+                    .into(),
+            );
+        } else {
+            let names: Vec<_> = dirs.iter().map(|d| d.name.as_str()).collect();
+            println!(
+                "check-gpui-pin: overlay {} = pinned crates + patches/gpui OK",
+                names.join(", ")
+            );
         }
     }
+    if errors.is_empty() {
+        return Ok(());
+    }
+    for e in &errors {
+        eprintln!("error: {e}");
+    }
+    bail!("check-gpui-pin: {} problem(s)", errors.len())
+}
+
+/// The directories under `patches/gpui/` with their checksum and patch files.
+fn read_patch_dirs(root: &Path) -> Result<Vec<overlay::PatchDir>> {
+    let mut dirs = Vec::new();
+    let Ok(entries) = fs::read_dir(root) else {
+        return Ok(dirs);
+    };
+    for entry in entries {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let path = entry.path();
+        let mut patches = Vec::new();
+        for file in fs::read_dir(&path)? {
+            let file = file?;
+            let name = file.file_name().to_string_lossy().into_owned();
+            let numbered = name.len() > 5 && name.as_bytes()[..4].iter().all(u8::is_ascii_digit);
+            if numbered && name.ends_with(".patch") {
+                patches.push((name, fs::read_to_string(file.path())?));
+            }
+        }
+        patches.sort();
+        dirs.push(overlay::PatchDir {
+            name: entry.file_name().to_string_lossy().into_owned(),
+            checksum: fs::read_to_string(path.join("checksum")).ok(),
+            patches,
+        });
+    }
+    dirs.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(dirs)
+}
+
+/// The exact version `gpui-pre` is pinned at (`=x.y.z` without the `=`), if it is pinned exactly.
+fn pinned_gpui_pre(manifest: &str) -> Option<String> {
+    let doc: toml::Value = toml::from_str(manifest).ok()?;
+    let deps = doc.get("workspace")?.get("dependencies")?.as_table()?;
+    deps.iter().find_map(|(key, val)| {
+        let tbl = val.as_table();
+        let package = tbl
+            .and_then(|t| t.get("package"))
+            .and_then(|p| p.as_str())
+            .unwrap_or(key);
+        let version = tbl
+            .and_then(|t| t.get("version"))
+            .and_then(|v| v.as_str())
+            .or_else(|| val.as_str())?;
+        (package == "gpui-pre")
+            .then(|| version.strip_prefix('=').map(str::to_owned))
+            .flatten()
+    })
 }
 
 /// Pure check over the workspace `Cargo.toml` text. The outer `Result` is a parse failure,
@@ -104,7 +203,7 @@ fn check(manifest: &str) -> Result<std::result::Result<String, Vec<String>>> {
                 );
             }
             None => errors.push(format!(
-                "gpui-pre ={p} and gpui-component ={k} are not a known pairing; update PAIRS in xtask/src/check_gpui_pin.rs and the table in docs/adr/0003-gpui-dependency.md"
+                "gpui-pre ={p} and gpui-component ={k} are not a known pairing; update PAIRS in xtask/src/check_gpui_pin/mod.rs and the table in docs/adr/0003-gpui-dependency.md"
             )),
         }
     }
@@ -148,7 +247,7 @@ gpui-kit-assets = "{component}"
 
     #[test]
     fn real_workspace_manifest_passes() {
-        let text = include_str!("../../Cargo.toml");
+        let text = include_str!("../../../Cargo.toml");
         assert!(check(text).unwrap().is_ok());
     }
 

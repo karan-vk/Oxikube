@@ -1,0 +1,337 @@
+Oxikube GPUI overlay patch: fetch the next drawable off the main thread
+Crate: gpui-pre-apple 0.3.7 (crates.io, Apache-2.0; snapshot of zed-industries/zed@1a28cff,
+Copyright Zed Industries, Inc. and contributors). Zed path: crates/gpui_apple/src/
+Upstream: Zed PR draft "gpui_apple: Prefetch the next CAMetalLayer drawable on a worker thread"
+(not yet filed; Oxikube issue karan-vk/Oxikube#601). Drop this patch at the first gpui-pre bump
+that contains the fix.
+Patch: Copyright Oxikube contributors, GPL-3.0-or-later (see patches/gpui/README.md).
+
+Why: `MetalRenderer::draw` called `-[CAMetalLayer nextDrawable]` on the main thread, after
+the frame's layout and paint. When the window draws every refresh all drawables are in use, so
+it blocked until the window server released one; when that came late (or a resize had to
+allocate new drawables) the main thread missed the next display-link callback (E05-P601: 5 to 10
+ms waits, refreshes dropped). A worker thread now asks for the next drawable as soon as a frame
+is handed to Core Animation, so the wait overlaps the next frame's layout and paint. At most one
+drawable is held, so the layer's drawable count is unchanged; one of a stale size is returned
+to the layer when the window resizes.
+diff --git a/src/drawable_prefetch.rs b/src/drawable_prefetch.rs
+new file mode 100644
+index 0000000..dd78425
+--- /dev/null
++++ b/src/drawable_prefetch.rs
+@@ -0,0 +1,236 @@
++//! Takes the layer's next drawable off the main thread.
++//!
++//! `-[CAMetalLayer nextDrawable]` blocks until the window server hands one of the layer's
++//! drawables back. When the app draws on every refresh, all of them are in use when a frame
++//! starts, so the wait (up to a refresh, longer when the window server is late) used to land on the
++//! main thread, inside `draw`, and made it miss the next display-link callback. A worker thread now
++//! asks for the next drawable as soon as a frame has been handed to Core Animation; the wait for it
++//! overlaps the main thread's work on the next frame (layout, prepaint, paint) instead of following
++//! it. `nextDrawable` may be called from any thread.
++//!
++//! At most one drawable is held here, so the layer's drawable count is unchanged. A held drawable
++//! whose size no longer matches the layer (the window was resized) is dropped, which returns it to
++//! the layer at once, and a new one of the right size is fetched.
++
++use metal::{MetalDrawable, MetalLayer};
++use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
++
++#[derive(Default)]
++struct State {
++    /// A fetch was asked for and not yet started.
++    wanted: bool,
++    /// The worker is inside `nextDrawable`.
++    fetching: bool,
++    /// The drawable the worker fetched, not yet taken.
++    ready: Option<MetalDrawable>,
++    /// The renderer is gone: the worker exits.
++    shutdown: bool,
++}
++
++struct Shared {
++    state: Mutex<State>,
++    changed: Condvar,
++}
++
++impl Shared {
++    fn lock(&self) -> MutexGuard<'_, State> {
++        self.state.lock().unwrap_or_else(PoisonError::into_inner)
++    }
++}
++
++pub(crate) struct DrawablePrefetcher {
++    shared: Arc<Shared>,
++}
++
++impl DrawablePrefetcher {
++    pub(crate) fn new(layer: MetalLayer) -> Self {
++        let shared = Arc::new(Shared {
++            state: Mutex::new(State::default()),
++            changed: Condvar::new(),
++        });
++        let worker = shared.clone();
++        let spawned = std::thread::Builder::new()
++            .name("gpui-next-drawable".into())
++            .spawn(move || run(&worker, &layer));
++        if let Err(error) = spawned {
++            log::error!("could not start the drawable prefetch thread: {error}");
++            shared.lock().shutdown = true;
++        }
++        Self { shared }
++    }
++
++    /// Asks for the next drawable now (after a frame was presented), unless one is held or being
++    /// fetched already.
++    pub(crate) fn request(&self) {
++        let mut state = self.shared.lock();
++        if state.shutdown || state.ready.is_some() || state.fetching {
++            return;
++        }
++        state.wanted = true;
++        self.shared.changed.notify_all();
++    }
++
++    /// The layer's drawable size changed: a held drawable of another size is returned to the layer
++    /// and one of the new size is asked for.
++    pub(crate) fn resized(&self, width: u64, height: u64) {
++        let stale = {
++            let mut state = self.shared.lock();
++            match &state.ready {
++                Some(drawable) if !has_size(drawable, width, height) => state.ready.take(),
++                _ => None,
++            }
++        };
++        if stale.is_some() {
++            drop(stale);
++            self.request();
++        }
++    }
++
++    /// The fetched drawable when it has the given size, waiting for a fetch in progress; `None`
++    /// when there is none (the caller then calls `nextDrawable` itself).
++    pub(crate) fn take(&self, width: u64, height: u64) -> Option<MetalDrawable> {
++        let mut state = self.shared.lock();
++        while state.fetching && !state.shutdown {
++            state = self
++                .shared
++                .changed
++                .wait(state)
++                .unwrap_or_else(PoisonError::into_inner);
++        }
++        let drawable = state.ready.take()?;
++        drop(state);
++        // A drawable of the old size goes back to the layer when it is dropped here.
++        has_size(&drawable, width, height).then_some(drawable)
++    }
++}
++
++impl Drop for DrawablePrefetcher {
++    fn drop(&mut self) {
++        let mut state = self.shared.lock();
++        state.shutdown = true;
++        state.ready = None;
++        self.shared.changed.notify_all();
++    }
++}
++
++fn has_size(drawable: &MetalDrawable, width: u64, height: u64) -> bool {
++    let texture = drawable.texture();
++    texture.width() == width && texture.height() == height
++}
++
++fn run(shared: &Shared, layer: &MetalLayer) {
++    loop {
++        {
++            let mut state = shared.lock();
++            while !state.wanted && !state.shutdown {
++                state = shared
++                    .changed
++                    .wait(state)
++                    .unwrap_or_else(PoisonError::into_inner);
++            }
++            if state.shutdown {
++                return;
++            }
++            state.wanted = false;
++            state.fetching = true;
++        }
++        // The drawable is autoreleased: keep our own reference and drain the pool here, since this
++        // thread has no run loop to drain it.
++        let drawable = objc::rc::autoreleasepool(|| layer.next_drawable().map(ToOwned::to_owned));
++        let mut state = shared.lock();
++        state.fetching = false;
++        if !state.shutdown {
++            state.ready = drawable;
++        }
++        shared.changed.notify_all();
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use cocoa::foundation::NSSize;
++    use metal::{Device, MTLPixelFormat};
++    use objc::{msg_send, sel, sel_impl};
++    use std::time::{Duration, Instant};
++
++    /// A layer that is in no window: it still hands out drawables (they are never shown), so the
++    /// prefetcher runs for real. `None` on a machine without a Metal device.
++    fn layer(width: f64, height: f64) -> Option<MetalLayer> {
++        let device = Device::system_default()?;
++        let layer = MetalLayer::new();
++        layer.set_device(&device);
++        layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
++        set_size(&layer, width, height);
++        Some(layer)
++    }
++
++    fn set_size(layer: &MetalLayer, width: f64, height: f64) {
++        unsafe {
++            let size = NSSize { width, height };
++            let _: () = msg_send![layer.as_ref(), setDrawableSize: size];
++        }
++    }
++
++    /// Waits until no fetch is asked for or running.
++    fn settle(prefetch: &DrawablePrefetcher) {
++        let deadline = Instant::now() + Duration::from_secs(5);
++        loop {
++            let state = prefetch.shared.lock();
++            if !state.wanted && !state.fetching {
++                return;
++            }
++            drop(state);
++            assert!(Instant::now() < deadline, "the fetch never finished");
++            std::thread::sleep(Duration::from_millis(1));
++        }
++    }
++
++    #[test]
++    fn hands_over_a_drawable_fetched_ahead_of_the_frame() {
++        let Some(layer) = layer(64.0, 32.0) else { return };
++        let prefetch = DrawablePrefetcher::new(layer);
++        assert!(prefetch.take(64, 32).is_none(), "nothing was asked for yet");
++        prefetch.request();
++        settle(&prefetch);
++        let drawable = prefetch.take(64, 32).expect("a prefetched drawable");
++        assert_eq!((drawable.texture().width(), drawable.texture().height()), (64, 32));
++        assert!(prefetch.take(64, 32).is_none(), "it is handed over once");
++    }
++
++    #[test]
++    fn a_resize_trades_a_stale_drawable_for_one_of_the_new_size() {
++        let Some(layer) = layer(64.0, 32.0) else { return };
++        let prefetch = DrawablePrefetcher::new(layer.clone());
++        prefetch.request();
++        settle(&prefetch);
++        set_size(&layer, 128.0, 48.0);
++        prefetch.resized(128, 48);
++        settle(&prefetch);
++        let drawable = prefetch.take(128, 48).expect("a drawable of the new size");
++        assert_eq!((drawable.texture().width(), drawable.texture().height()), (128, 48));
++    }
++
++    #[test]
++    fn a_drawable_of_another_size_is_not_handed_over() {
++        let Some(layer) = layer(64.0, 32.0) else { return };
++        let prefetch = DrawablePrefetcher::new(layer);
++        prefetch.request();
++        settle(&prefetch);
++        assert!(prefetch.take(65, 32).is_none());
++    }
++
++    #[test]
++    fn the_worker_exits_with_the_prefetcher() {
++        let Some(layer) = layer(16.0, 16.0) else { return };
++        let prefetch = DrawablePrefetcher::new(layer);
++        let shared = Arc::downgrade(&prefetch.shared);
++        prefetch.request();
++        drop(prefetch);
++        let deadline = Instant::now() + Duration::from_secs(5);
++        while shared.upgrade().is_some() {
++            assert!(Instant::now() < deadline, "the worker thread is still running");
++            std::thread::sleep(Duration::from_millis(1));
++        }
++    }
++}
+diff --git a/src/gpui_apple.rs b/src/gpui_apple.rs
+index 208d297..0b9fded 100644
+--- a/src/gpui_apple.rs
++++ b/src/gpui_apple.rs
+@@ -4,5 +4,6 @@
+ //! This crate contains the Metal renderer and GPU resource management shared
+ //! by GPUI's Apple platform backends.
+ 
++mod drawable_prefetch;
+ mod metal_atlas;
+ pub mod metal_renderer;
+diff --git a/src/metal_renderer.rs b/src/metal_renderer.rs
+index eddb3c1..cfc06ad 100644
+--- a/src/metal_renderer.rs
++++ b/src/metal_renderer.rs
+@@ -1,3 +1,4 @@
++use crate::drawable_prefetch::DrawablePrefetcher;
+ use crate::metal_atlas::MetalAtlas;
+ use anyhow::{Context as _, Result};
+ use block2::RcBlock;
+@@ -116,6 +117,8 @@ pub struct MetalRenderer {
+     is_apple_gpu: bool,
+     is_unified_memory: bool,
+     presents_with_transaction: bool,
++    /// Fetches the layer's next drawable off the main thread (window renderers only).
++    drawable_prefetch: Option<DrawablePrefetcher>,
+     /// For headless rendering, tracks whether output should be opaque
+     opaque: bool,
+     command_queue: CommandQueue,
+@@ -330,10 +333,12 @@ impl MetalRenderer {
+         let core_video_texture_cache =
+             CVMetalTextureCache::new(None, device.clone(), None).unwrap();
+ 
++        let drawable_prefetch = layer.clone().map(DrawablePrefetcher::new);
+         Self {
+             device,
+             layer,
+             presents_with_transaction: false,
++            drawable_prefetch,
+             is_apple_gpu,
+             is_unified_memory,
+             opaque,
+@@ -392,6 +397,9 @@ impl MetalRenderer {
+                     setDrawableSize: ns_size
+                 ];
+             }
++            if let Some(prefetch) = &self.drawable_prefetch {
++                prefetch.resized(size.width.0.max(0) as u64, size.height.0.max(0) as u64);
++            }
+         }
+         self.update_path_intermediate_textures(size);
+     }
+@@ -460,7 +468,15 @@ impl MetalRenderer {
+             (viewport_size.width.ceil() as i32).into(),
+             (viewport_size.height.ceil() as i32).into(),
+         );
+-        let drawable = if let Some(drawable) = layer.next_drawable() {
++        // Usually fetched while this frame was being laid out and painted (see `drawable_prefetch`).
++        let prefetched = self.drawable_prefetch.as_ref().and_then(|prefetch| {
++            prefetch.take(
++                viewport_size.width.0.max(0) as u64,
++                viewport_size.height.0.max(0) as u64,
++            )
++        });
++        let drawable = if let Some(drawable) = prefetched.as_deref().or_else(|| layer.next_drawable())
++        {
+             drawable
+         } else {
+             log::error!(
+@@ -486,6 +502,9 @@ impl MetalRenderer {
+             command_buffer.present_drawable(drawable);
+             command_buffer.commit();
+         }
++        if let Some(prefetch) = &self.drawable_prefetch {
++            prefetch.request();
++        }
+     }
+ 
+     fn render_frame(

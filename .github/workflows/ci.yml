@@ -51,6 +51,9 @@ jobs:
             libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config xvfb mesa-vulkan-drivers
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      # The GPUI patch overlay's crates (ADR 0017) are path crates outside the workspace: run their
+      # tests (upstream's and the patches') too. On Linux they are empty (macOS-only crates).
+      - run: cargo test -p gpui-pre-apple -p gpui-pre-macos
       # settings.schema.json must match the registered settings types (E05-S06).
       - run: cargo run -q -p xtask -- gen-settings-schema --check
       # Feature-gated screenshot harness (E01-S11): lint everything with the feature on, and run

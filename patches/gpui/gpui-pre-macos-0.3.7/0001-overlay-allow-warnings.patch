@@ -1,0 +1,21 @@
+Oxikube GPUI overlay patch: build the overlay crate under RUSTFLAGS=-D warnings
+Crate: gpui-pre-macos 0.3.7 (crates.io, Apache-2.0; snapshot of zed-industries/zed@1a28cff,
+Copyright Zed Industries, Inc. and contributors)
+Upstream: not applicable (an overlay concern only: cargo caps lints for registry
+crates, not for the path crate the overlay builds). Drop it with the last
+other patch of this crate.
+Patch: Copyright Oxikube contributors, GPL-3.0-or-later (see patches/gpui/README.md).
+
+diff --git a/src/gpui_macos.rs b/src/gpui_macos.rs
+index 1e393e4..bb67346 100644
+--- a/src/gpui_macos.rs
++++ b/src/gpui_macos.rs
+@@ -1,4 +1,8 @@
+ #![cfg(target_os = "macos")]
++// Oxikube overlay: cargo caps the lints of registry crates but not of path crates, and this crate
++// is built from `.gpui-overlay/` (a path). Keep it building under `RUSTFLAGS=-D warnings` as the
++// registry crate does.
++#![allow(warnings)]
+ //! macOS platform implementation for GPUI.
+ //!
+ //! macOS screens have a y axis that goes up from the bottom of the screen and

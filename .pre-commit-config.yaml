@@ -1,5 +1,7 @@
 # Git hooks for Oxikube (E01-S12).
 # Fast checks (rustfmt, xtask lint-deps, xtask check-gpui-pin) run on `pre-commit`.
+# The GPUI patch overlay (scripts/gpui-overlay.sh, ADR 0017) is built first on both stages:
+# cargo cannot resolve the workspace without it; it is a no-op when nothing changed.
 # Clippy and cargo-deny are deferred to `pre-push` because compiling and checking
 # this full GPUI multi-crate workspace is slow (~10-30s on incremental).
 # Local hooks provide rapid feedback; CI remains the authoritative gate.
@@ -10,6 +12,14 @@ default_stages: [pre-commit]
 repos:
   - repo: local
     hooks:
+      - id: gpui-overlay
+        name: scripts/gpui-overlay.sh
+        entry: bash scripts/gpui-overlay.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit, pre-push]
+
       - id: cargo-fmt
         name: cargo fmt
         entry: cargo fmt --all --check
@@ -31,7 +41,7 @@ repos:
         entry: cargo xtask check-gpui-pin
         language: system
         pass_filenames: false
-        files: '(Cargo\.toml|\.rs)$'
+        files: '(Cargo\.toml|Cargo\.lock|\.rs|\.patch|checksum)$'
         stages: [pre-commit]
 
       - id: cargo-clippy

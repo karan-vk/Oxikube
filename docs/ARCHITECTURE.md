@@ -917,6 +917,17 @@ cluster tools to them over MCP (`oxikube_mcp` serving `oxikube_app::ToolRegistry
 also drive the UI through `app.*` tools that dispatch `Command`s. Agent-proposed manifests open
 as editor diffs and apply only through `MutationGuard`.
 
+## GPUI and its patch overlay
+
+GPUI comes from the exact-pinned `gpui-pre` snapshots that gpui-component pins (ADR 0003). A fix
+GPUI does not have yet is a patch file under `patches/gpui/<crate>-<version>/`, never a copy of
+GPUI source: `scripts/gpui-overlay.sh` builds `.gpui-overlay/<crate>-<version>/` (gitignored) from
+the pinned `.crate` (sha256-checked) plus those patches, and `[patch.crates-io]` builds the crate
+from there (ADR 0017). Run the script once in a fresh checkout or worktree before cargo; the git
+hooks (`cargo xtask setup`) and CI (`.github/actions/setup-rust`) run it first, and
+`cargo xtask check-gpui-pin` verifies that the overlay is the pinned crates plus the patches. The
+patches, why each exists and its upstream status: `patches/gpui/README.md`.
+
 ## Decision records
 
 See `docs/adr/`. ADRs are the contract; change an ADR before changing an architectural rule.

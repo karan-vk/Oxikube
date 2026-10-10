@@ -1,4 +1,6 @@
-//! Install git pre-commit and pre-push hooks via `pre-commit`.
+//! Install git pre-commit and pre-push hooks via `pre-commit`, and build the GPUI patch overlay
+//! (`scripts/gpui-overlay.sh`, ADR 0017). On a fresh clone cargo cannot resolve the workspace
+//! (so cannot run this command) until the script has run once; the hooks run it before every check.
 
 use std::path::Path;
 
@@ -35,6 +37,12 @@ pub fn run() -> Result<()> {
 
     sh.change_dir(root);
 
+    // Normally a no-op here (cargo could not have built this command without the overlay), but it
+    // brings the overlay up to date when a patch changed since.
+    cmd!(sh, "bash scripts/gpui-overlay.sh")
+        .run()
+        .context("scripts/gpui-overlay.sh failed: the GPUI patch overlay could not be built")?;
+
     cmd!(
         sh,
         "pre-commit install --install-hooks --hook-type pre-commit --hook-type pre-push"
@@ -56,5 +64,22 @@ mod tests {
         let root = manifest_dir.parent().expect("repo root parent");
         assert!(root.join("Cargo.toml").exists());
         assert!(root.join(".pre-commit-config.yaml").exists());
+    }
+
+    #[test]
+    fn the_hooks_build_the_gpui_overlay_before_any_cargo_check() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("repo root");
+        let config = std::fs::read_to_string(root.join(".pre-commit-config.yaml")).unwrap();
+        let overlay = config
+            .find("entry: bash scripts/gpui-overlay.sh")
+            .expect("overlay hook");
+        let first_cargo = config.find("entry: cargo").expect("cargo hooks");
+        assert!(overlay < first_cargo, "the overlay hook runs first");
+        let hook = &config[overlay..first_cargo];
+        assert!(
+            hook.contains("stages: [pre-commit, pre-push]") && hook.contains("always_run: true")
+        );
     }
 }

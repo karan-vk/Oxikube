@@ -47,6 +47,8 @@ members = [
     "crates/testing/oxikube_testkit",
 ]
 default-members = ["bins/oxikube"]
+# The GPUI patch overlay's crates (scripts/gpui-overlay.sh) are path crates, not members.
+exclude = [".gpui-overlay"]
 
 [workspace.package]
 version = "0.0.1"
@@ -297,3 +299,11 @@ inherits = "release"
 debug = "limited"
 lto = false
 codegen-units = 16
+
+# GPUI patch overlay (ADR 0017): the exact pinned crates from crates.io plus the diffs in
+# patches/gpui/, built into .gpui-overlay/ by `scripts/gpui-overlay.sh`. A missing
+# `.gpui-overlay/...` (cargo: "failed to read .gpui-overlay/<crate>/Cargo.toml") means: run
+# scripts/gpui-overlay.sh. `cargo xtask check-gpui-pin` verifies the overlay.
+[patch.crates-io]
+gpui-pre-apple = { path = ".gpui-overlay/gpui-pre-apple-0.3.7" }
+gpui-pre-macos = { path = ".gpui-overlay/gpui-pre-macos-0.3.7" }
