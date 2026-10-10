@@ -38,7 +38,7 @@ pub fn namespace_changed(items: &[EchoItem], cluster: &ClusterId) -> bool {
 }
 
 /// Records the session updates sent while a command runs on the UI thread. See the
-/// [module docs](self).
+/// module docs.
 #[must_use = "`finish` hands the updates to the views"]
 pub struct SessionEcho {
     updates: SessionUpdates,
