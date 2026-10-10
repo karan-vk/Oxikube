@@ -625,6 +625,74 @@ each:
 8.33 ms (8.69 ms, `after` run 5), are in `resize-window` in both builds (window resize under
 contention, unchanged by this story).
 
+### E05-P601: present stalls in live resize (GPUI patch overlay)
+
+The `tabs-panes` and `terminal` window resizes (`resize-window`, `resize`: the window's size set
+on every refresh) dropped refreshes while every frame drew in about 4 ms. A traced build of
+`gpui-pre-macos`/`gpui-pre-apple` 0.3.7 (timestamps in `display_layer`, `step`, `set_frame_size`,
+`MetalRenderer::draw` and a run-loop observer; not committed) showed where the time went. During a
+live resize every frame is drawn by the layer's display pass (`display_layer`, presented in the
+Core Animation transaction). The pass runs about once a refresh after the window's frame changes,
+and the window misses a refresh in three ways:
+
+- **The display pass comes late.** The commit after a frame sometimes blocks the main thread for
+  3 to 8 ms waiting for the window server (`mach_msg` in `CA::Context::commit_transaction`). The
+  next size then arrives after that refresh's pass, and its frame waits for the following one (13
+  to 14 ms gaps, the large majority of the drops).
+- **`nextDrawable` blocks.** The main thread waited 5 to 10 ms in `-[CAMetalLayer nextDrawable]`
+  when the window server released a drawable late, or when a new size needed new drawables.
+- **Not a cause:** the display link's stop and start around each display pass cost about 0.05
+  ms. Keeping the link running instead let the display link draw the new size outside the
+  transaction, before the display pass (1 124 such frames in one sweep), so it stays.
+
+Two patches in the GPUI patch overlay (ADR 0017, `patches/gpui/README.md`) fix what GPUI controls:
+
+- `gpui-pre-macos` `0002-draw-late-resize-in-its-transaction`: when a new size arrives a refresh
+  or more after the window last asked for a frame, `set_frame_size` draws it at once, in the
+  transaction that carries the new size. Otherwise the display pass draws it as before, so the
+  window never draws faster than the display refreshes (1 204 refreshes in 10 s, gap p50 8.33 ms,
+  p95 8.43 ms).
+- `gpui-pre-apple` `0002-prefetch-next-drawable`: a worker thread asks for the next drawable as
+  soon as a frame is presented, so the wait overlaps the next frame's layout and paint. The
+  main-thread drawable wait in `resize-window` went from p50 0.30 / p99 1.45 / max 8.1 ms to p50
+  0.04 / p99 0.06 ms. At most one drawable is held, so the layer's drawable count is unchanged.
+
+Measured with `oxikube --perf-scenario-window`, `release-fast` + `perf-window`, Apple M5 Max,
+built-in 120 Hz display, window 1440 x 900 pt, on AC power, desktop lock held. Each run started
+after at least 20 s without input, with `before` (`origin/main` `95e27c09`) and `after` (this
+story) alternating. `terminal` ran its shell in a busybox pod on `kind-oxikube` (`--perf-exec`).
+The machine was **not** quiet: load average 3.5 to 15 on 18 cores (other agents building and
+testing). The same build drops a very different number of refreshes from run to run. A single
+`before` run at load 6, earlier the same day, dropped 53 in `resize-window`. Ten valid runs per
+build and scenario, in two batches of five:
+
+| Scenario / phase | before: dropped per run | after: dropped per run |
+|---|---|---|
+| `tabs-panes` `resize-window` | 7, 2, 8, 2, 8, 3, 3, 1, 25, 3 | 1, 3, 2, 3, 4, 9, 1, 0, 0, 2 |
+| `tabs-panes` `switch-tabs`, `resize-dock` | 0 in every run | 0 in every run |
+| `terminal` `resize` | 4, 2, 2, 1, 2, 2, 0, 2, 1, 84 | 1, 0, 1, 0, 0, 0, 0, 1, 0, 7 |
+| `terminal` `yes-flood` | 0 in every run | 0 in 9 runs, 1 in the last |
+| `terminal` `redraw-60hz` | 0 in every run | 0 in every run |
+
+The last pair of `terminal` runs (84 and 7 + 1) was taken while the machine was disturbed, and
+both builds lost refreshes then. Other figures, `before` and then `after`, over the same runs:
+`tabs-panes` scripted frame p99 4.29 to 4.73 and 4.37 to 4.77 ms, input max 6.4 to 7.8 and 5.9 to
+7.6 ms, CPU 37.9 to 39.7 % and 38.4 to 40.1 %, peak RSS 211.5 to 213.3 and 211.9 to 213.7 MiB.
+`terminal` frame p99 2.53 to 2.68 and 2.50 to 2.67 ms, CPU 48.2 to 51.6 % and 48.8 to 51.4 %,
+peak RSS 275 to 293 and 251 to 277 MiB. The frames over 8.33 ms are all in `resize-window`, at
+most one per run and nearly all within its last 100 ms: before in 4 of 10 runs (8.5 to 9.2 ms),
+after in 5 of 10 runs (9.0 to 11.0 ms). They are layout of the panes at the new size, which the
+patches do not change. They are not placed yet.
+
+**Status against #601.** The drawable waits and the late display passes that GPUI controls are
+gone, and `resize-dock`, `yes-flood` and `redraw-60hz` drop nothing on this machine. The
+remaining dropped refreshes of a window resized on every refresh come from the window server's
+synchronous answers (3 to 10 ms blocks in Core Animation's commit and in
+`-[NSWindow setContentSize:]`) on a machine under load. Presenting without the transaction did
+not remove them either (1 to 3 per run in an experiment), and it would make content and window
+size land in different frames. Whether `tabs-panes` reaches 0 in five runs is for the verify
+stage's quiet machine.
+
 ## Startup: cold start to the first interactive frame
 
 Built in E05-S13 (ADR 0013). Budgets: **≤ 400 ms** from launch to the first interactive frame with
