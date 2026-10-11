@@ -7,7 +7,7 @@ use oxikube_domain::view::{HpaState, HpaSummary, PdbSummary, VpaSummary};
 use oxikube_domain::view::{crd_aliases_text, crd_versions_text};
 use oxikube_domain::{Age, Resource};
 
-use super::{arr_at, spec, str_at};
+use super::{arr_at, spec, status, str_at};
 use crate::columns::{Cell, Tone};
 
 /// HPA `REFERENCE`: `Kind/name` of `spec.scaleTargetRef`.
