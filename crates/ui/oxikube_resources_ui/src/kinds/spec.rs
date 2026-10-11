@@ -1,10 +1,6 @@
 //! [`KindSpec`]: one kind's registration as the UI sees it.
 
-use std::sync::Arc;
-
-use oxikube_app::{ColumnProvider, KindColumns, KindMeta, SidebarSlot};
-use oxikube_domain::command::CommandId;
-use oxikube_domain::ids::Gvk;
+use oxikube_app::KindMeta;
 
 use super::detail::DetailRenderer;
 
@@ -36,30 +32,5 @@ impl KindSpec {
     pub fn with_detail(mut self, detail: DetailRenderer) -> Self {
         self.detail = detail;
         self
-    }
-
-    /// The kind.
-    pub fn gvk(&self) -> &Gvk {
-        &self.meta.gvk
-    }
-
-    /// Where its columns come from.
-    pub fn columns(&self) -> &KindColumns {
-        &self.meta.columns
-    }
-
-    /// Its own column provider, `None` for the shared one.
-    pub fn column_provider(&self) -> Option<&Arc<dyn ColumnProvider>> {
-        self.meta.columns.provider()
-    }
-
-    /// Its own actions, as commands.
-    pub fn actions(&self) -> &[CommandId] {
-        &self.meta.actions
-    }
-
-    /// Where it sits in the sidebar.
-    pub fn sidebar(&self) -> Option<SidebarSlot> {
-        self.meta.sidebar
     }
 }

@@ -104,11 +104,6 @@ impl KindRegistry {
         self.index.contains_key(&GroupKind::of(gvk))
     }
 
-    /// The registered specs, in registration order.
-    pub fn iter(&self) -> impl Iterator<Item = &Arc<KindMeta>> {
-        self.metas.iter()
-    }
-
     /// How many kinds are registered.
     pub fn len(&self) -> usize {
         self.metas.len()

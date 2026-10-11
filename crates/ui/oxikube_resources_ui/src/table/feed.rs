@@ -147,19 +147,15 @@ impl ResourceTable {
     pub(super) fn apply(&mut self, delta: StoreDelta, cx: &mut Context<Self>) {
         if let Some(columns) = &delta.columns {
             self.note_columns_source(columns.source);
-        }
-        // A kind with its own provider keeps it whatever the feed sends.
-        if let Some(columns) = delta
-            .columns
-            .as_ref()
-            .filter(|_| self.own_columns.is_none())
-        {
-            let provider: Arc<dyn ColumnProvider> = Arc::new(TableColumns::new(
-                &columns.columns,
-                columns.source,
-                self.kind.scope(),
-            ));
-            self.set_provider(provider, cx);
+            // A kind with its own provider keeps it whatever the feed sends.
+            if self.own_columns.is_none() {
+                let provider: Arc<dyn ColumnProvider> = Arc::new(TableColumns::new(
+                    &columns.columns,
+                    columns.source,
+                    self.kind.scope(),
+                ));
+                self.set_provider(provider, cx);
+            }
         }
         let StoreDelta {
             rows,
