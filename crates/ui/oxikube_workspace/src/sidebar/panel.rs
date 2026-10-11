@@ -25,7 +25,7 @@ use gpui::{
 };
 use oxikube_app::{
     ClusterSessionManager, CustomResourceGroup, IntegrationRegistry, IntegrationSection,
-    ResourceStores,
+    KindVisibility, ResourceStores, ServedKinds,
 };
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::StatePort;
@@ -54,6 +54,9 @@ pub struct SidebarDeps {
     pub state: Arc<dyn StatePort>,
     /// The per-cluster resource stores the count badges read (E07-S11). `None`: no badges.
     pub stores: Option<Arc<ResourceStores>>,
+    /// Whether the user may list a kind of the registry (E12-S01): the hook E17 implements over
+    /// `SelfSubjectRulesReview`. [`AllowAll`](oxikube_app::kinds::AllowAll) until then.
+    pub visibility: Arc<dyn KindVisibility>,
 }
 
 /// What the sidebar tells whoever hosts it.
@@ -78,6 +81,9 @@ pub struct SidebarPanel {
     integrations: Vec<IntegrationSection>,
     /// The cluster's custom resources; `None` until discovery answered.
     custom: Option<Vec<CustomResourceGroup>>,
+    /// The kinds the cluster serves; `None` until discovery answered (the registry's entries are
+    /// not gated by presence until then).
+    served: Option<ServedKinds>,
     /// Whether the session says the CRD watch was refused (`Forbidden`).
     crd_watch_forbidden: bool,
     access: AccessState,
@@ -215,6 +221,7 @@ impl SidebarPanel {
                 sections: Vec::new(),
                 integrations: Vec::new(),
                 custom: None,
+                served: None,
                 crd_watch_forbidden: false,
                 access: AccessState::Pending,
                 open: BTreeMap::new(),

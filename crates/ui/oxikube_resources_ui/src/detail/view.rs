@@ -20,6 +20,7 @@ use super::ages::TICK;
 use super::describe::DescribeTab;
 use super::events::EventRow;
 use super::find::FindPane;
+use super::kind_panel::KindPanel;
 use super::model::{DetailModel, OwnerLink, Row};
 use super::schema_tab::SchemaPane;
 use super::state::{DetailDeps, DetailEvent, DetailState, EventsTab, FullState, Mount};
@@ -69,6 +70,8 @@ pub struct DetailView {
     pub(super) events_list: ListState,
     /// The Schema tab of a CRD (E07-S07).
     pub(super) schema: SchemaPane,
+    /// The kind's own panel above the Overview (E12-S01): its spec's renderer, built on first draw.
+    pub(super) kind_panel: KindPanel,
     pub(super) store: Option<ResourceStore>,
     /// The store the Events feed is subscribed on.
     pub(super) events_store: Option<ResourceStore>,
@@ -113,7 +116,10 @@ impl DetailView {
                 }
             }
         });
-        let provider: Arc<dyn ColumnProvider> = deps.columns.clone();
+        let provider: Arc<dyn ColumnProvider> =
+            crate::kinds::KindSpecs::columns_for(cx, &target.gvk)
+                .unwrap_or_else(|| deps.columns.clone());
+        let kind_panel = KindPanel::new(crate::kinds::KindSpecs::detail_for(cx, &target.gvk));
         let mut this = Self {
             target,
             deps,
@@ -141,6 +147,7 @@ impl DetailView {
             find: FindPane::default(),
             events_list: ListState::new(0, ListAlignment::Top, px(240.)),
             schema: SchemaPane::default(),
+            kind_panel,
             store: None,
             events_store: None,
             subscription: None,

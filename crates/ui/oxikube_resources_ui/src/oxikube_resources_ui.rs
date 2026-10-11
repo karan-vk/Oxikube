@@ -11,6 +11,7 @@
 //! | [`detail`] | E07-S05 | [`DetailView`](detail::DetailView): the generic detail of one object (header, metadata, owners, conditions, status, YAML and Describe tabs (E07-S06), events), as the right-hand [`DetailDrawer`](detail::DetailDrawer) of a cluster tab or, pinned, a workspace tab |
 //! | [`exec`] | E09-S08 | "Shell" and "Attach" on a pod's row and detail: [`exec::exec_row_actions`], the [`exec::ContainerPicker`] for a pod with several containers (the default container, or the last choice for the pod, preselected) and [`exec::ExecFlow`], which reads the pod off the UI thread and dispatches `pod::Shell` / `pod::Attach` with the container chosen |
 //! | [`filter`] | E07-S04 | [`FilterBar`](filter::FilterBar): the `/` filter of a table (`/text`, `/!text`, `/-l k=v`, `/-f fuzzy`), its parse error and `123 of 4,812` count, debounce, and the saved filter |
+//! | [`kinds`] | E12-S01 | the kind registry's UI half: [`kinds::KindSpec`] (the app's `KindMeta` plus a [`kinds::DetailRenderer`]), the [`kinds::KindSpecs`] global (`kind_for` never fails: unknown kinds get the generic spec), the built-in kinds by sidebar section (each section module's `init`), published to the cluster sidebar, where each cluster gates them by discovery and the visibility hook |
 //! | [`navigate`] | E07-S11 | opening a kind's list: the `resource::OpenList` handler and the registry of kind views ([`navigate::KindViews`]) |
 //! | [`overview_lite`] | E07-S11 | the Workloads overview (store-only counts and health tiles) |
 //! | [`table`] | E07-S03 | [`ResourceTable`](table::ResourceTable): the generic, virtualised table of one kind, with sorting, column layout per kind, multi-select, context menu and keyboard navigation |
@@ -29,6 +30,7 @@ pub mod describe_settings;
 pub mod detail;
 pub mod exec;
 pub mod filter;
+pub mod kinds;
 pub mod navigate;
 pub mod overview_lite;
 pub mod table;
@@ -43,8 +45,10 @@ pub use views::{
     ViewRequest, register_commands, sidebar_navigation, view_row_actions,
 };
 
-/// Registers what this crate puts in the app: the Workloads overview's tiles. Called once from
-/// the binary's init, after the workspace's.
+/// Registers what this crate puts in the app: the built-in kinds (their specs and sidebar
+/// entries) and the Workloads overview's tiles. Called once from the binary's init, after the
+/// workspace's.
 pub fn init(cx: &mut gpui::App) {
+    kinds::init(cx);
     overview_lite::init(cx);
 }

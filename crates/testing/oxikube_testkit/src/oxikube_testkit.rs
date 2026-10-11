@@ -18,6 +18,8 @@
 //!   points are re-exported here.
 //! - [`commands`]: `fixture_commands(n)`, a deterministic mix of command metadata (every view,
 //!   selection shape and category) for palette, help and keymap tests.
+//! - [`discovery_sets`]: whole discovery answers for the kind registry and sidebar tests (E12-S01):
+//!   a stock cluster, with the Gateway API, with CRDs, CRDs only.
 //! - [`kinds`]: discovery fixtures, `ResourceKind`s as an API server reports them (`kind(..).short(..)`, `core_kinds()`, CRDs that collide).
 //! - [`images`]: the container images the kind suites run (one list, pre-pulled by `kind-up`).
 //! - [`manifests`]: large generated YAML (`pod_list_yaml(5 MiB, ..)`, a `kubectl get -o yaml`
@@ -42,6 +44,7 @@
 
 pub mod builders;
 pub mod commands;
+pub mod discovery_sets;
 pub mod fakes;
 pub mod fixtures;
 #[cfg(feature = "gpui-test")]

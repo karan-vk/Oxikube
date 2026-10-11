@@ -102,13 +102,18 @@ impl ResourceTable {
     }
 }
 
-/// The provider a new table starts with: the core catalogue, or for a kind on a Table feed the
-/// generic Name / Namespace / Age columns until the feed's own columns arrive.
+/// The provider a new table starts with: the kind's own (its spec's, E12-S01), else the core
+/// catalogue, or for a kind on a Table feed the generic Name / Namespace / Age columns until the
+/// feed's own columns arrive.
 pub(super) fn initial_provider(
     cluster: &ClusterId,
     kind: &ResourceKind,
     deps: &ResourceTableDeps,
+    own: Option<&Arc<dyn ColumnProvider>>,
 ) -> Arc<dyn ColumnProvider> {
+    if let Some(own) = own {
+        return own.clone();
+    }
     let on_table_feed = deps
         .sessions
         .get(cluster)

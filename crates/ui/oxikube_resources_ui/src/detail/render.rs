@@ -34,6 +34,7 @@ impl Render for DetailView {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let deleted = matches!(self.state, DetailState::Deleted);
+        self.ensure_kind_panel(window, cx);
         let body = match self.tab {
             DetailTab::Overview => self.overview_body(cx),
             DetailTab::Events => self.events_body(cx),

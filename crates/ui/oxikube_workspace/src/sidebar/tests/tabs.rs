@@ -59,6 +59,7 @@ fn every_cluster_tab_gets_its_own_sidebar_with_its_own_permissions(cx: &mut Test
             integrations: IntegrationRegistry::new(),
             state,
             stores: None,
+            visibility: Arc::new(oxikube_app::kinds::AllowAll),
         }));
     let tabs = vcx.update(|window, cx| ClusterTabs::start(&ws, deps, window, cx));
     vcx.run_until_parked();

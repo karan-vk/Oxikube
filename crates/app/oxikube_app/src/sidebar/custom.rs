@@ -5,9 +5,10 @@ use std::collections::BTreeMap;
 use oxikube_domain::OxiResult;
 use oxikube_domain::access::{AccessRequirement, is_builtin_api_group};
 use oxikube_domain::ids::{Gvk, Scope};
-use oxikube_domain::kinds::Verb;
+use oxikube_domain::kinds::{ResourceKind, Verb};
 use oxikube_ports::DiscoveryPort;
 
+use crate::kinds::ServedKinds;
 use crate::store::CountTarget;
 
 /// One custom kind in a [`CustomResourceGroup`].
@@ -72,8 +73,37 @@ impl CustomResourceGroup {
 pub async fn discover_custom_resources(
     discovery: &dyn DiscoveryPort,
 ) -> OxiResult<Vec<CustomResourceGroup>> {
+    Ok(custom_resource_groups(&discovery.discover().await?))
+}
+
+/// What one discovery answer tells the sidebar (E12-S01): which kinds the cluster serves (the
+/// registry's entries show only for those) and its custom resources.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SidebarDiscovery {
+    /// Every kind the cluster serves, any version.
+    pub served: ServedKinds,
+    /// The custom resource kinds, grouped (see [`custom_resource_groups`]).
+    pub custom: Vec<CustomResourceGroup>,
+}
+
+/// Runs discovery once for both halves of [`SidebarDiscovery`].
+///
+/// # Errors
+///
+/// The discovery port's error.
+pub async fn discover_sidebar(discovery: &dyn DiscoveryPort) -> OxiResult<SidebarDiscovery> {
+    let kinds = discovery.discover().await?;
+    Ok(SidebarDiscovery {
+        served: ServedKinds::from_kinds(&kinds),
+        custom: custom_resource_groups(&kinds),
+    })
+}
+
+/// The kinds of non-built-in API groups in `kinds`, grouped by group (sorted), preferred version
+/// only, listable kinds only.
+pub fn custom_resource_groups(kinds: &[ResourceKind]) -> Vec<CustomResourceGroup> {
     let mut groups: BTreeMap<String, Vec<CustomKind>> = BTreeMap::new();
-    for kind in discovery.discover().await? {
+    for kind in kinds {
         let group: &str = &kind.gvk.group;
         if kind.preferred && kind.supports(Verb::List) && !is_builtin_api_group(group) {
             groups
@@ -87,12 +117,12 @@ pub async fn discover_custom_resources(
                 });
         }
     }
-    Ok(groups
+    groups
         .into_iter()
         .map(|(group, mut kinds)| {
             kinds.sort();
             kinds.dedup();
             CustomResourceGroup { group, kinds }
         })
-        .collect())
+        .collect()
 }

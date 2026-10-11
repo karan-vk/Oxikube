@@ -319,3 +319,24 @@ fn a_custom_kind_carries_its_preferred_version_and_scope_as_a_count_target() {
         oxikube_domain::ids::Scope::Cluster
     );
 }
+
+#[test]
+fn one_discovery_read_gives_the_served_kinds_and_the_custom_resources() {
+    let discovery =
+        FakeDiscoveryPort::new().with_kinds(oxikube_testkit::discovery_sets::core_with_crds());
+    let found = block_on(super::discover_sidebar(&discovery)).expect("discovery");
+    assert!(found.served.serves(&Gvk::new("apps", "v1", "Deployment")));
+    assert!(
+        found
+            .served
+            .serves(&Gvk::new("cert-manager.io", "v1", "Certificate"))
+    );
+    assert!(
+        !found
+            .served
+            .serves(&Gvk::new("gateway.networking.k8s.io", "v1", "Gateway"))
+    );
+    let groups: Vec<&str> = found.custom.iter().map(|g| g.group.as_str()).collect();
+    assert_eq!(groups, ["cert-manager.io"]);
+    assert_eq!(discovery.recorded_calls().len(), 1, "one read for both");
+}

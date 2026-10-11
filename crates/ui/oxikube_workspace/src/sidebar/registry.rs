@@ -46,6 +46,27 @@ impl SidebarRegistry {
         }
     }
 
+    /// Replaces the entries of the section `section` with `entries` (the kind registry publishes
+    /// its sections this way, E12-S01). Returns `false` (and changes nothing) when there is no
+    /// such section or it does not hold entries.
+    pub fn set_entries(cx: &mut App, section: &str, entries: Vec<SidebarEntry>) -> bool {
+        let registry = cx.default_global::<SidebarRegistry>();
+        let target = registry.sections.iter_mut().find(|s| s.id == section);
+        match target.map(|s| &mut s.body) {
+            Some(SectionBody::Entries(existing)) => {
+                *existing = entries;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether a section `id` is registered.
+    pub fn contains(cx: &App, id: &str) -> bool {
+        cx.try_global::<SidebarRegistry>()
+            .is_some_and(|r| r.sections.iter().any(|s| s.id == id))
+    }
+
     /// The sections, ordered by `order`, ties in registration order.
     pub fn sections(cx: &App) -> Vec<SidebarSection> {
         let mut sections = cx

@@ -5,6 +5,7 @@
 mod badges;
 mod counts;
 mod crd_watch;
+mod kind_gate;
 mod panel;
 mod registry;
 mod rows;
@@ -16,8 +17,9 @@ use std::sync::Arc;
 use futures::executor::block_on;
 use futures::future::BoxFuture;
 use gpui::{Entity, TestAppContext, VisualTestContext};
+use oxikube_app::kinds::AllowAll;
 use oxikube_app::store::StoreRuntime;
-use oxikube_app::{ClusterSessionManager, IntegrationRegistry, ResourceStores};
+use oxikube_app::{ClusterSessionManager, IntegrationRegistry, KindVisibility, ResourceStores};
 use oxikube_domain::access::{AccessRule, AccessRules};
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::kinds::{ResourceKind, Verb, VerbSet};
@@ -94,12 +96,27 @@ impl Fixture {
         rules: AccessRules,
         state: Arc<FakeStatePort>,
     ) -> Self {
-        Self::open_inner(cx, rules, state, false)
+        Self::open_inner(cx, rules, state, false, Arc::new(AllowAll))
+    }
+
+    /// [`Self::open`] with the kind registry's visibility hook (E12-S01).
+    pub(super) fn open_gated(
+        cx: &mut TestAppContext,
+        rules: AccessRules,
+        visibility: Arc<dyn KindVisibility>,
+    ) -> Self {
+        Self::open_inner(cx, rules, Arc::new(FakeStatePort::new()), false, visibility)
     }
 
     /// [`Self::open`] with a `ResourceStores` over the session's fake ports behind the badges.
     pub(super) fn open_counted(cx: &mut TestAppContext, rules: AccessRules) -> Self {
-        Self::open_inner(cx, rules, Arc::new(FakeStatePort::new()), true)
+        Self::open_inner(
+            cx,
+            rules,
+            Arc::new(FakeStatePort::new()),
+            true,
+            Arc::new(AllowAll),
+        )
     }
 
     fn open_inner(
@@ -107,6 +124,7 @@ impl Fixture {
         rules: AccessRules,
         state: Arc<FakeStatePort>,
         counted: bool,
+        visibility: Arc<dyn KindVisibility>,
     ) -> Self {
         let cluster = id("prod");
         let source = Arc::new(FakeClusterSourcePort::new().with_contexts([context("prod")]));
@@ -143,6 +161,7 @@ impl Fixture {
             integrations: integrations.clone(),
             state: state.clone(),
             stores: stores.clone(),
+            visibility,
         };
         let panel = vcx.update(|window, cx| {
             let panel = SidebarPanel::build(cluster.clone(), deps, cx);

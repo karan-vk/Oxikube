@@ -57,7 +57,7 @@ pub use rows::{
     AccessState, DEFINITIONS_ENTRY, EntryRow, GroupRow, NoticeKind, NoticeRow, Row, RowInputs,
     SectionRow, build_rows,
 };
-pub use section::{SectionBody, SidebarEntry, SidebarSection, SidebarTarget};
+pub use section::{SectionBody, SidebarEntry, SidebarKind, SidebarSection, SidebarTarget};
 pub use store::{SIDEBAR_TABLE, SIDEBAR_VERSION, SavedSidebar, SidebarStore};
 
 use gpui::{App, Entity, Window};
