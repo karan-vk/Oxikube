@@ -125,6 +125,8 @@ impl DetailView {
     /// subscribes to its own feeds and sends its buttons' commands through these.
     pub(crate) fn deps(&self) -> &DetailDeps {
         &self.deps
+    }
+
     /// The command dispatcher the view's own buttons use (a kind panel's buttons send their
     /// commands through it, so they are the bus's, like every other action).
     pub fn dispatcher(&self) -> std::rc::Rc<dyn oxikube_workspace::CommandDispatcher> {

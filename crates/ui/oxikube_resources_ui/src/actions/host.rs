@@ -93,7 +93,7 @@ impl ResourceActions {
             exec: None,
             debug: DebugRunner::new(bus.clone(), who.clone()),
             workloads: Arc::new(WorkloadService::new(sessions)),
-            scale: ScaleRunner::new(bus.clone(), who),
+            scale: ScaleRunner::new(bus.clone(), who.clone()),
             namespace_creator: NamespaceCreator::new(bus.clone(), who),
         }
     }

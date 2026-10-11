@@ -81,14 +81,14 @@ mod crd;
 mod detail;
 #[path = "screenshot/exec.rs"]
 mod exec;
+#[path = "screenshot/namespaces.rs"]
+mod namespaces;
 #[path = "screenshot/network.rs"]
 mod network;
 #[path = "screenshot/pods.rs"]
 mod pods;
 #[path = "screenshot/service.rs"]
 mod service;
-#[path = "screenshot/namespaces.rs"]
-mod namespaces;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
