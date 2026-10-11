@@ -3,7 +3,7 @@
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
     AliasRegistry, ClusterCatalog, ClusterCommands, ClusterSessionManager, IntegrationRegistry,
-    MutationGuard,
+    MutationGuard, UtilisationAggregator,
 };
 
 use super::AppPorts;
@@ -31,6 +31,9 @@ pub struct ClusterServices {
     /// cluster's discovery serves, the user's `aliases.json`. Kept in step by
     /// [`crate::aliases`]; the jump bar reads `aliases.table(&cluster).resolve(word)`.
     pub aliases: AliasRegistry,
+    /// Requests, limits and `%CPU/R`-style percents per pod, node and namespace (E13-S02). Its GPU
+    /// vendor list follows `metrics.gpu_vendors` ([`crate::metrics_settings`]).
+    pub utilisation: UtilisationAggregator,
 }
 
 impl ClusterServices {
@@ -59,6 +62,7 @@ impl ClusterServices {
             namespaces,
             integrations: IntegrationRegistry::new(),
             aliases: AliasRegistry::new(),
+            utilisation: UtilisationAggregator::default(),
         }
     }
 
