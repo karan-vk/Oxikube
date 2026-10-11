@@ -69,6 +69,9 @@ pub struct ResourceViews {
     /// When the open of a kind's list failed (no discovery yet, no tab): a filter that arrives
     /// right after it, from the same jump, has no table to wait for and is dropped.
     failed_opens: HashMap<(ClusterId, Gvk), Instant>,
+    /// The `service::ShowPods` in flight: the Service is read, then the pods table opens (a newer
+    /// one replaces, and so cancels, it).
+    pub(super) service_task: Option<Task<()>>,
     /// The "save YAML" in flight: the dialog, then the write (a newer one replaces it).
     pub(super) save_task: Option<Task<()>>,
     _requests: Task<()>,
@@ -103,6 +106,7 @@ impl ResourceViews {
                 open_task: None,
                 pending_filters: HashMap::new(),
                 failed_opens: HashMap::new(),
+                service_task: None,
                 save_task: None,
                 _requests: pump,
             }
@@ -152,6 +156,7 @@ impl ResourceViews {
             ViewRequest::OpenCrdResources { cluster, name } => {
                 self.open_crd_resources(&cluster, name, window, cx);
             }
+            ViewRequest::ShowServicePods(target) => self.show_service_pods(&target, window, cx),
             other => self.apply(other, cx),
         }
     }
@@ -165,7 +170,9 @@ impl ResourceViews {
             ViewRequest::PinDetail(_)
             | ViewRequest::ViewYaml(_)
             | ViewRequest::ViewDescribe(_)
+            | ViewRequest::ShowServicePods(_)
             | ViewRequest::OpenCrdResources { .. } => {}
+            ViewRequest::OpenUrl(url) => cx.open_url(&url),
             ViewRequest::ToggleWide { cluster, gvk } => {
                 for table in self.tables(&cluster, &gvk, cx) {
                     table.update(cx, |table, cx| table.toggle_wide(cx));

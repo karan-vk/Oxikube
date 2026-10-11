@@ -80,6 +80,8 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
             | CommandId::CRONJOB_RESUME
             | CommandId::JOB_SUSPEND
             | CommandId::JOB_RESUME
+            | CommandId::SERVICE_SHOW_PODS
+            | CommandId::SERVICE_OPEN_IN_BROWSER
     )
 }
 
@@ -109,6 +111,10 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
         }
         CommandId::RESOURCE_EDIT => Some("Editing is not available yet"),
         CommandId::POD_PORT_FORWARD => Some(PORT_FORWARDING_UNAVAILABLE),
+        CommandId::SERVICE_SHOW_PODS => Some("Show Pods is available for Services"),
+        CommandId::SERVICE_OPEN_IN_BROWSER => {
+            Some("Open in Browser is available for Services once port forwarding is installed")
+        }
         _ => None,
     }
 }

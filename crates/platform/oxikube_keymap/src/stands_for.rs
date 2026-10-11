@@ -64,6 +64,15 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_table::ToggleSuspendSelected",
         CommandId::JOB_RESUME,
     ),
+    // A Service's verbs (E12-S13), bound where `kind == Service`.
+    (
+        "resource_table::ShowServicePods",
+        CommandId::SERVICE_SHOW_PODS,
+    ),
+    (
+        "resource_table::OpenInBrowser",
+        CommandId::SERVICE_OPEN_IN_BROWSER,
+    ),
     // The resource detail's find in the YAML and Describe text (E11-S06). `resource_detail::CloseFind`
     // only closes the field and gives the keys back to the detail, so it is view-local.
     ("resource_detail::Find", CommandId::RESOURCE_FIND),

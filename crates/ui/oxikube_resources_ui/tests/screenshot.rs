@@ -21,6 +21,9 @@
 //!   above the Overview (E12-S12): a ResourceQuota's used-against-hard bars and a webhook
 //!   configuration with its `caBundle` shown as present or absent.
 //!
+//! - `detail_service_dark`, `detail_service_light` (`service`): the detail drawer of a Service with
+//!   its ports ("Open in browser" on the TCP ones), EndpointSlices with ready counts and backing
+//!   pods (E12-S13).
 //! - `exec_picker_dark`, `exec_picker_light` (`exec`): the container picker of a pod with three
 //!   containers, the default one selected (E09-S08; the generic picker of E11-S02 since).
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
@@ -71,6 +74,8 @@ mod detail;
 mod exec;
 #[path = "screenshot/pods.rs"]
 mod pods;
+#[path = "screenshot/service.rs"]
+mod service;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
@@ -252,6 +257,7 @@ fn main() -> ExitCode {
         crd::run(),
         exec::run(),
         pods::run(),
+        service::run(),
     ];
     let mut failed = false;
     for result in results {

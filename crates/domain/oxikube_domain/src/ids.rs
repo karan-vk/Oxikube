@@ -291,6 +291,11 @@ impl Gvk {
     pub fn is_node(&self) -> bool {
         self.is_core() && &*self.kind == "Node"
     }
+
+    /// Whether this type is the core `v1` Service.
+    pub fn is_service(&self) -> bool {
+        self.is_core() && &*self.kind == "Service"
+    }
 }
 
 impl fmt::Display for Gvk {

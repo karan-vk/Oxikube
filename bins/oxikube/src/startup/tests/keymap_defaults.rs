@@ -81,6 +81,25 @@ fn the_default_keymap_loads_clean_and_binds_the_verbs(cx: &mut TestAppContext) {
         assert_eq!(resolution.action(), Some(action), "{keys}");
     }
 
+    // A Service's verbs (E12-S13) are bound in a Service table and nowhere else.
+    let services = parse_stack(&[
+        "Workspace",
+        "ClusterTab connected",
+        "Workspace",
+        "Pane",
+        "ResourceTable kind=Service selection=one",
+    ])
+    .unwrap();
+    for (keys, action) in [
+        ("u", "resource_table::ShowServicePods"),
+        ("o", "resource_table::OpenInBrowser"),
+    ] {
+        let on_service = cx.read(|cx| resolve(cx, keys, &services).unwrap());
+        assert_eq!(on_service.action(), Some(action), "{keys} on a Service");
+        let on_pod = cx.read(|cx| resolve(cx, keys, &table).unwrap());
+        assert_eq!(on_pod.action(), None, "{keys} on a Pod");
+    }
+
     // The terminal keeps ctrl-d (EOF) in the real keymap, workspace chords included.
     let terminal = parse_stack(&[
         "Workspace",

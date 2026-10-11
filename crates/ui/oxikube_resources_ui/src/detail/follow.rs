@@ -91,7 +91,7 @@ impl DetailView {
     }
 
     /// The store of the cluster's session, while it is connected.
-    pub(super) fn connected_store(&self) -> Option<ResourceStore> {
+    pub(crate) fn connected_store(&self) -> Option<ResourceStore> {
         let session = self.deps.sessions.get(&self.target.cluster)?;
         if !session.is_connected() {
             return None;

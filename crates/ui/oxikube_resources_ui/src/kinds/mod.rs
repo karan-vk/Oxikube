@@ -21,6 +21,8 @@
 //! | `sidebar` | publishing the registry's sections and entries to the cluster sidebar |
 //! | `config` | the Config section's smaller kinds (E12-S12): quota bars, limit tables, autoscalers, budgets, classes, leases and the admission kinds, each a [`ConfigPanel`] over a domain view-model |
 //! | `job`, `cronjob` | Jobs and CronJobs (E12-S08): the kind specs and their row actions, [`row_actions`] |
+//! | `endpoints` | Endpoints and EndpointSlices (E12-S13): the detail panel |
+//! | `service` | Services (E12-S13): the detail panel, the open-in-browser hook and the row actions |
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
 //! | [`crd`] | the CustomResourceDefinition kind (E12-S17): its spec and the definition panel of its detail |
 //! | `pods` | Pods (E12-S02): their own columns and the containers drill-down |
@@ -52,6 +54,9 @@ mod cronjob;
 mod detail;
 pub(crate) mod job;
 pub mod pods;
+pub mod endpoints;
+mod parts;
+pub mod service;
 mod sidebar;
 mod spec;
 mod specs;

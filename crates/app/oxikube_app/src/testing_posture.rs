@@ -257,6 +257,23 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             local_port: None,
             remote_port: 8080,
         },
+        "service::OpenInBrowser" => Command::ServiceOpenInBrowser {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("", "v1", "Service"),
+                "default",
+                "web",
+            ),
+            port: Some(80),
+        },
+        "service::ShowPods" => Command::ServiceShowPods {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("", "v1", "Service"),
+                "default",
+                "web",
+            ),
+        },
         "pod::ViewLogs" => Command::PodViewLogs {
             target: target(),
             container: None,

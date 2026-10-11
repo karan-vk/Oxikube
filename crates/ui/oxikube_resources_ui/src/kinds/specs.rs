@@ -65,6 +65,19 @@ impl KindSpecs {
         first.map_or(Ok(()), Err)
     }
 
+    /// Gives the registered kind `gvk` its own detail renderer (a kind registered by a section's
+    /// list of built-ins gets its panel from the kind's module). Returns whether the kind is
+    /// registered; the sidebar is not published again, the detail is not part of it.
+    pub fn set_detail(cx: &mut App, gvk: &Gvk, detail: DetailRenderer) -> bool {
+        let this = cx.default_global::<KindSpecs>();
+        if this.registry.get(gvk).is_none() {
+            tracing::warn!(%gvk, "a detail renderer for a kind that is not registered");
+            return false;
+        }
+        this.details.insert(GroupKind::of(gvk), detail);
+        true
+    }
+
     /// The registry (empty when nothing registered).
     pub fn registry(cx: &App) -> KindRegistry {
         cx.try_global::<KindSpecs>()
