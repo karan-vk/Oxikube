@@ -8,7 +8,7 @@
 //! | [`ClusterSourcePort`] | [`cluster_source`] | `oxikube_kube::sources` |
 //! | [`CloudDiscoveryPort`] | [`cloud`] | `oxikube_cloud` |
 //! | [`MetricsPort`] | [`metrics`] | `oxikube_kube` (metrics.k8s.io, ADR 0011) |
-//! | [`PromqlPort`] | [`promql`] | `oxikube_prometheus` |
+//! | [`PromqlPort`], [`PromqlEndpointPort`] | [`promql`] | `oxikube_prometheus` |
 //! | [`DescribePort`] | [`describe`] | `oxikube_describe` |
 //! | [`HelmPort`] | [`helm`] | `oxikube_helm` |
 //! | [`StatePort`] | [`state`] | `oxikube_state_sqlite` (ADR 0010) |
@@ -162,7 +162,10 @@ pub use log::{LogOptions, LogPort, LogSince, LogStream};
 pub use metrics::{MetricsOutcome, MetricsPort};
 pub use notifier::{Notification, NotificationLevel, NotifierPort};
 pub use portforward::{DuplexStream, PortForwardConnection, PortForwardPort};
-pub use promql::{PromqlPort, PromqlSeries, PromqlValue, TimeRange};
+pub use promql::{
+    DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TIMEOUT, PromAuth, PromEndpoint, PromSecret, PromTls,
+    PromqlEndpointPort, PromqlError, PromqlPort, PromqlSeries, PromqlValue, TimeRange,
+};
 pub use resource::{
     DeleteCollectionOutcome, DeleteOptions, DeleteOutcome, ListOptions, ListPage, Patch, PatchKind,
     Preconditions, PropagationPolicy, ResourcePort, ResourceReader, ResourceWriter, Scale,
@@ -194,6 +197,7 @@ mod tests {
         cloud: Arc<dyn CloudDiscoveryPort>,
         metrics: Arc<dyn MetricsPort>,
         promql: Arc<dyn PromqlPort>,
+        promql_endpoint: Arc<dyn PromqlEndpointPort>,
         describe: Arc<dyn DescribePort>,
         helm: Arc<dyn HelmPort>,
         state: Arc<dyn StatePort>,
@@ -218,6 +222,7 @@ mod tests {
         assert_send_sync::<dyn CloudDiscoveryPort>();
         assert_send_sync::<dyn MetricsPort>();
         assert_send_sync::<dyn PromqlPort>();
+        assert_send_sync::<dyn PromqlEndpointPort>();
         assert_send_sync::<dyn DescribePort>();
         assert_send_sync::<dyn HelmPort>();
         assert_send_sync::<dyn StatePort>();

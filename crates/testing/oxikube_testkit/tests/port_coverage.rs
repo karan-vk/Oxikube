@@ -10,9 +10,9 @@ use oxikube_ports::{
     AccessReviewPort, AgentClient, AgentPort, ClockPort, CloudDiscoveryPort, ClusterConnectorPort,
     ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort, DiscoveryPort,
     ExecPort, ExecStreamPort, FsPort, HelmPort, IntegrationPort, LogPort, MetricsPort,
-    NotifierPort, PortForwardPort, PromqlPort, ResourcePort, ResourceReader, ResourceWriter,
-    SchemaPort, SecretStorePort, StatePort, TableFeedPort, TerminalBackend, ToolDef, ToolName,
-    ToolPort, UpdaterPort, WarningPort,
+    NotifierPort, PortForwardPort, PromqlEndpointPort, PromqlPort, ResourcePort, ResourceReader,
+    ResourceWriter, SchemaPort, SecretStorePort, StatePort, TableFeedPort, TerminalBackend,
+    ToolDef, ToolName, ToolPort, UpdaterPort, WarningPort,
 };
 use oxikube_testkit::*;
 
@@ -31,6 +31,7 @@ const FAKES: &[(&str, &str)] = &[
     ("CloudDiscoveryPort", "FakeCloudDiscoveryPort"),
     ("MetricsPort", "FakeMetricsPort"),
     ("PromqlPort", "FakePromqlPort"),
+    ("PromqlEndpointPort", "FakePromqlEndpointPort"),
     ("DescribePort", "FakeDescribePort"),
     ("HelmPort", "FakeHelmPort"),
     ("StatePort", "FakeStatePort"),
@@ -82,6 +83,7 @@ fn fakes_are_port_trait_objects() {
     let _: Arc<dyn CloudDiscoveryPort> = Arc::new(FakeCloudDiscoveryPort::new());
     let _: Arc<dyn MetricsPort> = Arc::new(FakeMetricsPort::new());
     let _: Arc<dyn PromqlPort> = Arc::new(FakePromqlPort::new());
+    let _: Arc<dyn PromqlEndpointPort> = Arc::new(FakePromqlEndpointPort::new());
     let _: Arc<dyn DescribePort> = Arc::new(FakeDescribePort::new());
     let _: Arc<dyn HelmPort> = Arc::new(FakeHelmPort::new());
     let _: Arc<dyn StatePort> = Arc::new(FakeStatePort::new());

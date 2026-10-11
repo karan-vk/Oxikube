@@ -12,6 +12,42 @@ path = "src/oxikube_prometheus.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
+# Basic-auth header value.
+base64.workspace = true
+futures.workspace = true
+jiff.workspace = true
+oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+parking_lot.workspace = true
+# The HTTP client: rustls with ring (the workspace's single TLS provider), platform roots.
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# `spawn_blocking` for building a client (loads the platform root store).
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+oxikube_testkit.workspace = true
+rcgen.workspace = true
+# ring, so the TLS test server needs no process-wide default provider.
+rustls = { workspace = true, features = ["ring"] }
+tokio = { workspace = true, features = ["rt", "macros", "time", "net", "io-util"] }
+tokio-rustls.workspace = true
+tracing-subscriber.workspace = true
+wiremock.workspace = true
+
+[features]
+default = []
+# Enables the test that needs a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
+integration = ["oxikube_testkit/integration"]
+
+[[test]]
+name = "kind_prometheus"
+path = "tests/kind_prometheus.rs"
+required-features = ["integration"]
 
 [lints]
 workspace = true

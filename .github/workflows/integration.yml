@@ -53,8 +53,8 @@ env:
   OXIKUBE_TEST_DIAGNOSTICS_DIR: ${{ github.workspace }}/diagnostics/namespaces
   # kube, app and testkit integration tests; `--no-fail-fast` reports every failing file.
   SUITE: >-
-    cargo test -p oxikube_kube -p oxikube_app -p oxikube_testkit
-    --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration
+    cargo test -p oxikube_kube -p oxikube_app -p oxikube_testkit -p oxikube_prometheus
+    --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration,oxikube_prometheus/integration
     --no-fail-fast
 
 jobs:

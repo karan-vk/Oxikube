@@ -1,0 +1,1 @@
+{"status":"error","errorType":"422","error":"error when executing query=\"up{\" for (time=1791707569848, step=300000): labelFilterExpr: unexpected token \"\"; want \"ident\"; unparsed data: \"\""}

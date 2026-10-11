@@ -500,6 +500,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `describe.kubectl_path` settings, hot reloaded by the binary). `oxikube_kube::KubeConnector::set_describe_factory` hands each
   connection's client and discovery to the factory the binary supplies (`bins/oxikube::kube_ports::SourcesConnector`), which
   fills `ClusterPorts::describe` and points `kubectl` at the file that defines the context.
+- `oxikube_prometheus` (E13-S04) — the PromQL HTTP adapter. `PromqlClient` implements `PromqlEndpointPort` (instant and range
+  queries against one explicit `PromEndpoint`: base URL, path prefix such as Mimir's `/prometheus`, none/bearer/basic auth
+  whose secret is in memory or a keychain reference read per request, a custom CA or an insecure toggle, a request deadline
+  and a response size cap) with `reqwest` on rustls/ring, one pooled client per TLS configuration built off the executor
+  thread. Failures are a `PromqlError` (`Unreachable`, `Timeout`, `Unauthorized`, `Forbidden`, `BadQuery`, `ServerError`,
+  `TlsError`, `BadResponse`, `InvalidEndpoint`), which the cluster-level `PrometheusPort` (`PromqlPort`, an endpoint table per
+  cluster that settings and detection fill) carries as the source of its `OxiError`s (`PromqlError::of`). Dropping a call's
+  future closes its connection. Modules: `client`, `url`, `wire` (typed decode of vector/matrix/scalar, `NaN`/`±Inf`),
+  `errors`, `auth`, `transport`, `cluster`. Provider detection (E13-S05) and query catalogues (E13-S06) build on it.
 - `oxikube_ui::editor` (E07-S06, E10-S04) — gpui-component's editor (`tree-sitter-yaml` feature) behind our own API. `EditorApi`
   is the trait feature views use, in UTF-8 byte offsets and our types (`text`/`set_text`, `version`, `selections`/`select`,
   `set_read_only`, `set_soft_wrap`, `set_diagnostics(Vec<EditorDiagnostic>)`, `add_decoration`/`decorations`/
