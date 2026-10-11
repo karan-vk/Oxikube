@@ -13,9 +13,6 @@ doctest = false
 
 [dependencies]
 async-trait.workspace = true
-# Basic-auth header value.
-base64.workspace = true
-futures.workspace = true
 jiff.workspace = true
 oxikube_domain.workspace = true
 oxikube_ports.workspace = true

@@ -6088,8 +6088,6 @@ name = "oxikube_prometheus"
 version = "0.0.1"
 dependencies = [
  "async-trait",
- "base64 0.23.1",
- "futures",
  "jiff",
  "oxikube_domain",
  "oxikube_ports",
