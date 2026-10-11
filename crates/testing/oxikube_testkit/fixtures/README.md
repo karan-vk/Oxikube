@@ -6,6 +6,9 @@ Two independent sets live here:
   embedded by `oxikube_testkit::fixtures` and loaded as domain `Resource`s in unit tests. They
   never reach a cluster. Every file must be listed in `src/fixtures.rs` (a test checks this);
   prefer the builders for variations instead of new files. Secret data is dummy only.
+- **Recorded Table responses** (`tables/`): what the API server answered the Table feed for a kind of the
+  kind fixtures (`tables/widgets.json`: `kubectl get widgets -n oxikube-fixtures`, v1.37), verbatim but for
+  `managedFields` and annotations. Listed in `fixtures::tables` (a test checks the set and the shape).
 - **Cluster fixtures** (`cluster/`, `metrics-server/`), described below.
 
 ## Cluster fixtures

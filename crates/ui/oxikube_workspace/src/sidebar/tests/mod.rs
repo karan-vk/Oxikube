@@ -5,6 +5,7 @@
 mod badges;
 mod counts;
 mod crd_watch;
+mod custom;
 mod kind_gate;
 mod panel;
 mod registry;

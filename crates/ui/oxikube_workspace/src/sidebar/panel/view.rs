@@ -6,8 +6,9 @@ use gpui::{
     prelude::FluentBuilder as _, px, uniform_list,
 };
 use oxikube_app::CountState;
+use oxikube_ui::input::Input;
 use oxikube_ui::{
-    ActiveTokens as _, Icon, IconName,
+    ActiveTokens as _, Icon, IconName, Sizable as _,
     layout::{h_flex, v_flex},
     tooltip::Tooltip,
     u,
@@ -24,8 +25,17 @@ const ROW_HEIGHT: f32 = 28.;
 const INDENT: f32 = 16.;
 
 impl Render for SidebarPanel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.colors();
+        // The search field's input needs a window: build it before the list draws its row.
+        if self.custom_search.is_none() && self.rows.iter().any(|r| matches!(r, Row::Search(_))) {
+            self.search_input(window, cx);
+        }
+        if std::mem::take(&mut self.focus_search)
+            && let Some(field) = &self.custom_search
+        {
+            field.input.update(cx, |input, cx| input.focus(window, cx));
+        }
         let list = uniform_list(
             "cluster-sidebar-rows",
             self.rows.len(),
@@ -74,6 +84,7 @@ impl SidebarPanel {
             Some(Row::Group(row)) => self.render_group(ix, row, cx),
             Some(Row::Entry(row)) => self.render_entry(ix, row, cx),
             Some(Row::Notice(row)) => render_notice(ix, row, cx),
+            Some(Row::Search(_)) => self.render_search(ix, cx),
             None => div().into_any_element(),
         }
     }
@@ -160,6 +171,36 @@ impl SidebarPanel {
             .child(div().flex_1().truncate().child(row.title.clone()))
             .when_some(row.count.as_ref(), |entry, state| {
                 entry.child(count_badge(&row.id, state, cx))
+            })
+            .into_any_element()
+    }
+}
+
+impl SidebarPanel {
+    /// The Custom Resources search field, indented like the groups it filters.
+    fn render_search(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
+        let tokens = cx.tokens();
+        let input = self.custom_search.as_ref().map(|field| field.input.clone());
+        let highlighted = self.highlighted.as_deref() == Some(crate::sidebar::SEARCH_ROW);
+        h_flex()
+            .id(("cluster-sidebar-row", ix))
+            .debug_selector(|| "sidebar-custom-search".to_owned())
+            .w_full()
+            .h(u(px(ROW_HEIGHT)))
+            .pl(u(tokens.spacing.md + px(INDENT)))
+            .pr(u(tokens.spacing.md))
+            .items_center()
+            .when(highlighted, |row| row.bg(tokens.colors.element_hover))
+            .when_some(input, |row, input| {
+                row.child(
+                    div().flex_1().child(
+                        Input::new(&input).xsmall().prefix(
+                            Icon::new(IconName::Search)
+                                .size(u(px(12.)))
+                                .color(tokens.colors.text_muted),
+                        ),
+                    ),
+                )
             })
             .into_any_element()
     }

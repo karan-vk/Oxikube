@@ -283,6 +283,52 @@ pub mod openapi {
     }
 }
 
+/// Recorded server Table responses (`meta.k8s.io/v1` `Table`, E12-S17): what the API server
+/// answered the Table feed's request for a kind, kept verbatim but for `managedFields` and
+/// annotations, which the feed never reads. Not cluster objects, so outside the [`Resource`] set;
+/// every file is a `Table` with `columnDefinitions` and `rows` (checked by `tests/fixtures.rs`).
+pub mod tables {
+    macro_rules! tables {
+        ($($(#[$doc:meta])* $fn_name:ident => $path:literal,)*) => {
+            /// Every recorded Table path, relative to `fixtures/tables/`.
+            pub const ALL: &[&str] = &[$($path),*];
+
+            /// The raw text of the recorded Table `name`, or `None` when there is none.
+            pub fn raw(name: &str) -> Option<&'static str> {
+                match name {
+                    $($path => Some(include_str!(concat!("../fixtures/tables/", $path))),)*
+                    _ => None,
+                }
+            }
+
+            $(
+                $(#[$doc])*
+                pub fn $fn_name() -> serde_json::Value {
+                    json($path)
+                }
+            )*
+        };
+    }
+
+    tables! {
+        /// `kubectl get widgets -n oxikube-fixtures` of the kind fixtures (`cluster/`), recorded
+        /// from a v1.37 kind cluster with `Accept: application/json;as=Table;v=v1;g=meta.k8s.io`
+        /// and `includeObject=Metadata`: columns Name, Size, Replicas, Phase, Age and Owner
+        /// (`priority: 1`), three rows, a `null` Phase.
+        widgets => "widgets.json",
+    }
+
+    /// The recorded Table `name` as JSON.
+    ///
+    /// # Panics
+    ///
+    /// When there is no such Table or it is not valid JSON.
+    pub fn json(name: &str) -> serde_json::Value {
+        let text = raw(name).unwrap_or_else(|| panic!("unknown recorded Table {name:?}"));
+        serde_json::from_str(text).unwrap_or_else(|e| panic!("table {name}: invalid JSON: {e}"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

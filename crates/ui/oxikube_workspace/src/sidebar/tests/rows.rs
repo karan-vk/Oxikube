@@ -29,6 +29,7 @@ fn rows_for(
         access,
         crd_watch_forbidden: false,
         open,
+        custom_query: "",
         gate: None,
     })
 }
@@ -337,6 +338,7 @@ fn custom_groups_carry_how_many_kinds_they_have_and_the_crd_list_comes_first() {
         [
             "custom-resources",
             "custom-resources/definitions",
+            "custom-resources/search",
             "crd:argoproj.io"
         ]
     );

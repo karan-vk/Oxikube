@@ -116,7 +116,7 @@ pub fn apply_counts(rows: &mut [Row], plan: &CountPlan, states: &HashMap<KindKey
                     .map(|(_, key)| key);
                 section.count = key.and_then(|key| states.get(key)).cloned();
             }
-            Row::Group(_) | Row::Notice(_) => {}
+            Row::Group(_) | Row::Notice(_) | Row::Search(_) => {}
         }
     }
 }

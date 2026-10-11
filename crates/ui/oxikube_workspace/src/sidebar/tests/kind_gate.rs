@@ -56,6 +56,7 @@ fn row_ids(served: Option<&ServedKinds>, visibility: &dyn KindVisibility) -> Vec
         access: &access,
         crd_watch_forbidden: false,
         open: &BTreeMap::new(),
+        custom_query: "",
         gate: Some(KindGate {
             cluster: &cluster,
             served,

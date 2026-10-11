@@ -76,15 +76,20 @@ const EVENT: &[ColumnDef] = &[
     AGE.wide(),
 ];
 
+/// The CRD list (E12-S17): Freelens' Resource / Group / Versions / Scope / Age with kubectl's
+/// short names and k9s' aliases. `Versions` is the API server's own CRD column (served versions,
+/// `(storage)` marked); the name (`<plural>.<group>`) stands for the resource.
 const CRD: &[ColumnDef] = &[
     NAME,
+    ColumnDef::new("kind", "Kind", Text("/spec/names/kind")),
     ColumnDef::new("group", "Group", Text("/spec/group")),
-    ColumnDef::new("version", "Version", Func(f::crd_version)),
+    ColumnDef::new("versions", "Versions", Func(f::crd_versions)),
     ColumnDef::new("scope", "Scope", Text("/spec/scope")),
     ColumnDef::new("short-names", "Short Names", Func(f::crd_short_names)),
     AGE,
-    ColumnDef::new("kind", "Kind", Text("/spec/names/kind")).wide(),
     ColumnDef::new("resource", "Resource", Text("/spec/names/plural")).wide(),
+    ColumnDef::new("aliases", "Aliases", Func(f::crd_aliases)).wide(),
+    ColumnDef::new("established", "Established", Func(f::crd_established)).wide(),
 ];
 
 const PRIORITY_CLASS: &[ColumnDef] = &[

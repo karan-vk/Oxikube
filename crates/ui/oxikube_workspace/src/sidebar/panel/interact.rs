@@ -54,6 +54,12 @@ impl SidebarPanel {
                 return;
             }
             Some(Row::Entry(entry)) => entry.target.clone(),
+            Some(Row::Search(_)) => {
+                // The next draw moves the focus into the field (focusing needs the window).
+                self.focus_search = true;
+                cx.notify();
+                return;
+            }
             _ => return,
         };
         self.highlighted = Some(id.to_owned().into());

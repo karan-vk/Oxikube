@@ -7,6 +7,7 @@
 //! | `interact.rs` | open and close, highlight, activate |
 //! | `view.rs` | drawing the virtualised list |
 //! | `counts.rs` | the count badges: a `ResourceStore` read on a timer |
+//! | `search.rs` | the Custom Resources search field (E12-S17) |
 //!
 //! # What runs where
 //!
@@ -41,6 +42,7 @@ use crate::panel::{DockPosition, Panel, PanelEvent};
 mod counts;
 mod follow;
 mod interact;
+mod search;
 mod view;
 
 /// What a cluster's sidebar needs from the outside.
@@ -89,6 +91,12 @@ pub struct SidebarPanel {
     access: AccessState,
     /// The user's explicit open and closed choices by row id.
     open: BTreeMap<String, bool>,
+    /// What the Custom Resources search field holds; not saved.
+    custom_query: String,
+    /// The search field, built on the first draw that shows it (an input needs a window).
+    custom_search: Option<search::SearchField>,
+    /// Enter on the search row: the next draw focuses the field.
+    focus_search: bool,
     rows: Vec<Row>,
     /// The highlighted row's id (keyboard and hover cursor).
     highlighted: Option<SharedString>,
@@ -225,6 +233,9 @@ impl SidebarPanel {
                 crd_watch_forbidden: false,
                 access: AccessState::Pending,
                 open: BTreeMap::new(),
+                custom_query: String::new(),
+                custom_search: None,
+                focus_search: false,
                 rows: Vec::new(),
                 highlighted: None,
                 selected: None,

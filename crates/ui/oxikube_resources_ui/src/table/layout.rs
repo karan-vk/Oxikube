@@ -313,7 +313,14 @@ impl ColumnLayout {
     /// The user's order to save: the current columns in their order, with the absent columns
     /// of the saved order kept in their slots (each slot of a present column takes the next
     /// present column in the current order).
+    ///
+    /// Nothing when the user never moved a column: the order is then the provider's, and a new
+    /// column set (a Table feed's server columns replacing the Name / Namespace / Age stand-ins)
+    /// keeps its own order instead of inheriting the stand-ins' (E12-S17: `kubectl get` order).
     fn saved_order(&self) -> Vec<String> {
+        if self.foreign.order.is_empty() && self.order.iter().copied().eq(0..self.all.len()) {
+            return Vec::new();
+        }
         let mut present = self.order.iter().map(|&ix| self.all[ix].id.to_string());
         let mut out = Vec::with_capacity(self.foreign.order.len().max(self.all.len()));
         for id in &self.foreign.order {

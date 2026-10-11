@@ -102,7 +102,8 @@ pub(super) fn generic(_: &Builtin) -> &'static [CommandId] {
     &[]
 }
 
-/// Registers every built-in section's kinds and the kinds outside the sidebar.
+/// Registers every built-in section's kinds and the kinds outside the sidebar (the CRD kind,
+/// E12-S17, whose list is the Custom Resources section's "Definitions" entry).
 pub fn init(cx: &mut App) {
     nodes::init(cx);
     workloads::init(cx);
@@ -110,20 +111,5 @@ pub fn init(cx: &mut App) {
     network::init(cx);
     storage::init(cx);
     namespaces::init(cx);
-    definitions(cx);
-}
-
-/// CustomResourceDefinitions: listed by the Custom Resources section's "Definitions" entry
-/// (E07-S07), so no sidebar slot of their own; their action opens a CRD's resources.
-fn definitions(cx: &mut App) {
-    let meta = KindMeta::new(
-        Gvk::new("apiextensions.k8s.io", "v1", "CustomResourceDefinition"),
-        "customresourcedefinitions",
-        "Definitions",
-        Scope::Cluster,
-    )
-    .with_actions([CommandId::CRD_OPEN_RESOURCES]);
-    if let Err(error) = KindSpecs::register(cx, KindSpec::new(meta)) {
-        tracing::error!(%error, "the CRD kind was not registered");
-    }
+    super::crd::init(cx);
 }

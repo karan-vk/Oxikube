@@ -1,7 +1,8 @@
 //! Tests of the kind registry's UI half: registration and publishing (`registry`), the cluster
 //! sidebar built from it over discovery sets (`sidebar`), a kind's own columns and detail panel
-//! reaching the table and the drawer (`spec`). `#[gpui::test]`s over testkit fakes.
+//! reaching the table and the drawer (`spec`), the CRD kind's panel (`crd`, E12-S17). `#[gpui::test]`s over testkit fakes.
 
+mod crd;
 mod registry;
 mod sidebar;
 mod spec;

@@ -4,6 +4,7 @@
 use jiff::Timestamp;
 use oxikube_domain::json::JsonRef;
 use oxikube_domain::view::{HpaState, HpaSummary, PdbSummary, VpaSummary};
+use oxikube_domain::view::{crd_aliases_text, crd_versions_text};
 use oxikube_domain::{Age, Resource};
 
 use super::{arr_at, spec, str_at};
@@ -114,15 +115,30 @@ pub(crate) fn event_object<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     }
 }
 
-/// CRD `VERSION`: the storage version, else the first served one.
-pub(crate) fn crd_version<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let versions = arr_at(spec(res), "versions");
-    versions
+/// CRD `VERSIONS`: the served versions, the storage one marked (`v1(storage),v1beta1`), as the
+/// API server's own CRD table prints them.
+pub(crate) fn crd_versions<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    Cell::text(crd_versions_text(res))
+}
+
+/// CRD `ALIASES` (k9s): plural, singular and short names, what `:` accepts for the kind.
+pub(crate) fn crd_aliases<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    Cell::text(crd_aliases_text(res))
+}
+
+/// CRD `ESTABLISHED`: the `Established` condition, toned (`True` ok, `False` warn).
+pub(crate) fn crd_established<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    // The last entry wins, as everywhere conditions are read.
+    let established = arr_at(status(res), "conditions")
         .iter()
-        .find(|v| v.get("storage").and_then(JsonRef::as_bool) == Some(true))
-        .or_else(|| versions.first())
-        .and_then(|v| str_at(v, "name"))
-        .map_or_else(Cell::empty, Cell::text)
+        .filter(|c| str_at(*c, "type") == Some("Established"))
+        .last()
+        .and_then(|c| str_at(c, "status"));
+    match established {
+        Some("True") => Cell::text("True").with_tone(Tone::Ok),
+        Some(other) => Cell::text(other).with_tone(Tone::Warn),
+        None => Cell::empty(),
+    }
 }
 
 /// CRD `SHORT NAMES`: `spec.names.shortNames`, comma-separated.

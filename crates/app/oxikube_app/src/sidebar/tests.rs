@@ -340,3 +340,70 @@ fn one_discovery_read_gives_the_served_kinds_and_the_custom_resources() {
     assert_eq!(groups, ["cert-manager.io"]);
     assert_eq!(discovery.recorded_calls().len(), 1, "one read for both");
 }
+
+fn group(name: &str, kinds: &[(&str, &str)]) -> super::CustomResourceGroup {
+    super::CustomResourceGroup {
+        group: name.to_owned(),
+        kinds: kinds
+            .iter()
+            .map(|(kind, plural)| super::CustomKind {
+                kind: (*kind).to_owned(),
+                plural: (*plural).to_owned(),
+                version: "v1".to_owned(),
+                namespaced: true,
+            })
+            .collect(),
+    }
+}
+
+fn kinds_of(group: &super::CustomResourceGroup) -> Vec<&str> {
+    group.kinds.iter().map(|k| k.kind.as_str()).collect()
+}
+
+#[test]
+fn kinds_another_section_claims_are_not_listed_twice() {
+    let gateway = group(
+        "gateway.networking.k8s.io",
+        &[
+            ("Gateway", "gateways"),
+            ("HTTPRoute", "httproutes"),
+            ("BackendTLSPolicy", "backendtlspolicies"),
+        ],
+    );
+    let claimed = |g: &str, k: &str| g == "gateway.networking.k8s.io" && k != "BackendTLSPolicy";
+    let left = gateway.unclaimed(claimed).expect("one kind is nobody's");
+    assert_eq!(kinds_of(&left), ["BackendTLSPolicy"]);
+    let snapshots = group(
+        "snapshot.storage.k8s.io",
+        &[("VolumeSnapshot", "volumesnapshots")],
+    );
+    assert!(
+        snapshots.unclaimed(|_, _| true).is_none(),
+        "a fully claimed group is not shown"
+    );
+    assert_eq!(snapshots.unclaimed(|_, _| false), Some(snapshots));
+}
+
+#[test]
+fn the_search_matches_the_group_or_its_kinds_ignoring_case() {
+    let argo = group(
+        "argoproj.io",
+        &[
+            ("Application", "applications"),
+            ("AppProject", "appprojects"),
+            ("Rollout", "rollouts"),
+        ],
+    );
+    // The group's name matches: every kind.
+    assert_eq!(argo.matching("ARGO").map(|g| g.kinds.len()), Some(3));
+    // A kind or its plural matches: those kinds only.
+    assert_eq!(kinds_of(&argo.matching("roll").unwrap()), ["Rollout"]);
+    assert_eq!(kinds_of(&argo.matching("appproj").unwrap()), ["AppProject"]);
+    assert_eq!(
+        kinds_of(&argo.matching("  app ").unwrap()),
+        ["Application", "AppProject"],
+        "trimmed"
+    );
+    assert!(argo.matching("cert").is_none());
+    assert_eq!(argo.matching(""), Some(argo), "no query keeps all");
+}
