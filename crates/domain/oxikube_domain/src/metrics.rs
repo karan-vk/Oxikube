@@ -40,6 +40,8 @@ pub enum MissingReason {
     /// The user may not read metrics (HTTP 403 on `metrics.k8s.io`, or no rights for this subject).
     Forbidden,
     /// Any other reason: an unreadable or absent quantity in an otherwise served object.
+    /// (Named `unavailable` on the wire before the 503 case got its own variant.)
+    #[serde(alias = "unavailable")]
     Other,
 }
 
@@ -125,7 +127,8 @@ pub struct MetricsSample {
     /// Working-set memory in bytes.
     pub memory: Reading,
     /// For a pod: the per-container readings behind the summed `cpu` / `memory`, in the order the
-    /// server lists them. Empty for nodes and for samples that carry only a total.
+    /// server lists them. The total is all-or-nothing (missing when any container is unreadable,
+    /// never understated) while each entry stands alone. Empty for nodes and for samples that carry only a total.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub containers: Vec<ContainerUsage>,
 }
@@ -366,6 +369,12 @@ mod tests {
                 serde_json::json!(name)
             );
         }
+    }
+
+    #[test]
+    fn the_old_unavailable_wire_name_still_reads_as_other() {
+        let r: MissingReason = serde_json::from_value(serde_json::json!("unavailable")).unwrap();
+        assert_eq!(r, MissingReason::Other);
     }
 
     #[test]

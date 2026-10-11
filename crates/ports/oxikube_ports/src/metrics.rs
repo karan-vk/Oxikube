@@ -63,7 +63,9 @@ impl MetricsOutcome {
 /// [`Network`](oxikube_domain::ErrorKind::Network) /
 /// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for failures of the call itself.
 /// A cluster without metrics-server (404), a metrics APIService that does not answer (503) and
-/// an RBAC denial (403) are [`MetricsOutcome::Unavailable`], not errors.
+/// an RBAC denial (403) are [`MetricsOutcome::Unavailable`], not errors. A pod query over several
+/// namespaces is one outcome: a denial in any of them is `Forbidden` for the whole call, so a UI
+/// asking for a partial view should query the namespaces it can read.
 #[async_trait]
 pub trait MetricsPort: Send + Sync {
     /// One sample per node of `cluster`.

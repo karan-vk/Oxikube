@@ -42,43 +42,44 @@ impl Dimension {
     }
 }
 
-/// Sums one dimension over `usages` exactly, or `None` when any entry is absent or unreadable
-/// (a partial sum would understate the pod).
-fn sum<'a>(
-    mut usages: impl Iterator<Item = &'a RawUsage>,
-    dimension: Dimension,
-) -> Option<Quantity> {
-    usages.try_fold(Quantity::ZERO, |total, usage| {
-        let quantity = Quantity::parse(dimension.text(usage)?).ok()?;
-        total.checked_add(&quantity)
-    })
+/// One usage field parsed once: the exact quantity, or `None` when absent or unreadable.
+fn parse(usage: &RawUsage, dimension: Dimension) -> Option<Quantity> {
+    Quantity::parse(dimension.text(usage)?).ok()
 }
 
-fn reading<'a>(
-    usages: impl Iterator<Item = &'a RawUsage> + Clone,
-    dimension: Dimension,
-) -> Reading {
-    if usages.clone().next().is_none() {
-        // metrics-server has registered the pod but no container has been scraped yet.
-        return Reading::Missing(MissingReason::NotYetAvailable);
-    }
-    match sum(usages, dimension).and_then(|total| dimension.to_units(&total)) {
+/// A single reading in the port's unit (unreadable, negative or oversized values are `Other`).
+fn reading_of(quantity: Option<&Quantity>, dimension: Dimension) -> Reading {
+    match quantity.and_then(|q| dimension.to_units(q)) {
         Some(units) => Reading::Value(units),
         None => Reading::Missing(MissingReason::Other),
     }
 }
 
+/// A pod's total for one dimension, from the quantities already parsed per container: the exact
+/// sum, or missing when any container is unreadable (a partial sum would understate the pod).
+fn total_of(parsed: &[Option<Quantity>], dimension: Dimension) -> Reading {
+    if parsed.is_empty() {
+        // metrics-server has registered the pod but no container has been scraped yet.
+        return Reading::Missing(MissingReason::NotYetAvailable);
+    }
+    let sum = parsed
+        .iter()
+        .try_fold(Quantity::ZERO, |total, q| total.checked_add(q.as_ref()?));
+    reading_of(sum.as_ref(), dimension)
+}
+
 /// The sample of one node. `fetched_at` stands in when the server sent no readable timestamp.
 pub(super) fn node_sample(raw: RawNode, fetched_at: Timestamp) -> MetricsSample {
-    let usage = std::iter::once(&raw.usage);
+    let cpu = parse(&raw.usage, Dimension::Cpu);
+    let memory = parse(&raw.usage, Dimension::Memory);
     MetricsSample {
         subject: MetricsSubject::Node {
             node: raw.name.into(),
         },
         ts: raw.timestamp.unwrap_or(fetched_at),
         window: raw.window,
-        cpu: reading(usage.clone(), Dimension::Cpu),
-        memory: reading(usage, Dimension::Memory),
+        cpu: reading_of(cpu.as_ref(), Dimension::Cpu),
+        memory: reading_of(memory.as_ref(), Dimension::Memory),
         containers: Vec::new(),
     }
 }
@@ -91,23 +92,32 @@ pub(super) fn pod_sample(cluster: &ClusterId, raw: RawPod, fetched_at: Timestamp
         raw.namespace,
         raw.name,
     );
-    let usages = raw.containers.iter().map(|c| &c.usage);
+    // Each quantity is parsed once; the pod total and the container entries both use it.
+    let cpus: Vec<Option<Quantity>> = raw
+        .containers
+        .iter()
+        .map(|c| parse(&c.usage, Dimension::Cpu))
+        .collect();
+    let memories: Vec<Option<Quantity>> = raw
+        .containers
+        .iter()
+        .map(|c| parse(&c.usage, Dimension::Memory))
+        .collect();
     let (cpu, memory) = (
-        reading(usages.clone(), Dimension::Cpu),
-        reading(usages, Dimension::Memory),
+        total_of(&cpus, Dimension::Cpu),
+        total_of(&memories, Dimension::Memory),
     );
     // One entry per container the server lists (init containers are never served), kept so the
-    // detail panel can break the pod's total down.
+    // detail panel can break the pod's total down. A container may read while the total does
+    // not: the total is all-or-nothing, the entries are independent.
     let containers = raw
         .containers
         .into_iter()
-        .map(|c| {
-            let usage = std::iter::once(&c.usage);
-            ContainerUsage {
-                name: c.name.into(),
-                cpu: reading(usage.clone(), Dimension::Cpu),
-                memory: reading(usage, Dimension::Memory),
-            }
+        .zip(cpus.iter().zip(&memories))
+        .map(|(c, (cpu, memory))| ContainerUsage {
+            name: c.name.into(),
+            cpu: reading_of(cpu.as_ref(), Dimension::Cpu),
+            memory: reading_of(memory.as_ref(), Dimension::Memory),
         })
         .collect();
     MetricsSample {
