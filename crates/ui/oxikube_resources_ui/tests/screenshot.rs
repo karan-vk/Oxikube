@@ -24,6 +24,10 @@
 //! - `detail_service_dark`, `detail_service_light` (`service`): the detail drawer of a Service with
 //!   its ports ("Open in browser" on the TCP ones), EndpointSlices with ready counts and backing
 //!   pods (E12-S13).
+//! - `network_ingress_*`, `network_policy_*`, `network_httproute_*` (`network`, dark and light): the Network
+//!   panels of an Ingress (rules table, TLS secret, load balancer), a NetworkPolicy (peers, ports, the
+//!   IP block exception, default-deny egress) and an HTTPRoute (the parent that refused it, the
+//!   unresolved backend), with the generic rows below (E12-S14).
 //! - `exec_picker_dark`, `exec_picker_light` (`exec`): the container picker of a pod with three
 //!   containers, the default one selected (E09-S08; the generic picker of E11-S02 since).
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
@@ -72,6 +76,8 @@ mod crd;
 mod detail;
 #[path = "screenshot/exec.rs"]
 mod exec;
+#[path = "screenshot/network.rs"]
+mod network;
 #[path = "screenshot/pods.rs"]
 mod pods;
 #[path = "screenshot/service.rs"]
@@ -255,6 +261,7 @@ fn main() -> ExitCode {
         detail::run(),
         config::run(),
         crd::run(),
+        network::run(),
         exec::run(),
         pods::run(),
         service::run(),

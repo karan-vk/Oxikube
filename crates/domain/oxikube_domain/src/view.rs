@@ -17,6 +17,8 @@
 //! * [`ServiceSummary`], [`EndpointSliceSummary`] and [`EndpointsSummary`] for Services and where
 //!   their traffic goes (E12-S13): kubectl's port and external-IP text, the load balancer state,
 //!   ready endpoint counts, named target ports resolved against a pod.
+//! * [`network`] for the Network section: Ingress, IngressClass, NetworkPolicy and the Gateway API
+//!   kinds (E12-S14).
 //! * [`Health`] and [`health_of`]: the one rule for "is this object healthy" behind overview
 //!   tiles and sidebar counts.
 //!
@@ -47,6 +49,7 @@ mod crd;
 mod endpoints;
 mod health;
 mod job;
+pub mod network;
 mod node;
 mod pod;
 mod pod_health;

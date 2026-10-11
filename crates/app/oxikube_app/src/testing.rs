@@ -245,6 +245,14 @@ impl Harness {
         })
     }
 
+    /// The standard harness with the real `ingressclass::SetDefault` handler (E12-S14) over the
+    /// fake resource ports.
+    pub fn with_ingress_class_handler() -> Self {
+        Self::with_extra(|reg, _, sessions| {
+            crate::ingress_class::register_commands(reg, sessions.clone())
+        })
+    }
+
     /// The standard harness with the real workload handlers (`cronjob::*`, `job::*` of E12-S08
     /// and `workload::Scale` of E12-S04) in place of the recording test one, over the fake
     /// resource ports.

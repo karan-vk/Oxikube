@@ -21,6 +21,7 @@ mod keyboard;
 mod keymap;
 mod logs;
 mod metrics;
+mod network;
 mod node_shell;
 mod palette;
 mod resources;

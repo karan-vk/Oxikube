@@ -122,6 +122,7 @@ pub fn init(cx: &mut App) {
     workloads::init(cx);
     config::init(cx);
     network::init(cx);
+    crate::kinds::network::init(cx);
     storage::init(cx);
     namespaces::init(cx);
     super::crd::init(cx);

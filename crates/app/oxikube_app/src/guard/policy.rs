@@ -153,6 +153,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NodeCordon { target }
         | Command::NodeShell { target }
         | Command::NodeUncordon { target }
+        | Command::IngressClassSetDefault { target, .. }
         | Command::NodeDrain { target, .. }
         | Command::CronJobTrigger { target }
         | Command::CronJobSuspend { target }
@@ -258,7 +259,7 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
     if let Command::WorkloadScale { target, replicas } = command {
         return scale_summary(target, *replicas, context);
     }
-    match command.target() {
+    let base = match command.target() {
         Some(target) => {
             let object = match target.namespace() {
                 Some(ns) => format!("{ns}/{}", target.name),
@@ -267,6 +268,14 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
             format!("{}: {} {object} on {context}", meta.title, target.gvk.kind)
         }
         None => format!("{} on {context}", meta.title),
+    };
+    match command {
+        // Name the second write, so the user confirms what else changes.
+        Command::IngressClassSetDefault {
+            clear_previous: true,
+            ..
+        } => format!("{base}. Clears the default flag of the other Ingress classes."),
+        _ => base,
     }
 }
 

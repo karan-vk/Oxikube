@@ -55,6 +55,7 @@ mod cronjob;
 mod detail;
 pub mod endpoints;
 pub(crate) mod job;
+pub mod network;
 mod parts;
 pub mod pods;
 pub mod service;
@@ -84,6 +85,7 @@ pub fn row_actions() -> Vec<RowActionSpec> {
         .into_iter()
         .chain(cronjob::row_actions())
         .chain(scale_row_actions())
+        .chain(network::network_row_actions())
         .collect()
 }
 

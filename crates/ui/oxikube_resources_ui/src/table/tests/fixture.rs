@@ -62,6 +62,12 @@ fn actions_rig(
             crate::register_commands(r, sink.clone())
         })
         .unwrap();
+    // `ingressclass::SetDefault` (E12-S14): the real handler behind the real guard.
+    registry
+        .install("oxikube_app::ingress_class", |r| {
+            oxikube_app::ingress_class::register_commands(r, sessions.clone())
+        })
+        .unwrap();
     registry
         .register(
             *command::lookup(CommandId::POD_VIEW_LOGS).unwrap(),

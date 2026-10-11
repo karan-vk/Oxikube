@@ -623,9 +623,6 @@ fn services_are_registered_under_network_with_their_panel_and_actions(cx: &mut T
             !KindSpecs::detail_for(cx, &gvk).is_generic(),
             "the panel is registered"
         );
-        // Another Network kind keeps the generic detail until its own story.
-        let ingress = Gvk::new("networking.k8s.io", "v1", "Ingress");
-        assert!(KindSpecs::detail_for(cx, &ingress).is_generic());
     });
 }
 

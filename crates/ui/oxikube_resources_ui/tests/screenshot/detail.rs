@@ -25,8 +25,8 @@ use serde_json::json;
 
 use super::{Ignore, check, headless};
 
-const WIDTH: f32 = 480.0;
-const HEIGHT: f32 = 760.0;
+pub(super) const WIDTH: f32 = 480.0;
+pub(super) const HEIGHT: f32 = 760.0;
 
 fn web_deployment() -> Resource {
     let mut json = deployment()
@@ -88,7 +88,11 @@ fn render(light: bool, tab: DetailTab) -> anyhow::Result<RgbaImage> {
     render_of(web_deployment(), light, tab)
 }
 
-fn render_of(object: Resource, light: bool, tab: DetailTab) -> anyhow::Result<RgbaImage> {
+pub(super) fn render_of(
+    object: Resource,
+    light: bool,
+    tab: DetailTab,
+) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
@@ -118,6 +122,9 @@ fn render_of(object: Resource, light: bool, tab: DetailTab) -> anyhow::Result<Rg
         };
         oxikube_ui::set_tokens(cx, tokens);
         oxikube_runtime::init_deterministic(cx);
+        // The Network kinds' own panels (E12-S14); a Deployment has none, so its pictures are
+        // unchanged.
+        oxikube_resources_ui::kinds::network::init(cx);
         cx.set_reduce_motion(true);
         let clock: Arc<dyn ClockPort> = clock;
         let deps = DetailDeps {

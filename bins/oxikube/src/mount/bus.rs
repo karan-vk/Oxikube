@@ -152,6 +152,11 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_app::apply", |r| {
         oxikube_app::apply::register_commands(r, parts.sessions.clone())
     })?;
+    // `ingressclass::SetDefault` (E12-S14): a low-risk guarded mutation, the Network section's only
+    // one; it reads the cluster's classes to clear the flag on the previous default.
+    registry.install("oxikube_app::ingress_class", |r| {
+        oxikube_app::ingress_class::register_commands(r, parts.sessions.clone())
+    })?;
     registry.install("oxikube_app::workloads", |r| {
         oxikube_app::workloads::register_commands(r, parts.sessions.clone())
     })?;

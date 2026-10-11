@@ -3,6 +3,7 @@
 //! * `pods`: the pod status, ready and restarts rules, with the fixtures and builders.
 //! * `config_kinds`: the Config section's kinds (E12-S12), and declarative columns against the view-models.
 //! * `kinds`: one table-driven case per kind (fixture JSON to cell texts) for the ~40 kinds.
+//! * `network`: the Network section (E12-S14): Ingress, IngressClass, NetworkPolicy, Gateway API.
 //! * `registry`: invariants of the catalogue (ids, wide order, feed policy, metrics, memo).
 //! * `sorting`: sort keys compare by value, not text.
 //! * `table`: the Table provider on recorded server responses.
@@ -10,6 +11,7 @@
 mod config_kinds;
 mod kinds;
 mod kinds_more;
+mod network;
 mod pods;
 mod registry;
 mod sorting;

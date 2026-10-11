@@ -4,7 +4,9 @@
 
 mod batch;
 mod discovery;
+mod gateway;
 mod misc;
+mod network;
 mod node;
 mod pod;
 mod rbac;
@@ -19,8 +21,10 @@ use oxikube_domain::{OwnerRef, Resource};
 
 pub(super) use batch::*;
 pub(super) use discovery::*;
+pub(super) use gateway::*;
 pub use misc::hpa_state_tone;
 pub(super) use misc::*;
+pub(super) use network::*;
 pub(super) use node::*;
 pub(super) use pod::*;
 pub(super) use rbac::*;
