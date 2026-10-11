@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, Context, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
-    WeakEntity, Window, div, px,
+    AnyElement, AnyView, App, AppContext as _, Context, Entity, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Task, WeakEntity, Window, div, px,
 };
 use oxikube_app::{PvcUsage as _, PvcUsageFeed, UsageStatus};
 use oxikube_domain::command::Command;
@@ -85,18 +85,41 @@ impl StoragePanel {
         &self.content
     }
 
+    /// Whether the panel's Pods feed reads `store`.
+    #[cfg(test)]
+    pub(in crate::kinds::storage) fn reads(
+        &self,
+        store: &oxikube_app::store::ResourceStore,
+    ) -> bool {
+        self.usage.as_ref().is_some_and(|feed| feed.reads(store))
+    }
+
     /// The "Mounted by" list now shown, for a claim.
     #[cfg(test)]
     pub(in crate::kinds::storage) fn usage_block(&self) -> Option<&Block> {
         self.usage_block.as_ref()
     }
 
+    /// Whether the feed in hand reads a store the session has since replaced: a reconnect builds
+    /// a new store, and the old feed's Pods are frozen at the last state it saw.
+    fn feed_is_stale(&self, detail: &Entity<DetailView>, cx: &App) -> bool {
+        let Some(feed) = &self.usage else {
+            return false;
+        };
+        detail
+            .read(cx)
+            .columns_context()
+            .store
+            .is_some_and(|store| !feed.reads(&store))
+    }
+
     /// Rebuilds the content when the object has a new version, and the claim's Pods when the
-    /// session gained a store.
+    /// session gained a store or replaced it.
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let Some(detail) = self.detail.upgrade() else {
             return;
         };
+        let stale = self.feed_is_stale(&detail, cx);
         let (key, content, claim) = {
             let view = detail.read(cx);
             let Some(resource) = view.resource() else {
@@ -108,6 +131,7 @@ impl StoragePanel {
             );
             if self.built_from.as_ref() == Some(&key)
                 && self.usage.is_some() == is_claim(&resource.kind)
+                && !stale
             {
                 return;
             }
@@ -126,7 +150,7 @@ impl StoragePanel {
             if self._poll.is_none() {
                 self._poll = Some(Self::poll_task(cx));
             }
-            if self.usage.is_none() {
+            if self.usage.is_none() || stale {
                 self.usage = usage_feed(&env);
             }
             self.usage_version = u64::MAX;
@@ -177,15 +201,15 @@ impl StoragePanel {
 
     /// Looks for a change of the mounting Pods; redraws only when there is one.
     fn poll_usage(&mut self, cx: &mut Context<Self>) {
-        let is_claim_detail = self
-            .detail
-            .upgrade()
-            .is_some_and(|detail| is_claim(&detail.read(cx).target().gvk));
-        if !is_claim_detail {
+        let Some(detail) = self.detail.upgrade() else {
+            return;
+        };
+        if !is_claim(&detail.read(cx).target().gvk) {
             return;
         }
-        // A session that connected after the panel opened gets its feed now.
-        if self.usage.is_none() {
+        // A session that connected after the panel opened gets its feed now, and one that
+        // reconnected gets a feed over its new store.
+        if self.usage.is_none() || self.feed_is_stale(&detail, cx) {
             self.built_from = None;
             self.refresh(cx);
             return;

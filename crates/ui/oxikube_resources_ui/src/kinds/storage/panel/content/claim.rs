@@ -58,6 +58,9 @@ pub fn usage_block(usage: &dyn PvcUsage, namespace: &str, claim: &str) -> Block 
     match usage.status() {
         UsageStatus::Warming => note("Reading the pods…".to_owned()),
         UsageStatus::Unavailable(reason) => note(format!("The pods cannot be read: {reason}")),
+        UsageStatus::Ready if !usage.covers(namespace) => note(format!(
+            "The pods of {namespace} are not read (outside the selected namespaces)."
+        )),
         UsageStatus::Ready => {
             let pods = usage.users(namespace, claim);
             if pods.is_empty() {

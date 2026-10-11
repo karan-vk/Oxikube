@@ -196,3 +196,26 @@ fn the_pods_follow_the_namespace_selection() {
     );
     drop(feed);
 }
+
+#[test]
+fn the_index_covers_only_the_selected_namespaces() {
+    let mut rig = Rig::new();
+    let feed = PvcUsageFeed::start(&rig.store, &rig.sessions.manager);
+    let index = feed.index().clone();
+    rig.settle();
+    assert!(index.covers("shop"), "all namespaces to begin with");
+
+    rig.sessions
+        .manager
+        .set_namespace_selection(&id(CLUSTER), NamespaceSelection::single("default"))
+        .expect("selects");
+    rig.settle();
+    assert!(index.covers("default"));
+    assert!(!index.covers("shop"));
+    assert_eq!(
+        index.count("shop", "data"),
+        None,
+        "a claim outside the selection has unknown, not zero, users"
+    );
+    drop(feed);
+}

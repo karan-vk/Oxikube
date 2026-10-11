@@ -1,8 +1,10 @@
 //! The detail panels.
 
+use futures::executor::block_on;
 use gpui::TestAppContext;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::session::NamespaceSelection;
 use oxikube_testkit::storage::{pod_mounting, pvc, storage_class};
 use serde_json::json;
 
@@ -94,6 +96,80 @@ fn a_claim_nothing_mounts_says_so(cx: &mut TestAppContext) {
         .unwrap();
     assert_eq!(usage.lines[0].text, "No pod mounts this claim.");
     assert!(usage.note);
+}
+
+#[gpui::test]
+fn a_claim_outside_the_namespace_selection_does_not_claim_that_no_pod_mounts_it(
+    cx: &mut TestAppContext,
+) {
+    let mut f = storage_window(
+        cx,
+        vec![
+            pvc("data").namespace("shop").build(),
+            pod_mounting("web-0", "shop", &["data"]),
+        ],
+    );
+    // The selection is narrower than the claim's namespace (the claim was opened from a link).
+    f.sessions
+        .set_namespace_selection(&cluster(), NamespaceSelection::single("default"))
+        .expect("selects");
+    f.settle();
+    let view = open_detail(&mut f, &claim_ref("data"));
+    let panel = panel_of(&mut f, &view);
+    wait(&mut f, 1);
+    let usage = f
+        .vcx
+        .update(|_, cx| panel.read(cx).usage_block().cloned())
+        .expect("a claim has the block");
+    assert!(
+        usage.note && usage.lines[0].text.contains("not read"),
+        "unknown, not a false zero: {:?}",
+        usage.lines[0].text
+    );
+    assert_ne!(usage.lines[0].text, "No pod mounts this claim.");
+}
+
+#[gpui::test]
+fn the_claim_panel_follows_the_pods_of_the_new_store_after_a_reconnect(cx: &mut TestAppContext) {
+    let mut f = storage_window(
+        cx,
+        vec![
+            pvc("data").namespace("shop").build(),
+            pod_mounting("web-0", "shop", &["data"]),
+        ],
+    );
+    let view = open_detail(&mut f, &claim_ref("data"));
+    let panel = panel_of(&mut f, &view);
+    wait(&mut f, 1);
+    let store = |f: &crate::table::tests::fixture::Fixture| {
+        let session = f.sessions.get(&cluster()).expect("a session");
+        f.deps.stores.for_session(&session).expect("a store")
+    };
+    let old = store(&f);
+    assert!(f.vcx.update(|_, cx| panel.read(cx).reads(&old)));
+
+    // A real reconnect hands out new ports, so the registry builds a new store; the fake keeps
+    // its ports, so the old store is forgotten by hand.
+    let sessions = f.sessions.clone();
+    sessions.disconnect(&cluster()).expect("disconnect");
+    f.settle();
+    f.deps.stores.remove(&cluster());
+    block_on(sessions.connect(&cluster())).expect("connect");
+    f.settle();
+    wait(&mut f, 2);
+
+    let new = store(&f);
+    assert!(!old.is_same(&new), "the reconnect built a new store");
+    assert!(
+        f.vcx.update(|_, cx| panel.read(cx).reads(&new)),
+        "the panel moved its Pods feed to the new store"
+    );
+    assert!(!f.vcx.update(|_, cx| panel.read(cx).reads(&old)));
+    let usage = f
+        .vcx
+        .update(|_, cx| panel.read(cx).usage_block().cloned())
+        .expect("the block");
+    assert_eq!(usage.lines[0].text, "web-0");
 }
 
 #[gpui::test]

@@ -77,7 +77,9 @@ async fn follow(
     index: Arc<PvcUsageIndex>,
 ) {
     let gvk = Gvk::new("", "v1", "Pod");
-    let mut subscription = store.subscribe(StoreQuery::new(gvk, pods_scope(&sessions, &cluster)));
+    let scope = pods_scope(&sessions, &cluster);
+    index.set_scope(scope.clone());
+    let mut subscription = store.subscribe(StoreQuery::new(gvk, scope));
     let mut updates = sessions.subscribe();
     loop {
         select_biased! {
@@ -91,6 +93,7 @@ async fn follow(
                 Some(_) => {
                     let scope = pods_scope(&sessions, &cluster);
                     if scope != subscription.query().scope {
+                        index.set_scope(scope.clone());
                         subscription.rescope(scope);
                     }
                 }

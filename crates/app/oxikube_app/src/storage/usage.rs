@@ -17,6 +17,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use oxikube_domain::session::WatchScope;
 use oxikube_domain::view::storage::{pod_claims, pod_is_active};
 use parking_lot::RwLock;
 
@@ -40,12 +41,19 @@ pub trait PvcUsage: Send + Sync {
     /// Whether usage is known: [`UsageStatus::Ready`] once the Pods are listed.
     fn status(&self) -> UsageStatus;
 
+    /// Whether the Pods of `namespace` are read at all: the feed follows the session's namespace
+    /// selection, so a claim outside it (opened from a link or the palette) has no Pods here, and
+    /// an empty answer for it would be a false zero.
+    fn covers(&self, namespace: &str) -> bool;
+
     /// How many active Pods mount the claim `claim` of `namespace`; `None` while usage is not
-    /// known, so a view shows nothing rather than a false zero.
+    /// known or `namespace` is not [covered](Self::covers), so a view shows nothing rather than a
+    /// false zero.
     fn count(&self, namespace: &str, claim: &str) -> Option<usize>;
 
     /// The names of the active Pods that mount the claim, sorted; empty while usage is not
-    /// known (check [`status`](Self::status) to tell "none" from "not known").
+    /// known or `namespace` is not covered (check [`status`](Self::status) and
+    /// [`covers`](Self::covers) to tell "none" from "not known").
     fn users(&self, namespace: &str, claim: &str) -> Vec<Arc<str>>;
 
     /// A number that changes whenever an answer may have: a view polls it (once a second) to
@@ -58,6 +66,8 @@ type Claims = HashMap<Arc<str>, HashMap<Arc<str>, BTreeSet<Arc<str>>>>;
 
 struct State {
     status: UsageStatus,
+    /// The namespaces the Pods are read from (the feed's current scope).
+    scope: WatchScope,
     claims: Claims,
     /// The Pods feed's rows as the subscription last had them: the ops are positions, so a
     /// removed or replaced row is found here.
@@ -92,11 +102,26 @@ impl PvcUsageIndex {
         Self {
             state: RwLock::new(State {
                 status: UsageStatus::Warming,
+                scope: WatchScope::Cluster,
                 claims: Claims::new(),
                 rows: Vec::new(),
             }),
             version: AtomicU64::new(0),
         }
+    }
+
+    /// Sets the namespaces the Pods are read from. A change makes everything known so far
+    /// unreliable until the new scope's snapshot lands, so the index is
+    /// [`Warming`](UsageStatus::Warming) again meanwhile.
+    pub fn set_scope(&self, scope: WatchScope) {
+        let mut state = self.state.write();
+        if state.scope == scope {
+            return;
+        }
+        state.scope = scope;
+        state.status = UsageStatus::Warming;
+        drop(state);
+        self.version.fetch_add(1, Ordering::Release);
     }
 
     /// Applies one delta of the Pods subscription.
@@ -170,9 +195,13 @@ impl PvcUsage for PvcUsageIndex {
         self.state.read().status.clone()
     }
 
+    fn covers(&self, namespace: &str) -> bool {
+        covered(&self.state.read().scope, namespace)
+    }
+
     fn count(&self, namespace: &str, claim: &str) -> Option<usize> {
         let state = self.state.read();
-        if state.status != UsageStatus::Ready {
+        if state.status != UsageStatus::Ready || !covered(&state.scope, namespace) {
             return None;
         }
         Some(
@@ -186,7 +215,7 @@ impl PvcUsage for PvcUsageIndex {
 
     fn users(&self, namespace: &str, claim: &str) -> Vec<Arc<str>> {
         let state = self.state.read();
-        if state.status != UsageStatus::Ready {
+        if state.status != UsageStatus::Ready || !covered(&state.scope, namespace) {
             return Vec::new();
         }
         state
@@ -199,6 +228,13 @@ impl PvcUsage for PvcUsageIndex {
 
     fn version(&self) -> u64 {
         self.version.load(Ordering::Acquire)
+    }
+}
+
+fn covered(scope: &WatchScope, namespace: &str) -> bool {
+    match scope {
+        WatchScope::Cluster => true,
+        WatchScope::Namespaces(names) => names.iter().any(|n| n == namespace),
     }
 }
 

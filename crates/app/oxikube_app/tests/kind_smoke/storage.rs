@@ -12,7 +12,8 @@
 //! * the "used by" index follows a Pod that mounts a claim in the test's namespace.
 //!
 //! Every namespaced object lives in the test's own `oxi-test-<rand>` namespace; the two cluster
-//! scoped StorageClasses carry the namespace's name and are deleted at the end.
+//! scoped StorageClasses carry the namespace's name and are deleted when the test ends, also when
+//! it fails (`ClassGuard`, as `TestNamespace` does for the namespace).
 
 use std::sync::Arc;
 
@@ -43,6 +44,29 @@ use oxikube_testkit::{FakeClusterSourcePort, FakeStatePort, images};
 
 use crate::clock::TokioClock;
 use crate::cluster::{Kind, catalog_entry};
+
+/// Deletes cluster-scoped StorageClasses when dropped (also on panic), best effort: a test that
+/// fails half way must not leave classes on the shared cluster.
+struct ClassGuard {
+    context: String,
+    names: Vec<String>,
+}
+
+impl Drop for ClassGuard {
+    fn drop(&mut self) {
+        let _ = std::process::Command::new("kubectl")
+            .arg("--context")
+            .arg(&self.context)
+            .args([
+                "delete",
+                "storageclass",
+                "--ignore-not-found",
+                "--wait=false",
+            ])
+            .args(&self.names)
+            .output();
+    }
+}
 
 fn class(name: &str, expandable: bool) -> StorageClass {
     StorageClass {
@@ -142,6 +166,11 @@ async fn resize_set_default_and_used_by_against_a_kind_cluster() {
         format!("{}-grow", ns.name()),
         format!("{}-fixed", ns.name()),
     );
+    // Armed before the classes exist: deleting a class that was never created is a no-op.
+    let _class_guard = ClassGuard {
+        context: kind.context.to_string(),
+        names: vec![growable.clone(), fixed.clone()],
+    };
     let classes = Api::<StorageClass>::all(admin_client.clone());
     let claims = Api::<PersistentVolumeClaim>::namespaced(admin_client.clone(), ns.name());
     let pods = Api::<Pod>::namespaced(admin_client.clone(), ns.name());
@@ -373,11 +402,4 @@ async fn resize_set_default_and_used_by_against_a_kind_cluster() {
     )
     .await;
     drop(feed);
-
-    for name in [&growable, &fixed] {
-        classes
-            .delete(name, &DeleteParams::default())
-            .await
-            .expect("delete the class");
-    }
 }

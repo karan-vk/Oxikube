@@ -248,3 +248,45 @@ fn a_pending_resize_shows_both_sizes_in_the_size_column() {
     let size = provider.cell(&growing, &ColumnId::new("size"), now);
     assert_eq!(size.display(), "10Gi → 20Gi");
 }
+
+#[test]
+fn a_namespace_outside_the_scope_is_unknown_not_zero() {
+    use oxikube_domain::session::WatchScope;
+    let index = PvcUsageIndex::new();
+    index.set_scope(WatchScope::Namespaces(vec!["default".to_owned()]));
+    index.apply(&snapshot(vec![pod_mounting("web-0", "default", &["data"])]));
+    assert_eq!(index.status(), UsageStatus::Ready);
+    assert!(index.covers("default"));
+    assert_eq!(index.count("default", "data"), Some(1));
+    assert_eq!(index.count("default", "other"), Some(0));
+    assert!(!index.covers("shop"));
+    assert_eq!(
+        index.count("shop", "data"),
+        None,
+        "shop's Pods are not read"
+    );
+    assert!(index.users("shop", "data").is_empty());
+}
+
+#[test]
+fn a_new_scope_makes_the_index_warm_until_its_pods_are_listed() {
+    use oxikube_domain::session::WatchScope;
+    let index = PvcUsageIndex::new();
+    index.apply(&snapshot(vec![pod_mounting("web-0", "default", &["data"])]));
+    let before = index.version();
+    index.set_scope(WatchScope::Namespaces(vec!["shop".to_owned()]));
+    assert_eq!(index.status(), UsageStatus::Warming);
+    assert_ne!(index.version(), before, "a view redraws");
+    assert_eq!(
+        index.count("shop", "data"),
+        None,
+        "not a zero from the old scope"
+    );
+    index.apply(&snapshot(vec![]));
+    assert_eq!(index.count("shop", "data"), Some(0));
+    // The same scope again changes nothing.
+    let version = index.version();
+    index.set_scope(WatchScope::Namespaces(vec!["shop".to_owned()]));
+    assert_eq!(index.version(), version);
+    assert_eq!(index.status(), UsageStatus::Ready);
+}

@@ -107,6 +107,43 @@ fn the_audit_record_has_the_old_and_the_new_size() {
 }
 
 #[test]
+fn the_audit_record_has_the_old_size_when_the_caller_does_not_name_it() {
+    let h = harness();
+    expandable_cluster(&h);
+    // An MCP agent sends no `from`: the guard reads the live claim for the record.
+    for from in [None, Some("  ")] {
+        script_patches(
+            &h,
+            &pvc("data").namespace("shop").requests("20Gi").build(),
+            2,
+        );
+        h.confirm_and_run(resize("shop", "20Gi", from), ctx(Initiator::Agent))
+            .unwrap();
+    }
+    let records = h.audit();
+    assert_eq!(records.len(), 2);
+    for record in &records {
+        assert_eq!(record.detail.as_deref(), Some("from=10Gi to=20Gi"));
+    }
+}
+
+#[test]
+fn the_audit_record_says_only_the_new_size_when_the_claim_cannot_be_read() {
+    let h = harness();
+    expandable_cluster(&h);
+    let missing = Command::PvcResize {
+        target: super::claim_ref("shop", "gone"),
+        size: "20Gi".into(),
+        from: None,
+    };
+    h.confirm_and_run(missing, ctx(Initiator::Agent))
+        .expect_err("the claim is not there");
+    let records = h.audit();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].detail.as_deref(), Some("to=20Gi"));
+}
+
+#[test]
 fn the_guard_asks_a_simple_confirmation_naming_the_claim_and_the_sizes() {
     let h = harness();
     expandable_cluster(&h);

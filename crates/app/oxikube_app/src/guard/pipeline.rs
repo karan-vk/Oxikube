@@ -44,8 +44,9 @@ impl MutationGuard {
         handler: Arc<dyn CommandHandler>,
     ) -> Result<Outcome, DispatchError> {
         let resolved = self.resolved_target(&command, ctx.cluster.as_ref()).await;
+        let resolved_detail = self.resolved_detail(&command, ctx.cluster.as_ref()).await;
         let (cluster, context, target, writer, detail) =
-            match self.admit(meta, &command, &ctx, resolved) {
+            match self.admit(meta, &command, &ctx, resolved, resolved_detail) {
                 Admission::Proceed {
                     cluster,
                     context,
@@ -131,6 +132,13 @@ impl MutationGuard {
             Some(target) => target,
             None => policy::audit_target(&pending.command, &pending.cluster),
         };
+        let detail = match self
+            .resolved_detail(&pending.command, Some(&pending.cluster))
+            .await
+        {
+            Some(detail) => Some(detail),
+            None => policy::audit_detail(&pending.command),
+        };
         let record = AuditLog::describe(
             self.audit.entry(
                 &pending.who,
@@ -140,7 +148,7 @@ impl MutationGuard {
                 pending.dry_run,
                 AuditOutcome::Cancelled,
             ),
-            policy::audit_detail(&pending.command).as_deref(),
+            detail.as_deref(),
         );
         self.audit
             .record(record)
@@ -160,15 +168,28 @@ impl MutationGuard {
         crate::apply::resolved_audit_target(command, cluster, &self.sessions).await
     }
 
+    /// What a `pvc::Resize` that does not name its old size should say in its audit record: the
+    /// live size, read as the handler reads it; `None` for any other command.
+    async fn resolved_detail(
+        &self,
+        command: &Command,
+        context_cluster: Option<&ClusterId>,
+    ) -> Option<String> {
+        let cluster = policy::cluster_of(command).or(context_cluster)?;
+        crate::storage::resolved_audit_detail(command, cluster, &self.sessions).await
+    }
+
     /// The synchronous, in-memory checks: cluster, session, read-only, connection,
-    /// confirmation. `resolved` is the audit target when it was looked up already
-    /// ([`resolved_target`](Self::resolved_target)).
+    /// confirmation. `resolved` is the audit target and `resolved_detail` the audit detail when
+    /// they were looked up already ([`resolved_target`](Self::resolved_target),
+    /// [`resolved_detail`](Self::resolved_detail)).
     fn admit(
         &self,
         meta: &CommandMeta,
         command: &Command,
         ctx: &DispatchContext,
         resolved: Option<ResourceRef>,
+        resolved_detail: Option<String>,
     ) -> Admission {
         let Some(cluster) = policy::cluster_of(command)
             .or(ctx.cluster.as_ref())
@@ -180,7 +201,9 @@ impl MutationGuard {
             };
         };
         let target = resolved.unwrap_or_else(|| policy::audit_target(command, &cluster));
-        let detail = policy::audit_detail(command);
+        let detail = resolved_detail
+            .clone()
+            .or_else(|| policy::audit_detail(command));
         let deny = |error: DispatchError, outcome: AuditOutcome| Admission::Deny {
             error,
             record: Some(AuditLog::describe(
@@ -253,7 +276,7 @@ impl MutationGuard {
             }
         }
 
-        let detail = policy::audit_detail_in(command, session.prefs());
+        let detail = resolved_detail.or_else(|| policy::audit_detail_in(command, session.prefs()));
         Admission::Proceed {
             cluster,
             context,

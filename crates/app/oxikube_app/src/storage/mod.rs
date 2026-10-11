@@ -5,6 +5,7 @@
 //! | `usage` | [`PvcUsage`], [`PvcUsageIndex`]: which Pods mount which claim, kept incrementally from the Pods feed |
 //! | `feed` | [`PvcUsageFeed`]: the abort-on-drop task that feeds an index from a store, following the namespace selection |
 //! | `columns` | [`PvcColumns`]: the claims table's columns, with the Pods (used by) column |
+//! | `audit` | the audit detail of a resize that does not name its old size |
 //! | `read` | the claim-and-class read the resize handler and its flow share |
 //! | `commands` | [`register_commands`]: the `pvc::Resize` and `storageclass::SetDefault` handlers |
 //! | `flow` | [`ResizeFlow`], [`DefaultClassFlow`]: what the two dialogs read, check and send |
@@ -23,6 +24,7 @@
 //! from the Pods subscription's deltas; a Pod update that mounts the same claims costs one walk
 //! of its `spec.volumes` and no write lock. See [`usage`].
 
+mod audit;
 mod columns;
 mod commands;
 mod feed;
@@ -33,6 +35,7 @@ mod usage;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use audit::resolved_audit_detail;
 pub use columns::{PODS_COLUMN, PvcColumns};
 pub use commands::register_commands;
 pub use feed::PvcUsageFeed;
