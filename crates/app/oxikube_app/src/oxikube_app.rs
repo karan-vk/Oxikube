@@ -30,7 +30,7 @@
 //! | [`logs`] | E08-S01 | [`LogService`](logs::LogService): bounded, batched log sessions over the `LogPort` (`LogSession`, `LogBuffer` ring with seq index and a truncated marker, `LogDeltas`, `Connecting` / `Streaming` / `Ended` / `Failed`), cancelled on drop; `logs::aggregate` (E08-S04): the pods of a workload, Service or selector merged by server timestamp into one session |
 //! | [`context`] | E08-S09 | [`ContextRegistry`]: `@`-mentions routed to their [`ContextProviderPort`](oxikube_ports::ContextProviderPort) within a byte budget; [`LogContextProvider`] (`@logs`), [`selection_context`] (the viewer's selection as a block) and the [`PendingContext`] queue "Send to agent" fills until the agent panel exists |
 //! | [`tools`] | E08-S09 | [`ToolRegistry`]: read-only tools by name, listed, hidden without their capabilities and invoked after a schema check; `tools::k8s::get_logs` (`k8s.get_logs`: a pod's or a selector's newest lines, bounded and redacted) |
-//! | [`workloads`] | E12-S08 | [`WorkloadService`]: trigger a CronJob (a Job from its template, `kubectl create job --from`), suspend and resume CronJobs and Jobs; the `cronjob::Trigger`, `cronjob::Suspend`, `cronjob::Resume`, `job::Suspend` and `job::Resume` handlers (guarded, risk low, audited with the Job's name) |
+//! | [`workloads`] | E12-S08, E12-S04 | [`WorkloadService`]: trigger a CronJob (a Job from its template, `kubectl create job --from`), suspend and resume CronJobs and Jobs, and scale the replica controllers (`workload::Scale`, low risk, medium for zero: [`WorkloadService::plan_scale`] reads the `scale` subresource and any autoscaler, [`WorkloadService::scale`] patches `spec.replicas` through it, [`ScaleRunner`] runs it from a dialog); the `cronjob::*`, `job::*` and `workload::Scale` handlers (guarded, audited with the Job's name or the replica counts) |
 //! | [`network`] | E12-S13 | [`ServiceBackends`]: the label-selected store queries of a Service's detail (its EndpointSlices and its pods); [`plan_show_pods`], `service::ShowPods` as a jump; [`ServicePortOpener`], the hook the port-forward manager implements for `service::OpenInBrowser`, registered only when there is one |
 //! | [`columns`] | E07-S02 | [`ColumnProvider`]: table columns and cells per kind. [`CoreColumns`] (a table-driven catalogue of ~40 core kinds; Ready / Status / Restarts from the domain view-models; CPU and memory as pending metrics hooks) and [`TableColumns`] (a Table feed's server columns, `priority > 0` as `wide`); [`Cell`]s carry text, a typed sort key and a tone |
 //! | [`metrics`] | E13-S02 | [`UtilisationAggregator`]: per-pod `%CPU/R`-style percents, per-node ([`NodeAllocation`]) and per-namespace ([`NamespaceAllocation`]) requests and limits over resource snapshots, with the hot-reloadable GPU vendor list ([`GpuVendorsHandle`], `metrics.gpu_vendors`); the pure maths is `oxikube_domain::utilisation` |
@@ -130,4 +130,7 @@ pub use templates::{
     Prefill, SkippedTemplate, Template, TemplateCatalog, TemplateOrigin, TemplateService,
 };
 pub use tools::ToolRegistry;
-pub use workloads::{SuspendOutcome, Triggered, WorkloadService};
+pub use workloads::{
+    MAX_REPLICAS, ScalePlan, ScaleReport, ScaleResult, ScaleRunner, SuspendOutcome, Triggered,
+    WorkloadService, is_scalable, parse_replicas,
+};

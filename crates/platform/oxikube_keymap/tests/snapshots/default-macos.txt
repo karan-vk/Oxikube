@@ -120,6 +120,8 @@
 [ResourceTable && !Editing && kind == Service]
   o                resource_table::OpenInBrowser
   u                resource_table::ShowServicePods
+[ResourceTable && !Editing && (kind == Deployment || kind == StatefulSet || kind == ReplicaSet || kind == ReplicationController)]
+  s                resource_table::ScaleSelected
 [ResourceTable && Editing]
   escape           resource_table::ClearFilter
 [DetailDrawer && !Editing]

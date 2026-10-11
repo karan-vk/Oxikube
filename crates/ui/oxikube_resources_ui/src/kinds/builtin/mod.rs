@@ -15,7 +15,7 @@ mod namespaces;
 mod network;
 mod nodes;
 mod storage;
-mod workloads;
+pub(super) mod workloads;
 
 use gpui::App;
 use oxikube_app::{KindMeta, Section};

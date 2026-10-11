@@ -28,6 +28,8 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ("resource_table::ShellSelected", CommandId::POD_SHELL),
     ("resource_table::ShellSelected", CommandId::NODE_SHELL),
     ("resource_table::AttachSelected", CommandId::POD_ATTACH),
+    // `s` on a Deployment, StatefulSet, ReplicaSet or ReplicationController (E12-S04).
+    ("resource_table::ScaleSelected", CommandId::WORKLOAD_SCALE),
     ("resource_table::DebugSelected", CommandId::POD_DEBUG),
     ("resource_table::ViewYaml", CommandId::RESOURCE_VIEW_YAML),
     (

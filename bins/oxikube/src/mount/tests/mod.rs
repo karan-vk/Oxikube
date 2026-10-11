@@ -27,6 +27,7 @@ mod resources;
 mod signin;
 mod tail;
 mod terminal;
+mod scale;
 mod workloads;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};

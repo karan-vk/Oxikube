@@ -69,7 +69,7 @@ impl DetailView {
     /// running where possible: a cluster-wide feed of the kind when the store holds one (a table
     /// with every namespace selected), else just the namespace's, so opening one object never
     /// starts a cluster-wide watch of its kind. Cluster-scoped kinds have only the one feed.
-    pub(super) fn scope_for(
+    pub fn scope_for(
         &self,
         store: &ResourceStore,
         gvk: &Gvk,

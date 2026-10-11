@@ -43,13 +43,44 @@ fn shell_attach_and_debug_on_a_deployment_table_say_which_kinds_have_them(cx: &m
     let table = f.open(deployments_kind());
     f.keys(&table, "down");
 
+    // `s` is k9s's scale on a Deployment (E12-S04), not a shell.
     f.keys(&table, "s");
-    assert_eq!(messages(&mut f), ["Shell is available for Pods and Nodes"]);
+    assert_eq!(
+        messages(&mut f),
+        [
+            "Scale is available for Deployments, StatefulSets, ReplicaSets and ReplicationControllers"
+        ]
+    );
     f.keys(&table, "a");
     assert!(messages(&mut f).contains(&"Attach is available for Pods".to_owned()));
     f.keys(&table, "shift-d");
     assert!(messages(&mut f).contains(&"Debug is available for Pods".to_owned()));
     assert!(f.dispatcher.sent().is_empty(), "nothing was dispatched");
+}
+
+#[gpui::test]
+fn s_on_a_daemonset_table_is_still_the_shell_key_and_says_which_kinds_have_it(
+    cx: &mut TestAppContext,
+) {
+    let mut f = Fixture::with_exec(cx);
+    let daemonsets = oxikube_domain::kinds::ResourceKind {
+        gvk: oxikube_domain::ids::Gvk::new("apps", "v1", "DaemonSet"),
+        plural: "daemonsets".into(),
+        singular: "daemonset".into(),
+        ..deployments_kind()
+    };
+    f.ports().discovery.set_kinds([daemonsets.clone()]);
+    f.ports().resources.insert(at_version_1(
+        oxikube_testkit::daemonset()
+            .namespace("x")
+            .name("agent")
+            .build(),
+    ));
+    f.connect_with([]);
+    let table = f.open(daemonsets);
+    f.keys(&table, "down");
+    f.keys(&table, "s");
+    assert_eq!(messages(&mut f), ["Shell is available for Pods and Nodes"]);
 }
 
 #[gpui::test]

@@ -16,15 +16,40 @@ fn deployment() {
             ("ready", "3/3"),
             ("up-to-date", "3"),
             ("available", "3"),
+            ("replicas", "3"),
             ("age", "27h"),
+            ("conditions", "Available,Progressing"),
             ("images", "registry.example/app:1.0"),
             ("selector", "app=web"),
         ],
     );
     check(
         &fx::deployment_progressing(),
-        &[("ready", "2/3"), ("up-to-date", "3"), ("available", "2")],
+        &[
+            ("ready", "2/3"),
+            ("up-to-date", "3"),
+            ("available", "2"),
+            ("replicas", "3"),
+            ("conditions", "Available=False,Progressing"),
+        ],
     );
+}
+
+#[test]
+fn deployment_conditions_are_toned_by_what_they_say() {
+    use crate::columns::Tone;
+    let tone = |res: &oxikube_domain::Resource| super::cell(res, "conditions").tone();
+    assert_eq!(tone(&fx::deployment_ready()), Tone::Ok);
+    assert_eq!(tone(&fx::deployment_progressing()), Tone::Warn);
+    let failing = namespaced(
+        "apps/v1",
+        "Deployment",
+        json!({"spec": {"replicas": 1}, "status": {"conditions": [
+            {"type": "Progressing", "status": "False", "reason": "ProgressDeadlineExceeded"}]}}),
+    );
+    assert_eq!(tone(&failing), Tone::Error);
+    let none = namespaced("apps/v1", "Deployment", json!({"spec": {"replicas": 1}}));
+    assert_eq!(super::text(&none, "conditions"), "");
 }
 
 #[test]
@@ -40,7 +65,11 @@ fn replica_sets_stateful_sets_and_daemon_sets() {
     );
     check(
         &fx::statefulset(),
-        &[("ready", "3/3"), ("images", "registry.example/app:1.0")],
+        &[
+            ("ready", "3/3"),
+            ("replicas", "3"),
+            ("images", "registry.example/app:1.0"),
+        ],
     );
     check(
         &fx::daemonset(),
@@ -100,6 +129,30 @@ fn replication_controller() {
             ("ready", "2"),
             ("selector", "app=web"),
         ],
+    );
+    // Freelens' table: Replicas (the pods that exist), Desired, Selector, Age, visible by default.
+    let provider = crate::columns::CoreColumns::new();
+    let columns = crate::columns::ColumnProvider::columns(
+        &provider,
+        &oxikube_domain::ids::Gvk::new("", "v1", "ReplicationController"),
+        oxikube_domain::Capabilities::empty(),
+    );
+    let shown: Vec<_> = columns
+        .iter()
+        .filter(|c| !c.wide)
+        .map(|c| (c.id.as_str(), &*c.title))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("name", "Name"),
+            ("namespace", "Namespace"),
+            ("current", "Replicas"),
+            ("desired", "Desired"),
+            ("ready", "Ready"),
+            ("selector", "Selector"),
+            ("age", "Age"),
+        ]
     );
 }
 

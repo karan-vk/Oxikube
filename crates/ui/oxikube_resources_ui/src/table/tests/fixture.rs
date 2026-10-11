@@ -48,6 +48,7 @@ fn actions_rig(
     clock: Arc<dyn ClockPort>,
     sink: &ResourceCommandSink,
     exec: bool,
+    workloads: bool,
 ) -> ResourceActions {
     let mut registry = CommandRegistry::new();
     registry
@@ -118,6 +119,14 @@ fn actions_rig(
             )
             .unwrap();
     }
+    if workloads {
+        // `workload::Scale` (E12-S04): the real handler behind the real guard, over the fakes.
+        registry
+            .install("oxikube_app::workloads", |r| {
+                oxikube_app::workloads::register_commands(r, sessions.clone())
+            })
+            .unwrap();
+    }
     let bus = CommandBus::new(
         registry,
         MutationGuard::new(sessions.clone(), state.clone(), clock),
@@ -150,6 +159,11 @@ fn actions_rig(
             rows.register(spec).unwrap();
         }
     }
+    if workloads {
+        for spec in crate::kinds::scale_row_actions() {
+            rows.register(spec).unwrap();
+        }
+    }
     let actions = ResourceActions::with_registry(&bus, sessions.clone(), "alice", &rows);
     if exec {
         actions.with_exec(Arc::new(oxikube_app::ExecService::new(sessions.clone())))
@@ -167,6 +181,8 @@ enum Rig {
     Actions,
     /// [`Rig::Actions`] and the exec class.
     Exec,
+    /// [`Rig::Actions`] and `workload::Scale` for the workload kinds (E12-S04).
+    Workloads,
 }
 
 /// The cluster of every test.
@@ -249,6 +265,12 @@ impl Fixture {
         Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Exec)
     }
 
+    /// [`Self::with_actions`] plus "Scale" on the replica controllers (E12-S04): the real
+    /// `workload::Scale` handler behind the real guard, over the fake resource port.
+    pub(crate) fn with_workloads(cx: &mut TestAppContext) -> Self {
+        Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Workloads)
+    }
+
     fn build(cx: &mut TestAppContext, state: Arc<FakeStatePort>, rig: Rig) -> Self {
         let entry = ClusterContext::new(
             cluster(),
@@ -298,6 +320,7 @@ impl Fixture {
                 clock_port.clone(),
                 &dispatcher.sink,
                 rig == Rig::Exec,
+                rig == Rig::Workloads,
             )
             .with_concurrency(1)
         });

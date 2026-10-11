@@ -66,6 +66,13 @@ impl ResourceViews {
                 .with_debug(actions.debug_runner()),
             )
         });
+        // A workload's panel scales through the same flow as the table's menu.
+        deps.scale = self
+            .deps
+            .table
+            .actions
+            .as_ref()
+            .map(|actions| actions.scale_flow(workspace.downgrade()));
         let target = target.clone();
         let origin = self
             .tables(&target.cluster, &target.gvk, cx)

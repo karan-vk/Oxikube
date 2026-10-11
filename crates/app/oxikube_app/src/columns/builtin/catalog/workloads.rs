@@ -48,7 +48,9 @@ const DEPLOYMENT: &[ColumnDef] = &[
     ColumnDef::new("ready", "Ready", Func(f::workload_ready)).number(),
     ColumnDef::new("up-to-date", "Up-to-date", Func(f::workload_updated)).number(),
     ColumnDef::new("available", "Available", Func(f::workload_available)).number(),
+    ColumnDef::new("replicas", "Replicas", Func(f::workload_desired)).number(),
     AGE,
+    ColumnDef::new("conditions", "Conditions", Func(f::workload_conditions)),
     ColumnDef::new("images", "Images", Func(f::workload_images)).wide(),
     ColumnDef::new("selector", "Selector", Func(f::workload_selector)).wide(),
     LABELS,
@@ -61,6 +63,7 @@ const REPLICASET: &[ColumnDef] = &[
     ColumnDef::new("current", "Current", Func(f::workload_current)).number(),
     ColumnDef::new("ready", "Ready", Func(f::workload_ready_count)).number(),
     AGE,
+    ColumnDef::new("conditions", "Conditions", Func(f::workload_conditions)).wide(),
     ColumnDef::new("images", "Images", Func(f::workload_images)).wide(),
     ColumnDef::new("selector", "Selector", Func(f::workload_selector)).wide(),
     ColumnDef::new("controlled-by", "Controlled By", Func(f::controlled_by)).wide(),
@@ -71,7 +74,10 @@ const STATEFULSET: &[ColumnDef] = &[
     NAME,
     NAMESPACE,
     ColumnDef::new("ready", "Ready", Func(f::workload_ready)).number(),
+    ColumnDef::new("replicas", "Replicas", Func(f::workload_desired)).number(),
     AGE,
+    ColumnDef::new("service", "Service", Text("/spec/serviceName")),
+    ColumnDef::new("conditions", "Conditions", Func(f::workload_conditions)).wide(),
     ColumnDef::new("images", "Images", Func(f::workload_images)).wide(),
     LABELS,
 ];
@@ -90,14 +96,17 @@ const DAEMONSET: &[ColumnDef] = &[
     LABELS,
 ];
 
+/// Freelens' table: Replicas (the pods that exist), Desired Replicas, Selector, Age; Ready is k9s's.
 const REPLICATION_CONTROLLER: &[ColumnDef] = &[
     NAME,
     NAMESPACE,
+    ColumnDef::new("current", "Replicas", Func(f::rc_current)).number(),
     ColumnDef::new("desired", "Desired", Func(f::rc_desired)).number(),
-    ColumnDef::new("current", "Current", Func(f::rc_current)).number(),
     ColumnDef::new("ready", "Ready", Func(f::rc_ready)).number(),
+    ColumnDef::new("selector", "Selector", Func(f::rc_selector)),
     AGE,
-    ColumnDef::new("selector", "Selector", Func(f::rc_selector)).wide(),
+    ColumnDef::new("conditions", "Conditions", Func(f::workload_conditions)).wide(),
+    ColumnDef::new("images", "Images", Func(f::workload_images)).wide(),
     LABELS,
 ];
 

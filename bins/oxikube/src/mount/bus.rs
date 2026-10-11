@@ -18,7 +18,7 @@
 //! | `oxikube` | `view::Open` for the catalog home, the kubeconfig sources screen and the chart gallery, `charts::OpenGallery` (the gallery's palette command, E13-S07); `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
 //! | `oxikube_app::apply` | `resource::Apply` (guarded: blocked read-only, risk low with the editor's diff preview as the confirmation, a server dry run before every apply, server-side apply as the `editor.field_manager`, the replace fallback at the reviewed `resourceVersion`, audit; E10-S08). The manifest editor runs it through `ApplyService` |
-//! | `oxikube_app::workloads` | `cronjob::Trigger` (a Job from the CronJob's template), `cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume` (guarded: blocked read-only, risk low so a simple confirm, a server dry run first, audit with the created Job's name; E12-S08) |
+//! | `oxikube_app::workloads` | `cronjob::Trigger` (a Job from the CronJob's template), `cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume`, `workload::Scale` (E12-S04: the `scale` subresource, risk low and medium for zero, audit with `before=` and `after=`) (guarded: blocked read-only, risk low so a simple confirm, a server dry run first, audit with the created Job's name; E12-S08) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
 //! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
 //! | `oxikube_app::exec` | `node::Shell` (guarded: blocked read-only, a confirmation naming the node and the image, a server dry run of the pod, audit; E09-S09) |
@@ -35,7 +35,7 @@
 //! ephemeral debug container to a pod and opens a terminal in it.
 //!
 //! `resource::Delete`, `resource::Apply`, `pod::Debug`, `node::Shell` (it creates a privileged
-//! pod) and the `cronjob::*` / `job::*` commands mutate a cluster; they and the posture commands
+//! pod), `workload::Scale` and the `cronjob::*` / `job::*` commands mutate a cluster; they and the posture commands
 //! confirm and audit through the `MutationGuard` the bus owns, and E12's other per-kind actions
 //! join here.
 

@@ -82,6 +82,7 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
             | CommandId::JOB_RESUME
             | CommandId::SERVICE_SHOW_PODS
             | CommandId::SERVICE_OPEN_IN_BROWSER
+            | CommandId::WORKLOAD_SCALE
     )
 }
 
@@ -109,6 +110,10 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
         CommandId::JOB_SUSPEND | CommandId::JOB_RESUME => {
             Some("Suspend and Resume are available for Jobs")
         }
+        CommandId::WORKLOAD_SCALE => Some(
+            "Scale is available for Deployments, StatefulSets, ReplicaSets and \
+             ReplicationControllers",
+        ),
         CommandId::RESOURCE_EDIT => Some("Editing is not available yet"),
         CommandId::POD_PORT_FORWARD => Some(PORT_FORWARDING_UNAVAILABLE),
         CommandId::SERVICE_SHOW_PODS => Some("Show Pods is available for Services"),

@@ -245,6 +245,15 @@ impl Harness {
         })
     }
 
+    /// The standard harness with the real workload handlers (`cronjob::*`, `job::*` of E12-S08
+    /// and `workload::Scale` of E12-S04) in place of the recording test one, over the fake
+    /// resource ports.
+    pub fn with_workloads() -> Self {
+        Self::build(&[CommandId::WORKLOAD_SCALE], |reg, _, manager| {
+            crate::workloads::register_commands(reg, manager.clone())
+        })
+    }
+
     fn build(
         skip: &[CommandId],
         extra: impl FnOnce(

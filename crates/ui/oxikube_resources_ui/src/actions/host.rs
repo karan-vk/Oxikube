@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use oxikube_app::{
     ActionContext, ActionState, ClusterSessionManager, CommandBus, DebugRunner, DeleteFlow,
-    ExecService, RowAction, RowActionRegistry, RowActions,
+    ExecService, RowAction, RowActionRegistry, RowActions, ScaleRunner, WorkloadService,
 };
 use oxikube_domain::Capabilities;
 use oxikube_domain::command::CommandId;
@@ -53,6 +53,9 @@ pub struct ResourceActions {
     exec: Option<Arc<ExecService>>,
     /// Runs `pod::Debug` for the debug dialog (E09-S10).
     debug: DebugRunner,
+    /// Reads a workload's scale and runs `workload::Scale` for the scale dialog (E12-S04).
+    workloads: Arc<WorkloadService>,
+    scale: ScaleRunner,
 }
 
 impl ResourceActions {
@@ -83,9 +86,11 @@ impl ResourceActions {
         Self {
             actions: RowActions::from_bus(bus, registry),
             flow: DeleteFlow::new(bus.clone(), sessions.clone(), who.clone()),
-            sessions,
+            sessions: sessions.clone(),
             exec: None,
-            debug: DebugRunner::new(bus.clone(), who),
+            debug: DebugRunner::new(bus.clone(), who.clone()),
+            workloads: Arc::new(WorkloadService::new(sessions)),
+            scale: ScaleRunner::new(bus.clone(), who),
         }
     }
 
@@ -114,6 +119,15 @@ impl ResourceActions {
     /// The runner of `pod::Debug` for the debug dialog: dispatches on the same bus, as the user.
     pub fn debug_runner(&self) -> DebugRunner {
         self.debug.clone()
+    }
+
+    /// The flow that opens the scale dialog in `workspace` (E12-S04): the table's "Scale" action
+    /// and the workload panel's button.
+    pub fn scale_flow(
+        &self,
+        workspace: gpui::WeakEntity<oxikube_workspace::Workspace>,
+    ) -> crate::kinds::ScaleFlow {
+        crate::kinds::ScaleFlow::new(self.workloads.clone(), self.scale.clone(), workspace)
     }
 
     /// The delete flow.

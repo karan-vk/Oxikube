@@ -30,6 +30,7 @@ actions!(
         OpenInBrowser,
         DeleteSelected,
         ShellSelected,
+        ScaleSelected,
         AttachSelected,
         FocusFilter,
         ClearFilter,
@@ -350,7 +351,7 @@ fn a_log_view_keeps_its_own_letters(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn a_section_can_scope_a_binding_to_a_kind(cx: &mut TestAppContext) {
-    // E12 binds `s` to scale on Deployments this way; the table's context carries `kind`.
+    // E12 binds `s` to scale on workloads this way; the table's context carries `kind`.
     install(
         cx,
         MAC,
@@ -484,6 +485,45 @@ fn the_service_verbs_stand_for_their_commands(cx: &mut TestAppContext) {
         ActionRegistry::commands_of("resource_table::OpenInBrowser"),
         [CommandId::SERVICE_OPEN_IN_BROWSER]
     );
+}
+
+#[gpui::test]
+fn s_scales_the_workloads_that_can_scale_and_stays_a_shell_elsewhere(cx: &mut TestAppContext) {
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        for kind in [
+            "Deployment",
+            "StatefulSet",
+            "ReplicaSet",
+            "ReplicationController",
+        ] {
+            assert_eq!(
+                runs(cx, "s", &strs(&table(kind, ""))),
+                Some("resource_table::ScaleSelected"),
+                "{kind} on {platform:?}"
+            );
+        }
+        // A DaemonSet has no scale; a Pod and a Node keep the shell (a Job's `s` suspends it).
+        for kind in ["DaemonSet", "Pod", "Node"] {
+            assert_eq!(
+                runs(cx, "s", &strs(&table(kind, ""))),
+                Some("resource_table::ShellSelected"),
+                "{kind} on {platform:?}"
+            );
+        }
+        // Typing `s` into the table's filter field is text, not a scale.
+        let editing = table("Deployment", "Editing");
+        assert_eq!(press(cx, "s", &strs(&editing)), Resolution::Unbound);
+    }
+    // The palette shows the key next to the command.
+    install(cx, MAC, "");
+    let keys = cx.read(|cx| {
+        bindings_for_command(cx, CommandId::WORKLOAD_SCALE)
+            .into_iter()
+            .map(|info| info.keystrokes_text())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(keys, ["s"]);
 }
 
 #[gpui::test]

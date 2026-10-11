@@ -1,4 +1,5 @@
-//! [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets and ReplicaSets.
+//! [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets, ReplicaSets and
+//! ReplicationControllers.
 
 use std::sync::Arc;
 
@@ -6,6 +7,7 @@ use jiff::Timestamp;
 
 use super::{ViewError, bool_of, check_kind, count_of, opt_count, sub};
 use crate::age::Age;
+use crate::ids::Gvk;
 use crate::resource::Resource;
 
 /// The pod controllers a [`WorkloadSummary`] can describe.
@@ -19,6 +21,8 @@ pub enum WorkloadKind {
     DaemonSet,
     /// `apps/v1` ReplicaSet.
     ReplicaSet,
+    /// Core `v1` ReplicationController.
+    ReplicationController,
 }
 
 impl WorkloadKind {
@@ -29,7 +33,26 @@ impl WorkloadKind {
             Self::StatefulSet => "StatefulSet",
             Self::DaemonSet => "DaemonSet",
             Self::ReplicaSet => "ReplicaSet",
+            Self::ReplicationController => "ReplicationController",
         }
+    }
+
+    /// The controller kind `gvk` names (any version), `None` for any other kind.
+    pub fn of(gvk: &Gvk) -> Option<Self> {
+        match (&*gvk.group, &*gvk.kind) {
+            ("apps", "Deployment") => Some(Self::Deployment),
+            ("apps", "StatefulSet") => Some(Self::StatefulSet),
+            ("apps", "DaemonSet") => Some(Self::DaemonSet),
+            ("apps", "ReplicaSet") => Some(Self::ReplicaSet),
+            ("", "ReplicationController") => Some(Self::ReplicationController),
+            _ => None,
+        }
+    }
+
+    /// Whether the kind has a `scale` subresource a user can set. A DaemonSet runs one pod per
+    /// node and has none.
+    pub const fn scalable(self) -> bool {
+        !matches!(self, Self::DaemonSet)
     }
 }
 
@@ -44,7 +67,8 @@ impl WorkloadKind {
 /// | `available` | `status.availableReplicas` | `status.availableReplicas` | `status.numberAvailable` | `status.availableReplicas` |
 ///
 /// An absent `spec.replicas` means 1, the API server default. Every other absent count is 0. A
-/// ReplicaSet runs a single pod template, so all of its pods count as updated.
+/// ReplicaSet or ReplicationController runs a single pod template, so all of its pods count as
+/// updated; a ReplicationController is counted like a ReplicaSet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkloadSummary {
     /// Which controller this is.
@@ -73,14 +97,16 @@ pub struct WorkloadSummary {
 }
 
 impl WorkloadSummary {
-    /// Build the summary of an `apps` Deployment, StatefulSet, DaemonSet or ReplicaSet.
+    /// Build the summary of an `apps` Deployment, StatefulSet, DaemonSet or ReplicaSet, or of a
+    /// core ReplicationController.
     ///
     /// # Errors
     ///
     /// [`ViewError::WrongKind`] for any other kind. Missing or malformed fields never fail;
     /// they fall back to defaults.
     pub fn from_resource(res: &Resource) -> Result<Self, ViewError> {
-        const EXPECTED: &str = "Deployment, StatefulSet, DaemonSet or ReplicaSet";
+        const EXPECTED: &str =
+            "Deployment, StatefulSet, DaemonSet, ReplicaSet or ReplicationController";
         check_kind(
             res,
             EXPECTED,
@@ -89,6 +115,7 @@ impl WorkloadSummary {
                 ("apps", "StatefulSet"),
                 ("apps", "DaemonSet"),
                 ("apps", "ReplicaSet"),
+                ("", "ReplicationController"),
             ],
         )?;
         let spec = sub(res.json(), "spec");
@@ -120,10 +147,14 @@ impl WorkloadSummary {
                 count_of(status, "updatedNumberScheduled"),
                 count_of(status, "numberAvailable"),
             ),
-            _ => {
+            other => {
                 let current = count_of(status, "replicas");
                 (
-                    WorkloadKind::ReplicaSet,
+                    if other == "ReplicaSet" {
+                        WorkloadKind::ReplicaSet
+                    } else {
+                        WorkloadKind::ReplicationController
+                    },
                     replicas,
                     current,
                     count_of(status, "readyReplicas"),

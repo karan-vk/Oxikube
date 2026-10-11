@@ -569,7 +569,8 @@ fn constructors_reject_other_kinds() {
     let err = WorkloadSummary::from_resource(&foreign).unwrap_err();
     assert_eq!(
         err.to_string(),
-        "expected Deployment, StatefulSet, DaemonSet or ReplicaSet, got example.com/Deployment"
+        "expected Deployment, StatefulSet, DaemonSet, ReplicaSet or ReplicationController, got \
+         example.com/Deployment"
     );
 }
 

@@ -6,7 +6,9 @@
 //! * [`PodSummary`] and [`ContainerSummary`] for Pods, with the `STATUS` column computed by the
 //!   same rules as `kubectl get pods`.
 //! * [`NodeSummary`] for Nodes.
-//! * [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets and ReplicaSets.
+//! * [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets, ReplicaSets and
+//!   ReplicationControllers, and [`WorkloadDetail`] (pod template, strategy, selector, conditions)
+//!   for their detail panels.
 //! * [`JobSummary`] and [`CronJobSummary`] for batch kinds.
 //! * [`QuotaSummary`], [`HpaSummary`], [`PdbSummary`], [`LeaseSummary`], [`WebhookConfigSummary`] and
 //!   the other Config-section summaries (E12-S12), in `config`.
@@ -50,6 +52,7 @@ mod pod;
 mod pod_health;
 mod service;
 mod workload;
+mod workload_detail;
 
 pub use config::{
     AdmissionBindingSummary, AdmissionPolicySummary, CaBundle, HpaMetric, HpaMetricKind, HpaState,
@@ -78,6 +81,10 @@ pub use service::{
     resolve_target_port,
 };
 pub use workload::{WorkloadKind, WorkloadSummary};
+pub use workload_detail::{
+    ConditionLevel, LabelSelector, Strategy, TemplateContainer, WorkloadCondition, WorkloadDetail,
+    conditions_summary, workload_conditions,
+};
 
 /// Why a view-model could not be built.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
