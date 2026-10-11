@@ -16,11 +16,6 @@ use super::input::{manifest, validate_labels, validate_name};
 use crate::apply::DEFAULT_FIELD_MANAGER;
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 
-/// The kind both commands act on.
-fn namespace_gvk() -> Gvk {
-    Gvk::new("", "v1", "Namespace")
-}
-
 /// Registers `namespace::Create` and `namespace::Delete` on `registry`.
 ///
 /// # Errors
@@ -37,7 +32,7 @@ pub fn register_commands(registry: &mut CommandRegistry) -> Result<(), RegisterE
         validate_labels(&labels).map_err(|error| OxiError::validation(error.to_string()))?;
         let mutation = cx.require_mutation()?;
         let object = manifest(&name, &labels);
-        let gvk = namespace_gvk();
+        let gvk = Gvk::namespace();
         let options = |dry_run: bool| WriteOptions {
             dry_run,
             field_manager: Some(DEFAULT_FIELD_MANAGER.to_owned()),
@@ -64,7 +59,7 @@ pub fn register_commands(registry: &mut CommandRegistry) -> Result<(), RegisterE
         let Command::NamespaceDelete { target, .. } = command else {
             return Err(OxiError::validation("not a namespace::Delete command"));
         };
-        if !(target.gvk.group.is_empty() && &*target.gvk.kind == "Namespace") {
+        if !target.gvk.is_namespace() {
             return Err(OxiError::validation(format!(
                 "namespace::Delete acts on a Namespace, not {}",
                 target.gvk.kind

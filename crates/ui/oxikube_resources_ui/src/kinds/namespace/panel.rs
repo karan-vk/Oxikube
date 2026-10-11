@@ -5,7 +5,6 @@ use gpui::{
     AnyView, App, AppContext as _, Context, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, Styled as _, WeakEntity, Window, div, px,
 };
-use oxikube_domain::command::Command;
 use oxikube_domain::view::{NamespacePhase, NamespaceSummary};
 use oxikube_ui::button::Button;
 use oxikube_ui::layout::{h_flex, v_flex};
@@ -48,13 +47,7 @@ impl NamespacePanel {
             let detail = detail.read(cx);
             (detail.target().clone(), detail.dispatcher())
         };
-        dispatcher.dispatch(
-            Command::NamespaceSelect {
-                cluster: target.cluster,
-                namespaces: vec![target.name.to_string()],
-            },
-            cx,
-        );
+        dispatcher.dispatch(super::actions::use_command(&target), cx);
     }
 }
 

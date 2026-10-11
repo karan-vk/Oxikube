@@ -24,16 +24,14 @@ impl ResourceTable {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let targets = self.action_targets(cx);
-        let name = targets.first().map(|t| t.name.to_string());
-        self.run_action(CommandId::NAMESPACE_SELECT, targets, window, cx);
         // The Namespaces list is cluster-wide, so nothing in it narrows: say what happened.
-        if let Some(name) = name.filter(|_| self.kind.gvk.is_namespace()) {
-            self.toast(
-                Toast::info(format!("Watching namespace {name}")).key("namespace-use"),
-                cx,
-            );
-        }
+        self.run_namespace_action(
+            CommandId::NAMESPACE_SELECT,
+            "Watching namespace",
+            "namespace-use",
+            window,
+            cx,
+        );
     }
 
     /// `p`: pins or unpins the namespace under the cursor.
@@ -43,14 +41,29 @@ impl ResourceTable {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.run_namespace_action(
+            CommandId::NAMESPACE_TOGGLE_FAVOURITE,
+            "Toggled favourite",
+            "namespace-favourite",
+            window,
+            cx,
+        );
+    }
+
+    /// Runs `command` on the cursor row, then toasts `"{said} {name}"` on the Namespaces table.
+    fn run_namespace_action(
+        &mut self,
+        command: CommandId,
+        said: &str,
+        toast_key: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let targets = self.action_targets(cx);
         let name = targets.first().map(|t| t.name.to_string());
-        self.run_action(CommandId::NAMESPACE_TOGGLE_FAVOURITE, targets, window, cx);
+        self.run_action(command, targets, window, cx);
         if let Some(name) = name.filter(|_| self.kind.gvk.is_namespace()) {
-            self.toast(
-                Toast::info(format!("Toggled favourite {name}")).key("namespace-favourite"),
-                cx,
-            );
+            self.toast(Toast::info(format!("{said} {name}")).key(toast_key), cx);
         }
     }
 

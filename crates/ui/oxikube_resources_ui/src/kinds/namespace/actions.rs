@@ -15,6 +15,7 @@
 use oxikube_app::RowActionSpec;
 use oxikube_app::actions::KindFilter;
 use oxikube_domain::command::{Command, CommandId};
+use oxikube_domain::ids::ResourceRef;
 
 /// Where "Use namespace" sits in a Namespace's menu: first (after "View YAML" and "Describe").
 pub const USE_ORDER: u16 = 100;
@@ -27,21 +28,24 @@ pub const CREATE_ORDER: u16 = 120;
 /// Where "Delete" sits: last, as the generic delete does.
 pub const DELETE_ORDER: u16 = 900;
 
+/// `namespace::Select` with this one namespace: "use this namespace" (k9s `u`).
+pub(super) fn use_command(target: &ResourceRef) -> Command {
+    Command::NamespaceSelect {
+        cluster: target.cluster.clone(),
+        namespaces: vec![target.name.to_string()],
+    }
+}
+
 /// The row actions of the Namespaces table. "Delete" is the only one that changes the cluster
 /// (guarded: read-only mode disables it, the name is typed); "Use" and "Toggle favourite" change
 /// what the session watches and what is pinned, so they stay available on a read-only cluster.
 pub fn namespace_row_actions() -> Vec<RowActionSpec> {
     let namespaces = KindFilter::Matching(|kind| kind.gvk.is_namespace());
     vec![
-        RowActionSpec::new(CommandId::NAMESPACE_SELECT, |target| {
-            Command::NamespaceSelect {
-                cluster: target.cluster.clone(),
-                namespaces: vec![target.name.to_string()],
-            }
-        })
-        .label("Use namespace")
-        .kinds(namespaces)
-        .order(USE_ORDER),
+        RowActionSpec::new(CommandId::NAMESPACE_SELECT, use_command)
+            .label("Use namespace")
+            .kinds(namespaces)
+            .order(USE_ORDER),
         // The "All namespaces" choice (k9s's `0`): slot 0 of `namespace::UseFavourite`.
         RowActionSpec::new(CommandId::NAMESPACE_USE_FAVOURITE, |target| {
             Command::NamespaceUseFavourite {

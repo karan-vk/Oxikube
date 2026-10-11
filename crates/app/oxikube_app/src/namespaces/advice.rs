@@ -97,7 +97,7 @@ pub struct NamespaceAdvice {
 /// counted (and no feed is started for it), and without a store (`None`) the advice is the
 /// name-based warning alone.
 pub fn delete_advice(store: Option<&ResourceStore>, name: &str) -> NamespaceAdvice {
-    let namespace_kind = Gvk::new("", "v1", "Namespace");
+    let namespace_kind = Gvk::namespace();
     let summary = store
         .and_then(|store| store.cluster_object(&namespace_kind, name))
         .and_then(|object| NamespaceSummary::from_resource(object.resource()?).ok())
@@ -112,7 +112,8 @@ pub fn delete_advice(store: Option<&ResourceStore>, name: &str) -> NamespaceAdvi
                 })
                 .count()
         });
-    let contents: BTreeMap<String, u32> = store
+    // In the order of CONTENT_KINDS (pods first), which the warning keeps.
+    let held: Vec<(String, u32)> = store
         .map(|store| {
             CONTENT_KINDS
                 .iter()
@@ -126,14 +127,9 @@ pub fn delete_advice(store: Option<&ResourceStore>, name: &str) -> NamespaceAdvi
                 .collect()
         })
         .unwrap_or_default();
-    // In the order of CONTENT_KINDS (pods first), not alphabetical.
-    let held: Vec<(String, u32)> = CONTENT_KINDS
-        .iter()
-        .filter_map(|kind| Some((kind.kind.to_owned(), *contents.get(kind.kind)?)))
-        .collect();
     NamespaceAdvice {
         notes: delete_notes(&summary, descendants, &held),
-        contents,
+        contents: held.into_iter().collect(),
     }
 }
 

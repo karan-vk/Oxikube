@@ -39,19 +39,14 @@ pub use panel::NamespacePanel;
 /// The Namespaces kind: its own columns (built per cluster, over the cluster's store), its
 /// panel and its actions. Rank 10 of the Namespaces section.
 pub fn spec() -> KindSpec {
-    let meta = KindMeta::new(
-        Gvk::new("", "v1", "Namespace"),
-        "namespaces",
-        "Namespaces",
-        Scope::Cluster,
-    )
-    .in_section(Section::NAMESPACES, 10)
-    .with_columns_per_cluster(oxikube_app::namespaces::namespace_columns)
-    .with_actions([
-        CommandId::NAMESPACE_SELECT,
-        CommandId::NAMESPACE_TOGGLE_FAVOURITE,
-        CommandId::NAMESPACE_CREATE,
-        CommandId::NAMESPACE_DELETE,
-    ]);
+    let meta = KindMeta::new(Gvk::namespace(), "namespaces", "Namespaces", Scope::Cluster)
+        .in_section(Section::NAMESPACES, 10)
+        .with_columns_per_cluster(oxikube_app::namespaces::namespace_columns)
+        .with_actions([
+            CommandId::NAMESPACE_SELECT,
+            CommandId::NAMESPACE_TOGGLE_FAVOURITE,
+            CommandId::NAMESPACE_CREATE,
+            CommandId::NAMESPACE_DELETE,
+        ]);
     KindSpec::new(meta).with_detail(DetailRenderer::panel(panel::build))
 }

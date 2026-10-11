@@ -235,11 +235,7 @@ pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
     }
     // A create names the object it will make.
     if let Command::NamespaceCreate { name, .. } = command {
-        return ResourceRef::cluster_scoped(
-            cluster.clone(),
-            Gvk::new("", "v1", "Namespace"),
-            &**name,
-        );
+        return ResourceRef::cluster_scoped(cluster.clone(), Gvk::namespace(), &**name);
     }
     command.target().cloned().unwrap_or_else(|| {
         let gvk = Gvk::new("oxikube.io", "v1", "Cluster");
