@@ -13,7 +13,8 @@
 //! and the manager is the first quoted name in a cause's message (the server has no separate
 //! field for it; `kubectl` parses it the same way). A stale write has reason `Conflict`, no
 //! causes and "the object has been modified" in the message; a create of an existing name has
-//! reason `AlreadyExists`.
+//! reason `AlreadyExists`. A server-side apply the kind's schema cannot read is a `Validation`
+//! error with its fields (`typed_patch`), not the server failing.
 
 use kube::core::Status;
 use kube::core::response::StatusCause;
@@ -21,6 +22,7 @@ use oxikube_domain::{
     ConflictDetails, ConflictReason, ErrorKind, FieldCause, OxiError, ValidationDetails,
 };
 
+use super::typed_patch::typed_patch_error;
 use crate::auth::{classify, redacted_line};
 
 /// Maps a failed write.
@@ -29,6 +31,10 @@ pub(crate) fn write_error(err: &kube::Error) -> OxiError {
     let kube::Error::Api(status) = err else {
         return base;
     };
+    // A 500 that is the manifest not fitting the schema: the fields, as for a 422.
+    if let Some(invalid) = typed_patch_error(status) {
+        return invalid;
+    }
     match base.kind() {
         ErrorKind::Conflict => base.with_source(conflict_details(status)),
         ErrorKind::Validation => base.with_source(ValidationDetails {

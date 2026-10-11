@@ -1,12 +1,15 @@
 //! The app under test, shared by the kind suites of `bins/oxikube` (E09-S08, E09-S13): the real
 //! init order with its main window headless, a kind context connected, the pods table open, and
 //! helpers to make pods and to wait for what the app does with them. `launch` keeps the SQLite
-//! state in a temp dir that the test can read back ([`Launched::data_dir`]).
+//! state in a temp dir that the test can read back ([`Launched::data_dir`]). [`editor`] drives
+//! manifest editors in the cluster tab (the E10 suites).
 //!
 //! Real I/O wakes GPUI tasks from Tokio threads, so a test that uses this allows parking
 //! (`cx.executor().allow_parking()`) and waits with [`wait`], which polls with short real-time
 //! sleeps.
 #![allow(dead_code)]
+
+pub mod editor;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

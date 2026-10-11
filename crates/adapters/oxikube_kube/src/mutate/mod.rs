@@ -45,7 +45,8 @@
 //!   offer "force" or "cancel"; a stale `resourceVersion` and an already-existing object are
 //!   told apart too;
 //! * a `Validation` carries [`ValidationDetails`](oxikube_domain::ValidationDetails) with the
-//!   field paths the server rejected;
+//!   field paths the server rejected; so does a server-side apply the kind's schema cannot
+//!   read (a `500` whose message names the fields: `typed_patch`);
 //! * a 5xx the taxonomy files under `Internal` (500, 502) is marked retryable, since the
 //!   server failed the request rather than the request being wrong.
 //!
@@ -57,6 +58,7 @@ mod ops;
 mod params;
 #[cfg(test)]
 mod tests;
+mod typed_patch;
 mod writer;
 
 pub(crate) use error::write_error;

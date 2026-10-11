@@ -173,6 +173,29 @@ async fn cause_text_is_redacted() {
 }
 
 #[tokio::test]
+async fn an_apply_the_schema_cannot_read_is_a_validation_error_with_its_fields() {
+    let api = server();
+    api.reply(
+        CONFIGMAP_A,
+        500,
+        status_body(
+            500,
+            "",
+            "failed to create typed patch object (default/a; /v1, Kind=ConfigMap): errors:\n  \
+             .data.k: expected string, got &value.valueUnstructured{Value:2}\n  \
+             .bogus: field not declared in schema",
+        ),
+    );
+    let err = apply_error(&api).await;
+    assert_eq!(err.kind(), ErrorKind::Validation, "{err}");
+    assert!(!err.is_retryable(), "the same manifest fails the same way");
+    let details = err.validation_details().expect("validation details");
+    let fields: Vec<&str> = details.causes.iter().map(|c| c.field.as_str()).collect();
+    assert_eq!(fields, [".data.k", ".bogus"]);
+    assert_eq!(details.causes[1].message, "field not declared in schema");
+}
+
+#[tokio::test]
 async fn other_statuses_map_through_the_taxonomy() {
     let cases = [
         (403, "Forbidden", ErrorKind::Forbidden, false),
