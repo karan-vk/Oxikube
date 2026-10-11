@@ -8,9 +8,9 @@ use oxikube_domain::ids::Gvk;
 use oxikube_domain::{Capabilities, Quantity, Resource};
 use oxikube_testkit::{fixtures as fx, pod};
 
-use super::memo::MAX_ENTRIES;
+use super::memo::{MAX_ENTRIES, SWEEP_EVERY};
 use super::*;
-use crate::columns::{Cell, CellSort, Metric, SortKind, Tone};
+use crate::columns::{Cell, CellSort, CoreColumns, Metric, SortKind, Tone};
 
 fn now() -> Timestamp {
     "2026-01-02T03:04:05Z".parse().unwrap()
@@ -70,6 +70,7 @@ fn the_columns_follow_lens_and_k9s_with_ip_node_and_qos_hidden() {
             CONTROLLED_BY,
             "age",
             NOMINATED_NODE,
+            LAST_RESTART,
             "labels"
         ]
     );
@@ -78,7 +79,10 @@ fn the_columns_follow_lens_and_k9s_with_ip_node_and_qos_hidden() {
         .filter(|c| c.wide)
         .map(|c| c.id.as_str())
         .collect();
-    assert_eq!(hidden, [IP, NODE, QOS, NOMINATED_NODE, "labels"]);
+    assert_eq!(
+        hidden,
+        [IP, NODE, QOS, NOMINATED_NODE, LAST_RESTART, "labels"]
+    );
     let titles: Vec<&str> = columns[7..11].iter().map(|c| &*c.title).collect();
     assert_eq!(titles, ["%CPU/R", "%CPU/L", "%MEM/R", "%MEM/L"]);
 
@@ -210,10 +214,23 @@ fn a_metadata_only_pod_has_metadata_columns_only() {
     assert_eq!(text(&p, &o, READY), "");
 }
 
+/// A pod as an API server sends it: with a UID and a resource version.
+fn served(name: &str, uid: &str, version: &str, restarts: u32) -> StoreObject {
+    object(
+        pod()
+            .namespace("monitoring")
+            .name(name)
+            .uid(uid)
+            .resource_version(version)
+            .restarts(restarts)
+            .build(),
+    )
+}
+
 #[test]
 fn a_summary_is_derived_once_per_object_version() {
     let p = PodColumns::new();
-    let v1 = object(pod().name("web").restarts(1).build());
+    let v1 = served("web", "uid-web", "1", 1);
     for _ in 0..3 {
         for id in [READY, STATUS, RESTARTS, QOS, CPU_OF_REQUEST] {
             p.cell(&v1, &ColumnId::new(id), now());
@@ -222,23 +239,121 @@ fn a_summary_is_derived_once_per_object_version() {
     assert_eq!(p.derivations(), 1, "fifteen cells, one walk of the JSON");
 
     // A new version of the same pod: one more derivation, replacing the entry.
-    let v2 = object(pod().name("web").restarts(2).build());
+    let v2 = served("web", "uid-web", "2", 2);
     assert!(text(&p, &v2, RESTARTS).starts_with("2 ("));
     assert_eq!(p.derivations(), 2);
     assert_eq!(p.memo.len(), 1);
 
-    // An equal object in a new document is a new version as far as the memo knows.
-    let v2_copy = object(pod().name("web").restarts(2).build());
-    text(&p, &v2_copy, STATUS);
-    assert_eq!(p.derivations(), 3);
+    // The same version in a new document (a relist) is the same version.
+    let v2_again = served("web", "uid-web", "2", 2);
+    text(&p, &v2_again, STATUS);
+    assert_eq!(p.derivations(), 2);
+}
+
+#[test]
+fn same_named_pods_of_two_clusters_keep_their_own_entries() {
+    // `monitoring/prometheus-0` in staging and in prod: one provider serves both tables.
+    let p = PodColumns::new();
+    let staging = served("prometheus-0", "uid-staging", "7", 1);
+    let prod = served("prometheus-0", "uid-prod", "7", 4);
+    for _ in 0..5 {
+        assert!(text(&p, &staging, RESTARTS).starts_with("1 ("));
+        assert!(text(&p, &prod, RESTARTS).starts_with("4 ("));
+    }
+    assert_eq!(p.derivations(), 2, "one derivation per cluster's pod");
+    assert_eq!(p.memo.len(), 2);
+}
+
+#[test]
+fn pods_nobody_reads_are_released_by_the_sweep() {
+    let memo = super::memo::SummaryMemo::default();
+    let t0 = std::time::Instant::now();
+    let kept = served("kept", "uid-kept", "1", 0);
+    let gone = served("gone", "uid-gone", "1", 0);
+    let (StoreObject::Resource(kept), StoreObject::Resource(gone)) = (&kept, &gone) else {
+        unreachable!()
+    };
+    memo.get_at(kept, t0);
+    memo.get_at(gone, t0);
+    assert_eq!(memo.len(), 2);
+
+    // `gone` is deleted (or its table closed, or its cluster disconnected): only `kept` is read.
+    let first = t0 + SWEEP_EVERY;
+    memo.get_at(kept, first);
+    assert_eq!(
+        memo.len(),
+        2,
+        "both were read in the period the first sweep closes"
+    );
+    memo.get_at(kept, first + SWEEP_EVERY);
+    assert_eq!(memo.len(), 1, "`gone` was not read for a whole period");
+    assert_eq!(memo.derived(), 2, "`kept` stayed cached throughout");
+}
+
+#[test]
+fn a_pod_without_a_server_version_is_never_held() {
+    let p = PodColumns::new();
+    let built = object(pod().name("fixture").build());
+    text(&p, &built, STATUS);
+    text(&p, &built, READY);
+    assert_eq!(p.derivations(), 2, "derived on every read");
+    assert_eq!(p.memo.len(), 0);
 }
 
 #[test]
 fn the_memo_is_bounded() {
     let p = PodColumns::new();
     for i in 0..(MAX_ENTRIES + 10) {
-        let o = object(pod().name(format!("p{i}")).build());
+        let o = served(&format!("p{i}"), &format!("uid-{i}"), "1", 0);
         text(&p, &o, STATUS);
     }
     assert!(p.memo.len() <= MAX_ENTRIES);
+}
+
+#[test]
+fn the_core_catalogue_draws_pod_cells_as_the_pod_provider_does() {
+    // Every column both providers have (usage aside: the core catalogue offers it only with a
+    // metrics source), on every pod fixture: same text, sort key and tone.
+    let core = CoreColumns::new();
+    let pods_provider = PodColumns::new();
+    let core_ids: Vec<ColumnId> = core
+        .columns(&pods(), Capabilities::empty())
+        .iter()
+        .map(|c| c.id.clone())
+        .collect();
+    let shared: Vec<ColumnId> = pods_provider
+        .columns(&pods(), Capabilities::empty())
+        .iter()
+        .map(|c| c.id.clone())
+        .filter(|id| core_ids.contains(id))
+        .collect();
+    for id in [READY, STATUS, RESTARTS, IP, LAST_RESTART, CONTROLLED_BY] {
+        assert!(shared.contains(&ColumnId::new(id)), "{id} is in both");
+    }
+    for res in [
+        fx::pod_running(),
+        fx::pod_running_restarted(),
+        fx::pod_pending(),
+        fx::pod_crashloop(),
+        fx::pod_init(),
+        fx::pod_succeeded(),
+        fx::pod_failed(),
+        fx::pod_terminating(),
+        fx::pod_sidecar(),
+        pod()
+            .controlled_by("ReplicaSet", "web-5d8c7")
+            .ip("10.1.2.3")
+            .build(),
+    ] {
+        let o = object(res);
+        for id in &shared {
+            let (a, b) = (core.cell(&o, id, now()), pods_provider.cell(&o, id, now()));
+            assert_eq!(
+                (a.display(), a.sort(), a.tone()),
+                (b.display(), b.sort(), b.tone()),
+                "{} {id}",
+                o.name()
+            );
+        }
+    }
 }

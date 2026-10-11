@@ -114,7 +114,17 @@ fn workloads_pods_opens_the_pod_columns(cx: &mut TestAppContext) {
                 .collect()
         })
     });
-    assert_eq!(hidden, ["ip", "node", "qos", "nominated-node", "labels"]);
+    assert_eq!(
+        hidden,
+        [
+            "ip",
+            "node",
+            "qos",
+            "nominated-node",
+            "last-restart",
+            "labels"
+        ]
+    );
 }
 
 /// Reports `50m` of CPU and `64Mi` of memory for every pod.

@@ -11,7 +11,7 @@
 //! | %CPU/R, %CPU/L, %MEM/R, %MEM/L | usage over the pod's effective request or limit; `–` when either is missing |
 //! | IP, Node, QoS (hidden by default, as in Freelens) | the summary |
 //! | Service Account, Controlled By, Age | the summary, metadata |
-//! | Nominated Node, Labels (hidden) | the summary, metadata |
+//! | Nominated Node, Last Restart, Labels (hidden) | the summary, metadata |
 //!
 //! Every computed cell reads one [`PodSummary`], derived once per object version and memoised
 //! (`memo`), never per cell or per frame. The column set does not depend on the session's
@@ -36,6 +36,7 @@ use oxikube_domain::{Capabilities, PodSummary, Resource};
 use parking_lot::RwLock;
 
 pub use cells::ABSENT;
+pub(crate) use cells::cell as summary_cell;
 pub use defs::*;
 
 use super::builtin::{MetricsSource, meta_cell};

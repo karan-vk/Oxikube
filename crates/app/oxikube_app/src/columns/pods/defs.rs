@@ -34,6 +34,10 @@ pub const SERVICE_ACCOUNT: &str = "service-account";
 pub const CONTROLLED_BY: &str = "controlled-by";
 /// `Nominated Node`: `status.nominatedNodeName` (`kubectl -o wide`).
 pub const NOMINATED_NODE: &str = "nominated-node";
+/// `Last Restart`: how long ago the last container restart finished (also in `Restarts`; kept
+/// as its own column, the id the core catalogue gave it, so a saved layout that shows it keeps
+/// it).
+pub const LAST_RESTART: &str = "last-restart";
 
 /// One column: id, title, tooltip, hidden by default, alignment, sort.
 type Def = (
@@ -50,7 +54,7 @@ const R: Align = Align::Right;
 
 /// Lens' and k9s' pod columns in the story's order. Hidden by default, as Freelens hides them
 /// (the only kind that sets default-hidden columns there): IP, Node and QoS; plus the two
-/// `kubectl -o wide` / generic extras, Nominated Node and Labels.
+/// `kubectl -o wide` / generic extras, Nominated Node, Last Restart and Labels.
 const DEFS: &[Def] = &[
     (ColumnId::NAME, "Name", None, false, L, SortKind::Text),
     (
@@ -167,6 +171,14 @@ const DEFS: &[Def] = &[
         true,
         L,
         SortKind::Text,
+    ),
+    (
+        LAST_RESTART,
+        "Last Restart",
+        Some("How long ago the last container restart finished"),
+        true,
+        R,
+        SortKind::Age,
     ),
     (ColumnId::LABELS, "Labels", None, true, L, SortKind::Text),
 ];

@@ -1,17 +1,18 @@
 //! The cells of a pod row, read from its memoised [`PodSummary`] and, for usage, from the
-//! metrics source.
+//! metrics source. The core catalogue's pod cells draw through [`cell`] too, so a pod cell has
+//! one implementation.
 
 use std::borrow::Cow;
 
 use jiff::Timestamp;
 use oxikube_domain::view::PodPhase;
-use oxikube_domain::{PodSummary, Quantity, Resource};
+use oxikube_domain::{Age, PodSummary, Quantity, Resource};
 
 use super::defs::{
-    CONTROLLED_BY, CPU, CPU_OF_LIMIT, CPU_OF_REQUEST, IP, MEMORY, MEMORY_OF_LIMIT,
+    CONTROLLED_BY, CPU, CPU_OF_LIMIT, CPU_OF_REQUEST, IP, LAST_RESTART, MEMORY, MEMORY_OF_LIMIT,
     MEMORY_OF_REQUEST, NODE, NOMINATED_NODE, QOS, READY, RESTARTS, SERVICE_ACCOUNT, STATUS,
 };
-use crate::columns::builtin::{Metric, MetricsSource, status_tone};
+use crate::columns::builtin::{Metric, MetricsSource, owner_cell, ready_tone, status_tone};
 use crate::columns::{Cell, CellSort, Tone};
 
 /// What a usage cell shows without a sample, and a `%` cell without a sample, request or limit.
@@ -23,7 +24,7 @@ pub(super) fn absent<'a>() -> Cell<'a> {
 }
 
 /// The cell of a computed pod column (`None`: not one of them).
-pub(super) fn cell<'a>(
+pub(crate) fn cell<'a>(
     column: &str,
     pod: &'a Resource,
     s: &PodSummary,
@@ -40,6 +41,9 @@ pub(super) fn cell<'a>(
             s.restarts_display(now),
             CellSort::Int(i64::from(s.restarts)),
         ),
+        LAST_RESTART => s
+            .last_restart
+            .map_or_else(Cell::empty, |at| Cell::age(Age::between(at, now))),
         CPU => usage(pod, Metric::Cpu, metrics, now),
         MEMORY => usage(pod, Metric::Memory, metrics, now),
         CPU_OF_REQUEST => percent(pod, s, Metric::Cpu, false, metrics, now),
@@ -51,9 +55,10 @@ pub(super) fn cell<'a>(
         NOMINATED_NODE => owned(s.nominated_node.as_ref()),
         QOS => s.qos.map_or_else(Cell::empty, |q| Cell::text(q.as_str())),
         SERVICE_ACCOUNT => owned(s.service_account.as_ref()),
-        CONTROLLED_BY => s.controlled_by.as_ref().map_or_else(Cell::empty, |owner| {
-            Cell::text(Cow::Owned(format!("{}/{}", owner.kind, owner.name)))
-        }),
+        CONTROLLED_BY => s
+            .controlled_by
+            .as_ref()
+            .map_or_else(Cell::empty, owner_cell),
         _ => return None,
     })
 }
@@ -67,10 +72,8 @@ fn ready<'a>(s: &PodSummary) -> Cell<'a> {
     };
     let tone = if s.phase == PodPhase::Succeeded {
         Tone::Neutral
-    } else if s.ready >= s.total {
-        Tone::Ok
     } else {
-        Tone::Warn
+        ready_tone(s.ready, s.total)
     };
     Cell::float(s.ready_display(), ratio).with_tone(tone)
 }

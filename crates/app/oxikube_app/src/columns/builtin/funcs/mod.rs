@@ -11,10 +11,11 @@ mod rbac;
 mod storage;
 mod workload;
 
+use std::borrow::Cow;
 use std::fmt::Write as _;
 
-use oxikube_domain::Resource;
 use oxikube_domain::json::{Array, JsonRef};
+use oxikube_domain::{OwnerRef, Resource};
 
 pub(super) use batch::*;
 pub(super) use discovery::*;
@@ -27,7 +28,7 @@ pub(super) use storage::*;
 pub(super) use workload::*;
 
 use super::read::key_values;
-use crate::columns::Tone;
+use crate::columns::{Cell, Tone};
 
 /// The tone of a status word (`Running`, `CrashLoopBackOff`, `Bound`, `Init:1/2`...), by the
 /// words kubectl, Lens and k9s colour: failures red, transitions amber, healthy green, and
@@ -93,6 +94,11 @@ pub fn status_tone(status: &str) -> Tone {
 /// The tone of a `have/want` readiness pair: green when complete, amber when short.
 pub(crate) fn ready_tone(have: u32, want: u32) -> Tone {
     if have >= want { Tone::Ok } else { Tone::Warn }
+}
+
+/// An owner as `Kind/name`: the `Controlled By` cell of every kind that has one.
+pub(crate) fn owner_cell<'a>(owner: &OwnerRef) -> Cell<'a> {
+    Cell::text(Cow::Owned(format!("{}/{}", owner.kind, owner.name)))
 }
 
 /// A string at `key` of an object `v`, when non-empty.

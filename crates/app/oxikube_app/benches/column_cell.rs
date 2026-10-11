@@ -52,7 +52,16 @@ fn main() {
     let now: Timestamp = "2026-01-02T03:04:05Z".parse().unwrap();
     let provider = CoreColumns::new();
 
-    let pod_obj = StoreObject::Resource(pod().restarts(3).node("worker-1").ip("10.0.0.1").build());
+    // As a server sends it: a UID and a resource version (what the Pod provider's memo keys on).
+    let pod_obj = StoreObject::Resource(
+        pod()
+            .uid("uid-bench")
+            .resource_version("1")
+            .restarts(3)
+            .node("worker-1")
+            .ip("10.0.0.1")
+            .build(),
+    );
     let deploy = StoreObject::Resource(fixtures::deployment_ready());
     let kind = match &pod_obj {
         StoreObject::Resource(r) => r.kind.clone(),
@@ -127,12 +136,20 @@ fn main() {
             black_box(pods.cell(black_box(&pod_obj), id, now));
         }
     });
-    let built = pod().restarts(3).node("worker-1").ip("10.0.0.1").build();
+    let built = pod()
+        .uid("uid-bench-derive")
+        .restarts(3)
+        .node("worker-1")
+        .ip("10.0.0.1")
+        .build();
+    let mut version = 0u64;
     bench("PodColumns: derive (new version)", samples, || {
-        // A clone shares the document: re-wrap it so every call is a new version.
-        let fresh = StoreObject::Resource(
-            oxikube_domain::Resource::from_json(built.to_value()).expect("a pod"),
-        );
+        // Every call a new resource version, as a watch delta brings.
+        version += 1;
+        let mut json = built.to_value();
+        json["metadata"]["resourceVersion"] = version.to_string().into();
+        let fresh =
+            StoreObject::Resource(oxikube_domain::Resource::from_json(json).expect("a pod"));
         black_box(pods.cell(black_box(&fresh), &ColumnId::new("status"), now));
     });
     bench("  of which: Resource::from_json", samples, || {

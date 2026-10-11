@@ -44,6 +44,7 @@ struct Meta {
     name: String,
     namespace: Option<String>,
     uid: Option<String>,
+    resource_version: Option<String>,
     labels: BTreeMap<String, String>,
     annotations: BTreeMap<String, String>,
     created: String,
@@ -56,6 +57,7 @@ impl Meta {
             name: name.to_owned(),
             namespace: namespaced.then(|| NAMESPACE.to_owned()),
             uid: None,
+            resource_version: None,
             labels: BTreeMap::new(),
             annotations: BTreeMap::new(),
             created: CREATED.to_owned(),
@@ -72,6 +74,9 @@ impl Meta {
         if let Some(uid) = &self.uid {
             m.insert("uid".into(), json!(uid));
         }
+        if let Some(version) = &self.resource_version {
+            m.insert("resourceVersion".into(), json!(version));
+        }
         m.insert("creationTimestamp".into(), json!(self.created));
         if let Some(d) = &self.deleted {
             m.insert("deletionTimestamp".into(), json!(d));
@@ -87,7 +92,7 @@ impl Meta {
     }
 }
 
-/// Adds the metadata setters (`name`, `namespace`, `uid`, `label`, `annotation`,
+/// Adds the metadata setters (`name`, `namespace`, `uid`, `resource_version`, `label`, `annotation`,
 /// `created`) and `build`/`From` to a builder with a `meta: Meta` field and a
 /// `fn json(&self) -> Value`.
 macro_rules! meta_builder {
@@ -111,6 +116,13 @@ macro_rules! meta_builder {
             #[must_use]
             pub fn uid(mut self, uid: impl Into<String>) -> Self {
                 self.meta.uid = Some(uid.into());
+                self
+            }
+
+            /// Sets `metadata.resourceVersion`.
+            #[must_use]
+            pub fn resource_version(mut self, version: impl Into<String>) -> Self {
+                self.meta.resource_version = Some(version.into());
                 self
             }
 
