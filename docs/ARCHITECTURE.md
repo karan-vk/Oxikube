@@ -646,7 +646,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   editor's `CommandSurface`, the toolbar's Apply): its own checks first (errors, a masked value, refuse), the dry run on the
   Kubernetes runtime, `ApplyPreviewDialog` (virtualised diff) or `ConflictDialog` (Force previews again), then the apply.
 - `oxikube_app::templates` + `oxikube_editor::templates` + `oxikube_app::apply::batch` (E10-S09) — create from template and
-  many documents in one apply. `resource::Create` (palette "Create Resource…", `cmd-alt-n` / `ctrl-alt-n`, the "New" button
+  many documents in one apply. `resource::Create` (palette "Create Resource…", `cmd-alt-n` / `ctrl-shift-m`, the "New" button
   of every resource table; a read command like `editor::NewManifest`: it opens an editor and writes nothing) lists the
   templates on the Kubernetes runtime (`TemplateService::catalog`: the embedded manifests that `oxikube_editor::templates`
   passes in, one minimal YAML per core kind under `oxikube_editor/templates/`, plus the user's

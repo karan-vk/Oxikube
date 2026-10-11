@@ -65,7 +65,7 @@
 //!     (`cmd-shift-d`) shows the diff in the editor's bottom panel, and the changed-on-server
 //!     banner's Merge / Reload / Keep mine.
 //!     Create from template (E10-S09): `resource::Create` (palette "Create Resource…",
-//!     `cmd-alt-n` / `ctrl-alt-n`, the "New" button of every resource table) opens the "Create
+//!     `cmd-alt-n` / `ctrl-shift-m`, the "New" button of every resource table) opens the "Create
 //!     resource" picker over the embedded manifests of the core kinds and the user's
 //!     `<config dir>/templates/*.yaml`; the chosen template opens as a `New <name>` tab with the
 //!     cluster's selected namespace filled in. A buffer of several `---` documents is dry-run

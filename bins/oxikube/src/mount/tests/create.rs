@@ -18,7 +18,7 @@ fn create_key() -> &'static str {
     if cfg!(target_os = "macos") {
         "cmd-alt-n"
     } else {
-        "ctrl-alt-n"
+        "ctrl-shift-m"
     }
 }
 

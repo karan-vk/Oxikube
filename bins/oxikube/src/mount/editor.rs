@@ -14,7 +14,7 @@
 //! (`cmd-s` / `ctrl-s`, the palette, the toolbar's Apply) dry-runs the buffer, shows the diff and
 //! applies it through the bus.
 //! E10-S09 adds create from template: `resource::Create` (the palette's "Create Resource…",
-//! `cmd-alt-n` / `ctrl-alt-n`, the "New" button of every resource table) opens the "Create
+//! `cmd-alt-n` / `ctrl-shift-m`, the "New" button of every resource table) opens the "Create
 //! resource" picker over the embedded manifests of the core kinds and the user's
 //! `<config dir>/templates/*.yaml` ([`templates`], read through the filesystem port), and a
 //! buffer of several documents is applied one object at a time.
