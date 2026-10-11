@@ -19,6 +19,7 @@
 //! | `detail` | [`DetailRenderer`]: the generic detail, or a view factory for the kind's panel |
 //! | `specs` | [`KindSpecs`]: the GPUI global, registration and lookups (`kind_for` never fails) |
 //! | `sidebar` | publishing the registry's sections and entries to the cluster sidebar |
+//! | `config` | the Config section's smaller kinds (E12-S12): quota bars, limit tables, autoscalers, budgets, classes, leases and the admission kinds, each a [`ConfigPanel`] over a domain view-model |
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
 //!
 //! # Adding a kind's own panel or columns (E12-S02 and on)
@@ -42,6 +43,7 @@
 //! [`KindMeta`]: oxikube_app::KindMeta
 
 mod builtin;
+mod config;
 mod detail;
 mod sidebar;
 mod spec;
@@ -50,6 +52,7 @@ mod specs;
 #[cfg(test)]
 mod tests;
 
+pub use config::ConfigPanel;
 pub use detail::{DetailRenderer, DetailViewFactory};
 pub use spec::KindSpec;
 pub use specs::KindSpecs;

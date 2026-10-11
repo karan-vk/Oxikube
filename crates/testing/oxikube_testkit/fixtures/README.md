@@ -2,7 +2,7 @@
 
 Two independent sets live here:
 
-- **JSON manifests** (`pods/`, `workloads/`, `nodes/`, `crds/`, `events/`, `helm/`, `core/`, `networking/`, `autoscaling/`):
+- **JSON manifests** (`pods/`, `workloads/`, `nodes/`, `crds/`, `events/`, `helm/`, `core/`, `networking/`, `autoscaling/`, `config/`):
   embedded by `oxikube_testkit::fixtures` and loaded as domain `Resource`s in unit tests. They
   never reach a cluster. Every file must be listed in `src/fixtures.rs` (a test checks this);
   prefer the builders for variations instead of new files. Secret data is dummy only.

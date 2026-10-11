@@ -1,0 +1,14 @@
+{
+  "apiVersion": "scheduling.k8s.io/v1",
+  "kind": "PriorityClass",
+  "metadata": {
+    "name": "high",
+    "uid": "6f1f7d8e-3d3a-5b0e-9b5e-0c1b3a2d4e05",
+    "resourceVersion": "3105",
+    "creationTimestamp": "2026-01-01T00:00:00Z"
+  },
+  "value": 1000000,
+  "globalDefault": false,
+  "preemptionPolicy": "PreemptLowerPriority",
+  "description": "Customer-facing services."
+}

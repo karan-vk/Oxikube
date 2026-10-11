@@ -8,6 +8,8 @@
 //! * [`NodeSummary`] for Nodes.
 //! * [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets and ReplicaSets.
 //! * [`JobSummary`] and [`CronJobSummary`] for batch kinds.
+//! * [`QuotaSummary`], [`HpaSummary`], [`PdbSummary`], [`LeaseSummary`], [`WebhookConfigSummary`] and
+//!   the other Config-section summaries (E12-S12), in `config`.
 //! * [`Health`] and [`health_of`]: the one rule for "is this object healthy" behind overview
 //!   tiles and sidebar counts.
 //!
@@ -33,6 +35,7 @@ use crate::json::{Array, JsonRef};
 use crate::resource::Resource;
 use jiff::Timestamp;
 
+mod config;
 mod health;
 mod job;
 mod node;
@@ -40,6 +43,13 @@ mod pod;
 mod pod_health;
 mod workload;
 
+pub use config::{
+    AdmissionBindingSummary, AdmissionPolicySummary, CaBundle, HpaMetric, HpaMetricKind, HpaState,
+    HpaSummary, LeaseSummary, LimitRangeSummary, LimitRow, LimitSection, ParamRef, PdbSummary,
+    PolicyValidation, PriorityClassSummary, QuotaLevel, QuotaLine, QuotaSummary,
+    RuntimeClassSummary, TargetRef, VpaContainerPolicy, VpaRecommendation, VpaSummary,
+    WebhookConfigSummary, WebhookKind, WebhookRule, WebhookSummary, WebhookTarget, selector_text,
+};
 pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};
 pub use node::NodeSummary;

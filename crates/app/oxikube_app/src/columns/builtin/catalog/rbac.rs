@@ -1,4 +1,4 @@
-//! RBAC, autoscaling and disruption kinds.
+//! RBAC, autoscaling and disruption kinds (HPA, VPA, PodDisruptionBudget).
 //!
 //! Sources: Freelens Role / ClusterRole / RoleBinding / ClusterRoleBinding / HPA /
 //! PodDisruptionBudget lists (A1); k9s `ro`, `rob`, `cr`, `crb`, `hpa`, `pdb` (A2); kubectl
@@ -36,10 +36,23 @@ const HPA: &[ColumnDef] = &[
     NAME,
     NAMESPACE,
     ColumnDef::new("reference", "Reference", Func(f::hpa_reference)),
-    ColumnDef::new("targets", "Targets", Func(f::hpa_targets)),
+    ColumnDef::new("targets", "Metrics", Func(f::hpa_targets)),
     ColumnDef::new("min-pods", "Min Pods", Int("/spec/minReplicas")).number(),
     ColumnDef::new("max-pods", "Max Pods", Int("/spec/maxReplicas")).number(),
     ColumnDef::new("replicas", "Replicas", Int("/status/currentReplicas")).number(),
+    ColumnDef::new("status", "Status", Func(f::hpa_status)),
+    AGE,
+    LABELS,
+];
+
+/// The VerticalPodAutoscaler CRD's own printer columns are Mode, CPU, Mem, Provided, Age; the
+/// Freelens list is Name, Mode, Conditions, Age.
+const VPA: &[ColumnDef] = &[
+    NAME,
+    NAMESPACE,
+    ColumnDef::new("reference", "Reference", Func(f::vpa_reference)),
+    ColumnDef::new("mode", "Mode", Func(f::vpa_mode)),
+    ColumnDef::new("conditions", "Conditions", Func(f::vpa_conditions)),
     AGE,
     LABELS,
 ];
@@ -101,6 +114,11 @@ pub(super) const KINDS: &[KindDef] = &[
         group: "autoscaling",
         kind: "HorizontalPodAutoscaler",
         columns: HPA,
+    },
+    KindDef {
+        group: "autoscaling.k8s.io",
+        kind: "VerticalPodAutoscaler",
+        columns: VPA,
     },
     KindDef {
         group: "policy",
