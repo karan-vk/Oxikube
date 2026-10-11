@@ -9,7 +9,7 @@ use crate::u;
 use gpui::{
     App, ElementId, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
     RenderOnce, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Window, canvas,
-    div, px,
+    div, prelude::FluentBuilder as _, px,
 };
 use std::sync::Arc;
 
@@ -140,13 +140,16 @@ impl RenderOnce for Sparkline {
             ..
         } = self;
         let bits = |(a, b): (f64, f64)| (a.to_bits(), b.to_bits());
-        let frame = div()
+        div()
             .id(id)
             .role(Role::Image)
             .aria_label(summary)
             .h(u(height))
             .flex_none()
-            .map_width(width)
+            .map(|el| match width {
+                Some(width) => el.w(u(width)),
+                None => el.w_full(),
+            })
             .child(
                 canvas(
                     |_, _, _| (),
@@ -178,22 +181,7 @@ impl RenderOnce for Sparkline {
                     },
                 )
                 .size_full(),
-            );
-        frame
-    }
-}
-
-/// `Styled::w(u(width))` when a width is given, `w_full` otherwise.
-trait MapWidth {
-    fn map_width(self, width: Option<Pixels>) -> Self;
-}
-
-impl<T: gpui::Styled> MapWidth for T {
-    fn map_width(self, width: Option<Pixels>) -> Self {
-        match width {
-            Some(width) => self.w(u(width)),
-            None => self.w_full(),
-        }
+            )
     }
 }
 

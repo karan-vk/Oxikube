@@ -150,20 +150,6 @@ impl Chart {
         });
     }
 
-    /// Replaces the reference lines.
-    pub fn set_thresholds(&mut self, thresholds: Vec<Threshold>, cx: &mut Context<Self>) {
-        if self.spec.thresholds != thresholds {
-            self.update(cx, |spec| spec.thresholds = thresholds);
-        }
-    }
-
-    /// Replaces the status bands.
-    pub fn set_bands(&mut self, bands: Vec<Band>, cx: &mut Context<Self>) {
-        if self.spec.bands != bands {
-            self.update(cx, |spec| spec.bands = bands);
-        }
-    }
-
     /// Shows the "No data" state with `reason` in place of the plot (metrics-server missing,
     /// Prometheus unreachable, RBAC denied), or goes back to plotting with `None`. Without a
     /// reason set, a chart whose series hold no readings in the range shows "No data" anyway.
