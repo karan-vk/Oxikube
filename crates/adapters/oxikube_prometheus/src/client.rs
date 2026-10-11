@@ -59,8 +59,9 @@ impl PromqlClient {
         }
         let mut url = api_url(endpoint, route)?;
         let post = query.len() > MAX_QUERY_IN_URL;
-        let mut form: Vec<(&str, String)> = vec![("query", query.to_owned())];
-        form.extend(params.iter().map(|(k, v)| (*k, v.clone())));
+        let mut form = Vec::with_capacity(params.len() + 1);
+        form.push(("query", query.to_owned()));
+        form.extend(params);
         if !post {
             url.query_pairs_mut()
                 .extend_pairs(form.iter().map(|(k, v)| (*k, v.as_str())));
@@ -88,26 +89,24 @@ impl PromqlClient {
             .send()
             .await
             .map_err(|e| errors::from_transport(e, endpoint.timeout))?;
-        let status = response.status().as_u16();
+        let status = response.status();
+        let success = status.is_success();
+        let status = status.as_u16();
         let body = read_body(response, endpoint.max_response_bytes, endpoint.timeout).await?;
 
         match parse(&body) {
-            Ok(Reply::Success(series)) if (200..300).contains(&status) => Ok(series),
+            Ok(Reply::Success(series)) if success => Ok(series),
             Ok(Reply::Success(_)) => Err(errors::from_server(status, "", "")),
             Ok(Reply::Failure {
                 error_type,
                 message,
             }) => {
                 // An error envelope on a 2xx is still a failure; keep a server-side status.
-                let status = if (200..300).contains(&status) {
-                    500
-                } else {
-                    status
-                };
+                let status = if success { 500 } else { status };
                 Err(errors::from_server(status, &error_type, &message))
             }
             // No envelope: judge by status first (a proxy's 401/502 page is not "bad response").
-            Err(bad) if (200..300).contains(&status) => Err(bad),
+            Err(bad) if success => Err(bad),
             Err(_) => Err(errors::from_server(status, "", &snippet(&body))),
         }
     }

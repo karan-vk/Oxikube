@@ -105,7 +105,8 @@ pub trait PromqlPort: Send + Sync {
 ///
 /// # Effects
 ///
-/// Read-only: only `GET`s `/api/v1/query` and `/api/v1/query_range`. Credentials are sent in the
+/// Read-only: only calls `/api/v1/query` and `/api/v1/query_range` (a very long query goes in a
+/// `POST` form body, which is still a read). Credentials are sent in the
 /// `Authorization` header and never logged. Dropping the future cancels the in-flight request.
 ///
 /// # Errors
