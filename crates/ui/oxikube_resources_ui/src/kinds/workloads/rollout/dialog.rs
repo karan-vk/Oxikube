@@ -224,7 +224,9 @@ impl SetImageDialog {
 
     /// Whether any field holds an image the dialog refuses.
     fn has_problem(&self, cx: &App) -> bool {
-        (0..self.fields.len()).any(|index| self.problem(index, cx).is_some())
+        self.fields
+            .iter()
+            .any(|field| image_problem(field.input.read(cx).value().as_ref()).is_some())
     }
 
     /// The edits the form makes now: every container whose field differs from what it runs, with
@@ -261,7 +263,7 @@ impl SetImageDialog {
     /// only the containers that changed. A field problem shows under the field and nothing is
     /// sent.
     pub fn submit(&mut self, cx: &mut Context<Self>) {
-        if self.stage != SetImageStage::Editing || !self.can_submit(cx) {
+        if !self.can_submit(cx) {
             cx.notify();
             return;
         }

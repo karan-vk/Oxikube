@@ -3,6 +3,7 @@
 use oxikube_app::RowActionSpec;
 use oxikube_app::actions::KindFilter;
 use oxikube_domain::command::{Command, CommandId};
+use oxikube_domain::kinds::ResourceKind;
 
 /// Where "Restart" sits in a workload's menu: after "Scale" (140), before the generic actions.
 pub const RESTART_ORDER: u16 = 142;
@@ -25,9 +26,7 @@ pub fn rollout_row_actions() -> Vec<RowActionSpec> {
             }
         })
         .label("Restart")
-        .kinds(KindFilter::Matching(|kind| {
-            oxikube_app::is_rollable(&kind.gvk)
-        }))
+        .kinds(KindFilter::Matching(rollable))
         .order(RESTART_ORDER),
         RowActionSpec::new(CommandId::WORKLOAD_SET_IMAGE, |target| {
             Command::WorkloadSetImage {
@@ -36,9 +35,11 @@ pub fn rollout_row_actions() -> Vec<RowActionSpec> {
             }
         })
         .label("Set image")
-        .kinds(KindFilter::Matching(|kind| {
-            oxikube_app::is_rollable(&kind.gvk)
-        }))
+        .kinds(KindFilter::Matching(rollable))
         .order(SET_IMAGE_ORDER),
     ]
+}
+
+fn rollable(kind: &ResourceKind) -> bool {
+    oxikube_app::is_rollable(&kind.gvk)
 }

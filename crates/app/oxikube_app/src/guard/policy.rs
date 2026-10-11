@@ -366,8 +366,9 @@ fn effective_image(image: &str) -> &str {
 
 /// What the audit record of a guarded `command` says besides its target, if anything: for
 /// `pod::Debug` the image, the target container, the program (never its arguments) and a chosen
-/// name; for `workload::Scale` the requested count and for `workload::SetImage` the containers named; for `resource::Apply` the field manager, force
-/// and the reviewed version (never the manifest). Short, free of typed content, and redacted by the
+/// name; for `workload::Scale` the requested count and for `workload::SetImage` the containers
+/// named; for `resource::Apply` the field manager, force and the reviewed version (never the
+/// manifest). Short, free of typed content, and redacted by the
 /// audit log like every field.
 pub fn audit_detail(command: &Command) -> Option<String> {
     if let Some(detail) = crate::apply::audit_detail(command) {

@@ -3,7 +3,7 @@
 
 use jiff::Timestamp;
 use oxikube_domain::build::{ImageEdit, ImageSlot, restart_stamp};
-use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::view::WorkloadKind;
 
 use crate::actions::object_label;
@@ -11,11 +11,18 @@ use crate::actions::object_label;
 /// Whether a kind can be restarted and have its images set: Deployment, StatefulSet and DaemonSet.
 /// A ReplicaSet and a ReplicationController have a pod template too, but their controller never
 /// rolls existing pods when it changes; `kubectl rollout restart` refuses them as well.
-pub fn is_rollable(gvk: &oxikube_domain::ids::Gvk) -> bool {
-    matches!(
-        WorkloadKind::of(gvk),
-        Some(WorkloadKind::Deployment | WorkloadKind::StatefulSet | WorkloadKind::DaemonSet)
-    )
+pub fn is_rollable(gvk: &Gvk) -> bool {
+    rollable_kind(gvk).is_some()
+}
+
+/// The controller kind of `gvk` when a rollout action applies to it.
+pub(super) fn rollable_kind(gvk: &Gvk) -> Option<WorkloadKind> {
+    WorkloadKind::of(gvk).filter(|kind| {
+        matches!(
+            kind,
+            WorkloadKind::Deployment | WorkloadKind::StatefulSet | WorkloadKind::DaemonSet
+        )
+    })
 }
 
 /// What the set-image dialog starts with: the workload's containers as the cluster has them now.
@@ -58,6 +65,15 @@ impl RestartResult {
             format!("Dry run: {label} can be restarted")
         } else {
             format!("Restarting {label}: new pods are rolling out")
+        }
+    }
+
+    /// The audit note: `restartedAt=2026-10-06T12:34:56Z rv=42`.
+    pub fn audit_note(&self) -> String {
+        let at = self.stamp();
+        match &self.resource_version {
+            Some(version) => format!("restartedAt={at} rv={version}"),
+            None => format!("restartedAt={at}"),
         }
     }
 }

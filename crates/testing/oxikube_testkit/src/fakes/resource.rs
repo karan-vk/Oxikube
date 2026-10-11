@@ -757,8 +757,8 @@ impl ResourceWriter for FakeResourcePort {
         });
         self.script.patch.next_or_else(|| match &patch.kind {
             // A server-side apply of a whole object: the body is what the store holds afterwards
-            // (no field-ownership bookkeeping); a merge or strategic patch merges into the stored object. Other
-            // patch kinds must be scripted.
+            // (no field-ownership bookkeeping); a merge or strategic patch merges into the stored
+            // object. Other patch kinds must be scripted.
             PatchKind::Apply { .. } => {
                 let res = object_from_body(&patch.body, namespace)?;
                 if res.kind != *kind || res.name() != name {

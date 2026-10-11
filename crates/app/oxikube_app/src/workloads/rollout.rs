@@ -11,10 +11,10 @@ use oxikube_domain::build::{
 use oxikube_domain::command::ImageChange;
 use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::view::WorkloadKind;
-use oxikube_domain::{OxiError, OxiResult};
+use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::Patch;
 
-use super::rollout_plan::{RestartResult, SetImagePlan, SetImageResult};
+use super::rollout_plan::{RestartResult, SetImagePlan, SetImageResult, rollable_kind};
 use super::service::{WorkloadService, options};
 use crate::actions::object_label;
 use crate::guard::Mutation;
@@ -73,7 +73,7 @@ impl WorkloadService {
                 .map(ToString::to_string),
             dry_run: mutation.dry_run(),
         };
-        note(restart_note(&result));
+        note(result.audit_note());
         tracing::info!(
             workload = %target.name,
             dry_run = mutation.dry_run(),
@@ -135,7 +135,7 @@ impl WorkloadService {
         mutation: &Mutation,
         target: &ResourceRef,
         patch: &Patch,
-    ) -> OxiResult<oxikube_domain::Resource> {
+    ) -> OxiResult<Resource> {
         let writer = mutation.writer();
         let (namespace, name) = (target.namespace(), &*target.name);
         if !mutation.dry_run() {
@@ -155,27 +155,15 @@ impl WorkloadService {
     }
 }
 
-/// `restartedAt=2026-10-06T12:34:56Z rv=42`.
-fn restart_note(result: &RestartResult) -> String {
-    let at = result.stamp();
-    match &result.resource_version {
-        Some(version) => format!("restartedAt={at} rv={version}"),
-        None => format!("restartedAt={at}"),
-    }
-}
-
 /// The controller kind of `target` when a rollout action applies to it; `what` completes
 /// "cannot ..." in the refusal.
 fn check_rollable(target: &ResourceRef, what: &str) -> OxiResult<WorkloadKind> {
-    match WorkloadKind::of(&target.gvk) {
-        Some(
-            kind @ (WorkloadKind::Deployment | WorkloadKind::StatefulSet | WorkloadKind::DaemonSet),
-        ) => Ok(kind),
-        _ => Err(OxiError::validation(format!(
+    rollable_kind(&target.gvk).ok_or_else(|| {
+        OxiError::validation(format!(
             "{} cannot {what}: only Deployments, StatefulSets and DaemonSets can.",
             object_label(target)
-        ))),
-    }
+        ))
+    })
 }
 
 /// The permit must be for the workload's cluster: a handler never writes elsewhere.
