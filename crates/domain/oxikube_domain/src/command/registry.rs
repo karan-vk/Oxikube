@@ -1141,8 +1141,10 @@ pub static COMMANDS: &[CommandMeta] = &[
         Risk::Medium,
         NONE,
     )
-    .in_views(TABLE_VIEWS)
-    .selecting(SelectionKind::One),
+    // Scoped to claims in the table only: the dialog is opened by the table surface, which the
+    // detail drawer does not have, and the palette must not offer it on other kinds.
+    .in_views(TABLE_VIEW)
+    .selecting(SelectionKind::core("PersistentVolumeClaim")),
     // The manifest editor runs it through its own flow (E10-S08): a server dry run, the diff
     // preview (which is the confirmation, hence `Low`), then the apply. Agents call it directly;
     // the guard and the handler's own dry run apply to them alike.
@@ -1356,8 +1358,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         Risk::Low,
         NONE,
     )
-    .in_views(TABLE_VIEWS)
-    .selecting(SelectionKind::One),
+    // Table only and storage classes only, for the same reason as `pvc::Resize`: the dialog
+    // (current default, clear or keep it) is the table surface's.
+    .in_views(TABLE_VIEW)
+    .selecting(SelectionKind::OfKind {
+        group: "storage.k8s.io",
+        kind: "StorageClass",
+    }),
     // Moves focus inside a window, never touches the cluster: allowed in read-only mode.
     CommandMeta::read(
         CommandId::TABLE_FOCUS_FILTER,
