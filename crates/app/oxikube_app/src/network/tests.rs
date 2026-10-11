@@ -77,9 +77,9 @@ fn a_service_without_a_selector_has_no_pod_query_and_says_why() {
 #[test]
 fn show_pods_opens_the_pod_table_filtered_by_the_selector() {
     let cluster = id("a");
-    let all = plan_show_pods(&cluster, &selecting(), &WatchScope::Cluster).unwrap();
+    let only_demo = WatchScope::Namespaces(vec!["demo".to_owned()]);
     assert_eq!(
-        all,
+        plan_show_pods(&cluster, &selecting(), &only_demo).unwrap(),
         vec![
             Command::ResourceOpenList {
                 cluster: cluster.clone(),
@@ -91,28 +91,37 @@ fn show_pods_opens_the_pod_table_filtered_by_the_selector() {
                 text: "-l app=web,tier=front".to_owned(),
             },
         ],
-        "all namespaces are selected: the namespace is not touched"
+        "the selection is already exactly the Service's namespace: it is not touched"
     );
+}
 
-    let inside = WatchScope::Namespaces(vec!["demo".to_owned(), "other".to_owned()]);
-    assert_eq!(
-        plan_show_pods(&cluster, &selecting(), &inside)
-            .unwrap()
-            .len(),
-        2
-    );
-
-    let elsewhere = WatchScope::Namespaces(vec!["kube-system".to_owned()]);
-    let plan = plan_show_pods(&cluster, &selecting(), &elsewhere).unwrap();
-    assert_eq!(
-        plan[0],
-        Command::NamespaceSelect {
-            cluster,
-            namespaces: vec!["demo".to_owned()],
-        },
-        "the Service's namespace is selected first, or the table would be empty"
-    );
-    assert_eq!(plan.len(), 3);
+#[test]
+fn show_pods_narrows_every_other_selection_to_the_services_namespace() {
+    let cluster = id("a");
+    let select = Command::NamespaceSelect {
+        cluster: cluster.clone(),
+        namespaces: vec!["demo".to_owned()],
+    };
+    for (what, selection) in [
+        ("all namespaces", WatchScope::Cluster),
+        (
+            "several, including the Service's",
+            WatchScope::Namespaces(vec!["demo".to_owned(), "other".to_owned()]),
+        ),
+        (
+            "another one",
+            WatchScope::Namespaces(vec!["kube-system".to_owned()]),
+        ),
+        ("none", WatchScope::Namespaces(Vec::new())),
+    ] {
+        let plan = plan_show_pods(&cluster, &selecting(), &selection).unwrap();
+        assert_eq!(
+            plan[0], select,
+            "{what}: a label selector carries no namespace, so pods of other namespaces \
+             sharing the labels would be listed"
+        );
+        assert_eq!(plan.len(), 3, "{what}");
+    }
 }
 
 #[test]

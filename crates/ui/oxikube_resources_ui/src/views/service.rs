@@ -2,9 +2,9 @@
 //!
 //! The Service is read once on the Tokio bridge (the command may come from the palette or an
 //! agent, which have the reference and nothing else). [`plan_show_pods`] turns it into the same
-//! commands a jump line sends (`namespace::Select` when the namespace is not selected,
-//! `resource::OpenList` for Pods, `table::SetFilter -l <selector>`), and they go through the
-//! bus, so the table opens with the selector sent to the server. A Service that selects nothing
+//! commands a jump line sends (`namespace::Select` unless the Service's namespace is the only
+//! one selected, `resource::OpenList` for Pods, `table::SetFilter -l <selector>`), and they go
+//! through the bus, so the table opens with the selector sent to the server. A Service that selects nothing
 //! says why in a toast.
 
 use gpui::{Context, Window};

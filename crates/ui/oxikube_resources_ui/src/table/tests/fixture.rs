@@ -136,7 +136,10 @@ fn actions_rig(
         .order(100),
     )
     .unwrap();
-    for spec in crate::crds::crd_row_actions() {
+    for spec in crate::crds::crd_row_actions()
+        .into_iter()
+        .chain(crate::kinds::service::service_row_actions())
+    {
         rows.register(spec).unwrap();
     }
     for spec in crate::kinds::row_actions() {

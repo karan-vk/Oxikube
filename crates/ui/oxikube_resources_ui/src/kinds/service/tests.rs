@@ -17,6 +17,8 @@ use crate::detail::DetailView;
 use crate::detail::tests::fixture::Detail;
 use crate::table::tests::fixture::cluster;
 
+mod verbs;
+
 fn service_ref(name: &str) -> ResourceRef {
     ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Service"), "shop", name)
 }

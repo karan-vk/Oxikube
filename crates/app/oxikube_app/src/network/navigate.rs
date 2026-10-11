@@ -8,7 +8,7 @@ use oxikube_domain::view::{NoSelector, ServiceSummary};
 use super::ServiceBackends;
 
 /// The commands that show the pods of `service` in `cluster`, in order: select the Service's
-/// namespace when `selection` does not include it, open the Pods table, and filter it with the
+/// namespace unless `selection` is exactly that namespace, open the Pods table, and filter it with the
 /// Service's selector in the filter bar's grammar (`-l app=web,tier=front`), which the table
 /// sends to the server.
 ///
@@ -27,8 +27,11 @@ pub fn plan_show_pods(
             .expect("a service without a pod selector has a reason")
     })?;
     let mut commands = Vec::with_capacity(3);
-    if let (Some(namespace), WatchScope::Namespaces(selected)) = (&service.namespace, selection)
-        && !selected.iter().any(|n| n.as_str() == &**namespace)
+    // A label selector cannot carry a namespace and a Service selects only the pods of its own,
+    // so anything but exactly that namespace (all namespaces, several, another one) is replaced.
+    if let Some(namespace) = &service.namespace
+        && !matches!(selection, WatchScope::Namespaces(selected)
+            if matches!(selected.as_slice(), [only] if only.as_str() == &**namespace))
     {
         commands.push(Command::NamespaceSelect {
             cluster: cluster.clone(),
