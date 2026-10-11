@@ -97,7 +97,7 @@ struct PendingMerge {
     server: Arc<ObjectVersion>,
 }
 
-/// The base / live / mine state machine of one editor. See the [module docs](self).
+/// The base / live / mine state machine of one editor. See the docs at the top of this file.
 #[derive(Clone, Debug)]
 pub struct LiveSync {
     base: Option<Arc<ObjectVersion>>,
