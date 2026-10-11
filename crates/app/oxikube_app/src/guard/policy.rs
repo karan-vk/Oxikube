@@ -192,6 +192,14 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::EditorConvertToYaml
         | Command::EditorUseJson
         | Command::EditorUseYaml => None,
+        Command::EditorShowDiff
+        | Command::EditorToggleDiffLayout
+        | Command::EditorReloadFromServer
+        | Command::EditorMergeFromServer
+        | Command::EditorKeepMine
+        | Command::EditorTakeMine { .. }
+        | Command::EditorTakeServer { .. }
+        | Command::EditorAcceptMerge => None,
     }
 }
 

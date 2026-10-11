@@ -7,9 +7,9 @@
 //! `editor::ToggleSoftWrap`; E10-S06 adds `resource::Edit` / `resource::ViewYamlInEditor`
 //! (an editor on a freshly read object in the object's cluster tab, through the session's
 //! `ResourceReader`) and the toggles for `managedFields` and Secret values; E10-S10 the conversions
-//! between YAML and JSON and the switch of the language a buffer is read as. The keymap's
-//! `editor::NewManifest` reaches the bus through the
-//! dispatcher installed here.
+//! between YAML and JSON and the switch of the language a buffer is read as; E10-S07 the diff vs live
+//! commands (the editors of a cluster tab read and watch the edited object through the session's
+//! resource port). The keymap's `editor::NewManifest` reaches the bus through the dispatcher installed here.
 
 use std::rc::Rc;
 

@@ -354,6 +354,44 @@ pub enum Command {
     /// (E10-S04); the active pane's editor when focus is elsewhere.
     #[serde(rename = "editor::ToggleSoftWrap")]
     EditorToggleSoftWrap,
+    /// Show the focused manifest editor's diff against the live object in its bottom panel, or
+    /// hide it (E10-S07): the object the buffer was loaded from, else the one its manifest
+    /// names. Comments, key order and server-owned fields are ignored. Reads the cluster only.
+    #[serde(rename = "editor::ShowDiff")]
+    EditorShowDiff,
+    /// Switch the focused editor's diff between side by side and inline (E10-S07).
+    #[serde(rename = "editor::ToggleDiffLayout")]
+    EditorToggleDiffLayout,
+    /// Replace the focused editor's buffer with the live object, dropping its edits (E10-S07,
+    /// the changed-on-server banner's "Reload"). A buffer not loaded from an object loads the
+    /// one its manifest names. Reads the cluster only.
+    #[serde(rename = "editor::ReloadFromServer")]
+    EditorReloadFromServer,
+    /// Merge the server's change into the focused editor's buffer, three-way against the
+    /// version it was loaded from (E10-S07, the banner's "Merge"). Conflicts wait for a side.
+    #[serde(rename = "editor::MergeFromServer")]
+    EditorMergeFromServer,
+    /// Keep the focused editor's buffer as it is over the server's change (E10-S07, the
+    /// banner's "Keep mine"); a merge waiting for sides is dropped.
+    #[serde(rename = "editor::KeepMine")]
+    EditorKeepMine,
+    /// Settle conflict `conflict` (counting from 0) of the focused editor's merge with the
+    /// buffer's lines (E10-S07).
+    #[serde(rename = "editor::TakeMine")]
+    EditorTakeMine {
+        /// The conflict, counting from 0.
+        conflict: u32,
+    },
+    /// Settle conflict `conflict` (counting from 0) of the focused editor's merge with the
+    /// server's lines (E10-S07).
+    #[serde(rename = "editor::TakeServer")]
+    EditorTakeServer {
+        /// The conflict, counting from 0.
+        conflict: u32,
+    },
+    /// Put the focused editor's merge in its buffer once every conflict has a side (E10-S07).
+    #[serde(rename = "editor::AcceptMerge")]
+    EditorAcceptMerge,
     /// Open the list of the cluster's CustomResourceDefinitions (the sidebar's "Definitions").
     /// Read-only.
     #[serde(rename = "crd::OpenList")]
@@ -979,6 +1017,14 @@ impl Command {
             Command::EditorConvertToYaml => CommandId::EDITOR_CONVERT_TO_YAML,
             Command::EditorUseJson => CommandId::EDITOR_USE_JSON,
             Command::EditorUseYaml => CommandId::EDITOR_USE_YAML,
+            Command::EditorShowDiff => CommandId::EDITOR_SHOW_DIFF,
+            Command::EditorToggleDiffLayout => CommandId::EDITOR_TOGGLE_DIFF_LAYOUT,
+            Command::EditorReloadFromServer => CommandId::EDITOR_RELOAD_FROM_SERVER,
+            Command::EditorMergeFromServer => CommandId::EDITOR_MERGE_FROM_SERVER,
+            Command::EditorKeepMine => CommandId::EDITOR_KEEP_MINE,
+            Command::EditorTakeMine { .. } => CommandId::EDITOR_TAKE_MINE,
+            Command::EditorTakeServer { .. } => CommandId::EDITOR_TAKE_SERVER,
+            Command::EditorAcceptMerge => CommandId::EDITOR_ACCEPT_MERGE,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -1284,6 +1330,14 @@ mod tests {
             Command::EditorConvertToYaml,
             Command::EditorUseJson,
             Command::EditorUseYaml,
+            Command::EditorShowDiff,
+            Command::EditorToggleDiffLayout,
+            Command::EditorReloadFromServer,
+            Command::EditorMergeFromServer,
+            Command::EditorKeepMine,
+            Command::EditorTakeMine { conflict: 0 },
+            Command::EditorTakeServer { conflict: 2 },
+            Command::EditorAcceptMerge,
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -1666,6 +1720,14 @@ mod tests {
                     | Command::EditorConvertToYaml
                     | Command::EditorUseJson
                     | Command::EditorUseYaml
+                    | Command::EditorShowDiff
+                    | Command::EditorToggleDiffLayout
+                    | Command::EditorReloadFromServer
+                    | Command::EditorMergeFromServer
+                    | Command::EditorKeepMine
+                    | Command::EditorTakeMine { .. }
+                    | Command::EditorTakeServer { .. }
+                    | Command::EditorAcceptMerge
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }

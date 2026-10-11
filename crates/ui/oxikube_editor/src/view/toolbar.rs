@@ -1,6 +1,6 @@
 //! The editor's toolbar: what is checked against what (the cluster, or syntax only), the problem
-//! count, and the Read-only and Wrap toggles. Each toggle sends its `editor::*` command, like the
-//! keys and the palette.
+//! count, and the Read-only, Wrap and Diff (vs live, E10-S07) toggles. Each toggle sends its
+//! `editor::*` command, like the keys and the palette.
 //!
 //! The bus commands carry no target: [`EditorViews`](super::EditorViews) acts on the focused
 //! editor. gpui-component's `Button` keeps the focus where it was on mouse-down, so a toggle
@@ -21,7 +21,7 @@ use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 use super::manifest_editor::ManifestEditor;
 use super::model::Problems;
 use super::{
-    ConvertToJson, ConvertToYaml, ToggleManagedFields, ToggleReadOnly, ToggleSecretMask,
+    ConvertToJson, ConvertToYaml, ShowDiff, ToggleManagedFields, ToggleReadOnly, ToggleSecretMask,
     ToggleSoftWrap,
 };
 use crate::json::{Language, LanguageMode};
@@ -111,6 +111,15 @@ impl ManifestEditor {
                 &ToggleSoftWrap,
                 wrap,
                 Command::EditorToggleSoftWrap,
+                false,
+                cx,
+            ))
+            .child(self.toggle(
+                "manifest-diff-toggle",
+                "Diff",
+                &ShowDiff,
+                self.diff_open(),
+                Command::EditorShowDiff,
                 false,
                 cx,
             ))

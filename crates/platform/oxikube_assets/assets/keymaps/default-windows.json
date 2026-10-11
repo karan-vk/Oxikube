@@ -406,7 +406,14 @@
       "alt-v": "editor::ToggleSecretMask",
       "ctrl-alt-r": "editor::ToggleReadOnly",
       "ctrl-alt-j": "editor::ConvertToJson",
-      "ctrl-alt-y": "editor::ConvertToYaml"
+      "ctrl-alt-y": "editor::ConvertToYaml",
+      // Diff vs live (E10-S07): ctrl-shift-d shows the diff against the live object in the bottom
+      // panel, ctrl-alt-shift-d switches it between side by side and inline, ctrl-alt-shift-r
+      // reloads the buffer from the server. The banner's Merge and Keep mine are buttons (and
+      // palette entries). Not ctrl-alt-d: desktops take it to show the desktop.
+      "ctrl-shift-d": "editor::ShowDiff",
+      "ctrl-alt-shift-d": "editor::ToggleDiffLayout",
+      "ctrl-alt-shift-r": "editor::ReloadFromServer"
     }
   },
   {

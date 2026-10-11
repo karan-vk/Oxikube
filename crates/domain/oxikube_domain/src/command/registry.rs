@@ -46,6 +46,22 @@ impl CommandId {
     pub const CRD_OPEN_LIST: CommandId = CommandId::new("crd::OpenList");
     /// `crd::OpenResources`: open the table of the custom resources a CRD defines.
     pub const CRD_OPEN_RESOURCES: CommandId = CommandId::new("crd::OpenResources");
+    /// `editor::AcceptMerge`: put the focused editor's settled merge in its buffer.
+    pub const EDITOR_ACCEPT_MERGE: CommandId = CommandId::new("editor::AcceptMerge");
+    /// `editor::KeepMine`: keep the focused editor's buffer over the server's change.
+    pub const EDITOR_KEEP_MINE: CommandId = CommandId::new("editor::KeepMine");
+    /// `editor::MergeFromServer`: merge the server's change into the focused editor's buffer.
+    pub const EDITOR_MERGE_FROM_SERVER: CommandId = CommandId::new("editor::MergeFromServer");
+    /// `editor::ReloadFromServer`: replace the focused editor's buffer with the live object.
+    pub const EDITOR_RELOAD_FROM_SERVER: CommandId = CommandId::new("editor::ReloadFromServer");
+    /// `editor::ShowDiff`: show or hide the focused editor's diff against the live object.
+    pub const EDITOR_SHOW_DIFF: CommandId = CommandId::new("editor::ShowDiff");
+    /// `editor::TakeMine`: settle a merge conflict with the buffer's lines.
+    pub const EDITOR_TAKE_MINE: CommandId = CommandId::new("editor::TakeMine");
+    /// `editor::TakeServer`: settle a merge conflict with the server's lines.
+    pub const EDITOR_TAKE_SERVER: CommandId = CommandId::new("editor::TakeServer");
+    /// `editor::ToggleDiffLayout`: switch the editor's diff between side by side and inline.
+    pub const EDITOR_TOGGLE_DIFF_LAYOUT: CommandId = CommandId::new("editor::ToggleDiffLayout");
     /// `editor::ConvertToJson`: replace the focused manifest editor's YAML with the same data as JSON.
     pub const EDITOR_CONVERT_TO_JSON: CommandId = CommandId::new("editor::ConvertToJson");
     /// `editor::ConvertToYaml`: replace the focused manifest editor's JSON with the same data as YAML.
@@ -415,6 +431,15 @@ pub static COMMANDS: &[CommandMeta] = &[
     // `resource::Apply`, which is guarded.
     // The conversions replace the buffer's text (one undo step) and read nothing from a cluster;
     // the mode switches change only how the buffer is highlighted and checked (E10-S10).
+    // The diff vs live and the changed-on-server banner (E10-S07) read the object and change the
+    // buffer only.
+    CommandMeta::read(
+        CommandId::EDITOR_ACCEPT_MERGE,
+        "Accept Manifest Merge",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
     CommandMeta::read(
         CommandId::EDITOR_CONVERT_TO_JSON,
         "Convert Manifest to JSON",
@@ -430,11 +455,60 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(EDITOR_VIEW),
     CommandMeta::read(
+        CommandId::EDITOR_KEEP_MINE,
+        "Keep My Manifest Changes",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_MERGE_FROM_SERVER,
+        "Merge Server Changes into Manifest",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
         CommandId::EDITOR_NEW_MANIFEST,
         "New Manifest",
         CommandScope::Global,
         NONE,
     ),
+    CommandMeta::read(
+        CommandId::EDITOR_RELOAD_FROM_SERVER,
+        "Reload Manifest from Server",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_SHOW_DIFF,
+        "Show Diff vs Live",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_TAKE_MINE,
+        "Take My Side of a Merge Conflict",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_TAKE_SERVER,
+        "Take the Server's Side of a Merge Conflict",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_TOGGLE_DIFF_LAYOUT,
+        "Toggle Diff Side by Side / Inline",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
     // "Read-only" here is the editor's view state, not the cluster's read-only guard.
     // Re-renders the text of an opened resource without `managedFields`; reads nothing more
     // from the cluster.

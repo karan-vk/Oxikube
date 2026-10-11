@@ -76,6 +76,83 @@ fn no_key_is_bound_twice_in_one_context() {
     }
 }
 
+/// Chords the OS (or the desktop) takes before an app sees them, so a default bound to one never
+/// fires: macOS's Dock, Spotlight, app switcher, screenshots, force quit, lock screen and Mission
+/// Control; the common Linux desktops' show desktop, terminal, lock, run and switcher; Windows'
+/// security screen, Task Manager, Start and switcher.
+const RESERVED: [(&str, &[&str]); 3] = [
+    (
+        "macos",
+        &[
+            "cmd-alt-d",
+            "cmd-space",
+            "cmd-tab",
+            "cmd-shift-3",
+            "cmd-shift-4",
+            "cmd-shift-5",
+            "cmd-alt-escape",
+            "ctrl-cmd-q",
+            "ctrl-up",
+            "ctrl-down",
+        ],
+    ),
+    (
+        "linux",
+        &[
+            "ctrl-alt-d",
+            "ctrl-alt-t",
+            "ctrl-alt-l",
+            "ctrl-alt-delete",
+            "alt-tab",
+            "alt-f2",
+        ],
+    ),
+    (
+        "windows",
+        &[
+            "ctrl-alt-delete",
+            "ctrl-shift-escape",
+            "ctrl-escape",
+            "alt-tab",
+        ],
+    ),
+];
+
+/// A keystroke with its modifiers in one order (`alt-cmd-d` and `cmd-alt-d` are one chord).
+fn chord(keystroke: &str) -> String {
+    let (modifiers, key) = match keystroke.strip_suffix("--") {
+        Some(modifiers) => (modifiers, "-"),
+        None => keystroke.rsplit_once('-').unwrap_or(("", keystroke)),
+    };
+    let mut parts: Vec<&str> = modifiers.split('-').filter(|m| !m.is_empty()).collect();
+    parts.sort_unstable();
+    parts.push(key);
+    parts.join("-")
+}
+
+#[test]
+fn no_default_is_a_chord_the_os_takes_first() {
+    for ((name, platform), (reserved_for, reserved)) in PLATFORMS.into_iter().zip(RESERVED) {
+        assert_eq!(name, reserved_for);
+        let reserved: Vec<String> = reserved.iter().map(|k| chord(k)).collect();
+        for section in defaults(platform) {
+            for (keystrokes, value) in &section.bindings {
+                let taken = keystrokes
+                    .split_whitespace()
+                    .find(|k| reserved.contains(&chord(k)));
+                if let Some(taken) = taken {
+                    panic!(
+                        "{name}: `{keystrokes}` ({}) in `{}` is `{taken}`, which the OS takes \
+                         before the app sees it",
+                        action_text(value),
+                        context_of(&section)
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Actions of the default keymaps that move a cursor, a selection or the focus inside one view,
 /// or are OS window chrome. They are view business, not commands: they have no MCP tool and
 /// no palette entry. Anything else a default binds must dispatch a command (be one, or stand

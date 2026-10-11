@@ -13,6 +13,7 @@
 //! | `commands` | the bus handlers ([`register_commands`]): queue an [`EditorRequest`] on the window's [`EditorViewSink`] |
 //! | `convert` | the YAML to JSON conversion (one undo step, off the UI thread) and the language switch (E10-S10) |
 //! | `notice` | the one-line bar that says what a conversion did and could not carry over, with Undo |
+//! | `live` | diff vs live (E10-S07): the watch on the edited object, the changed-on-server banner (Merge / Reload / Keep mine), the diff side by side or inline in the bottom panel ([`LiveSource`], [`SessionLive`]) |
 //! | `controller` | [`EditorViews`]: applies the requests in the shown workspace through an [`EditorHost`] ([`ClusterEditorHost`] in the app) |
 //!
 //! The editor never writes its buffer anywhere: not to the layout, not to logs. Applying it to a
@@ -22,6 +23,7 @@ mod commands;
 mod controller;
 mod convert;
 mod item;
+mod live;
 mod manifest_editor;
 mod model;
 mod notice;
@@ -37,6 +39,7 @@ use oxikube_workspace::CommandDispatcher;
 
 pub use commands::{EDITOR_COMMANDS, EditorRequest, EditorViewSink, register_commands};
 pub use controller::{ClusterEditorHost, EditorHost, EditorViews, EditorViewsDeps};
+pub use live::{DIFF_DEBOUNCE, DiffLayout, LiveSource, SessionLive};
 pub use manifest_editor::{ManifestEditor, ManifestEditorParts};
 pub use model::{Accepted, ManifestModel, Problems};
 pub use notice::{Notice, NoticeLevel};
@@ -68,6 +71,15 @@ actions!(
         /// Replace the focused manifest editor's JSON with the same data as YAML
         /// (`editor::ConvertToYaml`).
         ConvertToYaml,
+        /// Show the focused editor's diff against the live object, or hide it
+        /// (`editor::ShowDiff`).
+        ShowDiff,
+        /// Switch the focused editor's diff between side by side and inline
+        /// (`editor::ToggleDiffLayout`).
+        ToggleDiffLayout,
+        /// Replace the focused editor's buffer with the live object
+        /// (`editor::ReloadFromServer`).
+        ReloadFromServer,
     ]
 );
 

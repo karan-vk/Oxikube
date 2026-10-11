@@ -5,12 +5,16 @@
 //! E10-S06: `e` on a pods table row, the detail drawer's "Edit" and "View YAML in Editor" buttons
 //! and the bus open a tab titled `kind/name` in the cluster's tab, reading the object fresh from
 //! the connection's reader; the same object reuses its tab.
+//!
+//! Diff vs live (E10-S07): the reload key loads the object a typed manifest names from the connected
+//! cluster (its session's resource port) and the diff key opens the diff against it.
 
 use std::sync::Arc;
 
 use futures::executor::block_on;
 use gpui::TestAppContext;
 use oxikube_app::command_bus::DispatchContext;
+use oxikube_domain::Resource;
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::Gvk;
@@ -35,15 +39,7 @@ fn the_editor_commands_are_on_the_bus(cx: &mut TestAppContext) {
     let mut app = App::start(cx, TestPorts::seeded());
     let state = app.vcx.update(|_, cx| AppState::global(cx));
     let bus = state.command_bus().expect("the bus");
-    for id in [
-        CommandId::EDITOR_NEW_MANIFEST,
-        CommandId::EDITOR_TOGGLE_READ_ONLY,
-        CommandId::EDITOR_TOGGLE_SOFT_WRAP,
-        CommandId::EDITOR_CONVERT_TO_JSON,
-        CommandId::EDITOR_CONVERT_TO_YAML,
-        CommandId::EDITOR_USE_JSON,
-        CommandId::EDITOR_USE_YAML,
-    ] {
+    for id in oxikube_editor::view::EDITOR_COMMANDS {
         assert_eq!(bus.owner(id), Some("oxikube_editor"), "{id}");
         assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");
     }
@@ -184,6 +180,33 @@ fn e_on_a_pods_row_opens_the_pod_in_an_editable_tab_of_the_cluster(cx: &mut Test
     assert_eq!(tab_editors(&mut app).len(), 1, "no duplicate tab");
 }
 
+/// An editor opened from a row follows its object (E10-S07): the diff key shows no difference
+/// for the text it opened with, and a typed change shows in the diff.
+#[gpui::test]
+fn an_editor_opened_from_a_row_follows_its_object_and_diffs_against_it(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.open_pods_table();
+    app.press("e");
+    app.tick();
+    let editors = tab_editors(&mut app);
+    assert_eq!(editors.len(), 1);
+    let target = app.vcx.update(|_, cx| {
+        editors[0]
+            .read(cx)
+            .live_target()
+            .map(|t| t.name.to_string())
+    });
+    assert_eq!(target.as_deref(), Some("web-running"));
+
+    app.press(key("cmd-shift-d", "ctrl-shift-d"));
+    app.tick();
+    let diff = app
+        .vcx
+        .update(|_, cx| editors[0].read(cx).diff())
+        .expect("the diff against the live object");
+    assert!(diff.is_empty(), "the buffer holds the live object");
+}
+
 #[gpui::test]
 fn the_detail_drawer_opens_the_editor_from_its_header(cx: &mut TestAppContext) {
     let mut app = App::start(cx, TestPorts::seeded());
@@ -312,4 +335,68 @@ fn the_conversion_commands_are_offered_only_while_an_editor_has_the_focus(cx: &m
     assert_eq!(in_editor.len(), 4, "{in_editor:?}");
     let read_only = offered(&CommandContext::new(ViewContext::Editor).read_only(true));
     assert_eq!(read_only.len(), 4, "text edits are not cluster mutations");
+}
+
+fn key(mac: &'static str, other: &'static str) -> &'static str {
+    if cfg!(target_os = "macos") {
+        mac
+    } else {
+        other
+    }
+}
+
+#[gpui::test]
+fn the_reload_key_loads_the_named_object_and_the_diff_key_compares_with_it(
+    cx: &mut TestAppContext,
+) {
+    let ports = TestPorts::seeded();
+    let live = Resource::from_json(json!({
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {"name": "web", "namespace": "shop", "resourceVersion": "7"},
+        "data": {"a": "1"}
+    }))
+    .unwrap();
+    let resources = ports
+        .connector
+        .ports_for(&TestPorts::cluster_id())
+        .resources;
+    resources.insert(live.clone());
+    let mut app = App::start(cx, ports);
+    app.press("enter");
+    let tab = app.cluster_tabs().pop().expect("the cluster tab");
+    let workspace = app.vcx.update(|_, cx| tab.read(cx).workspace().clone());
+    app.press(new_manifest_key());
+    let editor = app
+        .vcx
+        .update(|_, cx| workspace.read(cx).items_of_type::<ManifestEditor>())
+        .pop()
+        .expect("the editor opened in the cluster tab");
+    app.vcx.simulate_input(
+        "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: web, namespace: shop}\n",
+    );
+
+    app.press(key("cmd-alt-shift-r", "ctrl-alt-shift-r"));
+    let (text, target) = app.vcx.update(|_, cx| {
+        let view = editor.read(cx);
+        (
+            view.editor().read(cx).snapshot(cx).to_text().to_string(),
+            view.live_target().map(|t| t.name.to_string()),
+        )
+    });
+    assert_eq!(text, oxikube_editor::diff::buffer_text(&live));
+    assert_eq!(target.as_deref(), Some("web"));
+    let follows = resources.recorded_calls().into_iter().any(|call| {
+        matches!(call, oxikube_testkit::fakes::ResourceCall::Watch { namespace, options, .. }
+            if namespace.as_deref() == Some("shop")
+                && options.field_selector.as_deref() == Some("metadata.name=web"))
+    });
+    assert!(follows, "the editor watches the object it loaded");
+
+    app.press(key("cmd-shift-d", "ctrl-shift-d"));
+    let diff = app
+        .vcx
+        .update(|_, cx| editor.read(cx).diff())
+        .expect("the diff against the live object");
+    assert!(diff.is_empty(), "the buffer holds the live object");
 }

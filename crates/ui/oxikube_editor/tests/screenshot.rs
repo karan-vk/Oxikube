@@ -159,6 +159,7 @@ fn render_error_dark() -> Result<RgbaImage> {
             schemas: Some(Rc::new(Schemas { cluster, port })),
             dispatcher: Rc::new(NoBus),
             resource: None,
+            live: None,
         };
         let entity = cx.new(|cx| ManifestEditor::new(parts, window, cx));
         editor = Some(entity.clone());
@@ -209,6 +210,7 @@ fn render_opened(object: Resource, mode: OpenMode, errors: usize) -> Result<Rgba
                 reader: Some(reader),
                 cluster_read_only: false,
             }),
+            live: None,
         };
         let entity = cx.new(|cx| ManifestEditor::new(parts, window, cx));
         editor = Some(entity.clone());
@@ -285,6 +287,7 @@ fn render_json_dark() -> Result<RgbaImage> {
             schemas: None,
             dispatcher: Rc::new(NoBus),
             resource: None,
+            live: None,
         };
         let entity = cx.new(|cx| ManifestEditor::new(parts, window, cx));
         editor = Some(entity.clone());
