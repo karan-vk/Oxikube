@@ -5,7 +5,8 @@
 //!
 //! * [`PodSummary`] and [`ContainerSummary`] for Pods, with the `STATUS` column computed by the
 //!   same rules as `kubectl get pods`.
-//! * [`NodeSummary`] for Nodes.
+//! * [`NodeSummary`] for Nodes, with [`NodeTaint`], [`NodeDetail`] (capacity, system info, images)
+//!   and, for the pods on a node, [`PodPlacement`], [`Demand`] and [`NodeAllocation`].
 //! * [`NamespaceSummary`] for Namespaces, and [`delete_notes`], the warnings before one is deleted.
 //! * [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets, ReplicaSets and
 //!   ReplicationControllers, and [`WorkloadDetail`] (pod template, strategy, selector, conditions)
@@ -55,6 +56,10 @@ mod job;
 mod namespace;
 pub mod network;
 mod node;
+mod node_alloc;
+mod node_detail;
+mod node_load;
+mod node_taint;
 mod pod;
 mod pod_health;
 mod service;
@@ -85,6 +90,10 @@ pub use namespace::{
     protected_reason,
 };
 pub use node::NodeSummary;
+pub use node_alloc::{AllocationLine, AllocationResource, NodeAllocation};
+pub use node_detail::{CapacityRow, NodeDetail, NodeImage};
+pub use node_load::{Demand, PodPlacement};
+pub use node_taint::{NodeTaint, TaintEffect};
 pub use pod::{
     ComputeResources, ContainerKind, ContainerPort, ContainerState, ContainerSummary, PodPhase,
     PodSummary, Probes, QosClass, ResourceAmounts, TerminatedState,

@@ -28,6 +28,9 @@
 //!   panels of an Ingress (rules table, TLS secret, load balancer), a NetworkPolicy (peers, ports, the
 //!   IP block exception, default-deny egress) and an HTTPRoute (the parent that refused it, the
 //!   unresolved backend), with the generic rows below (E12-S14).
+//! - `detail_node_dark`, `detail_node_light` (`node`): the detail drawer of a cordoned worker
+//!   (E12-S09): the badge, conditions, the allocation bars from the pods on the node, taints,
+//!   pods, images, capacity and system info.
 //! - `exec_picker_dark`, `exec_picker_light` (`exec`): the container picker of a pod with three
 //!   containers, the default one selected (E09-S08; the generic picker of E11-S02 since).
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
@@ -88,6 +91,8 @@ mod exec;
 mod namespaces;
 #[path = "screenshot/network.rs"]
 mod network;
+#[path = "screenshot/node.rs"]
+mod node;
 #[path = "screenshot/pods.rs"]
 mod pods;
 #[path = "screenshot/service.rs"]
@@ -275,6 +280,7 @@ fn main() -> ExitCode {
         crd::run(),
         network::run(),
         exec::run(),
+        node::run(),
         pods::run(),
         service::run(),
         namespaces::run(),

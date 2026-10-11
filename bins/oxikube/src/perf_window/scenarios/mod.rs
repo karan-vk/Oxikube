@@ -35,6 +35,11 @@ pub fn pods() -> Gvk {
     Gvk::new("", "v1", "Pod")
 }
 
+/// The `Node` kind.
+pub fn nodes() -> Gvk {
+    Gvk::new("", "v1", "Node")
+}
+
 /// Where in its back-and-forth (radians) a resize drag is on refresh `index`.
 pub fn drag_phase(index: u64) -> f32 {
     (index as f32 / RESIZE_PERIOD) * TAU
@@ -63,6 +68,7 @@ pub async fn run(run: &WindowRun, driver: &mut Driver<'_>) -> Result<()> {
         Scenario::Namespaces => table::namespaces(driver).await,
         Scenario::Theme => table::theme(driver).await,
         Scenario::Sidebar => table::sidebar(driver).await,
+        Scenario::NodesTable => table::nodes_table(driver).await,
         Scenario::Idle => table::idle(driver).await,
         Scenario::DetailDrawer => drawer::run(driver).await,
         Scenario::TabsPanes => tabs::run(driver).await,

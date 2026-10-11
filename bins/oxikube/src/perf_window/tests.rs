@@ -192,7 +192,8 @@ fn every_scenario_has_a_name_a_world_and_the_frame_budget() {
             | Scenario::TableFilter
             | Scenario::Namespaces
             | Scenario::Theme
-            | Scenario::Sidebar => {
+            | Scenario::Sidebar
+            | Scenario::NodesTable => {
                 assert_eq!(world.clusters.len(), 1);
                 assert_eq!(world.clusters[0].pods, super::PODS);
                 assert_eq!(

@@ -15,7 +15,7 @@ use oxikube_runtime::perf::windowed::Flow;
 use oxikube_settings::SettingsStore;
 use oxikube_theme::ActiveTheme;
 
-use super::{KEY_EVERY, SETTLE, pods, typing};
+use super::{KEY_EVERY, SETTLE, nodes, pods, typing};
 use crate::perf_window::driver::{Driver, key, middle, scroll, tab_workspace};
 use crate::perf_window::world::namespace_name;
 use crate::perf_window::{MAIN_CONTEXT, PHASE, PODS};
@@ -201,6 +201,29 @@ pub async fn sidebar(driver: &mut Driver<'_>) -> Result<()> {
     ensure!(
         applied > 0,
         "no watch event reached the stores during the churn"
+    );
+    Ok(())
+}
+
+/// `nodes-table`: the Nodes table open (its Pods column leases the cluster-wide Pod feed and turns
+/// the pods-by-node index on), nothing driven but the 10 000-pod churn: every refresh is watched,
+/// so a churn frame that pays for the index shows as a long or dropped one. The Pods table is not
+/// open, so every feed delta counted here went through the lease's own subscription.
+pub async fn nodes_table(driver: &mut Driver<'_>) -> Result<()> {
+    let cluster = driver.connect(MAIN_CONTEXT).await?;
+    // `open_list` returns once the table is Ready with at least one node row.
+    driver.open_list(&cluster, nodes()).await?;
+    driver.settle(SETTLE).await;
+    let before = feed_deltas();
+    driver
+        .phase("churn", Duration::from_secs(30), |_, _, _| {
+            Ok(Flow::Continue)
+        })
+        .await?;
+    let applied = feed_deltas() - before;
+    ensure!(
+        applied > 0,
+        "no Pod event reached the pods-by-node index during the churn (is the lease held?)"
     );
     Ok(())
 }

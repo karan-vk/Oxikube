@@ -55,6 +55,7 @@ pub mod metrics;
 pub mod metrics_provider;
 pub mod namespaces;
 pub mod network;
+pub mod nodes;
 pub mod search;
 pub mod session;
 pub mod sidebar;

@@ -69,6 +69,10 @@ fn actions_rig(
             oxikube_app::ingress_class::register_commands(r, sessions.clone())
         })
         .unwrap();
+    // `node::Cordon` and `node::Uncordon` (E12-S09), for real behind the real guard.
+    registry
+        .install("oxikube_app::nodes", oxikube_app::nodes::register_commands)
+        .unwrap();
     registry
         .register(
             *command::lookup(CommandId::POD_VIEW_LOGS).unwrap(),
@@ -186,6 +190,9 @@ fn actions_rig(
         rows.register(spec).unwrap();
     }
     for spec in crate::kinds::namespace::namespace_row_actions() {
+        rows.register(spec).unwrap();
+    }
+    for spec in crate::kinds::node::node_row_actions() {
         rows.register(spec).unwrap();
     }
     if exec {

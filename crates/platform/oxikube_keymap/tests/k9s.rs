@@ -32,6 +32,8 @@ actions!(
         ShellSelected,
         ScaleSelected,
         AttachSelected,
+        CordonSelected,
+        UncordonSelected,
         FocusFilter,
         ClearFilter,
         ClearSelection,
@@ -145,6 +147,60 @@ fn the_k9s_verbs_run_in_a_focused_table_on_both_oses(cx: &mut TestAppContext) {
             );
         }
     }
+}
+
+/// The node verbs (E12-S09): `c` cordons and `u` uncordons, on the Nodes table only, on every OS;
+/// both are commands, neither is bound on another kind (`u` stays free for "used by"), and a
+/// letter typed into the filter is text.
+#[gpui::test]
+fn c_and_u_cordon_and_uncordon_on_the_nodes_table_only(cx: &mut TestAppContext) {
+    use oxikube_keymap::ActionRegistry;
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        let nodes = table("Node", "");
+        assert_eq!(
+            runs(cx, "c", &strs(&nodes)),
+            Some("resource_table::CordonSelected"),
+            "{platform:?}"
+        );
+        assert_eq!(
+            runs(cx, "u", &strs(&nodes)),
+            Some("resource_table::UncordonSelected"),
+            "{platform:?}"
+        );
+        // The node shell keeps `s`.
+        assert_eq!(
+            runs(cx, "s", &strs(&nodes)),
+            Some("resource_table::ShellSelected")
+        );
+        for kind in ["Pod", "Deployment", "Secret"] {
+            let other = table(kind, "");
+            for keys in ["c", "u"] {
+                assert_eq!(
+                    press(cx, keys, &strs(&other)),
+                    Resolution::Unbound,
+                    "{keys} on {kind} ({platform:?})"
+                );
+            }
+        }
+        let typing = table("Node", "Editing");
+        for keys in ["c", "u"] {
+            assert_eq!(
+                press(cx, keys, &strs(&typing)),
+                Resolution::Unbound,
+                "{keys}"
+            );
+        }
+    }
+    // Both keys stand for the commands of the same meaning (the palette shows them next to it).
+    assert_eq!(
+        ActionRegistry::commands_of("resource_table::CordonSelected"),
+        [oxikube_domain::command::CommandId::NODE_CORDON]
+    );
+    assert_eq!(
+        ActionRegistry::commands_of("resource_table::UncordonSelected"),
+        [oxikube_domain::command::CommandId::NODE_UNCORDON]
+    );
 }
 
 /// Verbs whose handler only toasts "not available yet" (port forwarding has not landed), so they
@@ -661,7 +717,7 @@ fn the_namespace_keys_are_scoped_to_the_table_and_the_namespace_kind(cx: &mut Te
         }
         // `u` and `p` are the Namespaces table's: other kinds keep them free (E12-S18 binds
         // used-by to `u` on its own kinds).
-        for kind in ["Pod", "Deployment", "Node"] {
+        for kind in ["Pod", "Deployment"] {
             let stack = table(kind, "");
             for keys in ["u", "p"] {
                 assert_eq!(

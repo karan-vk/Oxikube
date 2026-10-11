@@ -213,8 +213,11 @@ impl ResourceTable {
             loop {
                 cx.background_executor().timer(TICK).await;
                 let alive = this.update(cx, |view, cx| {
-                    if view.active && view.ages_moved(cx) {
-                        cx.notify();
+                    if view.active {
+                        view.follow_rank(cx);
+                        if view.ages_moved(cx) {
+                            cx.notify();
+                        }
                     }
                 });
                 if alive.is_err() {

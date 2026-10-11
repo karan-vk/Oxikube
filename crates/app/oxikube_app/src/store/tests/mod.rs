@@ -10,6 +10,7 @@ mod filter;
 mod filter_bar;
 mod incremental;
 mod namespaces;
+mod nodes;
 mod order;
 mod props;
 mod refcount;

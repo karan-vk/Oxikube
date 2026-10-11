@@ -20,6 +20,7 @@
 //! | `theme` | switch theme |
 //! | `catalog` | 50 contexts, type a search |
 //! | `sidebar` | count badges under churn |
+//! | `nodes-table` | the Nodes table with its pods-by-node index on, under 10 000-pod churn |
 //! | `logs` | stream 5 000 lines/s; type a search; JSON mode |
 //! | `terminal` | a 50 MB `yes` flood; a full-screen redraw at 60 Hz; resize |
 //! | `idle` | two clusters connected, nothing moving: CPU |
@@ -68,6 +69,8 @@ pub enum Scenario {
     Catalog,
     /// Sidebar count badges under churn.
     Sidebar,
+    /// The Nodes table, whose Pods column keeps the pods-by-node index on, under pod churn.
+    NodesTable,
     /// Stream 5 000 log lines a second; search typing; JSON mode.
     Logs,
     /// `yes` flood, full-screen redraws, resize.
@@ -83,7 +86,7 @@ pub const PODS: usize = 10_000;
 
 impl Scenario {
     /// Every scenario, in report order.
-    pub const ALL: [Scenario; 11] = [
+    pub const ALL: [Scenario; 12] = [
         Scenario::PodsTable,
         Scenario::TableFilter,
         Scenario::Namespaces,
@@ -92,6 +95,7 @@ impl Scenario {
         Scenario::Theme,
         Scenario::Catalog,
         Scenario::Sidebar,
+        Scenario::NodesTable,
         Scenario::Logs,
         Scenario::Terminal,
         Scenario::Idle,
@@ -108,6 +112,7 @@ impl Scenario {
             Scenario::Theme => "theme",
             Scenario::Catalog => "catalog",
             Scenario::Sidebar => "sidebar",
+            Scenario::NodesTable => "nodes-table",
             Scenario::Logs => "logs",
             Scenario::Terminal => "terminal",
             Scenario::Idle => "idle",
@@ -129,6 +134,7 @@ impl Scenario {
             | Scenario::DetailDrawer
             | Scenario::Theme
             | Scenario::Sidebar
+            | Scenario::NodesTable
             | Scenario::Logs => WorldSpec {
                 clusters: vec![main()],
                 listed_only: 0,
@@ -167,7 +173,8 @@ impl Scenario {
             | Scenario::TableFilter
             | Scenario::Namespaces
             | Scenario::Theme
-            | Scenario::Sidebar => Budgets {
+            | Scenario::Sidebar
+            | Scenario::NodesTable => Budgets {
                 peak_rss_mib: Some(MEMORY_10K_PODS_MIB),
                 ..Budgets::default()
             },

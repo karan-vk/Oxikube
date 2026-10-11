@@ -22,6 +22,7 @@
 //! | what it gets: snapshot, then coalesced ops with positions, plus the feed state | [`Subscription`], [`StoreDelta`], [`RowOp`], [`FeedState`] (`subscription`, `mailbox`, `delta`) |
 //! | the `/` filter: grammar, name predicates, fuzzy ranking, the server-side selector split | [`filter::parse`], [`FilterExpr`], [`FilterParts`], [`NameFilter`], [`Fuzzy`] (`filter`, E07-S04) |
 //! | which feed serves a kind | [`FeedPolicy`] (`policy`) |
+//! | pods by node (the node table's Pods column, the node detail's allocation) | [`ResourceStore::lease_node_loads`], [`NodeLoadsLease`] (`nodes`, E12-S09) |
 //! | counts and health for sidebar badges and overview tiles | [`ResourceStore::counts`], [`CountsLease`], [`CountState`] (`counts`, E07-S11) |
 //! | reading a namespace's object count or a cluster-scoped kind's objects off an open feed | [`ResourceStore::count_in_namespace`], [`ResourceStore::cluster_objects`] (`peek`, E12-S16) |
 //! | the watch-budget hook and admission | [`FeedBudget`] (`budget`, `admission`) |
@@ -83,6 +84,7 @@ pub mod filter;
 mod index;
 mod keyset;
 mod mailbox;
+mod nodes;
 mod object;
 mod peek;
 mod policy;
@@ -108,6 +110,7 @@ pub use feed::{StorePorts, TableColumns};
 pub use filter::{
     FilterError, FilterExpr, FilterParts, Fuzzy, NameFilter, NameMatcher, TextPattern,
 };
+pub use nodes::NodeLoadsLease;
 pub use object::{FeedKey, FeedScope, ObjectKey, StoreObject, TableObject};
 #[cfg(test)]
 pub(crate) use policy::core_kinds;

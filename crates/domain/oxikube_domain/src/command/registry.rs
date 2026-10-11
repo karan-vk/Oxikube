@@ -1017,7 +1017,7 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::NODE_CORDON,
         "Cordon Node",
         CommandScope::Selection,
-        Risk::Medium,
+        Risk::Low,
         NONE,
     )
     .in_views(TABLE_VIEWS)

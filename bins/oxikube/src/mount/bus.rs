@@ -17,6 +17,7 @@
 //! | `oxikube_workspace` | `cluster::Select`, `SwitchTab`, `NextTab`, `PreviousTab`, `CloseTab` |
 //! | `oxikube` | `view::Open` for the catalog home, the kubeconfig sources screen and the chart gallery, `charts::OpenGallery` (the gallery's palette command, E13-S07); `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
+//! | `oxikube_app::nodes` | `node::Cordon`, `node::Uncordon` (guarded: blocked read-only, risk low so one click confirms, a server dry run of the `spec.unschedulable` patch before the real one, audit with the node and the initiator; E12-S09) |
 //! | `oxikube_app::apply` | `resource::Apply` (guarded: blocked read-only, risk low with the editor's diff preview as the confirmation, a server dry run before every apply, server-side apply as the `editor.field_manager`, the replace fallback at the reviewed `resourceVersion`, audit; E10-S08). The manifest editor runs it through `ApplyService` |
 //! | `oxikube_app::workloads` | `cronjob::Trigger` (a Job from the CronJob's template), `cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume`, `workload::Scale` (E12-S04: the `scale` subresource, risk low and medium for zero, audit with `before=` and `after=`) (guarded: blocked read-only, risk low so a simple confirm, a server dry run first, audit with the created Job's name; E12-S08) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
@@ -184,6 +185,8 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         "oxikube_app::actions",
         oxikube_app::actions::register_commands,
     )?;
+    // `node::Cordon` and `node::Uncordon` (E12-S09): guarded, confirmed once, audited.
+    registry.install("oxikube_app::nodes", oxikube_app::nodes::register_commands)?;
     registry.install("oxikube_resources_ui", |r| {
         oxikube_resources_ui::navigate::register_commands(r, parts.kinds)?;
         oxikube_resources_ui::register_commands(r, parts.resources)

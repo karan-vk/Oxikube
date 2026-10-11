@@ -17,7 +17,7 @@ numbers are measured on a mid-range x86 laptop with an integrated GPU.
 | Startup | ≤ 400 ms cold to first interactive frame; catalog before any network; settings + keymap + theme < 30 ms on the main thread | `oxikube` launch with 3 kubeconfigs, 20 contexts ([Startup](#startup-cold-start-to-the-first-interactive-frame)) |
 | Cluster open | tab interactive ≤ 200 ms after connect; first table rows ≤ 1 s after feed warm | 2 000-pod cluster |
 | Main thread | 0 blocking I/O, process spawn, or lock contention > 1 ms | any |
-| Memory | 10 k pods < 400 MB (ADR 0016: the peak of the windowed scenarios whose load is the 10 000-pod cluster alone: `pods-table`, `table-filter`, `namespaces`, `theme`, `sidebar`); idle < 150 MB (2 clusters; ADR 0016: the peak of the windowed `idle` scenario); logs/events ring-buffered | steady state after 10 min |
+| Memory | 10 k pods < 400 MB (ADR 0016: the peak of the windowed scenarios whose load is the 10 000-pod cluster alone: `pods-table`, `table-filter`, `namespaces`, `theme`, `sidebar`, `nodes-table`); idle < 150 MB (2 clusters; ADR 0016: the peak of the windowed `idle` scenario); logs/events ring-buffered | steady state after 10 min |
 | CPU idle | < 1 % with two clusters connected and no visible churn (ADR 0016: the windowed `idle` scenario) | laptop on battery |
 | Terminal | 60 fps under `yes`/`htop`; resize ≤ 1 frame | local shell + exec |
 | Editor | typing latency ≤ 16 ms with validation, hover and completion debounced and off the UI thread; 5 MB file opens ≤ 500 ms | manifest editor |
@@ -355,6 +355,7 @@ another Space): the run then stops after 5 s without a refresh and says so.
 | `theme` | the pods table under churn | `switch-theme` (15 s: One Light / One Dark every half second through the settings store, the path a `settings.json` hot reload takes) |
 | `catalog` | 50 contexts | `type-search` (15 s: `listed-42` typed at 15 keys/s into the catalog's search, erased, again) |
 | `sidebar` | 10 000 pods churning, the cluster's first screen (Workloads overview) with the sidebar's count badges | `churn` (30 s, every refresh watched, nothing driven) |
+| `nodes-table` (E12-S09) | 10 000 pods churning on the synthetic cluster's nodes, the Nodes table open and nothing else: its Pods column leases the cluster-wide Pod feed and turns the pods-by-node index on | `churn` (30 s, every refresh watched, nothing driven; fails unless Pod deltas reached the store through the lease) |
 | `logs` | a pod writing 5 000 lines/s (the mixed JSON / plain stream of the headless `logs-stream`) | `stream-json` (10 s, JSON mode, the default), `type-search` (10 s: `logs::Find`, then `slow` typed and erased), `stream-raw` (10 s, `logs::ToggleJsonMode` off) |
 | `terminal` | a real shell: `LocalPty` running `/bin/sh` (`SHELL=/bin/sh` from xtask), or `pod::Shell` in a busybox pod on kind | `yes-flood` (until a 50 MB `yes` ends), `redraw-60hz` (8 s: an `awk` script rewriting every row in colour 60 times a second), `resize` (8 s, the window swept every refresh during the redraw) |
 | `idle` | two clusters, 1 000 pods each, no churn, both pods tables open | `idle` (30 s): the idle CPU and idle memory (< 150 MB, judged on the run's peak RSS) budgets |

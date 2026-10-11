@@ -35,6 +35,9 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ("resource_table::AttachSelected", CommandId::POD_ATTACH),
     // `s` on a Deployment, StatefulSet, ReplicaSet or ReplicationController (E12-S04).
     ("resource_table::ScaleSelected", CommandId::WORKLOAD_SCALE),
+    // `c` / `u` on the Nodes table (E12-S09).
+    ("resource_table::CordonSelected", CommandId::NODE_CORDON),
+    ("resource_table::UncordonSelected", CommandId::NODE_UNCORDON),
     ("resource_table::DebugSelected", CommandId::POD_DEBUG),
     ("resource_table::ViewYaml", CommandId::RESOURCE_VIEW_YAML),
     (
