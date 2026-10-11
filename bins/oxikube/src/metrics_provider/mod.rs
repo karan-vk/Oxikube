@@ -5,6 +5,8 @@
 //!   port reaches an in-cluster Prometheus through the clusters' service proxies
 //!   (`SessionProxies`) and is told where each cluster's provider is by the service
 //!   (`PromqlSink`). Constructing spawns and reads nothing.
+//! * The app's [`QueryCataloguePort`] (E13-S06) sits next to the PromQL port in [`MetricsServices`]: it
+//!   builds the query for the provider the service found, with no I/O.
 //! * [`start`] runs on the first window mount: a foreground task follows the session updates
 //!   (it waits, and per update does a short in-memory evaluation, so an idle app has no metrics
 //!   task on the Tokio runtime), and every change of the settings is passed on
@@ -27,8 +29,10 @@ use oxikube_app::metrics_provider::Resolved;
 use oxikube_app::store::Spawner;
 use oxikube_app::{ClusterSessionManager, EndpointSink, MetricsProviderService};
 use oxikube_domain::ids::ClusterId;
-use oxikube_ports::{PromqlPort, ProviderDetectorPort, ServiceProxyPort};
-use oxikube_prometheus::{PrometheusPort, PromqlClient, ProviderDetector, ServiceProxies};
+use oxikube_ports::{PromqlPort, ProviderDetectorPort, QueryCataloguePort, ServiceProxyPort};
+use oxikube_prometheus::{
+    PrometheusPort, PromqlCatalogue, PromqlClient, ProviderDetector, ServiceProxies,
+};
 use oxikube_settings::{ClusterSettings, Settings as _};
 
 pub use writer::SettingsMetricsWriter;
@@ -42,6 +46,9 @@ pub struct MetricsServices {
     pub provider: MetricsProviderService,
     /// PromQL queries per cluster (the graphs read through this).
     pub promql: Arc<dyn PromqlPort>,
+    /// The PromQL of a `MetricRequest` for a detected stack (E13-S06): the graphs ask this, then
+    /// run the query through [`promql`](Self::promql).
+    pub catalogue: Arc<dyn QueryCataloguePort>,
 }
 
 /// The services over `ports`, following `sessions`. Constructs only.
@@ -59,6 +66,7 @@ pub fn build(ports: &AppPorts, sessions: &ClusterSessionManager) -> MetricsServi
     MetricsServices {
         provider: MetricsProviderService::new(sessions.clone(), detector, sink),
         promql: port,
+        catalogue: Arc::new(PromqlCatalogue),
     }
 }
 

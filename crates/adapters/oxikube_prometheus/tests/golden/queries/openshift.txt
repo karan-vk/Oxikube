@@ -1,0 +1,119 @@
+# OpenShift monitoring (openshift): rate window 2m
+# one line per target and metric; `-` is a combination with no query
+
+## cluster
+cpu_usage: sum(rate(node_cpu_seconds_total{mode!="idle"}[2m]))
+cpu_requests: sum(kube_pod_container_resource_requests{resource="cpu"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} == 1))
+cpu_limits: sum(kube_pod_container_resource_limits{resource="cpu"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} == 1))
+memory_usage: sum(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+memory_requests: sum(kube_pod_container_resource_requests{resource="memory"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} == 1))
+memory_limits: sum(kube_pod_container_resource_limits{resource="memory"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} == 1))
+network_rx: sum(rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*|br-.*|cni.*|flannel.*|cali.*|cilium.*|lxc.*|tunl.*|vxlan.*|kube-.*|virbr.*|weave|tap.*"}[2m]))
+network_tx: sum(rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|br-.*|cni.*|flannel.*|cali.*|cilium.*|lxc.*|tunl.*|vxlan.*|kube-.*|virbr.*|weave|tap.*"}[2m]))
+disk_usage: sum(node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|ramfs|squashfs"} - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|ramfs|squashfs"})
+disk_capacity: sum(node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|ramfs|squashfs"})
+pod_count: sum(kube_pod_status_phase{phase=~"Pending|Running"})
+
+## node worker-1
+cpu_usage: sum(rate(node_cpu_seconds_total{mode!="idle"}[2m]) and on (instance) node_uname_info{nodename="worker-1"})
+cpu_requests: sum(kube_pod_container_resource_requests{resource="cpu",node="worker-1"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} == 1))
+cpu_limits: sum(kube_pod_container_resource_limits{resource="cpu",node="worker-1"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} == 1))
+memory_usage: sum((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) and on (instance) node_uname_info{nodename="worker-1"})
+memory_requests: sum(kube_pod_container_resource_requests{resource="memory",node="worker-1"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} == 1))
+memory_limits: sum(kube_pod_container_resource_limits{resource="memory",node="worker-1"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} == 1))
+network_rx: sum(rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*|br-.*|cni.*|flannel.*|cali.*|cilium.*|lxc.*|tunl.*|vxlan.*|kube-.*|virbr.*|weave|tap.*"}[2m]) and on (instance) node_uname_info{nodename="worker-1"})
+network_tx: sum(rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|br-.*|cni.*|flannel.*|cali.*|cilium.*|lxc.*|tunl.*|vxlan.*|kube-.*|virbr.*|weave|tap.*"}[2m]) and on (instance) node_uname_info{nodename="worker-1"})
+disk_usage: sum((node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|ramfs|squashfs"} - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|ramfs|squashfs"}) and on (instance) node_uname_info{nodename="worker-1"})
+disk_capacity: sum(node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|ramfs|squashfs"} and on (instance) node_uname_info{nodename="worker-1"})
+pod_count: count(kube_pod_info{node="worker-1"} and on (namespace, pod) (sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Running"}) > 0))
+
+## namespace shop
+cpu_usage: sum(rate(container_cpu_usage_seconds_total{namespace="shop",container!="",container!="POD"}[2m]))
+cpu_requests: sum(kube_pod_container_resource_requests{resource="cpu",namespace="shop"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running",namespace="shop"} == 1))
+cpu_limits: sum(kube_pod_container_resource_limits{resource="cpu",namespace="shop"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running",namespace="shop"} == 1))
+memory_usage: sum(container_memory_working_set_bytes{namespace="shop",container!="",container!="POD"})
+memory_requests: sum(kube_pod_container_resource_requests{resource="memory",namespace="shop"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running",namespace="shop"} == 1))
+memory_limits: sum(kube_pod_container_resource_limits{resource="memory",namespace="shop"} * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running",namespace="shop"} == 1))
+network_rx: sum(rate(container_network_receive_bytes_total{namespace="shop"}[2m]))
+network_tx: sum(rate(container_network_transmit_bytes_total{namespace="shop"}[2m]))
+disk_usage: sum(kubelet_volume_stats_used_bytes{namespace="shop"})
+disk_capacity: sum(kubelet_volume_stats_capacity_bytes{namespace="shop"})
+pod_count: sum(kube_pod_status_phase{phase=~"Pending|Running",namespace="shop"})
+
+## pod shop/web-0
+cpu_usage: sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="shop",pod="web-0",container!="",container!="POD"}[2m]))
+cpu_requests: sum by (pod) (kube_pod_container_resource_requests{resource="cpu",namespace="shop",pod="web-0"})
+cpu_limits: sum by (pod) (kube_pod_container_resource_limits{resource="cpu",namespace="shop",pod="web-0"})
+memory_usage: sum by (pod) (container_memory_working_set_bytes{namespace="shop",pod="web-0",container!="",container!="POD"})
+memory_requests: sum by (pod) (kube_pod_container_resource_requests{resource="memory",namespace="shop",pod="web-0"})
+memory_limits: sum by (pod) (kube_pod_container_resource_limits{resource="memory",namespace="shop",pod="web-0"})
+network_rx: sum by (pod) (rate(container_network_receive_bytes_total{namespace="shop",pod="web-0"}[2m]))
+network_tx: sum by (pod) (rate(container_network_transmit_bytes_total{namespace="shop",pod="web-0"}[2m]))
+disk_usage: sum by (pod) (container_fs_usage_bytes{namespace="shop",pod="web-0",container!="",container!="POD"})
+disk_capacity: -
+pod_count: -
+
+## pods shop/web-7d9f-abcde,web-7d9f-fghij
+cpu_usage: sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="shop",pod=~"web-7d9f-abcde|web-7d9f-fghij",container!="",container!="POD"}[2m]))
+cpu_requests: sum by (pod) (kube_pod_container_resource_requests{resource="cpu",namespace="shop",pod=~"web-7d9f-abcde|web-7d9f-fghij"})
+cpu_limits: sum by (pod) (kube_pod_container_resource_limits{resource="cpu",namespace="shop",pod=~"web-7d9f-abcde|web-7d9f-fghij"})
+memory_usage: sum by (pod) (container_memory_working_set_bytes{namespace="shop",pod=~"web-7d9f-abcde|web-7d9f-fghij",container!="",container!="POD"})
+memory_requests: sum by (pod) (kube_pod_container_resource_requests{resource="memory",namespace="shop",pod=~"web-7d9f-abcde|web-7d9f-fghij"})
+memory_limits: sum by (pod) (kube_pod_container_resource_limits{resource="memory",namespace="shop",pod=~"web-7d9f-abcde|web-7d9f-fghij"})
+network_rx: sum by (pod) (rate(container_network_receive_bytes_total{namespace="shop",pod=~"web-7d9f-abcde|web-7d9f-fghij"}[2m]))
+network_tx: sum by (pod) (rate(container_network_transmit_bytes_total{namespace="shop",pod=~"web-7d9f-abcde|web-7d9f-fghij"}[2m]))
+disk_usage: sum by (pod) (container_fs_usage_bytes{namespace="shop",pod=~"web-7d9f-abcde|web-7d9f-fghij",container!="",container!="POD"})
+disk_capacity: -
+pod_count: -
+
+## containers shop/web-0
+cpu_usage: sum by (container) (rate(container_cpu_usage_seconds_total{namespace="shop",pod="web-0",container!="",container!="POD"}[2m]))
+cpu_requests: sum by (container) (kube_pod_container_resource_requests{resource="cpu",namespace="shop",pod="web-0"})
+cpu_limits: sum by (container) (kube_pod_container_resource_limits{resource="cpu",namespace="shop",pod="web-0"})
+memory_usage: sum by (container) (container_memory_working_set_bytes{namespace="shop",pod="web-0",container!="",container!="POD"})
+memory_requests: sum by (container) (kube_pod_container_resource_requests{resource="memory",namespace="shop",pod="web-0"})
+memory_limits: sum by (container) (kube_pod_container_resource_limits{resource="memory",namespace="shop",pod="web-0"})
+network_rx: -
+network_tx: -
+disk_usage: sum by (container) (container_fs_usage_bytes{namespace="shop",pod="web-0",container!="",container!="POD"})
+disk_capacity: -
+pod_count: -
+
+## container shop/web-0/app
+cpu_usage: sum by (container) (rate(container_cpu_usage_seconds_total{namespace="shop",pod="web-0",container="app"}[2m]))
+cpu_requests: sum by (container) (kube_pod_container_resource_requests{resource="cpu",namespace="shop",pod="web-0",container="app"})
+cpu_limits: sum by (container) (kube_pod_container_resource_limits{resource="cpu",namespace="shop",pod="web-0",container="app"})
+memory_usage: sum by (container) (container_memory_working_set_bytes{namespace="shop",pod="web-0",container="app"})
+memory_requests: sum by (container) (kube_pod_container_resource_requests{resource="memory",namespace="shop",pod="web-0",container="app"})
+memory_limits: sum by (container) (kube_pod_container_resource_limits{resource="memory",namespace="shop",pod="web-0",container="app"})
+network_rx: -
+network_tx: -
+disk_usage: sum by (container) (container_fs_usage_bytes{namespace="shop",pod="web-0",container="app"})
+disk_capacity: -
+pod_count: -
+
+## pvc shop/data-web-0
+cpu_usage: -
+cpu_requests: -
+cpu_limits: -
+memory_usage: -
+memory_requests: -
+memory_limits: -
+network_rx: -
+network_tx: -
+disk_usage: sum(kubelet_volume_stats_used_bytes{namespace="shop",persistentvolumeclaim="data-web-0"})
+disk_capacity: sum(kubelet_volume_stats_capacity_bytes{namespace="shop",persistentvolumeclaim="data-web-0"})
+pod_count: -
+
+## ingress shop/web
+cpu_usage: -
+cpu_requests: -
+cpu_limits: -
+memory_usage: -
+memory_requests: -
+memory_limits: -
+network_rx: sum(rate(haproxy_backend_bytes_in_total{exported_namespace="shop",route=~"web|web-[a-z0-9]+"}[2m]))
+network_tx: sum(rate(haproxy_backend_bytes_out_total{exported_namespace="shop",route=~"web|web-[a-z0-9]+"}[2m]))
+disk_usage: -
+disk_capacity: -
+pod_count: -

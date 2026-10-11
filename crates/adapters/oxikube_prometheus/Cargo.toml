@@ -29,6 +29,7 @@ url.workspace = true
 
 [dev-dependencies]
 oxikube_testkit.workspace = true
+promql-parser.workspace = true
 rcgen.workspace = true
 # ring, so the TLS test server needs no process-wide default provider.
 rustls = { workspace = true, features = ["ring"] }
@@ -45,6 +46,11 @@ integration = ["oxikube_testkit/integration"]
 [[test]]
 name = "kind_prometheus"
 path = "tests/kind_prometheus.rs"
+required-features = ["integration"]
+
+[[test]]
+name = "kind_catalogue"
+path = "tests/kind_catalogue.rs"
 required-features = ["integration"]
 
 [lints]

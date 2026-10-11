@@ -33,6 +33,7 @@
 //! | `PromqlPort` | [`FakePromqlPort`] |
 //! | `PromqlEndpointPort` | [`FakePromqlEndpointPort`] |
 //! | `ProviderDetectorPort` | [`FakeProviderDetectorPort`] |
+//! | `QueryCataloguePort` | [`FakeQueryCataloguePort`] |
 //! | `ServiceProxyPort` | [`FakeServiceProxyPort`] |
 //! | `DescribePort` | [`FakeDescribePort`] |
 //! | `HelmPort` | [`FakeHelmPort`] |
@@ -85,6 +86,7 @@ mod integration;
 mod merge;
 mod promql_endpoint;
 mod provider;
+mod query_catalogue;
 mod resource;
 mod schema;
 mod session;
@@ -120,6 +122,7 @@ pub use provider::{
     FakeProviderDetectorPort, FakeServiceProxyPort, ProviderDetectorCall, ProviderDetectorScripts,
     ServiceProxyCall, ServiceProxyScripts,
 };
+pub use query_catalogue::{FakeQueryCataloguePort, QueryCatalogueCall, QueryCatalogueScripts};
 pub use resource::{FakeResourcePort, ResourceCall, ResourceScripts};
 pub use schema::{FakeSchemaPort, SchemaCall, SchemaScripts};
 pub use session::{

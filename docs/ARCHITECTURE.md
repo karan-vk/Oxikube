@@ -581,6 +581,24 @@ crate's `README.md` for its allowed dependencies. Highlights:
   cluster that settings and detection fill) carries as the source of its `OxiError`s (`PromqlError::of`). Dropping a call's
   future closes its connection. Modules: `client`, `url`, `wire` (typed decode of vector/matrix/scalar, `NaN`/`±Inf`),
   `errors`, `auth`, `transport`, `cluster`. Query catalogues (E13-S06) build on it.
+- `oxikube_domain::metric_query` + `oxikube_ports::query_catalogue` + `oxikube_prometheus::queries` (E13-S06) — the query
+  catalogue: what a history graph asks for, and the PromQL each stack needs for it. The vocabulary is domain data
+  (`MetricRequest` = a `MetricTarget` (cluster, node, namespace, pods, containers, PVC, ingress) + a `MetricKind` (cpu usage,
+  requests, limits; memory usage, requests, limits; network rx, tx; disk usage, capacity; pod count) + optional extra label
+  matchers for a shared store such as Mimir or VictoriaMetrics; `MetricScope::supports` is the provider-independent matrix of
+  which kinds exist at which scope), so the app and views build requests without an adapter. The step policy is there too
+  (`steps_for`, `RangePreset`: at most 300 points, step from 15 s up the 15 s / 30 s / 1 m / 2 m / 5 m ... ladder, `rate()`
+  window = max(2 x step, 2 m); 15 m and 1 h use 15 s / 2 m, 6 h 2 m / 4 m, 24 h 5 m / 10 m), and `RangePlan::ending_at` (ports)
+  packs a `TimeRange` with its window. `QueryCataloguePort::build(provider, request, rate_window)` is synchronous and I/O-free;
+  `oxikube_prometheus::PromqlCatalogue` implements it with one module per stack (`kube_prometheus`, `lens`, `victoria`, `mimir`,
+  `openshift`, `prometheus`, each a `Profile` plus module docs listing the conventions assumed) and one per metric family
+  (`workload`: cAdvisor usage and kube-state-metrics requests/limits; `host`: node-exporter for cluster and node scope, nodes
+  matched through `node_uname_info{nodename}`; `traffic`; `storage`; `pods`). The stacks differ in where Ingress traffic is
+  measured (ingress-nginx under `exported_namespace`, Lens' `namespace`, OpenShift's HAProxy router) and in whether the store is
+  shared by several clusters (`PromqlCatalogue::is_shared_store`, answered with `MetricRequest::with_label`). Pod and container
+  targets return a series per pod or container (`MetricQuery::series_label`). Names are escaped (`\`, `"`, control characters;
+  regex metacharacters for a set of pods); label names of extra matchers are validated. Detail-panel graphs (E13-S08) and the
+  `query_promql` tool (E13-S12) build on it.
 - `oxikube_prometheus::detect` + `proxy` (E13-S05) — finding a cluster's Prometheus-compatible service. `ProviderDetector`
   implements `ProviderDetectorPort`: it lists the Services of the namespaces `detect/catalogue.json` names (data, not code:
   per entry a kind, an exact name or a name prefix, namespaces, ports by preference, a scheme and path prefixes to try), matches

@@ -9,6 +9,7 @@
 //! | [`CloudDiscoveryPort`] | [`cloud`] | `oxikube_cloud` |
 //! | [`MetricsPort`] | [`metrics`] | `oxikube_kube` (metrics.k8s.io, ADR 0011) |
 //! | [`PromqlPort`], [`PromqlEndpointPort`] | [`promql`] | `oxikube_prometheus` |
+//! | [`QueryCataloguePort`] (the PromQL of a [`MetricRequest`](oxikube_domain::MetricRequest) per provider, E13-S06) | [`query_catalogue`] | `oxikube_prometheus` |
 //! | [`ProviderDetectorPort`] (finds a cluster's Prometheus-compatible service, E13-S05) | [`provider`] | `oxikube_prometheus` |
 //! | [`ServiceProxyPort`] (a request to a Service through the API server) | [`service_proxy`] | `oxikube_kube` |
 //! | [`DescribePort`] | [`describe`] | `oxikube_describe` |
@@ -109,6 +110,7 @@ pub mod notifier;
 pub mod portforward;
 pub mod promql;
 pub mod provider;
+pub mod query_catalogue;
 pub mod resource;
 pub mod schema;
 pub mod secrets;
@@ -175,6 +177,7 @@ pub use provider::{
     DetectedProvider, DetectionFailure, DetectionResult, DetectionState, Probe, ProbeOutcome,
     ProviderDetectorPort, ProviderTarget,
 };
+pub use query_catalogue::{QueryCataloguePort, RangePlan};
 pub use resource::{
     DeleteCollectionOutcome, DeleteOptions, DeleteOutcome, ListOptions, ListPage, Patch, PatchKind,
     Preconditions, PropagationPolicy, ResourcePort, ResourceReader, ResourceWriter, Scale,
@@ -212,6 +215,7 @@ mod tests {
         promql: Arc<dyn PromqlPort>,
         promql_endpoint: Arc<dyn PromqlEndpointPort>,
         detector: Arc<dyn ProviderDetectorPort>,
+        catalogue: Arc<dyn QueryCataloguePort>,
         service_proxy: Arc<dyn ServiceProxyPort>,
         describe: Arc<dyn DescribePort>,
         helm: Arc<dyn HelmPort>,
@@ -239,6 +243,7 @@ mod tests {
         assert_send_sync::<dyn PromqlPort>();
         assert_send_sync::<dyn PromqlEndpointPort>();
         assert_send_sync::<dyn ProviderDetectorPort>();
+        assert_send_sync::<dyn QueryCataloguePort>();
         assert_send_sync::<dyn ServiceProxyPort>();
         assert_send_sync::<dyn DescribePort>();
         assert_send_sync::<dyn HelmPort>();
@@ -259,7 +264,7 @@ mod tests {
     /// Every port's source file must name the adapter expected to implement it.
     #[test]
     fn every_port_docs_name_an_adapter() {
-        let ports: [(&str, &str, &str); 18] = [
+        let ports: [(&str, &str, &str); 19] = [
             (
                 "cluster_source",
                 include_str!("cluster_source.rs"),
@@ -271,6 +276,11 @@ mod tests {
             (
                 "provider",
                 include_str!("provider.rs"),
+                "oxikube_prometheus",
+            ),
+            (
+                "query_catalogue",
+                include_str!("query_catalogue.rs"),
                 "oxikube_prometheus",
             ),
             (
