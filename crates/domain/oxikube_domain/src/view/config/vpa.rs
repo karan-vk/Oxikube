@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use super::super::{Condition, ViewError, arc_of, arr_of, check_kind, opt_count, str_of, sub};
+use super::super::{Condition, ViewError, arc_of, arr_of, check_kind, opt_count, sub};
 use super::util::{TargetRef, quantities, strings};
 use crate::resource::Resource;
 
@@ -87,7 +87,7 @@ impl VpaSummary {
                 .iter()
                 .map(|p| VpaContainerPolicy {
                     container: arc_of(p, "containerName").unwrap_or_else(|| Arc::from("*")),
-                    mode: str_of(p, "mode").map(Arc::from),
+                    mode: arc_of(p, "mode"),
                     min_allowed: pairs(p, "minAllowed"),
                     max_allowed: pairs(p, "maxAllowed"),
                     controlled: strings(p, "controlledResources"),

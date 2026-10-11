@@ -1,11 +1,13 @@
 //! HorizontalPodAutoscaler and VerticalPodAutoscaler.
 
-use oxikube_app::columns::Tone;
+use std::sync::Arc;
+
+use oxikube_app::columns::hpa_state_tone;
 use oxikube_domain::Resource;
 use oxikube_domain::ids::{Gvk, Scope};
-use oxikube_domain::view::{HpaState, HpaSummary, TargetRef, VpaSummary};
+use oxikube_domain::view::{HpaSummary, TargetRef, VpaSummary};
 
-use super::model::{LinkTo, Panel, Row};
+use super::model::{LinkTo, Panel, Row, join_pairs};
 
 /// The scale target as a link: the workload the autoscaler scales, in the autoscaler's namespace.
 /// An `apiVersion`-less reference to a built-in workload kind gets its usual group; any other
@@ -40,19 +42,17 @@ fn count(n: Option<i64>) -> Option<String> {
 /// An HPA: the scale target, replica bounds and counts, and a table of metrics against targets.
 pub(super) fn hpa(res: &Resource) -> Option<Panel> {
     let hpa = HpaSummary::from_resource(res).ok()?;
-    let tone = match hpa.state {
-        HpaState::Active => Tone::Ok,
-        HpaState::Limited(_) => Tone::Warn,
-        HpaState::Inactive(_) => Tone::Error,
-        HpaState::Disabled | HpaState::Unknown => Tone::Neutral,
-    };
     let mut scaling = Vec::new();
     scaling.extend(
         hpa.reference
             .as_ref()
             .map(|t| target_link("Scale target", t)),
     );
-    scaling.push(Row::pair_toned("Status", hpa.state.text(), tone));
+    scaling.push(Row::pair_toned(
+        "Status",
+        hpa.state.text(),
+        hpa_state_tone(&hpa.state),
+    ));
     scaling.push(Row::pair("Min replicas", hpa.min_replicas.to_string()));
     scaling.extend(Row::opt("Max replicas", count(hpa.max_replicas)));
     scaling.extend(Row::opt("Current replicas", count(hpa.current_replicas)));
@@ -68,8 +68,8 @@ pub(super) fn hpa(res: &Resource) -> Option<Panel> {
         metrics.extend(hpa.metrics.iter().map(|m| {
             Row::cells([
                 m.title(),
-                m.current.clone().unwrap_or_else(|| "<unknown>".to_owned()),
-                m.target.clone().unwrap_or_else(|| "<unknown>".to_owned()),
+                m.current_text().to_owned(),
+                m.target_text().to_owned(),
             ])
         }));
     }
@@ -80,14 +80,13 @@ pub(super) fn hpa(res: &Resource) -> Option<Panel> {
     )
 }
 
-fn resources(list: &[(std::sync::Arc<str>, std::sync::Arc<str>)]) -> String {
+/// A resource list as `cpu 100m, memory 1Gi`; `-` when empty.
+fn resources(list: &[(Arc<str>, Arc<str>)]) -> String {
     if list.is_empty() {
-        return "-".to_owned();
+        "-".to_owned()
+    } else {
+        join_pairs(list, " ")
     }
-    list.iter()
-        .map(|(name, quantity)| format!("{name} {quantity}"))
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 /// A VPA: the target, the update mode, the recommendation per container and the container

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use super::super::{ViewError, arc_of, arr_of, check_kind, i64_of, str_of, sub};
+use super::super::{ViewError, arc_of, arr_of, bool_of, check_kind, i64_of, str_of, sub};
 use super::util::quantities;
 use crate::json::JsonRef;
 use crate::resource::Resource;
@@ -35,7 +35,7 @@ impl PriorityClassSummary {
         let json = res.json();
         Ok(Self {
             value: i64_of(json, "value").unwrap_or(0),
-            global_default: super::super::bool_of(json, "globalDefault"),
+            global_default: bool_of(json, "globalDefault"),
             preemption_policy: arc_of(json, "preemptionPolicy")
                 .unwrap_or_else(|| Arc::from("PreemptLowerPriority")),
             description: arc_of(json, "description"),

@@ -35,13 +35,17 @@ pub(crate) fn hpa_status<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     let Ok(hpa) = HpaSummary::from_resource(res) else {
         return Cell::empty();
     };
-    let tone = match hpa.state {
+    Cell::text(hpa.state.text().to_owned()).with_tone(hpa_state_tone(&hpa.state))
+}
+
+/// The tone of an autoscaler's state: the status column and the detail panel share it.
+pub fn hpa_state_tone(state: &HpaState) -> Tone {
+    match state {
         HpaState::Active => Tone::Ok,
         HpaState::Limited(_) => Tone::Warn,
         HpaState::Inactive(_) => Tone::Error,
         HpaState::Disabled | HpaState::Unknown => Tone::Neutral,
-    };
-    Cell::text(hpa.state.text().to_owned()).with_tone(tone)
+    }
 }
 
 /// VPA `REFERENCE`: `Kind/name` of `spec.targetRef`.

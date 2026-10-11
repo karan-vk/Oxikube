@@ -8,7 +8,9 @@ use std::sync::Arc;
 
 use jiff::Timestamp;
 
-use super::super::{Condition, ViewError, arr_of, check_kind, i64_of, str_of, sub, ts_of};
+use super::super::{
+    Condition, ConditionStatus, ViewError, arr_of, check_kind, i64_of, str_of, sub, ts_of,
+};
 use super::util::TargetRef;
 use crate::json::JsonRef;
 use crate::resource::Resource;
@@ -82,11 +84,17 @@ pub struct HpaMetric {
 impl HpaMetric {
     /// `current/target` as kubectl prints a metric (`42%/80%`, `<unknown>/512Mi`).
     pub fn text(&self) -> String {
-        format!(
-            "{}/{}",
-            self.current.as_deref().unwrap_or("<unknown>"),
-            self.target.as_deref().unwrap_or("<unknown>")
-        )
+        format!("{}/{}", self.current_text(), self.target_text())
+    }
+
+    /// The current value, `<unknown>` until the controller reports one.
+    pub fn current_text(&self) -> &str {
+        self.current.as_deref().unwrap_or("<unknown>")
+    }
+
+    /// The target value, `<unknown>` when the spec sets none.
+    pub fn target_text(&self) -> &str {
+        self.target.as_deref().unwrap_or("<unknown>")
     }
 
     /// `kind name`, with what it is measured on and its selector: `Resource cpu`,
@@ -222,14 +230,10 @@ fn state_of(conditions: &[Condition]) -> HpaState {
     let find = |kind: &str| conditions.iter().find(|c| &*c.kind == kind);
     let reason =
         |c: &Condition, fallback: &str| c.reason.clone().unwrap_or_else(|| Arc::from(fallback));
-    if let Some(c) =
-        find("AbleToScale").filter(|c| c.status == super::super::ConditionStatus::False)
-    {
+    if let Some(c) = find("AbleToScale").filter(|c| c.status == ConditionStatus::False) {
         return HpaState::Inactive(reason(c, "NotAbleToScale"));
     }
-    if let Some(c) =
-        find("ScalingActive").filter(|c| c.status == super::super::ConditionStatus::False)
-    {
+    if let Some(c) = find("ScalingActive").filter(|c| c.status == ConditionStatus::False) {
         // A target scaled to zero switches the autoscaler off on purpose.
         if c.reason.as_deref() == Some("ScalingDisabled") {
             return HpaState::Disabled;

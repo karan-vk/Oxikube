@@ -4,7 +4,7 @@ use oxikube_app::columns::Tone;
 use oxikube_domain::Resource;
 use oxikube_domain::view::{LeaseSummary, PdbSummary, PriorityClassSummary, RuntimeClassSummary};
 
-use super::model::{Panel, Row};
+use super::model::{Panel, Row, join_pairs};
 
 /// A PDB: the budget it enforces, and how many pods may leave right now.
 pub(super) fn pdb(res: &Resource) -> Option<Panel> {
@@ -79,19 +79,16 @@ pub(super) fn priority_class(res: &Resource) -> Option<Panel> {
 /// A RuntimeClass: its handler, pod overhead and where its pods may run.
 pub(super) fn runtime_class(res: &Resource) -> Option<Panel> {
     let class = RuntimeClassSummary::from_resource(res).ok()?;
-    let pairs = |list: &[(std::sync::Arc<str>, std::sync::Arc<str>)], sep: &str| {
-        list.iter()
-            .map(|(k, v)| format!("{k}{sep}{v}"))
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
     let mut rows = vec![Row::pair("Handler", class.handler.to_string())];
     if !class.overhead.is_empty() {
-        rows.push(Row::pair("Pod overhead", pairs(&class.overhead, " ")));
+        rows.push(Row::pair("Pod overhead", join_pairs(&class.overhead, " ")));
     }
     let mut scheduling = Vec::new();
     if !class.node_selector.is_empty() {
-        scheduling.push(Row::pair("Node selector", pairs(&class.node_selector, "=")));
+        scheduling.push(Row::pair(
+            "Node selector",
+            join_pairs(&class.node_selector, "="),
+        ));
     }
     if !class.tolerations.is_empty() {
         scheduling.push(Row::pair("Tolerations", class.tolerations.join(", ")));

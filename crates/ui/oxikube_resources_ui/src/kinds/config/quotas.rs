@@ -1,5 +1,7 @@
 //! ResourceQuota (used against hard, as bars) and LimitRange (limits and defaults, as tables).
 
+use std::sync::Arc;
+
 use oxikube_domain::Resource;
 use oxikube_domain::view::{LimitRangeSummary, QuotaLine, QuotaSummary};
 
@@ -40,7 +42,7 @@ pub(super) fn resource_quota(res: &Resource) -> Option<Panel> {
 /// A LimitRange's limits: one table per limited type.
 pub(super) fn limit_range(res: &Resource) -> Option<Panel> {
     let limits = LimitRangeSummary::from_resource(res).ok()?;
-    let cell = |v: &Option<std::sync::Arc<str>>| v.as_deref().unwrap_or("-").to_owned();
+    let cell = |v: &Option<Arc<str>>| v.as_deref().unwrap_or("-").to_owned();
     let mut panel = Panel::new();
     for (ix, section) in limits.sections.iter().enumerate() {
         let mut rows = vec![Row::head([

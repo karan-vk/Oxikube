@@ -124,6 +124,14 @@ impl Row {
     }
 }
 
+/// `(name, value)` pairs as `name{sep}value`, comma-separated: resource quantities, node selectors.
+pub(crate) fn join_pairs(list: &[(Arc<str>, Arc<str>)], sep: &str) -> String {
+    list.iter()
+        .map(|(name, value)| format!("{name}{sep}{value}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 impl Panel {
     /// An empty panel.
     pub(crate) fn new() -> Self {

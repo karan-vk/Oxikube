@@ -1,5 +1,7 @@
 //! Mutating and ValidatingWebhookConfiguration, ValidatingAdmissionPolicy and its binding.
 
+use std::sync::Arc;
+
 use oxikube_domain::Resource;
 use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_domain::view::{
@@ -20,7 +22,7 @@ fn rules_table(rules: &[WebhookRule]) -> Vec<Row> {
         "Scope",
     ])];
     // An empty group name is the core group.
-    let join = |list: &[std::sync::Arc<str>], empty: &str| {
+    let join = |list: &[Arc<str>], empty: &str| {
         if list.is_empty() {
             empty.to_owned()
         } else {

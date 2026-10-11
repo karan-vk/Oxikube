@@ -163,7 +163,10 @@ fn declarative_columns_read_the_same_text_as_the_view_models() {
 
     let lease = fx::lease();
     let summary = LeaseSummary::from_resource(&lease).unwrap();
-    assert_eq!(text(&lease, "holder"), summary.holder_text());
+    assert_eq!(
+        text(&lease, "holder"),
+        summary.holder.as_deref().unwrap_or("")
+    );
 }
 
 #[test]

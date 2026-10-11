@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use super::super::{Condition, ViewError, arc_of, arr_of, check_kind, str_of, sub};
+use super::super::{Condition, ViewError, arc_of, arr_of, check_kind, sub};
 use super::util::{TargetRef, selector_text, strings};
 use super::webhook::WebhookRule;
 use crate::resource::Resource;
@@ -133,7 +133,7 @@ impl AdmissionBindingSummary {
                 name: arc_of(p, "name"),
                 namespace: arc_of(p, "namespace"),
                 selector: p.get("selector").and_then(selector_text),
-                not_found_action: str_of(p, "parameterNotFoundAction").map(Arc::from),
+                not_found_action: arc_of(p, "parameterNotFoundAction"),
             }),
             namespace_selector: matches.get("namespaceSelector").and_then(selector_text),
             object_selector: matches.get("objectSelector").and_then(selector_text),

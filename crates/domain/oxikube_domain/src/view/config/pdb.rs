@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use super::super::{Condition, ViewError, arc_of, arr_of, check_kind, i64_of, sub};
+use super::super::{ViewError, arc_of, check_kind, i64_of, sub};
 use super::util::{scalar_text, selector_text};
 use crate::resource::Resource;
 
@@ -27,8 +27,6 @@ pub struct PdbSummary {
     pub reported_allowed: Option<i64>,
     /// How many pods the budget has seen leave (`status.disruptedPods`).
     pub disrupted_pods: usize,
-    /// `status.conditions`.
-    pub conditions: Vec<Condition>,
 }
 
 impl PdbSummary {
@@ -58,10 +56,6 @@ impl PdbSummary {
                 .get("disruptedPods")
                 .and_then(|v| v.as_object())
                 .map_or(0, |o| o.len()),
-            conditions: arr_of(status, "conditions")
-                .iter()
-                .filter_map(Condition::from_json)
-                .collect(),
         })
     }
 

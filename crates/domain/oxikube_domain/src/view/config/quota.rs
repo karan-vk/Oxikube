@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use super::super::{ViewError, check_kind, sub};
+use super::super::{ViewError, check_kind, str_of, sub};
 use super::util::{quantities, strings};
 use crate::quantity::Quantity;
 use crate::resource::Resource;
@@ -132,8 +132,8 @@ impl QuotaSummary {
                 exprs
                     .iter()
                     .map(|e| {
-                        let scope = e.get("scopeName").and_then(|v| v.as_str()).unwrap_or("?");
-                        let op = e.get("operator").and_then(|v| v.as_str()).unwrap_or("?");
+                        let scope = str_of(e, "scopeName").unwrap_or("?");
+                        let op = str_of(e, "operator").unwrap_or("?");
                         let values = strings(e, "values").join(",");
                         if values.is_empty() {
                             format!("{scope} {op}")

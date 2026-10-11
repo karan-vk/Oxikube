@@ -255,13 +255,13 @@ fn lease_holder_and_times() {
                          "renewTime": "2026-01-02T03:04:00.000000Z", "leaseTransitions": 2}}),
     ))
     .unwrap();
-    assert_eq!(lease.holder_text(), "node-a_1f2e");
+    assert_eq!(lease.holder.as_deref(), Some("node-a_1f2e"));
     assert_eq!(lease.transitions, Some(2));
     assert_eq!(lease.duration_seconds, Some(15));
     let free =
         LeaseSummary::from_resource(&res("coordination.k8s.io/v1", "Lease", json!({"spec": {}})))
             .unwrap();
-    assert_eq!(free.holder_text(), "");
+    assert_eq!(free.holder, None);
 }
 
 #[test]
