@@ -4,8 +4,10 @@
 //!
 //! | Module | What |
 //! |---|---|
-//! | `manifest_editor` | [`ManifestEditor`]: the view, its key context (`ManifestEditor`, `mode == yaml`, `Editing`), the debounced validation off the UI thread and the schema fetches |
-//! | `model` | [`ManifestModel`]: the logic over `EditorApi` only (stale results, schemas to fetch, problem counts, toggles), tested without a window |
+//! | `manifest_editor` | [`ManifestEditor`]: the view, its key context (`ManifestEditor`, `mode == yaml`, `Editing`) |
+//! | `pipeline` | the debounced, cancellable validation off the UI thread (a large buffer in chunks, visible objects first) and the schema fetches (E10-S11) |
+//! | `model` | [`ManifestModel`]: the logic over `EditorApi` only (stale results, schemas to fetch, problem counts, coverage, the parse cache, [`PassStats`]), tested without a window |
+//! | `progressive` | `plan`, `check_chunk`, `Progress`: a pass split into chunks of objects, pure (E10-S11) |
 //! | `validation` | [`validate_text`] / [`validate_text_as`]: one pass of the YAML model and the validator (and, for JSON, the strict JSON check), as editor diagnostics |
 //! | `schemas` | [`SchemaSource`]: the cluster's `SchemaPort` ([`SessionSchemas`] in the app) |
 //! | `toolbar` | what the buffer is checked against, the problem count, the Read-only and Wrap toggles |
@@ -27,6 +29,8 @@ mod live;
 mod manifest_editor;
 mod model;
 mod notice;
+mod pipeline;
+mod progressive;
 mod schemas;
 mod toolbar;
 mod validation;
@@ -41,8 +45,9 @@ pub use commands::{EDITOR_COMMANDS, EditorRequest, EditorViewSink, register_comm
 pub use controller::{ClusterEditorHost, EditorHost, EditorViews, EditorViewsDeps};
 pub use live::{DIFF_DEBOUNCE, DiffLayout, LiveSource, SessionLive};
 pub use manifest_editor::{ManifestEditor, ManifestEditorParts};
-pub use model::{Accepted, ManifestModel, Problems};
+pub use model::{Accepted, ManifestModel, PassStats, Problems};
 pub use notice::{Notice, NoticeLevel};
+pub use progressive::{Coverage, LARGE_BUFFER_BYTES};
 pub use schemas::{SchemaSource, SessionSchemas};
 pub use validation::{
     KnownSchemas, VALIDATION_DEBOUNCE, Validation, validate_text, validate_text_as,

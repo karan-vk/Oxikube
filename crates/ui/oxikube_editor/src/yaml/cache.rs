@@ -36,6 +36,12 @@ impl ParseCache {
         result
     }
 
+    /// Caches `result` as the parse of `version` (a parse run elsewhere, such as on the background
+    /// executor), replacing the previous one.
+    pub fn insert(&mut self, version: u64, result: Arc<ParseResult>) {
+        self.last = Some((version, result));
+    }
+
     /// The cached parse, if it is of `version`.
     #[must_use]
     pub fn get(&self, version: u64) -> Option<Arc<ParseResult>> {
@@ -66,5 +72,8 @@ mod tests {
         assert_eq!(next.text(), "b: 2");
         assert!(cache.get(1).is_none());
         assert!(cache.get(2).is_some());
+        cache.insert(3, Arc::new(crate::yaml::parse("c: 3")));
+        assert!(cache.get(2).is_none());
+        assert_eq!(cache.get(3).expect("inserted").text(), "c: 3");
     }
 }

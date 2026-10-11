@@ -7,6 +7,11 @@
 //! ([`yaml::ParseCache`](crate::yaml::ParseCache)) and runs [`validate`] or [`validate_buffer`]
 //! on the background executor, dropping the result if the buffer has moved on.
 //!
+//! The objects checked are [`Unit`]s: each document, or each item of a list document
+//! (`kubectl get -o yaml`). A large buffer is validated a few units at a time with
+//! [`validate_units`], which polls a [`CancelToken`](crate::cancel::CancelToken) between units
+//! and every few hundred nodes, so a stale run stops at once (E10-S11).
+//!
 //! # Rules
 //!
 //! | Code | Severity | Meaning |
@@ -43,11 +48,13 @@ mod options;
 mod run;
 pub(crate) mod scalar;
 mod suggest;
+mod units;
 mod walk;
 
 pub use diagnostic::{Diagnostic, DiagnosticCode, Severity};
 pub use options::ValidateOptions;
-pub use run::{document_gvk, node_gvk, validate, validate_buffer};
+pub use run::{document_gvk, syntax_diagnostics, validate, validate_buffer, validate_units};
+pub use units::{Unit, node_gvk, units};
 
 #[cfg(doc)]
 use oxikube_domain::schema::JsonSchema;

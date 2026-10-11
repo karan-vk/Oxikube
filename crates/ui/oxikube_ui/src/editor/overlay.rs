@@ -4,8 +4,10 @@
 //! The canvas is a later sibling of the editor element, so it paints after the editor has laid
 //! out the frame and reads that frame's geometry through `EditorState::range_to_bounds`. Only the
 //! lines of the visible range are looked at (a binary search into the per-line summaries), so a
-//! buffer with thousands of findings costs what the screen shows.
+//! buffer with thousands of findings costs what the screen shows. [`OverlayStats`] records what the
+//! last paint drew, so tests and the perf scenario can check that (E10-S11).
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui::{
@@ -26,6 +28,16 @@ const MARKER_WIDTH: f32 = 3.;
 const MESSAGE_GAP: f32 = 24.;
 /// Longest message drawn, in characters; the hover shows the whole text.
 const MESSAGE_MAX_CHARS: usize = 160;
+
+/// What the overlay's last paint did: how many lines' markers it drew, out of how many lines
+/// have a diagnostic. Shared between the editor and its canvas.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OverlayStats {
+    /// Lines whose marker and message the last paint drew (the visible ones with a finding).
+    pub painted: usize,
+    /// Lines with a diagnostic in the whole buffer.
+    pub lines: usize,
+}
 
 /// The colour of `level` in the active theme.
 pub(crate) fn level_color(level: DiagnosticLevel, colors: &Colors) -> Hsla {
@@ -56,6 +68,7 @@ pub(crate) fn diagnostics_overlay(
     state: Entity<EditorState>,
     summaries: Rc<Vec<LineSummary>>,
     label: SharedString,
+    stats: Rc<Cell<OverlayStats>>,
 ) -> impl IntoElement {
     div()
         .id("editor-diagnostics")
@@ -68,7 +81,13 @@ pub(crate) fn diagnostics_overlay(
         .child(
             canvas(
                 |_, _, _| {},
-                move |_, (), window, cx| paint(&state, &summaries, window, cx),
+                move |_, (), window, cx| {
+                    let painted = paint(&state, &summaries, window, cx);
+                    stats.set(OverlayStats {
+                        painted,
+                        lines: summaries.len(),
+                    });
+                },
             )
             .size_full(),
         )
@@ -93,21 +112,22 @@ pub(crate) fn status_label(summaries: &[LineSummary], errors: usize, warnings: u
     )
 }
 
+/// Paints the markers and messages of the visible lines; returns how many lines it drew.
 fn paint(
     state: &Entity<EditorState>,
     summaries: &[LineSummary],
     window: &mut Window,
     cx: &mut App,
-) {
+) -> usize {
     if summaries.is_empty() {
-        return;
+        return 0;
     }
     let editor = state.read(cx);
     let Some(visible) = editor.visible_row_range() else {
-        return;
+        return 0;
     };
     let Some(line_height) = editor.line_height() else {
-        return;
+        return 0;
     };
     let viewport = editor.input_bounds();
     let first = summaries.partition_point(|s| s.line < visible.start);
@@ -122,8 +142,9 @@ fn paint(
         })
         .collect();
     if lines.is_empty() {
-        return;
+        return 0;
     }
+    let painted = lines.len();
     let colors = cx.colors();
     let font_size = u(cx.tokens().font.small);
     let family = cx.mono_font_family();
@@ -155,4 +176,5 @@ fn paint(
             let _ = shaped.paint(origin, font_size, TextAlign::Left, None, window, cx);
         }
     });
+    painted
 }

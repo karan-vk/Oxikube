@@ -11,23 +11,36 @@ pub enum MetricClass {
     /// `*_mib`: resident memory.
     Memory,
     /// Cold-start milestones, observed once per process (`first_frame_ms`,
-    /// `launch_to_first_frame_ms`, `first_rows_ms`, `init_window_ms`): a whole launch, so one
-    /// slow runner moves them by tens of milliseconds with unchanged code.
+    /// `launch_to_first_frame_ms`, `first_rows_ms`, `init_window_ms`, and the editor's 5 MB
+    /// `open_ms` and `validation_ms`, E10-S11): a whole launch, or hundreds of milliseconds of
+    /// work measured once, so one slow runner moves them by tens of milliseconds with unchanged
+    /// code.
     ColdStart,
+    /// `*_pct`: a share of frames (`slow_frame_pct`, E10-S11), compared with [`PERCENT_FLOOR`].
+    Percent,
     /// Every other `*_ms` metric: per-frame percentiles (`frame_ms`, `<mode>_draw_ms`), which
     /// real views put at 1 to 5 ms, and the small startup stages (`config_load_ms`,
     /// `init_<stage>_ms`). A small floor lets them gate.
     Millis,
 }
 
+/// Percentage points a `*_pct` metric must also grow by to fail: one point is more than one
+/// frame in a hundred, so a single slow frame on a noisy runner does not fail the gate (the
+/// absolute budget still applies).
+pub const PERCENT_FLOOR: f64 = 1.0;
+
 impl MetricClass {
     /// The class of `metric`, from its name.
     pub fn of(metric: &str) -> Self {
         if metric_unit(metric) == "MiB" {
             Self::Memory
+        } else if metric_unit(metric) == "%" {
+            Self::Percent
         } else if metric.ends_with("first_frame_ms")
             || metric.ends_with("first_rows_ms")
             || metric == "init_window_ms"
+            || metric == "open_ms"
+            || metric == "validation_ms"
         {
             Self::ColdStart
         } else {
@@ -55,6 +68,7 @@ impl NoiseFloors {
             MetricClass::Memory => self.mib,
             MetricClass::ColdStart => self.cold_ms,
             MetricClass::Millis => self.ms,
+            MetricClass::Percent => PERCENT_FLOOR,
         }
     }
 }
@@ -89,6 +103,10 @@ mod tests {
             ("state_db_open_ms", Millis),
             ("init_ui_ms", Millis),
             ("init_assets_ms", Millis),
+            ("open_ms", ColdStart),
+            ("validation_ms", ColdStart),
+            ("scroll_frame_ms", Millis),
+            ("slow_frame_pct", Percent),
         ] {
             assert_eq!(MetricClass::of(metric), class, "{metric}");
         }
@@ -104,6 +122,8 @@ mod tests {
         assert_eq!(FLOORS.for_metric("first_frame_ms"), 40.0);
         assert_eq!(FLOORS.for_metric("launch_to_first_frame_ms"), 40.0);
         assert_eq!(FLOORS.for_metric("first_rows_ms"), 40.0);
+        assert_eq!(FLOORS.for_metric("open_ms"), 40.0);
+        assert_eq!(FLOORS.for_metric("slow_frame_pct"), PERCENT_FLOOR);
     }
 
     /// #411: the nightly of an unchanged tree read 95.7 -> 120.3 ms (+25.7 %) on one slow runner

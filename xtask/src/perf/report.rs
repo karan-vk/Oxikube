@@ -24,6 +24,8 @@ compare it against the same-runner baseline too, never against the memory budget
 pub fn metric_unit(metric: &str) -> &'static str {
     if metric.ends_with("_mib") {
         "MiB"
+    } else if metric.ends_with("_pct") {
+        "%"
     } else {
         "ms"
     }
@@ -277,6 +279,7 @@ mod tests {
         assert_eq!(metric_unit("peak_rss_mib"), "MiB");
         assert_eq!(metric_unit("first_frame_ms"), "ms");
         assert_eq!(metric_unit("launch_to_first_frame_ms"), "ms");
+        assert_eq!(metric_unit("slow_frame_pct"), "%");
     }
 
     #[test]

@@ -536,11 +536,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `additionalProperties: false`; int-or-string, `x-kubernetes-list-type: map|set` duplicates and `embedded-resource`
   (`apiVersion`/`kind`) are checked; root `status` is skipped by default; `required` is not judged on objects a syntax error
   touched. Bench: `cargo bench -p oxikube_editor --bench validate` (2k-line Deployment: validate about 0.1 ms, with the parse
-  about 1 ms; budget 50 ms).
+  about 1 ms; budget 50 ms). E10-S11: the objects checked are `Unit`s (`units`): each document, or each item of a list
+  document (`kind: List` from `kubectl get -o yaml`, or a typed `PodList`), each against its own kind's schema;
+  `validate_units` checks a slice of them and polls a `CancelToken` (`oxikube_editor::cancel`) before each unit and every 256
+  nodes, as `yaml::parse_cancellable` does every 4 096 parser events, so a stale run stops within a millisecond.
 - `oxikube_editor::view` (E10-S04) — `ManifestEditor`, the manifest editor as a workspace `Item` over `CodeEditor` (key context
-  `ManifestEditor`, `mode == yaml`, `Editing` while the buffer has the focus). Every change restarts a 150 ms debounce
-  (`VALIDATION_DEBOUNCE`; replacing the task cancels the old one); then a `TextSnapshot` is parsed and validated on the
-  background executor (`validate_text`) and the result is shown only for the version it was computed for. Kinds whose schema
+  `ManifestEditor`, `mode == yaml`, `Editing` while the buffer has the focus). Every change cancels the running pass (its
+  `CancelToken`) and restarts a 150 ms debounce (`VALIDATION_DEBOUNCE`; replacing the task drops the old one); then a
+  `TextSnapshot` is parsed on the background executor (or the parse cached for that version is reused, `ParseCache`) and
+  checked a chunk of units at a time (`view::pipeline`, `view::progressive`, E10-S11): a buffer under 1 MiB is one chunk; a
+  larger one starts with the units on screen (`CodeEditor::visible_range`), then about 256 KiB of objects per chunk, the
+  findings shown after each chunk and the toolbar saying "Large file (5.2 MB) · checking 40 %". A result is shown only for
+  the version it was computed for; `PassStats` counts passes started, completed and cancelled. Kinds whose schema
   is not known are fetched once per editor through the cluster's `SchemaPort` (`SchemaSource`, `SessionSchemas` over
   `ClusterSession::schemas`) on `spawn_kube`, then the buffer is validated again; no cluster means syntax only. The logic is in
   `ManifestModel`, written against `EditorApi` only and tested with a fake editor. Commands: `editor::NewManifest` (palette
@@ -548,7 +555,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   focused editor's `editor::ToggleReadOnly` (`cmd-alt-r` / `ctrl-alt-r`, a view state, not the cluster's read-only) and
   `editor::ToggleSoftWrap` (`alt-z`); the bus handlers queue an `EditorRequest` on the window's `EditorViewSink`, applied by
   `EditorViews` through an `EditorHost` (`ClusterEditorHost`). The editor is never serialised with the layout (a manifest
-  can hold Secret data). Bench: `cargo run -p oxikube_editor --profile release-fast --example typing_bench`.
+  can hold Secret data). Bench: `cargo run -p oxikube_editor --profile release-fast --example typing_bench`; the 5 MB
+  scenario `cargo xtask perf editor-5mb` (open, typing, the pass, scrolling; budgets in `xtask/src/perf/budget.rs`). The
+  overlay of `CodeEditor` records what each paint drew (`OverlayStats`: lines painted of the lines with a finding), which
+  the tests use to prove the gutter only paints the visible markers.
 - `oxikube_editor::settings` (E10-S12) — the `editor` settings (`EditorSettings`, registered with `register_settings!`; content
   `EditorSettingsContent`, free of gpui): `tab_size`, `font_family`, `font_size`, `soft_wrap`, `show_managed_fields`,
   `mask_secrets`, `validation`, `field_manager`, with defaults in `default.json` and the schema in `settings.schema.json`. Read

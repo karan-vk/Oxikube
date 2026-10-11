@@ -20,6 +20,9 @@
 //!   selection shape and category) for palette, help and keymap tests.
 //! - [`kinds`]: discovery fixtures, `ResourceKind`s as an API server reports them (`kind(..).short(..)`, `core_kinds()`, CRDs that collide).
 //! - [`images`]: the container images the kind suites run (one list, pre-pulled by `kind-up`).
+//! - [`manifests`]: large generated YAML (`pod_list_yaml(5 MiB, ..)`, a `kubectl get -o yaml`
+//!   dump with planted schema errors) and the schema it is checked against, for the manifest
+//!   editor's perf tests and the `editor-5mb` scenario (E10-S11).
 //! - [`script`]: the [`Script`] / [`CallLog`] / [`Timeline`] helpers the fakes share.
 //! - [`scripted_feed`]: [`ScriptedFeed`], objects added / modified / deleted at chosen ticks as the
 //!   `DeltaBatch`es a watch delivers (UI and store tests).
@@ -50,6 +53,7 @@ pub mod images;
 #[cfg(feature = "integration")]
 pub mod integration;
 pub mod kinds;
+pub mod manifests;
 #[cfg(feature = "screenshot")]
 pub mod screenshot;
 pub mod script;

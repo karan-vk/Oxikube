@@ -29,6 +29,7 @@ pub use code_editor::{
     CodeEditor, CodeEditorEvent, CodeEditorOptions, DEFAULT_TAB_SIZE, TextSnapshot,
 };
 pub use live::LiveEditor;
+pub use overlay::OverlayStats;
 
 use gpui::{App, AppContext as _, Entity, Pixels, Point, Window};
 pub use gpui_component::input::{Editor, EditorState};

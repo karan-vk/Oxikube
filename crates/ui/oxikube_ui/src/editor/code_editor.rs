@@ -8,6 +8,8 @@
 //! stale-result checks, our diagnostics (squiggles through the library's `DiagnosticSet`, plus
 //! the gutter markers and end-of-line messages of [`super::overlay`]) and decorations.
 
+use std::cell::Cell;
+use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -24,8 +26,8 @@ use gpui_component::input::{
 use super::api::EditorApi;
 use super::api::{EditorDiagnostic, EditorFont};
 use super::live::LiveEditor;
-use super::overlay::{diagnostics_overlay, status_label};
-use super::positions::LineSummary;
+use super::overlay::{OverlayStats, diagnostics_overlay, status_label};
+use super::positions::{LineSummary, rows_to_bytes};
 use crate::size::u;
 use crate::tokens::ActiveTokens as _;
 
@@ -111,6 +113,7 @@ pub struct CodeEditor {
     pub(super) dimmed: Option<TextDecorationCollection>,
     pub(super) fills: Option<RangeDecorationCollection>,
     pub(super) frames: Option<RangeDecorationCollection>,
+    overlay_stats: Rc<Cell<OverlayStats>>,
     _events: Subscription,
 }
 
@@ -153,6 +156,7 @@ impl CodeEditor {
             dimmed: None,
             fills: None,
             frames: None,
+            overlay_stats: Rc::default(),
             _events: events,
         }
     }
@@ -220,6 +224,32 @@ impl CodeEditor {
         }
     }
 
+    /// The buffer's length in bytes (cheap: the rope keeps it).
+    pub fn len(&self, cx: &gpui::App) -> usize {
+        self.state.read(cx).text().len()
+    }
+
+    /// Whether the buffer is empty.
+    pub fn is_empty(&self, cx: &gpui::App) -> bool {
+        self.len(cx) == 0
+    }
+
+    /// The bytes of the buffer lines laid out in the last frame (the visible ones, plus the few
+    /// the library lays out around them), `None` before the first frame. For work that should
+    /// start with what the reader sees.
+    pub fn visible_range(&self, cx: &gpui::App) -> Option<Range<usize>> {
+        let state = self.state.read(cx);
+        let rows = state.visible_row_range()?;
+        Some(rows_to_bytes(state.text(), rows))
+    }
+
+    /// What the diagnostics overlay drew in the last frame: lines painted, out of the lines with
+    /// a diagnostic. The overlay looks at the visible lines only, so `painted` stays at a
+    /// screenful however many findings the buffer has.
+    pub fn overlay_stats(&self) -> OverlayStats {
+        self.overlay_stats.get()
+    }
+
     /// What the overlay's status element says ("2 errors, 1 warning").
     pub fn status(&self) -> &SharedString {
         &self.status
@@ -280,6 +310,7 @@ impl Render for CodeEditor {
                 self.state.clone(),
                 self.summaries.clone(),
                 self.status.clone(),
+                self.overlay_stats.clone(),
             ))
     }
 }

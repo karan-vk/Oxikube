@@ -21,6 +21,8 @@ fn run(scenario: &str) -> (std::process::Output, Option<Value>) {
         .env("OXIKUBE_PERF_SCROLL_FRAMES", SCROLL_FRAMES.to_string())
         // `logs-stream` likewise.
         .env("OXIKUBE_PERF_LOGS_FRAMES", LOGS_FRAMES.to_string())
+        // `editor-5mb` on a smaller dump.
+        .env("OXIKUBE_PERF_EDITOR_BYTES", EDITOR_BYTES.to_string())
         .args(["--perf-scenario", scenario, "--perf-report"])
         .arg(&report)
         .output()
@@ -106,6 +108,10 @@ fn scroll_10k_scrolls_the_table_under_churn_with_coalesced_notifies() {
 /// Scripted frames per mode of the `logs-stream` smoke run.
 const LOGS_FRAMES: u64 = 10;
 
+/// The `editor-5mb` dump in the smoke test: above the 1 MiB large-file threshold, so the
+/// validation runs in chunks, small enough for a debug build.
+const EDITOR_BYTES: u64 = 1_200_000;
+
 #[test]
 fn logs_stream_measures_ten_modes_with_coalesced_notifies() {
     let (out, sample) = run("logs-stream");
@@ -166,13 +172,26 @@ fn palette_opens_and_types_over_two_thousand_commands() {
 }
 
 #[test]
-fn scenarios_without_views_are_unavailable_and_exit_0() {
-    let scenario = "editor-5mb";
-    let (out, sample) = run(scenario);
-    assert!(out.status.success(), "{scenario}");
+fn the_editor_opens_types_validates_and_scrolls_a_large_dump() {
+    let (out, sample) = run("editor-5mb");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let s = sample.expect("sample written");
-    assert_eq!(s["status"], "unavailable", "{scenario}");
-    assert!(s["enabled_by"][0].as_str().unwrap().starts_with("E10-S11"));
+    assert_eq!(s["status"], "ok");
+    assert_eq!(s["scenario"], "editor-5mb");
+    // One typing frame and one scrolling frame per scripted frame.
+    assert_eq!(s["metrics"]["draw_ms"]["count"], 120);
+    assert_eq!(s["metrics"]["scroll_draw_ms"]["count"], 120);
+    for metric in ["open_ms", "validation_ms", "frame_ms", "scroll_frame_ms"] {
+        let p50 = s["metrics"][metric]["p50"].as_f64();
+        assert!(p50.is_some_and(|v| v > 0.0), "{metric}: {p50:?}");
+    }
+    assert!(s["metrics"]["slow_frame_pct"]["p50"].as_f64().is_some());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("oxikube editor-5mb: opened"), "{stderr}");
 }
 
 #[test]
