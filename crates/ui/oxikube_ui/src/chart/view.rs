@@ -282,7 +282,7 @@ impl Chart {
 }
 
 impl Render for Chart {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let palette = ChartPalette::from_tokens(&tokens);
         let root = v_flex()
@@ -297,6 +297,17 @@ impl Render for Chart {
         let cache = self.cache.clone();
         let spec = self.spec.clone();
         let generation = self.generation;
+        if self.hovered.is_some() {
+            // The overlay is placed from the layout, which paint would otherwise only rebuild
+            // after this render: rebuild it now (at the last painted size) so a data tick does not
+            // leave the crosshair and tooltip one frame behind.
+            let mut cache = cache.borrow_mut();
+            let bounds = gpui::Bounds::new(cache.origin, cache.canvas_size);
+            if bounds.size.width > px(0.) && bounds.size.height > px(0.) {
+                cache.ensure(generation, &spec, bounds, &palette, window);
+            }
+        }
+        let entity = cx.entity();
         let plot = div()
             .id(ElementId::NamedChild(
                 Arc::new(self.id.clone()),
@@ -319,15 +330,19 @@ impl Render for Chart {
                 canvas(
                     |_, _, _| (),
                     move |bounds, (), window, cx| {
-                        paint::paint(
-                            &mut cache.borrow_mut(),
-                            generation,
-                            &spec,
-                            &palette,
-                            bounds,
-                            window,
-                            cx,
-                        );
+                        let stale = {
+                            let mut cache = cache.borrow_mut();
+                            paint::paint(
+                                &mut cache, generation, &spec, &palette, bounds, window, cx,
+                            );
+                            cache.overlay_is_stale()
+                        };
+                        // A resize or zoom change moved the geometry the overlay was placed from.
+                        // A notify during paint is dropped, so ask for it once the frame is done.
+                        if stale {
+                            let entity = entity.clone();
+                            cx.defer(move |cx| entity.update(cx, |_, cx| cx.notify()));
+                        }
                     },
                 )
                 .absolute()

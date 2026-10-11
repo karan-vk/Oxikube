@@ -36,6 +36,8 @@ pub(super) struct LayoutCache {
     pub canvas_size: Size<Pixels>,
     /// How many times the layout was built (tests assert it stays put while repainting).
     pub builds: usize,
+    /// The `build` the hover overlay was last positioned from; `None` while there is no overlay.
+    pub overlay_build: Option<u64>,
 }
 
 impl Default for LayoutCache {
@@ -49,11 +51,17 @@ impl Default for LayoutCache {
             origin: point(px(0.), px(0.)),
             canvas_size: Size::default(),
             builds: 0,
+            overlay_build: None,
         }
     }
 }
 
 impl LayoutCache {
+    /// Whether the hover overlay was positioned from an older layout than the current one.
+    pub fn overlay_is_stale(&self) -> bool {
+        self.overlay_build.is_some_and(|b| b != self.build)
+    }
+
     /// Rebuilds the layout when `generation` (the spec's), the canvas size, the zoom or the
     /// palette differ from the last build.
     pub fn ensure(

@@ -51,10 +51,16 @@ impl Chart {
 
     /// The crosshair, dots and tooltip for the hovered sample.
     pub(super) fn overlay(&self, palette: &ChartPalette) -> Option<AnyElement> {
-        let t = self.hovered?;
+        let Some(t) = self.hovered else {
+            self.cache.borrow_mut().overlay_build = None;
+            return None;
+        };
         let rows = self.hover_rows(palette);
+        let mut cache = self.cache.borrow_mut();
+        // Remember which layout this overlay is placed from: paint compares it with the layout it
+        // ends up using and asks for one more render when a resize or zoom change moved it.
+        cache.overlay_build = Some(cache.build);
         let first = rows.first()?;
-        let cache = self.cache.borrow();
         let plot = cache.layout.as_ref()?.plot;
         let x = first.at.x;
         let top = rows

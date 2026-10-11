@@ -570,9 +570,56 @@ fn a_data_tick_keeps_the_tooltip_while_its_sample_exists(cx: &mut TestAppContext
         "the tooltip survives a tick under a still cursor"
     );
 
+    // The overlay was placed from the layout of the new data, not the previous frame's.
+    assert!(
+        overlay_is_current(&chart, cx),
+        "the tooltip follows the new geometry"
+    );
+
     // Once the sample has left the data, the tooltip goes.
     let rest = Series::new("a", a.points[40..].to_vec());
     chart.update(cx, |c, cx| c.set_series(vec![rest], axis(), cx));
     cx.run_until_parked();
     assert!(chart.read_with(cx, |c, _| c.hovered_time()).is_none());
+}
+
+fn overlay_is_current(chart: &Entity<Chart>, cx: &VisualTestContext) -> bool {
+    chart.read_with(cx, |c, _| {
+        let cache = c.cache.borrow();
+        cache.overlay_build == Some(cache.build)
+    })
+}
+
+#[gpui::test]
+fn a_resize_under_the_cursor_repositions_the_tooltip(cx: &mut TestAppContext) {
+    let (chart, host, cx) = mount_host(cx, |_| Chart::line("t"));
+    let a = minutes("a", 60, 1);
+    let t = a.points[30].t;
+    feed(&chart, cx, vec![a]);
+    hover_at(cx, &chart, t, 0.0);
+    assert!(overlay_is_current(&chart, cx));
+    let before = chart.read_with(cx, |c, _| c.x_of_time(t)).unwrap();
+    let rows = |chart: &Entity<Chart>, cx: &mut VisualTestContext| {
+        let palette = cx.update(|_, cx| ChartPalette::from_tokens(&cx.tokens()));
+        chart.read_with(cx, |c, _| c.hover_rows(&palette))
+    };
+    let dot_before = rows(&chart, cx)[0].at.x;
+
+    host.update(cx, |host, cx| {
+        host.width = 400.0;
+        cx.notify();
+    });
+    cx.run_until_parked();
+    let after = chart.read_with(cx, |c, _| c.x_of_time(t)).unwrap();
+    assert_ne!(before, after, "the resize moved the sample");
+    eprintln!(
+        "DBG {:?} {:?}",
+        chart.read_with(cx, |c, _| c.hovered_time()),
+        chart.read_with(cx, |c, _| (
+            c.cache.borrow().overlay_build,
+            c.cache.borrow().build
+        ))
+    );
+    assert!(overlay_is_current(&chart, cx), "the tooltip was re-placed");
+    assert_ne!(dot_before, rows(&chart, cx)[0].at.x);
 }
