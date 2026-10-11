@@ -294,4 +294,25 @@ mod tests {
         let labels = value_labels(&t, &ValueFormat::Cores);
         assert_eq!(labels, ["0", "100m", "200m", "300m", "400m"]);
     }
+
+    #[test]
+    fn core_axes_do_not_mix_units() {
+        let cores = ValueFormat::Cores;
+        for (max, expected) in [
+            (2.0, vec!["0", "0.5", "1", "1.5", "2"]),
+            (1.25, vec!["0", "0.5", "1", "1.5"]),
+        ] {
+            let t = value_ticks(0.0, max, 4, cores.tick_unit(max));
+            let labels = value_labels(&t, &cores);
+            assert!(labels.iter().all(|l| !l.ends_with('m')), "{labels:?}");
+            assert_eq!(labels, expected);
+        }
+        // A max just under a core is widened to one core; the axis still reads in millicores.
+        let t = value_ticks(0.0, 0.9, 4, cores.tick_unit(0.9));
+        let labels = value_labels(&t, &cores);
+        assert!(
+            labels.iter().skip(1).all(|l| l.ends_with('m')),
+            "{labels:?}"
+        );
+    }
 }

@@ -5,8 +5,8 @@ use super::gallery::fixtures::{wave, with_gaps};
 use super::*;
 use crate::tokens::{ActiveTokens as _, Tokens};
 use gpui::{
-    AppContext as _, Bounds, Context, Entity, IntoElement, Modifiers, ParentElement as _, Pixels,
-    Render, Styled as _, TestAppContext, VisualTestContext, Window, div, point, px, size,
+    AppContext as _, Bounds, Context, Entity, IntoElement, Modifiers, ParentElement as _, Render,
+    Styled as _, TestAppContext, VisualTestContext, Window, div, point, px, size,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -530,10 +530,49 @@ fn the_gallery_renders_every_state(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn sparkline_arcs_are_shared_not_copied(_cx: &mut TestAppContext) {
-    // A series handed to a chart keeps the caller's allocation.
-    let points: Arc<[Point]> = vec![Point::new(1.0, 1.0), Point::new(2.0, 2.0)].into();
-    let series = Series::new("a", points.clone());
-    assert!(Arc::ptr_eq(&series.points, &points));
-    let _unused: Option<Pixels> = None;
+fn a_chart_keeps_the_callers_sample_allocation(cx: &mut TestAppContext) {
+    let (chart, cx) = mount(cx, |_| Chart::line("t"));
+    let series = minutes("a", 60, 1);
+    let points = series.points.clone();
+    feed(&chart, cx, vec![series]);
+    let stored = chart.read_with(cx, |c, _| c.spec.series[0].points.clone());
+    assert!(
+        Arc::ptr_eq(&stored, &points),
+        "set_series copied the samples"
+    );
+    // Repainting does not copy them either.
+    cx.update(|window, _| window.refresh());
+    cx.run_until_parked();
+    let stored = chart.read_with(cx, |c, _| c.spec.series[0].points.clone());
+    assert!(Arc::ptr_eq(&stored, &points));
+}
+
+#[gpui::test]
+fn a_data_tick_keeps_the_tooltip_while_its_sample_exists(cx: &mut TestAppContext) {
+    let (chart, cx) = mount(cx, |_| Chart::line("t"));
+    let a = minutes("a", 60, 1);
+    let t = a.points[30].t;
+    feed(&chart, cx, vec![a.clone()]);
+    hover_at(cx, &chart, t, 0.0);
+    assert_eq!(chart.read_with(cx, |c, _| c.hovered_time()), Some(t));
+
+    // The next poll: one more sample at the end, the window slides a little.
+    let mut next: Vec<Point> = a.points.to_vec();
+    next.push(Point::new(NOW + 15.0, 5.0));
+    let next = Series::new("a", next);
+    chart.update(cx, |c, cx| {
+        c.set_series(vec![next], TimeAxis::utc(NOW - 885.0, NOW + 15.0), cx)
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        chart.read_with(cx, |c, _| c.hovered_time()),
+        Some(t),
+        "the tooltip survives a tick under a still cursor"
+    );
+
+    // Once the sample has left the data, the tooltip goes.
+    let rest = Series::new("a", a.points[40..].to_vec());
+    chart.update(cx, |c, cx| c.set_series(vec![rest], axis(), cx));
+    cx.run_until_parked();
+    assert!(chart.read_with(cx, |c, _| c.hovered_time()).is_none());
 }

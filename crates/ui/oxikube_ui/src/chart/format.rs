@@ -12,7 +12,8 @@ pub enum ValueFormat {
     Bytes,
     /// Bytes per second in binary units.
     BytesPerSecond,
-    /// CPU: the value is in cores; below one core it reads in millicores (`250m`).
+    /// CPU: the value is in cores; below one core it reads in millicores (`250m`). An axis picks
+    /// one unit for all its ticks, so `0, 500m, 1` never appears.
     Cores,
     /// Your own formatter: a plain function, so the format stays `Copy` and comparable.
     Custom(fn(f64) -> String),
@@ -64,7 +65,13 @@ impl ValueFormat {
             ValueFormat::Bytes => binary(value, tick, ""),
             ValueFormat::BytesPerSecond => binary(value, tick, "/s"),
             ValueFormat::Cores => {
-                if value.abs() < 1.0 && value != 0.0 {
+                // Ticks share one unit, chosen from the axis extent (like bytes); a lone value
+                // picks its own.
+                let millis = match tick {
+                    Some((_, extent)) => extent.abs().max(value.abs()) <= 1.0 + 1e-9,
+                    None => value.abs() < 1.0 && value != 0.0,
+                };
+                if millis && value != 0.0 {
                     format!("{}m", number(value * 1000.0, step.map(|s| s * 1000.0)))
                 } else {
                     number(value, step)
@@ -182,6 +189,9 @@ mod tests {
         assert_eq!(ValueFormat::Cores.format(1.5), "1.5");
         assert_eq!(ValueFormat::Cores.format(0.0), "0");
         assert_eq!(ValueFormat::Cores.format_tick(0.2, 0.1, 0.4), "200m");
+        // An axis reaching past a core keeps every tick in cores.
+        assert_eq!(ValueFormat::Cores.format_tick(0.5, 0.5, 2.0), "0.5");
+        assert_eq!(ValueFormat::Cores.format_tick(0.25, 0.25, 1.25), "0.25");
     }
 
     #[test]

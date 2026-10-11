@@ -234,8 +234,12 @@ impl Chart {
 
     fn update(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Spec)) {
         self.edit(change);
-        // The hovered sample may no longer exist.
-        self.hovered = None;
+        // A poll tick must not drop the tooltip under a still cursor: keep the hovered sample
+        // while it still exists in the new data, and clear it only once it has scrolled away.
+        self.hovered = self
+            .hovered
+            .and_then(|t| hover::snap(&self.spec, t, 0.0))
+            .filter(|snapped| self.hovered.is_some_and(|t| (snapped - t).abs() < 1e-6));
         cx.notify();
     }
 
