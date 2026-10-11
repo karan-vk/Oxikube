@@ -389,7 +389,11 @@
     // The manifest editor (E10-S04): a new, empty manifest from anywhere (in the shown cluster's
     // tab, checked against its schemas).
     "bindings": {
-      "ctrl-shift-e": "editor::NewManifest"
+      "ctrl-shift-e": "editor::NewManifest",
+      // Create from template (E10-S09): the "Create resource" picker (a manifest for a core kind
+      // with the selected namespace filled in; your own templates are in the config directory's
+      // `templates` folder).
+      "ctrl-shift-m": "resource::Create"
     }
   },
   {

@@ -4,6 +4,8 @@
 //!   buffer checked against that cluster's schemas), or of the window's own workspace with syntax
 //!   checks only when no cluster tab is shown. A request naming a cluster without a tab here does
 //!   nothing.
+//! - **Create** (`resource::Create`, E10-S09) lists the templates and opens the "Create resource"
+//!   picker (`create`); choosing one opens an editor on it in the cluster's tab.
 //! - **Open** (`resource::Edit`, `resource::ViewYamlInEditor`, E10-S06) opens an editor on a live
 //!   object in the object's cluster tab, titled `kind/name`, or focuses the tab that already
 //!   holds the object. The object is read fresh, off the UI thread, by the editor itself.
@@ -51,9 +53,12 @@ pub struct EditorViewsDeps {
 
 /// Opens the window's manifest editors and applies their commands. See the module docs.
 pub struct EditorViews {
-    deps: EditorViewsDeps,
+    pub(super) deps: EditorViewsDeps,
     /// How many editors this window has opened (the "Untitled-N" titles).
-    opened: usize,
+    pub(super) opened: usize,
+    /// The templates scan behind the running `resource::Create`; a newer one replaces (and so
+    /// cancels) it. Never cleared from inside itself.
+    pub(super) scan: Option<Task<()>>,
     /// The setting problems the last notice was about, so an unrelated change of the settings
     /// does not show it again.
     reported: Vec<String>,
@@ -93,6 +98,7 @@ impl EditorViews {
             Self {
                 deps,
                 opened: 0,
+                scan: None,
                 reported: Vec::new(),
                 _requests: pump,
                 _settings: settings,
@@ -104,6 +110,9 @@ impl EditorViews {
     pub fn apply(&mut self, request: EditorRequest, window: &mut Window, cx: &mut Context<Self>) {
         cx.defer_in(window, move |this, window, cx| match request {
             EditorRequest::New { cluster } => this.open_new(cluster, window, cx),
+            EditorRequest::Create { cluster, template } => {
+                this.create_resource(cluster, template, window, cx)
+            }
             EditorRequest::Open { target, mode } => this.open_resource(&target, mode, window, cx),
             EditorRequest::ToggleManagedFields => {
                 this.on_target(window, cx, |editor, window, cx| {
@@ -201,7 +210,7 @@ impl EditorViews {
     /// What a new editor gets besides its parts: the apply pipeline of its cluster with the
     /// workspace its dialogs open in (E10-S08), and its place among the palette's command
     /// surfaces.
-    fn mount(
+    pub(super) fn mount(
         &self,
         editor: &Entity<ManifestEditor>,
         cluster: Option<&ClusterId>,

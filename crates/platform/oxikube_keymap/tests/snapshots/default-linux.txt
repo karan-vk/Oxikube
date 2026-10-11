@@ -191,6 +191,7 @@
   shift-f3         terminal::SearchPrevious
 [(everywhere)]
   ctrl-shift-e     editor::NewManifest
+  ctrl-shift-m     resource::Create
 [ManifestEditor]
   alt-m            editor::ToggleManagedFields
   alt-v            editor::ToggleSecretMask

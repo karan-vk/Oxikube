@@ -16,6 +16,7 @@
 //! | [`open`] | E10-S06 | an editor opened from a live object: [`open::render_resource`], Secret masking, the `resource::Edit` row actions |
 //! | [`diff`] | E10-S07 | diff vs live, the three-way merge, the changed-on-server state machine |
 //! | [`cancel`] | E10-S11 | [`cancel::CancelToken`]: how a stale parse or validation stops early |
+//! | [`templates`] | E10-S09 | create from template: the embedded manifests of the core kinds ([`templates::embedded`]) and the "Create resource" picker ([`templates::TemplatePicker`]); creating several objects at once is the apply flow's multi-document path (`view::apply`) |
 //! | [`apply`] | E10-S08 | applying the buffer: the server's rejection mapped onto it, the preview's diff (the flow is `view`'s, the pipeline `oxikube_app::ApplyService`) |
 
 pub mod apply;
@@ -25,6 +26,7 @@ pub mod diff;
 pub mod json;
 pub mod open;
 pub mod settings;
+pub mod templates;
 pub mod validate;
 pub mod view;
 pub mod yaml;

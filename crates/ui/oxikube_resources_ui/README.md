@@ -38,6 +38,7 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 - `detail::yaml` / `detail::describe` (E07-S06): the YAML tab (read-only tree-sitter highlighted editor from
   `oxikube_ui::editor`, managedFields toggle, secrets masked, copy and save as commands) and the Describe tab
   (the connection's `DescribePort`, spinner, error with Retry, refresh).
+- `table::render` toolbar "New" button (E10-S09): dispatches `resource::Create` for the table's cluster (the manifest editor's "Create resource" picker).
 - `describe_settings` (E07-S06): the `describe` setting (`backend`: `auto`, `native`, `kubectl`; `kubectl_path`).
 - `views` (E07-S03): `ResourceViews`, which opens tables in cluster tabs from the sidebar and
   `resource::OpenList`, and runs `resource::Open` (which opens the detail drawer), `CopyName`,

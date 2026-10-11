@@ -19,6 +19,8 @@ granit-parser.workspace = true
 # `view` (E10-S04): the session manager (schemas), the command bus registry.
 oxikube_app.workspace = true
 oxikube_keymap.workspace = true
+# The "Create resource" picker (E10-S09) is a `Picker` (E11-S02).
+oxikube_palette.workspace = true
 oxikube_ports.workspace = true
 # Schema fetches on the Kubernetes runtime (`spawn_kube`).
 oxikube_runtime.workspace = true
@@ -76,6 +78,15 @@ path = "tests/diff_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# Create from template and multi-document apply (E10-S09): the "Create resource" picker and the
+# combined preview of several documents.
+# `cargo test -p oxikube_editor --features screenshot --test create_screenshot`
+[[test]]
+name = "create_screenshot"
+path = "tests/create_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 # `cargo bench -p oxikube_editor --bench yaml_parse` (E10-S02, reused by E10-S11): parse time of a
 # 2k-line manifest and a 5 MB dump.
 [[bench]]
@@ -107,6 +118,11 @@ name = "typing_bench"
 # `cargo run -p oxikube_editor --profile release-fast --example live_bench`
 [[example]]
 name = "live_bench"
+
+# Building the embedded templates and filling the namespace in (E10-S09):
+# `cargo run -p oxikube_editor --profile release-fast --example templates_bench`
+[[example]]
+name = "templates_bench"
 
 [lints]
 workspace = true

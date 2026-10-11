@@ -4,12 +4,15 @@
 //!
 //! | Module | What |
 //! |---|---|
+//! | `documents` | [`split_documents`]: the buffer's documents with their byte ranges (E10-S09), [`place_causes_in`]: a cause placed on its document of the buffer |
 //! | `spans` | [`place_causes`]: `Status.details.causes[].field` (validation and server-side apply notation) to a buffer range, the nearest parent when the field is missing |
 
+mod documents;
 mod spans;
 
 use oxikube_app::ApplyPreview;
 
+pub use documents::{Document, place_causes_in, split_documents};
 pub use spans::{PlacedCauses, SERVER_CODE, place_causes};
 
 use crate::diff::ManifestDiff;

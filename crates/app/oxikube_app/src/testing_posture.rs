@@ -338,6 +338,10 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "terminal::Paste" => Command::TerminalPaste,
         "terminal::New" => Command::TerminalNew { cluster: None },
         "editor::NewManifest" => Command::EditorNewManifest { cluster: None },
+        "resource::Create" => Command::ResourceCreate {
+            cluster: None,
+            template: None,
+        },
         "editor::ToggleManagedFields" => Command::EditorToggleManagedFields,
         "editor::ToggleSecretMask" => Command::EditorToggleSecretMask,
         "resource::ViewYamlInEditor" => Command::ResourceViewYamlInEditor { target: target() },

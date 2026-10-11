@@ -9,16 +9,9 @@ use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use serde_json::{Map, Value};
 
 /// The fields the diff ignores, as paths from the object's root: what the server writes and a
-/// manifest never sets (`status`, the bookkeeping under `metadata`).
-pub const IGNORED_FIELDS: &[&[&str]] = &[
-    &["metadata", "managedFields"],
-    &["metadata", "resourceVersion"],
-    &["metadata", "generation"],
-    &["metadata", "uid"],
-    &["metadata", "creationTimestamp"],
-    &["metadata", "selfLink"],
-    &["status"],
-];
+/// manifest never sets (`status`, the bookkeeping under `metadata`). The list is the app's, so the
+/// diff and `oxikube_app::apply::Change` (created / configured / unchanged) never disagree.
+pub use oxikube_app::apply::SERVER_OWNED_FIELDS as IGNORED_FIELDS;
 
 /// What a masked Secret value reads as in a buffer (the YAML tab's placeholder). The diff treats
 /// a key whose value is this text as unchanged: the value was hidden, not edited.

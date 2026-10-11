@@ -282,3 +282,21 @@ fn a_user_section_can_bind_a_key_for_one_kind(cx: &mut TestAppContext) {
         f.dispatcher.sent()
     );
 }
+
+#[gpui::test]
+fn the_new_button_asks_for_the_create_resource_picker_of_this_cluster(cx: &mut TestAppContext) {
+    let (mut f, _table) = open(cx);
+    let bounds = f
+        .vcx
+        .debug_bounds("resource-table-create")
+        .expect("the toolbar has a New button");
+    f.vcx.simulate_click(bounds.center(), Default::default());
+    f.vcx.run_until_parked();
+    assert_eq!(
+        f.dispatcher.sent(),
+        [Command::ResourceCreate {
+            cluster: Some(cluster()),
+            template: None
+        }]
+    );
+}

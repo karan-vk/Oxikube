@@ -1,8 +1,9 @@
 //! `editor::NewManifest`, `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (E10-S04),
 //! `resource::Edit`, `resource::ViewYamlInEditor`, `editor::ToggleManagedFields`,
-//! `editor::ToggleSecretMask` (E10-S06), for JSON mode (E10-S10) `editor::ConvertToJson`,
-//! `editor::ConvertToYaml`, `editor::UseJson` and `editor::UseYaml`, and the diff vs live commands
-//! (E10-S07: `editor::ShowDiff`, `ToggleDiffLayout`, `ReloadFromServer`, `MergeFromServer`,
+//! `editor::ToggleSecretMask` (E10-S06), `resource::Create` (E10-S09, the "Create resource"
+//! picker), for JSON mode (E10-S10) `editor::ConvertToJson`, `editor::ConvertToYaml`,
+//! `editor::UseJson` and `editor::UseYaml`, and the diff vs live commands (E10-S07:
+//! `editor::ShowDiff`, `ToggleDiffLayout`, `ReloadFromServer`, `MergeFromServer`,
 //! `KeepMine`, `TakeMine`, `TakeServer`, `AcceptMerge`) on the command bus, each with its MCP tool
 //! stub (`app.editor_new_manifest`, `k8s.resource_edit`, ...).
 //!
@@ -24,7 +25,7 @@ use crate::json::Language;
 use crate::open::OpenMode;
 
 /// The commands [`register_commands`] handles.
-pub const EDITOR_COMMANDS: [CommandId; 21] = [
+pub const EDITOR_COMMANDS: [CommandId; 22] = [
     CommandId::EDITOR_NEW_MANIFEST,
     CommandId::EDITOR_TOGGLE_MANAGED_FIELDS,
     CommandId::EDITOR_TOGGLE_READ_ONLY,
@@ -46,6 +47,7 @@ pub const EDITOR_COMMANDS: [CommandId; 21] = [
     CommandId::EDITOR_ACCEPT_MERGE,
     CommandId::EDITOR_TRIGGER_COMPLETION,
     CommandId::EDITOR_SHOW_HOVER,
+    CommandId::RESOURCE_CREATE,
 ];
 
 /// What the window's manifest editors should do.
@@ -55,6 +57,16 @@ pub enum EditorRequest {
     New {
         /// The cluster whose tab gets the editor.
         cluster: Option<ClusterId>,
+    },
+    /// `resource::Create` (E10-S09): the "Create resource" picker in `cluster`'s tab (the shown
+    /// one when `None`), or, with `template`, an editor opened on that template at once. The
+    /// editor starts from the template with the cluster's selected namespace filled in and no
+    /// live object.
+    Create {
+        /// The cluster whose tab gets the editor.
+        cluster: Option<ClusterId>,
+        /// The template to open by name; the picker when `None`.
+        template: Option<String>,
     },
     /// `resource::Edit` (`mode` edit) or `resource::ViewYamlInEditor` (`mode` view): a tab titled
     /// `kind/name` in the object's cluster tab, reading the object fresh. The tab of the same
@@ -109,6 +121,9 @@ impl EditorRequest {
     pub fn of(command: Command) -> Option<Self> {
         match command {
             Command::EditorNewManifest { cluster } => Some(EditorRequest::New { cluster }),
+            Command::ResourceCreate { cluster, template } => {
+                Some(EditorRequest::Create { cluster, template })
+            }
             Command::ResourceEdit { target } => Some(EditorRequest::Open {
                 target,
                 mode: OpenMode::Edit,

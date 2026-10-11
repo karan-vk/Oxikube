@@ -190,6 +190,7 @@
   cmd-shift-g      terminal::SearchPrevious
   escape           terminal::SearchClose
 [(everywhere)]
+  cmd-alt-n        resource::Create
   cmd-shift-e      editor::NewManifest
 [ManifestEditor]
   alt-m            editor::ToggleManagedFields

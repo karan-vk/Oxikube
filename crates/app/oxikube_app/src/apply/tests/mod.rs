@@ -1,6 +1,7 @@
 //! Tests of the apply pipeline over the real guard and the testkit fakes: [`Applying`] is the
 //! guard harness with the real `resource::Apply` handler and an [`ApplyService`] on it.
 
+mod batch;
 mod guard;
 mod handler;
 mod service;
@@ -46,6 +47,21 @@ impl Applying {
     pub fn preview(&self, request: ApplyRequest) -> Result<ApplyPreview, ApplyError> {
         self.service
             .preview(request)
+            .now_or_never()
+            .expect("the fakes answer at once")
+    }
+
+    pub fn preview_batch(&self, texts: &[&str]) -> super::BatchPreview {
+        let requests = texts.iter().map(|text| self.request(text)).collect();
+        self.service
+            .preview_batch(requests)
+            .now_or_never()
+            .expect("the fakes answer at once")
+    }
+
+    pub fn apply_batch(&self, preview: &super::BatchPreview) -> super::BatchReport {
+        self.service
+            .apply_batch(preview)
             .now_or_never()
             .expect("the fakes answer at once")
     }
