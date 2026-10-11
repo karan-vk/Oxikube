@@ -66,7 +66,7 @@ impl CommandCategory {
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 20] = [
+        const NAMESPACES: [(&str, CommandCategory); 21] = [
             ("app", CommandCategory::App),
             ("window", CommandCategory::Window),
             ("view", CommandCategory::View),
@@ -160,6 +160,18 @@ mod tests {
             CommandCategory::of(CommandId::new("a::B")),
             CommandCategory::Other,
             "`app` must not claim a shorter namespace"
+        );
+    }
+
+    #[test]
+    fn the_namespaces_added_by_parallel_stories_are_all_listed() {
+        assert_eq!(
+            CommandCategory::of(CommandId::new("charts::Open")),
+            CommandCategory::View
+        );
+        assert_eq!(
+            CommandCategory::of(CommandId::INGRESS_CLASS_SET_DEFAULT),
+            CommandCategory::Resource
         );
     }
 
