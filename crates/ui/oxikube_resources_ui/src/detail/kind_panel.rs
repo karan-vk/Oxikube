@@ -5,6 +5,8 @@
 use gpui::{AnyView, Context, Window};
 use oxikube_app::store::StoreObject;
 use oxikube_domain::Resource;
+use oxikube_domain::command::Command;
+use oxikube_domain::ids::{Gvk, ResourceRef, Scope};
 
 use super::view::DetailView;
 use crate::kinds::DetailRenderer;
@@ -45,6 +47,24 @@ impl DetailView {
                 Some(StoreObject::Resource(resource)) => Some(resource),
                 _ => None,
             })
+    }
+
+    /// A reference to the object `name` of `gvk` in this object's cluster, and in this object's
+    /// namespace when `scope` is namespaced: what a panel links to (an HPA's scale target, a
+    /// binding's policy).
+    pub fn sibling(&self, gvk: Gvk, name: &str, scope: Scope) -> ResourceRef {
+        let namespace = match scope {
+            Scope::Namespaced => self.target.namespace.clone(),
+            Scope::Cluster => None,
+        };
+        ResourceRef::new(self.target.cluster.clone(), gvk, namespace, name)
+    }
+
+    /// Opens the detail of `target`: sends `resource::Open`, as an owner link does.
+    pub fn open_resource(&mut self, target: ResourceRef, cx: &mut Context<Self>) {
+        self.deps
+            .dispatcher
+            .dispatch(Command::ResourceOpen { target }, cx);
     }
 
     /// The kind's own panel, when its spec has one and it was drawn.

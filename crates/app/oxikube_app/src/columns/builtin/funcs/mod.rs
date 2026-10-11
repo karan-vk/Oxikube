@@ -18,6 +18,7 @@ use oxikube_domain::json::{Array, JsonRef};
 
 pub(super) use batch::*;
 pub(super) use discovery::*;
+pub use misc::hpa_state_tone;
 pub(super) use misc::*;
 pub(super) use node::*;
 pub(super) use pod::*;

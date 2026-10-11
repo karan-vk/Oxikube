@@ -24,7 +24,7 @@ mod table;
 #[cfg(test)]
 mod tests;
 
-pub use builtin::{CoreColumns, Metric, MetricsSource};
+pub use builtin::{CoreColumns, Metric, MetricsSource, hpa_state_tone};
 pub use cell::{Cell, CellSort, CellValue, Tone};
 pub use column::{Align, Column, ColumnId, SortKind};
 pub use provider::ColumnProvider;

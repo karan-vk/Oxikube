@@ -5,6 +5,7 @@
 //! |---|---|
 //! | [`core()`] | a stock cluster: [`core_kinds`] plus the other built-in kinds every current server serves |
 //! | [`core_with_gateway_api`] | [`core()`] plus the Gateway API CRDs (an optional group the sidebar shows only when served) |
+//! | [`core_with_vpa`] | [`core()`] plus the VerticalPodAutoscaler CRD (the Config section's optional kind) |
 //! | [`core_with_crds`] | [`core()`] plus cert-manager's CRDs (the Custom Resources section) |
 //! | [`crds_only`] | cert-manager's CRDs and nothing built in (a server whose discovery lists only custom groups) |
 
@@ -107,6 +108,29 @@ pub fn core_with_gateway_api() -> Vec<ResourceKind> {
     kinds
 }
 
+/// The VerticalPodAutoscaler's CRD (`autoscaling.k8s.io`), installed separately from the cluster.
+pub fn vpa_kinds() -> Vec<ResourceKind> {
+    vec![
+        KindSpec::new(
+            "autoscaling.k8s.io",
+            "v1",
+            "VerticalPodAutoscaler",
+            "verticalpodautoscalers",
+        )
+        .singular("verticalpodautoscaler")
+        .short("vpa")
+        .build(),
+    ]
+}
+
+/// [`core()`] with the VerticalPodAutoscaler installed (an optional CRD the Config section shows
+/// only when served).
+pub fn core_with_vpa() -> Vec<ResourceKind> {
+    let mut kinds = core();
+    kinds.extend(vpa_kinds());
+    kinds
+}
+
 /// [`core()`] with cert-manager installed.
 pub fn core_with_crds() -> Vec<ResourceKind> {
     let mut kinds = core();
@@ -130,6 +154,7 @@ mod tests {
         for set in [
             core(),
             core_with_gateway_api(),
+            core_with_vpa(),
             core_with_crds(),
             crds_only(),
         ] {

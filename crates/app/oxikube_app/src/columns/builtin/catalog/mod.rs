@@ -7,7 +7,7 @@
 //!
 //! Every kind the [`FeedPolicy`](crate::store::FeedPolicy) serves from a reflector or metadata
 //! feed has an entry here (a test keeps the two in step). Kinds read through the metadata feed
-//! (ConfigMap, Secret, Lease) only list columns a metadata-only object can fill: their `data`,
+//! (ConfigMap, Secret) only list columns a metadata-only object can fill: their `data`,
 //! `type` and `spec` are never cached (non-negotiable 5).
 
 mod cluster;

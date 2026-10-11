@@ -17,6 +17,10 @@
 //! - `detail_crd_schema_dark`, `detail_crd_schema_light` (`crd`): the Schema tab of a CRD's detail
 //!   (E07-S07) with `spec` and `spec.containers` open.
 //!
+//! - `detail_quota_dark`, `detail_quota_light`, `detail_webhook_dark` (`config`): the Config kinds' panels
+//!   above the Overview (E12-S12): a ResourceQuota's used-against-hard bars and a webhook
+//!   configuration with its `caBundle` shown as present or absent.
+//!
 //! - `exec_picker_dark`, `exec_picker_light` (`exec`): the container picker of a pod with three
 //!   containers, the default one selected (E09-S08; the generic picker of E11-S02 since).
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
@@ -54,6 +58,8 @@ use oxikube_testkit::{
 };
 use oxikube_workspace::CommandDispatcher;
 
+#[path = "screenshot/config.rs"]
+mod config;
 #[path = "screenshot/crd.rs"]
 mod crd;
 #[path = "screenshot/detail.rs"]
@@ -237,6 +243,7 @@ fn main() -> ExitCode {
         render_at(None, false, NARROW, Some("shop"))
             .and_then(|image| check("pods_table_one_namespace", image, NARROW, HEIGHT)),
         detail::run(),
+        config::run(),
         crd::run(),
         exec::run(),
     ];

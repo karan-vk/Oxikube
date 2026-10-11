@@ -135,10 +135,15 @@ const CORE: &[(&str, &str, FeedPlan)] = &[
         FeedPlan::new(Full, Normal),
     ),
     ("policy", "PodDisruptionBudget", FeedPlan::new(Full, Normal)),
+    // A Lease holds no secrets and its holder is a column (E12-S12), so it is read in full.
+    ("coordination.k8s.io", "Lease", FeedPlan::new(Full, Normal)),
+    // The VerticalPodAutoscaler is an optional CRD: its mode and conditions are columns
+    // (E12-S12), which the Table API would print differently. Where the CRD is absent nothing
+    // opens this feed (the sidebar gates the entry by discovery).
     (
-        "coordination.k8s.io",
-        "Lease",
-        FeedPlan::new(Metadata, Normal),
+        "autoscaling.k8s.io",
+        "VerticalPodAutoscaler",
+        FeedPlan::new(Full, Normal),
     ),
     // Cluster-level kinds with core columns (E07-S02): small, rarely churning, and their columns
     // are computed from `spec`, which the Table API would print differently from our catalogue.
@@ -258,6 +263,18 @@ mod tests {
             FALLBACK
         );
         assert_eq!(FeedKind::Table.variant(), FeedVariant::Table);
+        // E12-S12: a Lease's holder and a VPA's mode and conditions are columns, so both are read
+        // in full (a Lease holds no secrets; the VPA is a CRD the Table API prints differently).
+        for (group, kind) in [
+            ("coordination.k8s.io", "Lease"),
+            ("autoscaling.k8s.io", "VerticalPodAutoscaler"),
+        ] {
+            assert_eq!(
+                policy.plan(&Gvk::new(group, "v1", kind)).kind,
+                FeedKind::Full,
+                "{kind}"
+            );
+        }
     }
 
     #[test]
