@@ -9,8 +9,9 @@ use oxikube_ui::editor::DiagnosticLevel;
 use oxikube_workspace::Toast;
 use oxikube_workspace::modal::ModalView;
 
-use super::{ApplyPreviewDialog, ApplyStage, ConflictDialog};
-use crate::apply::{place_causes, preview_diff};
+use super::{ApplyPreviewDialog, ApplyStage, ConflictDialog, batch};
+use crate::apply::{place_causes, preview_diff, split_documents};
+use crate::json::Language;
 use crate::open::{MASKED_CODE, ResourceBinding};
 use crate::view::ManifestEditor;
 use crate::view::notice::{Notice, NoticeLevel};
@@ -55,15 +56,17 @@ impl ManifestEditor {
         let settings = self.settings(cx);
         let validating = settings.validation;
         let manager = settings.field_manager.clone();
+        let several = self.model.language() == Language::Yaml;
         let namespace = self
             .binding
             .as_ref()
             .and_then(|binding| binding.target().namespace().map(str::to_owned));
         self.apply.stage = ApplyStage::DryRun;
+        self.apply.results = None;
         self.apply_notice(NoticeLevel::Info, "Dry run on the server…".into(), cx);
         self.apply.task = Some(cx.spawn_in(window, async move |this, cx| {
             // The checks of this very text: a result shown for an older one does not count.
-            let (text, errors) = cx
+            let (text, errors, documents) = cx
                 .background_spawn(async move {
                     let text = snapshot.to_text();
                     let check = validate_text_in(version, text.clone(), &known, mode, masking);
@@ -73,7 +76,13 @@ impl ManifestEditor {
                         .filter(|d| d.level == DiagnosticLevel::Error)
                         .filter(|d| validating || d.code.as_deref() == Some(MASKED_CODE))
                         .count();
-                    (text, errors)
+                    // Several documents are applied one object at a time (E10-S09).
+                    let documents = if several && errors == 0 {
+                        split_documents(&text)
+                    } else {
+                        Vec::new()
+                    };
+                    (text, errors, documents)
                 })
                 .await;
             if errors > 0 {
@@ -81,6 +90,24 @@ impl ManifestEditor {
                     let noun = if errors == 1 { "error" } else { "errors" };
                     view.apply_refused(format!("Fix the {errors} {noun} before applying"), cx);
                 });
+                return;
+            }
+            if documents.len() > 1 {
+                let target = batch::Target {
+                    cluster,
+                    namespace,
+                    manager,
+                };
+                batch::run_preview(
+                    this,
+                    cx,
+                    service,
+                    target,
+                    documents,
+                    text.to_string().into(),
+                    version,
+                )
+                .await;
                 return;
             }
             let mut request = ApplyRequest::new(cluster, text.to_string())
@@ -268,7 +295,7 @@ impl ManifestEditor {
     /// cancels through [`ModalView::on_before_dismiss`]; a modal that replaces it (the palette's
     /// key works over it) never asks it, so its release cancels too: the stage never stays
     /// `Reviewing` with no dialog to answer.
-    fn show_review<V: ModalView>(
+    pub(in crate::view::apply) fn show_review<V: ModalView>(
         &mut self,
         workspace: &Entity<oxikube_workspace::Workspace>,
         dialog: Entity<V>,
@@ -318,13 +345,18 @@ impl ManifestEditor {
     }
 
     /// Refuses the apply with `text`; nothing was sent.
-    fn apply_refused(&mut self, text: String, cx: &mut Context<Self>) {
+    pub(in crate::view::apply) fn apply_refused(&mut self, text: String, cx: &mut Context<Self>) {
         self.apply.stage = ApplyStage::Idle;
         self.apply_notice(NoticeLevel::Error, text, cx);
     }
 
     /// Shows `text` in the notice bar until the next edit.
-    fn apply_notice(&mut self, level: NoticeLevel, text: String, cx: &mut Context<Self>) {
+    pub(in crate::view::apply) fn apply_notice(
+        &mut self,
+        level: NoticeLevel,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
         self.set_notice(Notice::new(level, text), cx);
     }
 }

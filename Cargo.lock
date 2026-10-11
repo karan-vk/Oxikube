@@ -5834,6 +5834,7 @@ dependencies = [
  "oxikube_assets",
  "oxikube_domain",
  "oxikube_keymap",
+ "oxikube_palette",
  "oxikube_ports",
  "oxikube_runtime",
  "oxikube_settings",

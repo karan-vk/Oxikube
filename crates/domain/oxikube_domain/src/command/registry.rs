@@ -207,6 +207,9 @@ impl CommandId {
     pub const RESOURCE_COPY_NAME: CommandId = CommandId::new("resource::CopyName");
     /// `resource::CopyYaml`: copy the YAML a resource's detail shows (secrets masked).
     pub const RESOURCE_COPY_YAML: CommandId = CommandId::new("resource::CopyYaml");
+    /// `resource::Create`: open the "Create resource" picker (or one template) in the manifest
+    /// editor.
+    pub const RESOURCE_CREATE: CommandId = CommandId::new("resource::Create");
     /// `resource::Delete`: delete any resource.
     pub const RESOURCE_DELETE: CommandId = CommandId::new("resource::Delete");
     /// `resource::Edit`: open a resource's manifest in the editor.
@@ -1001,6 +1004,16 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Opens a manifest editor on a template (E10-S09); like `editor::NewManifest` it changes
+    // nothing in a cluster. The objects are made by `resource::Apply`, one per document of the
+    // buffer, each through the guard (read-only blocks it, the dry-run preview confirms it, every
+    // document is audited).
+    CommandMeta::read(
+        CommandId::RESOURCE_CREATE,
+        "Create Resource…",
+        CommandScope::Cluster,
+        NONE,
+    ),
     CommandMeta::mutation(
         CommandId::RESOURCE_DELETE,
         "Delete Resource",

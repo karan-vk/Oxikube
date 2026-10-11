@@ -14,6 +14,7 @@
 //! |---|---|
 //! | `flow` | the steps above on [`ManifestEditor`]: [`begin_apply`](ManifestEditor::begin_apply), what each answer does to the editor |
 //! | `preview` | [`ApplyPreviewDialog`]: the dry run's diff (virtualised), the fallback or force it will use, Apply / Cancel |
+//! | `batch` | a buffer of several documents (E10-S09): every document's dry run, one combined preview ([`BatchPreviewDialog`]), applied in buffer order, the per-document results panel |
 //! | `conflicts` | [`ConflictDialog`]: the fields other managers own, Force / Cancel |
 //!
 //! The editor never writes to a cluster: every request is a `resource::Apply` dispatch of
@@ -21,6 +22,7 @@
 //! (`oxikube_runtime::spawn_kube`). The preview is the confirmation. Nothing here logs the
 //! buffer; a Secret's values reach the dialogs only as fingerprints.
 
+mod batch;
 mod conflicts;
 mod flow;
 mod preview;
@@ -41,6 +43,7 @@ use oxikube_ui::tooltip::tooltip_for_action;
 use oxikube_workspace::Workspace;
 use oxikube_workspace::command_surface::CommandSurface;
 
+pub use batch::{BatchPreviewDialog, BatchSession};
 pub use conflicts::ConflictDialog;
 pub use preview::ApplyPreviewDialog;
 
@@ -80,6 +83,8 @@ pub(crate) struct ApplyLink {
     /// The open preview's (or conflict list's) release: it ends `Reviewing` when the dialog goes
     /// without being answered, e.g. replaced by another modal.
     pub(super) review: Option<Subscription>,
+    /// The results of the last multi-document apply, shown under the buffer (E10-S09).
+    pub(super) results: Option<batch::ResultsPanel>,
 }
 
 impl ManifestEditor {

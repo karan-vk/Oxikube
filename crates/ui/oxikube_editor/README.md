@@ -11,7 +11,7 @@ Manifest editor: YAML/JSON on gpui-component editor, spanned YAML (granit-parser
 - `oxikube_app`
 - `oxikube_ui`
 - `oxikube_workspace`
-- platform crates: `oxikube_keymap` (key contexts), `oxikube_runtime` (`spawn_kube` for schema fetches), `oxikube_settings` (the `editor` settings)
+- `oxikube_palette` (the `Picker` of the "Create resource" picker); platform crates: `oxikube_keymap` (key contexts), `oxikube_runtime` (`spawn_kube` for schema fetches), `oxikube_settings` (the `editor` settings)
 
 ## Modules
 
@@ -25,10 +25,13 @@ Manifest editor: YAML/JSON on gpui-component editor, spanned YAML (granit-parser
 | `diff` | E10-S07 | diff vs live (pure): normalising, the line diff, the three-way merge, the changed-on-server state machine |
 | `view` | E10-S04 | `ManifestEditor` (workspace item over `oxikube_ui::editor::CodeEditor`), debounced background validation against the cluster's `SchemaPort`, `editor::NewManifest` / `ToggleReadOnly` / `ToggleSoftWrap`; E10-S05: `TriggerCompletion` (`ctrl-space`) / `ShowHover` (`ctrl-shift-space`); E10-S10: the language chip, `editor::ConvertToJson` / `ConvertToYaml` / `UseJson` / `UseYaml`, the notice bar |
 | `json` | E10-S10 | JSON mode (pure, no gpui): `Language` detection, the strict JSON check, YAML <-> JSON `convert` with `Warnings`, the two writers |
+| `templates` | E10-S09 | create from template: the embedded manifests of the core kinds (`templates/*.yaml`, compiled in), `TemplatePicker` (a `Picker` over `oxikube_app::TemplateService`'s catalog); `resource::Create` opens it, `view::create` opens the chosen template in a tab with the selected namespace filled in |
+| `apply::documents` | E10-S09 | `split_documents`: a buffer's documents with their ranges; `place_causes_in`: a server cause on its own document |
+| `view::apply::batch` | E10-S09 | several documents in one buffer: every document's dry run, `BatchPreviewDialog` (the combined preview), apply in buffer order, the per-document results panel |
 | `cancel` | E10-S11 | `CancelToken`: a stale parse or validation stops at its next poll |
 | `view::pipeline`, `view::progressive` | E10-S11 | the cancellable pass, a large buffer in chunks with the visible objects first |
 
-Tests: `cargo test -p oxikube_editor` (unit, the view logic against a fake `EditorApi`, `#[gpui::test]`s in
+Tests: `cargo test -p oxikube_editor` (unit, the templates in `tests/templates.rs`, create and multi-document apply in `tests/create.rs`, the documents split in `tests/documents.rs`, the view logic against a fake `EditorApi`, `#[gpui::test]`s in
 `tests/view.rs`, `tests/open.rs`, and, for large files and the pipeline, `tests/large_file.rs`; diff vs live against a `FakeResourcePort` in `tests/live.rs`, the pure diff in `tests/diff.rs`); screenshots: `cargo test -p oxikube_editor --features screenshot --test screenshot` and `--test diff_screenshot`;
 typing bench: `cargo run -p oxikube_editor --profile release-fast --example typing_bench` (and `--example live_bench` for diff vs live); hover / completion bench: `cargo bench -p oxikube_editor --bench assist`; conversion bench:
 `cargo bench -p oxikube_editor --bench convert`; JSON mode: `cargo test -p oxikube_editor --test json_mode --test json_props

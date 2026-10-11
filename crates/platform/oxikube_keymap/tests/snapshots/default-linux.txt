@@ -190,6 +190,7 @@
   f3               terminal::SearchNext
   shift-f3         terminal::SearchPrevious
 [(everywhere)]
+  ctrl-alt-n       resource::Create
   ctrl-shift-e     editor::NewManifest
 [ManifestEditor]
   alt-m            editor::ToggleManagedFields

@@ -8,6 +8,7 @@ use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use serde_json::Value;
 
+use super::change::Change;
 use crate::actions::object_label;
 
 /// What to apply where. The manifest may hold Secret data: it lives in memory only and is
@@ -160,6 +161,11 @@ impl ApplyPreview {
     /// Whether the apply creates the object.
     pub fn creates(&self) -> bool {
         self.live.is_none()
+    }
+
+    /// What the apply does to the object: create it, change it, or leave it as it is.
+    pub fn change(&self) -> Change {
+        Change::between(self.live.as_ref(), &self.result)
     }
 }
 

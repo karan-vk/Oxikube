@@ -645,6 +645,26 @@ crate's `README.md` for its allowed dependencies. Highlights:
   fingerprints. The editor reaches it by `resource::Apply` (`cmd-s` / `ctrl-s` in `ManifestEditor`, the palette through the
   editor's `CommandSurface`, the toolbar's Apply): its own checks first (errors, a masked value, refuse), the dry run on the
   Kubernetes runtime, `ApplyPreviewDialog` (virtualised diff) or `ConflictDialog` (Force previews again), then the apply.
+- `oxikube_app::templates` + `oxikube_editor::templates` + `oxikube_app::apply::batch` (E10-S09) — create from template and
+  many documents in one apply. `resource::Create` (palette "Create Resource…", `cmd-alt-n` / `ctrl-alt-n`, the "New" button
+  of every resource table; a read command like `editor::NewManifest`: it opens an editor and writes nothing) lists the
+  templates on the Kubernetes runtime (`TemplateService::catalog`: the embedded manifests that `oxikube_editor::templates`
+  passes in, one minimal YAML per core kind under `oxikube_editor/templates/`, plus the user's
+  `<config dir>/templates/*.yaml` read through `FsPort` each time the picker opens; a user template named like an embedded one
+  — `# name:` comment or file name, case-insensitive — replaces it, a file that is not YAML or not an object, not UTF-8 or
+  over 256 KiB is skipped with a warning that quotes nothing of it) and opens `TemplatePicker`, a generic `oxikube_palette::Picker`.
+  Choosing one opens a `ManifestEditor` tab `New <name>` in the cluster's tab: `Template::prefill` puts the namespace of the
+  session's `NamespaceSelection` into the `namespace: default` placeholders (`All` or several namespaces say so in the notice
+  bar), and there is no live object, so the apply is a create. Several documents in a buffer (a template with two, or a paste)
+  go through `ApplyService::preview_batch` / `apply_batch`, which are the single-object `preview` / `apply` once per document —
+  one `resource::Apply` each, so the guard, the confirmation (the combined `BatchPreviewDialog`) and one audit record per
+  document are unchanged and there is no second apply path. The dry runs go out together; a document that needs a Namespace or
+  a CustomResourceDefinition an earlier document creates is `Deferred` (rehearsed and applied when its turn comes); applying
+  is in buffer order and, like `kubectl apply`, a failure does not stop the rest except the documents that need the failed one
+  (`Skipped`). `ResultsPanel` under the buffer lists created / configured / unchanged / failed (message, squiggle on the
+  rejected field) / skipped per document. `Change` (create / update / unchanged) is decided from the dry run over
+  `SERVER_OWNED_FIELDS`, the one list the diff vs live uses too. Bench: `cargo run -p oxikube_editor --profile release-fast
+  --example templates_bench` (building the 27 templates 0.3 ms, filling the namespace of all of them 10 us).
 - `oxikube_editor::diff` (E10-S07) — diff vs live, pure (no gpui) so the apply preview (E10-S08), the dry-run preview
   (E19-S07) and the cross-cluster diff (E20-S09) reuse it without the editor widget. The buffer is read as values
   (`serde-saphyr`: comments gone), both sides are `normalize`d (`IGNORED_FIELDS`, the one list: `metadata.managedFields`,

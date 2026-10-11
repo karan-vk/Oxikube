@@ -10,6 +10,7 @@ use gpui::{
     Styled as _, Window, div, px,
 };
 use oxikube_app::ColumnId;
+use oxikube_domain::command::Command;
 use oxikube_keymap::KeyContextual as _;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{h_flex, v_flex};
@@ -77,6 +78,7 @@ impl Render for ResourceTable {
                 .children(self.basic_columns_note(cx))
                 .child(div().flex_1())
                 .children(self.version_switcher(cx))
+                .child(self.create_button(cx))
                 .child(self.column_picker(cx));
         v_flex()
             .id("resource-table")
@@ -123,6 +125,32 @@ impl Render for ResourceTable {
 }
 
 impl ResourceTable {
+    /// The "New" button (E10-S09): `resource::Create`, the "Create resource" picker of the
+    /// manifest editor for this table's cluster (the palette and `cmd-alt-n` run the same
+    /// command).
+    fn create_button(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let cluster = self.cluster.clone();
+        let dispatcher = self.deps.dispatcher.clone();
+        div()
+            .debug_selector(|| "resource-table-create".into())
+            .child(
+                Button::new("resource-table-create")
+                    .label("New")
+                    .ghost()
+                    .xsmall()
+                    .tooltip("Create a resource from a template")
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        dispatcher.dispatch(
+                            Command::ResourceCreate {
+                                cluster: Some(cluster.clone()),
+                                template: None,
+                            },
+                            cx,
+                        );
+                    })),
+            )
+    }
+
     /// The "Columns" button: every column of the kind, checked when shown; clicking one shows or
     /// hides it. The name column cannot be hidden.
     fn column_picker(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {

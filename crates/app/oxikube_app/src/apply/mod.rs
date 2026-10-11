@@ -14,6 +14,8 @@
 //! | `handler` | [`register_commands`]: the `resource::Apply` handler, the only code that writes a manifest (server-side apply under the field manager, the replace / create fallback) |
 //! | `manifest` | the manifest read as one object, its namespace, the request body |
 //! | `mask` | Secret values replaced by keyed fingerprints before anything leaves this module |
+//! | `batch` | [`ApplyService::preview_batch`] / [`apply_batch`](ApplyService::apply_batch): many documents (E10-S09), each the same `resource::Apply`: all dry-run first, then applied in buffer order, per-document results, a failure not stopping the rest (as `kubectl apply`) except for the documents that need it |
+//! | `change` | [`Change`]: create / update / unchanged from a dry run; [`SERVER_OWNED_FIELDS`], the fields every diff ignores |
 //! | `types` | [`ApplyRequest`], [`ApplyPreview`], [`ApplyReport`], [`ApplyMethod`], [`FieldConflict`] |
 //!
 //! Every request goes through the `MutationGuard`: blocked on a read-only cluster for every
@@ -22,6 +24,8 @@
 //! outcome. The audit record names the object and the field manager, never the manifest.
 //! Plan review #397: this is the one apply service; E20 extends it to many objects.
 
+mod batch;
+mod change;
 mod handler;
 mod manifest;
 mod mask;
@@ -36,6 +40,11 @@ use oxikube_domain::ids::{ClusterId, ResourceRef};
 
 use crate::session::ClusterSessionManager;
 
+pub use batch::{
+    BatchCounts, BatchPreview, BatchReport, DocumentPreview, DocumentResult, DocumentStatus,
+    PreviewOutcome,
+};
+pub use change::{Change, SERVER_OWNED_FIELDS};
 pub use handler::{DEFAULT_FIELD_MANAGER, register_commands};
 pub use service::ApplyService;
 pub use types::{

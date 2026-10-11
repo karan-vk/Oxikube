@@ -86,9 +86,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::TableToggleWide { cluster, .. }
         | Command::TableSetFilter { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
-        Command::TerminalNew { cluster } | Command::EditorNewManifest { cluster } => {
-            cluster.as_ref()
-        }
+        Command::TerminalNew { cluster }
+        | Command::EditorNewManifest { cluster }
+        | Command::ResourceCreate { cluster, .. } => cluster.as_ref(),
         Command::ResourceOpen { target }
         | Command::ResourceCopyName { target }
         | Command::ResourcePinDetail { target }

@@ -580,6 +580,19 @@ pub enum Command {
         /// The kind listed.
         gvk: Gvk,
     },
+    /// Open the "Create resource" picker in the manifest editor (E10-S09): the embedded templates
+    /// of the core kinds and the user's own, with the namespace of the cluster's selection filled
+    /// in. With `template` the editor opens on that template at once. Edits text only; the
+    /// objects are made by `resource::Apply`, one per document.
+    #[serde(rename = "resource::Create")]
+    ResourceCreate {
+        /// The cluster to create in; the displayed cluster tab when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+        /// The template to open (by name, `Deployment`); the picker when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        template: Option<String>,
+    },
     /// Delete any resource.
     #[serde(rename = "resource::Delete")]
     ResourceDelete {
@@ -1079,6 +1092,7 @@ impl Command {
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
             Command::ResourceViewYamlInEditor { .. } => CommandId::RESOURCE_VIEW_YAML_IN_EDITOR,
             Command::ResourceViewDescribe { .. } => CommandId::RESOURCE_VIEW_DESCRIBE,
+            Command::ResourceCreate { .. } => CommandId::RESOURCE_CREATE,
             Command::ResourceEdit { .. } => CommandId::RESOURCE_EDIT,
             Command::TableToggleWide { .. } => CommandId::TABLE_TOGGLE_WIDE,
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
@@ -1352,6 +1366,14 @@ mod tests {
             Command::EditorNewManifest { cluster: None },
             Command::EditorNewManifest {
                 cluster: Some(cluster()),
+            },
+            Command::ResourceCreate {
+                cluster: None,
+                template: None,
+            },
+            Command::ResourceCreate {
+                cluster: Some(cluster()),
+                template: Some("Deployment".into()),
             },
             Command::EditorToggleManagedFields,
             Command::EditorToggleSecretMask,
@@ -1749,6 +1771,7 @@ mod tests {
                     | Command::TerminalSearchPrevious
                     | Command::TerminalSelectAll
                     | Command::EditorNewManifest { .. }
+                    | Command::ResourceCreate { .. }
                     | Command::EditorToggleManagedFields
                     | Command::EditorToggleSecretMask
                     | Command::EditorToggleReadOnly

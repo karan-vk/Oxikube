@@ -18,6 +18,7 @@
 //! | `live` | diff vs live (E10-S07): the watch on the edited object, the changed-on-server banner (Merge / Reload / Keep mine), the diff side by side or inline in the bottom panel ([`LiveSource`], [`SessionLive`]) |
 //! | `controller` | [`EditorViews`]: applies the requests in the shown workspace through an [`EditorHost`] |
 //! | `host` | [`EditorHost`]: where the editors go, their schemas, live objects and apply pipeline ([`ClusterEditorHost`] in the app) |
+//! | `create` | create from template (E10-S09): `resource::Create` lists the templates off the UI thread, opens the picker, and opens the chosen template in a new editor with the namespace filled in |
 //! | `apply` | applying the buffer (E10-S08): `resource::Apply` (`cmd-s` / `ctrl-s`, the palette, the toolbar), the dry run, [`ApplyPreviewDialog`], [`ConflictDialog`], the server's errors on their fields |
 //!
 //! The editor never writes its buffer anywhere: not to the layout, not to logs. Applying it to a
@@ -28,6 +29,7 @@ pub mod apply;
 mod commands;
 mod controller;
 mod convert;
+mod create;
 mod host;
 mod item;
 mod live;
@@ -46,9 +48,10 @@ use gpui::{App, Global, actions};
 use oxikube_domain::command::Command;
 use oxikube_workspace::CommandDispatcher;
 
-pub use apply::{ApplyPreviewDialog, ApplyStage, ConflictDialog};
+pub use apply::{ApplyPreviewDialog, ApplyStage, BatchPreviewDialog, BatchSession, ConflictDialog};
 pub use commands::{EDITOR_COMMANDS, EditorRequest, EditorViewSink, register_commands};
 pub use controller::{EditorViews, EditorViewsDeps};
+pub use create::Create;
 pub use host::{ClusterEditorHost, EditorHost};
 pub use live::{DIFF_DEBOUNCE, DiffLayout, LiveSource, SessionLive};
 pub use manifest_editor::{ManifestEditor, ManifestEditorParts};
@@ -106,13 +109,24 @@ struct EditorDispatcher(Rc<dyn CommandDispatcher>);
 
 impl Global for EditorDispatcher {}
 
-/// Registers the global `editor::NewManifest` action (it dispatches the bus command through the
+/// Registers the global `editor::NewManifest` and `resource::Create` actions (it dispatches the bus command through the
 /// dispatcher [`install`] set). Called by [`crate::init`]. The toggles are handled by the focused
 /// [`ManifestEditor`] itself.
 pub(crate) fn init(cx: &mut App) {
     cx.on_action(|_: &NewManifest, cx| {
         if let Some(dispatcher) = cx.try_global::<EditorDispatcher>().map(|d| d.0.clone()) {
             dispatcher.dispatch(Command::EditorNewManifest { cluster: None }, cx);
+        }
+    });
+    cx.on_action(|_: &Create, cx| {
+        if let Some(dispatcher) = cx.try_global::<EditorDispatcher>().map(|d| d.0.clone()) {
+            dispatcher.dispatch(
+                Command::ResourceCreate {
+                    cluster: None,
+                    template: None,
+                },
+                cx,
+            );
         }
     });
 }

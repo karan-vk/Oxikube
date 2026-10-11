@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: example
+  namespace: default
+spec:
+  serviceName: example
+  replicas: 1
+  selector:
+    matchLabels:
+      app: example
+  template:
+    metadata:
+      labels:
+        app: example
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.27
+          ports:
+            - containerPort: 80

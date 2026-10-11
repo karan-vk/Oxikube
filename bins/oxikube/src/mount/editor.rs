@@ -13,19 +13,27 @@
 //! E10-S08 gives the editors of a cluster tab the app's [`ApplyService`]: `resource::Apply`
 //! (`cmd-s` / `ctrl-s`, the palette, the toolbar's Apply) dry-runs the buffer, shows the diff and
 //! applies it through the bus.
+//! E10-S09 adds create from template: `resource::Create` (the palette's "Create Resource…",
+//! `cmd-alt-n` / `ctrl-alt-n`, the "New" button of every resource table) opens the "Create
+//! resource" picker over the embedded manifests of the core kinds and the user's
+//! `<config dir>/templates/*.yaml` ([`templates`], read through the filesystem port), and a
+//! buffer of several documents is applied one object at a time.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use futures::channel::mpsc;
 use gpui::{App, Entity, WeakEntity, Window};
-use oxikube_app::{ApplyService, ClusterSessionManager};
+use oxikube_app::{ApplyService, ClusterSessionManager, TemplateService};
 use oxikube_editor::view::{ClusterEditorHost, EditorRequest, EditorViews, EditorViewsDeps};
+use oxikube_ports::FsPort;
 use oxikube_workspace::{ClusterTabs, CommandDispatcher, Workspace};
 
 /// Starts the window's editor views over `requests` (the bus's `editor::*` handlers).
 pub fn start_views(
     sessions: ClusterSessionManager,
     apply: ApplyService,
+    templates: Option<TemplateService>,
     tabs: WeakEntity<ClusterTabs>,
     workspace: &Entity<Workspace>,
     dispatcher: Rc<dyn CommandDispatcher>,
@@ -34,10 +42,26 @@ pub fn start_views(
     cx: &mut App,
 ) -> Entity<EditorViews> {
     oxikube_editor::view::install(dispatcher.clone(), cx);
+    let mut host = ClusterEditorHost::new(tabs, sessions).with_apply(apply);
+    if let Some(templates) = templates {
+        host = host.with_templates(templates);
+    }
     let deps = EditorViewsDeps {
-        host: Rc::new(ClusterEditorHost::new(tabs, sessions).with_apply(apply)),
+        host: Rc::new(host),
         window_workspace: workspace.downgrade(),
         dispatcher,
     };
     EditorViews::start(deps, requests, window, cx)
+}
+
+/// The "Create resource" templates (E10-S09): the editor's embedded manifests plus the
+/// `templates` folder of the config directory, read through `fs` each time the picker opens.
+/// `None` without a config directory: only the embedded ones are offered.
+pub fn templates(fs: Arc<dyn FsPort>) -> Option<TemplateService> {
+    let dir = oxikube_settings::paths::config_dir()?.join("templates");
+    Some(TemplateService::new(
+        oxikube_editor::templates::embedded(),
+        fs,
+        dir,
+    ))
 }

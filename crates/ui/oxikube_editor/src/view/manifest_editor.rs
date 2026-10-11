@@ -199,6 +199,11 @@ impl ManifestEditor {
         &self.editor
     }
 
+    /// The tab's title ("Untitled-1", "New Deployment", "Deployment/web").
+    pub fn title(&self) -> &SharedString {
+        &self.title
+    }
+
     /// The object this editor was opened on (E10-S06), `None` for free text.
     pub fn resource_ref(&self) -> Option<&oxikube_domain::ids::ResourceRef> {
         self.binding.as_ref().map(ResourceBinding::target)
@@ -403,5 +408,6 @@ impl Render for ManifestEditor {
             .children(self.banner(cx))
             .child(gpui::div().flex_1().min_h_0().child(self.editor.clone()))
             .children(self.diff_panel(cx))
+            .children(self.results_panel(cx))
     }
 }

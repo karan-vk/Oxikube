@@ -5,8 +5,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{App, Entity, WeakEntity, Window};
-use oxikube_app::{ApplyService, ClusterSessionManager};
+use oxikube_app::{ApplyService, ClusterSessionManager, TemplateService};
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::session::NamespaceSelection;
 use oxikube_ports::ResourceReader;
 use oxikube_workspace::{ClusterTabs, Workspace};
 
@@ -47,6 +48,17 @@ pub trait EditorHost: 'static {
     fn apply(&self, _cluster: &ClusterId) -> Option<ApplyService> {
         None
     }
+
+    /// The templates of the "Create resource" picker (E10-S09): the embedded ones and the user's
+    /// directory. `None` offers the embedded ones alone.
+    fn templates(&self) -> Option<TemplateService> {
+        None
+    }
+
+    /// The namespaces `cluster`'s tab shows: the namespace a new resource starts in.
+    fn namespace_selection(&self, _cluster: &ClusterId) -> NamespaceSelection {
+        NamespaceSelection::All
+    }
 }
 
 /// The app's [`EditorHost`]: the window's [`ClusterTabs`] and the sessions' schema ports.
@@ -55,6 +67,7 @@ pub struct ClusterEditorHost {
     tabs: WeakEntity<ClusterTabs>,
     sessions: ClusterSessionManager,
     apply: Option<ApplyService>,
+    templates: Option<TemplateService>,
 }
 
 impl ClusterEditorHost {
@@ -64,6 +77,7 @@ impl ClusterEditorHost {
             tabs,
             sessions,
             apply: None,
+            templates: None,
         }
     }
 
@@ -71,6 +85,15 @@ impl ClusterEditorHost {
     #[must_use]
     pub fn with_apply(mut self, service: ApplyService) -> Self {
         self.apply = Some(service);
+        self
+    }
+}
+
+impl ClusterEditorHost {
+    /// The same host, whose "Create resource" picker lists `service`'s templates (E10-S09).
+    #[must_use]
+    pub fn with_templates(mut self, service: TemplateService) -> Self {
+        self.templates = Some(service);
         self
     }
 }
@@ -117,5 +140,16 @@ impl EditorHost for ClusterEditorHost {
 
     fn apply(&self, _: &ClusterId) -> Option<ApplyService> {
         self.apply.clone()
+    }
+
+    fn templates(&self) -> Option<TemplateService> {
+        self.templates.clone()
+    }
+
+    fn namespace_selection(&self, cluster: &ClusterId) -> NamespaceSelection {
+        self.sessions
+            .get(cluster)
+            .map(|session| session.namespace_selection().clone())
+            .unwrap_or_default()
     }
 }

@@ -76,6 +76,11 @@ impl Manifest {
         })
     }
 
+    /// The object as written (comments and formatting gone).
+    pub(crate) fn object(&self) -> &Value {
+        &self.object
+    }
+
     /// The namespace the object goes to in `session`'s cluster ([`namespace_for`], with what
     /// the cluster's discovery says about the kind; unknown when it cannot say).
     pub(crate) async fn resolve_namespace(
