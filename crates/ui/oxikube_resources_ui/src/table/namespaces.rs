@@ -50,7 +50,8 @@ impl ResourceTable {
         );
     }
 
-    /// Runs `command` on the cursor row, then toasts `"{said} {name}"` on the Namespaces table.
+    /// Runs `command`, then toasts `"{said} {name}"` on the Namespaces table, naming the row the
+    /// command ran on (the cursor row of a selection) and only when it went ahead.
     fn run_namespace_action(
         &mut self,
         command: CommandId,
@@ -60,9 +61,13 @@ impl ResourceTable {
         cx: &mut Context<Self>,
     ) {
         let targets = self.action_targets(cx);
-        let name = targets.first().map(|t| t.name.to_string());
-        self.run_action(command, targets, window, cx);
-        if let Some(name) = name.filter(|_| self.kind.gvk.is_namespace()) {
+        // The row `run_action` narrows a selection to, else the only target.
+        let name = self
+            .cursor_target(command, &targets, cx)
+            .or_else(|| targets.first().cloned())
+            .map(|t| t.name.to_string());
+        let ran = self.run_action(command, targets, window, cx);
+        if let Some(name) = name.filter(|_| ran && self.kind.gvk.is_namespace()) {
             self.toast(Toast::info(format!("{said} {name}")).key(toast_key), cx);
         }
     }

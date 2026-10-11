@@ -135,3 +135,45 @@ fn the_all_namespaces_menu_entry_is_slot_zero(cx: &mut TestAppContext) {
         }]
     );
 }
+
+#[gpui::test]
+fn the_toast_names_the_row_the_command_ran_on_not_the_first_selected(cx: &mut TestAppContext) {
+    use crate::actions::tests::toasts;
+
+    let mut env = Env::standard(cx);
+    env.cursor_to("team-a");
+    env.keys("shift-down");
+    assert_eq!(env.f.selected(&env.table).len(), 2);
+    env.keys("u");
+    let said = toasts(&mut env.f);
+    assert!(
+        said.iter()
+            .any(|t| t.message.as_ref() == "Watching namespace team-b"),
+        "the cursor row is team-b: {said:?}"
+    );
+    assert!(
+        !said
+            .iter()
+            .any(|t| t.message.contains("Watching namespace team-a")),
+        "{said:?}"
+    );
+}
+
+#[gpui::test]
+fn the_pin_toast_names_the_row_the_command_ran_on(cx: &mut TestAppContext) {
+    use crate::actions::tests::toasts;
+
+    let mut env = Env::standard(cx);
+    env.cursor_to("team-a");
+    env.keys("shift-down p");
+    let said = toasts(&mut env.f);
+    assert!(
+        said.iter()
+            .any(|t| t.message.as_ref() == "Toggled favourite team-b"),
+        "{said:?}"
+    );
+    assert!(
+        !said.iter().any(|t| t.message.contains("favourite team-a")),
+        "{said:?}"
+    );
+}

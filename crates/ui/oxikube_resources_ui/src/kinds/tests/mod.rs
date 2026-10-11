@@ -64,6 +64,7 @@ impl ColumnProvider for PodColumns {
             align: oxikube_app::columns::Align::Left,
             sort: oxikube_app::columns::SortKind::Text,
             table_index: None,
+            sortable: true,
         };
         Arc::new([column(ColumnId::NAME, "Name"), column(Self::PHASE, "Phase")])
     }

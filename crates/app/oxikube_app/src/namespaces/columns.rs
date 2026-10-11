@@ -7,6 +7,11 @@
 //! per visible row. The table redraws a cell whose text moved on its once-a-second tick (the
 //! same check that moves ages), so a count follows the cluster without a subscription of its own.
 //!
+//! The column is not [sortable](Column::sortable): the store ranks a row once per object version,
+//! by calling `cell`, and pod churn never touches a Namespace object, so a sort by it would go
+//! stale. The lookup would also take the store's entry-map lock while the sorting feed's lock is
+//! held, the reverse of the order attach takes them in.
+//!
 //! The provider keeps a [`CountsLease`] on pods and deployments for as long as a table uses it,
 //! so the numbers exist even when no other view watches those kinds (the delete dialog counts
 //! deployments from the same feed). Dropping the provider releases the feeds.
@@ -78,6 +83,7 @@ impl NamespaceColumns {
             align: Align::Right,
             sort: SortKind::Number,
             table_index: None,
+            sortable: false,
         }
     }
 

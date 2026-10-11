@@ -76,7 +76,7 @@ impl ColumnLayout {
             }
         }
         let (sort, foreign_sort) = match &prefs.sort {
-            Some(s) if index(&s.column).is_some() => {
+            Some(s) if index(&s.column).is_some_and(|ix| all[ix].sortable) => {
                 (Some((ColumnId::new(s.column.as_str()), s.descending)), None)
             }
             other => (None, other.clone()),
@@ -277,8 +277,14 @@ impl ColumnLayout {
     }
 
     /// Sets the sort; `None` is the store's default order. The user chose, so a saved sort on
-    /// an absent column is forgotten.
+    /// an absent column is forgotten. A column that is not [`sortable`](Column::sortable) (or is
+    /// absent) cannot be sorted by: the call changes nothing.
     pub fn set_sort(&mut self, sort: Option<(ColumnId, bool)>) -> bool {
+        if let Some((id, _)) = &sort
+            && !self.all.iter().any(|c| c.id == *id && c.sortable)
+        {
+            return false;
+        }
         let forgot = self.foreign.sort.take().is_some();
         if self.sort == sort {
             return forgot;

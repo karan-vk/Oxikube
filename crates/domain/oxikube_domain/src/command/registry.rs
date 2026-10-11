@@ -980,8 +980,7 @@ pub static COMMANDS: &[CommandMeta] = &[
         Risk::Low,
         NONE,
     )
-    .in_views(TABLE_VIEWS)
-    .selecting(SelectionKind::core("Namespace")),
+    .in_views(TABLE_VIEWS),
     CommandMeta::mutation(
         CommandId::NAMESPACE_DELETE,
         "Delete Namespace",

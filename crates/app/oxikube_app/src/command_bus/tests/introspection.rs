@@ -97,6 +97,25 @@ fn list_without_a_cluster_is_only_the_global_commands() {
 }
 
 #[test]
+fn create_namespace_is_listed_in_a_table_whatever_is_selected() {
+    let bus = full_bus();
+    let create =
+        |context: CommandContext| ids(&bus.list(&context)).contains(&CommandId::NAMESPACE_CREATE);
+    assert!(
+        create(session(ViewContext::Table)),
+        "nothing selected: an empty or filtered Namespaces table"
+    );
+    assert!(
+        create(session(ViewContext::Table).selecting(Selection::many(pod(), 2))),
+        "pods selected: another kind's table"
+    );
+    assert!(
+        !create(session(ViewContext::Table).read_only(true)),
+        "creating is a mutation: a read-only session hides it"
+    );
+}
+
+#[test]
 fn list_hides_mutations_on_a_read_only_session() {
     let bus = full_bus();
     let writable = session(ViewContext::Table).selecting(Selection::many(pod(), 2));

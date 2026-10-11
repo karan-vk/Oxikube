@@ -164,6 +164,7 @@ fn server(definitions: &[TableColumn], scope: Scope) -> (Vec<Column>, Vec<Slot>)
             align,
             sort,
             table_index: Some(index),
+            sortable: true,
         });
         slots.push(Slot {
             read: Read::Cell { index, ty },
@@ -221,6 +222,7 @@ fn meta_column(id: &str, title: &str, wide: bool, align: Align, sort: SortKind) 
         align,
         sort,
         table_index: None,
+        sortable: true,
     }
 }
 

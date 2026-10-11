@@ -218,3 +218,50 @@ fn deleting_several_namespaces_asks_for_the_cluster_name_and_names_whose_warning
         );
     });
 }
+
+#[gpui::test]
+fn many_notes_scroll_and_stop_at_a_cap_so_the_confirm_step_stays_on_screen(
+    cx: &mut TestAppContext,
+) {
+    let names: Vec<String> = (0..60).map(|i| format!("team-{i:02}")).collect();
+    let mut env = Env::new(
+        cx,
+        names.iter().map(|name| ns(name, json!({}))),
+        names
+            .iter()
+            .map(|name| crate::table::tests::p(name, "web-0", "1")),
+    );
+    let table = env.table.clone();
+    env.f.update(&table, |t, cx| t.select_all(cx));
+    assert_eq!(env.f.selected(&env.table).len(), 60);
+    env.keys("ctrl-d");
+    let d = dialog(&mut env.f).expect("dialog");
+    with_dialog(&mut env.f, &d, |d, _, _| {
+        assert!(d.notes().len() > 40, "{} notes", d.notes().len());
+    });
+    env.f.settle();
+    let bounds = |env: &mut Env, selector: &'static str| env.f.vcx.debug_bounds(selector);
+    let notes = bounds(&mut env, "delete-notes").expect("the notes list draws");
+    assert!(
+        notes.size.height <= gpui::px(200.) + gpui::px(1.),
+        "the list scrolls past its cap: {:?}",
+        notes.size
+    );
+    assert!(bounds(&mut env, "delete-note-29").is_some());
+    assert!(
+        bounds(&mut env, "delete-note-30").is_none(),
+        "rows past the cap are not built"
+    );
+    assert!(
+        bounds(&mut env, "delete-notes-more").is_some(),
+        "says how many more"
+    );
+    let window = env.f.vcx.update(|window, _| window.viewport_size());
+    for selector in ["delete-type-input", "delete-confirm"] {
+        let at = bounds(&mut env, selector).unwrap_or_else(|| panic!("{selector} draws"));
+        assert!(
+            at.bottom() <= window.height,
+            "{selector} is on screen: {at:?} in {window:?}"
+        );
+    }
+}

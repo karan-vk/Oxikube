@@ -103,6 +103,11 @@ pub struct Column {
     /// the store sorts by. `None` for core columns, which the store ranks by their cells
     /// ([`SortField::Cell`](crate::store::SortField::Cell)).
     pub table_index: Option<usize>,
+    /// Whether the user can sort by the column. The store ranks a row once per object version
+    /// and calls the provider's `cell` to do it, so a column whose cell is a live lookup in
+    /// another feed (the Namespaces table's pod count) cannot be sorted: the rank would go stale
+    /// and the lookup would take the store's locks while the sorting feed's lock is held.
+    pub sortable: bool,
 }
 
 impl Column {

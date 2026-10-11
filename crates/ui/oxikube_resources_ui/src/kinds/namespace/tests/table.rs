@@ -212,3 +212,75 @@ fn a_read_only_cluster_lists_no_create_or_delete_for_the_palette(cx: &mut TestAp
     assert!(!own.contains(&CommandId::NAMESPACE_DELETE));
     assert!(own.contains(&CommandId::NAMESPACE_SELECT));
 }
+
+#[gpui::test]
+fn the_palette_offers_create_from_a_pods_table_and_opens_the_dialog(cx: &mut TestAppContext) {
+    use oxikube_workspace::command_surface::CommandSurface as _;
+
+    let mut f = Fixture::with_actions(cx);
+    f.vcx.update(|_, cx| crate::kinds::init(cx));
+    f.ports().resources.insert(ns("team-a", json!({})));
+    f.connect_with([p("team-a", "web-0", "1")]);
+    let pods = f.open_pods();
+    let own = f.vcx.update(|_, cx| pods.read(cx).own_commands(cx));
+    assert!(own.contains(&CommandId::NAMESPACE_CREATE), "{own:?}");
+
+    let ran = f.vcx.update(|window, cx| {
+        pods.update(cx, |table, cx| {
+            table.run_command(CommandId::NAMESPACE_CREATE, Vec::new(), window, cx)
+        })
+    });
+    f.settle();
+    assert!(ran);
+    let tabs = f.tabs.clone();
+    let open = f.vcx.update(|_, cx| {
+        let tab = tabs.read(cx).tab(&cluster()).cloned().expect("a tab");
+        let workspace = tab.read(cx).workspace().clone();
+        let layer = workspace.read(cx).modal_layer().clone();
+        layer
+            .read(cx)
+            .active_modal::<crate::kinds::namespace::CreateNamespaceDialog>()
+            .is_some()
+    });
+    assert!(open, "no row needed, and not only on the Namespaces table");
+}
+
+#[gpui::test]
+fn the_pods_column_cannot_be_sorted_by(cx: &mut TestAppContext) {
+    let mut env = Env::standard(cx);
+    let table = env.table.clone();
+    let pods = ColumnId::new("pods");
+    // The store ranks a row when its Namespace object changes, and a live count would be stale
+    // (and its lookup would lock the pods feed from inside the namespaces feed's lock).
+    env.f.vcx.update(|_, cx| {
+        table.update(cx, |table, cx| {
+            table.sort_by(Some((pods.clone(), true)), cx)
+        })
+    });
+    env.f.settle();
+    let sort = env
+        .f
+        .vcx
+        .update(|_, cx| table.read(cx).read_rows(cx, |d| d.layout().sort().cloned()));
+    assert_eq!(sort, None, "the request was ignored");
+    let (pods_sortable, name_sortable) = env.f.vcx.update(|_, cx| {
+        table.read(cx).read_rows(cx, |d| {
+            let sortable = |id: &str| {
+                d.layout()
+                    .columns()
+                    .find(|(c, _)| c.id == *id)
+                    .map(|(c, _)| c.sortable)
+            };
+            (sortable("pods"), sortable("name"))
+        })
+    });
+    assert_eq!((pods_sortable, name_sortable), (Some(false), Some(true)));
+    // The other columns still sort.
+    env.f.vcx.update(|_, cx| {
+        table.update(cx, |table, cx| {
+            table.sort_by(Some((ColumnId::new("name"), true)), cx)
+        })
+    });
+    env.f.settle();
+    assert_eq!(env.f.names(&env.table), ["team-b", "team-a", "kube-system"]);
+}
