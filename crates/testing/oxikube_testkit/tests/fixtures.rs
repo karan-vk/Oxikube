@@ -255,10 +255,14 @@ fn secret_fixtures_hold_only_dummy_values() {
 
 fn same_pod(builder: PodBuilder, fixture: &Resource) {
     let built = builder.build();
-    let (a, b) = (
-        PodSummary::from_resource(&built).unwrap(),
-        PodSummary::from_resource(fixture).unwrap(),
-    );
+    // The printer columns must agree; the owner and resources the fixtures add (E12-S02) are
+    // set with the builder's own `controlled_by` and `limits` when a test needs them.
+    let printer = |r: &Resource| PodSummary {
+        controlled_by: None,
+        resources: Default::default(),
+        ..PodSummary::from_resource(r).unwrap()
+    };
+    let (a, b) = (printer(&built), printer(fixture));
     assert_eq!(a, b, "{}", fixture.name());
     let containers = |r: &Resource| {
         ContainerSummary::list_from_resource(r)

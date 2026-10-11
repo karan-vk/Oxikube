@@ -22,8 +22,8 @@ use parking_lot::Mutex;
 
 pub use self::def::Metric;
 use self::def::{ColumnDef, GENERIC, KindDef, Src};
-pub use self::funcs::hpa_state_tone;
-pub(super) use self::funcs::status_tone;
+pub use self::funcs::{hpa_state_tone, status_tone};
+pub(crate) use self::funcs::{owner_cell, ready_tone};
 pub use self::metrics::MetricsSource;
 pub(super) use self::read::value_scalar;
 use super::{Cell, Column, ColumnId, ColumnProvider};

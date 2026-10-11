@@ -26,6 +26,9 @@
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
 //!   containers, with the defaults (busybox, `sh`) and the note that the container is permanent
 //!   (E09-S10).
+//! - `pods_columns_dark`, `detail_pod_containers_dark`, `detail_pod_containers_light` (`pods`):
+//!   the Pod kind's own columns with a metrics source, and a pod's detail opening on its
+//!   containers sub-table (E12-S02).
 //!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
@@ -66,6 +69,8 @@ mod crd;
 mod detail;
 #[path = "screenshot/exec.rs"]
 mod exec;
+#[path = "screenshot/pods.rs"]
+mod pods;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
@@ -246,6 +251,7 @@ fn main() -> ExitCode {
         config::run(),
         crd::run(),
         exec::run(),
+        pods::run(),
     ];
     let mut failed = false;
     for result in results {

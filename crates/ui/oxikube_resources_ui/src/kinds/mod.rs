@@ -23,6 +23,7 @@
 //! | `job`, `cronjob` | Jobs and CronJobs (E12-S08): the kind specs and their row actions, [`row_actions`] |
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
 //! | [`crd`] | the CustomResourceDefinition kind (E12-S17): its spec and the definition panel of its detail |
+//! | `pods` | Pods (E12-S02): their own columns and the containers drill-down |
 //!
 //! # Adding a kind's own panel or columns (E12-S02 and on)
 //!
@@ -50,6 +51,7 @@ pub mod crd;
 mod cronjob;
 mod detail;
 pub(crate) mod job;
+pub mod pods;
 mod sidebar;
 mod spec;
 mod specs;
@@ -77,5 +79,6 @@ pub fn row_actions() -> Vec<RowActionSpec> {
 /// Registers the built-in kinds, section by section, and publishes them to the sidebar. Called by
 /// the crate's `init`, after the workspace's (whose core sections the kinds fill).
 pub fn init(cx: &mut App) {
+    pods::init(cx);
     builtin::init(cx);
 }

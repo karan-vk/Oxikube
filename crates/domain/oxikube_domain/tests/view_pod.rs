@@ -767,3 +767,21 @@ fn timing_10k_pod_summaries() {
     assert_eq!(summaries.len(), 10_000);
     assert!(summaries.iter().all(|s| &*s.status == "CrashLoopBackOff"));
 }
+
+/// E12-S02: a pod the scheduler cannot place reads `Pending` (kubectl shows the phase; the
+/// `Unschedulable` reason stays on the condition).
+#[test]
+fn pending_with_an_unschedulable_condition_reads_pending() {
+    let s = summary(pod_json(
+        containers(1),
+        json!({
+            "phase": "Pending",
+            "conditions": [{
+                "type": "PodScheduled", "status": "False", "reason": "Unschedulable",
+                "message": "0/3 nodes are available: 3 Insufficient cpu."
+            }]
+        }),
+        None,
+    ));
+    assert_eq!((&*s.status, s.ready, s.total), ("Pending", 0, 1));
+}

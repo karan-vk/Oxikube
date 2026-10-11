@@ -8,6 +8,10 @@
 //! | [`CoreColumns`] | core kinds on reflector or metadata feeds (~40 kinds) | our own catalogue: computed `Ready`, `Status`, `Restarts`, ... |
 //! | [`TableColumns`] | CRDs and unknown kinds on a Table feed | the server's `columnDefinitions` (`additionalPrinterColumns`) |
 //!
+//! A kind can also bring its own provider through its `KindSpec` (E12-S01): Pods use
+//! [`PodColumns`] (E12-S02, the [`pods`] module), whose cells read one memoised `PodSummary` per
+//! object version.
+//!
 //! A [`Column`] has a stable [`ColumnId`], a title, a `wide` flag (hidden by default, as in
 //! `kubectl -o wide`), an alignment and a [`SortKind`]. A [`Cell`] has display text, a typed
 //! [`CellSort`] key (so sorting never reparses text) and a [`Tone`] (a meaning, never a colour).
@@ -18,14 +22,16 @@
 mod builtin;
 mod cell;
 mod column;
+pub mod pods;
 mod provider;
 mod table;
 
 #[cfg(test)]
 mod tests;
 
-pub use builtin::{CoreColumns, Metric, MetricsSource, hpa_state_tone};
+pub use builtin::{CoreColumns, Metric, MetricsSource, hpa_state_tone, status_tone};
 pub use cell::{Cell, CellSort, CellValue, Tone};
 pub use column::{Align, Column, ColumnId, SortKind};
+pub use pods::PodColumns;
 pub use provider::ColumnProvider;
 pub use table::TableColumns;
