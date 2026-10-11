@@ -35,14 +35,21 @@ impl CommandId {
     pub const CLUSTER_PREVIOUS_TAB: CommandId = CommandId::new("cluster::PreviousTab");
     /// `cluster::Reconnect`: drop a cluster's connection and connect it again (the retry).
     pub const CLUSTER_RECONNECT: CommandId = CommandId::new("cluster::Reconnect");
+    /// `cluster::RedetectMetrics`: run metrics provider detection for a cluster again.
+    pub const CLUSTER_REDETECT_METRICS: CommandId = CommandId::new("cluster::RedetectMetrics");
     /// `cluster::Select`: make a cluster the active one.
     pub const CLUSTER_SELECT: CommandId = CommandId::new("cluster::Select");
     /// `cluster::SetColour`: set or clear a cluster's accent colour.
     pub const CLUSTER_SET_COLOUR: CommandId = CommandId::new("cluster::SetColour");
+    /// `cluster::ShowMetricsSettings`: open a cluster's metrics settings page.
+    pub const CLUSTER_SHOW_METRICS_SETTINGS: CommandId =
+        CommandId::new("cluster::ShowMetricsSettings");
     /// `cluster::SwitchTab`: show the nth cluster tab.
     pub const CLUSTER_SWITCH_TAB: CommandId = CommandId::new("cluster::SwitchTab");
     /// `cluster::ToggleFavourite`: mark or unmark a cluster as a favourite.
     pub const CLUSTER_TOGGLE_FAVOURITE: CommandId = CommandId::new("cluster::ToggleFavourite");
+    /// `cluster::ToggleMetrics`: switch a cluster's history metrics on or off.
+    pub const CLUSTER_TOGGLE_METRICS: CommandId = CommandId::new("cluster::ToggleMetrics");
     /// `cluster::ToggleReadOnly`: set or toggle a cluster's read-only mode.
     pub const CLUSTER_TOGGLE_READ_ONLY: CommandId = CommandId::new("cluster::ToggleReadOnly");
     /// `crd::OpenList`: open the list of the cluster's CustomResourceDefinitions.
@@ -394,6 +401,14 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // Lists Services and sends one probe query through the API server; changes nothing in the
+    // cluster.
+    CommandMeta::read(
+        CommandId::CLUSTER_REDETECT_METRICS,
+        "Look for Metrics Provider Again",
+        CommandScope::Cluster,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::CLUSTER_SELECT,
         "Select Cluster",
@@ -403,6 +418,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::CLUSTER_SET_COLOUR,
         "Set Cluster Colour",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // Opens a page; reads the session's own state and nothing from the cluster.
+    CommandMeta::read(
+        CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
+        "Cluster Metrics Settings",
         CommandScope::Cluster,
         NONE,
     ),
@@ -417,6 +439,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::CLUSTER_TOGGLE_FAVOURITE,
         "Toggle Favourite Cluster",
         CommandScope::Global,
+        NONE,
+    ),
+    // A local preference (`prometheus.enabled` in the user's settings), never a cluster change.
+    CommandMeta::read(
+        CommandId::CLUSTER_TOGGLE_METRICS,
+        "Toggle Cluster Metrics",
+        CommandScope::Cluster,
         NONE,
     ),
     CommandMeta::privileged(

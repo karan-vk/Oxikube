@@ -140,6 +140,37 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         colour: Option<ClusterColour>,
     },
+    /// Open the cluster's metrics settings (E13-S05): which Prometheus-compatible service its
+    /// history graphs come from, what detection found and which services it probed, the
+    /// `prometheus` settings in effect, and the buttons to run detection again and to switch
+    /// history metrics on or off. Reads only the cluster's own state.
+    #[serde(rename = "cluster::ShowMetricsSettings")]
+    ClusterShowMetricsSettings {
+        /// The cluster whose metrics settings open.
+        cluster: ClusterId,
+    },
+    /// Run the metrics provider detection for a cluster again (E13-S05): list the Services of the
+    /// namespaces the monitoring stacks use, probe the ones that match with a cheap query through
+    /// the API server's service proxy, and classify the stack. A cluster configured by hand has
+    /// its endpoint checked instead. Read-only: it lists Services and sends one query.
+    #[serde(rename = "cluster::RedetectMetrics")]
+    ClusterRedetectMetrics {
+        /// The cluster to look in.
+        cluster: ClusterId,
+    },
+    /// Switch a cluster's history metrics on or off (E13-S05): `prometheus.enabled` in its
+    /// settings. `Some` sets it, `None` flips the current value.
+    ///
+    /// Not a cluster mutation: it only edits the cluster's own settings, so it runs on a
+    /// read-only cluster. Live CPU and memory from metrics-server are not affected.
+    #[serde(rename = "cluster::ToggleMetrics")]
+    ClusterToggleMetrics {
+        /// The cluster to change.
+        cluster: ClusterId,
+        /// Desired state; `None` flips the current one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        enabled: Option<bool>,
+    },
     /// Give a cluster a named posture: its colour and, for production, read-only mode on.
     /// A preset never lowers protection (see [`ClusterPreset`]).
     #[serde(rename = "cluster::ApplyPreset")]
@@ -1014,6 +1045,9 @@ impl Command {
             Command::ClusterToggleFavourite { .. } => CommandId::CLUSTER_TOGGLE_FAVOURITE,
             Command::ClusterToggleReadOnly { .. } => CommandId::CLUSTER_TOGGLE_READ_ONLY,
             Command::ClusterSetColour { .. } => CommandId::CLUSTER_SET_COLOUR,
+            Command::ClusterShowMetricsSettings { .. } => CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
+            Command::ClusterRedetectMetrics { .. } => CommandId::CLUSTER_REDETECT_METRICS,
+            Command::ClusterToggleMetrics { .. } => CommandId::CLUSTER_TOGGLE_METRICS,
             Command::ClusterApplyPreset { .. } => CommandId::CLUSTER_APPLY_PRESET,
             Command::NamespaceSelect { .. } => CommandId::NAMESPACE_SELECT,
             Command::NamespaceToggleFavourite { .. } => CommandId::NAMESPACE_TOGGLE_FAVOURITE,
@@ -1297,6 +1331,16 @@ mod tests {
             Command::ClusterSetColour {
                 cluster: cluster(),
                 colour: None,
+            },
+            Command::ClusterShowMetricsSettings { cluster: cluster() },
+            Command::ClusterRedetectMetrics { cluster: cluster() },
+            Command::ClusterToggleMetrics {
+                cluster: cluster(),
+                enabled: None,
+            },
+            Command::ClusterToggleMetrics {
+                cluster: cluster(),
+                enabled: Some(false),
             },
             Command::ClusterApplyPreset {
                 cluster: cluster(),
@@ -1849,6 +1893,9 @@ mod tests {
                     | Command::WorkloadViewLogs { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }
+                    | Command::ClusterShowMetricsSettings { .. }
+                    | Command::ClusterRedetectMetrics { .. }
+                    | Command::ClusterToggleMetrics { .. }
                     | Command::ClusterApplyPreset { .. }
             ) {
                 assert!(!command.is_mutating(), "{}", command.id());

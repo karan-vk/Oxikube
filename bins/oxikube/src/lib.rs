@@ -38,6 +38,7 @@ pub mod cluster_prefs;
 pub mod history;
 pub mod kube_ports;
 pub mod metrics_settings;
+pub mod metrics_provider;
 pub mod mount;
 pub mod os_motion;
 pub mod perf_logs;

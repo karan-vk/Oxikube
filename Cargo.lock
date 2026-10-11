@@ -5711,9 +5711,11 @@ dependencies = [
  "oxikube_logs_ui",
  "oxikube_palette",
  "oxikube_ports",
+ "oxikube_prometheus",
  "oxikube_resources_ui",
  "oxikube_runtime",
  "oxikube_settings",
+ "oxikube_settings_ui",
  "oxikube_state_sqlite",
  "oxikube_terminal",
  "oxikube_testkit",
@@ -5958,6 +5960,7 @@ dependencies = [
  "oxikube_domain",
  "oxikube_logging",
  "oxikube_ports",
+ "oxikube_prometheus",
  "oxikube_testkit",
  "parking_lot",
  "proptest",
@@ -6088,6 +6091,7 @@ name = "oxikube_prometheus"
 version = "0.0.1"
 dependencies = [
  "async-trait",
+ "futures",
  "jiff",
  "oxikube_domain",
  "oxikube_ports",
@@ -6184,6 +6188,24 @@ dependencies = [
 [[package]]
 name = "oxikube_settings_ui"
 version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "futures",
+ "gpui-pre",
+ "gpui-pre-platform",
+ "jiff",
+ "oxikube_app",
+ "oxikube_domain",
+ "oxikube_keymap",
+ "oxikube_ports",
+ "oxikube_runtime",
+ "oxikube_testkit",
+ "oxikube_ui",
+ "oxikube_workspace",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "oxikube_state_sqlite"

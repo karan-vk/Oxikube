@@ -526,7 +526,48 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `TlsError`, `BadResponse`, `InvalidEndpoint`), which the cluster-level `PrometheusPort` (`PromqlPort`, an endpoint table per
   cluster that settings and detection fill) carries as the source of its `OxiError`s (`PromqlError::of`). Dropping a call's
   future closes its connection. Modules: `client`, `url`, `wire` (typed decode of vector/matrix/scalar, `NaN`/`±Inf`),
-  `errors`, `auth`, `transport`, `cluster`. Provider detection (E13-S05) and query catalogues (E13-S06) build on it.
+  `errors`, `auth`, `transport`, `cluster`. Query catalogues (E13-S06) build on it.
+- `oxikube_prometheus::detect` + `proxy` (E13-S05) — finding a cluster's Prometheus-compatible service. `ProviderDetector`
+  implements `ProviderDetectorPort`: it lists the Services of the namespaces `detect/catalogue.json` names (data, not code:
+  per entry a kind, an exact name or a name prefix, namespaces, ports by preference, a scheme and path prefixes to try), matches
+  them, confirms a match with a probe query (`vector(1)`, 5 s) through the API server's service proxy and classifies the stack
+  (`MetricsProviderKind`: kube-prometheus, Lens, VictoriaMetrics, Mimir, OpenShift, plain Prometheus). The first catalogue entry
+  that answers wins. Every service looked for is a `Probe` (`Answered`, `NotPresent`, `NoUsablePort`, `Failed`, `Skipped`,
+  `NotNeeded`), so a missing stack is explained. The verdict is a `DetectionState`: `Found`, `NotFound`, or `Failed` with a
+  `DetectionFailure` (`Forbidden` when `list services` is refused and nothing was found elsewhere, `ProbeFailed` when a matched
+  Service did not answer, `Other`); absence is never inferred past a namespace it could not read. Read-only. A managed
+  port-forward fallback for a blocked proxy waits for the port-forward manager (E15). `ProxyPromqlClient` is the
+  `PromqlEndpointPort` that sends a `PromEndpoint` with a `service` through a cluster's `ServiceProxyPort` (and a URL to the
+  direct client), mapping the API server's own refusals (403 forbidden, 404 no such Service, 503 no ready endpoint) to
+  `PromqlError`s; `PrometheusPort` looks the proxy up per query (`ServiceProxies`), so a reconnect needs no update.
+- `oxikube_kube::service_proxy` (E13-S05) — `KubeServiceProxy`, `ServiceProxyPort` over
+  `/api/v1/namespaces/<ns>/services/[https:]<name>:<port>/proxy/<path>` (a GET with query parameters or a form POST; the path
+  and names are validated so nothing can change the route). A status from the Service or from the API server is an answer
+  (`ProxyResponse`, with `api_server_message` when it is the API server's own `Status`), a body over the limit is `truncated`;
+  only a failure to get any answer is an error. The connection's client retries 429/503/504, so a Service with no ready
+  endpoint ends as a timeout that says so. `ClusterPorts::service_proxy` carries it.
+- `oxikube_app::metrics_provider` (E13-S05) — `MetricsProviderService`: one `ProviderStatus` per cluster (`mode`, `state`:
+  `Disabled`, `WaitingForCluster` or a `DetectionState`; the probes; when it finished; the `prometheus` settings in effect).
+  It follows the session updates: a cluster that connects (or reconnects) is detected (`provider: auto`) or has its
+  configured endpoint checked (`provider: manual`); a cluster whose settings turn metrics off is never probed; a change of the
+  settings re-runs only what it changes (`settings_changed`, called by the binary on every settings change); `redetect` is the
+  user's ask. Runs are tasks on the binary's `Spawner` (`attach`), each held by an abort-on-drop guard in the status table and
+  writing its result only while it is still the current run; following the sessions is `follow()`, a future the host runs where it
+  likes (the binary: its foreground executor, so an idle app has no metrics task on the Tokio runtime). A found provider is published to an `EndpointSink` (the binary points
+  `PrometheusPort` at it in the same step, with the credentials' keychain references for a configured URL). Commands:
+  `cluster::RedetectMetrics` and `cluster::ToggleMetrics` (`prometheus.enabled`, through the `MetricsSettingsWriter` trait the
+  binary implements over `ClusterSettings::set_metrics_enabled`); neither changes a cluster, so neither takes a guard tier.
+- `oxikube_settings::cluster::prometheus` (E13-S05) — the `prometheus` block of the per-cluster layer, the settings of
+  history metrics: `enabled`, `provider` (`auto` | `manual` | `off`; unset is `manual` when a `url` or `path` is set, else
+  `auto`), `kind` (the stack of a manual endpoint), `url` or `path` (`namespace/service:port` through the API server),
+  `path_prefix`, `auth` (`none` | `bearer` | `basic`), `auth_user`, `auth_secret` (a keychain entry's name, never the token).
+  Defaults are in `default.json`, the schema in `settings.schema.json`, edits hot reload through `ClusterSettings::observe`.
+  `PrometheusOverride::manual_endpoint` turns the resolved block into a `PromEndpoint` or says in a sentence what is missing.
+- `oxikube_settings_ui::metrics` (E13-S05) — the cluster's metrics page: `MetricsSettingsModel` (the whole page as plain data
+  with its wording: the headline and its tone, `metrics unavailable: <reason>`, the services looked at, the settings in effect),
+  `MetricsSettingsView` (a workspace item of the cluster's tab; "Look again" and "Turn history metrics off / on" are bus
+  commands) and `MetricsViews` (`cluster::ShowMetricsSettings` opens the page in the cluster's tab). The sidebar's "Metrics"
+  section ("Provider and settings") and the palette ("Cluster Metrics Settings") reach it.
 - `oxikube_ui::editor` (E07-S06, E10-S04) — gpui-component's editor (`tree-sitter-yaml` feature) behind our own API. `EditorApi`
   is the trait feature views use, in UTF-8 byte offsets and our types (`text`/`set_text`, `version`, `selections`/`select`,
   `set_read_only`, `set_soft_wrap`, `set_diagnostics(Vec<EditorDiagnostic>)`, `add_decoration`/`decorations`/
@@ -998,6 +1039,10 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | Local files by path (pasted kubeconfigs: owner-only write, delete; streamed chunked writes for log exports) | `FsPort` | `oxikube_runtime::StdFs` (tests: `FakeFsPort`) | `oxikube_app::sources` |
 | Per-cluster ports for a connected context | `ClusterConnectorPort` (returns `ClusterPorts` + `AccessReviewPort`; health via the `HealthReporter` callback) | `oxikube_kube` (wired by `bins/oxikube`) | `oxikube_app::session` |
 | Per-kind JSON Schemas of a connected cluster (manifest editor validation, hover, completion) | `SchemaPort` (`schema_for`, `invalidate`; part of `ClusterPorts`) | `oxikube_kube::openapi` (`OpenApiSchemas`; tests: `FakeSchemaPort`) | `oxikube_editor` (E10-S03 onwards); `oxikube_app::session` calls `invalidate` on `KindsChanged` and `SchemasChanged` |
+| Reaching an in-cluster service (the metrics provider's probe and queries) with the connection's own credentials | `ServiceProxyPort` (part of `ClusterPorts`) | `oxikube_kube::service_proxy` (`KubeServiceProxy`; tests: `FakeServiceProxyPort`) | `oxikube_prometheus` (`ProxyPromqlClient`) |
+| Finding a cluster's Prometheus-compatible service | `ProviderDetectorPort` (`detect`, `check`) | `oxikube_prometheus::ProviderDetector` (tests: `FakeProviderDetectorPort`) | `oxikube_app::metrics_provider` |
+| App writing `prometheus.enabled` back to `settings.json` | `oxikube_app::metrics_provider::MetricsSettingsWriter` (a trait of the app crate) | `bins/oxikube::metrics_provider::SettingsMetricsWriter` over `ClusterSettings::set_metrics_enabled` | `cluster::ToggleMetrics` |
+| The found provider reaching the PromQL port | `oxikube_app::metrics_provider::EndpointSink` | `bins/oxikube::metrics_provider` (over `PrometheusPort::set_endpoint`) | `MetricsProviderService` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`), opened by `ExecPort` (`exec`, `attach`, `create_debug_container`, `node_shell`) | `oxikube_terminal` (local PTY), `oxikube_kube` (`KubeExec` handing out `KubeStream`), `oxikube_argocd` | `oxikube_terminal` element, `oxikube_app` `ExecService` |
 
 If a story's crate list implies a forbidden edge, follow this table and say so in the PR; do not
@@ -1047,6 +1092,12 @@ weaken `cargo xtask lint-deps`.
   frame's path) follows the session manager on the Tokio runtime and opens the user's `aliases.json` on the
   background executor (watched under `ConfigSource::UserDir`, read once under `Dir`, not at all in memory); a save
   reaches every cluster's table within the watcher's debounce, and invalid entries are logged with their line.
+- `metrics_provider` (E13-S05): `ClusterServices::metrics` holds the `MetricsProviderService` and the per-cluster
+  `PromqlPort` (`PrometheusPort` over `ProxyPromqlClient`, finding each cluster's service proxy through the session manager).
+  The first window's mount starts the service (`metrics_provider::start`: a foreground task follows the session updates and
+  nothing runs on the Tokio runtime until a cluster connects; nothing is probed for a cluster whose settings turn metrics off) and passes every
+  settings change to it. `mount::metrics` opens the page for `cluster::ShowMetricsSettings` and routes the sidebar's Metrics
+  entry to the same command.
 - `mount`: `mount_main_window` runs inside the main window's construction
   (`oxikube_workspace::window::open_main_window_mounted`): the cluster tabs with their setup
   (sidebar, connect views, namespace selector in the tab toolbar, `ClusterTab::set_toolbar`), the

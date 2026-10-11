@@ -119,15 +119,21 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "cluster::NextTab" => Command::ClusterNextTab,
         "cluster::PreviousTab" => Command::ClusterPreviousTab,
         "cluster::Reconnect" => Command::ClusterReconnect { cluster },
+        "cluster::RedetectMetrics" => Command::ClusterRedetectMetrics { cluster },
         "cluster::Select" => Command::ClusterSelect { cluster },
         "cluster::SetColour" => Command::ClusterSetColour {
             cluster,
             colour: Some(RED),
         },
+        "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
         "cluster::SwitchTab" => Command::ClusterSwitchTab { index: 1 },
         "cluster::ToggleFavourite" => Command::ClusterToggleFavourite {
             cluster,
             favourite: None,
+        },
+        "cluster::ToggleMetrics" => Command::ClusterToggleMetrics {
+            cluster,
+            enabled: None,
         },
         "cluster::ToggleReadOnly" => Command::ClusterToggleReadOnly {
             cluster,

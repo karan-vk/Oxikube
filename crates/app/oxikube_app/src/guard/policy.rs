@@ -76,6 +76,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NamespaceSelect { cluster, .. }
         | Command::NamespaceToggleFavourite { cluster, .. }
         | Command::ClusterSetColour { cluster, .. }
+        | Command::ClusterShowMetricsSettings { cluster }
+        | Command::ClusterRedetectMetrics { cluster }
+        | Command::ClusterToggleMetrics { cluster, .. }
         | Command::ClusterApplyPreset { cluster, .. }
         | Command::CrdOpenList { cluster }
         | Command::CrdOpenResources { cluster, .. }

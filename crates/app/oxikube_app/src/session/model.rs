@@ -8,7 +8,7 @@ use oxikube_domain::{Capabilities, Capability, ClusterColour};
 use oxikube_ports::{
     AccessReviewPort, ClusterPorts, ClusterPrefs, CrdWatchStatus, DescribePort, DiscoveryPort,
     ExecInteractivity, ExecPort, LogPort, MetricsPort, PortForwardPort, ResourceReader,
-    ResourceWriter, SchemaPort, TableFeedPort, WarningPort,
+    ResourceWriter, SchemaPort, ServiceProxyPort, TableFeedPort, WarningPort,
 };
 
 use super::reconnect::AutoReconnect;
@@ -193,6 +193,12 @@ impl ClusterSession {
     /// `metrics.k8s.io`.
     pub fn metrics(&self) -> Option<Arc<dyn MetricsPort>> {
         self.ports.as_ref().map(|p| p.metrics.clone())
+    }
+
+    /// Requests to Services through the API server's service proxy, how an in-cluster Prometheus
+    /// is reached (`None` while not connected). Read-only.
+    pub fn service_proxy(&self) -> Option<Arc<dyn ServiceProxyPort>> {
+        self.ports.as_ref().map(|p| p.service_proxy.clone())
     }
 
     /// `kubectl describe`-style text for one object (`None` while not connected).

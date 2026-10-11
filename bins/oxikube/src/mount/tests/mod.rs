@@ -20,6 +20,7 @@ mod jump;
 mod keyboard;
 mod keymap;
 mod logs;
+mod metrics;
 mod node_shell;
 mod palette;
 mod resources;

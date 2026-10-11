@@ -1,0 +1,57 @@
+{
+  "_comment": "Services that serve a Prometheus-compatible API, in the order they are tried: the first that answers a probe query wins. `service` is an exact name, `service_prefix` a name prefix (operators add a suffix). `ports` lists port names or numbers in order of preference. `path_prefixes` are tried in order before /api/v1/...; the default is [\"\"]. `scheme` is http unless the pod speaks TLS.",
+  "entries": [
+    {
+      "kind": "kube_prometheus",
+      "service": "kube-prometheus-stack-prometheus",
+      "namespaces": ["monitoring", "observability", "prometheus"],
+      "ports": ["http-web", "web", "9090"]
+    },
+    {
+      "kind": "kube_prometheus",
+      "service": "prometheus-operated",
+      "namespaces": ["monitoring", "observability", "prometheus"],
+      "ports": ["web", "http-web", "9090"]
+    },
+    {
+      "kind": "kube_prometheus",
+      "service": "prometheus-k8s",
+      "namespaces": ["monitoring"],
+      "ports": ["web", "9090"]
+    },
+    {
+      "kind": "lens",
+      "service": "prometheus",
+      "namespaces": ["lens-metrics"],
+      "ports": ["80", "web", "9090"],
+      "path_prefixes": ["", "/prometheus"]
+    },
+    {
+      "kind": "victoria_metrics",
+      "service_prefix": "vmsingle",
+      "namespaces": ["monitoring", "observability", "victoria-metrics"],
+      "ports": ["http", "8429"]
+    },
+    {
+      "kind": "victoria_metrics",
+      "service_prefix": "vmselect",
+      "namespaces": ["monitoring", "observability", "victoria-metrics"],
+      "ports": ["http", "8481"],
+      "path_prefixes": ["/select/0/prometheus"]
+    },
+    {
+      "kind": "mimir",
+      "service": "mimir-query-frontend",
+      "namespaces": ["monitoring", "observability", "mimir"],
+      "ports": ["http-metrics", "8080"],
+      "path_prefixes": ["/prometheus"]
+    },
+    {
+      "kind": "openshift",
+      "service": "thanos-querier",
+      "namespaces": ["openshift-monitoring"],
+      "ports": ["web", "9091"],
+      "scheme": "https"
+    }
+  ]
+}
