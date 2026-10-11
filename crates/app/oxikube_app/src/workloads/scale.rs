@@ -7,7 +7,7 @@ use oxikube_domain::view::WorkloadKind;
 use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 use oxikube_ports::{ListOptions, ResourceReader};
 
-use super::plan::{ScalePlan, ScaleResult, is_scalable};
+use super::plan::{ScalePlan, ScaleResult};
 use super::service::WorkloadService;
 use crate::guard::Mutation;
 
@@ -114,7 +114,7 @@ fn check_scalable(gvk: &Gvk) -> OxiResult<WorkloadKind> {
         Some(WorkloadKind::DaemonSet) => Err(OxiError::validation(
             "A DaemonSet runs one pod per node and cannot be scaled.",
         )),
-        Some(kind) if is_scalable(gvk) => Ok(kind),
+        Some(kind) if kind.scalable() => Ok(kind),
         _ => Err(OxiError::validation(format!(
             "{} cannot be scaled: only Deployments, StatefulSets, ReplicaSets and \
              ReplicationControllers have a scale.",

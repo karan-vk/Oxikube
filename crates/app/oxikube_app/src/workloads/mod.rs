@@ -57,6 +57,6 @@ mod service;
 mod tests;
 
 pub use commands::{WORKLOAD_COMMANDS, register_commands};
-pub use plan::{MAX_REPLICAS, ScalePlan, ScaleResult, is_scalable, parse_replicas};
+pub use plan::{MAX_REPLICAS, ScalePlan, ScaleResult, is_scalable, parse_replicas, replicas_word};
 pub use runner::{ScaleReport, ScaleRunner};
 pub use service::{SuspendOutcome, Triggered, WorkloadService};

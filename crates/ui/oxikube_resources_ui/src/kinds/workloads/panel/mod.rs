@@ -37,6 +37,8 @@ use std::sync::Arc;
 
 use gpui::{AnyView, AppContext as _, Context, Subscription as GpuiSubscription, Task, WeakEntity};
 use oxikube_app::store::{ResourceStore, StoreObject, Subscription};
+use oxikube_domain::command::Command;
+use oxikube_domain::ids::ResourceRef;
 
 pub use model::{ContainerLine, PanelModel, Stat};
 pub use owned::{MAX_ROWS, Owned, OwnedRow};
@@ -165,12 +167,6 @@ impl WorkloadPanel {
         self.detail.upgrade()?.read(cx).scale_state()
     }
 
-    /// [`scale_state`](Self::scale_state), for the tests.
-    #[cfg(test)]
-    pub(crate) fn scale_state_for_test(&self, cx: &gpui::App) -> Option<Option<String>> {
-        self.scale_state(cx)
-    }
-
     /// Opens the scale dialog for the workload. Does nothing when the button is disabled.
     pub fn open_scale(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         let Some(detail) = self.detail.upgrade() else {
@@ -180,18 +176,11 @@ impl WorkloadPanel {
     }
 
     /// Opens an owned object's detail (`resource::Open`), like an owner link does.
-    pub(super) fn open_object(
-        &mut self,
-        target: oxikube_domain::ids::ResourceRef,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn open_object(&mut self, target: ResourceRef, cx: &mut Context<Self>) {
         let Some(detail) = self.detail.upgrade() else {
             return;
         };
         let dispatcher = detail.read(cx).deps().dispatcher.clone();
-        dispatcher.dispatch(
-            oxikube_domain::command::Command::ResourceOpen { target },
-            cx,
-        );
+        dispatcher.dispatch(Command::ResourceOpen { target }, cx);
     }
 }

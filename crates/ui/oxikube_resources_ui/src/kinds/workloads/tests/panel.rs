@@ -221,9 +221,7 @@ fn the_scale_button_opens_the_dialog_and_read_only_disables_it(cx: &mut TestAppC
     });
     d.f.sessions.set_read_only(&cluster(), true).unwrap();
     d.settle();
-    let state =
-        d.f.vcx
-            .update(|_, cx| panel.read(cx).scale_state_for_test(cx));
+    let state = d.f.vcx.update(|_, cx| panel.read(cx).scale_state(cx));
     assert!(
         state
             .expect("offered")

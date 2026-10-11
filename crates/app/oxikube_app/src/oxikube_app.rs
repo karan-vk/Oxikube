@@ -132,5 +132,5 @@ pub use templates::{
 pub use tools::ToolRegistry;
 pub use workloads::{
     MAX_REPLICAS, ScalePlan, ScaleReport, ScaleResult, ScaleRunner, SuspendOutcome, Triggered,
-    WorkloadService, is_scalable, parse_replicas,
+    WorkloadService, is_scalable, parse_replicas, replicas_word,
 };

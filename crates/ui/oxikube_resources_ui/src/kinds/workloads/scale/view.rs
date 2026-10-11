@@ -4,6 +4,7 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
     SharedString, Styled as _, Window, div, px,
 };
+use oxikube_app::{object_label, replicas_word};
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::dialog::{Cancel, Confirm, DialogFooter, DialogHeader, DialogTitle};
 use oxikube_ui::input::Input;
@@ -18,10 +19,6 @@ use super::dialog::{ScaleDialog, ScaleStage};
 pub(super) const ZERO_NOTE: &str =
     "Scaling to 0 stops every pod of this workload. It serves nothing until it is scaled up again.";
 
-fn replicas_word(n: u32) -> &'static str {
-    if n == 1 { "replica" } else { "replicas" }
-}
-
 impl ScaleDialog {
     fn title(&self) -> SharedString {
         format!("Scale {}", self.target.name).into()
@@ -29,12 +26,7 @@ impl ScaleDialog {
 
     /// `Deployment shop/web`.
     fn subtitle(&self) -> SharedString {
-        let kind = &self.target.gvk.kind;
-        match self.target.namespace() {
-            Some(ns) => format!("{kind} {ns}/{}", self.target.name),
-            None => format!("{kind} {}", self.target.name),
-        }
-        .into()
+        object_label(&self.target).into()
     }
 
     /// The line about the count now: running, and wanted when that differs.

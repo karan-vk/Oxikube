@@ -41,8 +41,6 @@ pub struct PanelModel {
     pub uid: Option<Arc<str>>,
     /// Which controller.
     pub kind: WorkloadKind,
-    /// Desired replicas, for the Scale button's tooltip.
-    pub desired: u32,
     /// The replica summary.
     pub stats: Vec<Stat>,
     /// `RollingUpdate · Max surge 25% · Max unavailable 25%`; `None` for kinds without one.
@@ -81,7 +79,6 @@ impl PanelModel {
             version: res.meta.resource_version.clone(),
             uid: res.meta.uid.clone(),
             kind: summary.kind,
-            desired: summary.desired,
             stats: stats(&summary),
             strategy: detail.strategy.as_ref().map(|s| {
                 let mut line = s.kind.to_string();

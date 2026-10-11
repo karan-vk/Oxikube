@@ -203,13 +203,10 @@ impl ScaleDialog {
         if self.stage != ScaleStage::Editing {
             return;
         }
-        let replicas = match self.parsed(cx) {
-            Ok(replicas) => replicas,
-            Err(_) => {
-                // The field shows its own message as the user types; Enter just does nothing.
-                cx.notify();
-                return;
-            }
+        let Ok(replicas) = self.parsed(cx) else {
+            // The field shows its own message as the user types; Enter just does nothing.
+            cx.notify();
+            return;
         };
         self.stage = ScaleStage::Scaling;
         self.error = None;

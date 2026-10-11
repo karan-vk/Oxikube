@@ -123,14 +123,7 @@ impl LabelSelector {
         } else {
             selector.get("matchLabels")
         };
-        let match_labels = labels
-            .and_then(JsonRef::as_object)
-            .map(|map| {
-                map.iter()
-                    .filter_map(|(k, v)| Some((Arc::from(k), Arc::from(v.as_str()?))))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let match_labels = labels.map(string_pairs).unwrap_or_default();
         let match_expressions = if plain_map {
             Vec::new()
         } else {
@@ -285,8 +278,13 @@ fn container(c: JsonRef<'_>, init: bool) -> TemplateContainer {
 }
 
 fn quantities(resources: JsonRef<'_>, key: &str) -> Vec<(Arc<str>, Arc<str>)> {
-    obj_of(resources, key)
-        .and_then(JsonRef::as_object)
+    obj_of(resources, key).map(string_pairs).unwrap_or_default()
+}
+
+/// The string entries of a JSON object, in key order; empty for anything else.
+fn string_pairs(object: JsonRef<'_>) -> Vec<(Arc<str>, Arc<str>)> {
+    object
+        .as_object()
         .map(|map| {
             map.iter()
                 .filter_map(|(k, v)| Some((Arc::from(k), Arc::from(v.as_str()?))))
@@ -303,12 +301,16 @@ fn int_or_percent(v: JsonRef<'_>, key: &str) -> Option<String> {
         .or_else(|| v.as_u64().map(|n| n.to_string()))
 }
 
+/// `type` of an update strategy; the API defaults it to `RollingUpdate`.
+fn strategy_type(strategy: JsonRef<'_>) -> Arc<str> {
+    arc_of(strategy, "type").unwrap_or_else(|| Arc::from("RollingUpdate"))
+}
+
 fn strategy(kind: WorkloadKind, spec: JsonRef<'_>) -> Option<Strategy> {
     match kind {
         WorkloadKind::Deployment => {
             let strategy = sub(spec, "strategy");
-            let kind: Arc<str> =
-                arc_of(strategy, "type").unwrap_or_else(|| Arc::from("RollingUpdate"));
+            let kind = strategy_type(strategy);
             let mut parameters = Vec::new();
             if &*kind == "RollingUpdate" {
                 let rolling = sub(strategy, "rollingUpdate");
@@ -328,8 +330,7 @@ fn strategy(kind: WorkloadKind, spec: JsonRef<'_>) -> Option<Strategy> {
         }
         WorkloadKind::StatefulSet => {
             let strategy = sub(spec, "updateStrategy");
-            let kind: Arc<str> =
-                arc_of(strategy, "type").unwrap_or_else(|| Arc::from("RollingUpdate"));
+            let kind = strategy_type(strategy);
             let mut parameters = Vec::new();
             if &*kind == "RollingUpdate" {
                 let rolling = sub(strategy, "rollingUpdate");

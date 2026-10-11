@@ -7,6 +7,7 @@ use oxikube_domain::safety::{ConfirmTier, Risk};
 use oxikube_ports::{ClusterPrefs, NodeShellSpec};
 
 use crate::actions::object_label;
+use crate::workloads::replicas_word;
 
 /// The confirmation tier the guard asks for before running a command.
 ///
@@ -297,19 +298,15 @@ fn workload_summary(command: &Command, context: &str) -> Option<String> {
 /// The confirmation text of `workload::Scale`: the workload, the count, and for zero that every
 /// pod stops.
 fn scale_summary(workload: &ResourceRef, replicas: u32, context: &str) -> String {
-    let object = match workload.namespace() {
-        Some(ns) => format!("{ns}/{}", workload.name),
-        None => workload.name.to_string(),
-    };
-    let noun = if replicas == 1 { "replica" } else { "replicas" };
     let zero = if replicas == 0 {
         " (stops all of its pods)"
     } else {
         ""
     };
     format!(
-        "Scale {} {object} to {replicas} {noun}{zero} on {context}",
-        workload.gvk.kind
+        "Scale {} to {replicas} {}{zero} on {context}",
+        object_label(workload),
+        replicas_word(replicas)
     )
 }
 
@@ -349,8 +346,9 @@ fn effective_image(image: &str) -> &str {
 
 /// What the audit record of a guarded `command` says besides its target, if anything: for
 /// `pod::Debug` the image, the target container, the program (never its arguments) and a chosen
-/// name; for `workload::Scale` the requested count; for `resource::Apply` the field manager, force and the reviewed version (never the
-/// manifest). Short, free of typed content, and redacted by the audit log like every field.
+/// name; for `workload::Scale` the requested count; for `resource::Apply` the field manager, force
+/// and the reviewed version (never the manifest). Short, free of typed content, and redacted by the
+/// audit log like every field.
 pub fn audit_detail(command: &Command) -> Option<String> {
     if let Some(detail) = crate::apply::audit_detail(command) {
         return Some(detail);

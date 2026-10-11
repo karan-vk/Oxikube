@@ -6,8 +6,15 @@ use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::view::WorkloadKind;
 use oxikube_domain::{OxiError, OxiResult};
 
+use crate::actions::object_label;
+
 /// The most replicas a scale may ask for: what the API's `int32` holds.
 pub const MAX_REPLICAS: u32 = i32::MAX as u32;
+
+/// `replica` for 1, `replicas` otherwise.
+pub fn replicas_word(n: u32) -> &'static str {
+    if n == 1 { "replica" } else { "replicas" }
+}
 
 /// Whether a kind has a `scale` subresource a user sets: Deployment, StatefulSet, ReplicaSet and
 /// ReplicationController. A DaemonSet does not.
@@ -77,16 +84,6 @@ pub struct ScaleResult {
 impl ScaleResult {
     /// The line to show: `Scaled Deployment shop/web from 3 to 5 replicas`.
     pub fn message(&self) -> String {
-        let object = match self.target.namespace() {
-            Some(ns) => format!("{ns}/{}", self.target.name),
-            None => self.target.name.to_string(),
-        };
-        let kind = &self.target.gvk.kind;
-        let noun = if self.after == 1 {
-            "replica"
-        } else {
-            "replicas"
-        };
         let from = self
             .before
             .map_or_else(String::new, |before| format!(" from {before}"));
@@ -95,6 +92,11 @@ impl ScaleResult {
         } else {
             "Scaled"
         };
-        format!("{verb} {kind} {object}{from} to {} {noun}", self.after)
+        format!(
+            "{verb} {}{from} to {} {}",
+            object_label(&self.target),
+            self.after,
+            replicas_word(self.after)
+        )
     }
 }
