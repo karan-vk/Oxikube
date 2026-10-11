@@ -5,10 +5,63 @@
 //! (the Gateway API's) is resolved through discovery, which says which version the cluster
 //! serves, so nothing here hard-codes `v1` or `v1alpha2`.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
 
-use oxikube_domain::ids::{Gvk, ResourceRef, Scope};
+use gpui::Global;
+use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef, Scope};
 use oxikube_domain::kinds::ResourceKind;
+use oxikube_domain::view::network::GATEWAY_API_GROUP;
+use oxikube_ports::DiscoveryPort;
+
+/// How long a discovery answer serves the panels opened after it: long enough that clicking
+/// through routes costs one discovery, short enough that a Gateway API installed meanwhile shows.
+const CACHE_TTL: Duration = Duration::from_secs(30);
+
+/// The Gateway API kinds each connection's discovery last reported, shared by every panel so
+/// opening a detail does not run discovery again.
+#[derive(Default)]
+pub(super) struct KindsCache {
+    entries: HashMap<ClusterId, Cached>,
+}
+
+struct Cached {
+    /// The discovery that answered: a reconnect's new port does not read the old one's answer.
+    port: Weak<dyn DiscoveryPort>,
+    at: Instant,
+    kinds: NavKinds,
+}
+
+impl Global for KindsCache {}
+
+impl KindsCache {
+    /// What `port` said for `cluster` less than [`CACHE_TTL`] ago.
+    pub(super) fn get(
+        &self,
+        cluster: &ClusterId,
+        port: &Arc<dyn DiscoveryPort>,
+    ) -> Option<NavKinds> {
+        let cached = self.entries.get(cluster)?;
+        let same = Weak::ptr_eq(&cached.port, &Arc::downgrade(port));
+        (same && cached.at.elapsed() < CACHE_TTL).then(|| cached.kinds.clone())
+    }
+
+    /// Remembers `kinds`, what `port` said for `cluster`.
+    pub(super) fn put(
+        &mut self,
+        cluster: ClusterId,
+        port: &Arc<dyn DiscoveryPort>,
+        kinds: NavKinds,
+    ) {
+        let entry = Cached {
+            port: Arc::downgrade(port),
+            at: Instant::now(),
+            kinds,
+        };
+        self.entries.insert(cluster, entry);
+    }
+}
 
 /// The kinds a cluster serves, as far as discovery has said.
 #[derive(Clone, Default)]
@@ -17,7 +70,9 @@ pub(super) struct NavKinds {
 }
 
 impl NavKinds {
-    pub(super) fn new(kinds: Vec<ResourceKind>) -> Self {
+    /// Keeps the Gateway API kinds of `kinds`: the only ones a link needs discovery for.
+    pub(super) fn new(mut kinds: Vec<ResourceKind>) -> Self {
+        kinds.retain(|k| *k.gvk.group == *GATEWAY_API_GROUP);
         Self {
             kinds: Some(kinds.into()),
         }

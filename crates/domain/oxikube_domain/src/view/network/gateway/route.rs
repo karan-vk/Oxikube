@@ -175,21 +175,22 @@ impl RouteSummary {
         })
     }
 
-    /// The `Accepted` state over all parents: `True` when every parent accepted the route,
-    /// `False` when any refused it, `Unknown` when there is no parent or no controller has said.
+    /// The `Accepted` state over all parents, whatever their order: `False` when any refused the
+    /// route, else `Unknown` when any parent (or none at all) has not been heard from, else
+    /// `True`.
     pub fn accepted(&self) -> ConditionStatus {
-        let mut seen = false;
+        let mut unknown = self.parents.is_empty();
         for parent in &self.parents {
             match parent.accepted() {
                 ConditionStatus::False => return ConditionStatus::False,
-                ConditionStatus::True => seen = true,
-                ConditionStatus::Unknown => return ConditionStatus::Unknown,
+                ConditionStatus::True => {}
+                ConditionStatus::Unknown => unknown = true,
             }
         }
-        if seen {
-            ConditionStatus::True
-        } else {
+        if unknown {
             ConditionStatus::Unknown
+        } else {
+            ConditionStatus::True
         }
     }
 

@@ -246,6 +246,50 @@ fn an_http_route_has_hostnames_rules_and_parents_with_their_status() {
 }
 
 #[test]
+fn a_refusal_shows_whatever_the_order_of_the_parents_and_whoever_has_not_reported() {
+    // "silent" has no status at all; a status for a reference the spec lacks is a parent too.
+    let route = |parents: &[&str]| {
+        let refs: Vec<_> = parents.iter().map(|name| json!({"name": name})).collect();
+        let status: Vec<_> = parents
+            .iter()
+            .filter(|name| **name != "silent")
+            .map(|name| {
+                let verdict = if *name == "refusing" { "False" } else { "True" };
+                json!({"parentRef": {"name": name}, "controllerName": "c",
+                       "conditions": [{"type": "Accepted", "status": verdict}]})
+            })
+            .collect();
+        RouteSummary::from_resource(&object(
+            "gateway.networking.k8s.io/v1",
+            "HTTPRoute",
+            Some("a"),
+            "r",
+            json!({"spec": {"parentRefs": refs}, "status": {"parents": status}}),
+        ))
+        .unwrap()
+    };
+    for order in [
+        ["silent", "refusing"],
+        ["refusing", "silent"],
+        ["accepting", "refusing"],
+    ] {
+        assert_eq!(
+            route(&order).accepted(),
+            ConditionStatus::False,
+            "{order:?}"
+        );
+    }
+    assert_eq!(
+        route(&["accepting", "silent"]).accepted(),
+        ConditionStatus::Unknown
+    );
+    assert_eq!(
+        route(&["silent", "accepting"]).accepted(),
+        ConditionStatus::Unknown
+    );
+}
+
+#[test]
 fn a_route_with_every_parent_accepting_is_accepted_and_one_nobody_reported_on_is_unknown() {
     let accepted = RouteSummary::from_resource(&object(
         "gateway.networking.k8s.io/v1",

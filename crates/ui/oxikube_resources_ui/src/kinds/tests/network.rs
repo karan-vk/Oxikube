@@ -2,14 +2,16 @@
 //! Ingress, an IngressClass, a NetworkPolicy, a Gateway and an HTTPRoute, "Set as default", and
 //! the Gateway API appearing only where discovery serves it.
 
+use std::time::Duration;
+
 use futures::executor::block_on;
 use gpui::TestAppContext;
-use oxikube_domain::Resource;
 use oxikube_domain::access::AccessRules;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::kinds::ResourceKind;
-use oxikube_testkit::{ResourceCall, discovery_sets};
+use oxikube_domain::{OxiError, Resource};
+use oxikube_testkit::{DiscoveryCall, ResourceCall, discovery_sets};
 use serde_json::{Value, json};
 
 use super::row_ids;
@@ -232,7 +234,7 @@ fn policy() -> Resource {
 #[gpui::test]
 fn a_network_policy_detail_renders_rules_and_default_deny(cx: &mut TestAppContext) {
     let mut d = window(cx, served("v1"), vec![policy()]);
-    let view = d.open(&target(
+    d.open(&target(
         NETWORKING,
         "v1",
         "NetworkPolicy",
@@ -251,14 +253,15 @@ fn a_network_policy_detail_renders_rules_and_default_deny(cx: &mut TestAppContex
         assert!(d.shown(selector), "{selector} is on screen");
     }
     // No egress rule at all, and Egress is a policy type: default deny. Ingress is restricted
-    // to the one rule. The text itself is the domain's (pinned by its tests); here it must
-    // reach the screen.
-    let text = d.read(&view, |v| {
-        v.resource()
-            .map(|r| r.to_value().to_string())
-            .unwrap_or_default()
-    });
-    assert!(text.contains("10.1.0.0/16"));
+    // to the one rule. The text itself is the domain's (pinned by its tests); here every peer,
+    // the ipBlock with its exception among them, must be drawn as that text.
+    for peer in [
+        "net-policy-peer:IP 10.0.0.0/8 except 10.1.0.0/16",
+        "net-policy-peer:pods app=web in this namespace",
+        "net-policy-peer:all pods in namespaces env=prod",
+    ] {
+        assert!(d.shown(peer), "{peer} is on screen");
+    }
     assert!(
         !d.shown("net-policy-egress-rule-0"),
         "no egress rule to draw"
@@ -424,6 +427,53 @@ fn a_link_waits_for_discovery_instead_of_guessing_a_version(cx: &mut TestAppCont
         d.f.dispatcher.sent().is_empty(),
         "an unplaceable link does nothing"
     );
+}
+
+/// How many times the cluster's discovery was run.
+fn discover_calls(d: &Detail) -> usize {
+    d.f.ports()
+        .discovery
+        .recorded_calls()
+        .iter()
+        .filter(|call| **call == DiscoveryCall::Discover)
+        .count()
+}
+
+#[gpui::test]
+fn a_failed_discovery_is_asked_again_so_the_links_come_back(cx: &mut TestAppContext) {
+    let mut d = window(cx, served("v1"), gateway_objects("v1"));
+    d.f.ports()
+        .discovery
+        .script()
+        .discover
+        .push_err(OxiError::network("connection refused"));
+    d.f.ports().discovery.clear_calls();
+    d.open(&target(GATEWAY, "v1", "HTTPRoute", Some("shop"), "web"));
+    assert_eq!(discover_calls(&d), 1);
+    d.f.dispatcher.clear();
+    d.click("net-route-parent-link-0");
+    assert!(
+        d.f.dispatcher.sent().is_empty(),
+        "no link while discovery is down"
+    );
+
+    d.f.vcx.executor().advance_clock(Duration::from_secs(6));
+    d.settle();
+    d.draw();
+    assert_eq!(discover_calls(&d), 2, "asked again after the pause");
+    d.click("net-route-parent-link-0");
+    assert_eq!(d.f.dispatcher.sent().len(), 1, "the link works now");
+}
+
+#[gpui::test]
+fn opening_more_details_does_not_run_discovery_again(cx: &mut TestAppContext) {
+    let mut d = window(cx, served("v1"), gateway_objects("v1"));
+    d.f.ports().discovery.clear_calls();
+    d.open(&target(GATEWAY, "v1", "HTTPRoute", Some("shop"), "web"));
+    d.open(&target(GATEWAY, "v1", "Gateway", Some("infra"), "edge"));
+    d.open(&target(GATEWAY, "v1", "GatewayClass", None, "envoy"));
+    d.open(&target(GATEWAY, "v1", "HTTPRoute", Some("shop"), "web"));
+    assert_eq!(discover_calls(&d), 1, "one discovery serves every panel");
 }
 
 #[gpui::test]

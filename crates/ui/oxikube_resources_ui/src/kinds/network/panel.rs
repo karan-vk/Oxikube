@@ -3,6 +3,7 @@
 //! section (the per-kind files add `impl NetworkPanel` blocks).
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use gpui::prelude::*;
 use gpui::{AnyView, App, Div, ElementId, SharedString, Stateful, Task, WeakEntity, Window};
@@ -15,9 +16,12 @@ use oxikube_domain::view::network::{
 };
 use oxikube_runtime::spawn_kube;
 
-use super::nav::NavKinds;
+use super::nav::{KindsCache, NavKinds};
 use super::widgets::{Look, link};
 use crate::detail::{DetailView, PanelHost};
+
+/// How long after a failed discovery the panel asks again.
+const RETRY_AFTER: Duration = Duration::from_secs(5);
 
 /// The view-model of the object being shown.
 pub(super) enum Model {
@@ -81,6 +85,8 @@ pub(super) struct NetworkPanel {
     seen: Option<Seen>,
     pub(super) kinds: NavKinds,
     kinds_task: Option<Task<()>>,
+    /// The last discovery failed and the pause is over: ask again on the next draw.
+    kinds_retry: bool,
 }
 
 impl NetworkPanel {
@@ -99,6 +105,7 @@ impl NetworkPanel {
                 seen: None,
                 kinds: NavKinds::default(),
                 kinds_task: None,
+                kinds_retry: false,
             }
         })
         .into()
@@ -130,23 +137,49 @@ impl NetworkPanel {
         self.model = model;
     }
 
-    /// Asks discovery which versions the cluster serves, once, for the links to Gateways and
-    /// GatewayClasses. Off the UI thread; the task is replaced, never cleared from inside.
+    /// Asks discovery which versions the cluster serves, for the links to Gateways and
+    /// GatewayClasses. A recent answer for the connection is shared by every panel (no discovery
+    /// per opened detail); off the UI thread otherwise. A failed answer is asked again
+    /// [`RETRY_AFTER`] later. The task is replaced, never cleared from inside.
     fn fetch_kinds(&mut self, cx: &mut Context<Self>) {
-        if self.kinds.is_known() || self.kinds_task.is_some() {
+        if self.kinds.is_known() || (self.kinds_task.is_some() && !self.kinds_retry) {
             return;
         }
         let Some(discovery) = self.host.as_ref().and_then(PanelHost::discovery) else {
             return;
         };
+        let Some(cluster) = self.object().map(|o| o.cluster.clone()) else {
+            return;
+        };
+        if let Some(known) = cx.default_global::<KindsCache>().get(&cluster, &discovery) {
+            self.kinds = known;
+            return;
+        }
+        self.kinds_retry = false;
+        let port = discovery.clone();
         let discovered = spawn_kube(cx, async move { discovery.discover().await });
         self.kinds_task = Some(cx.spawn(async move |this, cx| {
-            if let Ok(Ok(kinds)) = discovered.await {
-                this.update(cx, |this, cx| {
-                    this.kinds = NavKinds::new(kinds);
-                    cx.notify();
-                })
-                .ok();
+            match discovered.await {
+                Ok(Ok(kinds)) => {
+                    this.update(cx, |this, cx| {
+                        let kinds = NavKinds::new(kinds);
+                        cx.default_global::<KindsCache>()
+                            .put(cluster, &port, kinds.clone());
+                        this.kinds = kinds;
+                        cx.notify();
+                    })
+                    .ok();
+                }
+                Ok(Err(_)) | Err(_) => {
+                    // Unreachable or throttled, or the task was cancelled: the next draw after
+                    // the pause asks again.
+                    cx.background_executor().timer(RETRY_AFTER).await;
+                    this.update(cx, |this, cx| {
+                        this.kinds_retry = true;
+                        cx.notify();
+                    })
+                    .ok();
+                }
             }
         }));
     }

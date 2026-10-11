@@ -132,7 +132,13 @@ fn rule_block(look: &Look, ids: &Ids, index: usize, rule: &PolicyRule) -> AnyEle
             look,
             "net-policy-peers",
             ids.peers,
-            v_flex().children(peers.into_iter().map(|p| div().child(p))),
+            v_flex().children(peers.into_iter().map(|p| {
+                // The text is in the selector too, so a test can tell what reached the screen.
+                let tag = p.clone();
+                div()
+                    .debug_selector(move || format!("net-policy-peer:{tag}"))
+                    .child(p)
+            })),
         ))
         .child(field(look, "net-policy-ports", "Ports", rule.ports_text()))
         .into_any_element()
