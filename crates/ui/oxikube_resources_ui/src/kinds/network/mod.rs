@@ -1,10 +1,10 @@
 //! The Network section's kinds that have their own columns and panels (E12-S14): Ingress,
 //! IngressClass, NetworkPolicy and the Gateway API (GatewayClass, Gateway, HTTPRoute, GRPCRoute,
-//! TLSRoute). Services, Endpoints and EndpointSlices stay in `builtin::network` until their story.
+//! TLSRoute). Services, Endpoints and EndpointSlices have their own modules (`kinds::service`, `kinds::endpoints`, E12-S13).
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `panel` | [`NetworkPanel`]: the one entity every kind's panel is; it keeps the parsed view-model of the detail's object until the object changes |
+//! | `panel` | `NetworkPanel`: the one entity every kind's panel is; it keeps the parsed view-model of the detail's object until the object changes |
 //! | `ingress`, `ingress_class`, `policy`, `gateway`, `route` | what each kind's panel draws (`impl NetworkPanel` blocks) |
 //! | `widgets` | headings, fields, chips, table rows and condition lines |
 //! | `nav` | the version and scope a referenced kind is served at (from discovery), for the links |
