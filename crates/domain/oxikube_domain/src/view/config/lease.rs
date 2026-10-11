@@ -47,11 +47,4 @@ impl LeaseSummary {
     pub fn holder_text(&self) -> &str {
         self.holder.as_deref().unwrap_or("")
     }
-
-    /// Whether the holder has not renewed within the lease duration as of `now`: the lease has
-    /// lapsed and anyone may take it. `None` without a renew time and duration to judge by.
-    pub fn is_expired(&self, now: Timestamp) -> Option<bool> {
-        let (renewed, duration) = (self.renewed.or(self.acquired)?, self.duration_seconds?);
-        Some(now.as_second() - renewed.as_second() > duration)
-    }
 }

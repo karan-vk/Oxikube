@@ -52,8 +52,15 @@ fn quota_ratios_cover_quantities_counts_and_extended_resources() {
     assert_eq!(deployments.level(), QuotaLevel::Full);
     assert_eq!(line(&q, "requests.nvidia.com/gpu").percent(), Some(0));
     assert!(!line(&q, "requests.cpu").is_count());
+    let classed = quota(
+        json!({"gold.storageclass.storage.k8s.io/persistentvolumeclaims": "4"}),
+        json!({}),
+    );
+    assert!(
+        classed.lines[0].is_count(),
+        "claims of one storage class are a count"
+    );
     assert!(line(&q, "pods").is_count());
-    assert_eq!(q.worst(), QuotaLevel::Full);
 }
 
 #[test]
@@ -239,7 +246,7 @@ fn pdb_allowed_disruptions_come_from_the_controller_else_the_counts() {
 }
 
 #[test]
-fn lease_holder_and_expiry() {
+fn lease_holder_and_times() {
     let lease = LeaseSummary::from_resource(&res(
         "coordination.k8s.io/v1",
         "Lease",
@@ -250,14 +257,11 @@ fn lease_holder_and_expiry() {
     .unwrap();
     assert_eq!(lease.holder_text(), "node-a_1f2e");
     assert_eq!(lease.transitions, Some(2));
-    let at = |s: &str| s.parse().unwrap();
-    assert_eq!(lease.is_expired(at("2026-01-02T03:04:10Z")), Some(false));
-    assert_eq!(lease.is_expired(at("2026-01-02T03:05:00Z")), Some(true));
+    assert_eq!(lease.duration_seconds, Some(15));
     let free =
         LeaseSummary::from_resource(&res("coordination.k8s.io/v1", "Lease", json!({"spec": {}})))
             .unwrap();
     assert_eq!(free.holder_text(), "");
-    assert_eq!(free.is_expired(at("2026-01-02T03:05:00Z")), None);
 }
 
 #[test]
@@ -311,9 +315,11 @@ fn webhook_configurations_never_keep_the_ca_bundle() {
     assert_eq!((&*a.failure_policy, a.timeout_seconds), ("Ignore", 5));
     assert_eq!(a.namespace_selector.as_deref(), Some("inject=on"));
     assert_eq!(a.object_selector.as_deref(), Some("!skip"));
+    assert_eq!(a.rules[0].operations, ["CREATE".into(), "UPDATE".into()]);
     assert_eq!(
-        a.rules[0].text(),
-        "CREATE,UPDATE pods (core/v1) [Namespaced]"
+        a.rules[0].api_groups,
+        ["".into()],
+        "the core group is the empty name"
     );
     assert_eq!(a.match_conditions, 1);
     let b = &cfg.webhooks[1];
@@ -431,4 +437,44 @@ fn the_wrong_kind_is_refused() {
     assert!(AdmissionPolicySummary::from_resource(&pod).is_err());
     assert!(AdmissionBindingSummary::from_resource(&pod).is_err());
     assert!(LimitRangeSummary::from_resource(&pod).is_err());
+}
+
+#[test]
+fn an_empty_ca_bundle_is_absent() {
+    let cfg = WebhookConfigSummary::from_resource(&res(
+        "admissionregistration.k8s.io/v1",
+        "ValidatingWebhookConfiguration",
+        json!({"webhooks": [{"name": "w", "clientConfig": {"service": {"name": "s", "namespace": "n"}, "caBundle": ""}}]}),
+    ))
+    .unwrap();
+    assert_eq!(
+        cfg.webhooks[0].ca_bundle,
+        CaBundle::Absent,
+        "cert-manager has not injected it yet"
+    );
+}
+
+#[test]
+fn metrics_with_the_same_name_are_told_apart_by_their_selector() {
+    let h = hpa(
+        json!({"metrics": [
+            {"type": "External", "external": {"metric": {"name": "queue", "selector": {"matchLabels": {"q": "a"}}}, "target": {"type": "Value", "value": "10"}}},
+            {"type": "External", "external": {"metric": {"name": "queue", "selector": {"matchLabels": {"q": "b"}}}, "target": {"type": "Value", "value": "20"}}}]}),
+        json!({"currentMetrics": [
+            {"type": "External", "external": {"metric": {"name": "queue", "selector": {"matchLabels": {"q": "b"}}}, "current": {"value": "7"}}},
+            {"type": "External", "external": {"metric": {"name": "queue", "selector": {"matchLabels": {"q": "a"}}}, "current": {"value": "3"}}}]}),
+    );
+    assert_eq!(h.metrics_text().as_deref(), Some("3/10, 7/20"));
+    assert_eq!(h.metrics[1].title(), "External queue [q=b]");
+}
+
+#[test]
+fn a_target_scaled_to_zero_disables_the_autoscaler_without_a_fault() {
+    let state = hpa(
+        json!({}),
+        json!({"conditions": [{"type": "ScalingActive", "status": "False", "reason": "ScalingDisabled"}]}),
+    )
+    .state;
+    assert_eq!(state, HpaState::Disabled);
+    assert_eq!(state.text(), "ScalingDisabled");
 }

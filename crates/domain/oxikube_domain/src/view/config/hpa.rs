@@ -71,6 +71,8 @@ pub struct HpaMetric {
     pub name: Arc<str>,
     /// What it is measured on besides the pods: a container name, or `Kind/name` of an object.
     pub on: Option<Arc<str>>,
+    /// The metric's label selector as text, when it has one (two metrics may share a name).
+    pub selector: Option<String>,
     /// The target: `80%`, `512Mi`, `100`.
     pub target: Option<String>,
     /// The latest value: `42%`, `300Mi`. `None` until the controller has read it.
@@ -87,12 +89,17 @@ impl HpaMetric {
         )
     }
 
-    /// `kind name`, with what it is measured on: `Resource cpu`, `Object requests-per-second on Ingress/web`.
+    /// `kind name`, with what it is measured on and its selector: `Resource cpu`,
+    /// `Object requests-per-second on Ingress/web`, `External queue_depth [env=prod]`.
     pub fn title(&self) -> String {
-        match &self.on {
-            Some(on) => format!("{} {} on {on}", self.kind.as_str(), self.name),
-            None => format!("{} {}", self.kind.as_str(), self.name),
+        let mut out = format!("{} {}", self.kind.as_str(), self.name);
+        if let Some(on) = &self.on {
+            out.push_str(&format!(" on {on}"));
         }
+        if let Some(selector) = &self.selector {
+            out.push_str(&format!(" [{selector}]"));
+        }
+        out
     }
 }
 
@@ -105,6 +112,9 @@ pub enum HpaState {
     Limited(Arc<str>),
     /// It cannot scale: no metrics, or `AbleToScale` false. The reason says why.
     Inactive(Arc<str>),
+    /// Scaling is switched off because the target is scaled to zero (`ScalingDisabled`): not a
+    /// fault.
+    Disabled,
     /// No conditions yet.
     Unknown,
 }
@@ -115,6 +125,7 @@ impl HpaState {
         match self {
             Self::Active => "Active",
             Self::Limited(reason) | Self::Inactive(reason) => reason,
+            Self::Disabled => "ScalingDisabled",
             Self::Unknown => "Unknown",
         }
     }
@@ -169,6 +180,7 @@ impl HpaSummary {
                 kind: HpaMetricKind::Resource,
                 name: Arc::from("cpu"),
                 on: None,
+                selector: None,
                 target: Some(format!("{target}%")),
                 current: i64_of(status, "currentCPUUtilizationPercentage").map(|c| format!("{c}%")),
             });
@@ -218,6 +230,10 @@ fn state_of(conditions: &[Condition]) -> HpaState {
     if let Some(c) =
         find("ScalingActive").filter(|c| c.status == super::super::ConditionStatus::False)
     {
+        // A target scaled to zero switches the autoscaler off on purpose.
+        if c.reason.as_deref() == Some("ScalingDisabled") {
+            return HpaState::Disabled;
+        }
         return HpaState::Inactive(reason(c, "NotScaling"));
     }
     if let Some(c) = find("ScalingLimited").filter(|c| c.is_true()) {
@@ -236,23 +252,27 @@ fn read_metric<'a>(
 ) -> Option<HpaMetric> {
     let kind = HpaMetricKind::parse(str_of(m, "type")?)?;
     let body = m.get(kind.body_key())?;
-    let (name, on) = identity(kind, body);
+    let id = identity(kind, body);
     let latest = current.find(|c| {
         str_of(*c, "type").and_then(HpaMetricKind::parse) == Some(kind)
             && c.get(kind.body_key())
-                .is_some_and(|b| identity(kind, b) == (name.clone(), on.clone()))
+                .is_some_and(|b| identity(kind, b) == id)
     });
+    let (name, on, selector) = id;
     Some(HpaMetric {
         kind,
         target: value_text(body.get("target")),
         current: latest.and_then(|c| value_text(c.get(kind.body_key())?.get("current"))),
         name,
         on,
+        selector,
     })
 }
 
-/// The name of a metric and what it is measured on.
-fn identity(kind: HpaMetricKind, body: JsonRef<'_>) -> (Arc<str>, Option<Arc<str>>) {
+/// What tells two metrics apart: the name, what it is measured on, and the label selector.
+type MetricId = (Arc<str>, Option<Arc<str>>, Option<String>);
+
+fn identity(kind: HpaMetricKind, body: JsonRef<'_>) -> MetricId {
     let metric = body.get("metric");
     let name = str_of(body, "name")
         .or_else(|| metric.and_then(|m| str_of(m, "name")))
@@ -268,7 +288,11 @@ fn identity(kind: HpaMetricKind, body: JsonRef<'_>) -> (Arc<str>, Option<Arc<str
         }),
         _ => None,
     };
-    (Arc::from(name), on)
+    let selector = metric
+        .and_then(|m| m.get("selector"))
+        .and_then(super::util::selector_text)
+        .filter(|s| s != "<all>");
+    (Arc::from(name), on, selector)
 }
 
 /// A `MetricTarget` or `MetricValueStatus`: utilisation as a percentage, else the average value,

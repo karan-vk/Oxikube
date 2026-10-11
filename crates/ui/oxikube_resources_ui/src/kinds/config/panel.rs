@@ -25,12 +25,13 @@ pub struct ConfigPanel {
     detail: WeakEntity<DetailView>,
     build: Build,
     built: Option<Built>,
-    _follow: Subscription,
+    _follow: Option<Subscription>,
 }
 
-/// A built panel and the object version it was built from.
+/// A built panel and the object (name, namespace and resource version) it was built from.
 struct Built {
     name: Arc<str>,
+    namespace: Option<Arc<str>>,
     version: Option<Arc<str>>,
     panel: Arc<Panel>,
 }
@@ -38,10 +39,9 @@ struct Built {
 impl ConfigPanel {
     fn new(detail: WeakEntity<DetailView>, build: Build, cx: &mut Context<Self>) -> Self {
         // The detail view notifies on every delta of the object; the panel redraws with it.
-        let follow = match detail.upgrade() {
-            Some(view) => cx.observe(&view, |_, _, cx| cx.notify()),
-            None => cx.observe_self(|_, cx| cx.notify()),
-        };
+        let follow = detail
+            .upgrade()
+            .map(|view| cx.observe(&view, |_, _, cx| cx.notify()));
         Self {
             detail,
             build,
@@ -67,12 +67,14 @@ impl ConfigPanel {
             && version.is_some()
             && built.version == version
             && built.name == resource.meta.name
+            && built.namespace == resource.meta.namespace
         {
             return Some(built.panel.clone());
         }
         let panel = Arc::new((self.build)(resource)?);
         self.built = Some(Built {
             name: resource.meta.name.clone(),
+            namespace: resource.meta.namespace.clone(),
             version,
             panel: panel.clone(),
         });

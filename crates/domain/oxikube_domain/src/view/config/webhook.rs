@@ -104,29 +104,6 @@ impl WebhookRule {
             scope: arc_of(v, "scope"),
         }
     }
-
-    /// `CREATE,UPDATE deployments,statefulsets (apps/*)`.
-    pub fn text(&self) -> String {
-        let join = |list: &[Arc<str>]| list.iter().map(|s| &**s).collect::<Vec<_>>().join(",");
-        // An empty group name is the core group.
-        let groups = self
-            .api_groups
-            .iter()
-            .map(|g| if g.is_empty() { "core" } else { &**g })
-            .collect::<Vec<_>>()
-            .join(",");
-        let groups = if groups.is_empty() { "core" } else { &groups };
-        let mut out = format!(
-            "{} {} ({groups}/{})",
-            join(&self.operations),
-            join(&self.resources),
-            join(&self.api_versions)
-        );
-        if let Some(scope) = &self.scope {
-            out.push_str(&format!(" [{scope}]"));
-        }
-        out
-    }
 }
 
 /// One webhook of a configuration.

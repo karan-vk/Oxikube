@@ -49,7 +49,10 @@ impl QuotaLine {
             "replicationcontrollers",
             "resourcequotas",
         ];
-        self.resource.starts_with("count/") || COUNTED.contains(&&*self.resource)
+        // `gold.storageclass.storage.k8s.io/persistentvolumeclaims` counts claims of one class.
+        self.resource.starts_with("count/")
+            || self.resource.ends_with("/persistentvolumeclaims")
+            || COUNTED.contains(&&*self.resource)
     }
 
     /// The ratio as a percentage, rounded down (`25`); `None` without one.
@@ -146,19 +149,6 @@ impl QuotaSummary {
             scopes: strings(spec, "scopes"),
             scope_selector,
         })
-    }
-
-    /// The fullest line's level: what a header badge shows.
-    pub fn worst(&self) -> QuotaLevel {
-        self.lines
-            .iter()
-            .map(QuotaLine::level)
-            .max_by_key(|l| match l {
-                QuotaLevel::Ok => 0,
-                QuotaLevel::Warn => 1,
-                QuotaLevel::Full => 2,
-            })
-            .unwrap_or(QuotaLevel::Ok)
     }
 }
 

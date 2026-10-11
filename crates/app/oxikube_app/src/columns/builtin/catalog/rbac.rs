@@ -70,7 +70,7 @@ const PDB: &[ColumnDef] = &[
     ColumnDef::new(
         "allowed-disruptions",
         "Allowed Disruptions",
-        Int("/status/disruptionsAllowed"),
+        Func(f::pdb_allowed),
     )
     .number(),
     ColumnDef::new(

@@ -8,14 +8,16 @@ use oxikube_domain::view::{HpaState, HpaSummary, TargetRef, VpaSummary};
 use super::model::{LinkTo, Panel, Row};
 
 /// The scale target as a link: the workload the autoscaler scales, in the autoscaler's namespace.
-/// An `apiVersion`-less reference to a built-in workload kind gets its usual group.
+/// An `apiVersion`-less reference to a built-in workload kind gets its usual group; any other
+/// `apiVersion`-less kind cannot be located without discovery, so it is shown as text.
 fn target_link(label: &str, target: &TargetRef) -> Row {
     let gvk = if target.api_version.is_empty() {
         match &*target.kind {
             "Deployment" | "StatefulSet" | "ReplicaSet" | "DaemonSet" => {
                 Gvk::new("apps", "v1", &*target.kind)
             }
-            _ => Gvk::new("", "v1", &*target.kind),
+            "ReplicationController" => Gvk::new("", "v1", "ReplicationController"),
+            _ => return Row::pair(label, target.display()),
         }
     } else {
         target.gvk()
@@ -42,7 +44,7 @@ pub(super) fn hpa(res: &Resource) -> Option<Panel> {
         HpaState::Active => Tone::Ok,
         HpaState::Limited(_) => Tone::Warn,
         HpaState::Inactive(_) => Tone::Error,
-        HpaState::Unknown => Tone::Neutral,
+        HpaState::Disabled | HpaState::Unknown => Tone::Neutral,
     };
     let mut scaling = Vec::new();
     scaling.extend(

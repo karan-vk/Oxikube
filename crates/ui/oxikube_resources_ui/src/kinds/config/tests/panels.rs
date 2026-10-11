@@ -149,6 +149,25 @@ fn an_hpa_status_carries_its_tone() {
 }
 
 #[test]
+fn a_scale_target_of_an_unknown_kind_without_an_api_version_is_text_not_a_link() {
+    let mut json = fx::json("autoscaling/hpa.json");
+    json["spec"]["scaleTargetRef"] = serde_json::json!({"kind": "Rollout", "name": "web"});
+    let hpa = oxikube_domain::Resource::from_json(json).unwrap();
+    let panel = autoscaling::hpa(&hpa).unwrap();
+    assert_eq!(pair(&panel, "Scale target"), "Rollout/web");
+    assert!(panel.find(|r| matches!(r, Row::Link { .. })).is_none());
+    // A built-in workload kind without an `apiVersion` still links, with its usual group.
+    let mut json = fx::json("autoscaling/hpa.json");
+    json["spec"]["scaleTargetRef"] = serde_json::json!({"kind": "StatefulSet", "name": "db"});
+    let hpa = oxikube_domain::Resource::from_json(json).unwrap();
+    let panel = autoscaling::hpa(&hpa).unwrap();
+    let Some(Row::Link { to, .. }) = panel.find(|r| matches!(r, Row::Link { .. })) else {
+        panic!("a link");
+    };
+    assert_eq!(to.gvk.api_version(), "apps/v1");
+}
+
+#[test]
 fn a_vpa_shows_mode_recommendations_and_policies() {
     let panel = autoscaling::vpa(&fx::vpa()).unwrap();
     assert_eq!(pair(&panel, "Update mode"), "Auto");

@@ -165,3 +165,36 @@ fn declarative_columns_read_the_same_text_as_the_view_models() {
     let summary = LeaseSummary::from_resource(&lease).unwrap();
     assert_eq!(text(&lease, "holder"), summary.holder_text());
 }
+
+#[test]
+fn a_pdb_without_a_reported_allowance_shows_the_computed_one_like_the_panel() {
+    let mut json = fx::json("config/pdb.json");
+    json["status"]
+        .as_object_mut()
+        .unwrap()
+        .remove("disruptionsAllowed");
+    let pdb = oxikube_domain::Resource::from_json(json).unwrap();
+    // 3 healthy against 2 desired.
+    check(&pdb, &[("allowed-disruptions", "1")]);
+    assert_eq!(
+        text(&pdb, "allowed-disruptions"),
+        PdbSummary::from_resource(&pdb)
+            .unwrap()
+            .allowed_disruptions()
+            .to_string()
+    );
+}
+
+#[test]
+fn a_scaled_to_zero_hpa_is_neutral_not_an_error() {
+    let mut json = fx::json("autoscaling/hpa.json");
+    json["status"]["conditions"] = serde_json::json!([
+        {"type": "ScalingActive", "status": "False", "reason": "ScalingDisabled"}
+    ]);
+    let hpa = oxikube_domain::Resource::from_json(json).unwrap();
+    let cell = CoreColumns::new().resource_cell(&hpa, &"status".into(), super::now());
+    assert_eq!(
+        (cell.display(), cell.tone()),
+        ("ScalingDisabled", Tone::Neutral)
+    );
+}

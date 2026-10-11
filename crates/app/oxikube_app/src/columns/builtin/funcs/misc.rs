@@ -3,10 +3,10 @@
 
 use jiff::Timestamp;
 use oxikube_domain::json::JsonRef;
-use oxikube_domain::view::{HpaState, HpaSummary};
+use oxikube_domain::view::{HpaState, HpaSummary, PdbSummary, VpaSummary};
 use oxikube_domain::{Age, Resource};
 
-use super::{arr_at, spec, status, str_at};
+use super::{arr_at, spec, str_at};
 use crate::columns::{Cell, Tone};
 
 /// HPA `REFERENCE`: `Kind/name` of `spec.scaleTargetRef`.
@@ -39,7 +39,7 @@ pub(crate) fn hpa_status<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
         HpaState::Active => Tone::Ok,
         HpaState::Limited(_) => Tone::Warn,
         HpaState::Inactive(_) => Tone::Error,
-        HpaState::Unknown => Tone::Neutral,
+        HpaState::Disabled | HpaState::Unknown => Tone::Neutral,
     };
     Cell::text(hpa.state.text().to_owned()).with_tone(tone)
 }
@@ -57,21 +57,23 @@ pub(crate) fn vpa_reference<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> 
 
 /// VPA `MODE`: `spec.updatePolicy.updateMode`, `Auto` when unset (the API default).
 pub(crate) fn vpa_mode<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let mode = spec(res)
-        .get("updatePolicy")
-        .and_then(|policy| str_at(policy, "updateMode"))
-        .unwrap_or("Auto");
-    Cell::text(mode)
+    VpaSummary::from_resource(res)
+        .map_or_else(|_| Cell::empty(), |vpa| Cell::text(vpa.mode.to_string()))
 }
 
 /// VPA `CONDITIONS`: the types of the conditions that hold, comma-separated.
 pub(crate) fn vpa_conditions<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let held: Vec<&str> = arr_at(status(res), "conditions")
-        .iter()
-        .filter(|c| str_at(*c, "status") == Some("True"))
-        .filter_map(|c| str_at(c, "type"))
-        .collect();
-    Cell::text(held.join(","))
+    VpaSummary::from_resource(res)
+        .map_or_else(|_| Cell::empty(), |vpa| Cell::text(vpa.conditions_text()))
+}
+
+/// PDB `ALLOWED DISRUPTIONS`: the controller's `disruptionsAllowed`, else the healthy pods above
+/// the desired count (the same rule the detail panel shows).
+pub(crate) fn pdb_allowed<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    PdbSummary::from_resource(res).map_or_else(
+        |_| Cell::empty(),
+        |pdb| Cell::int(pdb.allowed_disruptions()),
+    )
 }
 
 /// Event `LAST SEEN`: time since the event last happened. `series.lastObservedTime` wins (a
