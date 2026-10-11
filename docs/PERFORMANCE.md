@@ -426,6 +426,17 @@ budget (the run was judged before that budget was added to the scenario; it is j
 more than 10 000 pods); that the 5 MB object and its YAML editor cost about 300 MiB over the pods
 table is itself a finding for the quiet profile.
 
+**Workloads overview with status bars (E12-S07).** The store tally now also keeps a per-status-bucket
+count per delta (O(1), `store/counts/tally.rs`) and the overview's seven cards draw stacked bars from
+it. `cargo xtask perf --windowed sidebar --samples 5`, `release-fast`, Apple M5 Max, 120 Hz display,
+10 000 pods churning (1 800 feed deltas in the 30 s `churn` phase), load average 5 to 15 from other
+agents. Median / worst of 5 runs: frame max 3.08 / 6.94 ms (p95 the same, 13 frames: the overview
+redraws only when a number moves), dropped refreshes 0 / 2 (the worst run has a 26 ms gap between two
+refreshes with no frame of ours near it, the machine was busy), 22 to 24 coalesced notifies in 30 s
+(0.8 per second against 60 deltas per second), at most 1 per view per frame (2 per frame across the
+sidebar badges and the tiles), peak RSS 178.7 / 179.2 MiB, CPU 0.74 / 0.90 %. The pre-bars first
+baseline above has the same scenario at 3.60 ms max and 1 notify per view per frame.
+
 **Over-budget frames and their causes.** Each was placed by its phase and time in the summary
 (`over_budget`), against the script's input times and the 5 s churn period, and the drawer's by a
 `sample` time profile of the run (Instruments is not installed on the measuring machine; `sample`
