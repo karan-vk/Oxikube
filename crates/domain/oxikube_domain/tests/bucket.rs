@@ -147,5 +147,4 @@ fn words_round_trip_and_index_a_table() {
     assert_eq!(Bucket::parse("not ready"), Some(Bucket::NotReady));
     assert_eq!(Bucket::parse("nope"), None);
     assert_eq!(Bucket::COUNT, 9);
-    assert!(Bucket::Failed.is_problem() && !Bucket::Running.is_problem());
 }

@@ -16,7 +16,6 @@ fn warning(object: &str, count: u32) -> WarningRow {
         reason: "BackOff".to_owned(),
         message: "Back-off restarting failed container".to_owned(),
         count,
-        last_seen: None,
     }
 }
 

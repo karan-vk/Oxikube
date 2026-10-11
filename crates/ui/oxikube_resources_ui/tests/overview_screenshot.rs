@@ -52,7 +52,6 @@ fn warning(namespace: &str, object: &str, reason: &str, message: &str, count: u3
         reason: reason.to_owned(),
         message: message.to_owned(),
         count,
-        last_seen: None,
     }
 }
 

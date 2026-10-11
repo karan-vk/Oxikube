@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use jiff::Timestamp;
 use oxikube_domain::ids::ClusterId;
 
 /// One warning in the overview's panel: what an event said about an object.
@@ -18,8 +17,6 @@ pub struct WarningRow {
     pub message: String,
     /// How many times it happened (the event's `count`), at least 1.
     pub count: u32,
-    /// When it last happened, if the event says.
-    pub last_seen: Option<Timestamp>,
 }
 
 /// The newest warning events of a cluster. Implemented by the Events feed (E14), which keeps the

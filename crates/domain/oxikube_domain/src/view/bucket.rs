@@ -101,15 +101,6 @@ impl Bucket {
                         || word.eq_ignore_ascii_case("not ready")))
         })
     }
-
-    /// Whether the bucket means something is wrong or short (the bar draws it in a warning or
-    /// error tone).
-    pub const fn is_problem(self) -> bool {
-        matches!(
-            self,
-            Self::NotReady | Self::Pending | Self::Failed | Self::Unknown
-        )
-    }
 }
 
 /// The buckets of the kind `kind` of API group `group` (empty for core), in drawing order; empty

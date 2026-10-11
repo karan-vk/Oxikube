@@ -45,11 +45,6 @@ impl WorkloadCounters {
         }
     }
 
-    /// The kinds counted, in order.
-    pub fn targets(&self) -> &[CountTarget] {
-        &self.targets
-    }
-
     /// The state of each kind, in [`targets`](Self::targets) order, as of the last
     /// [`follow`](Self::follow) or [`refresh`](Self::refresh).
     pub fn states(&self) -> &[CountState] {
@@ -69,7 +64,7 @@ impl WorkloadCounters {
         }
         self.targets = targets;
         self.lease = None;
-        self.states = vec![CountState::NotWatched; self.targets.len()];
+        self.states = self.not_watched();
         true
     }
 
@@ -81,7 +76,7 @@ impl WorkloadCounters {
         let Some((store, selection)) = view else {
             self.store = None;
             self.lease = None;
-            return self.set_states(vec![CountState::NotWatched; self.targets.len()]);
+            return self.set_states(self.not_watched());
         };
         let same_store = self.store.as_ref().is_some_and(|s| s.is_same_store(store));
         match &mut self.lease {
@@ -105,7 +100,11 @@ impl WorkloadCounters {
     pub fn release(&mut self) {
         self.lease = None;
         self.store = None;
-        self.states = vec![CountState::NotWatched; self.targets.len()];
+        self.states = self.not_watched();
+    }
+
+    fn not_watched(&self) -> Vec<CountState> {
+        vec![CountState::NotWatched; self.targets.len()]
     }
 
     fn set_states(&mut self, states: Vec<CountState>) -> bool {

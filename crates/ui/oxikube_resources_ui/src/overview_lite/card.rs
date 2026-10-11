@@ -119,15 +119,10 @@ impl WorkloadsOverview {
             .children(segs.iter().map(|seg| {
                 let (tile_id, bucket) = (tile.id.clone(), seg.bucket);
                 let text = SharedString::from(hover(seg));
+                let name = format!("overview-bar-{tile_id}-{}", bucket.word());
                 div()
-                    .id(SharedString::from(format!(
-                        "overview-bar-{tile_id}-{}",
-                        bucket.word()
-                    )))
-                    .debug_selector({
-                        let selector = format!("overview-bar-{tile_id}-{}", bucket.word());
-                        move || selector
-                    })
+                    .id(SharedString::from(name.clone()))
+                    .debug_selector(move || name)
                     .h_full()
                     .w(relative(seg.fraction))
                     .min_w(u(px(MIN_SEGMENT)))
@@ -154,15 +149,10 @@ impl WorkloadsOverview {
             .min_h(u(px(16.)))
             .children(segs.iter().map(|seg| {
                 let (tile_id, bucket) = (tile.id.clone(), seg.bucket);
+                let name = format!("overview-legend-{tile_id}-{}", bucket.word());
                 h_flex()
-                    .id(SharedString::from(format!(
-                        "overview-legend-{tile_id}-{}",
-                        bucket.word()
-                    )))
-                    .debug_selector({
-                        let selector = format!("overview-legend-{tile_id}-{}", bucket.word());
-                        move || selector
-                    })
+                    .id(SharedString::from(name.clone()))
+                    .debug_selector(move || name)
                     .gap(u(tokens.spacing.xs))
                     .items_center()
                     .cursor_pointer()
