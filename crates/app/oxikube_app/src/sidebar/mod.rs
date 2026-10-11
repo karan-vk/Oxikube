@@ -4,7 +4,7 @@
 //! | File | Holds |
 //! |---|---|
 //! | `review` | [`review_access`]: one rules review per selected namespace, merged (partial under All); [`AccessOutcome`] |
-//! | `custom` | [`discover_custom_resources`]: CRD kinds from discovery, grouped by API group |
+//! | `custom` | [`discover_custom_resources`]: CRD kinds from discovery, grouped by API group; [`discover_sidebar`] (E12-S01): the same answer's [`ServedKinds`](crate::kinds::ServedKinds) too, which gate the registry's entries |
 //!
 //! # Visibility rule
 //!
@@ -36,5 +36,8 @@ mod review;
 #[cfg(test)]
 mod tests;
 
-pub use custom::{CustomKind, CustomResourceGroup, discover_custom_resources};
+pub use custom::{
+    CustomKind, CustomResourceGroup, SidebarDiscovery, custom_resource_groups,
+    discover_custom_resources, discover_sidebar,
+};
 pub use review::{AccessOutcome, review_access};

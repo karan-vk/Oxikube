@@ -94,7 +94,10 @@ impl ResourceTable {
         if self.feed_kind != Some(plan) {
             self.feed_kind = Some(plan);
             if plan != FeedKind::Table {
-                let core: Arc<dyn ColumnProvider> = self.deps.columns.clone();
+                let core: Arc<dyn ColumnProvider> = match &self.own_columns {
+                    Some(own) => own.clone(),
+                    None => self.deps.columns.clone(),
+                };
                 let current = self.table.read(cx, |d| d.provider.clone());
                 if !std::ptr::addr_eq(Arc::as_ptr(&current), Arc::as_ptr(&core)) {
                     self.set_provider(core, cx);
@@ -144,12 +147,15 @@ impl ResourceTable {
     pub(super) fn apply(&mut self, delta: StoreDelta, cx: &mut Context<Self>) {
         if let Some(columns) = &delta.columns {
             self.note_columns_source(columns.source);
-            let provider: Arc<dyn ColumnProvider> = Arc::new(TableColumns::new(
-                &columns.columns,
-                columns.source,
-                self.kind.scope(),
-            ));
-            self.set_provider(provider, cx);
+            // A kind with its own provider keeps it whatever the feed sends.
+            if self.own_columns.is_none() {
+                let provider: Arc<dyn ColumnProvider> = Arc::new(TableColumns::new(
+                    &columns.columns,
+                    columns.source,
+                    self.kind.scope(),
+                ));
+                self.set_provider(provider, cx);
+            }
         }
         let StoreDelta {
             rows,

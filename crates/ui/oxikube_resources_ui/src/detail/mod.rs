@@ -25,6 +25,7 @@
 //! | `events_feed` | the Events tab's subscription, started on first show |
 //! | `render`, `overview`, `parts`, `events_tab` | drawing: header, tab strip, the virtualised Overview (its stateless rows in `parts`) and Events lists |
 //! | `schema_tab`, `schema_view` | the Schema tab of a CRD's detail (E07-S07): its `openAPIV3Schema` as a collapsible tree, the version chips and the way to the custom resources (state and commands, then drawing) |
+//! | `kind_panel` | the kind's own panel above the Overview, from its spec's [`DetailRenderer`](crate::kinds::DetailRenderer) (E12-S01), and [`DetailView::resource`], what the panel reads |
 //! | `drawer` | [`DetailDrawer`]: the `Panel` that hosts a detail and hands it to the workspace when pinned |
 //!
 //! # How a user gets here
@@ -58,6 +59,7 @@ mod find;
 mod follow;
 mod full;
 mod keys;
+mod kind_panel;
 pub mod model;
 mod overview;
 mod parts;

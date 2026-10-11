@@ -258,6 +258,7 @@ impl Fixture {
             integrations: IntegrationRegistry::new(),
             state: state.clone(),
             stores: None,
+            visibility: Arc::new(oxikube_app::kinds::AllowAll),
         });
         let navigation = sidebar_navigation(slot.clone());
         let tabs_deps =

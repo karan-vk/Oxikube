@@ -91,6 +91,9 @@ pub struct ResourceTable {
     pub(super) feed_kind: Option<FeedKind>,
     /// The versions of the kind the cluster serves (custom kinds, E07-S07), newest first.
     pub(super) served: Vec<ResourceKind>,
+    /// The kind's own column provider from its spec (E12-S01): used whatever the feed, never
+    /// replaced by a Table feed's columns. `None`: the shared provider.
+    pub(super) own_columns: Option<Arc<dyn oxikube_app::ColumnProvider>>,
     /// Where the columns of the last Table delta came from (`None` for kinds without a Table
     /// feed, and until the feed answers).
     pub(super) columns_source: Option<TableSource>,
@@ -149,7 +152,8 @@ impl ResourceTable {
         cx: &mut Context<Self>,
     ) -> Self {
         let title: SharedString = plural_title(&kind).into();
-        let provider = initial_provider(&cluster, &kind, &deps);
+        let own_columns = crate::kinds::KindSpecs::columns_for(cx, &kind.gvk);
+        let provider = initial_provider(&cluster, &kind, &deps, own_columns.as_ref());
         let scope = ColumnScope::of(&deps, &cluster, &kind);
         let layout = ColumnLayout::new(
             scope.columns(&*provider, &kind.gvk),
@@ -232,6 +236,7 @@ impl ResourceTable {
             warning_task: None,
             feed_kind: None,
             served: Vec::new(),
+            own_columns,
             columns_source: None,
             writer: None,
             prefs_loaded: false,

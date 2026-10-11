@@ -3,6 +3,7 @@
 use gpui::SharedString;
 use oxikube_domain::access::AccessRequirement;
 use oxikube_domain::command::CommandId;
+use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_ui::IconName;
 
 /// Where activating a sidebar entry goes. Pure UI: the code that hosts the sidebar (the cluster's
@@ -32,6 +33,17 @@ impl SidebarTarget {
     }
 }
 
+/// The kind an entry lists, for the per-cluster gating of the kind registry (E12-S01): an entry
+/// with one shows only when the cluster serves the kind (discovery) and the visibility hook
+/// allows it ([`KindGate`](oxikube_app::KindGate)).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SidebarKind {
+    /// The kind (any version matches).
+    pub gvk: Gvk,
+    /// Namespaced or cluster-scoped: which namespaces the visibility hook is asked about.
+    pub scope: Scope,
+}
+
 /// One item under a section (a kind: Pods, Deployments).
 #[derive(Clone, Debug, PartialEq)]
 pub struct SidebarEntry {
@@ -43,6 +55,9 @@ pub struct SidebarEntry {
     pub requires: Vec<AccessRequirement>,
     /// Where activating it goes.
     pub target: Option<SidebarTarget>,
+    /// The kind it lists, when it comes from the kind registry: gated by discovery and the
+    /// visibility hook. `None`: shown by the access rules alone.
+    pub kind: Option<SidebarKind>,
 }
 
 impl SidebarEntry {
@@ -53,7 +68,15 @@ impl SidebarEntry {
             title: title.to_owned().into(),
             requires: vec![AccessRequirement::list(group, resource)],
             target: Some(SidebarTarget::kind(group.to_owned(), resource.to_owned())),
+            kind: None,
         }
+    }
+
+    /// Gates the entry on `kind` (see [`SidebarKind`]).
+    #[must_use]
+    pub fn with_kind(mut self, gvk: Gvk, scope: Scope) -> Self {
+        self.kind = Some(SidebarKind { gvk, scope });
+        self
     }
 }
 

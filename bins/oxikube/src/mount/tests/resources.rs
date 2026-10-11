@@ -115,6 +115,8 @@ fn a_connected_cluster_opens_on_the_workloads_overview(cx: &mut TestAppContext) 
 #[gpui::test]
 fn the_sidebar_shows_count_badges_from_the_store(cx: &mut TestAppContext) {
     let mut app = App::start(cx, TestPorts::seeded());
+    // The registry's entries show for the kinds the cluster serves (E12-S01).
+    app.serve(oxikube_testkit::discovery_sets::core());
     app.press("enter");
     app.tick();
     assert!(

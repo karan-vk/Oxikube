@@ -100,6 +100,7 @@ fn render(tokens: Tokens, restricted: bool, zoom: f32) -> anyhow::Result<RgbaIma
         integrations: IntegrationRegistry::new(),
         state: Arc::new(FakeStatePort::new()),
         stores: None,
+        visibility: Arc::new(oxikube_app::kinds::AllowAll),
     };
     let mut cx = headless();
     let mut shown = None;

@@ -2,10 +2,8 @@
 
 use futures::StreamExt as _;
 use gpui::{Context, WeakEntity};
-use oxikube_app::{
-    AccessOutcome, CustomResourceGroup, SessionChange, sidebar::discover_custom_resources,
-    sidebar::review_access,
-};
+use oxikube_app::sidebar::{SidebarDiscovery, discover_sidebar, review_access};
+use oxikube_app::{AccessOutcome, KindGate, SessionChange};
 use oxikube_domain::OxiResult;
 use oxikube_runtime::spawn_kube;
 
@@ -66,7 +64,8 @@ impl SidebarPanel {
                 self.refresh_access(cx);
                 self.refresh_custom_resources(cx);
             }
-            // A CRD was added or removed: list the custom kinds again (discovery already did).
+            // A CRD was added or removed: list the custom kinds and the served kinds again
+            // (discovery already did).
             SessionChange::KindsChanged(_) => self.refresh_custom_resources(cx),
             // Say so when the user may not watch CRDs (the list is then only refreshed slowly).
             SessionChange::CrdWatchChanged(status) => {
@@ -77,6 +76,8 @@ impl SidebarPanel {
             SessionChange::NamespaceChanged(_) => {
                 self.refresh_access(cx);
                 self.rescope_counts(cx);
+                // The visibility hook answers per namespace.
+                self.rebuild(cx);
             }
             // Integrations' sections depend on what the cluster offers.
             SessionChange::CapabilitiesChanged(_) => self.rebuild(cx),
@@ -108,7 +109,8 @@ impl SidebarPanel {
         }));
     }
 
-    /// Lists the cluster's custom resource kinds, on the Tokio bridge.
+    /// Lists the kinds the cluster serves and its custom resource kinds (one discovery read), on
+    /// the Tokio bridge.
     pub(super) fn refresh_custom_resources(&mut self, cx: &mut Context<Self>) {
         let Some(discovery) = self
             .deps
@@ -119,13 +121,14 @@ impl SidebarPanel {
             return;
         };
         self.discovery_task = Some(cx.spawn(async move |this: WeakEntity<Self>, cx| {
-            let groups = spawn_kube(cx, async move {
-                discover_custom_resources(discovery.as_ref()).await
-            })
+            let found = spawn_kube(
+                cx,
+                async move { discover_sidebar(discovery.as_ref()).await },
+            )
             .await
             .map_err(oxikube_domain::OxiError::from)
             .and_then(|found| found);
-            this.update(cx, |this, cx| this.apply_custom(groups, cx))
+            this.update(cx, |this, cx| this.apply_discovery(found, cx))
                 .ok();
         }));
     }
@@ -135,14 +138,18 @@ impl SidebarPanel {
         self.rebuild(cx);
     }
 
-    pub(super) fn apply_custom(
+    pub(super) fn apply_discovery(
         &mut self,
-        groups: OxiResult<Vec<CustomResourceGroup>>,
+        found: OxiResult<SidebarDiscovery>,
         cx: &mut Context<Self>,
     ) {
-        match groups {
-            Ok(groups) => self.custom = Some(groups),
-            // Without discovery there is nothing to list: the section stays hidden.
+        match found {
+            Ok(found) => {
+                self.custom = Some(found.custom);
+                self.served = Some(found.served);
+            }
+            // Without discovery there are no custom resources to list (the section stays
+            // hidden), and the registry's entries stay ungated by presence (fail open).
             Err(error) => {
                 tracing::warn!(%error, cluster = %self.cluster, "listing custom resources failed")
             }
@@ -185,6 +192,18 @@ impl SidebarPanel {
             .unwrap_or_default();
         self.integrations = self.deps.integrations.sidebar_sections(capabilities);
         self.plan_counts();
+        let namespaces = self
+            .deps
+            .sessions
+            .get(&self.cluster)
+            .map(|s| s.namespace_selection().clone())
+            .unwrap_or_default();
+        let gate = KindGate {
+            cluster: &self.cluster,
+            served: self.served.as_ref(),
+            visibility: self.deps.visibility.as_ref(),
+            namespaces: &namespaces,
+        };
         let mut rows = build_rows(&RowInputs {
             sections: &self.sections,
             integrations: &self.integrations,
@@ -192,6 +211,7 @@ impl SidebarPanel {
             access: &self.access,
             crd_watch_forbidden: self.crd_watch_forbidden,
             open: &self.open,
+            gate: Some(gate),
         });
         self.apply_count_states(&mut rows);
         if rows != self.rows {

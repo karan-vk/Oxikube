@@ -52,6 +52,9 @@ pub fn tab_setup(
         integrations: deps.integrations.clone(),
         state: deps.state.clone(),
         stores: Some(deps.stores.clone()),
+        // The per-kind RBAC gate is E17's; until then every registered kind is offered (the
+        // sidebar's rules review still hides what the user may not list).
+        visibility: Arc::new(oxikube_app::kinds::AllowAll),
     });
     let sources = deps.dispatcher.clone();
     let terminals = deps.dispatcher.clone();

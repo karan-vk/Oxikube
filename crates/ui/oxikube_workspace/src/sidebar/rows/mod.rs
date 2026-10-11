@@ -8,20 +8,23 @@
 use std::collections::BTreeMap;
 
 use gpui::SharedString;
-use oxikube_app::{AccessOutcome, CountState, CustomResourceGroup, IntegrationSection};
+use oxikube_app::{AccessOutcome, CountState, CustomResourceGroup, IntegrationSection, KindGate};
 use oxikube_domain::access::AccessRequirement;
-use oxikube_domain::command::CommandId;
 use oxikube_ui::IconName;
 
-use super::section::{SectionBody, SidebarEntry, SidebarSection, SidebarTarget};
+use super::section::{SidebarSection, SidebarTarget};
+
+mod sections;
+
+use sections::{Shown, integration_rows, section_rows};
 
 /// The id of the "Definitions" entry at the top of Custom Resources: the list of the cluster's
 /// CustomResourceDefinitions (E07-S07).
 pub const DEFINITIONS_ENTRY: &str = "custom-resources/definitions";
 
 /// The API group and plural of the CRD kind, which the Definitions entry needs `list` on.
-const CRD_GROUP: &str = "apiextensions.k8s.io";
-const CRD_PLURAL: &str = "customresourcedefinitions";
+pub(super) const CRD_GROUP: &str = "apiextensions.k8s.io";
+pub(super) const CRD_PLURAL: &str = "customresourcedefinitions";
 
 /// What the sidebar knows about the user's access.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -157,10 +160,13 @@ pub struct RowInputs<'a> {
     pub crd_watch_forbidden: bool,
     /// The user's explicit open and closed choices by row id.
     pub open: &'a BTreeMap<String, bool>,
+    /// The kind registry's per-cluster rule for entries that list a kind (discovery presence and
+    /// the visibility hook, E12-S01); `None` gates nothing.
+    pub gate: Option<KindGate<'a>>,
 }
 
 /// Whether row `id` is open: the user's choice, else `default`.
-fn is_open(open: &BTreeMap<String, bool>, id: &str, default: bool) -> bool {
+pub(super) fn is_open(open: &BTreeMap<String, bool>, id: &str, default: bool) -> bool {
     open.get(id).copied().unwrap_or(default)
 }
 
@@ -219,153 +225,4 @@ CustomResourceDefinitions. New ones appear after a while or on reconnect.";
 fn limited_access_text(hidden: usize) -> String {
     let what = if hidden == 1 { "section" } else { "sections" };
     format!("Limited access: {hidden} {what} hidden")
-}
-
-/// What a section turned into.
-enum Shown {
-    /// Its rows: the heading and (when open) its entries.
-    Rows(Vec<Row>),
-    /// Hidden because the user may not list what it covers: counted in the "limited access" hint.
-    Denied,
-    /// Nothing to show for a reason that is not about access (the cluster has no CRDs, discovery
-    /// has not answered): not counted.
-    Absent,
-}
-
-/// The rows of one section.
-fn section_rows(section: &SidebarSection, input: &RowInputs<'_>) -> Shown {
-    let id = section.id.to_string();
-    let open = is_open(input.open, &id, true);
-    match &section.body {
-        SectionBody::Entries(entries) => {
-            let requirements = section.requirements();
-            // A section needing nothing (the overview) always shows; otherwise one listable kind
-            // among its own and its entries' requirements is enough.
-            if !input.access.offers(&requirements) {
-                return Shown::Denied;
-            }
-            let visible: Vec<&SidebarEntry> = entries
-                .iter()
-                .filter(|e| input.access.offers(&e.requires))
-                .collect();
-            if visible.is_empty() && !entries.is_empty() {
-                return Shown::Denied;
-            }
-            let mut rows = vec![Row::Section(SectionRow {
-                id: section.id.clone(),
-                title: section.title.clone(),
-                icon: section.icon,
-                open,
-                expandable: !visible.is_empty(),
-                count: None,
-                target: section.target.clone(),
-            })];
-            if open {
-                rows.extend(visible.into_iter().map(|e| {
-                    Row::Entry(EntryRow {
-                        id: format!("{id}/{}", e.id).into(),
-                        title: e.title.clone(),
-                        depth: 1,
-                        target: e.target.clone(),
-                        count: None,
-                    })
-                }));
-            }
-            Shown::Rows(rows)
-        }
-        SectionBody::CustomResources => {
-            let Some(found) = input.custom.filter(|found| !found.is_empty()) else {
-                return Shown::Absent;
-            };
-            let groups: Vec<CustomResourceGroup> = found
-                .iter()
-                .filter_map(|g| g.visible(|reqs| input.access.offers(reqs)))
-                .collect();
-            if groups.is_empty() {
-                // There are custom resources, but none the user may list.
-                return Shown::Denied;
-            }
-            let mut rows = vec![Row::Section(SectionRow {
-                id: section.id.clone(),
-                title: section.title.clone(),
-                icon: section.icon,
-                open,
-                expandable: true,
-                count: None,
-                target: None,
-            })];
-            if open {
-                // The list of the definitions themselves, before the groups they define.
-                if input
-                    .access
-                    .offers(&[AccessRequirement::list(CRD_GROUP, CRD_PLURAL)])
-                {
-                    rows.push(Row::Entry(EntryRow {
-                        id: DEFINITIONS_ENTRY.into(),
-                        title: "Definitions".into(),
-                        depth: 1,
-                        target: Some(SidebarTarget::Command(CommandId::CRD_OPEN_LIST)),
-                        count: None,
-                    }));
-                }
-                for group in groups {
-                    let group_id = format!("crd:{}", group.group);
-                    let group_open = is_open(input.open, &group_id, false);
-                    rows.push(Row::Group(GroupRow {
-                        id: group_id.clone().into(),
-                        title: group.group.clone().into(),
-                        open: group_open,
-                        count: Some(group.kinds.len()),
-                    }));
-                    if group_open {
-                        rows.extend(group.kinds.iter().map(|kind| {
-                            Row::Entry(EntryRow {
-                                id: format!("{group_id}/{}", kind.plural).into(),
-                                title: kind.kind.clone().into(),
-                                depth: 2,
-                                target: Some(SidebarTarget::kind(
-                                    group.group.clone(),
-                                    kind.plural.clone(),
-                                )),
-                                count: None,
-                            })
-                        }));
-                    }
-                }
-            }
-            Shown::Rows(rows)
-        }
-    }
-}
-
-/// The rows of an integration's section: always expandable, never access-gated here (the
-/// integration's own items carry capability needs, applied by the registry).
-fn integration_rows(
-    integration: &IntegrationSection,
-    open_state: &BTreeMap<String, bool>,
-) -> Vec<Row> {
-    let section = &integration.section;
-    let id = format!("integration:{}/{}", integration.integration, section.id);
-    let open = is_open(open_state, &id, true);
-    let mut rows = vec![Row::Section(SectionRow {
-        id: id.clone().into(),
-        title: section.title.clone().into(),
-        icon: IconName::Plug,
-        open,
-        expandable: !section.items.is_empty(),
-        count: None,
-        target: None,
-    })];
-    if open {
-        rows.extend(section.items.iter().map(|item| {
-            Row::Entry(EntryRow {
-                id: format!("{id}/{}", item.id).into(),
-                title: item.title.clone().into(),
-                depth: 1,
-                target: Some(SidebarTarget::Command(item.command)),
-                count: None,
-            })
-        }));
-    }
-    rows
 }

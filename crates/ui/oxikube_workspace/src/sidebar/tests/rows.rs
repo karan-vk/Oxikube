@@ -29,6 +29,7 @@ fn rows_for(
         access,
         crd_watch_forbidden: false,
         open,
+        gate: None,
     })
 }
 

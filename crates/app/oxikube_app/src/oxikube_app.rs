@@ -19,6 +19,7 @@
 //! | [`guard`] | E06-S02 | [`MutationGuard`]: read-only check, confirmation tier and token, dry-run stage (stub), the [`Mutation`] permit, audit |
 //! | [`guard::posture`] | E06-S09 | read-only mode, colour and presets as commands (`cluster::ToggleReadOnly`, `cluster::SetColour`, `cluster::ApplyPreset`): confirm when lifting read-only on a production-flagged cluster, audit, the [`PrefsWriter`] port to the settings; the guard also re-checks the flag right before each request |
 //! | [`sidebar`] | E06-S10 | [`review_access`](sidebar::review_access) (the rules reviews the cluster sidebar hides sections by, failing open) and [`discover_custom_resources`](sidebar::discover_custom_resources) |
+//! | [`kinds`] | E12-S01 | [`KindRegistry`]: each kind's [`KindMeta`] (columns, actions as command ids, sidebar slot, templates) registered by its module, looked up in O(1) with a generic fallback; [`SidebarTree`] by section rank; [`KindGate`]: discovery presence ([`ServedKinds`]) and the [`KindVisibility`] hook E17 implements |
 //! | [`integrations`] | E06-S10 | [`IntegrationRegistry`] (stub): registered integrations and the sidebar sections they append after the core ones |
 //! | [`actions`] | E07-S08 | row actions: [`RowActionRegistry`] / [`RowActions`] (the actions a table's context menu and the palette offer per kind, read from the `CommandBus` once), the `resource::Delete` handler, and [`DeleteFlow`] (plan and run a delete of one object or a selection through the guard, with per-object results) |
 //! | [`apply`] | E10-S08 | [`ApplyService`]: one object's manifest dry-run, previewed and applied through the guard (server-side apply under a field manager, conflicts with their managers and a force option, the replace fallback at the reviewed `resourceVersion`); the `resource::Apply` handler; Secret values masked |
@@ -42,6 +43,7 @@ pub mod context;
 pub mod exec;
 pub mod guard;
 pub mod integrations;
+pub mod kinds;
 pub mod logs;
 pub mod search;
 pub mod session;
@@ -89,6 +91,10 @@ pub use guard::{
     PrefsWriter,
 };
 pub use integrations::{IntegrationRegistry, IntegrationSection, RegisterIntegrationError};
+pub use kinds::{
+    GroupKind, KindColumns, KindGate, KindMeta, KindRegistry, KindVisibility, RegisterKindError,
+    Section, ServedKinds, SidebarSlot, SidebarTree,
+};
 pub use search::aliases::{
     AliasConflict, AliasEntry, AliasFollow, AliasRegistry, AliasSource, AliasTable, ConflictKind,
     Resolution,

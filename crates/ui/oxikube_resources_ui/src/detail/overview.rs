@@ -9,7 +9,7 @@ use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _,
     StatefulInteractiveElement as _, Styled as _, div, list, px,
 };
-use oxikube_ui::layout::h_flex;
+use oxikube_ui::layout::{h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Tokens, u};
 
 use super::model::{DetailModel, MetaEntry, Row};
@@ -28,17 +28,26 @@ impl DetailView {
             let tokens = cx.tokens();
             return skeleton(&tokens, "detail-skeleton", &[260., 180., 320., 140., 220.]);
         }
-        div()
-            .debug_selector(|| "detail-overview".to_owned())
-            .size_full()
-            .child(
-                list(
-                    self.overview.clone(),
-                    cx.processor(|this, ix, _, cx| full_width(this.overview_row(ix, cx))),
-                )
-                .size_full(),
+        let rows = div().debug_selector(|| "detail-overview".to_owned()).child(
+            list(
+                self.overview.clone(),
+                cx.processor(|this, ix, _, cx| full_width(this.overview_row(ix, cx))),
             )
-            .into_any_element()
+            .size_full(),
+        );
+        // The kind's own panel (E12-S01) above the generic rows.
+        match self.kind_panel() {
+            None => rows.size_full().into_any_element(),
+            Some(panel) => v_flex()
+                .size_full()
+                .child(
+                    div()
+                        .debug_selector(|| "detail-kind-panel".to_owned())
+                        .child(panel.clone()),
+                )
+                .child(rows.flex_1().min_h_0().w_full())
+                .into_any_element(),
+        }
     }
 
     /// One row of the Overview. Only rows on screen are built.
