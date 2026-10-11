@@ -69,7 +69,7 @@ impl DetailView {
     /// running where possible: a cluster-wide feed of the kind when the store holds one (a table
     /// with every namespace selected), else just the namespace's, so opening one object never
     /// starts a cluster-wide watch of its kind. Cluster-scoped kinds have only the one feed.
-    pub(super) fn scope_for(
+    pub fn scope_for(
         &self,
         store: &ResourceStore,
         gvk: &Gvk,
@@ -90,8 +90,9 @@ impl DetailView {
         }
     }
 
-    /// The store of the cluster's session, while it is connected.
-    pub(super) fn connected_store(&self) -> Option<ResourceStore> {
+    /// The store of the cluster's session, while it is connected (a kind's panel subscribes to
+    /// the objects it lists beside the one shown through it).
+    pub(crate) fn connected_store(&self) -> Option<ResourceStore> {
         let session = self.deps.sessions.get(&self.target.cluster)?;
         if !session.is_connected() {
             return None;

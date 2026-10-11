@@ -139,6 +139,17 @@ fn the_open_commands_are_on_the_bus_and_are_row_actions(cx: &mut TestAppContext)
     assert!(offered.contains(&CommandId::RESOURCE_VIEW_YAML_IN_EDITOR));
 }
 
+#[test]
+fn the_service_row_actions_are_registered_with_the_tables() {
+    let offered: Vec<_> = crate::mount::logs::row_actions()
+        .specs()
+        .iter()
+        .map(|spec| spec.command)
+        .collect();
+    assert!(offered.contains(&CommandId::SERVICE_SHOW_PODS));
+    assert!(offered.contains(&CommandId::SERVICE_OPEN_IN_BROWSER));
+}
+
 fn tab_editors(app: &mut App) -> Vec<gpui::Entity<ManifestEditor>> {
     let ws = app.tab_workspace();
     app.vcx

@@ -14,7 +14,7 @@ pub(crate) enum Route {
 }
 
 impl Route {
-    fn segment(self) -> &'static str {
+    pub(crate) fn segment(self) -> &'static str {
         match self {
             Route::Instant => "query",
             Route::Range => "query_range",
@@ -56,6 +56,23 @@ pub(crate) fn api_url(endpoint: &PromEndpoint, route: Route) -> Result<Url, Prom
         segments.extend(["api", "v1", route.segment()]);
     }
     Ok(url)
+}
+
+/// Queries longer than this go in a POST form body; a long PromQL expression in the URL can hit
+/// a proxy's or server's request-line limit (commonly 8 KiB).
+pub(crate) const MAX_QUERY_IN_URL: usize = 2048;
+
+/// `/<prefix>/api/v1/<route>` for a service endpoint: the path on the proxied Service.
+pub(crate) fn api_path(endpoint: &PromEndpoint, route: Route) -> String {
+    let prefix = endpoint.path_prefix.as_deref().unwrap_or("");
+    let mut path = String::new();
+    for segment in prefix.split('/').filter(|s| !s.is_empty()) {
+        path.push('/');
+        path.push_str(segment);
+    }
+    path.push_str("/api/v1/");
+    path.push_str(route.segment());
+    path
 }
 
 /// A timestamp as Prometheus's `time`/`start`/`end` parameter: unix seconds with milliseconds.
@@ -123,6 +140,24 @@ mod tests {
         assert_eq!(
             url("https://thanos-querier.openshift-monitoring.svc:9091", None).unwrap(),
             "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query"
+        );
+    }
+
+    #[test]
+    fn a_service_path_has_the_prefix_and_no_doubled_slashes() {
+        let endpoint = |prefix: Option<&str>| {
+            let mut endpoint = PromEndpoint::new("");
+            endpoint.path_prefix = prefix.map(str::to_owned);
+            endpoint
+        };
+        assert_eq!(api_path(&endpoint(None), Route::Instant), "/api/v1/query");
+        assert_eq!(
+            api_path(&endpoint(Some("/select/0/prometheus/")), Route::Range),
+            "/select/0/prometheus/api/v1/query_range"
+        );
+        assert_eq!(
+            api_path(&endpoint(Some("prometheus")), Route::Instant),
+            "/prometheus/api/v1/query"
         );
     }
 

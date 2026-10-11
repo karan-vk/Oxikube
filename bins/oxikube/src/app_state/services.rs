@@ -3,10 +3,11 @@
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
     AliasRegistry, ClusterCatalog, ClusterCommands, ClusterSessionManager, IntegrationRegistry,
-    MutationGuard,
+    MutationGuard, UtilisationAggregator,
 };
 
 use super::AppPorts;
+use crate::metrics_provider::{self, MetricsServices};
 
 /// The cluster services every window and the command bus share (E07-S00). Cheap to clone: each
 /// is a handle on shared state.
@@ -31,6 +32,12 @@ pub struct ClusterServices {
     /// cluster's discovery serves, the user's `aliases.json`. Kept in step by
     /// [`crate::aliases`]; the jump bar reads `aliases.table(&cluster).resolve(word)`.
     pub aliases: AliasRegistry,
+    /// Requests, limits and `%CPU/R`-style percents per pod, node and namespace (E13-S02). Its GPU
+    /// vendor list follows `metrics.gpu_vendors` ([`crate::metrics_settings`]).
+    pub utilisation: UtilisationAggregator,
+    /// Which Prometheus-compatible service each cluster's history graphs come from, and the
+    /// PromQL port that queries it (E13-S05). Idle until `metrics_provider::start`.
+    pub metrics: MetricsServices,
 }
 
 impl ClusterServices {
@@ -52,6 +59,7 @@ impl ClusterServices {
             ports.state.clone(),
             clusters.clock.clone(),
         );
+        let metrics = metrics_provider::build(ports, &sessions);
         Self {
             cluster_commands: ClusterCommands::new(sessions.clone(), catalog.clone()),
             sessions,
@@ -59,6 +67,8 @@ impl ClusterServices {
             namespaces,
             integrations: IntegrationRegistry::new(),
             aliases: AliasRegistry::new(),
+            utilisation: UtilisationAggregator::default(),
+            metrics,
         }
     }
 

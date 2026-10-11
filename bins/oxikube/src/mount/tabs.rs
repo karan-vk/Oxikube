@@ -81,6 +81,7 @@ pub fn tab_setup(
         connect(tab, session, window, cx);
         install_selector(tab, session, &deps, window, cx);
         super::resources::install(tab, session, &deps, window, cx);
+        super::metrics::install_tab(tab, session, &deps, window, cx);
     }
 }
 

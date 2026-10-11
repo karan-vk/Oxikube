@@ -11,6 +11,7 @@
 //! | [`access`] | [`AccessRules`](access::AccessRules): what the user may do per resource (a rules review as data), [`AccessRequirement`](access::AccessRequirement) |
 //! | [`resource`] | the thin [`Resource`] model: [`ObjectMeta`] + the object's JSON |
 //! | [`json`] | [`JsonDoc`]: compact immutable JSON read in place through [`JsonRef`] |
+//! | [`build`] | manifest builders for kubectl-equivalent actions ([`build::job_from_cronjob`], [`build::suspend_patch`]) |
 //! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
 //! | [`quantity`], [`age`] | [`Quantity`] parsing/formatting and [`Age`] formatting |
 //! | [`session`] | the cluster session state machine, `NamespaceSelection`, `WatchScope` |
@@ -18,7 +19,9 @@
 //! | [`preset`] | [`ClusterPreset`]: the prod / staging / dev / none postures (colour, read-only) |
 //! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
+//! | [`utilisation`] | pod / node / namespace requests, limits and `%CPU/R`-style percents ([`ResourceAmounts`](utilisation::ResourceAmounts), [`percent`](utilisation::percent), `metrics.gpu_vendors`) |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
+//! | [`metrics_provider`] | [`MetricsProviderKind`]: the Prometheus-compatible stack behind a cluster's history graphs (E13-S05) |
 //! | [`schema`] | [`JsonSchema`]: the flattened per-GVK OpenAPI v3 view the manifest editor validates against |
 //! | [`portforward`] | [`ForwardSpec`], [`ForwardStatus`]: what a port-forward targets and how it is doing |
 //! | [`agent`] | [`ContextBlock`](agent::ContextBlock), the bounded context handed to agents |
@@ -42,6 +45,7 @@ pub mod agent;
 pub mod alias;
 pub mod audit;
 mod bounds;
+pub mod build;
 pub mod colour;
 pub mod command;
 pub mod error;
@@ -54,6 +58,7 @@ pub mod json;
 pub mod kinds;
 pub mod log;
 pub mod metrics;
+pub mod metrics_provider;
 pub mod portforward;
 pub mod preset;
 pub mod quantity;
@@ -62,6 +67,7 @@ pub mod resource;
 pub mod safety;
 pub mod schema;
 pub mod session;
+pub mod utilisation;
 pub mod view;
 
 pub use age::{Age, AgeStyle};
@@ -74,6 +80,7 @@ pub use error::{ErrorKind, OxiError, OxiResult};
 pub use error_details::{ConflictDetails, ConflictReason, FieldCause, ValidationDetails};
 pub use human_error::HumanError;
 pub use json::{JsonDoc, JsonRef};
+pub use metrics_provider::MetricsProviderKind;
 pub use portforward::{ForwardPort, ForwardSpec, ForwardStatus};
 pub use preset::ClusterPreset;
 pub use quantity::{Quantity, QuantityError, QuantityFormat};

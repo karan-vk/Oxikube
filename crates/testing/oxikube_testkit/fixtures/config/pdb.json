@@ -1,0 +1,27 @@
+{
+  "apiVersion": "policy/v1",
+  "kind": "PodDisruptionBudget",
+  "metadata": {
+    "name": "web",
+    "namespace": "demo",
+    "uid": "6f1f7d8e-3d3a-5b0e-9b5e-0c1b3a2d4e03",
+    "resourceVersion": "3103",
+    "creationTimestamp": "2026-01-01T00:00:00Z"
+  },
+  "spec": {
+    "minAvailable": 2,
+    "selector": {"matchLabels": {"app": "web"}},
+    "unhealthyPodEvictionPolicy": "IfHealthyBudget"
+  },
+  "status": {
+    "currentHealthy": 3,
+    "desiredHealthy": 2,
+    "disruptionsAllowed": 1,
+    "expectedPods": 3,
+    "observedGeneration": 1,
+    "conditions": [
+      {"type": "DisruptionAllowed", "status": "True", "reason": "SufficientPods",
+       "lastTransitionTime": "2026-01-01T00:00:10Z"}
+    ]
+  }
+}

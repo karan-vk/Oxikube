@@ -16,15 +16,40 @@ fn deployment() {
             ("ready", "3/3"),
             ("up-to-date", "3"),
             ("available", "3"),
+            ("replicas", "3"),
             ("age", "27h"),
+            ("conditions", "Available,Progressing"),
             ("images", "registry.example/app:1.0"),
             ("selector", "app=web"),
         ],
     );
     check(
         &fx::deployment_progressing(),
-        &[("ready", "2/3"), ("up-to-date", "3"), ("available", "2")],
+        &[
+            ("ready", "2/3"),
+            ("up-to-date", "3"),
+            ("available", "2"),
+            ("replicas", "3"),
+            ("conditions", "Available=False,Progressing"),
+        ],
     );
+}
+
+#[test]
+fn deployment_conditions_are_toned_by_what_they_say() {
+    use crate::columns::Tone;
+    let tone = |res: &oxikube_domain::Resource| super::cell(res, "conditions").tone();
+    assert_eq!(tone(&fx::deployment_ready()), Tone::Ok);
+    assert_eq!(tone(&fx::deployment_progressing()), Tone::Warn);
+    let failing = namespaced(
+        "apps/v1",
+        "Deployment",
+        json!({"spec": {"replicas": 1}, "status": {"conditions": [
+            {"type": "Progressing", "status": "False", "reason": "ProgressDeadlineExceeded"}]}}),
+    );
+    assert_eq!(tone(&failing), Tone::Error);
+    let none = namespaced("apps/v1", "Deployment", json!({"spec": {"replicas": 1}}));
+    assert_eq!(super::text(&none, "conditions"), "");
 }
 
 #[test]
@@ -40,7 +65,11 @@ fn replica_sets_stateful_sets_and_daemon_sets() {
     );
     check(
         &fx::statefulset(),
-        &[("ready", "3/3"), ("images", "registry.example/app:1.0")],
+        &[
+            ("ready", "3/3"),
+            ("replicas", "3"),
+            ("images", "registry.example/app:1.0"),
+        ],
     );
     check(
         &fx::daemonset(),
@@ -62,11 +91,16 @@ fn jobs_and_cron_jobs() {
             ("status", "Complete"),
             ("completions", "3/3"),
             ("duration", "59m"),
+            ("conditions", "SuccessCriteriaMet,Complete"),
         ],
     );
     check(
         &fx::job_failed(),
-        &[("status", "Failed"), ("completions", "0/1")],
+        &[
+            ("status", "Failed"),
+            ("completions", "0/1"),
+            ("conditions", "FailureTarget,Failed"),
+        ],
     );
     check(
         &fx::cronjob(),
@@ -95,6 +129,30 @@ fn replication_controller() {
             ("ready", "2"),
             ("selector", "app=web"),
         ],
+    );
+    // Freelens' table: Replicas (the pods that exist), Desired, Selector, Age, visible by default.
+    let provider = crate::columns::CoreColumns::new();
+    let columns = crate::columns::ColumnProvider::columns(
+        &provider,
+        &oxikube_domain::ids::Gvk::new("", "v1", "ReplicationController"),
+        oxikube_domain::Capabilities::empty(),
+    );
+    let shown: Vec<_> = columns
+        .iter()
+        .filter(|c| !c.wide)
+        .map(|c| (c.id.as_str(), &*c.title))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("name", "Name"),
+            ("namespace", "Namespace"),
+            ("current", "Replicas"),
+            ("desired", "Desired"),
+            ("ready", "Ready"),
+            ("selector", "Selector"),
+            ("age", "Age"),
+        ]
     );
 }
 
@@ -132,6 +190,65 @@ fn namespace_and_service_account() {
         json!({"secrets": [{"name": "a"}, {"name": "b"}]}),
     );
     check(&sa, &[("secrets", "2")]);
+}
+
+#[test]
+fn service_columns_are_the_lens_set_with_status() {
+    use crate::columns::{ColumnProvider as _, CoreColumns};
+    let columns = CoreColumns::new().columns(
+        &oxikube_domain::ids::Gvk::new("", "v1", "Service"),
+        oxikube_domain::Capabilities::empty(),
+    );
+    let default: Vec<&str> = columns
+        .iter()
+        .filter(|c| !c.wide)
+        .map(|c| c.id.as_str())
+        .collect();
+    assert_eq!(
+        default,
+        [
+            "name",
+            "namespace",
+            "type",
+            "cluster-ip",
+            "external-ip",
+            "ports",
+            "selector",
+            "status",
+            "age"
+        ]
+    );
+
+    let pending = namespaced(
+        "v1",
+        "Service",
+        json!({"spec": {"type": "LoadBalancer"}, "status": {"loadBalancer": {}}}),
+    );
+    check(
+        &pending,
+        &[("external-ip", "<pending>"), ("status", "Pending")],
+    );
+    let assigned = namespaced(
+        "v1",
+        "Service",
+        json!({"spec": {"type": "LoadBalancer"},
+               "status": {"loadBalancer": {"ingress": [{"ip": "1.2.3.4"}]}}}),
+    );
+    check(&assigned, &[("status", "Assigned")]);
+    check(&fx::service(), &[("status", "Active")]);
+    let headless = namespaced(
+        "v1",
+        "Service",
+        json!({"spec": {"clusterIP": "None", "selector": {"app": "db", "tier": "data"}}}),
+    );
+    check(
+        &headless,
+        &[
+            ("cluster-ip", "None"),
+            ("ports", ""),
+            ("selector", "app=db,tier=data"),
+        ],
+    );
 }
 
 #[test]
@@ -239,4 +356,48 @@ fn ingress_ingress_class_and_network_policy() {
         json!({"spec": {"podSelector": {}}}),
     );
     check(&default_types, &[("policy-types", "Ingress")]);
+}
+
+#[test]
+fn a_job_lists_every_true_condition_and_a_running_one_none() {
+    let suspended = namespaced(
+        "batch/v1",
+        "Job",
+        json!({"spec": {"suspend": true},
+               "status": {"conditions": [{"type": "Suspended", "status": "True"},
+                                         {"type": "Failed", "status": "False"}]}}),
+    );
+    check(
+        &suspended,
+        &[("status", "Suspended"), ("conditions", "Suspended")],
+    );
+    let running = namespaced("batch/v1", "Job", json!({"status": {"active": 1}}));
+    check(&running, &[("status", "Running"), ("conditions", "")]);
+}
+
+#[test]
+fn the_job_and_cronjob_tables_show_the_columns_of_the_story_by_default() {
+    use crate::columns::{ColumnProvider, CoreColumns};
+    use oxikube_domain::Capabilities;
+    use oxikube_domain::ids::Gvk;
+
+    let shown = |kind: &str| -> Vec<String> {
+        CoreColumns::new()
+            .columns(&Gvk::new("batch", "v1", kind), Capabilities::all())
+            .iter()
+            .filter(|c| c.is_default())
+            .map(|c| c.id.as_str().to_owned())
+            .collect()
+    };
+    let jobs = shown("Job");
+    for id in ["completions", "duration", "conditions"] {
+        assert!(jobs.iter().any(|c| c == id), "Job: `{id}` in {jobs:?}");
+    }
+    let cronjobs = shown("CronJob");
+    for id in ["schedule", "timezone", "suspend", "active", "last-schedule"] {
+        assert!(
+            cronjobs.iter().any(|c| c == id),
+            "CronJob: `{id}` in {cronjobs:?}"
+        );
+    }
 }

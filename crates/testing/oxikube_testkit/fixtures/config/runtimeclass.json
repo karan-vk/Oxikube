@@ -1,0 +1,16 @@
+{
+  "apiVersion": "node.k8s.io/v1",
+  "kind": "RuntimeClass",
+  "metadata": {
+    "name": "gvisor",
+    "uid": "6f1f7d8e-3d3a-5b0e-9b5e-0c1b3a2d4e06",
+    "resourceVersion": "3106",
+    "creationTimestamp": "2026-01-01T00:00:00Z"
+  },
+  "handler": "runsc",
+  "overhead": {"podFixed": {"cpu": "250m", "memory": "120Mi"}},
+  "scheduling": {
+    "nodeSelector": {"sandbox": "gvisor"},
+    "tolerations": [{"key": "sandbox", "operator": "Exists", "effect": "NoSchedule"}]
+  }
+}

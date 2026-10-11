@@ -17,6 +17,13 @@
 //! - `detail_crd_schema_dark`, `detail_crd_schema_light` (`crd`): the Schema tab of a CRD's detail
 //!   (E07-S07) with `spec` and `spec.containers` open.
 //!
+//! - `detail_quota_dark`, `detail_quota_light`, `detail_webhook_dark` (`config`): the Config kinds' panels
+//!   above the Overview (E12-S12): a ResourceQuota's used-against-hard bars and a webhook
+//!   configuration with its `caBundle` shown as present or absent.
+//!
+//! - `detail_service_dark`, `detail_service_light` (`service`): the detail drawer of a Service with
+//!   its ports ("Open in browser" on the TCP ones), EndpointSlices with ready counts and backing
+//!   pods (E12-S13).
 //! - `network_ingress_*`, `network_policy_*`, `network_httproute_*` (`network`, dark and light): the Network
 //!   panels of an Ingress (rules table, TLS secret, load balancer), a NetworkPolicy (peers, ports, the
 //!   IP block exception, default-deny egress) and an HTTPRoute (the parent that refused it, the
@@ -26,6 +33,9 @@
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
 //!   containers, with the defaults (busybox, `sh`) and the note that the container is permanent
 //!   (E09-S10).
+//! - `pods_columns_dark`, `detail_pod_containers_dark`, `detail_pod_containers_light` (`pods`):
+//!   the Pod kind's own columns with a metrics source, and a pod's detail opening on its
+//!   containers sub-table (E12-S02).
 //!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
@@ -58,6 +68,8 @@ use oxikube_testkit::{
 };
 use oxikube_workspace::CommandDispatcher;
 
+#[path = "screenshot/config.rs"]
+mod config;
 #[path = "screenshot/crd.rs"]
 mod crd;
 #[path = "screenshot/detail.rs"]
@@ -66,6 +78,10 @@ mod detail;
 mod exec;
 #[path = "screenshot/network.rs"]
 mod network;
+#[path = "screenshot/pods.rs"]
+mod pods;
+#[path = "screenshot/service.rs"]
+mod service;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
@@ -243,9 +259,12 @@ fn main() -> ExitCode {
         render_at(None, false, NARROW, Some("shop"))
             .and_then(|image| check("pods_table_one_namespace", image, NARROW, HEIGHT)),
         detail::run(),
+        config::run(),
         crd::run(),
         network::run(),
         exec::run(),
+        pods::run(),
+        service::run(),
     ];
     let mut failed = false;
     for result in results {

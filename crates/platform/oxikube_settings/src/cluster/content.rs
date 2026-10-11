@@ -10,29 +10,10 @@ use oxikube_ports::ExecInteractivity;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::fields::{HttpUrl, SecretName, colour_schema, exec_interactivity_schema};
+use super::fields::{colour_schema, exec_interactivity_schema};
 use super::node_shell::NodeShellContent;
+use super::prometheus::PrometheusContent;
 use super::watch_budget::WatchBudgetContent;
-
-/// A manual Prometheus location for a cluster (`prometheus` key). Keeps no secret: the bearer
-/// token lives in the OS keychain and `auth_secret` only names its entry.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct PrometheusContent {
-    /// `auto` (probe the cluster) or a provider id such as `operator`, `lens`, `helm`,
-    /// `victoria_metrics`, `mimir`. Unset means auto-detect.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
-    /// `namespace/service:port`, reached through the API server's service proxy.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-    /// A direct `http(s)` URL, used instead of `path`. No credentials, query or fragment.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<HttpUrl>,
-    /// Name of the keychain entry (namespace `prometheus`) that holds the bearer token. Never
-    /// put the token itself in `settings.json`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auth_secret: Option<SecretName>,
-}
 
 /// What one settings layer says about a cluster.
 ///
@@ -90,7 +71,8 @@ pub struct ClusterSettingsContent {
     /// tolerations, labels, image pull policy and lifetime. Fields merge across layers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node_shell: Option<NodeShellContent>,
-    /// Manual Prometheus location; unset auto-detects. Fields merge across layers.
+    /// Whether and where history metrics come from: auto-detection (the default), a manual
+    /// `url` or service `path`, or off. Fields merge across layers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prometheus: Option<PrometheusContent>,
     /// Namespaces to offer in the selector when the user is not allowed to list namespaces

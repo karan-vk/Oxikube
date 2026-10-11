@@ -10,10 +10,11 @@ use oxikube_app::ClusterSessionManager;
 use oxikube_app::store::StoreObject;
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
-use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::ids::{Gvk, ResourceRef, Scope};
 use oxikube_ports::DiscoveryPort;
 use oxikube_workspace::CommandDispatcher;
 
+use super::state::DetailDeps;
 use super::view::DetailView;
 use crate::kinds::DetailRenderer;
 
@@ -100,6 +101,30 @@ impl DetailView {
                 Some(StoreObject::Resource(resource)) => Some(resource),
                 _ => None,
             })
+    }
+
+    /// A reference to the object `name` of `gvk` in this object's cluster, and in this object's
+    /// namespace when `scope` is namespaced: what a panel links to (an HPA's scale target, a
+    /// binding's policy).
+    pub fn sibling(&self, gvk: Gvk, name: &str, scope: Scope) -> ResourceRef {
+        let namespace = match scope {
+            Scope::Namespaced => self.target.namespace.clone(),
+            Scope::Cluster => None,
+        };
+        ResourceRef::new(self.target.cluster.clone(), gvk, namespace, name)
+    }
+
+    /// Opens the detail of `target`: sends `resource::Open`, as an owner link does.
+    pub fn open_resource(&mut self, target: ResourceRef, cx: &mut Context<Self>) {
+        self.deps
+            .dispatcher
+            .dispatch(Command::ResourceOpen { target }, cx);
+    }
+
+    /// What the view is built over: the sessions, the stores, the dispatcher. A kind's panel
+    /// subscribes to its own feeds and sends its buttons' commands through these.
+    pub(crate) fn deps(&self) -> &DetailDeps {
+        &self.deps
     }
 
     /// The kind's own panel, when its spec has one and it was drawn.

@@ -30,12 +30,14 @@ pub enum CommandCategory {
     /// Resources, tables and custom resources (`resource::*`, `table::*`, `crd::*`,
     /// `ingressclass::*`).
     Resource,
-    /// Workloads (`workload::*`).
+    /// Workloads (`workload::*`, `cronjob::*`, `job::*`).
     Workload,
     /// Pods (`pod::*`).
     Pod,
     /// Nodes (`node::*`).
     Node,
+    /// Services (`service::*`).
+    Service,
     /// The log viewer (`logs::*`).
     Logs,
     /// Terminals (`terminal::*`).
@@ -48,7 +50,7 @@ pub enum CommandCategory {
 
 impl CommandCategory {
     /// Every category, in display order.
-    pub const ALL: [CommandCategory; 13] = [
+    pub const ALL: [CommandCategory; 14] = [
         CommandCategory::App,
         CommandCategory::Window,
         CommandCategory::View,
@@ -58,6 +60,7 @@ impl CommandCategory {
         CommandCategory::Workload,
         CommandCategory::Pod,
         CommandCategory::Node,
+        CommandCategory::Service,
         CommandCategory::Logs,
         CommandCategory::Terminal,
         CommandCategory::Editor,
@@ -66,7 +69,7 @@ impl CommandCategory {
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 21] = [
+        const NAMESPACES: [(&str, CommandCategory); 24] = [
             ("app", CommandCategory::App),
             ("window", CommandCategory::Window),
             ("view", CommandCategory::View),
@@ -83,8 +86,11 @@ impl CommandCategory {
             ("crd", CommandCategory::Resource),
             ("ingressclass", CommandCategory::Resource),
             ("workload", CommandCategory::Workload),
+            ("cronjob", CommandCategory::Workload),
+            ("job", CommandCategory::Workload),
             ("pod", CommandCategory::Pod),
             ("node", CommandCategory::Node),
+            ("service", CommandCategory::Service),
             ("logs", CommandCategory::Logs),
             ("terminal", CommandCategory::Terminal),
             ("editor", CommandCategory::Editor),
@@ -111,6 +117,7 @@ impl CommandCategory {
             CommandCategory::Workload => "Workload",
             CommandCategory::Pod => "Pod",
             CommandCategory::Node => "Node",
+            CommandCategory::Service => "Service",
             CommandCategory::Logs => "Logs",
             CommandCategory::Terminal => "Terminal",
             CommandCategory::Editor => "Editor",

@@ -6,6 +6,9 @@ use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::safety::{ConfirmTier, Risk};
 use oxikube_ports::{ClusterPrefs, NodeShellSpec};
 
+use crate::actions::object_label;
+use crate::workloads::replicas_word;
+
 /// The confirmation tier the guard asks for before running a command.
 ///
 /// * A non-mutating command never confirms ([`ConfirmTier::None`]).
@@ -76,6 +79,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NamespaceSelect { cluster, .. }
         | Command::NamespaceToggleFavourite { cluster, .. }
         | Command::ClusterSetColour { cluster, .. }
+        | Command::ClusterShowMetricsSettings { cluster }
+        | Command::ClusterRedetectMetrics { cluster }
+        | Command::ClusterToggleMetrics { cluster, .. }
         | Command::ClusterApplyPreset { cluster, .. }
         | Command::CrdOpenList { cluster }
         | Command::CrdOpenResources { cluster, .. }
@@ -111,6 +117,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PodExec { target, .. }
         | Command::PodDebug { target, .. }
         | Command::PodPortForward { target, .. }
+        | Command::ServiceOpenInBrowser { target, .. }
+        | Command::ServiceShowPods { target }
         | Command::PodViewLogs { target, .. }
         | Command::LogsClear { target }
         | Command::LogsCopy { target }
@@ -146,7 +154,12 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NodeShell { target }
         | Command::NodeUncordon { target }
         | Command::IngressClassSetDefault { target, .. }
-        | Command::NodeDrain { target, .. } => Some(&target.cluster),
+        | Command::NodeDrain { target, .. }
+        | Command::CronJobTrigger { target }
+        | Command::CronJobSuspend { target }
+        | Command::CronJobResume { target }
+        | Command::JobSuspend { target }
+        | Command::JobResume { target } => Some(&target.cluster),
         Command::ClusterNextTab
         | Command::ClusterPreviousTab
         | Command::ClusterSwitchTab { .. }
@@ -240,6 +253,12 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
             context,
         );
     }
+    if let Some(summary) = workload_summary(command, context) {
+        return summary;
+    }
+    if let Command::WorkloadScale { target, replicas } = command {
+        return scale_summary(target, *replicas, context);
+    }
     let base = match command.target() {
         Some(target) => {
             let object = match target.namespace() {
@@ -258,6 +277,46 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
         } => format!("{base}. Clears the default flag of the other Ingress classes."),
         _ => base,
     }
+}
+
+/// The confirmation text of the workload commands (E12-S08), which say what happens beyond the
+/// name: a trigger creates a Job, a Job's suspend deletes its running pods. `None` for any other
+/// command.
+fn workload_summary(command: &Command, context: &str) -> Option<String> {
+    Some(match command {
+        Command::CronJobTrigger { target } => format!(
+            "Run {} now on {context}: a Job is created from its job template, as `kubectl create \
+             job --from` does.",
+            object_label(target)
+        ),
+        Command::CronJobSuspend { target } => format!(
+            "Suspend {} on {context}: it creates no Jobs until it is resumed.",
+            object_label(target)
+        ),
+        Command::JobSuspend { target } => format!(
+            "Suspend {} on {context}: its running pods are deleted until it is resumed.",
+            object_label(target)
+        ),
+        Command::CronJobResume { target } | Command::JobResume { target } => {
+            format!("Resume {} on {context}.", object_label(target))
+        }
+        _ => return None,
+    })
+}
+
+/// The confirmation text of `workload::Scale`: the workload, the count, and for zero that every
+/// pod stops.
+fn scale_summary(workload: &ResourceRef, replicas: u32, context: &str) -> String {
+    let zero = if replicas == 0 {
+        " (stops all of its pods)"
+    } else {
+        ""
+    };
+    format!(
+        "Scale {} to {replicas} {}{zero} on {context}",
+        object_label(workload),
+        replicas_word(replicas)
+    )
 }
 
 /// The confirmation text of `pod::Debug`: the pod, the image and the target container, and that the
@@ -296,11 +355,16 @@ fn effective_image(image: &str) -> &str {
 
 /// What the audit record of a guarded `command` says besides its target, if anything: for
 /// `pod::Debug` the image, the target container, the program (never its arguments) and a chosen
-/// name; for `resource::Apply` the field manager, force and the reviewed version (never the
-/// manifest). Short, free of typed content, and redacted by the audit log like every field.
+/// name; for `workload::Scale` the requested count; for `resource::Apply` the field manager, force
+/// and the reviewed version (never the manifest). Short, free of typed content, and redacted by the
+/// audit log like every field.
 pub fn audit_detail(command: &Command) -> Option<String> {
     if let Some(detail) = crate::apply::audit_detail(command) {
         return Some(detail);
+    }
+    if let Command::WorkloadScale { replicas, .. } = command {
+        // The handler adds `before=` and `after=` (`Mutation::note`).
+        return Some(format!("replicas={replicas}"));
     }
     let Command::PodDebug {
         image,

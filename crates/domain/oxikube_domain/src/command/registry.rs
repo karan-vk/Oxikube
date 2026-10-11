@@ -35,16 +35,29 @@ impl CommandId {
     pub const CLUSTER_PREVIOUS_TAB: CommandId = CommandId::new("cluster::PreviousTab");
     /// `cluster::Reconnect`: drop a cluster's connection and connect it again (the retry).
     pub const CLUSTER_RECONNECT: CommandId = CommandId::new("cluster::Reconnect");
+    /// `cluster::RedetectMetrics`: run metrics provider detection for a cluster again.
+    pub const CLUSTER_REDETECT_METRICS: CommandId = CommandId::new("cluster::RedetectMetrics");
     /// `cluster::Select`: make a cluster the active one.
     pub const CLUSTER_SELECT: CommandId = CommandId::new("cluster::Select");
     /// `cluster::SetColour`: set or clear a cluster's accent colour.
     pub const CLUSTER_SET_COLOUR: CommandId = CommandId::new("cluster::SetColour");
+    /// `cluster::ShowMetricsSettings`: open a cluster's metrics settings page.
+    pub const CLUSTER_SHOW_METRICS_SETTINGS: CommandId =
+        CommandId::new("cluster::ShowMetricsSettings");
     /// `cluster::SwitchTab`: show the nth cluster tab.
     pub const CLUSTER_SWITCH_TAB: CommandId = CommandId::new("cluster::SwitchTab");
     /// `cluster::ToggleFavourite`: mark or unmark a cluster as a favourite.
     pub const CLUSTER_TOGGLE_FAVOURITE: CommandId = CommandId::new("cluster::ToggleFavourite");
+    /// `cluster::ToggleMetrics`: switch a cluster's history metrics on or off.
+    pub const CLUSTER_TOGGLE_METRICS: CommandId = CommandId::new("cluster::ToggleMetrics");
     /// `cluster::ToggleReadOnly`: set or toggle a cluster's read-only mode.
     pub const CLUSTER_TOGGLE_READ_ONLY: CommandId = CommandId::new("cluster::ToggleReadOnly");
+    /// `cronjob::Resume`: let a suspended CronJob create Jobs again.
+    pub const CRONJOB_RESUME: CommandId = CommandId::new("cronjob::Resume");
+    /// `cronjob::Suspend`: stop a CronJob creating Jobs.
+    pub const CRONJOB_SUSPEND: CommandId = CommandId::new("cronjob::Suspend");
+    /// `cronjob::Trigger`: run a CronJob now by creating a Job from its template.
+    pub const CRONJOB_TRIGGER: CommandId = CommandId::new("cronjob::Trigger");
     /// `crd::OpenList`: open the list of the cluster's CustomResourceDefinitions.
     pub const CRD_OPEN_LIST: CommandId = CommandId::new("crd::OpenList");
     /// `crd::OpenResources`: open the table of the custom resources a CRD defines.
@@ -100,6 +113,10 @@ impl CommandId {
     pub const JUMP_FORWARD: CommandId = CommandId::new("jump::Forward");
     /// `jump::Last`: go back to the view before the current one (`-` in the jump bar).
     pub const JUMP_LAST: CommandId = CommandId::new("jump::Last");
+    /// `job::Resume`: resume a suspended Job.
+    pub const JOB_RESUME: CommandId = CommandId::new("job::Resume");
+    /// `job::Suspend`: suspend a Job (its pods are deleted until it is resumed).
+    pub const JOB_SUSPEND: CommandId = CommandId::new("job::Suspend");
     /// `keymap::OpenUser`: open the user's `keymap.json`, creating it from a commented template
     /// first when it does not exist.
     pub const KEYMAP_OPEN_USER: CommandId = CommandId::new("keymap::OpenUser");
@@ -250,6 +267,10 @@ impl CommandId {
     /// `resource::ViewYamlInEditor`: open a resource's YAML read-only in a manifest editor tab.
     pub const RESOURCE_VIEW_YAML_IN_EDITOR: CommandId =
         CommandId::new("resource::ViewYamlInEditor");
+    /// `service::OpenInBrowser`: forward a Service port and open it in the browser.
+    pub const SERVICE_OPEN_IN_BROWSER: CommandId = CommandId::new("service::OpenInBrowser");
+    /// `service::ShowPods`: open the pods a Service selects, in a table filtered by its selector.
+    pub const SERVICE_SHOW_PODS: CommandId = CommandId::new("service::ShowPods");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
     /// `table::ToggleWide`: show or hide the wide columns (`kubectl -o wide`) of a kind's tables.
@@ -396,6 +417,14 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // Lists Services and sends one probe query through the API server; changes nothing in the
+    // cluster.
+    CommandMeta::read(
+        CommandId::CLUSTER_REDETECT_METRICS,
+        "Look for Metrics Provider Again",
+        CommandScope::Cluster,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::CLUSTER_SELECT,
         "Select Cluster",
@@ -405,6 +434,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::CLUSTER_SET_COLOUR,
         "Set Cluster Colour",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // Opens a page; reads the session's own state and nothing from the cluster.
+    CommandMeta::read(
+        CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
+        "Cluster Metrics Settings",
         CommandScope::Cluster,
         NONE,
     ),
@@ -419,6 +455,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::CLUSTER_TOGGLE_FAVOURITE,
         "Toggle Favourite Cluster",
         CommandScope::Global,
+        NONE,
+    ),
+    // A local preference (`prometheus.enabled` in the user's settings), never a cluster change.
+    CommandMeta::read(
+        CommandId::CLUSTER_TOGGLE_METRICS,
+        "Toggle Cluster Metrics",
+        CommandScope::Cluster,
         NONE,
     ),
     CommandMeta::privileged(
@@ -445,6 +488,45 @@ pub static COMMANDS: &[CommandMeta] = &[
     .selecting(SelectionKind::OfKind {
         group: "apiextensions.k8s.io",
         kind: "CustomResourceDefinition",
+    }),
+    // E12-S08. Low risk (a simple confirm): a trigger creates one Job the CronJob owns, a suspend
+    // or resume flips `spec.suspend` and is undone by its sibling. `kubectl create job --from`
+    // and a merge patch; neither is a cascade.
+    CommandMeta::mutation(
+        CommandId::CRONJOB_RESUME,
+        "Resume CronJob",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "CronJob",
+    }),
+    CommandMeta::mutation(
+        CommandId::CRONJOB_SUSPEND,
+        "Suspend CronJob",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "CronJob",
+    }),
+    CommandMeta::mutation(
+        CommandId::CRONJOB_TRIGGER,
+        "Trigger CronJob",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "CronJob",
     }),
     // The manifest editor (E10-S04) only edits text in this window: a new buffer and the view's
     // own toggles read and change nothing in a cluster. What reaches the cluster goes through
@@ -611,6 +693,30 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::of("networking.k8s.io", "IngressClass")),
+    CommandMeta::mutation(
+        CommandId::JOB_RESUME,
+        "Resume Job",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "Job",
+    }),
+    CommandMeta::mutation(
+        CommandId::JOB_SUSPEND,
+        "Suspend Job",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "Job",
+    }),
     // The `:` jump bar's history only moves around the app: they read and change nothing in
     // a cluster, and run in read-only mode. What a typed line does is done by the navigation
     // commands it turns into (`resource::OpenList`, `namespace::Select`, `cluster::Select`, ...).
@@ -1175,6 +1281,26 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Starts a port-forward to a pod behind the Service and opens the local end in the browser. A
+    // forward changes nothing in the cluster, so it is a read like `pod::PortForward` (what the
+    // forward may do is the port-forward manager's guard policy, E15); it needs the capability.
+    CommandMeta::read(
+        CommandId::SERVICE_OPEN_IN_BROWSER,
+        "Open Service in Browser",
+        CommandScope::Selection,
+        Capabilities::PORTFORWARD,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Service")),
+    // Opens a table of pods filtered by the Service's selector (`-l`): navigation, a read.
+    CommandMeta::read(
+        CommandId::SERVICE_SHOW_PODS,
+        "Show Service Pods",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Service")),
     // Moves focus inside a window, never touches the cluster: allowed in read-only mode.
     CommandMeta::read(
         CommandId::TABLE_FOCUS_FILTER,
@@ -1384,11 +1510,12 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Low for N > 0, raised to Medium for N = 0 by `Command::effective_risk` (E12-S04).
     CommandMeta::mutation(
         CommandId::WORKLOAD_SCALE,
         "Scale Workload",
         CommandScope::Selection,
-        Risk::Medium,
+        Risk::Low,
         NONE,
     )
     .in_views(TABLE_VIEWS)
@@ -1590,7 +1717,9 @@ mod tests {
             COMMANDS
                 .iter()
                 .filter(|m| !m.exec)
-                .all(|m| m.tool_risk() == m.risk || m.id == CommandId::RESOURCE_DELETE)
+                .all(|m| m.tool_risk() == m.risk
+                    || m.id == CommandId::RESOURCE_DELETE
+                    || m.id == CommandId::WORKLOAD_SCALE)
         );
     }
 

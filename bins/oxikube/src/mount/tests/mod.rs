@@ -20,13 +20,16 @@ mod jump;
 mod keyboard;
 mod keymap;
 mod logs;
+mod metrics;
 mod network;
 mod node_shell;
 mod palette;
 mod resources;
+mod scale;
 mod signin;
 mod tail;
 mod terminal;
+mod workloads;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use oxikube_catalog_ui::namespaces::NamespaceSelector;

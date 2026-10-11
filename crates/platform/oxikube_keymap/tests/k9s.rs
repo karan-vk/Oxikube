@@ -26,12 +26,17 @@ actions!(
         PortForward,
         ShowPortForwards,
         ToggleWide,
+        ShowServicePods,
+        OpenInBrowser,
         DeleteSelected,
         ShellSelected,
+        ScaleSelected,
         AttachSelected,
         FocusFilter,
         ClearFilter,
-        ClearSelection
+        ClearSelection,
+        TriggerSelected,
+        ToggleSuspendSelected
     ]
 );
 actions!(resource_detail, [Close]);
@@ -346,7 +351,7 @@ fn a_log_view_keeps_its_own_letters(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn a_section_can_scope_a_binding_to_a_kind(cx: &mut TestAppContext) {
-    // E12 binds `s` to scale on Deployments this way; the table's context carries `kind`.
+    // E12 binds `s` to scale on workloads this way; the table's context carries `kind`.
     install(
         cx,
         MAC,
@@ -368,6 +373,157 @@ fn a_section_can_scope_a_binding_to_a_kind(cx: &mut TestAppContext) {
         runs(cx, "y", &strs(&deployments)),
         Some("resource_table::ViewYaml")
     );
+}
+
+#[gpui::test]
+fn cronjobs_trigger_on_t_and_cronjobs_and_jobs_suspend_on_s(cx: &mut TestAppContext) {
+    // E12-S08: the k9s verbs `t` (trigger) and `s` (suspend) are bound for the kinds that have
+    // them, so `s` stays a shell on pods and nodes.
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        let cronjobs = table("CronJob", "");
+        let jobs = table("Job", "");
+        let pods = table("Pod", "");
+        assert_eq!(
+            runs(cx, "t", &strs(&cronjobs)),
+            Some("resource_table::TriggerSelected"),
+            "{platform:?}"
+        );
+        assert_eq!(
+            runs(cx, "s", &strs(&cronjobs)),
+            Some("resource_table::ToggleSuspendSelected")
+        );
+        assert_eq!(
+            runs(cx, "s", &strs(&jobs)),
+            Some("resource_table::ToggleSuspendSelected")
+        );
+        // `t` triggers CronJobs only; a Job has nothing to trigger.
+        assert_eq!(press(cx, "t", &strs(&jobs)), Resolution::Unbound);
+        assert_eq!(press(cx, "t", &strs(&pods)), Resolution::Unbound);
+        assert_eq!(
+            runs(cx, "s", &strs(&pods)),
+            Some("resource_table::ShellSelected")
+        );
+        // The other verbs of a CronJob table keep their meaning.
+        assert_eq!(
+            runs(cx, "y", &strs(&cronjobs)),
+            Some("resource_table::ViewYaml")
+        );
+        // While the filter field has the focus, the keys are text.
+        let typing = table("CronJob", "Editing");
+        assert_eq!(press(cx, "t", &strs(&typing)), Resolution::Unbound);
+        assert_eq!(press(cx, "s", &strs(&typing)), Resolution::Unbound);
+    }
+}
+
+#[gpui::test]
+fn a_services_verbs_are_bound_on_service_tables_only(cx: &mut TestAppContext) {
+    // E12-S13: `u` shows the pods a Service selects, `o` opens a port in the browser.
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        let services = table("Service", "");
+        assert_eq!(
+            runs(cx, "u", &strs(&services)),
+            Some("resource_table::ShowServicePods")
+        );
+        assert_eq!(
+            runs(cx, "o", &strs(&services)),
+            Some("resource_table::OpenInBrowser")
+        );
+        for kind in ["Pod", "Deployment", "Endpoints"] {
+            let stack = table(kind, "");
+            assert_eq!(runs(cx, "u", &strs(&stack)), None, "u on {kind}");
+            assert_eq!(runs(cx, "o", &strs(&stack)), None, "o on {kind}");
+        }
+        // A Service table keeps the generic verbs.
+        assert_eq!(
+            runs(cx, "y", &strs(&services)),
+            Some("resource_table::ViewYaml")
+        );
+        // Typing into the filter field stays text.
+        let editing = table("Service", "Editing");
+        assert_eq!(press(cx, "u", &strs(&editing)), Resolution::Unbound);
+    }
+}
+
+#[gpui::test]
+fn the_palette_finds_the_keys_of_the_cronjob_commands(cx: &mut TestAppContext) {
+    install(cx, MAC, "");
+    let keys = |cx: &mut TestAppContext, command| {
+        cx.read(|cx| {
+            bindings_for_command(cx, command)
+                .into_iter()
+                .map(|info| info.keystrokes_text())
+                .collect::<Vec<_>>()
+        })
+    };
+    assert_eq!(keys(cx, CommandId::CRONJOB_TRIGGER), ["t"]);
+    // `s` is bound once for CronJob tables and once for Job tables: one key, two sections.
+    for command in [
+        CommandId::CRONJOB_SUSPEND,
+        CommandId::CRONJOB_RESUME,
+        CommandId::JOB_SUSPEND,
+        CommandId::JOB_RESUME,
+    ] {
+        let found = keys(cx, command);
+        assert!(
+            !found.is_empty() && found.iter().all(|k| k == "s"),
+            "{command}: {found:?}"
+        );
+    }
+}
+
+#[gpui::test]
+fn the_service_verbs_stand_for_their_commands(cx: &mut TestAppContext) {
+    use oxikube_keymap::ActionRegistry;
+    install(cx, MAC, "");
+    assert_eq!(
+        ActionRegistry::commands_of("resource_table::ShowServicePods"),
+        [CommandId::SERVICE_SHOW_PODS]
+    );
+    assert_eq!(
+        ActionRegistry::commands_of("resource_table::OpenInBrowser"),
+        [CommandId::SERVICE_OPEN_IN_BROWSER]
+    );
+}
+
+#[gpui::test]
+fn s_scales_the_workloads_that_can_scale_and_stays_a_shell_elsewhere(cx: &mut TestAppContext) {
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        for kind in [
+            "Deployment",
+            "StatefulSet",
+            "ReplicaSet",
+            "ReplicationController",
+        ] {
+            assert_eq!(
+                runs(cx, "s", &strs(&table(kind, ""))),
+                Some("resource_table::ScaleSelected"),
+                "{kind} on {platform:?}"
+            );
+        }
+        // A DaemonSet has no scale; a Pod and a Node keep the shell (a Job's `s` suspends it).
+        for kind in ["DaemonSet", "Pod", "Node"] {
+            assert_eq!(
+                runs(cx, "s", &strs(&table(kind, ""))),
+                Some("resource_table::ShellSelected"),
+                "{kind} on {platform:?}"
+            );
+        }
+        // Typing `s` into the table's filter field is text, not a scale.
+        let editing = table("Deployment", "Editing");
+        assert_eq!(press(cx, "s", &strs(&editing)), Resolution::Unbound);
+    }
+    // The palette shows the key next to the command.
+    install(cx, MAC, "");
+    let keys = cx.read(|cx| {
+        bindings_for_command(cx, CommandId::WORKLOAD_SCALE)
+            .into_iter()
+            .map(|info| info.keystrokes_text())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(keys, ["s"]);
 }
 
 #[gpui::test]

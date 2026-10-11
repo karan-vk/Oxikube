@@ -130,7 +130,10 @@ pub fn start_views(
 /// The resource tables' row actions: the core ones (delete), the CRD list's (E07-S07), "View
 /// Logs" on pods (E08-S02) and on workloads and Services (E08-S04), "Shell" and "Attach" on
 /// pods (E09-S08), "View YAML" and "Describe" on every kind (E11-S07), "Edit" and "View YAML in
-/// Editor" on every kind (E10-S06), and "Set as default" on IngressClasses (E12-S14).
+/// Editor" on every kind (E10-S06), and the per-kind actions of `oxikube_resources_ui::kinds` (E12:
+/// "Trigger", "Suspend" and "Resume" on CronJobs and Jobs, E12-S08; "Scale" on Deployments,
+/// StatefulSets, ReplicaSets and ReplicationControllers, E12-S04; "Show Pods" and "Open in
+/// Browser" on Services, E12-S13; "Set as default" on IngressClasses, E12-S14).
 pub fn row_actions() -> RowActionRegistry {
     let mut registry = RowActionRegistry::core();
     let specs = oxikube_resources_ui::crds::crd_row_actions()
@@ -138,8 +141,9 @@ pub fn row_actions() -> RowActionRegistry {
         .chain(oxikube_resources_ui::view_row_actions())
         .chain(log_row_actions())
         .chain(oxikube_resources_ui::exec::exec_row_actions())
-        .chain(oxikube_editor::open::editor_row_actions())
-        .chain(oxikube_resources_ui::kinds::network::network_row_actions());
+        .chain(oxikube_resources_ui::kinds::row_actions())
+        .chain(oxikube_resources_ui::kinds::service::service_row_actions())
+        .chain(oxikube_editor::open::editor_row_actions());
     for spec in specs {
         if let Err(error) = registry.register(spec) {
             // A wiring bug (one command offered twice); the tests catch it.

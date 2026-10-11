@@ -160,6 +160,32 @@ fixtures! {
     configmap => "core/configmap.json",
     /// Opaque Secret `web-credentials` with dummy values.
     secret => "core/secret.json",
+    /// ResourceQuota `compute`: pods 9/10, `count/deployments.apps` 2/5, cpu 1500m of 4, memory
+    /// 2Gi of 8Gi and an extended resource (`requests.nvidia.com/gpu` 0/2).
+    resource_quota => "config/resourcequota.json",
+    /// LimitRange `defaults`: Container min / max / default / defaultRequest / ratio and a PVC
+    /// range.
+    limit_range => "config/limitrange.json",
+    /// PodDisruptionBudget `web`: `minAvailable` 2, 3 healthy, 1 disruption allowed.
+    pdb => "config/pdb.json",
+    /// Lease `kube-controller-manager` in `kube-system`, held by `oxikube-control-plane_7c1e2d9a`.
+    lease => "config/lease.json",
+    /// PriorityClass `high` (value 1000000, not the global default).
+    priority_class => "config/priorityclass.json",
+    /// RuntimeClass `gvisor` (handler `runsc`, pod overhead, node selector, one toleration).
+    runtime_class => "config/runtimeclass.json",
+    /// MutatingWebhookConfiguration `sidecar-injector`: two webhooks, one with a service and a
+    /// `caBundle`, one with a URL.
+    mutating_webhook => "config/mutating-webhook.json",
+    /// ValidatingWebhookConfiguration `policy-check`: one webhook with an object selector.
+    validating_webhook => "config/validating-webhook.json",
+    /// ValidatingAdmissionPolicy `replica-limit`: two CEL validations and a param kind.
+    admission_policy => "config/admission-policy.json",
+    /// ValidatingAdmissionPolicyBinding `replica-limit-prod`: `Deny` and `Audit`.
+    admission_policy_binding => "config/admission-policy-binding.json",
+    /// VerticalPodAutoscaler `web` targeting Deployment `web` in `Auto` mode, with a
+    /// recommendation for container `web`.
+    vpa => "config/vpa.json",
 }
 
 /// The fixture at `path` as JSON.
@@ -254,6 +280,52 @@ pub mod openapi {
     pub fn json(name: &str) -> serde_json::Value {
         let text = raw(name).unwrap_or_else(|| panic!("unknown OpenAPI fixture {name:?}"));
         serde_json::from_str(text).unwrap_or_else(|e| panic!("fixture {name}: invalid JSON: {e}"))
+    }
+}
+
+/// Recorded server Table responses (`meta.k8s.io/v1` `Table`, E12-S17): what the API server
+/// answered the Table feed's request for a kind, kept verbatim but for `managedFields` and
+/// annotations, which the feed never reads. Not cluster objects, so outside the [`Resource`] set;
+/// every file is a `Table` with `columnDefinitions` and `rows` (checked by `tests/fixtures.rs`).
+pub mod tables {
+    macro_rules! tables {
+        ($($(#[$doc:meta])* $fn_name:ident => $path:literal,)*) => {
+            /// Every recorded Table path, relative to `fixtures/tables/`.
+            pub const ALL: &[&str] = &[$($path),*];
+
+            /// The raw text of the recorded Table `name`, or `None` when there is none.
+            pub fn raw(name: &str) -> Option<&'static str> {
+                match name {
+                    $($path => Some(include_str!(concat!("../fixtures/tables/", $path))),)*
+                    _ => None,
+                }
+            }
+
+            $(
+                $(#[$doc])*
+                pub fn $fn_name() -> serde_json::Value {
+                    json($path)
+                }
+            )*
+        };
+    }
+
+    tables! {
+        /// `kubectl get widgets -n oxikube-fixtures` of the kind fixtures (`cluster/`), recorded
+        /// from a v1.37 kind cluster with `Accept: application/json;as=Table;v=v1;g=meta.k8s.io`
+        /// and `includeObject=Metadata`: columns Name, Size, Replicas, Phase, Age and Owner
+        /// (`priority: 1`), three rows, a `null` Phase.
+        widgets => "widgets.json",
+    }
+
+    /// The recorded Table `name` as JSON.
+    ///
+    /// # Panics
+    ///
+    /// When there is no such Table or it is not valid JSON.
+    pub fn json(name: &str) -> serde_json::Value {
+        let text = raw(name).unwrap_or_else(|| panic!("unknown recorded Table {name:?}"));
+        serde_json::from_str(text).unwrap_or_else(|e| panic!("table {name}: invalid JSON: {e}"))
     }
 }
 

@@ -6,7 +6,7 @@
 //! binary pushes a [`ClusterPrefsTable`] (the resolved prefs of every cluster that has
 //! overrides, plus the global fallback) into `oxikube_app::ClusterSessionManager` at startup
 //! and on every change. Everything here is a value type: no I/O, no secrets. A Prometheus
-//! bearer token, for example, is only a [`SecretKey`] naming a keychain entry.
+//! bearer token, for example, is only a [`SecretKey`](crate::secrets::SecretKey) naming a keychain entry.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -17,23 +17,10 @@ use oxikube_domain::ids::ClusterId;
 
 use crate::connector::ExecInteractivity;
 use crate::exec::NodeShellToleration;
-use crate::secrets::SecretKey;
 
-/// Where a cluster's Prometheus is, when the user overrides auto-detection (E13).
-///
-/// Every field is optional so a layer can set any subset; the settings layer fills them from
-/// `clusters.<id>.prometheus`.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PrometheusOverride {
-    /// Provider id (`operator`, `victoria_metrics`, ...) or `auto`; `None` means auto-detect.
-    pub provider: Option<String>,
-    /// `namespace/service:port` reached through the API server's service proxy.
-    pub path: Option<String>,
-    /// A direct `http(s)` URL (no credentials, query or fragment).
-    pub url: Option<String>,
-    /// The keychain entry holding the bearer token. Only the name is ever configured.
-    pub auth: Option<SecretKey>,
-}
+mod prometheus;
+
+pub use prometheus::{MetricsMode, PrometheusAuthKind, PrometheusOverride};
 
 /// The node shell's pod template as the settings give it (E09-S09): the keys under
 /// `node_shell` beside the flat `node_shell_image` and `node_shell_pull_secret`. Every field is

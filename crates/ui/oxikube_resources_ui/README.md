@@ -28,6 +28,19 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   (GatewayClass, Gateway, HTTPRoute, GRPCRoute, TLSRoute, listed only where discovery serves them): one
   `NetworkPanel` for all of them (rules, listeners, parents, conditions with reasons, links to Services,
   Gateways and GatewayClasses) and the IngressClass row action "Set as default" (`ingressclass::SetDefault`).
+- `kinds::workloads` (E12-S04): Deployments, StatefulSets, ReplicaSets and ReplicationControllers,
+  one spec file each, with the shared detail `WorkloadPanel` (replicas, strategy, selector, pod
+  template, owned ReplicaSets and Pods as links) and the Scale dialog (`workload::Scale`: context
+  menu, palette, `s` on those kinds, the panel's button).
+- `kinds::pods` (E12-S02): the Pod spec: `PodColumns` (Lens and k9s columns, IP / Node / QoS hidden,
+  usage `–` until E13's metrics) and `ContainersPanel`, the containers drill-down at the top of a pod's detail.
+- `kinds::service`, `kinds::endpoints` (E12-S13): Services, Endpoints and EndpointSlices. The
+  Service's detail panel lists its ports (a named `targetPort` resolved against a backing pod),
+  its EndpointSlices with ready counts and its backing pods, through two server-side
+  label-selected feeds that live as long as the detail is open. "Show Pods" (`u`, `service::ShowPods`)
+  opens the Pods table filtered by the selector. "Open in Browser" (`o`, `service::OpenInBrowser`)
+  appears once the port-forward manager installs its opener (`ServiceBrowser::enable` plus
+  `register_open_in_browser`); a Service without a selector says why it has no pods.
 - `table` (E07-S03): `ResourceTable`, the generic virtualised table of one kind (store
   subscription, sort through the store, column layout per kind, multi-select, keyboard, context
   menu, status colours from the theme's `oxikube` block).

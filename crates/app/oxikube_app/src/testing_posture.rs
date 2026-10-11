@@ -119,15 +119,21 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "cluster::NextTab" => Command::ClusterNextTab,
         "cluster::PreviousTab" => Command::ClusterPreviousTab,
         "cluster::Reconnect" => Command::ClusterReconnect { cluster },
+        "cluster::RedetectMetrics" => Command::ClusterRedetectMetrics { cluster },
         "cluster::Select" => Command::ClusterSelect { cluster },
         "cluster::SetColour" => Command::ClusterSetColour {
             cluster,
             colour: Some(RED),
         },
+        "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
         "cluster::SwitchTab" => Command::ClusterSwitchTab { index: 1 },
         "cluster::ToggleFavourite" => Command::ClusterToggleFavourite {
             cluster,
             favourite: None,
+        },
+        "cluster::ToggleMetrics" => Command::ClusterToggleMetrics {
+            cluster,
+            enabled: None,
         },
         "cluster::ToggleReadOnly" => Command::ClusterToggleReadOnly {
             cluster,
@@ -258,6 +264,23 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             target: target(),
             local_port: None,
             remote_port: 8080,
+        },
+        "service::OpenInBrowser" => Command::ServiceOpenInBrowser {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("", "v1", "Service"),
+                "default",
+                "web",
+            ),
+            port: Some(80),
+        },
+        "service::ShowPods" => Command::ServiceShowPods {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("", "v1", "Service"),
+                "default",
+                "web",
+            ),
         },
         "pod::ViewLogs" => Command::PodViewLogs {
             target: target(),
@@ -417,9 +440,29 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             follow: true,
             tail_lines: None,
         },
+        "cronjob::Trigger" => Command::CronJobTrigger {
+            target: batch(name, "CronJob", "nightly"),
+        },
+        "cronjob::Suspend" => Command::CronJobSuspend {
+            target: batch(name, "CronJob", "nightly"),
+        },
+        "cronjob::Resume" => Command::CronJobResume {
+            target: batch(name, "CronJob", "nightly"),
+        },
+        "job::Suspend" => Command::JobSuspend {
+            target: batch(name, "Job", "import"),
+        },
+        "job::Resume" => Command::JobResume {
+            target: batch(name, "Job", "import"),
+        },
         other => panic!(
             "no sample for the declared command {other}: add one to testing_posture::sample; the \
              read-only enforcement test iterates every declared command"
         ),
     }
+}
+
+/// A `batch/v1` object in `default` of cluster `name`.
+fn batch(name: &str, kind: &str, object: &str) -> ResourceRef {
+    ResourceRef::namespaced(id(name), Gvk::new("batch", "v1", kind), "default", object)
 }

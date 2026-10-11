@@ -42,7 +42,11 @@ pub const DEFERRED: &[Deferred] = &[
     Deferred {
         name: "prometheus_detection",
         owner: "E13",
-        started_by: "the first metrics view of a connected cluster",
+        started_by: "a cluster connecting: the first window's mount starts a foreground task that \
+                     follows the session updates (`metrics_provider::start`, no I/O, nothing on \
+                     the Tokio runtime), and the first probe (list services, one query through \
+                     the API server) runs on the Tokio bridge after the connect, never for a \
+                     cluster whose settings turn metrics off",
     },
     Deferred {
         name: "extension_host",

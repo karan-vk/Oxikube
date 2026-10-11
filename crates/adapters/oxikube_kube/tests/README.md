@@ -107,3 +107,14 @@ Run it all: `cargo xtask kind-up`, then `cargo it` (this crate, the app's kind s
 `OXIKUBE_TEST_CONTEXT=kind-oxikube cargo test -p oxikube --features integration --test kind_exec
 --test kind_terminal --test kind_terminal_data`. Pods come from `oxikube_testkit::integration::pods` (`sleeper`, `cat`,
 `logger`, `shell_less`).
+
+## Epic E13 acceptance items (metrics provider detection, E13-S05)
+
+| Item | Test |
+|---|---|
+| the service proxy reaches a Service by port name and number, GET with parameters and form POST, the Service's own 404/405 told from the API server's | `service_proxy_kind::the_proxy_reaches_a_service_and_tells_its_answers_from_the_api_servers` |
+| a Service that does not exist (404 with the API server's message), one with no ready endpoint (503, retried by the client until the deadline: a timeout that says so), a body over the limit (`truncated`) | the same |
+| an RBAC-restricted account gets the API server's 403 as an answer, not an error | `service_proxy_kind::an_account_that_may_not_use_the_proxy_gets_a_403_that_says_so` |
+| an account that may not list Services: detection ends in `Failed(Forbidden)` with the way out, every probe `Skipped` | `service_proxy_kind::detection_as_an_account_that_may_not_list_services_fails_as_forbidden_not_as_absent` |
+| a path that could change the route never reaches the cluster | `service_proxy_kind::a_path_that_could_change_the_route_never_reaches_the_cluster` |
+| detection of a real Prometheus Service through the proxy; the app checks a configured Service, queries it and shows it; automatic detection ends in a visible verdict | `bins/oxikube/tests/kind_metrics` |

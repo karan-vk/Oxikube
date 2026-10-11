@@ -1,5 +1,25 @@
 {
   "$defs": {
+    "AuthContent": {
+      "description": "How requests to a `url` authenticate (`prometheus.auth`).",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "No `Authorization` header.",
+          "type": "string"
+        },
+        {
+          "const": "bearer",
+          "description": "`Authorization: Bearer` with the token in the `auth_secret` keychain entry.",
+          "type": "string"
+        },
+        {
+          "const": "basic",
+          "description": "HTTP basic auth: `auth_user` and the password in the `auth_secret` keychain entry.",
+          "type": "string"
+        }
+      ]
+    },
     "BaseKeymap": {
       "description": "The base keymap a user chooses: the layer under their own `keymap.json`.",
       "oneOf": [
@@ -127,6 +147,9 @@
         "logs": {
           "$ref": "#/$defs/LogsContent"
         },
+        "metrics": {
+          "$ref": "#/$defs/MetricsSettingsContent"
+        },
         "node_shell": {
           "anyOf": [
             {
@@ -161,7 +184,7 @@
               "type": "null"
             }
           ],
-          "description": "Manual Prometheus location; unset auto-detects. Fields merge across layers."
+          "description": "Whether and where history metrics come from: auto-detection (the default), a manual\n`url` or service `path`, or off. Fields merge across layers."
         },
         "read_only": {
           "description": "Block every mutation (create, edit, delete, scale, node shell) for the cluster, and shells and\nattaches into pods unless `exec_in_read_only` allows them.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
@@ -315,7 +338,7 @@
               "type": "null"
             }
           ],
-          "description": "Manual Prometheus location; unset auto-detects. Fields merge across layers."
+          "description": "Whether and where history metrics come from: auto-detection (the default), a manual\n`url` or service `path`, or off. Fields merge across layers."
         },
         "read_only": {
           "description": "Block every mutation (create, edit, delete, scale, node shell) for the cluster, and shells and\nattaches into pods unless `exec_in_read_only` allows them.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
@@ -668,6 +691,23 @@
       },
       "type": "object"
     },
+    "MetricsSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about metrics.",
+      "properties": {
+        "gpu_vendors": {
+          "description": "Extended resource names counted as GPUs, for example `nvidia.com/gpu`. Each is summed as\na whole number per pod, node and namespace. This list replaces the default as a whole;\nan empty list turns GPU accounting off.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "NodeShellContent": {
       "additionalProperties": false,
       "description": "The node shell pod template, as one settings layer writes it. Every field is optional so a\nlayer sets any subset.\n\nExample, to run on a tainted GPU node from a mirror registry:\n\n```json\n\"node_shell_image\": \"registry.example/tools/nsenter:1\",\n\"node_shell\": {\n  \"namespace\": \"ops-debug\",\n  \"tolerations\": [{ \"key\": \"nvidia.com/gpu\", \"operator\": \"Exists\" }],\n  \"labels\": { \"team\": \"infra\" }\n}\n```",
@@ -742,10 +782,30 @@
       },
       "type": "object"
     },
+    "PathPrefix": {
+      "description": "A path inserted before /api/v1/..., for example /prometheus.",
+      "examples": [
+        "/prometheus",
+        "/select/0/prometheus"
+      ],
+      "pattern": "^(/?[A-Za-z0-9_.~-]+)*/?$",
+      "type": "string"
+    },
     "PrometheusContent": {
       "additionalProperties": false,
-      "description": "A manual Prometheus location for a cluster (`prometheus` key). Keeps no secret: the bearer\ntoken lives in the OS keychain and `auth_secret` only names its entry.",
+      "description": "Whether and where a cluster's history metrics come from (the `prometheus` key): auto-detection\n(the default), a manual `url` or service `path`, or off. Keeps no secret: the token lives in\nthe OS keychain and `auth_secret` only names its entry.\n\nExample: `{ \"provider\": \"manual\", \"url\": \"https://vm.example.com\", \"kind\": \"victoria_metrics\",\n\"path_prefix\": \"/select/0/prometheus\", \"auth_secret\": \"prod-vm\" }`.",
       "properties": {
+        "auth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How requests to a `url` authenticate. Unset means `bearer` when `auth_secret` is set\n(`basic` when `auth_user` is too) and `none` otherwise. A service `path` needs no auth."
+        },
         "auth_secret": {
           "anyOf": [
             {
@@ -755,21 +815,70 @@
               "type": "null"
             }
           ],
-          "description": "Name of the keychain entry (namespace `prometheus`) that holds the bearer token. Never\nput the token itself in `settings.json`."
+          "description": "Name of the keychain entry (namespace `prometheus`) that holds the bearer token or the\nbasic password. Never put the token itself in `settings.json`."
+        },
+        "auth_user": {
+          "description": "The user name of basic auth.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "description": "`false` fetches no history metrics for the cluster, whatever `provider` says. The live\nusage columns from metrics-server are not affected.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "The stack a manual endpoint belongs to (`kube_prometheus`, `lens`, `victoria_metrics`,\n`mimir`, `openshift`, `prometheus`), so history queries use its label names. Unset is a\nplain Prometheus. Detection classifies the stack itself.",
+          "enum": [
+            "kube_prometheus",
+            "lens",
+            "victoria_metrics",
+            "mimir",
+            "openshift",
+            "prometheus",
+            null
+          ],
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "path": {
-          "description": "`namespace/service:port`, reached through the API server's service proxy.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServicePath"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`namespace/service:port`, reached through the API server's service proxy with your\ncluster credentials."
+        },
+        "path_prefix": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PathPrefix"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A path inserted before `/api/v1/...`: Mimir's `/prometheus`, VictoriaMetrics' cluster\n`/select/0/prometheus`, a Grafana datasource proxy."
         },
         "provider": {
-          "description": "`auto` (probe the cluster) or a provider id such as `operator`, `lens`, `helm`,\n`victoria_metrics`, `mimir`. Unset means auto-detect.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderModeContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`auto` probes the cluster for a Prometheus-compatible service when it connects; `manual`\nuses the `url` or `path`; `off` fetches nothing. Unset means `manual` when a `url` or\n`path` is set and `auto` otherwise."
         },
         "url": {
           "anyOf": [
@@ -784,6 +893,26 @@
         }
       },
       "type": "object"
+    },
+    "ProviderModeContent": {
+      "description": "How the cluster's Prometheus is found (`prometheus.provider`).",
+      "oneOf": [
+        {
+          "const": "auto",
+          "description": "Probe the cluster for known Prometheus-compatible services when it connects.",
+          "type": "string"
+        },
+        {
+          "const": "manual",
+          "description": "Use the `url` or `path` below, whatever the cluster has.",
+          "type": "string"
+        },
+        {
+          "const": "off",
+          "description": "Fetch no history metrics for the cluster.",
+          "type": "string"
+        }
+      ]
     },
     "ReduceMotionSetting": {
       "description": "How the `reduce_motion` setting is decided.",
@@ -841,6 +970,14 @@
       ],
       "minLength": 1,
       "pattern": "^[^/\\p{Cc}]+$",
+      "type": "string"
+    },
+    "ServicePath": {
+      "description": "namespace/service:port, reached through the API server's service proxy.",
+      "examples": [
+        "monitoring/prometheus-operated:9090"
+      ],
+      "pattern": "^[A-Za-z0-9.-]+/(https:)?[A-Za-z0-9.-]+:[A-Za-z0-9.-]+$",
       "type": "string"
     },
     "SessionRestoreContent": {
@@ -1331,6 +1468,9 @@
     "logs": {
       "$ref": "#/$defs/LogsContent"
     },
+    "metrics": {
+      "$ref": "#/$defs/MetricsSettingsContent"
+    },
     "node_shell": {
       "anyOf": [
         {
@@ -1365,7 +1505,7 @@
           "type": "null"
         }
       ],
-      "description": "Manual Prometheus location; unset auto-detects. Fields merge across layers."
+      "description": "Whether and where history metrics come from: auto-detection (the default), a manual\n`url` or service `path`, or off. Fields merge across layers."
     },
     "read_only": {
       "description": "Block every mutation (create, edit, delete, scale, node shell) for the cluster, and shells and\nattaches into pods unless `exec_in_read_only` allows them.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",

@@ -1,0 +1,39 @@
+{
+  "apiVersion": "admissionregistration.k8s.io/v1",
+  "kind": "MutatingWebhookConfiguration",
+  "metadata": {
+    "name": "sidecar-injector",
+    "uid": "6f1f7d8e-3d3a-5b0e-9b5e-0c1b3a2d4e07",
+    "resourceVersion": "3107",
+    "creationTimestamp": "2026-01-01T00:00:00Z"
+  },
+  "webhooks": [
+    {
+      "name": "inject.example.com",
+      "admissionReviewVersions": ["v1"],
+      "failurePolicy": "Ignore",
+      "sideEffects": "None",
+      "matchPolicy": "Equivalent",
+      "reinvocationPolicy": "IfNeeded",
+      "timeoutSeconds": 10,
+      "clientConfig": {
+        "service": {"namespace": "injector", "name": "injector", "path": "/mutate", "port": 443},
+        "caBundle": "RFVNTVktQ0EtQlVORExFLU5PVC1BLVJFQUwtQ0VSVA=="
+      },
+      "namespaceSelector": {"matchLabels": {"injection": "enabled"}},
+      "rules": [
+        {"operations": ["CREATE"], "apiGroups": [""], "apiVersions": ["v1"], "resources": ["pods"], "scope": "Namespaced"}
+      ]
+    },
+    {
+      "name": "defaults.example.com",
+      "admissionReviewVersions": ["v1", "v1beta1"],
+      "failurePolicy": "Fail",
+      "sideEffects": "NoneOnDryRun",
+      "clientConfig": {"url": "https://defaults.example.com/mutate"},
+      "rules": [
+        {"operations": ["CREATE", "UPDATE"], "apiGroups": ["apps"], "apiVersions": ["*"], "resources": ["deployments", "statefulsets"]}
+      ]
+    }
+  ]
+}

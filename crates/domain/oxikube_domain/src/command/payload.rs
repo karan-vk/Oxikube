@@ -140,6 +140,37 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         colour: Option<ClusterColour>,
     },
+    /// Open the cluster's metrics settings (E13-S05): which Prometheus-compatible service its
+    /// history graphs come from, what detection found and which services it probed, the
+    /// `prometheus` settings in effect, and the buttons to run detection again and to switch
+    /// history metrics on or off. Reads only the cluster's own state.
+    #[serde(rename = "cluster::ShowMetricsSettings")]
+    ClusterShowMetricsSettings {
+        /// The cluster whose metrics settings open.
+        cluster: ClusterId,
+    },
+    /// Run the metrics provider detection for a cluster again (E13-S05): list the Services of the
+    /// namespaces the monitoring stacks use, probe the ones that match with a cheap query through
+    /// the API server's service proxy, and classify the stack. A cluster configured by hand has
+    /// its endpoint checked instead. Read-only: it lists Services and sends one query.
+    #[serde(rename = "cluster::RedetectMetrics")]
+    ClusterRedetectMetrics {
+        /// The cluster to look in.
+        cluster: ClusterId,
+    },
+    /// Switch a cluster's history metrics on or off (E13-S05): `prometheus.enabled` in its
+    /// settings. `Some` sets it, `None` flips the current value.
+    ///
+    /// Not a cluster mutation: it only edits the cluster's own settings, so it runs on a
+    /// read-only cluster. Live CPU and memory from metrics-server are not affected.
+    #[serde(rename = "cluster::ToggleMetrics")]
+    ClusterToggleMetrics {
+        /// The cluster to change.
+        cluster: ClusterId,
+        /// Desired state; `None` flips the current one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        enabled: Option<bool>,
+    },
     /// Give a cluster a named posture: its colour and, for production, read-only mode on.
     /// A preset never lowers protection (see [`ClusterPreset`]).
     #[serde(rename = "cluster::ApplyPreset")]
@@ -525,6 +556,22 @@ pub enum Command {
         cluster: ClusterId,
         /// The kind listed.
         gvk: Gvk,
+    },
+    /// Forward a local port to a pod behind a Service and open `http://localhost:<port>` in the
+    /// browser. Offered only where a port-forward manager is installed.
+    #[serde(rename = "service::OpenInBrowser")]
+    ServiceOpenInBrowser {
+        /// The Service.
+        target: ResourceRef,
+        /// The Service port to open; `None` opens the first TCP port.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<u16>,
+    },
+    /// Open the table of the pods a Service selects, filtered by its selector (`-l app=web`).
+    #[serde(rename = "service::ShowPods")]
+    ServiceShowPods {
+        /// The Service.
+        target: ResourceRef,
     },
     /// Focus the filter bar of a kind's resource table (`/` in a table): the next keys type a
     /// filter (`/text`, `/!text`, `/-l selector`, `/-f fuzzy`).
@@ -1008,6 +1055,38 @@ pub enum Command {
         #[serde(default)]
         force: bool,
     },
+    /// Run a CronJob now: create a Job from its `spec.jobTemplate` with a generated name and the
+    /// CronJob as its owner (`kubectl create job --from=cronjob/x`, E12-S08).
+    #[serde(rename = "cronjob::Trigger")]
+    CronJobTrigger {
+        /// The CronJob.
+        target: ResourceRef,
+    },
+    /// Stop a CronJob creating Jobs (`spec.suspend: true`).
+    #[serde(rename = "cronjob::Suspend")]
+    CronJobSuspend {
+        /// The CronJob.
+        target: ResourceRef,
+    },
+    /// Let a suspended CronJob create Jobs again (`spec.suspend: false`).
+    #[serde(rename = "cronjob::Resume")]
+    CronJobResume {
+        /// The CronJob.
+        target: ResourceRef,
+    },
+    /// Suspend a Job: its controller deletes the running pods until it is resumed
+    /// (`spec.suspend: true`).
+    #[serde(rename = "job::Suspend")]
+    JobSuspend {
+        /// The Job.
+        target: ResourceRef,
+    },
+    /// Resume a suspended Job (`spec.suspend: false`); a Job that finished cannot be resumed.
+    #[serde(rename = "job::Resume")]
+    JobResume {
+        /// The Job.
+        target: ResourceRef,
+    },
 }
 
 impl Command {
@@ -1026,6 +1105,9 @@ impl Command {
             Command::ClusterToggleFavourite { .. } => CommandId::CLUSTER_TOGGLE_FAVOURITE,
             Command::ClusterToggleReadOnly { .. } => CommandId::CLUSTER_TOGGLE_READ_ONLY,
             Command::ClusterSetColour { .. } => CommandId::CLUSTER_SET_COLOUR,
+            Command::ClusterShowMetricsSettings { .. } => CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
+            Command::ClusterRedetectMetrics { .. } => CommandId::CLUSTER_REDETECT_METRICS,
+            Command::ClusterToggleMetrics { .. } => CommandId::CLUSTER_TOGGLE_METRICS,
             Command::ClusterApplyPreset { .. } => CommandId::CLUSTER_APPLY_PRESET,
             Command::NamespaceSelect { .. } => CommandId::NAMESPACE_SELECT,
             Command::NamespaceToggleFavourite { .. } => CommandId::NAMESPACE_TOGGLE_FAVOURITE,
@@ -1104,6 +1186,8 @@ impl Command {
             Command::ResourcePreviousMatch { .. } => CommandId::RESOURCE_PREVIOUS_MATCH,
             Command::ResourceRefreshDescribe { .. } => CommandId::RESOURCE_REFRESH_DESCRIBE,
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
+            Command::ServiceOpenInBrowser { .. } => CommandId::SERVICE_OPEN_IN_BROWSER,
+            Command::ServiceShowPods { .. } => CommandId::SERVICE_SHOW_PODS,
             Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
             Command::TableSetFilter { .. } => CommandId::TABLE_SET_FILTER,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
@@ -1154,6 +1238,11 @@ impl Command {
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
             Command::NodeShell { .. } => CommandId::NODE_SHELL,
             Command::NodeUncordon { .. } => CommandId::NODE_UNCORDON,
+            Command::CronJobTrigger { .. } => CommandId::CRONJOB_TRIGGER,
+            Command::CronJobSuspend { .. } => CommandId::CRONJOB_SUSPEND,
+            Command::CronJobResume { .. } => CommandId::CRONJOB_RESUME,
+            Command::JobSuspend { .. } => CommandId::JOB_SUSPEND,
+            Command::JobResume { .. } => CommandId::JOB_RESUME,
             Command::NodeDrain { .. } => CommandId::NODE_DRAIN,
         }
     }
@@ -1204,6 +1293,8 @@ impl Command {
             | Command::PodExec { target, .. }
             | Command::PodDebug { target, .. }
             | Command::PodPortForward { target, .. }
+            | Command::ServiceOpenInBrowser { target, .. }
+            | Command::ServiceShowPods { target }
             | Command::PodViewLogs { target, .. }
             | Command::LogsClear { target }
             | Command::LogsCopy { target }
@@ -1239,7 +1330,12 @@ impl Command {
             | Command::NodeShell { target }
             | Command::NodeUncordon { target }
             | Command::IngressClassSetDefault { target, .. }
-            | Command::NodeDrain { target, .. } => Some(target),
+            | Command::NodeDrain { target, .. }
+            | Command::CronJobTrigger { target }
+            | Command::CronJobSuspend { target }
+            | Command::CronJobResume { target }
+            | Command::JobSuspend { target }
+            | Command::JobResume { target } => Some(target),
             _ => None,
         }
     }
@@ -1263,12 +1359,34 @@ mod tests {
         ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "default", "web-0")
     }
 
+    fn service() -> ResourceRef {
+        ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Service"), "default", "web")
+    }
+
     fn deployment() -> ResourceRef {
         ResourceRef::namespaced(
             cluster(),
             Gvk::new("apps", "v1", "Deployment"),
             "prod",
             "api",
+        )
+    }
+
+    fn cronjob() -> ResourceRef {
+        ResourceRef::namespaced(
+            cluster(),
+            Gvk::new("batch", "v1", "CronJob"),
+            "default",
+            "nightly",
+        )
+    }
+
+    fn job() -> ResourceRef {
+        ResourceRef::namespaced(
+            cluster(),
+            Gvk::new("batch", "v1", "Job"),
+            "default",
+            "import",
         )
     }
 
@@ -1319,6 +1437,16 @@ mod tests {
             Command::ClusterSetColour {
                 cluster: cluster(),
                 colour: None,
+            },
+            Command::ClusterShowMetricsSettings { cluster: cluster() },
+            Command::ClusterRedetectMetrics { cluster: cluster() },
+            Command::ClusterToggleMetrics {
+                cluster: cluster(),
+                enabled: None,
+            },
+            Command::ClusterToggleMetrics {
+                cluster: cluster(),
+                enabled: Some(false),
             },
             Command::ClusterApplyPreset {
                 cluster: cluster(),
@@ -1455,6 +1583,11 @@ mod tests {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
             },
+            Command::ServiceOpenInBrowser {
+                target: service(),
+                port: Some(80),
+            },
+            Command::ServiceShowPods { target: service() },
             Command::TableFocusFilter {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
@@ -1595,6 +1728,11 @@ mod tests {
                 target: ingress_class(),
                 clear_previous: true,
             },
+            Command::CronJobTrigger { target: cronjob() },
+            Command::CronJobSuspend { target: cronjob() },
+            Command::CronJobResume { target: cronjob() },
+            Command::JobSuspend { target: job() },
+            Command::JobResume { target: job() },
         ]
     }
 
@@ -1838,6 +1976,8 @@ mod tests {
                     | Command::ResourcePreviousMatch { .. }
                     | Command::ResourceRefreshDescribe { .. }
                     | Command::ResourceSelectAll { .. }
+                    | Command::ServiceOpenInBrowser { .. }
+                    | Command::ServiceShowPods { .. }
                     | Command::TableFocusFilter { .. }
                     | Command::TableSetFilter { .. }
                     | Command::ResourceViewYaml { .. }
@@ -1875,6 +2015,9 @@ mod tests {
                     | Command::WorkloadViewLogs { .. }
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }
+                    | Command::ClusterShowMetricsSettings { .. }
+                    | Command::ClusterRedetectMetrics { .. }
+                    | Command::ClusterToggleMetrics { .. }
                     | Command::ClusterApplyPreset { .. }
             ) {
                 assert!(!command.is_mutating(), "{}", command.id());

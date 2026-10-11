@@ -1,7 +1,5 @@
 //! [`CrdInfo`]: a CustomResourceDefinition read for browsing.
 
-use std::cmp::Ordering;
-
 use oxikube_domain::ids::{Gvk, Scope};
 use serde_json::Value;
 
@@ -121,36 +119,5 @@ impl CrdInfo {
     }
 }
 
-/// Kubernetes' version priority, as `Ordering` for sorting newest first: GA (`v2`) before beta
-/// (`v1beta2`) before alpha (`v1alpha1`), larger numbers first within a stability, and names that
-/// are not versions last, alphabetically.
-pub fn version_order(a: &str, b: &str) -> Ordering {
-    match (parse_version(a), parse_version(b)) {
-        // Newest first: the greater (stability, major, minor) sorts earlier.
-        (Some(x), Some(y)) => y.cmp(&x),
-        (Some(_), None) => Ordering::Less,
-        (None, Some(_)) => Ordering::Greater,
-        (None, None) => a.cmp(b),
-    }
-}
-
-/// Stability (alpha < beta < GA), major, minor of `v<major>[(alpha|beta)<minor>]`.
-fn parse_version(name: &str) -> Option<(u8, u32, u32)> {
-    let rest = name.strip_prefix('v')?;
-    let digits = rest
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(rest.len());
-    let major: u32 = rest[..digits].parse().ok()?;
-    let tail = &rest[digits..];
-    if tail.is_empty() {
-        return Some((2, major, 0));
-    }
-    let (stability, minor) = if let Some(m) = tail.strip_prefix("alpha") {
-        (0, m)
-    } else if let Some(m) = tail.strip_prefix("beta") {
-        (1, m)
-    } else {
-        return None;
-    };
-    Some((stability, major, minor.parse().ok()?))
-}
+/// Kubernetes' version priority (newest first), from the domain's CRD view-model.
+pub use oxikube_domain::view::version_order;

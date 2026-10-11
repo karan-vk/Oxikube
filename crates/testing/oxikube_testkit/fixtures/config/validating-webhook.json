@@ -1,0 +1,26 @@
+{
+  "apiVersion": "admissionregistration.k8s.io/v1",
+  "kind": "ValidatingWebhookConfiguration",
+  "metadata": {
+    "name": "policy-check",
+    "uid": "6f1f7d8e-3d3a-5b0e-9b5e-0c1b3a2d4e08",
+    "resourceVersion": "3108",
+    "creationTimestamp": "2026-01-01T00:00:00Z"
+  },
+  "webhooks": [
+    {
+      "name": "check.example.com",
+      "admissionReviewVersions": ["v1"],
+      "failurePolicy": "Fail",
+      "sideEffects": "None",
+      "timeoutSeconds": 5,
+      "clientConfig": {
+        "service": {"namespace": "policy", "name": "checker", "path": "/validate"}
+      },
+      "objectSelector": {"matchExpressions": [{"key": "skip-check", "operator": "DoesNotExist"}]},
+      "rules": [
+        {"operations": ["*"], "apiGroups": ["*"], "apiVersions": ["*"], "resources": ["*/scale"], "scope": "*"}
+      ]
+    }
+  ]
+}

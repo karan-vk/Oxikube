@@ -18,6 +18,10 @@ run time (`set_user_sources`, the `kubeconfig.sources` setting), each source rep
 (`source_statuses`: found with N contexts, missing, blank, invalid; file content is never in a message) and pasted
 text can be checked without storing it (`validate_kubeconfig`). Tests use temp files, no cluster.
 
+## Service proxy
+
+`service_proxy` (E13-S05): `KubeServiceProxy` implements `ServiceProxyPort`, a GET or form POST to a Service through the API server (`/api/v1/namespaces/<ns>/services/[https:]<name>:<port>/proxy/<path>`). The API server's own refusals (403, 404, 503) come back as answers with its message, a Service's own statuses as theirs, a body over the limit as `truncated`; the connection's client retries 429/503/504, so a Service with no ready endpoint ends as a timeout that says so. Kind test: `tests/service_proxy_kind.rs`.
+
 ## Integration tests
 
 `tests/` is the kind integration suite (`--features integration`, `OXIKUBE_TEST_CONTEXT`); its

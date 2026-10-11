@@ -112,7 +112,7 @@ fn the_command_is_on_the_bus_with_a_tool_stub_and_is_a_row_action_of_ingress_cla
     let state = app.vcx.update(|_, cx| AppState::global(cx));
     let bus = state.command_bus().expect("the bus");
     let id = CommandId::INGRESS_CLASS_SET_DEFAULT;
-    assert_eq!(bus.owner(id), Some("oxikube_app::network"));
+    assert_eq!(bus.owner(id), Some("oxikube_app::ingress_class"));
     let tool = bus.tool(id).expect("a stub");
     assert_eq!(tool.name.as_str(), "k8s.ingressclass_set_default");
     let spec = crate::mount::logs::row_actions()

@@ -19,6 +19,7 @@
 //! | [`pool`] | E03-S03 | [`ClientPool`]: one lazily built, shared kube client per context, with invalidation and LRU eviction |
 //! | [`logs`] | E04-S08 | [`KubeLogs`]: `LogPort` with reconnect, overlap and dedup, plus multi-container and label-selector fan-in |
 //! | [`resources`] | E04-S01 | [`KubeResources`]: `ResourceReader` list/get with pagination, selectors and `resourceVersion` semantics over typed and dynamic `Api`s |
+//! | [`service_proxy`] | E13-S05 | [`KubeServiceProxy`]: `ServiceProxyPort`, a GET or form POST to a Service through the API server's service proxy (how metrics reach an in-cluster Prometheus); API server refusals as answers, a capped body |
 //! | [`metrics`] | E04-S11 | [`KubeMetrics`]: `MetricsPort` on `metrics.k8s.io` via `k8s-metrics`, exact `Quantity` parsing, per-container usage, absence (404 / 503 / 403) as a visible state |
 //! | [`mutate`] | E04-S05 | [`KubeResources`] as a `ResourceWriter`: create, replace, patch (merge, strategic, JSON, server-side apply), dry-run, delete, delete-collection, with conflict and validation detail in the errors |
 //! | [`remote`] | E04-S09, E04-S10, E09-S03 | [`KubeExec`]: `ExecPort` over `Api<Pod>::exec` / `attach` handing out [`KubeStream`] terminal backends, node shells with guaranteed cleanup, ephemeral debug containers; [`KubePortForward`]: `PortForwardPort` over `Api<Pod>::portforward`, local-listener forwards with service-to-pod resolution and a target-gone hook |
@@ -46,6 +47,7 @@ pub mod openapi;
 pub mod pool;
 pub mod remote;
 pub mod resources;
+pub mod service_proxy;
 pub mod sources;
 pub mod subresource;
 pub mod table;
@@ -92,6 +94,7 @@ pub use remote::portforward::{ForwardHandle, KubePortForward};
 pub use resources::{
     AccessPath, KubeResources, ListExpired, ManagedFields, ResourcesConfig, is_list_expired,
 };
+pub use service_proxy::KubeServiceProxy;
 pub use subresource::{
     EphemeralContainerSpec, EvictionBlocked, RESTARTED_AT_ANNOTATION, ResizeSpec, ResourcePatch,
     ephemeral_container_patch, eviction_blocked, resize_patch,

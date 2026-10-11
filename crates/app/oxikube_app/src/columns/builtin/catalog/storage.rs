@@ -4,14 +4,24 @@
 //! / ServiceAccount / ResourceQuota / LimitRange / Lease lists (A1); k9s `pv`, `pvc`, `sc`, `cm`,
 //! `secret`, `sa` (A2); kubectl printers.
 //!
-//! ConfigMap, Secret and Lease arrive from metadata-only feeds, so they list only what
-//! `metadata` can fill: a Secret's `type` and a ConfigMap's keys are not in the cache by design.
+//! ConfigMap and Secret arrive from metadata-only feeds, so they list only what `metadata` can
+//! fill: a Secret's `type` and a ConfigMap's keys are not in the cache by design. A Lease holds
+//! no secrets and is read in full, for its holder.
 
 use super::super::def::{
     AGE, ColumnDef, KindDef, LABELS, NAME, NAMESPACE,
     Src::{Func, Len, Qty, Text},
 };
 use super::super::funcs as f;
+
+/// Holder, then age: the Freelens and k9s Lease columns.
+const LEASE: &[ColumnDef] = &[
+    NAME,
+    NAMESPACE,
+    ColumnDef::new("holder", "Holder", Text("/spec/holderIdentity")),
+    AGE,
+    LABELS,
+];
 
 const PV: &[ColumnDef] = &[
     NAME,
@@ -106,7 +116,7 @@ pub(super) const KINDS: &[KindDef] = &[
     KindDef {
         group: "coordination.k8s.io",
         kind: "Lease",
-        columns: NAME_NS_AGE,
+        columns: LEASE,
     },
     KindDef {
         group: "",

@@ -1,7 +1,7 @@
 //! [`CommandHandler`]: the code a crate registers for a command id.
 
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use futures::future::BoxFuture;
 use oxikube_domain::audit::Initiator;
@@ -48,6 +48,8 @@ pub struct HandlerContext {
     cluster: Option<ClusterId>,
     mutation: Option<Mutation>,
     dry_run: bool,
+    /// What the handler learned that the audit record should name (see [`Self::note_audit`]).
+    audit_note: Arc<Mutex<Option<String>>>,
 }
 
 impl HandlerContext {
@@ -63,6 +65,23 @@ impl HandlerContext {
             cluster,
             mutation,
             dry_run: false,
+            audit_note: Arc::default(),
+        }
+    }
+
+    /// The slot [`note_audit`](Self::note_audit) writes to, for the guard to read once the
+    /// handler returned.
+    pub(crate) fn audit_note_slot(&self) -> Arc<Mutex<Option<String>>> {
+        self.audit_note.clone()
+    }
+
+    /// Adds `note` to the detail of this command's audit record: what only the handler knows
+    /// once it ran (the name of the Job a trigger created). Short `key=value` words, never a
+    /// body or a value (non-negotiable 5); the audit log redacts it like every field. A later
+    /// note replaces an earlier one.
+    pub fn note_audit(&self, note: impl Into<String>) {
+        if let Ok(mut slot) = self.audit_note.lock() {
+            *slot = Some(note.into());
         }
     }
 

@@ -4,10 +4,15 @@
 //! the toggle command of the sidebar itself (`sidebar.toggle`) belongs with the palette work
 //! (E11), so the panel's toggle action is declared here without a key binding.
 
-use gpui::{App, KeyBinding, actions};
+use gpui::{App, KeyBinding, NoAction, actions};
 
 /// Key context of the focused sidebar list.
 pub const SIDEBAR_CONTEXT: &str = "ClusterSidebar";
+
+/// Key context of the Custom Resources search field, nested in [`SIDEBAR_CONTEXT`]. The text
+/// input binds no `space`, so without this context the sidebar's `space` (Activate) would take
+/// the keystroke and a space could never be typed into the search.
+pub const SIDEBAR_SEARCH_CONTEXT: &str = "ClusterSidebarSearch";
 
 actions!(
     cluster_sidebar,
@@ -37,5 +42,7 @@ pub(super) fn register(cx: &mut App) {
         KeyBinding::new("space", Activate, ctx),
         KeyBinding::new("left", Collapse, ctx),
         KeyBinding::new("right", Expand, ctx),
+        // In the search field a space is text: the deeper null binding masks Activate.
+        KeyBinding::new("space", NoAction, Some(SIDEBAR_SEARCH_CONTEXT)),
     ]);
 }

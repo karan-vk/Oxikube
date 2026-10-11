@@ -6,7 +6,6 @@ use oxikube_domain::OxiResult;
 use oxikube_domain::access::{AccessRequirement, is_builtin_api_group};
 use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_domain::kinds::{ResourceKind, Verb};
-use oxikube_domain::view::network::is_gateway_network_kind;
 use oxikube_ports::DiscoveryPort;
 
 use crate::kinds::ServedKinds;
@@ -63,6 +62,41 @@ impl CustomResourceGroup {
             kinds,
         })
     }
+
+    /// The group without the kinds `claimed` (by group and kind) says another sidebar section
+    /// lists already, such as the Gateway API under Network or VolumeSnapshots under Storage, so
+    /// no kind is listed twice. `None` when every kind is claimed (the group is not shown).
+    pub fn unclaimed(&self, claimed: impl Fn(&str, &str) -> bool) -> Option<CustomResourceGroup> {
+        self.keep(|kind| !claimed(&self.group, &kind.kind))
+    }
+
+    /// The group as the sidebar's search shows it for `query` (trimmed; ASCII case is ignored):
+    /// every kind when the group's name contains it, else the kinds whose kind or plural does.
+    /// An empty query keeps the group whole. `None` when nothing matches.
+    pub fn matching(&self, query: &str) -> Option<CustomResourceGroup> {
+        let query = query.trim();
+        if query.is_empty() || contains_ignore_case(&self.group, query) {
+            return Some(self.clone());
+        }
+        self.keep(|kind| {
+            contains_ignore_case(&kind.kind, query) || contains_ignore_case(&kind.plural, query)
+        })
+    }
+
+    fn keep(&self, keep: impl Fn(&CustomKind) -> bool) -> Option<CustomResourceGroup> {
+        let kinds: Vec<CustomKind> = self.kinds.iter().filter(|k| keep(k)).cloned().collect();
+        (!kinds.is_empty()).then(|| CustomResourceGroup {
+            group: self.group.clone(),
+            kinds,
+        })
+    }
+}
+
+/// Whether `haystack` contains `needle`, ignoring ASCII case, without allocating (the sidebar
+/// runs it over every custom kind on each keystroke of its search).
+fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
+    let (h, n) = (haystack.as_bytes(), needle.as_bytes());
+    n.is_empty() || h.windows(n.len()).any(|w| w.eq_ignore_ascii_case(n))
 }
 
 /// Runs discovery and returns the kinds of non-built-in API groups, grouped by group (sorted),
@@ -101,17 +135,12 @@ pub async fn discover_sidebar(discovery: &dyn DiscoveryPort) -> OxiResult<Sideba
 }
 
 /// The kinds of non-built-in API groups in `kinds`, grouped by group (sorted), preferred version
-/// only, listable kinds only. The Gateway API kinds the Network section lists itself (GatewayClass,
-/// Gateway, HTTPRoute, GRPCRoute, TLSRoute; E12-S14) are left out, so each shows once.
+/// only, listable kinds only.
 pub fn custom_resource_groups(kinds: &[ResourceKind]) -> Vec<CustomResourceGroup> {
     let mut groups: BTreeMap<String, Vec<CustomKind>> = BTreeMap::new();
     for kind in kinds {
         let group: &str = &kind.gvk.group;
-        if kind.preferred
-            && kind.supports(Verb::List)
-            && !is_builtin_api_group(group)
-            && !is_gateway_network_kind(group, &kind.gvk.kind)
-        {
+        if kind.preferred && kind.supports(Verb::List) && !is_builtin_api_group(group) {
             groups
                 .entry(group.to_owned())
                 .or_default()

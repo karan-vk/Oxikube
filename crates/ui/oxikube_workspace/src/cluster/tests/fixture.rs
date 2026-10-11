@@ -197,6 +197,10 @@ pub(crate) struct Fixture {
     pub deletes: Arc<Mutex<usize>>,
     /// How many `node::Shell` handlers ran.
     pub node_shells: Arc<Mutex<usize>>,
+    /// How many `cronjob::Trigger` handlers ran.
+    pub triggers: Arc<Mutex<usize>>,
+    /// The objects `resource::Open` was dispatched for.
+    pub opened: Arc<Mutex<Vec<oxikube_domain::ids::ResourceRef>>>,
 }
 
 pub(crate) fn bounds(
@@ -286,6 +290,48 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
             },
         )
         .unwrap();
+    // `cronjob::Trigger` (E12-S08): a mutation whose output names the Job it created, and
+    // `resource::Open`, which the toast's "Open Job" button dispatches.
+    let triggers = Arc::new(Mutex::new(0));
+    let counter = triggers.clone();
+    registry
+        .register(
+            *command::lookup(CommandId::CRONJOB_TRIGGER).unwrap(),
+            move |_: Command, cx: HandlerContext| {
+                let counter = counter.clone();
+                async move {
+                    cx.require_mutation()?;
+                    *counter.lock() += 1;
+                    let job = oxikube_domain::ids::ResourceRef::namespaced(
+                        id(PROD),
+                        oxikube_domain::ids::Gvk::new("batch", "v1", "Job"),
+                        "default",
+                        "nightly-manual-x7k2p",
+                    );
+                    Ok(CommandOutput {
+                        message: Some("Triggered CronJob default/nightly".into()),
+                        data: Some(serde_json::json!({ "open": job })),
+                    })
+                }
+            },
+        )
+        .unwrap();
+    let opened = Arc::new(Mutex::new(Vec::new()));
+    let seen = opened.clone();
+    registry
+        .register(
+            *command::lookup(CommandId::RESOURCE_OPEN).unwrap(),
+            move |command: Command, _: HandlerContext| {
+                let seen = seen.clone();
+                async move {
+                    if let Command::ResourceOpen { target } = command {
+                        seen.lock().push(target);
+                    }
+                    Ok(CommandOutput::none())
+                }
+            },
+        )
+        .unwrap();
     // `namespace::Select` (E05-P600): immediate, as the binary registers it.
     let namespaces = NamespaceService::new(manager.clone(), state.clone(), clock.clone());
     registry
@@ -332,5 +378,7 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
         deletes,
         debugs,
         node_shells,
+        triggers,
+        opened,
     }
 }

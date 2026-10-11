@@ -9,6 +9,8 @@
 //! | [`CloudDiscoveryPort`] | [`cloud`] | `oxikube_cloud` |
 //! | [`MetricsPort`] | [`metrics`] | `oxikube_kube` (metrics.k8s.io, ADR 0011) |
 //! | [`PromqlPort`], [`PromqlEndpointPort`] | [`promql`] | `oxikube_prometheus` |
+//! | [`ProviderDetectorPort`] (finds a cluster's Prometheus-compatible service, E13-S05) | [`provider`] | `oxikube_prometheus` |
+//! | [`ServiceProxyPort`] (a request to a Service through the API server) | [`service_proxy`] | `oxikube_kube` |
 //! | [`DescribePort`] | [`describe`] | `oxikube_describe` |
 //! | [`HelmPort`] | [`helm`] | `oxikube_helm` |
 //! | [`StatePort`] | [`state`] | `oxikube_state_sqlite` (ADR 0010) |
@@ -106,9 +108,11 @@ pub mod metrics;
 pub mod notifier;
 pub mod portforward;
 pub mod promql;
+pub mod provider;
 pub mod resource;
 pub mod schema;
 pub mod secrets;
+pub mod service_proxy;
 pub mod state;
 pub mod table;
 pub mod tool;
@@ -128,7 +132,8 @@ pub use agent::{
 pub use clock::ClockPort;
 pub use cloud::{CloudDiscoveryPort, CloudProvider, CloudToolStatus, DiscoveredCluster};
 pub use cluster_prefs::{
-    ClusterPrefs, ClusterPrefsTable, NodeShellPrefs, PrometheusOverride, WatchBudgetPrefs,
+    ClusterPrefs, ClusterPrefsTable, MetricsMode, NodeShellPrefs, PrometheusAuthKind,
+    PrometheusOverride, WatchBudgetPrefs,
 };
 pub use cluster_source::{
     ClusterContext, ClusterSource, ClusterSourcePort, DiagnosticSeverity, SourceDiagnostic,
@@ -166,6 +171,10 @@ pub use promql::{
     DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TIMEOUT, PromAuth, PromEndpoint, PromSecret, PromTls,
     PromqlEndpointPort, PromqlError, PromqlPort, PromqlSeries, PromqlValue, TimeRange,
 };
+pub use provider::{
+    DetectedProvider, DetectionFailure, DetectionResult, DetectionState, Probe, ProbeOutcome,
+    ProviderDetectorPort, ProviderTarget,
+};
 pub use resource::{
     DeleteCollectionOutcome, DeleteOptions, DeleteOutcome, ListOptions, ListPage, Patch, PatchKind,
     Preconditions, PropagationPolicy, ResourcePort, ResourceReader, ResourceWriter, Scale,
@@ -173,6 +182,10 @@ pub use resource::{
 };
 pub use schema::SchemaPort;
 pub use secrets::{SecretKey, SecretStorePort};
+pub use service_proxy::{
+    ProxyMethod, ProxyRequest, ProxyResponse, ProxyScheme, ServicePort, ServiceProxyPort,
+    ServiceRef,
+};
 pub use state::{AuditQuery, StateKey, StatePort, StatePortExt, StateTable};
 pub use table::{
     IncludeObject, Table, TableBatch, TableColumn, TableFeed, TableFeedPort, TableOptions,
@@ -198,6 +211,8 @@ mod tests {
         metrics: Arc<dyn MetricsPort>,
         promql: Arc<dyn PromqlPort>,
         promql_endpoint: Arc<dyn PromqlEndpointPort>,
+        detector: Arc<dyn ProviderDetectorPort>,
+        service_proxy: Arc<dyn ServiceProxyPort>,
         describe: Arc<dyn DescribePort>,
         helm: Arc<dyn HelmPort>,
         state: Arc<dyn StatePort>,
@@ -223,6 +238,8 @@ mod tests {
         assert_send_sync::<dyn MetricsPort>();
         assert_send_sync::<dyn PromqlPort>();
         assert_send_sync::<dyn PromqlEndpointPort>();
+        assert_send_sync::<dyn ProviderDetectorPort>();
+        assert_send_sync::<dyn ServiceProxyPort>();
         assert_send_sync::<dyn DescribePort>();
         assert_send_sync::<dyn HelmPort>();
         assert_send_sync::<dyn StatePort>();
@@ -242,7 +259,7 @@ mod tests {
     /// Every port's source file must name the adapter expected to implement it.
     #[test]
     fn every_port_docs_name_an_adapter() {
-        let ports: [(&str, &str, &str); 16] = [
+        let ports: [(&str, &str, &str); 18] = [
             (
                 "cluster_source",
                 include_str!("cluster_source.rs"),
@@ -251,6 +268,16 @@ mod tests {
             ("cloud", include_str!("cloud.rs"), "oxikube_cloud"),
             ("metrics", include_str!("metrics.rs"), "oxikube_kube"),
             ("promql", include_str!("promql.rs"), "oxikube_prometheus"),
+            (
+                "provider",
+                include_str!("provider.rs"),
+                "oxikube_prometheus",
+            ),
+            (
+                "service_proxy",
+                include_str!("service_proxy.rs"),
+                "oxikube_kube",
+            ),
             ("describe", include_str!("describe.rs"), "oxikube_describe"),
             ("helm", include_str!("helm.rs"), "oxikube_helm"),
             ("state", include_str!("state.rs"), "oxikube_state_sqlite"),

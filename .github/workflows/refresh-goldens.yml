@@ -49,6 +49,7 @@ jobs:
           xvfb-run -a cargo test -p oxikube_ui --features screenshot --test chart_screenshot
           xvfb-run -a cargo test -p oxikube_workspace --features screenshot --test screenshot
           xvfb-run -a cargo test -p oxikube_editor --features screenshot --test create_screenshot
+          xvfb-run -a cargo test -p oxikube_settings_ui --features screenshot --test metrics_screenshot
       # The nightly's path: the same tests in compare mode (`check_golden` against the PNGs just
       # written). A golden that does not reproduce on its own runner fails here, not in the nightly.
       - name: Verify goldens reproduce
@@ -58,6 +59,7 @@ jobs:
           xvfb-run -a cargo test -p oxikube_ui --features screenshot --test chart_screenshot
           xvfb-run -a cargo test -p oxikube_workspace --features screenshot --test screenshot
           xvfb-run -a cargo test -p oxikube_editor --features screenshot --test create_screenshot
+          xvfb-run -a cargo test -p oxikube_settings_ui --features screenshot --test metrics_screenshot
       - name: Upload goldens
         uses: actions/upload-artifact@v7
         with:

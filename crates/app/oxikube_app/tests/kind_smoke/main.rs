@@ -32,8 +32,11 @@ mod logs_aggregate;
 mod logs_churn;
 mod logs_search;
 mod node_shell;
+mod scale;
 mod scoped_feeds;
+mod service_backends;
 mod two_clusters;
+mod workloads;
 
 use std::future::Future;
 use std::time::{Duration, Instant};

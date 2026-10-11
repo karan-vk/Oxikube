@@ -1,8 +1,10 @@
-//! Cells of the remaining kinds: HorizontalPodAutoscaler, Event, CustomResourceDefinition and
-//! the admission and scheduling kinds.
+//! Cells of the remaining kinds: HorizontalPodAutoscaler, VerticalPodAutoscaler, Event,
+//! CustomResourceDefinition and the admission and scheduling kinds.
 
 use jiff::Timestamp;
 use oxikube_domain::json::JsonRef;
+use oxikube_domain::view::{HpaState, HpaSummary, PdbSummary, VpaSummary};
+use oxikube_domain::view::{crd_aliases_text, crd_versions_text};
 use oxikube_domain::{Age, Resource};
 
 use super::{arr_at, spec, status, str_at};
@@ -19,78 +21,64 @@ pub(crate) fn hpa_reference<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> 
     }
 }
 
-/// HPA `TARGETS`: `current/target` per metric, comma-separated (`40%/80%`, `<unknown>/80%`).
-/// Reads the `autoscaling/v2` metric list, or the v1 CPU percentage fields.
+/// HPA `METRICS` (`TARGETS` in kubectl): `current/target` per metric, comma-separated
+/// (`40%/80%`, `<unknown>/80%`). The text is the domain view-model's, so the detail panel and the
+/// column cannot disagree.
 pub(crate) fn hpa_targets<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let (spec, status) = (spec(res), status(res));
-    let metrics = arr_at(spec, "metrics");
-    if metrics.is_empty() {
-        let target = spec
-            .get("targetCPUUtilizationPercentage")
-            .and_then(JsonRef::as_i64);
-        let current = status
-            .get("currentCPUUtilizationPercentage")
-            .and_then(JsonRef::as_i64);
-        return match target {
-            Some(t) => Cell::text(format!(
-                "{}/{t}%",
-                current.map_or_else(|| "<unknown>".to_owned(), |c| format!("{c}%"))
-            )),
-            None => Cell::empty(),
-        };
-    }
-    let current_metrics = arr_at(status, "currentMetrics");
-    let parts: Vec<String> = metrics
-        .iter()
-        .map(|m| {
-            let target = metric_value(m, "target").unwrap_or_else(|| "<unknown>".to_owned());
-            let current = current_metrics
-                .iter()
-                .find(|&c| same_metric(m, c))
-                .and_then(|c| metric_value(c, "current"))
-                .unwrap_or_else(|| "<unknown>".to_owned());
-            format!("{current}/{target}")
-        })
-        .collect();
-    Cell::text(parts.join(", "))
+    HpaSummary::from_resource(res)
+        .ok()
+        .and_then(|hpa| hpa.metrics_text())
+        .map_or_else(Cell::empty, Cell::text)
 }
 
-/// The `type` of an HPA metric and the object holding its fields (`resource`, `pods`, ...).
-fn metric_body(m: JsonRef<'_>) -> Option<(&str, JsonRef<'_>)> {
-    let kind = str_at(m, "type")?;
-    let key = match kind {
-        "Resource" => "resource",
-        "ContainerResource" => "containerResource",
-        "Pods" => "pods",
-        "Object" => "object",
-        "External" => "external",
-        _ => return None,
+/// HPA `STATUS`: `Active`, the reason it is held at a bound, or the reason it cannot scale.
+pub(crate) fn hpa_status<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    let Ok(hpa) = HpaSummary::from_resource(res) else {
+        return Cell::empty();
     };
-    Some((kind, m.get(key)?))
+    Cell::text(hpa.state.text().to_owned()).with_tone(hpa_state_tone(&hpa.state))
 }
 
-/// The metric's name: the resource name, or `metric.name` for the custom kinds.
-fn metric_name(body: JsonRef<'_>) -> Option<&str> {
-    str_at(body, "name").or_else(|| str_at(body.get("metric")?, "name"))
-}
-
-fn same_metric(spec_metric: JsonRef<'_>, current: JsonRef<'_>) -> bool {
-    match (metric_body(spec_metric), metric_body(current)) {
-        (Some((k1, b1)), Some((k2, b2))) => k1 == k2 && metric_name(b1) == metric_name(b2),
-        _ => false,
+/// The tone of an autoscaler's state: the status column and the detail panel share it.
+pub fn hpa_state_tone(state: &HpaState) -> Tone {
+    match state {
+        HpaState::Active => Tone::Ok,
+        HpaState::Limited(_) => Tone::Warn,
+        HpaState::Inactive(_) => Tone::Error,
+        HpaState::Disabled | HpaState::Unknown => Tone::Neutral,
     }
 }
 
-/// `averageUtilization` (as a percentage), `averageValue` or `value` of `body[which]`.
-fn metric_value(m: JsonRef<'_>, which: &str) -> Option<String> {
-    let (_, body) = metric_body(m)?;
-    let v = body.get(which)?;
-    if let Some(u) = v.get("averageUtilization").and_then(JsonRef::as_i64) {
-        return Some(format!("{u}%"));
+/// VPA `REFERENCE`: `Kind/name` of `spec.targetRef`.
+pub(crate) fn vpa_reference<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    let Some(target) = spec(res).get("targetRef") else {
+        return Cell::empty();
+    };
+    match (str_at(target, "kind"), str_at(target, "name")) {
+        (Some(kind), Some(name)) => Cell::text(format!("{kind}/{name}")),
+        _ => Cell::empty(),
     }
-    str_at(v, "averageValue")
-        .or_else(|| str_at(v, "value"))
-        .map(str::to_owned)
+}
+
+/// VPA `MODE`: `spec.updatePolicy.updateMode`, `Auto` when unset (the API default).
+pub(crate) fn vpa_mode<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    VpaSummary::from_resource(res)
+        .map_or_else(|_| Cell::empty(), |vpa| Cell::text(vpa.mode.to_string()))
+}
+
+/// VPA `CONDITIONS`: the types of the conditions that hold, comma-separated.
+pub(crate) fn vpa_conditions<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    VpaSummary::from_resource(res)
+        .map_or_else(|_| Cell::empty(), |vpa| Cell::text(vpa.conditions_text()))
+}
+
+/// PDB `ALLOWED DISRUPTIONS`: the controller's `disruptionsAllowed`, else the healthy pods above
+/// the desired count (the same rule the detail panel shows).
+pub(crate) fn pdb_allowed<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    PdbSummary::from_resource(res).map_or_else(
+        |_| Cell::empty(),
+        |pdb| Cell::int(pdb.allowed_disruptions()),
+    )
 }
 
 /// Event `LAST SEEN`: time since the event last happened. `series.lastObservedTime` wins (a
@@ -127,15 +115,30 @@ pub(crate) fn event_object<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     }
 }
 
-/// CRD `VERSION`: the storage version, else the first served one.
-pub(crate) fn crd_version<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let versions = arr_at(spec(res), "versions");
-    versions
+/// CRD `VERSIONS`: the served versions, the storage one marked (`v1(storage),v1beta1`), as the
+/// API server's own CRD table prints them.
+pub(crate) fn crd_versions<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    Cell::text(crd_versions_text(res))
+}
+
+/// CRD `ALIASES` (k9s): plural, singular and short names, what `:` accepts for the kind.
+pub(crate) fn crd_aliases<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    Cell::text(crd_aliases_text(res))
+}
+
+/// CRD `ESTABLISHED`: the `Established` condition, toned (`True` ok, `False` warn).
+pub(crate) fn crd_established<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    // The last entry wins, as everywhere conditions are read.
+    let established = arr_at(status(res), "conditions")
         .iter()
-        .find(|v| v.get("storage").and_then(JsonRef::as_bool) == Some(true))
-        .or_else(|| versions.first())
-        .and_then(|v| str_at(v, "name"))
-        .map_or_else(Cell::empty, Cell::text)
+        .filter(|c| str_at(*c, "type") == Some("Established"))
+        .last()
+        .and_then(|c| str_at(c, "status"));
+    match established {
+        Some("True") => Cell::text("True").with_tone(Tone::Ok),
+        Some(other) => Cell::text(other).with_tone(Tone::Warn),
+        None => Cell::empty(),
+    }
 }
 
 /// CRD `SHORT NAMES`: `spec.names.shortNames`, comma-separated.

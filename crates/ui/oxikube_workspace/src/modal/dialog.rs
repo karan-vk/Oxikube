@@ -77,6 +77,11 @@ impl DialogModal {
         &self.title
     }
 
+    /// The confirm button's label.
+    pub fn confirm_text(&self) -> &SharedString {
+        &self.confirm_label
+    }
+
     /// The explanatory text under the title, if any.
     pub fn message_text(&self) -> Option<&SharedString> {
         self.message.as_ref()

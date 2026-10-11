@@ -5,10 +5,11 @@ use std::sync::Arc;
 
 use gpui::{App, Subscription};
 use oxikube_domain::ids::ClusterId;
-use oxikube_ports::{ClusterPrefs, ClusterPrefsTable, PrometheusOverride};
+use oxikube_ports::{ClusterPrefs, ClusterPrefsTable};
 use serde_json::Value;
 
-use super::content::{ClusterSettingsContent, PrometheusContent};
+use super::content::ClusterSettingsContent;
+use super::prometheus::PrometheusContent;
 use crate::settings::{Settings, SettingsLocation};
 use crate::store::SettingsStore;
 
@@ -96,22 +97,12 @@ fn prefs_from_content(content: ClusterSettingsContent) -> ClusterPrefs {
         node_shell_image: non_blank(node_shell_image),
         node_shell_pull_secret: non_blank(node_shell_pull_secret),
         node_shell: node_shell.map(Into::into).unwrap_or_default(),
-        prometheus: prometheus.and_then(prometheus_from_content),
+        prometheus: prometheus.and_then(PrometheusContent::into_prefs),
         accessible_namespaces: namespaces,
         exec_interactivity: exec_interactivity.unwrap_or_default(),
         exec_in_read_only: exec_in_read_only.unwrap_or(false),
         watch_budget: watch_budget.map(Into::into).unwrap_or_default(),
     }
-}
-
-fn prometheus_from_content(content: PrometheusContent) -> Option<PrometheusOverride> {
-    let value = PrometheusOverride {
-        provider: non_blank(content.provider),
-        path: non_blank(content.path),
-        url: content.url.map(|url| url.as_str().to_owned()),
-        auth: content.auth_secret.map(|name| name.key()),
-    };
-    (value != PrometheusOverride::default()).then_some(value)
 }
 
 pub(super) fn non_blank(value: Option<String>) -> Option<String> {

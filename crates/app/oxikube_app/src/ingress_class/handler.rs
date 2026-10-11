@@ -12,7 +12,7 @@ use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, Registe
 use crate::session::ClusterSessionManager;
 
 /// Registers the `ingressclass::SetDefault` handler on `registry` (the app installs it under
-/// `oxikube_app::network`). `sessions` gives it the cluster's reader, to find the class that is
+/// `oxikube_app::ingress_class`). `sessions` gives it the cluster's reader, to find the class that is
 /// the default now.
 ///
 /// The handler runs only after the guard let the command through: read-only check, confirmation

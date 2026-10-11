@@ -4,6 +4,10 @@
 
 GUI settings page, keymap editor, theme picker.
 
+## What is here
+
+- `metrics` (E13-S05): the cluster's metrics page. Which Prometheus-compatible service the history graphs come from, what detection found and which services it probed (or `metrics unavailable: <reason>`), the `prometheus` settings in effect, "Look again" and the on/off switch (bus commands). Opened by `cluster::ShowMetricsSettings` (palette, the sidebar's Metrics entry, agents) in the cluster's tab.
+
 ## Allowed internal dependencies
 
 - `oxikube_domain`

@@ -11,7 +11,8 @@
 //! move, shift extends, `enter` opens, `escape` clears, `cmd-a` / `ctrl-a` selects all,
 //! `cmd-c` / `ctrl-c` copies the name, `delete` (and k9s's `ctrl-d`) opens the delete dialog,
 //! `s` opens a shell in the pod, `a` attaches to it (E09-S08) and `shift-d` adds a debug
-//! container (E09-S10).
+//! container (E09-S10). On a Deployment, StatefulSet, ReplicaSet or ReplicationController `s` is
+//! k9s's scale instead: the keymap binds `resource_table::ScaleSelected` for those kinds (E12-S04).
 //!
 //! The k9s verbs of E11-S07 live next to them: `y` shows the YAML, `d` describes, `e` edits, `l`
 //! opens the logs, `shift-f` forwards a port, `f` lists the forwards and `ctrl-w` toggles the wide
@@ -22,6 +23,9 @@
 //! The vim base keymap (`base_keymap: "vim"`, E11-S09) adds `g g` / `shift-g` (first / last row),
 //! `ctrl-d` / `ctrl-u` (half a page), `d d` (the delete dialog, like `delete`) and `y y` (copy the
 //! name) in the same key context, on these same actions.
+//!
+//! A Service's own verbs (E12-S13) are bound with a `kind == Service` section: `u` shows the pods
+//! its selector picks, `o` opens a port in the browser.
 //!
 //! Users rebind them in `keymap.json`.
 
@@ -67,6 +71,10 @@ actions!(
         ShellSelected,
         /// Attach to the cursor row's pod (`pod::Attach`; k9s's `a`).
         AttachSelected,
+        /// Scale the cursor row's workload through the scale dialog (`workload::Scale`; k9s's `s`
+        /// on a Deployment, StatefulSet, ReplicaSet or ReplicationController: bound for those
+        /// kinds only, where it replaces the shell key).
+        ScaleSelected,
         /// Add a debug container to the cursor row's pod (`pod::Debug`, through the debug dialog;
         /// `shift-d`). A toast says why not for a kind that is not a pod, or on a read-only cluster.
         DebugSelected,
@@ -87,8 +95,22 @@ actions!(
         /// List the active port forwards (k9s's `f`). A toast says so while port forwarding is
         /// not installed.
         ShowPortForwards,
+        /// Run the cursor row's CronJob now (`cronjob::Trigger`; k9s's `t`, bound on CronJob
+        /// tables). Creates a Job from the template, confirmed first.
+        TriggerSelected,
+        /// Suspend the cursor row's CronJob or Job, or resume it when it is suspended
+        /// (`cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume`; k9s's `s`,
+        /// bound on CronJob and Job tables).
+        ToggleSuspendSelected,
         /// Show or hide the wide columns of this kind's tables (`table::ToggleWide`; k9s's
         /// `ctrl-w`).
         ToggleWide,
+        /// Open the Pods table filtered by the cursor row's Service selector
+        /// (`service::ShowPods`; `u`, bound where `kind == Service`).
+        ShowServicePods,
+        /// Forward a port of the cursor row's Service and open it in the browser
+        /// (`service::OpenInBrowser`; `o`, bound where `kind == Service`). A toast says so while
+        /// no port-forward manager is installed.
+        OpenInBrowser,
     ]
 );

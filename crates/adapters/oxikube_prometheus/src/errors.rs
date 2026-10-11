@@ -7,6 +7,7 @@ use std::error::Error as _;
 use std::time::Duration;
 
 use oxikube_domain::redact::redact;
+use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::PromqlError;
 
 /// The longest server message kept in an error. A misbehaving endpoint could answer with a page
@@ -73,6 +74,38 @@ pub(crate) fn from_server(status: u16, error_type: &str, message: &str) -> Promq
             "HTTP {status}: {}",
             text("unexpected status for a query")
         )),
+    }
+}
+
+/// A refusal the API server itself gave to a proxied request (its `Status` message, not the
+/// Service's): the service proxy forbidden, the Service missing, no ready endpoint.
+pub(crate) fn from_api_server(status: u16, message: &str) -> PromqlError {
+    let text = clean(message);
+    match status {
+        401 => {
+            PromqlError::Unauthorized(format!("the API server rejected the credentials: {text}"))
+        }
+        403 => PromqlError::Forbidden(format!(
+            "the API server does not let you use the service proxy: {text}"
+        )),
+        404 => PromqlError::Unreachable(format!("the service does not exist: {text}")),
+        503 => PromqlError::Unreachable(format!("the service has no ready endpoint: {text}")),
+        _ => PromqlError::ServerError {
+            status,
+            message: format!("the API server could not reach the service: {text}"),
+        },
+    }
+}
+
+/// A failure to get an answer through the service proxy port.
+pub(crate) fn from_proxy(error: &OxiError, timeout: Duration) -> PromqlError {
+    let text = clean(error.message());
+    match error.kind() {
+        ErrorKind::Timeout => PromqlError::Timeout(timeout),
+        ErrorKind::Auth => PromqlError::Unauthorized(text),
+        ErrorKind::Forbidden => PromqlError::Forbidden(text),
+        ErrorKind::Validation => PromqlError::InvalidEndpoint(text),
+        _ => PromqlError::Unreachable(text),
     }
 }
 

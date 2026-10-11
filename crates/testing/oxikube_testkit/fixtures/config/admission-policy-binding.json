@@ -1,0 +1,18 @@
+{
+  "apiVersion": "admissionregistration.k8s.io/v1",
+  "kind": "ValidatingAdmissionPolicyBinding",
+  "metadata": {
+    "name": "replica-limit-prod",
+    "uid": "6f1f7d8e-3d3a-5b0e-9b5e-0c1b3a2d4e0a",
+    "resourceVersion": "3110",
+    "creationTimestamp": "2026-01-01T00:00:00Z"
+  },
+  "spec": {
+    "policyName": "replica-limit",
+    "validationActions": ["Deny", "Audit"],
+    "paramRef": {"name": "prod-limits", "parameterNotFoundAction": "Deny"},
+    "matchResources": {
+      "namespaceSelector": {"matchLabels": {"env": "prod"}}
+    }
+  }
+}

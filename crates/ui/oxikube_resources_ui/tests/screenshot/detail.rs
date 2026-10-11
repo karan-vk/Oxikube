@@ -133,6 +133,7 @@ pub(super) fn render_of(
             columns: Arc::new(CoreColumns::new()),
             dispatcher: Rc::new(Ignore),
             exec: None,
+            scale: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

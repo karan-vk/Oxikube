@@ -1,20 +1,22 @@
-//! Network section actions (E12-S14): the one mutation of the section, making an IngressClass
-//! the cluster's default.
+//! Services and where their traffic goes (E12-S13): the questions a Service's detail asks of the
+//! store, the navigation from a Service to its pods, and the hook behind "Open in browser".
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `ingress_class` | [`register_commands`]: the `ingressclass::SetDefault` handler, the only code that writes the default-class annotation, through the guard's `Mutation` |
+//! | `backends` | [`ServiceBackends`]: the two store queries of a Service's detail, its EndpointSlices (by `kubernetes.io/service-name`) and its pods (by the Service's selector), both with the label selector sent to the server so a large namespace is never scanned locally |
+//! | `navigate` | [`plan_show_pods`]: `service::ShowPods` as the commands of a jump (`namespace::Select` when needed, `resource::OpenList`, `table::SetFilter -l <selector>`) |
+//! | `browser` | [`ServicePortOpener`]: the hook the port-forward manager (E15) implements, and the handler of `service::OpenInBrowser` that is registered only when there is one |
 //!
-//! `ingressclass::SetDefault` is a low-risk mutation (a simple confirmation): blocked on a
-//! read-only cluster for every initiator, a server dry run on request, one audit record. It merge
-//! patches `ingressclass.kubernetes.io/is-default-class: "true"` onto the class and, unless the
-//! command says otherwise, removes the annotation from the class that carried it (the API server
-//! refuses an Ingress without a class while two defaults exist). Everything else in the Network
-//! section is read-only.
+//! Nothing here starts a feed by itself: the detail of one Service subscribes to its two queries
+//! when it is open and drops them when it closes, so a table of 500 Services costs nothing extra.
 
-mod ingress_class;
+mod backends;
+mod browser;
+mod navigate;
 
 #[cfg(test)]
 mod tests;
 
-pub use ingress_class::register_commands;
+pub use backends::{PodsPlan, ServiceBackends};
+pub use browser::{OpenedServicePort, ServicePortOpener, UrlSink, register_open_in_browser};
+pub use navigate::plan_show_pods;

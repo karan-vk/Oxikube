@@ -24,14 +24,20 @@ mod content;
 mod edit;
 pub mod fields;
 mod node_shell;
+mod prometheus;
+#[cfg(test)]
+mod prometheus_tests;
 mod resolved;
 #[cfg(test)]
 mod tests;
 mod watch_budget;
 
-pub use content::{ClusterSettingsContent, PrometheusContent};
+pub use content::ClusterSettingsContent;
 pub use node_shell::{
     ImagePullPolicy, NodeShellContent, TaintEffect, TolerationContent, TolerationOperator,
+};
+pub use prometheus::{
+    AuthContent, PathPrefix, PrometheusContent, ProviderModeContent, ServicePath,
 };
 pub use resolved::ClusterSettings;
 pub use watch_budget::WatchBudgetContent;

@@ -159,12 +159,25 @@ crate's `README.md` for its allowed dependencies. Highlights:
   typed `CellSort` (number, quantity, age, time, text) and a `Tone`; colours stay in the theme.
   The store sorts by any column through `SortField::Cell(CellSortKey)`: each object ranks by its
   cell's typed sort key, read once per object version from the view's provider (E07-S03).
+  Module `columns::pods` (E12-S02): `PodColumns`, the Pod kind's own provider (registered through its `KindSpec`):
+  Name, Namespace, Ready, Status, Restarts (+ last restart), CPU, Memory, `%CPU/R`, `%CPU/L`, `%MEM/R`, `%MEM/L`,
+  IP / Node / QoS (hidden by default), Service Account, Controlled By, Age; every computed cell reads one `PodSummary`
+  memoised per object version (keyed by namespace and name, a hit needs the same `JsonDoc`), usage from a
+  `MetricsSource` set with `set_metrics` (E13), `–` without one.
   Module `kinds` (E12-S01): `KindRegistry` of `KindMeta`s (gvk, plural, title, scope, `KindColumns`, actions as
   `CommandId`s checked against the domain's declarations, `SidebarSlot`, template names), O(1) lookup by group and kind
   with the generic fallback (`kind_for`), `sidebar_tree(gate)` (sections and entries by explicit rank, so registration
   order never matters; searchable), `templates_for(gvk, catalog)`; `KindGate` joins `ServedKinds` (discovery presence)
   and the `KindVisibility` hook (E17's RBAC gate; `AllowAll` until then). `sidebar::discover_sidebar` reads discovery once
   for the served kinds and the custom resources.
+  Module `workloads` (E12-S04): `WorkloadService`, the replica controllers' actions. `plan_scale` reads the `scale`
+  subresource (current and desired counts, a HorizontalPodAutoscaler that targets the workload as a soft hint);
+  `scale(&Mutation, target, replicas)` runs inside the guarded `workload::Scale` handler (`register_commands`),
+  patches `spec.replicas` through `ResourceWriter::scale` (never the object; a dry-run dispatch has the server rehearse
+  it), and notes `before=` / `after=` in the audit record through `Mutation::note`. Risk is Low, Medium for zero
+  (`Command::effective_risk`); both are one simple confirmation. `ScaleRunner` dispatches it for the dialog, answering
+  that confirmation on the user's behalf. A DaemonSet is refused (no scale subresource). `oxikube_domain::view`
+  gained `WorkloadKind::ReplicationController` and `WorkloadDetail` (pod template, strategy, selector, conditions).
   Module `actions` (E07-S08): row actions. `RowActionRegistry` says which bus commands are row actions and for which
   kinds (`KindFilter`; E12 registers scale, restart, cordon with `register` and touches nothing else); `RowActions::from_bus`
   joins it with the commands the `CommandBus` really has once, and `actions_for(kind, capabilities)` / `resolve(kind,
@@ -262,6 +275,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   lines. `selection_context` builds the same block from lines the viewer selected ("Send to agent"). `PendingContext`
   is the small queue between the viewer and the agent panel: items wait (32 at most, the oldest dropped and counted)
   until a `ContextConsumer` attaches, which receives them in order, then every later send; nothing is persisted.
+- `oxikube_domain::utilisation` + `oxikube_app::metrics` (E13-S02) — the utilisation maths behind `%CPU/R`, `%CPU/L`,
+  `%MEM/R`, `%MEM/L` and the allocation views. Domain (pure, exact `Quantity` maths): `ResourceAmounts` (CPU, memory, and
+  whole-number GPU counts per vendor resource name), `aggregate_pod_requests_limits(&Resource, &GpuVendors)` (the Kubernetes
+  effective figure: regular containers plus sidecars, or the peak of an init container with the sidecars started before it,
+  plus `spec.overhead`, with `spec.resources` replacing the sum), `PodAllocation` (node, namespace, phase), `NodeAllocatable`,
+  `percent(usage, base) -> Option<f64>` (`None` on a zero or missing base: a dash, never `0`), `Utilisation::of_sample`.
+  App: `UtilisationAggregator` (`pod_resources`, `pod_utilisation`, `nodes`, `namespaces`) over `&Resource` snapshots of the
+  `ResourceStore`, plus `allocate_nodes` / `allocate_namespaces`. Terminated pods hold nothing, unscheduled pods count for
+  their namespace only. The GPU list is the `metrics.gpu_vendors` setting (`oxikube_settings::MetricsSettings`, also under
+  `clusters.<id>.metrics`); the binary pushes `MetricsSettings::gpu_table` into the aggregator's `GpuVendorsHandle` on every
+  change (`bins/oxikube/src/metrics_settings.rs`), so an edit applies to the next computation. Oracle: the semantics of
+  `kubectl-view-allocations` (CC0), reimplemented as a model in the tests; `cargo bench -p oxikube_app --bench utilisation`.
 - `oxikube_app::exec` (E09-S08) — `ExecService`: `open_shell(pod, container, &ShellOptions)` finds the shell with a quick
   non-interactive exec per entry of the chain (`terminal.exec_shells`, default `bash`, `sh`; exit 126/127 or `executable file
   not found` means missing, anything else stops the search), opens the first the container has over the session's `ExecPort`
@@ -469,7 +494,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   reports the palette closed, after the focus is back. `palette::Toggle` is bound to a global action
   (`PaletteHost` per window) and is also a bus command with a tool stub, as are `palette::ToggleShowAll` and
   `palette::ClearRecents`.
-- `oxikube_resources_ui` — module `kinds` (E12-S01): `KindSpec` (`KindMeta` + `DetailRenderer`), the `KindSpecs` global (`register` / `register_all`, `kind_for`, `columns_for`, `detail_for`), the built-in kinds by sidebar section (`kinds::builtin::<section>::init`, generic specs until each kind story gives its kind a module), published to the cluster sidebar; a table opens with its kind's own `ColumnProvider` when the spec has one (a Table feed's columns do not replace it), and the detail drawer draws the kind's panel above the Overview (`DetailView::resource` is what it reads). Module `kinds::network` (E12-S14): Ingress, IngressClass, NetworkPolicy and the Gateway API kinds register with their own `NetworkPanel` (the `DetailRenderer::panel` factory), `network_row_actions` adds "Set as default" to IngressClass rows. Module `exec` (E09-S08): `exec_row_actions` ("Shell" and "Attach" on a Pod's context menu and the palette's list, keys `s` / `a`, the pod detail's header buttons), `ExecFlow` (reads the pod through `ExecService::plan` on `spawn_kube`, then dispatches `pod::Shell` / `pod::Attach` with the container chosen, or asks first) and `ContainerPicker` (since E11-S02 the generic `oxikube_palette::Picker` over a `ContainerPickerDelegate`: typing filters the containers, up / down wrap, enter or click opens, escape sends nothing, so cancelling leaves no audit record of an open that never happened). Module `exec::debug` (E09-S10): "Debug" on a Pod's row (order 130, key `shift-d`, the detail header's bug button) opens `DebugDialog` through `ExecFlow::begin_debug` (it reads the pod for the defaults on `spawn_kube`): image, the container to share processes with, command, optional name, the note that the container is permanent; the button runs `DebugRunner` on `spawn_kube`, shows progress while the container starts and an API refusal under the fields, and closes on success (the terminal opens in the bottom dock). Module `table::verbs` and `views::row_actions` (E11-S07): the k9s verbs of a table, each a view action that stands for a command: `y` / `d` dispatch `resource::ViewYaml` / `resource::ViewDescribe` (the window's `ResourceViews` opens the detail drawer on that tab; "View YAML" and "Describe" lead a row's menu), `l` the pod's or the workload's logs, `ctrl-w` `table::ToggleWide` (`ColumnLayout::toggle_wide`: every wide column, or back), and `e` / `shift-f` / `f` the editor's and port forwarding's row actions, which say they are not installed until those crates register them. Module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the same list), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
+- `oxikube_resources_ui` — module `kinds::workloads` (E12-S04): Deployments, StatefulSets, ReplicaSets and ReplicationControllers register their specs from their own files (`deployment`, `statefulset`, `replicaset`, `replication_controller`; the sidebar order stays the Workloads section's), share the detail `WorkloadPanel` (replicas, strategy, selector, pod template, the ReplicaSets and Pods the workload owns by `ownerReferences`, each a link; a Scale button) and the Scale dialog (`ScaleFlow` / `ScaleDialog`, opened at once, the count read in the background, `workload::Scale` run by `ScaleRunner`; reached by the context menu, the palette, `s` in the table for those kinds only and the panel's button). Their columns are the shared core catalogue's (Replicas and Conditions added).
+- `oxikube_resources_ui` — module `kinds` (E12-S01): `KindSpec` (`KindMeta` + `DetailRenderer`), the `KindSpecs` global (`register` / `register_all`, `kind_for`, `columns_for`, `detail_for`), the built-in kinds by sidebar section (`kinds::builtin::<section>::init`, generic specs until each kind story gives its kind a module), published to the cluster sidebar; a table opens with its kind's own `ColumnProvider` when the spec has one (a Table feed's columns do not replace it), and the detail drawer draws the kind's panel above the Overview (`DetailView::resource` is what it reads). Module `kinds::config` (E12-S12): the Config section's smaller kinds (ResourceQuota, LimitRange, HorizontalPodAutoscaler, VerticalPodAutoscaler (an optional CRD, shown only where discovery serves it), PodDisruptionBudget, PriorityClass, RuntimeClass, Lease, Mutating and ValidatingWebhookConfiguration, ValidatingAdmissionPolicy and its binding), each a row of `KINDS` (sidebar rank and a `fn(&Resource) -> Option<Panel>`) over the domain view-models of `oxikube_domain::view::config`; one `ConfigPanel` entity follows the detail view, caches its `Panel` per resource version and draws sections of pairs, used-against-hard quota bars, links (an HPA's or VPA's scale target, a binding's policy, through `DetailView::sibling` / `open_resource`) and small tables; the columns are the shared catalogue's declarative JSON-pointer definitions (`oxikube_app::columns`), and a webhook's `caBundle` is reported present or absent, never shown. Module `kinds::pods` (E12-S02): the Pod spec (`PodColumns`, the pod actions of E08/E09, Workloads rank 10) and `ContainersPanel`, the containers drill-down at the top of a pod's detail (IDX, name with an init / sidecar / ephemeral marker, image, ready, state, restarts, probes `L:R:S`, ports, CPU and memory request/limit; rows rebuilt once per pod version, in the observer); `set_metrics_source` is E13's door to the usage columns. module `kinds::service` (E12-S13): the Service's detail panel (`ServicePanel`, drawn above the Overview from a `ServiceView` built per delta, never per frame: facts, selector chips, ports with the named `targetPort` resolved against a backing pod, the EndpointSlices with ready counts, the backing pods, capped at 20 and 50 rows with the counts covering all), its two label-selected feeds (`oxikube_app::ServiceBackends`: `kubernetes.io/service-name=<name>` and the Service's selector, both in the Service's namespace and filtered by the server, started when the detail opens and dropped when it closes), `service_row_actions` ("Show Pods", key `u`; "Open in Browser", key `o`; both bound where `kind == Service`), and the open-in-browser hook (`ServiceBrowser::enable` + `register_open_in_browser`, called by the wiring of E15's port-forward manager; until then the handler is not on the bus, so no row action, palette entry or panel button exists). Module `kinds::endpoints` (E12-S13): the Endpoints and EndpointSlice panel (endpoints with readiness, node and pod links, a link back to the Service; no feed of its own). Module `kinds::network` (E12-S14): Ingress, IngressClass, NetworkPolicy and the Gateway API kinds register with their own `NetworkPanel` (the `DetailRenderer::panel` factory), `network_row_actions` adds "Set as default" to IngressClass rows (chained by `kinds::row_actions()`). Module `exec` (E09-S08): `exec_row_actions` ("Shell" and "Attach" on a Pod's context menu and the palette's list, keys `s` / `a`, the pod detail's header buttons), `ExecFlow` (reads the pod through `ExecService::plan` on `spawn_kube`, then dispatches `pod::Shell` / `pod::Attach` with the container chosen, or asks first) and `ContainerPicker` (since E11-S02 the generic `oxikube_palette::Picker` over a `ContainerPickerDelegate`: typing filters the containers, up / down wrap, enter or click opens, escape sends nothing, so cancelling leaves no audit record of an open that never happened). Module `exec::debug` (E09-S10): "Debug" on a Pod's row (order 130, key `shift-d`, the detail header's bug button) opens `DebugDialog` through `ExecFlow::begin_debug` (it reads the pod for the defaults on `spawn_kube`): image, the container to share processes with, command, optional name, the note that the container is permanent; the button runs `DebugRunner` on `spawn_kube`, shows progress while the container starts and an API refusal under the fields, and closes on success (the terminal opens in the bottom dock). Modules `kinds::job` and `kinds::cronjob` (E12-S08): the Job and CronJob specs (the shared core columns, the actions of `oxikube_app::workloads`) registered from their own `init`, and their row actions (`kinds::row_actions()`, which the binary chains once for every kind story: "Trigger" 140, "Suspend" 150, "Resume" 160 on CronJobs, "Suspend" and "Resume" on Jobs); `table::batch`: `t` (`resource_table::TriggerSelected`, CronJob tables) and `s` (`ToggleSuspendSelected`, CronJob and Job tables, which resumes an object that reads as suspended), bound by kind-scoped sections of the default keymaps (`ResourceTable && !Editing && kind == CronJob`), acting on the cursor row. Module `table::verbs` and `views::row_actions` (E11-S07): the k9s verbs of a table, each a view action that stands for a command: `y` / `d` dispatch `resource::ViewYaml` / `resource::ViewDescribe` (the window's `ResourceViews` opens the detail drawer on that tab; "View YAML" and "Describe" lead a row's menu), `l` the pod's or the workload's logs, `ctrl-w` `table::ToggleWide` (`ColumnLayout::toggle_wide`: every wide column, or back), and `e` / `shift-f` / `f` the editor's and port forwarding's row actions, which say they are not installed until those crates register them. Module `actions` (E07-S08): `ResourceActions` (the row actions of the bus and the delete flow, shared by every table through `ResourceTableDeps::actions`), the actions appended to a row's context menu and `ResourceTable::action_entries` (the same list), the `delete` / `ctrl-d` key (`resource_table::DeleteSelected`), and `DeleteDialog`, a workspace modal: propagation choice, type-the-name, one confirmation for a selection, a virtualised per-object results list.
   Node rows (E09-S09): `exec_row_actions` also offers "Shell" on a Node (`node::Shell`, key `s` on a node table, a button in
   the node detail's header), greyed out on every read-only cluster; the runner confirms with the node and the image named.
   module `detail` (E07-S05): `DetailView`, the generic detail of one object, one entity with two
@@ -514,7 +540,48 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `TlsError`, `BadResponse`, `InvalidEndpoint`), which the cluster-level `PrometheusPort` (`PromqlPort`, an endpoint table per
   cluster that settings and detection fill) carries as the source of its `OxiError`s (`PromqlError::of`). Dropping a call's
   future closes its connection. Modules: `client`, `url`, `wire` (typed decode of vector/matrix/scalar, `NaN`/`±Inf`),
-  `errors`, `auth`, `transport`, `cluster`. Provider detection (E13-S05) and query catalogues (E13-S06) build on it.
+  `errors`, `auth`, `transport`, `cluster`. Query catalogues (E13-S06) build on it.
+- `oxikube_prometheus::detect` + `proxy` (E13-S05) — finding a cluster's Prometheus-compatible service. `ProviderDetector`
+  implements `ProviderDetectorPort`: it lists the Services of the namespaces `detect/catalogue.json` names (data, not code:
+  per entry a kind, an exact name or a name prefix, namespaces, ports by preference, a scheme and path prefixes to try), matches
+  them, confirms a match with a probe query (`vector(1)`, 5 s) through the API server's service proxy and classifies the stack
+  (`MetricsProviderKind`: kube-prometheus, Lens, VictoriaMetrics, Mimir, OpenShift, plain Prometheus). The first catalogue entry
+  that answers wins. Every service looked for is a `Probe` (`Answered`, `NotPresent`, `NoUsablePort`, `Failed`, `Skipped`,
+  `NotNeeded`), so a missing stack is explained. The verdict is a `DetectionState`: `Found`, `NotFound`, or `Failed` with a
+  `DetectionFailure` (`Forbidden` when `list services` is refused and nothing was found elsewhere, `ProbeFailed` when a matched
+  Service did not answer, `Other`); absence is never inferred past a namespace it could not read. Read-only. A managed
+  port-forward fallback for a blocked proxy waits for the port-forward manager (E15). `ProxyPromqlClient` is the
+  `PromqlEndpointPort` that sends a `PromEndpoint` with a `service` through a cluster's `ServiceProxyPort` (and a URL to the
+  direct client), mapping the API server's own refusals (403 forbidden, 404 no such Service, 503 no ready endpoint) to
+  `PromqlError`s; `PrometheusPort` looks the proxy up per query (`ServiceProxies`), so a reconnect needs no update.
+- `oxikube_kube::service_proxy` (E13-S05) — `KubeServiceProxy`, `ServiceProxyPort` over
+  `/api/v1/namespaces/<ns>/services/[https:]<name>:<port>/proxy/<path>` (a GET with query parameters or a form POST; the path
+  and names are validated so nothing can change the route). A status from the Service or from the API server is an answer
+  (`ProxyResponse`, with `api_server_message` when it is the API server's own `Status`), a body over the limit is `truncated`;
+  only a failure to get any answer is an error. The connection's client retries 429/503/504, so a Service with no ready
+  endpoint ends as a timeout that says so. `ClusterPorts::service_proxy` carries it.
+- `oxikube_app::metrics_provider` (E13-S05) — `MetricsProviderService`: one `ProviderStatus` per cluster (`mode`, `state`:
+  `Disabled`, `WaitingForCluster` or a `DetectionState`; the probes; when it finished; the `prometheus` settings in effect).
+  It follows the session updates: a cluster that connects (or reconnects) is detected (`provider: auto`) or has its
+  configured endpoint checked (`provider: manual`); a cluster whose settings turn metrics off is never probed; a change of the
+  settings re-runs only what it changes (`settings_changed`, called by the binary on every settings change); `redetect` is the
+  user's ask. Runs are tasks on the binary's `Spawner` (`attach`), each held by an abort-on-drop guard in the status table and
+  writing its result only while it is still the current run; following the sessions is `follow()`, a future the host runs where it
+  likes (the binary: its foreground executor, so an idle app has no metrics task on the Tokio runtime). A found provider is published to an `EndpointSink` (the binary points
+  `PrometheusPort` at it in the same step, with the credentials' keychain references for a configured URL). Commands:
+  `cluster::RedetectMetrics` and `cluster::ToggleMetrics` (`prometheus.enabled`, through the `MetricsSettingsWriter` trait the
+  binary implements over `ClusterSettings::set_metrics_enabled`); neither changes a cluster, so neither takes a guard tier.
+- `oxikube_settings::cluster::prometheus` (E13-S05) — the `prometheus` block of the per-cluster layer, the settings of
+  history metrics: `enabled`, `provider` (`auto` | `manual` | `off`; unset is `manual` when a `url` or `path` is set, else
+  `auto`), `kind` (the stack of a manual endpoint), `url` or `path` (`namespace/service:port` through the API server),
+  `path_prefix`, `auth` (`none` | `bearer` | `basic`), `auth_user`, `auth_secret` (a keychain entry's name, never the token).
+  Defaults are in `default.json`, the schema in `settings.schema.json`, edits hot reload through `ClusterSettings::observe`.
+  `PrometheusOverride::manual_endpoint` turns the resolved block into a `PromEndpoint` or says in a sentence what is missing.
+- `oxikube_settings_ui::metrics` (E13-S05) — the cluster's metrics page: `MetricsSettingsModel` (the whole page as plain data
+  with its wording: the headline and its tone, `metrics unavailable: <reason>`, the services looked at, the settings in effect),
+  `MetricsSettingsView` (a workspace item of the cluster's tab; "Look again" and "Turn history metrics off / on" are bus
+  commands) and `MetricsViews` (`cluster::ShowMetricsSettings` opens the page in the cluster's tab). The sidebar's "Metrics"
+  section ("Provider and settings") and the palette ("Cluster Metrics Settings") reach it.
 - `oxikube_ui::editor` (E07-S06, E10-S04) — gpui-component's editor (`tree-sitter-yaml` feature) behind our own API. `EditorApi`
   is the trait feature views use, in UTF-8 byte offsets and our types (`text`/`set_text`, `version`, `selections`/`select`,
   `set_read_only`, `set_soft_wrap`, `set_diagnostics(Vec<EditorDiagnostic>)`, `add_decoration`/`decorations`/
@@ -646,6 +713,21 @@ crate's `README.md` for its allowed dependencies. Highlights:
   validator also checks a `kind: List` item by item against each item's own `apiVersion` and `kind`. Bench:
   `cargo bench -p oxikube_editor --bench convert` (2k lines about 1 ms, 5 MB about 130 ms, all off the UI thread; the UI thread
   then replaces the text: about 8 ms for 2k lines, about 95 ms for the 5 MB result, a one-off per explicit conversion).
+- `oxikube_app::workloads` (E12-S08) — `WorkloadService` and the `cronjob::Trigger`, `cronjob::Suspend`, `cronjob::Resume`,
+  `job::Suspend` and `job::Resume` handlers (tools `k8s.cronjob_trigger`, `k8s.cronjob_suspend`, `k8s.cronjob_resume`,
+  `k8s.job_suspend`, `k8s.job_resume`). All five are mutations at risk `Low` through the `MutationGuard`: blocked on a
+  read-only cluster for every initiator, a simple confirmation, a server dry run before the real request (a dispatch that is
+  itself a dry run stops there), one audit record. A trigger is `kubectl create job --from=cronjob/x`: the Job is
+  `oxikube_domain::build::job_from_cronjob` (the kdash port, MIT header; `spec.jobTemplate` verbatim, `generateName:
+  <cronjob>-manual-` cut so the server's 63-character limit keeps the suffix, `cronjob.kubernetes.io/instantiate: manual`,
+  an owner reference to the CronJob), shared with `oxikube_kube::trigger_cronjob`; `spec.concurrencyPolicy` is not
+  consulted, as in kubectl. Its output names the Job (`data.job`) and the object to go to next (`data.open`, read through
+  `CommandOutput::open_target`): the runner's success toast then carries an "Open Job" button that dispatches
+  `resource::Open`. The audit record's detail says `job=<name>`: a handler adds to the detail of its own record through
+  `HandlerContext::note_audit`, which the guard merges when the attempt finishes (names only, redacted). Suspend and resume
+  are a merge patch of `spec.suspend` (`oxikube_domain::build::suspend_patch`); a finished Job (`Complete` or `Failed`,
+  `JobSummary::is_finished`) is not resumed. Time is not read here: ages, durations and the last schedule come from the
+  table's per-frame `now`.
 - `oxikube_app::apply` + `oxikube_editor::view::apply` (E10-S08) — applying one manifest: `ApplyService` (the one apply
   pipeline; E20 extends it to many objects, plan review #397) dispatches `resource::Apply` through the `CommandBus`, so the
   `MutationGuard` blocks it on a read-only cluster (re-checked before each request), confirms it at risk `Low` (the editor's
@@ -660,7 +742,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   fingerprints. The editor reaches it by `resource::Apply` (`cmd-s` / `ctrl-s` in `ManifestEditor`, the palette through the
   editor's `CommandSurface`, the toolbar's Apply): its own checks first (errors, a masked value, refuse), the dry run on the
   Kubernetes runtime, `ApplyPreviewDialog` (virtualised diff) or `ConflictDialog` (Force previews again), then the apply.
-- `oxikube_domain::view::network` + `oxikube_app::network` + `oxikube_resources_ui::kinds::network` (E12-S14) — the Network
+- `oxikube_domain::view::network` + `oxikube_app::ingress_class` + `oxikube_resources_ui::kinds::network` (E12-S14) — the Network
   section's own columns, panels and its one mutation. The view-models are pure and read raw JSON (`IngressSummary` with the rules
   flattened to one row per host and path and the TLS secret of each host, `IngressClassSummary` with the default annotation,
   `NetworkPolicySummary` with the API's `policyTypes` defaulting and each rule as peers and ports, and for the Gateway API
@@ -674,7 +756,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   backends to their Services, a route to its parent Gateway and a Gateway to its GatewayClass through `resource::Open` (the
   version of a Gateway API target comes from discovery on `spawn_kube`, never from a constant). `ingressclass::SetDefault`
   is a `Risk::Low` mutation (simple confirm, blocked read-only for every initiator, dry run honoured, audited): its handler
-  in `oxikube_app::network` merge-patches `ingressclass.kubernetes.io/is-default-class: "true"` onto the class and then
+  in `oxikube_app::ingress_class` merge-patches `ingressclass.kubernetes.io/is-default-class: "true"` onto the class and then
   removes the annotation from the class that carried it (`clear_previous`, on by default, named in the confirmation); the
   IngressClass row action, the palette entry and the panel's button are all that command, and its tool stub is
   `k8s.ingressclass_set_default`.
@@ -1004,6 +1086,10 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | Local files by path (pasted kubeconfigs: owner-only write, delete; streamed chunked writes for log exports) | `FsPort` | `oxikube_runtime::StdFs` (tests: `FakeFsPort`) | `oxikube_app::sources` |
 | Per-cluster ports for a connected context | `ClusterConnectorPort` (returns `ClusterPorts` + `AccessReviewPort`; health via the `HealthReporter` callback) | `oxikube_kube` (wired by `bins/oxikube`) | `oxikube_app::session` |
 | Per-kind JSON Schemas of a connected cluster (manifest editor validation, hover, completion) | `SchemaPort` (`schema_for`, `invalidate`; part of `ClusterPorts`) | `oxikube_kube::openapi` (`OpenApiSchemas`; tests: `FakeSchemaPort`) | `oxikube_editor` (E10-S03 onwards); `oxikube_app::session` calls `invalidate` on `KindsChanged` and `SchemasChanged` |
+| Reaching an in-cluster service (the metrics provider's probe and queries) with the connection's own credentials | `ServiceProxyPort` (part of `ClusterPorts`) | `oxikube_kube::service_proxy` (`KubeServiceProxy`; tests: `FakeServiceProxyPort`) | `oxikube_prometheus` (`ProxyPromqlClient`) |
+| Finding a cluster's Prometheus-compatible service | `ProviderDetectorPort` (`detect`, `check`) | `oxikube_prometheus::ProviderDetector` (tests: `FakeProviderDetectorPort`) | `oxikube_app::metrics_provider` |
+| App writing `prometheus.enabled` back to `settings.json` | `oxikube_app::metrics_provider::MetricsSettingsWriter` (a trait of the app crate) | `bins/oxikube::metrics_provider::SettingsMetricsWriter` over `ClusterSettings::set_metrics_enabled` | `cluster::ToggleMetrics` |
+| The found provider reaching the PromQL port | `oxikube_app::metrics_provider::EndpointSink` | `bins/oxikube::metrics_provider` (over `PrometheusPort::set_endpoint`) | `MetricsProviderService` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`), opened by `ExecPort` (`exec`, `attach`, `create_debug_container`, `node_shell`) | `oxikube_terminal` (local PTY), `oxikube_kube` (`KubeExec` handing out `KubeStream`), `oxikube_argocd` | `oxikube_terminal` element, `oxikube_app` `ExecService` |
 
 If a story's crate list implies a forbidden edge, follow this table and say so in the PR; do not
@@ -1053,6 +1139,12 @@ weaken `cargo xtask lint-deps`.
   frame's path) follows the session manager on the Tokio runtime and opens the user's `aliases.json` on the
   background executor (watched under `ConfigSource::UserDir`, read once under `Dir`, not at all in memory); a save
   reaches every cluster's table within the watcher's debounce, and invalid entries are logged with their line.
+- `metrics_provider` (E13-S05): `ClusterServices::metrics` holds the `MetricsProviderService` and the per-cluster
+  `PromqlPort` (`PrometheusPort` over `ProxyPromqlClient`, finding each cluster's service proxy through the session manager).
+  The first window's mount starts the service (`metrics_provider::start`: a foreground task follows the session updates and
+  nothing runs on the Tokio runtime until a cluster connects; nothing is probed for a cluster whose settings turn metrics off) and passes every
+  settings change to it. `mount::metrics` opens the page for `cluster::ShowMetricsSettings` and routes the sidebar's Metrics
+  entry to the same command.
 - `mount`: `mount_main_window` runs inside the main window's construction
   (`oxikube_workspace::window::open_main_window_mounted`): the cluster tabs with their setup
   (sidebar, connect views, namespace selector in the tab toolbar, `ClusterTab::set_toolbar`), the
@@ -1241,6 +1333,18 @@ its own tab (`resource::OpenList`). Namespaced kinds follow the namespace select
 a table (or anything else) has its feed open, because counting is a cache read, never a subscription
 (the watch budget stays for tables). The CRD's detail drawer has a Schema tab (`openAPIV3Schema` of the selected version:
 type as `kubectl explain` writes it, required, enum, default, description; only open nodes are walked, depth and rows are bounded).
+
+Since E12-S17 the CRD kind has a spec of its own (`oxikube_resources_ui::kinds::crd`): the CRD list's columns are Name,
+Kind, Group, Versions (the served versions, `(storage)` marked, as the API server's own CRD table prints them), Scope,
+Short Names and Age, with Resource, Aliases (k9s: plural, singular, short names) and Established in the column chooser;
+its detail has a definition panel above the Overview (names, scope, conversion, `Established` / `NamesAccepted`, each
+version with its flags and printer columns, the wide ones marked) built from the domain's `CrdSummary` once per change
+of the CRD. The Custom Resources section leaves out kinds another section's registry entry lists (Gateway API,
+VolumeSnapshots: nothing is listed twice) and has a search field: typing filters the groups and kinds (a pass over
+discovery's answer, rows rebuilt per keystroke; ~0.4 ms for 500 CRDs in a debug build) and shows the matching groups
+open without touching their saved state; Enter opens the first match. A table whose user never reordered its columns
+saves no order, so a Table feed's server columns keep the server's order when they replace the Name / Namespace / Age
+stand-ins (what `kubectl get` shows, checked against a Table response recorded from kind in `crds::tests::parity`).
 
 States and diagnostics (E07-S10, `oxikube_resources_ui::table::states`): one pure
 `TableState::derive(feed_state, row_count, filter)` tells loading, empty, filtered-empty,

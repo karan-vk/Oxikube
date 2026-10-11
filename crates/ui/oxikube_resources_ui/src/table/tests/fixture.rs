@@ -48,6 +48,7 @@ fn actions_rig(
     clock: Arc<dyn ClockPort>,
     sink: &ResourceCommandSink,
     exec: bool,
+    workloads: bool,
 ) -> ResourceActions {
     let mut registry = CommandRegistry::new();
     registry
@@ -63,8 +64,8 @@ fn actions_rig(
         .unwrap();
     // `ingressclass::SetDefault` (E12-S14): the real handler behind the real guard.
     registry
-        .install("oxikube_app::network", |r| {
-            oxikube_app::network::register_commands(r, sessions.clone())
+        .install("oxikube_app::ingress_class", |r| {
+            oxikube_app::ingress_class::register_commands(r, sessions.clone())
         })
         .unwrap();
     registry
@@ -73,6 +74,25 @@ fn actions_rig(
             |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
         )
         .unwrap();
+    // The CronJob and Job actions (E12-S08): do-nothing handlers behind the real guard (the
+    // workloads rig below installs the real ones, with `workload::Scale`).
+    for id in [
+        CommandId::CRONJOB_TRIGGER,
+        CommandId::CRONJOB_SUSPEND,
+        CommandId::CRONJOB_RESUME,
+        CommandId::JOB_SUSPEND,
+        CommandId::JOB_RESUME,
+    ]
+    .into_iter()
+    .filter(|_| !workloads)
+    {
+        registry
+            .register(
+                *command::lookup(id).unwrap(),
+                |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
+            )
+            .unwrap();
+    }
     if exec {
         // The exec class (E09-S08): do-nothing handlers behind the real guard, so a test sees the
         // read-only block and the audit record.
@@ -109,6 +129,14 @@ fn actions_rig(
             )
             .unwrap();
     }
+    if workloads {
+        // `workload::Scale` (E12-S04): the real handler behind the real guard, over the fakes.
+        registry
+            .install("oxikube_app::workloads", |r| {
+                oxikube_app::workloads::register_commands(r, sessions.clone())
+            })
+            .unwrap();
+    }
     let bus = CommandBus::new(
         registry,
         MutationGuard::new(sessions.clone(), state.clone(), clock),
@@ -127,10 +155,13 @@ fn actions_rig(
         .order(100),
     )
     .unwrap();
-    for spec in crate::crds::crd_row_actions() {
+    for spec in crate::crds::crd_row_actions()
+        .into_iter()
+        .chain(crate::kinds::service::service_row_actions())
+    {
         rows.register(spec).unwrap();
     }
-    for spec in crate::kinds::network::network_row_actions() {
+    for spec in crate::kinds::row_actions() {
         rows.register(spec).unwrap();
     }
     if exec {
@@ -155,6 +186,8 @@ enum Rig {
     Actions,
     /// [`Rig::Actions`] and the exec class.
     Exec,
+    /// [`Rig::Actions`] and `workload::Scale` for the workload kinds (E12-S04).
+    Workloads,
 }
 
 /// The cluster of every test.
@@ -237,6 +270,12 @@ impl Fixture {
         Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Exec)
     }
 
+    /// [`Self::with_actions`] plus "Scale" on the replica controllers (E12-S04): the real
+    /// `workload::Scale` handler behind the real guard, over the fake resource port.
+    pub(crate) fn with_workloads(cx: &mut TestAppContext) -> Self {
+        Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Workloads)
+    }
+
     fn build(cx: &mut TestAppContext, state: Arc<FakeStatePort>, rig: Rig) -> Self {
         let entry = ClusterContext::new(
             cluster(),
@@ -286,6 +325,7 @@ impl Fixture {
                 clock_port.clone(),
                 &dispatcher.sink,
                 rig == Rig::Exec,
+                rig == Rig::Workloads,
             )
             .with_concurrency(1)
         });

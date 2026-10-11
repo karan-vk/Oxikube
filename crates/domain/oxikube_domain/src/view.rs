@@ -6,8 +6,17 @@
 //! * [`PodSummary`] and [`ContainerSummary`] for Pods, with the `STATUS` column computed by the
 //!   same rules as `kubectl get pods`.
 //! * [`NodeSummary`] for Nodes.
-//! * [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets and ReplicaSets.
+//! * [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets, ReplicaSets and
+//!   ReplicationControllers, and [`WorkloadDetail`] (pod template, strategy, selector, conditions)
+//!   for their detail panels.
 //! * [`JobSummary`] and [`CronJobSummary`] for batch kinds.
+//! * [`QuotaSummary`], [`HpaSummary`], [`PdbSummary`], [`LeaseSummary`], [`WebhookConfigSummary`] and
+//!   the other Config-section summaries (E12-S12), in `config`.
+//! * [`CrdSummary`] for CustomResourceDefinitions: names, versions and their printer columns,
+//!   conversion and conditions (E12-S17).
+//! * [`ServiceSummary`], [`EndpointSliceSummary`] and [`EndpointsSummary`] for Services and where
+//!   their traffic goes (E12-S13): kubectl's port and external-IP text, the load balancer state,
+//!   ready endpoint counts, named target ports resolved against a pod.
 //! * [`network`] for the Network section: Ingress, IngressClass, NetworkPolicy and the Gateway API
 //!   kinds (E12-S14).
 //! * [`Health`] and [`health_of`]: the one rule for "is this object healthy" behind overview
@@ -35,22 +44,50 @@ use crate::json::{Array, JsonRef};
 use crate::resource::Resource;
 use jiff::Timestamp;
 
+mod config;
+mod crd;
+mod endpoints;
 mod health;
 mod job;
 pub mod network;
 mod node;
 mod pod;
 mod pod_health;
+mod service;
 mod workload;
+mod workload_detail;
 
+pub use config::{
+    AdmissionBindingSummary, AdmissionPolicySummary, CaBundle, HpaMetric, HpaMetricKind, HpaState,
+    HpaSummary, LeaseSummary, LimitRangeSummary, LimitRow, LimitSection, ParamRef, PdbSummary,
+    PolicyValidation, PriorityClassSummary, QuotaLevel, QuotaLine, QuotaSummary,
+    RuntimeClassSummary, TargetRef, VpaContainerPolicy, VpaRecommendation, VpaSummary,
+    WebhookConfigSummary, WebhookKind, WebhookRule, WebhookSummary, WebhookTarget, selector_text,
+};
+pub use crd::{
+    CrdConversion, CrdNames, CrdSummary, CrdVersionSummary, PrinterColumn, crd_aliases_text,
+    crd_versions_text, version_order,
+};
+pub use endpoints::{
+    EndpointPort, EndpointSliceSummary, EndpointSummary, EndpointTarget, EndpointsAddress,
+    EndpointsSummary, ReadyCounts, SERVICE_NAME_LABEL, ready_counts,
+};
 pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};
 pub use node::NodeSummary;
 pub use pod::{
-    ContainerKind, ContainerState, ContainerSummary, PodPhase, PodSummary, QosClass,
-    TerminatedState,
+    ComputeResources, ContainerKind, ContainerPort, ContainerState, ContainerSummary, PodPhase,
+    PodSummary, Probes, QosClass, ResourceAmounts, TerminatedState,
+};
+pub use service::{
+    NoSelector, ServicePortSummary, ServiceStatus, ServiceSummary, ServiceType, TargetPort,
+    resolve_target_port,
 };
 pub use workload::{WorkloadKind, WorkloadSummary};
+pub use workload_detail::{
+    ConditionLevel, LabelSelector, Strategy, TemplateContainer, WorkloadCondition, WorkloadDetail,
+    conditions_summary, workload_conditions,
+};
 
 /// Why a view-model could not be built.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -137,7 +174,7 @@ impl Condition {
 // document and allocate nothing.
 
 /// Reject `res` unless its group and kind match one of `accepted`.
-fn check_kind(
+pub(crate) fn check_kind(
     res: &Resource,
     expected: &'static str,
     accepted: &[(&str, &str)],
@@ -159,7 +196,7 @@ fn check_kind(
 }
 
 /// `v[key]`, or `null` when absent or `v` is not an object.
-fn sub<'a>(v: JsonRef<'a>, key: &str) -> JsonRef<'a> {
+pub(crate) fn sub<'a>(v: JsonRef<'a>, key: &str) -> JsonRef<'a> {
     v.get(key).unwrap_or(JsonRef::NULL)
 }
 
@@ -169,17 +206,17 @@ fn obj_of<'a>(v: JsonRef<'a>, key: &str) -> Option<JsonRef<'a>> {
 }
 
 /// `v[key]` as a non-empty string.
-fn str_of<'a>(v: JsonRef<'a>, key: &str) -> Option<&'a str> {
+pub(crate) fn str_of<'a>(v: JsonRef<'a>, key: &str) -> Option<&'a str> {
     v.get(key)?.as_str().filter(|s| !s.is_empty())
 }
 
 /// `v[key]` as a non-empty shared string.
-fn arc_of(v: JsonRef<'_>, key: &str) -> Option<Arc<str>> {
+pub(crate) fn arc_of(v: JsonRef<'_>, key: &str) -> Option<Arc<str>> {
     str_of(v, key).map(Arc::from)
 }
 
 /// `v[key]` as an array; empty when absent or not an array.
-fn arr_of<'a>(v: JsonRef<'a>, key: &str) -> Array<'a> {
+pub(crate) fn arr_of<'a>(v: JsonRef<'a>, key: &str) -> Array<'a> {
     v.get(key)
         .and_then(JsonRef::as_array)
         .unwrap_or(Array::EMPTY)

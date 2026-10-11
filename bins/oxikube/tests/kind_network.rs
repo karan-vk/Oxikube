@@ -208,12 +208,12 @@ fn set_default_moves_the_flag_on_a_real_cluster_through_the_guard(cx: &mut TestA
     let Outcome::NeedsConfirmation(request) = ask else {
         panic!("expected a confirmation request");
     };
-    block_on(
-        bus.dispatch(
-            command(&a),
-            ui().with_dry_run(true)
-                .with_confirmation(Confirmation::simple(request.token)),
-        ),
+    dispatch(
+        &mut app,
+        &bus,
+        command(&a),
+        ui().with_dry_run(true)
+            .with_confirmation(Confirmation::simple(request.token)),
     )
     .expect("the dry run runs");
     assert_eq!(defaults(&context), [b.as_str()], "a dry run writes nothing");

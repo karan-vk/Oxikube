@@ -98,12 +98,17 @@ impl MutationGuard {
             Some(cluster),
             Some(mutation),
         );
+        let note = cx.audit_note_slot();
         let result = handler.handle(command, cx).await;
 
-        attempt.finish(match result {
-            Ok(_) => AuditOutcome::Succeeded,
-            Err(_) => AuditOutcome::Failed,
-        });
+        let note = note.lock().ok().and_then(|mut slot| slot.take());
+        attempt.finish_noting(
+            match result {
+                Ok(_) => AuditOutcome::Succeeded,
+                Err(_) => AuditOutcome::Failed,
+            },
+            note.as_deref(),
+        );
         self.audit
             .flush()
             .await

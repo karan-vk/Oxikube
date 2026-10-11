@@ -183,3 +183,80 @@ fn the_table_indexes_every_cluster_with_overrides(cx: &mut TestAppContext) {
         );
     });
 }
+
+#[gpui::test]
+fn the_prometheus_block_hot_reloads_per_cluster_and_wakes_only_its_cluster(
+    cx: &mut TestAppContext,
+) {
+    use oxikube_ports::MetricsMode;
+
+    let _dir = setup(cx, USER);
+    let (prod, _prod_sub) = watch(cx, PROD);
+    let (lab, _lab_sub) = watch(cx, LAB);
+    let mode = |cx: &mut TestAppContext, cluster: &str| {
+        cx.read(|cx| {
+            ClusterSettings::resolve(&id(cluster), cx)
+                .prefs()
+                .prometheus
+                .as_ref()
+                .map(|p| p.effective_mode())
+        })
+    };
+    assert_eq!(
+        mode(cx, PROD),
+        None,
+        "the shipped defaults leave it on auto"
+    );
+
+    // One cluster switches its history metrics off.
+    reload(
+        cx,
+        &format!(r#"{{ "clusters": {{ "{PROD}": {{ "prometheus": {{ "enabled": false }} }} }} }}"#),
+    );
+    assert_eq!(mode(cx, PROD), Some(MetricsMode::Off));
+    assert_eq!(mode(cx, LAB), None);
+    assert_eq!((prod.borrow().len(), lab.borrow().len()), (1, 0));
+
+    // A manual endpoint for the other one, from the top level: every cluster inherits it, and the
+    // one that switched off stays off.
+    reload(
+        cx,
+        &format!(
+            r#"{{ "prometheus": {{ "url": "https://vm.example.com" }},
+                 "clusters": {{ "{PROD}": {{ "prometheus": {{ "enabled": false }} }} }} }}"#
+        ),
+    );
+    assert_eq!(mode(cx, PROD), Some(MetricsMode::Off));
+    assert_eq!(mode(cx, LAB), Some(MetricsMode::Manual));
+    assert_eq!(
+        (prod.borrow().len(), lab.borrow().len()),
+        (2, 1),
+        "prod's effective mode did not change but its endpoint did; lab inherited the endpoint"
+    );
+}
+
+#[gpui::test]
+async fn the_metrics_switch_edits_the_file_and_keeps_the_users_comments(cx: &mut TestAppContext) {
+    let dir = setup(cx, USER);
+    let (prod, _sub) = watch(cx, PROD);
+
+    cx.update(|cx| ClusterSettings::set_metrics_enabled(cx, &id(PROD), Some("prod-eu"), false))
+        .await
+        .unwrap();
+    cx.run_until_parked();
+
+    cx.read(|cx| {
+        let prefs = ClusterSettings::resolve(&id(PROD), cx).prefs().clone();
+        assert!(!prefs.prometheus.as_ref().expect("a block").enabled);
+    });
+    assert_eq!(prod.borrow().len(), 1);
+    let text = std::fs::read_to_string(dir.path().join("settings.json")).unwrap();
+    assert!(text.starts_with("// mine\n"), "{text}");
+    assert!(text.contains("\"ui_scale\": 1.5, // keep me"), "{text}");
+    assert!(text.contains("\"enabled\": false"), "{text}");
+    assert!(text.contains("\"display_name\": \"prod-eu\""), "{text}");
+    assert!(
+        !text.contains("token") && !text.contains("auth_secret"),
+        "no credential is written: {text}"
+    );
+}

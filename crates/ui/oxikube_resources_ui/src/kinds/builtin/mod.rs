@@ -2,6 +2,7 @@
 //! Storage, Namespaces (then Custom Resources, from discovery). Each section module registers its
 //! kinds from its own `init(cx)`; until a kind story gives a kind its own module, it has the
 //! generic spec (the shared columns, the generic detail) and the actions E08/E09 already ship.
+//! Kinds with a module of their own: Pods (`kinds::pods`, E12-S02).
 //!
 //! Optional APIs (the Gateway API, VolumeSnapshots, the VerticalPodAutoscaler) are registered
 //! like the others: the sidebar shows them only on clusters whose discovery serves them.
@@ -14,7 +15,7 @@ mod namespaces;
 mod network;
 mod nodes;
 mod storage;
-mod workloads;
+pub(super) mod workloads;
 
 use gpui::App;
 use oxikube_app::{KindMeta, Section};
@@ -88,9 +89,21 @@ pub(super) fn register(
     kinds: &[Builtin],
     actions_of: impl Fn(&Builtin) -> &'static [CommandId],
 ) {
+    register_from(cx, section, kinds, 1, actions_of);
+}
+
+/// [`register`] with the ranks starting at `first * 10`: the slots before it belong to kinds with
+/// a module of their own (Pods, E12-S02).
+pub(super) fn register_from(
+    cx: &mut App,
+    section: Section,
+    kinds: &[Builtin],
+    first: u32,
+    actions_of: impl Fn(&Builtin) -> &'static [CommandId],
+) {
     let specs = kinds
         .iter()
-        .zip(1u32..)
+        .zip(first..)
         .map(|(kind, ix)| spec(kind, section, ix * 10, actions_of(kind)));
     if let Err(error) = KindSpecs::register_all(cx, specs) {
         tracing::error!(%error, section = section.id, "built-in kinds not all registered");
@@ -102,7 +115,8 @@ pub(super) fn generic(_: &Builtin) -> &'static [CommandId] {
     &[]
 }
 
-/// Registers every built-in section's kinds and the kinds outside the sidebar.
+/// Registers every built-in section's kinds and the kinds outside the sidebar (the CRD kind,
+/// E12-S17, whose list is the Custom Resources section's "Definitions" entry).
 pub fn init(cx: &mut App) {
     nodes::init(cx);
     workloads::init(cx);
@@ -111,20 +125,5 @@ pub fn init(cx: &mut App) {
     crate::kinds::network::init(cx);
     storage::init(cx);
     namespaces::init(cx);
-    definitions(cx);
-}
-
-/// CustomResourceDefinitions: listed by the Custom Resources section's "Definitions" entry
-/// (E07-S07), so no sidebar slot of their own; their action opens a CRD's resources.
-fn definitions(cx: &mut App) {
-    let meta = KindMeta::new(
-        Gvk::new("apiextensions.k8s.io", "v1", "CustomResourceDefinition"),
-        "customresourcedefinitions",
-        "Definitions",
-        Scope::Cluster,
-    )
-    .with_actions([CommandId::CRD_OPEN_RESOURCES]);
-    if let Err(error) = KindSpecs::register(cx, KindSpec::new(meta)) {
-        tracing::error!(%error, "the CRD kind was not registered");
-    }
+    super::crd::init(cx);
 }

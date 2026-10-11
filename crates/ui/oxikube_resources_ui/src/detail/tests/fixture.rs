@@ -32,11 +32,20 @@ pub(crate) fn kind(
     }
 }
 
-/// The kinds the tests serve: pods, replica sets, deployments, secrets, nodes, the Widget custom
-/// kind and the CRD kind.
+/// The kinds the tests serve: pods, services and their endpoints, replica sets, deployments,
+/// secrets, nodes, the Widget custom kind and the CRD kind.
 pub(crate) fn kinds() -> Vec<ResourceKind> {
     vec![
         kind("", "v1", "Pod", "pods", true),
+        kind("", "v1", "Service", "services", true),
+        kind("", "v1", "Endpoints", "endpoints", true),
+        kind(
+            "discovery.k8s.io",
+            "v1",
+            "EndpointSlice",
+            "endpointslices",
+            true,
+        ),
         kind("apps", "v1", "ReplicaSet", "replicasets", true),
         kind("apps", "v1", "Deployment", "deployments", true),
         kind("", "v1", "Secret", "secrets", true),
@@ -123,9 +132,26 @@ impl Detail {
         Self::over(Fixture::with_exec(cx), objects)
     }
 
+    /// [`Self::new`] over the fixture with `workload::Scale` (E12-S04), serving `served` too.
+    pub(crate) fn with_workloads(
+        cx: &mut TestAppContext,
+        served: impl IntoIterator<Item = ResourceKind>,
+        objects: impl IntoIterator<Item = Resource>,
+    ) -> Self {
+        let f = Fixture::with_workloads(cx);
+        let mut served_kinds = kinds();
+        served_kinds.extend(served);
+        f.ports().discovery.set_kinds(served_kinds);
+        Self::connected(f, objects)
+    }
+
     fn over(f: Fixture, objects: impl IntoIterator<Item = Resource>) -> Self {
+        f.ports().discovery.set_kinds(kinds());
+        Self::connected(f, objects)
+    }
+
+    fn connected(f: Fixture, objects: impl IntoIterator<Item = Resource>) -> Self {
         let ports = f.ports();
-        ports.discovery.set_kinds(kinds());
         for object in objects {
             ports.resources.insert(object);
         }

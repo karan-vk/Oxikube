@@ -12,6 +12,7 @@ use oxikube_workspace::CommandDispatcher;
 
 use super::events::EventRow;
 use crate::exec::ExecFlow;
+use crate::kinds::ScaleFlow;
 use crate::table::ResourceTableDeps;
 
 /// What a [`DetailView`](crate::detail::DetailView) is built over. Cheap to clone.
@@ -29,6 +30,9 @@ pub struct DetailDeps {
     /// Opens a shell or an attach from a pod's header (E09-S08): the pod's cluster tab's
     /// workspace asks which container. `None`: the header has no such buttons.
     pub exec: Option<ExecFlow>,
+    /// Opens the scale dialog from a workload's panel (E12-S04). `None`: the panel has no Scale
+    /// button.
+    pub scale: Option<ScaleFlow>,
 }
 
 impl From<&ResourceTableDeps> for DetailDeps {
@@ -39,6 +43,7 @@ impl From<&ResourceTableDeps> for DetailDeps {
             columns: deps.columns.clone(),
             dispatcher: deps.dispatcher.clone(),
             exec: None,
+            scale: None,
         }
     }
 }

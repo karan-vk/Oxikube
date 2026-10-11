@@ -28,6 +28,8 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ("resource_table::ShellSelected", CommandId::POD_SHELL),
     ("resource_table::ShellSelected", CommandId::NODE_SHELL),
     ("resource_table::AttachSelected", CommandId::POD_ATTACH),
+    // `s` on a Deployment, StatefulSet, ReplicaSet or ReplicationController (E12-S04).
+    ("resource_table::ScaleSelected", CommandId::WORKLOAD_SCALE),
     ("resource_table::DebugSelected", CommandId::POD_DEBUG),
     ("resource_table::ViewYaml", CommandId::RESOURCE_VIEW_YAML),
     (
@@ -43,6 +45,36 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     // dispatches `view::Open` with the view `port_forwards`, list it here and drop it from
     // `PLACEHOLDER_VERBS` in `tests/k9s.rs`.
     ("resource_table::ToggleWide", CommandId::TABLE_TOGGLE_WIDE),
+    // CronJobs and Jobs (E12-S08): `t` triggers, `s` suspends or, when suspended, resumes.
+    (
+        "resource_table::TriggerSelected",
+        CommandId::CRONJOB_TRIGGER,
+    ),
+    (
+        "resource_table::ToggleSuspendSelected",
+        CommandId::CRONJOB_SUSPEND,
+    ),
+    (
+        "resource_table::ToggleSuspendSelected",
+        CommandId::CRONJOB_RESUME,
+    ),
+    (
+        "resource_table::ToggleSuspendSelected",
+        CommandId::JOB_SUSPEND,
+    ),
+    (
+        "resource_table::ToggleSuspendSelected",
+        CommandId::JOB_RESUME,
+    ),
+    // A Service's verbs (E12-S13), bound where `kind == Service`.
+    (
+        "resource_table::ShowServicePods",
+        CommandId::SERVICE_SHOW_PODS,
+    ),
+    (
+        "resource_table::OpenInBrowser",
+        CommandId::SERVICE_OPEN_IN_BROWSER,
+    ),
     // The resource detail's find in the YAML and Describe text (E11-S06). `resource_detail::CloseFind`
     // only closes the field and gives the keys back to the detail, so it is view-local.
     ("resource_detail::Find", CommandId::RESOURCE_FIND),

@@ -206,8 +206,8 @@
       "/": "resource_table::FocusFilter",
       // k9s verbs on the cursor row (E11-S07): y the YAML, d describe, e edit, l logs (a pod's, or
       // a workload's pods), shift-f forward a port, f the active forwards. `ctrl-w` shows or hides
-      // the wide columns. `s` above is a shell on a Pod or a Node; E12 binds scale on workloads
-      // with a `kind == Deployment` section.
+      // the wide columns. `s` above is a shell on a Pod or a Node; the kind-scoped sections below
+      // rebind it (scale on workloads, E12-S04; CronJobs and Jobs suspend, E12-S08).
       "y": "resource_table::ViewYaml",
       "d": "resource_table::ViewDescribe",
       "e": "resource_table::EditSelected",
@@ -220,6 +220,42 @@
       "[": "jump::Back",
       "]": "jump::Forward",
       "-": "jump::Last"
+    }
+  },
+  {
+    // CronJobs (E12-S08), k9s: t runs the CronJob now (a Job from its template, confirmed first),
+    // s suspends it, or resumes it when it is suspended. Scoped by kind, so s stays a shell on
+    // pods and nodes; both act on the cursor row.
+    "context": "ResourceTable && !Editing && kind == CronJob",
+    "bindings": {
+      "t": "resource_table::TriggerSelected",
+      "s": "resource_table::ToggleSuspendSelected"
+    }
+  },
+  {
+    // Jobs (E12-S08): s suspends the Job (its pods are deleted until it is resumed), or resumes it.
+    "context": "ResourceTable && !Editing && kind == Job",
+    "bindings": {
+      "s": "resource_table::ToggleSuspendSelected"
+    }
+  },
+  {
+    // A Service's own verbs (E12-S13): `u` opens the Pods table filtered by the Service's selector
+    // (k9s's used-by), `o` forwards a port and opens it in the browser (offered once port
+    // forwarding is installed). The `kind` value is the table's kind.
+    "context": "ResourceTable && !Editing && kind == Service",
+    "bindings": {
+      "u": "resource_table::ShowServicePods",
+      "o": "resource_table::OpenInBrowser"
+    }
+  },
+  {
+    // k9s: s scales a workload instead of opening a shell (E12-S04). Bound for the kinds that
+    // have a scale (a DaemonSet has none), after the section above so it wins the tie: the
+    // table's context carries `kind`. The other action stories add their kind-scoped verbs here.
+    "context": "ResourceTable && !Editing && (kind == Deployment || kind == StatefulSet || kind == ReplicaSet || kind == ReplicationController)",
+    "bindings": {
+      "s": "resource_table::ScaleSelected"
     }
   },
   {

@@ -38,6 +38,10 @@ pub const FEATURES: &[Feature] = &[
         init: oxikube_editor::init,
     },
     Feature {
+        name: "oxikube_settings_ui",
+        init: oxikube_settings_ui::init,
+    },
+    Feature {
         name: "oxikube_palette",
         init: oxikube_palette::command_palette::init,
     },
@@ -52,6 +56,10 @@ pub const FEATURES: &[Feature] = &[
     Feature {
         name: "cluster_prefs",
         init: follow_cluster_prefs,
+    },
+    Feature {
+        name: "metrics_settings",
+        init: follow_metrics_settings,
     },
     Feature {
         name: "aliases",
@@ -71,6 +79,15 @@ fn follow_cluster_prefs(cx: &mut App) {
         crate::cluster_prefs::follow_cluster_settings(cx, sessions).detach();
         let budgets = state.ports().clusters.budgets.clone();
         crate::cluster_prefs::follow_watch_budgets(cx, budgets).detach();
+    }
+}
+
+/// `metrics.gpu_vendors` (global and per cluster) follows into the utilisation aggregator
+/// (E13-S02) for the life of the app.
+fn follow_metrics_settings(cx: &mut App) {
+    if let Some(state) = crate::app_state::AppState::try_global(cx) {
+        let vendors = state.services().utilisation.vendors().clone();
+        crate::metrics_settings::follow_gpu_vendors(cx, vendors).detach();
     }
 }
 

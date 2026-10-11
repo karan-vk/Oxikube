@@ -342,23 +342,45 @@ fn crd_list(f: &mut Fixture) -> Entity<ResourceTable> {
 }
 
 #[gpui::test]
-fn the_crd_list_shows_group_version_scope_and_short_names(cx: &mut TestAppContext) {
+fn the_crd_list_shows_kind_group_versions_scope_short_names_and_age(cx: &mut TestAppContext) {
     let mut f = Fixture::new(cx);
     let table = crd_list(&mut f);
     assert_eq!(f.names(&table), ["widgets.example.com"]);
     let shown = visible(&mut f, &table);
     assert_eq!(
         shown,
-        ["name", "group", "version", "scope", "short-names", "age"]
+        [
+            "name",
+            "kind",
+            "group",
+            "versions",
+            "scope",
+            "short-names",
+            "age"
+        ]
     );
+    assert_eq!(cell(&mut f, &table, 0, "kind"), "Widget");
     assert_eq!(cell(&mut f, &table, 0, "group"), "example.com");
     assert_eq!(
-        cell(&mut f, &table, 0, "version"),
-        "v1",
-        "the storage version"
+        cell(&mut f, &table, 0, "versions"),
+        "v1beta1,v1(storage)",
+        "the served versions, the storage one marked, as the API server's CRD table"
     );
     assert_eq!(cell(&mut f, &table, 0, "scope"), "Namespaced");
     assert_eq!(cell(&mut f, &table, 0, "short-names"), "wd,wdg");
+    // Freelens' Resource and k9s' Aliases are in the column chooser, hidden by default.
+    assert_eq!(cell(&mut f, &table, 0, "resource"), "widgets");
+    assert_eq!(cell(&mut f, &table, 0, "aliases"), "widgets,widget,wd,wdg");
+    let hidden: Vec<String> = f.vcx.update(|_, cx| {
+        table.read(cx).read_rows(cx, |d| {
+            d.layout()
+                .columns()
+                .filter(|(_, shown)| !shown)
+                .map(|(c, _)| c.id.to_string())
+                .collect()
+        })
+    });
+    assert_eq!(hidden, ["resource", "aliases", "established"]);
 }
 
 #[gpui::test]
@@ -398,6 +420,34 @@ fn opening_a_crd_row_opens_the_table_of_its_custom_resources_at_the_storage_vers
     f.update(&table, |t, cx| t.open_row(0, cx));
     f.settle();
     assert_eq!(tables_of(&mut f, &widget_kind("v1", true).gvk).len(), 1);
+}
+
+#[gpui::test]
+fn the_enter_key_on_a_crd_row_opens_its_custom_resources(cx: &mut TestAppContext) {
+    let mut f = Fixture::new(cx);
+    let table = crd_list(&mut f);
+    script(
+        &f,
+        batch(TableSource::Server, widget_columns(), &widget_rows()),
+    );
+    f.dispatcher.clear();
+    // k9s: `j` onto the row, Enter opens the resources the CRD defines (not its detail).
+    f.keys(&table, "j enter");
+    f.settle();
+    assert_eq!(
+        f.dispatcher.sent().first(),
+        Some(&Command::CrdOpenResources {
+            cluster: cluster(),
+            name: "widgets.example.com".into()
+        })
+    );
+    let opened = tables_of(&mut f, &widget_kind("v1", true).gvk);
+    assert_eq!(opened.len(), 1);
+    // The CR list's columns are the server's, in its order; `Owner` (priority 1) hidden.
+    assert_eq!(
+        visible(&mut f, &opened[0]),
+        ["name", "size", "replicas", "age"]
+    );
 }
 
 #[gpui::test]

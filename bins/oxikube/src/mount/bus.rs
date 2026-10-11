@@ -18,6 +18,7 @@
 //! | `oxikube` | `view::Open` for the catalog home, the kubeconfig sources screen and the chart gallery, `charts::OpenGallery` (the gallery's palette command, E13-S07); `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
 //! | `oxikube_app::apply` | `resource::Apply` (guarded: blocked read-only, risk low with the editor's diff preview as the confirmation, a server dry run before every apply, server-side apply as the `editor.field_manager`, the replace fallback at the reviewed `resourceVersion`, audit; E10-S08). The manifest editor runs it through `ApplyService` |
+//! | `oxikube_app::workloads` | `cronjob::Trigger` (a Job from the CronJob's template), `cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume`, `workload::Scale` (E12-S04: the `scale` subresource, risk low and medium for zero, audit with `before=` and `after=`) (guarded: blocked read-only, risk low so a simple confirm, a server dry run first, audit with the created Job's name; E12-S08) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
 //! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
 //! | `oxikube_app::exec` | `node::Shell` (guarded: blocked read-only, a confirmation naming the node and the image, a server dry run of the pod, audit; E09-S09) |
@@ -25,15 +26,18 @@
 //! | `oxikube_palette` | `palette::OpenJump` (the `:` jump bar, E11-S05), `jump::Back`, `jump::Forward`, `jump::Last` (its history: `[`, `]`, `-`) |
 //! | `oxikube_workspace` (quit) | `app::Quit`: asks first while operations run, like `cmd-q` (E11-S05, for `:q`, the palette and agents) |
 //! | `oxikube_palette` | `help::Show` (the `?` overlay of the keys that apply where the focus is; read-only, E11-S10) |
+//! | `oxikube_app::metrics_provider` | `cluster::RedetectMetrics` (run provider detection again, or re-check the configured endpoint), `cluster::ToggleMetrics` (`prometheus.enabled` in `settings.json`); neither changes a cluster (E13-S05) |
+//! | `oxikube_settings_ui` | `cluster::ShowMetricsSettings` (the cluster's metrics page, a tab of its tab; E13-S05) |
 //! | `oxikube_editor` | `editor::NewManifest` (an empty manifest editor in the shown cluster's tab, its YAML checked against that cluster's schemas), `resource::Create` (the "Create resource" picker, or one template, opened in a new editor with the cluster's selected namespace filled in; E10-S09: it writes nothing, the objects are made by `resource::Apply`, one per document), `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (the focused editor's view toggles; E10-S04), `editor::TriggerCompletion` / `editor::ShowHover` (the focused editor's completion menu and field docs at the cursor, from the cluster's schema; E10-S05), `resource::Edit`, `resource::ViewYamlInEditor` (a `kind/name` editor tab on a freshly read object, E10-S06), `editor::ToggleManagedFields`, `editor::ToggleSecretMask` (E10-S06), `editor::ConvertToJson`, `editor::ConvertToYaml` (the buffer as the other language, one undo step), `editor::UseJson`, `editor::UseYaml` (the language the buffer is read as; E10-S10), `editor::ShowDiff` / `ToggleDiffLayout` / `ReloadFromServer` / `MergeFromServer` / `KeepMine` / `TakeMine` / `TakeServer` / `AcceptMerge` (diff vs live and the changed-on-server banner of the focused editor: read the object, change the buffer only; E10-S07) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
 //! `pod::Debug` (E09-S10, registered by `oxikube_terminal` over the app's `ExecService`) adds an
 //! ephemeral debug container to a pod and opens a terminal in it.
 //!
-//! Only `resource::Delete`, `resource::Apply`, `pod::Debug` and `node::Shell` (it creates a
-//! privileged pod) mutate a cluster; they and the posture commands confirm and audit through the `MutationGuard` the bus
-//! owns, and E12's per-kind actions join here.
+//! `resource::Delete`, `resource::Apply`, `pod::Debug`, `node::Shell` (it creates a privileged
+//! pod), `workload::Scale` and the `cronjob::*` / `job::*` commands mutate a cluster; they and the posture commands
+//! confirm and audit through the `MutationGuard` the bus owns, and E12's other per-kind actions
+//! join here.
 
 use std::cell::OnceCell;
 use std::rc::Rc;
@@ -120,6 +124,13 @@ pub struct BusParts {
     pub quit: QuitSink,
     /// The manifest editors' queue (`editor::*`, applied on the UI thread).
     pub editors: EditorViewSink,
+    /// The metrics provider service (`cluster::RedetectMetrics`, `cluster::ToggleMetrics`; E13-S05).
+    pub metrics: oxikube_app::MetricsProviderService,
+    /// Where `cluster::ToggleMetrics` persists (`settings.json`).
+    pub metrics_settings: Arc<dyn oxikube_app::metrics_provider::MetricsSettingsWriter>,
+    /// Where `cluster::ShowMetricsSettings` sends the cluster whose page to open (applied on the UI
+    /// thread).
+    pub metrics_pages: oxikube_settings_ui::metrics::MetricsRequestSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -143,8 +154,11 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     // `ingressclass::SetDefault` (E12-S14): a low-risk guarded mutation, the Network section's only
     // one; it reads the cluster's classes to clear the flag on the previous default.
-    registry.install("oxikube_app::network", |r| {
-        oxikube_app::network::register_commands(r, parts.sessions.clone())
+    registry.install("oxikube_app::ingress_class", |r| {
+        oxikube_app::ingress_class::register_commands(r, parts.sessions.clone())
+    })?;
+    registry.install("oxikube_app::workloads", |r| {
+        oxikube_app::workloads::register_commands(r, parts.sessions.clone())
     })?;
     registry.install("oxikube_app::posture", |r| {
         oxikube_app::guard::register_commands(r, parts.sessions, parts.prefs)
@@ -178,6 +192,12 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_palette::help", |r| {
         oxikube_palette::help::register_commands(r, parts.help)
+    })?;
+    registry.install("oxikube_app::metrics_provider", |r| {
+        oxikube_app::metrics_provider::register_commands(r, parts.metrics, parts.metrics_settings)
+    })?;
+    registry.install("oxikube_settings_ui", |r| {
+        oxikube_settings_ui::metrics::register_commands(r, parts.metrics_pages)
     })?;
     registry.install("oxikube_editor", |r| {
         oxikube_editor::view::register_commands(r, parts.editors)

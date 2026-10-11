@@ -68,6 +68,11 @@ harness = false
 name = "column_cell"
 harness = false
 
+# `cargo bench -p oxikube_app --bench utilisation` (E13-S02): requests/limits/percent maths, 10k-pod allocation.
+[[bench]]
+name = "utilisation"
+harness = false
+
 # `cargo bench -p oxikube_app --bench log_ingest` (E08-S01): lines through a LogService session.
 [[bench]]
 name = "log_ingest"

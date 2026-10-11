@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AccessReviewPort, DescribePort, DiscoveryPort, ExecPort, LogPort, MetricsPort, PortForwardPort,
-    ResourcePort, SchemaPort, TableFeedPort, WarningPort,
+    ResourcePort, SchemaPort, ServiceProxyPort, TableFeedPort, WarningPort,
 };
 
 /// How interactive an exec credential plugin may be (a per-cluster setting, E06-S08).
@@ -162,6 +162,9 @@ pub struct ClusterPorts {
     pub port_forward: Arc<dyn PortForwardPort>,
     /// `metrics.k8s.io`.
     pub metrics: Arc<dyn MetricsPort>,
+    /// Requests to Services through the API server's service proxy (how the metrics code
+    /// reaches an in-cluster Prometheus, E13-S05). Read-only.
+    pub service_proxy: Arc<dyn ServiceProxyPort>,
     /// What the user may do here.
     pub access: Arc<dyn AccessReviewPort>,
     /// The API server's `Warning:` response headers.
