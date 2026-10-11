@@ -68,14 +68,39 @@ fn the_job_is_in_the_cluster_afterwards() {
 
 #[test]
 fn the_cronjobs_concurrency_policy_is_not_consulted() {
-    // kubectl creates the Job whatever `concurrencyPolicy` says, and so do we.
+    // kubectl creates the Job whatever `concurrencyPolicy` says, and so do we: a
+    // `Forbid` CronJob that already has a running Job still gets a manual trigger.
     let t = Workloads::new(false);
+    let mut busy = serde_json::to_value(cronjob("busy").to_value()).unwrap();
+    assert_eq!(busy["spec"]["concurrencyPolicy"], "Forbid");
+    busy["status"] = json!({"active": [{
+        "apiVersion": "batch/v1", "kind": "Job", "name": "busy-28000000",
+        "namespace": "default", "uid": "busy-28000000-uid",
+    }]});
+    t.port()
+        .insert(oxikube_domain::Resource::from_json(busy).unwrap());
+    let mut running =
+        serde_json::to_value(job("busy-28000000", json!({}), json!({"active": 1})).to_value())
+            .unwrap();
+    running["metadata"]["ownerReferences"] = json!([{
+        "apiVersion": "batch/v1", "kind": "CronJob", "name": "busy",
+        "uid": "cj-uid", "controller": true,
+    }]);
+    t.port()
+        .insert(oxikube_domain::Resource::from_json(running).unwrap());
+
+    let output = t.run(trigger("busy"), Initiator::Ui).expect("trigger");
+
     assert_eq!(
-        cronjob("nightly").get("/spec/concurrencyPolicy").is_some(),
-        true
+        t.writes(),
+        [
+            ("Job".to_owned(), "create", true),
+            ("Job".to_owned(), "create", false)
+        ]
     );
-    t.run(trigger("nightly"), Initiator::Ui).expect("trigger");
-    assert_eq!(t.writes().len(), 2);
+    assert_eq!(output.data.expect("data")["outcome"], "triggered");
+    // The running Job and the manual one sit side by side.
+    assert_eq!(t.objects_of(&Gvk::new("batch", "v1", "Job")).len(), 2);
 }
 
 #[test]
