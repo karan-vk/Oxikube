@@ -20,6 +20,7 @@
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
 //! | [`utilisation`] | pod / node / namespace requests, limits and `%CPU/R`-style percents ([`ResourceAmounts`](utilisation::ResourceAmounts), [`percent`](utilisation::percent), `metrics.gpu_vendors`) |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
+//! | [`metrics_provider`] | [`MetricsProviderKind`]: the Prometheus-compatible stack behind a cluster's history graphs (E13-S05) |
 //! | [`schema`] | [`JsonSchema`]: the flattened per-GVK OpenAPI v3 view the manifest editor validates against |
 //! | [`portforward`] | [`ForwardSpec`], [`ForwardStatus`]: what a port-forward targets and how it is doing |
 //! | [`agent`] | [`ContextBlock`](agent::ContextBlock), the bounded context handed to agents |
@@ -55,6 +56,7 @@ pub mod json;
 pub mod kinds;
 pub mod log;
 pub mod metrics;
+pub mod metrics_provider;
 pub mod portforward;
 pub mod preset;
 pub mod quantity;
@@ -76,6 +78,7 @@ pub use error::{ErrorKind, OxiError, OxiResult};
 pub use error_details::{ConflictDetails, ConflictReason, FieldCause, ValidationDetails};
 pub use human_error::HumanError;
 pub use json::{JsonDoc, JsonRef};
+pub use metrics_provider::MetricsProviderKind;
 pub use portforward::{ForwardPort, ForwardSpec, ForwardStatus};
 pub use preset::ClusterPreset;
 pub use quantity::{Quantity, QuantityError, QuantityFormat};

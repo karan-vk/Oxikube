@@ -32,6 +32,8 @@
 //! | `MetricsPort` | [`FakeMetricsPort`] |
 //! | `PromqlPort` | [`FakePromqlPort`] |
 //! | `PromqlEndpointPort` | [`FakePromqlEndpointPort`] |
+//! | `ProviderDetectorPort` | [`FakeProviderDetectorPort`] |
+//! | `ServiceProxyPort` | [`FakeServiceProxyPort`] |
 //! | `DescribePort` | [`FakeDescribePort`] |
 //! | `HelmPort` | [`FakeHelmPort`] |
 //! | `StatePort` | [`FakeStatePort`] |
@@ -81,6 +83,7 @@ mod data;
 mod infra;
 mod integration;
 mod promql_endpoint;
+mod provider;
 mod resource;
 mod schema;
 mod session;
@@ -112,6 +115,10 @@ pub use integration::{
     FakeToolPort, IntegrationCall, IntegrationScripts, ToolCall, ToolScripts,
 };
 pub use promql_endpoint::{FakePromqlEndpointPort, PromqlEndpointCall, PromqlEndpointScripts};
+pub use provider::{
+    FakeProviderDetectorPort, FakeServiceProxyPort, ProviderDetectorCall, ProviderDetectorScripts,
+    ServiceProxyCall, ServiceProxyScripts,
+};
 pub use resource::{FakeResourcePort, ResourceCall, ResourceScripts};
 pub use schema::{FakeSchemaPort, SchemaCall, SchemaScripts};
 pub use session::{

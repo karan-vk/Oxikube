@@ -38,6 +38,10 @@ pub const FEATURES: &[Feature] = &[
         init: oxikube_editor::init,
     },
     Feature {
+        name: "oxikube_settings_ui",
+        init: oxikube_settings_ui::init,
+    },
+    Feature {
         name: "oxikube_palette",
         init: oxikube_palette::command_palette::init,
     },

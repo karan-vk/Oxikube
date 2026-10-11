@@ -1,7 +1,7 @@
 //! The per-cluster layer: precedence per field, diagnostics, comment-preserving edits, schema.
 
-use oxikube_domain::ClusterColour;
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::{ClusterColour, MetricsProviderKind};
 use oxikube_ports::{ClusterPrefs, ExecInteractivity, NodeShellSpec};
 use serde_json::{Value, json};
 
@@ -210,9 +210,9 @@ fn the_cluster_layer_beats_the_user_layer_beats_the_defaults_for_every_field() {
         }),
         (
             "prometheus",
-            json!({"provider": "auto"}),
-            json!({"provider": "operator"}),
-            |p| json!({ "provider": p.prometheus.as_ref().and_then(|v| v.provider.clone()) }),
+            json!({"provider": "off"}),
+            json!({"provider": "manual"}),
+            |p| json!({ "provider": p.prometheus.as_ref().map(|v| v.mode.id()) }),
         ),
     ];
     for (key, user, cluster, read) in cases {
@@ -261,15 +261,18 @@ fn a_cluster_block_overrides_only_the_fields_it_names() {
 fn prometheus_fields_merge_and_hold_only_a_keychain_reference() {
     let store = load(&format!(
         r#"{{
-          "prometheus": {{ "provider": "auto" }},
+          "prometheus": {{ "kind": "victoria_metrics" }},
           "clusters": {{ "{PROD}": {{ "prometheus": {{
             "url": "https://prom.example.com", "auth_secret": "prod-prom" }} }} }}
         }}"#
     ));
     let prom = prefs(&store, Some(&id(PROD))).prometheus.clone().unwrap();
-    assert_eq!(prom.provider.as_deref(), Some("auto"));
+    assert_eq!(prom.kind, Some(MetricsProviderKind::VictoriaMetrics));
     assert_eq!(prom.url.as_deref(), Some("https://prom.example.com"));
-    assert_eq!(prom.auth.unwrap().to_string(), "prometheus/prod-prom");
+    assert_eq!(
+        prom.auth_secret.unwrap().to_string(),
+        "prometheus/prod-prom"
+    );
 }
 
 #[test]

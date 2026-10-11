@@ -233,11 +233,39 @@
     "image_pull_policy": null,
     "max_lifetime_seconds": 28800
   },
-  // Manual Prometheus location instead of auto-detection, e.g.
-  // { "url": "https://prometheus.example.com", "auth_secret": "prod-prometheus" }.
-  // `auth_secret` names an OS keychain entry (namespace `prometheus`) holding the bearer token;
-  // never put a token in this file.
-  "prometheus": null,
+  // History metrics (graphs), per cluster: set any of these at the top level for every cluster or
+  // under `clusters.<id>.prometheus` for one. Live CPU/memory from metrics-server is separate and
+  // never affected by this block. Fields merge across layers; edits apply at once.
+  //   enabled      false fetches no history metrics for the cluster, whatever `provider` says.
+  //   provider     "auto" probes the cluster for a Prometheus-compatible service when it connects
+  //                (kube-prometheus, Lens stack, VictoriaMetrics, Mimir, OpenShift) through the
+  //                API server's service proxy; "manual" uses `url` or `path`; "off" fetches
+  //                nothing. null means "manual" when `url` or `path` is set, else "auto".
+  //   kind         manual only: "kube_prometheus", "lens", "victoria_metrics", "mimir",
+  //                "openshift" or "prometheus" (null), so history queries use the right labels.
+  //   url          manual: a direct http(s) URL, no credentials, e.g. "https://vm.example.com".
+  //   path         manual: "namespace/service:port" through the API server with your cluster
+  //                credentials, e.g. "monitoring/vmsingle-vmks:8429".
+  //   path_prefix  inserted before /api/v1/..., e.g. "/prometheus" (Mimir) or
+  //                "/select/0/prometheus" (VictoriaMetrics cluster).
+  //   auth         for a `url`: "none", "bearer" or "basic". null means "bearer" when
+  //                `auth_secret` is set ("basic" when `auth_user` is too), else "none".
+  //   auth_user    the user name of basic auth.
+  //   auth_secret  the name of an OS keychain entry (namespace `prometheus`) holding the bearer
+  //                token or the basic password; never put a token in this file.
+  // The cluster settings page of a connected cluster shows what detection found and which
+  // services it probed, and can run it again.
+  "prometheus": {
+    "enabled": true,
+    "provider": null,
+    "kind": null,
+    "url": null,
+    "path": null,
+    "path_prefix": null,
+    "auth": null,
+    "auth_user": null,
+    "auth_secret": null
+  },
   // Namespaces to offer when you may not list namespaces cluster-wide (RBAC-restricted users).
   "accessible_namespaces": [],
   // How interactive exec credential plugins (aws, gke-gcloud-auth-plugin, ...) may be: "never"

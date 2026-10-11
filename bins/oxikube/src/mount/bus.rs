@@ -25,6 +25,8 @@
 //! | `oxikube_palette` | `palette::OpenJump` (the `:` jump bar, E11-S05), `jump::Back`, `jump::Forward`, `jump::Last` (its history: `[`, `]`, `-`) |
 //! | `oxikube_workspace` (quit) | `app::Quit`: asks first while operations run, like `cmd-q` (E11-S05, for `:q`, the palette and agents) |
 //! | `oxikube_palette` | `help::Show` (the `?` overlay of the keys that apply where the focus is; read-only, E11-S10) |
+//! | `oxikube_app::metrics_provider` | `cluster::RedetectMetrics` (run provider detection again, or re-check the configured endpoint), `cluster::ToggleMetrics` (`prometheus.enabled` in `settings.json`); neither changes a cluster (E13-S05) |
+//! | `oxikube_settings_ui` | `cluster::ShowMetricsSettings` (the cluster's metrics page, a tab of its tab; E13-S05) |
 //! | `oxikube_editor` | `editor::NewManifest` (an empty manifest editor in the shown cluster's tab, its YAML checked against that cluster's schemas), `resource::Create` (the "Create resource" picker, or one template, opened in a new editor with the cluster's selected namespace filled in; E10-S09: it writes nothing, the objects are made by `resource::Apply`, one per document), `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (the focused editor's view toggles; E10-S04), `editor::TriggerCompletion` / `editor::ShowHover` (the focused editor's completion menu and field docs at the cursor, from the cluster's schema; E10-S05), `resource::Edit`, `resource::ViewYamlInEditor` (a `kind/name` editor tab on a freshly read object, E10-S06), `editor::ToggleManagedFields`, `editor::ToggleSecretMask` (E10-S06), `editor::ConvertToJson`, `editor::ConvertToYaml` (the buffer as the other language, one undo step), `editor::UseJson`, `editor::UseYaml` (the language the buffer is read as; E10-S10), `editor::ShowDiff` / `ToggleDiffLayout` / `ReloadFromServer` / `MergeFromServer` / `KeepMine` / `TakeMine` / `TakeServer` / `AcceptMerge` (diff vs live and the changed-on-server banner of the focused editor: read the object, change the buffer only; E10-S07) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
@@ -120,6 +122,13 @@ pub struct BusParts {
     pub quit: QuitSink,
     /// The manifest editors' queue (`editor::*`, applied on the UI thread).
     pub editors: EditorViewSink,
+    /// The metrics provider service (`cluster::RedetectMetrics`, `cluster::ToggleMetrics`; E13-S05).
+    pub metrics: oxikube_app::MetricsProviderService,
+    /// Where `cluster::ToggleMetrics` persists (`settings.json`).
+    pub metrics_settings: Arc<dyn oxikube_app::metrics_provider::MetricsSettingsWriter>,
+    /// Where `cluster::ShowMetricsSettings` sends the cluster whose page to open (applied on the UI
+    /// thread).
+    pub metrics_pages: oxikube_settings_ui::metrics::MetricsRequestSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -173,6 +182,12 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_palette::help", |r| {
         oxikube_palette::help::register_commands(r, parts.help)
+    })?;
+    registry.install("oxikube_app::metrics_provider", |r| {
+        oxikube_app::metrics_provider::register_commands(r, parts.metrics, parts.metrics_settings)
+    })?;
+    registry.install("oxikube_settings_ui", |r| {
+        oxikube_settings_ui::metrics::register_commands(r, parts.metrics_pages)
     })?;
     registry.install("oxikube_editor", |r| {
         oxikube_editor::view::register_commands(r, parts.editors)

@@ -17,7 +17,8 @@ use parking_lot::Mutex;
 
 use super::{
     FakeDescribePort, FakeDiscoveryPort, FakeExecPort, FakeLogPort, FakeMetricsPort,
-    FakePortForwardPort, FakeResourcePort, FakeSchemaPort, FakeTableFeedPort, FakeWarningPort,
+    FakePortForwardPort, FakeResourcePort, FakeSchemaPort, FakeServiceProxyPort, FakeTableFeedPort,
+    FakeWarningPort,
 };
 use crate::script::{CallLog, Script};
 
@@ -155,6 +156,8 @@ pub struct FakeClusterPorts {
     pub port_forward: Arc<FakePortForwardPort>,
     /// `MetricsPort`.
     pub metrics: Arc<FakeMetricsPort>,
+    /// `ServiceProxyPort`.
+    pub service_proxy: Arc<FakeServiceProxyPort>,
     /// `AccessReviewPort`.
     pub access: Arc<FakeAccessReviewPort>,
     /// `WarningPort`.
@@ -176,6 +179,7 @@ impl FakeClusterPorts {
             exec: self.exec.clone(),
             port_forward: self.port_forward.clone(),
             metrics: self.metrics.clone(),
+            service_proxy: self.service_proxy.clone(),
             access: self.access.clone(),
             warnings: self.warnings.clone(),
             describe: self.describe.clone(),

@@ -47,6 +47,7 @@ pub mod integrations;
 pub mod kinds;
 pub mod logs;
 pub mod metrics;
+pub mod metrics_provider;
 pub mod search;
 pub mod session;
 pub mod sidebar;
@@ -101,6 +102,7 @@ pub use metrics::{
     GpuVendorsHandle, NamespaceAllocation, NodeAllocation, UtilisationAggregator,
     allocate_namespaces, allocate_nodes,
 };
+pub use metrics_provider::{EndpointSink, MetricsProviderService, ProviderState, ProviderStatus};
 pub use search::aliases::{
     AliasConflict, AliasEntry, AliasFollow, AliasRegistry, AliasSource, AliasTable, ConflictKind,
     Resolution,

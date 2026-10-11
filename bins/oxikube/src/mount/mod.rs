@@ -75,6 +75,11 @@
 //!     `:ctx prod`, `:ns`, `:q`, opened by `:` in a resource table or `palette::OpenJump`; a line
 //!     runs as `resource::OpenList`, `namespace::Select`, `table::SetFilter`, `cluster::Select` and
 //!     `app::Quit` through the window's dispatcher; `[`, `]` and `-` replay the history.
+//! 15. history metrics (E13-S05, `mount::metrics` and `crate::metrics_provider`): the app's
+//!     `MetricsProviderService` starts following the sessions and the settings (idle until a cluster
+//!     connects), `cluster::ShowMetricsSettings` (the palette's "Cluster Metrics Settings", the
+//!     sidebar's Metrics entry) opens the cluster's metrics page in its tab, and
+//!     `cluster::RedetectMetrics` / `cluster::ToggleMetrics` are on the bus with their tool stubs.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -89,6 +94,7 @@ mod help;
 mod jump;
 mod keymap;
 mod logs;
+mod metrics;
 mod palette;
 mod resources;
 mod tabs;
@@ -173,6 +179,10 @@ pub struct Wiring {
     /// Applies `app::Quit` from the bus (`:q`, the palette): the quit guard asks first while
     /// operations are running.
     _quit: Task<()>,
+    /// Opens the cluster metrics pages for `cluster::ShowMetricsSettings` (E13-S05).
+    _metrics_pages: Task<()>,
+    /// Follows the sessions and the settings for the metrics provider service (E13-S05).
+    _follow_metrics: crate::metrics_provider::MetricsFollow,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -196,6 +206,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let bus_dispatcher = bus::BusDispatcher::new(window.window_handle());
     let dispatcher: Rc<dyn CommandDispatcher> = Rc::new(bus_dispatcher.clone());
     let dispatcher_for_keymap = dispatcher.clone();
+    let dispatcher_for_metrics = dispatcher.clone();
 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
@@ -262,6 +273,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (quit_sink, quit_rx) = oxikube_workspace::session::QuitSink::channel();
     let (help_sink, help_rx) = oxikube_palette::help::HelpSink::channel();
     let (editor_sink, editor_rx) = oxikube_editor::view::EditorViewSink::channel();
+    let (metrics_sink, metrics_rx) = oxikube_settings_ui::metrics::MetricsRequestSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
@@ -284,6 +296,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         jump: jump_sink,
         quit: quit_sink,
         editors: editor_sink,
+        metrics: services.metrics.provider.clone(),
+        metrics_settings: Arc::new(crate::metrics_provider::SettingsMetricsWriter::new(cx)),
+        metrics_pages: metrics_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -464,6 +479,18 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let follow_keymap =
         keymap::follow_diagnostics(workspace.downgrade(), dispatcher_for_keymap, cx);
     let terminal_input = terminal::terminal_input(terminal_input_rx, window, cx);
+    // History metrics (E13-S05): the provider service follows the sessions and the settings, and the
+    // page opens in the cluster tab.
+    let follow_metrics = crate::metrics_provider::start(&services.metrics, &services.sessions, cx);
+    let metrics_pages = metrics::start_views(
+        services.metrics.provider.clone(),
+        services.sessions.clone(),
+        dispatcher_for_metrics,
+        tabs.downgrade(),
+        metrics_rx,
+        window,
+        cx,
+    );
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -485,6 +512,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _jump: jump,
         _quit: quit,
         _editor_views: editor_views,
+        _metrics_pages: metrics_pages,
+        _follow_metrics: follow_metrics,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

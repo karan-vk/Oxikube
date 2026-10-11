@@ -9,6 +9,7 @@
 use std::time::Duration;
 
 use crate::secrets::{SecretKey, SecretString};
+use crate::service_proxy::ServiceRef;
 
 /// Default whole-request deadline (connect, send, wait and read the body).
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -63,8 +64,14 @@ pub struct PromTls {
 #[derive(Debug, Clone)]
 pub struct PromEndpoint {
     /// Scheme, host, optional port and path, e.g. `http://prometheus.monitoring:9090`. No
-    /// credentials in the URL; use [`auth`](Self::auth).
+    /// credentials in the URL; use [`auth`](Self::auth). Empty, and ignored, when
+    /// [`service`](Self::service) is set.
     pub base_url: String,
+    /// An in-cluster Service reached through the API server's service proxy instead of a URL
+    /// (E13-S05). The request goes out with the cluster connection's own credentials, so
+    /// [`auth`](Self::auth) and [`tls`](Self::tls) do not apply. Only a client that has the
+    /// cluster's `ServiceProxyPort` can send to such an endpoint.
+    pub service: Option<ServiceRef>,
     /// A path inserted before `/api/v1/...` (Mimir's `/prometheus`, OpenShift's thanos-querier,
     /// Grafana-fronted setups). `None` or empty adds nothing.
     pub path_prefix: Option<String>,
@@ -83,11 +90,29 @@ impl PromEndpoint {
     pub fn new(base_url: impl Into<String>) -> Self {
         Self {
             base_url: base_url.into(),
+            service: None,
             path_prefix: None,
             auth: PromAuth::None,
             tls: PromTls::default(),
             timeout: DEFAULT_TIMEOUT,
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
+        }
+    }
+
+    /// An endpoint on `service`, reached through the API server's service proxy, with the default
+    /// limits.
+    pub fn service(service: ServiceRef) -> Self {
+        Self {
+            service: Some(service),
+            ..Self::new(String::new())
+        }
+    }
+
+    /// Where the endpoint is, for a status line: the service (`ns/name:port`) or the URL.
+    pub fn location(&self) -> String {
+        match &self.service {
+            Some(service) => service.to_string(),
+            None => self.base_url.clone(),
         }
     }
 

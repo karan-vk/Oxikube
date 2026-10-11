@@ -57,4 +57,20 @@ impl ClusterSettings {
             content.read_only = Some(read_only);
         })
     }
+
+    /// Sets `clusters.<cluster>.prometheus.enabled`: `false` fetches no history metrics for the
+    /// cluster. See [`ClusterSettings::update_cluster`].
+    ///
+    /// Writes `true` and `false` explicitly, so a cluster can opt back in when the top level
+    /// switched metrics off.
+    pub fn set_metrics_enabled(
+        cx: &mut App,
+        cluster: &ClusterId,
+        name_hint: Option<&str>,
+        enabled: bool,
+    ) -> Task<OxiResult<()>> {
+        Self::update_cluster(cx, cluster, name_hint, move |content| {
+            content.prometheus.get_or_insert_default().enabled = Some(enabled);
+        })
+    }
 }

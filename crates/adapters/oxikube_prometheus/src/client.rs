@@ -11,14 +11,10 @@ use oxikube_ports::{
 use reqwest::header::{ACCEPT, CONTENT_LENGTH};
 use reqwest::{Method, Response};
 
+use crate::decode::decode;
 use crate::transport::ClientPool;
-use crate::url::{Route, api_url, loggable, unix_seconds};
-use crate::wire::{Reply, parse};
+use crate::url::{MAX_QUERY_IN_URL, Route, api_url, loggable, unix_seconds};
 use crate::{auth, errors};
-
-/// Queries longer than this go in a POST form body; a long PromQL expression in the URL can hit
-/// a proxy's or server's request-line limit (commonly 8 KiB).
-const MAX_QUERY_IN_URL: usize = 2048;
 
 /// Talks to any Prometheus-compatible HTTP API (Prometheus, VictoriaMetrics, Mimir, Thanos).
 ///
@@ -57,6 +53,13 @@ impl PromqlClient {
                 message: "the query is empty".into(),
             });
         }
+        if endpoint.service.is_some() {
+            return Err(PromqlError::InvalidEndpoint(
+                "a service endpoint is reached through the cluster's API server; this client \
+                 only speaks to URLs"
+                    .into(),
+            ));
+        }
         let mut url = api_url(endpoint, route)?;
         let post = query.len() > MAX_QUERY_IN_URL;
         let mut form = Vec::with_capacity(params.len() + 1);
@@ -89,26 +92,10 @@ impl PromqlClient {
             .send()
             .await
             .map_err(|e| errors::from_transport(e, endpoint.timeout))?;
-        let status = response.status();
-        let success = status.is_success();
-        let status = status.as_u16();
+        let status = response.status().as_u16();
         let body = read_body(response, endpoint.max_response_bytes, endpoint.timeout).await?;
 
-        match parse(&body) {
-            Ok(Reply::Success(series)) if success => Ok(series),
-            Ok(Reply::Success(_)) => Err(errors::from_server(status, "", "")),
-            Ok(Reply::Failure {
-                error_type,
-                message,
-            }) => {
-                // An error envelope on a 2xx is still a failure; keep a server-side status.
-                let status = if success { 500 } else { status };
-                Err(errors::from_server(status, &error_type, &message))
-            }
-            // No envelope: judge by status first (a proxy's 401/502 page is not "bad response").
-            Err(bad) if success => Err(bad),
-            Err(_) => Err(errors::from_server(status, "", &snippet(&body))),
-        }
+        decode(status, &body)
     }
 }
 
@@ -143,11 +130,6 @@ async fn read_body(
         body.extend_from_slice(&chunk);
     }
     Ok(body)
-}
-
-/// The start of a non-API body, for an error message.
-fn snippet(body: &[u8]) -> String {
-    String::from_utf8_lossy(&body[..body.len().min(200)]).into_owned()
 }
 
 #[async_trait]

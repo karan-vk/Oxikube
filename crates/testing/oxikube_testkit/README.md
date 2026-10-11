@@ -8,7 +8,7 @@ Port fakes, fixtures, builders, kind helpers, gpui test helpers.
 
 - `oxikube_testkit::Fake*`: one fake per port trait in `oxikube_ports` (`FakeResourcePort`,
   `FakeDiscoveryPort`, `FakeTableFeedPort`, `FakeLogPort`, `FakeExecPort`, `FakeTerminalBackend`, `FakeExecStreamPort`, `FakePortForwardPort`,
-  `FakeClusterSourcePort`, `FakeCloudDiscoveryPort`, `FakeMetricsPort`, `FakePromqlPort`, `FakePromqlEndpointPort`,
+  `FakeClusterSourcePort`, `FakeCloudDiscoveryPort`, `FakeMetricsPort`, `FakePromqlPort`, `FakePromqlEndpointPort`, `FakeProviderDetectorPort`, `FakeServiceProxyPort`,
   `FakeDescribePort`, `FakeHelmPort`, `FakeStatePort`, `FakeSecretStorePort`, `FakeNotifierPort`,
   `FakeUpdaterPort`, `FakeCrashReporterPort`, `FakeFsPort`, `FakeClockPort`, `FakeIntegrationPort`,
   `FakeToolPort`, `FakeContextProviderPort`, `FakeAgentPort`, `FakeAgentClient`).

@@ -51,6 +51,9 @@ uuid.workspace = true
 [dev-dependencies]
 oxikube_logging.workspace = true
 oxikube_testkit.workspace = true
+# `tests/service_proxy_kind.rs` runs the real provider detector over the real service proxy.
+# Dev-dependencies are exempt from `lint-deps`; the adapter itself depends on no other adapter.
+oxikube_prometheus.workspace = true
 proptest.workspace = true
 # `ExposeSecret`: the kind user's client key in the exec-certificate integration test.
 secrecy.workspace = true
