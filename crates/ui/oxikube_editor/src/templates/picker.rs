@@ -25,7 +25,7 @@ pub type TemplateSink = Rc<dyn Fn(Template, &mut Window, &mut App)>;
 /// The picker's width (before UI zoom): a name, its kind and a line about it.
 const WIDTH: f32 = 600.;
 
-/// What the picker lists and does. See the [module docs](self).
+/// What the picker lists and does. See the module docs.
 pub struct TemplatePickerDelegate {
     catalog: TemplateCatalog,
     user_dir: Option<PathBuf>,
