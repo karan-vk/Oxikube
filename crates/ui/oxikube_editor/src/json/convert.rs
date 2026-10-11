@@ -52,7 +52,7 @@ pub fn convert(text: &str, to: Language) -> Result<Converted, ConvertError> {
     }
 }
 
-/// YAML (one or more documents) as JSON. See the [module docs](self).
+/// YAML (one or more documents) as JSON. See the module documentation above.
 ///
 /// # Errors
 ///
@@ -84,7 +84,7 @@ pub fn yaml_to_json(text: &str) -> Result<Converted, ConvertError> {
     })
 }
 
-/// JSON as block-style YAML. See the [module docs](self).
+/// JSON as block-style YAML. See the module documentation above.
 ///
 /// # Errors
 ///

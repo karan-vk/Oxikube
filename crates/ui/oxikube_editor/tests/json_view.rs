@@ -24,6 +24,15 @@ fn mod_key(rest: &str) -> String {
     format!("{modifier}-{rest}")
 }
 
+/// Redo: `cmd-shift-z` on macOS, `ctrl-y` elsewhere (the editor library's bindings).
+fn redo_key() -> String {
+    if cfg!(target_os = "macos") {
+        "cmd-shift-z".to_owned()
+    } else {
+        "ctrl-y".to_owned()
+    }
+}
+
 fn convert_to_json_key() -> String {
     mod_key("alt-j")
 }
@@ -151,7 +160,7 @@ fn the_convert_key_replaces_the_buffer_and_one_undo_restores_the_yaml(cx: &mut T
     );
 
     // And forward again: redo is the same single step.
-    f.vcx.simulate_keystrokes(&mod_key("shift-z"));
+    f.vcx.simulate_keystrokes(&redo_key());
     f.vcx.run_until_parked();
     assert!(f.text(&editor).starts_with("{\n  \"apiVersion\""));
 }
