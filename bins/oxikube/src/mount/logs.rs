@@ -133,8 +133,9 @@ pub fn start_views(
 /// Editor" on every kind (E10-S06), and the per-kind actions of `oxikube_resources_ui::kinds` (E12:
 /// "Trigger", "Suspend" and "Resume" on CronJobs and Jobs, E12-S08; "Scale" on Deployments,
 /// StatefulSets, ReplicaSets and ReplicationControllers, E12-S04; "Show Pods" and "Open in
-/// Browser" on Services, E12-S13; "Set as default" on IngressClasses, E12-S14; "Use namespace", "Toggle favourite", "New namespace…" and "Delete" on Namespaces,
-/// E12-S16).
+/// Browser" on Services, E12-S13; "Set as default" on IngressClasses, E12-S14; "Resize…" on
+/// claims and "Set as Default" on storage classes, E12-S15; "Use namespace", "Toggle favourite",
+/// "New namespace…" and "Delete" on Namespaces, E12-S16).
 pub fn row_actions() -> RowActionRegistry {
     let mut registry = RowActionRegistry::core();
     let specs = oxikube_resources_ui::crds::crd_row_actions()

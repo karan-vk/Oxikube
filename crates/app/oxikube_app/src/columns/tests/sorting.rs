@@ -40,7 +40,7 @@ fn quantities_sort_by_value() {
         make("tiny", "512Ki"),
     ];
     // As text "2Gi" > "1Gi" > "500Mi" > "512Ki".
-    assert_eq!(order(rows, "capacity"), ["tiny", "small", "mid", "big"]);
+    assert_eq!(order(rows, "size"), ["tiny", "small", "mid", "big"]);
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn sort_keys_are_typed() {
         CellSort::Int(5)
     );
     assert!(matches!(
-        cell(&fx::pvc(), "capacity").sort(),
+        cell(&fx::pvc(), "size").sort(),
         CellSort::Quantity(_)
     ));
     assert_eq!(

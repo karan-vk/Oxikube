@@ -166,6 +166,10 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_app::workloads", |r| {
         oxikube_app::workloads::register_commands(r, parts.sessions.clone())
     })?;
+    // `pvc::Resize` and `storageclass::SetDefault` (E12-S15): guarded mutations over the sessions.
+    registry.install("oxikube_app::storage", |r| {
+        oxikube_app::storage::register_commands(r, parts.sessions.clone())
+    })?;
     registry.install("oxikube_app::posture", |r| {
         oxikube_app::guard::register_commands(r, parts.sessions, parts.prefs)
     })?;

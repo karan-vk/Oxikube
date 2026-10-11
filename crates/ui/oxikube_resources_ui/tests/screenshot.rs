@@ -41,6 +41,9 @@
 //!   Pods column (E12-S16); `namespaces_delete_dark`, `namespaces_delete_light`: the delete dialog
 //!   of a namespace with HNC children and a lot in it; `namespaces_create_dark`: the create dialog
 //!   showing an invalid name.
+//! - `storage_claims_table_*`, `storage_claim_panel_*`, `storage_resize_dialog_*` (`storage`): the
+//!   claims table with its Pods (used by) column, a claim's detail panel with the Pods that mount
+//!   it, and the resize dialog refusing a shrink, in both themes (E12-S15).
 //!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
@@ -89,6 +92,8 @@ mod network;
 mod pods;
 #[path = "screenshot/service.rs"]
 mod service;
+#[path = "screenshot/storage.rs"]
+mod storage;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
@@ -273,6 +278,7 @@ fn main() -> ExitCode {
         pods::run(),
         service::run(),
         namespaces::run(),
+        storage::run(),
     ];
     let mut failed = false;
     for result in results {

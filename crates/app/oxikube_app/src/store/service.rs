@@ -106,6 +106,12 @@ impl ResourceStore {
         &self.inner
     }
 
+    /// Runs `task` on the store's spawner, abortable through the returned guard. For app
+    /// services that follow a feed beside the views (the storage "used by" index, E12-S15).
+    pub(crate) fn spawn(&self, task: impl Future<Output = ()> + Send + 'static) -> TaskGuard {
+        self.inner.spawn(task)
+    }
+
     /// The cluster this store caches.
     pub fn cluster(&self) -> &ClusterId {
         &self.inner.cluster

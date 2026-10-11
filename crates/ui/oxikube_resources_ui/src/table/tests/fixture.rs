@@ -49,6 +49,7 @@ fn actions_rig(
     sink: &ResourceCommandSink,
     exec: bool,
     workloads: bool,
+    storage: bool,
 ) -> ResourceActions {
     let mut registry = CommandRegistry::new();
     registry
@@ -103,6 +104,14 @@ fn actions_rig(
                 *command::lookup(id).unwrap(),
                 |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
             )
+            .unwrap();
+    }
+    if storage {
+        // Resize a claim, set the default class (E12-S15): the real handlers behind the guard.
+        registry
+            .install("oxikube_app::storage", |r| {
+                oxikube_app::storage::register_commands(r, sessions.clone())
+            })
             .unwrap();
     }
     if exec {
@@ -203,6 +212,8 @@ enum Rig {
     Exec,
     /// [`Rig::Actions`] and `workload::Scale` for the workload kinds (E12-S04).
     Workloads,
+    /// [`Rig::Actions`] and the storage actions (E12-S15).
+    Storage,
 }
 
 /// The cluster of every test.
@@ -291,6 +302,12 @@ impl Fixture {
         Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Workloads)
     }
 
+    /// [`Self::with_actions`] plus the storage commands (`pvc::Resize`,
+    /// `storageclass::SetDefault`) and their row actions (E12-S15).
+    pub(crate) fn with_storage(cx: &mut TestAppContext) -> Self {
+        Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Storage)
+    }
+
     fn build(cx: &mut TestAppContext, state: Arc<FakeStatePort>, rig: Rig) -> Self {
         let entry = ClusterContext::new(
             cluster(),
@@ -341,6 +358,7 @@ impl Fixture {
                 &dispatcher.sink,
                 rig == Rig::Exec,
                 rig == Rig::Workloads,
+                rig == Rig::Storage,
             )
             .with_concurrency(1)
         });

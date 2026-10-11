@@ -20,6 +20,8 @@
 //!   ready endpoint counts, named target ports resolved against a pod.
 //! * [`network`] for the Network section: Ingress, IngressClass, NetworkPolicy and the Gateway API
 //!   kinds (E12-S14).
+//! * [`storage`]: [`storage::PvcSummary`], [`storage::PvSummary`], [`storage::StorageClassSummary`],
+//!   the VolumeSnapshot kinds and the PVC resize rule (E12-S15).
 //! * [`Health`] and [`health_of`]: the one rule for "is this object healthy" behind overview
 //!   tiles and sidebar counts.
 //!
@@ -56,6 +58,7 @@ mod node;
 mod pod;
 mod pod_health;
 mod service;
+pub mod storage;
 mod workload;
 mod workload_detail;
 

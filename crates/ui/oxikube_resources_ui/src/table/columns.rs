@@ -133,6 +133,7 @@ pub(super) fn scoped_provider(
     let context = ColumnsContext {
         cluster: cluster.clone(),
         store,
+        sessions: deps.sessions.clone(),
         shared: deps.columns.clone(),
     };
     crate::kinds::KindSpecs::columns_in(cx, &kind.gvk, &context)

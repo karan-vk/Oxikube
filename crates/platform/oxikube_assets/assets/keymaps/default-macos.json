@@ -196,6 +196,10 @@
       "a": "resource_table::AttachSelected",
       // shift-d adds an ephemeral debug container (Pods only; blocked on a read-only cluster).
       "shift-d": "resource_table::DebugSelected",
+      // Storage (E12-S15), each on its own kind only (a toast says so elsewhere): shift-r resizes the
+      // claim under the cursor (the resize dialog), shift-s makes the storage class the default.
+      "shift-r": "resource_table::ResizeClaim",
+      "shift-s": "resource_table::SetDefaultClass",
       "/": "resource_table::FocusFilter",
       // k9s verbs on the cursor row (E11-S07): y the YAML, d describe, e edit, l logs (a pod's, or
       // a workload's pods), shift-f forward a port, f the active forwards. `ctrl-w` shows or hides

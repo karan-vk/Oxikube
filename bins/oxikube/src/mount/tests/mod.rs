@@ -28,6 +28,7 @@ mod palette;
 mod resources;
 mod scale;
 mod signin;
+mod storage;
 mod tail;
 mod terminal;
 mod workloads;

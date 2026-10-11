@@ -217,6 +217,36 @@ fn list_depends_on_the_selection_kind() {
 }
 
 #[test]
+fn the_storage_actions_are_offered_on_their_own_kind_in_the_table_only() {
+    let bus = full_bus();
+    let has = |ctx: &CommandContext, id: CommandId| ids(&bus.list(ctx)).contains(&id);
+    let claim = Gvk::new("", "v1", "PersistentVolumeClaim");
+    let class = Gvk::new("storage.k8s.io", "v1", "StorageClass");
+
+    let on_claim = session(ViewContext::Table).selecting(Selection::one(claim.clone()));
+    assert!(has(&on_claim, CommandId::PVC_RESIZE));
+    assert!(!has(&on_claim, CommandId::STORAGECLASS_SET_DEFAULT));
+    let on_class = session(ViewContext::Table).selecting(Selection::one(class.clone()));
+    assert!(has(&on_class, CommandId::STORAGECLASS_SET_DEFAULT));
+    assert!(!has(&on_class, CommandId::PVC_RESIZE));
+
+    // Any other kind is never offered either, so the palette stays clean.
+    for other in [pod(), node(), deployment()] {
+        let ctx = session(ViewContext::Table).selecting(Selection::one(other));
+        assert!(!has(&ctx, CommandId::PVC_RESIZE));
+        assert!(!has(&ctx, CommandId::STORAGECLASS_SET_DEFAULT));
+    }
+
+    // The detail drawer has no dialog front for them, so it does not offer them (the generic
+    // palette path would otherwise dispatch `SetDefault` with its defaults, skipping the dialog).
+    for gvk in [claim, class] {
+        let detail = session(ViewContext::Detail).selecting(Selection::one(gvk));
+        assert!(!has(&detail, CommandId::PVC_RESIZE));
+        assert!(!has(&detail, CommandId::STORAGECLASS_SET_DEFAULT));
+    }
+}
+
+#[test]
 fn selection_satisfies_each_requirement() {
     let none = Selection::none();
     let one = Selection::one(pod());

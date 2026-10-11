@@ -113,6 +113,11 @@ impl ResourceTable {
                     .unwrap_or_else(gpui::WeakEntity::new_invalid);
                 actions.scale_flow(workspace).begin(target, window, cx);
             }
+        } else if matches!(
+            command,
+            CommandId::PVC_RESIZE | CommandId::STORAGECLASS_SET_DEFAULT
+        ) {
+            self.begin_storage_dialog(&actions, command, targets, window, cx);
         } else if let Some(service) = actions
             .exec_service()
             .filter(|_| ExecKind::of(command).is_some() || command == CommandId::POD_DEBUG)

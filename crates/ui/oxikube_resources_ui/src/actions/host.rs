@@ -12,6 +12,8 @@ use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::kinds::ResourceKind;
 
+use crate::kinds::storage::StorageFlows;
+
 /// One action as a menu or the palette shows it: the action, its label for this many objects,
 /// and whether it can run.
 #[derive(Clone, Debug)]
@@ -59,6 +61,8 @@ pub struct ResourceActions {
     scale: ScaleRunner,
     /// Runs `namespace::Create` for the create dialog (E12-S16).
     namespace_creator: NamespaceCreator,
+    /// The flows of the storage dialogs: PVC resize, set the default StorageClass (E12-S15).
+    storage: StorageFlows,
 }
 
 impl ResourceActions {
@@ -92,8 +96,9 @@ impl ResourceActions {
             sessions: sessions.clone(),
             exec: None,
             debug: DebugRunner::new(bus.clone(), who.clone()),
-            workloads: Arc::new(WorkloadService::new(sessions)),
+            workloads: Arc::new(WorkloadService::new(sessions.clone())),
             scale: ScaleRunner::new(bus.clone(), who.clone()),
+            storage: StorageFlows::new(bus, &sessions, &who),
             namespace_creator: NamespaceCreator::new(bus.clone(), who),
         }
     }
@@ -138,6 +143,11 @@ impl ResourceActions {
     /// bus, as the user.
     pub fn namespace_creator(&self) -> NamespaceCreator {
         self.namespace_creator.clone()
+    }
+
+    /// The flows behind the storage dialogs (resize a claim, set the default class).
+    pub fn storage(&self) -> &StorageFlows {
+        &self.storage
     }
 
     /// The delete flow.

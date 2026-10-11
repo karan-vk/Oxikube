@@ -6,6 +6,7 @@
 //! | [`core()`] | a stock cluster: [`core_kinds`] plus the other built-in kinds every current server serves |
 //! | [`core_with_gateway_api`] | [`core()`] plus the Gateway API CRDs (an optional group the sidebar shows only when served) |
 //! | [`core_with_vpa`] | [`core()`] plus the VerticalPodAutoscaler CRD (the Config section's optional kind) |
+//! | [`core_with_snapshots`] | [`core()`] plus the CSI snapshot kinds (VolumeSnapshot, VolumeSnapshotClass; E12-S15) |
 //! | [`core_with_crds`] | [`core()`] plus cert-manager's CRDs (the Custom Resources section) |
 //! | [`crds_only`] | cert-manager's CRDs and nothing built in (a server whose discovery lists only custom groups) |
 
@@ -94,6 +95,20 @@ pub fn gateway_api_kinds() -> Vec<ResourceKind> {
     ]
 }
 
+/// The CSI snapshot kinds (`snapshot.storage.k8s.io`), installed with the external-snapshotter.
+pub fn snapshot_kinds() -> Vec<ResourceKind> {
+    let k = |kind_name: &str, plural: &str| {
+        KindSpec::new("snapshot.storage.k8s.io", "v1", kind_name, plural)
+            .singular(&kind_name.to_ascii_lowercase())
+    };
+    vec![
+        k("VolumeSnapshot", "volumesnapshots").build(),
+        k("VolumeSnapshotClass", "volumesnapshotclasses")
+            .cluster_scoped()
+            .build(),
+    ]
+}
+
 /// A stock cluster: every built-in kind, no optional group, no CRD.
 pub fn core() -> Vec<ResourceKind> {
     let mut kinds = core_kinds();
@@ -131,6 +146,13 @@ pub fn core_with_vpa() -> Vec<ResourceKind> {
     kinds
 }
 
+/// [`core()`] with the CSI snapshot CRDs installed.
+pub fn core_with_snapshots() -> Vec<ResourceKind> {
+    let mut kinds = core();
+    kinds.extend(snapshot_kinds());
+    kinds
+}
+
 /// [`core()`] with cert-manager installed.
 pub fn core_with_crds() -> Vec<ResourceKind> {
     let mut kinds = core();
@@ -155,6 +177,7 @@ mod tests {
             core(),
             core_with_gateway_api(),
             core_with_vpa(),
+            core_with_snapshots(),
             core_with_crds(),
             crds_only(),
         ] {

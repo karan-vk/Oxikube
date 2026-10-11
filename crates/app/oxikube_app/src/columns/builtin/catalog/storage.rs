@@ -45,18 +45,20 @@ const PV: &[ColumnDef] = &[
     LABELS,
 ];
 
+/// Claims. The Pods (used by) column is not here: it needs the Pods feed, so `PvcColumns` adds it
+/// after Size (E12-S15).
 const PVC: &[ColumnDef] = &[
     NAME,
     NAMESPACE,
     ColumnDef::new("status", "Status", Func(f::status_phase)),
-    ColumnDef::new("volume", "Volume", Text("/spec/volumeName")),
-    ColumnDef::new("capacity", "Capacity", Qty("/status/capacity/storage")).quantity(),
-    ColumnDef::new("access-modes", "Access Modes", Func(f::access_modes)),
     ColumnDef::new(
         "storage-class",
         "Storage Class",
         Text("/spec/storageClassName"),
     ),
+    ColumnDef::new("size", "Size", Func(f::pvc_size)).quantity(),
+    ColumnDef::new("volume", "Volume", Text("/spec/volumeName")),
+    ColumnDef::new("access-modes", "Access Modes", Func(f::access_modes)),
     AGE,
     ColumnDef::new("volume-mode", "Volume Mode", Text("/spec/volumeMode")).wide(),
     LABELS,
@@ -73,6 +75,40 @@ const STORAGE_CLASS: &[ColumnDef] = &[
         Text("/allowVolumeExpansion"),
     ),
     ColumnDef::new("default", "Default", Func(f::storage_class_default)),
+    AGE,
+];
+
+const VOLUME_SNAPSHOT: &[ColumnDef] = &[
+    NAME,
+    NAMESPACE,
+    ColumnDef::new("ready", "Ready", Func(f::snapshot_ready)),
+    ColumnDef::new("source-pvc", "Source", Func(f::snapshot_source)),
+    ColumnDef::new(
+        "snapshot-class",
+        "Class",
+        Text("/spec/volumeSnapshotClassName"),
+    ),
+    ColumnDef::new("restore-size", "Restore Size", Qty("/status/restoreSize")).quantity(),
+    ColumnDef::new("created", "Created", Func(f::snapshot_created)),
+    AGE,
+    ColumnDef::new(
+        "snapshot-content",
+        "Snapshot Content",
+        Text("/status/boundVolumeSnapshotContentName"),
+    )
+    .wide(),
+    LABELS,
+];
+
+const VOLUME_SNAPSHOT_CLASS: &[ColumnDef] = &[
+    NAME,
+    ColumnDef::new("driver", "Driver", Text("/driver")),
+    ColumnDef::new(
+        "deletion-policy",
+        "Deletion Policy",
+        Text("/deletionPolicy"),
+    ),
+    ColumnDef::new("default", "Default", Func(f::snapshot_class_default)),
     AGE,
 ];
 
@@ -102,6 +138,16 @@ pub(super) const KINDS: &[KindDef] = &[
         group: "storage.k8s.io",
         kind: "StorageClass",
         columns: STORAGE_CLASS,
+    },
+    KindDef {
+        group: "snapshot.storage.k8s.io",
+        kind: "VolumeSnapshot",
+        columns: VOLUME_SNAPSHOT,
+    },
+    KindDef {
+        group: "snapshot.storage.k8s.io",
+        kind: "VolumeSnapshotClass",
+        columns: VOLUME_SNAPSHOT_CLASS,
     },
     KindDef {
         group: "",

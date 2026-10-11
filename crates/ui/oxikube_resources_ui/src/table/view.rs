@@ -312,6 +312,12 @@ impl ResourceTable {
         &self.table
     }
 
+    /// How many times the view rendered (tests of the once-a-second redraw).
+    #[cfg(test)]
+    pub(crate) fn render_count(&self) -> usize {
+        self.renders
+    }
+
     /// Reads the delegate: rows, layout, selection.
     pub fn read_rows<R>(&self, cx: &App, f: impl FnOnce(&RowsDelegate) -> R) -> R {
         self.table.read(cx, f)
