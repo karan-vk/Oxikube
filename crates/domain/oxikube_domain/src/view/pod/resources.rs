@@ -30,7 +30,7 @@ impl ResourceAmounts {
 }
 
 /// CPU and memory requests and limits: a container's own, or a pod's effective totals
-/// ([`ComputeResources::of_pod`]).
+/// (as kubectl's pod printer sums them).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ComputeResources {
     /// `resources.requests`.

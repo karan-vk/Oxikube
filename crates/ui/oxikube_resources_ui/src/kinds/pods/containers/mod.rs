@@ -5,7 +5,7 @@
 //! [`ContainersPanel`] follows its [`DetailView`]: when the detail's object is a new version (a
 //! new JSON document), it rebuilds its [`ContainerRow`]s once, in the observer, and render only
 //! lays out the strings it holds. Rows have one height; the table scrolls sideways in a narrow
-//! drawer and downwards past [`MAX_HEIGHT`].
+//! drawer and downwards past `MAX_HEIGHT`.
 
 mod render;
 mod rows;

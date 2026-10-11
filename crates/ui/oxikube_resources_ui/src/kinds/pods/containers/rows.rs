@@ -53,7 +53,7 @@ pub struct ContainerRow {
 }
 
 impl ContainerRow {
-    /// The texts of the cells, in [`COLUMNS`] order (the name without its marker).
+    /// The texts of the cells, in `COLUMNS` order (the name without its marker).
     pub fn cells(&self) -> [SharedString; 10] {
         [
             self.index.to_string().into(),
