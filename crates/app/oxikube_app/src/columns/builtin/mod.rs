@@ -151,6 +151,7 @@ impl ColumnProvider for CoreColumns {
                 align: d.align,
                 sort: d.sort,
                 table_index: None,
+                sortable: true,
             })
             .collect();
         self.memo.lock().insert(key, built.clone());

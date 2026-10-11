@@ -80,6 +80,17 @@ impl ObjectCache {
         self.objects.is_empty()
     }
 
+    /// How many objects are in `namespace`: one lookup in the namespace index and the size of
+    /// its key set, however many objects the cache holds.
+    pub fn count_in_namespace(&self, namespace: &str) -> usize {
+        self.by_namespace.get(namespace).map_or(0, KeySet::len)
+    }
+
+    /// The cached object named `name` in no namespace (a cluster-scoped kind), if any.
+    pub fn cluster_object(&self, name: &str) -> Option<&Arc<StoreObject>> {
+        self.objects.get(&ObjectKey::new(None, name))
+    }
+
     pub fn values(&self) -> impl Iterator<Item = &Arc<StoreObject>> {
         self.objects.values()
     }

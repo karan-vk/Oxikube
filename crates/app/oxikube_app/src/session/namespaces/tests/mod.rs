@@ -4,6 +4,7 @@
 mod catalog;
 mod command;
 mod debounce;
+mod favourite;
 mod now;
 mod persist;
 mod select;

@@ -194,6 +194,7 @@ pub(super) fn columns() -> Arc<[Column]> {
             align,
             sort,
             table_index: None,
+            sortable: true,
         })
         .collect()
 }

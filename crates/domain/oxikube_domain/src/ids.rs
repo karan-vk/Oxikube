@@ -296,6 +296,16 @@ impl Gvk {
     pub fn is_service(&self) -> bool {
         self.is_core() && &*self.kind == "Service"
     }
+
+    /// The core `v1` Namespace.
+    pub fn namespace() -> Self {
+        Self::new("", "v1", "Namespace")
+    }
+
+    /// Whether this type is the core `v1` Namespace.
+    pub fn is_namespace(&self) -> bool {
+        self.is_core() && &*self.kind == "Namespace"
+    }
 }
 
 impl fmt::Display for Gvk {

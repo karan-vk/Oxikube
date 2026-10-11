@@ -29,6 +29,8 @@ mod tree;
 mod tests;
 
 pub use gate::{AllowAll, KindGate, KindVisibility, ServedKinds, Shown};
-pub use meta::{GroupKind, KindColumns, KindMeta, Section, SidebarSlot};
+pub use meta::{
+    ColumnsContext, ColumnsFactory, GroupKind, KindColumns, KindMeta, Section, SidebarSlot,
+};
 pub use registry::{KindRegistry, RegisterKindError};
 pub use tree::{SidebarTree, TreeEntry, TreeSection};

@@ -9,7 +9,8 @@
 
 use gpui::{AppContext as _, Context, Window};
 use oxikube_app::CommandTarget;
-use oxikube_domain::command::{CommandId, ViewContext};
+use oxikube_app::namespaces::{delete_advice, delete_command};
+use oxikube_domain::command::{self, CommandId, ViewContext};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::command_surface::CommandSurface;
 use oxikube_workspace::{Toast, Workspace};
@@ -54,20 +55,33 @@ impl ResourceTable {
     /// this table does not offer (E07-U563: "Shell is available for Pods and Nodes"). Shell,
     /// Attach and Debug take one object: of a selection they act on the cursor row and say so.
     /// `resource::Delete` opens the [`DeleteDialog`]; another action's command is dispatched for
-    /// each object, which is the bus's to guard and report.
+    /// each object, which is the bus's to guard and report. Returns whether the action went ahead
+    /// (a dialog opened or commands dispatched), `false` when it was refused with a toast.
     pub fn run_action(
         &mut self,
         command: CommandId,
         targets: Vec<ResourceRef>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some(actions) = self.deps.actions.clone() else {
-            return;
+            return false;
         };
+        // A Namespace is deleted by its own command (the generic delete does not offer it).
+        let command = if command == CommandId::RESOURCE_DELETE && self.kind.gvk.is_namespace() {
+            CommandId::NAMESPACE_DELETE
+        } else {
+            command
+        };
+        // Creating needs no row, and no Namespaces table: it asks for a name in its own dialog,
+        // wherever the palette was opened.
+        if command == CommandId::NAMESPACE_CREATE {
+            self.open_create_namespace(window, cx);
+            return true;
+        }
         if targets.is_empty() {
             self.say_no_row(cx);
-            return;
+            return false;
         }
         // Shell, attach and debug take one object: a selection acts on the cursor row.
         let selected = targets.len();
@@ -76,19 +90,19 @@ impl ResourceTable {
         let entries = actions.entries(&self.cluster, &self.kind, targets.len());
         let Some(entry) = entries.into_iter().find(|entry| entry.command() == command) else {
             self.say_unavailable(&actions, command, selected, cx);
-            return;
+            return false;
         };
         if let Some(reason) = entry.reason() {
             self.toast(
                 Toast::warning(reason).key(format!("action-disabled:{command}")),
                 cx,
             );
-            return;
+            return false;
         }
         if let Some(target) = &cursor_target {
             self.say_cursor_row(command, entry.action.label(), target, selected, cx);
         }
-        if command == CommandId::RESOURCE_DELETE {
+        if command == CommandId::RESOURCE_DELETE || command == CommandId::NAMESPACE_DELETE {
             self.begin_delete(&actions, targets, window, cx);
         } else if command == CommandId::WORKLOAD_SCALE {
             // The dialog asks for the count; the command is sent when the user confirms it.
@@ -125,6 +139,7 @@ impl ResourceTable {
                 self.deps.dispatcher.dispatch(command, cx);
             }
         }
+        true
     }
 
     /// Opens the delete dialog for `targets`.
@@ -139,17 +154,37 @@ impl ResourceTable {
             tracing::warn!("a resource table without a workspace cannot open the delete dialog");
             return;
         };
-        let plan = match actions.flow().plan(&targets, Default::default()) {
+        // A Namespace is deleted by `namespace::Delete`, carrying what it holds (counted from the
+        // caches the app already has) and warned about before the name is typed.
+        let mut flow = actions.flow().clone();
+        let mut notes = Vec::new();
+        if self.kind.gvk.is_namespace() {
+            let several = targets.len() > 1;
+            let mut contents = std::collections::HashMap::new();
+            for target in &targets {
+                let advice = delete_advice(self.store.as_ref(), &target.name);
+                notes.extend(advice.notes.into_iter().map(|mut note| {
+                    if several {
+                        note.text = format!("{}: {}", target.name, note.text);
+                    }
+                    note
+                }));
+                contents.insert(target.name.to_string(), advice.contents);
+            }
+            notes.sort_by_key(|note| std::cmp::Reverse(note.level));
+            flow = flow.with_command(delete_command(contents));
+        }
+        let plan = match flow.plan(&targets, Default::default()) {
             Ok(plan) => plan,
             Err(error) => {
                 self.toast(Toast::error(error.to_string()), cx);
                 return;
             }
         };
-        let flow = actions.flow().clone();
         let host = workspace.downgrade();
         workspace.update(cx, |workspace, cx| {
-            let dialog = cx.new(|cx| DeleteDialog::new(flow, plan, host, window, cx));
+            let dialog =
+                cx.new(|cx| DeleteDialog::new(flow, plan, host, window, cx).with_notes(notes));
             workspace.show_modal(dialog.clone(), window, cx);
             dialog.update(cx, |dialog, cx| dialog.focus_input(window, cx));
         });
@@ -172,6 +207,7 @@ impl ResourceTable {
         cx: &mut Context<Self>,
     ) {
         let targets = self.action_targets(cx);
+        // `run_action` turns this into `namespace::Delete` on the Namespaces table.
         self.run_action(CommandId::RESOURCE_DELETE, targets, window, cx);
     }
 
@@ -241,11 +277,27 @@ impl CommandSurface for ResourceTable {
     }
 
     fn own_commands(&self, cx: &gpui::App) -> Vec<CommandId> {
-        self.action_entries(cx)
+        let mut own: Vec<CommandId> = self
+            .action_entries(cx)
             .into_iter()
             .filter(|entry| entry.reason().is_none())
             .map(|entry| entry.command())
-            .collect()
+            .collect();
+        // The create dialog opens over any table: the palette lists `namespace::Create` from a
+        // Pods table too, and only this flow can ask for the name.
+        if let Some(actions) = &self.deps.actions
+            && !own.contains(&CommandId::NAMESPACE_CREATE)
+            && command::lookup(CommandId::NAMESPACE_CREATE).is_some_and(|meta| {
+                actions
+                    .context(&self.cluster)
+                    .state_of(meta)
+                    .reason()
+                    .is_none()
+            })
+        {
+            own.push(CommandId::NAMESPACE_CREATE);
+        }
+        own
     }
 
     fn run_command(

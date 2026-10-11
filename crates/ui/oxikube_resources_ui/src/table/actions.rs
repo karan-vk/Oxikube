@@ -14,6 +14,9 @@
 //! container (E09-S10). On a Deployment, StatefulSet, ReplicaSet or ReplicationController `s` is
 //! k9s's scale instead: the keymap binds `resource_table::ScaleSelected` for those kinds (E12-S04).
 //!
+//! E12-S16 adds `u` (use the namespace), `p` (pin it) for the Namespaces table and `0`-`9`
+//! (All, or the nth favourite) for every table: see `namespaces`.
+//!
 //! The k9s verbs of E11-S07 live next to them: `y` shows the YAML, `d` describes, `e` edits, `l`
 //! opens the logs, `shift-f` forwards a port, `f` lists the forwards and `ctrl-w` toggles the wide
 //! columns. Each is a view action that stands for a command of the same meaning (the table in
@@ -29,7 +32,9 @@
 //!
 //! Users rebind them in `keymap.json`.
 
-use gpui::actions;
+use gpui::{Action, actions};
+use schemars::JsonSchema;
+use serde::Deserialize;
 
 actions!(
     resource_table,
@@ -102,6 +107,12 @@ actions!(
         /// (`cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume`; k9s's `s`,
         /// bound on CronJob and Job tables).
         ToggleSuspendSelected,
+        /// Use the cursor row's namespace: the session watches only it (`namespace::Select` with
+        /// that one name; k9s's `u`, bound for Namespaces only).
+        UseNamespace,
+        /// Pin or unpin the cursor row's namespace as a favourite (`namespace::ToggleFavourite`;
+        /// `p`, bound for Namespaces only).
+        ToggleFavouriteNamespace,
         /// Show or hide the wide columns of this kind's tables (`table::ToggleWide`; k9s's
         /// `ctrl-w`).
         ToggleWide,
@@ -114,3 +125,13 @@ actions!(
         OpenInBrowser,
     ]
 );
+
+/// Selects all namespaces (`slot` 0) or the nth favourite (1 to 9), as k9s's number keys do
+/// (`namespace::UseFavourite`). Bound to `0`-`9` in every table, so the namespace can be changed
+/// from wherever the list is.
+#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Action)]
+#[action(namespace = resource_table)]
+pub struct SelectNamespaceSlot {
+    /// The digit.
+    pub slot: u8,
+}

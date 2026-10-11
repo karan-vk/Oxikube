@@ -14,5 +14,5 @@ mod run;
 
 pub use handler::register_commands;
 pub use label::object_label;
-pub use plan::{DeleteError, DeleteFlow, DeletePlan, PlannedDelete};
+pub use plan::{CommandBuilder, DeleteError, DeleteFlow, DeletePlan, PlannedDelete};
 pub use run::{DeleteReport, ItemResult, ItemStatus};

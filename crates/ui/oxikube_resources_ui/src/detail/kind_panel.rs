@@ -127,6 +127,12 @@ impl DetailView {
         &self.deps
     }
 
+    /// The command dispatcher the view's own buttons use (a kind panel's buttons send their
+    /// commands through it, so they are the bus's, like every other action).
+    pub fn dispatcher(&self) -> std::rc::Rc<dyn oxikube_workspace::CommandDispatcher> {
+        self.deps.dispatcher.clone()
+    }
+
     /// The kind's own panel, when its spec has one and it was drawn.
     pub fn kind_panel(&self) -> Option<&AnyView> {
         self.kind_panel.view()

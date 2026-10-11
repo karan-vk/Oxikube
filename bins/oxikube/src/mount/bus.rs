@@ -143,9 +143,15 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_app::catalog", |r| {
         register_cluster_commands(r, parts.cluster_commands)
     })?;
-    registry.install("oxikube_app::namespaces", |r| {
+    registry.install("oxikube_app::session::namespaces", |r| {
         register_namespace_commands(r, parts.namespaces)
     })?;
+    // `namespace::Create` and `namespace::Delete` (E12-S16): guarded mutations of the Namespace
+    // kind (a server dry run first; delete takes the typed name and is audited with the counts).
+    registry.install(
+        "oxikube_app::namespaces",
+        oxikube_app::namespaces::register_commands,
+    )?;
     registry.install("oxikube_app::sources", |r| {
         oxikube_app::sources::register_commands(r, &parts.sources)
     })?;
@@ -265,7 +271,8 @@ fn register_cluster_commands(
     Ok(())
 }
 
-/// `namespace::Select` and `namespace::ToggleFavourite` over the [`NamespaceService`].
+/// `namespace::Select`, `namespace::ToggleFavourite` and `namespace::UseFavourite` over the
+/// [`NamespaceService`].
 ///
 /// `namespace::Select` is immediate (E05-P600): the session's selection changes in the call, so
 /// the UI's runner shows it in the frame after the input, and remembering it is the rest, run off
@@ -284,6 +291,37 @@ fn register_namespace_commands(
             Ok(Immediate::then(output, async move {
                 remember.await.map(|_| ())
             }))
+        },
+    )?;
+    // The number keys (E12-S16): `0` is All, `1`-`9` the nth favourite. Immediate like Select
+    // when the favourites are loaded (the selector loads them when the cluster tab opens); else
+    // the rest of the command loads them off the UI thread and selects.
+    let digits = service.clone();
+    registry.register_immediate(
+        meta(CommandId::NAMESPACE_USE_FAVOURITE)?,
+        move |command: Command, _: HandlerContext| {
+            let Command::NamespaceUseFavourite { cluster, slot } = command else {
+                return Err(OxiError::validation(
+                    "not a namespace::UseFavourite command",
+                ));
+            };
+            match digits.use_favourite_now(&cluster, slot)? {
+                Some(selected) => {
+                    let output =
+                        CommandOutput::data(json!({ "changed": selected.session_changed }));
+                    let remember = selected.remember();
+                    Ok(Immediate::then(output, async move {
+                        remember.await.map(|_| ())
+                    }))
+                }
+                None => {
+                    let digits = digits.clone();
+                    Ok(Immediate::then(
+                        CommandOutput::data(json!({ "deferred": true })),
+                        async move { digits.use_favourite(&cluster, slot).await.map(|_| ()) },
+                    ))
+                }
+            }
         },
     )?;
     registry.register(

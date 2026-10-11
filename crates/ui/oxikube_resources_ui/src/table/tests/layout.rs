@@ -285,3 +285,33 @@ fn toggle_wide_does_nothing_for_a_kind_without_wide_columns() {
     assert!(!layout.wide_shown());
     assert_eq!(layout, before);
 }
+
+#[test]
+fn a_column_that_is_not_sortable_cannot_be_sorted_by_or_restored_as_the_sort() {
+    let mut columns: Vec<Column> = pod_columns().to_vec();
+    columns
+        .iter_mut()
+        .find(|c| c.id == "restarts")
+        .expect("restarts")
+        .sortable = false;
+    let all: Arc<[Column]> = columns.into();
+    let mut layout = ColumnLayout::new(all.clone(), &ColumnPrefs::default());
+    assert!(!layout.set_sort(Some((ColumnId::new("restarts"), false))));
+    assert_eq!(layout.sort(), None);
+    assert!(layout.set_sort(Some((ColumnId::new("age"), false))));
+
+    // A saved sort on it is not applied, but is kept for when the column sorts again.
+    let saved = SavedSort {
+        column: "restarts".into(),
+        descending: true,
+    };
+    let layout = ColumnLayout::new(
+        all,
+        &ColumnPrefs {
+            sort: Some(saved.clone()),
+            ..ColumnPrefs::default()
+        },
+    );
+    assert_eq!(layout.sort(), None);
+    assert_eq!(layout.prefs().sort, Some(saved));
+}

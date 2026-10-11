@@ -3,11 +3,12 @@
 
 use gpui::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-    SharedString, Styled as _, Window, div, px, uniform_list,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px, uniform_list,
 };
 use oxikube_app::object_label;
 use oxikube_domain::command::Propagation;
 use oxikube_domain::safety::Risk;
+use oxikube_domain::view::NoteLevel;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::dialog::{DialogFooter, DialogHeader, DialogTitle};
 use oxikube_ui::input::Input;
@@ -22,6 +23,14 @@ use super::results::{ROW_HEIGHT, result_row};
 
 /// How many result rows show before the list scrolls.
 const VISIBLE_RESULTS: f32 = 10.0;
+
+/// How many notes the confirm step lists before it says how many more there are (a bulk delete of
+/// many namespaces adds a note each; the worst come first).
+const MAX_NOTES: usize = 30;
+
+/// How tall the notes list grows before it scrolls, so the typed-name input and the Delete button
+/// stay on screen however many notes there are.
+const NOTES_MAX_HEIGHT: f32 = 200.0;
 
 impl DeleteDialog {
     fn title(&self) -> SharedString {
@@ -116,6 +125,52 @@ impl DeleteDialog {
             )
     }
 
+    /// The notes, worst first, in a list that scrolls past [`NOTES_MAX_HEIGHT`] and stops at
+    /// [`MAX_NOTES`] rows.
+    fn notes_list(&self, colors: &oxikube_ui::Colors) -> Option<AnyElement> {
+        if self.notes.is_empty() {
+            return None;
+        }
+        let hidden = self.notes.len().saturating_sub(MAX_NOTES);
+        let rows = self
+            .notes
+            .iter()
+            .take(MAX_NOTES)
+            .enumerate()
+            .map(|(ix, note)| {
+                let colour = match note.level {
+                    NoteLevel::Danger => colors.error,
+                    NoteLevel::Warning => colors.warning,
+                    NoteLevel::Info => colors.text_muted,
+                };
+                h_flex()
+                    .debug_selector(move || format!("delete-note-{ix}"))
+                    .gap(u(px(8.)))
+                    .items_start()
+                    .text_size(u(px(12.)))
+                    .text_color(colour)
+                    .child(Icon::new(IconName::TriangleAlert).size(u(px(14.))))
+                    .child(div().flex_1().min_w_0().child(note.text.clone()))
+            });
+        Some(
+            v_flex()
+                .id("delete-notes")
+                .debug_selector(|| "delete-notes".into())
+                .gap(u(px(12.)))
+                .max_h(u(px(NOTES_MAX_HEIGHT)))
+                .overflow_y_scroll()
+                .children(rows)
+                .children((hidden > 0).then(|| {
+                    div()
+                        .debug_selector(|| "delete-notes-more".into())
+                        .text_size(u(px(12.)))
+                        .text_color(colors.text_muted)
+                        .child(format!("…and {hidden} more"))
+                }))
+                .into_any_element(),
+        )
+    }
+
     fn confirm_body(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.colors();
         let typed = self.plan.phrase().map(|phrase| {
@@ -154,6 +209,7 @@ impl DeleteDialog {
                     .child(Icon::new(IconName::TriangleAlert).size(u(px(14.))))
                     .child(warning)
             }))
+            .children(self.notes_list(&colors))
             .children(self.asks_propagation().then(|| self.propagation_row(cx)))
             .children(typed)
             .children(self.error.clone().map(|error| {

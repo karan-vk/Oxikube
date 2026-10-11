@@ -90,8 +90,21 @@ impl ResourceTable {
         // Before the feed opens: the server's warnings are not replayed.
         self.warning_task = Some(poll_warnings(store.warnings(), cx));
         self.subscription = Some(store.subscribe(query));
+        // A kind whose columns read the live store (a Namespace's pod count) gets a provider over
+        // this store: a reconnect brings a new one.
+        let scoped = super::columns::scoped_provider(
+            cx,
+            &self.cluster,
+            &self.kind,
+            &self.deps,
+            Some(store.clone()),
+        );
         self.store = Some(store);
-        if self.feed_kind != Some(plan) {
+        if let Some(provider) = scoped {
+            self.own_columns = Some(provider.clone());
+            self.feed_kind = Some(plan);
+            self.set_provider(provider, cx);
+        } else if self.feed_kind != Some(plan) {
             self.feed_kind = Some(plan);
             if plan != FeedKind::Table {
                 let core: Arc<dyn ColumnProvider> = match &self.own_columns {

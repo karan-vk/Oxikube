@@ -78,6 +78,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ClusterToggleReadOnly { cluster, .. }
         | Command::NamespaceSelect { cluster, .. }
         | Command::NamespaceToggleFavourite { cluster, .. }
+        | Command::NamespaceUseFavourite { cluster, .. }
+        | Command::NamespaceCreate { cluster, .. }
         | Command::ClusterSetColour { cluster, .. }
         | Command::ClusterShowMetricsSettings { cluster }
         | Command::ClusterRedetectMetrics { cluster }
@@ -111,6 +113,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceViewDescribe { target }
         | Command::ResourceEdit { target }
         | Command::ResourceDelete { target, .. }
+        | Command::NamespaceDelete { target, .. }
         | Command::PodDelete { target, .. }
         | Command::PodShell { target, .. }
         | Command::PodAttach { target, .. }
@@ -229,6 +232,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
 pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
     if let Some(object) = crate::apply::audit_target(command, cluster) {
         return object;
+    }
+    // A create names the object it will make.
+    if let Command::NamespaceCreate { name, .. } = command {
+        return ResourceRef::cluster_scoped(cluster.clone(), Gvk::namespace(), &**name);
     }
     command.target().cloned().unwrap_or_else(|| {
         let gvk = Gvk::new("oxikube.io", "v1", "Cluster");
@@ -362,9 +369,31 @@ pub fn audit_detail(command: &Command) -> Option<String> {
     if let Some(detail) = crate::apply::audit_detail(command) {
         return Some(detail);
     }
-    if let Command::WorkloadScale { replicas, .. } = command {
-        // The handler adds `before=` and `after=` (`Mutation::note`).
-        return Some(format!("replicas={replicas}"));
+    match command {
+        Command::WorkloadScale { replicas, .. } => {
+            // The handler adds `before=` and `after=` (`Mutation::note`).
+            return Some(format!("replicas={replicas}"));
+        }
+        // Label keys are not secrets, but the count is all a record needs.
+        Command::NamespaceCreate { labels, .. } => {
+            return Some(format!("labels={}", labels.len()));
+        }
+        // What the namespace held when the user asked, as `contents=Pod:12,Deployment:3`.
+        Command::NamespaceDelete { contents, .. } if !contents.is_empty() => {
+            // Kind names only (the caller supplies the keys): anything else is dropped.
+            let held: Vec<String> = contents
+                .iter()
+                .filter(|(kind, _)| {
+                    kind.len() <= 40 && kind.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+                .take(32)
+                .map(|(kind, n)| format!("{kind}:{n}"))
+                .collect();
+            if !held.is_empty() {
+                return Some(format!("contents={}", held.join(",")));
+            }
+        }
+        _ => {}
     }
     let Command::PodDebug {
         image,

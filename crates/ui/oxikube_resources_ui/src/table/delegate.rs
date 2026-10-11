@@ -139,7 +139,8 @@ impl TableDelegate for RowsDelegate {
             } else {
                 SortDirection::Ascending
             }),
-            _ => out.sortable(),
+            _ if column.sortable => out.sortable(),
+            _ => out,
         }
     }
 

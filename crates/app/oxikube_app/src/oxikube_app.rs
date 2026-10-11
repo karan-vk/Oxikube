@@ -35,6 +35,7 @@
 //! | [`network`] | E12-S13 | [`ServiceBackends`]: the label-selected store queries of a Service's detail (its EndpointSlices and its pods); [`plan_show_pods`], `service::ShowPods` as a jump; [`ServicePortOpener`], the hook the port-forward manager implements for `service::OpenInBrowser`, registered only when there is one |
 //! | [`columns`] | E07-S02 | [`ColumnProvider`]: table columns and cells per kind. [`CoreColumns`] (a table-driven catalogue of ~40 core kinds; Ready / Status / Restarts from the domain view-models; CPU and memory as pending metrics hooks) and [`TableColumns`] (a Table feed's server columns, `priority > 0` as `wide`); [`Cell`]s carry text, a typed sort key and a tone |
 //! | [`metrics`] | E13-S02 | [`UtilisationAggregator`]: per-pod `%CPU/R`-style percents, per-node ([`NodeAllocation`]) and per-namespace ([`NamespaceAllocation`]) requests and limits over resource snapshots, with the hot-reloadable GPU vendor list ([`GpuVendorsHandle`], `metrics.gpu_vendors`); the pure maths is `oxikube_domain::utilisation` |
+//! | [`namespaces`] | E12-S16 | the Namespace kind: `namespace::Create` / `namespace::Delete` handlers (guarded), [`delete_advice`](namespaces::delete_advice) (HNC and system-namespace warnings, counts of what a namespace holds) and [`NamespaceColumns`](namespaces::NamespaceColumns) (a live Pods count from the pods feed's per-namespace index) |
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
 pub mod actions;
@@ -52,6 +53,7 @@ pub mod kinds;
 pub mod logs;
 pub mod metrics;
 pub mod metrics_provider;
+pub mod namespaces;
 pub mod network;
 pub mod search;
 pub mod session;
@@ -101,8 +103,8 @@ pub use guard::{
 };
 pub use integrations::{IntegrationRegistry, IntegrationSection, RegisterIntegrationError};
 pub use kinds::{
-    GroupKind, KindColumns, KindGate, KindMeta, KindRegistry, KindVisibility, RegisterKindError,
-    Section, ServedKinds, SidebarSlot, SidebarTree,
+    ColumnsContext, ColumnsFactory, GroupKind, KindColumns, KindGate, KindMeta, KindRegistry,
+    KindVisibility, RegisterKindError, Section, ServedKinds, SidebarSlot, SidebarTree,
 };
 pub use metrics::{
     GpuVendorsHandle, NamespaceAllocation, NodeAllocation, UtilisationAggregator,

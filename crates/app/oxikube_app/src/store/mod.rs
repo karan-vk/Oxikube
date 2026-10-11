@@ -23,6 +23,7 @@
 //! | the `/` filter: grammar, name predicates, fuzzy ranking, the server-side selector split | [`filter::parse`], [`FilterExpr`], [`FilterParts`], [`NameFilter`], [`Fuzzy`] (`filter`, E07-S04) |
 //! | which feed serves a kind | [`FeedPolicy`] (`policy`) |
 //! | counts and health for sidebar badges and overview tiles | [`ResourceStore::counts`], [`CountsLease`], [`CountState`] (`counts`, E07-S11) |
+//! | reading a namespace's object count or a cluster-scoped kind's objects off an open feed | [`ResourceStore::count_in_namespace`], [`ResourceStore::cluster_objects`] (`peek`, E12-S16) |
 //! | the watch-budget hook and admission | [`FeedBudget`] (`budget`, `admission`) |
 //! | the cached objects | [`StoreObject`], [`ObjectKey`], [`FeedKey`] (`object`), `cache`, `index` |
 //! | the feed task and its spawner | `driver`, [`Spawner`] (`spawn`) |
@@ -83,6 +84,7 @@ mod index;
 mod keyset;
 mod mailbox;
 mod object;
+mod peek;
 mod policy;
 mod query;
 mod registry;

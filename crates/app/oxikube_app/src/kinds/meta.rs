@@ -4,9 +4,10 @@ use std::fmt;
 use std::sync::Arc;
 
 use oxikube_domain::command::CommandId;
-use oxikube_domain::ids::{Gvk, Scope};
+use oxikube_domain::ids::{ClusterId, Gvk, Scope};
 
 use crate::columns::ColumnProvider;
+use crate::store::ResourceStore;
 use crate::templates::{Template, TemplateCatalog};
 
 /// A kind without its version: what the registry is keyed by. `autoscaling/v1` and
@@ -39,6 +40,23 @@ impl fmt::Display for GroupKind {
     }
 }
 
+/// What a [`KindColumns::PerCluster`] factory builds a provider from: the cluster a table is
+/// opened in and, when its session is connected, the session's store (the live counts a computed
+/// column reads, like the pods of a namespace).
+#[derive(Clone)]
+pub struct ColumnsContext {
+    /// The cluster the table is for.
+    pub cluster: ClusterId,
+    /// The cluster's resource store; `None` while the session is not connected (a reconnect
+    /// builds the provider again with the new store).
+    pub store: Option<ResourceStore>,
+    /// The shared provider the factory may wrap: the core catalogue.
+    pub shared: Arc<dyn ColumnProvider>,
+}
+
+/// Builds a kind's column provider for one cluster.
+pub type ColumnsFactory = dyn Fn(&ColumnsContext) -> Arc<dyn ColumnProvider> + Send + Sync;
+
 /// Where a kind's table gets its columns (ADR 0006).
 #[derive(Clone, Default)]
 pub enum KindColumns {
@@ -48,14 +66,26 @@ pub enum KindColumns {
     Shared,
     /// The kind's own provider, used whatever the feed: a per-kind story's computed columns.
     Provider(Arc<dyn ColumnProvider>),
+    /// A provider built for each cluster (and again when its session reconnects): for columns
+    /// that read the cluster's live store.
+    PerCluster(Arc<ColumnsFactory>),
 }
 
 impl KindColumns {
-    /// The kind's own provider, `None` for the shared one.
+    /// The kind's own provider, `None` for the shared one and for a per-cluster one (use
+    /// [`build`](Self::build)).
     pub fn provider(&self) -> Option<&Arc<dyn ColumnProvider>> {
         match self {
-            KindColumns::Shared => None,
+            KindColumns::Shared | KindColumns::PerCluster(_) => None,
             KindColumns::Provider(provider) => Some(provider),
+        }
+    }
+
+    /// The provider for the cluster of `context`, for a per-cluster kind.
+    pub fn build(&self, context: &ColumnsContext) -> Option<Arc<dyn ColumnProvider>> {
+        match self {
+            KindColumns::PerCluster(factory) => Some(factory(context)),
+            KindColumns::Shared | KindColumns::Provider(_) => None,
         }
     }
 }
@@ -65,6 +95,7 @@ impl fmt::Debug for KindColumns {
         match self {
             KindColumns::Shared => f.write_str("Shared"),
             KindColumns::Provider(_) => f.write_str("Provider(..)"),
+            KindColumns::PerCluster(_) => f.write_str("PerCluster(..)"),
         }
     }
 }
@@ -192,6 +223,16 @@ impl KindMeta {
     #[must_use]
     pub fn with_columns(mut self, provider: Arc<dyn ColumnProvider>) -> Self {
         self.columns = KindColumns::Provider(provider);
+        self
+    }
+
+    /// Gives the kind a column provider built for each cluster it is opened in.
+    #[must_use]
+    pub fn with_columns_per_cluster(
+        mut self,
+        factory: impl Fn(&ColumnsContext) -> Arc<dyn ColumnProvider> + Send + Sync + 'static,
+    ) -> Self {
+        self.columns = KindColumns::PerCluster(Arc::new(factory));
         self
     }
 

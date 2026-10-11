@@ -6,6 +6,7 @@
 //! * [`PodSummary`] and [`ContainerSummary`] for Pods, with the `STATUS` column computed by the
 //!   same rules as `kubectl get pods`.
 //! * [`NodeSummary`] for Nodes.
+//! * [`NamespaceSummary`] for Namespaces, and [`delete_notes`], the warnings before one is deleted.
 //! * [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets, ReplicaSets and
 //!   ReplicationControllers, and [`WorkloadDetail`] (pod template, strategy, selector, conditions)
 //!   for their detail panels.
@@ -49,6 +50,7 @@ mod crd;
 mod endpoints;
 mod health;
 mod job;
+mod namespace;
 pub mod network;
 mod node;
 mod pod;
@@ -74,6 +76,11 @@ pub use endpoints::{
 };
 pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};
+pub use namespace::{
+    DeleteNote, HNC_DEPTH_SUFFIX, HNC_INCLUDED, HNC_SUBNAMESPACE_OF, HncInfo, NamespacePhase,
+    NamespaceSummary, NoteLevel, PROTECTED_NAMESPACES, delete_notes, is_hnc_descendant,
+    protected_reason,
+};
 pub use node::NodeSummary;
 pub use pod::{
     ComputeResources, ContainerKind, ContainerPort, ContainerState, ContainerSummary, PodPhase,

@@ -205,6 +205,16 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             namespace: "default".into(),
         },
+        "namespace::UseFavourite" => Command::NamespaceUseFavourite { cluster, slot: 1 },
+        "namespace::Create" => Command::NamespaceCreate {
+            cluster,
+            name: "team-a".into(),
+            labels: Default::default(),
+        },
+        "namespace::Delete" => Command::NamespaceDelete {
+            target: ResourceRef::cluster_scoped(cluster, Gvk::new("", "v1", "Namespace"), "team-a"),
+            contents: Default::default(),
+        },
         "node::Cordon" => Command::NodeCordon {
             target: node(name, "worker-1"),
         },

@@ -4,7 +4,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use gpui::{App, Global};
-use oxikube_app::{ColumnProvider, GroupKind, KindMeta, KindRegistry, RegisterKindError};
+use oxikube_app::{
+    ColumnProvider, ColumnsContext, GroupKind, KindMeta, KindRegistry, RegisterKindError,
+};
 use oxikube_domain::ids::Gvk;
 
 use super::detail::DetailRenderer;
@@ -101,6 +103,20 @@ impl KindSpecs {
             .columns
             .provider()
             .cloned()
+    }
+
+    /// The provider a kind builds for one cluster (its spec's per-cluster columns, over the
+    /// cluster's store), `None` when the kind has none of that kind.
+    pub fn columns_in(
+        cx: &App,
+        gvk: &Gvk,
+        context: &ColumnsContext,
+    ) -> Option<Arc<dyn ColumnProvider>> {
+        cx.try_global::<KindSpecs>()?
+            .registry
+            .get(gvk)?
+            .columns
+            .build(context)
     }
 
     /// How the detail of `gvk` is drawn: the kind's renderer, else the generic detail.

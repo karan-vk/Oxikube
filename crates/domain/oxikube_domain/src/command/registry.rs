@@ -185,10 +185,16 @@ impl CommandId {
     pub const LOGS_TOGGLE_TIMESTAMPS: CommandId = CommandId::new("logs::ToggleTimestamps");
     /// `logs::ToggleWrap`: wrap a log view's long lines, or let them run off the edge.
     pub const LOGS_TOGGLE_WRAP: CommandId = CommandId::new("logs::ToggleWrap");
+    /// `namespace::Create`: create a namespace, with optional labels.
+    pub const NAMESPACE_CREATE: CommandId = CommandId::new("namespace::Create");
+    /// `namespace::Delete`: delete a namespace and everything in it.
+    pub const NAMESPACE_DELETE: CommandId = CommandId::new("namespace::Delete");
     /// `namespace::Select`: choose the namespace selection.
     pub const NAMESPACE_SELECT: CommandId = CommandId::new("namespace::Select");
     /// `namespace::ToggleFavourite`: pin or unpin a namespace as a favourite.
     pub const NAMESPACE_TOGGLE_FAVOURITE: CommandId = CommandId::new("namespace::ToggleFavourite");
+    /// `namespace::UseFavourite`: select all namespaces (`0`) or the nth favourite (`1`-`9`).
+    pub const NAMESPACE_USE_FAVOURITE: CommandId = CommandId::new("namespace::UseFavourite");
     /// `node::Cordon`: mark a node unschedulable.
     pub const NODE_CORDON: CommandId = CommandId::new("node::Cordon");
     /// `node::Drain`: evict a node's pods.
@@ -967,6 +973,23 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     )
     .in_views(LOG_VIEW),
+    CommandMeta::mutation(
+        CommandId::NAMESPACE_CREATE,
+        "Create Namespace",
+        CommandScope::Cluster,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS),
+    CommandMeta::mutation(
+        CommandId::NAMESPACE_DELETE,
+        "Delete Namespace",
+        CommandScope::Selection,
+        Risk::Irreversible,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Namespace")),
     CommandMeta::read(
         CommandId::NAMESPACE_SELECT,
         "Select Namespaces",
@@ -979,6 +1002,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Cluster,
         NONE,
     ),
+    CommandMeta::read(
+        CommandId::NAMESPACE_USE_FAVOURITE,
+        "Use Favourite Namespace",
+        CommandScope::Cluster,
+        NONE,
+    )
+    .in_views(&[ViewContext::Table]),
     CommandMeta::mutation(
         CommandId::NODE_CORDON,
         "Cordon Node",

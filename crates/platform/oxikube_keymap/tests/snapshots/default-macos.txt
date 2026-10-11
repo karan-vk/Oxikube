@@ -91,6 +91,16 @@
 [ResourceTable && !Editing]
   -                jump::Last
   /                resource_table::FocusFilter
+  0                resource_table::SelectNamespaceSlot {"slot":0}
+  1                resource_table::SelectNamespaceSlot {"slot":1}
+  2                resource_table::SelectNamespaceSlot {"slot":2}
+  3                resource_table::SelectNamespaceSlot {"slot":3}
+  4                resource_table::SelectNamespaceSlot {"slot":4}
+  5                resource_table::SelectNamespaceSlot {"slot":5}
+  6                resource_table::SelectNamespaceSlot {"slot":6}
+  7                resource_table::SelectNamespaceSlot {"slot":7}
+  8                resource_table::SelectNamespaceSlot {"slot":8}
+  9                resource_table::SelectNamespaceSlot {"slot":9}
   [                jump::Back
   ]                jump::Forward
   a                resource_table::AttachSelected
@@ -112,6 +122,9 @@
   shift-j          resource_table::ExtendNext
   shift-k          resource_table::ExtendPrevious
   y                resource_table::ViewYaml
+[ResourceTable && !Editing && kind == Namespace]
+  p                resource_table::ToggleFavouriteNamespace
+  u                resource_table::UseNamespace
 [ResourceTable && !Editing && kind == CronJob]
   s                resource_table::ToggleSuspendSelected
   t                resource_table::TriggerSelected

@@ -108,7 +108,9 @@ impl RowActionRegistry {
     }
 
     /// The actions every table has: delete, for any kind the server can delete, also for a
-    /// selection.
+    /// selection. A Namespace is deleted by `namespace::Delete` instead (E12-S16): the same
+    /// type-the-name confirmation, with the warnings and counts of what goes with it, so the
+    /// generic delete does not offer it.
     pub fn core() -> Self {
         let mut registry = Self::new();
         registry
@@ -120,7 +122,9 @@ impl RowActionRegistry {
                     }
                 })
                 .label("Delete")
-                .kinds(KindFilter::Verb(Verb::Delete))
+                .kinds(KindFilter::Matching(|kind| {
+                    kind.supports(Verb::Delete) && !kind.gvk.is_namespace()
+                }))
                 .bulk()
                 .order(900),
             )

@@ -83,6 +83,9 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
             | CommandId::SERVICE_SHOW_PODS
             | CommandId::SERVICE_OPEN_IN_BROWSER
             | CommandId::WORKLOAD_SCALE
+            | CommandId::NAMESPACE_SELECT
+            | CommandId::NAMESPACE_USE_FAVOURITE
+            | CommandId::NAMESPACE_TOGGLE_FAVOURITE
     )
 }
 
@@ -115,6 +118,12 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
              ReplicationControllers",
         ),
         CommandId::RESOURCE_EDIT => Some("Editing is not available yet"),
+        CommandId::NAMESPACE_SELECT | CommandId::NAMESPACE_USE_FAVOURITE => {
+            Some("Use namespace is available for Namespaces")
+        }
+        CommandId::NAMESPACE_TOGGLE_FAVOURITE => {
+            Some("Favourites are pinned from the Namespaces table")
+        }
         CommandId::POD_PORT_FORWARD => Some(PORT_FORWARDING_UNAVAILABLE),
         CommandId::SERVICE_SHOW_PODS => Some("Show Pods is available for Services"),
         CommandId::SERVICE_OPEN_IN_BROWSER => {

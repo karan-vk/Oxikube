@@ -21,6 +21,7 @@ mod keyboard;
 mod keymap;
 mod logs;
 mod metrics;
+mod namespaces;
 mod network;
 mod node_shell;
 mod palette;
@@ -232,7 +233,16 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
     for (id, owner) in [
         (CommandId::CLUSTER_CONNECT, "oxikube_app::catalog"),
         (CommandId::CLUSTER_TOGGLE_FAVOURITE, "oxikube_app::catalog"),
-        (CommandId::NAMESPACE_SELECT, "oxikube_app::namespaces"),
+        (
+            CommandId::NAMESPACE_SELECT,
+            "oxikube_app::session::namespaces",
+        ),
+        (
+            CommandId::NAMESPACE_USE_FAVOURITE,
+            "oxikube_app::session::namespaces",
+        ),
+        (CommandId::NAMESPACE_CREATE, "oxikube_app::namespaces"),
+        (CommandId::NAMESPACE_DELETE, "oxikube_app::namespaces"),
         (CommandId::KUBECONFIG_RELOAD, "oxikube_app::sources"),
         (CommandId::CLUSTER_SET_COLOUR, "oxikube_app::posture"),
         (CommandId::CLUSTER_SELECT, "oxikube_workspace"),
