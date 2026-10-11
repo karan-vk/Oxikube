@@ -3,9 +3,9 @@
 //!
 //! | Set | Holds |
 //! |---|---|
-//! | [`core`] | a stock cluster: [`core_kinds`](crate::kinds::core_kinds) plus the other built-in kinds every current server serves |
-//! | [`core_with_gateway_api`] | [`core`] plus the Gateway API CRDs (an optional group the sidebar shows only when served) |
-//! | [`core_with_crds`] | [`core`] plus cert-manager's CRDs (the Custom Resources section) |
+//! | [`core()`] | a stock cluster: [`core_kinds`] plus the other built-in kinds every current server serves |
+//! | [`core_with_gateway_api`] | [`core()`] plus the Gateway API CRDs (an optional group the sidebar shows only when served) |
+//! | [`core_with_crds`] | [`core()`] plus cert-manager's CRDs (the Custom Resources section) |
 //! | [`crds_only`] | cert-manager's CRDs and nothing built in (a server whose discovery lists only custom groups) |
 
 use oxikube_domain::kinds::ResourceKind;
@@ -100,14 +100,14 @@ pub fn core() -> Vec<ResourceKind> {
     kinds
 }
 
-/// [`core`] with the Gateway API installed.
+/// [`core()`] with the Gateway API installed.
 pub fn core_with_gateway_api() -> Vec<ResourceKind> {
     let mut kinds = core();
     kinds.extend(gateway_api_kinds());
     kinds
 }
 
-/// [`core`] with cert-manager installed.
+/// [`core()`] with cert-manager installed.
 pub fn core_with_crds() -> Vec<ResourceKind> {
     let mut kinds = core();
     kinds.extend(cert_manager_kinds());
