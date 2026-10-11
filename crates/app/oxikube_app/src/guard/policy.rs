@@ -162,7 +162,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::CronJobSuspend { target }
         | Command::CronJobResume { target }
         | Command::JobSuspend { target }
-        | Command::JobResume { target } => Some(&target.cluster),
+        | Command::JobResume { target }
+        | Command::PvcResize { target, .. }
+        | Command::StorageClassSetDefault { target, .. } => Some(&target.cluster),
         Command::ClusterNextTab
         | Command::ClusterPreviousTab
         | Command::ClusterSwitchTab { .. }
@@ -265,6 +267,16 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
     }
     if let Command::WorkloadScale { target, replicas } = command {
         return scale_summary(target, *replicas, context);
+    }
+    if let Command::PvcResize { target, size, from } = command {
+        let object = match target.namespace() {
+            Some(ns) => format!("{ns}/{}", target.name),
+            None => target.name.to_string(),
+        };
+        let from = from
+            .as_deref()
+            .map_or_else(String::new, |f| format!(" from {f}"));
+        return format!("Resize PersistentVolumeClaim {object}{from} to {size} on {context}");
     }
     let base = match command.target() {
         Some(target) => {
@@ -392,6 +404,15 @@ pub fn audit_detail(command: &Command) -> Option<String> {
             if !held.is_empty() {
                 return Some(format!("contents={}", held.join(",")));
             }
+        }
+        Command::PvcResize { size, from, .. } => {
+            return Some(match from {
+                Some(from) => format!("from={from} to={size}"),
+                None => format!("to={size}"),
+            });
+        }
+        Command::StorageClassSetDefault { clear_previous, .. } => {
+            return Some(format!("clear_previous={clear_previous}"));
         }
         _ => {}
     }

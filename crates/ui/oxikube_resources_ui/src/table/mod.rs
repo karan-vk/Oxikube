@@ -67,6 +67,7 @@ mod scope;
 mod selection;
 pub mod states;
 mod step;
+mod storage_actions;
 mod verbs;
 mod view;
 

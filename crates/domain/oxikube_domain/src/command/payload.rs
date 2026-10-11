@@ -44,6 +44,11 @@ fn default_follow() -> bool {
     true
 }
 
+/// `true`: the serde default of `storageclass::SetDefault`'s `clear_previous`.
+fn default_clear_previous() -> bool {
+    true
+}
+
 /// A user or agent action as plain data.
 ///
 /// Serialised as JSON with a `type` tag equal to the command id
@@ -1121,6 +1126,32 @@ pub enum Command {
         /// The Job.
         target: ResourceRef,
     },
+    /// Grow a PersistentVolumeClaim: patch `spec.resources.requests.storage`. Refused when the
+    /// new size is not greater than the current one, or when the claim's StorageClass does not
+    /// allow volume expansion (`oxikube_domain::view::storage::check_resize`).
+    #[serde(rename = "pvc::Resize")]
+    PvcResize {
+        /// The PersistentVolumeClaim.
+        target: ResourceRef,
+        /// The new size as a Kubernetes quantity (`20Gi`).
+        size: String,
+        /// The size the caller saw (`10Gi`). Recorded in the audit entry next to the new size,
+        /// and checked against the live claim: if the claim changed meanwhile the resize is
+        /// refused instead of applied on a size the user did not see.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<String>,
+    },
+    /// Make a StorageClass the cluster's default: set the
+    /// `storageclass.kubernetes.io/is-default-class` annotation to `true`.
+    #[serde(rename = "storageclass::SetDefault")]
+    StorageClassSetDefault {
+        /// The StorageClass.
+        target: ResourceRef,
+        /// Also clear the default annotation on the class(es) that were the default, so the
+        /// cluster is left with exactly one (default `true`).
+        #[serde(default = "default_clear_previous")]
+        clear_previous: bool,
+    },
 }
 
 impl Command {
@@ -1280,6 +1311,8 @@ impl Command {
             Command::CronJobResume { .. } => CommandId::CRONJOB_RESUME,
             Command::JobSuspend { .. } => CommandId::JOB_SUSPEND,
             Command::JobResume { .. } => CommandId::JOB_RESUME,
+            Command::PvcResize { .. } => CommandId::PVC_RESIZE,
+            Command::StorageClassSetDefault { .. } => CommandId::STORAGECLASS_SET_DEFAULT,
             Command::NodeDrain { .. } => CommandId::NODE_DRAIN,
         }
     }
@@ -1373,7 +1406,9 @@ impl Command {
             | Command::CronJobSuspend { target }
             | Command::CronJobResume { target }
             | Command::JobSuspend { target }
-            | Command::JobResume { target } => Some(target),
+            | Command::JobResume { target }
+            | Command::PvcResize { target, .. }
+            | Command::StorageClassSetDefault { target, .. } => Some(target),
             _ => None,
         }
     }
@@ -1437,6 +1472,23 @@ mod tests {
             cluster(),
             Gvk::new("networking.k8s.io", "v1", "IngressClass"),
             "nginx",
+        )
+    }
+
+    fn claim() -> ResourceRef {
+        ResourceRef::namespaced(
+            cluster(),
+            Gvk::new("", "v1", "PersistentVolumeClaim"),
+            "shop",
+            "data",
+        )
+    }
+
+    fn storage_class() -> ResourceRef {
+        ResourceRef::cluster_scoped(
+            cluster(),
+            Gvk::new("storage.k8s.io", "v1", "StorageClass"),
+            "fast",
         )
     }
 
@@ -1788,6 +1840,15 @@ mod tests {
             Command::CronJobResume { target: cronjob() },
             Command::JobSuspend { target: job() },
             Command::JobResume { target: job() },
+            Command::PvcResize {
+                target: claim(),
+                size: "20Gi".into(),
+                from: Some("10Gi".into()),
+            },
+            Command::StorageClassSetDefault {
+                target: storage_class(),
+                clear_previous: true,
+            },
         ]
     }
 

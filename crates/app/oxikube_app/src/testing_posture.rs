@@ -237,6 +237,24 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             target: node(name, "worker-1"),
         },
         "palette::Toggle" => Command::PaletteToggle,
+        "pvc::Resize" => Command::PvcResize {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("", "v1", "PersistentVolumeClaim"),
+                "default",
+                "data",
+            ),
+            size: "20Gi".into(),
+            from: Some("10Gi".into()),
+        },
+        "storageclass::SetDefault" => Command::StorageClassSetDefault {
+            target: ResourceRef::cluster_scoped(
+                cluster,
+                Gvk::new("storage.k8s.io", "v1", "StorageClass"),
+                "fast",
+            ),
+            clear_previous: true,
+        },
         "palette::ClearRecents" => Command::PaletteClearRecents,
         "palette::OpenJump" => Command::PaletteOpenJump,
         "help::Show" => Command::HelpShow,

@@ -13,7 +13,7 @@ fn storage_kinds() {
         &[
             ("status", "Bound"),
             ("volume", "pvc-0f3b6e0e"),
-            ("capacity", "10Gi"),
+            ("size", "10Gi"),
             ("access-modes", "RWO"),
             ("storage-class", "standard"),
             ("volume-mode", "Filesystem"),
@@ -57,7 +57,7 @@ fn storage_kinds() {
             ("reclaim-policy", "Delete"),
             ("binding-mode", "WaitForFirstConsumer"),
             ("allow-expansion", "true"),
-            ("default", "true"),
+            ("default", "default"),
         ],
     );
     check(

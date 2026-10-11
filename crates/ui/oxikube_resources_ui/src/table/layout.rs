@@ -239,6 +239,8 @@ impl ColumnLayout {
             // `12 (279d ago)`: the count and the age of the last restart.
             ("restarts", _, _) => 130.,
             ("ready", _, _) => 70.,
+            // A claim's `10Gi → 20Gi` while a resize is pending (E12-S15).
+            ("size", _, _) => 120.,
             // `kind-control-plane`, `ip-10-0-123-45.eu-west-1.compute.internal` (truncated).
             ("node", _, _) => 110.,
             // An IPv4 address; an IPv6 one truncates to a tooltip.

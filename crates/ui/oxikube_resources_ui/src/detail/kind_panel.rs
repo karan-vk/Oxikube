@@ -6,8 +6,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{AnyView, App, Context, Window};
-use oxikube_app::ClusterSessionManager;
 use oxikube_app::store::StoreObject;
+use oxikube_app::{ClusterSessionManager, ColumnsContext};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{Gvk, ResourceRef, Scope};
@@ -131,6 +131,22 @@ impl DetailView {
     /// commands through it, so they are the bus's, like every other action).
     pub fn dispatcher(&self) -> std::rc::Rc<dyn oxikube_workspace::CommandDispatcher> {
         self.deps.dispatcher.clone()
+    }
+
+    /// The cluster, session store and shared catalogue this detail is built over, for a kind's
+    /// panel that reads more than the object (the claim panel's Pods).
+    pub fn columns_context(&self) -> ColumnsContext {
+        let store = self
+            .deps
+            .sessions
+            .get(&self.target.cluster)
+            .and_then(|session| self.deps.stores.for_session(&session));
+        ColumnsContext {
+            cluster: self.target.cluster.clone(),
+            sessions: self.deps.sessions.clone(),
+            store,
+            shared: self.deps.columns.clone(),
+        }
     }
 
     /// The kind's own panel, when its spec has one and it was drawn.

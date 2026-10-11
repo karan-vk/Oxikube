@@ -7,6 +7,7 @@ use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{ClusterId, Gvk, Scope};
 
 use crate::columns::ColumnProvider;
+use crate::session::ClusterSessionManager;
 use crate::store::ResourceStore;
 use crate::templates::{Template, TemplateCatalog};
 
@@ -50,6 +51,9 @@ pub struct ColumnsContext {
     /// The cluster's resource store; `None` while the session is not connected (a reconnect
     /// builds the provider again with the new store).
     pub store: Option<ResourceStore>,
+    /// The sessions, for a provider that follows a session's setting (the claims' Pods column
+    /// follows the namespace selection).
+    pub sessions: ClusterSessionManager,
     /// The shared provider the factory may wrap: the core catalogue.
     pub shared: Arc<dyn ColumnProvider>,
 }

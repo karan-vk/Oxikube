@@ -38,6 +38,8 @@ pub enum CommandCategory {
     Node,
     /// Services (`service::*`).
     Service,
+    /// Storage (`pvc::*`, `storageclass::*`).
+    Storage,
     /// The log viewer (`logs::*`).
     Logs,
     /// Terminals (`terminal::*`).
@@ -50,7 +52,7 @@ pub enum CommandCategory {
 
 impl CommandCategory {
     /// Every category, in display order.
-    pub const ALL: [CommandCategory; 14] = [
+    pub const ALL: [CommandCategory; 15] = [
         CommandCategory::App,
         CommandCategory::Window,
         CommandCategory::View,
@@ -61,6 +63,7 @@ impl CommandCategory {
         CommandCategory::Pod,
         CommandCategory::Node,
         CommandCategory::Service,
+        CommandCategory::Storage,
         CommandCategory::Logs,
         CommandCategory::Terminal,
         CommandCategory::Editor,
@@ -69,7 +72,7 @@ impl CommandCategory {
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 24] = [
+        const NAMESPACES: [(&str, CommandCategory); 26] = [
             ("app", CommandCategory::App),
             ("window", CommandCategory::Window),
             ("view", CommandCategory::View),
@@ -91,6 +94,8 @@ impl CommandCategory {
             ("pod", CommandCategory::Pod),
             ("node", CommandCategory::Node),
             ("service", CommandCategory::Service),
+            ("pvc", CommandCategory::Storage),
+            ("storageclass", CommandCategory::Storage),
             ("logs", CommandCategory::Logs),
             ("terminal", CommandCategory::Terminal),
             ("editor", CommandCategory::Editor),
@@ -118,6 +123,7 @@ impl CommandCategory {
             CommandCategory::Pod => "Pod",
             CommandCategory::Node => "Node",
             CommandCategory::Service => "Service",
+            CommandCategory::Storage => "Storage",
             CommandCategory::Logs => "Logs",
             CommandCategory::Terminal => "Terminal",
             CommandCategory::Editor => "Editor",

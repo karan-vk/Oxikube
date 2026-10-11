@@ -121,6 +121,8 @@
   shift-f          resource_table::PortForward
   shift-j          resource_table::ExtendNext
   shift-k          resource_table::ExtendPrevious
+  shift-r          resource_table::ResizeClaim
+  shift-s          resource_table::SetDefaultClass
   y                resource_table::ViewYaml
 [ResourceTable && !Editing && kind == Namespace]
   p                resource_table::ToggleFavouriteNamespace

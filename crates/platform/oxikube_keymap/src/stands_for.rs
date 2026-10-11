@@ -91,6 +91,13 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_table::OpenInBrowser",
         CommandId::SERVICE_OPEN_IN_BROWSER,
     ),
+    // Storage (E12-S15): `shift-r` resizes the claim under the cursor, `shift-s` makes the storage
+    // class the default; each only on its own kind.
+    ("resource_table::ResizeClaim", CommandId::PVC_RESIZE),
+    (
+        "resource_table::SetDefaultClass",
+        CommandId::STORAGECLASS_SET_DEFAULT,
+    ),
     // The resource detail's find in the YAML and Describe text (E11-S06). `resource_detail::CloseFind`
     // only closes the field and gives the keys back to the detail, so it is view-local.
     ("resource_detail::Find", CommandId::RESOURCE_FIND),

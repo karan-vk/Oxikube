@@ -59,6 +59,7 @@ pub mod search;
 pub mod session;
 pub mod sidebar;
 pub mod sources;
+pub mod storage;
 pub mod store;
 pub mod templates;
 pub mod tools;
@@ -126,6 +127,10 @@ pub use session::{
 };
 pub use sidebar::{AccessOutcome, CustomKind, CustomResourceGroup};
 pub use sources::{KubeconfigSourcesService, SourceListStore, SourceRow};
+pub use storage::{
+    DefaultClassContext, DefaultClassFlow, DefaultClassReport, PODS_COLUMN, PvcColumns, PvcUsage,
+    PvcUsageFeed, PvcUsageIndex, ResizeContext, ResizeFlow, ResizeReport, UsageStatus,
+};
 pub use store::{
     CountState, CountTarget, CountsLease, KindCount, ResourceStore, ResourceStores, StoreDelta,
     StoreQuery, Subscription,

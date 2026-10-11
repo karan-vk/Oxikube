@@ -227,6 +227,8 @@ impl CommandId {
     pub const POD_SHELL: CommandId = CommandId::new("pod::Shell");
     /// `pod::ViewLogs`: open a pod's logs.
     pub const POD_VIEW_LOGS: CommandId = CommandId::new("pod::ViewLogs");
+    /// `pvc::Resize`: grow a PersistentVolumeClaim (patch its requested storage).
+    pub const PVC_RESIZE: CommandId = CommandId::new("pvc::Resize");
     /// `resource::Apply`: apply a manifest.
     pub const RESOURCE_APPLY: CommandId = CommandId::new("resource::Apply");
     /// `resource::CopyLabel`: copy a label or annotation of a resource as `key=value`.
@@ -277,6 +279,8 @@ impl CommandId {
     pub const SERVICE_OPEN_IN_BROWSER: CommandId = CommandId::new("service::OpenInBrowser");
     /// `service::ShowPods`: open the pods a Service selects, in a table filtered by its selector.
     pub const SERVICE_SHOW_PODS: CommandId = CommandId::new("service::ShowPods");
+    /// `storageclass::SetDefault`: make a StorageClass the cluster's default.
+    pub const STORAGECLASS_SET_DEFAULT: CommandId = CommandId::new("storageclass::SetDefault");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
     /// `table::ToggleWide`: show or hide the wide columns (`kubectl -o wide`) of a kind's tables.
@@ -1127,6 +1131,18 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Pod")),
+    // The resize dialog (E12-S15) is the confirmation's front: it checks growth and
+    // `allowVolumeExpansion`, names the old and the new size, then the guard asks (simple confirm
+    // naming the claim and the cluster). The handler dry-runs the patch first.
+    CommandMeta::mutation(
+        CommandId::PVC_RESIZE,
+        "Resize Volume Claim",
+        CommandScope::Selection,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     // The manifest editor runs it through its own flow (E10-S08): a server dry run, the diff
     // preview (which is the confirmation, hence `Low`), then the apply. Agents call it directly;
     // the guard and the handler's own dry run apply to them alike.
@@ -1331,6 +1347,17 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Service")),
+    // One annotation on one StorageClass (and the previous default's, when asked): reversible by
+    // setting another class, hence `Low`; the per-session skip of low-risk confirms is E19's.
+    CommandMeta::mutation(
+        CommandId::STORAGECLASS_SET_DEFAULT,
+        "Set Default Storage Class",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     // Moves focus inside a window, never touches the cluster: allowed in read-only mode.
     CommandMeta::read(
         CommandId::TABLE_FOCUS_FILTER,

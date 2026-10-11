@@ -36,6 +36,7 @@ mod node_shell;
 mod scale;
 mod scoped_feeds;
 mod service_backends;
+mod storage;
 mod two_clusters;
 mod workloads;
 

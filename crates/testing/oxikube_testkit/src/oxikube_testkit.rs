@@ -25,6 +25,8 @@
 //! - [`manifests`]: large generated YAML (`pod_list_yaml(5 MiB, ..)`, a `kubectl get -o yaml`
 //!   dump with planted schema errors) and the schema it is checked against, for the manifest
 //!   editor's perf tests and the `editor-5mb` scenario (E10-S11).
+//! - [`storage`]: `pvc("data").class("fast")`, `storage_class("fast").expandable(true)`, `pod_mounting(..)`
+//!   for the storage views and actions (E12-S15).
 //! - [`script`]: the [`Script`] / [`CallLog`] / [`Timeline`] helpers the fakes share.
 //! - [`scripted_feed`]: [`ScriptedFeed`], objects added / modified / deleted at chosen ticks as the
 //!   `DeltaBatch`es a watch delivers (UI and store tests).
@@ -61,6 +63,7 @@ pub mod manifests;
 pub mod screenshot;
 pub mod script;
 pub mod scripted_feed;
+pub mod storage;
 pub mod test_ports;
 
 pub use builders::{daemonset, deployment, job, node, pod, replicaset, resource, statefulset};

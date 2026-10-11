@@ -138,6 +138,19 @@ const CORE: &[(&str, &str, FeedPlan)] = &[
         "StorageClass",
         FeedPlan::new(Full, Normal),
     ),
+    // The CSI snapshot kinds (E12-S15), optional CRDs: the sidebar shows them only where
+    // discovery serves them. Read in full so the columns the story names (source claim, class,
+    // ready, restore size, creation time) do not depend on the CRD's printer columns.
+    (
+        "snapshot.storage.k8s.io",
+        "VolumeSnapshot",
+        FeedPlan::new(Full, Normal),
+    ),
+    (
+        "snapshot.storage.k8s.io",
+        "VolumeSnapshotClass",
+        FeedPlan::new(Full, Normal),
+    ),
     (
         "rbac.authorization.k8s.io",
         "Role",

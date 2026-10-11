@@ -1,5 +1,6 @@
 //! The built-in kinds, by sidebar section in Freelens' order: Nodes, Workloads, Config, Network,
-//! Storage, Namespaces (then Custom Resources, from discovery). Each section module registers its
+//! Storage, Namespaces (then Custom Resources, from discovery). Storage lives in `kinds::storage`
+//! (E12-S15). Each section module registers its
 //! kinds from its own `init(cx)`; until a kind story gives a kind its own module, it has the
 //! generic spec (the shared columns, the generic detail) and the actions E08/E09 already ship.
 //! Kinds with a module of their own: Pods (`kinds::pods`, E12-S02).
@@ -14,7 +15,6 @@ mod config;
 mod namespaces;
 mod network;
 mod nodes;
-mod storage;
 pub(super) mod workloads;
 
 use gpui::App;
@@ -123,7 +123,7 @@ pub fn init(cx: &mut App) {
     config::init(cx);
     network::init(cx);
     crate::kinds::network::init(cx);
-    storage::init(cx);
+    super::storage::init(cx);
     namespaces::init(cx);
     super::crd::init(cx);
 }

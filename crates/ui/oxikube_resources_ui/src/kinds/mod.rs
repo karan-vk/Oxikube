@@ -24,6 +24,7 @@
 //! | `endpoints` | Endpoints and EndpointSlices (E12-S13): the detail panel |
 //! | `service` | Services (E12-S13): the detail panel, the open-in-browser hook and the row actions |
 //! | `namespace` | E12-S16: the Namespaces kind: columns with a live pod count, row actions, panel, create dialog |
+//! | `storage` | the Storage section's kinds (E12-S15): columns, panels, resize and set-default |
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
 //! | [`crd`] | the CustomResourceDefinition kind (E12-S17): its spec and the definition panel of its detail |
 //! | `pods` | Pods (E12-S02): their own columns and the containers drill-down |
@@ -64,6 +65,7 @@ pub mod service;
 mod sidebar;
 mod spec;
 mod specs;
+pub mod storage;
 pub mod workloads;
 
 #[cfg(test)]
@@ -73,6 +75,7 @@ pub use config::ConfigPanel;
 pub use detail::{DetailRenderer, DetailViewFactory};
 pub use spec::KindSpec;
 pub use specs::KindSpecs;
+pub use storage::storage_row_actions;
 pub use workloads::{
     SCALE_ORDER, ScaleDialog, ScaleFlow, ScaleStage, WorkloadPanel, scale_row_actions,
 };
@@ -88,6 +91,7 @@ pub fn row_actions() -> Vec<RowActionSpec> {
         .chain(cronjob::row_actions())
         .chain(scale_row_actions())
         .chain(network::network_row_actions())
+        .chain(storage_row_actions())
         .collect()
 }
 

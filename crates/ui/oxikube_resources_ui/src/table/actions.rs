@@ -113,6 +113,13 @@ actions!(
         /// Pin or unpin the cursor row's namespace as a favourite (`namespace::ToggleFavourite`;
         /// `p`, bound for Namespaces only).
         ToggleFavouriteNamespace,
+        /// Resize the cursor row's PersistentVolumeClaim (`pvc::Resize`, through the resize
+        /// dialog; `shift-r`). A toast says so on any other kind, or on a read-only cluster.
+        ResizeClaim,
+        /// Make the cursor row's StorageClass the cluster's default (`storageclass::SetDefault`,
+        /// through its dialog; `shift-s`). A toast says so on any other kind, or on a read-only
+        /// cluster.
+        SetDefaultClass,
         /// Show or hide the wide columns of this kind's tables (`table::ToggleWide`; k9s's
         /// `ctrl-w`).
         ToggleWide,

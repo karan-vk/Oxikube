@@ -41,6 +41,11 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   opens the Pods table filtered by the selector. "Open in Browser" (`o`, `service::OpenInBrowser`)
   appears once the port-forward manager installs its opener (`ServiceBrowser::enable` plus
   `register_open_in_browser`); a Service without a selector says why it has no pods.
+- `kinds::storage` (E12-S15): the Storage section. Claims (Status, Storage Class, Size, Pods used by),
+  volumes, storage classes (Default badge) and, where the CSI snapshot CRDs are served, volume snapshots
+  and their classes; a detail panel per kind (a claim lists its bound volume and the Pods that mount it);
+  "Resize…" (`pvc::Resize`, `shift-r`) and "Set as Default" (`storageclass::SetDefault`, `shift-s`) as row
+  actions with their dialogs, through the guard.
 - `table` (E07-S03): `ResourceTable`, the generic virtualised table of one kind (store
   subscription, sort through the store, column layout per kind, multi-select, keyboard, context
   menu, status colours from the theme's `oxikube` block).
