@@ -3,8 +3,8 @@
 //!
 //! * [`build`] makes the app's one [`MetricsProviderService`] and the per-cluster PromQL port. The
 //!   port reaches an in-cluster Prometheus through the clusters' service proxies
-//!   ([`SessionProxies`]) and is told where each cluster's provider is by the service
-//!   ([`PromqlSink`]). Constructing spawns and reads nothing.
+//!   (`SessionProxies`) and is told where each cluster's provider is by the service
+//!   (`PromqlSink`). Constructing spawns and reads nothing.
 //! * [`start`] runs on the first window mount: a foreground task follows the session updates
 //!   (it waits, and per update does a short in-memory evaluation, so an idle app has no metrics
 //!   task on the Tokio runtime), and every change of the settings is passed on
