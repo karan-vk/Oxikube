@@ -20,6 +20,8 @@
 //!   autoscroll on/paused (E08-S02), and with a search highlighting or filtering (E08-S03).
 //! - `editor-5mb` ([`editor_5mb`]): the manifest editor over a 5 MB `kubectl get -o yaml` dump:
 //!   open, typing, the debounced validation pass, scrolling with diagnostics (E10-S11).
+//! - `charts` ([`charts`]): the overview's worst case, 12 sparklines and 3 area charts of 5 760
+//!   points: repaint, a data tick on every frame, a hover sweep (E13-S07).
 //!
 //! The view-driving scenarios mount their view as the app's window does ([`window_root`]), so it
 //! is drawn with the app's text style; a sample fails if its text falls back to another family
@@ -27,6 +29,7 @@
 //! `cargo xtask perf` sets): with them on, every error built on a hot path captures a stack trace
 //! and the numbers stop being comparable, so a sample warns about it on stderr.
 
+mod charts;
 mod editor_5mb;
 mod logs_stream;
 mod palette;
@@ -61,10 +64,11 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
         palette::NAME => palette::run(probe),
         logs_stream::NAME => logs_stream::run(probe),
         editor_5mb::NAME => editor_5mb::run(probe),
+        charts::NAME => charts::run(probe),
         other => {
             eprintln!(
                 "oxikube: unknown perf scenario `{other}` (startup, scroll-10k or \
-                 table-scroll-10k, palette, logs-stream, editor-5mb)"
+                 table-scroll-10k, palette, logs-stream, editor-5mb, charts)"
             );
             return ExitCode::from(2);
         }

@@ -21,7 +21,7 @@ pub enum CommandCategory {
     /// Windows (`window::*`).
     Window,
     /// Views, zoom, the palette, the jump bar, the key-binding help and the keymap file
-    /// (`view::*`, `palette::*`, `jump::*`, `help::*`, `keymap::*`).
+    /// (`view::*`, `palette::*`, `jump::*`, `help::*`, `keymap::*`, `charts::*`).
     View,
     /// Clusters and kubeconfig sources (`cluster::*`, `kubeconfig::*`).
     Cluster,
@@ -65,7 +65,7 @@ impl CommandCategory {
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 19] = [
+        const NAMESPACES: [(&str, CommandCategory); 20] = [
             ("app", CommandCategory::App),
             ("window", CommandCategory::Window),
             ("view", CommandCategory::View),
@@ -73,6 +73,7 @@ impl CommandCategory {
             ("help", CommandCategory::View),
             ("jump", CommandCategory::View),
             ("keymap", CommandCategory::View),
+            ("charts", CommandCategory::View),
             ("cluster", CommandCategory::Cluster),
             ("kubeconfig", CommandCategory::Cluster),
             ("namespace", CommandCategory::Namespace),

@@ -48,12 +48,20 @@ app.run(|cx| {
   separate layer helper to call. `dialog::{Cancel, Confirm}` are the library's Escape / Enter
   actions; `oxikube_workspace`'s modal layer (one modal view over the workspace, focus-trapped)
   listens for the same `Cancel`, so components inside a modal consume Escape first.
-- Everything else (`dock`, `dialog`, `menu`, `input`, `tabs`, `sidebar`, `chart`, `markdown`,
+- **Charts** (`oxikube_ui::chart`, E13-S07): `cx.new(|_| Chart::area("pod-cpu").format(ValueFormat::Cores))`,
+  then `chart.update(cx, |c, cx| c.set_series(vec![Series::new("nginx", points)], TimeAxis::last(3600.0, now), cx))`
+  on every poll (feeding the same `Arc<[Point]>` again is free). Line, area and bar over a time axis with a value axis,
+  thresholds, bands, a legend that toggles series, a hover tooltip and an explicit "No data" state
+  (`set_unavailable(Some("No Prometheus endpoint".into()), cx)`); `Sparkline::new(id, points)` is the axis-less form for
+  table cells. Colours come from the active tokens (`ChartPalette`). `chart::gallery::ChartGallery` shows every state
+  (the app's "Open Chart Gallery" command opens it).
+- Everything else (`dock`, `dialog`, `menu`, `input`, `tabs`, `sidebar`, `markdown`,
   `button`, `layout`) is a curated re-export under our names; there is no `pub use gpui_component::*`.
 
 Tests: `cargo test -p oxikube_ui` (unit + `#[gpui::test]` renders of every component, 10 000-row
-virtualisation). Token sampler screenshot (needs a GPU; nightly CI):
-`cargo test -p oxikube_ui --features screenshot --test screenshot`. Micro benchmark:
+virtualisation, every chart state). Token sampler screenshot (needs a GPU; nightly CI):
+`cargo test -p oxikube_ui --features screenshot --test screenshot` (and `--test chart_screenshot`: line, area, bar,
+sparkline and the gallery under One Dark and One Light). Micro benchmark:
 `cargo run -p oxikube_ui --profile release-fast --example table_bench`.
 
 ## Allowed internal dependencies

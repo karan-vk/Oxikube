@@ -135,6 +135,22 @@ pub const BUDGETS: &[Budget] = &[
         tolerance: 0.0,
         what: "typing and scrolling frames over 16 ms in a 5 MB manifest (%)",
     },
+    Budget {
+        scenario: "charts",
+        metric: "frame_ms",
+        // E13-S07: p95 frame <= 8 ms with the overview's worst case on screen (12 sparklines and
+        // 3 area charts of 5 760 points), nothing changing between frames.
+        limit: 8.0,
+        tolerance: 0.0,
+        what: "12 sparklines and 3 area charts of 5 760 points repainting (headless frame, p95)",
+    },
+    Budget {
+        scenario: "charts",
+        metric: "hover_frame_ms",
+        limit: 8.0,
+        tolerance: 0.0,
+        what: "the same page with a chart's tooltip following the cursor (headless frame, p95)",
+    },
 ];
 
 /// A `logs-stream` frame budget (E08-S02, the JSON modes E08-S05, the search modes E08-S03, the merged modes E08-S04):

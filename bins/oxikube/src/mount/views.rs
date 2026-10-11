@@ -4,6 +4,7 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
+use super::gallery::{CHART_GALLERY_VIEW, ChartGalleryPage};
 use gpui::{App, AppContext as _, Entity, SharedString, Window};
 use oxikube_app::{ClusterCatalog, ClusterSessionManager, KubeconfigSourcesService};
 use oxikube_catalog_ui::catalog::CATALOG_VIEW;
@@ -39,7 +40,7 @@ impl ViewDeps {
         cx.new(|cx| CatalogView::new(deps, window, cx))
     }
 
-    /// Shows `view` ([`CATALOG_VIEW`] or [`SOURCES_VIEW`]) in `workspace`: the open tab when there
+    /// Shows `view` ([`CATALOG_VIEW`], [`SOURCES_VIEW`] or [`CHART_GALLERY_VIEW`]) in `workspace`: the open tab when there
     /// is one, else a new one. Any other id is ignored (`view::Open` validates it first).
     pub fn open(
         &self,
@@ -62,6 +63,10 @@ impl ViewDeps {
                     workspace: Some(workspace.downgrade()),
                 };
                 Box::new(cx.new(|cx| SourcesView::new(deps, cx)))
+            }
+            CHART_GALLERY_VIEW => {
+                let now = self.clock.now().as_second() as f64;
+                Box::new(cx.new(|cx| ChartGalleryPage::new(now, cx)))
             }
             _ => return,
         };

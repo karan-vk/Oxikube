@@ -23,6 +23,8 @@ fn run(scenario: &str) -> (std::process::Output, Option<Value>) {
         .env("OXIKUBE_PERF_LOGS_FRAMES", LOGS_FRAMES.to_string())
         // `editor-5mb` on a smaller dump.
         .env("OXIKUBE_PERF_EDITOR_BYTES", EDITOR_BYTES.to_string())
+        // `charts` likewise.
+        .env("OXIKUBE_PERF_CHARTS_FRAMES", CHARTS_FRAMES.to_string())
         .args(["--perf-scenario", scenario, "--perf-report"])
         .arg(&report)
         .output()
@@ -192,6 +194,28 @@ fn the_editor_opens_types_validates_and_scrolls_a_large_dump() {
     assert!(s["metrics"]["slow_frame_pct"]["p50"].as_f64().is_some());
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("oxikube editor-5mb: opened"), "{stderr}");
+}
+
+/// Scripted frames per phase of the `charts` smoke run.
+const CHARTS_FRAMES: u64 = 8;
+
+#[test]
+fn charts_repaint_from_cache_rebuild_once_per_tick_and_follow_a_hover() {
+    let (out, sample) = run("charts");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let s = sample.expect("sample written");
+    assert_eq!(s["status"], "ok");
+    assert_eq!(s["scenario"], "charts");
+    for prefix in ["", "tick_", "hover_"] {
+        let frames = s["metrics"][format!("{prefix}draw_ms")]["count"].as_u64();
+        assert_eq!(frames, Some(CHARTS_FRAMES), "{prefix}draw_ms");
+        let p50 = s["metrics"][format!("{prefix}frame_ms")]["p50"].as_f64();
+        assert!(p50.is_some_and(|v| v > 0.0), "{prefix}frame_ms: {p50:?}");
+    }
 }
 
 #[test]

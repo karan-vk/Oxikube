@@ -84,6 +84,7 @@
 pub mod bus;
 mod describe;
 mod editor;
+mod gallery;
 mod help;
 mod jump;
 mod keymap;
