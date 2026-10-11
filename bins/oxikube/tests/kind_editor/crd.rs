@@ -103,11 +103,14 @@ fn crd_instances_validate_against_the_live_schema_and_the_server_names_the_same_
         };
         let placed = place_causes(&text, &causes);
         assert!(placed.unplaced.is_empty(), "{message}: {placed:?}");
-        let [server] = placed.diagnostics.as_slice() else {
-            panic!("one cause: {message}: {causes:?}");
-        };
+        // The server may name one bad field or all of them, whichever its schema walk meets
+        // first: the one the editor marked is among them.
+        let server = placed
+            .diagnostics
+            .iter()
+            .find(|d| text.get(d.range.clone()) == Some(key))
+            .unwrap_or_else(|| panic!("a cause on `{key}`: {message}: {causes:?}"));
         assert_eq!(server.code.as_deref(), Some(SERVER_CODE));
-        assert_eq!(text.get(server.range.clone()), Some(key), "{causes:?}");
         assert_eq!(
             line_of(&text, &server.range),
             line_of(&text, &client),

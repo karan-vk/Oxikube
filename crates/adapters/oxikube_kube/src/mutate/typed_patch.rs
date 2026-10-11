@@ -38,7 +38,7 @@ pub(super) fn typed_patch_error(status: &Status) -> Option<OxiError> {
 
 /// One cause per `.<path>: <message>` of a typed-patch failure message; `None` when `message`
 /// is not one, or names no field.
-pub(super) fn typed_patch_causes(message: &str) -> Option<Vec<FieldCause>> {
+fn typed_patch_causes(message: &str) -> Option<Vec<FieldCause>> {
     let rest = message.trim_start().strip_prefix(PREFIX)?;
     // The object in parentheses (`ns/name; group/version, Kind=K`) never holds "): ".
     let (_, reasons) = rest.split_once("): ")?;

@@ -24,7 +24,7 @@ use oxikube_domain::ids::Gvk;
 use oxikube_editor::templates::embedded;
 use oxikube_testkit::integration::{TestNamespace, ensure_kind_context, test_context};
 
-use kind_common::editor::{EditorSession as Session, configmaps, gvks_in};
+use kind_common::editor::{EditorSession, configmaps, gvks_in};
 use kind_common::{on_cluster, wait_value};
 
 /// Removes a namespace a buffer under test created, even when an assertion fails first (the
@@ -53,7 +53,7 @@ fn every_template_opens_clean_against_the_clusters_schemas_and_passes_a_server_d
     };
     ensure_kind_context(&context).expect("a kind context");
     let namespace = TestNamespace::create(&context).expect("a namespace");
-    let mut s = Session::start(cx, &context, namespace.name());
+    let mut s = EditorSession::start(cx, &context, namespace.name());
 
     for template in embedded() {
         let name = template.name.to_string();
@@ -114,7 +114,7 @@ fn a_configmap_made_from_its_template_is_created_in_the_selected_namespace(
     };
     ensure_kind_context(&context).expect("a kind context");
     let namespace = TestNamespace::create(&context).expect("a namespace");
-    let mut s = Session::start(cx, &context, namespace.name());
+    let mut s = EditorSession::start(cx, &context, namespace.name());
 
     let editor = s.create("ConfigMap");
     s.wait_checked(&editor, &[Gvk::new("", "v1", "ConfigMap")]);
@@ -162,7 +162,7 @@ fn a_buffer_of_several_documents_is_applied_in_order_with_a_new_namespace_first(
         context: context.clone(),
         name: extra.clone(),
     };
-    let mut s = Session::start(cx, &context, namespace.name());
+    let mut s = EditorSession::start(cx, &context, namespace.name());
     let ns = namespace.name();
     let text = format!(
         "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {extra}\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: first\n  namespace: {ns}\ndata:\n  k: one\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: second\n  namespace: {extra}\ndata:\n  k: two\n"

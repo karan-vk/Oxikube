@@ -82,8 +82,7 @@ pub fn owners(object: &Value, path: &[&str]) -> Vec<(String, String)> {
     let entries = object
         .pointer("/metadata/managedFields")
         .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .map_or(&[][..], Vec::as_slice);
     entries
         .iter()
         .filter(|entry| {

@@ -21,17 +21,18 @@ use oxikube_domain::session::NamespaceSelection;
 use oxikube_editor::apply::split_documents;
 use oxikube_editor::open::ResourceLoad;
 use oxikube_editor::view::{
-    ApplyPreviewDialog, BatchPreviewDialog, ConflictDialog, ManifestEditor, Notice,
+    ApplyPreviewDialog, ApplyStage, BatchPreviewDialog, ConflictDialog, ManifestEditor, Notice,
     VALIDATION_DEBOUNCE,
 };
 use oxikube_ports::AuditQuery;
 use oxikube_ui::editor::{EditorApi as _, EditorDiagnostic};
+use oxikube_workspace::modal::ModalView;
 use oxikube_workspace::{ClusterTab, Workspace};
 
 use super::{Launched, wait, wait_value};
 
 /// Runs the debounced validation and everything it started.
-pub fn settle(vcx: &mut VisualTestContext) {
+fn settle(vcx: &mut VisualTestContext) {
     vcx.executor().advance_clock(VALIDATION_DEBOUNCE);
     vcx.run_until_parked();
 }
@@ -258,7 +259,7 @@ impl EditorSession {
         self.modal(what)
     }
 
-    fn modal<V: oxikube_workspace::modal::ModalView>(&mut self, what: &str) -> Entity<V> {
+    fn modal<V: ModalView>(&mut self, what: &str) -> Entity<V> {
         wait_value(&mut self.vcx, what, |vcx| {
             vcx.update(|_, cx| {
                 self.inner
@@ -282,8 +283,7 @@ impl EditorSession {
     /// Waits until the editor's apply flow has nothing running and nothing to review.
     pub fn wait_idle(&mut self, editor: &Entity<ManifestEditor>) {
         wait(&mut self.vcx, "the apply to finish", |vcx| {
-            vcx.update(|_, cx| editor.read(cx).apply_stage())
-                == oxikube_editor::view::ApplyStage::Idle
+            vcx.update(|_, cx| editor.read(cx).apply_stage()) == ApplyStage::Idle
         });
     }
 
@@ -292,7 +292,7 @@ impl EditorSession {
         wait_value(&mut self.vcx, what, |vcx| {
             vcx.update(|_, cx| {
                 let view = editor.read(cx);
-                (view.apply_stage() == oxikube_editor::view::ApplyStage::Idle)
+                (view.apply_stage() == ApplyStage::Idle)
                     .then(|| view.notice().cloned())
                     .flatten()
             })
