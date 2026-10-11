@@ -7,6 +7,9 @@
 //! - [`EditorApi`] (`api`): the trait feature views drive it through, in byte offsets and our own
 //!   types ([`EditorDiagnostic`], [`Decoration`]), so no feature crate imports gpui-component.
 //!   [`LiveEditor`] implements it over a [`CodeEditor`]; tests implement it with a plain struct.
+//! - [`EditorAssist`] (`assist`, `assist_bridge`): hover docs and completion a feature view
+//!   supplies in our own types; the bridge plugs them into the library's providers
+//!   ([`CodeEditor::set_assist`], [`CodeEditor::show_completions`], [`CodeEditor::show_hover`]).
 //! - `positions`: the one place byte offsets become the library's line/character positions.
 //! - `overlay`: the gutter markers and end-of-line messages, painted in a canvas over the visible
 //!   lines (the library has no inline widgets).
@@ -17,6 +20,8 @@
 //! runs per frame beyond painting the visible lines.
 
 mod api;
+mod assist;
+mod assist_bridge;
 mod code_editor;
 mod live;
 mod overlay;
@@ -25,6 +30,8 @@ mod positions;
 pub use api::{
     Decoration, DecorationStyle, DiagnosticLevel, EditorApi, EditorDiagnostic, EditorFont,
 };
+pub use assist::{CompletionEntry, EditorAssist, EntryKind, HoverInfo};
+pub use assist_bridge::COMPLETION_DEBOUNCE;
 pub use code_editor::{
     CodeEditor, CodeEditorEvent, CodeEditorOptions, DEFAULT_TAB_SIZE, TextSnapshot,
 };

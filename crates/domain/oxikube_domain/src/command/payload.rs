@@ -392,6 +392,15 @@ pub enum Command {
     /// Put the focused editor's merge in its buffer once every conflict has a side (E10-S07).
     #[serde(rename = "editor::AcceptMerge")]
     EditorAcceptMerge,
+    /// Open the completion menu at the focused manifest editor's cursor (E10-S05): the schema's
+    /// sibling fields, enum values and snippets; the active pane's editor when focus is
+    /// elsewhere. Reads the text only.
+    #[serde(rename = "editor::TriggerCompletion")]
+    EditorTriggerCompletion,
+    /// Show the schema docs of the token at the focused manifest editor's cursor (E10-S05), as
+    /// hovering it would; the active pane's editor when focus is elsewhere. Reads the text only.
+    #[serde(rename = "editor::ShowHover")]
+    EditorShowHover,
     /// Open the list of the cluster's CustomResourceDefinitions (the sidebar's "Definitions").
     /// Read-only.
     #[serde(rename = "crd::OpenList")]
@@ -1025,6 +1034,8 @@ impl Command {
             Command::EditorTakeMine { .. } => CommandId::EDITOR_TAKE_MINE,
             Command::EditorTakeServer { .. } => CommandId::EDITOR_TAKE_SERVER,
             Command::EditorAcceptMerge => CommandId::EDITOR_ACCEPT_MERGE,
+            Command::EditorTriggerCompletion => CommandId::EDITOR_TRIGGER_COMPLETION,
+            Command::EditorShowHover => CommandId::EDITOR_SHOW_HOVER,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -1338,6 +1349,8 @@ mod tests {
             Command::EditorTakeMine { conflict: 0 },
             Command::EditorTakeServer { conflict: 2 },
             Command::EditorAcceptMerge,
+            Command::EditorTriggerCompletion,
+            Command::EditorShowHover,
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -1728,6 +1741,8 @@ mod tests {
                     | Command::EditorTakeMine { .. }
                     | Command::EditorTakeServer { .. }
                     | Command::EditorAcceptMerge
+                    | Command::EditorTriggerCompletion
+                    | Command::EditorShowHover
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }

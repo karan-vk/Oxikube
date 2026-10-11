@@ -351,6 +351,8 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "editor::TakeMine" => Command::EditorTakeMine { conflict: 0 },
         "editor::TakeServer" => Command::EditorTakeServer { conflict: 0 },
         "editor::AcceptMerge" => Command::EditorAcceptMerge,
+        "editor::TriggerCompletion" => Command::EditorTriggerCompletion,
+        "editor::ShowHover" => Command::EditorShowHover,
         "terminal::Split" => Command::TerminalSplit,
         "terminal::Close" => Command::TerminalClose,
         "terminal::Reconnect" => Command::TerminalReconnect,

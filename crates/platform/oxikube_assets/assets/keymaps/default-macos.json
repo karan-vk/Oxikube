@@ -385,6 +385,8 @@
     // step). The editor's own keys stay as they are: cmd-f / cmd-shift-f search and replace,
     // cmd-z / cmd-shift-z undo and redo, cmd-alt-up / cmd-alt-down add a cursor. In an editor opened
     // from an object (E10-S06) alt-m shows or hides managedFields and alt-v the values of a Secret.
+    // ctrl-space opens the completion menu (it also opens as fields are typed) and ctrl-shift-space
+    // shows the docs of the token at the cursor (hovering it does too; E10-S05).
     "context": "ManifestEditor",
     "bindings": {
       "alt-z": "editor::ToggleSoftWrap",
@@ -399,7 +401,9 @@
       // palette entries). Not cmd-alt-d: macOS takes it to hide the Dock.
       "cmd-shift-d": "editor::ShowDiff",
       "cmd-alt-shift-d": "editor::ToggleDiffLayout",
-      "cmd-alt-shift-r": "editor::ReloadFromServer"
+      "cmd-alt-shift-r": "editor::ReloadFromServer",
+      "ctrl-space": "editor::TriggerCompletion",
+      "ctrl-shift-space": "editor::ShowHover"
     }
   },
   {

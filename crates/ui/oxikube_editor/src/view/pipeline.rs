@@ -79,6 +79,7 @@ impl ManifestEditor {
             };
             let version = snapshot.version();
             let fresh = cached.is_none();
+            let text = snapshot.clone();
             let token = cancel.clone();
             let planned = cx
                 .background_spawn(async move {
@@ -95,9 +96,14 @@ impl ManifestEditor {
             let parsed = plan.parsed.clone();
             if fresh {
                 let cache = parsed.clone();
-                let cached = this.update(cx, |view, _| {
+                let cached = this.update(cx, |view, cx| {
                     view.model.stats_mut().parses += 1;
-                    view.model.cache_parse(version, cache);
+                    view.model.cache_parse(version, cache.clone());
+                    // Hover and completion read this parse (E10-S05): a hover after a pause
+                    // parses nothing.
+                    if view.editor.read(cx).version() == version {
+                        view.assist.remember(text, cache);
+                    }
                 });
                 if cached.is_err() {
                     return;
@@ -183,6 +189,7 @@ impl ManifestEditor {
                     .unwrap_or_else(|error| Err(OxiError::internal(error.to_string())));
                 let _ = this.update_in(cx, |view, window, cx| {
                     view.model.schema_arrived(gvk, outcome);
+                    view.assist.set_schemas(view.model.known());
                     view.schedule_validation(Duration::ZERO, window, cx);
                 });
             }));

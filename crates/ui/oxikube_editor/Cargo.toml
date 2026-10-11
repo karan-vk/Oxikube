@@ -92,6 +92,10 @@ harness = false
 # JSON check, on a 2k-line manifest and a 5 MB dump (all of it off the UI thread in the editor).
 [[bench]]
 name = "convert"
+# `cargo bench -p oxikube_editor --bench assist` (E10-S05): hover and completion on a 2k-line Pod
+# and a 5 MB one.
+[[bench]]
+name = "assist"
 harness = false
 
 # Keystroke-to-frame cost of typing in a 2 000-line manifest, and the validation it debounces

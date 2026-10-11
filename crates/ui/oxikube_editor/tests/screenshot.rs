@@ -12,6 +12,10 @@
 //!   ("View YAML in Editor"), kubectl's key order, `managedFields` hidden, `status` dimmed; the
 //!   Secret is masked, the placeholders underlined as errors.
 //!
+//! - `manifest_editor_completion_dark` and `manifest_editor_hover_dark` (E10-S05): `ima` typed in
+//!   a container with the completion menu open beside the docs of the selected field; and the
+//!   docs popup of `containerPort` at the cursor.
+//!
 //! `harness = false`: on macOS the platform text system can only be created on the process main
 //! thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so it only builds
 //! with `--features screenshot` and runs in the nightly job:
@@ -24,7 +28,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::Result;
-use gpui::{App, AppContext as _, Entity, SharedString, px, size};
+use gpui::{AnyWindowHandle, App, AppContext as _, Entity, SharedString, px, size};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ResourceRef;
@@ -39,6 +43,7 @@ use oxikube_ports::{ResourceReader, SchemaPort};
 use oxikube_testkit::fakes::{FakeResourcePort, FakeSchemaPort};
 use oxikube_testkit::gpui_test::{GoldenCase, ScreenshotApp, run_golden_cases};
 use oxikube_testkit::screenshot::RgbaImage;
+use oxikube_ui::editor::EditorApi as _;
 use oxikube_ui::root::Root;
 use oxikube_workspace::CommandDispatcher;
 use serde_json::json;
@@ -82,11 +87,20 @@ fn deployment_schema() -> Arc<JsonSchema> {
         "required": ["name"],
         "properties": {
             "name": {"type": "string"},
-            "image": {"type": "string"},
+            "image": {"type": "string", "description": "Container image name."},
+            "imagePullPolicy": {
+                "type": "string",
+                "description": "Image pull policy. One of Always, Never, IfNotPresent.",
+                "enum": ["Always", "IfNotPresent", "Never"]
+            },
             "ports": {"type": "array", "items": {
                 "type": "object",
                 "required": ["containerPort"],
-                "properties": {"containerPort": {"type": "integer"}}
+                "properties": {"containerPort": {
+                    "type": "integer",
+                    "format": "int32",
+                    "description": "Number of port to expose on the pod's IP address."
+                }}
             }}
         }
     });
@@ -139,6 +153,64 @@ impl SchemaSource for Schemas {
 }
 
 fn render_error_dark() -> Result<RgbaImage> {
+    let (mut app, window, editor) = open(DEPLOYMENT)?;
+    // The first validation asks for the schema; the second one, when it arrives, finds the error.
+    app.advance_clock(VALIDATION_DEBOUNCE);
+    app.run_until_parked();
+    let errors = app.update(|cx| editor.read(cx).model().problems().errors);
+    anyhow::ensure!(errors == 1, "{errors} errors");
+    app.capture(window)
+}
+
+/// A container with a half-typed key, the cursor at its end, the completion menu opened.
+fn render_completion_dark() -> Result<RgbaImage> {
+    let text = "apiVersion: apps/v1\nkind: Deployment\nspec:\n  template:\n    spec:\n      containers:\n        - name: web\n          ima\n";
+    let (mut app, window, editor) = open(text)?;
+    app.advance_clock(VALIDATION_DEBOUNCE);
+    app.run_until_parked();
+    let at = text.len() - 1;
+    place_cursor_and(&mut app, window, &editor, at, |editor, window, cx| {
+        editor.show_completions(window, cx);
+    })?;
+    app.capture(window)
+}
+
+/// The cursor on `containerPort`, its docs shown.
+fn render_hover_dark() -> Result<RgbaImage> {
+    let (mut app, window, editor) = open(DEPLOYMENT)?;
+    app.advance_clock(VALIDATION_DEBOUNCE);
+    app.run_until_parked();
+    let at = DEPLOYMENT.find("containerPort").expect("field") + 4;
+    place_cursor_and(&mut app, window, &editor, at, |editor, window, cx| {
+        editor.show_hover(window, cx);
+    })?;
+    app.capture(window)
+}
+
+/// Puts the cursor at `at` in `editor`'s buffer, runs `then`, and lets the answer arrive.
+fn place_cursor_and(
+    app: &mut ScreenshotApp,
+    window: AnyWindowHandle,
+    editor: &Entity<ManifestEditor>,
+    at: usize,
+    then: impl FnOnce(&mut ManifestEditor, &mut gpui::Window, &mut gpui::Context<ManifestEditor>),
+) -> Result<()> {
+    app.update(|cx| {
+        window.update(cx, |_, window, cx| {
+            editor.update(cx, |editor, cx| {
+                let code = editor.editor().clone();
+                code.update(cx, |code, cx| code.api(window, cx).select(at..at));
+                then(editor, window, cx);
+            });
+        })
+    })?;
+    app.advance_clock(oxikube_ui::editor::COMPLETION_DEBOUNCE * 2);
+    app.run_until_parked();
+    Ok(())
+}
+
+/// A window holding a manifest editor with `text`, checked against the Deployment schema.
+fn open(text: &str) -> Result<(ScreenshotApp, AnyWindowHandle, Entity<ManifestEditor>)> {
     let mut app = ScreenshotApp::with_assets(Arc::new(oxikube_ui::Assets));
     app.update(|cx| {
         oxikube_ui::init(cx);
@@ -155,7 +227,7 @@ fn render_error_dark() -> Result<RgbaImage> {
     let window = app.open_window(size(px(SIZE.0 as f32), px(SIZE.1 as f32)), |window, cx| {
         let parts = ManifestEditorParts {
             title: "deployment.yaml".into(),
-            text: DEPLOYMENT.to_owned(),
+            text: text.to_owned(),
             schemas: Some(Rc::new(Schemas { cluster, port })),
             dispatcher: Rc::new(NoBus),
             resource: None,
@@ -165,13 +237,7 @@ fn render_error_dark() -> Result<RgbaImage> {
         editor = Some(entity.clone());
         cx.new(|cx| Root::new(entity, window, cx))
     })?;
-    // The first validation asks for the schema; the second one, when it arrives, finds the error.
-    app.advance_clock(VALIDATION_DEBOUNCE);
-    app.run_until_parked();
-    let editor = editor.expect("built");
-    let errors = app.update(|cx| editor.read(cx).model().problems().errors);
-    anyhow::ensure!(errors == 1, "{errors} errors");
-    app.capture(window)
+    Ok((app, window, editor.expect("built")))
 }
 
 /// An editor opened on `object` (read through a fake reader), settled and captured.
@@ -333,6 +399,16 @@ fn main() -> ExitCode {
                 name: "manifest_editor_json_dark",
                 size: SIZE,
                 render: render_json_dark,
+            },
+            GoldenCase {
+                name: "manifest_editor_completion_dark",
+                size: SIZE,
+                render: render_completion_dark,
+            },
+            GoldenCase {
+                name: "manifest_editor_hover_dark",
+                size: SIZE,
+                render: render_hover_dark,
             },
         ],
     )

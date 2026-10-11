@@ -19,17 +19,18 @@ Manifest editor: YAML/JSON on gpui-component editor, spanned YAML (granit-parser
 |---|---|---|
 | `yaml` | E10-S02 | the spanned YAML model (granit-parser) |
 | `validate` | E10-S03 | schema validation into diagnostics |
+| `assist` | E10-S05 | hover docs and completion from the schema (`hover_at`, `complete_at`, `ManifestAssist`) |
 | `settings` | E10-S12 | the `editor` settings (`tab_size`, `font_family`, `font_size`, `soft_wrap`, `show_managed_fields`, `mask_secrets`, `validation`, `field_manager`), hot reload into open editors, the notice for a rejected value |
 | `open` | E10-S06 | an editor opened from a live object: `render_resource` (kubectl key order, managedFields hidden, Secret values masked, `status` dimmed), the `resource::Edit` / `resource::ViewYamlInEditor` row actions, `editor::ToggleManagedFields` / `ToggleSecretMask` |
 | `diff` | E10-S07 | diff vs live (pure): normalising, the line diff, the three-way merge, the changed-on-server state machine |
-| `view` | E10-S04 | `ManifestEditor` (workspace item over `oxikube_ui::editor::CodeEditor`), debounced background validation against the cluster's `SchemaPort`, `editor::NewManifest` / `ToggleReadOnly` / `ToggleSoftWrap`; E10-S10: the language chip, `editor::ConvertToJson` / `ConvertToYaml` / `UseJson` / `UseYaml`, the notice bar |
+| `view` | E10-S04 | `ManifestEditor` (workspace item over `oxikube_ui::editor::CodeEditor`), debounced background validation against the cluster's `SchemaPort`, `editor::NewManifest` / `ToggleReadOnly` / `ToggleSoftWrap`; E10-S05: `TriggerCompletion` (`ctrl-space`) / `ShowHover` (`ctrl-shift-space`); E10-S10: the language chip, `editor::ConvertToJson` / `ConvertToYaml` / `UseJson` / `UseYaml`, the notice bar |
 | `json` | E10-S10 | JSON mode (pure, no gpui): `Language` detection, the strict JSON check, YAML <-> JSON `convert` with `Warnings`, the two writers |
 | `cancel` | E10-S11 | `CancelToken`: a stale parse or validation stops at its next poll |
 | `view::pipeline`, `view::progressive` | E10-S11 | the cancellable pass, a large buffer in chunks with the visible objects first |
 
 Tests: `cargo test -p oxikube_editor` (unit, the view logic against a fake `EditorApi`, `#[gpui::test]`s in
 `tests/view.rs`, `tests/open.rs`, and, for large files and the pipeline, `tests/large_file.rs`; diff vs live against a `FakeResourcePort` in `tests/live.rs`, the pure diff in `tests/diff.rs`); screenshots: `cargo test -p oxikube_editor --features screenshot --test screenshot` and `--test diff_screenshot`;
-typing bench: `cargo run -p oxikube_editor --profile release-fast --example typing_bench` (and `--example live_bench` for diff vs live); conversion bench:
+typing bench: `cargo run -p oxikube_editor --profile release-fast --example typing_bench` (and `--example live_bench` for diff vs live); hover / completion bench: `cargo bench -p oxikube_editor --bench assist`; conversion bench:
 `cargo bench -p oxikube_editor --bench convert`; JSON mode: `cargo test -p oxikube_editor --test json_mode --test json_props
 --test json_view` (properties: `PROPTEST_CASES=20000` for a longer run); the 5 MB scenario: `cargo xtask perf editor-5mb`.
 

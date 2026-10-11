@@ -169,6 +169,9 @@ tree-sitter = "0.26"
 # JSON grammar for comment-preserving settings.json edits (oxikube_settings::json_edit).
 tree-sitter-json = "0.24"
 ropey = "2.0.0-beta.1"
+# The language-server types gpui-component's editor takes hover and completion in (already in the
+# lock through it); only `oxikube_ui::editor` names them.
+lsp-types = "0.97"
 
 # --- plugins ---
 wasmtime = { version = "49", default-features = false, features = ["cranelift", "component-model", "async", "cache", "parallel-compilation", "runtime"] }

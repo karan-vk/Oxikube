@@ -20,7 +20,7 @@ numbers are measured on a mid-range x86 laptop with an integrated GPU.
 | Memory | 10 k pods < 400 MB (ADR 0016: the peak of the windowed scenarios whose load is the 10 000-pod cluster alone: `pods-table`, `table-filter`, `namespaces`, `theme`, `sidebar`); idle < 150 MB (2 clusters; ADR 0016: the peak of the windowed `idle` scenario); logs/events ring-buffered | steady state after 10 min |
 | CPU idle | < 1 % with two clusters connected and no visible churn (ADR 0016: the windowed `idle` scenario) | laptop on battery |
 | Terminal | 60 fps under `yes`/`htop`; resize ≤ 1 frame | local shell + exec |
-| Editor | typing latency ≤ 16 ms with validation debounced; 5 MB file opens ≤ 500 ms | manifest editor |
+| Editor | typing latency ≤ 16 ms with validation, hover and completion debounced and off the UI thread; 5 MB file opens ≤ 500 ms | manifest editor |
 | Agent thread | streaming markdown at 200 tokens/s without dropped frames | ACP panel |
 
 ## How to measure

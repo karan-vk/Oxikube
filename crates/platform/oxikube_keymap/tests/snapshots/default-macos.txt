@@ -201,6 +201,8 @@
   cmd-alt-shift-r  editor::ReloadFromServer
   cmd-alt-y        editor::ConvertToYaml
   cmd-shift-d      editor::ShowDiff
+  ctrl-shift-space editor::ShowHover
+  ctrl-space       editor::TriggerCompletion
 [Terminal || ManifestEditor || Palette || JumpBar || Input || Editing]
   :                null
   ?                null

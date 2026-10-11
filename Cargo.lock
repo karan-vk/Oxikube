@@ -6230,6 +6230,7 @@ dependencies = [
  "gpui-kit-assets",
  "gpui-pre",
  "gpui-pre-platform",
+ "lsp-types",
  "oxikube_assets",
  "oxikube_testkit",
  "oxikube_theme",

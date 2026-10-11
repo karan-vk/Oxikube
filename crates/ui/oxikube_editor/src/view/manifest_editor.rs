@@ -10,6 +10,7 @@
 //! blocks the UI thread, and a keystroke costs the editor's own edit plus a timer restart.
 
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
@@ -31,9 +32,10 @@ use super::notice::Notice;
 use super::schemas::SchemaSource;
 use super::validation::VALIDATION_DEBOUNCE;
 use super::{
-    ConvertToJson, ConvertToYaml, ReloadFromServer, ShowDiff, ToggleDiffLayout,
-    ToggleManagedFields, ToggleReadOnly, ToggleSecretMask, ToggleSoftWrap,
+    ConvertToJson, ConvertToYaml, ReloadFromServer, ShowDiff, ShowHover, ToggleDiffLayout,
+    ToggleManagedFields, ToggleReadOnly, ToggleSecretMask, ToggleSoftWrap, TriggerCompletion,
 };
+use crate::assist::ManifestAssist;
 use crate::cancel::CancelOnDrop;
 use crate::json::{Language, LanguageMode};
 use crate::open::{RenderOptions, ResourceBinding, ResourceOpen};
@@ -69,6 +71,9 @@ pub struct ManifestEditor {
     pub(crate) model: ManifestModel,
     pub(crate) title: SharedString,
     pub(crate) schemas: Option<Rc<dyn SchemaSource>>,
+    /// Hover docs and completion over the schemas fetched so far (E10-S05); the code editor
+    /// asks it on the background executor.
+    pub(crate) assist: Arc<ManifestAssist>,
     dispatcher: Rc<dyn CommandDispatcher>,
     /// The buffer version that counts as unchanged (the text it opened with).
     pub(crate) clean_version: u64,
@@ -128,6 +133,8 @@ impl ManifestEditor {
                 editor.api(window, cx).set_text(&parts.text)
             });
         }
+        let assist = ManifestAssist::new();
+        editor.update(cx, |editor, cx| editor.set_assist(assist.clone(), cx));
         let clean_version = editor.read(cx).version();
         let mut binding = parts.resource.map(ResourceBinding::new);
         if let Some(binding) = binding.as_mut() {
@@ -156,6 +163,7 @@ impl ManifestEditor {
             model,
             title,
             schemas: parts.schemas,
+            assist,
             dispatcher: parts.dispatcher,
             clean_version,
             binding,
@@ -252,6 +260,18 @@ impl ManifestEditor {
             api.set_soft_wrap(wrap);
         });
         cx.notify();
+    }
+
+    /// Opens the completion menu at the cursor (`editor::TriggerCompletion`).
+    pub fn show_completions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor
+            .update(cx, |editor, cx| editor.show_completions(window, cx));
+    }
+
+    /// Shows the schema docs of the token at the cursor (`editor::ShowHover`).
+    pub fn show_hover(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor
+            .update(cx, |editor, cx| editor.show_hover(window, cx));
     }
 
     /// The settings store changed: applies what differs for this editor, at once. The buffer, its
@@ -361,6 +381,12 @@ impl Render for ManifestEditor {
             }))
             .on_action(cx.listener(|this, _: &ReloadFromServer, _, cx| {
                 this.send(Command::EditorReloadFromServer, cx);
+            }))
+            .on_action(cx.listener(|this, _: &TriggerCompletion, _, cx| {
+                this.send(Command::EditorTriggerCompletion, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowHover, _, cx| {
+                this.send(Command::EditorShowHover, cx);
             }))
             .size_full()
             .bg(colors.background)

@@ -4,7 +4,7 @@
 //! empty editor in the shown cluster's tab, its YAML checked against that cluster's schemas
 //! through the session's `SchemaPort`; a tab of the window with syntax checks only when no
 //! cluster tab is shown) and the focused editor's `editor::ToggleReadOnly` /
-//! `editor::ToggleSoftWrap`; E10-S06 adds `resource::Edit` / `resource::ViewYamlInEditor`
+//! `editor::ToggleSoftWrap` / `editor::TriggerCompletion` / `editor::ShowHover` (E10-S05); E10-S06 adds `resource::Edit` / `resource::ViewYamlInEditor`
 //! (an editor on a freshly read object in the object's cluster tab, through the session's
 //! `ResourceReader`) and the toggles for `managedFields` and Secret values; E10-S10 the conversions
 //! between YAML and JSON and the switch of the language a buffer is read as; E10-S07 the diff vs live

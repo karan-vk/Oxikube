@@ -12,12 +12,16 @@ path = "src/oxikube_ui.rs"
 doctest = false
 
 [dependencies]
+# The error type of gpui-component's completion and hover provider traits (`editor::assist`).
+anyhow.workspace = true
 gpui.workspace = true
 # `tree-sitter-yaml`: the YAML grammar of the read-only code view (`editor`), E07-S06. The JSON
 # grammar of the manifest editor's JSON mode (E10-S10) has no feature of its own: tree-sitter-json
 # is part of gpui-component's base `tree-sitter` feature (`tests/code_editor.rs` checks it).
 gpui-component = { workspace = true, features = ["tree-sitter-yaml"] }
 gpui-kit-assets.workspace = true
+# Hover and completion payloads of the library's editor (E10-S05); confined to `editor::assist`.
+lsp-types.workspace = true
 oxikube_assets.workspace = true
 oxikube_theme.workspace = true
 serde.workspace = true
