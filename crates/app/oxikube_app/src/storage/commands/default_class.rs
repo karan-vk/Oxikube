@@ -10,9 +10,9 @@ use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::{ListOptions, Patch, PatchKind, ResourceReader, WriteOptions};
 use serde_json::{Value, json};
 
-use super::class_gvk;
 use crate::command_bus::{CommandOutput, HandlerContext};
 use crate::session::ClusterSessionManager;
+use crate::storage::read::class_gvk;
 
 pub(super) async fn handle(
     command: Command,

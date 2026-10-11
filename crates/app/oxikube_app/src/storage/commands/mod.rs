@@ -13,20 +13,9 @@ mod default_class;
 mod resize;
 
 use oxikube_domain::command::{self, CommandId};
-use oxikube_domain::ids::Gvk;
 
 use crate::command_bus::{CommandRegistry, RegisterError};
 use crate::session::ClusterSessionManager;
-
-/// The core `PersistentVolumeClaim` type.
-pub(crate) fn claim_gvk() -> Gvk {
-    Gvk::new("", "v1", "PersistentVolumeClaim")
-}
-
-/// The `storage.k8s.io` `StorageClass` type.
-pub(crate) fn class_gvk() -> Gvk {
-    Gvk::new("storage.k8s.io", "v1", "StorageClass")
-}
 
 /// Registers `pvc::Resize` and `storageclass::SetDefault` on `registry`; they read through the
 /// sessions of `sessions` and write through the guard's permit.

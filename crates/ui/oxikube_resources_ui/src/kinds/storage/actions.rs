@@ -6,12 +6,12 @@ use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::Gvk;
 
 /// Whether `gvk` is the core PersistentVolumeClaim.
-pub fn is_claim(gvk: &Gvk) -> bool {
+pub(super) fn is_claim(gvk: &Gvk) -> bool {
     gvk.group.is_empty() && &*gvk.kind == "PersistentVolumeClaim"
 }
 
 /// Whether `gvk` is a `storage.k8s.io` StorageClass.
-pub fn is_storage_class(gvk: &Gvk) -> bool {
+fn is_storage_class(gvk: &Gvk) -> bool {
     &*gvk.group == "storage.k8s.io" && &*gvk.kind == "StorageClass"
 }
 

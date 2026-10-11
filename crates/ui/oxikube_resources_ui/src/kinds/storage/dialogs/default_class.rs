@@ -21,6 +21,8 @@ use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 use oxikube_workspace::modal::{DIALOG_KEY_CONTEXT, ModalPlacement, ModalView};
 use oxikube_workspace::{Toast, Workspace};
 
+use super::shared::{settle, show_toast};
+
 /// What the dialog has read.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClassLoaded {
@@ -89,10 +91,9 @@ impl DefaultClassDialog {
             let flow = flow.clone();
             cx.spawn(async move |this, cx| {
                 let read = spawn_kube(cx, async move { flow.open(&target).await }).await;
-                let loaded = match read {
-                    Ok(Ok(context)) => ClassLoaded::Ready(Box::new(context)),
-                    Ok(Err(error)) => ClassLoaded::Failed(error.message().to_owned().into()),
-                    Err(error) => ClassLoaded::Failed(error.to_string().into()),
+                let loaded = match settle(read) {
+                    Ok(context) => ClassLoaded::Ready(Box::new(context)),
+                    Err(reason) => ClassLoaded::Failed(reason.into()),
                 };
                 this.update(cx, |this, cx| {
                     this.loaded = loaded;
@@ -175,15 +176,11 @@ impl DefaultClassDialog {
         // Detached for the same reason as the delete: it is audited as it runs.
         cx.spawn(async move |this, cx| {
             let run = spawn_kube(cx, async move { flow.run(&context, clear).await });
-            let result = match run.await {
-                Ok(Ok(report)) => Ok(report.message),
-                Ok(Err(error)) => Err(error.message().to_owned()),
-                Err(error) => Err(error.to_string()),
-            };
+            let result = settle(run.await).map(|report| report.message);
             let delivered = this.update(cx, |this, cx| match &result {
                 Ok(message) => {
                     this.stage = ClassStage::Done;
-                    this.toast(Toast::success(message.clone()), cx);
+                    show_toast(&this.workspace, Toast::success(message.clone()), cx);
                     cx.emit(DismissEvent);
                 }
                 Err(message) => {
@@ -197,18 +194,10 @@ impl DefaultClassDialog {
                     Ok(message) => Toast::success(message.clone()),
                     Err(message) => Toast::error(message.clone()),
                 };
-                workspace
-                    .update(cx, |workspace, cx| workspace.show_toast(toast, cx))
-                    .ok();
+                show_toast(&workspace, toast, cx);
             }
         })
         .detach();
-    }
-
-    fn toast(&self, toast: Toast, cx: &mut Context<Self>) {
-        self.workspace
-            .update(cx, |workspace, cx| workspace.show_toast(toast, cx))
-            .ok();
     }
 
     fn body(&self, cx: &mut Context<Self>) -> gpui::AnyElement {

@@ -224,41 +224,44 @@ fn same_mounts(old: &StoreObject, new: &StoreObject) -> bool {
     }
 }
 
-/// Records that `object` mounts its claims. Returns whether it mounts any.
-fn add(claims: &mut Claims, object: &StoreObject) -> bool {
-    let (Some(pod), Some(namespace)) = (object.resource(), object.meta().namespace.as_ref()) else {
-        return false;
-    };
+/// The namespace, name and claims of an active Pod `object` that mounts any claim; `None` for
+/// anything the index holds no entry for (a row without its JSON, a finished Pod, no claims).
+fn mounts(object: &StoreObject) -> Option<(&Arc<str>, &Arc<str>, Vec<Arc<str>>)> {
+    let (pod, namespace) = (object.resource()?, object.meta().namespace.as_ref()?);
     if !pod_is_active(pod) {
-        return false;
+        return None;
     }
     let mounted = pod_claims(pod);
-    for claim in &mounted {
+    (!mounted.is_empty()).then_some((namespace, &pod.meta.name, mounted))
+}
+
+/// Records that `object` mounts its claims. Returns whether it mounts any.
+fn add(claims: &mut Claims, object: &StoreObject) -> bool {
+    let Some((namespace, pod, mounted)) = mounts(object) else {
+        return false;
+    };
+    for claim in mounted {
         claims
             .entry(namespace.clone())
             .or_default()
-            .entry(claim.clone())
+            .entry(claim)
             .or_default()
-            .insert(pod.meta.name.clone());
+            .insert(pod.clone());
     }
-    !mounted.is_empty()
+    true
 }
 
 /// Forgets the claims `object` mounted. Returns whether it mounted any.
 fn remove(claims: &mut Claims, object: &StoreObject) -> bool {
-    let (Some(pod), Some(namespace)) = (object.resource(), object.meta().namespace.as_ref()) else {
+    let Some((namespace, pod, mounted)) = mounts(object) else {
         return false;
     };
-    if !pod_is_active(pod) {
-        return false;
-    }
-    let mounted = pod_claims(pod);
     let Some(in_namespace) = claims.get_mut(namespace) else {
         return false;
     };
     for claim in &mounted {
         if let Some(pods) = in_namespace.get_mut(claim) {
-            pods.remove(&pod.meta.name);
+            pods.remove(pod);
             if pods.is_empty() {
                 in_namespace.remove(claim);
             }
@@ -267,5 +270,5 @@ fn remove(claims: &mut Claims, object: &StoreObject) -> bool {
     if in_namespace.is_empty() {
         claims.remove(namespace);
     }
-    !mounted.is_empty()
+    true
 }

@@ -16,8 +16,4 @@
 mod content;
 mod view;
 
-pub use content::{
-    Block, Field, Line, Link, MAX_PODS_LISTED, PanelContent, claim_content, class_content,
-    content_of, snapshot_class_content, snapshot_content, usage_block, volume_content,
-};
-pub use view::StoragePanel;
+pub(super) use view::StoragePanel;

@@ -9,7 +9,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::ListOptions;
 
 use super::confirm::dispatch_confirmed;
-use crate::storage::commands::class_gvk;
+use crate::storage::read::class_gvk;
 use crate::{ClusterSessionManager, CommandBus};
 
 /// What the dialog shows, read when it opens.

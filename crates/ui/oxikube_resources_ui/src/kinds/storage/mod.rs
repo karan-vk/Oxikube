@@ -36,11 +36,11 @@
 //! subscription off the UI thread (`oxikube_app::storage`). The feed exists only while a claims
 //! table or a claim detail is open, and is shared between them.
 
-pub mod actions;
+mod actions;
 pub mod dialogs;
-pub mod flows;
-pub mod open;
-pub mod panel;
+mod flows;
+pub(crate) mod open;
+mod panel;
 mod specs;
 mod usage;
 

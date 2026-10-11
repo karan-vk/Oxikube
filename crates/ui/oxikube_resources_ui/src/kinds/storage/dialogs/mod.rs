@@ -5,6 +5,7 @@
 mod default_class;
 mod resize;
 mod resize_view;
+mod shared;
 
 pub use default_class::{ClassLoaded, ClassStage, DefaultClassDialog};
 pub use resize::{Loaded, ResizeDialog, ResizeStage};

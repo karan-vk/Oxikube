@@ -11,7 +11,7 @@ use oxikube_domain::view::storage::{
 use oxikube_domain::{OxiError, OxiResult, Quantity};
 
 use super::confirm::dispatch_confirmed;
-use crate::storage::commands::{claim_gvk, class_gvk};
+use crate::storage::read::read_claim;
 use crate::{ClusterSessionManager, CommandBus};
 
 /// What the resize dialog shows, read from the cluster when it opens.
@@ -109,20 +109,7 @@ impl ResizeFlow {
         let reader = session
             .resources()
             .ok_or_else(|| OxiError::not_found("the cluster is not connected"))?;
-        let live = reader
-            .get(&claim_gvk(), target.namespace(), &target.name)
-            .await?;
-        let claim =
-            PvcSummary::from_resource(&live).map_err(|e| OxiError::validation(e.to_string()))?;
-        let class = match claim.storage_class.as_deref() {
-            Some(name) => reader
-                .get_opt(&class_gvk(), None, name)
-                .await
-                .ok()
-                .flatten()
-                .and_then(|res| StorageClassSummary::from_resource(&res).ok()),
-            None => None,
-        };
+        let (claim, class) = read_claim(&*reader, target.namespace(), &target.name).await?;
         let expansion = Expansion::of(claim.storage_class.as_deref(), class.as_ref());
         Ok(ResizeContext {
             target: target.clone(),

@@ -21,6 +21,8 @@ use oxikube_ui::input::{InputEvent, InputState};
 use oxikube_workspace::modal::{ModalPlacement, ModalView};
 use oxikube_workspace::{Toast, Workspace};
 
+use super::shared::{settle, show_toast};
+
 /// What the dialog has read.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Loaded {
@@ -98,10 +100,9 @@ impl ResizeDialog {
             let (flow, target) = (flow.clone(), target.clone());
             cx.spawn(async move |this, cx| {
                 let read = spawn_kube(cx, async move { flow.open(&target).await }).await;
-                let loaded = match read {
-                    Ok(Ok(context)) => Loaded::Ready(Box::new(context)),
-                    Ok(Err(error)) => Loaded::Failed(error.message().to_owned().into()),
-                    Err(error) => Loaded::Failed(error.to_string().into()),
+                let loaded = match settle(read) {
+                    Ok(context) => Loaded::Ready(Box::new(context)),
+                    Err(reason) => Loaded::Failed(reason.into()),
                 };
                 this.update(cx, |this, cx| this.loaded(loaded, cx)).ok();
             })
@@ -214,20 +215,14 @@ impl ResizeDialog {
         // away meanwhile; the task ends itself and clears nothing.
         cx.spawn(async move |this, cx| {
             let run = spawn_kube(cx, async move { flow.run(&context, size).await });
-            let result = match run.await {
-                Ok(Ok(report)) => Ok(report),
-                Ok(Err(error)) => Err(error.message().to_owned()),
-                Err(error) => Err(error.to_string()),
-            };
+            let result = settle(run.await);
             let delivered = this.update(cx, |this, cx| this.finished(&result, &name, cx));
             if delivered.is_err() {
                 let toast = match &result {
                     Ok(report) => Toast::success(format!("Resizing {name} to {}", report.to)),
                     Err(message) => Toast::error(message.clone()),
                 };
-                workspace
-                    .update(cx, |workspace, cx| workspace.show_toast(toast, cx))
-                    .ok();
+                show_toast(&workspace, toast, cx);
             }
         })
         .detach();
@@ -245,10 +240,8 @@ impl ResizeDialog {
                 self.report = Some(report.clone());
                 if report.conditions.is_empty() {
                     // Nothing more to say: a toast and done.
-                    self.toast(
-                        Toast::success(format!("Resizing {name} to {}", report.to)),
-                        cx,
-                    );
+                    let toast = Toast::success(format!("Resizing {name} to {}", report.to));
+                    show_toast(&self.workspace, toast, cx);
                     cx.emit(DismissEvent);
                 } else {
                     cx.notify();
@@ -260,12 +253,6 @@ impl ResizeDialog {
                 cx.notify();
             }
         }
-    }
-
-    fn toast(&self, toast: Toast, cx: &mut Context<Self>) {
-        self.workspace
-            .update(cx, |workspace, cx| workspace.show_toast(toast, cx))
-            .ok();
     }
 
     fn on_typed(

@@ -79,13 +79,15 @@ impl StoragePanel {
         }
     }
 
-    /// The content now shown (tests and diagnostics).
-    pub fn content(&self) -> &PanelContent {
+    /// The content now shown.
+    #[cfg(test)]
+    pub(in crate::kinds::storage) fn content(&self) -> &PanelContent {
         &self.content
     }
 
     /// The "Mounted by" list now shown, for a claim.
-    pub fn usage_block(&self) -> Option<&Block> {
+    #[cfg(test)]
+    pub(in crate::kinds::storage) fn usage_block(&self) -> Option<&Block> {
         self.usage_block.as_ref()
     }
 

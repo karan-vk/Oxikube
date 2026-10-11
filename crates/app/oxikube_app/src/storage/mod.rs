@@ -5,6 +5,7 @@
 //! | `usage` | [`PvcUsage`], [`PvcUsageIndex`]: which Pods mount which claim, kept incrementally from the Pods feed |
 //! | `feed` | [`PvcUsageFeed`]: the abort-on-drop task that feeds an index from a store, following the namespace selection |
 //! | `columns` | [`PvcColumns`]: the claims table's columns, with the Pods (used by) column |
+//! | `read` | the claim-and-class read the resize handler and its flow share |
 //! | `commands` | [`register_commands`]: the `pvc::Resize` and `storageclass::SetDefault` handlers |
 //! | `flow` | [`ResizeFlow`], [`DefaultClassFlow`]: what the two dialogs read, check and send |
 //!
@@ -26,6 +27,7 @@ mod columns;
 mod commands;
 mod feed;
 mod flow;
+mod read;
 mod usage;
 
 #[cfg(test)]

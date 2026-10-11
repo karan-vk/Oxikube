@@ -3,14 +3,14 @@
 use std::sync::Arc;
 
 use oxikube_domain::command::Command;
-use oxikube_domain::view::storage::{Expansion, PvcSummary, StorageClassSummary, check_resize};
+use oxikube_domain::view::storage::{Expansion, PvcSummary, check_resize};
 use oxikube_domain::{OxiError, OxiResult, Quantity};
 use oxikube_ports::{Patch, PatchKind, ResourceReader, WriteOptions};
 use serde_json::{Value, json};
 
-use super::{claim_gvk, class_gvk};
 use crate::command_bus::{CommandOutput, HandlerContext};
 use crate::session::ClusterSessionManager;
+use crate::storage::read::{claim_gvk, read_claim};
 
 pub(super) async fn handle(
     command: Command,
@@ -34,9 +34,7 @@ pub(super) async fn handle(
     let ns = target.namespace();
 
     // The live claim decides, not what the caller saw.
-    let live = reader.get(&claim_gvk(), ns, &target.name).await?;
-    let claim =
-        PvcSummary::from_resource(&live).map_err(|e| OxiError::validation(e.to_string()))?;
+    let (claim, class) = read_claim(&*reader, ns, &target.name).await?;
     let current = claim.current_request();
     if let Some(seen) = from.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         let seen = Quantity::parse(seen)
@@ -49,16 +47,6 @@ pub(super) async fn handle(
             )));
         }
     }
-    let class = match claim.storage_class.as_deref() {
-        // A class that cannot be read is "unknown", not "forbidden": the server decides.
-        Some(name) => reader
-            .get_opt(&class_gvk(), None, name)
-            .await
-            .ok()
-            .flatten()
-            .and_then(|res| StorageClassSummary::from_resource(&res).ok()),
-        None => None,
-    };
     let expansion = Expansion::of(claim.storage_class.as_deref(), class.as_ref());
     let new = check_resize(current.as_ref(), &size, &expansion)
         .map_err(|block| OxiError::validation(block.to_string()))?;
