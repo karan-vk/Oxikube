@@ -631,6 +631,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   validator also checks a `kind: List` item by item against each item's own `apiVersion` and `kind`. Bench:
   `cargo bench -p oxikube_editor --bench convert` (2k lines about 1 ms, 5 MB about 130 ms, all off the UI thread; the UI thread
   then replaces the text: about 8 ms for 2k lines, about 95 ms for the 5 MB result, a one-off per explicit conversion).
+- `oxikube_app::apply` + `oxikube_editor::view::apply` (E10-S08) — applying one manifest: `ApplyService` (the one apply
+  pipeline; E20 extends it to many objects, plan review #397) dispatches `resource::Apply` through the `CommandBus`, so the
+  `MutationGuard` blocks it on a read-only cluster (re-checked before each request), confirms it at risk `Low` (the editor's
+  diff preview is the confirmation: the service answers the guard's simple confirm with it) and audits the dry run and the
+  apply with the object as target and `manager=… force=…` as detail, never the manifest. The handler (`apply::handler`, the
+  only code that writes a manifest) reads the live object, has the server dry-run a server-side apply under the field
+  manager (`editor.field_manager`, default `oxikube`; `force` only after the user chose it in the conflict dialog), then
+  sends it; a `415` / `Unsupported` falls back to a replace carrying the reviewed `resourceVersion` (a create for a new
+  object). Conflicts come back with their fields, managers and each manager's last `managedFields` time; a rejected field
+  (`Status.details.causes[].field`, validation or SSA notation such as `containers[name="web"]`) becomes a squiggle on its
+  key (`oxikube_editor::apply::place_causes`, off the UI thread). A Secret's values leave the module only as keyed
+  fingerprints. The editor reaches it by `resource::Apply` (`cmd-s` / `ctrl-s` in `ManifestEditor`, the palette through the
+  editor's `CommandSurface`, the toolbar's Apply): its own checks first (errors, a masked value, refuse), the dry run on the
+  Kubernetes runtime, `ApplyPreviewDialog` (virtualised diff) or `ConflictDialog` (Force previews again), then the apply.
 - `oxikube_editor::diff` (E10-S07) — diff vs live, pure (no gpui) so the apply preview (E10-S08), the dry-run preview
   (E19-S07) and the cross-cluster diff (E20-S09) reuse it without the editor widget. The buffer is read as values
   (`serde-saphyr`: comments gone), both sides are `normalize`d (`IGNORED_FIELDS`, the one list: `metadata.managedFields`,

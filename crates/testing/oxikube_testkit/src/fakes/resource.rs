@@ -9,8 +9,8 @@ use oxikube_domain::json::JsonRef;
 use oxikube_domain::{ObjectMeta, OxiError, OxiResult, Resource};
 use oxikube_ports::{
     ClockPort, DeleteCollectionOutcome, DeleteOptions, DeleteOutcome, Delta, DeltaBatch,
-    ListOptions, ListPage, Patch, ResourceReader, ResourceWriter, Scale, Subresource, WatchFeed,
-    WatchOptions, WriteOptions,
+    ListOptions, ListPage, Patch, PatchKind, ResourceReader, ResourceWriter, Scale, Subresource,
+    WatchFeed, WatchOptions, WriteOptions,
 };
 use parking_lot::Mutex;
 use serde_json::Value;
@@ -302,6 +302,8 @@ impl ResourceCall {
 /// * `create` / `replace` parse the body into a `Resource`, store it (unless dry run) and
 ///   return it; `create` of an existing object is `Conflict`, `replace` of a missing one
 ///   `NotFound`. `delete` removes the object (unless dry run) and returns `Deleted`.
+/// * `patch` with [`PatchKind::Apply`] (server-side apply) stores the body as the object
+///   (unless dry run) and returns it; other patch kinds are unscripted.
 /// * Every other method returns the [`unscripted`](crate::unscripted) error.
 ///
 /// Scripted watch timelines are replayed against [`clock`](Self::clock): offsets count
@@ -748,7 +750,23 @@ impl ResourceWriter for FakeResourcePort {
             patch: patch.clone(),
             options: options.clone(),
         });
-        self.script.patch.next_or_unscripted(PORT, "patch")
+        self.script.patch.next_or_else(|| match &patch.kind {
+            // A server-side apply of a whole object: the body is what the store holds afterwards
+            // (no field-ownership bookkeeping). Other patch kinds must be scripted.
+            PatchKind::Apply { .. } => {
+                let res = object_from_body(&patch.body, namespace)?;
+                if res.kind != *kind || res.name() != name {
+                    return Err(OxiError::validation(format!(
+                        "{PORT}: the applied object is not {kind} {name}"
+                    )));
+                }
+                if !options.dry_run {
+                    self.insert(res.clone());
+                }
+                Ok(res)
+            }
+            _ => Err(crate::script::unscripted(PORT, "patch")),
+        })
     }
 
     async fn delete(

@@ -145,6 +145,7 @@ impl ManifestEditor {
             ))
             .child(self.language_chip(cx))
             .child(self.convert_button(cx))
+            .children(self.apply_button(cx))
     }
 
     /// The language the buffer is read as (`YAML` / `JSON`); a click reads it as the other one

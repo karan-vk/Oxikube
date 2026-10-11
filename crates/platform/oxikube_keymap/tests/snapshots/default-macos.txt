@@ -200,6 +200,7 @@
   cmd-alt-shift-d  editor::ToggleDiffLayout
   cmd-alt-shift-r  editor::ReloadFromServer
   cmd-alt-y        editor::ConvertToYaml
+  cmd-s            resource::Apply
   cmd-shift-d      editor::ShowDiff
   ctrl-shift-space editor::ShowHover
   ctrl-space       editor::TriggerCompletion

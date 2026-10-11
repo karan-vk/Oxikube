@@ -16,14 +16,19 @@
 //! | `convert` | the YAML to JSON conversion (one undo step, off the UI thread) and the language switch (E10-S10) |
 //! | `notice` | the one-line bar that says what a conversion did and could not carry over, with Undo |
 //! | `live` | diff vs live (E10-S07): the watch on the edited object, the changed-on-server banner (Merge / Reload / Keep mine), the diff side by side or inline in the bottom panel ([`LiveSource`], [`SessionLive`]) |
-//! | `controller` | [`EditorViews`]: applies the requests in the shown workspace through an [`EditorHost`] ([`ClusterEditorHost`] in the app) |
+//! | `controller` | [`EditorViews`]: applies the requests in the shown workspace through an [`EditorHost`] |
+//! | `host` | [`EditorHost`]: where the editors go, their schemas, live objects and apply pipeline ([`ClusterEditorHost`] in the app) |
+//! | `apply` | applying the buffer (E10-S08): `resource::Apply` (`cmd-s` / `ctrl-s`, the palette, the toolbar), the dry run, [`ApplyPreviewDialog`], [`ConflictDialog`], the server's errors on their fields |
 //!
 //! The editor never writes its buffer anywhere: not to the layout, not to logs. Applying it to a
-//! cluster is `resource::Apply` (E10-S08), through the `MutationGuard`.
+//! cluster is `resource::Apply` (E10-S08), through `oxikube_app::ApplyService` and the
+//! `MutationGuard`.
 
+pub mod apply;
 mod commands;
 mod controller;
 mod convert;
+mod host;
 mod item;
 mod live;
 mod manifest_editor;
@@ -41,8 +46,10 @@ use gpui::{App, Global, actions};
 use oxikube_domain::command::Command;
 use oxikube_workspace::CommandDispatcher;
 
+pub use apply::{ApplyPreviewDialog, ApplyStage, ConflictDialog};
 pub use commands::{EDITOR_COMMANDS, EditorRequest, EditorViewSink, register_commands};
-pub use controller::{ClusterEditorHost, EditorHost, EditorViews, EditorViewsDeps};
+pub use controller::{EditorViews, EditorViewsDeps};
+pub use host::{ClusterEditorHost, EditorHost};
 pub use live::{DIFF_DEBOUNCE, DiffLayout, LiveSource, SessionLive};
 pub use manifest_editor::{ManifestEditor, ManifestEditorParts};
 pub use model::{Accepted, ManifestModel, PassStats, Problems};

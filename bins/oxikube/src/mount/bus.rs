@@ -17,6 +17,7 @@
 //! | `oxikube_workspace` | `cluster::Select`, `SwitchTab`, `NextTab`, `PreviousTab`, `CloseTab` |
 //! | `oxikube` | `view::Open` for the catalog home and the kubeconfig sources screen; `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
+//! | `oxikube_app::apply` | `resource::Apply` (guarded: blocked read-only, risk low with the editor's diff preview as the confirmation, a server dry run before every apply, server-side apply as the `editor.field_manager`, the replace fallback at the reviewed `resourceVersion`, audit; E10-S08). The manifest editor runs it through `ApplyService` |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
 //! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
 //! | `oxikube_app::exec` | `node::Shell` (guarded: blocked read-only, a confirmation naming the node and the image, a server dry run of the pod, audit; E09-S09) |
@@ -30,8 +31,8 @@
 //! `pod::Debug` (E09-S10, registered by `oxikube_terminal` over the app's `ExecService`) adds an
 //! ephemeral debug container to a pod and opens a terminal in it.
 //!
-//! Only `resource::Delete`, `pod::Debug` and `node::Shell` (it creates a privileged pod) mutate a
-//! cluster; they and the posture commands confirm and audit through the `MutationGuard` the bus
+//! Only `resource::Delete`, `resource::Apply`, `pod::Debug` and `node::Shell` (it creates a
+//! privileged pod) mutate a cluster; they and the posture commands confirm and audit through the `MutationGuard` the bus
 //! owns, and E12's per-kind actions join here.
 
 use std::cell::OnceCell;
@@ -135,6 +136,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_app::sources", |r| {
         oxikube_app::sources::register_commands(r, &parts.sources)
+    })?;
+    registry.install("oxikube_app::apply", |r| {
+        oxikube_app::apply::register_commands(r, parts.sessions.clone())
     })?;
     registry.install("oxikube_app::posture", |r| {
         oxikube_app::guard::register_commands(r, parts.sessions, parts.prefs)

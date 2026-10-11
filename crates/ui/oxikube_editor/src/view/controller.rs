@@ -21,7 +21,6 @@
 //! the editor it was opened over.
 
 use std::rc::Rc;
-use std::sync::Arc;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
@@ -29,103 +28,15 @@ use gpui::{
     App, AppContext as _, Context, Entity, Focusable as _, SharedString, Subscription, Task,
     WeakEntity, Window,
 };
-use oxikube_app::ClusterSessionManager;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
-use oxikube_ports::ResourceReader;
 use oxikube_settings::SettingsStore;
-use oxikube_workspace::{ClusterTabs, CommandDispatcher, Workspace};
+use oxikube_workspace::{CommandDispatcher, Workspace};
 
 use super::commands::EditorRequest;
-use super::live::{LiveSource, SessionLive};
+use super::host::EditorHost;
 use super::manifest_editor::{ManifestEditor, ManifestEditorParts};
-use super::schemas::{SchemaSource, SessionSchemas};
 use crate::open::{OpenMode, ResourceOpen};
 use crate::settings::notice;
-
-/// Where a window's editors go, and the schemas of a cluster.
-pub trait EditorHost: 'static {
-    /// The cluster whose tab is displayed, if one is.
-    fn active_cluster(&self, cx: &App) -> Option<ClusterId>;
-
-    /// The workspace of `cluster`'s tab, `None` when it has no tab here.
-    fn workspace(&self, cluster: &ClusterId, cx: &App) -> Option<Entity<Workspace>>;
-
-    /// Shows `cluster`'s tab (an editor is opening in it).
-    fn show(&self, cluster: &ClusterId, window: &mut Window, cx: &mut App);
-
-    /// The schemas of `cluster`.
-    fn schemas(&self, cluster: &ClusterId) -> Rc<dyn SchemaSource>;
-
-    /// The reader to `get` objects of `cluster` with; `None` while it is not connected.
-    fn reader(&self, _: &ClusterId) -> Option<Arc<dyn ResourceReader>> {
-        None
-    }
-
-    /// Whether `cluster` is in read-only mode (an edit tab then opens read-only).
-    fn cluster_read_only(&self, _: &ClusterId) -> bool {
-        false
-    }
-
-    /// The live objects of `cluster` (the diff vs live); `None` has none.
-    fn live(&self, _cluster: &ClusterId) -> Option<Rc<dyn LiveSource>> {
-        None
-    }
-}
-
-/// The app's [`EditorHost`]: the window's [`ClusterTabs`] and the sessions' schema ports.
-#[derive(Clone)]
-pub struct ClusterEditorHost {
-    tabs: WeakEntity<ClusterTabs>,
-    sessions: ClusterSessionManager,
-}
-
-impl ClusterEditorHost {
-    /// A host over the window's cluster tabs.
-    pub fn new(tabs: WeakEntity<ClusterTabs>, sessions: ClusterSessionManager) -> Self {
-        Self { tabs, sessions }
-    }
-}
-
-impl EditorHost for ClusterEditorHost {
-    fn active_cluster(&self, cx: &App) -> Option<ClusterId> {
-        self.tabs.upgrade()?.read(cx).active().cloned()
-    }
-
-    fn workspace(&self, cluster: &ClusterId, cx: &App) -> Option<Entity<Workspace>> {
-        let tabs = self.tabs.upgrade()?;
-        let tab = tabs.read(cx).tab(cluster)?;
-        Some(tab.read(cx).workspace().clone())
-    }
-
-    fn show(&self, cluster: &ClusterId, window: &mut Window, cx: &mut App) {
-        if let Some(tabs) = self.tabs.upgrade() {
-            tabs.update(cx, |tabs, cx| {
-                tabs.activate(cluster, window, cx);
-            });
-        }
-    }
-
-    fn schemas(&self, cluster: &ClusterId) -> Rc<dyn SchemaSource> {
-        Rc::new(SessionSchemas::new(self.sessions.clone(), cluster.clone()))
-    }
-
-    fn reader(&self, cluster: &ClusterId) -> Option<Arc<dyn ResourceReader>> {
-        self.sessions.get(cluster)?.resources()
-    }
-
-    fn cluster_read_only(&self, cluster: &ClusterId) -> bool {
-        self.sessions
-            .get(cluster)
-            .is_some_and(|session| session.read_only())
-    }
-
-    fn live(&self, cluster: &ClusterId) -> Option<Rc<dyn LiveSource>> {
-        Some(Rc::new(SessionLive::new(
-            self.sessions.clone(),
-            cluster.clone(),
-        )))
-    }
-}
 
 /// What [`EditorViews`] needs.
 #[derive(Clone)]
@@ -283,7 +194,26 @@ impl EditorViews {
             resource: None,
         };
         let editor = cx.new(|cx| ManifestEditor::new(parts, window, cx));
+        self.mount(&editor, cluster.as_ref(), &workspace, cx);
         workspace.update(cx, |ws, cx| ws.open_item(editor, window, cx));
+    }
+
+    /// What a new editor gets besides its parts: the apply pipeline of its cluster with the
+    /// workspace its dialogs open in (E10-S08), and its place among the palette's command
+    /// surfaces.
+    fn mount(
+        &self,
+        editor: &Entity<ManifestEditor>,
+        cluster: Option<&ClusterId>,
+        workspace: &Entity<Workspace>,
+        cx: &mut App,
+    ) {
+        if let Some(service) = cluster.and_then(|cluster| self.deps.host.apply(cluster)) {
+            let workspace = workspace.downgrade();
+            editor.update(cx, |editor, _| editor.set_apply(service, workspace));
+        }
+        let focus = editor.read(cx).editor().focus_handle(cx);
+        oxikube_workspace::command_surface::register(editor, &focus, cx);
     }
 
     /// Opens an editor on `target` in its cluster's tab, or focuses the one that holds it (and
@@ -331,6 +261,7 @@ impl EditorViews {
             }),
         };
         let editor = cx.new(|cx| ManifestEditor::new(parts, window, cx));
+        self.mount(&editor, Some(cluster), &workspace, cx);
         workspace.update(cx, |ws, cx| ws.open_item(editor, window, cx));
     }
 

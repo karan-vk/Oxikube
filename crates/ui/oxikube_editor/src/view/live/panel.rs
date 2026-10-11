@@ -21,7 +21,7 @@ use crate::view::ManifestEditor;
 /// The panel's height, before the UI zoom.
 const PANEL_HEIGHT: f32 = 260.;
 /// A diff row's height, before the UI zoom.
-const ROW_HEIGHT: f32 = 18.;
+pub(in crate::view) const ROW_HEIGHT: f32 = 18.;
 
 /// "No changes", "1 change · −1 +1".
 pub(crate) fn summary(diff: &ManifestDiff) -> String {
@@ -192,6 +192,19 @@ fn diff_rows(
         .collect()
 }
 
+/// The inline rows `range` of `diff`, as the panel draws them (the apply preview's dialog shows
+/// its diff with them).
+pub(in crate::view) fn inline_rows(
+    diff: &ManifestDiff,
+    range: Range<usize>,
+    cx: &gpui::App,
+) -> Vec<AnyElement> {
+    let colors = Colors::of(cx);
+    range
+        .map(|ix| inline_row(diff, diff.inline_rows()[ix], &colors))
+        .collect()
+}
+
 struct Colors {
     text: Hsla,
     muted: Hsla,
@@ -200,7 +213,7 @@ struct Colors {
 }
 
 impl Colors {
-    fn of(cx: &Context<ManifestEditor>) -> Self {
+    fn of(cx: &gpui::App) -> Self {
         let colors = &cx.tokens().colors;
         Self {
             text: colors.text,

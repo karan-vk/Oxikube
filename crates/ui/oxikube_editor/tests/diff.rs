@@ -338,3 +338,56 @@ fn an_unloaded_buffer_follows_the_live_object_without_a_banner() {
     assert!(sync.live().is_some());
     assert_eq!(sync.state(), SyncState::Clean);
 }
+
+/// E10-S08: the buffer's own apply coming back through the watch is not a server change.
+#[test]
+fn the_buffers_own_apply_becomes_the_base_without_a_banner() {
+    // The watch delivers the applied object after the apply answered.
+    let (mut sync, _) = loaded();
+    sync.edited(true);
+    sync.applied(Some("42"));
+    assert_eq!(sync.state(), SyncState::Clean);
+    assert_eq!(
+        sync.live_changed(present(deployment(5, "nginx:1.27", "42")), false),
+        SyncAction::None,
+        "no reload over the text that was applied"
+    );
+    assert_eq!(
+        sync.base()
+            .unwrap()
+            .resource
+            .meta
+            .resource_version
+            .as_deref(),
+        Some("42")
+    );
+    // A later change by someone else reloads the clean buffer, as before.
+    assert!(matches!(
+        sync.live_changed(present(deployment(6, "nginx:1.27", "43")), false),
+        SyncAction::Reload(_)
+    ));
+
+    // The watch was faster than the apply's answer: the banner it raised goes.
+    let (mut sync, _) = loaded();
+    sync.edited(true);
+    assert_eq!(
+        sync.live_changed(present(deployment(5, "nginx:1.27", "42")), true),
+        SyncAction::Banner
+    );
+    sync.applied(Some("42"));
+    assert_eq!(sync.state(), SyncState::Clean);
+    assert_eq!(
+        sync.base()
+            .unwrap()
+            .resource
+            .meta
+            .resource_version
+            .as_deref(),
+        Some("42")
+    );
+
+    // A buffer that follows no object keeps following none.
+    let mut sync = LiveSync::new();
+    sync.applied(Some("1"));
+    assert!(sync.base().is_none());
+}

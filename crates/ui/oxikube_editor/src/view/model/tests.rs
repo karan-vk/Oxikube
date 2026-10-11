@@ -356,3 +356,38 @@ fn a_result_computed_under_another_mode_is_dropped() {
     assert_eq!(validate(&mut model, &mut editor), Accepted::Shown);
     assert_eq!(editor.diagnostics.len(), 1);
 }
+
+#[test]
+fn the_servers_rejection_shows_with_the_checks_until_the_next_edit() {
+    let mut model = ManifestModel::new();
+    let mut editor =
+        FakeEditor::with_text("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n");
+    validate(&mut model, &mut editor);
+    assert_eq!(model.problems(), Problems::default());
+    let server = EditorDiagnostic::new(17..21, DiagnosticLevel::Error, "kind: Invalid value")
+        .with_code(crate::apply::SERVER_CODE);
+    let version = editor.version();
+    assert_eq!(
+        model.show_server(&mut editor, version, vec![server.clone()]),
+        Accepted::Shown
+    );
+    assert_eq!(model.problems().errors, 1);
+    assert_eq!(editor.diagnostics, std::slice::from_ref(&server));
+    // A check of the same version keeps them; showing them again does not double them.
+    validate(&mut model, &mut editor);
+    assert_eq!(editor.diagnostics, std::slice::from_ref(&server));
+    model.show_server(&mut editor, version, vec![server.clone()]);
+    assert_eq!(editor.diagnostics.len(), 1);
+    assert_eq!(model.server_problems(), std::slice::from_ref(&server));
+    // An edit makes them stale.
+    editor.type_text("data: {}\n");
+    model.changed();
+    validate(&mut model, &mut editor);
+    assert!(editor.diagnostics.is_empty());
+    assert!(model.server_problems().is_empty());
+    assert_eq!(
+        model.show_server(&mut editor, version, vec![server]),
+        Accepted::Stale,
+        "for an older version"
+    );
+}
