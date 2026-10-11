@@ -24,10 +24,10 @@ mod metrics;
 mod node_shell;
 mod palette;
 mod resources;
+mod scale;
 mod signin;
 mod tail;
 mod terminal;
-mod scale;
 mod workloads;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
