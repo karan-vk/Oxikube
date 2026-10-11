@@ -245,6 +245,14 @@ impl Harness {
         })
     }
 
+    /// The standard harness with the real `ingressclass::SetDefault` handler (E12-S14) over the
+    /// fake resource ports.
+    pub fn with_ingress_class_handler() -> Self {
+        Self::with_extra(|reg, _, sessions| {
+            crate::network::register_commands(reg, sessions.clone())
+        })
+    }
+
     fn build(
         skip: &[CommandId],
         extra: impl FnOnce(

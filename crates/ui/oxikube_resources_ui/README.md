@@ -24,6 +24,10 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   module's `init(cx)`; `KindSpecs::kind_for` falls back to the generic spec. The built-in kinds
   (`kinds::builtin`, one module per sidebar section) fill the cluster sidebar, where each cluster
   shows the kinds its discovery serves. A kind story adds `kinds/<kind>/` and registers its own spec.
+- `kinds::network` (E12-S14): Ingress, IngressClass, NetworkPolicy and the Gateway API kinds
+  (GatewayClass, Gateway, HTTPRoute, GRPCRoute, TLSRoute, listed only where discovery serves them): one
+  `NetworkPanel` for all of them (rules, listeners, parents, conditions with reasons, links to Services,
+  Gateways and GatewayClasses) and the IngressClass row action "Set as default" (`ingressclass::SetDefault`).
 - `table` (E07-S03): `ResourceTable`, the generic virtualised table of one kind (store
   subscription, sort through the store, column layout per kind, multi-select, keyboard, context
   menu, status colours from the theme's `oxikube` block).

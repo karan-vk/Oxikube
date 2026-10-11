@@ -80,6 +80,7 @@ pub use events::{EventRow, MAX_EVENTS, events_about};
 pub use keys::{
     Close, CloseFind, Find, NextMatch, PreviousMatch, SelectNext, SelectPrevious, ShowTab,
 };
+pub use kind_panel::PanelHost;
 pub use model::DetailModel;
 pub use state::{DetailDeps, DetailEvent, DetailState, Mount};
 pub use tabs::DetailTab;

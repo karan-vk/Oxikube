@@ -209,6 +209,14 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "node::Shell" => Command::NodeShell {
             target: node(name, "worker-1"),
         },
+        "ingressclass::SetDefault" => Command::IngressClassSetDefault {
+            target: ResourceRef::cluster_scoped(
+                id(name),
+                Gvk::new("networking.k8s.io", "v1", "IngressClass"),
+                "nginx",
+            ),
+            clear_previous: true,
+        },
         "node::Uncordon" => Command::NodeUncordon {
             target: node(name, "worker-1"),
         },

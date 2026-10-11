@@ -21,6 +21,9 @@ use super::state::FullState;
 use super::view::DetailView;
 use crate::table::ToneColors;
 
+/// The most the kind's own panel takes of the Overview before it scrolls, unscaled pixels.
+const KIND_PANEL_MAX_HEIGHT: f32 = 360.;
+
 impl DetailView {
     /// The Overview: the list, or a skeleton until the object is known.
     pub(super) fn overview_body(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -42,7 +45,15 @@ impl DetailView {
                 .size_full()
                 .child(
                     div()
+                        .id("detail-kind-panel")
                         .debug_selector(|| "detail-kind-panel".to_owned())
+                        .flex_none()
+                        // A long panel scrolls inside its own box: the generic rows below stay
+                        // in view.
+                        .max_h(u(px(KIND_PANEL_MAX_HEIGHT)))
+                        .overflow_y_scroll()
+                        .border_b_1()
+                        .border_color(cx.tokens().colors.border_variant)
                         .child(panel.clone()),
                 )
                 .child(rows.flex_1().min_h_0().w_full())

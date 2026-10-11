@@ -2,9 +2,17 @@
 //! Overview, built once per detail view on its first draw, and [`DetailView::resource`], the
 //! object the panel reads.
 
-use gpui::{AnyView, Context, Window};
+use std::rc::Rc;
+use std::sync::Arc;
+
+use gpui::{AnyView, App, Context, Window};
+use oxikube_app::ClusterSessionManager;
 use oxikube_app::store::StoreObject;
 use oxikube_domain::Resource;
+use oxikube_domain::command::Command;
+use oxikube_domain::ids::ResourceRef;
+use oxikube_ports::DiscoveryPort;
+use oxikube_workspace::CommandDispatcher;
 
 use super::view::DetailView;
 use crate::kinds::DetailRenderer;
@@ -35,7 +43,54 @@ impl KindPanel {
     }
 }
 
+/// What a kind's panel may do besides reading the object: send a command, ask whether the
+/// cluster is read-only, reach discovery. Cheap to clone; taken with [`DetailView::host`].
+///
+/// A panel never calls a port that mutates: its buttons dispatch commands, which the guard
+/// confirms, audits and refuses on a read-only cluster.
+#[derive(Clone)]
+pub struct PanelHost {
+    target: ResourceRef,
+    dispatcher: Rc<dyn CommandDispatcher>,
+    sessions: ClusterSessionManager,
+}
+
+impl PanelHost {
+    /// The object the detail shows.
+    pub fn target(&self) -> &ResourceRef {
+        &self.target
+    }
+
+    /// Sends `command` through the command bus (the same path as the palette and the keymap).
+    pub fn dispatch(&self, command: Command, cx: &mut App) {
+        self.dispatcher.dispatch(command, cx);
+    }
+
+    /// Whether the object's cluster refuses mutations.
+    pub fn read_only(&self) -> bool {
+        self.sessions
+            .get(&self.target.cluster)
+            .is_some_and(|session| session.read_only())
+    }
+
+    /// The cluster's discovery, while it is connected.
+    pub fn discovery(&self) -> Option<Arc<dyn DiscoveryPort>> {
+        self.sessions
+            .get(&self.target.cluster)
+            .and_then(|session| session.discovery())
+    }
+}
+
 impl DetailView {
+    /// What the kind's panel may do besides reading the object. See [`PanelHost`].
+    pub fn host(&self) -> PanelHost {
+        PanelHost {
+            target: self.target.clone(),
+            dispatcher: self.deps.dispatcher.clone(),
+            sessions: self.deps.sessions.clone(),
+        }
+    }
+
     /// The object as best known: the full read for a feed that carries less, else the feed's
     /// object. `None` until the store answers, and for a Table row without a full read.
     pub fn resource(&self) -> Option<&Resource> {

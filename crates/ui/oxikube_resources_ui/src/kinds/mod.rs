@@ -43,6 +43,7 @@
 
 mod builtin;
 mod detail;
+pub mod network;
 mod sidebar;
 mod spec;
 mod specs;

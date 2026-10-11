@@ -6,6 +6,7 @@ use oxikube_domain::OxiResult;
 use oxikube_domain::access::{AccessRequirement, is_builtin_api_group};
 use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_domain::kinds::{ResourceKind, Verb};
+use oxikube_domain::view::network::is_gateway_network_kind;
 use oxikube_ports::DiscoveryPort;
 
 use crate::kinds::ServedKinds;
@@ -100,12 +101,17 @@ pub async fn discover_sidebar(discovery: &dyn DiscoveryPort) -> OxiResult<Sideba
 }
 
 /// The kinds of non-built-in API groups in `kinds`, grouped by group (sorted), preferred version
-/// only, listable kinds only.
+/// only, listable kinds only. The Gateway API kinds the Network section lists itself (GatewayClass,
+/// Gateway, HTTPRoute, GRPCRoute, TLSRoute; E12-S14) are left out, so each shows once.
 pub fn custom_resource_groups(kinds: &[ResourceKind]) -> Vec<CustomResourceGroup> {
     let mut groups: BTreeMap<String, Vec<CustomKind>> = BTreeMap::new();
     for kind in kinds {
         let group: &str = &kind.gvk.group;
-        if kind.preferred && kind.supports(Verb::List) && !is_builtin_api_group(group) {
+        if kind.preferred
+            && kind.supports(Verb::List)
+            && !is_builtin_api_group(group)
+            && !is_gateway_network_kind(group, &kind.gvk.kind)
+        {
             groups
                 .entry(group.to_owned())
                 .or_default()

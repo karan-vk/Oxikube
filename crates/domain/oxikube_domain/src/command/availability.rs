@@ -101,6 +101,11 @@ impl SelectionKind {
         SelectionKind::OfKind { group: "", kind }
     }
 
+    /// One or more objects of `kind` in `group`.
+    pub const fn of(group: &'static str, kind: &'static str) -> Self {
+        SelectionKind::OfKind { group, kind }
+    }
+
     /// Whether the command needs any selection at all.
     pub const fn needs_selection(self) -> bool {
         !matches!(self, SelectionKind::None)

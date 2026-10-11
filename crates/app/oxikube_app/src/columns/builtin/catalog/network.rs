@@ -1,7 +1,8 @@
 //! Services and networking kinds.
 //!
 //! Sources: Freelens Service / Endpoints / EndpointSlice / Ingress / IngressClass /
-//! NetworkPolicy lists (A1); k9s `svc`, `ep`, `ing`, `np` (A2); kubectl printers.
+//! NetworkPolicy lists (A1); k9s `svc`, `ep`, `ing`, `np` (A2); kubectl printers. The Gateway API
+//! columns follow `kubectl get` for the CRDs plus the status conditions users debug with.
 
 use super::super::def::{
     AGE, ColumnDef, KindDef, LABELS, NAME, NAMESPACE,
@@ -40,28 +41,31 @@ const ENDPOINT_SLICE: &[ColumnDef] = &[
 const INGRESS: &[ColumnDef] = &[
     NAME,
     NAMESPACE,
-    ColumnDef::new("class", "Class", Func(f::ingress_class)),
-    ColumnDef::new("hosts", "Hosts", Func(f::ingress_hosts)),
-    ColumnDef::new("address", "Address", Func(f::ingress_address)),
-    ColumnDef::new("ports", "Ports", Func(f::ingress_ports)),
+    ColumnDef::new("address", "Load Balancers", Func(f::ingress_address)),
+    ColumnDef::new("rules", "Rules", Func(f::ingress_rules)),
     AGE,
+    ColumnDef::new("class", "Class", Func(f::ingress_class)).wide(),
+    ColumnDef::new("hosts", "Hosts", Func(f::ingress_hosts)).wide(),
+    ColumnDef::new("ports", "Ports", Func(f::ingress_ports)).wide(),
     LABELS,
 ];
 
 const INGRESS_CLASS: &[ColumnDef] = &[
     NAME,
+    ColumnDef::new("default", "Default", Func(f::ingress_class_default)),
     ColumnDef::new("controller", "Controller", Text("/spec/controller")),
-    AGE,
     ColumnDef::new(
-        "parameters-kind",
-        "Parameters Kind",
-        Text("/spec/parameters/kind"),
-    )
-    .wide(),
+        "parameters-api-group",
+        "API Group",
+        Func(f::ingress_class_api_group),
+    ),
+    ColumnDef::new("parameters-scope", "Scope", Func(f::ingress_class_scope)),
+    ColumnDef::new("parameters-kind", "Kind", Func(f::ingress_class_kind)),
+    AGE,
     ColumnDef::new(
         "parameters-name",
         "Parameters Name",
-        Text("/spec/parameters/name"),
+        Func(f::ingress_class_parameters),
     )
     .wide(),
 ];
@@ -69,8 +73,41 @@ const INGRESS_CLASS: &[ColumnDef] = &[
 const NETWORK_POLICY: &[ColumnDef] = &[
     NAME,
     NAMESPACE,
-    ColumnDef::new("pod-selector", "Pod Selector", Func(f::netpol_selector)),
     ColumnDef::new("policy-types", "Policy Types", Func(f::netpol_types)),
+    ColumnDef::new("pod-selector", "Pod Selector", Func(f::netpol_selector)),
+    AGE,
+    ColumnDef::new("ingress", "Ingress", Func(f::netpol_ingress)).wide(),
+    ColumnDef::new("egress", "Egress", Func(f::netpol_egress)).wide(),
+];
+
+// The Gateway API (E12-S14). Its kinds are CRDs, but small and read as raw JSON, so they use a
+// full feed (see the feed policy) and these computed columns instead of the Table API's.
+
+const GATEWAY_CLASS: &[ColumnDef] = &[
+    NAME,
+    ColumnDef::new("controller", "Controller", Text("/spec/controllerName")),
+    ColumnDef::new("accepted", "Accepted", Func(f::gateway_class_accepted)),
+    AGE,
+    ColumnDef::new("description", "Description", Text("/spec/description")).wide(),
+];
+
+const GATEWAY: &[ColumnDef] = &[
+    NAME,
+    NAMESPACE,
+    ColumnDef::new("class", "Class", Text("/spec/gatewayClassName")),
+    ColumnDef::new("addresses", "Addresses", Func(f::gateway_addresses)),
+    ColumnDef::new("listeners", "Listeners", Func(f::gateway_listeners)),
+    ColumnDef::new("programmed", "Programmed", Func(f::gateway_programmed)),
+    AGE,
+];
+
+const ROUTE: &[ColumnDef] = &[
+    NAME,
+    NAMESPACE,
+    ColumnDef::new("hostnames", "Hostnames", Func(f::route_hostnames)),
+    ColumnDef::new("parents", "Parents", Func(f::route_parents)),
+    ColumnDef::new("rules", "Rules", Func(f::route_rules)).number(),
+    ColumnDef::new("accepted", "Accepted", Func(f::route_accepted)),
     AGE,
 ];
 
@@ -104,5 +141,30 @@ pub(super) const KINDS: &[KindDef] = &[
         group: "networking.k8s.io",
         kind: "NetworkPolicy",
         columns: NETWORK_POLICY,
+    },
+    KindDef {
+        group: "gateway.networking.k8s.io",
+        kind: "GatewayClass",
+        columns: GATEWAY_CLASS,
+    },
+    KindDef {
+        group: "gateway.networking.k8s.io",
+        kind: "Gateway",
+        columns: GATEWAY,
+    },
+    KindDef {
+        group: "gateway.networking.k8s.io",
+        kind: "HTTPRoute",
+        columns: ROUTE,
+    },
+    KindDef {
+        group: "gateway.networking.k8s.io",
+        kind: "GRPCRoute",
+        columns: ROUTE,
+    },
+    KindDef {
+        group: "gateway.networking.k8s.io",
+        kind: "TLSRoute",
+        columns: ROUTE,
     },
 ];

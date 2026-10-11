@@ -2,6 +2,7 @@
 //! sidebar built from it over discovery sets (`sidebar`), a kind's own columns and detail panel
 //! reaching the table and the drawer (`spec`). `#[gpui::test]`s over testkit fakes.
 
+mod network;
 mod registry;
 mod sidebar;
 mod spec;

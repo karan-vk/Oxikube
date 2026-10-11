@@ -8,6 +8,8 @@
 //! * [`NodeSummary`] for Nodes.
 //! * [`WorkloadSummary`] for Deployments, StatefulSets, DaemonSets and ReplicaSets.
 //! * [`JobSummary`] and [`CronJobSummary`] for batch kinds.
+//! * [`network`] for the Network section: Ingress, IngressClass, NetworkPolicy and the Gateway API
+//!   kinds (E12-S14).
 //! * [`Health`] and [`health_of`]: the one rule for "is this object healthy" behind overview
 //!   tiles and sidebar counts.
 //!
@@ -35,6 +37,7 @@ use jiff::Timestamp;
 
 mod health;
 mod job;
+pub mod network;
 mod node;
 mod pod;
 mod pod_health;

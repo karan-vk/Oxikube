@@ -340,3 +340,38 @@ fn one_discovery_read_gives_the_served_kinds_and_the_custom_resources() {
     assert_eq!(groups, ["cert-manager.io"]);
     assert_eq!(discovery.recorded_calls().len(), 1, "one read for both");
 }
+
+#[test]
+fn the_gateway_api_kinds_the_network_section_lists_are_not_custom_resources_too() {
+    let mut kinds = oxikube_testkit::discovery_sets::core_with_gateway_api();
+    // TLSRoute (experimental) and a Gateway API kind the Network section does not list.
+    let api = |name: &str, plural: &str| {
+        kind("gateway.networking.k8s.io", name, plural, &Verb::ALL, true)
+    };
+    kinds.push(api("TLSRoute", "tlsroutes"));
+    kinds.push(api("ReferenceGrant", "referencegrants"));
+    kinds.push(kind(
+        "cert-manager.io",
+        "Certificate",
+        "certificates",
+        &Verb::ALL,
+        true,
+    ));
+    let groups = super::custom_resource_groups(&kinds);
+    let listed: Vec<(&str, Vec<&str>)> = groups
+        .iter()
+        .map(|g| {
+            (
+                g.group.as_str(),
+                g.kinds.iter().map(|k| k.kind.as_str()).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        listed,
+        [
+            ("cert-manager.io", vec!["Certificate"]),
+            ("gateway.networking.k8s.io", vec!["ReferenceGrant"]),
+        ]
+    );
+}

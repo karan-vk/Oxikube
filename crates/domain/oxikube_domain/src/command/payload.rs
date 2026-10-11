@@ -962,6 +962,18 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tail_lines: Option<u32>,
     },
+    /// Make an IngressClass the cluster's default by annotating it
+    /// `ingressclass.kubernetes.io/is-default-class: "true"`.
+    #[serde(rename = "ingressclass::SetDefault")]
+    IngressClassSetDefault {
+        /// The IngressClass to make the default.
+        target: ResourceRef,
+        /// Also clear the annotation on the classes that carried it, so exactly one default
+        /// remains (the API server refuses an Ingress without a class while two exist).
+        /// Defaults to `true`.
+        #[serde(default = "default_follow")]
+        clear_previous: bool,
+    },
     /// Mark a node unschedulable.
     #[serde(rename = "node::Cordon")]
     NodeCordon {
@@ -1025,6 +1037,7 @@ impl Command {
             Command::PaletteToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
             Command::KeymapOpenUser => CommandId::KEYMAP_OPEN_USER,
             Command::AppQuit => CommandId::APP_QUIT,
+            Command::IngressClassSetDefault { .. } => CommandId::INGRESS_CLASS_SET_DEFAULT,
             Command::JumpBack => CommandId::JUMP_BACK,
             Command::JumpForward => CommandId::JUMP_FORWARD,
             Command::JumpLast => CommandId::JUMP_LAST,
@@ -1221,6 +1234,7 @@ impl Command {
             | Command::NodeCordon { target }
             | Command::NodeShell { target }
             | Command::NodeUncordon { target }
+            | Command::IngressClassSetDefault { target, .. }
             | Command::NodeDrain { target, .. } => Some(target),
             _ => None,
         }
@@ -1256,6 +1270,14 @@ mod tests {
 
     fn node() -> ResourceRef {
         ResourceRef::cluster_scoped(cluster(), Gvk::new("", "v1", "Node"), "worker-1")
+    }
+
+    fn ingress_class() -> ResourceRef {
+        ResourceRef::cluster_scoped(
+            cluster(),
+            Gvk::new("networking.k8s.io", "v1", "IngressClass"),
+            "nginx",
+        )
     }
 
     /// One sample of every variant.
@@ -1563,6 +1585,10 @@ mod tests {
             Command::NodeDrain {
                 target: node(),
                 force: true,
+            },
+            Command::IngressClassSetDefault {
+                target: ingress_class(),
+                clear_previous: true,
             },
         ]
     }

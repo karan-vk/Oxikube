@@ -89,6 +89,8 @@ impl CommandId {
     pub const EDITOR_TRIGGER_COMPLETION: CommandId = CommandId::new("editor::TriggerCompletion");
     /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
+    /// `ingressclass::SetDefault`: make an IngressClass the cluster's default (annotation patch).
+    pub const INGRESS_CLASS_SET_DEFAULT: CommandId = CommandId::new("ingressclass::SetDefault");
     /// `jump::Back`: run the previous command of the `:` jump bar's history again.
     pub const JUMP_BACK: CommandId = CommandId::new("jump::Back");
     /// `jump::Forward`: run the next command of the `:` jump bar's history again.
@@ -586,6 +588,18 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // Patches the `ingressclass.kubernetes.io/is-default-class` annotation (a merge patch, with
+    // a server dry run through the guard); low risk: it changes which class an Ingress without
+    // one gets, and is undone by setting another class (or removing the annotation).
+    CommandMeta::mutation(
+        CommandId::INGRESS_CLASS_SET_DEFAULT,
+        "Set Default Ingress Class",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::of("networking.k8s.io", "IngressClass")),
     // The `:` jump bar's history only moves around the app: they read and change nothing in
     // a cluster, and run in read-only mode. What a typed line does is done by the navigation
     // commands it turns into (`resource::OpenList`, `namespace::Select`, `cluster::Select`, ...).

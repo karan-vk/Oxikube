@@ -17,6 +17,10 @@
 //! - `detail_crd_schema_dark`, `detail_crd_schema_light` (`crd`): the Schema tab of a CRD's detail
 //!   (E07-S07) with `spec` and `spec.containers` open.
 //!
+//! - `network_ingress_*`, `network_policy_*`, `network_httproute_*` (`network`, dark and light): the Network
+//!   panels of an Ingress (rules table, TLS secret, load balancer), a NetworkPolicy (peers, ports, the
+//!   IP block exception, default-deny egress) and an HTTPRoute (the parent that refused it, the
+//!   unresolved backend), with the generic rows below (E12-S14).
 //! - `exec_picker_dark`, `exec_picker_light` (`exec`): the container picker of a pod with three
 //!   containers, the default one selected (E09-S08; the generic picker of E11-S02 since).
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
@@ -60,6 +64,8 @@ mod crd;
 mod detail;
 #[path = "screenshot/exec.rs"]
 mod exec;
+#[path = "screenshot/network.rs"]
+mod network;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
@@ -238,6 +244,7 @@ fn main() -> ExitCode {
             .and_then(|image| check("pods_table_one_namespace", image, NARROW, HEIGHT)),
         detail::run(),
         crd::run(),
+        network::run(),
         exec::run(),
     ];
     let mut failed = false;

@@ -104,6 +104,35 @@ const CORE: &[(&str, &str, FeedPlan)] = &[
         "EndpointSlice",
         FeedPlan::new(Full, Normal),
     ),
+    // The Gateway API (E12-S14): optional CRDs, small lists, read as raw JSON. Their columns and
+    // panels need `spec` and `status` conditions, which a Table feed would print differently.
+    // A feed starts only when the user opens the kind, which the sidebar offers only where
+    // discovery serves the group.
+    (
+        "gateway.networking.k8s.io",
+        "GatewayClass",
+        FeedPlan::new(Full, Normal),
+    ),
+    (
+        "gateway.networking.k8s.io",
+        "Gateway",
+        FeedPlan::new(Full, Normal),
+    ),
+    (
+        "gateway.networking.k8s.io",
+        "HTTPRoute",
+        FeedPlan::new(Full, Normal),
+    ),
+    (
+        "gateway.networking.k8s.io",
+        "GRPCRoute",
+        FeedPlan::new(Full, Normal),
+    ),
+    (
+        "gateway.networking.k8s.io",
+        "TLSRoute",
+        FeedPlan::new(Full, Normal),
+    ),
     (
         "storage.k8s.io",
         "StorageClass",
