@@ -17,12 +17,14 @@ use crate::apply::types::{ApplyError, ApplyMethod, ApplyPreview, ApplyRequest};
 /// How many documents are dry-run together.
 const DRY_RUNS_AT_ONCE: usize = 8;
 
-/// A document's status, one line, and the object it made.
+/// A document's status, one line, the object it made, how it was sent and the
+/// `metadata.resourceVersion` the server stored.
 type Outcome = (
     DocumentStatus,
     String,
     Option<ResourceRef>,
     Option<ApplyMethod>,
+    Option<String>,
 );
 
 impl ApplyService {
@@ -93,18 +95,19 @@ impl ApplyService {
                 .iter()
                 .map(|&earlier| &results[earlier])
                 .find(|result| result.status.is_failure());
-            let (status, message, target, method) = match (&document.outcome, cause) {
-                (_, Some(cause)) => skipped(cause),
-                (PreviewOutcome::Skipped, None) => skipped_earlier(document),
-                (PreviewOutcome::Failed(error), None) => failed(error.clone()),
-                (PreviewOutcome::Ready(ready), None) => self.apply_rehearsed(ready).await,
-                (PreviewOutcome::Deferred, None) => {
-                    match self.preview(document.request.clone()).await {
-                        Ok(ready) => self.apply_rehearsed(&ready).await,
-                        Err(error) => failed(error),
+            let (status, message, target, method, resource_version) =
+                match (&document.outcome, cause) {
+                    (_, Some(cause)) => skipped(cause),
+                    (PreviewOutcome::Skipped, None) => skipped_earlier(document),
+                    (PreviewOutcome::Failed(error), None) => failed(error.clone()),
+                    (PreviewOutcome::Ready(ready), None) => self.apply_rehearsed(ready).await,
+                    (PreviewOutcome::Deferred, None) => {
+                        match self.preview(document.request.clone()).await {
+                            Ok(ready) => self.apply_rehearsed(&ready).await,
+                            Err(error) => failed(error),
+                        }
                     }
-                }
-            };
+                };
             let label = target
                 .as_ref()
                 .map_or_else(|| document.label.clone(), object_label);
@@ -115,6 +118,7 @@ impl ApplyService {
                 status,
                 method,
                 message,
+                resource_version,
             });
         }
         BatchReport { documents: results }
@@ -130,11 +134,17 @@ impl ApplyService {
                     Change::Update => DocumentStatus::Configured,
                     Change::Unchanged => DocumentStatus::Unchanged,
                 };
+                let resource_version = report
+                    .object
+                    .pointer("/metadata/resourceVersion")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned);
                 (
                     status,
                     report.message,
                     Some(report.target),
                     Some(report.method),
+                    resource_version,
                 )
             }
             Err(error) => failed(error),
@@ -144,7 +154,7 @@ impl ApplyService {
 
 fn failed(error: ApplyError) -> Outcome {
     let message = error.to_string();
-    (DocumentStatus::Failed(error), message, None, None)
+    (DocumentStatus::Failed(error), message, None, None, None)
 }
 
 /// Skipped because `cause` (an earlier result) did not apply.
@@ -167,5 +177,11 @@ fn skipped_earlier(document: &DocumentPreview) -> Outcome {
 }
 
 fn skipped_because(reason: String) -> Outcome {
-    (DocumentStatus::Skipped(reason.clone()), reason, None, None)
+    (
+        DocumentStatus::Skipped(reason.clone()),
+        reason,
+        None,
+        None,
+        None,
+    )
 }

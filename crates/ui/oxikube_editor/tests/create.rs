@@ -20,13 +20,15 @@ use common::*;
 use gpui::{Entity, TestAppContext};
 use oxikube_app::{DocumentStatus, TemplateService};
 use oxikube_domain::OxiError;
+use oxikube_domain::Resource;
 use oxikube_domain::audit::AuditOutcome;
 use oxikube_domain::session::NamespaceSelection;
+use oxikube_editor::diff::SyncState;
 use oxikube_editor::templates::{TemplatePicker, embedded};
 use oxikube_editor::view::{
     ApplyPreviewDialog, ApplyStage, BatchPreviewDialog, EditorRequest, ManifestEditor,
 };
-use oxikube_testkit::FakeFsPort;
+use oxikube_testkit::{FakeFsPort, ScriptedFeed, TICK};
 use oxikube_ui::editor::EditorApi as _;
 
 const DIR: &str = "/home/me/.config/oxikube/templates";
@@ -538,4 +540,106 @@ fn pasting_several_documents_into_an_empty_tab_just_works(cx: &mut TestAppContex
     f.vcx.run_until_parked();
     assert_eq!(names_in_store(&f), ["shop", "a", "b"]);
     assert_eq!(f.notice(&editor), "3 applied");
+}
+
+fn web(rv: &str, mode: &str) -> Resource {
+    Resource::from_json(serde_json::json!({
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {"name": "web", "namespace": "shop", "resourceVersion": rv, "uid": "u-1"},
+        "data": {"mode": mode}
+    }))
+    .unwrap()
+}
+
+fn other() -> Resource {
+    Resource::from_json(serde_json::json!({
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {"name": "other", "namespace": "shop", "resourceVersion": "9"},
+        "data": {"k": "v"}
+    }))
+    .unwrap()
+}
+
+#[gpui::test]
+fn a_batch_that_writes_the_followed_object_is_not_a_change_on_the_server(cx: &mut TestAppContext) {
+    let mut f = setup(cx, false);
+    // The cluster holds `web` at version 1; the watch later delivers our own write, version 2.
+    ScriptedFeed::new()
+        .initial([web("1", "blue")])
+        .modify(1, web("2", "green"))
+        .install(&f.resources);
+    let editor = f.editor_with(
+        "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: web\n  namespace: shop\n",
+    );
+    f.vcx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-alt-shift-r"
+    } else {
+        "ctrl-alt-shift-r"
+    });
+    f.vcx.run_until_parked();
+    assert_eq!(
+        f.vcx.read(|cx| editor.read(cx).live_sync().state()),
+        SyncState::Clean
+    );
+
+    // The buffer now holds the followed object edited, and a second document.
+    let code = f.vcx.read(|cx| editor.read(cx).editor().clone());
+    let text = "\
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web
+  namespace: shop
+data:
+  mode: green
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: other
+  namespace: shop
+data:
+  k: v
+";
+    f.vcx.update(|window, cx| {
+        code.update(cx, |code, cx| code.api(window, cx).set_text(text));
+    });
+    f.vcx.run_until_parked();
+    assert_eq!(
+        f.vcx.read(|cx| editor.read(cx).live_sync().state()),
+        SyncState::Dirty
+    );
+
+    // Two dry runs, then each document's rehearsal and write; the server stores `web` at 2.
+    let (w, o) = (web("2", "green"), other());
+    for object in [w.clone(), o.clone(), w.clone(), w, o.clone(), o] {
+        f.resources.script().patch.push_ok(object);
+    }
+    f.press_apply();
+    let dialog = f
+        .modal::<BatchPreviewDialog>()
+        .expect("the combined preview");
+    dialog.update_in(&mut f.vcx, |dialog, window, cx| dialog.confirm(window, cx));
+    f.vcx.run_until_parked();
+    assert_eq!(f.notice(&editor), "2 applied");
+    assert_eq!(
+        f.vcx.read(|cx| editor.read(cx).live_sync().state()),
+        SyncState::Clean
+    );
+
+    // The watch delivers that write: adopted, not a change made by someone else.
+    f.resources.clock().advance(TICK);
+    f.vcx.run_until_parked();
+    f.vcx.executor().advance_clock(TICK);
+    f.vcx.run_until_parked();
+    assert_eq!(
+        f.vcx.read(|cx| editor.read(cx).live_sync().state()),
+        SyncState::Clean
+    );
+    assert!(
+        f.vcx.debug_bounds("manifest-banner").is_none(),
+        "no changed-on-server banner for our own write"
+    );
 }

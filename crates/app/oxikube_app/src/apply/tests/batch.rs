@@ -390,3 +390,19 @@ fn a_long_buffer_is_dry_run_a_few_at_a_time_and_keeps_its_order() {
     let expected: Vec<String> = (0..30).map(|i| format!("cm-{i:02}")).collect();
     assert_eq!(applied_names(&t), expected, "in buffer order");
 }
+
+#[test]
+fn an_applied_document_reports_the_resource_version_the_server_stored() {
+    let t = Applying::new(false);
+    let a = configmap("a", None, "x");
+    // The preview's dry run, the handler's rehearsal, then the apply: `a` is stored at version 5.
+    for _ in 0..3 {
+        t.port().script().patch.push_ok(live("a", "x"));
+    }
+    let report = t.apply_batch(&t.preview_batch(&[&a]));
+    assert_eq!(report.documents[0].resource_version.as_deref(), Some("5"));
+
+    // A document that is not applied has none.
+    let failed = t.apply_batch(&t.preview_batch(&["kind: [", &a]));
+    assert_eq!(failed.documents[0].resource_version, None);
+}

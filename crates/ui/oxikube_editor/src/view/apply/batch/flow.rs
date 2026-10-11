@@ -194,10 +194,27 @@ impl ManifestEditor {
         self.place_batch_causes(&failed, &session, window, cx);
         if failures == 0 && self.editor.read(cx).version() == session.version {
             self.clean_version = session.version;
+            self.adopt_batch_write(&report);
             cx.emit(oxikube_workspace::ItemEvent::UpdateTab);
         }
         self.apply.results = Some(ResultsPanel::new(report, session));
         cx.notify();
+    }
+
+    /// Tells the live link about the editor's own write, as a single apply does: the document
+    /// that is the followed object was stored at a resourceVersion, and the watch event for it
+    /// is adopted instead of raising the "changed on the server" banner.
+    fn adopt_batch_write(&mut self, report: &BatchReport) {
+        let Some(target) = self.live_target() else {
+            return;
+        };
+        let written = report
+            .documents
+            .iter()
+            .find(|d| d.target.as_ref() == Some(target) && !d.status.is_failure());
+        if let Some(written) = written {
+            self.live.sync.applied(written.resource_version.as_deref());
+        }
     }
 
     /// Puts the server's causes for the refused documents on their fields, off the UI thread.

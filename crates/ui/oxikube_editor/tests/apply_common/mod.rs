@@ -17,9 +17,9 @@ use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::session::NamespaceSelection;
 use oxikube_editor::view::{
     ApplyPreviewDialog, ApplyStage, EditorHost, EditorRequest, EditorViewSink, EditorViews,
-    EditorViewsDeps, ManifestEditor, SchemaSource,
+    EditorViewsDeps, LiveSource, ManifestEditor, SchemaSource,
 };
-use oxikube_ports::{ClusterContext, SchemaPort, SourceId};
+use oxikube_ports::{ClusterContext, ResourceReader, SchemaPort, SourceId};
 use oxikube_testkit::fakes::{
     FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeResourcePort,
     FakeSchemaPort, FakeStatePort, ResourceCall,
@@ -78,6 +78,19 @@ impl SchemaSource for Schemas {
     }
 }
 
+/// The cluster's fake resource port as the live source of the editors that follow an object.
+struct FakeLive(Arc<FakeResourcePort>);
+
+impl LiveSource for FakeLive {
+    fn cluster(&self) -> &ClusterId {
+        static CLUSTER: std::sync::OnceLock<ClusterId> = std::sync::OnceLock::new();
+        CLUSTER.get_or_init(cluster)
+    }
+    fn reader(&self, _: &App) -> Option<Arc<dyn ResourceReader>> {
+        Some(self.0.clone())
+    }
+}
+
 /// The window's workspace is the cluster's tab; its editors apply through `service`.
 struct Host {
     workspace: WeakEntity<Workspace>,
@@ -85,6 +98,7 @@ struct Host {
     service: ApplyService,
     sessions: ClusterSessionManager,
     templates: Option<TemplateService>,
+    resources: Arc<FakeResourcePort>,
 }
 
 impl EditorHost for Host {
@@ -103,6 +117,9 @@ impl EditorHost for Host {
     }
     fn templates(&self) -> Option<TemplateService> {
         self.templates.clone()
+    }
+    fn live(&self, _: &ClusterId) -> Option<Rc<dyn LiveSource>> {
+        Some(Rc::new(FakeLive(self.resources.clone())))
     }
     fn namespace_selection(&self, cluster: &ClusterId) -> NamespaceSelection {
         self.sessions
@@ -172,6 +189,7 @@ pub fn setup_with(
         service,
         sessions: sessions.clone(),
         templates,
+        resources: ports.resources.clone(),
     });
     let views = vcx.update(|window, cx| {
         oxikube_runtime::init_deterministic(cx);

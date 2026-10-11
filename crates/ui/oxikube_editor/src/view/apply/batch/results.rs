@@ -224,6 +224,7 @@ mod tests {
             status,
             method,
             message: text.to_owned(),
+            resource_version: None,
         }
     }
 

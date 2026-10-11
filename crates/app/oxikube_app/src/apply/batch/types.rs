@@ -174,6 +174,8 @@ pub struct DocumentResult {
     pub method: Option<ApplyMethod>,
     /// One line: the server's message for a failure, why for a skip, else what was applied.
     pub message: String,
+    /// The `metadata.resourceVersion` the server stored for the object, when it was applied.
+    pub resource_version: Option<String>,
 }
 
 /// The per-document results of an apply, in buffer order.
