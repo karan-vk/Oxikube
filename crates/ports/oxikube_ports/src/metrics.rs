@@ -9,8 +9,8 @@
 //! # Absence is a result, not an error
 //!
 //! A cluster without metrics-server, one whose metrics APIService is not answering, or an
-//! account that RBAC denies `metrics.k8s.io` are normal states the UI renders ("metrics
-//! unavailable: <reason>"). They are returned as [`MetricsOutcome::Unavailable`] with a
+//! account that RBAC denies `metrics.k8s.io` are normal states the UI renders as
+//! "metrics unavailable: `<reason>`". They are returned as [`MetricsOutcome::Unavailable`] with a
 //! [`MissingReason`] (`NotInstalled`, `ApiUnavailable`, `Forbidden`), never as an `Err` to be
 //! swallowed. `Err` is reserved for failures of the call itself (network, timeout, expired
 //! credentials, ...).
