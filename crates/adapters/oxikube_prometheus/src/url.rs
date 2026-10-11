@@ -61,7 +61,10 @@ pub(crate) fn api_url(endpoint: &PromEndpoint, route: Route) -> Result<Url, Prom
 /// A timestamp as Prometheus's `time`/`start`/`end` parameter: unix seconds with milliseconds.
 pub(crate) fn unix_seconds(ts: Timestamp) -> String {
     let ms = ts.as_millisecond();
-    format!("{}.{:03}", ms.div_euclid(1000), ms.rem_euclid(1000))
+    // Sign and magnitude are formatted separately: floor division would turn -1.5 s into "-2.500".
+    let sign = if ms < 0 { "-" } else { "" };
+    let abs = ms.unsigned_abs();
+    format!("{sign}{}.{:03}", abs / 1000, abs % 1000)
 }
 
 /// The URL for logs: scheme, host and path only, with the query string and credentials gone.
@@ -172,7 +175,15 @@ mod tests {
         );
         assert_eq!(
             unix_seconds(Timestamp::from_millisecond(-1500).unwrap()),
-            "-2.500"
+            "-1.500"
+        );
+        assert_eq!(
+            unix_seconds(Timestamp::from_millisecond(-2000).unwrap()),
+            "-2.000"
+        );
+        assert_eq!(
+            unix_seconds(Timestamp::from_millisecond(-5).unwrap()),
+            "-0.005"
         );
     }
 }
