@@ -49,9 +49,9 @@ use crate::resource::Resource;
 use jiff::Timestamp;
 
 mod config;
+mod configmap;
 mod crd;
 mod endpoints;
-mod configmap;
 mod health;
 mod job;
 mod namespace;
@@ -75,6 +75,9 @@ pub use config::{
     RuntimeClassSummary, TargetRef, VpaContainerPolicy, VpaRecommendation, VpaSummary,
     WebhookConfigSummary, WebhookKind, WebhookRule, WebhookSummary, WebhookTarget, selector_text,
 };
+pub use configmap::{
+    BinaryEntry, ConfigEntry, ConfigMapView, PREVIEW_CAP, PreviewLanguage, SUMMARY_CHARS,
+};
 pub use crd::{
     CrdConversion, CrdNames, CrdSummary, CrdVersionSummary, PrinterColumn, crd_aliases_text,
     crd_versions_text, version_order,
@@ -82,9 +85,6 @@ pub use crd::{
 pub use endpoints::{
     EndpointPort, EndpointSliceSummary, EndpointSummary, EndpointTarget, EndpointsAddress,
     EndpointsSummary, ReadyCounts, SERVICE_NAME_LABEL, ready_counts,
-};
-pub use configmap::{
-    BinaryEntry, ConfigEntry, ConfigMapView, PREVIEW_CAP, PreviewLanguage, SUMMARY_CHARS,
 };
 pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};

@@ -1335,6 +1335,37 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Opens a dialog that builds a Secret manifest in an editor tab (E12-S11); like
+    // `resource::Create` it changes nothing in a cluster. The object is made by `resource::Apply`
+    // (risk low, the dry-run diff with the values masked is the confirmation, blocked read-only).
+    CommandMeta::read(
+        CommandId::SECRET_CREATE,
+        "Create Secret…",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // Opens the Secret in the manifest editor with `data` shown as plaintext (E12-S11); like
+    // `resource::Edit` the change reaches the cluster only through `resource::Apply`, which is
+    // guarded (risk low, blocked read-only, the values re-encoded to base64 first, audited
+    // without them).
+    CommandMeta::read(
+        CommandId::SECRET_EDIT_DECODED,
+        "Edit Secret Decoded",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Secret")),
+    // Reads the Secret once (a `get`) and shows its values in memory (E12-S11); changes nothing in
+    // the cluster and writes nothing to disk. Allowed in read-only mode.
+    CommandMeta::read(
+        CommandId::SECRET_REVEAL,
+        "Reveal Secret Values",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Secret")),
     // Starts a port-forward to a pod behind the Service and opens the local end in the browser. A
     // forward changes nothing in the cluster, so it is a read like `pod::PortForward` (what the
     // forward may do is the port-forward manager's guard policy, E15); it needs the capability.
@@ -1371,37 +1402,6 @@ pub static COMMANDS: &[CommandMeta] = &[
         group: "storage.k8s.io",
         kind: "StorageClass",
     }),
-    // Opens a dialog that builds a Secret manifest in an editor tab (E12-S11); like
-    // `resource::Create` it changes nothing in a cluster. The object is made by `resource::Apply`
-    // (risk low, the dry-run diff with the values masked is the confirmation, blocked read-only).
-    CommandMeta::read(
-        CommandId::SECRET_CREATE,
-        "Create Secret…",
-        CommandScope::Cluster,
-        NONE,
-    ),
-    // Opens the Secret in the manifest editor with `data` shown as plaintext (E12-S11); like
-    // `resource::Edit` the change reaches the cluster only through `resource::Apply`, which is
-    // guarded (risk low, blocked read-only, the values re-encoded to base64 first, audited
-    // without them).
-    CommandMeta::read(
-        CommandId::SECRET_EDIT_DECODED,
-        "Edit Secret Decoded",
-        CommandScope::Selection,
-        NONE,
-    )
-    .in_views(TABLE_VIEWS)
-    .selecting(SelectionKind::core("Secret")),
-    // Reads the Secret once (a `get`) and shows its values in memory (E12-S11); changes nothing in
-    // the cluster and writes nothing to disk. Allowed in read-only mode.
-    CommandMeta::read(
-        CommandId::SECRET_REVEAL,
-        "Reveal Secret Values",
-        CommandScope::Selection,
-        NONE,
-    )
-    .in_views(TABLE_VIEWS)
-    .selecting(SelectionKind::core("Secret")),
     // Moves focus inside a window, never touches the cluster: allowed in read-only mode.
     CommandMeta::read(
         CommandId::TABLE_FOCUS_FILTER,

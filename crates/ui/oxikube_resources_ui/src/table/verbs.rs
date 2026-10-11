@@ -28,8 +28,8 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::Toast;
 
 use super::actions::{
-    EditDecodedSelected, EditSelected, OpenInBrowser, PortForward, RevealSelected, ShowPortForwards,
-    ShowServicePods, ToggleWide, ViewDescribe, ViewLogs, ViewYaml,
+    EditDecodedSelected, EditSelected, OpenInBrowser, PortForward, RevealSelected,
+    ShowPortForwards, ShowServicePods, ToggleWide, ViewDescribe, ViewLogs, ViewYaml,
 };
 use super::view::ResourceTable;
 use crate::exec::PORT_FORWARDING_UNAVAILABLE;

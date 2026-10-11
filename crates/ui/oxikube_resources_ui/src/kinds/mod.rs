@@ -54,20 +54,20 @@
 
 mod builtin;
 mod config;
+pub(crate) mod configmap;
 pub mod crd;
 mod cronjob;
 mod detail;
 pub mod endpoints;
 pub(crate) mod job;
+mod key_list;
 pub mod namespace;
 pub mod network;
 pub mod node;
 mod parts;
 pub mod pods;
-pub mod service;
-pub(crate) mod configmap;
-mod key_list;
 pub(crate) mod secret;
+pub mod service;
 mod sidebar;
 mod spec;
 mod specs;

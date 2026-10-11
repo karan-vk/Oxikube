@@ -96,12 +96,12 @@ mod network;
 mod node;
 #[path = "screenshot/pods.rs"]
 mod pods;
+#[path = "screenshot/secrets.rs"]
+mod secrets;
 #[path = "screenshot/service.rs"]
 mod service;
 #[path = "screenshot/storage.rs"]
 mod storage;
-#[path = "screenshot/secrets.rs"]
-mod secrets;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).

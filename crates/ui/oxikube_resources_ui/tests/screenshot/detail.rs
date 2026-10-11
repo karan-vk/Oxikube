@@ -88,7 +88,11 @@ fn render(light: bool, tab: DetailTab) -> anyhow::Result<RgbaImage> {
     render_of(web_deployment(), light, tab)
 }
 
-pub(super) fn render_of(object: Resource, light: bool, tab: DetailTab) -> anyhow::Result<RgbaImage> {
+pub(super) fn render_of(
+    object: Resource,
+    light: bool,
+    tab: DetailTab,
+) -> anyhow::Result<RgbaImage> {
     render_with(object, light, tab, false, |_, _| {})
 }
 
