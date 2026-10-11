@@ -132,6 +132,7 @@ fn editor_window(
             text: text.to_owned(),
             schemas: None,
             dispatcher: Rc::new(NoBus),
+            resource: None,
             live: Some(Rc::new(FakeLive::new(cluster(), port))),
         };
         let entity = cx.new(|cx| ManifestEditor::new(parts, window, cx));

@@ -180,6 +180,33 @@ fn e_on_a_pods_row_opens_the_pod_in_an_editable_tab_of_the_cluster(cx: &mut Test
     assert_eq!(tab_editors(&mut app).len(), 1, "no duplicate tab");
 }
 
+/// An editor opened from a row follows its object (E10-S07): the diff key shows no difference
+/// for the text it opened with, and a typed change shows in the diff.
+#[gpui::test]
+fn an_editor_opened_from_a_row_follows_its_object_and_diffs_against_it(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.open_pods_table();
+    app.press("e");
+    app.tick();
+    let editors = tab_editors(&mut app);
+    assert_eq!(editors.len(), 1);
+    let target = app.vcx.update(|_, cx| {
+        editors[0]
+            .read(cx)
+            .live_target()
+            .map(|t| t.name.to_string())
+    });
+    assert_eq!(target.as_deref(), Some("web-running"));
+
+    app.press(key("cmd-shift-d", "ctrl-shift-d"));
+    app.tick();
+    let diff = app
+        .vcx
+        .update(|_, cx| editors[0].read(cx).diff())
+        .expect("the diff against the live object");
+    assert!(diff.is_empty(), "the buffer holds the live object");
+}
+
 #[gpui::test]
 fn the_detail_drawer_opens_the_editor_from_its_header(cx: &mut TestAppContext) {
     let mut app = App::start(cx, TestPorts::seeded());

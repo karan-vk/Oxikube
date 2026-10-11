@@ -614,8 +614,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
   in the bottom panel, a `uniform_list`), `editor::ToggleDiffLayout` (`cmd-alt-shift-d`), `editor::ReloadFromServer`
   (`cmd-alt-shift-r`; an editor not following an object loads the one its manifest names), and the banner's
   `editor::MergeFromServer`, `editor::KeepMine`, `editor::TakeMine` / `editor::TakeServer` (a side per conflict) and
-  `editor::AcceptMerge`; all read the cluster and change the buffer only. `ManifestEditor::follow_object` is the entry for
-  an editor opened from a resource (E10-S06). Bench: `cargo run -p oxikube_editor --profile release-fast --example
+  `editor::AcceptMerge`; all read the cluster and change the buffer only. An editor opened from a resource (E10-S06)
+  follows its object from the first read (`follow_opened`: the rendering with its toggles is the base, so masked Secret values
+  and hidden `managedFields` never read as changes); `follow_object` loads a looked-up object into a buffer. Bench: `cargo run -p oxikube_editor --profile release-fast --example
   live_bench`.
 - `oxikube_ui::code_view` (E07-P598) — `CodeView`, the read-only text view of the detail's YAML and Describe tabs: the text as
   an `Arc<str>`, its display rows (`RowMap`: soft wrap at the measured width, or lines cut at `MAX_ROW_COLS`) and its
