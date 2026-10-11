@@ -212,15 +212,20 @@ pub enum ApplyError {
     Failed(String),
 }
 
-/// "kubectl and helm".
-fn managers(conflicts: &[FieldConflict]) -> String {
+/// The managers named by `conflicts`, in first-seen order.
+pub fn conflict_managers(conflicts: &[FieldConflict]) -> Vec<&str> {
     let mut names: Vec<&str> = Vec::new();
     for name in conflicts.iter().filter_map(|c| c.manager.as_deref()) {
         if !names.contains(&name) {
             names.push(name);
         }
     }
-    match names.as_slice() {
+    names
+}
+
+/// "kubectl and helm".
+fn managers(conflicts: &[FieldConflict]) -> String {
+    match conflict_managers(conflicts).as_slice() {
         [] => "another manager".to_owned(),
         [one] => (*one).to_owned(),
         [rest @ .., last] => format!("{} and {last}", rest.join(", ")),

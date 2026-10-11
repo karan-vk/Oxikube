@@ -82,13 +82,7 @@ impl ConflictDialog {
 
     /// The managers named, in first-seen order.
     pub fn managers(&self) -> Vec<&str> {
-        let mut managers: Vec<&str> = Vec::new();
-        for manager in self.conflicts.iter().filter_map(|c| c.manager.as_deref()) {
-            if !managers.contains(&manager) {
-                managers.push(manager);
-            }
-        }
-        managers
+        oxikube_app::apply::conflict_managers(&self.conflicts)
     }
 
     /// Force: preview the apply again, taking the fields over.

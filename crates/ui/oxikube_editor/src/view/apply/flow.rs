@@ -189,17 +189,18 @@ impl ManifestEditor {
     /// The server took it: a toast, the notice, and the buffer is clean against what it holds.
     fn applied(&mut self, report: ApplyReport, version: u64, cx: &mut Context<Self>) {
         self.apply.stage = ApplyStage::Idle;
-        let level = if report.method.is_fallback() {
+        let fallback = report.method.is_fallback();
+        let level = if fallback {
             NoticeLevel::Warning
         } else {
             NoticeLevel::Info
         };
         self.apply_notice(level, report.message.clone(), cx);
         if let Some(workspace) = self.apply.workspace.as_ref().and_then(|w| w.upgrade()) {
-            let toast = if report.method.is_fallback() {
-                Toast::warning(report.message.clone())
+            let toast = if fallback {
+                Toast::warning(report.message)
             } else {
-                Toast::success(report.message.clone())
+                Toast::success(report.message)
             };
             workspace.update(cx, |workspace, cx| {
                 workspace.show_toast(toast, cx);

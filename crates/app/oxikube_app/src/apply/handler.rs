@@ -65,12 +65,23 @@ impl Plan {
         self.target.namespace()
     }
 
-    async fn server_side(&self, writer: &dyn ResourceWriter, dry_run: bool) -> OxiResult<Resource> {
-        let patch = Patch::apply(self.body.clone(), self.manager.as_str(), self.force);
-        let options = WriteOptions {
+    fn options(&self, dry_run: bool) -> WriteOptions {
+        WriteOptions {
             dry_run,
             field_manager: Some(self.manager.clone()),
-        };
+        }
+    }
+
+    /// The live object, `None` when it does not exist.
+    async fn live(&self, reader: &dyn ResourceReader) -> OxiResult<Option<Resource>> {
+        let target = &self.target;
+        reader
+            .get_opt(&target.gvk, self.namespace(), &target.name)
+            .await
+    }
+
+    async fn server_side(&self, writer: &dyn ResourceWriter, dry_run: bool) -> OxiResult<Resource> {
+        let patch = Patch::apply(self.body.clone(), self.manager.as_str(), self.force);
         let target = &self.target;
         writer
             .patch(
@@ -78,7 +89,7 @@ impl Plan {
                 self.namespace(),
                 &target.name,
                 &patch,
-                &options,
+                &self.options(dry_run),
             )
             .await
     }
@@ -90,10 +101,7 @@ impl Plan {
         resource_version: Option<&str>,
         dry_run: bool,
     ) -> OxiResult<(ApplyMethod, Resource)> {
-        let options = WriteOptions {
-            dry_run,
-            field_manager: Some(self.manager.clone()),
-        };
+        let options = self.options(dry_run);
         let target = &self.target;
         match resource_version {
             Some(version) => {
@@ -162,7 +170,7 @@ async fn handle(
         Err(error) if error.kind() == ErrorKind::Unsupported => {
             let version = match plan.resource_version.clone() {
                 Some(version) => Some(version),
-                None => live_version(&plan, reader.as_ref()).await?,
+                None => version_of(plan.live(reader.as_ref()).await?.as_ref()),
             };
             plan.fallback(writer, version.as_deref(), true).await?;
             plan.fallback(writer, version.as_deref(), false).await?
@@ -200,18 +208,16 @@ async fn rehearse(
     reader: &dyn ResourceReader,
 ) -> OxiResult<CommandOutput> {
     let target = &plan.target;
-    let live = reader
-        .get_opt(&target.gvk, plan.namespace(), &target.name)
-        .await?;
-    let live_version = live
-        .as_ref()
-        .and_then(|live| live.meta.resource_version.as_deref())
-        .map(str::to_owned);
+    let live = plan.live(reader).await?;
+    let live_version = version_of(live.as_ref());
     let (method, object) = match plan.server_side(writer, true).await {
         Ok(object) => (ApplyMethod::ServerSide, object),
         Err(error) if error.kind() == ErrorKind::Unsupported => {
-            let version = plan.resource_version.clone().or(live_version.clone());
-            let version = version.filter(|_| live.is_some());
+            let version = plan
+                .resource_version
+                .clone()
+                .or_else(|| live_version.clone())
+                .filter(|_| live.is_some());
             plan.fallback(writer, version.as_deref(), true).await?
         }
         Err(error) => return Err(error),
@@ -230,12 +236,8 @@ async fn rehearse(
     })
 }
 
-/// The live object's version, read now (a fallback without a reviewed version); `None` when the
-/// object does not exist.
-async fn live_version(plan: &Plan, reader: &dyn ResourceReader) -> OxiResult<Option<String>> {
-    let target = &plan.target;
-    let live = reader
-        .get_opt(&target.gvk, plan.namespace(), &target.name)
-        .await?;
-    Ok(live.and_then(|live| live.meta.resource_version.map(|v| v.to_string())))
+/// `metadata.resourceVersion` of `live`.
+fn version_of(live: Option<&Resource>) -> Option<String> {
+    live.and_then(|live| live.meta.resource_version.as_deref())
+        .map(str::to_owned)
 }

@@ -35,9 +35,11 @@ use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 
 pub use handler::{DEFAULT_FIELD_MANAGER, register_commands};
-pub use mask::{HIDDEN_PREFIX, is_secret};
 pub use service::ApplyService;
-pub use types::{ApplyError, ApplyMethod, ApplyPreview, ApplyReport, ApplyRequest, FieldConflict};
+pub use types::{
+    ApplyError, ApplyMethod, ApplyPreview, ApplyReport, ApplyRequest, FieldConflict,
+    conflict_managers,
+};
 
 /// The object a `resource::Apply` names, for its audit record; `None` for any other command or a
 /// manifest that names no single object.

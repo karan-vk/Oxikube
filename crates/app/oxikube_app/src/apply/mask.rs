@@ -20,10 +20,10 @@ const LAST_APPLIED: &str = "kubectl.kubernetes.io/last-applied-configuration";
 const SECRET_FIELDS: [&str; 2] = ["data", "stringData"];
 
 /// What a masked value starts with.
-pub const HIDDEN_PREFIX: &str = "(hidden ";
+const HIDDEN_PREFIX: &str = "(hidden ";
 
 /// Whether `value` is a core `Secret`.
-pub fn is_secret(value: &Value) -> bool {
+fn is_secret(value: &Value) -> bool {
     value.get("apiVersion").and_then(Value::as_str) == Some("v1")
         && value.get("kind").and_then(Value::as_str) == Some("Secret")
 }

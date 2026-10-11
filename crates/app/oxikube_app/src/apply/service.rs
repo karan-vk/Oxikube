@@ -29,14 +29,11 @@ pub struct ApplyService {
     bus: CommandBus,
     sessions: ClusterSessionManager,
     who: Arc<str>,
-    initiator: Initiator,
 }
 
 impl std::fmt::Debug for ApplyService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ApplyService")
-            .field("initiator", &self.initiator)
-            .finish_non_exhaustive()
+        f.debug_struct("ApplyService").finish_non_exhaustive()
     }
 }
 
@@ -48,15 +45,7 @@ impl ApplyService {
             bus,
             sessions,
             who: who.into(),
-            initiator: Initiator::Ui,
         }
-    }
-
-    /// The same service dispatching as `initiator` (an agent, E27).
-    #[must_use]
-    pub fn with_initiator(mut self, initiator: Initiator) -> Self {
-        self.initiator = initiator;
-        self
     }
 
     /// The server's dry run of `request`: the object as it would be stored next to the live one,
@@ -72,12 +61,12 @@ impl ApplyService {
     pub async fn preview(&self, request: ApplyRequest) -> Result<ApplyPreview, ApplyError> {
         let command = request.command(None);
         let output = self.dispatch(&request, command, true).await?;
-        let data = output.data.unwrap_or(Value::Null);
+        let mut data = output.data.unwrap_or(Value::Null);
         let target = target_of(&data)?;
         Ok(ApplyPreview {
             method: method_of(&data),
-            live: data.get("live").filter(|live| !live.is_null()).cloned(),
-            result: data.get("object").cloned().unwrap_or(Value::Null),
+            live: take(&mut data, "live").filter(|live| !live.is_null()),
+            result: take(&mut data, "object").unwrap_or(Value::Null),
             resource_version: data
                 .get("resource_version")
                 .and_then(Value::as_str)
@@ -100,13 +89,12 @@ impl ApplyService {
         let request = &preview.request;
         let command = request.command(preview.resource_version.clone());
         let output = self.dispatch(request, command, false).await?;
-        let message = output.message.clone().unwrap_or_default();
-        let data = output.data.unwrap_or(Value::Null);
+        let mut data = output.data.unwrap_or(Value::Null);
         Ok(ApplyReport {
             target: target_of(&data).unwrap_or_else(|_| preview.target.clone()),
             method: method_of(&data),
-            object: data.get("object").cloned().unwrap_or(Value::Null),
-            message,
+            object: take(&mut data, "object").unwrap_or(Value::Null),
+            message: output.message.unwrap_or_default(),
         })
     }
 
@@ -117,7 +105,7 @@ impl ApplyService {
         dry_run: bool,
     ) -> Result<CommandOutput, ApplyError> {
         let context = || {
-            DispatchContext::new(self.initiator, self.who.clone())
+            DispatchContext::new(Initiator::Ui, self.who.clone())
                 .with_cluster(request.cluster.clone())
                 .with_dry_run(dry_run)
         };
@@ -233,6 +221,11 @@ pub(crate) fn manager_times(object: &Value) -> HashMap<String, String> {
         }
     }
     times
+}
+
+/// Moves the field `key` out of `data`, without copying it.
+fn take(data: &mut Value, key: &str) -> Option<Value> {
+    data.get_mut(key).map(Value::take)
 }
 
 fn target_of(data: &Value) -> Result<ResourceRef, ApplyError> {
