@@ -113,7 +113,7 @@ pub(super) struct Left {
     pub(super) object: usize,
 }
 
-/// Renders `resource` as editor text: see the [module docs](self).
+/// Renders `resource` as editor text: see [`crate::open`].
 ///
 /// # Errors
 ///
