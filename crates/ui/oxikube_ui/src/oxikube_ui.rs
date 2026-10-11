@@ -21,7 +21,10 @@
 //! - [`code_view`]: [`code_view::CodeView`], the read-only, virtualised, tree-sitter coloured text
 //!   view the resource detail's YAML and Describe tabs show (laid out off the UI thread, any size).
 //! - [`kbd`]: [`kbd::Kbd`] key caps and [`kbd::keycap`] (a keybinding next to a command).
-//! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`chart`], [`markdown`],
+//! - [`chart`]: [`chart::Chart`] (line, area and bar over a time axis, legend, hover tooltip, "No data"
+//!   state), [`chart::Sparkline`] and [`chart::ChartPalette`], our own types over gpui-component's plot
+//!   primitives (E13-S07).
+//! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`markdown`],
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
 //! - [`error_details`]: the Details toggle and raw-text box every error notice shares.
 //! - [`spinner`]: [`spinner::Spinner`], a loading indicator that stands still under reduce-motion.

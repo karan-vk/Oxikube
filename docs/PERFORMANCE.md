@@ -208,6 +208,7 @@ Two rules keep a scenario measuring what the app does (E07-F509, see
 | `palette` | measured (E11-S03) | the command palette over 2 000 registered commands (fixture commands in every category, view and selection shape; 1 500 available for a table with a pod selected): `open_ms` (building the view, which classifies the commands and puts the recents first, to the end of the first frame listing them; a fresh process, so it includes the real text system's first glyph shaping), then 120 scripted frames typing `fixture 19 pod` one character a frame (cleared after the last): `frame_ms` / `draw_ms` (the matches of 2 000 candidates, above 512 on the background executor, and the frame showing them), `rss_mib` / `peak_rss_mib`. Local macOS, `release-fast`, median of 5: `open_ms` 20 (the palette's own part is 1.5 ms: `cargo run -p oxikube_palette --features test-support --profile release-fast --example command_palette_bench` reports classify 0.18, open 1.3, keystroke to matches 0.75, frame 0.28, all p50 ms), `frame_ms` p50 0.31 / p95 1.45, `draw_ms` p95 0.72. Baseline: seeded from the nightly run like the others. Since E11-S11 the matching is `oxikube_app::FuzzyService` (see "Palette fuzzy ranking" below) |
 | `logs-stream` | measured (E08-S02, see [Log viewer](#log-viewer-streaming-5-000-liness-e08-s02)) | the log view streaming 5 000 lines/s after a 1 000-line tail, 120 scripted frames per mode: `frame_ms` / `draw_ms` (wrap off, following), `paused_*`, `wrap_*`, `wrap_paused_*`, `search_*` / `filter_*` (E08-S03: a regex search highlighting / filtering while it streams), `merged_*`, `merged_wrap_*` (E08-S04: the same lines merged from 10 pods of a Deployment), `rss_mib` / `peak_rss_mib`; fails unless every mode receives the lines at that rate and `max_notifies_per_frame` ≤ 1 |
 | `editor-5mb` | measured (E10-S11, see [Manifest editor](#manifest-editor-a-5-mb-dump-e10-s11)) | the manifest editor over a 5 MB `kubectl get -o yaml` dump (a `kind: List` of about 12 000 pods, an error planted in every 20th) checked against the Pod schema: `open_ms` (building the view with the text to the end of its first frame), `frame_ms` / `draw_ms` (120 frames typing one keystroke each into a visible line, the clock moving one 120 Hz frame between them so the 150 ms debounce keeps restarting), `validation_ms` (the whole pass the pause starts, run on the test scheduler: its CPU time), `scroll_frame_ms` / `scroll_draw_ms` (120 frames scrolling from the top to the end with the diagnostics drawn), `slow_frame_pct` (typing and scrolling frames over 16 ms), `rss_mib` / `peak_rss_mib`; fails unless every planted error is found and the gutter paints no more markers than lines on screen |
+| `charts` | measured (E13-S07, see [Charts](#charts-12-sparklines-and-3-area-charts-e13-s07)) | the overview's worst case, 12 sparklines and 3 area charts of 5 760 points (24 h at 15 s) in the app's window root: `frame_ms` / `draw_ms` (120 frames with nothing changed: the paint from cached geometry), `tick_frame_ms` / `tick_draw_ms` (120 frames each handing all 15 new data, so every piece re-decimates, re-projects and re-tessellates once per frame), `hover_frame_ms` / `hover_draw_ms` (a chart's tooltip following a sweeping cursor), `rss_mib` / `peak_rss_mib`; fails when a repaint rebuilt any geometry or a tick built more than once per piece |
 
 A scenario whose view is not built yet writes `status: "unavailable"` and a specific `reason` into the JSON report, prints `UNAVAILABLE: <reason>` with the enabling stories, and exits 0; every scenario is scripted today (`editor-5mb` was the last, E10-S11). The scripted path and the sample schema are covered by a `#[gpui::test]` that drives a fake feed through the same driver (`oxikube_runtime::perf::harness`).
 
@@ -1442,6 +1443,57 @@ budget in `cargo test` with slack for debug builds.
 Unchanged by the swap (`cargo xtask perf palette`, median of 5, release-fast): `open_ms` 21, `frame_ms` p50 0.30 / p95
 1.45, `draw_ms` p95 0.71, 0 dropped frames; `cargo xtask perf startup`: `init_features_ms` 0.055 (the history loader and
 writers are background GPUI tasks, none on Tokio, so the idle app still holds no Tokio task), first frame p50 130 ms.
+
+## Charts: 12 sparklines and 3 area charts (E13-S07)
+
+Budget: p95 frame <= 8 ms with the overview's worst case on screen (12 sparklines and 3 area
+charts of 5 760 points each), hover visible within one frame (the Charts story's performance
+section).
+
+How `oxikube_ui::chart` stays inside it:
+
+- The geometry is cached. A chart keeps a `LayoutCache` (a sparkline keeps element state): the
+  samples decimated to one column per two logical pixels with M4 (first, minimum, maximum and last
+  sample of each column, so a spike or dip survives; a gap splits the series into runs that are
+  never bridged), projected, the tick labels chosen and measured, and the stroke and fill
+  tessellated into `PathCache`s. It is rebuilt only when the generation of the chart's data (the
+  `Arc<[Point]>` identity: feeding the same samples again is not a change and notifies nothing),
+  the canvas size, the zoom or the palette changes. A repaint of an unchanged chart is a few quads
+  (grid, bands, thresholds) plus one translated copy of each cached path (GPUI scales the path it
+  is handed, so the copy is the floor), and the labels' text, shaped from the text system's cache.
+- Hover is a state of the chart entity: the snapped sample time under the cursor. A mouse move that
+  stays on the same sample changes nothing and notifies nothing; a move to the next sample
+  re-renders this chart (not its parent) and builds the tooltip from the cached layout.
+- Charts run no animation, so reduce-motion has nothing to turn off.
+
+### Measuring it
+
+```
+cargo xtask perf charts                     # headless, 5 fresh processes, budgets checked
+cargo test -p oxikube_ui chart              # unit + #[gpui::test]: states, caching, hover, legend
+cargo test -p oxikube_ui --features screenshot --test chart_screenshot   # pictures, two themes
+```
+
+### Numbers (E13-S07, M-series laptop, release-fast)
+
+Headless (`cargo xtask perf charts`, median of 5 fresh processes; CPU, layout and paint
+preparation, no present and no GPU time):
+
+| Metric | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| `frame_ms` (repaint, nothing changed) | 0.35 ms | 0.42 ms | 0.45 ms | 0.47 ms |
+| `hover_frame_ms` (tooltip following the cursor) | 0.56 ms | 0.84 ms | 1.03 ms | 1.52 ms |
+| `tick_frame_ms` (all 15 pieces rebuilt, every frame) | 3.7 ms | 4.5 ms | 5.3 ms | 5.8 ms |
+| `peak_rss_mib` | 59 MiB | | | |
+
+A real overview rebuilds one piece per poll (every 15 s or more), so the tick row is a worst case
+about 250 times more frequent than the app's. At one column per pixel the same tick took 7.2 ms
+p50 (8.8 ms p95): halving the columns (still two points per pixel) halved the tessellation.
+
+**Baseline.** `charts` has no baseline yet: like the other scenarios it is seeded from the nightly
+runners' own numbers (`cargo xtask perf --from-report <perf-report artifact> --update-baseline`),
+never by hand. Until then `--check` reports it as `MISSING`; the two absolute budgets above are
+enforced regardless.
 
 ## Manifest editor: a 5 MB dump (E10-S11)
 

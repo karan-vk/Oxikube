@@ -13,7 +13,7 @@ use gpui::{
 use oxikube_ui::{
     ActiveTokens as _, Icon, IconName,
     button::{Button, ButtonVariants as _},
-    chart::{BarChart, LineChart},
+    chart::{Chart, Point, Series, Sparkline, TimeAxis},
     dialog::{Dialog, OverlayExt as _},
     dock::{DockLayout, DockSkin, PanelBehavior, PanelEvent, panel_handle},
     input::{Input, InputState},
@@ -141,16 +141,22 @@ fn sidebar_renders(cx: &mut TestAppContext) {
 
 /// Quads painted by a bar chart of `points` bars (plus whatever the window background paints).
 fn bar_chart_quads(cx: &mut TestAppContext, points: usize) -> usize {
-    let cx = mount(cx, move |_, _| {
-        move |_, _| {
-            let data: Vec<(f64, f64)> = (0..points)
-                .map(|i| (i as f64, 1.0 + (i * 3 % 7) as f64))
+    let cx = mount(cx, move |window, cx| {
+        let chart = cx.new(|_| Chart::bar("bars").legend(false));
+        let series = if points == 0 {
+            Vec::new()
+        } else {
+            let samples: Vec<Point> = (0..points)
+                .map(|i| Point::new(1_000.0 + 60.0 * i as f64, 1.0 + (i * 3 % 7) as f64))
                 .collect();
-            let chart = BarChart::new(data)
-                .band(|d: &(f64, f64)| format!("{}", d.0))
-                .value(|d: &(f64, f64)| d.1);
-            div().h(px(200.)).child(chart).into_any_element()
-        }
+            vec![Series::new("bars", samples)]
+        };
+        let end = 1_000.0 + 60.0 * points.max(1) as f64;
+        chart.update(cx, |chart, cx| {
+            chart.set_series(series, TimeAxis::utc(1_000.0, end), cx);
+        });
+        let _ = window;
+        move |_, _| div().h(px(200.)).child(chart.clone()).into_any_element()
     });
     cx.update(|window, _| window.painted_quads().len())
 }
@@ -165,24 +171,19 @@ fn chart_renders(cx: &mut TestAppContext) {
         drawn >= baseline + 12,
         "12-bar chart painted {drawn} quads, empty chart {baseline}: the bars were not painted"
     );
+}
 
-    // The line chart paints paths and text, which tests cannot observe: smoke test only (it must
-    // build, lay out and paint without panicking).
+#[gpui::test]
+fn sparkline_renders(cx: &mut TestAppContext) {
+    // A sparkline's own box is its fixed height: a zero-height box means it was not built.
     let cx = mount(cx, |_, _| {
-        |_, _| {
-            let data: Vec<(f64, f64)> = (0..20)
-                .map(|i| (f64::from(i), f64::from(i * i % 7)))
-                .collect();
-            let chart = LineChart::new(data)
-                .x(|d: &(f64, f64)| format!("{}", d.0))
-                .y(|d: &(f64, f64)| d.1);
-            div().h(px(200.)).child(chart).into_any_element()
-        }
+        let points: std::sync::Arc<[Point]> = (0..30)
+            .map(|i| Point::new(f64::from(i), f64::from(i % 5)))
+            .collect::<Vec<_>>()
+            .into();
+        move |_, _| Sparkline::new("spark", points.clone()).into_any_element()
     });
-    assert!(
-        cx.debug_bounds("subject").is_some(),
-        "line chart not laid out"
-    );
+    assert_laid_out(cx, "sparkline");
 }
 
 #[gpui::test]

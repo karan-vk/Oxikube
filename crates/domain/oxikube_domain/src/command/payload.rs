@@ -209,6 +209,9 @@ pub enum Command {
     /// when it does not exist.
     #[serde(rename = "keymap::OpenUser")]
     KeymapOpenUser,
+    /// Open the chart gallery, every chart state on one page, as a tab.
+    #[serde(rename = "charts::OpenGallery")]
+    ChartsOpenGallery,
     /// Quit the application; asks first while operations are running.
     #[serde(rename = "app::Quit")]
     AppQuit,
@@ -1024,6 +1027,7 @@ impl Command {
             Command::HelpShow => CommandId::HELP_SHOW,
             Command::PaletteToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
             Command::KeymapOpenUser => CommandId::KEYMAP_OPEN_USER,
+            Command::ChartsOpenGallery => CommandId::CHARTS_OPEN_GALLERY,
             Command::AppQuit => CommandId::APP_QUIT,
             Command::JumpBack => CommandId::JUMP_BACK,
             Command::JumpForward => CommandId::JUMP_FORWARD,
@@ -1332,6 +1336,7 @@ mod tests {
             Command::HelpShow,
             Command::PaletteToggleShowAll,
             Command::KeymapOpenUser,
+            Command::ChartsOpenGallery,
             Command::AppQuit,
             Command::JumpBack,
             Command::JumpForward,
@@ -1744,6 +1749,7 @@ mod tests {
                     | Command::HelpShow
                     | Command::PaletteToggleShowAll
                     | Command::KeymapOpenUser
+                    | Command::ChartsOpenGallery
                     | Command::AppQuit
                     | Command::JumpBack
                     | Command::JumpForward

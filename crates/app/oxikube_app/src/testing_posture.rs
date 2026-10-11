@@ -221,6 +221,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "jump::Forward" => Command::JumpForward,
         "jump::Last" => Command::JumpLast,
         "keymap::OpenUser" => Command::KeymapOpenUser,
+        "charts::OpenGallery" => Command::ChartsOpenGallery,
         "pod::Delete" => Command::PodDelete {
             target: target(),
             grace_period_seconds: None,

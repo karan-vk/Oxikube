@@ -766,7 +766,24 @@ crate's `README.md` for its allowed dependencies. Highlights:
   the backend drops, swept after a crash), `KUBE_CONTEXT` and `OXIKUBE_NAMESPACE`; `PATH` is
   inherited untouched. The grid, element and view arrive with E09-S04..S07.
 - `oxikube_ui` — the only crate that imports `gpui-component`; exposes tokens and curated
-  components to every view.
+  components to every view. Module `chart` (E13-S07): the metrics charts under our own types, so no view names a
+  gpui-component chart type (ADR 0004). `Chart` is an entity (`Chart::line` / `area` / `bar`, a `ChartKind`) fed with
+  `Series` (a name, `Arc<[Point]>` samples of seconds-since-epoch and value, a `SeriesStyle`) over a `TimeAxis`;
+  `Threshold` lines (requests, limits), status `Band`s, a `ValueFormat` (number, percent, bytes, cores, custom), a
+  `YRange`, a legend whose entries switch series off and on, a hover tooltip (the sample's time and each series' value;
+  the hover lives in the entity and notifies only when the snapped sample changes), and an explicit "No data" state
+  (`Chart::set_unavailable(reason)`, or no reading inside the axis). `Sparkline` is an element built per frame (no axes,
+  fixed height, `last_marker`, `filled`) for table cells, tiles and pulses. `ChartPalette` derives every colour from the
+  active `Tokens`: a categorical hue wheel (3:1 contrast on the chart surfaces in the built-in and bundled themes,
+  tested) and the status tones. Drawing uses gpui-component's plot primitives (`Grid`, `PlotLabel`, `PathCache`, the
+  tooltip box), not its single-series chart types, which copy the data and format every x label per frame. Cost: a
+  `LayoutCache` per chart (and element state per sparkline) holds the decimated (M4: first, min, max, last per column,
+  gaps split runs), projected and tessellated geometry plus the tick labels, rebuilt only when the data (`Arc`
+  identity), size, zoom or theme changes, so a repaint is quads plus one translated copy of each cached path; charts run
+  no animation (reduce-motion has nothing to switch off). `chart::gallery::ChartGallery` shows every state;
+  `bins/oxikube`'s `mount::gallery::ChartGalleryPage` opens it as a tab for `charts::OpenGallery` ("Open Chart Gallery"
+  in the palette) or `view::Open { view: "chart-gallery" }`. The `charts` perf scenario draws 12 sparklines and 3 area
+  charts of 5 760 points (repaint, a tick on every frame, a hover sweep).
 - `oxikube_terminal` — the one terminal (epic E09). Module `grid` (E09-S04): `TermGrid`, the only
   code that names `alacritty_terminal` (pinned `=0.26.0`) types; it owns `Term` plus the `vte`
   parser and exposes our own `TerminalSnapshot` (visible cells, cursor, modes, scroll offset,
