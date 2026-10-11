@@ -575,6 +575,29 @@ crate's `README.md` for its allowed dependencies. Highlights:
   render the object held in memory again (refused while the buffer has edits). A placeholder still in a Secret's buffer is an
   error diagnostic (`masked-secret-value`), so the problem count blocks an apply: a masked value is never sent as a value.
   Revealed values live in the editor's memory only (the item is never serialised, the object's `Debug` prints no JSON).
+  JSON mode (E10-S10): the buffer's language (`json::Language`, a `LanguageMode` of `Auto` or `Fixed`) is editor state, not
+  buffer text: `Auto` follows the content (`{` or `[` as the first non-blank character means JSON; decided in the same
+  background pass as the validation, which adopts it and switches the grammar through `EditorApi::set_language`), `Fixed` is
+  the user's choice (`editor::UseJson` / `editor::UseYaml`, the toolbar's language chip) or a tab opened as JSON (the
+  opener calls `ManifestEditor::use_language` after creating the editor). The key context's `mode` value is `yaml` or
+  `json`. `editor::ConvertToJson` / `editor::ConvertToYaml` (`cmd-alt-j` / `cmd-alt-y`, the toolbar's "To JSON" /
+  "To YAML", the palette while an editor has the focus) snapshot the buffer, convert it on the background executor and, if the buffer has not changed meanwhile, replace
+  the text through `EditorApi::replace_text` (one undo step; the history is kept) and say in the notice bar what could not be
+  carried over; a read-only editor refuses. They edit the buffer only, so they need no guard tier; applying the converted text
+  is `resource::Apply` as always.
+- `oxikube_editor::json` (E10-S10) — pure, gpui-free: `Language` / `LanguageMode`; `first_error`, the strict JSON check that
+  JSON mode adds to the validation pass (JSON is YAML flow style, so the spanned model and the schema validator run on a JSON
+  buffer unchanged; the YAML parser accepts a trailing comma, single quotes and bare words, the scanner does not, and its
+  finding, with a span, replaces the parser's syntax errors); `convert` / `yaml_to_json` / `json_to_yaml` over a `Value` read from
+  the spanned model (key order and number digits are exact: an integer past `u64` or a float past `f64` precision survives),
+  with `Warnings` counting what JSON cannot hold (comments dropped, aliases expanded, tags dropped) or what was read the way the
+  API server reads YAML (`0644` is octal, merge keys `<<` are expanded; plain `yes` / `on` stay strings, as the validator
+  types them, and are counted). Several YAML documents become one `kind: List` (`apiVersion: v1`); a `List` going back to YAML
+  stays one document. The YAML writer quotes every string a YAML 1.1 or 1.2 reader could take for another type (`"yes"`,
+  `"123"`, `"null"`, `"0644"`, `"2001-12-14"`) and writes multi-line text as a literal block when that reads back exactly. The
+  validator also checks a `kind: List` item by item against each item's own `apiVersion` and `kind`. Bench:
+  `cargo bench -p oxikube_editor --bench convert` (2k lines about 1 ms, 5 MB about 130 ms, all off the UI thread; the UI thread
+  then replaces the text: about 8 ms for 2k lines, about 95 ms for the 5 MB result, a one-off per explicit conversion).
 - `oxikube_ui::code_view` (E07-P598) — `CodeView`, the read-only text view of the detail's YAML and Describe tabs: the text as
   an `Arc<str>`, its display rows (`RowMap`: soft wrap at the measured width, or lines cut at `MAX_ROW_COLS`) and its
   tree-sitter parse (gpui-component's `SyntaxHighlighter`) made on the background executor; a `uniform_list` shapes only the

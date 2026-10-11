@@ -46,6 +46,10 @@ impl CommandId {
     pub const CRD_OPEN_LIST: CommandId = CommandId::new("crd::OpenList");
     /// `crd::OpenResources`: open the table of the custom resources a CRD defines.
     pub const CRD_OPEN_RESOURCES: CommandId = CommandId::new("crd::OpenResources");
+    /// `editor::ConvertToJson`: replace the focused manifest editor's YAML with the same data as JSON.
+    pub const EDITOR_CONVERT_TO_JSON: CommandId = CommandId::new("editor::ConvertToJson");
+    /// `editor::ConvertToYaml`: replace the focused manifest editor's JSON with the same data as YAML.
+    pub const EDITOR_CONVERT_TO_YAML: CommandId = CommandId::new("editor::ConvertToYaml");
     /// `editor::NewManifest`: open an empty manifest editor tab.
     pub const EDITOR_NEW_MANIFEST: CommandId = CommandId::new("editor::NewManifest");
     /// `editor::ToggleManagedFields`: show or hide `metadata.managedFields` in the focused
@@ -59,6 +63,10 @@ impl CommandId {
     pub const EDITOR_TOGGLE_SECRET_MASK: CommandId = CommandId::new("editor::ToggleSecretMask");
     /// `editor::ToggleSoftWrap`: wrap the focused manifest editor's long lines, or not.
     pub const EDITOR_TOGGLE_SOFT_WRAP: CommandId = CommandId::new("editor::ToggleSoftWrap");
+    /// `editor::UseJson`: read the focused manifest editor's buffer as JSON (highlighting and checks).
+    pub const EDITOR_USE_JSON: CommandId = CommandId::new("editor::UseJson");
+    /// `editor::UseYaml`: read the focused manifest editor's buffer as YAML (highlighting and checks).
+    pub const EDITOR_USE_YAML: CommandId = CommandId::new("editor::UseYaml");
     /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `jump::Back`: run the previous command of the `:` jump bar's history again.
@@ -405,6 +413,22 @@ pub static COMMANDS: &[CommandMeta] = &[
     // The manifest editor (E10-S04) only edits text in this window: a new buffer and the view's
     // own toggles read and change nothing in a cluster. What reaches the cluster goes through
     // `resource::Apply`, which is guarded.
+    // The conversions replace the buffer's text (one undo step) and read nothing from a cluster;
+    // the mode switches change only how the buffer is highlighted and checked (E10-S10).
+    CommandMeta::read(
+        CommandId::EDITOR_CONVERT_TO_JSON,
+        "Convert Manifest to JSON",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_CONVERT_TO_YAML,
+        "Convert Manifest to YAML",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
     CommandMeta::read(
         CommandId::EDITOR_NEW_MANIFEST,
         "New Manifest",
@@ -440,6 +464,20 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::EDITOR_TOGGLE_SOFT_WRAP,
         "Toggle Editor Soft Wrap",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_USE_JSON,
+        "Use JSON Mode in Editor",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_USE_YAML,
+        "Use YAML Mode in Editor",
         CommandScope::Global,
         NONE,
     )

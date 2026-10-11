@@ -9,7 +9,7 @@ use crate::yaml::ScalarStyle;
 
 /// The type of a YAML value as the validator sees it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum ValueType {
+pub(crate) enum ValueType {
     /// `null`, `~` or an empty value.
     Null,
     /// `true` / `false` (YAML 1.2 spellings only).
@@ -59,7 +59,7 @@ impl ValueType {
 }
 
 /// The type of a scalar with this notation and decoded text.
-pub(super) fn scalar_type(style: ScalarStyle, text: &str) -> ValueType {
+pub(crate) fn scalar_type(style: ScalarStyle, text: &str) -> ValueType {
     match style {
         ScalarStyle::Plain => plain_type(text),
         ScalarStyle::SingleQuoted

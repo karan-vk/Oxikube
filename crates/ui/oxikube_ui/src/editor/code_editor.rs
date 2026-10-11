@@ -50,6 +50,12 @@ impl CodeEditorOptions {
         soft_wrap: false,
         read_only: false,
     };
+
+    /// Editable JSON (tree-sitter-json) with line numbers; long lines scroll sideways.
+    pub const JSON: CodeEditorOptions = CodeEditorOptions {
+        language: "json",
+        ..CodeEditorOptions::YAML
+    };
 }
 
 /// The indent width a new editor starts with (the library's own default).
@@ -98,6 +104,7 @@ pub struct CodeEditor {
     pub(super) soft_wrap: bool,
     pub(super) tab_size: usize,
     pub(super) font: EditorFont,
+    pub(super) language: &'static str,
     pub(super) diagnostics: Vec<EditorDiagnostic>,
     pub(super) summaries: Rc<Vec<LineSummary>>,
     pub(super) status: SharedString,
@@ -139,6 +146,7 @@ impl CodeEditor {
             soft_wrap: options.soft_wrap,
             tab_size: DEFAULT_TAB_SIZE,
             font: EditorFont::default(),
+            language: options.language,
             diagnostics: Vec::new(),
             summaries: Rc::default(),
             status: status_label(&[], 0, 0).into(),
@@ -189,6 +197,19 @@ impl CodeEditor {
     /// The font size before the UI zoom.
     fn font_size(&self, cx: &gpui::App) -> Pixels {
         self.font.size.map_or_else(|| cx.tokens().font.mono, px)
+    }
+
+    /// The grammar the buffer is highlighted with (see [`EditorApi::language`]).
+    pub fn language(&self) -> &'static str {
+        self.language
+    }
+
+    /// Undoes the last edit of the buffer, as the undo key does: focuses the buffer and sends it
+    /// the library's undo action. For a button that offers to take an edit back.
+    pub fn undo(&self, window: &mut Window, cx: &mut gpui::App) {
+        use gpui::Action as _;
+        window.focus(&self.focus_handle(cx), cx);
+        window.dispatch_action(gpui_component::input::Undo.boxed_clone(), cx);
     }
 
     /// The buffer now, to turn into text off the UI thread.

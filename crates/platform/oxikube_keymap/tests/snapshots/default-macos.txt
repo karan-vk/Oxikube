@@ -195,7 +195,9 @@
   alt-m            editor::ToggleManagedFields
   alt-v            editor::ToggleSecretMask
   alt-z            editor::ToggleSoftWrap
+  cmd-alt-j        editor::ConvertToJson
   cmd-alt-r        editor::ToggleReadOnly
+  cmd-alt-y        editor::ConvertToYaml
 [Terminal || ManifestEditor || Palette || JumpBar || Input || Editing]
   :                null
   ?                null

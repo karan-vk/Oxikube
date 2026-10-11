@@ -11,8 +11,9 @@ use oxikube_ui::editor::{Decoration, DiagnosticLevel, EditorApi, EditorDiagnosti
 use serde_json::json;
 
 use super::{Accepted, ManifestModel, Problems};
+use crate::json::{Language, LanguageMode};
 use crate::settings::{EditorSettings, apply_changes};
-use crate::view::validation::validate_text;
+use crate::view::validation::validate_text_as;
 
 /// An editor that is a string and a few flags.
 #[derive(Default)]
@@ -28,12 +29,14 @@ struct FakeEditor {
     font: EditorFont,
     /// The setters called, in order, to see what `apply_changes` touched.
     calls: Vec<&'static str>,
+    language: &'static str,
 }
 
 impl FakeEditor {
     fn with_text(text: &str) -> Self {
         Self {
             text: text.to_owned(),
+            language: "yaml",
             ..Self::default()
         }
     }
@@ -57,6 +60,17 @@ impl EditorApi for FakeEditor {
         self.text = text.to_owned();
         self.version += 1;
         self.diagnostics.clear();
+    }
+    fn replace_text(&mut self, text: &str) {
+        self.text = text.to_owned();
+        self.version += 1;
+        self.diagnostics.clear();
+    }
+    fn language(&self) -> &'static str {
+        self.language
+    }
+    fn set_language(&mut self, language: &'static str) {
+        self.language = language;
     }
     fn selections(&self) -> Vec<Range<usize>> {
         vec![self.selection.clone()]
@@ -133,7 +147,7 @@ const CONFIGMAP: &str = "apiVersion: v1\nkind: ConfigMap\nmetadata: {}\ndata:\n 
 /// One full cycle as the view runs it: validate the current text, fetch what is missing, validate
 /// again, accept.
 fn validate(model: &mut ManifestModel, editor: &mut FakeEditor) -> Accepted {
-    let result = validate_text(editor.version(), editor.text(), model.known());
+    let result = validate_text_as(editor.version(), editor.text(), model.known(), model.mode());
     model.accept(editor, result)
 }
 
@@ -142,7 +156,7 @@ fn schema_findings_reach_the_editor_once_the_schema_arrives() {
     let mut editor = FakeEditor::with_text(CONFIGMAP);
     let mut model = ManifestModel::new();
 
-    let first = validate_text(editor.version(), editor.text(), model.known());
+    let first = validate_text_as(editor.version(), editor.text(), model.known(), model.mode());
     assert_eq!(first.missing, vec![configmap()]);
     assert_eq!(model.to_fetch(&first.missing), vec![configmap()]);
     // Asked again while the fetch runs: not fetched twice.
@@ -176,7 +190,7 @@ fn schema_findings_reach_the_editor_once_the_schema_arrives() {
 fn a_result_for_an_older_version_is_dropped() {
     let mut editor = FakeEditor::with_text("a: [\n");
     let mut model = ManifestModel::new();
-    let late = validate_text(editor.version(), editor.text(), model.known());
+    let late = validate_text_as(editor.version(), editor.text(), model.known(), model.mode());
     editor.type_text("]\n");
     model.changed();
     assert_eq!(model.accept(&mut editor, late), Accepted::Stale);
@@ -286,4 +300,59 @@ fn applying_settings_touches_only_what_changed_and_never_the_text() {
     assert!(editor.calls.is_empty());
     assert_eq!(editor.version(), version, "the buffer was not touched");
     assert_eq!(&*editor.text(), "a: 1\nb: 2\n");
+}
+
+#[test]
+fn auto_mode_follows_the_content_and_tells_the_editor() {
+    let mut editor = FakeEditor::with_text("kind: Pod\n");
+    let mut model = ManifestModel::new();
+    assert_eq!(model.mode(), LanguageMode::Auto);
+    assert_eq!(validate(&mut model, &mut editor), Accepted::Shown);
+    assert_eq!(model.language(), Language::Yaml);
+    assert_eq!(editor.language, "yaml");
+
+    editor.set_text("{\"kind\": \"Pod\"}\n");
+    model.changed();
+    assert_eq!(validate(&mut model, &mut editor), Accepted::Shown);
+    assert_eq!(model.language(), Language::Json);
+    assert_eq!(editor.language, "json", "highlighted with the JSON grammar");
+
+    editor.set_text("kind: Pod\n");
+    model.changed();
+    validate(&mut model, &mut editor);
+    assert_eq!(editor.language, "yaml", "and back");
+}
+
+#[test]
+fn a_fixed_mode_beats_the_content() {
+    let mut editor = FakeEditor::with_text("{\"a\": 1}\n");
+    let mut model = ManifestModel::new();
+    model.set_mode(LanguageMode::Fixed(Language::Yaml));
+    assert_eq!(model.language(), Language::Yaml, "effective at once");
+    validate(&mut model, &mut editor);
+    assert_eq!(editor.language, "yaml");
+    assert!(editor.diagnostics.is_empty(), "flow YAML is valid YAML");
+
+    model.set_mode(LanguageMode::Fixed(Language::Json));
+    editor.set_text("{\"a\": 1,}\n");
+    model.changed();
+    validate(&mut model, &mut editor);
+    assert_eq!(editor.language, "json");
+    assert_eq!(editor.diagnostics.len(), 1, "the trailing comma");
+    assert_eq!(editor.diagnostics[0].code.as_deref(), Some("syntax"));
+    assert_eq!(&editor.text[editor.diagnostics[0].range.clone()], ",");
+}
+
+#[test]
+fn a_result_computed_under_another_mode_is_dropped() {
+    let mut editor = FakeEditor::with_text("{\"a\": 1,}\n");
+    let mut model = ManifestModel::new();
+    model.set_mode(LanguageMode::Fixed(Language::Yaml));
+    let late = validate_text_as(editor.version(), editor.text(), model.known(), model.mode());
+    model.set_mode(LanguageMode::Fixed(Language::Json));
+    assert_eq!(model.accept(&mut editor, late), Accepted::Stale);
+    assert!(editor.diagnostics.is_empty());
+    assert_eq!(model.shown_version(), None);
+    assert_eq!(validate(&mut model, &mut editor), Accepted::Shown);
+    assert_eq!(editor.diagnostics.len(), 1);
 }

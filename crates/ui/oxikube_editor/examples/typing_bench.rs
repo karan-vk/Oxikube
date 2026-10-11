@@ -20,12 +20,14 @@ use gpui::{App, AppContext as _, SharedString, TestAppContext, VisualTestContext
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_domain::schema::JsonSchema;
+use oxikube_editor::json::{Language, convert};
 use oxikube_editor::view::{
     KnownSchemas, ManifestEditor, ManifestEditorParts, SchemaSource, VALIDATION_DEBOUNCE,
     validate_text,
 };
 use oxikube_ports::SchemaPort;
 use oxikube_testkit::fakes::FakeSchemaPort;
+use oxikube_ui::editor::EditorApi as _;
 use oxikube_ui::root::Root;
 use oxikube_workspace::CommandDispatcher;
 use serde_json::json;
@@ -181,4 +183,47 @@ fn main() {
         ms.push(started.elapsed().as_secs_f64() * 1000.0);
     }
     report("validate-2k-lines (background)", ms);
+
+    // Converting to JSON (E10-S10): the conversion runs on the background executor; the UI thread
+    // then replaces the text (one undo step) and draws the frame that shows it.
+    let code = vcx.update(|_, cx| editor.read(cx).editor().clone());
+    for (name, yaml) in [
+        ("2k-lines", text.to_string()),
+        ("5mb", pods(5 * 1024 * 1024)),
+    ] {
+        let started = Instant::now();
+        let json = convert(&yaml, Language::Json).expect("converts").text;
+        println!(
+            "typing_bench convert-{name} (background): {:.1} ms for {} bytes of YAML into {} of JSON",
+            started.elapsed().as_secs_f64() * 1000.0,
+            yaml.len(),
+            json.len()
+        );
+        let started = Instant::now();
+        vcx.update(|window, cx| {
+            code.update(cx, |code, cx| code.api(window, cx).replace_text(&json));
+        });
+        let replaced = started.elapsed().as_secs_f64() * 1000.0;
+        let started = Instant::now();
+        vcx.update(|window, cx| window.draw(cx).clear(cx));
+        println!(
+            "typing_bench apply-converted-{name} (UI thread): replace {replaced:.1} ms, next frame {:.1} ms",
+            started.elapsed().as_secs_f64() * 1000.0
+        );
+    }
+}
+
+/// About `bytes` of a `kubectl get pods -o yaml` list.
+fn pods(bytes: usize) -> String {
+    let mut out = String::from("apiVersion: v1\nkind: List\nitems:\n");
+    let mut i = 0;
+    while out.len() < bytes {
+        out.push_str(&format!(
+            "- apiVersion: v1\n  kind: Pod\n  metadata:\n    name: pod-{i}\n    namespace: ns-{n}\n    labels: {{app: app-{n}}}\n  spec:\n    containers:\n    - name: main\n      image: registry.example.com/app:{n}\n  status:\n    phase: Running\n    podIP: 10.0.{n}.{m}\n",
+            n = i % 50,
+            m = i % 250,
+        ));
+        i += 1;
+    }
+    out
 }

@@ -55,6 +55,11 @@
 //!     (`resource::Edit`, `resource::ViewYamlInEditor`) open a `kind/name` tab in the cluster's tab,
 //!     reading the object fresh, Secret values masked and `managedFields` hidden
 //!     (`editor::ToggleSecretMask` `alt-v`, `editor::ToggleManagedFields` `alt-m`).
+//!     JSON mode (E10-S10):
+//!     `editor::ConvertToJson` / `editor::ConvertToYaml` (`cmd-alt-j` / `cmd-alt-y`, the editor's
+//!     "To JSON" button, the palette) replace the buffer with the same data in the other language
+//!     as one undo step, `editor::UseJson` / `editor::UseYaml` (the editor's language chip) read it
+//!     as the other language without touching the text.
 //! 14. the `:` jump bar (E11-S05, `jump`): `:pods`, `:deploy kube-system`, `:pod /re app=x`,
 //!     `:ctx prod`, `:ns`, `:q`, opened by `:` in a resource table or `palette::OpenJump`; a line
 //!     runs as `resource::OpenList`, `namespace::Select`, `table::SetFilter`, `cluster::Select` and

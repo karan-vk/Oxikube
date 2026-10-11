@@ -109,6 +109,15 @@ pub trait EditorApi {
     /// position stays.
     fn set_text(&mut self, text: &str);
 
+    /// Replaces the whole buffer as **one undoable edit**: the undo history is kept and a single
+    /// undo restores the text from before. The default is [`set_text`](EditorApi::set_text), for a
+    /// test double with no history. For an explicit user action such as a conversion;
+    /// [`set_text`](EditorApi::set_text) is for loading. Works on a read-only buffer (the caller
+    /// decides whether the user may edit). Emits a change like typing does.
+    fn replace_text(&mut self, text: &str) {
+        self.set_text(text);
+    }
+
     /// The selections, the primary one first; an empty range is a cursor.
     fn selections(&self) -> Vec<Range<usize>>;
 
@@ -138,6 +147,14 @@ pub trait EditorApi {
 
     /// Sets the font. Touches neither the text nor the undo history; the next frame draws it.
     fn set_font(&mut self, font: EditorFont);
+
+    /// The tree-sitter grammar the buffer is highlighted with (`"yaml"`, `"json"`).
+    fn language(&self) -> &'static str {
+        "yaml"
+    }
+
+    /// Highlights the buffer with another grammar. The text and the undo history are untouched.
+    fn set_language(&mut self, _language: &'static str) {}
 
     /// Replaces the diagnostics: squiggles, gutter markers and end-of-line messages. They are
     /// dropped by the next edit, so set them for the [`version`](EditorApi::version) they were

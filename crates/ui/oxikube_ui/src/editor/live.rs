@@ -48,6 +48,14 @@ impl EditorApi for LiveEditor<'_, '_> {
         self.editor.changed(self.cx);
     }
 
+    fn replace_text(&mut self, text: &str) {
+        let window = &mut *self.window;
+        let text = text.to_owned();
+        self.editor
+            .state
+            .update(self.cx, |state, cx| state.replace_all(text, window, cx));
+    }
+
     fn selections(&self) -> Vec<Range<usize>> {
         vec![self.editor.state.read(self.cx).selected_range()]
     }
@@ -109,6 +117,21 @@ impl EditorApi for LiveEditor<'_, '_> {
             self.editor.font = font;
             self.cx.notify();
         }
+    }
+
+    fn language(&self) -> &'static str {
+        self.editor.language
+    }
+
+    fn set_language(&mut self, language: &'static str) {
+        if self.editor.language == language {
+            return;
+        }
+        self.editor.language = language;
+        self.editor
+            .state
+            .update(self.cx, |state, cx| state.set_highlighter(language, cx));
+        self.cx.notify();
     }
 
     fn set_diagnostics(&mut self, mut diagnostics: Vec<EditorDiagnostic>) {

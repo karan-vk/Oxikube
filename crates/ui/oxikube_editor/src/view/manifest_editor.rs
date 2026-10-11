@@ -27,9 +27,14 @@ use oxikube_ui::layout::v_flex;
 use oxikube_workspace::{CommandDispatcher, ItemEvent};
 
 use super::model::ManifestModel;
+use super::notice::Notice;
 use super::schemas::SchemaSource;
-use super::validation::{VALIDATION_DEBOUNCE, validate_text_with};
-use super::{ToggleManagedFields, ToggleReadOnly, ToggleSecretMask, ToggleSoftWrap};
+use super::validation::{VALIDATION_DEBOUNCE, validate_text_in};
+use super::{
+    ConvertToJson, ConvertToYaml, ToggleManagedFields, ToggleReadOnly, ToggleSecretMask,
+    ToggleSoftWrap,
+};
+use crate::json::{Language, LanguageMode};
 use crate::open::{RenderOptions, ResourceBinding, ResourceOpen};
 use crate::settings::{EditorSettings, apply_changes};
 
@@ -71,6 +76,12 @@ pub struct ManifestEditor {
     /// the difference to this, so one setting changing leaves what another did to the editor
     /// alone. Never read to decide anything else: [`EditorSettings::resolve`] is the source.
     applied_settings: EditorSettings,
+    /// What the notice bar says (a conversion's outcome); gone with the next edit.
+    pub(super) notice: Option<Notice>,
+    /// The next change event is the conversion's own: it keeps the notice.
+    pub(super) keep_notice: bool,
+    /// A running conversion; replacing it cancels the old one.
+    pub(super) conversion: Option<Task<()>>,
     /// The pending or running validation; replacing it cancels the old one.
     validation: Option<Task<()>>,
     /// Schema fetches in flight; dropped (and aborted) with the editor.
@@ -81,7 +92,15 @@ pub struct ManifestEditor {
 impl ManifestEditor {
     /// A new editor holding `parts.text`, validated at once.
     pub fn new(parts: ManifestEditorParts, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let editor = cx.new(|cx| CodeEditor::new(CodeEditorOptions::YAML, window, cx));
+        // The content decides until the user (or a conversion) fixes the language; a tab opened
+        // as JSON calls `use_language` right after creating the editor.
+        let mode = LanguageMode::Auto;
+        let language = mode.resolve(&parts.text);
+        let options = match language {
+            Language::Yaml => CodeEditorOptions::YAML,
+            Language::Json => CodeEditorOptions::JSON,
+        };
+        let editor = cx.new(|cx| CodeEditor::new(options, window, cx));
         let cluster = parts
             .schemas
             .as_ref()
@@ -115,9 +134,12 @@ impl ManifestEditor {
                 this.settings_changed(window, cx);
             }),
         ];
+        let mut model = ManifestModel::new();
+        model.set_mode(mode);
+        model.adopt(language);
         let mut this = Self {
             editor,
-            model: ManifestModel::new(),
+            model,
             title,
             schemas: parts.schemas,
             dispatcher: parts.dispatcher,
@@ -126,6 +148,9 @@ impl ManifestEditor {
             load_task: None,
             editor_focused: false,
             applied_settings: settings,
+            notice: None,
+            keep_notice: false,
+            conversion: None,
             validation: None,
             schema_fetches: Vec::new(),
             _subscriptions: subscriptions,
@@ -169,6 +194,22 @@ impl ManifestEditor {
     /// The `editor` settings in effect for this editor, read from the store now.
     pub fn settings<'a>(&self, cx: &'a gpui::App) -> &'a EditorSettings {
         EditorSettings::resolve(self.cluster(), cx)
+    }
+
+    /// The language the buffer is read as now (see [`LanguageMode`]).
+    pub fn language(&self) -> Language {
+        self.model.language()
+    }
+
+    /// What the notice bar says now, if anything.
+    pub fn notice(&self) -> Option<&Notice> {
+        self.notice.as_ref()
+    }
+
+    /// Shows `notice` in the bar.
+    pub(super) fn set_notice(&mut self, notice: Notice, cx: &mut Context<Self>) {
+        self.notice = Some(notice);
+        cx.notify();
     }
 
     /// Whether the buffer differs from what the editor opened with.
@@ -231,6 +272,11 @@ impl ManifestEditor {
         match event {
             CodeEditorEvent::Changed { version } => {
                 self.model.changed();
+                // The conversion's own change keeps its notice; any other edit (an undo too)
+                // makes it stale.
+                if !std::mem::take(&mut self.keep_notice) {
+                    self.notice = None;
+                }
                 self.schedule_validation(VALIDATION_DEBOUNCE, window, cx);
                 // The dirty dot appears with the first edit.
                 if *version == self.clean_version + 1 {
@@ -269,10 +315,11 @@ impl ManifestEditor {
             if !delay.is_zero() {
                 cx.background_executor().timer(delay).await;
             }
-            let Ok((snapshot, known, masking)) = this.update(cx, |view, cx| {
+            let Ok((snapshot, known, mode, masking)) = this.update(cx, |view, cx| {
                 (
                     view.editor.read(cx).snapshot(cx),
                     view.model.known().clone(),
+                    view.model.mode(),
                     view.binding.as_ref().is_some_and(ResourceBinding::masking),
                 )
             }) else {
@@ -280,7 +327,13 @@ impl ManifestEditor {
             };
             let mut result = cx
                 .background_spawn(async move {
-                    validate_text_with(snapshot.version(), snapshot.to_text(), &known, masking)
+                    validate_text_in(
+                        snapshot.version(),
+                        snapshot.to_text(),
+                        &known,
+                        mode,
+                        masking,
+                    )
                 })
                 .await;
             let _ = this.update_in(cx, |view, window, cx| {
@@ -335,7 +388,7 @@ impl KeyContextual for ManifestEditor {
 
     fn extend_key_context(&self, context: &mut KeyContextBuilder) {
         context
-            .value("mode", "yaml")
+            .value("mode", self.model.language().grammar())
             .flag_if(self.editor_focused, contexts::EDITING);
     }
 }
@@ -357,10 +410,17 @@ impl Render for ManifestEditor {
             .on_action(cx.listener(|this, _: &ToggleSecretMask, _, cx| {
                 this.send(Command::EditorToggleSecretMask, cx);
             }))
+            .on_action(cx.listener(|this, _: &ConvertToJson, _, cx| {
+                this.send(Command::EditorConvertToJson, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ConvertToYaml, _, cx| {
+                this.send(Command::EditorConvertToYaml, cx);
+            }))
             .size_full()
             .bg(colors.background)
             .text_color(colors.text)
             .child(self.toolbar(cx))
+            .children(self.notice_bar(cx))
             .child(gpui::div().flex_1().min_h_0().child(self.editor.clone()))
     }
 }

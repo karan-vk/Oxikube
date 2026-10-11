@@ -24,6 +24,9 @@
 //! is a string and `replicas: 3` an integer; `yes` is a string; `500m`, `1Gi` and `5s` are
 //! strings, so an int-or-string or quantity field takes them. An empty value (`key:`) is a null,
 //! which the server treats as "not set", and is never reported. `3.0` is accepted for an integer.
+//! A `kind: List` (`apiVersion: v1`) is checked item by item, each against the schema of its own
+//! `apiVersion` and `kind`, as a multi-document buffer is document by document, and so is each
+//! mapping of a root sequence (a JSON array of manifests; E10-S10).
 //! Format checks beyond `pattern` (`int32` range, `date-time`) are out of scope.
 //!
 //! Unknown fields: Kubernetes schemas are structural, so an object that lists `properties` and
@@ -38,13 +41,13 @@ mod list;
 mod object;
 mod options;
 mod run;
-mod scalar;
+pub(crate) mod scalar;
 mod suggest;
 mod walk;
 
 pub use diagnostic::{Diagnostic, DiagnosticCode, Severity};
 pub use options::ValidateOptions;
-pub use run::{document_gvk, validate, validate_buffer};
+pub use run::{document_gvk, node_gvk, validate, validate_buffer};
 
 #[cfg(doc)]
 use oxikube_domain::schema::JsonSchema;

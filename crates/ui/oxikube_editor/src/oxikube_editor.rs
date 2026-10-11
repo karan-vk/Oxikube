@@ -11,8 +11,10 @@
 //! | [`validate`] | E10-S03 | schema validation into diagnostics |
 //! | [`view`] | E10-S04 | [`view::ManifestEditor`], the `editor::*` commands |
 //! | [`settings`] | E10-S12 | the `editor` settings: tab size, font, wrap, validation, masking, field manager |
+//! | [`json`] | E10-S10 | JSON mode: [`json::Language`], the strict JSON check, YAML to JSON conversion |
 //! | [`open`] | E10-S06 | an editor opened from a live object: [`open::render_resource`], Secret masking, the `resource::Edit` row actions |
 
+pub mod json;
 pub mod open;
 pub mod settings;
 pub mod validate;

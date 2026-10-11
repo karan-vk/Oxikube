@@ -395,7 +395,8 @@
   {
     // Inside the manifest editor the buffer takes text, so only modifier chords: alt-z wraps long
     // lines, ctrl-alt-r makes the buffer read-only (a view state; the cluster's read-only mode is
-    // separate). The editor's own keys stay as they are: ctrl-f / ctrl-h search and replace,
+    // separate), ctrl-alt-j / ctrl-alt-y convert the buffer to JSON / YAML (E10-S10, one undo
+    // step). The editor's own keys stay as they are: ctrl-f / ctrl-h search and replace,
     // ctrl-z / ctrl-y undo and redo, shift-alt-up / shift-alt-down add a cursor (ctrl-alt-up /
     // ctrl-alt-down on Windows).
     "context": "ManifestEditor",
@@ -403,7 +404,9 @@
       "alt-z": "editor::ToggleSoftWrap",
       "alt-m": "editor::ToggleManagedFields",
       "alt-v": "editor::ToggleSecretMask",
-      "ctrl-alt-r": "editor::ToggleReadOnly"
+      "ctrl-alt-r": "editor::ToggleReadOnly",
+      "ctrl-alt-j": "editor::ConvertToJson",
+      "ctrl-alt-y": "editor::ConvertToYaml"
     }
   },
   {

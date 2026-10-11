@@ -49,6 +49,8 @@ oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
 proptest.workspace = true
+# An independent YAML reader to check that what the writer emits reads back as the same data.
+serde-saphyr.workspace = true
 
 [features]
 default = []
@@ -73,6 +75,12 @@ harness = false
 # Deployment manifest (budget 50 ms, epic goal squiggles within 100 ms of typing).
 [[bench]]
 name = "validate"
+harness = false
+
+# `cargo bench -p oxikube_editor --bench convert` (E10-S10): YAML to JSON and back, and the strict
+# JSON check, on a 2k-line manifest and a 5 MB dump (all of it off the UI thread in the editor).
+[[bench]]
+name = "convert"
 harness = false
 
 # Keystroke-to-frame cost of typing in a 2 000-line manifest, and the validation it debounces

@@ -3,6 +3,9 @@
 //! - `manifest_editor_error_dark`: a Deployment whose `replicas` is a word, validated against
 //!   the Deployment schema (a fake `SchemaPort`): one error squiggle under `three`, its gutter
 //!   marker and its end-of-line message, the toolbar saying "1 error".
+//! - `manifest_editor_json_dark` (E10-S10): a commented Deployment converted to JSON: the JSON
+//!   buffer, the language chip and the "To YAML" button, and the notice bar warning that two
+//!   comments were dropped, with its Undo.
 //!
 //! - `manifest_editor_open_deployment_dark` and `manifest_editor_open_secret_dark` (E10-S06): an
 //!   editor opened from a live object through the fake reader. The Deployment is read-only
@@ -27,6 +30,7 @@ use oxikube_domain::command::Command;
 use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_domain::schema::JsonSchema;
+use oxikube_editor::json::Language;
 use oxikube_editor::open::{OpenMode, ResourceOpen};
 use oxikube_editor::view::{
     ManifestEditor, ManifestEditorParts, SchemaSource, VALIDATION_DEBOUNCE,
@@ -250,6 +254,59 @@ fn render_open_secret_dark() -> Result<RgbaImage> {
     render_opened(object, OpenMode::Edit, 2)
 }
 
+const COMMENTED: &str = "\
+# The web tier.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web   # the name
+  labels:
+    app: web
+spec:
+  replicas: 3
+  paused: false
+";
+
+/// A commented manifest converted to JSON (E10-S10): the JSON grammar and the language chip.
+fn render_json_dark() -> Result<RgbaImage> {
+    let mut app = ScreenshotApp::with_assets(Arc::new(oxikube_ui::Assets));
+    app.update(|cx| {
+        oxikube_ui::init(cx);
+        oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
+        cx.set_reduce_motion(true);
+        oxikube_runtime::init_deterministic(cx);
+        oxikube_editor::init(cx);
+    });
+    let mut editor: Option<Entity<ManifestEditor>> = None;
+    let window = app.open_window(size(px(SIZE.0 as f32), px(SIZE.1 as f32)), |window, cx| {
+        let parts = ManifestEditorParts {
+            title: "deployment".into(),
+            text: COMMENTED.to_owned(),
+            schemas: None,
+            dispatcher: Rc::new(NoBus),
+            resource: None,
+        };
+        let entity = cx.new(|cx| ManifestEditor::new(parts, window, cx));
+        editor = Some(entity.clone());
+        cx.new(|cx| Root::new(entity, window, cx))
+    })?;
+    let editor = editor.expect("built");
+    app.run_until_parked();
+    app.update(|cx| {
+        window.update(cx, |_, window, cx| {
+            editor.update(cx, |editor, cx| {
+                editor.convert_to(Language::Json, window, cx)
+            });
+        })
+    })?;
+    app.run_until_parked();
+    app.advance_clock(VALIDATION_DEBOUNCE);
+    app.run_until_parked();
+    let language = app.update(|cx| editor.read(cx).language());
+    anyhow::ensure!(language == Language::Json, "{language}");
+    app.capture(window)
+}
+
 fn main() -> ExitCode {
     run_golden_cases(
         env!("CARGO_MANIFEST_DIR"),
@@ -268,6 +325,11 @@ fn main() -> ExitCode {
                 name: "manifest_editor_open_secret_dark",
                 size: SIZE,
                 render: render_open_secret_dark,
+            },
+            GoldenCase {
+                name: "manifest_editor_json_dark",
+                size: SIZE,
+                render: render_json_dark,
             },
         ],
     )

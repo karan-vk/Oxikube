@@ -10,6 +10,7 @@ use oxikube_domain::ids::Gvk;
 use oxikube_domain::schema::JsonSchema;
 use oxikube_ui::editor::{DiagnosticLevel, EditorDiagnostic};
 
+use crate::json::{self, Language, LanguageMode};
 use crate::open::masked_diagnostics;
 use crate::validate::{self, Severity, ValidateOptions};
 use crate::yaml::parse_shared;
@@ -26,15 +27,22 @@ pub type KnownSchemas = HashMap<Gvk, Option<Arc<JsonSchema>>>;
 pub struct Validation {
     /// The buffer version that was validated; a result for an older version is dropped.
     pub version: u64,
+    /// How the language was chosen for this pass; a result for another mode (the user switched
+    /// meanwhile) is dropped.
+    pub mode: LanguageMode,
+    /// The language the buffer was read as: the [`mode`](Self::mode)'s, or what the content
+    /// looked like under [`LanguageMode::Auto`].
+    pub language: Language,
     /// Syntax errors and the schema findings of every document whose schema is known.
     pub diagnostics: Vec<EditorDiagnostic>,
     /// Kinds the buffer declares whose schema is not known yet: fetch them and validate again.
     pub missing: Vec<Gvk>,
 }
 
-/// Validates `text` (the buffer at `version`) against the `known` schemas.
+/// Validates `text` (the buffer at `version`) against the `known` schemas, reading it as YAML or
+/// JSON by its content ([`LanguageMode::Auto`]); see [`validate_text_as`].
 pub fn validate_text(version: u64, text: Arc<str>, known: &KnownSchemas) -> Validation {
-    validate_text_with(version, text, known, false)
+    validate_text_in(version, text, known, LanguageMode::Auto, false)
 }
 
 /// [`validate_text`], and when `masking` (the buffer is a Secret opened with its values masked,
@@ -45,6 +53,35 @@ pub fn validate_text_with(
     known: &KnownSchemas,
     masking: bool,
 ) -> Validation {
+    validate_text_in(version, text, known, LanguageMode::Auto, masking)
+}
+
+/// Validates `text` (the buffer at `version`) against the `known` schemas, read as the language
+/// `mode` gives; see [`validate_text_in`].
+pub fn validate_text_as(
+    version: u64,
+    text: Arc<str>,
+    known: &KnownSchemas,
+    mode: LanguageMode,
+) -> Validation {
+    validate_text_in(version, text, known, mode, false)
+}
+
+/// The whole pass: `text` read as the language `mode` gives, and when `masking` the placeholder
+/// check of [`validate_text_with`].
+///
+/// JSON goes through the same pipeline as YAML (JSON is YAML flow style: the same spanned model,
+/// the same schema diagnostics, `kind: List` per item), plus the strict JSON check
+/// ([`json::first_error`]): its finding replaces the YAML parser's syntax errors, which would
+/// accept a trailing comma or single quotes and describe other breakage in YAML terms.
+pub fn validate_text_in(
+    version: u64,
+    text: Arc<str>,
+    known: &KnownSchemas,
+    mode: LanguageMode,
+    masking: bool,
+) -> Validation {
+    let language = mode.resolve(&text);
     let parsed = parse_shared(text);
     let mut missing: Vec<Gvk> = Vec::new();
     let found = validate::validate_buffer(
@@ -63,10 +100,23 @@ pub fn validate_text_with(
     let mut diagnostics: Vec<EditorDiagnostic> = found.iter().map(to_editor).collect();
     if masking {
         diagnostics.extend(masked_diagnostics(&parsed));
-        diagnostics.sort_by_key(|d| d.range.start);
+    }
+    if language == Language::Json
+        && let Some(error) = json::first_error(parsed.text())
+    {
+        diagnostics.retain(|d| d.code.as_deref() != Some("syntax"));
+        diagnostics.push(
+            EditorDiagnostic::new(error.span, DiagnosticLevel::Error, error.message)
+                .with_code("syntax"),
+        );
+    }
+    if masking || language == Language::Json {
+        diagnostics.sort_by_key(|d| (d.range.start, d.range.end));
     }
     Validation {
         version,
+        mode,
+        language,
         diagnostics,
         missing,
     }
