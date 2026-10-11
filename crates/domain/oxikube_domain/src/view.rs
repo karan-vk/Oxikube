@@ -10,6 +10,8 @@
 //! * [`JobSummary`] and [`CronJobSummary`] for batch kinds.
 //! * [`QuotaSummary`], [`HpaSummary`], [`PdbSummary`], [`LeaseSummary`], [`WebhookConfigSummary`] and
 //!   the other Config-section summaries (E12-S12), in `config`.
+//! * [`CrdSummary`] for CustomResourceDefinitions: names, versions and their printer columns,
+//!   conversion and conditions (E12-S17).
 //! * [`Health`] and [`health_of`]: the one rule for "is this object healthy" behind overview
 //!   tiles and sidebar counts.
 //!
@@ -36,6 +38,7 @@ use crate::resource::Resource;
 use jiff::Timestamp;
 
 mod config;
+mod crd;
 mod health;
 mod job;
 mod node;
@@ -49,6 +52,10 @@ pub use config::{
     PolicyValidation, PriorityClassSummary, QuotaLevel, QuotaLine, QuotaSummary,
     RuntimeClassSummary, TargetRef, VpaContainerPolicy, VpaRecommendation, VpaSummary,
     WebhookConfigSummary, WebhookKind, WebhookRule, WebhookSummary, WebhookTarget, selector_text,
+};
+pub use crd::{
+    CrdConversion, CrdNames, CrdSummary, CrdVersionSummary, PrinterColumn, crd_aliases_text,
+    crd_versions_text, version_order,
 };
 pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};

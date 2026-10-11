@@ -246,11 +246,13 @@ fn custom_resource_definitions_and_cluster_policy_kinds() {
         &fx::widget_crd(),
         &[
             ("group", "test.oxikube.dev"),
-            ("version", "v1"),
+            ("versions", "v1(storage)"),
             ("scope", "Namespaced"),
             ("short-names", "wd"),
             ("kind", "Widget"),
             ("resource", "widgets"),
+            ("aliases", "widgets,widget,wd"),
+            ("established", "True"),
         ],
     );
     check(

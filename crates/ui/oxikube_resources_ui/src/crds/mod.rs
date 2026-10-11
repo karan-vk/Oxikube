@@ -17,6 +17,9 @@
 //! "Definitions" entry opens the CRD list (`crd::OpenList`), and a row of that list opens the
 //! table of the custom resources it defines (`crd::OpenResources`: Enter, double click or the
 //! row menu). The CRD's own detail drawer has a Schema tab, and a button that does the same.
+//! Since E12-S17 the section can be searched (typing filters its groups and kinds) and leaves out
+//! kinds other sections list; the CRD's detail has a definition panel above the Overview
+//! ([`kinds::crd`](crate::kinds::crd): names, versions, printer columns, conversion, conditions).
 //!
 //! # Feeds
 //!

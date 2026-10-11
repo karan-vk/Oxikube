@@ -23,6 +23,8 @@
 //! it answers only sections that need no access (the overview) show. A failed review fails open:
 //! everything shows, with a warning. When sections are hidden a muted line says so. Custom
 //! Resources lists the non-built-in API groups from discovery and hides when none is listable.
+//! Since E12-S17 it leaves out kinds another section's entry lists, and has a search field
+//! (`rows::custom`, `panel::search`) that filters its groups and kinds as the user types.
 //!
 //! Integrations append their sections after the core ones, in registration order
 //! ([`IntegrationRegistry`](oxikube_app::IntegrationRegistry)).
@@ -55,7 +57,7 @@ pub use panel::{DEFAULT_WIDTH, SidebarDeps, SidebarEvent, SidebarPanel};
 pub use registry::SidebarRegistry;
 pub use rows::{
     AccessState, DEFINITIONS_ENTRY, EntryRow, GroupRow, NoticeKind, NoticeRow, Row, RowInputs,
-    SectionRow, build_rows,
+    SEARCH_ROW, SearchRow, SectionRow, build_rows,
 };
 pub use section::{SectionBody, SidebarEntry, SidebarKind, SidebarSection, SidebarTarget};
 pub use store::{SIDEBAR_TABLE, SIDEBAR_VERSION, SavedSidebar, SidebarStore};

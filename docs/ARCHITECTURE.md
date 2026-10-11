@@ -1287,6 +1287,18 @@ a table (or anything else) has its feed open, because counting is a cache read, 
 (the watch budget stays for tables). The CRD's detail drawer has a Schema tab (`openAPIV3Schema` of the selected version:
 type as `kubectl explain` writes it, required, enum, default, description; only open nodes are walked, depth and rows are bounded).
 
+Since E12-S17 the CRD kind has a spec of its own (`oxikube_resources_ui::kinds::crd`): the CRD list's columns are Name,
+Kind, Group, Versions (the served versions, `(storage)` marked, as the API server's own CRD table prints them), Scope,
+Short Names and Age, with Resource, Aliases (k9s: plural, singular, short names) and Established in the column chooser;
+its detail has a definition panel above the Overview (names, scope, conversion, `Established` / `NamesAccepted`, each
+version with its flags and printer columns, the wide ones marked) built from the domain's `CrdSummary` once per change
+of the CRD. The Custom Resources section leaves out kinds another section's registry entry lists (Gateway API,
+VolumeSnapshots: nothing is listed twice) and has a search field: typing filters the groups and kinds (a pass over
+discovery's answer, rows rebuilt per keystroke; ~0.4 ms for 500 CRDs in a debug build) and shows the matching groups
+open without touching their saved state; Enter opens the first match. A table whose user never reordered its columns
+saves no order, so a Table feed's server columns keep the server's order when they replace the Name / Namespace / Age
+stand-ins (what `kubectl get` shows, checked against a Table response recorded from kind in `crds::tests::parity`).
+
 States and diagnostics (E07-S10, `oxikube_resources_ui::table::states`): one pure
 `TableState::derive(feed_state, row_count, filter)` tells loading, empty, filtered-empty,
 forbidden, unauthorized (a `401` or expired credential is `FeedState::Unauthorized`, mapped from the

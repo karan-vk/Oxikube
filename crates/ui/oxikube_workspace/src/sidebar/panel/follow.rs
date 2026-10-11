@@ -211,6 +211,7 @@ impl SidebarPanel {
             access: &self.access,
             crd_watch_forbidden: self.crd_watch_forbidden,
             open: &self.open,
+            custom_query: &self.custom_query,
             gate: Some(gate),
         });
         self.apply_count_states(&mut rows);

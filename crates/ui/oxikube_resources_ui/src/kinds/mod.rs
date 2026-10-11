@@ -21,6 +21,7 @@
 //! | `sidebar` | publishing the registry's sections and entries to the cluster sidebar |
 //! | `config` | the Config section's smaller kinds (E12-S12): quota bars, limit tables, autoscalers, budgets, classes, leases and the admission kinds, each a [`ConfigPanel`] over a domain view-model |
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
+//! | [`crd`] | the CustomResourceDefinition kind (E12-S17): its spec and the definition panel of its detail |
 //!
 //! # Adding a kind's own panel or columns (E12-S02 and on)
 //!
@@ -44,6 +45,7 @@
 
 mod builtin;
 mod config;
+pub mod crd;
 mod detail;
 mod sidebar;
 mod spec;

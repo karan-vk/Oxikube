@@ -31,10 +31,9 @@ fn json_files_on_disk(dir: &Path, root: &Path, out: &mut Vec<String>) {
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
         if path.is_dir() {
-            if path
-                .file_name()
-                .is_some_and(|n| n == "cluster" || n == "metrics-server" || n == "openapi")
-            {
+            if path.file_name().is_some_and(|n| {
+                n == "cluster" || n == "metrics-server" || n == "openapi" || n == "tables"
+            }) {
                 continue;
             }
             json_files_on_disk(&path, root, out);
@@ -402,4 +401,42 @@ fn node_builders_match_node_fixtures() {
             .build()),
         n(fixtures::node_memory_pressure())
     );
+}
+
+#[test]
+fn every_recorded_table_is_registered_and_shaped() {
+    let root = fixtures_dir().join("tables");
+    let mut on_disk = Vec::new();
+    for entry in std::fs::read_dir(&root).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|e| e == "json") {
+            on_disk.push(path.file_name().unwrap().to_string_lossy().into_owned());
+        }
+    }
+    on_disk.sort();
+    let mut registered: Vec<String> = fixtures::tables::ALL
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
+    registered.sort();
+    assert_eq!(on_disk, registered);
+    for name in fixtures::tables::ALL {
+        let table = fixtures::tables::json(name);
+        assert_eq!(table["kind"], "Table", "{name}");
+        let columns = table["columnDefinitions"]
+            .as_array()
+            .expect("columns")
+            .len();
+        for row in table["rows"].as_array().expect("rows") {
+            assert_eq!(
+                row["cells"].as_array().map(Vec::len),
+                Some(columns),
+                "{name}"
+            );
+            assert!(
+                row.pointer("/object/metadata/uid").is_some(),
+                "{name}: rows carry metadata"
+            );
+        }
+    }
 }

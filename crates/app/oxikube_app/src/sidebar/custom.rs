@@ -62,6 +62,41 @@ impl CustomResourceGroup {
             kinds,
         })
     }
+
+    /// The group without the kinds `claimed` (by group and kind) says another sidebar section
+    /// lists already, such as the Gateway API under Network or VolumeSnapshots under Storage, so
+    /// no kind is listed twice. `None` when every kind is claimed (the group is not shown).
+    pub fn unclaimed(&self, claimed: impl Fn(&str, &str) -> bool) -> Option<CustomResourceGroup> {
+        self.keep(|kind| !claimed(&self.group, &kind.kind))
+    }
+
+    /// The group as the sidebar's search shows it for `query` (trimmed; ASCII case is ignored):
+    /// every kind when the group's name contains it, else the kinds whose kind or plural does.
+    /// An empty query keeps the group whole. `None` when nothing matches.
+    pub fn matching(&self, query: &str) -> Option<CustomResourceGroup> {
+        let query = query.trim();
+        if query.is_empty() || contains_ignore_case(&self.group, query) {
+            return Some(self.clone());
+        }
+        self.keep(|kind| {
+            contains_ignore_case(&kind.kind, query) || contains_ignore_case(&kind.plural, query)
+        })
+    }
+
+    fn keep(&self, keep: impl Fn(&CustomKind) -> bool) -> Option<CustomResourceGroup> {
+        let kinds: Vec<CustomKind> = self.kinds.iter().filter(|k| keep(k)).cloned().collect();
+        (!kinds.is_empty()).then(|| CustomResourceGroup {
+            group: self.group.clone(),
+            kinds,
+        })
+    }
+}
+
+/// Whether `haystack` contains `needle`, ignoring ASCII case, without allocating (the sidebar
+/// runs it over every custom kind on each keystroke of its search).
+fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
+    let (h, n) = (haystack.as_bytes(), needle.as_bytes());
+    n.is_empty() || h.windows(n.len()).any(|w| w.eq_ignore_ascii_case(n))
 }
 
 /// Runs discovery and returns the kinds of non-built-in API groups, grouped by group (sorted),

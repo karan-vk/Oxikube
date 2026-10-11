@@ -14,6 +14,7 @@ use oxikube_ui::IconName;
 
 use super::section::{SidebarSection, SidebarTarget};
 
+mod custom;
 mod sections;
 
 use sections::{Shown, integration_rows, section_rows};
@@ -21,6 +22,9 @@ use sections::{Shown, integration_rows, section_rows};
 /// The id of the "Definitions" entry at the top of Custom Resources: the list of the cluster's
 /// CustomResourceDefinitions (E07-S07).
 pub const DEFINITIONS_ENTRY: &str = "custom-resources/definitions";
+
+/// The id of the search field of Custom Resources (E12-S17).
+pub const SEARCH_ROW: &str = "custom-resources/search";
 
 /// The API group and plural of the CRD kind, which the Definitions entry needs `list` on.
 pub(super) const CRD_GROUP: &str = "apiextensions.k8s.io";
@@ -57,6 +61,18 @@ pub enum Row {
     Entry(EntryRow),
     /// A line of explanation.
     Notice(NoticeRow),
+    /// The search field of Custom Resources: the panel draws its text input here.
+    Search(SearchRow),
+}
+
+/// The search field of Custom Resources. Filtering by it is pure UI (no command, no cluster
+/// call): the panel holds the text and rebuilds the rows on each edit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SearchRow {
+    /// [`SEARCH_ROW`].
+    pub id: &'static str,
+    /// The query the rows below were filtered by (trimmed).
+    pub query: SharedString,
 }
 
 /// A section heading.
@@ -137,11 +153,13 @@ impl Row {
             Row::Group(r) => &r.id,
             Row::Entry(r) => &r.id,
             Row::Notice(r) => r.id,
+            Row::Search(r) => r.id,
         }
     }
 
     /// Whether the row can be highlighted and activated.
     pub fn is_interactive(&self) -> bool {
+        // The search field too: Enter on it moves the keyboard focus into it.
         !matches!(self, Row::Notice(_))
     }
 }
@@ -160,6 +178,8 @@ pub struct RowInputs<'a> {
     pub crd_watch_forbidden: bool,
     /// The user's explicit open and closed choices by row id.
     pub open: &'a BTreeMap<String, bool>,
+    /// What the Custom Resources search field holds (empty: no filter).
+    pub custom_query: &'a str,
     /// The kind registry's per-cluster rule for entries that list a kind (discovery presence and
     /// the visibility hook, E12-S01); `None` gates nothing.
     pub gate: Option<KindGate<'a>>,
