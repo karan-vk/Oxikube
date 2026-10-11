@@ -8,10 +8,10 @@ use gpui::{
     uniform_list,
 };
 use oxikube_app::{Change, DocumentPreview, PreviewOutcome};
-use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, u};
 
 use super::{BatchPreviewDialog, ROW_HEIGHT, VISIBLE_DIFF_ROWS, VISIBLE_ROWS};
+use crate::view::apply::batch::row::document_row;
 use crate::view::live::{ROW_HEIGHT as DIFF_ROW_HEIGHT, inline_rows};
 
 impl BatchPreviewDialog {
@@ -43,39 +43,21 @@ impl BatchPreviewDialog {
         range
             .filter_map(|ix| Some((ix, self.preview.documents.get(ix)?)))
             .map(|(ix, document)| {
-                let (word, tone) = chip(document, &tokens.colors);
-                let detail = detail(document);
-                h_flex()
-                    .id(("batch-preview-row", ix))
-                    .debug_selector(move || format!("batch-preview-row-{ix}"))
-                    .h(u(px(ROW_HEIGHT)))
-                    .w_full()
-                    .px(u(tokens.spacing.md))
-                    .gap(u(tokens.spacing.md))
-                    .items_center()
-                    .text_size(u(tokens.font.small))
-                    .when(ix == self.selected, |row| {
-                        row.bg(tokens.colors.element_selected)
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| this.select(ix, cx)))
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(u(px(18.)))
-                            .text_color(tokens.colors.text_muted)
-                            .child(format!("{}", ix + 1)),
-                    )
-                    .child(div().flex_none().w(u(px(78.))).text_color(tone).child(word))
-                    .child(div().flex_none().child(document.label.clone()))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_color(tokens.colors.text_muted)
-                            .child(detail),
-                    )
-                    .into_any_element()
+                let chip = chip(document, &tokens.colors);
+                document_row(
+                    "batch-preview-row",
+                    ix,
+                    ROW_HEIGHT,
+                    chip,
+                    &document.label,
+                    detail(document),
+                    &tokens,
+                )
+                .when(ix == self.selected, |row| {
+                    row.bg(tokens.colors.element_selected)
+                })
+                .on_click(cx.listener(move |this, _, _, cx| this.select(ix, cx)))
+                .into_any_element()
             })
             .collect()
     }

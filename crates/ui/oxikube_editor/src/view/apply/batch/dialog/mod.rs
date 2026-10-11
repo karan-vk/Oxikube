@@ -6,6 +6,8 @@
 //! one screen of rows. Enter applies (the documents the dry run accepted, in order), Escape cancels;
 //! nothing is written until Apply.
 
+mod rows;
+
 use std::sync::Arc;
 
 use gpui::{
@@ -45,8 +47,6 @@ pub struct BatchPreviewDialog {
     diff_scroll: UniformListScrollHandle,
     focus: FocusHandle,
 }
-
-mod rows;
 
 impl EventEmitter<DismissEvent> for BatchPreviewDialog {}
 

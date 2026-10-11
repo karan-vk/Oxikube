@@ -87,9 +87,7 @@ impl ClusterEditorHost {
         self.apply = Some(service);
         self
     }
-}
 
-impl ClusterEditorHost {
     /// The same host, whose "Create resource" picker lists `service`'s templates (E10-S09).
     #[must_use]
     pub fn with_templates(mut self, service: TemplateService) -> Self {

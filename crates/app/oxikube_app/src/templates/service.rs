@@ -86,12 +86,6 @@ impl TemplateService {
         }
     }
 
-    /// The embedded templates alone, with no read: what the picker shows while the directory is
-    /// being scanned.
-    pub fn embedded(&self) -> TemplateCatalog {
-        TemplateCatalog::of(self.embedded.to_vec())
-    }
-
     /// Where the user's templates are.
     pub fn user_dir(&self) -> &Path {
         &self.dir

@@ -27,10 +27,10 @@ type Outcome = (
 
 impl ApplyService {
     /// The server's dry run of every document of `requests` (one object each, in buffer order),
-    /// for the combined preview. Nothing is written. The dry runs go out a few at a time (eight); a document that
-    /// needs an object an earlier one creates (its namespace, its definition) and so cannot be
-    /// rehearsed yet is [`Deferred`](PreviewOutcome::Deferred), and one that needs an earlier
-    /// document that failed is [`Skipped`](PreviewOutcome::Skipped).
+    /// for the combined preview. Nothing is written. A document that needs an object an earlier one
+    /// creates (its namespace, its definition) and so cannot be rehearsed yet is
+    /// [`Deferred`](PreviewOutcome::Deferred), and one that needs an earlier document that failed
+    /// is [`Skipped`](PreviewOutcome::Skipped).
     pub async fn preview_batch(&self, requests: Vec<ApplyRequest>) -> BatchPreview {
         let manifests: Vec<Option<Manifest>> = requests
             .iter()
@@ -153,7 +153,7 @@ fn skipped(cause: &DocumentResult) -> Outcome {
         cause.label,
         cause.index + 1
     );
-    (DocumentStatus::Skipped(reason.clone()), reason, None, None)
+    skipped_because(reason)
 }
 
 /// Skipped at the dry run, for an earlier document that failed there.
@@ -165,5 +165,9 @@ fn skipped_earlier(document: &DocumentPreview) -> Outcome {
         ),
         None => "skipped".to_owned(),
     };
+    skipped_because(reason)
+}
+
+fn skipped_because(reason: String) -> Outcome {
     (DocumentStatus::Skipped(reason.clone()), reason, None, None)
 }

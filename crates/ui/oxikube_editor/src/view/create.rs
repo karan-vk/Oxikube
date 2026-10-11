@@ -100,12 +100,11 @@ impl EditorViews {
             }
         }
         let views = cx.entity().downgrade();
-        let target = cluster;
         let choose: TemplateSink = Rc::new(move |template, window, cx| {
-            let target = target.clone();
+            let cluster = cluster.clone();
             views
                 .update(cx, |views, cx| {
-                    views.open_template(target, template, window, cx);
+                    views.open_template(cluster, template, window, cx);
                 })
                 .ok();
         });

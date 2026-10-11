@@ -25,6 +25,7 @@
 mod dialog;
 mod flow;
 mod results;
+mod row;
 
 use std::ops::Range;
 use std::sync::Arc;

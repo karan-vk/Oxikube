@@ -1,8 +1,9 @@
 //! `editor::NewManifest`, `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (E10-S04),
 //! `resource::Edit`, `resource::ViewYamlInEditor`, `editor::ToggleManagedFields`,
-//! `editor::ToggleSecretMask` (E10-S06), `resource::Create` (E10-S09, the "Create resource" picker), for JSON mode (E10-S10) `editor::ConvertToJson`,
-//! `editor::ConvertToYaml`, `editor::UseJson` and `editor::UseYaml`, and the diff vs live commands
-//! (E10-S07: `editor::ShowDiff`, `ToggleDiffLayout`, `ReloadFromServer`, `MergeFromServer`,
+//! `editor::ToggleSecretMask` (E10-S06), `resource::Create` (E10-S09, the "Create resource"
+//! picker), for JSON mode (E10-S10) `editor::ConvertToJson`, `editor::ConvertToYaml`,
+//! `editor::UseJson` and `editor::UseYaml`, and the diff vs live commands (E10-S07:
+//! `editor::ShowDiff`, `ToggleDiffLayout`, `ReloadFromServer`, `MergeFromServer`,
 //! `KeepMine`, `TakeMine`, `TakeServer`, `AcceptMerge`) on the command bus, each with its MCP tool
 //! stub (`app.editor_new_manifest`, `k8s.resource_edit`, ...).
 //!

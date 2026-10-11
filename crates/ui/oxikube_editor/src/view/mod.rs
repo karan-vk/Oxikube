@@ -109,8 +109,8 @@ struct EditorDispatcher(Rc<dyn CommandDispatcher>);
 
 impl Global for EditorDispatcher {}
 
-/// Registers the global `editor::NewManifest` and `resource::Create` actions (it dispatches the bus command through the
-/// dispatcher [`install`] set). Called by [`crate::init`]. The toggles are handled by the focused
+/// Registers the global `editor::NewManifest` and `resource::Create` actions (each dispatches its
+/// bus command through the dispatcher [`install`] set). Called by [`crate::init`]. The toggles are handled by the focused
 /// [`ManifestEditor`] itself.
 pub(crate) fn init(cx: &mut App) {
     cx.on_action(|_: &NewManifest, cx| {

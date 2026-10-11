@@ -16,6 +16,7 @@ use oxikube_ui::layout::{h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
 
 use super::BatchSession;
+use super::row::document_row;
 use crate::view::ManifestEditor;
 
 /// A row's height, before the UI zoom.
@@ -162,43 +163,20 @@ impl ManifestEditor {
         range
             .filter_map(|ix| Some((ix, panel.report.documents.get(ix)?)))
             .map(|(ix, result)| {
-                let tone = tone(&result.status, &tokens.colors);
-                h_flex()
-                    .id(("manifest-apply-result", ix))
-                    .debug_selector(move || format!("manifest-apply-result-{ix}"))
-                    .h(u(px(ROW_HEIGHT)))
-                    .w_full()
-                    .px(u(tokens.spacing.md))
-                    .gap(u(tokens.spacing.md))
-                    .items_center()
-                    .text_size(u(tokens.font.small))
-                    .on_click(cx.listener(move |view, _, window, cx| {
-                        view.show_document(ix, window, cx);
-                    }))
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(u(px(18.)))
-                            .text_color(tokens.colors.text_muted)
-                            .child(format!("{}", ix + 1)),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(u(px(78.)))
-                            .text_color(tone)
-                            .child(result.status.word()),
-                    )
-                    .child(div().flex_none().child(result.label.clone()))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_color(tokens.colors.text_muted)
-                            .child(message(result)),
-                    )
-                    .into_any_element()
+                let chip = (result.status.word(), tone(&result.status, &tokens.colors));
+                document_row(
+                    "manifest-apply-result",
+                    ix,
+                    ROW_HEIGHT,
+                    chip,
+                    &result.label,
+                    message(result),
+                    &tokens,
+                )
+                .on_click(cx.listener(move |view, _, window, cx| {
+                    view.show_document(ix, window, cx);
+                }))
+                .into_any_element()
             })
             .collect()
     }
