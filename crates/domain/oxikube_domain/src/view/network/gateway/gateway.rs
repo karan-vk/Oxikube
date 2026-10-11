@@ -45,11 +45,6 @@ pub struct ListenerSummary {
 }
 
 impl ListenerSummary {
-    /// The status of the listener's condition `kind`.
-    pub fn condition(&self, kind: &str) -> ConditionStatus {
-        status_of(&self.conditions, kind)
-    }
-
     /// `HTTPS :443 api.example.com`.
     pub fn title(&self) -> String {
         let mut text = self.protocol.clone();

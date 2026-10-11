@@ -5,12 +5,11 @@ use gpui::prelude::*;
 use gpui::{AnyElement, Context};
 use oxikube_app::columns::Tone;
 use oxikube_domain::view::network::{IngressBackend, IngressRuleRow, IngressSummary, ObjectRef};
-use oxikube_ui::layout::{h_flex, v_flex};
-use oxikube_ui::u;
+use oxikube_ui::layout::v_flex;
 
 use super::panel::NetworkPanel;
 use super::widgets::{
-    Look, MAX_ROWS, cell, chip, field, heading, link, more_rows, note, shell, table_header,
+    Look, MAX_ROWS, cell, chip, field, heading, more_rows, note, shell, table_header, table_row,
 };
 
 /// The rules table's columns: title and share of the width.
@@ -87,11 +86,7 @@ impl NetworkPanel {
             }
             None => note(look, "net-ingress-no-tls", "none").into_any_element(),
         };
-        h_flex()
-            .debug_selector(move || format!("net-ingress-rule-{index}"))
-            .w_full()
-            .items_center()
-            .py(u(gpui::px(2.)))
+        table_row(format!("net-ingress-rule-{index}"))
             .child(cell(
                 host,
                 row.host.clone().unwrap_or_else(|| "*".to_owned()),
@@ -117,11 +112,7 @@ impl NetworkPanel {
         backend: &IngressBackend,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        h_flex()
-            .debug_selector(|| "net-ingress-default-backend".to_owned())
-            .w_full()
-            .items_center()
-            .py(u(gpui::px(2.)))
+        table_row("net-ingress-default-backend".to_owned())
             .child(cell(COLUMNS[0].1, "(default backend)"))
             .child(cell(COLUMNS[1].1, ""))
             .child(cell(COLUMNS[2].1, ""))
@@ -149,17 +140,14 @@ impl NetworkPanel {
             self.object().and_then(|o| o.namespace()),
             service,
         );
-        let enabled = self.target_of(&target).is_some();
-        link(
+        self.object_link(
             look,
             id,
             format!("{}-{}", id.0, id.1),
             backend.to_string(),
-            enabled,
+            &target,
+            cx,
         )
-        .when_some(enabled.then_some(target), |el, target| {
-            el.on_click(cx.listener(move |this, _, _, cx| this.open(&target, cx)))
-        })
         .into_any_element()
     }
 }

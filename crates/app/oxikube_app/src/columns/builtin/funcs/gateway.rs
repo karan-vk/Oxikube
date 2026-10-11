@@ -10,12 +10,7 @@ use crate::columns::{Cell, Tone};
 
 /// A condition as a cell: `True` green, `False` red, `Unknown` (nothing reported yet) amber.
 fn condition<'a>(status: ConditionStatus) -> Cell<'a> {
-    let tone = match status {
-        ConditionStatus::True => Tone::Ok,
-        ConditionStatus::False => Tone::Error,
-        ConditionStatus::Unknown => Tone::Warn,
-    };
-    Cell::text(status.as_str()).with_tone(tone)
+    Cell::text(status.as_str()).with_tone(Tone::of_condition(status))
 }
 
 /// `ACCEPTED` of a GatewayClass: whether its controller accepted it.

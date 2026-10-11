@@ -17,17 +17,6 @@ pub enum RouteKind {
     Tls,
 }
 
-impl RouteKind {
-    /// The Kubernetes kind name.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            RouteKind::Http => "HTTPRoute",
-            RouteKind::Grpc => "GRPCRoute",
-            RouteKind::Tls => "TLSRoute",
-        }
-    }
-}
-
 /// A parent a route attaches to (a Gateway, normally) and what the controller said about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteParent {
@@ -76,6 +65,18 @@ struct ParentKey {
 }
 
 impl ParentKey {
+    /// The parent this reference names, with what its controller reported (nothing, for a
+    /// reference no status entry has matched yet).
+    fn into_parent(self, controller: Option<String>, conditions: Vec<Condition>) -> RouteParent {
+        RouteParent {
+            target: self.target,
+            section: self.section,
+            port: self.port,
+            controller,
+            conditions,
+        }
+    }
+
     fn from_json(parent: JsonRef<'_>, route_namespace: Option<&str>) -> Option<Self> {
         Some(Self {
             target: ObjectRef::new(
@@ -131,13 +132,7 @@ impl RouteSummary {
         let mut parents: Vec<RouteParent> = arr_of(spec, "parentRefs")
             .iter()
             .filter_map(|p| ParentKey::from_json(p, namespace))
-            .map(|key| RouteParent {
-                target: key.target,
-                section: key.section,
-                port: key.port,
-                controller: None,
-                conditions: Vec::new(),
-            })
+            .map(|key| key.into_parent(None, Vec::new()))
             .collect();
         // Each status entry names the reference it is about; a controller reports one per
         // reference it handled, so several controllers can report on one reference.
@@ -161,13 +156,7 @@ impl RouteSummary {
                 None => {
                     // A second controller for the same reference, or a status for a reference
                     // the spec no longer has (stale): shown, so the problem is visible.
-                    parents.push(RouteParent {
-                        target: key.target,
-                        section: key.section,
-                        port: key.port,
-                        controller,
-                        conditions,
-                    });
+                    parents.push(key.into_parent(controller, conditions));
                 }
             }
         }

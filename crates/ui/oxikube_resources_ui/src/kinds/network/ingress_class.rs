@@ -98,7 +98,7 @@ impl NetworkPanel {
     }
 
     /// Sends `ingressclass::SetDefault` for this class.
-    pub(super) fn set_default(&self, cx: &mut Context<Self>) {
+    fn set_default(&self, cx: &mut Context<Self>) {
         let Some(target) = self.object().cloned() else {
             return;
         };

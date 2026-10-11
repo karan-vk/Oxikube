@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use gpui::prelude::*;
-use gpui::{AnyView, App, Task, WeakEntity, Window};
+use gpui::{AnyView, App, Div, ElementId, SharedString, Stateful, Task, WeakEntity, Window};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ResourceRef;
@@ -16,7 +16,7 @@ use oxikube_domain::view::network::{
 use oxikube_runtime::spawn_kube;
 
 use super::nav::NavKinds;
-use super::widgets::Look;
+use super::widgets::{Look, link};
 use crate::detail::{DetailView, PanelHost};
 
 /// The view-model of the object being shown.
@@ -168,22 +168,36 @@ impl NetworkPanel {
         self.host.as_ref().is_some_and(PanelHost::read_only)
     }
 
-    /// Opens the detail of `target` (`resource::Open`), when its kind can be placed.
-    pub(super) fn open(&self, target: &ObjectRef, cx: &mut App) {
-        if let Some(target) = self.target_of(target) {
-            self.dispatch(Command::ResourceOpen { target }, cx);
-        }
-    }
-
-    /// The reference to open for `target`, `None` while it cannot be placed.
-    pub(super) fn target_of(&self, target: &ObjectRef) -> Option<ResourceRef> {
-        self.kinds.target(
-            self.object()?,
-            &target.group,
-            &target.kind,
-            target.namespace.as_deref(),
-            &target.name,
-        )
+    /// A link to `target` that opens its detail (`resource::Open`). Plain text while the kind
+    /// cannot be placed (discovery has not answered, or the cluster does not serve it).
+    pub(super) fn object_link(
+        &self,
+        look: &Look,
+        id: impl Into<ElementId>,
+        selector: String,
+        text: impl Into<SharedString>,
+        target: &ObjectRef,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let open = self.object().and_then(|from| {
+            self.kinds.target(
+                from,
+                &target.group,
+                &target.kind,
+                target.namespace.as_deref(),
+                &target.name,
+            )
+        });
+        link(look, id, selector, text, open.is_some()).when_some(open, |el, target| {
+            el.on_click(cx.listener(move |this, _, _, cx| {
+                this.dispatch(
+                    Command::ResourceOpen {
+                        target: target.clone(),
+                    },
+                    cx,
+                );
+            }))
+        })
     }
 }
 

@@ -3,16 +3,15 @@
 use jiff::Timestamp;
 use oxikube_domain::Resource;
 use oxikube_domain::view::network::{
-    IngressClassSummary, IngressSummary, NetworkPolicySummary, PolicyEffect, PolicyType,
-    is_default_class,
+    IngressClassParameters, IngressClassSummary, IngressSummary, NetworkPolicySummary,
+    PolicyEffect, PolicyType, is_default_class,
 };
 
 use crate::columns::{Cell, Tone};
 
 /// `CLASS` of an Ingress: `spec.ingressClassName`, else the legacy annotation.
 pub(crate) fn ingress_class<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    IngressSummary::from_resource(res)
-        .ok()
+    summary(res)
         .and_then(|ingress| ingress.class)
         .map_or_else(Cell::empty, |class| Cell::text(class.to_string()))
 }
@@ -85,7 +84,7 @@ pub(crate) fn ingress_class_parameters<'a>(res: &'a Resource, _now: Timestamp) -
 
 fn class_parameters<'a>(
     res: &Resource,
-    read: impl FnOnce(&oxikube_domain::view::network::IngressClassParameters) -> Option<String>,
+    read: impl FnOnce(&IngressClassParameters) -> Option<String>,
 ) -> Cell<'a> {
     IngressClassSummary::from_resource(res)
         .ok()

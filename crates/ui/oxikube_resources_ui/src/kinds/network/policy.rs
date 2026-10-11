@@ -33,11 +33,39 @@ impl NetworkPanel {
     }
 }
 
+/// The element ids of one direction's blocks, and the word its peers go by.
+struct Ids {
+    section: &'static str,
+    heading: &'static str,
+    effect: &'static str,
+    note: &'static str,
+    rule: &'static str,
+    peers: &'static str,
+}
+
+const INGRESS: Ids = Ids {
+    section: "net-policy-ingress",
+    heading: "net-policy-ingress-heading",
+    effect: "net-policy-ingress-effect",
+    note: "net-policy-ingress-note",
+    rule: "net-policy-ingress-rule",
+    peers: "From",
+};
+
+const EGRESS: Ids = Ids {
+    section: "net-policy-egress",
+    heading: "net-policy-egress-heading",
+    effect: "net-policy-egress-effect",
+    note: "net-policy-egress-note",
+    rule: "net-policy-egress-rule",
+    peers: "To",
+};
+
 /// One direction: its heading with the effect chip, the sentence about it, then its rules.
 fn direction(look: &Look, summary: &NetworkPolicySummary, which: PolicyType) -> AnyElement {
-    let (rules, id, noun) = match which {
-        PolicyType::Ingress => (&summary.ingress, "net-policy-ingress", "ingress"),
-        PolicyType::Egress => (&summary.egress, "net-policy-egress", "egress"),
+    let (rules, ids, noun) = match which {
+        PolicyType::Ingress => (&summary.ingress, &INGRESS, "ingress"),
+        PolicyType::Egress => (&summary.egress, &EGRESS, "egress"),
     };
     let effect = summary.effect(which);
     let (label, tone, sentence) = match effect {
@@ -68,65 +96,31 @@ fn direction(look: &Look, summary: &NetworkPolicySummary, which: PolicyType) -> 
             ),
         ),
     };
-    let word = match which {
-        PolicyType::Ingress => "From",
-        PolicyType::Egress => "To",
-    };
     v_flex()
-        .debug_selector(move || id.to_owned())
+        .debug_selector(move || ids.section.to_owned())
         .gap(u(look.tokens.spacing.sm))
-        .child(heading(look, id_heading(which), noun, Some(rules.len())))
-        .child(chip(look, id_chip(which), label, tone))
-        .child(note(look, id_note(which), sentence))
+        .child(heading(look, ids.heading, noun, Some(rules.len())))
+        .child(chip(look, ids.effect, label, tone))
+        .child(note(look, ids.note, sentence))
         .children(
             rules
                 .iter()
                 .take(MAX_ROWS)
                 .enumerate()
-                .map(|(i, rule)| rule_block(look, which, i, word, rule)),
+                .map(|(i, rule)| rule_block(look, ids, i, rule)),
         )
         .children(more_rows(look, rules.len().saturating_sub(MAX_ROWS)))
         .into_any_element()
 }
 
-fn id_heading(which: PolicyType) -> &'static str {
-    match which {
-        PolicyType::Ingress => "net-policy-ingress-heading",
-        PolicyType::Egress => "net-policy-egress-heading",
-    }
-}
-
-fn id_chip(which: PolicyType) -> &'static str {
-    match which {
-        PolicyType::Ingress => "net-policy-ingress-effect",
-        PolicyType::Egress => "net-policy-egress-effect",
-    }
-}
-
-fn id_note(which: PolicyType) -> &'static str {
-    match which {
-        PolicyType::Ingress => "net-policy-ingress-note",
-        PolicyType::Egress => "net-policy-egress-note",
-    }
-}
-
 /// One rule: its peers, one per line, and its ports.
-fn rule_block(
-    look: &Look,
-    which: PolicyType,
-    index: usize,
-    word: &str,
-    rule: &PolicyRule,
-) -> AnyElement {
+fn rule_block(look: &Look, ids: &Ids, index: usize, rule: &PolicyRule) -> AnyElement {
     let peers: Vec<String> = if rule.peers.is_empty() {
         vec![rule.peers_text()]
     } else {
         rule.peers.iter().map(ToString::to_string).collect()
     };
-    let prefix = match which {
-        PolicyType::Ingress => "net-policy-ingress-rule",
-        PolicyType::Egress => "net-policy-egress-rule",
-    };
+    let prefix = ids.rule;
     v_flex()
         .debug_selector(move || format!("{prefix}-{index}"))
         .w_full()
@@ -137,7 +131,7 @@ fn rule_block(
         .child(field(
             look,
             "net-policy-peers",
-            word,
+            ids.peers,
             v_flex().children(peers.into_iter().map(|p| div().child(p))),
         ))
         .child(field(look, "net-policy-ports", "Ports", rule.ports_text()))

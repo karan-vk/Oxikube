@@ -4,7 +4,7 @@
 use gpui::prelude::*;
 use gpui::{AnyElement, Div, ElementId, SharedString, Stateful, div, px, relative};
 use oxikube_app::columns::Tone;
-use oxikube_domain::view::{Condition, ConditionStatus};
+use oxikube_domain::view::Condition;
 use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
 use oxikube_ui::tooltip::Tooltip;
 use oxikube_ui::{ActiveTokens as _, Tokens, u};
@@ -110,15 +110,6 @@ pub(super) fn chip(
     )
 }
 
-/// The tone of a condition status.
-pub(super) fn tone_of(status: ConditionStatus) -> Tone {
-    match status {
-        ConditionStatus::True => Tone::Ok,
-        ConditionStatus::False => Tone::Error,
-        ConditionStatus::Unknown => Tone::Warn,
-    }
-}
-
 /// A link to another object: accent-coloured and underlined on hover when it `enabled`
 /// (the caller adds `on_click`), plain muted text when it cannot be followed yet.
 pub(super) fn link(
@@ -157,6 +148,15 @@ pub(super) fn cell(fraction: f32, content: impl IntoElement) -> Div {
         .child(content)
 }
 
+/// A body row of a table: its [`cell`]s side by side.
+pub(super) fn table_row(id: String) -> Div {
+    h_flex()
+        .debug_selector(move || id)
+        .w_full()
+        .items_center()
+        .py(u(px(2.)))
+}
+
 /// The header row of a table: `(title, fraction)` per column.
 pub(super) fn table_header(look: &Look, id: &'static str, columns: &[(&str, f32)]) -> Div {
     h_flex()
@@ -186,7 +186,7 @@ pub(super) fn more_rows(look: &Look, hidden: usize) -> Option<Div> {
 
 /// One condition: type, status and the reason, then the message wrapped below.
 pub(super) fn condition_line(look: &Look, id: String, condition: &Condition) -> AnyElement {
-    let color = look.tones.of(tone_of(condition.status));
+    let color = look.tones.of(Tone::of_condition(condition.status));
     let reason = condition.reason.as_deref().unwrap_or_default().to_owned();
     v_flex()
         .debug_selector(move || id)

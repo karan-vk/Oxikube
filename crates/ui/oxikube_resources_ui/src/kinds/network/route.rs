@@ -4,14 +4,13 @@
 
 use gpui::prelude::*;
 use gpui::{AnyElement, Context, div};
+use oxikube_app::columns::Tone;
 use oxikube_domain::view::network::{RouteBackend, RouteParent, RouteRule, RouteSummary};
 use oxikube_ui::layout::{h_flex, v_flex};
 use oxikube_ui::u;
 
 use super::panel::NetworkPanel;
-use super::widgets::{
-    Look, MAX_ROWS, chip, conditions, field, heading, link, more_rows, note, shell, tone_of,
-};
+use super::widgets::{Look, MAX_ROWS, chip, conditions, field, heading, more_rows, note, shell};
 
 impl NetworkPanel {
     pub(super) fn route(
@@ -36,7 +35,7 @@ impl NetworkPanel {
                     look,
                     "net-route-accepted-chip",
                     accepted.as_str(),
-                    tone_of(accepted),
+                    Tone::of_condition(accepted),
                 ),
             ))
             .child(heading(
@@ -82,8 +81,6 @@ impl NetworkPanel {
         parent: &RouteParent,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let target = parent.target.clone();
-        let enabled = self.target_of(&target).is_some();
         let accepted = parent.accepted();
         v_flex()
             .debug_selector(move || format!("net-route-parent-{index}"))
@@ -93,23 +90,21 @@ impl NetworkPanel {
                     .gap(u(look.tokens.spacing.md))
                     .items_center()
                     .child(
-                        link(
+                        self.object_link(
                             look,
                             ("net-route-parent-link", index),
                             format!("net-route-parent-link-{index}"),
                             parent.label(),
-                            enabled,
+                            &parent.target,
+                            cx,
                         )
-                        .flex_1()
-                        .when(enabled, |el| {
-                            el.on_click(cx.listener(move |this, _, _, cx| this.open(&target, cx)))
-                        }),
+                        .flex_1(),
                     )
                     .child(chip(
                         look,
                         "net-route-parent-accepted",
                         accepted.as_str(),
-                        tone_of(accepted),
+                        Tone::of_condition(accepted),
                     )),
             )
             .children(parent.controller.as_ref().map(|c| {
@@ -182,18 +177,14 @@ impl NetworkPanel {
         backend: &RouteBackend,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let target = backend.target.clone();
-        let enabled = self.target_of(&target).is_some();
-        link(
+        self.object_link(
             look,
             ("net-route-backend", index),
             format!("net-route-backend-{index}"),
             backend.label(),
-            enabled,
+            &backend.target,
+            cx,
         )
-        .when(enabled, |el| {
-            el.on_click(cx.listener(move |this, _, _, cx| this.open(&target, cx)))
-        })
         .into_any_element()
     }
 }

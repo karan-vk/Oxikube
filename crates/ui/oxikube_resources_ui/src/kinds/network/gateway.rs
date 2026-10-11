@@ -3,6 +3,7 @@
 
 use gpui::prelude::*;
 use gpui::{AnyElement, Context, div};
+use oxikube_app::columns::Tone;
 use oxikube_domain::view::ConditionStatus;
 use oxikube_domain::view::network::{GatewayClassSummary, GatewaySummary, ListenerSummary};
 use oxikube_ui::layout::v_flex;
@@ -10,8 +11,8 @@ use oxikube_ui::u;
 
 use super::panel::NetworkPanel;
 use super::widgets::{
-    Look, MAX_ROWS, cell, chip, conditions, field, heading, link, more_rows, note, shell,
-    table_header, tone_of,
+    Look, MAX_ROWS, cell, chip, conditions, field, heading, more_rows, note, shell, table_header,
+    table_row,
 };
 
 /// The listener table's columns.
@@ -59,7 +60,7 @@ impl NetworkPanel {
                     look,
                     "net-gc-accepted-chip",
                     accepted.as_str(),
-                    tone_of(accepted),
+                    Tone::of_condition(accepted),
                 ),
             ))
             .child(heading(look, "net-gc-conditions", "Conditions", None))
@@ -74,20 +75,16 @@ impl NetworkPanel {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let class = match (summary.class_ref(), summary.class.as_deref()) {
-            (Some(target), Some(name)) => {
-                let enabled = self.target_of(&target).is_some();
-                link(
+            (Some(target), Some(name)) => self
+                .object_link(
                     look,
                     "net-gateway-class-link",
                     "net-gateway-class-link".to_owned(),
                     name.to_owned(),
-                    enabled,
+                    &target,
+                    cx,
                 )
-                .when(enabled, |el| {
-                    el.on_click(cx.listener(move |this, _, _, cx| this.open(&target, cx)))
-                })
-                .into_any_element()
-            }
+                .into_any_element(),
             _ => note(look, "net-gateway-no-class", "not set").into_any_element(),
         };
         let addresses = if summary.addresses.is_empty() {
@@ -112,7 +109,7 @@ impl NetworkPanel {
                 .into_any_element()
         };
         let status = |id: &'static str, status: ConditionStatus| {
-            chip(look, id, status.as_str(), tone_of(status))
+            chip(look, id, status.as_str(), Tone::of_condition(status))
         };
         shell(look, "net-gateway")
             .child(field(look, "net-gateway-class", "Class", class))
@@ -170,11 +167,7 @@ fn listener(look: &Look, index: usize, listener: &ListenerSummary) -> AnyElement
         .debug_selector(move || format!("net-listener-{index}"))
         .w_full()
         .child(
-            gpui::div()
-                .flex()
-                .w_full()
-                .items_center()
-                .py(u(gpui::px(2.)))
+            table_row(format!("net-listener-row-{index}"))
                 .child(cell(name, listener.name.clone()))
                 .child(cell(protocol, protocol_text))
                 .child(cell(

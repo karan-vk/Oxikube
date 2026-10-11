@@ -194,10 +194,7 @@ impl IngressSummary {
             })
             .collect();
         let secret_for = |host: Option<&str>| -> Option<String> {
-            let covering = match host {
-                Some(host) => tls.iter().find(|entry| entry.covers(host)),
-                None => None,
-            };
+            let covering = host.and_then(|host| tls.iter().find(|entry| entry.covers(host)));
             // An entry without hosts is the default certificate of the Ingress.
             covering
                 .or_else(|| tls.iter().find(|entry| entry.hosts.is_empty()))

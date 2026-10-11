@@ -11,6 +11,7 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 
 use jiff::Timestamp;
+use oxikube_domain::view::ConditionStatus;
 use oxikube_domain::{Age, Quantity};
 
 /// How a cell should be coloured, by meaning. The table view maps these to theme tokens.
@@ -25,6 +26,18 @@ pub enum Tone {
     Warn,
     /// Failed: `CrashLoopBackOff`, `Error`, `Failed`.
     Error,
+}
+
+impl Tone {
+    /// The tone of a condition status: `True` ok, `False` error, `Unknown` (nothing reported
+    /// yet) warn.
+    pub const fn of_condition(status: ConditionStatus) -> Self {
+        match status {
+            ConditionStatus::True => Tone::Ok,
+            ConditionStatus::False => Tone::Error,
+            ConditionStatus::Unknown => Tone::Warn,
+        }
+    }
 }
 
 /// The typed value a cell sorts by.

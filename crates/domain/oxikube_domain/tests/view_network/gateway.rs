@@ -114,7 +114,8 @@ fn a_gateway_joins_each_listener_with_its_status_by_name() {
     assert_eq!(https.certificates, ["api-tls"]);
     assert_eq!(https.allowed_namespaces, "Selected namespaces");
     assert_eq!(https.allowed_kinds, ["HTTPRoute"]);
-    assert_eq!(https.condition("ResolvedRefs"), ConditionStatus::False);
+    assert_eq!(&*https.conditions[0].kind, "ResolvedRefs");
+    assert_eq!(https.conditions[0].status, ConditionStatus::False);
     assert_eq!(
         https.conditions[0].reason.as_deref(),
         Some("InvalidCertificateRef")
