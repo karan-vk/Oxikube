@@ -14,6 +14,7 @@ use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::Disableable as _;
 use oxikube_ui::{Icon, IconName, Sizable as _, u};
 
+use super::keys::{Restart, SetImage};
 use super::view::DetailView;
 
 impl DetailView {
@@ -45,6 +46,21 @@ impl DetailView {
             target: self.target.clone(),
         };
         self.deps.dispatcher.dispatch(command, cx);
+    }
+
+    /// The `r` key of the focused drawer: [`restart`](Self::restart).
+    pub(super) fn on_restart(&mut self, _: &Restart, _: &mut Window, cx: &mut Context<Self>) {
+        self.restart(cx);
+    }
+
+    /// The `i` key of the focused drawer: [`open_set_image`](Self::open_set_image).
+    pub(super) fn on_set_image(
+        &mut self,
+        _: &SetImage,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_set_image(window, cx);
     }
 
     /// Opens the set-image dialog for the workload. Does nothing when the verbs are not on offer

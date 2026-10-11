@@ -48,6 +48,9 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_table::SetImageSelected",
         CommandId::WORKLOAD_SET_IMAGE,
     ),
+    // The same two keys in the focused detail drawer.
+    ("resource_detail::Restart", CommandId::WORKLOAD_RESTART),
+    ("resource_detail::SetImage", CommandId::WORKLOAD_SET_IMAGE),
     ("resource_table::DebugSelected", CommandId::POD_DEBUG),
     ("resource_table::ViewYaml", CommandId::RESOURCE_VIEW_YAML),
     (

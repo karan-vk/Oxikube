@@ -415,6 +415,31 @@ fn detail_dialog(d: &mut Detail) -> Option<Entity<SetImageDialog>> {
 }
 
 #[gpui::test]
+fn r_and_i_in_the_focused_drawer_do_what_the_header_tooltips_say(cx: &mut TestAppContext) {
+    let mut d = window_detail(cx);
+    d.f.vcx.update(|_, cx| crate::kinds::init(cx));
+    let table = d.f.open(deployments());
+    d.f.keys(&table, "j enter");
+    d.settle();
+    assert!(d.drawer_view().is_some(), "Enter focuses the drawer");
+
+    // `r` sends `workload::Restart` for the shown object.
+    d.f.dispatcher.clear();
+    d.f.vcx.simulate_keystrokes("r");
+    d.settle();
+    let sent = d.f.dispatcher.sent();
+    assert!(
+        matches!(&sent[..], [Command::WorkloadRestart { target }] if target == &web_ref()),
+        "{sent:?}"
+    );
+
+    // `i` opens the set-image dialog.
+    d.f.vcx.simulate_keystrokes("i");
+    d.settle();
+    assert!(detail_dialog(&mut d).is_some(), "i opens the dialog");
+}
+
+#[gpui::test]
 fn the_detail_header_has_both_buttons_and_the_palette_runs_them(cx: &mut TestAppContext) {
     use oxikube_workspace::command_surface::CommandSurface as _;
     let mut d = window_detail(cx);

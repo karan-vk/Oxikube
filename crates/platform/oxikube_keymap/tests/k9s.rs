@@ -50,7 +50,7 @@ actions!(
         ExtendNext
     ]
 );
-actions!(resource_detail, [Close]);
+actions!(resource_detail, [Close, Restart, SetImage]);
 actions!(palette, [Toggle, OpenJump]);
 actions!(help, [Show]);
 actions!(terminal, [Copy, Split]);
@@ -680,6 +680,49 @@ fn s_scales_the_workloads_that_can_scale_and_stays_a_shell_elsewhere(cx: &mut Te
             .collect::<Vec<_>>()
     });
     assert_eq!(keys, ["s"]);
+}
+
+#[gpui::test]
+fn r_and_i_in_the_detail_drawer_act_on_the_workloads_a_template_change_rolls(
+    cx: &mut TestAppContext,
+) {
+    let drawer = |kind: &str, extra: &str| {
+        strs(&[
+            "Workspace".to_owned(),
+            "ClusterTab connected".to_owned(),
+            "Workspace".to_owned(),
+            "Dock position=right".to_owned(),
+            format!("DetailDrawer mount=drawer kind={kind} {extra}"),
+        ])
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>()
+    };
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        for kind in ["Deployment", "StatefulSet", "DaemonSet"] {
+            let stack = drawer(kind, "");
+            assert_eq!(
+                runs(cx, "r", &strs(&stack)),
+                Some("resource_detail::Restart"),
+                "{kind} on {platform:?}"
+            );
+            assert_eq!(
+                runs(cx, "i", &strs(&stack)),
+                Some("resource_detail::SetImage"),
+                "{kind} on {platform:?}"
+            );
+        }
+        for kind in ["ReplicaSet", "ReplicationController", "Pod", "Node"] {
+            let stack = drawer(kind, "");
+            assert_eq!(runs(cx, "r", &strs(&stack)), None, "{kind}");
+            assert_eq!(runs(cx, "i", &strs(&stack)), None, "{kind}");
+        }
+        // The find field of the drawer has the focus: its keys are text.
+        let editing = drawer("Deployment", "Editing");
+        assert_eq!(press(cx, "r", &strs(&editing)), Resolution::Unbound);
+        assert_eq!(press(cx, "i", &strs(&editing)), Resolution::Unbound);
+    }
 }
 
 #[gpui::test]

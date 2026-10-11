@@ -172,6 +172,9 @@
 [DetailDrawer && !Editing && kind == Secret]
   shift-e          resource_detail::EditSecretDecoded
   x                resource_detail::RevealSecret
+[DetailDrawer && !Editing && (kind == Deployment || kind == StatefulSet || kind == DaemonSet)]
+  i                resource_detail::SetImage
+  r                resource_detail::Restart
 [DetailDrawer && Editing]
   escape           resource_detail::CloseFind
 [LogView && !Editing]

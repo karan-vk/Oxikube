@@ -365,6 +365,15 @@
     }
   },
   {
+    // k9s: r restarts and i sets the images of the workload shown in the drawer (E12-S05), the
+    // table's keys for the same kinds; the header buttons say so in their tooltips.
+    "context": "DetailDrawer && !Editing && (kind == Deployment || kind == StatefulSet || kind == DaemonSet)",
+    "bindings": {
+      "r": "resource_detail::Restart",
+      "i": "resource_detail::SetImage"
+    }
+  },
+  {
     // The find field of the detail has the focus: its keys are text; escape closes it and drops
     // the matches (enter keeps them and returns to the detail).
     "context": "DetailDrawer && Editing",
