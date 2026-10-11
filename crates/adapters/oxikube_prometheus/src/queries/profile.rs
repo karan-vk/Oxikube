@@ -1,7 +1,5 @@
 //! [`Profile`]: how one stack differs from the common conventions.
 
-use oxikube_domain::MetricsProviderKind;
-
 /// Where an Ingress's traffic is measured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum IngressSource {
@@ -18,7 +16,6 @@ pub(super) enum IngressSource {
 /// builders; each stack's module documents the conventions it was written against.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Profile {
-    pub kind: MetricsProviderKind,
     pub ingress: IngressSource,
     /// The store usually holds several clusters, so an unscoped query mixes them: callers add
     /// an external-label matcher (`MetricRequest::with_label`).

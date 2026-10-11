@@ -91,7 +91,6 @@ impl QueryCataloguePort for PromqlCatalogue {
             return Err(MetricQueryError::EmptyWindow);
         }
         let profile = Self::profile(provider);
-        debug_assert_eq!(profile.kind, provider);
         let ctx = Ctx {
             profile,
             request,

@@ -9,12 +9,9 @@
 //!   `cluster`: callers add it with `MetricRequest::with_label`, otherwise the query aggregates
 //!   them all. The tenant header (`X-Scope-OrgID`) belongs to the endpoint, not the query.
 
-use oxikube_domain::MetricsProviderKind;
-
 use super::profile::{IngressSource, Profile};
 
 pub(super) const PROFILE: Profile = Profile {
-    kind: MetricsProviderKind::Mimir,
     ingress: IngressSource::Nginx {
         namespace_label: "exported_namespace",
     },

@@ -32,7 +32,7 @@ fn volumes(ctx: &Ctx<'_>) -> Result<String, MetricQueryError> {
         }
         _ => return Err(ctx.unsupported()),
     }
-    Ok(ctx.sum(&ctx.select(metric, matchers).to_string()))
+    Ok(ctx.sum(ctx.select(metric, matchers)))
 }
 
 /// The ephemeral storage a pod's containers use (`container_fs_usage_bytes`).
@@ -41,5 +41,5 @@ fn writable_layers(ctx: &Ctx<'_>) -> Result<String, MetricQueryError> {
         return Err(ctx.unsupported());
     }
     let series = ctx.select("container_fs_usage_bytes", ctx.cadvisor_matchers());
-    Ok(ctx.sum(&series.to_string()))
+    Ok(ctx.sum(series))
 }

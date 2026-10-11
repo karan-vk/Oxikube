@@ -3,11 +3,8 @@
 
 use oxikube_domain::{MetricKind, MetricQueryError, MetricScope};
 
-use super::ctx::Ctx;
+use super::ctx::{Ctx, LIVE_PHASES};
 use super::selector::Matcher;
-
-/// Pods that hold their requests: pending or running ones, as kube-prometheus' own rules count.
-const LIVE_PHASES: &str = "Pending|Running";
 
 pub(super) fn usage(ctx: &Ctx<'_>) -> Result<String, MetricQueryError> {
     let inner = match ctx.request.kind {
@@ -22,7 +19,7 @@ pub(super) fn usage(ctx: &Ctx<'_>) -> Result<String, MetricQueryError> {
             .to_string(),
         _ => return Err(ctx.unsupported()),
     };
-    Ok(ctx.sum(&inner))
+    Ok(ctx.sum(inner))
 }
 
 /// Requests or limits of one resource. The aggregate scopes count only pods that are pending or
@@ -36,15 +33,15 @@ pub(super) fn reference(ctx: &Ctx<'_>) -> Result<String, MetricQueryError> {
         MetricKind::MemoryLimits => ("kube_pod_container_resource_limits", "memory"),
         _ => return Err(ctx.unsupported()),
     };
+    let target_matchers = ctx.workload_matchers();
     let mut matchers = vec![Matcher::eq("resource", resource)];
-    matchers.extend(ctx.workload_matchers());
+    matchers.extend(target_matchers.iter().cloned());
     let series = ctx.select(metric, matchers);
     match ctx.request.scope() {
-        MetricScope::Pod | MetricScope::Container => Ok(ctx.sum(&series.to_string())),
+        MetricScope::Pod | MetricScope::Container => Ok(ctx.sum(series)),
         MetricScope::Cluster | MetricScope::Node | MetricScope::Namespace => {
             let mut live = vec![Matcher::re("phase", LIVE_PHASES)];
-            if let Some(namespace) = ctx
-                .workload_matchers()
+            if let Some(namespace) = target_matchers
                 .into_iter()
                 .find(|m| m.is_label("namespace"))
             {

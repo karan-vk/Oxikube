@@ -12,12 +12,9 @@
 //! * Ingress controller metrics are scraped through a ServiceMonitor without `honorLabels`, so
 //!   the metric's own `namespace` label is renamed `exported_namespace`.
 
-use oxikube_domain::MetricsProviderKind;
-
 use super::profile::{IngressSource, Profile};
 
 pub(super) const PROFILE: Profile = Profile {
-    kind: MetricsProviderKind::KubePrometheus,
     ingress: IngressSource::Nginx {
         namespace_label: "exported_namespace",
     },

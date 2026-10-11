@@ -4,7 +4,7 @@
 //! cAdvisor counts network per pod (the container label is empty), so there is no per-container
 //! traffic, and a host-network pod reports the node's interfaces.
 
-use oxikube_domain::{MetricKind, MetricQueryError, MetricScope};
+use oxikube_domain::{MetricKind, MetricQueryError, MetricScope, MetricTarget};
 
 use super::ctx::Ctx;
 use super::host;
@@ -27,11 +27,11 @@ fn pods(ctx: &Ctx<'_>) -> Result<String, MetricQueryError> {
         _ => return Err(ctx.unsupported()),
     };
     let series = ctx.select(metric, ctx.workload_matchers());
-    Ok(ctx.sum(&ctx.rate(&series)))
+    Ok(ctx.sum(ctx.rate(&series)))
 }
 
 fn ingress(ctx: &Ctx<'_>) -> Result<String, MetricQueryError> {
-    let oxikube_domain::MetricTarget::Ingress { namespace, name } = ctx.target() else {
+    let MetricTarget::Ingress { namespace, name } = ctx.target() else {
         return Err(ctx.unsupported());
     };
     let received = ctx.request.kind == MetricKind::NetworkRx;
@@ -65,5 +65,5 @@ fn ingress(ctx: &Ctx<'_>) -> Result<String, MetricQueryError> {
             )
         }
     };
-    Ok(ctx.sum(&ctx.rate(&series)))
+    Ok(ctx.sum(ctx.rate(&series)))
 }

@@ -1,9 +1,14 @@
 //! [`Ctx`]: what the builders of one query share.
 
-use oxikube_domain::{MetricQueryError, MetricRequest, MetricTarget, PodSelector};
+use std::fmt::Display;
+
+use oxikube_domain::{MetricQueryError, MetricRequest, MetricTarget};
 
 use super::profile::Profile;
 use super::selector::{Matcher, Selector};
+
+/// Pods that hold their requests: pending or running ones, as kube-prometheus' own rules count.
+pub(super) const LIVE_PHASES: &str = "Pending|Running";
 
 /// The `rate()` window, the stack's profile and the request being built.
 pub(super) struct Ctx<'a> {
@@ -31,7 +36,7 @@ impl<'a> Ctx<'a> {
 
     /// `sum(inner)`, or `sum by (pod|container) (inner)` for the scopes whose result has a
     /// series per pod or container.
-    pub(super) fn sum(&self, inner: &str) -> String {
+    pub(super) fn sum(&self, inner: impl Display) -> String {
         match self.target().series_label() {
             Some(label) => format!("sum by ({label}) ({inner})"),
             None => format!("sum({inner})"),
@@ -53,13 +58,9 @@ impl<'a> Ctx<'a> {
             MetricTarget::Node(node) => vec![Matcher::eq("node", node)],
             MetricTarget::Namespace(namespace) => vec![Matcher::eq("namespace", namespace)],
             MetricTarget::Pod { namespace, pods } => {
-                let names = match pods {
-                    PodSelector::One(name) => std::slice::from_ref(name),
-                    PodSelector::Any(names) => names.as_slice(),
-                };
                 vec![
                     Matcher::eq("namespace", namespace),
-                    Matcher::one_of("pod", names),
+                    Matcher::one_of("pod", pods.names()),
                 ]
             }
             MetricTarget::Container {

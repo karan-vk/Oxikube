@@ -11,12 +11,9 @@
 //! * The querier enforces namespaces through its tenancy port; this catalogue targets the
 //!   cluster-wide port the detector finds.
 
-use oxikube_domain::MetricsProviderKind;
-
 use super::profile::{IngressSource, Profile};
 
 pub(super) const PROFILE: Profile = Profile {
-    kind: MetricsProviderKind::OpenShift,
     ingress: IngressSource::HaproxyRouter,
     shared_store: false,
 };

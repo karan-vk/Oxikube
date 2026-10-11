@@ -6,12 +6,9 @@
 //! matched by `node_uname_info`, and ingress-nginx under `exported_namespace` (a scrape job that
 //! does not set `honor_labels` renames the metric's own `namespace`).
 
-use oxikube_domain::MetricsProviderKind;
-
 use super::profile::{IngressSource, Profile};
 
 pub(super) const PROFILE: Profile = Profile {
-    kind: MetricsProviderKind::Prometheus,
     ingress: IngressSource::Nginx {
         namespace_label: "exported_namespace",
     },

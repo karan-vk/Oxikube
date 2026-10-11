@@ -11,12 +11,9 @@
 //! * One store often serves several clusters (vmagent `-remoteWrite.label=cluster=...`): see
 //!   [`Profile::shared_store`](super::profile::Profile).
 
-use oxikube_domain::MetricsProviderKind;
-
 use super::profile::{IngressSource, Profile};
 
 pub(super) const PROFILE: Profile = Profile {
-    kind: MetricsProviderKind::VictoriaMetrics,
     ingress: IngressSource::Nginx {
         namespace_label: "exported_namespace",
     },
