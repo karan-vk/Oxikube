@@ -1,5 +1,7 @@
-//! `editor::NewManifest`, `editor::ToggleReadOnly` and `editor::ToggleSoftWrap` on the command
-//! bus, each with its MCP tool stub (`app.editor_new_manifest`, ...).
+//! `editor::NewManifest`, `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (E10-S04) and
+//! `resource::Edit`, `resource::ViewYamlInEditor`, `editor::ToggleManagedFields`,
+//! `editor::ToggleSecretMask` (E10-S06) on the command bus, each with its MCP tool stub
+//! (`app.editor_new_manifest`, `k8s.resource_edit`, ...).
 //!
 //! The keymap (through the GPUI actions of the same names), the toolbar, the palette and agents
 //! all dispatch the bus command. Its handler queues an [`EditorRequest`] on the window's
@@ -10,14 +12,20 @@
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use oxikube_domain::command::{self, Command, CommandId};
-use oxikube_domain::ids::ClusterId;
+use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_domain::{OxiError, OxiResult};
 
+use crate::open::OpenMode;
+
 /// The commands [`register_commands`] handles.
-pub const EDITOR_COMMANDS: [CommandId; 3] = [
+pub const EDITOR_COMMANDS: [CommandId; 7] = [
     CommandId::EDITOR_NEW_MANIFEST,
+    CommandId::EDITOR_TOGGLE_MANAGED_FIELDS,
     CommandId::EDITOR_TOGGLE_READ_ONLY,
+    CommandId::EDITOR_TOGGLE_SECRET_MASK,
     CommandId::EDITOR_TOGGLE_SOFT_WRAP,
+    CommandId::RESOURCE_EDIT,
+    CommandId::RESOURCE_VIEW_YAML_IN_EDITOR,
 ];
 
 /// What the window's manifest editors should do.
@@ -28,6 +36,19 @@ pub enum EditorRequest {
         /// The cluster whose tab gets the editor.
         cluster: Option<ClusterId>,
     },
+    /// `resource::Edit` (`mode` edit) or `resource::ViewYamlInEditor` (`mode` view): a tab titled
+    /// `kind/name` in the object's cluster tab, reading the object fresh. The tab of the same
+    /// object is reused.
+    Open {
+        /// The object.
+        target: ResourceRef,
+        /// Editable or read-only.
+        mode: OpenMode,
+    },
+    /// `editor::ToggleManagedFields` on the focused editor, else the active pane's.
+    ToggleManagedFields,
+    /// `editor::ToggleSecretMask` on the focused editor, else the active pane's.
+    ToggleSecretMask,
     /// `editor::ToggleReadOnly` on the focused editor, else the active pane's.
     ToggleReadOnly,
     /// `editor::ToggleSoftWrap` on the focused editor, else the active pane's.
@@ -39,6 +60,16 @@ impl EditorRequest {
     pub fn of(command: Command) -> Option<Self> {
         match command {
             Command::EditorNewManifest { cluster } => Some(EditorRequest::New { cluster }),
+            Command::ResourceEdit { target } => Some(EditorRequest::Open {
+                target,
+                mode: OpenMode::Edit,
+            }),
+            Command::ResourceViewYamlInEditor { target } => Some(EditorRequest::Open {
+                target,
+                mode: OpenMode::View,
+            }),
+            Command::EditorToggleManagedFields => Some(EditorRequest::ToggleManagedFields),
+            Command::EditorToggleSecretMask => Some(EditorRequest::ToggleSecretMask),
             Command::EditorToggleReadOnly => Some(EditorRequest::ToggleReadOnly),
             Command::EditorToggleSoftWrap => Some(EditorRequest::ToggleSoftWrap),
             _ => None,

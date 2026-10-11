@@ -5823,6 +5823,7 @@ name = "oxikube_editor"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "gpui-pre",
  "gpui-pre-platform",
@@ -5843,6 +5844,7 @@ dependencies = [
  "regex",
  "schemars",
  "serde",
+ "serde-saphyr 1.3.0",
  "serde_json",
  "tracing",
 ]

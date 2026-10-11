@@ -192,6 +192,8 @@
 [(everywhere)]
   ctrl-shift-e     editor::NewManifest
 [ManifestEditor]
+  alt-m            editor::ToggleManagedFields
+  alt-v            editor::ToggleSecretMask
   alt-z            editor::ToggleSoftWrap
   ctrl-alt-r       editor::ToggleReadOnly
 [Terminal || ManifestEditor || Palette || JumpBar || Input || Editing]

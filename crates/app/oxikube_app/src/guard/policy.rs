@@ -101,6 +101,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourcePreviousMatch { target }
         | Command::ResourceRefreshDescribe { target }
         | Command::ResourceViewYaml { target }
+        | Command::ResourceViewYamlInEditor { target }
         | Command::ResourceViewDescribe { target }
         | Command::ResourceEdit { target }
         | Command::ResourceDelete { target, .. }
@@ -183,6 +184,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::TerminalSearchNext
         | Command::TerminalSearchPrevious
         | Command::TerminalSelectAll
+        | Command::EditorToggleManagedFields
+        | Command::EditorToggleSecretMask
         | Command::EditorToggleReadOnly
         | Command::EditorToggleSoftWrap => None,
     }

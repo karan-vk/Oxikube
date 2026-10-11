@@ -567,7 +567,8 @@ fn the_yaml_and_describe_tabs_of_a_row_show_the_object_and_its_description(
 fn the_k9s_verbs_work_through_the_real_keymap_and_bus(cx: &mut TestAppContext) {
     // E11-S07: `y` and `d` open the drawer on the YAML and Describe tab of the cursor row, and
     // `ctrl-w` shows the wide columns, all through the shipped keymap, the real `CommandBus` and
-    // the window's views. (Port forwarding and editing are not installed: their keys say so.)
+    // the window's views. (Port forwarding is not installed: its keys say so. `e` opens the manifest
+    // editor, E10-S06.)
     let mut app = App::start(cx, TestPorts::seeded());
     app.serve([kind("", "v1", "Pod", "pods")]);
     let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
@@ -629,13 +630,19 @@ fn the_k9s_verbs_work_through_the_real_keymap_and_bus(cx: &mut TestAppContext) {
     app.tick();
     assert!(!qos(&mut app), "and a second one hid them");
 
-    // `e` and `shift-f` name what is missing instead of doing nothing.
-    app.press("e");
-    app.tick();
-    app.expect_toast("Editing is not available yet");
+    // `shift-f` names what is missing instead of doing nothing.
     app.press("shift-f");
     app.tick();
     app.expect_toast("Port forwarding is not available yet");
+    // `e` opens the cursor row in the manifest editor (and takes the focus).
+    app.press("e");
+    app.tick();
+    let editors = app.vcx.update(|_, cx| {
+        ws.read(cx)
+            .items_of_type::<oxikube_editor::view::ManifestEditor>()
+            .len()
+    });
+    assert_eq!(editors, 1, "e opened the pod in the editor");
 }
 
 #[gpui::test]

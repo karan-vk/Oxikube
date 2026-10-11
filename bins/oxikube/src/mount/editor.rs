@@ -4,7 +4,9 @@
 //! empty editor in the shown cluster's tab, its YAML checked against that cluster's schemas
 //! through the session's `SchemaPort`; a tab of the window with syntax checks only when no
 //! cluster tab is shown) and the focused editor's `editor::ToggleReadOnly` /
-//! `editor::ToggleSoftWrap`. The keymap's `editor::NewManifest` reaches the bus through the
+//! `editor::ToggleSoftWrap`; E10-S06 adds `resource::Edit` / `resource::ViewYamlInEditor`
+//! (an editor on a freshly read object in the object's cluster tab, through the session's
+//! `ResourceReader`) and the toggles for `managedFields` and Secret values. The keymap's `editor::NewManifest` reaches the bus through the
 //! dispatcher installed here.
 
 use std::rc::Rc;

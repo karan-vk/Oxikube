@@ -320,6 +320,15 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         cluster: Option<ClusterId>,
     },
+    /// Show or hide `metadata.managedFields` in the focused manifest editor of a resource
+    /// (E10-S06); the active pane's editor when focus is elsewhere. The text is rendered again
+    /// from the object the editor holds.
+    #[serde(rename = "editor::ToggleManagedFields")]
+    EditorToggleManagedFields,
+    /// Show the values of a Secret in the focused manifest editor of a resource, or mask them
+    /// again (E10-S06). The values stay in memory; the revealed text is never written.
+    #[serde(rename = "editor::ToggleSecretMask")]
+    EditorToggleSecretMask,
     /// Make the focused manifest editor read-only, or editable again (E10-S04); the active
     /// pane's editor when focus is elsewhere. A view state, not the cluster's read-only mode.
     #[serde(rename = "editor::ToggleReadOnly")]
@@ -475,6 +484,13 @@ pub enum Command {
     /// Open a resource's YAML.
     #[serde(rename = "resource::ViewYaml")]
     ResourceViewYaml {
+        /// The resource to show.
+        target: ResourceRef,
+    },
+    /// Open a resource's YAML in a read-only manifest editor tab titled `kind/name` (E10-S06):
+    /// Secret values masked, `managedFields` hidden. The tab of the same object is reused.
+    #[serde(rename = "resource::ViewYamlInEditor")]
+    ResourceViewYamlInEditor {
         /// The resource to show.
         target: ResourceRef,
     },
@@ -938,6 +954,8 @@ impl Command {
             Command::TerminalSearchPrevious => CommandId::TERMINAL_SEARCH_PREVIOUS,
             Command::TerminalSelectAll => CommandId::TERMINAL_SELECT_ALL,
             Command::EditorNewManifest { .. } => CommandId::EDITOR_NEW_MANIFEST,
+            Command::EditorToggleManagedFields => CommandId::EDITOR_TOGGLE_MANAGED_FIELDS,
+            Command::EditorToggleSecretMask => CommandId::EDITOR_TOGGLE_SECRET_MASK,
             Command::EditorToggleReadOnly => CommandId::EDITOR_TOGGLE_READ_ONLY,
             Command::EditorToggleSoftWrap => CommandId::EDITOR_TOGGLE_SOFT_WRAP,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
@@ -961,6 +979,7 @@ impl Command {
             Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
             Command::TableSetFilter { .. } => CommandId::TABLE_SET_FILTER,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
+            Command::ResourceViewYamlInEditor { .. } => CommandId::RESOURCE_VIEW_YAML_IN_EDITOR,
             Command::ResourceViewDescribe { .. } => CommandId::RESOURCE_VIEW_DESCRIBE,
             Command::ResourceEdit { .. } => CommandId::RESOURCE_EDIT,
             Command::TableToggleWide { .. } => CommandId::TABLE_TOGGLE_WIDE,
@@ -1046,6 +1065,7 @@ impl Command {
             | Command::ResourcePreviousMatch { target }
             | Command::ResourceRefreshDescribe { target }
             | Command::ResourceViewYaml { target }
+            | Command::ResourceViewYamlInEditor { target }
             | Command::ResourceViewDescribe { target }
             | Command::ResourceEdit { target }
             | Command::ResourceDelete { target, .. }
@@ -1235,6 +1255,8 @@ mod tests {
             Command::EditorNewManifest {
                 cluster: Some(cluster()),
             },
+            Command::EditorToggleManagedFields,
+            Command::EditorToggleSecretMask,
             Command::EditorToggleReadOnly,
             Command::EditorToggleSoftWrap,
             Command::CrdOpenList { cluster: cluster() },
@@ -1282,6 +1304,7 @@ mod tests {
                 text: "/api -l app=x".to_owned(),
             },
             Command::ResourceViewYaml { target: pod() },
+            Command::ResourceViewYamlInEditor { target: pod() },
             Command::ResourceViewDescribe { target: pod() },
             Command::ResourceEdit { target: pod() },
             Command::TableToggleWide {
@@ -1610,6 +1633,8 @@ mod tests {
                     | Command::TerminalSearchPrevious
                     | Command::TerminalSelectAll
                     | Command::EditorNewManifest { .. }
+                    | Command::EditorToggleManagedFields
+                    | Command::EditorToggleSecretMask
                     | Command::EditorToggleReadOnly
                     | Command::EditorToggleSoftWrap
                     | Command::CrdOpenList { .. }
@@ -1631,6 +1656,7 @@ mod tests {
                     | Command::TableFocusFilter { .. }
                     | Command::TableSetFilter { .. }
                     | Command::ResourceViewYaml { .. }
+                    | Command::ResourceViewYamlInEditor { .. }
                     | Command::ResourceViewDescribe { .. }
                     | Command::ResourceEdit { .. }
                     | Command::TableToggleWide { .. }

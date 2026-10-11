@@ -36,7 +36,9 @@ pub use controller::{ClusterEditorHost, EditorHost, EditorViews, EditorViewsDeps
 pub use manifest_editor::{ManifestEditor, ManifestEditorParts};
 pub use model::{Accepted, ManifestModel, Problems};
 pub use schemas::{SchemaSource, SessionSchemas};
-pub use validation::{KnownSchemas, VALIDATION_DEBOUNCE, Validation, validate_text};
+pub use validation::{
+    KnownSchemas, VALIDATION_DEBOUNCE, Validation, validate_text, validate_text_with,
+};
 
 actions!(
     editor,
@@ -48,6 +50,12 @@ actions!(
         ToggleReadOnly,
         /// Wrap the focused manifest editor's long lines, or not (`editor::ToggleSoftWrap`).
         ToggleSoftWrap,
+        /// Show or hide `metadata.managedFields` in the focused editor of a resource
+        /// (`editor::ToggleManagedFields`).
+        ToggleManagedFields,
+        /// Show the values of the Secret in the focused editor, or mask them again
+        /// (`editor::ToggleSecretMask`).
+        ToggleSecretMask,
     ]
 );
 

@@ -35,13 +35,16 @@ schemars.workspace = true
 serde.workspace = true
 # Schema `enum` values are JSON.
 serde_json.workspace = true
+# `open::render_resource` writes the object as YAML (the repo's writer, not serde_yml).
+serde-saphyr.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
-oxikube_assets.workspace = true
+async-trait.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 insta.workspace = true
+oxikube_assets.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
