@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use oxikube_domain::build::{job_from_cronjob, suspend_patch};
-use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::{JobSummary, OxiError, OxiResult, Resource};
 use oxikube_ports::{Patch, ResourceReader, WriteOptions};
 
@@ -70,15 +70,14 @@ impl WorkloadService {
         let namespace = cronjob.namespace();
         let job_gvk = Gvk::new("batch", "v1", "Job");
         let writer = mutation.writer();
-        let options = options(mutation.dry_run());
         if !mutation.dry_run() {
-            let rehearsal = WriteOptions {
-                dry_run: true,
-                ..options.clone()
-            };
-            writer.create(&job_gvk, namespace, &job, &rehearsal).await?;
+            writer
+                .create(&job_gvk, namespace, &job, &options(true))
+                .await?;
         }
-        let created = writer.create(&job_gvk, namespace, &job, &options).await?;
+        let created = writer
+            .create(&job_gvk, namespace, &job, &options(mutation.dry_run()))
+            .await?;
         Ok(Triggered {
             job: ResourceRef::new(
                 cronjob.cluster.clone(),
@@ -148,12 +147,8 @@ impl WorkloadService {
         let writer = mutation.writer();
         let (namespace, name) = (target.namespace(), &*target.name);
         if !mutation.dry_run() {
-            let rehearsal = WriteOptions {
-                dry_run: true,
-                ..options(false)
-            };
             writer
-                .patch(&target.gvk, namespace, name, &patch, &rehearsal)
+                .patch(&target.gvk, namespace, name, &patch, &options(true))
                 .await?;
         }
         writer
@@ -180,10 +175,7 @@ impl WorkloadService {
             .await
     }
 
-    fn reader(
-        &self,
-        cluster: &oxikube_domain::ids::ClusterId,
-    ) -> OxiResult<Arc<dyn ResourceReader>> {
+    fn reader(&self, cluster: &ClusterId) -> OxiResult<Arc<dyn ResourceReader>> {
         self.sessions
             .get(cluster)
             .ok_or_else(|| OxiError::not_found("the cluster is not open"))?

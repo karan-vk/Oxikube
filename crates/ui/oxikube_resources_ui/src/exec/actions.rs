@@ -62,8 +62,8 @@ pub fn exec_row_actions() -> Vec<RowActionSpec> {
 }
 
 /// Whether `command` is a row action of a single object (none is bulk): the exec-class ones and
-/// the k9s verbs `l`, `e` and `shift-f` (E11-S07), and the CronJob and Job verbs `t` and `s` (E12-S08). With several rows selected, the table's key
-/// runs it on the cursor row and says so.
+/// the k9s verbs `l`, `e` and `shift-f` (E11-S07) and the CronJob and Job verbs `t` and `s`
+/// (E12-S08). With several rows selected, the table's key runs it on the cursor row and says so.
 pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
     matches!(
         command,

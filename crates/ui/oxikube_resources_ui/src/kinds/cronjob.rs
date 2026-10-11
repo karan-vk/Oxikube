@@ -15,24 +15,24 @@ use oxikube_domain::kinds::ResourceKind;
 use super::{KindSpec, KindSpecs};
 
 /// The CronJob's own actions.
-pub const ACTIONS: &[CommandId] = &[
+pub(super) const ACTIONS: &[CommandId] = &[
     CommandId::CRONJOB_TRIGGER,
     CommandId::CRONJOB_SUSPEND,
     CommandId::CRONJOB_RESUME,
 ];
 
 /// Where "Trigger" sits in a CronJob's menu: after "View Logs" and the shells (100 to 130).
-pub const TRIGGER_ORDER: u16 = 140;
+const TRIGGER_ORDER: u16 = 140;
 /// Where "Suspend" sits: right after "Trigger".
-pub const SUSPEND_ORDER: u16 = 150;
+const SUSPEND_ORDER: u16 = 150;
 /// Where "Resume" sits: right after "Suspend".
-pub const RESUME_ORDER: u16 = 160;
+const RESUME_ORDER: u16 = 160;
 
 /// Where the CronJobs entry sits in the Workloads section (after the Jobs).
 const SIDEBAR_RANK: u32 = 80;
 
 /// The CronJob kind: shared columns, the generic detail, its three actions.
-pub fn spec() -> KindSpec {
+fn spec() -> KindSpec {
     KindSpec::new(
         KindMeta::new(
             Gvk::new("batch", "v1", "CronJob"),
@@ -46,7 +46,7 @@ pub fn spec() -> KindSpec {
 }
 
 /// Registers the CronJob kind.
-pub fn init(cx: &mut App) {
+pub(super) fn init(cx: &mut App) {
     if let Err(error) = KindSpecs::register(cx, spec()) {
         tracing::error!(%error, "the CronJob kind was not registered");
     }
@@ -60,7 +60,7 @@ pub(crate) fn is_cronjob(kind: &ResourceKind) -> bool {
 /// The row actions of CronJobs: "Trigger", "Suspend" and "Resume", one object at a time. Each
 /// mutates, so the menu greys it out on a read-only cluster and the bus asks for a confirmation
 /// (risk low).
-pub fn row_actions() -> Vec<RowActionSpec> {
+pub(super) fn row_actions() -> Vec<RowActionSpec> {
     vec![
         RowActionSpec::new(CommandId::CRONJOB_TRIGGER, |target| {
             Command::CronJobTrigger {

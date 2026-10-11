@@ -6,6 +6,8 @@ use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::safety::{ConfirmTier, Risk};
 use oxikube_ports::{ClusterPrefs, NodeShellSpec};
 
+use crate::actions::object_label;
+
 /// The confirmation tier the guard asks for before running a command.
 ///
 /// * A non-mutating command never confirms ([`ConfirmTier::None`]).
@@ -266,26 +268,22 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
 /// name: a trigger creates a Job, a Job's suspend deletes its running pods. `None` for any other
 /// command.
 fn workload_summary(command: &Command, context: &str) -> Option<String> {
-    let label = |target: &ResourceRef| match target.namespace() {
-        Some(ns) => format!("{} {ns}/{}", target.gvk.kind, target.name),
-        None => format!("{} {}", target.gvk.kind, target.name),
-    };
     Some(match command {
         Command::CronJobTrigger { target } => format!(
             "Run {} now on {context}: a Job is created from its job template, as `kubectl create \
              job --from` does.",
-            label(target)
+            object_label(target)
         ),
         Command::CronJobSuspend { target } => format!(
             "Suspend {} on {context}: it creates no Jobs until it is resumed.",
-            label(target)
+            object_label(target)
         ),
         Command::JobSuspend { target } => format!(
             "Suspend {} on {context}: its running pods are deleted until it is resumed.",
-            label(target)
+            object_label(target)
         ),
         Command::CronJobResume { target } | Command::JobResume { target } => {
-            format!("Resume {} on {context}.", label(target))
+            format!("Resume {} on {context}.", object_label(target))
         }
         _ => return None,
     })

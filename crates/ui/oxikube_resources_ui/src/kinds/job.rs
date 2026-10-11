@@ -15,18 +15,18 @@ use oxikube_domain::kinds::ResourceKind;
 use super::{KindSpec, KindSpecs};
 
 /// The Job's own actions.
-pub const ACTIONS: &[CommandId] = &[CommandId::JOB_SUSPEND, CommandId::JOB_RESUME];
+pub(super) const ACTIONS: &[CommandId] = &[CommandId::JOB_SUSPEND, CommandId::JOB_RESUME];
 
 /// Where "Suspend" sits in a Job's menu: after "View Logs" (100).
-pub const SUSPEND_ORDER: u16 = 150;
+const SUSPEND_ORDER: u16 = 150;
 /// Where "Resume" sits: right after "Suspend".
-pub const RESUME_ORDER: u16 = 160;
+const RESUME_ORDER: u16 = 160;
 
 /// Where the Jobs entry sits in the Workloads section (after the ReplicationControllers).
 const SIDEBAR_RANK: u32 = 70;
 
 /// The Job kind: shared columns, the generic detail, its two actions.
-pub fn spec() -> KindSpec {
+fn spec() -> KindSpec {
     KindSpec::new(
         KindMeta::new(
             Gvk::new("batch", "v1", "Job"),
@@ -40,7 +40,7 @@ pub fn spec() -> KindSpec {
 }
 
 /// Registers the Job kind.
-pub fn init(cx: &mut App) {
+pub(super) fn init(cx: &mut App) {
     if let Err(error) = KindSpecs::register(cx, spec()) {
         tracing::error!(%error, "the Job kind was not registered");
     }
@@ -52,7 +52,7 @@ pub(crate) fn is_job(kind: &ResourceKind) -> bool {
 }
 
 /// The row actions of Jobs: "Suspend" and "Resume", one object at a time.
-pub fn row_actions() -> Vec<RowActionSpec> {
+pub(super) fn row_actions() -> Vec<RowActionSpec> {
     vec![
         RowActionSpec::new(CommandId::JOB_SUSPEND, |target| Command::JobSuspend {
             target: target.clone(),

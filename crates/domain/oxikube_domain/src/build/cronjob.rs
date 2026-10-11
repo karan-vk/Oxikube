@@ -3,8 +3,8 @@
 // name and an owner reference to the CronJob; mirrors `kubectl create job --from=cronjob/x`).
 // MIT licence; the full text follows. Modifications (c) Oxikube contributors: the manifest builder
 // is pure (no kube `Api`; the kube adapter and the app both call it), truncates the generated-name
-// prefix to what the server keeps, keeps the job template's labels and annotations and adds kubectl's `cronjob.kubernetes.io/instantiate`
-// annotation, and is pinned by exact-JSON tests.
+// prefix to what the server keeps, keeps the job template's labels and annotations and adds
+// kubectl's `cronjob.kubernetes.io/instantiate` annotation, and is pinned by exact-JSON tests.
 //
 // Copyright (c) 2021 Deepu K Sasidharan
 //

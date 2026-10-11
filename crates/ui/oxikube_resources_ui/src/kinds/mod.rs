@@ -47,9 +47,9 @@
 mod builtin;
 mod config;
 pub mod crd;
-pub mod cronjob;
+mod cronjob;
 mod detail;
-pub mod job;
+pub(crate) mod job;
 mod sidebar;
 mod spec;
 mod specs;
