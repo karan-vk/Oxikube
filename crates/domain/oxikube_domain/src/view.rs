@@ -134,7 +134,7 @@ impl Condition {
 // document and allocate nothing.
 
 /// Reject `res` unless its group and kind match one of `accepted`.
-fn check_kind(
+pub(crate) fn check_kind(
     res: &Resource,
     expected: &'static str,
     accepted: &[(&str, &str)],
@@ -156,7 +156,7 @@ fn check_kind(
 }
 
 /// `v[key]`, or `null` when absent or `v` is not an object.
-fn sub<'a>(v: JsonRef<'a>, key: &str) -> JsonRef<'a> {
+pub(crate) fn sub<'a>(v: JsonRef<'a>, key: &str) -> JsonRef<'a> {
     v.get(key).unwrap_or(JsonRef::NULL)
 }
 
@@ -166,17 +166,17 @@ fn obj_of<'a>(v: JsonRef<'a>, key: &str) -> Option<JsonRef<'a>> {
 }
 
 /// `v[key]` as a non-empty string.
-fn str_of<'a>(v: JsonRef<'a>, key: &str) -> Option<&'a str> {
+pub(crate) fn str_of<'a>(v: JsonRef<'a>, key: &str) -> Option<&'a str> {
     v.get(key)?.as_str().filter(|s| !s.is_empty())
 }
 
 /// `v[key]` as a non-empty shared string.
-fn arc_of(v: JsonRef<'_>, key: &str) -> Option<Arc<str>> {
+pub(crate) fn arc_of(v: JsonRef<'_>, key: &str) -> Option<Arc<str>> {
     str_of(v, key).map(Arc::from)
 }
 
 /// `v[key]` as an array; empty when absent or not an array.
-fn arr_of<'a>(v: JsonRef<'a>, key: &str) -> Array<'a> {
+pub(crate) fn arr_of<'a>(v: JsonRef<'a>, key: &str) -> Array<'a> {
     v.get(key)
         .and_then(JsonRef::as_array)
         .unwrap_or(Array::EMPTY)

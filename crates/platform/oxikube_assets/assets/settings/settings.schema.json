@@ -127,6 +127,9 @@
         "logs": {
           "$ref": "#/$defs/LogsContent"
         },
+        "metrics": {
+          "$ref": "#/$defs/MetricsSettingsContent"
+        },
         "node_shell": {
           "anyOf": [
             {
@@ -662,6 +665,23 @@
           "description": "Wrap long lines instead of letting them run off the edge (key `w` toggles it per view).\nA change applies to open views at once.",
           "type": [
             "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "MetricsSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about metrics.",
+      "properties": {
+        "gpu_vendors": {
+          "description": "Extended resource names counted as GPUs, for example `nvidia.com/gpu`. Each is summed as\na whole number per pod, node and namespace. This list replaces the default as a whole;\nan empty list turns GPU accounting off.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
             "null"
           ]
         }
@@ -1330,6 +1350,9 @@
     },
     "logs": {
       "$ref": "#/$defs/LogsContent"
+    },
+    "metrics": {
+      "$ref": "#/$defs/MetricsSettingsContent"
     },
     "node_shell": {
       "anyOf": [

@@ -262,6 +262,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   lines. `selection_context` builds the same block from lines the viewer selected ("Send to agent"). `PendingContext`
   is the small queue between the viewer and the agent panel: items wait (32 at most, the oldest dropped and counted)
   until a `ContextConsumer` attaches, which receives them in order, then every later send; nothing is persisted.
+- `oxikube_domain::utilisation` + `oxikube_app::metrics` (E13-S02) — the utilisation maths behind `%CPU/R`, `%CPU/L`,
+  `%MEM/R`, `%MEM/L` and the allocation views. Domain (pure, exact `Quantity` maths): `ResourceAmounts` (CPU, memory, and
+  whole-number GPU counts per vendor resource name), `aggregate_pod_requests_limits(&Resource, &GpuVendors)` (the Kubernetes
+  effective figure: regular containers plus sidecars, or the peak of an init container with the sidecars started before it,
+  plus `spec.overhead`, with `spec.resources` replacing the sum), `PodAllocation` (node, namespace, phase), `NodeAllocatable`,
+  `percent(usage, base) -> Option<f64>` (`None` on a zero or missing base: a dash, never `0`), `Utilisation::of_sample`.
+  App: `UtilisationAggregator` (`pod_resources`, `pod_utilisation`, `nodes`, `namespaces`) over `&Resource` snapshots of the
+  `ResourceStore`, plus `allocate_nodes` / `allocate_namespaces`. Terminated pods hold nothing, unscheduled pods count for
+  their namespace only. The GPU list is the `metrics.gpu_vendors` setting (`oxikube_settings::MetricsSettings`, also under
+  `clusters.<id>.metrics`); the binary pushes `MetricsSettings::gpu_table` into the aggregator's `GpuVendorsHandle` on every
+  change (`bins/oxikube/src/metrics_settings.rs`), so an edit applies to the next computation. Oracle: the semantics of
+  `kubectl-view-allocations` (CC0), reimplemented as a model in the tests; `cargo bench -p oxikube_app --bench utilisation`.
 - `oxikube_app::exec` (E09-S08) — `ExecService`: `open_shell(pod, container, &ShellOptions)` finds the shell with a quick
   non-interactive exec per entry of the chain (`terminal.exec_shells`, default `bash`, `sh`; exit 126/127 or `executable file
   not found` means missing, anything else stops the search), opens the first the container has over the session's `ExecPort`

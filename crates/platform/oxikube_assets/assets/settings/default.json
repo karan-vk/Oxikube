@@ -47,6 +47,15 @@
   "kubeconfig": {
     "sources": [{ "kind": "default" }]
   },
+  // Metrics and utilisation (E13). Every key can also be set under "clusters.<id>.metrics".
+  //   gpu_vendors   the extended resource names counted as GPUs in the requests, limits and
+  //                 allocation figures of pods, nodes and namespaces. A GPU is a whole-number
+  //                 count, summed per name. Your list replaces this one (an empty list turns GPU
+  //                 accounting off); list a MIG profile or a vendor of your own by its exact
+  //                 resource name. Edits apply at once.
+  "metrics": {
+    "gpu_vendors": ["nvidia.com/gpu", "amd.com/gpu", "gpu.intel.com/i915", "gpu.intel.com/xe"]
+  },
   // Session restore: reopen the clusters, tabs and namespaces of your last session at launch.
   // Off by default. Restoring starts after the window is drawn, so it never delays start-up, and a
   // cluster that fails or cannot be reached only shows an error in its own tab.

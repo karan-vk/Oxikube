@@ -31,6 +31,7 @@
 //! | [`context`] | E08-S09 | [`ContextRegistry`]: `@`-mentions routed to their [`ContextProviderPort`](oxikube_ports::ContextProviderPort) within a byte budget; [`LogContextProvider`] (`@logs`), [`selection_context`] (the viewer's selection as a block) and the [`PendingContext`] queue "Send to agent" fills until the agent panel exists |
 //! | [`tools`] | E08-S09 | [`ToolRegistry`]: read-only tools by name, listed, hidden without their capabilities and invoked after a schema check; `tools::k8s::get_logs` (`k8s.get_logs`: a pod's or a selector's newest lines, bounded and redacted) |
 //! | [`columns`] | E07-S02 | [`ColumnProvider`]: table columns and cells per kind. [`CoreColumns`] (a table-driven catalogue of ~40 core kinds; Ready / Status / Restarts from the domain view-models; CPU and memory as pending metrics hooks) and [`TableColumns`] (a Table feed's server columns, `priority > 0` as `wide`); [`Cell`]s carry text, a typed sort key and a tone |
+//! | [`metrics`] | E13-S02 | [`UtilisationAggregator`]: per-pod `%CPU/R`-style percents, per-node ([`NodeAllocation`]) and per-namespace ([`NamespaceAllocation`]) requests and limits over resource snapshots, with the hot-reloadable GPU vendor list ([`GpuVendorsHandle`], `metrics.gpu_vendors`); the pure maths is `oxikube_domain::utilisation` |
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
 pub mod actions;
@@ -45,6 +46,7 @@ pub mod guard;
 pub mod integrations;
 pub mod kinds;
 pub mod logs;
+pub mod metrics;
 pub mod search;
 pub mod session;
 pub mod sidebar;
@@ -94,6 +96,10 @@ pub use integrations::{IntegrationRegistry, IntegrationSection, RegisterIntegrat
 pub use kinds::{
     GroupKind, KindColumns, KindGate, KindMeta, KindRegistry, KindVisibility, RegisterKindError,
     Section, ServedKinds, SidebarSlot, SidebarTree,
+};
+pub use metrics::{
+    GpuVendorsHandle, NamespaceAllocation, NodeAllocation, UtilisationAggregator,
+    allocate_namespaces, allocate_nodes,
 };
 pub use search::aliases::{
     AliasConflict, AliasEntry, AliasFollow, AliasRegistry, AliasSource, AliasTable, ConflictKind,

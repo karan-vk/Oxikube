@@ -18,6 +18,7 @@
 //! | [`preset`] | [`ClusterPreset`]: the prod / staging / dev / none postures (colour, read-only) |
 //! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
+//! | [`utilisation`] | pod / node / namespace requests, limits and `%CPU/R`-style percents ([`ResourceAmounts`](utilisation::ResourceAmounts), [`percent`](utilisation::percent), `metrics.gpu_vendors`) |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
 //! | [`schema`] | [`JsonSchema`]: the flattened per-GVK OpenAPI v3 view the manifest editor validates against |
 //! | [`portforward`] | [`ForwardSpec`], [`ForwardStatus`]: what a port-forward targets and how it is doing |
@@ -62,6 +63,7 @@ pub mod resource;
 pub mod safety;
 pub mod schema;
 pub mod session;
+pub mod utilisation;
 pub mod view;
 
 pub use age::{Age, AgeStyle};
