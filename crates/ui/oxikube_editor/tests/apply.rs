@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use futures::FutureExt as _;
-use gpui::{App, Entity, TestAppContext, VisualTestContext, WeakEntity, Window};
+use gpui::{App, AppContext as _, Entity, TestAppContext, VisualTestContext, WeakEntity, Window};
 use oxikube_app::command_bus::{CommandBus, CommandRegistry};
 use oxikube_app::session::SessionOptions;
 use oxikube_app::{ApplyMethod, ApplyService, ClusterSessionManager, MutationGuard};
@@ -28,7 +28,7 @@ use oxikube_testkit::fakes::{
 };
 use oxikube_ui::editor::EditorApi as _;
 use oxikube_workspace::modal::ModalView;
-use oxikube_workspace::test_support::open_workspace;
+use oxikube_workspace::test_support::{TestModal, open_workspace};
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
 const CONFIGMAP: &str = "\
@@ -341,6 +341,67 @@ fn cancel_sends_nothing_more(cx: &mut TestAppContext) {
         f.vcx.read(|cx| editor.read(cx).apply_stage()),
         ApplyStage::Idle
     );
+}
+
+impl Fixture {
+    /// Another modal replaces the open one, as the palette's key does over a dialog.
+    fn replace_modal(&mut self) {
+        let workspace = self.workspace.clone();
+        workspace.update_in(&mut self.vcx, |workspace, window, cx| {
+            let other = cx.new(|cx| TestModal::new("other", cx));
+            workspace.show_modal(other, window, cx);
+        });
+        self.vcx.run_until_parked();
+    }
+
+    fn stage(&mut self, editor: &Entity<ManifestEditor>) -> ApplyStage {
+        self.vcx.read(|cx| editor.read(cx).apply_stage())
+    }
+}
+
+#[gpui::test]
+fn a_preview_replaced_by_another_modal_leaves_the_editor_idle(cx: &mut TestAppContext) {
+    let mut f = setup(cx, false);
+    let editor = f.editor_with(CONFIGMAP);
+    f.press_apply();
+    assert!(f.modal::<ApplyPreviewDialog>().is_some());
+    assert_eq!(f.stage(&editor), ApplyStage::Reviewing);
+
+    f.replace_modal();
+    assert!(f.modal::<ApplyPreviewDialog>().is_none());
+    assert_eq!(f.stage(&editor), ApplyStage::Idle);
+    assert_eq!(f.writes(), [("patch", true)], "nothing applied");
+    // Apply works again.
+    f.workspace.update_in(&mut f.vcx, |workspace, window, cx| {
+        workspace.hide_modal(window, cx)
+    });
+    editor.update_in(&mut f.vcx, |view, window, cx| view.begin_apply(window, cx));
+    f.vcx.run_until_parked();
+    assert!(f.modal::<ApplyPreviewDialog>().is_some());
+}
+
+#[gpui::test]
+fn a_conflict_list_replaced_by_another_modal_leaves_the_editor_idle(cx: &mut TestAppContext) {
+    let mut f = setup(cx, false);
+    let editor = f.editor_with(CONFIGMAP);
+    f.resources.script().patch.push_err(
+        OxiError::conflict("Apply failed with 1 conflict").with_source(ConflictDetails {
+            reason: ConflictReason::FieldOwnership,
+            causes: vec![FieldCause {
+                field: ".data.mode".into(),
+                manager: Some("kubectl".into()),
+                reason: "FieldManagerConflict".into(),
+                message: "conflict with \"kubectl\"".into(),
+            }],
+        }),
+    );
+    f.press_apply();
+    assert!(f.modal::<ConflictDialog>().is_some());
+    assert_eq!(f.stage(&editor), ApplyStage::Reviewing);
+
+    f.replace_modal();
+    assert!(f.modal::<ConflictDialog>().is_none());
+    assert_eq!(f.stage(&editor), ApplyStage::Idle);
 }
 
 #[gpui::test]

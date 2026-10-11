@@ -27,8 +27,8 @@ mod preview;
 
 use gpui::{
     AnyElement, App, Context, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, StatefulInteractiveElement as _, Styled as _, Task, WeakEntity, Window,
-    actions, div,
+    ParentElement as _, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
+    WeakEntity, Window, actions, div,
 };
 use oxikube_app::{ApplyService, CommandTarget};
 use oxikube_domain::command::{CommandId, ViewContext};
@@ -77,6 +77,9 @@ pub(crate) struct ApplyLink {
     pub(super) stage: ApplyStage,
     /// The step running; replacing it cancels it. Never cleared from inside (see `stage`).
     pub(super) task: Option<Task<()>>,
+    /// The open preview's (or conflict list's) release: it ends `Reviewing` when the dialog goes
+    /// without being answered, e.g. replaced by another modal.
+    pub(super) review: Option<Subscription>,
 }
 
 impl ManifestEditor {

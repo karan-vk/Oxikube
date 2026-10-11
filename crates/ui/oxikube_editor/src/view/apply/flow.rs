@@ -3,10 +3,11 @@
 
 use std::sync::Arc;
 
-use gpui::{AppContext as _, Context, Window};
+use gpui::{AppContext as _, Context, Entity, Window};
 use oxikube_app::{ApplyError, ApplyPreview, ApplyReport, ApplyRequest, FieldConflict};
 use oxikube_ui::editor::DiagnosticLevel;
 use oxikube_workspace::Toast;
+use oxikube_workspace::modal::ModalView;
 
 use super::{ApplyPreviewDialog, ApplyStage, ConflictDialog};
 use crate::apply::{place_causes, preview_diff};
@@ -131,12 +132,9 @@ impl ManifestEditor {
             );
             return;
         };
-        self.apply.stage = ApplyStage::Reviewing;
         let editor = cx.entity().downgrade();
-        workspace.update(cx, |workspace, cx| {
-            let dialog = cx.new(|cx| ApplyPreviewDialog::new(preview, diff, editor, version, cx));
-            workspace.show_modal(dialog, window, cx);
-        });
+        let dialog = cx.new(|cx| ApplyPreviewDialog::new(preview, diff, editor, version, cx));
+        self.show_review(&workspace, dialog, window, cx);
         cx.notify();
     }
 
@@ -261,12 +259,28 @@ impl ManifestEditor {
         let Some(workspace) = self.apply.workspace.as_ref().and_then(|w| w.upgrade()) else {
             return;
         };
-        self.apply.stage = ApplyStage::Reviewing;
         let editor = cx.entity().downgrade();
-        workspace.update(cx, |workspace, cx| {
-            let dialog = cx.new(|cx| ConflictDialog::new(conflicts, editor, cx));
-            workspace.show_modal(dialog, window, cx);
-        });
+        let dialog = cx.new(|cx| ConflictDialog::new(conflicts, editor, cx));
+        self.show_review(&workspace, dialog, window, cx);
+    }
+
+    /// Opens `dialog` (the preview or the conflict list) and waits for the user. Its dismissal
+    /// cancels through [`ModalView::on_before_dismiss`]; a modal that replaces it (the palette's
+    /// key works over it) never asks it, so its release cancels too: the stage never stays
+    /// `Reviewing` with no dialog to answer.
+    fn show_review<V: ModalView>(
+        &mut self,
+        workspace: &Entity<oxikube_workspace::Workspace>,
+        dialog: Entity<V>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply.stage = ApplyStage::Reviewing;
+        // Replacing the subscription drops the previous dialog's: only this one's release counts.
+        self.apply.review = Some(cx.observe_release(&dialog, |view, _, cx| {
+            view.apply_cancelled(cx);
+        }));
+        workspace.update(cx, |workspace, cx| workspace.show_modal(dialog, window, cx));
     }
 
     /// Puts the server's causes on their fields, off the UI thread; the ones without a place join
