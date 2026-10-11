@@ -8,8 +8,8 @@
 //! editor (a split pane, or the one typed in last).
 
 use gpui::{
-    Action, AnyElement, Context, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div,
+    Action, AnyElement, ClickEvent, Context, Focusable as _, InteractiveElement as _, IntoElement,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
 };
 use oxikube_domain::command::Command;
 use oxikube_keymap::contexts;
@@ -20,7 +20,11 @@ use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::manifest_editor::ManifestEditor;
 use super::model::Problems;
-use super::{ToggleManagedFields, ToggleReadOnly, ToggleSecretMask, ToggleSoftWrap};
+use super::{
+    ConvertToJson, ConvertToYaml, ToggleManagedFields, ToggleReadOnly, ToggleSecretMask,
+    ToggleSoftWrap,
+};
+use crate::json::{Language, LanguageMode};
 use crate::open::{ResourceBinding, ResourceLoad};
 
 /// What the problem count says while `editor.validation` is off.
@@ -77,7 +81,7 @@ impl ManifestEditor {
                     .text_color(tokens.colors.text_muted)
                     .child(self.checked_against(cx)),
             )
-            .children(self.notice(cx))
+            .children(self.resource_notice(cx))
             .child(div().flex_1())
             .child(
                 div()
@@ -110,11 +114,72 @@ impl ManifestEditor {
                 false,
                 cx,
             ))
+            .child(self.language_chip(cx))
+            .child(self.convert_button(cx))
+    }
+
+    /// The language the buffer is read as (`YAML` / `JSON`); a click reads it as the other one
+    /// (`editor::UseJson` / `editor::UseYaml`). The tooltip says whether the content chose it.
+    fn language_chip(&self, cx: &mut Context<Self>) -> AnyElement {
+        let language = self.model.language();
+        let other = language.other();
+        let how = match self.model.mode() {
+            LanguageMode::Auto => "detected from the text",
+            LanguageMode::Fixed(_) => "set by you",
+        };
+        let command = match other {
+            Language::Json => Command::EditorUseJson,
+            Language::Yaml => Command::EditorUseYaml,
+        };
+        let title = self.title.clone();
+        div()
+            .id("manifest-language")
+            .flex_none()
+            .debug_selector(move || format!("manifest-language-{title}"))
+            .child(
+                Button::new("manifest-language")
+                    .label(language.label())
+                    .ghost()
+                    .xsmall()
+                    .tooltip(format!(
+                        "Reading as {language} ({how}). Click to read as {other}."
+                    ))
+                    .on_click(Self::focus_and_send(command, cx)),
+            )
+            .into_any_element()
+    }
+
+    /// "To JSON" / "To YAML": converts the buffer to the other language (`editor::ConvertToJson`
+    /// / `editor::ConvertToYaml`); its tooltip names the key.
+    fn convert_button(&self, cx: &mut Context<Self>) -> AnyElement {
+        let to = self.model.language().other();
+        let (action, command): (&dyn Action, Command) = match to {
+            Language::Json => (&ConvertToJson, Command::EditorConvertToJson),
+            Language::Yaml => (&ConvertToYaml, Command::EditorConvertToYaml),
+        };
+        let title = self.title.clone();
+        div()
+            .id("manifest-convert")
+            .flex_none()
+            .debug_selector(move || format!("manifest-convert-{title}"))
+            .tooltip(tooltip_for_action(
+                format!("Convert to {to}"),
+                action,
+                Some(contexts::MANIFEST_EDITOR),
+            ))
+            .child(
+                Button::new("manifest-convert")
+                    .label(format!("To {to}"))
+                    .ghost()
+                    .xsmall()
+                    .on_click(Self::focus_and_send(command, cx)),
+            )
+            .into_any_element()
     }
 
     /// The line after the subject: why the buffer is read-only, that the object is being read,
     /// what failed.
-    fn notice(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn resource_notice(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let binding = self.binding.as_ref()?;
         let tokens = cx.tokens();
         let (text, color) = match (binding.load(), binding.notice()) {
@@ -192,10 +257,21 @@ impl ManifestEditor {
         }
     }
 
+    /// The click handler of a toolbar button: focuses this editor's buffer, then sends `command`
+    /// (see the module docs).
+    fn focus_and_send(
+        command: Command,
+        cx: &mut Context<Self>,
+    ) -> impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static {
+        cx.listener(move |view, _, window, cx| {
+            window.focus(&view.editor.focus_handle(cx), cx);
+            view.send(command.clone(), cx);
+        })
+    }
+
     /// A toggle button; its tooltip names the key bound to the same action. Tagged
-    /// `<id>-<title>` for `debug_bounds` ("manifest-wrap-Untitled-1"). A click focuses this
-    /// editor's buffer before sending `command`, so the toggle acts on this editor (see the
-    /// module docs).
+    /// `<id>-<title>` for `debug_bounds` ("manifest-wrap-Untitled-1"). A click acts on this editor
+    /// ([`focus_and_send`](Self::focus_and_send)).
     fn toggle(
         &self,
         id: &'static str,
@@ -223,10 +299,7 @@ impl ManifestEditor {
                     .xsmall()
                     .selected(on)
                     .disabled(disabled)
-                    .on_click(cx.listener(move |view, _, window, cx| {
-                        window.focus(&view.editor.focus_handle(cx), cx);
-                        view.send(command.clone(), cx);
-                    })),
+                    .on_click(Self::focus_and_send(command, cx)),
             )
             .into_any_element()
     }

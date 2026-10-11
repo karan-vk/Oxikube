@@ -7,8 +7,9 @@
 //! - **Open** (`resource::Edit`, `resource::ViewYamlInEditor`, E10-S06) opens an editor on a live
 //!   object in the object's cluster tab, titled `kind/name`, or focuses the tab that already
 //!   holds the object. The object is read fresh, off the UI thread, by the editor itself.
-//! - **ToggleReadOnly** / **ToggleSoftWrap** / **ToggleManagedFields** / **ToggleSecretMask** act
-//!   on the focused editor, else the active pane's item when it is one. The toolbar's toggles
+//! - **ToggleReadOnly** / **ToggleSoftWrap** / **ToggleManagedFields** / **ToggleSecretMask** /
+//!   **ConvertTo** / **UseLanguage** act on the focused editor, else the active pane's item when it
+//!   is one. The toolbar's toggles
 //!   focus their own editor before they send, so a click acts on the editor clicked.
 //!
 //! It also tells the user, with a warning toast, about an `editor` setting that was rejected
@@ -192,6 +193,16 @@ impl EditorViews {
             EditorRequest::ToggleSoftWrap => this.on_target(window, cx, |editor, window, cx| {
                 editor.toggle_soft_wrap(window, cx);
             }),
+            EditorRequest::ConvertTo(language) => {
+                this.on_target(window, cx, move |editor, window, cx| {
+                    editor.convert_to(language, window, cx);
+                });
+            }
+            EditorRequest::UseLanguage(language) => {
+                this.on_target(window, cx, move |editor, window, cx| {
+                    editor.use_language(language, window, cx);
+                });
+            }
         });
     }
 

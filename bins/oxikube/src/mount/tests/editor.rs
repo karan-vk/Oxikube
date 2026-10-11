@@ -39,6 +39,10 @@ fn the_editor_commands_are_on_the_bus(cx: &mut TestAppContext) {
         CommandId::EDITOR_NEW_MANIFEST,
         CommandId::EDITOR_TOGGLE_READ_ONLY,
         CommandId::EDITOR_TOGGLE_SOFT_WRAP,
+        CommandId::EDITOR_CONVERT_TO_JSON,
+        CommandId::EDITOR_CONVERT_TO_YAML,
+        CommandId::EDITOR_USE_JSON,
+        CommandId::EDITOR_USE_YAML,
     ] {
         assert_eq!(bus.owner(id), Some("oxikube_editor"), "{id}");
         assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");
@@ -202,4 +206,110 @@ fn the_detail_drawer_opens_the_editor_from_its_header(cx: &mut TestAppContext) {
     let editors = tab_editors(&mut app);
     assert_eq!(editors.len(), 1);
     assert!(!editor_read_only(&mut app, &editors[0]));
+}
+
+fn convert_key(to: &str) -> String {
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    format!("{modifier}-alt-{}", if to == "json" { "j" } else { "y" })
+}
+
+fn buffer(app: &mut App, editor: &gpui::Entity<ManifestEditor>) -> String {
+    let code = app.vcx.update(|_, cx| editor.read(cx).editor().clone());
+    app.vcx.update(|window, cx| {
+        code.update(cx, |code, cx| {
+            use oxikube_ui::editor::EditorApi as _;
+            code.api(window, cx).text().to_string()
+        })
+    })
+}
+
+/// JSON mode in the running app (E10-S10): the shipped keys and the bus convert the focused
+/// editor's buffer, and one undo brings the YAML back.
+#[gpui::test]
+fn the_convert_keys_and_commands_turn_the_buffer_into_json_and_back(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.press(new_manifest_key());
+    let editor = app
+        .read(|ws, _| ws.items_of_type::<ManifestEditor>())
+        .pop()
+        .expect("the editor opened");
+    app.vcx
+        .simulate_input("# note\nkind: Pod\nmetadata:\n  name: web\n");
+    app.vcx.run_until_parked();
+    let yaml = buffer(&mut app, &editor);
+    assert_eq!(yaml, "# note\nkind: Pod\nmetadata:\n  name: web\n");
+
+    app.press(&convert_key("json"));
+    app.vcx.run_until_parked();
+    assert_eq!(
+        buffer(&mut app, &editor),
+        "{\n  \"kind\": \"Pod\",\n  \"metadata\": {\n    \"name\": \"web\"\n  }\n}\n"
+    );
+    let notice = app
+        .vcx
+        .update(|_, cx| editor.read(cx).notice().map(|n| n.text.to_string()));
+    assert_eq!(
+        notice.as_deref(),
+        Some("Converted to JSON, but 1 comment dropped. Undo brings the YAML back.")
+    );
+
+    // The same through the bus (what the palette and agents send): back to YAML.
+    assert!(run(&mut app, Command::EditorConvertToYaml));
+    assert_eq!(
+        buffer(&mut app, &editor),
+        "kind: Pod\nmetadata:\n  name: web\n"
+    );
+    // Undo the conversion to YAML, then the conversion to JSON: the typed text is back.
+    for _ in 0..2 {
+        app.press(if cfg!(target_os = "macos") {
+            "cmd-z"
+        } else {
+            "ctrl-z"
+        });
+        app.vcx.run_until_parked();
+    }
+    assert_eq!(buffer(&mut app, &editor), yaml);
+}
+
+/// The convert and mode commands are offered where a manifest editor has the focus and nowhere
+/// else (the palette lists `bus.list(ctx)`), on a read-only cluster too: they edit text only.
+#[gpui::test]
+fn the_conversion_commands_are_offered_only_while_an_editor_has_the_focus(cx: &mut TestAppContext) {
+    use oxikube_app::command_bus::CommandContext;
+    use oxikube_domain::command::ViewContext;
+
+    let mut app = App::start(cx, TestPorts::seeded());
+    let state = app.vcx.update(|_, cx| AppState::global(cx));
+    let bus = state.command_bus().expect("the bus").clone();
+    let ids = [
+        CommandId::EDITOR_CONVERT_TO_JSON,
+        CommandId::EDITOR_CONVERT_TO_YAML,
+        CommandId::EDITOR_USE_JSON,
+        CommandId::EDITOR_USE_YAML,
+    ];
+    let offered = |ctx: &CommandContext| -> Vec<CommandId> {
+        bus.list(ctx)
+            .iter()
+            .map(|info| info.id())
+            .filter(|id| ids.contains(id))
+            .collect()
+    };
+    for view in [
+        ViewContext::Workspace,
+        ViewContext::Table,
+        ViewContext::Detail,
+        ViewContext::Logs,
+        ViewContext::Terminal,
+        ViewContext::Palette,
+    ] {
+        assert_eq!(offered(&CommandContext::new(view)), [], "{view}");
+    }
+    let in_editor = offered(&CommandContext::new(ViewContext::Editor));
+    assert_eq!(in_editor.len(), 4, "{in_editor:?}");
+    let read_only = offered(&CommandContext::new(ViewContext::Editor).read_only(true));
+    assert_eq!(read_only.len(), 4, "text edits are not cluster mutations");
 }

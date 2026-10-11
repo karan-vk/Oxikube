@@ -310,6 +310,76 @@ fn tab_size_changes_the_indent_without_touching_the_text_or_undo(cx: &mut TestAp
 }
 
 #[gpui::test]
+fn replace_text_is_one_undo_step_that_keeps_the_history(cx: &mut TestAppContext) {
+    let mut window = open(cx, "a: 1\n");
+    select(&mut window, 4..4);
+    window.simulate_input("2");
+    assert_eq!(text(&mut window), "a: 12\n");
+    let before = with_api(&mut window, |api| api.version());
+
+    with_api(&mut window, |api| api.replace_text("{\n  \"a\": 12\n}\n"));
+    window.draw_frame();
+    assert_eq!(text(&mut window), "{\n  \"a\": 12\n}\n");
+    assert_eq!(
+        with_api(&mut window, |api| api.version()),
+        before + 1,
+        "one change event for the whole replacement"
+    );
+
+    let (undo, redo) = undo_keys();
+    window.simulate_keystrokes(undo);
+    assert_eq!(
+        text(&mut window),
+        "a: 12\n",
+        "one undo restores the text from before"
+    );
+    window.simulate_keystrokes(redo);
+    assert_eq!(text(&mut window), "{\n  \"a\": 12\n}\n");
+    window.simulate_keystrokes(undo);
+    window.simulate_keystrokes(undo);
+    assert_eq!(
+        text(&mut window),
+        "a: 1\n",
+        "earlier typing is still in the history"
+    );
+}
+
+#[gpui::test]
+fn replace_text_works_on_a_read_only_buffer(cx: &mut TestAppContext) {
+    let mut window = open(cx, "a: 1\n");
+    with_api(&mut window, |api| api.set_read_only(true));
+    with_api(&mut window, |api| api.replace_text("b: 2\n"));
+    assert_eq!(text(&mut window), "b: 2\n");
+    assert!(with_api(&mut window, |api| api.is_read_only()));
+}
+
+#[gpui::test]
+fn the_grammar_can_change_without_touching_text_or_history(cx: &mut TestAppContext) {
+    let mut window = open(cx, "{\"a\": 1}\n");
+    select(&mut window, 0..0);
+    window.simulate_input(" ");
+    let before = with_api(&mut window, |api| (api.text(), api.version()));
+    assert_eq!(with_api(&mut window, |api| api.language()), "yaml");
+
+    with_api(&mut window, |api| api.set_language("json"));
+    window.draw_frame();
+    assert_eq!(with_api(&mut window, |api| api.language()), "json");
+    let name = window.read_root(|host, cx| host.editor.read(cx).state().read(cx).language_name());
+    assert_eq!(name.as_ref(), "json");
+    assert_eq!(
+        with_api(&mut window, |api| (api.text(), api.version())),
+        before
+    );
+    let (undo, _) = undo_keys();
+    window.simulate_keystrokes(undo);
+    assert_eq!(
+        text(&mut window),
+        "{\"a\": 1}\n",
+        "the typed space is still undoable"
+    );
+}
+
+#[gpui::test]
 fn the_font_sets_the_text_size_in_zoomed_pixels(cx: &mut TestAppContext) {
     let mut window = open(cx, "a: 1\n");
     let size = |window: &mut TestWindow<Host>| {
@@ -335,4 +405,15 @@ fn the_font_sets_the_text_size_in_zoomed_pixels(cx: &mut TestAppContext) {
     window.update_root(|_, _, cx| oxikube_ui::set_ui_scale(cx, oxikube_ui::UiScale::IDENTITY));
     with_api(&mut window, |api| api.set_font(EditorFont::default()));
     assert_eq!(size(&mut window), theme, "back to the theme's size");
+}
+
+#[gpui::test]
+fn the_json_grammar_is_available(cx: &mut TestAppContext) {
+    let _app = TestApp::new(cx);
+    assert!(
+        gpui_component::highlighter::LanguageRegistry::singleton()
+            .language("json")
+            .is_some(),
+        "tree-sitter-json is part of gpui-component's `tree-sitter` feature"
+    );
 }

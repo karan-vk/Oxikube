@@ -14,6 +14,7 @@ use oxikube_domain::{ErrorKind, OxiResult};
 use oxikube_ui::editor::{DiagnosticLevel, EditorApi};
 
 use super::validation::{KnownSchemas, Validation};
+use crate::json::{Language, LanguageMode};
 
 /// How many problems the shown diagnostics hold.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -29,7 +30,7 @@ pub struct Problems {
 pub enum Accepted {
     /// The result was for the buffer as it is: its diagnostics are shown.
     Shown,
-    /// The buffer changed since: the result was dropped.
+    /// The buffer changed since, or the user switched the language: the result was dropped.
     Stale,
 }
 
@@ -44,6 +45,8 @@ pub struct ManifestModel {
     unavailable: Vec<(Gvk, String)>,
     problems: Problems,
     shown: Option<u64>,
+    mode: LanguageMode,
+    language: Language,
 }
 
 impl ManifestModel {
@@ -62,6 +65,33 @@ impl ManifestModel {
         self.problems
     }
 
+    /// How the language is chosen: from the content, or fixed.
+    pub fn mode(&self) -> LanguageMode {
+        self.mode
+    }
+
+    /// The language the buffer is read as now (highlighting, checks).
+    pub fn language(&self) -> Language {
+        self.language
+    }
+
+    /// Fixes the language, or lets the content decide again ([`LanguageMode::Auto`], which keeps
+    /// the language shown until the next check has looked at the content). Results computed
+    /// under another mode are dropped. The editor's text is untouched.
+    pub fn set_mode(&mut self, mode: LanguageMode) {
+        self.mode = mode;
+        if let LanguageMode::Fixed(language) = mode {
+            self.language = language;
+        }
+        self.problems = Problems::default();
+        self.shown = None;
+    }
+
+    /// Records the language the editor was created with (before any check has run).
+    pub(super) fn adopt(&mut self, language: Language) {
+        self.language = language;
+    }
+
     /// The buffer version whose diagnostics are shown, if any.
     pub fn shown_version(&self) -> Option<u64> {
         self.shown
@@ -78,10 +108,16 @@ impl ManifestModel {
         self.shown = None;
     }
 
-    /// Shows `result` when it is for the buffer's current version; drops it otherwise.
+    /// Shows `result` when it is for the buffer's current version and language mode; drops it
+    /// otherwise. Adopts the language the content showed under [`LanguageMode::Auto`] and tells
+    /// the editor to highlight with it.
     pub fn accept(&mut self, editor: &mut dyn EditorApi, result: Validation) -> Accepted {
-        if result.version != editor.version() {
+        if result.version != editor.version() || result.mode != self.mode {
             return Accepted::Stale;
+        }
+        self.language = result.language;
+        if editor.language() != self.language.grammar() {
+            editor.set_language(self.language.grammar());
         }
         let count = |level| {
             result

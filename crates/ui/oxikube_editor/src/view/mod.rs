@@ -6,11 +6,13 @@
 //! |---|---|
 //! | `manifest_editor` | [`ManifestEditor`]: the view, its key context (`ManifestEditor`, `mode == yaml`, `Editing`), the debounced validation off the UI thread and the schema fetches |
 //! | `model` | [`ManifestModel`]: the logic over `EditorApi` only (stale results, schemas to fetch, problem counts, toggles), tested without a window |
-//! | `validation` | [`validate_text`]: one pass of the YAML model and the validator, as editor diagnostics |
+//! | `validation` | [`validate_text`] / [`validate_text_as`]: one pass of the YAML model and the validator (and, for JSON, the strict JSON check), as editor diagnostics |
 //! | `schemas` | [`SchemaSource`]: the cluster's `SchemaPort` ([`SessionSchemas`] in the app) |
 //! | `toolbar` | what the buffer is checked against, the problem count, the Read-only and Wrap toggles |
 //! | `item` | the workspace `Item`: tab title, icon, dirty dot; never saved with the layout |
 //! | `commands` | the bus handlers ([`register_commands`]): queue an [`EditorRequest`] on the window's [`EditorViewSink`] |
+//! | `convert` | the YAML to JSON conversion (one undo step, off the UI thread) and the language switch (E10-S10) |
+//! | `notice` | the one-line bar that says what a conversion did and could not carry over, with Undo |
 //! | `controller` | [`EditorViews`]: applies the requests in the shown workspace through an [`EditorHost`] ([`ClusterEditorHost`] in the app) |
 //!
 //! The editor never writes its buffer anywhere: not to the layout, not to logs. Applying it to a
@@ -18,9 +20,11 @@
 
 mod commands;
 mod controller;
+mod convert;
 mod item;
 mod manifest_editor;
 mod model;
+mod notice;
 mod schemas;
 mod toolbar;
 mod validation;
@@ -35,9 +39,11 @@ pub use commands::{EDITOR_COMMANDS, EditorRequest, EditorViewSink, register_comm
 pub use controller::{ClusterEditorHost, EditorHost, EditorViews, EditorViewsDeps};
 pub use manifest_editor::{ManifestEditor, ManifestEditorParts};
 pub use model::{Accepted, ManifestModel, Problems};
+pub use notice::{Notice, NoticeLevel};
 pub use schemas::{SchemaSource, SessionSchemas};
 pub use validation::{
-    KnownSchemas, VALIDATION_DEBOUNCE, Validation, validate_text, validate_text_with,
+    KnownSchemas, VALIDATION_DEBOUNCE, Validation, validate_text, validate_text_as,
+    validate_text_in, validate_text_with,
 };
 
 actions!(
@@ -56,6 +62,12 @@ actions!(
         /// Show the values of the Secret in the focused editor, or mask them again
         /// (`editor::ToggleSecretMask`).
         ToggleSecretMask,
+        /// Replace the focused manifest editor's YAML with the same data as JSON
+        /// (`editor::ConvertToJson`).
+        ConvertToJson,
+        /// Replace the focused manifest editor's JSON with the same data as YAML
+        /// (`editor::ConvertToYaml`).
+        ConvertToYaml,
     ]
 );
 

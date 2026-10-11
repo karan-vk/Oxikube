@@ -310,6 +310,23 @@ pub enum Command {
         /// The URL or absolute path.
         target: String,
     },
+    /// Replace the focused manifest editor's YAML with the same data as JSON (E10-S10), as one
+    /// undo step; comments cannot be carried over and are counted in a warning. The active
+    /// pane's editor when focus is elsewhere. Edits the buffer only.
+    #[serde(rename = "editor::ConvertToJson")]
+    EditorConvertToJson,
+    /// Replace the focused manifest editor's JSON with the same data as YAML (E10-S10), as one
+    /// undo step. The active pane's editor when focus is elsewhere. Edits the buffer only.
+    #[serde(rename = "editor::ConvertToYaml")]
+    EditorConvertToYaml,
+    /// Read the focused manifest editor's buffer as JSON (E10-S10): the JSON grammar and the
+    /// strict JSON checks, text untouched. Overrides the detection.
+    #[serde(rename = "editor::UseJson")]
+    EditorUseJson,
+    /// Read the focused manifest editor's buffer as YAML (E10-S10); the text is untouched.
+    /// Overrides the detection.
+    #[serde(rename = "editor::UseYaml")]
+    EditorUseYaml,
     /// Open an empty manifest editor (E10-S04): a tab of `cluster`'s tab (the displayed cluster
     /// tab when `None`), whose YAML is checked against that cluster's schemas, or a tab of the
     /// window with syntax checks only when no cluster tab is shown. Edits text only; applying it
@@ -958,6 +975,10 @@ impl Command {
             Command::EditorToggleSecretMask => CommandId::EDITOR_TOGGLE_SECRET_MASK,
             Command::EditorToggleReadOnly => CommandId::EDITOR_TOGGLE_READ_ONLY,
             Command::EditorToggleSoftWrap => CommandId::EDITOR_TOGGLE_SOFT_WRAP,
+            Command::EditorConvertToJson => CommandId::EDITOR_CONVERT_TO_JSON,
+            Command::EditorConvertToYaml => CommandId::EDITOR_CONVERT_TO_YAML,
+            Command::EditorUseJson => CommandId::EDITOR_USE_JSON,
+            Command::EditorUseYaml => CommandId::EDITOR_USE_YAML,
             Command::CrdOpenList { .. } => CommandId::CRD_OPEN_LIST,
             Command::CrdOpenResources { .. } => CommandId::CRD_OPEN_RESOURCES,
             Command::ResourceOpenList { .. } => CommandId::RESOURCE_OPEN_LIST,
@@ -1259,6 +1280,10 @@ mod tests {
             Command::EditorToggleSecretMask,
             Command::EditorToggleReadOnly,
             Command::EditorToggleSoftWrap,
+            Command::EditorConvertToJson,
+            Command::EditorConvertToYaml,
+            Command::EditorUseJson,
+            Command::EditorUseYaml,
             Command::CrdOpenList { cluster: cluster() },
             Command::CrdOpenResources {
                 cluster: cluster(),
@@ -1637,6 +1662,10 @@ mod tests {
                     | Command::EditorToggleSecretMask
                     | Command::EditorToggleReadOnly
                     | Command::EditorToggleSoftWrap
+                    | Command::EditorConvertToJson
+                    | Command::EditorConvertToYaml
+                    | Command::EditorUseJson
+                    | Command::EditorUseYaml
                     | Command::CrdOpenList { .. }
                     | Command::CrdOpenResources { .. }
                     | Command::ResourceOpen { .. }

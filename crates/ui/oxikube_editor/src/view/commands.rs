@@ -1,7 +1,8 @@
-//! `editor::NewManifest`, `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (E10-S04) and
+//! `editor::NewManifest`, `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (E10-S04),
 //! `resource::Edit`, `resource::ViewYamlInEditor`, `editor::ToggleManagedFields`,
-//! `editor::ToggleSecretMask` (E10-S06) on the command bus, each with its MCP tool stub
-//! (`app.editor_new_manifest`, `k8s.resource_edit`, ...).
+//! `editor::ToggleSecretMask` (E10-S06) and, for JSON mode (E10-S10), `editor::ConvertToJson`,
+//! `editor::ConvertToYaml`, `editor::UseJson` and `editor::UseYaml` on the command bus, each with
+//! its MCP tool stub (`app.editor_new_manifest`, `k8s.resource_edit`, ...).
 //!
 //! The keymap (through the GPUI actions of the same names), the toolbar, the palette and agents
 //! all dispatch the bus command. Its handler queues an [`EditorRequest`] on the window's
@@ -15,10 +16,11 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_domain::{OxiError, OxiResult};
 
+use crate::json::Language;
 use crate::open::OpenMode;
 
 /// The commands [`register_commands`] handles.
-pub const EDITOR_COMMANDS: [CommandId; 7] = [
+pub const EDITOR_COMMANDS: [CommandId; 11] = [
     CommandId::EDITOR_NEW_MANIFEST,
     CommandId::EDITOR_TOGGLE_MANAGED_FIELDS,
     CommandId::EDITOR_TOGGLE_READ_ONLY,
@@ -26,6 +28,10 @@ pub const EDITOR_COMMANDS: [CommandId; 7] = [
     CommandId::EDITOR_TOGGLE_SOFT_WRAP,
     CommandId::RESOURCE_EDIT,
     CommandId::RESOURCE_VIEW_YAML_IN_EDITOR,
+    CommandId::EDITOR_CONVERT_TO_JSON,
+    CommandId::EDITOR_CONVERT_TO_YAML,
+    CommandId::EDITOR_USE_JSON,
+    CommandId::EDITOR_USE_YAML,
 ];
 
 /// What the window's manifest editors should do.
@@ -53,6 +59,12 @@ pub enum EditorRequest {
     ToggleReadOnly,
     /// `editor::ToggleSoftWrap` on the focused editor, else the active pane's.
     ToggleSoftWrap,
+    /// `editor::ConvertToJson` / `editor::ConvertToYaml` on the focused editor, else the active
+    /// pane's: replace its text with the same data in this language (one undo step).
+    ConvertTo(Language),
+    /// `editor::UseJson` / `editor::UseYaml` on the focused editor, else the active pane's: read
+    /// the buffer as this language from now on.
+    UseLanguage(Language),
 }
 
 impl EditorRequest {
@@ -72,6 +84,10 @@ impl EditorRequest {
             Command::EditorToggleSecretMask => Some(EditorRequest::ToggleSecretMask),
             Command::EditorToggleReadOnly => Some(EditorRequest::ToggleReadOnly),
             Command::EditorToggleSoftWrap => Some(EditorRequest::ToggleSoftWrap),
+            Command::EditorConvertToJson => Some(EditorRequest::ConvertTo(Language::Json)),
+            Command::EditorConvertToYaml => Some(EditorRequest::ConvertTo(Language::Yaml)),
+            Command::EditorUseJson => Some(EditorRequest::UseLanguage(Language::Json)),
+            Command::EditorUseYaml => Some(EditorRequest::UseLanguage(Language::Yaml)),
             _ => None,
         }
     }

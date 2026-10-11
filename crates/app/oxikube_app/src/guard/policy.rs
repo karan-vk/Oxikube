@@ -187,7 +187,11 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::EditorToggleManagedFields
         | Command::EditorToggleSecretMask
         | Command::EditorToggleReadOnly
-        | Command::EditorToggleSoftWrap => None,
+        | Command::EditorToggleSoftWrap
+        | Command::EditorConvertToJson
+        | Command::EditorConvertToYaml
+        | Command::EditorUseJson
+        | Command::EditorUseYaml => None,
     }
 }
 
