@@ -8,7 +8,7 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `model` | [`EndpointsView`](model::EndpointsView): the rows and counts, capped |
+//! | `model` | `EndpointsView`: the rows and counts, capped |
 //! | `panel` | [`EndpointsPanel`]: the entity above the Overview |
 //!
 //! No feed starts: the panel reads the object the detail already follows.

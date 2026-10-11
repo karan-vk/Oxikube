@@ -18,7 +18,7 @@ use super::feeds::Feeds;
 use super::model::{Inputs, ServiceView};
 use crate::detail::DetailView;
 
-/// The panel of one Service's detail. See the [module docs](self).
+/// The panel of one Service's detail. See the module docs.
 pub struct ServicePanel {
     pub(super) detail: WeakEntity<DetailView>,
     /// The Service shown; known after the first [`sync`](Self::sync) (the panel is built while

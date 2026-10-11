@@ -5,7 +5,7 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `model` | [`ServiceView`](model::ServiceView): the panel's content built from the Service, its EndpointSlices and its pods, off the render path and capped |
+//! | `model` | `ServiceView`: the panel's content built from the Service, its EndpointSlices and its pods, off the render path and capped |
 //! | `feeds` | the two label-selected subscriptions of the panel ([`oxikube_app::ServiceBackends`]) |
 //! | `panel` | [`ServicePanel`]: the entity above the Overview, following the detail it sits in |
 //! | `render` | drawing the panel: facts, selector chips, ports with "Open in browser" |
