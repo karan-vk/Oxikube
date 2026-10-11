@@ -22,7 +22,7 @@
 //!
 //! The Pods column is one hash lookup per visible cell. The index is maintained off the UI thread
 //! from the Pods subscription's deltas; a Pod update that mounts the same claims costs one walk
-//! of its `spec.volumes` and no write lock. See [`usage`].
+//! of its `spec.volumes` and no write lock. See `PvcUsageIndex`.
 
 mod audit;
 mod columns;

@@ -5,10 +5,10 @@
 //! |---|---|
 //! | `specs` | the five kinds' [`KindSpec`](crate::kinds::KindSpec)s: sidebar slot (Storage), detail panel, actions, and the claims' per-cluster columns |
 //! | `usage` | the claims' "used by" feed, shared by the claims table and the claim detail of a cluster, and the claims' column provider |
-//! | `panel` | the detail panels: [`StoragePanel`](panel::StoragePanel) over [`PanelContent`](panel::PanelContent) |
+//! | `panel` | the detail panels: `StoragePanel` over `PanelContent` |
 //! | `dialogs` | [`ResizeDialog`](dialogs::ResizeDialog) and [`DefaultClassDialog`](dialogs::DefaultClassDialog) |
 //! | `actions` | the row actions ("Resize…", "Set as Default") and the kind filters |
-//! | `flows` | [`StorageFlows`](flows::StorageFlows), the flows the dialogs run, held by the table's actions |
+//! | `flows` | [`StorageFlows`], the flows the dialogs run, held by the table's actions |
 //! | `open` | opening the dialogs in the cluster tab's workspace |
 //!
 //! # How a user gets here
