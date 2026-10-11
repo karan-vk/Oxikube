@@ -288,6 +288,41 @@ async fn invalid_objects_come_back_as_validation_errors_with_field_paths() {
     );
 }
 
+/// The API server answers a server-side apply that does not fit the kind's schema with a 500 and
+/// the fields in its message only (E10-S13): the adapter makes it a validation error naming them.
+#[tokio::test]
+async fn an_apply_the_schema_cannot_read_names_its_fields() {
+    let Some((r, ns)) = setup().await else { return };
+    let mut object = configmap("typed", &[], &[]);
+    object["apiVersion"] = json!("v1");
+    object["kind"] = json!("ConfigMap");
+    object["data"] = json!({"k": 2});
+    object["bogus"] = json!(true);
+    let err = r
+        .patch(
+            &configmap_gvk(),
+            Some(ns.name()),
+            "typed",
+            &Patch::apply(object, "oxikube", false),
+            &WriteOptions {
+                dry_run: true,
+                field_manager: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::Validation, "{err}");
+    assert!(!err.is_retryable());
+    let details = err.validation_details().expect("validation details");
+    assert!(
+        details
+            .causes
+            .iter()
+            .any(|c| c.field == ".data.k" || c.field == ".bogus"),
+        "{details:?}"
+    );
+}
+
 #[tokio::test]
 async fn custom_resources_accept_merge_and_apply_but_not_strategic_patches() {
     let Some(kind) = common::kind().await else {

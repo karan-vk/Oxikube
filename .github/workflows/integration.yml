@@ -14,7 +14,10 @@ name: integration
 # The `terminal` job (E09-S13) is the terminal stack end to end on the same kind cluster: the app
 # (`bins/oxikube/tests/kind_exec`, `kind_terminal`, `kind_terminal_data`; `kind_assist`, E10-S05, reads the editor's schemas) opens pod shells, debug containers and local
 # shells, runs busybox `vi` and `top` through the websocket and the grid, resizes, floods, and scans
-# the app's data dir for terminal content. The per-port exec, attach, node shell and debug
+# the app's data dir for terminal content. The manifest editor's kind suite runs there too
+# (`kind_templates`, E10-S09; `kind_editor`, E10-S13: create from template, server-side apply of an
+# edited Deployment, the conflict with `kubectl` and Force, CRD instance validation, the read-only
+# guard), since it is the app's GPUI build as well. The per-port exec, attach, node shell and debug
 # scenarios (`oxikube_kube/tests/exec_*`, `oxikube_app/tests/kind_smoke/{exec,debug,node_shell}`)
 # run in the `kind` job with everything else. The macOS golden screenshots of the terminal
 # element are the nightly job's (`nightly.yml`).
@@ -26,6 +29,7 @@ on:
       - "crates/app/**"
       - "crates/testing/**"
       - "crates/ui/oxikube_terminal/**"
+      - "crates/ui/oxikube_editor/**"
       - "bins/oxikube/**"
       - "xtask/**"
       - ".github/workflows/integration.yml"
@@ -116,6 +120,7 @@ jobs:
     env:
       TERMINAL_SUITE: >-
         cargo test -p oxikube --features integration --test kind_exec --test kind_terminal --test kind_terminal_data --test kind_assist
+        --test kind_templates --test kind_editor
         --no-fail-fast
     steps:
       - uses: actions/checkout@v7

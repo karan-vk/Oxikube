@@ -75,6 +75,7 @@ logs. Locally, without that variable, a failed test prints its namespace's event
 |---|---|
 | Table API on a CRD with `additionalPrinterColumns`, and on pods | `table_feed::crd_printer_columns_match_kubectl_get`, `table_feed::pods_match_kubectl_get_pods_o_wide` |
 | SSA apply conflict returns `Conflict` naming the field managers | `mutations::server_side_apply_conflicts_name_the_other_manager_and_force_takes_over` |
+| SSA apply the kind's schema cannot read (the server's `500` "failed to create typed patch object") is a `Validation` error naming the fields (E10-S13) | `mutations::an_apply_the_schema_cannot_read_names_its_fields` |
 | Dry run returns the server's would-be object | `mutations::dry_run_returns_the_would_be_object_and_changes_nothing`, `mutations_delete::a_dry_run_delete_leaves_the_object` |
 | Logs survive a restart without duplicated or missing lines | `logs_restart::a_container_crash_mid_stream_leaves_no_duplicate_and_no_gap` |
 | Exec round-trips stdin/stdout with resize | `exec_streams::a_tty_shell_echoes_and_reports_the_round_trip_latency`, `exec_streams::a_resize_is_observed_by_stty` |

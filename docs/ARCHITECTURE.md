@@ -1105,7 +1105,10 @@ that own them, `StaleVersion`, `AlreadyExists`, `Other`) and `ValidationDetails`
 paths a 422 rejected). An adapter attaches one as the error's source and callers read it with
 `OxiError::conflict_details()` / `validation_details()`; `oxikube_kube::mutate` (E04-S05) does
 this for every write. In the same module a 500 or 502 is marked retryable (the server failed
-the request) while keeping the `Internal` kind.
+the request) while keeping the `Internal` kind, except the 500 a server-side apply gets when the
+manifest does not fit the kind's schema ("failed to create typed patch object ...: .spec.colour:
+field not declared in schema", `mutate::typed_patch`, E10-S13): that is a `Validation` error with
+one cause per field the message names, so the editor marks them as it does a 422's.
 `oxikube_kube::subresource` (E04-S06) keeps `Network` and `retryable` for an eviction that a
 PodDisruptionBudget refuses (HTTP 429) and attaches an `EvictionBlocked` marker with the budget's
 explanation (`eviction_blocked(&err)`), which a drain waits on; no new `ErrorKind`.

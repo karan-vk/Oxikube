@@ -19,29 +19,13 @@
 
 mod kind_common;
 
-use futures::executor::block_on;
-use gpui::{Entity, TestAppContext, VisualTestContext};
-use oxikube::app_state::AppState;
-use oxikube_app::command_bus::DispatchContext;
-use oxikube_domain::audit::Initiator;
-use oxikube_domain::command::Command;
-use oxikube_domain::ids::{ClusterId, Gvk};
-use oxikube_domain::session::NamespaceSelection;
-use oxikube_editor::apply::split_documents;
+use gpui::TestAppContext;
+use oxikube_domain::ids::Gvk;
 use oxikube_editor::templates::embedded;
-use oxikube_editor::view::{
-    ApplyPreviewDialog, BatchPreviewDialog, ManifestEditor, VALIDATION_DEBOUNCE,
-};
 use oxikube_testkit::integration::{TestNamespace, ensure_kind_context, test_context};
-use oxikube_ui::editor::EditorApi as _;
-use oxikube_workspace::{ClusterTab, Workspace};
 
-use kind_common::{Launched, on_cluster, wait, wait_value};
-
-fn settle(vcx: &mut VisualTestContext) {
-    vcx.executor().advance_clock(VALIDATION_DEBOUNCE);
-    vcx.run_until_parked();
-}
+use kind_common::editor::{EditorSession, configmaps, gvks_in};
+use kind_common::{on_cluster, wait_value};
 
 /// Removes a namespace a buffer under test created, even when an assertion fails first (the
 /// testkit's `TestNamespace` only knows its own).
@@ -60,154 +44,6 @@ impl Drop for DeleteNamespaceOnDrop {
     }
 }
 
-/// What the tests do in the connected cluster's tab.
-struct Session {
-    vcx: VisualTestContext,
-    inner: Entity<Workspace>,
-    cluster: ClusterId,
-    _tab: Entity<ClusterTab>,
-}
-
-impl Session {
-    fn start(cx: &mut TestAppContext, context: &str, namespace: &str) -> Self {
-        cx.executor().allow_parking();
-        let Launched {
-            mut vcx,
-            tab,
-            cluster,
-            ..
-        } = kind_common::launch(cx, context);
-        let inner = vcx.update(|_, cx| tab.read(cx).workspace().clone());
-        let state = vcx.update(|_, cx| AppState::global(cx));
-        state
-            .services()
-            .sessions
-            .set_namespace_selection(&cluster, NamespaceSelection::single(namespace))
-            .expect("a session");
-        Self {
-            vcx,
-            inner,
-            cluster,
-            _tab: tab,
-        }
-    }
-
-    fn dispatch(&mut self, command: Command) {
-        let state = self.vcx.update(|_, cx| AppState::global(cx));
-        let bus = state.command_bus().expect("the bus").clone();
-        block_on(bus.dispatch(command, DispatchContext::new(Initiator::Ui, "me")))
-            .expect("the command runs");
-        self.vcx.run_until_parked();
-    }
-
-    fn editors(&mut self) -> Vec<Entity<ManifestEditor>> {
-        self.vcx
-            .update(|_, cx| self.inner.read(cx).items_of_type::<ManifestEditor>())
-    }
-
-    /// Opens the template `name` in the cluster's tab and returns its editor.
-    fn create(&mut self, name: &str) -> Entity<ManifestEditor> {
-        let before = self.editors().len();
-        self.dispatch(Command::ResourceCreate {
-            cluster: Some(self.cluster.clone()),
-            template: Some(name.to_owned()),
-        });
-        wait(&mut self.vcx, &format!("the {name} editor"), |vcx| {
-            vcx.update(|_, cx| self.inner.read(cx).items_of_type::<ManifestEditor>().len()) > before
-        });
-        self.vcx.update(|_, cx| {
-            self.inner
-                .read(cx)
-                .active_item(cx)
-                .and_then(|item| item.downcast::<ManifestEditor>())
-                .expect("the new editor is the active tab")
-        })
-    }
-
-    fn text(&mut self, editor: &Entity<ManifestEditor>) -> String {
-        let code = self.vcx.update(|_, cx| editor.read(cx).editor().clone());
-        self.vcx
-            .update(|window, cx| code.update(cx, |c, cx| c.api(window, cx).text().to_string()))
-    }
-
-    /// Waits for the cluster's schema of every kind in `editor`'s text, then for the checks.
-    fn wait_checked(&mut self, editor: &Entity<ManifestEditor>, kinds: &[Gvk]) {
-        for gvk in kinds {
-            wait(&mut self.vcx, &format!("the schema of {gvk}"), |vcx| {
-                settle(vcx);
-                vcx.update(|_, cx| {
-                    editor
-                        .read(cx)
-                        .model()
-                        .known()
-                        .get(gvk)
-                        .is_some_and(Option::is_some)
-                })
-            });
-        }
-        settle(&mut self.vcx);
-    }
-
-    fn apply(&mut self, editor: &Entity<ManifestEditor>) {
-        editor.update_in(&mut self.vcx, |view, window, cx| {
-            view.begin_apply(window, cx)
-        });
-        self.vcx.run_until_parked();
-    }
-
-    fn single_preview(&mut self, what: &str) -> Entity<ApplyPreviewDialog> {
-        wait_value(&mut self.vcx, what, |vcx| {
-            vcx.update(|_, cx| {
-                self.inner
-                    .read(cx)
-                    .modal_layer()
-                    .read(cx)
-                    .active_modal::<ApplyPreviewDialog>()
-            })
-        })
-    }
-
-    fn batch_preview(&mut self, what: &str) -> Entity<BatchPreviewDialog> {
-        wait_value(&mut self.vcx, what, |vcx| {
-            vcx.update(|_, cx| {
-                self.inner
-                    .read(cx)
-                    .modal_layer()
-                    .read(cx)
-                    .active_modal::<BatchPreviewDialog>()
-            })
-        })
-    }
-}
-
-/// The kind of each document of `text`.
-fn gvks_in(text: &str) -> Vec<Gvk> {
-    split_documents(text)
-        .iter()
-        .filter_map(|document| {
-            let field = |key: &str| {
-                document
-                    .text
-                    .lines()
-                    .find_map(|line| line.strip_prefix(key)?.strip_prefix(": "))
-            };
-            Some(Gvk::from_api_version(
-                field("apiVersion")?.trim(),
-                field("kind")?.trim(),
-            ))
-        })
-        .collect()
-}
-
-/// The ConfigMaps API of `namespace`, as the dynamic client sees it.
-fn configmaps(client: kube::Client, namespace: &str) -> kube::Api<kube::api::DynamicObject> {
-    let resource = kube::api::ApiResource::from_gvk_with_plural(
-        &kube::api::GroupVersionKind::gvk("", "v1", "ConfigMap"),
-        "configmaps",
-    );
-    kube::Api::namespaced_with(client, namespace, &resource)
-}
-
 #[gpui::test]
 fn every_template_opens_clean_against_the_clusters_schemas_and_passes_a_server_dry_run(
     cx: &mut TestAppContext,
@@ -217,7 +53,7 @@ fn every_template_opens_clean_against_the_clusters_schemas_and_passes_a_server_d
     };
     ensure_kind_context(&context).expect("a kind context");
     let namespace = TestNamespace::create(&context).expect("a namespace");
-    let mut s = Session::start(cx, &context, namespace.name());
+    let mut s = EditorSession::start(cx, &context, namespace.name());
 
     for template in embedded() {
         let name = template.name.to_string();
@@ -278,7 +114,7 @@ fn a_configmap_made_from_its_template_is_created_in_the_selected_namespace(
     };
     ensure_kind_context(&context).expect("a kind context");
     let namespace = TestNamespace::create(&context).expect("a namespace");
-    let mut s = Session::start(cx, &context, namespace.name());
+    let mut s = EditorSession::start(cx, &context, namespace.name());
 
     let editor = s.create("ConfigMap");
     s.wait_checked(&editor, &[Gvk::new("", "v1", "ConfigMap")]);
@@ -326,25 +162,12 @@ fn a_buffer_of_several_documents_is_applied_in_order_with_a_new_namespace_first(
         context: context.clone(),
         name: extra.clone(),
     };
-    let mut s = Session::start(cx, &context, namespace.name());
+    let mut s = EditorSession::start(cx, &context, namespace.name());
     let ns = namespace.name();
     let text = format!(
         "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {extra}\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: first\n  namespace: {ns}\ndata:\n  k: one\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: second\n  namespace: {extra}\ndata:\n  k: two\n"
     );
-    s.dispatch(Command::EditorNewManifest {
-        cluster: Some(s.cluster.clone()),
-    });
-    let editor = s.vcx.update(|_, cx| {
-        s.inner
-            .read(cx)
-            .items_of_type::<ManifestEditor>()
-            .pop()
-            .expect("the new editor")
-    });
-    let code = s.vcx.update(|_, cx| editor.read(cx).editor().clone());
-    s.vcx
-        .update(|window, cx| code.update(cx, |c, cx| c.api(window, cx).set_text(&text)));
-    s.vcx.run_until_parked();
+    let editor = s.new_manifest(&text);
 
     s.apply(&editor);
     let dialog = s.batch_preview("the combined dry run");
