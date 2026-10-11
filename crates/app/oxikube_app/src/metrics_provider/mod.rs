@@ -43,10 +43,12 @@ mod command_tests;
 mod commands;
 mod run;
 mod service;
+mod sink;
 mod status;
 #[cfg(test)]
 mod tests;
 
 pub use commands::{MetricsSettingsWriter, register_commands};
-pub use service::{EndpointSink, MetricsProviderService, NoSink, Resolved};
+pub use service::MetricsProviderService;
+pub use sink::{EndpointSink, NoSink, Resolved};
 pub use status::{ProviderState, ProviderStatus};

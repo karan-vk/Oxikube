@@ -113,11 +113,12 @@ pub(super) async fn list(resources: &dyn ResourceReader, namespace: &str) -> Lis
 }
 
 fn describe(error: &OxiError) -> String {
-    let message = redact(error.message());
-    let line = message.split_whitespace().collect::<Vec<_>>().join(" ");
     match error.kind() {
         ErrorKind::Forbidden => "you may not list services here".to_owned(),
         ErrorKind::Timeout => "listing services timed out".to_owned(),
-        _ => line,
+        _ => redact(error.message())
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" "),
     }
 }

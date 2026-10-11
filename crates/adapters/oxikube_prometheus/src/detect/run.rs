@@ -7,12 +7,12 @@ use jiff::Timestamp;
 use oxikube_domain::MetricsProviderKind;
 use oxikube_ports::{
     DetectedProvider, DetectionFailure, DetectionResult, DetectionState, Probe, ProbeOutcome,
-    PromEndpoint, PromqlEndpointPort, ProviderTarget, ResourceReader, ServiceRef,
+    PromEndpoint, PromqlEndpointPort, PromqlError, ProviderTarget, ResourceReader, ServiceRef,
 };
 
-use super::ProviderDetector;
 use super::catalogue::Entry;
 use super::services::{Listing, ServiceInfo, list};
+use super::{PROBE_TIMEOUT, ProviderDetector};
 use crate::errors::clean;
 
 /// Most namespace lists in flight at once.
@@ -139,8 +139,7 @@ impl ProviderDetector {
     ) -> Result<Option<String>, String> {
         let mut first_error = None;
         for prefix in entry.prefixes() {
-            let mut endpoint =
-                PromEndpoint::service(target.clone()).with_timeout(self.probe_timeout);
+            let mut endpoint = PromEndpoint::service(target.clone()).with_timeout(PROBE_TIMEOUT);
             endpoint.path_prefix = prefix.clone();
             match client.ping(&endpoint).await {
                 Ok(()) => return Ok(prefix),
@@ -149,8 +148,7 @@ impl ProviderDetector {
                     let stop = error.is_absent()
                         || matches!(
                             error,
-                            oxikube_ports::PromqlError::Forbidden(_)
-                                | oxikube_ports::PromqlError::Unauthorized(_)
+                            PromqlError::Forbidden(_) | PromqlError::Unauthorized(_)
                         );
                     first_error.get_or_insert_with(|| clean(&error.to_string()));
                     if stop {

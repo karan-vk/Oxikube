@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use futures::StreamExt as _;
 use futures::stream::BoxStream;
 use oxikube_app::{ClusterSessionManager, MetricsProviderService, ProviderStatus};
 use oxikube_domain::ids::ClusterId;
@@ -58,6 +57,6 @@ impl MetricsBackend for ServiceBackend {
     fn changes(&self, cluster: &ClusterId) -> BoxStream<'static, ()> {
         // The service wakes for its own status; a session connecting or dropping changes what
         // the buttons may do, and the service answers that with a status change of its own.
-        self.service.changes(cluster).boxed()
+        self.service.changes(cluster)
     }
 }

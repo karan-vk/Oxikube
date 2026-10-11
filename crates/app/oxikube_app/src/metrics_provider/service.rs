@@ -8,44 +8,15 @@ use futures::stream::BoxStream;
 use futures::{FutureExt as _, StreamExt as _};
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{OxiError, OxiResult};
-use oxikube_ports::{
-    DetectedProvider, DetectionState, MetricsMode, PromEndpoint, PrometheusOverride,
-    ProviderDetectorPort,
-};
+use oxikube_ports::{DetectionState, MetricsMode, PrometheusOverride, ProviderDetectorPort};
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
 
 use super::run::{Found, detect};
+use super::sink::{EndpointSink, Resolved};
 use super::status::{ProviderState, ProviderStatus};
 use crate::session::{ClusterSession, ClusterSessionManager, SessionChange, SessionUpdates};
 use crate::store::{Spawner, TaskGuard, spawn_guarded};
-
-/// A provider that answered and the endpoint queries to it go to (for a configured endpoint, with
-/// the credentials' keychain references; for a detected one, a Service reached through the API
-/// server).
-#[derive(Debug, Clone)]
-pub struct Resolved {
-    /// The provider, as the page shows it.
-    pub provider: DetectedProvider,
-    /// Where to send queries.
-    pub endpoint: PromEndpoint,
-}
-
-/// Where the provider that answered goes: the query side. The binary implements it over
-/// `oxikube_prometheus::PrometheusPort`, so the endpoint a query uses is set in the same step as
-/// the state a view shows. `None` forgets the cluster's endpoint.
-pub trait EndpointSink: Send + Sync {
-    /// `cluster`'s provider is now `resolved`, or none.
-    fn publish(&self, cluster: &ClusterId, resolved: Option<&Resolved>);
-}
-
-/// An [`EndpointSink`] that drops everything (tests, and a build without a query side).
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoSink;
-
-impl EndpointSink for NoSink {
-    fn publish(&self, _: &ClusterId, _: Option<&Resolved>) {}
-}
 
 /// Capacity of the change broadcast. A subscriber that falls behind re-reads the status, which
 /// is all a change means.

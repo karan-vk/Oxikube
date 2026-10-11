@@ -208,11 +208,6 @@ impl DetectionResult {
             finished_at: None,
         }
     }
-
-    /// A run in progress.
-    pub fn detecting() -> Self {
-        Self::of(DetectionState::Detecting)
-    }
 }
 
 /// Finds and checks Prometheus-compatible services.

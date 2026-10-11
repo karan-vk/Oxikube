@@ -62,7 +62,6 @@ pub const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct ProviderDetector {
     catalogue: Arc<Catalogue>,
     direct: Arc<dyn PromqlEndpointPort>,
-    probe_timeout: Duration,
 }
 
 impl ProviderDetector {
@@ -78,7 +77,6 @@ impl ProviderDetector {
         Self {
             catalogue: Arc::new(Catalogue::builtin().clone()),
             direct,
-            probe_timeout: PROBE_TIMEOUT,
         }
     }
 
@@ -86,13 +84,6 @@ impl ProviderDetector {
     #[must_use]
     pub fn with_catalogue(mut self, catalogue: Catalogue) -> Self {
         self.catalogue = Arc::new(catalogue);
-        self
-    }
-
-    /// The same detector with another probe deadline.
-    #[must_use]
-    pub fn with_probe_timeout(mut self, timeout: Duration) -> Self {
-        self.probe_timeout = timeout;
         self
     }
 
