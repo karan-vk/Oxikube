@@ -207,11 +207,14 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
 
 /// What the audit record of `command` on `cluster` names as its target.
 ///
-/// The command's own [`ResourceRef`] when it acts on one object. A command without a
-/// single target (`resource::Apply` of a manifest) is recorded against the cluster
-/// itself, as the synthetic cluster-scoped `oxikube.io/v1 Cluster` named `*`; the apply
-/// service (E19) audits each applied object on its own.
+/// The command's own [`ResourceRef`] when it acts on one object, and for `resource::Apply` the
+/// object its manifest names (E10-S08). A command without a single target (a manifest that
+/// names no single object) is recorded against the cluster itself, as the synthetic
+/// cluster-scoped `oxikube.io/v1 Cluster` named `*`.
 pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
+    if let Some(object) = crate::apply::audit_target(command, cluster) {
+        return object;
+    }
     command.target().cloned().unwrap_or_else(|| {
         let gvk = Gvk::new("oxikube.io", "v1", "Cluster");
         ResourceRef::cluster_scoped(cluster.clone(), gvk, "*")
@@ -283,8 +286,12 @@ fn effective_image(image: &str) -> &str {
 
 /// What the audit record of a guarded `command` says besides its target, if anything: for
 /// `pod::Debug` the image, the target container, the program (never its arguments) and a chosen
-/// name. Short, free of typed content, and redacted by the audit log like every field.
+/// name; for `resource::Apply` the field manager, force and the reviewed version (never the
+/// manifest). Short, free of typed content, and redacted by the audit log like every field.
 pub fn audit_detail(command: &Command) -> Option<String> {
+    if let Some(detail) = crate::apply::audit_detail(command) {
+        return Some(detail);
+    }
     let Command::PodDebug {
         image,
         target_container,

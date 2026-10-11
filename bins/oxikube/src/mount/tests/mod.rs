@@ -7,6 +7,7 @@
 
 mod actions;
 mod agent;
+mod apply;
 mod chrome;
 mod editor;
 mod exec;

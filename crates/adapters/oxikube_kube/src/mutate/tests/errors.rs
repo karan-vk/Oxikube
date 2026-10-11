@@ -224,3 +224,22 @@ async fn strategic_merge_on_a_custom_resource_is_unsupported() {
         .unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Unsupported);
 }
+
+/// E10-S08: a server that cannot server-side apply the kind (an aggregated API, an old CRD setup)
+/// answers 415; the apply service falls back to a replace on `Unsupported`.
+#[tokio::test]
+async fn an_apply_the_server_cannot_take_is_unsupported() {
+    let api = server();
+    api.reply(
+        CONFIGMAP_A,
+        415,
+        status_body(
+            415,
+            "UnsupportedMediaType",
+            "the body of the request was in an unknown format - accepted media types include: application/json-patch+json, application/merge-patch+json",
+        ),
+    );
+    let err = apply_error(&api).await;
+    assert_eq!(err.kind(), ErrorKind::Unsupported);
+    assert!(err.conflict_details().is_none() && err.validation_details().is_none());
+}

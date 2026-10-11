@@ -261,6 +261,9 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             namespace: None,
             manifest: manifest(),
+            field_manager: None,
+            force: false,
+            resource_version: None,
         },
         "resource::Delete" => Command::ResourceDelete {
             target: ResourceRef::namespaced(

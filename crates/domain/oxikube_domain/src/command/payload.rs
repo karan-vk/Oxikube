@@ -589,7 +589,10 @@ pub enum Command {
         #[serde(default)]
         propagation: Propagation,
     },
-    /// Apply a manifest (server-side apply after a dry-run diff).
+    /// Apply a manifest of one object (E10-S08): server-side apply under a field manager, after a
+    /// server dry run; a replace carrying `resource_version` where the server cannot apply. A
+    /// dry-run dispatch stops after the dry run and returns the object as the server would store
+    /// it, next to the live one.
     #[serde(rename = "resource::Apply")]
     ResourceApply {
         /// Cluster to apply to.
@@ -600,6 +603,18 @@ pub enum Command {
         /// The YAML or JSON manifest text. May hold secrets: audit and logs
         /// must redact it.
         manifest: String,
+        /// The server-side apply field manager; `None` is `oxikube`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        field_manager: Option<String>,
+        /// Take over the fields other field managers own instead of failing with a conflict.
+        /// Off unless the user chose it after seeing the conflicts.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        force: bool,
+        /// The live object's `metadata.resourceVersion` the change was reviewed against. The
+        /// replace fallback carries it, so a change made since fails with a conflict instead of
+        /// being overwritten.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        resource_version: Option<String>,
     },
     /// Delete one pod.
     #[serde(rename = "pod::Delete")]
@@ -1411,6 +1426,9 @@ mod tests {
                 cluster: cluster(),
                 namespace: Some("default".into()),
                 manifest: "kind: ConfigMap".into(),
+                field_manager: Some("oxikube".into()),
+                force: true,
+                resource_version: Some("42".into()),
             },
             Command::PodDelete {
                 target: pod(),

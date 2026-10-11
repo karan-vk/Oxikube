@@ -414,6 +414,9 @@
       // reloads the buffer from the server. The banner's Merge and Keep mine are buttons (and
       // palette entries). Not ctrl-alt-d: desktops take it to show the desktop.
       "ctrl-shift-d": "editor::ShowDiff",
+      // Apply (E10-S08): a server dry run, its diff to confirm, then a server-side apply. Like a
+      // save: the buffer goes to the cluster, never to disk.
+      "ctrl-s": "resource::Apply",
       "ctrl-alt-shift-d": "editor::ToggleDiffLayout",
       "ctrl-alt-shift-r": "editor::ReloadFromServer",
       "ctrl-space": "editor::TriggerCompletion",

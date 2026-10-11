@@ -21,6 +21,7 @@
 //! | [`sidebar`] | E06-S10 | [`review_access`](sidebar::review_access) (the rules reviews the cluster sidebar hides sections by, failing open) and [`discover_custom_resources`](sidebar::discover_custom_resources) |
 //! | [`integrations`] | E06-S10 | [`IntegrationRegistry`] (stub): registered integrations and the sidebar sections they append after the core ones |
 //! | [`actions`] | E07-S08 | row actions: [`RowActionRegistry`] / [`RowActions`] (the actions a table's context menu and the palette offer per kind, read from the `CommandBus` once), the `resource::Delete` handler, and [`DeleteFlow`] (plan and run a delete of one object or a selection through the guard, with per-object results) |
+//! | [`apply`] | E10-S08 | [`ApplyService`]: one object's manifest dry-run, previewed and applied through the guard (server-side apply under a field manager, conflicts with their managers and a force option, the replace fallback at the reviewed `resourceVersion`); the `resource::Apply` handler; Secret values masked |
 //! | [`audit`] | E06-S02 | [`AuditLog`]: redacted, batched, fail-closed audit appends through `StatePort` |
 //! | [`store`] | E07-S01 | [`ResourceStore`]: the per-session cache over reflector, metadata and Table feeds keyed by (gvk, scope), ref-counted feeds with grace teardown and a [`FeedBudget`](store::FeedBudget) hook, in-app sort / filter / name-namespace-label indices, and [`Subscription`] streams of coalesced [`StoreDelta`]s; [`ResourceStores`] keeps one per connected session |
 //! | [`exec`] | E09-S08 | [`ExecService`]: a shell (`bash`, else `sh`, probed with a quick exec), an attach or a command in a pod container over the `ExecPort`; [`PodContainers`] and [`ContainerPlan`] pick the container (the default-container annotation, the last choice per pod, a picker for several); the exec-class policy lives in the [`MutationGuard`] (blocked read-only by default, audited, no confirmation); E09-S10 adds debug containers (`pod::Debug`, a low-risk guarded mutation: [`DebugRequest`], [`plan_debug`], [`ExecService::open_debug`], [`DebugRunner`]) |
@@ -31,6 +32,7 @@
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
 pub mod actions;
+pub mod apply;
 pub mod audit;
 pub mod catalog;
 pub mod columns;
@@ -56,6 +58,9 @@ pub use actions::{
     ActionContext, ActionState, DeleteError, DeleteFlow, DeletePlan, DeleteReport, ItemResult,
     ItemStatus, ResolvedAction, RowAction, RowActionRegistry, RowActionSpec, RowActions,
     object_label,
+};
+pub use apply::{
+    ApplyError, ApplyMethod, ApplyPreview, ApplyReport, ApplyRequest, ApplyService, FieldConflict,
 };
 pub use audit::AuditLog;
 pub use catalog::{

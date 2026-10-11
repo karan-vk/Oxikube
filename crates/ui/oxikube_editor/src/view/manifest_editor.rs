@@ -26,6 +26,7 @@ use oxikube_ui::editor::{CodeEditor, CodeEditorEvent, CodeEditorOptions, EditorA
 use oxikube_ui::layout::v_flex;
 use oxikube_workspace::{CommandDispatcher, ItemEvent};
 
+use super::apply::{Apply, ApplyLink};
 use super::live::{LiveLink, LiveSource};
 use super::model::ManifestModel;
 use super::notice::Notice;
@@ -105,6 +106,8 @@ pub struct ManifestEditor {
     pub(super) schema_fetches: Vec<Task<()>>,
     /// The live object: its watch, the banner's state and the diff panel (E10-S07).
     pub(super) live: LiveLink,
+    /// The way to apply the buffer to the cluster (E10-S08).
+    pub(super) apply: ApplyLink,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -178,6 +181,7 @@ impl ManifestEditor {
             pass_running: false,
             schema_fetches: Vec::new(),
             live: LiveLink::new(parts.live),
+            apply: ApplyLink::default(),
             _subscriptions: subscriptions,
         };
         if this.binding.is_some() {
@@ -387,6 +391,9 @@ impl Render for ManifestEditor {
             }))
             .on_action(cx.listener(|this, _: &ShowHover, _, cx| {
                 this.send(Command::EditorShowHover, cx);
+            }))
+            .on_action(cx.listener(|this, _: &Apply, window, cx| {
+                this.begin_apply(window, cx);
             }))
             .size_full()
             .bg(colors.background)

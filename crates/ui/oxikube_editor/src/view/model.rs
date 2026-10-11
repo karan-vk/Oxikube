@@ -12,10 +12,11 @@ use std::sync::Arc;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::schema::JsonSchema;
 use oxikube_domain::{ErrorKind, OxiResult};
-use oxikube_ui::editor::{DiagnosticLevel, EditorApi};
+use oxikube_ui::editor::{DiagnosticLevel, EditorApi, EditorDiagnostic};
 
 use super::progressive::Coverage;
 use super::validation::{KnownSchemas, Validation};
+use crate::apply::SERVER_CODE;
 use crate::json::{Language, LanguageMode};
 use crate::yaml::{ParseCache, ParseResult};
 
@@ -68,6 +69,9 @@ pub struct ManifestModel {
     coverage: Coverage,
     parsed: ParseCache,
     stats: PassStats,
+    /// The server's rejection of the buffer at a version (E10-S08): shown with the checks of that
+    /// version, gone with the next edit.
+    server: Option<(u64, Vec<EditorDiagnostic>)>,
 }
 
 impl ManifestModel {
@@ -149,11 +153,41 @@ impl ManifestModel {
         &self.unavailable
     }
 
-    /// The buffer changed: the shown diagnostics are gone (the editor drops them on an edit).
+    /// The buffer changed: the shown diagnostics are gone (the editor drops them on an edit), the
+    /// server's with them.
     pub fn changed(&mut self) {
         self.problems = Problems::default();
         self.shown = None;
         self.coverage = Coverage::default();
+        self.server = None;
+    }
+
+    /// Shows the server's rejection of the buffer at `version` (an apply, E10-S08) next to the
+    /// checks' own diagnostics, until the next edit. Dropped when the buffer moved on since.
+    pub fn show_server(
+        &mut self,
+        editor: &mut dyn EditorApi,
+        version: u64,
+        diagnostics: Vec<EditorDiagnostic>,
+    ) -> Accepted {
+        if version != editor.version() {
+            return Accepted::Stale;
+        }
+        let mut shown: Vec<EditorDiagnostic> = editor
+            .diagnostics()
+            .into_iter()
+            .filter(|d| d.code.as_deref() != Some(SERVER_CODE))
+            .collect();
+        shown.extend(diagnostics.iter().cloned());
+        self.server = Some((version, diagnostics));
+        self.problems = count(&shown);
+        editor.set_diagnostics(shown);
+        Accepted::Shown
+    }
+
+    /// The server's diagnostics of the buffer as it is, if it rejected it.
+    pub fn server_problems(&self) -> &[EditorDiagnostic] {
+        self.server.as_ref().map_or(&[], |(_, d)| d.as_slice())
     }
 
     /// Shows `result` when it is for the buffer's current version and language mode; drops it
@@ -167,20 +201,16 @@ impl ManifestModel {
         if editor.language() != self.language.grammar() {
             editor.set_language(self.language.grammar());
         }
-        let count = |level| {
-            result
-                .diagnostics
-                .iter()
-                .filter(|d| d.level == level)
-                .count()
-        };
-        self.problems = Problems {
-            errors: count(DiagnosticLevel::Error),
-            warnings: count(DiagnosticLevel::Warning),
-        };
+        let mut diagnostics = result.diagnostics;
+        if let Some((version, server)) = &self.server
+            && *version == result.version
+        {
+            diagnostics.extend(server.iter().cloned());
+        }
+        self.problems = count(&diagnostics);
         self.shown = Some(result.version);
         self.coverage = result.coverage;
-        editor.set_diagnostics(result.diagnostics);
+        editor.set_diagnostics(diagnostics);
         Accepted::Shown
     }
 
@@ -226,6 +256,15 @@ impl ManifestModel {
                 self.known.insert(gvk, None);
             }
         }
+    }
+}
+
+/// The errors and warnings among `diagnostics`.
+fn count(diagnostics: &[EditorDiagnostic]) -> Problems {
+    let of = |level| diagnostics.iter().filter(|d| d.level == level).count();
+    Problems {
+        errors: of(DiagnosticLevel::Error),
+        warnings: of(DiagnosticLevel::Warning),
     }
 }
 

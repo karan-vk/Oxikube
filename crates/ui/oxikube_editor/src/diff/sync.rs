@@ -104,6 +104,9 @@ pub struct LiveSync {
     live: Option<LiveObject>,
     state: SyncState,
     merge: Option<PendingMerge>,
+    /// The `resourceVersion` the buffer was just applied as (E10-S08): the watch's object at that
+    /// version is the buffer's own change, not one to raise the banner for.
+    adopt: Option<Arc<str>>,
 }
 
 impl Default for LiveSync {
@@ -120,6 +123,28 @@ impl LiveSync {
             live: None,
             state: SyncState::Clean,
             merge: None,
+            adopt: None,
+        }
+    }
+
+    /// The buffer was applied and the server stored it at `resource_version` (E10-S08): the
+    /// buffer is clean, and the object at that version becomes the base when the watch delivers
+    /// it (or now, when it has), without a reload or a banner. A buffer that follows no object
+    /// (no base) keeps following none.
+    pub fn applied(&mut self, resource_version: Option<&str>) {
+        if self.base.is_none() {
+            return;
+        }
+        self.state = SyncState::Clean;
+        self.merge = None;
+        self.adopt = None;
+        match (&self.live, resource_version) {
+            (Some(LiveObject::Present(live)), Some(version))
+                if live.resource.meta.resource_version.as_deref() == Some(version) =>
+            {
+                self.base = Some(live.clone());
+            }
+            (_, version) => self.adopt = version.map(Arc::from),
         }
     }
 
@@ -129,6 +154,7 @@ impl LiveSync {
         self.base = Some(version);
         self.state = SyncState::Clean;
         self.merge = None;
+        self.adopt = None;
     }
 
     /// Where the buffer stands.
@@ -179,6 +205,14 @@ impl LiveSync {
         let Some(base) = &self.base else {
             return SyncAction::None;
         };
+        if let (Some(adopt), LiveObject::Present(version)) = (&self.adopt, &live)
+            && version.resource.meta.resource_version.as_deref() == Some(&**adopt)
+        {
+            // The buffer's own apply coming back: it is what the buffer holds.
+            self.adopt = None;
+            self.base = Some(version.clone());
+            return SyncAction::None;
+        }
         let version = match live {
             LiveObject::Present(version) => version,
             // Said once: a re-list that still finds nothing does not ask again.

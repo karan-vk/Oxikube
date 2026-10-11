@@ -90,6 +90,9 @@ fn cluster_and_audit_target_come_from_the_payload() {
         cluster: id("b"),
         namespace: None,
         manifest: "kind: Secret\ndata:\n  token: c2VjcmV0\n".into(),
+        field_manager: None,
+        force: false,
+        resource_version: None,
     };
     assert_eq!(policy::cluster_of(&apply), Some(&id("b")));
     let target = policy::audit_target(&apply, &id("b"));
@@ -120,6 +123,9 @@ fn summary_and_expected_name_name_the_target_and_cluster() {
         cluster: id("a"),
         namespace: None,
         manifest: String::new(),
+        field_manager: None,
+        force: false,
+        resource_version: None,
     };
     assert_eq!(policy::expected_name(&apply, "prod"), "prod");
     assert_eq!(

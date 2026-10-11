@@ -400,6 +400,9 @@
       // reloads the buffer from the server. The banner's Merge and Keep mine are buttons (and
       // palette entries). Not cmd-alt-d: macOS takes it to hide the Dock.
       "cmd-shift-d": "editor::ShowDiff",
+      // Apply (E10-S08): a server dry run, its diff to confirm, then a server-side apply. Like a
+      // save: the buffer goes to the cluster, never to disk.
+      "cmd-s": "resource::Apply",
       "cmd-alt-shift-d": "editor::ToggleDiffLayout",
       "cmd-alt-shift-r": "editor::ReloadFromServer",
       "ctrl-space": "editor::TriggerCompletion",

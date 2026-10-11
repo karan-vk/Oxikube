@@ -963,13 +963,17 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Pod")),
+    // The manifest editor runs it through its own flow (E10-S08): a server dry run, the diff
+    // preview (which is the confirmation, hence `Low`), then the apply. Agents call it directly;
+    // the guard and the handler's own dry run apply to them alike.
     CommandMeta::mutation(
         CommandId::RESOURCE_APPLY,
         "Apply Manifest",
         CommandScope::Cluster,
-        Risk::Medium,
+        Risk::Low,
         NONE,
-    ),
+    )
+    .in_views(EDITOR_VIEW),
     // Writes the user's clipboard, never the cluster.
     CommandMeta::read(
         CommandId::RESOURCE_COPY_LABEL,
