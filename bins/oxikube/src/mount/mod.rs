@@ -245,6 +245,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         dispatcher: dispatcher.clone(),
         workspace: workspace.downgrade(),
         stores: stores.clone(),
+        // The Events feed (E14) replaces this; until then the overview says there are none.
+        warnings: Arc::new(oxikube_app::NoRecentWarnings),
         resources: resources_slot.clone(),
     };
     let tabs_deps = ClusterTabsDeps::new(

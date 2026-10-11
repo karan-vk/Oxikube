@@ -65,5 +65,12 @@ path = "tests/states_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# The Workloads overview with mixed statuses, E12-S07.
+[[test]]
+name = "overview_screenshot"
+path = "tests/overview_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 [lints]
 workspace = true

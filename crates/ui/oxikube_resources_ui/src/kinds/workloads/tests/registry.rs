@@ -72,10 +72,13 @@ fn the_four_kinds_offer_scale_and_a_panel_and_keep_their_sidebar_places(cx: &mut
                 kind.1
             );
         }
-        // A DaemonSet cannot be scaled: no action, no panel of this story.
+        // A DaemonSet cannot be scaled (no action); its own panel is E12-S07's (`kinds::daemonset`).
         let daemonset = Gvk::new("apps", "v1", "DaemonSet");
         assert!(!KindSpecs::kind_for(cx, &daemonset).offers(CommandId::WORKLOAD_SCALE));
-        assert!(KindSpecs::detail_for(cx, &daemonset).is_generic());
+        assert!(matches!(
+            KindSpecs::detail_for(cx, &daemonset),
+            DetailRenderer::Panel(_)
+        ));
         // Restart and Set image (E12-S05): Deployments, StatefulSets and DaemonSets, not the
         // controllers whose pods a template change never rolls.
         for (group, kind, offered) in [

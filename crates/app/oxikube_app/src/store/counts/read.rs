@@ -34,6 +34,7 @@ impl ResourceStore {
             total.total += tally.total;
             total.rated += tally.rated;
             total.healthy += tally.healthy;
+            total.buckets.merge(&tally.buckets);
             if worst
                 .as_ref()
                 .is_none_or(|w| state.severity() > w.severity())

@@ -3,6 +3,7 @@
 mod fuzzy;
 mod grammar;
 mod narrowing;
+mod status;
 
 use super::{FilterExpr, FilterParts, parse};
 

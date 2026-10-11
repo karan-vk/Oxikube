@@ -4,8 +4,14 @@
 //! input    = [ "/" ] ( "" | "!" body | body ) [ "-l" selector ]
 //! body     = "-l" selector            label selector (server-side)
 //!          | "-f" text                fuzzy name match
+//!          | "-s" status              the objects in a status bucket (`-s pending`)
 //!          | text                     name regex, or substring when it has no regex syntax
 //! ```
+//!
+//! `-s` takes a [`Bucket`](oxikube_domain::view::Bucket) word (`running`, `not-ready`, `pending`,
+//! `succeeded`, `failed`, `unknown`, `ready`, `active`, `suspended`), is applied by the store to
+//! the cached objects, and stands alone: it does not combine with a name or a selector, and cannot
+//! be inverted. It is what a click on a bar of the Workloads overview types.
 //!
 //! A name filter may be followed by `-l selector` (`api -l app=x`): both apply. That is how the
 //! `:` jump bar's `:pod /api app=x` fills the bar.
@@ -20,6 +26,7 @@
 //! The whole input is capped at [`MAX_FILTER_LEN`] characters: the pattern is recompiled on every
 //! keystroke, and a name filter never needs more.
 
+use oxikube_domain::view::Bucket;
 use thiserror::Error;
 
 use super::fuzzy::Fuzzy;
@@ -44,6 +51,8 @@ pub enum FilterExpr {
     LabelSelector(LabelSelector),
     /// `/-f text`: names containing the characters in order, ranked by closeness.
     Fuzzy(Fuzzy),
+    /// `/-s bucket`: the objects in a status bucket, applied by the store. Stands alone.
+    Status(Bucket),
     /// A name filter and a label selector together: `api -l app=x`. `name` is never a
     /// `LabelSelector` or another `Narrowed`.
     Narrowed {
@@ -63,9 +72,17 @@ pub enum FilterError {
     /// The label selector does not parse.
     #[error("{0}")]
     Selector(SelectorError),
-    /// A `-x` flag other than `-l` and `-f`.
-    #[error("unknown option `{0}` (use -l for labels, -f for fuzzy)")]
+    /// A `-x` flag other than `-l`, `-f` and `-s`.
+    #[error("unknown option `{0}` (use -l for labels, -f for fuzzy, -s for status)")]
     UnknownFlag(String),
+    /// `-s` with a word that is not a status bucket.
+    #[error(
+        "unknown status `{0}` (running, not-ready, pending, succeeded, failed, unknown, ready, active, suspended)"
+    )]
+    UnknownStatus(String),
+    /// `!` in front of `-s`.
+    #[error("a status filter cannot be inverted")]
+    InvertedStatus,
     /// `!` in front of `-l`.
     #[error("a label selector cannot be inverted (use != or notin)")]
     InvertedSelector,
@@ -133,6 +150,7 @@ fn parse_name_or_selector(text: &str) -> Result<FilterExpr, FilterError> {
 fn parse_name(text: &str) -> Result<FilterExpr, FilterError> {
     match parse_name_or_selector(text)? {
         FilterExpr::LabelSelector(_) => Err(FilterError::UnknownFlag("-l".to_owned())),
+        FilterExpr::Status(_) => Err(FilterError::UnknownFlag("-s".to_owned())),
         name => Ok(name),
     }
 }
@@ -146,6 +164,7 @@ fn parse_inverse(rest: &str) -> Result<FilterExpr, FilterError> {
         FilterExpr::Empty => Err(FilterError::NothingToInvert),
         FilterExpr::Fuzzy(fuzzy) if fuzzy.is_empty() => Err(FilterError::NothingToInvert),
         FilterExpr::LabelSelector(_) => Err(FilterError::InvertedSelector),
+        FilterExpr::Status(_) => Err(FilterError::InvertedStatus),
         inner => Ok(FilterExpr::Inverse(Box::new(inner))),
     }
 }
@@ -163,6 +182,11 @@ fn parse_body(text: &str) -> Result<FilterExpr, FilterError> {
                 .map(FilterExpr::LabelSelector)
                 .map_err(FilterError::Selector),
             "-f" => Ok(FilterExpr::Fuzzy(Fuzzy::new(rest))),
+            // A bare `-s` is a filter being typed: no filter yet.
+            "-s" if rest.is_empty() => Ok(FilterExpr::Empty),
+            "-s" => Bucket::parse(rest)
+                .map(FilterExpr::Status)
+                .ok_or_else(|| FilterError::UnknownStatus(rest.to_owned())),
             other => Err(FilterError::UnknownFlag(other.to_owned())),
         };
     }

@@ -2,12 +2,13 @@
 
 use futures::StreamExt as _;
 use gpui::{Context, WeakEntity};
-use oxikube_app::{CountState, CountTarget, SessionChange};
+use oxikube_app::SessionChange;
 use oxikube_runtime::notify_coalesced;
 
 use super::REFRESH_INTERVAL;
 use super::tiles::TileRegistry;
 use super::view::WorkloadsOverview;
+use super::warnings::WARNING_ROWS;
 
 impl WorkloadsOverview {
     /// Starts what the overview follows: the tile registry, the session, the refresh timer.
@@ -17,7 +18,6 @@ impl WorkloadsOverview {
         self.subscriptions
             .push(cx.observe_global::<TileRegistry>(|this, cx| {
                 this.reload_tiles(cx);
-                this.lease = None;
                 this.sync(cx);
             }));
 
@@ -62,8 +62,8 @@ impl WorkloadsOverview {
         }
     }
 
-    /// Finds the session's store and keeps a lease on the tiles' kinds under the current
-    /// namespace selection; reads the numbers now. Cheap when nothing changed.
+    /// Finds the session's store and keeps the counters on it under the current namespace
+    /// selection; reads the numbers now. Cheap when nothing changed.
     pub(super) fn sync(&mut self, cx: &mut Context<Self>) {
         let session = self
             .deps
@@ -73,40 +73,40 @@ impl WorkloadsOverview {
         let store = session
             .as_ref()
             .and_then(|s| self.deps.stores.for_session(s));
-        let (Some(session), Some(store)) = (session, store) else {
-            self.store = None;
-            self.lease = None;
-            self.set_states(vec![CountState::NotWatched; self.tiles.len()], cx);
-            cx.notify();
-            return;
-        };
-        let selection = session.namespace_selection().clone();
-        let targets: Vec<CountTarget> = self.tiles.iter().map(|t| t.target.clone()).collect();
-        let same_store = self.store.as_ref().is_some_and(|s| s.is_same_store(&store));
-        match &mut self.lease {
-            Some(lease) if same_store && lease.targets() == targets.as_slice() => {
-                lease.rescope(&selection);
+        match (&session, &store) {
+            (Some(session), Some(store)) => {
+                let selection = session.namespace_selection().clone();
+                self.counters.follow(Some((store, &selection)));
             }
-            _ => self.lease = Some(store.lease_counts(targets, &selection)),
+            _ => {
+                self.counters.follow(None);
+            }
         }
-        self.store = Some(store);
-        self.refresh(cx);
+        self.refresh_warnings();
         cx.notify();
     }
 
-    /// Reads every tile's count from the lease; redraws (coalesced) when one changed.
+    /// Reads every tile's count and the warnings again; redraws (coalesced) when one changed.
     pub(super) fn refresh(&mut self, cx: &mut Context<Self>) {
-        let Some(lease) = &self.lease else {
-            return;
-        };
-        let states = lease.counts();
-        self.set_states(states, cx);
-    }
-
-    fn set_states(&mut self, states: Vec<CountState>, cx: &mut Context<Self>) {
-        if states != self.states {
-            self.states = states;
+        let counts = self.counters.refresh();
+        let warnings = self.refresh_warnings();
+        if counts || warnings {
             notify_coalesced(cx);
         }
+    }
+
+    /// Asks the warnings hook for the newest rows; whether they differ from the ones shown. Not
+    /// connected means no warnings.
+    fn refresh_warnings(&mut self) -> bool {
+        let rows = if self.counters.is_open() {
+            self.deps.warnings.latest(&self.cluster, WARNING_ROWS)
+        } else {
+            Vec::new()
+        };
+        if rows == self.warnings {
+            return false;
+        }
+        self.warnings = rows;
+        true
     }
 }

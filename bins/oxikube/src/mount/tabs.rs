@@ -9,7 +9,9 @@ use std::sync::Arc;
 
 use gpui::{App, AppContext as _, Entity, WeakEntity, Window};
 use oxikube_app::session::namespaces::NamespaceService;
-use oxikube_app::{ClusterSession, ClusterSessionManager, IntegrationRegistry, ResourceStores};
+use oxikube_app::{
+    ClusterSession, ClusterSessionManager, IntegrationRegistry, RecentWarnings, ResourceStores,
+};
 use oxikube_catalog_ui::connect::{self, ConnectDeps};
 use oxikube_catalog_ui::namespaces::{
     NamespaceSelector, NamespaceSelectorEvent, stale_dropped_toast,
@@ -40,6 +42,9 @@ pub struct TabDeps {
     pub resources: ResourceViewsSlot,
     /// The resource stores the sidebar's badges and the overview read (E07-S11).
     pub stores: Arc<ResourceStores>,
+    /// The newest warning events for the Workloads overview's panel (E12-S07): the Events feed
+    /// when E14 provides one.
+    pub warnings: Arc<dyn RecentWarnings>,
 }
 
 /// The `ClusterTabsDeps` setup hook: sidebar (and its navigation to the resource tables),

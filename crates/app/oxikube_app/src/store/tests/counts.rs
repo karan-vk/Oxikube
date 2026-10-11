@@ -12,7 +12,7 @@ use oxikube_testkit::{Timeline, deployment, pod};
 use serde_json::json;
 
 use super::*;
-use crate::store::{CountState, CountTarget, KindCount, MaxFeeds};
+use crate::store::{BucketCounts, CountState, CountTarget, KindCount, MaxFeeds};
 
 fn pod_target() -> CountTarget {
     CountTarget::core("", "pods").expect("pods are a core target")
@@ -39,7 +39,23 @@ fn counted(total: usize, rated: usize, healthy: usize) -> CountState {
         total,
         rated,
         healthy,
+        buckets: BucketCounts::default(),
     })
+}
+
+/// `state` without its bucket counts (the bucket tests below look at those on their own).
+fn plain(state: CountState) -> CountState {
+    match state {
+        CountState::Counted(count) => CountState::Counted(KindCount {
+            buckets: BucketCounts::default(),
+            ..count
+        }),
+        other => other,
+    }
+}
+
+fn plain_all(states: Vec<CountState>) -> Vec<CountState> {
+    states.into_iter().map(plain).collect()
 }
 
 #[test]
@@ -61,16 +77,20 @@ fn counts_follow_adds_updates_and_deletes() {
         .store
         .lease_counts(vec![pod_target()], &NamespaceSelection::All);
     h.settle();
-    assert_eq!(lease.counts(), [counted(3, 3, 2)], "one pod is pending");
+    assert_eq!(
+        plain_all(lease.counts()),
+        [counted(3, 3, 2)],
+        "one pod is pending"
+    );
     h.advance(1);
     assert_eq!(
-        lease.counts(),
+        plain_all(lease.counts()),
         [counted(3, 3, 3)],
         "an update turns it healthy"
     );
     h.advance(1);
     assert_eq!(
-        lease.counts(),
+        plain_all(lease.counts()),
         [counted(3, 3, 2)],
         "one added (failed), one deleted"
     );
@@ -97,12 +117,12 @@ fn an_open_feed_is_reused_and_no_second_one_starts() {
     let _table = h.subscribe(all(pods()));
     assert_eq!(h.resources.live_watches(), 1);
     let all_ns = h.store.count(&pod_target(), &NamespaceSelection::All);
-    assert_eq!(all_ns, counted(2, 2, 1));
+    assert_eq!(plain(all_ns), counted(2, 2, 1));
     // A namespace selection reads the cluster-wide feed's objects of that namespace.
     let one = h
         .store
         .count(&pod_target(), &NamespaceSelection::single("x"));
-    assert_eq!(one, counted(1, 1, 1));
+    assert_eq!(plain(one), counted(1, 1, 1));
     assert_eq!(h.store.feeds().len(), 1);
     assert_eq!(h.resources.live_watches(), 1, "counting reused the feed");
 }
@@ -137,7 +157,11 @@ fn an_over_budget_kind_degrades_and_starts_nothing() {
     );
     h.settle();
     let counts = lease.counts();
-    assert_eq!(counts[0], counted(1, 1, 1), "the first feed fits");
+    assert_eq!(
+        plain(counts[0].clone()),
+        counted(1, 1, 1),
+        "the first feed fits"
+    );
     assert!(
         matches!(&counts[1], CountState::OverBudget { message } if message.contains("limit 1")),
         "{:?}",
@@ -165,9 +189,9 @@ fn a_feed_that_has_not_listed_yet_is_loading() {
         .store
         .lease_counts(vec![pod_target()], &NamespaceSelection::All);
     h.settle();
-    assert_eq!(lease.counts(), [CountState::Loading]);
+    assert_eq!(plain_all(lease.counts()), [CountState::Loading]);
     h.advance(5);
-    assert_eq!(lease.counts(), [counted(1, 1, 1)]);
+    assert_eq!(plain_all(lease.counts()), [counted(1, 1, 1)]);
 }
 
 #[test]
@@ -184,13 +208,13 @@ fn a_lease_follows_the_namespace_selection() {
         .store
         .lease_counts(vec![pod_target()], &NamespaceSelection::single("a"));
     h.settle();
-    assert_eq!(lease.counts(), [counted(2, 2, 1)]);
+    assert_eq!(plain_all(lease.counts()), [counted(2, 2, 1)]);
     lease.rescope(&NamespaceSelection::from_names(["a", "b"]));
     h.settle();
-    assert_eq!(lease.counts(), [counted(3, 3, 2)]);
+    assert_eq!(plain_all(lease.counts()), [counted(3, 3, 2)]);
     lease.rescope(&NamespaceSelection::single("b"));
     h.settle();
-    assert_eq!(lease.counts(), [counted(1, 1, 1)]);
+    assert_eq!(plain_all(lease.counts()), [counted(1, 1, 1)]);
     assert_eq!(h.resources.live_watches(), 1, "one namespace, one feed");
 }
 
@@ -223,7 +247,7 @@ fn a_lease_builds_no_row_index() {
         .store
         .lease_counts(vec![pod_target()], &NamespaceSelection::All);
     h.settle();
-    assert_eq!(lease.counts(), [counted(300, 300, 300)]);
+    assert_eq!(plain_all(lease.counts()), [counted(300, 300, 300)]);
     let mut table = h.subscribe(all(pods()));
     let mut m = Mirror::default();
     m.drain(&mut table);
@@ -250,7 +274,7 @@ fn workload_health_counts_ready_against_desired() {
         .store
         .lease_counts(vec![deployment_target()], &NamespaceSelection::All);
     h.settle();
-    assert_eq!(lease.counts(), [counted(2, 2, 1)]);
+    assert_eq!(plain_all(lease.counts()), [counted(2, 2, 1)]);
 }
 
 #[test]

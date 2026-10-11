@@ -69,6 +69,7 @@ impl ObjectCache {
             total,
             rated: tally.rated,
             healthy: tally.healthy,
+            buckets: tally.buckets,
         };
         match scope {
             FeedScope::Cluster => count(self.tally, self.objects.len()),

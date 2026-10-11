@@ -75,6 +75,9 @@ impl PanelModel {
         if summary.paused {
             extras.push(("Paused", "yes: rollouts wait".to_owned()));
         }
+        if summary.kind == WorkloadKind::DaemonSet {
+            extras.push(("Node selector", node_selector(&detail.node_selector)));
+        }
         Some(Self {
             version: res.meta.resource_version.clone(),
             uid: res.meta.uid.clone(),
@@ -130,6 +133,26 @@ fn stats(s: &WorkloadSummary) -> Vec<Stat> {
             }
             stats
         }
+        // A DaemonSet runs one pod per matching node: `desired` is the nodes it should run on.
+        WorkloadKind::DaemonSet => vec![
+            stat("Desired", s.desired.to_string(), Tone::Neutral),
+            stat(
+                "Current",
+                s.current.to_string(),
+                short(s.current, s.desired),
+            ),
+            stat("Ready", s.ready.to_string(), short(s.ready, s.desired)),
+            stat(
+                "Up-to-date",
+                s.updated.to_string(),
+                short(s.updated, s.desired),
+            ),
+            stat(
+                "Available",
+                s.available.to_string(),
+                short(s.available, s.desired),
+            ),
+        ],
         _ => vec![
             stat("Ready", s.ready_display(), short(s.ready, s.desired)),
             stat(
@@ -140,6 +163,18 @@ fn stats(s: &WorkloadSummary) -> Vec<Stat> {
             stat("Desired", s.desired.to_string(), Tone::Neutral),
         ],
     }
+}
+
+/// A pod template's node selector as `disk=ssd, kubernetes.io/os=linux`; every node when none.
+fn node_selector(selector: &[(Arc<str>, Arc<str>)]) -> String {
+    if selector.is_empty() {
+        return "none (every node)".to_owned();
+    }
+    selector
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn pairs(pairs: &[(Arc<str>, Arc<str>)]) -> String {

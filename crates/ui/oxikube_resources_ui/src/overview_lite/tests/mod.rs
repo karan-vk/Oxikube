@@ -1,9 +1,12 @@
 //! The Workloads overview over testkit fakes: the pure faces (`face`), the tile registry
 //! (`registry`) and the view with a scripted store (`view`). No cluster, no threads.
 
+mod bars;
+mod buckets;
 mod face;
 mod registry;
 mod view;
+mod warnings;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -14,7 +17,10 @@ use futures::executor::block_on;
 use futures::future::BoxFuture;
 use gpui::{App, AppContext as _, Entity, TestAppContext, VisualTestContext};
 use oxikube_app::store::{StoreConfig, StoreOptions, StoreRuntime};
-use oxikube_app::{ClusterSessionManager, ResourceStores};
+use oxikube_app::{
+    BucketCounts, ClusterSessionManager, CountState, FixedWarnings, KindCount, RecentWarnings,
+    ResourceStores,
+};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{ClusterContext, SourceId};
@@ -85,6 +91,30 @@ impl Fixture {
         connect: bool,
         seed: impl FnOnce(&FakeClusterPorts),
     ) -> Self {
+        Self::build_with(
+            cx,
+            options,
+            connect,
+            seed,
+            Arc::new(FixedWarnings::default()),
+        )
+    }
+
+    /// A connected cluster whose warnings hook answers with `warnings`.
+    pub(super) fn open_with_warnings(
+        cx: &mut TestAppContext,
+        warnings: Arc<dyn RecentWarnings>,
+    ) -> Self {
+        Self::build_with(cx, no_grace(), true, |_| {}, warnings)
+    }
+
+    fn build_with(
+        cx: &mut TestAppContext,
+        options: StoreOptions,
+        connect: bool,
+        seed: impl FnOnce(&FakeClusterPorts),
+        warnings: Arc<dyn RecentWarnings>,
+    ) -> Self {
         let context = ClusterContext::new(
             cluster(),
             ContextName::new("prod"),
@@ -114,6 +144,7 @@ impl Fixture {
             sessions: sessions.clone(),
             stores,
             dispatcher: Rc::new(recorder.clone()),
+            warnings: warnings.clone(),
         };
         let (ws, mut vcx) = open_workspace(cx);
         vcx.update(|_, cx| {
@@ -148,10 +179,31 @@ impl Fixture {
         self.vcx.run_until_parked();
     }
 
-    pub(super) fn state(&mut self, tile: &str) -> Option<oxikube_app::CountState> {
+    /// The tile's state without its bucket counts (see [`Self::bucket`] for those).
+    pub(super) fn state(&mut self, tile: &str) -> Option<CountState> {
         let overview = self.overview.clone();
-        self.vcx
-            .update(|_, cx| overview.read(cx).state_of(tile).cloned())
+        let state = self
+            .vcx
+            .update(|_, cx| overview.read(cx).state_of(tile).cloned());
+        state.map(|state| match state {
+            CountState::Counted(count) => CountState::Counted(KindCount {
+                buckets: BucketCounts::default(),
+                ..count
+            }),
+            other => other,
+        })
+    }
+
+    /// How many objects of the tile's kind are in `bucket`.
+    pub(super) fn bucket(&mut self, tile: &str, bucket: oxikube_domain::view::Bucket) -> usize {
+        let overview = self.overview.clone();
+        self.vcx.update(|_, cx| {
+            overview
+                .read(cx)
+                .state_of(tile)
+                .and_then(CountState::count)
+                .map_or(0, |count| count.buckets.get(bucket))
+        })
     }
 }
 

@@ -8,17 +8,18 @@ use gpui::{
     InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
     Task, Window, div, px,
 };
-use oxikube_app::{ClusterSessionManager, CountState, CountsLease, ResourceStore, ResourceStores};
+use oxikube_app::{
+    ClusterSessionManager, CountState, RecentWarnings, ResourceStores, WarningRow, WorkloadCounters,
+};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::view::Bucket;
 use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
-use oxikube_ui::tile::StatTile;
 use oxikube_ui::{ActiveTokens as _, IconName, u};
 use oxikube_workspace::{
     CommandDispatcher, Item, ItemEvent, ItemHandle, OpenOptions, TabContent, Workspace,
 };
 
-use super::face::face;
 use super::tiles::{Tile, TileRegistry};
 
 /// The overview's tab key: one overview per cluster tab, so opening it again shows the open one.
@@ -33,6 +34,9 @@ pub struct OverviewDeps {
     pub stores: Arc<ResourceStores>,
     /// Where a tile click sends its command (the bus).
     pub dispatcher: Rc<dyn CommandDispatcher>,
+    /// The newest warning events for the warnings panel: the Events feed (E14) once it exists,
+    /// else [`NoRecentWarnings`](oxikube_app::NoRecentWarnings).
+    pub warnings: Arc<dyn RecentWarnings>,
 }
 
 /// The Workloads overview of one cluster. See the [module docs](super).
@@ -41,10 +45,10 @@ pub struct WorkloadsOverview {
     pub(super) deps: OverviewDeps,
     focus: FocusHandle,
     pub(super) tiles: Vec<Tile>,
-    /// The answer for each tile, in tile order.
-    pub(super) states: Vec<CountState>,
-    pub(super) store: Option<ResourceStore>,
-    pub(super) lease: Option<CountsLease>,
+    /// The tiles' feeds and their counts, in tile order.
+    pub(super) counters: WorkloadCounters,
+    /// The warnings panel's rows, newest first.
+    pub(super) warnings: Vec<WarningRow>,
     /// The refresh timer and the session follower. Live as long as the item; nothing clears
     /// them from inside.
     pub(super) tasks: Vec<Task<()>>,
@@ -67,9 +71,8 @@ impl WorkloadsOverview {
             deps,
             focus: cx.focus_handle(),
             tiles: Vec::new(),
-            states: Vec::new(),
-            store: None,
-            lease: None,
+            counters: WorkloadCounters::new(Vec::new()),
+            warnings: Vec::new(),
             tasks: Vec::new(),
             subscriptions: Vec::new(),
         };
@@ -100,7 +103,7 @@ impl WorkloadsOverview {
 
     /// The tiles with their current answers, in order.
     pub fn tiles(&self) -> impl Iterator<Item = (&Tile, &CountState)> {
-        self.tiles.iter().zip(&self.states)
+        self.tiles.iter().zip(self.counters.states())
     }
 
     /// The answer for the tile `id`.
@@ -124,10 +127,41 @@ impl WorkloadsOverview {
         );
     }
 
-    /// Replaces the tiles from the registry; the lease follows in `sync`.
+    /// Opens the list of the tile `id`'s kind filtered to `bucket` (`-s <bucket>`): sends
+    /// `resource::OpenList` and `table::SetFilter` on the bus, the pair the jump bar sends for
+    /// `:pod /-s pending`. The filter waits for the table when it is not open yet.
+    pub fn open_bucket(&self, id: &str, bucket: Bucket, cx: &mut App) {
+        let Some(tile) = self.tiles.iter().find(|t| &*t.id == id) else {
+            return;
+        };
+        let (cluster, gvk) = (self.cluster.clone(), tile.target.gvk.clone());
+        self.deps.dispatcher.dispatch(
+            Command::ResourceOpenList {
+                cluster: cluster.clone(),
+                gvk: gvk.clone(),
+            },
+            cx,
+        );
+        self.deps.dispatcher.dispatch(
+            Command::TableSetFilter {
+                cluster,
+                gvk,
+                text: format!("-s {}", bucket.word()),
+            },
+            cx,
+        );
+    }
+
+    /// The rows the warnings panel shows now.
+    pub fn warnings(&self) -> &[WarningRow] {
+        &self.warnings
+    }
+
+    /// Replaces the tiles from the registry; the feeds follow in `sync`.
     pub(super) fn reload_tiles(&mut self, cx: &App) {
         self.tiles = TileRegistry::tiles(cx);
-        self.states = vec![CountState::NotWatched; self.tiles.len()];
+        let targets = self.tiles.iter().map(|t| t.target.clone()).collect();
+        self.counters.set_targets(targets);
     }
 }
 
@@ -142,8 +176,7 @@ impl Item for WorkloadsOverview {
 
     fn on_close(&mut self, _: &mut Window, _: &mut Context<Self>) {
         // Release the feeds now rather than when the entity is dropped.
-        self.lease = None;
-        self.store = None;
+        self.counters.release();
         self.tasks.clear();
     }
 }
@@ -152,22 +185,13 @@ impl Render for WorkloadsOverview {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
-        let connected = self.store.is_some();
-        let tiles = self.tiles().map(|(tile, state)| {
-            let face = face(state);
-            let id = tile.id.clone();
-            let click_id = tile.id.clone();
-            StatTile::new(
-                SharedString::from(format!("overview-tile-{id}")),
-                tile.title.clone(),
-                face.value,
-            )
-            .caption(face.caption)
-            .tone(face.tone)
-            .hover_text(face.hover)
-            .selector(format!("overview-tile-{id}"))
-            .on_click(cx.listener(move |this, _, _, cx| this.open_tile(&click_id, cx)))
-        });
+        let connected = self.counters.is_open();
+        let cards: Vec<_> = self
+            .tiles
+            .iter()
+            .zip(self.counters.states())
+            .map(|(tile, state)| self.card(tile, state, cx))
+            .collect();
         v_flex()
             .id("workloads-overview")
             .debug_selector(|| "workloads-overview".to_owned())
@@ -186,10 +210,16 @@ impl Render for WorkloadsOverview {
                     .child("Workloads"),
             )
             .child(if connected {
-                h_flex()
-                    .flex_wrap()
+                v_flex()
                     .gap(u(tokens.spacing.lg))
-                    .children(tiles)
+                    .child(
+                        h_flex()
+                            .flex_wrap()
+                            .items_start()
+                            .gap(u(tokens.spacing.lg))
+                            .children(cards),
+                    )
+                    .child(self.warnings_panel(cx))
                     .into_any_element()
             } else {
                 div()
