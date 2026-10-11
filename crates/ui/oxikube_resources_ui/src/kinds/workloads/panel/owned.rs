@@ -11,8 +11,8 @@ use jiff::Timestamp;
 use oxikube_app::columns::Tone;
 use oxikube_app::store::StoreObject;
 use oxikube_app::{ColumnId, CoreColumns};
-use oxikube_domain::WorkloadSummary;
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
+use oxikube_domain::{Resource, WorkloadSummary};
 
 /// Most rows a section lists; the rest are counted.
 pub const MAX_ROWS: usize = 25;
@@ -110,28 +110,45 @@ pub fn replicaset_rows(cluster: &ClusterId, owned: &[Arc<StoreObject>]) -> Owned
 
 /// The Pods as rows, by name, with the status and ready cells the Pods table shows (the same
 /// rules: one place decides what `Running` means).
+///
+/// This runs on the UI thread for every delta, and a Deployment can own thousands of pods, so the
+/// page is picked first (the [`MAX_ROWS`] smallest names, by selection rather than a full sort)
+/// and only those get their cells computed; the rest are counted.
 pub fn pod_rows(
     cluster: &ClusterId,
     columns: &CoreColumns,
     owned: &[Arc<StoreObject>],
     now: Timestamp,
 ) -> Owned {
-    let mut rows: Vec<OwnedRow> = owned
+    let mut candidates: Vec<(&StoreObject, &Resource)> = owned
         .iter()
-        .filter_map(|object| {
-            let resource = object.resource()?;
-            let status = columns.resource_cell(resource, &ColumnId::new("status"), now);
-            let ready = columns.resource_cell(resource, &ColumnId::new("ready"), now);
-            Some(OwnedRow {
+        .filter_map(|object| Some((&**object, object.resource()?)))
+        .collect();
+    let total = candidates.len();
+    let by_name = |a: &(&StoreObject, &Resource), b: &(&StoreObject, &Resource)| {
+        a.0.meta().name.cmp(&b.0.meta().name)
+    };
+    if total > MAX_ROWS {
+        candidates.select_nth_unstable_by(MAX_ROWS - 1, by_name);
+        candidates.truncate(MAX_ROWS);
+    }
+    candidates.sort_by(by_name);
+    let status_id = ColumnId::new("status");
+    let ready_id = ColumnId::new("ready");
+    let rows = candidates
+        .into_iter()
+        .map(|(object, resource)| {
+            let status = columns.resource_cell(resource, &status_id, now);
+            let ready = columns.resource_cell(resource, &ready_id, now);
+            OwnedRow {
                 target: target_of(cluster, object, pod_gvk()),
                 status: status.display().to_owned(),
                 tone: status.tone(),
                 info: ready.display().to_owned(),
-            })
+            }
         })
         .collect();
-    rows.sort_by(|a, b| a.target.name.cmp(&b.target.name));
-    cap(rows)
+    Owned { rows, total }
 }
 
 fn target_of(cluster: &ClusterId, object: &StoreObject, gvk: Gvk) -> ResourceRef {

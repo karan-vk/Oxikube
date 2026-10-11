@@ -148,3 +148,43 @@ fn a_big_workload_lists_a_page_and_counts_the_rest() {
     assert_eq!(rows.rows[0].status, "Running");
     assert_eq!(rows.rows[0].info, "1/1");
 }
+
+#[test]
+fn a_huge_workload_picks_its_page_by_name_without_costing_every_pod() {
+    const PODS: usize = 5_000;
+    // Scrambled input (a prime stride visits every index once), so the page is a selection and
+    // not just the head of the list.
+    let owned: Vec<_> = (0..PODS)
+        .map(|n| {
+            let i = (n * 3_001) % PODS;
+            object(web_pod(&format!("web-{i:05}"), "rs", "web"))
+        })
+        .collect();
+    let started = std::time::Instant::now();
+    let rows = pod_rows(
+        &cluster(),
+        &CoreColumns::new(),
+        &owned,
+        "2026-01-02T00:00:00Z".parse().unwrap(),
+    );
+    let took = started.elapsed();
+    assert_eq!((rows.rows.len(), rows.total), (MAX_ROWS, PODS));
+    let names: Vec<_> = rows
+        .rows
+        .iter()
+        .map(|r| r.target.name.to_string())
+        .collect();
+    let expected: Vec<_> = (0..MAX_ROWS).map(|i| format!("web-{i:05}")).collect();
+    assert_eq!(names, expected, "the smallest names, in order");
+    assert!(
+        rows.rows
+            .iter()
+            .all(|r| r.status == "Running" && r.info == "1/1")
+    );
+    // Cells are computed for the page only; walking 5k objects to select it is far under this
+    // (computing two cells for each of the 5k pods was more than twice it in a debug build).
+    assert!(
+        took < std::time::Duration::from_millis(100),
+        "5000 pods took {took:?}"
+    );
+}

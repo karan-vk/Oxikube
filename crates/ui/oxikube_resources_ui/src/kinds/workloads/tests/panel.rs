@@ -4,9 +4,11 @@
 use gpui::TestAppContext;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ResourceRef;
+use oxikube_testkit::{ScriptedFeed, TICK};
 
 use super::{
-    daemonsets, pods, replicasets, statefulsets, web_deployment, web_pod, web_ref, web_replicaset,
+    daemonsets, deployment_selecting, pods, replicasets, statefulsets, web_deployment, web_pod,
+    web_ref, web_replicaset,
 };
 use crate::detail::tests::fixture::Detail;
 use crate::kinds::{ScaleDialog, WorkloadPanel};
@@ -271,4 +273,136 @@ fn the_palette_runs_scale_through_the_focused_detail(cx: &mut TestAppContext) {
     d.settle();
     let own = d.f.vcx.update(|_, cx| view.read(cx).own_commands(cx));
     assert!(own.is_empty());
+}
+
+fn names(rows: &crate::kinds::workloads::panel::Owned) -> Vec<String> {
+    rows.rows
+        .iter()
+        .map(|r| r.target.name.to_string())
+        .collect()
+}
+
+fn rows_of(
+    d: &mut Detail,
+    panel: &gpui::Entity<WorkloadPanel>,
+) -> (
+    crate::kinds::workloads::panel::Owned,
+    crate::kinds::workloads::panel::Owned,
+) {
+    d.f.vcx.update(|_, cx| {
+        let p = panel.read(cx);
+        (p.replicaset_rows().clone(), p.pod_rows().clone())
+    })
+}
+
+/// Moves the fake watch clock one tick and lets the panel apply what arrived.
+fn tick(d: &mut Detail) {
+    d.f.ports().resources.clock().advance(TICK);
+    d.settle();
+}
+
+#[gpui::test]
+fn the_owned_lists_follow_the_watch_after_the_panel_is_open(cx: &mut TestAppContext) {
+    let mut d = window(cx);
+    // The panel opens three watches, in this order: the Deployment (the detail), its Pods and its
+    // ReplicaSets. Each is a scripted feed on the one fake clock.
+    let ports = d.f.ports();
+    ScriptedFeed::new()
+        .initial([web_deployment()])
+        .install(&ports.resources);
+    ScriptedFeed::new()
+        .initial([
+            web_pod("web-5d-aaaaa", "rs-new", "web"),
+            web_pod("web-5d-bbbbb", "rs-new", "web"),
+            web_pod("stray-xxxxx", "rs-other", "web"),
+        ])
+        // A pod comes up, one is deleted, and a pod of a ReplicaSet the Deployment does not own
+        // yet appears (its ReplicaSet arrives a tick earlier).
+        .add(1, web_pod("web-5d-ccccc", "rs-new", "web"))
+        .delete(2, web_pod("web-5d-aaaaa", "rs-new", "web"))
+        .add(4, web_pod("web-6e-ddddd", "rs-6e", "web"))
+        .install(&ports.resources);
+    ScriptedFeed::new()
+        .initial([
+            web_replicaset("web-5d", "rs-new", 3, 2, "dep-uid"),
+            web_replicaset("web-4c", "rs-old", 0, 0, "dep-uid"),
+        ])
+        // A rollout starts: a new ReplicaSet of this Deployment, and one of another.
+        .add(3, web_replicaset("web-6e", "rs-6e", 3, 0, "dep-uid"))
+        .add(3, web_replicaset("api-9z", "rs-api", 1, 1, "api-uid"))
+        .install(&ports.resources);
+
+    let (_, panel) = open_panel(&mut d, &web_ref());
+    let (sets, pods) = rows_of(&mut d, &panel);
+    assert_eq!(names(&sets), ["web-5d", "web-4c"]);
+    assert_eq!(names(&pods), ["web-5d-aaaaa", "web-5d-bbbbb"]);
+
+    tick(&mut d);
+    let (_, pods) = rows_of(&mut d, &panel);
+    assert_eq!(
+        names(&pods),
+        ["web-5d-aaaaa", "web-5d-bbbbb", "web-5d-ccccc"],
+        "a pod that came up is listed"
+    );
+    assert_eq!(pods.total, 3);
+
+    tick(&mut d);
+    let (_, pods) = rows_of(&mut d, &panel);
+    assert_eq!(
+        names(&pods),
+        ["web-5d-bbbbb", "web-5d-ccccc"],
+        "a deleted pod is gone"
+    );
+    assert_eq!(pods.total, 2);
+    assert!(!d.shown("workload-pods-row-2"), "and its row with it");
+
+    tick(&mut d);
+    let (sets, pods) = rows_of(&mut d, &panel);
+    let mut listed = names(&sets);
+    listed.sort();
+    assert_eq!(
+        listed,
+        ["web-4c", "web-5d", "web-6e"],
+        "the new revision is listed, the other Deployment's is not"
+    );
+    assert_eq!(sets.total, 3);
+    assert_eq!(pods.total, 2, "no pod of the new ReplicaSet yet");
+
+    tick(&mut d);
+    let (_, pods) = rows_of(&mut d, &panel);
+    assert_eq!(
+        names(&pods),
+        ["web-5d-bbbbb", "web-5d-ccccc", "web-6e-ddddd"],
+        "a pod of a ReplicaSet that arrived later is owned through it"
+    );
+}
+
+#[gpui::test]
+fn the_feeds_restart_when_the_selector_changes(cx: &mut TestAppContext) {
+    let mut d = window(cx);
+    let ports = d.f.ports();
+    // The Deployment's own watch: it is re-selected at tick 1. (Pods and ReplicaSets keep the
+    // defaults: what each watch lists, by its position in the opening order.)
+    ScriptedFeed::new()
+        .initial([web_deployment()])
+        .modify(1, deployment_selecting("other", "11"))
+        .install(&ports.resources);
+    let (_, panel) = open_panel(&mut d, &web_ref());
+    let before = d.f.ports().resources.live_watches();
+    let (_, pods) = rows_of(&mut d, &panel);
+    assert_eq!(names(&pods), ["web-5d-aaaaa", "web-5d-bbbbb"]);
+
+    tick(&mut d);
+    let (_, pods) = rows_of(&mut d, &panel);
+    let model = d.f.vcx.update(|_, cx| panel.read(cx).model().cloned());
+    assert_eq!(model.expect("a model").selector, "app=other");
+    assert_eq!(
+        pods.total, 0,
+        "the pods follow the new selector, not the old one"
+    );
+    assert_eq!(
+        d.f.ports().resources.live_watches(),
+        before,
+        "the old feeds were dropped, not leaked beside the new ones"
+    );
 }

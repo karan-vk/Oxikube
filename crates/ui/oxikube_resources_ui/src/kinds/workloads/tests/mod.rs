@@ -66,12 +66,17 @@ fn template() -> Value {
 
 /// The Deployment `shop/web`: 3 wanted, 2 ready, rolling update, selector `app=web`.
 pub(super) fn web_deployment() -> Resource {
+    deployment_selecting("web", "10")
+}
+
+/// [`web_deployment`] selecting `app=<app>`, at resource version `rv`.
+pub(super) fn deployment_selecting(app: &str, rv: &str) -> Resource {
     Resource::from_json(json!({
         "apiVersion": "apps/v1", "kind": "Deployment",
-        "metadata": {"name": "web", "namespace": "shop", "uid": "dep-uid", "resourceVersion": "10",
+        "metadata": {"name": "web", "namespace": "shop", "uid": "dep-uid", "resourceVersion": rv,
                      "creationTimestamp": "2026-01-01T00:00:00Z"},
         "spec": {
-            "replicas": 3, "selector": {"matchLabels": {"app": "web"}},
+            "replicas": 3, "selector": {"matchLabels": {"app": app}},
             "strategy": {"type": "RollingUpdate",
                          "rollingUpdate": {"maxSurge": "25%", "maxUnavailable": 1}},
             "template": template()

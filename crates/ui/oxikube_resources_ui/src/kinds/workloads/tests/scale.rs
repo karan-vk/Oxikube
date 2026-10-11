@@ -156,13 +156,64 @@ fn s_opens_the_dialog_at_once_and_it_shows_current_and_desired(cx: &mut TestAppC
     );
 }
 
+/// Presses `s` on the focused table and returns at once: the key's action runs, but nothing is
+/// parked, so no task (the subresource read) has had a turn yet.
+fn press_s_unparked(f: &mut Fixture, table: &Entity<ResourceTable>) {
+    f.vcx.update(|window, cx| {
+        let focus = gpui::Focusable::focus_handle(table.read(cx), cx);
+        window.focus(&focus, cx);
+    });
+    f.vcx.run_until_parked();
+    f.vcx.update(|window, cx| {
+        window.dispatch_keystroke(gpui::Keystroke::parse("s").expect("a key"), cx);
+    });
+}
+
 #[gpui::test]
-fn the_dialog_is_up_before_the_subresource_answers(cx: &mut TestAppContext) {
+fn the_dialog_is_up_and_loading_before_the_subresource_answers(cx: &mut TestAppContext) {
     let mut f = window(cx, [web_deployment()]);
     let table = f.open(deployments());
     f.update(&table, |t, cx| t.move_cursor(1, false, cx));
-    // The read of the scale is not scripted yet, so it fails; the dialog is open regardless and
-    // says so (an account that cannot read the count can still type one).
+    f.ports()
+        .resources
+        .script()
+        .get_scale
+        .push_ok(scale_of(3, 2));
+    f.dispatcher.clear();
+    press_s_unparked(&mut f, &table);
+
+    // No task has run: the modal is already open, in Loading, and the read has not answered. A
+    // dialog that waited for `plan_scale` before showing would have no modal here.
+    let dialog = dialog(&mut f).expect("open before the read answers");
+    let (stage, plan) = f
+        .vcx
+        .update(|_, cx| (dialog.read(cx).stage(), dialog.read(cx).plan().cloned()));
+    assert_eq!(stage, ScaleStage::Loading);
+    assert!(plan.is_none());
+    assert!(
+        f.ports().resources.mutating_calls().is_empty(),
+        "opening only reads"
+    );
+    assert!(drawn(&mut f, "scale-dialog"), "the shell is drawn");
+    assert!(drawn(&mut f, "scale-loading"), "with a loading line");
+
+    // Then the read answers and the field takes over.
+    f.settle();
+    let (stage, plan) = f
+        .vcx
+        .update(|_, cx| (dialog.read(cx).stage(), dialog.read(cx).plan().cloned()));
+    assert_eq!(stage, ScaleStage::Editing);
+    assert_eq!(plan.map(|p| (p.current, p.desired)), Some((2, 3)));
+    assert!(!drawn(&mut f, "scale-loading"));
+}
+
+#[gpui::test]
+fn an_unreadable_count_still_leaves_a_dialog_to_type_into(cx: &mut TestAppContext) {
+    let mut f = window(cx, [web_deployment()]);
+    let table = f.open(deployments());
+    f.update(&table, |t, cx| t.move_cursor(1, false, cx));
+    // The read of the scale is not scripted, so it fails; the dialog is open regardless and says
+    // so (an account that cannot read the count can still type one).
     f.dispatcher.clear();
     f.keys(&table, "s");
     let dialog = dialog(&mut f).expect("open");
