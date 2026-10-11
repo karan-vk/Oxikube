@@ -37,6 +37,7 @@ impl DetailView {
             .as_ref()
             .is_some_and(|text| text.has_managed_fields);
         let shown = self.yaml.managed_fields;
+        let decoded = self.secret_values_shown();
         let icon = |name| Icon::new(name).size(u(px(14.)));
         h_flex()
             .flex_none()
@@ -69,6 +70,7 @@ impl DetailView {
                         ),
                 ),
             )
+            .children(self.decode_toggle(cx))
             .child(div().flex_1())
             .child(
                 div().debug_selector(|| "yaml-copy".to_owned()).child(
@@ -87,11 +89,44 @@ impl DetailView {
                         .xsmall()
                         .ghost()
                         .icon(icon(IconName::Download))
-                        .disabled(!ready)
-                        .tooltip("Save YAML as a file")
+                        .disabled(!ready || decoded)
+                        .tooltip(if decoded {
+                            "Hide the decoded values to save: they are never written to disk"
+                        } else {
+                            "Save YAML as a file"
+                        })
                         .on_click(cx.listener(|this, _, _, cx| this.request_save_yaml(cx))),
                 ),
             )
+    }
+
+    /// A Secret's "Decode values" toggle (`secret::Reveal`, `x`): the YAML shows the values as
+    /// text, in memory, until it is toggled off, the tab closes or the reveal times out.
+    fn decode_toggle(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.is_secret() {
+            return None;
+        }
+        let on = self.reveal_requested();
+        let icon = |name| Icon::new(name).size(u(px(14.)));
+        Some(
+            div()
+                .debug_selector(|| "yaml-decode".to_owned())
+                .child(
+                    Button::new("yaml-decode")
+                        .xsmall()
+                        .ghost()
+                        .icon(icon(if on { IconName::EyeOff } else { IconName::Eye }))
+                        .label(if on { "Hide values" } else { "Decode values" })
+                        .toggled(on)
+                        .tooltip(if on {
+                            "Hide the decoded values (x)"
+                        } else {
+                            "Show the values as text, in memory only (x)"
+                        })
+                        .on_click(cx.listener(|this, _, _, cx| this.request_reveal(None, cx))),
+                )
+                .into_any_element(),
+        )
     }
 
     fn yaml_content(&mut self, cx: &mut Context<Self>) -> AnyElement {

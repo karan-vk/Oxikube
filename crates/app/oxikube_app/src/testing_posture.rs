@@ -384,6 +384,12 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "resource::ViewYaml" => Command::ResourceViewYaml { target: target() },
         "resource::ViewDescribe" => Command::ResourceViewDescribe { target: target() },
         "resource::Edit" => Command::ResourceEdit { target: target() },
+        "secret::Reveal" => Command::SecretReveal {
+            target: target(),
+            key: None,
+        },
+        "secret::EditDecoded" => Command::SecretEditDecoded { target: target() },
+        "secret::Create" => Command::SecretCreate { cluster: None },
         "table::ToggleWide" => Command::TableToggleWide {
             cluster,
             gvk: Gvk::new("", "v1", "Pod"),

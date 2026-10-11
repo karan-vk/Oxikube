@@ -195,6 +195,10 @@ fn actions_rig(
     for spec in crate::kinds::node::node_row_actions() {
         rows.register(spec).unwrap();
     }
+    // A Secret's "Reveal Values" (E12-S11); its `secret::Reveal` is one of this crate's commands.
+    for spec in crate::kinds::secret_row_actions() {
+        rows.register(spec).unwrap();
+    }
     if exec {
         for spec in crate::exec::exec_row_actions() {
             rows.register(spec).unwrap();

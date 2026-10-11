@@ -139,6 +139,12 @@ actions!(
         /// (`service::OpenInBrowser`; `o`, bound where `kind == Service`). A toast says so while
         /// no port-forward manager is installed.
         OpenInBrowser,
+        /// Show the cursor row's Secret decoded in the detail drawer, or hide it again
+        /// (`secret::Reveal`; k9s's `x`). A toast says so for a kind that is not a Secret.
+        RevealSelected,
+        /// Open the cursor row's Secret in the editor with its values as text
+        /// (`secret::EditDecoded`; `shift-e`). A toast says so for a kind that is not a Secret.
+        EditDecodedSelected,
     ]
 );
 

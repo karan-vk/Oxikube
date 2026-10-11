@@ -32,6 +32,9 @@ tracing.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
+# Secret panel tests: base64 data, and certificates made at run time.
+base64.workspace = true
+rcgen.workspace = true
 insta.workspace = true
 serde-saphyr.workspace = true
 gpui = { workspace = true, features = ["test-support"] }

@@ -131,6 +131,9 @@ dirs = "7"
 libc = "0.2"
 url = "2"
 base64 = "0.23"
+# Reads a TLS Secret's certificate (subject, validity, names) and checks the PEM of a new one
+# (`oxikube_app::secrets::tls`, E12-S11). No `verify` feature: parsing only, no crypto provider.
+x509-parser = { version = "0.18", default-features = false }
 flate2 = "1"
 sha2 = "0.11"
 hex = "0.4"

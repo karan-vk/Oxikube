@@ -23,7 +23,7 @@ use oxikube_app::RowActionRegistry;
 use oxikube_app::context::{LogContextProvider, PendingContext};
 use oxikube_app::logs::kubectl::Kubectl;
 use oxikube_app::logs::{LogConfig, LogService};
-use oxikube_app::tools::k8s::GetLogsTool;
+use oxikube_app::tools::k8s::{GetLogsTool, GetSecretTool};
 use oxikube_logs_ui::{
     LogRequest, LogViewDeps, LogViews, LogViewsDeps, LogsSettings, follow_settings,
     log_row_actions, log_runtime,
@@ -69,8 +69,8 @@ pub fn install(state: &AppState, clock: Arc<dyn ClockPort>, cx: &mut App) -> Arc
 }
 
 /// The agent hooks of the app (E08-S09): the ones already on `state`, else new ones that are set,
-/// with `@logs` in the context registry and `k8s.get_logs` in the tool registry, both reading
-/// through `sessions` on the `service`.
+/// with `@logs` in the context registry and `k8s.get_logs` and `k8s.get_secret` (E12-S11) in the
+/// tool registry, all reading through `sessions` (the logs on the `service`).
 pub fn install_agent_hooks(
     state: &AppState,
     sessions: ClusterSessionManager,
@@ -86,8 +86,13 @@ pub fn install_agent_hooks(
         // A wiring bug (two providers for one prefix); the tests catch it.
         tracing::error!(%error, "the @logs provider could not be registered");
     }
-    if let Err(error) = GetLogsTool::register(&hooks.tools, clusters, service) {
+    if let Err(error) = GetLogsTool::register(&hooks.tools, clusters.clone(), service) {
         tracing::error!(%error, "the get_logs tool could not be registered");
+    }
+    // `k8s.get_secret` (E12-S11): masked, and values only where a policy allows them (none does
+    // until the agent epic can ask the user).
+    if let Err(error) = GetSecretTool::register(&hooks.tools, clusters) {
+        tracing::error!(%error, "the get_secret tool could not be registered");
     }
     if !state.set_agent_hooks(hooks.clone()) {
         // Another window set them first: use those, so every window shares the queue.
@@ -135,7 +140,8 @@ pub fn start_views(
 /// StatefulSets, ReplicaSets and ReplicationControllers, E12-S04; "Show Pods" and "Open in
 /// Browser" on Services, E12-S13; "Set as default" on IngressClasses, E12-S14; "Resize…" on
 /// claims and "Set as Default" on storage classes, E12-S15; "Use namespace", "Toggle favourite",
-/// "New namespace…" and "Delete" on Namespaces, E12-S16; "Cordon" and "Uncordon" on nodes, E12-S09).
+/// "New namespace…" and "Delete" on Namespaces, E12-S16; "Cordon" and "Uncordon" on nodes, E12-S09; "Reveal Values" and "Edit Decoded" on Secrets,
+/// E12-S11).
 pub fn row_actions() -> RowActionRegistry {
     let mut registry = RowActionRegistry::core();
     let specs = oxikube_resources_ui::crds::crd_row_actions()
@@ -147,7 +153,8 @@ pub fn row_actions() -> RowActionRegistry {
         .chain(oxikube_resources_ui::kinds::service::service_row_actions())
         .chain(oxikube_editor::open::editor_row_actions())
         .chain(oxikube_resources_ui::kinds::namespace::namespace_row_actions())
-        .chain(oxikube_resources_ui::kinds::node::node_row_actions());
+        .chain(oxikube_resources_ui::kinds::node::node_row_actions())
+        .chain(oxikube_resources_ui::kinds::secret_row_actions());
     for spec in specs {
         if let Err(error) = registry.register(spec) {
             // A wiring bug (one command offered twice); the tests catch it.

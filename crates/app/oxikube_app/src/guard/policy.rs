@@ -96,6 +96,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::TerminalNew { cluster }
         | Command::EditorNewManifest { cluster }
+        | Command::SecretCreate { cluster }
         | Command::ResourceCreate { cluster, .. } => cluster.as_ref(),
         Command::ResourceOpen { target }
         | Command::ResourceCopyName { target }
@@ -112,6 +113,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceViewYamlInEditor { target }
         | Command::ResourceViewDescribe { target }
         | Command::ResourceEdit { target }
+        | Command::SecretReveal { target, .. }
+        | Command::SecretEditDecoded { target }
         | Command::ResourceDelete { target, .. }
         | Command::NamespaceDelete { target, .. }
         | Command::PodDelete { target, .. }

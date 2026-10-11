@@ -682,6 +682,34 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         template: Option<String>,
     },
+    /// Show a Secret's values decoded in its detail, or hide them again (E12-S11; `x` on a
+    /// Secret, k9s's decode). The values are read once and held in memory for as long as the
+    /// detail shows them; nothing is written or logged. With `key`, only that key.
+    #[serde(rename = "secret::Reveal")]
+    SecretReveal {
+        /// The Secret.
+        target: ResourceRef,
+        /// The one key to reveal or hide; every key when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+    },
+    /// Open a Secret in the manifest editor with its values decoded to plaintext (E12-S11). The
+    /// buffer is re-encoded to base64 when it is applied (`resource::Apply`); the decoded text is
+    /// never saved with the layout.
+    #[serde(rename = "secret::EditDecoded")]
+    SecretEditDecoded {
+        /// The Secret to edit.
+        target: ResourceRef,
+    },
+    /// Open the "Create secret" dialog (E12-S11): Opaque key/value rows, a Docker registry login
+    /// or a TLS pair, validated before an editor tab with the manifest opens. The object is made
+    /// by `resource::Apply`.
+    #[serde(rename = "secret::Create")]
+    SecretCreate {
+        /// The cluster to create in; the displayed cluster tab when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+    },
     /// Delete any resource.
     #[serde(rename = "resource::Delete")]
     ResourceDelete {
@@ -1263,6 +1291,9 @@ impl Command {
             Command::ResourceViewDescribe { .. } => CommandId::RESOURCE_VIEW_DESCRIBE,
             Command::ResourceCreate { .. } => CommandId::RESOURCE_CREATE,
             Command::ResourceEdit { .. } => CommandId::RESOURCE_EDIT,
+            Command::SecretReveal { .. } => CommandId::SECRET_REVEAL,
+            Command::SecretEditDecoded { .. } => CommandId::SECRET_EDIT_DECODED,
+            Command::SecretCreate { .. } => CommandId::SECRET_CREATE,
             Command::TableToggleWide { .. } => CommandId::TABLE_TOGGLE_WIDE,
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
             Command::ResourceApply { .. } => CommandId::RESOURCE_APPLY,
@@ -1356,6 +1387,8 @@ impl Command {
             | Command::ResourceViewYamlInEditor { target }
             | Command::ResourceViewDescribe { target }
             | Command::ResourceEdit { target }
+            | Command::SecretReveal { target, .. }
+            | Command::SecretEditDecoded { target }
             | Command::ResourceDelete { target, .. }
             | Command::PodDelete { target, .. }
             | Command::PodShell { target, .. }
@@ -1708,6 +1741,14 @@ mod tests {
             Command::ResourceViewYamlInEditor { target: pod() },
             Command::ResourceViewDescribe { target: pod() },
             Command::ResourceEdit { target: pod() },
+            Command::SecretReveal {
+                target: pod(),
+                key: Some("password".into()),
+            },
+            Command::SecretEditDecoded { target: pod() },
+            Command::SecretCreate {
+                cluster: Some(cluster()),
+            },
             Command::TableToggleWide {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
@@ -2101,6 +2142,9 @@ mod tests {
                     | Command::ResourceViewYamlInEditor { .. }
                     | Command::ResourceViewDescribe { .. }
                     | Command::ResourceEdit { .. }
+                    | Command::SecretReveal { .. }
+                    | Command::SecretEditDecoded { .. }
+                    | Command::SecretCreate { .. }
                     | Command::TableToggleWide { .. }
                     | Command::LogsClear { .. }
                     | Command::LogsCopy { .. }

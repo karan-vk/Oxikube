@@ -51,6 +51,7 @@ use jiff::Timestamp;
 mod config;
 mod crd;
 mod endpoints;
+mod configmap;
 mod health;
 mod job;
 mod namespace;
@@ -81,6 +82,9 @@ pub use crd::{
 pub use endpoints::{
     EndpointPort, EndpointSliceSummary, EndpointSummary, EndpointTarget, EndpointsAddress,
     EndpointsSummary, ReadyCounts, SERVICE_NAME_LABEL, ready_counts,
+};
+pub use configmap::{
+    BinaryEntry, ConfigEntry, ConfigMapView, PREVIEW_CAP, PreviewLanguage, SUMMARY_CHARS,
 };
 pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};

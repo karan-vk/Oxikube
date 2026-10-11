@@ -9,6 +9,7 @@ use gpui::{AppContext as _, Context, Window};
 use super::{DiffLayout, PanelBody};
 use crate::diff::{LiveObject, ManifestDiff, MergeSide, MergeStep, ThreeWayMerge, document_for};
 use crate::view::ManifestEditor;
+use crate::view::apply::SecretEncoder;
 
 impl ManifestEditor {
     /// Shows the diff against the live object in the bottom panel, or hides it
@@ -147,10 +148,11 @@ impl ManifestEditor {
             if !delay.is_zero() {
                 cx.background_executor().timer(delay).await;
             }
-            let Ok((snapshot, live)) = this.update(cx, |view, cx| {
+            let Ok((snapshot, live, encoder)) = this.update(cx, |view, cx| {
                 (
                     view.editor.read(cx).snapshot(cx),
                     view.live.sync.live().cloned(),
+                    view.secret_encoder(),
                 )
             }) else {
                 return;
@@ -161,7 +163,9 @@ impl ManifestEditor {
             };
             let version = snapshot.version();
             let body = cx
-                .background_spawn(async move { compare(&snapshot.to_text(), &live) })
+                .background_spawn(
+                    async move { compare(&snapshot.to_text(), &live, encoder.as_ref()) },
+                )
                 .await;
             let _ = this.update(cx, |view, cx| {
                 let current =
@@ -175,11 +179,24 @@ impl ManifestEditor {
     }
 }
 
-/// The panel's body for the buffer `text` against `live`.
-fn compare(text: &str, live: &LiveObject) -> PanelBody {
+/// The panel's body for the buffer `text` against `live`. A Secret shown as plaintext is
+/// compared as the server would get it (base64), like the live object: otherwise every key reads
+/// as changed.
+fn compare(text: &str, live: &LiveObject, encoder: Option<&SecretEncoder>) -> PanelBody {
     let live = match live {
         LiveObject::Present(version) => Some(&version.resource),
         LiveObject::Gone => None,
+    };
+    let encoded;
+    let text = match encoder {
+        Some(encoder) => match encoder.encode(text) {
+            Ok(text) => {
+                encoded = text;
+                encoded.as_str()
+            }
+            Err(error) => return PanelBody::Message(error.message().to_owned().into()),
+        },
+        None => text,
     };
     match document_for(text, live) {
         Ok(mine) => {

@@ -14,6 +14,7 @@
 //! - `pods_table_one_namespace`: the same pods with the namespace `shop` selected in a window too
 //!   narrow for every default column: no Namespace column, Status before Ready, and the fade at
 //!   the right edge that says Node and IP continue past the view (E07-U561).
+//! - `detail_secret_tls_dark`, `detail_secret_registry_dark`, `detail_secret_revealed_light`, `detail_secret_yaml_decoded_dark`, `detail_configmap_preview_dark` (`secrets`): the Secret detail masked with its type's facts, revealed, its YAML tab decoded, and a ConfigMap's keys with an expanded preview (E12-S11)
 //! - `detail_crd_schema_dark`, `detail_crd_schema_light` (`crd`): the Schema tab of a CRD's detail
 //!   (E07-S07) with `spec` and `spec.containers` open.
 //!
@@ -99,6 +100,8 @@ mod pods;
 mod service;
 #[path = "screenshot/storage.rs"]
 mod storage;
+#[path = "screenshot/secrets.rs"]
+mod secrets;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
@@ -277,6 +280,7 @@ fn main() -> ExitCode {
             .and_then(|image| check("pods_table_one_namespace", image, NARROW, HEIGHT)),
         detail::run(),
         config::run(),
+        secrets::run(),
         crd::run(),
         network::run(),
         exec::run(),

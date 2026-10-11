@@ -100,6 +100,21 @@ impl ResourceViews {
         }
     }
 
+    /// `secret::Reveal`: shows the detail of the Secret `target` (the drawer opens on it, or its
+    /// pinned tab is activated) and shows or hides its values decoded: every key when `key` is
+    /// `None`, else that key. The values are read once and kept in that detail's memory only.
+    pub(super) fn reveal_in_detail(
+        &mut self,
+        target: &ResourceRef,
+        key: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(view) = self.open_detail(target, window, cx) {
+            view.update(cx, |view, cx| view.toggle_reveal(key, cx));
+        }
+    }
+
     /// Pins the drawer's detail of `target` as a tab: the same entity moves from the drawer to
     /// the workspace's pane, state intact, and the drawer closes. Does nothing when the drawer
     /// is not showing `target` (or it is a tab already).
@@ -197,7 +212,8 @@ impl ResourceViews {
     }
 
     /// Puts the YAML the detail of `target` shows on the clipboard: exactly the displayed text,
-    /// so a Secret is copied masked.
+    /// so a Secret is copied masked, unless the user revealed it (then the decoded text they are
+    /// looking at: the clipboard is theirs, unlike a file).
     pub(super) fn copy_yaml(&self, target: &ResourceRef, cx: &mut Context<Self>) {
         let text = self
             .detail_view(target, cx)
@@ -219,6 +235,20 @@ impl ResourceViews {
     /// through the `FsPort` (the file dialog is the platform's; nothing is written when it is
     /// cancelled). A Secret's file holds the masked text.
     pub(super) fn save_yaml(&mut self, target: &ResourceRef, cx: &mut Context<Self>) {
+        if self
+            .detail_view(target, cx)
+            .is_some_and(|view| view.read(cx).secret_values_shown())
+        {
+            // Decoded Secret values are never written to disk (non-negotiable 5).
+            self.toast(
+                &target.cluster,
+                Toast::warning(
+                    "Hide the decoded values first: decoded Secret values are never written to disk.",
+                ),
+                cx,
+            );
+            return;
+        }
         let Some((text, name)) = self.detail_view(target, cx).and_then(|view| {
             let view = view.read(cx);
             view.yaml()

@@ -140,6 +140,9 @@
 [ResourceTable && !Editing && kind == Node]
   c                resource_table::CordonSelected
   u                resource_table::UncordonSelected
+[ResourceTable && !Editing && kind == Secret]
+  shift-e          resource_table::EditDecodedSelected
+  x                resource_table::RevealSelected
 [ResourceTable && Editing]
   escape           resource_table::ClearFilter
 [DetailDrawer && !Editing]
@@ -158,6 +161,9 @@
   shift-n          resource_detail::PreviousMatch
   up               resource_detail::SelectPrevious
   y                resource_detail::ShowTab {"index":2}
+[DetailDrawer && !Editing && kind == Secret]
+  shift-e          resource_detail::EditSecretDecoded
+  x                resource_detail::RevealSecret
 [DetailDrawer && Editing]
   escape           resource_detail::CloseFind
 [LogView && !Editing]

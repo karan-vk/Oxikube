@@ -28,6 +28,8 @@ regex.workspace = true
 serde.workspace = true
 # Tool stub input schemas (`ToolDef::input_schema`) and command output data.
 serde_json.workspace = true
+# A TLS Secret's certificate (E12-S11): subject, validity, names.
+x509-parser.workspace = true
 # `resource::Apply` (E10-S08) reads a manifest written in YAML (or JSON) as one object.
 serde-saphyr.workspace = true
 thiserror.workspace = true
@@ -52,6 +54,10 @@ oxikube_kube.workspace = true
 # The recents survive a restart of the real SQLite adapter (`tests/recents_sqlite.rs`, E11-S11).
 oxikube_state_sqlite.workspace = true
 tempfile.workspace = true
+# Self-signed certificates for the Secret tests (made at run time; no key material in the repository).
+rcgen.workspace = true
+# Base64 in the Secret summary tests.
+base64.workspace = true
 
 # `cargo bench -p oxikube_app --bench store_apply` (E07-S01): a 500-event batch into a 10k cache.
 [[bench]]

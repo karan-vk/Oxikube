@@ -78,7 +78,7 @@ impl Section {
     }
 }
 
-pub(super) fn flatten(model: &DetailModel) -> Vec<Row> {
+pub(super) fn flatten(model: &DetailModel, keys: bool) -> Vec<Row> {
     let mut rows = Vec::with_capacity(
         model.labels.len() + model.annotations.len() + model.conditions.len() + 16,
     );
@@ -96,7 +96,11 @@ pub(super) fn flatten(model: &DetailModel) -> Vec<Row> {
         model.finalizers.len(),
         Row::Finalizer,
     );
-    if let Some(keys) = &model.secret_keys {
+    if let Some(names) = &model.secret_keys {
+        if !keys {
+            // The kind's own panel lists the keys (with their reveal): nothing generic to add.
+            return rows;
+        }
         if !model.complete {
             // The key names come from the full read: until it lands (or while it has failed) the
             // Secret is not known to have no keys.
@@ -104,7 +108,7 @@ pub(super) fn flatten(model: &DetailModel) -> Vec<Row> {
             rows.push(Row::Loading);
             return rows;
         }
-        section(&mut rows, Section::Keys, keys.len(), Row::SecretKey);
+        section(&mut rows, Section::Keys, names.len(), Row::SecretKey);
         return rows;
     }
     rows.push(Row::Section(Section::Conditions, model.conditions.len()));

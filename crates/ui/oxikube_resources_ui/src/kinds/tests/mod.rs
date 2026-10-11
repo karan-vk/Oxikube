@@ -5,7 +5,9 @@
 mod batch;
 mod crd;
 mod network;
+mod configmap;
 mod registry;
+mod secret;
 mod sidebar;
 mod spec;
 

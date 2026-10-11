@@ -144,6 +144,9 @@ impl ResourceViews {
             ViewRequest::Find { target, pattern } => {
                 self.find_in_detail(&target, pattern.as_deref(), window, cx);
             }
+            ViewRequest::RevealSecret { target, key } => {
+                self.reveal_in_detail(&target, key.as_deref(), window, cx);
+            }
             ViewRequest::FocusFilter { cluster, gvk } => {
                 // The tab's active table (a kind has one table per cluster tab).
                 if let Some(table) = self.tables(&cluster, &gvk, cx).into_iter().next() {
@@ -171,6 +174,7 @@ impl ResourceViews {
             | ViewRequest::ViewYaml(_)
             | ViewRequest::ViewDescribe(_)
             | ViewRequest::ShowServicePods(_)
+            | ViewRequest::RevealSecret { .. }
             | ViewRequest::OpenCrdResources { .. } => {}
             ViewRequest::OpenUrl(url) => cx.open_url(&url),
             ViewRequest::ToggleWide { cluster, gvk } => {

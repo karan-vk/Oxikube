@@ -10,6 +10,10 @@
 //! * a Secret's `data` and `stringData` values are replaced by [`MASKED`] unless
 //!   [`RenderOptions::reveal_secrets`], and the `last-applied-configuration` annotation, which
 //!   embeds them, is removed with them;
+//! * with [`RenderOptions::decode_secrets`] (and the values revealed) a Secret's `data` shows
+//!   each value as plaintext, a binary one as a placeholder (`(binary, 12 bytes)`), and the
+//!   annotation is removed too: "edit decoded" (E12-S11). The buffer is re-encoded to base64
+//!   when it is applied;
 //! * `kind: List` objects (and `*List` kinds) are handled item by item.
 //!
 //! The returned [`RenderedManifest`] says where the hidden and masked parts were and which byte
@@ -17,16 +21,13 @@
 
 use std::ops::Range;
 
-use oxikube_domain::Resource;
+use oxikube_domain::{Resource, secret};
 use serde_json::{Map, Value};
 
 use super::regions;
 
 /// What stands in for a Secret value that is not shown.
-pub const MASKED: &str = "(hidden)";
-
-/// The annotation `kubectl apply` writes: the whole applied manifest, a Secret's data included.
-const LAST_APPLIED: &str = "kubectl.kubernetes.io/last-applied-configuration";
+pub const MASKED: &str = secret::MASKED_VALUE;
 
 /// What to show of an object.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -35,8 +36,12 @@ pub struct RenderOptions {
     /// k9s's `m` toggles it).
     pub managed_fields: bool,
     /// Show Secret values (masked by default). Revealed text holds the values as the API serves
-    /// them (base64 under `data`) and lives in memory only.
+    /// them (base64 under `data`, plaintext with [`decode_secrets`](Self::decode_secrets)) and
+    /// lives in memory only.
     pub reveal_secrets: bool,
+    /// Show revealed Secret values decoded, as text (E12-S11). Has no effect while the values
+    /// are masked: hiding them again masks them, and revealing returns to the decoded text.
+    pub decode_secrets: bool,
 }
 
 /// What was left out of the text.
@@ -172,6 +177,16 @@ fn transform_object(
         });
     }
     let is_secret = map.get("kind").and_then(Value::as_str) == Some("Secret");
+    if is_secret && options.reveal_secrets && options.decode_secrets {
+        if secret::to_decoded(object) {
+            left.push(Left {
+                kind: HiddenKind::LastApplied,
+                count: 1,
+                object: index,
+            });
+        }
+        return;
+    }
     if is_secret && !options.reveal_secrets {
         for field in ["data", "stringData"] {
             if let Some(values) = map.get_mut(field).and_then(Value::as_object_mut) {
@@ -184,7 +199,7 @@ fn transform_object(
             .get_mut("metadata")
             .and_then(|metadata| metadata.get_mut("annotations"))
             .and_then(Value::as_object_mut)
-            && annotations.shift_remove(LAST_APPLIED).is_some()
+            && annotations.shift_remove(secret::LAST_APPLIED).is_some()
         {
             left.push(Left {
                 kind: HiddenKind::LastApplied,

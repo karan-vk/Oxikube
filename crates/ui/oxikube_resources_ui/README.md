@@ -50,6 +50,10 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   Internal IP, Pods, CPU%, Mem%, Taints, Schedulable, Age; instance type and zone as wide columns),
   the detail panel (cordon badge and button, conditions, allocation bars from the pods on the node,
   taints, pods, capacity, images) and the "Cordon" / "Uncordon" actions (keys `c` / `u` on Nodes).
+- `kinds::configmap`, `kinds::secret` (E12-S11): the ConfigMaps panel (uniform key rows, a language-aware
+  preview created when a key is expanded, capped at 64 KiB) and the Secrets panel (masked keys, the type's
+  facts, reveal and "Edit decoded"); `detail::reveal` holds a revealed Secret in the detail's memory only
+  (per tab, `REVEAL_TIMEOUT`), `x` / `shift-e` are bound to `kind == Secret`.
 - `table` (E07-S03): `ResourceTable`, the generic virtualised table of one kind (store
   subscription, sort through the store, column layout per kind, multi-select, keyboard, context
   menu, status colours from the theme's `oxikube` block).

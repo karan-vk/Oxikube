@@ -267,7 +267,12 @@ impl DetailView {
             })
         });
         let model = DetailModel::build(&object, &self.target.gvk, self.full.resource(), chip);
-        let rows = model.rows();
+        // A Secret whose kind panel lists the keys (with their reveal) does not list them twice.
+        let rows = if model.secret_keys.is_some() && self.kind_panel.is_present() {
+            model.rows_without_keys()
+        } else {
+            model.rows()
+        };
         self.sync_list(&rows);
         self.body = rows;
         self.model = Some(model);

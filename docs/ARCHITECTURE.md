@@ -820,6 +820,32 @@ crate's `README.md` for its allowed dependencies. Highlights:
   rejected field) / skipped per document. `Change` (create / update / unchanged) is decided from the dry run over
   `SERVER_OWNED_FIELDS`, the one list the diff vs live uses too. Bench: `cargo run -p oxikube_editor --profile release-fast
   --example templates_bench` (building the 27 templates 0.3 ms, filling the namespace of all of them 10 us).
+- `oxikube_domain::secret` + `oxikube_app::secrets` + `oxikube_editor::view::secret` + `oxikube_resources_ui::kinds::{secret,configmap}`
+  (E12-S11) — Secrets viewed, decoded and edited with transparent base64, and ConfigMaps with a syntax-aware preview. The pure half
+  is in the domain: `SecretText` (zeroised, `Debug` and `Display` print `***`, no `Serialize`), `DecodedSecret` (`data` as text, a
+  binary or non-UTF-8 value kept as its original base64 and shown as `(binary, N bytes)`), `to_decoded` / `from_decoded` (the object
+  the editor shows, and the object that is applied: a placeholder takes the original value of its key), the registry-login reader
+  (`docker::registries`: servers and usernames, never the password or `auth`) and `ConfigMapView` (keys sorted, language by key
+  extension then content, a one-line summary, a preview capped at 64 KiB, `binaryData` as a size). `oxikube_app::SecretService`
+  decodes and encodes, `summarize`s a Secret without its values (`SecretSummary`: key names and sizes, the registries and usernames of
+  a registry login, a TLS certificate's subject, issuer, names and expiry through `x509-parser`), reads one for a user who asked to
+  reveal it (`read_decoded`, logged by object and key count), validates and builds a `NewSecret` (Opaque rows, Docker registry →
+  `.dockerconfigjson` with `auth`, TLS with both PEMs parsed; each problem names its field) and `encode_manifest`s a decoded buffer.
+  `k8s.get_secret` (`tools::k8s::get_secret`) is a read tool that returns the type, key names and sizes and the type's facts, masked;
+  `reveal: true` is refused unless its `RevealPolicy` allows the caller, and the default policy (`DenyReveal`) allows nobody until the
+  agent epic can ask the user. The detail drawer: a full read keeps the summary and drops the values inside the read
+  (`mask_secret`); `secret::Reveal` (`x`, the YAML tab's "Decode values", a key's eye) reads the Secret once more and holds it decoded in
+  that `DetailView`'s memory (`detail::reveal`): per tab, gone when it is hidden, when the tab closes and after `REVEAL_TIMEOUT`
+  (five minutes); the YAML tab shows the revealed keys as text and refuses to be saved to a file while it does. The editor: `secret::EditDecoded`
+  (`OpenMode::EditDecoded`, `shift-e`) renders the Secret with `RenderOptions::decode_secrets`; applying re-encodes through
+  `SecretEncoder` → `SecretService::encode_manifest` on the background executor, so the dry run, the preview (fingerprints), the
+  audit (object and field manager) and the server only ever see base64, while the buffer, its diagnostics and the diff stay the text
+  typed; hiding the values masks them and the masked placeholders block the apply as in E10-S06. `secret::Create` (the Secrets table's
+  "New", the palette) opens `CreateSecretDialog` (Opaque / Docker registry / TLS): a valid Secret opens in an editor tab as text
+  and is created by `resource::Apply` (risk low, blocked read-only). Nothing decoded is serialised: editor and detail tabs are not
+  saved with the layout, no setting or file holds a value. The Config section's ConfigMaps and Secrets register from their own
+  modules (`kinds::configmap`, `kinds::secret`: ranks 10 and 20; the other Config kinds follow from rank 30). The `x` and `shift-e`
+  bindings are scoped `kind == Secret` in the `ResourceTable` and `DetailDrawer` contexts.
 - `oxikube_editor::diff` (E10-S07) — diff vs live, pure (no gpui) so the apply preview (E10-S08), the dry-run preview
   (E19-S07) and the cross-cluster diff (E20-S09) reuse it without the editor widget. The buffer is read as values
   (`serde-saphyr`: comments gone), both sides are `normalize`d (`IGNORED_FIELDS`, the one list: `metadata.managedFields`,

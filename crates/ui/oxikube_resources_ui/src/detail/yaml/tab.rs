@@ -8,7 +8,8 @@ use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_ui::code_view::{CodeView, Look};
 
-use super::text::{YamlOptions, has_managed_fields, yaml_text};
+use super::text::{YamlOptions, has_managed_fields, yaml_text, yaml_text_revealed};
+use crate::detail::reveal::RevealedValues;
 use crate::detail::state::FullState;
 use crate::detail::tabs::DetailTab;
 use crate::detail::view::DetailView;
@@ -19,6 +20,8 @@ use crate::detail::view::DetailView;
 pub(in crate::detail) struct YamlKey {
     pub(in crate::detail) version: Option<Arc<str>>,
     pub(in crate::detail) managed_fields: bool,
+    /// How many times what a Secret shows decoded changed (E12-S11); 0 for any other kind.
+    pub(in crate::detail) reveal: u64,
 }
 
 /// The text for one [`YamlKey`].
@@ -66,8 +69,9 @@ impl Complete {
     }
 }
 
-/// Writes `object` as the tab shows it (on a background thread).
-fn make(object: &Complete, key: YamlKey) -> YamlText {
+/// Writes `object` as the tab shows it (on a background thread). `revealed` is a Secret's decoded
+/// values, when the user asked to see them.
+fn make(object: &Complete, key: YamlKey, revealed: Option<RevealedValues>) -> YamlText {
     let Some(resource) = object.resource() else {
         return YamlText {
             key,
@@ -78,9 +82,15 @@ fn make(object: &Complete, key: YamlKey) -> YamlText {
     let options = YamlOptions {
         managed_fields: key.managed_fields,
     };
+    let text = match &revealed {
+        Some(revealed) => {
+            yaml_text_revealed(resource, options, &revealed.decoded, revealed.keys.as_ref())
+        }
+        None => yaml_text(resource, options),
+    };
     YamlText {
         has_managed_fields: has_managed_fields(resource),
-        result: yaml_text(resource, options)
+        result: text
             .map(Arc::<str>::from)
             .map_err(|error| format!("The object cannot be written as YAML: {error}")),
         key,
@@ -124,6 +134,7 @@ impl DetailView {
                 .resource()
                 .and_then(|resource| resource.meta.resource_version.clone()),
             managed_fields,
+            reveal: self.secret.epoch,
         };
         if self.yaml.text.as_ref().is_some_and(|t| t.key == key) {
             // Back to the text on screen (a toggle undone before its text was made).
@@ -137,10 +148,11 @@ impl DetailView {
             self.yaml.view = Some(cx.new(|cx| CodeView::new(Look::YAML, cx)));
         }
         self.yaml.making = Some(key.clone());
+        let revealed = self.revealed_values();
         self.yaml.task = Some(cx.spawn(async move |this, cx| {
             let made = cx
                 .background_executor()
-                .spawn(async move { make(&object, key) })
+                .spawn(async move { make(&object, key, revealed) })
                 .await;
             this.update(cx, |view, cx| view.yaml_made(made, cx)).ok();
         }));

@@ -33,6 +33,7 @@
 //! | [`tools`] | E08-S09 | [`ToolRegistry`]: read-only tools by name, listed, hidden without their capabilities and invoked after a schema check; `tools::k8s::get_logs` (`k8s.get_logs`: a pod's or a selector's newest lines, bounded and redacted) |
 //! | [`workloads`] | E12-S08, E12-S04 | [`WorkloadService`]: trigger a CronJob (a Job from its template, `kubectl create job --from`), suspend and resume CronJobs and Jobs, and scale the replica controllers (`workload::Scale`, low risk, medium for zero: [`WorkloadService::plan_scale`] reads the `scale` subresource and any autoscaler, [`WorkloadService::scale`] patches `spec.replicas` through it, [`ScaleRunner`] runs it from a dialog); the `cronjob::*`, `job::*` and `workload::Scale` handlers (guarded, audited with the Job's name or the replica counts) |
 //! | [`network`] | E12-S13 | [`ServiceBackends`]: the label-selected store queries of a Service's detail (its EndpointSlices and its pods); [`plan_show_pods`], `service::ShowPods` as a jump; [`ServicePortOpener`], the hook the port-forward manager implements for `service::OpenInBrowser`, registered only when there is one |
+//! | [`secrets`] | E12-S11 | [`SecretService`]: decode a Secret's values in memory, encode them back, summarise a Secret without its values ([`SecretSummary`]: key names and sizes, registry logins without passwords, a TLS certificate's subject and expiry), validate and build a new Secret ([`NewSecret`]: Opaque, Docker registry, TLS), and the manifest of a decoded editor re-encoded to base64 for `resource::Apply`; `tools::k8s::get_secret` (`k8s.get_secret`: masked unless a [`RevealPolicy`](tools::k8s::RevealPolicy) allows values, denied by default) |
 //! | [`columns`] | E07-S02 | [`ColumnProvider`]: table columns and cells per kind. [`CoreColumns`] (a table-driven catalogue of ~40 core kinds; Ready / Status / Restarts from the domain view-models; CPU and memory as pending metrics hooks) and [`TableColumns`] (a Table feed's server columns, `priority > 0` as `wide`); [`Cell`]s carry text, a typed sort key and a tone |
 //! | [`metrics`] | E13-S02 | [`UtilisationAggregator`]: per-pod `%CPU/R`-style percents, per-node ([`NodeAllocation`]) and per-namespace ([`NamespaceAllocation`]) requests and limits over resource snapshots, with the hot-reloadable GPU vendor list ([`GpuVendorsHandle`], `metrics.gpu_vendors`); the pure maths is `oxikube_domain::utilisation` |
 //! | [`namespaces`] | E12-S16 | the Namespace kind: `namespace::Create` / `namespace::Delete` handlers (guarded), [`delete_advice`](namespaces::delete_advice) (HNC and system-namespace warnings, counts of what a namespace holds) and [`NamespaceColumns`](namespaces::NamespaceColumns) (a live Pods count from the pods feed's per-namespace index) |
@@ -57,6 +58,7 @@ pub mod namespaces;
 pub mod network;
 pub mod nodes;
 pub mod search;
+pub mod secrets;
 pub mod session;
 pub mod sidebar;
 pub mod sources;
@@ -123,6 +125,10 @@ pub use search::aliases::{
 };
 pub use search::fuzzy::{FuzzyService, Match, QueryGeneration};
 pub use search::recents::{JumpRecents, RecentList, StateRecents};
+pub use secrets::{
+    Field as NewSecretField, KeyInfo, NewSecret, PemProblem, Problem as NewSecretProblem,
+    SecretService, SecretSummary, TlsInfo, TypeSummary,
+};
 pub use session::{
     ClusterSession, ClusterSessionManager, SessionChange, SessionUpdate, SessionUpdates,
 };

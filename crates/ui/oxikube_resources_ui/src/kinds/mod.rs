@@ -26,6 +26,7 @@
 //! | `node` | Nodes (E12-S09): per-cluster columns (Pods from the pods-by-node index), the node panel and the cordon / uncordon row actions |
 //! | `namespace` | E12-S16: the Namespaces kind: columns with a live pod count, row actions, panel, create dialog |
 //! | `storage` | the Storage section's kinds (E12-S15): columns, panels, resize and set-default |
+//! | `configmap`, `secret` | the ConfigMaps and Secrets kinds (E12-S11): the key/value detail with a syntax-aware preview, and the masked-by-default Secret detail with reveal, decode and the type's facts (registries, certificate), their specs and the Secret row actions |
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
 //! | [`crd`] | the CustomResourceDefinition kind (E12-S17): its spec and the definition panel of its detail |
 //! | `pods` | Pods (E12-S02): their own columns and the containers drill-down |
@@ -64,6 +65,9 @@ pub mod node;
 mod parts;
 pub mod pods;
 pub mod service;
+pub(crate) mod configmap;
+mod key_list;
+pub(crate) mod secret;
 mod sidebar;
 mod spec;
 mod specs;
@@ -74,7 +78,11 @@ pub mod workloads;
 mod tests;
 
 pub use config::ConfigPanel;
+pub use configmap::ConfigMapPanel;
 pub use detail::{DetailRenderer, DetailViewFactory};
+pub use secret::{
+    EDIT_DECODED_ORDER, REVEAL_ORDER, SecretPanel, is_secret_kind, secret_row_actions,
+};
 pub use spec::KindSpec;
 pub use specs::KindSpecs;
 pub use storage::storage_row_actions;
@@ -95,6 +103,13 @@ pub fn row_actions() -> Vec<RowActionSpec> {
         .chain(network::network_row_actions())
         .chain(storage_row_actions())
         .collect()
+}
+
+/// Registers the ConfigMaps and Secrets kinds alone (their specs, with the panels), for a view
+/// that draws a detail without the rest of the Config section.
+pub fn register_config_kinds(cx: &mut App) {
+    configmap::init(cx);
+    secret::init(cx);
 }
 
 /// Registers the built-in kinds, section by section, and publishes them to the sidebar. Called by

@@ -35,6 +35,11 @@ impl KindPanel {
         }
     }
 
+    /// Whether the kind has a panel (built or still to be).
+    pub(super) fn is_present(&self) -> bool {
+        matches!(self, KindPanel::Pending(_) | KindPanel::Built(Some(_)))
+    }
+
     /// The built panel, if the kind has one.
     pub(super) fn view(&self) -> Option<&AnyView> {
         match self {

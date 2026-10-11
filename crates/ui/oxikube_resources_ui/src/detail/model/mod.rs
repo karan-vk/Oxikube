@@ -93,7 +93,13 @@ impl DetailModel {
 
     /// The Overview as one flat list of rows (what the virtualised body draws).
     pub fn rows(&self) -> Vec<Row> {
-        rows::flatten(self)
+        rows::flatten(self, true)
+    }
+
+    /// [`rows`](Self::rows) without a Secret's key names, for a detail whose kind panel lists
+    /// them (E12-S11).
+    pub fn rows_without_keys(&self) -> Vec<Row> {
+        rows::flatten(self, false)
     }
 
     /// The label or annotation `key`, for the copy action.

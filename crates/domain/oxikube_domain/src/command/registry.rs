@@ -281,6 +281,12 @@ impl CommandId {
     pub const SERVICE_SHOW_PODS: CommandId = CommandId::new("service::ShowPods");
     /// `storageclass::SetDefault`: make a StorageClass the cluster's default.
     pub const STORAGECLASS_SET_DEFAULT: CommandId = CommandId::new("storageclass::SetDefault");
+    /// `secret::Create`: open the "Create secret" dialog (Opaque, Docker registry, TLS).
+    pub const SECRET_CREATE: CommandId = CommandId::new("secret::Create");
+    /// `secret::EditDecoded`: open a Secret in the manifest editor with its values decoded.
+    pub const SECRET_EDIT_DECODED: CommandId = CommandId::new("secret::EditDecoded");
+    /// `secret::Reveal`: show, or hide again, a Secret's values decoded in its detail (k9s `x`).
+    pub const SECRET_REVEAL: CommandId = CommandId::new("secret::Reveal");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
     /// `table::ToggleWide`: show or hide the wide columns (`kubectl -o wide`) of a kind's tables.
@@ -1365,6 +1371,37 @@ pub static COMMANDS: &[CommandMeta] = &[
         group: "storage.k8s.io",
         kind: "StorageClass",
     }),
+    // Opens a dialog that builds a Secret manifest in an editor tab (E12-S11); like
+    // `resource::Create` it changes nothing in a cluster. The object is made by `resource::Apply`
+    // (risk low, the dry-run diff with the values masked is the confirmation, blocked read-only).
+    CommandMeta::read(
+        CommandId::SECRET_CREATE,
+        "Create Secret…",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // Opens the Secret in the manifest editor with `data` shown as plaintext (E12-S11); like
+    // `resource::Edit` the change reaches the cluster only through `resource::Apply`, which is
+    // guarded (risk low, blocked read-only, the values re-encoded to base64 first, audited
+    // without them).
+    CommandMeta::read(
+        CommandId::SECRET_EDIT_DECODED,
+        "Edit Secret Decoded",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Secret")),
+    // Reads the Secret once (a `get`) and shows its values in memory (E12-S11); changes nothing in
+    // the cluster and writes nothing to disk. Allowed in read-only mode.
+    CommandMeta::read(
+        CommandId::SECRET_REVEAL,
+        "Reveal Secret Values",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Secret")),
     // Moves focus inside a window, never touches the cluster: allowed in read-only mode.
     CommandMeta::read(
         CommandId::TABLE_FOCUS_FILTER,
@@ -1752,6 +1789,31 @@ mod tests {
                 .contains(Capabilities::EXEC | Capabilities::MUTATE)
         );
         assert_eq!(CommandId::POD_DEBUG.tool_name(), "k8s.pod_debug");
+    }
+
+    #[test]
+    fn the_secret_commands_open_views_and_write_only_through_resource_apply() {
+        // E12-S11: revealing reads the Secret into memory, "edit decoded" and "create" open an
+        // editor; the object is written by `resource::Apply` (risk low), so none of the three is
+        // a mutation itself, and each has its MCP tool stub.
+        for (id, tool) in [
+            (CommandId::SECRET_REVEAL, "k8s.secret_reveal"),
+            (CommandId::SECRET_EDIT_DECODED, "k8s.secret_edit_decoded"),
+            (CommandId::SECRET_CREATE, "k8s.secret_create"),
+        ] {
+            let meta = lookup(id).expect("declared");
+            assert!(!meta.mutating && !meta.privileged && !meta.exec, "{id}");
+            assert_eq!(meta.confirm, ConfirmTier::None, "{id}");
+            assert_eq!(id.tool_name(), tool);
+        }
+        let apply = lookup(CommandId::RESOURCE_APPLY).expect("declared");
+        assert_eq!(apply.risk, Some(Risk::Low));
+        assert_eq!(apply.confirm, ConfirmTier::Simple);
+        // Reveal and edit act on a selected Secret only.
+        for id in [CommandId::SECRET_REVEAL, CommandId::SECRET_EDIT_DECODED] {
+            let meta = lookup(id).expect("declared");
+            assert!(meta.availability.selection.needs_selection(), "{id}");
+        }
     }
 
     #[test]

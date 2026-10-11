@@ -9,6 +9,7 @@ use oxikube_ui::editor::DiagnosticLevel;
 use oxikube_workspace::Toast;
 use oxikube_workspace::modal::ModalView;
 
+use super::secrets::SecretEncoder;
 use super::{ApplyPreviewDialog, ApplyStage, ConflictDialog, batch};
 use crate::apply::{place_causes, preview_diff, split_documents};
 use crate::json::Language;
@@ -16,6 +17,23 @@ use crate::open::{MASKED_CODE, ResourceBinding};
 use crate::view::ManifestEditor;
 use crate::view::notice::{Notice, NoticeLevel};
 use crate::view::validation::validate_text_in;
+
+/// `text` and each of `documents` as the server takes them (see [`SecretEncoder`]); the ranges
+/// of the documents stay the buffer's. The message names a key, never a value.
+fn encode_for_server(
+    encoder: &SecretEncoder,
+    text: &str,
+    mut documents: Vec<crate::apply::Document>,
+) -> Result<(String, Vec<crate::apply::Document>), String> {
+    let describe = |error: oxikube_domain::OxiError| error.message().to_owned();
+    if documents.len() > 1 {
+        for document in &mut documents {
+            document.text = encoder.encode(&document.text).map_err(describe)?;
+        }
+        return Ok((String::new(), documents));
+    }
+    Ok((encoder.encode(text).map_err(describe)?, documents))
+}
 
 impl ManifestEditor {
     /// Applies the buffer (`resource::Apply`: the key, the palette, the toolbar): the buffer's own
@@ -48,6 +66,7 @@ impl ManifestEditor {
             );
             return;
         }
+        let encoder = self.secret_encoder();
         let snapshot = self.editor.read(cx).snapshot(cx);
         let version = snapshot.version();
         let known = self.model.known().clone();
@@ -66,7 +85,7 @@ impl ManifestEditor {
         self.apply_notice(NoticeLevel::Info, "Dry run on the server…".into(), cx);
         self.apply.task = Some(cx.spawn_in(window, async move |this, cx| {
             // The checks of this very text: a result shown for an older one does not count.
-            let (text, errors, documents) = cx
+            let (text, sent, errors, documents) = cx
                 .background_spawn(async move {
                     let text = snapshot.to_text();
                     let check = validate_text_in(version, text.clone(), &known, mode, masking);
@@ -82,7 +101,16 @@ impl ManifestEditor {
                     } else {
                         Vec::new()
                     };
-                    (text, errors, documents)
+                    // A Secret shown as plaintext is sent as base64 (E12-S11); the buffer, the
+                    // ranges of `documents` and the diagnostics stay the text typed.
+                    let encoded = match (&encoder, errors) {
+                        (Some(encoder), 0) => encode_for_server(encoder, &text, documents),
+                        _ => Ok((text.to_string(), documents)),
+                    };
+                    match encoded {
+                        Ok((sent, documents)) => (text, Ok(sent), errors, documents),
+                        Err(message) => (text, Err(message), errors, Vec::new()),
+                    }
                 })
                 .await;
             if errors > 0 {
@@ -92,6 +120,13 @@ impl ManifestEditor {
                 });
                 return;
             }
+            let sent = match sent {
+                Ok(sent) => sent,
+                Err(message) => {
+                    let _ = this.update(cx, |view, cx| view.apply_refused(message, cx));
+                    return;
+                }
+            };
             if documents.len() > 1 {
                 let target = batch::Target {
                     cluster,
@@ -110,7 +145,7 @@ impl ManifestEditor {
                 .await;
                 return;
             }
-            let mut request = ApplyRequest::new(cluster, text.to_string())
+            let mut request = ApplyRequest::new(cluster, sent)
                 .in_namespace(namespace)
                 .managed_by(Some(manager));
             if force {
@@ -189,7 +224,9 @@ impl ManifestEditor {
             format!("Applying {}…", preview.label()),
             cx,
         );
-        let text: Arc<str> = Arc::from(preview.request.manifest.as_str());
+        // The causes are placed in the buffer, which is the text typed: the request holds the
+        // encoded text (base64 `data`) of a Secret shown as plaintext, so its ranges would not fit.
+        let snapshot = self.editor.read(cx).snapshot(cx);
         self.apply.task = Some(cx.spawn_in(window, async move |this, cx| {
             let answer =
                 oxikube_runtime::spawn_kube(cx, async move { service.apply(&preview).await })
@@ -197,7 +234,10 @@ impl ManifestEditor {
                     .unwrap_or_else(|error| Err(ApplyError::Failed(error.to_string())));
             let _ = this.update_in(cx, |view, window, cx| match answer {
                 Ok(report) => view.applied(report, version, cx),
-                Err(error) => view.apply_failed(error, version, text, window, cx),
+                Err(error) => {
+                    let text = snapshot.to_text();
+                    view.apply_failed(error, version, text, window, cx);
+                }
             });
         }));
         cx.notify();

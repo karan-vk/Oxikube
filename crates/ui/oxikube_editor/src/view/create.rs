@@ -153,7 +153,11 @@ impl EditorViews {
     }
 
     /// A warning toast in the window's workspace.
-    fn warn(&self, text: impl Into<gpui::SharedString>, cx: &mut Context<Self>) {
+    pub(in crate::view) fn warn(
+        &self,
+        text: impl Into<gpui::SharedString>,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(workspace) = self.deps.window_workspace.upgrade() {
             let toast = Toast::warning(text);
             workspace.update(cx, |workspace, cx| {

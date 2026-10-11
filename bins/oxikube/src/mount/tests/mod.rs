@@ -28,6 +28,7 @@ mod node_shell;
 mod palette;
 mod resources;
 mod scale;
+mod secrets;
 mod signin;
 mod storage;
 mod tail;
@@ -252,6 +253,9 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::RESOURCE_OPEN_LIST, "oxikube_resources_ui"),
         (CommandId::CRD_OPEN_LIST, "oxikube_resources_ui"),
         (CommandId::CRD_OPEN_RESOURCES, "oxikube_resources_ui"),
+        (CommandId::SECRET_REVEAL, "oxikube_resources_ui"),
+        (CommandId::SECRET_EDIT_DECODED, "oxikube_editor"),
+        (CommandId::SECRET_CREATE, "oxikube_editor"),
         (CommandId::RESOURCE_DELETE, "oxikube_app::actions"),
         (CommandId::POD_VIEW_LOGS, "oxikube_logs_ui"),
         (CommandId::WORKLOAD_VIEW_LOGS, "oxikube_logs_ui"),

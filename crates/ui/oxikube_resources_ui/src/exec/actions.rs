@@ -77,6 +77,8 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
             | CommandId::POD_VIEW_LOGS
             | CommandId::WORKLOAD_VIEW_LOGS
             | CommandId::RESOURCE_EDIT
+            | CommandId::SECRET_REVEAL
+            | CommandId::SECRET_EDIT_DECODED
             | CommandId::POD_PORT_FORWARD
             | CommandId::CRONJOB_TRIGGER
             | CommandId::CRONJOB_SUSPEND
@@ -129,6 +131,8 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
         CommandId::NAMESPACE_TOGGLE_FAVOURITE => {
             Some("Favourites are pinned from the Namespaces table")
         }
+        CommandId::SECRET_REVEAL => Some("Reveal is available for Secrets"),
+        CommandId::SECRET_EDIT_DECODED => Some("Edit decoded is available for Secrets"),
         CommandId::POD_PORT_FORWARD => Some(PORT_FORWARDING_UNAVAILABLE),
         CommandId::SERVICE_SHOW_PODS => Some("Show Pods is available for Services"),
         CommandId::SERVICE_OPEN_IN_BROWSER => {
