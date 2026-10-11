@@ -28,7 +28,7 @@ const ROW_HEIGHT: f32 = 22.;
 /// Most rows shown before the list scrolls.
 const VISIBLE_ROWS: f32 = 10.;
 
-/// The conflicts of one apply. See the [module docs](self).
+/// The conflicts of one apply. See the module docs.
 pub struct ConflictDialog {
     conflicts: Vec<FieldConflict>,
     editor: WeakEntity<ManifestEditor>,

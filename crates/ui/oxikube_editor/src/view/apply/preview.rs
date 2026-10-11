@@ -27,7 +27,7 @@ use crate::view::live::{ROW_HEIGHT, inline_rows, summary};
 /// Most diff rows shown before the list scrolls.
 const VISIBLE_ROWS: f32 = 18.0;
 
-/// The preview of one apply. See the [module docs](self).
+/// The preview of one apply. See the module docs.
 pub struct ApplyPreviewDialog {
     preview: ApplyPreview,
     diff: Arc<ManifestDiff>,
