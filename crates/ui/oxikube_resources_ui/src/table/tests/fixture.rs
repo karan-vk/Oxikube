@@ -68,14 +68,18 @@ fn actions_rig(
             |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
         )
         .unwrap();
-    // The CronJob and Job actions (E12-S08): do-nothing handlers behind the real guard.
+    // The CronJob and Job actions (E12-S08): do-nothing handlers behind the real guard (the
+    // workloads rig below installs the real ones, with `workload::Scale`).
     for id in [
         CommandId::CRONJOB_TRIGGER,
         CommandId::CRONJOB_SUSPEND,
         CommandId::CRONJOB_RESUME,
         CommandId::JOB_SUSPEND,
         CommandId::JOB_RESUME,
-    ] {
+    ]
+    .into_iter()
+    .filter(|_| !workloads)
+    {
         registry
             .register(
                 *command::lookup(id).unwrap(),
@@ -156,11 +160,6 @@ fn actions_rig(
     }
     if exec {
         for spec in crate::exec::exec_row_actions() {
-            rows.register(spec).unwrap();
-        }
-    }
-    if workloads {
-        for spec in crate::kinds::scale_row_actions() {
             rows.register(spec).unwrap();
         }
     }

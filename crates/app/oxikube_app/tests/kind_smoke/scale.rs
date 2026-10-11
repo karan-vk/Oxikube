@@ -97,10 +97,10 @@ async fn scale_up_dry_run_zero_and_read_only() {
     let state = Arc::new(FakeStatePort::new());
     let service = WorkloadService::new(manager.clone());
     let mut registry = CommandRegistry::new();
-    let handler_service = service.clone();
+    let handler_sessions = manager.clone();
     registry
         .install("oxikube_app::workloads", move |r| {
-            register_commands(r, handler_service)
+            register_commands(r, handler_sessions)
         })
         .expect("register workload::Scale");
     let bus = CommandBus::new(
