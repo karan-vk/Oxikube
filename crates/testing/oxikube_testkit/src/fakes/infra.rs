@@ -676,7 +676,6 @@ mod tests {
         for outcome in &scripted {
             fake.script().pod_metrics.push_ok(outcome.clone());
         }
-        // Used through the trait object the app holds.
         let port: Box<dyn MetricsPort> = Box::new(fake);
         for outcome in scripted {
             assert_eq!(

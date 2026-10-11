@@ -128,7 +128,8 @@ pub struct MetricsSample {
     pub memory: Reading,
     /// For a pod: the per-container readings behind the summed `cpu` / `memory`, in the order the
     /// server lists them. The total is all-or-nothing (missing when any container is unreadable,
-    /// never understated) while each entry stands alone. Empty for nodes and for samples that carry only a total.
+    /// never understated) while each entry stands alone. Empty for nodes and for samples that
+    /// carry only a total.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub containers: Vec<ContainerUsage>,
 }
