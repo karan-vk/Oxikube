@@ -54,12 +54,13 @@ use std::process::{Command, Stdio};
 use std::time::Instant;
 
 /// Every scenario `oxikube --perf-scenario` knows, in report order.
-pub const SCENARIOS: [&str; 5] = [
+pub const SCENARIOS: [&str; 6] = [
     "startup",
     "scroll-10k",
     "palette",
     "logs-stream",
     "editor-5mb",
+    "charts",
 ];
 
 /// The name `oxikube --perf-scenario` reports for `name`: `table-scroll-10k` (the story's name
@@ -79,7 +80,7 @@ const LAUNCH_METRIC: &str = "launch_to_first_frame_ms";
 #[derive(clap::Args, Debug, Clone)]
 pub struct Args {
     /// Scenario to run: startup, scroll-10k (alias table-scroll-10k), palette, logs-stream,
-    /// editor-5mb.
+    /// editor-5mb, charts.
     #[arg(required_unless_present_any = ["all", "from_report"], conflicts_with_all = ["all", "from_report"])]
     pub scenario: Option<String>,
     /// Run every scenario.

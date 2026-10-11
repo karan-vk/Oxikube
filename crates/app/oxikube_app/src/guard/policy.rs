@@ -160,6 +160,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::HelpShow
         | Command::PaletteToggleShowAll
         | Command::KeymapOpenUser
+        | Command::ChartsOpenGallery
         | Command::AppQuit
         | Command::JumpBack
         | Command::JumpForward

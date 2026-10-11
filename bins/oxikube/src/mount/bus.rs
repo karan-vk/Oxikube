@@ -15,7 +15,7 @@
 //! | `oxikube_app::sources` | `kubeconfig::AddSource`, `RemoveSource`, `Reload` |
 //! | `oxikube_app::posture` | `cluster::ToggleReadOnly`, `SetColour`, `ApplyPreset` (guarded posture) |
 //! | `oxikube_workspace` | `cluster::Select`, `SwitchTab`, `NextTab`, `PreviousTab`, `CloseTab` |
-//! | `oxikube` | `view::Open` for the catalog home and the kubeconfig sources screen; `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
+//! | `oxikube` | `view::Open` for the catalog home, the kubeconfig sources screen and the chart gallery, `charts::OpenGallery` (the gallery's palette command, E13-S07); `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
 //! | `oxikube_app::apply` | `resource::Apply` (guarded: blocked read-only, risk low with the editor's diff preview as the confirmation, a server dry run before every apply, server-side apply as the `editor.field_manager`, the replace fallback at the reviewed `resourceVersion`, audit; E10-S08). The manifest editor runs it through `ApplyService` |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10) |
@@ -39,6 +39,7 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use super::gallery::CHART_GALLERY_VIEW;
 use futures::channel::mpsc;
 use gpui::{AnyWindowHandle, App};
 use oxikube_app::catalog::ClusterCommandOutcome;
@@ -69,7 +70,7 @@ use oxikube_workspace::{ClusterCommandRunner, CommandDispatcher};
 use serde_json::json;
 
 /// The views `view::Open` opens in the main window.
-pub const VIEWS: [&str; 2] = [CATALOG_VIEW, SOURCES_VIEW];
+pub const VIEWS: [&str; 3] = [CATALOG_VIEW, SOURCES_VIEW, CHART_GALLERY_VIEW];
 
 /// What the registry's handlers run on.
 pub struct BusParts {
@@ -277,12 +278,25 @@ fn register_namespace_commands(
     )
 }
 
-/// `view::Open` for the [`VIEWS`] of the main window: the view id goes to `views`, whose receiver
-/// opens it on the UI thread.
+/// `view::Open` for the [`VIEWS`] of the main window, and `charts::OpenGallery`: the view id goes
+/// to `views`, whose receiver opens it on the UI thread.
 fn register_view_commands(
     registry: &mut CommandRegistry,
     views: mpsc::UnboundedSender<String>,
 ) -> Result<(), RegisterError> {
+    let gallery = views.clone();
+    registry.register(
+        meta(CommandId::CHARTS_OPEN_GALLERY)?,
+        move |_: Command, _: HandlerContext| {
+            let gallery = gallery.clone();
+            async move {
+                gallery
+                    .unbounded_send(CHART_GALLERY_VIEW.to_owned())
+                    .map_err(|_| OxiError::internal("the main window is gone"))?;
+                Ok(CommandOutput::none())
+            }
+        },
+    )?;
     registry.register(
         meta(CommandId::VIEW_OPEN)?,
         move |command: Command, _: HandlerContext| {

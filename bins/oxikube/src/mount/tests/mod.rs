@@ -8,6 +8,7 @@
 mod actions;
 mod agent;
 mod apply;
+mod charts;
 mod chrome;
 mod create;
 mod editor;

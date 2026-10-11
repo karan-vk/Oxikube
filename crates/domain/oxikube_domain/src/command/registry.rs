@@ -16,6 +16,9 @@ use crate::safety::Risk;
 impl CommandId {
     /// `app::Quit`: quit the application (confirms first while operations run).
     pub const APP_QUIT: CommandId = CommandId::new("app::Quit");
+    /// `charts::OpenGallery`: open the chart gallery, every chart state on one page (a reference
+    /// page for the metrics views and their reviewers).
+    pub const CHARTS_OPEN_GALLERY: CommandId = CommandId::new("charts::OpenGallery");
     /// `cluster::ApplyPreset`: give a cluster a prod / staging / dev / none posture.
     pub const CLUSTER_APPLY_PRESET: CommandId = CommandId::new("cluster::ApplyPreset");
     /// `cluster::CancelConnect`: cancel a connection attempt that is still in flight.
@@ -329,6 +332,14 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::APP_QUIT,
         "Quit Oxikube",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Opens the chart gallery (a page of every chart state) as a tab; reads nothing from a
+    // cluster and changes nothing.
+    CommandMeta::read(
+        CommandId::CHARTS_OPEN_GALLERY,
+        "Open Chart Gallery",
         CommandScope::Global,
         NONE,
     ),
