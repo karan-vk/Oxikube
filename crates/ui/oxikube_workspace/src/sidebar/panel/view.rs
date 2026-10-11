@@ -15,7 +15,9 @@ use oxikube_ui::{
 };
 
 use super::SidebarPanel;
-use crate::sidebar::actions::{Activate, Collapse, Expand, MoveDown, MoveUp, SIDEBAR_CONTEXT};
+use crate::sidebar::actions::{
+    Activate, Collapse, Expand, MoveDown, MoveUp, SIDEBAR_CONTEXT, SIDEBAR_SEARCH_CONTEXT,
+};
 use crate::sidebar::badges::badge_text;
 use crate::sidebar::rows::{EntryRow, GroupRow, NoticeKind, NoticeRow, Row, SectionRow};
 
@@ -191,7 +193,7 @@ impl SidebarPanel {
             .when(highlighted, |row| row.bg(tokens.colors.element_hover))
             .when_some(input, |row, input| {
                 row.child(
-                    div().flex_1().child(
+                    div().flex_1().key_context(SIDEBAR_SEARCH_CONTEXT).child(
                         Input::new(&input).xsmall().prefix(
                             Icon::new(IconName::Search)
                                 .size(u(px(12.)))

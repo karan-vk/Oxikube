@@ -245,8 +245,9 @@ fn filtering_500_crds_takes_well_under_a_frame() {
     );
 }
 
-#[gpui::test]
-fn typing_in_the_search_filters_and_enter_opens_the_first_match(cx: &mut TestAppContext) {
+/// Opens a cluster with three custom kinds, closes the long sections so the search row is on
+/// screen, and moves the keyboard focus into the search field the way Enter on its row does.
+fn focused_search(cx: &mut TestAppContext) -> Fixture {
     let mut fx = Fixture::open(cx, AccessRules::all_access());
     fx.ports.discovery.set_kinds([
         crd("argoproj.io", "Application", "applications"),
@@ -254,7 +255,6 @@ fn typing_in_the_search_filters_and_enter_opens_the_first_match(cx: &mut TestApp
         crd("cert-manager.io", "Certificate", "certificates"),
     ]);
     fx.connect();
-    // The section is at the bottom: close the long ones so the search row is on screen.
     for id in [
         "workloads",
         "config",
@@ -269,17 +269,7 @@ fn typing_in_the_search_filters_and_enter_opens_the_first_match(cx: &mut TestApp
         fx.vcx.debug_bounds("sidebar-custom-search").is_some(),
         "the field is drawn"
     );
-    let events = Rc::new(RefCell::new(Vec::new()));
-    let sink = events.clone();
     let panel = fx.panel.clone();
-    let _subscription = fx.vcx.update(|_, cx| {
-        cx.subscribe(&panel, move |_, event: &SidebarEvent, _| {
-            sink.borrow_mut().push(event.clone())
-        })
-    });
-
-    // Enter on the search row (the arrows reach it) moves the focus into the field; then type:
-    // the rows follow each keystroke.
     let input = fx
         .vcx
         .update(|_, cx| panel.read(cx).search_field().expect("built on draw"));
@@ -290,6 +280,29 @@ fn typing_in_the_search_filters_and_enter_opens_the_first_match(cx: &mut TestApp
         .vcx
         .update(|window, cx| gpui::Focusable::focus_handle(input.read(cx), cx).is_focused(window));
     assert!(focused, "the field has the keyboard focus");
+    fx
+}
+
+/// Records the panel's events.
+fn sidebar_events(fx: &mut Fixture) -> (Rc<RefCell<Vec<SidebarEvent>>>, gpui::Subscription) {
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let sink = events.clone();
+    let panel = fx.panel.clone();
+    let subscription = fx.vcx.update(|_, cx| {
+        cx.subscribe(&panel, move |_, event: &SidebarEvent, _| {
+            sink.borrow_mut().push(event.clone())
+        })
+    });
+    (events, subscription)
+}
+
+#[gpui::test]
+fn typing_in_the_search_filters_and_enter_opens_the_first_match(cx: &mut TestAppContext) {
+    let mut fx = focused_search(cx);
+    let panel = fx.panel.clone();
+    let (events, _subscription) = sidebar_events(&mut fx);
+
+    // The field has the focus (Enter on its row put it there); the rows follow each keystroke.
     fx.vcx.simulate_input("roll");
     fx.vcx.run_until_parked();
     let query = fx
@@ -322,6 +335,33 @@ fn typing_in_the_search_filters_and_enter_opens_the_first_match(cx: &mut TestApp
             .contains(&"crd:argoproj.io/rollouts".to_owned())
     );
     assert!(!fx.is_open("crd:argoproj.io"));
+}
+
+/// The sidebar binds space to Activate; in the search field a space is text (reviewer finding on
+/// PR #656), so it neither opens the highlighted row nor gets lost.
+#[gpui::test]
+fn a_space_typed_in_the_search_is_text_and_activates_nothing(cx: &mut TestAppContext) {
+    let mut fx = focused_search(cx);
+    let panel = fx.panel.clone();
+    let (events, _subscription) = sidebar_events(&mut fx);
+
+    fx.vcx.simulate_input("argo");
+    let space = gpui::Keystroke::parse("space-> ").expect("a keystroke");
+    fx.vcx
+        .update(|window, cx| window.dispatch_keystroke(space, cx));
+    fx.vcx.simulate_input("proj");
+    fx.vcx.run_until_parked();
+
+    let query = fx
+        .vcx
+        .update(|_, cx| panel.read(cx).custom_query().to_owned());
+    assert_eq!(query, "argo proj", "the space reached the field");
+    assert!(events.borrow().is_empty(), "{:?}", events.borrow());
+    assert!(
+        !fx.row_ids()
+            .contains(&"crd:argoproj.io/rollouts".to_owned()),
+        "nothing matches the spaced query, so no kind shows"
+    );
 }
 
 #[gpui::test]
