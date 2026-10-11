@@ -49,6 +49,21 @@ impl<'a> AuditAttempt<'a> {
         }
     }
 
+    /// [`finish`](Self::finish), adding `note` to the record's detail after what is there: what
+    /// the handler learned by running (the Job a trigger created). Redacted like every detail.
+    pub fn finish_noting(mut self, outcome: AuditOutcome, note: Option<&str>) {
+        if let Some(mut record) = self.record.take() {
+            if let Some(note) = note {
+                let joined = match record.detail.as_deref() {
+                    Some(detail) => format!("{detail} {note}"),
+                    None => note.to_owned(),
+                };
+                record = AuditLog::describe(record, Some(&joined));
+            }
+            self.queue(record, outcome);
+        }
+    }
+
     fn queue(&self, mut record: AuditRecord, outcome: AuditOutcome) {
         record.outcome = outcome;
         self.log.stamp(&mut record);

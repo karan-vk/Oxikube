@@ -31,7 +31,9 @@ actions!(
         AttachSelected,
         FocusFilter,
         ClearFilter,
-        ClearSelection
+        ClearSelection,
+        TriggerSelected,
+        ToggleSuspendSelected
     ]
 );
 actions!(resource_detail, [Close]);
@@ -368,6 +370,74 @@ fn a_section_can_scope_a_binding_to_a_kind(cx: &mut TestAppContext) {
         runs(cx, "y", &strs(&deployments)),
         Some("resource_table::ViewYaml")
     );
+}
+
+#[gpui::test]
+fn cronjobs_trigger_on_t_and_cronjobs_and_jobs_suspend_on_s(cx: &mut TestAppContext) {
+    // E12-S08: the k9s verbs `t` (trigger) and `s` (suspend) are bound for the kinds that have
+    // them, so `s` stays a shell on pods and nodes.
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        let cronjobs = table("CronJob", "");
+        let jobs = table("Job", "");
+        let pods = table("Pod", "");
+        assert_eq!(
+            runs(cx, "t", &strs(&cronjobs)),
+            Some("resource_table::TriggerSelected"),
+            "{platform:?}"
+        );
+        assert_eq!(
+            runs(cx, "s", &strs(&cronjobs)),
+            Some("resource_table::ToggleSuspendSelected")
+        );
+        assert_eq!(
+            runs(cx, "s", &strs(&jobs)),
+            Some("resource_table::ToggleSuspendSelected")
+        );
+        // `t` triggers CronJobs only; a Job has nothing to trigger.
+        assert_eq!(press(cx, "t", &strs(&jobs)), Resolution::Unbound);
+        assert_eq!(press(cx, "t", &strs(&pods)), Resolution::Unbound);
+        assert_eq!(
+            runs(cx, "s", &strs(&pods)),
+            Some("resource_table::ShellSelected")
+        );
+        // The other verbs of a CronJob table keep their meaning.
+        assert_eq!(
+            runs(cx, "y", &strs(&cronjobs)),
+            Some("resource_table::ViewYaml")
+        );
+        // While the filter field has the focus, the keys are text.
+        let typing = table("CronJob", "Editing");
+        assert_eq!(press(cx, "t", &strs(&typing)), Resolution::Unbound);
+        assert_eq!(press(cx, "s", &strs(&typing)), Resolution::Unbound);
+    }
+}
+
+#[gpui::test]
+fn the_palette_finds_the_keys_of_the_cronjob_commands(cx: &mut TestAppContext) {
+    install(cx, MAC, "");
+    let keys = |cx: &mut TestAppContext, command| {
+        cx.read(|cx| {
+            bindings_for_command(cx, command)
+                .into_iter()
+                .map(|info| info.keystrokes_text())
+                .collect::<Vec<_>>()
+        })
+    };
+    assert_eq!(keys(cx, CommandId::CRONJOB_TRIGGER), ["t"]);
+    // `s` is bound once for CronJob tables and once for Job tables: one key, two sections.
+    for command in [
+        CommandId::CRONJOB_SUSPEND,
+        CommandId::CRONJOB_RESUME,
+        CommandId::JOB_SUSPEND,
+        CommandId::JOB_RESUME,
+    ] {
+        let found = keys(cx, command);
+        assert!(
+            !found.is_empty() && found.iter().all(|k| k == "s"),
+            "{command}: {found:?}"
+        );
+    }
 }
 
 #[gpui::test]

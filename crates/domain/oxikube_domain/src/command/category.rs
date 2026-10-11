@@ -29,7 +29,7 @@ pub enum CommandCategory {
     Namespace,
     /// Resources, tables and custom resources (`resource::*`, `table::*`, `crd::*`).
     Resource,
-    /// Workloads (`workload::*`).
+    /// Workloads (`workload::*`, `cronjob::*`, `job::*`).
     Workload,
     /// Pods (`pod::*`).
     Pod,
@@ -65,7 +65,7 @@ impl CommandCategory {
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 20] = [
+        const NAMESPACES: [(&str, CommandCategory); 22] = [
             ("app", CommandCategory::App),
             ("window", CommandCategory::Window),
             ("view", CommandCategory::View),
@@ -81,6 +81,8 @@ impl CommandCategory {
             ("table", CommandCategory::Resource),
             ("crd", CommandCategory::Resource),
             ("workload", CommandCategory::Workload),
+            ("cronjob", CommandCategory::Workload),
+            ("job", CommandCategory::Workload),
             ("pod", CommandCategory::Pod),
             ("node", CommandCategory::Node),
             ("logs", CommandCategory::Logs),

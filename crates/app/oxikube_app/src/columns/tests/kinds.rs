@@ -62,11 +62,16 @@ fn jobs_and_cron_jobs() {
             ("status", "Complete"),
             ("completions", "3/3"),
             ("duration", "59m"),
+            ("conditions", "SuccessCriteriaMet,Complete"),
         ],
     );
     check(
         &fx::job_failed(),
-        &[("status", "Failed"), ("completions", "0/1")],
+        &[
+            ("status", "Failed"),
+            ("completions", "0/1"),
+            ("conditions", "FailureTarget,Failed"),
+        ],
     );
     check(
         &fx::cronjob(),
@@ -239,4 +244,48 @@ fn ingress_ingress_class_and_network_policy() {
         json!({"spec": {"podSelector": {}}}),
     );
     check(&default_types, &[("policy-types", "Ingress")]);
+}
+
+#[test]
+fn a_job_lists_every_true_condition_and_a_running_one_none() {
+    let suspended = namespaced(
+        "batch/v1",
+        "Job",
+        json!({"spec": {"suspend": true},
+               "status": {"conditions": [{"type": "Suspended", "status": "True"},
+                                         {"type": "Failed", "status": "False"}]}}),
+    );
+    check(
+        &suspended,
+        &[("status", "Suspended"), ("conditions", "Suspended")],
+    );
+    let running = namespaced("batch/v1", "Job", json!({"status": {"active": 1}}));
+    check(&running, &[("status", "Running"), ("conditions", "")]);
+}
+
+#[test]
+fn the_job_and_cronjob_tables_show_the_columns_of_the_story_by_default() {
+    use crate::columns::{ColumnProvider, CoreColumns};
+    use oxikube_domain::Capabilities;
+    use oxikube_domain::ids::Gvk;
+
+    let shown = |kind: &str| -> Vec<String> {
+        CoreColumns::new()
+            .columns(&Gvk::new("batch", "v1", kind), Capabilities::all())
+            .iter()
+            .filter(|c| c.is_default())
+            .map(|c| c.id.as_str().to_owned())
+            .collect()
+    };
+    let jobs = shown("Job");
+    for id in ["completions", "duration", "conditions"] {
+        assert!(jobs.iter().any(|c| c == id), "Job: `{id}` in {jobs:?}");
+    }
+    let cronjobs = shown("CronJob");
+    for id in ["schedule", "timezone", "suspend", "active", "last-schedule"] {
+        assert!(
+            cronjobs.iter().any(|c| c == id),
+            "CronJob: `{id}` in {cronjobs:?}"
+        );
+    }
 }

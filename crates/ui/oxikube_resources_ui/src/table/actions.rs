@@ -87,6 +87,13 @@ actions!(
         /// List the active port forwards (k9s's `f`). A toast says so while port forwarding is
         /// not installed.
         ShowPortForwards,
+        /// Run the cursor row's CronJob now (`cronjob::Trigger`; k9s's `t`, bound on CronJob
+        /// tables). Creates a Job from the template, confirmed first.
+        TriggerSelected,
+        /// Suspend the cursor row's CronJob or Job, or resume it when it is suspended
+        /// (`cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume`; k9s's `s`,
+        /// bound on CronJob and Job tables).
+        ToggleSuspendSelected,
         /// Show or hide the wide columns of this kind's tables (`table::ToggleWide`; k9s's
         /// `ctrl-w`).
         ToggleWide,

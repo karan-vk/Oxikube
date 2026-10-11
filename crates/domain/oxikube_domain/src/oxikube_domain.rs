@@ -11,6 +11,7 @@
 //! | [`access`] | [`AccessRules`](access::AccessRules): what the user may do per resource (a rules review as data), [`AccessRequirement`](access::AccessRequirement) |
 //! | [`resource`] | the thin [`Resource`] model: [`ObjectMeta`] + the object's JSON |
 //! | [`json`] | [`JsonDoc`]: compact immutable JSON read in place through [`JsonRef`] |
+//! | [`build`] | manifest builders for kubectl-equivalent actions ([`build::job_from_cronjob`], [`build::suspend_patch`]) |
 //! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
 //! | [`quantity`], [`age`] | [`Quantity`] parsing/formatting and [`Age`] formatting |
 //! | [`session`] | the cluster session state machine, `NamespaceSelection`, `WatchScope` |
@@ -44,6 +45,7 @@ pub mod agent;
 pub mod alias;
 pub mod audit;
 mod bounds;
+pub mod build;
 pub mod colour;
 pub mod command;
 pub mod error;

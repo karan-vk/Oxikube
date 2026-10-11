@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use oxikube_domain::audit::Initiator;
-use oxikube_domain::ids::ClusterId;
+use oxikube_domain::ids::{ClusterId, ResourceRef};
 use serde_json::Value;
 
 use crate::guard::{Confirmation, ConfirmationRequest};
@@ -121,5 +121,12 @@ impl CommandOutput {
             message: None,
             data: Some(data),
         }
+    }
+
+    /// The object a view should offer to open next: `data.open`, a serialized [`ResourceRef`]
+    /// (`cronjob::Trigger` names the Job it created this way). `None` when the handler named none.
+    pub fn open_target(&self) -> Option<ResourceRef> {
+        let open = self.data.as_ref()?.get("open")?;
+        serde_json::from_value(open.clone()).ok()
     }
 }

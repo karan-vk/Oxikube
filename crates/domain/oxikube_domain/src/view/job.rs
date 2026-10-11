@@ -147,6 +147,38 @@ impl JobSummary {
     pub fn age(&self, now: Timestamp) -> Option<Age> {
         self.created.map(|c| Age::between(c, now))
     }
+
+    /// Whether the job ended, for better or worse: `Complete` or `Failed`. A finished job cannot
+    /// be resumed (the API server refuses to un-suspend it), and its duration no longer grows.
+    pub fn is_finished(&self) -> bool {
+        matches!(self.status, JobStatus::Complete | JobStatus::Failed)
+    }
+
+    /// The `CONDITIONS` column: the types of the conditions that are `True` on `res`, in the order
+    /// the controller lists them, comma separated (`Suspended`, `SuccessCriteriaMet,Complete`);
+    /// empty while none is. Unlike [`status`](Self::status) it shows every one, not the winner.
+    ///
+    /// # Errors
+    ///
+    /// [`ViewError::WrongKind`] when `res` is not a `batch` Job.
+    pub fn conditions_display(res: &Resource) -> Result<String, ViewError> {
+        check_kind(res, "Job", &[("batch", "Job")])?;
+        let conditions = arr_of(sub(res.json(), "status"), "conditions");
+        let mut out = String::new();
+        for condition in conditions.iter() {
+            if str_of(condition, "status") != Some("True") {
+                continue;
+            }
+            let Some(kind) = str_of(condition, "type") else {
+                continue;
+            };
+            if !out.is_empty() {
+                out.push(',');
+            }
+            out.push_str(kind);
+        }
+        Ok(out)
+    }
 }
 
 /// The first condition of `kind` decides, as in the printer.

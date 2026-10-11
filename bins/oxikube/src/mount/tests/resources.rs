@@ -38,7 +38,7 @@ impl App {
     }
 
     /// The kinds of the tables open in the cluster tab.
-    fn tables(&mut self) -> Vec<String> {
+    pub(super) fn tables(&mut self) -> Vec<String> {
         let ws = self.tab_workspace();
         self.vcx.update(|_, cx| {
             ws.read(cx)

@@ -30,6 +30,14 @@ pub(crate) fn job_duration<'a>(res: &'a Resource, now: Timestamp) -> Cell<'a> {
         .map_or_else(Cell::empty, Cell::age)
 }
 
+/// Job `CONDITIONS`: the types of the conditions that are `True` (`Suspended`, `Complete`, ...).
+pub(crate) fn job_conditions<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    match JobSummary::conditions_display(res) {
+        Ok(text) if !text.is_empty() => Cell::text(text),
+        _ => Cell::empty(),
+    }
+}
+
 /// CronJob `SUSPEND`: `True` or `False`.
 pub(crate) fn cron_suspend<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     CronJobSummary::from_resource(res).map_or_else(

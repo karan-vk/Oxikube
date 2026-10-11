@@ -67,6 +67,21 @@ fn actions_rig(
             |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
         )
         .unwrap();
+    // The CronJob and Job actions (E12-S08): do-nothing handlers behind the real guard.
+    for id in [
+        CommandId::CRONJOB_TRIGGER,
+        CommandId::CRONJOB_SUSPEND,
+        CommandId::CRONJOB_RESUME,
+        CommandId::JOB_SUSPEND,
+        CommandId::JOB_RESUME,
+    ] {
+        registry
+            .register(
+                *command::lookup(id).unwrap(),
+                |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
+            )
+            .unwrap();
+    }
     if exec {
         // The exec class (E09-S08): do-nothing handlers behind the real guard, so a test sees the
         // read-only block and the audit record.
@@ -122,6 +137,9 @@ fn actions_rig(
     )
     .unwrap();
     for spec in crate::crds::crd_row_actions() {
+        rows.register(spec).unwrap();
+    }
+    for spec in crate::kinds::row_actions() {
         rows.register(spec).unwrap();
     }
     if exec {

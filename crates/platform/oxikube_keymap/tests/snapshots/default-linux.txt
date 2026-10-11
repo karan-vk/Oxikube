@@ -107,6 +107,11 @@
   shift-j          resource_table::ExtendNext
   shift-k          resource_table::ExtendPrevious
   y                resource_table::ViewYaml
+[ResourceTable && !Editing && kind == CronJob]
+  s                resource_table::ToggleSuspendSelected
+  t                resource_table::TriggerSelected
+[ResourceTable && !Editing && kind == Job]
+  s                resource_table::ToggleSuspendSelected
 [ResourceTable && Editing]
   escape           resource_table::ClearFilter
 [DetailDrawer && !Editing]

@@ -301,3 +301,89 @@ fn denial_toasts_name_the_cluster_and_use_one_key_per_cluster(cx: &mut TestAppCo
     assert_eq!(shown[1].level, ToastLevel::Error);
     assert!(shown[1].key.is_none());
 }
+
+fn trigger_nightly() -> Command {
+    Command::CronJobTrigger {
+        target: ResourceRef::namespaced(
+            id(PROD),
+            Gvk::new("batch", "v1", "CronJob"),
+            "default",
+            "nightly",
+        ),
+    }
+}
+
+#[gpui::test]
+fn a_trigger_asks_first_then_offers_to_open_the_job_it_created(cx: &mut TestAppContext) {
+    let mut f = fixture(cx);
+    run(&mut f, trigger_nightly());
+    assert!(
+        modal_open(&mut f),
+        "the guard asks first (risk low: a simple confirm)"
+    );
+    assert_eq!(*f.triggers.lock(), 0, "nothing ran before the answer");
+    let layer = f.vcx.update(|_, cx| f.ws.read(cx).modal_layer().clone());
+    let (title, button, message) = f.vcx.update(|_, cx| {
+        let dialog = layer
+            .read(cx)
+            .active_modal::<crate::modal::DialogModal>()
+            .expect("a dialog");
+        let dialog = dialog.read(cx);
+        (
+            dialog.title().to_string(),
+            dialog.confirm_text().to_string(),
+            dialog
+                .message_text()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+        )
+    });
+    assert_eq!(title, "Run the CronJob now?");
+    assert_eq!(button, "Trigger");
+    assert!(
+        message.contains("nightly") && message.contains("job template"),
+        "{message}"
+    );
+
+    f.vcx.simulate_keystrokes("enter");
+    f.vcx.run_until_parked();
+    assert_eq!(*f.triggers.lock(), 1);
+    let layer = f.vcx.update(|_, cx| f.ws.read(cx).toast_layer().clone());
+    let toast = f
+        .vcx
+        .update(|_, cx| layer.read(cx).visible())
+        .pop()
+        .expect("a toast");
+    assert_eq!(toast.level, ToastLevel::Success);
+    assert_eq!(toast.message.as_ref(), "Triggered CronJob default/nightly");
+
+    // The toast carries an "Open Job" button; clicking it dispatches `resource::Open` for the Job.
+    assert!(f.opened.lock().is_empty());
+    let selector: &'static str =
+        Box::leak(format!("toast-{}-action-0", toast.id.as_u64()).into_boxed_str());
+    let button = bounds(&mut f.vcx, selector).expect("the Open Job button is drawn");
+    f.vcx
+        .simulate_click(button.center(), gpui::Modifiers::none());
+    f.vcx.run_until_parked();
+    let opened = f.opened.lock().clone();
+    assert_eq!(opened.len(), 1, "{opened:?}");
+    assert_eq!(&*opened[0].name, "nightly-manual-x7k2p");
+    assert_eq!(&*opened[0].gvk.kind, "Job");
+}
+
+#[gpui::test]
+fn a_trigger_on_a_read_only_cluster_is_refused_and_offers_nothing(cx: &mut TestAppContext) {
+    let mut f = fixture(cx);
+    f.manager.set_read_only(&id(PROD), true).unwrap();
+    f.vcx.run_until_parked();
+    run(&mut f, trigger_nightly());
+    assert!(!modal_open(&mut f));
+    assert_eq!(*f.triggers.lock(), 0);
+    let shown = toasts(&mut f);
+    assert!(
+        shown
+            .iter()
+            .any(|(level, m)| *level == ToastLevel::Warning && m.contains("read-only")),
+        "{shown:?}"
+    );
+}

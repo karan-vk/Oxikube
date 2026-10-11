@@ -415,9 +415,29 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             follow: true,
             tail_lines: None,
         },
+        "cronjob::Trigger" => Command::CronJobTrigger {
+            target: batch(name, "CronJob", "nightly"),
+        },
+        "cronjob::Suspend" => Command::CronJobSuspend {
+            target: batch(name, "CronJob", "nightly"),
+        },
+        "cronjob::Resume" => Command::CronJobResume {
+            target: batch(name, "CronJob", "nightly"),
+        },
+        "job::Suspend" => Command::JobSuspend {
+            target: batch(name, "Job", "import"),
+        },
+        "job::Resume" => Command::JobResume {
+            target: batch(name, "Job", "import"),
+        },
         other => panic!(
             "no sample for the declared command {other}: add one to testing_posture::sample; the \
              read-only enforcement test iterates every declared command"
         ),
     }
+}
+
+/// A `batch/v1` object in `default` of cluster `name`.
+fn batch(name: &str, kind: &str, object: &str) -> ResourceRef {
+    ResourceRef::namespaced(id(name), Gvk::new("batch", "v1", kind), "default", object)
 }
