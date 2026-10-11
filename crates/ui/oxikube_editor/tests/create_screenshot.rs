@@ -112,7 +112,7 @@ fn ready(
         index,
         label: label.to_owned(),
         request: request.clone(),
-        depends_on: None,
+        depends_on: Vec::new(),
         outcome: PreviewOutcome::Ready(ApplyPreview {
             request,
             target,
@@ -148,7 +148,7 @@ fn render_batch() -> Result<RgbaImage> {
         index: 3,
         label: "Deployment web".to_owned(),
         request: ApplyRequest::new(cluster(), "kind: placeholder\n"),
-        depends_on: None,
+        depends_on: Vec::new(),
         outcome: PreviewOutcome::Failed(ApplyError::Invalid {
             message: "Deployment.apps \"web\" is invalid: spec.selector: Required value".into(),
             causes: Vec::new(),

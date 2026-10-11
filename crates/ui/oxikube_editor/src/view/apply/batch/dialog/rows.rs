@@ -135,19 +135,15 @@ pub(super) fn detail(document: &DocumentPreview) -> String {
             Change::Unchanged => "the server dry run changes nothing".to_owned(),
             Change::Update => "the server dry run changes it".to_owned(),
         },
-        PreviewOutcome::Deferred => match document.depends_on {
-            Some(earlier) => format!(
-                "needs document {}: rehearsed and applied once that exists",
-                earlier + 1
-            ),
+        PreviewOutcome::Deferred => match document.needs_text() {
+            Some(needs) => format!("needs {needs}: rehearsed and applied once that exists"),
             None => "rehearsed and applied once what it needs exists".to_owned(),
         },
         PreviewOutcome::Failed(error) => format!("{error}. It is not sent."),
-        PreviewOutcome::Skipped => match document.depends_on {
-            Some(earlier) => format!(
-                "needs document {}, which the dry run refused. It is not sent.",
-                earlier + 1
-            ),
+        PreviewOutcome::Skipped => match document.needs_text() {
+            Some(needs) => {
+                format!("needs {needs}, one of which the dry run refused. It is not sent.")
+            }
             None => "not sent".to_owned(),
         },
     }

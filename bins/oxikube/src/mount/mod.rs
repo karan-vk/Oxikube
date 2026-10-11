@@ -359,7 +359,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let editor_views = editor::start_views(
         services.sessions.clone(),
         oxikube_app::ApplyService::new(bus.clone(), services.sessions.clone(), local_user()),
-        editor::templates(ports.clusters.fs.clone()),
+        editor::templates(ports.clusters.fs.clone(), cx),
         tabs.downgrade(),
         &workspace,
         dispatcher.clone(),

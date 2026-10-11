@@ -47,15 +47,15 @@ impl ApplyService {
         for (index, ((request, answer), depends_on)) in
             requests.into_iter().zip(answers).zip(needs).enumerate()
         {
-            let blocked = depends_on.is_some_and(|earlier| {
+            let blocked = depends_on.iter().any(|&earlier| {
                 matches!(
                     documents[earlier].outcome,
                     PreviewOutcome::Failed(_) | PreviewOutcome::Skipped
                 )
             });
             // An earlier document that makes what this one needs: until it has, the server
-            // cannot rehearse this one.
-            let awaited = depends_on.is_some_and(|earlier| {
+            // cannot rehearse this one. Any one of them is enough, whichever order they come in.
+            let awaited = depends_on.iter().any(|&earlier| {
                 matches!(documents[earlier].outcome, PreviewOutcome::Deferred)
                     || documents[earlier].change() == Some(Change::Create)
             });
@@ -90,8 +90,9 @@ impl ApplyService {
         for document in &preview.documents {
             let cause = document
                 .depends_on
-                .map(|earlier| &results[earlier])
-                .filter(|result| result.status.is_failure());
+                .iter()
+                .map(|&earlier| &results[earlier])
+                .find(|result| result.status.is_failure());
             let (status, message, target, method) = match (&document.outcome, cause) {
                 (_, Some(cause)) => skipped(cause),
                 (PreviewOutcome::Skipped, None) => skipped_earlier(document),
@@ -158,11 +159,8 @@ fn skipped(cause: &DocumentResult) -> Outcome {
 
 /// Skipped at the dry run, for an earlier document that failed there.
 fn skipped_earlier(document: &DocumentPreview) -> Outcome {
-    let reason = match document.depends_on {
-        Some(earlier) => format!(
-            "skipped: it needs document {}, which did not apply",
-            earlier + 1
-        ),
+    let reason = match document.needs_text() {
+        Some(needs) => format!("skipped: it needs {needs}, one of which did not apply"),
         None => "skipped".to_owned(),
     };
     skipped_because(reason)

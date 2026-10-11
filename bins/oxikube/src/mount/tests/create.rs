@@ -99,7 +99,15 @@ fn resource_create_is_on_the_bus_with_a_tool_stub_and_changes_nothing_in_a_clust
 fn the_key_opens_the_picker_and_a_template_opens_with_the_selected_namespace(
     cx: &mut TestAppContext,
 ) {
-    let mut app = App::start(cx, TestPorts::seeded());
+    // The start-up's config directory is where the user's templates are looked for.
+    let config = tempfile::tempdir().unwrap();
+    let dir = config.path().to_owned();
+    let mut app = App::start_with_env(
+        cx,
+        TestPorts::seeded(),
+        move |env| env.config = crate::startup::ConfigSource::Dir(dir),
+        |_| {},
+    );
     app.press("enter");
     app.select_namespace("kube-system");
 
@@ -236,6 +244,46 @@ fn several_documents_are_previewed_together_and_applied_in_order(cx: &mut TestAp
         "the results panel is under the buffer"
     );
     assert!(app.drawn("manifest-apply-result-1"));
+    // Each row carries its status word.
+    assert!(app.drawn("manifest-apply-result-0-created"));
+    assert!(app.drawn("manifest-apply-result-1-created"));
+}
+
+#[gpui::test]
+fn the_results_panel_shows_a_failed_row_with_its_word(cx: &mut TestAppContext) {
+    let ports = TestPorts::seeded();
+    let resources = ports
+        .connector
+        .ports_for(&TestPorts::cluster_id())
+        .resources;
+    let mut app = App::start(cx, ports);
+    app.press("enter");
+    app.press(new_manifest_key());
+    app.vcx.simulate_input(
+        "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: first\n  namespace: default\ndata:\n  a: b\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: second\n  namespace: default\ndata:\n  c: d\n",
+    );
+    app.vcx
+        .executor()
+        .advance_clock(oxikube_editor::view::VALIDATION_DEBOUNCE);
+    app.vcx.run_until_parked();
+    // Dry runs: the second is refused, so it is not sent.
+    resources.script().patch.push_ok(
+        oxikube_domain::Resource::from_json(serde_json::json!({
+            "apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "first", "namespace": "default"}
+        }))
+        .unwrap(),
+    );
+    resources
+        .script()
+        .patch
+        .push_err(oxikube_domain::OxiError::validation(
+            "ConfigMap \"second\" is invalid",
+        ));
+    app.press(apply_key());
+    app.click("batch-preview-confirm");
+    assert!(app.drawn("manifest-apply-results"));
+    assert!(app.drawn("manifest-apply-result-0-created"));
+    assert!(app.drawn("manifest-apply-result-1-failed"));
 }
 
 #[gpui::test]

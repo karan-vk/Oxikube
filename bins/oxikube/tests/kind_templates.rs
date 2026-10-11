@@ -19,8 +19,6 @@
 
 mod kind_common;
 
-use std::time::Duration;
-
 use futures::executor::block_on;
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use oxikube::app_state::AppState;
@@ -43,6 +41,23 @@ use kind_common::{Launched, on_cluster, wait, wait_value};
 fn settle(vcx: &mut VisualTestContext) {
     vcx.executor().advance_clock(VALIDATION_DEBOUNCE);
     vcx.run_until_parked();
+}
+
+/// Removes a namespace a buffer under test created, even when an assertion fails first (the
+/// testkit's `TestNamespace` only knows its own).
+struct DeleteNamespaceOnDrop {
+    context: String,
+    name: String,
+}
+
+impl Drop for DeleteNamespaceOnDrop {
+    fn drop(&mut self) {
+        // Best effort, like the testkit's: never panic in drop.
+        let _ = std::process::Command::new("kubectl")
+            .args(["--context", &self.context, "delete", "namespace"])
+            .args([&self.name, "--ignore-not-found", "--wait=false"])
+            .output();
+    }
 }
 
 /// What the tests do in the connected cluster's tab.
@@ -304,8 +319,13 @@ fn a_buffer_of_several_documents_is_applied_in_order_with_a_new_namespace_first(
     };
     ensure_kind_context(&context).expect("a kind context");
     let namespace = TestNamespace::create(&context).expect("a namespace");
-    // A second namespace that the buffer itself creates; removed at the end.
+    // A second namespace that the buffer itself creates; removed when the test ends, however
+    // it ends.
     let extra = format!("{}-b", namespace.name());
+    let _extra_namespace = DeleteNamespaceOnDrop {
+        context: context.clone(),
+        name: extra.clone(),
+    };
     let mut s = Session::start(cx, &context, namespace.name());
     let ns = namespace.name();
     let text = format!(
@@ -352,7 +372,7 @@ fn a_buffer_of_several_documents_is_applied_in_order_with_a_new_namespace_first(
         ["created", "created", "created"],
         "{results:?}"
     );
-    let (extra_name, ns_name) = (extra.clone(), ns.to_owned());
+    let (extra_name, ns_name) = (extra, ns.to_owned());
     let found = on_cluster(&context, async |client| {
         (
             configmaps(client.clone(), &ns_name)
@@ -368,17 +388,4 @@ fn a_buffer_of_several_documents_is_applied_in_order_with_a_new_namespace_first(
         )
     });
     assert_eq!(found, (true, true));
-
-    // Clean up the namespace the buffer made (the test's own is removed on drop).
-    let _ = std::process::Command::new("kubectl")
-        .args([
-            "--context",
-            &context,
-            "delete",
-            "namespace",
-            &extra,
-            "--wait=false",
-        ])
-        .output();
-    std::thread::sleep(Duration::from_millis(10));
 }

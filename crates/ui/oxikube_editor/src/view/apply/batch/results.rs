@@ -182,6 +182,7 @@ impl ManifestEditor {
     }
 }
 
+/// The colour of a row's word.
 fn tone(status: &DocumentStatus, colors: &oxikube_ui::Colors) -> Hsla {
     match status {
         DocumentStatus::Created => colors.success,
@@ -205,5 +206,73 @@ fn message(result: &DocumentResult) -> String {
             }
             _ => String::new(),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use oxikube_app::{ApplyError, ApplyMethod};
+    use oxikube_ui::Tokens;
+
+    use super::*;
+
+    fn result(status: DocumentStatus, method: Option<ApplyMethod>, text: &str) -> DocumentResult {
+        DocumentResult {
+            index: 0,
+            label: "ConfigMap default/a".to_owned(),
+            target: None,
+            status,
+            method,
+            message: text.to_owned(),
+        }
+    }
+
+    #[test]
+    fn each_status_has_its_own_colour_and_word() {
+        let colors = Tokens::dark().colors;
+        let failed = DocumentStatus::Failed(ApplyError::Invalid {
+            message: "no".into(),
+            causes: Vec::new(),
+        });
+        let rows = [
+            (DocumentStatus::Created, colors.success, "created"),
+            (DocumentStatus::Configured, colors.accent, "configured"),
+            (DocumentStatus::Unchanged, colors.text_muted, "unchanged"),
+            (failed, colors.error, "failed"),
+            (
+                DocumentStatus::Skipped("why".into()),
+                colors.warning,
+                "skipped",
+            ),
+        ];
+        for (status, colour, word) in rows {
+            assert_eq!(status.word(), word);
+            assert_eq!(tone(&status, &colors), colour, "{word}");
+        }
+    }
+
+    #[test]
+    fn a_failure_and_a_skip_show_their_text_and_a_fallback_says_so() {
+        let failed = DocumentStatus::Failed(ApplyError::Invalid {
+            message: "ConfigMap \"a\" is invalid".into(),
+            causes: Vec::new(),
+        });
+        let line = result(failed, None, "ConfigMap \"a\" is invalid");
+        assert_eq!(message(&line), "ConfigMap \"a\" is invalid");
+        let skipped = result(
+            DocumentStatus::Skipped("skipped: it needs document 1".into()),
+            None,
+            "skipped: it needs document 1",
+        );
+        assert_eq!(message(&skipped), "skipped: it needs document 1");
+
+        let plain = result(DocumentStatus::Created, Some(ApplyMethod::ServerSide), "x");
+        assert_eq!(message(&plain), "", "nothing to add for a normal apply");
+        let fallback = result(DocumentStatus::Created, Some(ApplyMethod::Replace), "x");
+        assert!(
+            message(&fallback).contains("sent as a"),
+            "{}",
+            message(&fallback)
+        );
     }
 }

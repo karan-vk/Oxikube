@@ -30,13 +30,28 @@ pub struct DocumentPreview {
     pub label: String,
     /// What is sent for it.
     pub request: ApplyRequest,
-    /// The earlier document it needs, if any.
-    pub depends_on: Option<usize>,
+    /// The earlier documents it needs (its Namespace, its definition), in buffer order.
+    pub depends_on: Vec<usize>,
     /// How the dry run ended.
     pub outcome: PreviewOutcome,
 }
 
 impl DocumentPreview {
+    /// "document 2", "documents 1 and 3" or "documents 1, 2 and 4" (numbered from 1) for what it
+    /// needs; `None` when it needs nothing.
+    pub fn needs_text(&self) -> Option<String> {
+        let numbers: Vec<String> = self
+            .depends_on
+            .iter()
+            .map(|d| (d + 1).to_string())
+            .collect();
+        match numbers.as_slice() {
+            [] => None,
+            [one] => Some(format!("document {one}")),
+            [rest @ .., last] => Some(format!("documents {} and {last}", rest.join(", "))),
+        }
+    }
+
     /// The server's rehearsal, when there is one.
     pub fn preview(&self) -> Option<&ApplyPreview> {
         match &self.outcome {

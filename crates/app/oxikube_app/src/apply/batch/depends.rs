@@ -9,20 +9,25 @@ use serde_json::Value;
 use crate::apply::manifest::Manifest;
 use crate::apply::types::ApplyRequest;
 
-/// For each document, the first earlier document it needs. A document that does not parse needs
+/// For each document, every earlier document it needs (a custom resource in a new namespace needs
+/// both the Namespace and the definition), in buffer order. A document that does not parse needs
 /// nothing (its dry run reports why).
 pub(super) fn dependencies(
     requests: &[ApplyRequest],
     manifests: &[Option<Manifest>],
-) -> Vec<Option<usize>> {
+) -> Vec<Vec<usize>> {
     (0..manifests.len())
         .map(|index| {
-            let me = manifests[index].as_ref()?;
-            (0..index).find(|&earlier| {
-                manifests[earlier]
-                    .as_ref()
-                    .is_some_and(|other| needs(me, requests[index].namespace.as_deref(), other))
-            })
+            let Some(me) = manifests[index].as_ref() else {
+                return Vec::new();
+            };
+            (0..index)
+                .filter(|&earlier| {
+                    manifests[earlier]
+                        .as_ref()
+                        .is_some_and(|other| needs(me, requests[index].namespace.as_deref(), other))
+                })
+                .collect()
         })
         .collect()
 }

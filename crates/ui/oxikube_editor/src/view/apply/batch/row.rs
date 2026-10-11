@@ -6,7 +6,7 @@ use oxikube_ui::layout::h_flex;
 use oxikube_ui::{Tokens, u};
 
 /// A document's row `ix` of the list named `prefix` (its element id and `prefix-{ix}` debug
-/// selector). `chip` is the word and its colour. The caller adds the click and any highlight.
+/// selector; the word also has `prefix-{ix}-{word}`). `chip` is the word and its colour. The caller adds the click and any highlight.
 pub(super) fn document_row(
     prefix: &'static str,
     ix: usize,
@@ -33,7 +33,14 @@ pub(super) fn document_row(
                 .text_color(tokens.colors.text_muted)
                 .child((ix + 1).to_string()),
         )
-        .child(div().flex_none().w(u(px(78.))).text_color(tone).child(word))
+        .child(
+            div()
+                .debug_selector(move || format!("{prefix}-{ix}-{word}"))
+                .flex_none()
+                .w(u(px(78.)))
+                .text_color(tone)
+                .child(word),
+        )
         .child(div().flex_none().child(label.to_owned()))
         .child(
             div()

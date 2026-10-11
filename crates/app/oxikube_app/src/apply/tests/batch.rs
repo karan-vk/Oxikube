@@ -124,8 +124,8 @@ fn a_failure_while_applying_does_not_stop_the_rest_but_skips_what_needs_it() {
     let in_shop = configmap("in-shop", Some("shop"), "x");
     let elsewhere = configmap("elsewhere", None, "y");
     let preview = t.preview_batch(&[NAMESPACE, &in_shop, &elsewhere]);
-    assert_eq!(preview.documents[1].depends_on, Some(0));
-    assert_eq!(preview.documents[2].depends_on, None);
+    assert_eq!(preview.documents[1].depends_on, [0]);
+    assert!(preview.documents[2].depends_on.is_empty());
 
     // The namespace is refused as it is written.
     t.port()
@@ -212,8 +212,73 @@ fn a_custom_resource_waits_for_the_definition_an_earlier_document_makes() {
         .patch
         .push_err(OxiError::not_found("no matches for kind \"Widget\""));
     let preview = t.preview_batch(&[crd, widget]);
-    assert_eq!(preview.documents[1].depends_on, Some(0));
+    assert_eq!(preview.documents[1].depends_on, [0]);
     assert_eq!(preview.documents[1].outcome, PreviewOutcome::Deferred);
+}
+
+const CRD: &str = "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nmetadata:\n  name: widgets.example.com\nspec:\n  group: example.com\n  names:\n    kind: Widget\n";
+const WIDGET_IN_SHOP: &str =
+    "apiVersion: example.com/v1\nkind: Widget\nmetadata:\n  name: w\n  namespace: shop\n";
+
+#[test]
+fn a_custom_resource_needing_both_its_namespace_and_its_definition_waits_for_either_to_be_made() {
+    let t = Applying::new(false);
+    // The namespace is already there, so only the definition is new.
+    t.port().insert(
+        Resource::from_json(json!({
+            "apiVersion": "v1", "kind": "Namespace",
+            "metadata": {"name": "shop", "resourceVersion": "5"}
+        }))
+        .expect("a valid object"),
+    );
+    t.port().script().patch.push_ok(live("shop", "-"));
+    t.port().script().patch.push_ok(live("crd", "-"));
+    t.port()
+        .script()
+        .patch
+        .push_err(OxiError::not_found("no matches for kind \"Widget\""));
+    let preview = t.preview_batch(&[NAMESPACE, CRD, WIDGET_IN_SHOP]);
+    assert_eq!(preview.documents[2].depends_on, [0, 1]);
+    assert_ne!(preview.documents[0].change(), Some(Change::Create));
+    assert_eq!(preview.documents[1].change(), Some(Change::Create));
+    assert_eq!(
+        preview.documents[2].outcome,
+        PreviewOutcome::Deferred,
+        "the definition in the buffer will make the kind"
+    );
+    assert_eq!(
+        preview.documents[2].needs_text().as_deref(),
+        Some("documents 1 and 2")
+    );
+}
+
+#[test]
+fn a_custom_resource_is_skipped_when_either_document_it_needs_failed() {
+    let t = Applying::new(false);
+    // The namespace dry run works (and is new), the definition is refused.
+    t.port().script().patch.push_ok(live("shop", "-"));
+    t.port().script().patch.push_err(OxiError::forbidden(
+        "customresourcedefinitions is forbidden",
+    ));
+    t.port()
+        .script()
+        .patch
+        .push_err(OxiError::not_found("namespaces \"shop\" not found"));
+    let preview = t.preview_batch(&[NAMESPACE, CRD, WIDGET_IN_SHOP]);
+    assert_eq!(preview.documents[0].change(), Some(Change::Create));
+    assert!(matches!(
+        preview.documents[1].outcome,
+        PreviewOutcome::Failed(_)
+    ));
+    assert_eq!(preview.documents[2].outcome, PreviewOutcome::Skipped);
+
+    let report = t.apply_batch(&preview);
+    assert_eq!(statuses(&report), ["created", "failed", "skipped"]);
+    assert_eq!(
+        report.documents[2].message,
+        "skipped: it needs CustomResourceDefinition widgets.example.com (document 2), which did not apply"
+    );
+    assert_eq!(applied_names(&t), ["shop"]);
 }
 
 #[test]
