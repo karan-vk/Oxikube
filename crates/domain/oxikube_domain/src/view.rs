@@ -62,8 +62,7 @@ pub use crd::{
     CrdConversion, CrdNames, CrdSummary, CrdVersionSummary, PrinterColumn, crd_aliases_text,
     crd_versions_text, version_order,
 };
-
-pub use pub use endpoints::{
+pub use endpoints::{
     EndpointPort, EndpointSliceSummary, EndpointSummary, EndpointTarget, EndpointsAddress,
     EndpointsSummary, ReadyCounts, SERVICE_NAME_LABEL, ready_counts,
 };
