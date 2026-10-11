@@ -146,6 +146,7 @@ fn render(light: bool) -> anyhow::Result<RgbaImage> {
             columns: Arc::new(CoreColumns::new()),
             dispatcher: Rc::new(Ignore),
             exec: None,
+            scale: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;
