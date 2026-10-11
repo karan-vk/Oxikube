@@ -161,7 +161,7 @@ pub(crate) fn sub<'a>(v: JsonRef<'a>, key: &str) -> JsonRef<'a> {
 }
 
 /// `v[key]` when it is a JSON object.
-pub(crate) fn obj_of<'a>(v: JsonRef<'a>, key: &str) -> Option<JsonRef<'a>> {
+fn obj_of<'a>(v: JsonRef<'a>, key: &str) -> Option<JsonRef<'a>> {
     v.get(key).filter(|x| x.is_object())
 }
 
@@ -188,7 +188,7 @@ fn i64_of(v: JsonRef<'_>, key: &str) -> Option<i64> {
 }
 
 /// `v[key]` as a boolean; `false` when absent or not a boolean.
-pub(crate) fn bool_of(v: JsonRef<'_>, key: &str) -> bool {
+fn bool_of(v: JsonRef<'_>, key: &str) -> bool {
     v.get(key).and_then(JsonRef::as_bool).unwrap_or(false)
 }
 
