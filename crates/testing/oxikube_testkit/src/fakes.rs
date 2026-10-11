@@ -82,6 +82,7 @@ mod cluster;
 mod data;
 mod infra;
 mod integration;
+mod merge;
 mod promql_endpoint;
 mod provider;
 mod resource;

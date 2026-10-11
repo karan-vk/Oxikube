@@ -43,6 +43,27 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     // dispatches `view::Open` with the view `port_forwards`, list it here and drop it from
     // `PLACEHOLDER_VERBS` in `tests/k9s.rs`.
     ("resource_table::ToggleWide", CommandId::TABLE_TOGGLE_WIDE),
+    // CronJobs and Jobs (E12-S08): `t` triggers, `s` suspends or, when suspended, resumes.
+    (
+        "resource_table::TriggerSelected",
+        CommandId::CRONJOB_TRIGGER,
+    ),
+    (
+        "resource_table::ToggleSuspendSelected",
+        CommandId::CRONJOB_SUSPEND,
+    ),
+    (
+        "resource_table::ToggleSuspendSelected",
+        CommandId::CRONJOB_RESUME,
+    ),
+    (
+        "resource_table::ToggleSuspendSelected",
+        CommandId::JOB_SUSPEND,
+    ),
+    (
+        "resource_table::ToggleSuspendSelected",
+        CommandId::JOB_RESUME,
+    ),
     // The resource detail's find in the YAML and Describe text (E11-S06). `resource_detail::CloseFind`
     // only closes the field and gives the keys back to the detail, so it is view-local.
     ("resource_detail::Find", CommandId::RESOURCE_FIND),

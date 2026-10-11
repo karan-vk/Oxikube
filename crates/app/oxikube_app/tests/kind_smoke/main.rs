@@ -34,6 +34,7 @@ mod logs_search;
 mod node_shell;
 mod scoped_feeds;
 mod two_clusters;
+mod workloads;
 
 use std::future::Future;
 use std::time::{Duration, Instant};

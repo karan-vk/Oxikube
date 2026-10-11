@@ -107,6 +107,7 @@ const JOB: &[ColumnDef] = &[
     ColumnDef::new("status", "Status", Func(f::job_status)),
     ColumnDef::new("completions", "Completions", Func(f::job_completions)).number(),
     ColumnDef::new("duration", "Duration", Func(f::job_duration)).age(),
+    ColumnDef::new("conditions", "Conditions", Func(f::job_conditions)),
     AGE,
     LABELS,
 ];
@@ -115,6 +116,8 @@ const CRONJOB: &[ColumnDef] = &[
     NAME,
     NAMESPACE,
     ColumnDef::new("schedule", "Schedule", Text("/spec/schedule")),
+    // `kubectl get cronjob` prints the time zone by default (empty: the controller's zone).
+    ColumnDef::new("timezone", "Timezone", Text("/spec/timeZone")),
     ColumnDef::new("suspend", "Suspend", Func(f::cron_suspend)),
     ColumnDef::new("active", "Active", Func(f::cron_active)).number(),
     ColumnDef::new(
@@ -124,7 +127,6 @@ const CRONJOB: &[ColumnDef] = &[
     )
     .age(),
     AGE,
-    ColumnDef::new("timezone", "Timezone", Text("/spec/timeZone")).wide(),
     LABELS,
 ];
 

@@ -13,7 +13,9 @@
 //!
 //! The answers:
 //!
-//! * completed: a toast with the handler's message, if it had one;
+//! * completed: a toast with the handler's message, if it had one, and an "Open" button when the
+//!   handler named an object to go to next (`cronjob::Trigger`: the Job it created; the button
+//!   dispatches `resource::Open` for it);
 //! * needs confirmation: a [`DialogModal`] with the guard's one-line summary; confirming
 //!   dispatches the same command again with the answer, cancelling declines it (audited);
 //! * refused: a toast naming the cluster ([`denial_toast`]). A read-only refusal also pulses the
@@ -28,13 +30,14 @@ use oxikube_app::{
 };
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
+use oxikube_domain::ids::ResourceRef;
 use oxikube_runtime::spawn_kube;
 
 use super::echo::SessionEcho;
 use super::status::ClusterStatusItem;
 use crate::cluster_tab::apply_queued;
 use crate::modal::DialogModal;
-use crate::toast::Toast;
+use crate::toast::{Toast, ToastAction};
 use crate::workspace::Workspace;
 
 /// The toast for a dispatch that did not run.
@@ -55,11 +58,19 @@ pub fn denial_toast(error: &DispatchError) -> Toast {
 /// The title, the confirm button and whether it is styled destructive, for the dialog the guard's
 /// request opens. The posture commands (read-only, colour, presets) ask "Are you sure?" and offer
 /// to turn the protection off; a debug container (E09-S10) is an addition that cannot be undone;
-/// a node shell (E09-S09) says what is being opened, because it creates a privileged pod.
+/// a node shell (E09-S09) says what is being opened, because it creates a privileged pod; the
+/// workload commands (E12-S08) name their verb on the button.
 fn confirm_copy(command: &Command) -> (&'static str, &'static str, bool) {
     match command {
         Command::PodDebug { .. } => ("Add a debug container?", "Add debug container", false),
         Command::NodeShell { .. } => ("Open a shell on the node?", "Open shell", true),
+        Command::CronJobTrigger { .. } => ("Run the CronJob now?", "Trigger", false),
+        Command::CronJobSuspend { .. } | Command::JobSuspend { .. } => {
+            ("Suspend it?", "Suspend", false)
+        }
+        Command::CronJobResume { .. } | Command::JobResume { .. } => {
+            ("Resume it?", "Resume", false)
+        }
         _ => ("Are you sure?", "Turn off", true),
     }
 }
@@ -177,8 +188,9 @@ impl ClusterCommandRunner {
     ) {
         match result {
             Ok(Outcome::Completed(output)) => {
+                let open = output.open_target();
                 if let Some(message) = output.message {
-                    self.toast(Toast::success(message), cx);
+                    self.toast(self.success_toast(message, open), cx);
                 }
             }
             Ok(Outcome::NeedsConfirmation(request)) => self.confirm(command, request, window, cx),
@@ -191,6 +203,23 @@ impl ClusterCommandRunner {
                 self.toast(denial_toast(&error), cx);
             }
         }
+    }
+
+    /// The toast for a command that ran: `message`, with an "Open <Kind>" button when `open` names
+    /// the object to go to next.
+    fn success_toast(&self, message: String, open: Option<ResourceRef>) -> Toast {
+        let toast = Toast::success(message);
+        let Some(target) = open else {
+            return toast;
+        };
+        let runner = self.clone();
+        let label = format!("Open {}", target.gvk.kind);
+        toast.action(ToastAction::new(label, move |window, cx| {
+            let command = Command::ResourceOpen {
+                target: target.clone(),
+            };
+            runner.run(command, window, cx);
+        }))
     }
 
     fn toast(&self, toast: Toast, cx: &mut App) {

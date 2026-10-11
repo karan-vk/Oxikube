@@ -1027,6 +1027,38 @@ pub enum Command {
         #[serde(default)]
         force: bool,
     },
+    /// Run a CronJob now: create a Job from its `spec.jobTemplate` with a generated name and the
+    /// CronJob as its owner (`kubectl create job --from=cronjob/x`, E12-S08).
+    #[serde(rename = "cronjob::Trigger")]
+    CronJobTrigger {
+        /// The CronJob.
+        target: ResourceRef,
+    },
+    /// Stop a CronJob creating Jobs (`spec.suspend: true`).
+    #[serde(rename = "cronjob::Suspend")]
+    CronJobSuspend {
+        /// The CronJob.
+        target: ResourceRef,
+    },
+    /// Let a suspended CronJob create Jobs again (`spec.suspend: false`).
+    #[serde(rename = "cronjob::Resume")]
+    CronJobResume {
+        /// The CronJob.
+        target: ResourceRef,
+    },
+    /// Suspend a Job: its controller deletes the running pods until it is resumed
+    /// (`spec.suspend: true`).
+    #[serde(rename = "job::Suspend")]
+    JobSuspend {
+        /// The Job.
+        target: ResourceRef,
+    },
+    /// Resume a suspended Job (`spec.suspend: false`); a Job that finished cannot be resumed.
+    #[serde(rename = "job::Resume")]
+    JobResume {
+        /// The Job.
+        target: ResourceRef,
+    },
 }
 
 impl Command {
@@ -1175,6 +1207,11 @@ impl Command {
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
             Command::NodeShell { .. } => CommandId::NODE_SHELL,
             Command::NodeUncordon { .. } => CommandId::NODE_UNCORDON,
+            Command::CronJobTrigger { .. } => CommandId::CRONJOB_TRIGGER,
+            Command::CronJobSuspend { .. } => CommandId::CRONJOB_SUSPEND,
+            Command::CronJobResume { .. } => CommandId::CRONJOB_RESUME,
+            Command::JobSuspend { .. } => CommandId::JOB_SUSPEND,
+            Command::JobResume { .. } => CommandId::JOB_RESUME,
             Command::NodeDrain { .. } => CommandId::NODE_DRAIN,
         }
     }
@@ -1259,7 +1296,12 @@ impl Command {
             | Command::NodeCordon { target }
             | Command::NodeShell { target }
             | Command::NodeUncordon { target }
-            | Command::NodeDrain { target, .. } => Some(target),
+            | Command::NodeDrain { target, .. }
+            | Command::CronJobTrigger { target }
+            | Command::CronJobSuspend { target }
+            | Command::CronJobResume { target }
+            | Command::JobSuspend { target }
+            | Command::JobResume { target } => Some(target),
             _ => None,
         }
     }
@@ -1289,6 +1331,24 @@ mod tests {
             Gvk::new("apps", "v1", "Deployment"),
             "prod",
             "api",
+        )
+    }
+
+    fn cronjob() -> ResourceRef {
+        ResourceRef::namespaced(
+            cluster(),
+            Gvk::new("batch", "v1", "CronJob"),
+            "default",
+            "nightly",
+        )
+    }
+
+    fn job() -> ResourceRef {
+        ResourceRef::namespaced(
+            cluster(),
+            Gvk::new("batch", "v1", "Job"),
+            "default",
+            "import",
         )
     }
 
@@ -1613,6 +1673,11 @@ mod tests {
                 target: node(),
                 force: true,
             },
+            Command::CronJobTrigger { target: cronjob() },
+            Command::CronJobSuspend { target: cronjob() },
+            Command::CronJobResume { target: cronjob() },
+            Command::JobSuspend { target: job() },
+            Command::JobResume { target: job() },
         ]
     }
 

@@ -148,7 +148,12 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NodeCordon { target }
         | Command::NodeShell { target }
         | Command::NodeUncordon { target }
-        | Command::NodeDrain { target, .. } => Some(&target.cluster),
+        | Command::NodeDrain { target, .. }
+        | Command::CronJobTrigger { target }
+        | Command::CronJobSuspend { target }
+        | Command::CronJobResume { target }
+        | Command::JobSuspend { target }
+        | Command::JobResume { target } => Some(&target.cluster),
         Command::ClusterNextTab
         | Command::ClusterPreviousTab
         | Command::ClusterSwitchTab { .. }
@@ -242,6 +247,9 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
             context,
         );
     }
+    if let Some(summary) = workload_summary(command, context) {
+        return summary;
+    }
     match command.target() {
         Some(target) => {
             let object = match target.namespace() {
@@ -252,6 +260,35 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
         }
         None => format!("{} on {context}", meta.title),
     }
+}
+
+/// The confirmation text of the workload commands (E12-S08), which say what happens beyond the
+/// name: a trigger creates a Job, a Job's suspend deletes its running pods. `None` for any other
+/// command.
+fn workload_summary(command: &Command, context: &str) -> Option<String> {
+    let label = |target: &ResourceRef| match target.namespace() {
+        Some(ns) => format!("{} {ns}/{}", target.gvk.kind, target.name),
+        None => format!("{} {}", target.gvk.kind, target.name),
+    };
+    Some(match command {
+        Command::CronJobTrigger { target } => format!(
+            "Run {} now on {context}: a Job is created from its job template, as `kubectl create \
+             job --from` does.",
+            label(target)
+        ),
+        Command::CronJobSuspend { target } => format!(
+            "Suspend {} on {context}: it creates no Jobs until it is resumed.",
+            label(target)
+        ),
+        Command::JobSuspend { target } => format!(
+            "Suspend {} on {context}: its running pods are deleted until it is resumed.",
+            label(target)
+        ),
+        Command::CronJobResume { target } | Command::JobResume { target } => {
+            format!("Resume {} on {context}.", label(target))
+        }
+        _ => return None,
+    })
 }
 
 /// The confirmation text of `pod::Debug`: the pod, the image and the target container, and that the

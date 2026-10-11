@@ -52,6 +52,12 @@ impl CommandId {
     pub const CLUSTER_TOGGLE_METRICS: CommandId = CommandId::new("cluster::ToggleMetrics");
     /// `cluster::ToggleReadOnly`: set or toggle a cluster's read-only mode.
     pub const CLUSTER_TOGGLE_READ_ONLY: CommandId = CommandId::new("cluster::ToggleReadOnly");
+    /// `cronjob::Resume`: let a suspended CronJob create Jobs again.
+    pub const CRONJOB_RESUME: CommandId = CommandId::new("cronjob::Resume");
+    /// `cronjob::Suspend`: stop a CronJob creating Jobs.
+    pub const CRONJOB_SUSPEND: CommandId = CommandId::new("cronjob::Suspend");
+    /// `cronjob::Trigger`: run a CronJob now by creating a Job from its template.
+    pub const CRONJOB_TRIGGER: CommandId = CommandId::new("cronjob::Trigger");
     /// `crd::OpenList`: open the list of the cluster's CustomResourceDefinitions.
     pub const CRD_OPEN_LIST: CommandId = CommandId::new("crd::OpenList");
     /// `crd::OpenResources`: open the table of the custom resources a CRD defines.
@@ -105,6 +111,10 @@ impl CommandId {
     pub const JUMP_FORWARD: CommandId = CommandId::new("jump::Forward");
     /// `jump::Last`: go back to the view before the current one (`-` in the jump bar).
     pub const JUMP_LAST: CommandId = CommandId::new("jump::Last");
+    /// `job::Resume`: resume a suspended Job.
+    pub const JOB_RESUME: CommandId = CommandId::new("job::Resume");
+    /// `job::Suspend`: suspend a Job (its pods are deleted until it is resumed).
+    pub const JOB_SUSPEND: CommandId = CommandId::new("job::Suspend");
     /// `keymap::OpenUser`: open the user's `keymap.json`, creating it from a commented template
     /// first when it does not exist.
     pub const KEYMAP_OPEN_USER: CommandId = CommandId::new("keymap::OpenUser");
@@ -473,6 +483,45 @@ pub static COMMANDS: &[CommandMeta] = &[
         group: "apiextensions.k8s.io",
         kind: "CustomResourceDefinition",
     }),
+    // E12-S08. Low risk (a simple confirm): a trigger creates one Job the CronJob owns, a suspend
+    // or resume flips `spec.suspend` and is undone by its sibling. `kubectl create job --from`
+    // and a merge patch; neither is a cascade.
+    CommandMeta::mutation(
+        CommandId::CRONJOB_RESUME,
+        "Resume CronJob",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "CronJob",
+    }),
+    CommandMeta::mutation(
+        CommandId::CRONJOB_SUSPEND,
+        "Suspend CronJob",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "CronJob",
+    }),
+    CommandMeta::mutation(
+        CommandId::CRONJOB_TRIGGER,
+        "Trigger CronJob",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "CronJob",
+    }),
     // The manifest editor (E10-S04) only edits text in this window: a new buffer and the view's
     // own toggles read and change nothing in a cluster. What reaches the cluster goes through
     // `resource::Apply`, which is guarded.
@@ -626,6 +675,30 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    CommandMeta::mutation(
+        CommandId::JOB_RESUME,
+        "Resume Job",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "Job",
+    }),
+    CommandMeta::mutation(
+        CommandId::JOB_SUSPEND,
+        "Suspend Job",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::OfKind {
+        group: "batch",
+        kind: "Job",
+    }),
     // The `:` jump bar's history only moves around the app: they read and change nothing in
     // a cluster, and run in read-only mode. What a typed line does is done by the navigation
     // commands it turns into (`resource::OpenList`, `namespace::Select`, `cluster::Select`, ...).

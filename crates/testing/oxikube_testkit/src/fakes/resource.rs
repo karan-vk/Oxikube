@@ -752,7 +752,8 @@ impl ResourceWriter for FakeResourcePort {
         });
         self.script.patch.next_or_else(|| match &patch.kind {
             // A server-side apply of a whole object: the body is what the store holds afterwards
-            // (no field-ownership bookkeeping). Other patch kinds must be scripted.
+            // (no field-ownership bookkeeping); a merge patch merges into the stored object. Other patch
+            // kinds must be scripted.
             PatchKind::Apply { .. } => {
                 let res = object_from_body(&patch.body, namespace)?;
                 if res.kind != *kind || res.name() != name {
@@ -760,6 +761,20 @@ impl ResourceWriter for FakeResourcePort {
                         "{PORT}: the applied object is not {kind} {name}"
                     )));
                 }
+                if !options.dry_run {
+                    self.insert(res.clone());
+                }
+                Ok(res)
+            }
+            // A JSON merge patch of a stored object: the merged object is what the store holds
+            // afterwards (a dry run stores nothing).
+            PatchKind::Merge => {
+                let live = self
+                    .find(kind, namespace, name)
+                    .ok_or_else(|| OxiError::not_found(format!("{kind} {name} not found")))?;
+                let mut merged = live.to_value();
+                super::merge::merge_patch(&mut merged, &patch.body);
+                let res = object_from_body(&merged, namespace)?;
                 if !options.dry_run {
                     self.insert(res.clone());
                 }

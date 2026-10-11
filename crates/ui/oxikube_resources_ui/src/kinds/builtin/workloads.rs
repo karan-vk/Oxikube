@@ -1,5 +1,6 @@
 //! Workloads: Pods, Deployments, DaemonSets, StatefulSets, ReplicaSets, ReplicationControllers,
-//! Jobs, CronJobs.
+//! Jobs, CronJobs. Jobs and CronJobs have their own modules (`kinds::job`, `kinds::cronjob`,
+//! E12-S08), which register them.
 
 use gpui::App;
 use oxikube_app::Section;
@@ -20,8 +21,6 @@ const WORKLOADS: &[Builtin] = &[
         "replicationcontrollers",
         "Replication Controllers",
     ),
-    namespaced("batch", "v1", "Job", "jobs", "Jobs"),
-    namespaced("batch", "v1", "CronJob", "cronjobs", "CronJobs"),
 ];
 
 /// A pod's own actions, as E08 and E09 ship them: logs, shell, attach, debug, port forward.
@@ -38,4 +37,6 @@ pub fn init(cx: &mut App) {
     register(cx, Section::WORKLOADS, WORKLOADS, |kind| {
         if kind.kind == "Pod" { POD_ACTIONS } else { &[] }
     });
+    crate::kinds::job::init(cx);
+    crate::kinds::cronjob::init(cx);
 }

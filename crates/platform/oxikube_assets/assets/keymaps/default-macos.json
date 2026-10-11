@@ -199,8 +199,9 @@
       "/": "resource_table::FocusFilter",
       // k9s verbs on the cursor row (E11-S07): y the YAML, d describe, e edit, l logs (a pod's, or
       // a workload's pods), shift-f forward a port, f the active forwards. `ctrl-w` shows or hides
-      // the wide columns. `s` above is a shell on a Pod or a Node; E12 binds scale on workloads
-      // with a `kind == Deployment` section.
+      // the wide columns. `s` above is a shell on a Pod or a Node; the kind-scoped sections below
+      // rebind it (CronJobs and Jobs suspend, E12-S08; E12 binds scale on workloads with a
+      // `kind == Deployment` section).
       "y": "resource_table::ViewYaml",
       "d": "resource_table::ViewDescribe",
       "e": "resource_table::EditSelected",
@@ -213,6 +214,23 @@
       "[": "jump::Back",
       "]": "jump::Forward",
       "-": "jump::Last"
+    }
+  },
+  {
+    // CronJobs (E12-S08), k9s: t runs the CronJob now (a Job from its template, confirmed first),
+    // s suspends it, or resumes it when it is suspended. Scoped by kind, so s stays a shell on
+    // pods and nodes; both act on the cursor row.
+    "context": "ResourceTable && !Editing && kind == CronJob",
+    "bindings": {
+      "t": "resource_table::TriggerSelected",
+      "s": "resource_table::ToggleSuspendSelected"
+    }
+  },
+  {
+    // Jobs (E12-S08): s suspends the Job (its pods are deleted until it is resumed), or resumes it.
+    "context": "ResourceTable && !Editing && kind == Job",
+    "bindings": {
+      "s": "resource_table::ToggleSuspendSelected"
     }
   },
   {

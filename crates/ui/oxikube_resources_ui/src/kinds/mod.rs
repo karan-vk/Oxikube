@@ -20,6 +20,7 @@
 //! | `specs` | [`KindSpecs`]: the GPUI global, registration and lookups (`kind_for` never fails) |
 //! | `sidebar` | publishing the registry's sections and entries to the cluster sidebar |
 //! | `config` | the Config section's smaller kinds (E12-S12): quota bars, limit tables, autoscalers, budgets, classes, leases and the admission kinds, each a [`ConfigPanel`] over a domain view-model |
+//! | `job`, `cronjob` | Jobs and CronJobs (E12-S08): the kind specs and their row actions, [`row_actions`] |
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
 //! | [`crd`] | the CustomResourceDefinition kind (E12-S17): its spec and the definition panel of its detail |
 //!
@@ -46,7 +47,9 @@
 mod builtin;
 mod config;
 pub mod crd;
+pub mod cronjob;
 mod detail;
+pub mod job;
 mod sidebar;
 mod spec;
 mod specs;
@@ -60,6 +63,16 @@ pub use spec::KindSpec;
 pub use specs::KindSpecs;
 
 use gpui::App;
+use oxikube_app::RowActionSpec;
+
+/// The row actions the kind modules add, for the binary's row action registry: a kind story
+/// appends its module's `row_actions()` here, so the binary never changes with it.
+pub fn row_actions() -> Vec<RowActionSpec> {
+    job::row_actions()
+        .into_iter()
+        .chain(cronjob::row_actions())
+        .collect()
+}
 
 /// Registers the built-in kinds, section by section, and publishes them to the sidebar. Called by
 /// the crate's `init`, after the workspace's (whose core sections the kinds fill).

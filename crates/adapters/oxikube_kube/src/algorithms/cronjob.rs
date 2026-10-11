@@ -5,7 +5,8 @@
 // on a `ResourcePort` instead of a kube `Api`, returns the created `Job`, takes the write options
 // (dry run, field manager), truncates the generated-name prefix to what the server keeps, keeps the
 // job template's labels and annotations and adds kubectl's `cronjob.kubernetes.io/instantiate`
-// annotation, and is pinned by exact-JSON tests.
+// annotation, and is pinned by exact-JSON tests. The manifest builder moved to
+// `oxikube_domain::build` (E12-S08) so the app builds the same Job; this file keeps the create.
 //
 // Copyright (c) 2021 Deepu K Sasidharan
 //
@@ -29,28 +30,18 @@
 
 //! `trigger_cronjob`: run a CronJob now by creating a Job from its template.
 //!
-//! The Job is `spec.jobTemplate` verbatim (its `spec`, labels and annotations), named by the
-//! API server from `generateName: <cronjob>-manual-`, annotated
-//! [`cronjob.kubernetes.io/instantiate: manual`](INSTANTIATE_ANNOTATION) as kubectl does and
-//! owned by the CronJob (`controller` and `blockOwnerDeletion` true), so deleting the CronJob
-//! deletes the Jobs it triggered and the CronJob's history limits apply to them.
+//! The manifest is [`oxikube_domain::build::job_from_cronjob`] (the template verbatim, a
+//! `generateName: <cronjob>-manual-`, kubectl's instantiate annotation and an owner reference to
+//! the CronJob); this function reads the CronJob and creates the Job.
 
-use oxikube_domain::json::JsonRef;
-use oxikube_domain::{OxiError, OxiResult, Resource};
+use oxikube_domain::build::job_from_cronjob;
+use oxikube_domain::{OxiResult, Resource};
 use oxikube_ports::{ResourcePort, WriteOptions};
-use serde_json::{Map, Value, json};
 use tracing::debug;
 
 use super::api::{cronjob_gvk, job_gvk};
 
-/// The annotation `kubectl create job --from=cronjob/x` puts on the Jobs it creates.
-pub const INSTANTIATE_ANNOTATION: &str = "cronjob.kubernetes.io/instantiate";
-
-/// The most characters of `generateName` the API server keeps (63 minus its 5 random ones).
-const MAX_GENERATE_NAME: usize = 58;
-
-/// What follows the CronJob's name in the generated name.
-const SUFFIX: &str = "-manual-";
+pub use oxikube_domain::build::INSTANTIATE_ANNOTATION;
 
 /// Creates a Job from the CronJob `namespace/name`'s job template and returns it.
 ///
@@ -78,79 +69,4 @@ pub async fn trigger_cronjob(
     );
     port.create(&job_gvk(), Some(namespace), &job, options)
         .await
-}
-
-/// The Job manifest `kubectl create job --from` builds for `cronjob`.
-///
-/// Pure: no clock and no randomness (the server generates the name suffix).
-///
-/// # Errors
-///
-/// `Validation` if the CronJob has no `spec.jobTemplate.spec`, no uid, or its template labels or
-/// annotations are not objects.
-pub fn job_from_cronjob(cronjob: &Resource) -> OxiResult<Value> {
-    // A user action on one CronJob, so decoding its template to a tree is fine.
-    let template_value = cronjob.get("/spec/jobTemplate").map(JsonRef::to_value);
-    let template = template_value.as_ref().and_then(Value::as_object);
-    let Some(spec) = template
-        .and_then(|t| t.get("spec"))
-        .filter(|s| s.is_object())
-    else {
-        return Err(OxiError::validation(format!(
-            "cronjob {} has no job template",
-            cronjob.name()
-        )));
-    };
-    let Some(uid) = cronjob.meta.uid.as_deref() else {
-        return Err(OxiError::validation(format!(
-            "cronjob {} has no uid to own the job",
-            cronjob.name()
-        )));
-    };
-    let template_meta = template.and_then(|t| t.get("metadata"));
-    let string_map = |key: &str| -> OxiResult<Map<String, Value>> {
-        match template_meta.and_then(|m| m.get(key)) {
-            None | Some(Value::Null) => Ok(Map::new()),
-            Some(Value::Object(map)) => Ok(map.clone()),
-            Some(_) => Err(OxiError::validation(format!(
-                "cronjob {} has a job template with invalid {key}",
-                cronjob.name()
-            ))),
-        }
-    };
-    let mut annotations = string_map("annotations")?;
-    annotations.insert(INSTANTIATE_ANNOTATION.to_owned(), json!("manual"));
-    let mut metadata = json!({
-        "generateName": generate_name(cronjob.name()),
-        "annotations": annotations,
-        "ownerReferences": [{
-            "apiVersion": "batch/v1",
-            "kind": "CronJob",
-            "name": cronjob.name(),
-            "uid": uid,
-            "controller": true,
-            "blockOwnerDeletion": true,
-        }],
-    });
-    if let Some(namespace) = cronjob.namespace() {
-        metadata["namespace"] = json!(namespace);
-    }
-    let labels = string_map("labels")?;
-    if !labels.is_empty() {
-        metadata["labels"] = Value::Object(labels);
-    }
-    Ok(json!({
-        "apiVersion": "batch/v1",
-        "kind": "Job",
-        "metadata": metadata,
-        "spec": spec,
-    }))
-}
-
-/// `<cronjob>-manual-`, with the CronJob's name cut so the whole prefix survives the server's
-/// own truncation (a 52-character CronJob name would otherwise lose `-manual-`).
-fn generate_name(cronjob: &str) -> String {
-    let keep = MAX_GENERATE_NAME - SUFFIX.len();
-    let base: String = cronjob.chars().take(keep).collect();
-    format!("{base}{SUFFIX}")
 }

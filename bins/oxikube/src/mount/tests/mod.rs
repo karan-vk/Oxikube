@@ -27,6 +27,7 @@ mod resources;
 mod signin;
 mod tail;
 mod terminal;
+mod workloads;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use oxikube_catalog_ui::namespaces::NamespaceSelector;

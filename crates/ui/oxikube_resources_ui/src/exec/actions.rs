@@ -62,7 +62,7 @@ pub fn exec_row_actions() -> Vec<RowActionSpec> {
 }
 
 /// Whether `command` is a row action of a single object (none is bulk): the exec-class ones and
-/// the k9s verbs `l`, `e` and `shift-f` (E11-S07). With several rows selected, the table's key
+/// the k9s verbs `l`, `e` and `shift-f` (E11-S07), and the CronJob and Job verbs `t` and `s` (E12-S08). With several rows selected, the table's key
 /// runs it on the cursor row and says so.
 pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
     matches!(
@@ -75,6 +75,11 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
             | CommandId::WORKLOAD_VIEW_LOGS
             | CommandId::RESOURCE_EDIT
             | CommandId::POD_PORT_FORWARD
+            | CommandId::CRONJOB_TRIGGER
+            | CommandId::CRONJOB_SUSPEND
+            | CommandId::CRONJOB_RESUME
+            | CommandId::JOB_SUSPEND
+            | CommandId::JOB_RESUME
     )
 }
 
@@ -94,6 +99,13 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
         CommandId::POD_DEBUG => Some("Debug is available for Pods"),
         CommandId::POD_VIEW_LOGS | CommandId::WORKLOAD_VIEW_LOGS => {
             Some("Logs are available for Pods, workloads and Services")
+        }
+        CommandId::CRONJOB_TRIGGER => Some("Trigger is available for CronJobs"),
+        CommandId::CRONJOB_SUSPEND | CommandId::CRONJOB_RESUME => {
+            Some("Suspend and Resume are available for CronJobs")
+        }
+        CommandId::JOB_SUSPEND | CommandId::JOB_RESUME => {
+            Some("Suspend and Resume are available for Jobs")
         }
         CommandId::RESOURCE_EDIT => Some("Editing is not available yet"),
         CommandId::POD_PORT_FORWARD => Some(PORT_FORWARDING_UNAVAILABLE),

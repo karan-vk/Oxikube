@@ -91,12 +91,19 @@ Entries:
   `src/network/mod.rs` @ c303673 (v2.1.1). Reworked so the restart timestamp is an argument and
   the result is an `oxikube_ports::Patch`; pinned by exact-JSON tests. The MIT notice and
   permission text are the file header (same text as below).
+- `crates/domain/oxikube_domain/src/build/cronjob.rs`: the manifest half of the same port
+  (`job_from_cronjob`, E12-S08): the Job built from `spec.jobTemplate` with `generateName:
+  <cronjob>-manual-`, the `cronjob.kubernetes.io/instantiate` annotation and an owner reference to
+  the CronJob. Moved here from `algorithms/cronjob.rs` so the app's `cronjob::Trigger` handler
+  and the kube adapter build the same Job; pure, with the generated-name prefix cut to the
+  server's limit. The MIT notice and permission text are the file header (same text as below).
+  `build/suspend.rs` (the `spec.suspend` merge patch) is the one-line `CronJobSuspend` patch of
+  `src/network/mod.rs` rewritten, with no kdash code in it.
 - `crates/adapters/oxikube_kube/src/algorithms/cronjob.rs`: ports `trigger_cronjob` (clone
   `spec.jobTemplate` into a `Job` with `generateName: <cronjob>-manual-`, the
   `cronjob.kubernetes.io/instantiate` annotation and an owner reference to the CronJob) from
   `src/network/mod.rs` @ c303673 (v2.1.1). Reworked to run on a `ResourcePort`, return the created
-  Job, take write options (dry run), cut the generated-name prefix to the server's limit and
-  report a CronJob with no template or uid as a validation error. The MIT notice and permission
+  Job and take write options (dry run); the manifest builder is `oxikube_domain::build` (above). The MIT notice and permission
   text are the file header (same text as below).
 - `crates/domain/oxikube_domain/src/age.rs` (test module `kdash_corpus`): test inputs and expected
   strings from `src/app/utils.rs` (`test_to_age`, `test_to_age_secs`), and the `duration_to_age`

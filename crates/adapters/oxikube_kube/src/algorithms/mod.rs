@@ -40,11 +40,12 @@ mod rollout;
 #[cfg(test)]
 mod tests;
 
-pub use cronjob::{INSTANTIATE_ANNOTATION, job_from_cronjob, trigger_cronjob};
+pub use cronjob::{INSTANTIATE_ANNOTATION, trigger_cronjob};
 pub use drain::{
     BlockReason, BlockedPod, DrainOptions, DrainPlan, DrainProgress, DrainSummary, PodRef,
     SkipReason, SkippedPod, drain, drain_to_completion, plan_drain,
 };
+pub use oxikube_domain::build::job_from_cronjob;
 pub use rollout::{
     REVISION_ANNOTATION, RolloutRevision, RolloutUndo, rollout_history, rollout_undo,
 };
