@@ -32,8 +32,8 @@ pub(crate) fn kind(
     }
 }
 
-/// The kinds the tests serve: pods, services and their endpoints, replica sets, deployments, secrets, nodes, the Widget custom
-/// kind and the CRD kind.
+/// The kinds the tests serve: pods, services and their endpoints, replica sets, deployments,
+/// secrets, nodes, the Widget custom kind and the CRD kind.
 pub(crate) fn kinds() -> Vec<ResourceKind> {
     vec![
         kind("", "v1", "Pod", "pods", true),

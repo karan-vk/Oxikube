@@ -25,6 +25,14 @@ pub struct ReadyCounts {
 }
 
 impl ReadyCounts {
+    /// `ready` of `total` endpoints are ready.
+    fn of(total: usize, ready: usize) -> Self {
+        Self {
+            ready: u32::try_from(ready).unwrap_or(u32::MAX),
+            not_ready: u32::try_from(total - ready).unwrap_or(u32::MAX),
+        }
+    }
+
     /// Every endpoint counted.
     pub const fn total(self) -> u32 {
         self.ready + self.not_ready
@@ -92,10 +100,6 @@ pub struct EndpointSummary {
     pub terminating: bool,
     /// `nodeName`.
     pub node: Option<Arc<str>>,
-    /// `zone`.
-    pub zone: Option<Arc<str>>,
-    /// `hostname`.
-    pub hostname: Option<Arc<str>>,
     /// `targetRef`.
     pub target: Option<EndpointTarget>,
 }
@@ -115,8 +119,6 @@ impl EndpointSummary {
             serving: flag("serving").unwrap_or(ready),
             terminating: flag("terminating").unwrap_or(false),
             node: arc_of(v, "nodeName"),
-            zone: arc_of(v, "zone"),
-            hostname: arc_of(v, "hostname"),
             target: v.get("targetRef").and_then(EndpointTarget::from_json),
         }
     }
@@ -134,6 +136,17 @@ pub struct EndpointPort {
 }
 
 impl EndpointPort {
+    fn from_json(v: JsonRef<'_>) -> Self {
+        Self {
+            name: arc_of(v, "name"),
+            port: v
+                .get("port")
+                .and_then(JsonRef::as_i64)
+                .and_then(|n| u16::try_from(n).ok()),
+            protocol: arc_of(v, "protocol").unwrap_or_else(|| Arc::from("TCP")),
+        }
+    }
+
     /// `8080/TCP`, or the protocol alone for a slice port without a number.
     pub fn text(&self) -> String {
         match self.port {
@@ -180,14 +193,7 @@ impl EndpointSliceSummary {
             address_type: arc_of(json, "addressType").unwrap_or_else(|| Arc::from("IPv4")),
             ports: arr_of(json, "ports")
                 .iter()
-                .map(|p| EndpointPort {
-                    name: arc_of(p, "name"),
-                    port: p
-                        .get("port")
-                        .and_then(JsonRef::as_i64)
-                        .and_then(|n| u16::try_from(n).ok()),
-                    protocol: arc_of(p, "protocol").unwrap_or_else(|| Arc::from("TCP")),
-                })
+                .map(EndpointPort::from_json)
                 .collect(),
             endpoints: arr_of(json, "endpoints")
                 .iter()
@@ -198,11 +204,10 @@ impl EndpointSliceSummary {
 
     /// Ready and not-ready endpoints of this slice.
     pub fn ready_counts(&self) -> ReadyCounts {
-        let ready = self.endpoints.iter().filter(|e| e.ready).count();
-        ReadyCounts {
-            ready: u32::try_from(ready).unwrap_or(u32::MAX),
-            not_ready: u32::try_from(self.endpoints.len() - ready).unwrap_or(u32::MAX),
-        }
+        ReadyCounts::of(
+            self.endpoints.len(),
+            self.endpoints.iter().filter(|e| e.ready).count(),
+        )
     }
 
     /// The ports as the `PORTS` column prints them.
@@ -273,14 +278,7 @@ impl EndpointsSummary {
                 }
             }
             for p in arr_of(subset, "ports") {
-                let port = EndpointPort {
-                    name: arc_of(p, "name"),
-                    port: p
-                        .get("port")
-                        .and_then(JsonRef::as_i64)
-                        .and_then(|n| u16::try_from(n).ok()),
-                    protocol: arc_of(p, "protocol").unwrap_or_else(|| Arc::from("TCP")),
-                };
+                let port = EndpointPort::from_json(p);
                 if !ports.contains(&port) {
                     ports.push(port);
                 }
@@ -296,10 +294,9 @@ impl EndpointsSummary {
 
     /// Ready and not-ready addresses.
     pub fn ready_counts(&self) -> ReadyCounts {
-        let ready = self.addresses.iter().filter(|a| a.ready).count();
-        ReadyCounts {
-            ready: u32::try_from(ready).unwrap_or(u32::MAX),
-            not_ready: u32::try_from(self.addresses.len() - ready).unwrap_or(u32::MAX),
-        }
+        ReadyCounts::of(
+            self.addresses.len(),
+            self.addresses.iter().filter(|a| a.ready).count(),
+        )
     }
 }

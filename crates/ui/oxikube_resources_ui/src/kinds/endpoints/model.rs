@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use oxikube_app::columns::Tone;
 use oxikube_domain::Resource;
-use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 use oxikube_domain::view::{
     EndpointSliceSummary, EndpointSummary, EndpointTarget, EndpointsSummary, ReadyCounts,
 };
@@ -41,10 +41,7 @@ pub(super) struct EndpointsView {
 
 impl EndpointsView {
     /// The view of an EndpointSlice or an `Endpoints` object; `None` for any other kind.
-    pub(super) fn of(
-        resource: &Resource,
-        cluster: &oxikube_domain::ids::ClusterId,
-    ) -> Option<Self> {
+    pub(super) fn of(resource: &Resource, cluster: &ClusterId) -> Option<Self> {
         if let Ok(slice) = EndpointSliceSummary::from_resource(resource) {
             let service = slice
                 .service
@@ -100,11 +97,7 @@ impl EndpointsView {
     }
 }
 
-fn service_ref(
-    cluster: &oxikube_domain::ids::ClusterId,
-    namespace: &Option<Arc<str>>,
-    name: &Arc<str>,
-) -> ResourceRef {
+fn service_ref(cluster: &ClusterId, namespace: &Option<Arc<str>>, name: &Arc<str>) -> ResourceRef {
     ResourceRef::new(
         cluster.clone(),
         Gvk::new("", "v1", "Service"),
@@ -115,7 +108,7 @@ fn service_ref(
 
 fn slice_row(
     endpoint: &EndpointSummary,
-    cluster: &oxikube_domain::ids::ClusterId,
+    cluster: &ClusterId,
     namespace: &Option<Arc<str>>,
 ) -> EndpointRow {
     let (state, tone) = if endpoint.terminating {
@@ -145,7 +138,7 @@ fn slice_row(
 /// A link to what an endpoint points at: a pod, in the endpoint's namespace unless it names one.
 fn link(
     target: &EndpointTarget,
-    cluster: &oxikube_domain::ids::ClusterId,
+    cluster: &ClusterId,
     namespace: &Option<Arc<str>>,
 ) -> Option<(String, ResourceRef)> {
     if &*target.kind != "Pod" {

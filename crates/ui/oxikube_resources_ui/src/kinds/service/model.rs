@@ -9,11 +9,12 @@ use std::sync::Arc;
 use jiff::Timestamp;
 use oxikube_app::columns::Tone;
 use oxikube_app::store::StoreObject;
-use oxikube_app::{ColumnId, ColumnProvider};
-use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_app::{ColumnId, ColumnProvider, ServiceBackends};
+use oxikube_domain::Resource;
+use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::view::{
-    EndpointSliceSummary, NoSelector, ReadyCounts, ServiceSummary, ServiceType, ready_counts,
-    resolve_target_port,
+    EndpointSliceSummary, NoSelector, ReadyCounts, ServiceSummary, ServiceType, TargetPort,
+    ready_counts, resolve_target_port,
 };
 
 /// The most EndpointSlices listed.
@@ -22,9 +23,10 @@ pub(super) const MAX_SLICES: usize = 20;
 pub(super) const MAX_PODS: usize = 50;
 
 /// How one of the panel's two feeds stands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) enum FeedStatus {
     /// The store has not answered yet.
+    #[default]
     Loading,
     /// Answered (the list may be empty).
     Ready,
@@ -126,7 +128,7 @@ pub(super) struct Inputs<'a> {
 impl ServiceView {
     pub(super) fn build(inputs: &Inputs<'_>) -> Self {
         let Inputs { service, .. } = inputs;
-        let pod_resources: Vec<&oxikube_domain::Resource> = inputs
+        let pod_resources: Vec<&Resource> = inputs
             .pods
             .unwrap_or_default()
             .iter()
@@ -146,7 +148,7 @@ impl ServiceView {
             .map(|port| {
                 let resolved = resolve_target_port(port, pod_resources.iter().copied());
                 let target = match (&port.target_port, resolved) {
-                    (oxikube_domain::view::TargetPort::Named(name), Some(n)) => {
+                    (TargetPort::Named(name), Some(n)) => {
                         format!("{name} → {n}")
                     }
                     (target, _) => target.to_string(),
@@ -264,7 +266,7 @@ fn slice_row(service: &ResourceRef, slice: &EndpointSliceSummary) -> SliceRow {
     SliceRow {
         target: ResourceRef::new(
             service.cluster.clone(),
-            Gvk::new("discovery.k8s.io", "v1", "EndpointSlice"),
+            ServiceBackends::slice_gvk(),
             slice.namespace.as_deref().map(Arc::from),
             slice.name.clone(),
         ),
@@ -282,7 +284,7 @@ fn pod_row(inputs: &Inputs<'_>, object: &StoreObject) -> PodRow {
     PodRow {
         target: ResourceRef::new(
             inputs.target.cluster.clone(),
-            Gvk::new("", "v1", "Pod"),
+            ServiceBackends::pod_gvk(),
             meta.namespace.clone(),
             meta.name.clone(),
         ),

@@ -15,7 +15,7 @@ use oxikube_domain::view::ServiceSummary;
 use oxikube_runtime::notify_coalesced;
 
 use super::feeds::Feeds;
-use super::model::{FeedStatus, Inputs, ServiceView};
+use super::model::{Inputs, ServiceView};
 use crate::detail::DetailView;
 
 /// The panel of one Service's detail. See the [module docs](self).
@@ -75,7 +75,7 @@ impl ServicePanel {
                 detail
                     .resource()
                     .and_then(|r| ServiceSummary::from_resource(r).ok()),
-                detail.followed_store(),
+                detail.connected_store(),
             )
         };
         self.target = Some(target);
@@ -106,24 +106,19 @@ impl ServicePanel {
         };
         let (columns, now) = {
             let detail = detail.read(cx);
-            (detail.deps().columns.clone(), detail.clock())
+            (detail.deps().columns.clone(), detail.now())
         };
         let pods = self
             .feeds
             .selects_pods
             .then_some(self.feeds.pods.as_slice());
-        let none_loading = FeedStatus::Ready;
         let view = ServiceView::build(&Inputs {
             service: summary,
             target,
             slices: &self.feeds.slices,
             slices_status: &self.feeds.slices_status,
             pods,
-            pods_status: if self.feeds.selects_pods {
-                &self.feeds.pods_status
-            } else {
-                &none_loading
-            },
+            pods_status: &self.feeds.pods_status,
             columns: columns.as_ref(),
             now,
         });
@@ -160,41 +155,30 @@ impl ServicePanel {
 
     /// The Service port buttons offer "Open in browser" for: sends `service::OpenInBrowser`.
     pub fn open_in_browser(&mut self, port: u16, cx: &mut Context<Self>) {
-        let Some(detail) = self.detail.upgrade() else {
-            return;
-        };
-        let Some(target) = self.target.clone() else {
-            return;
-        };
-        let command = Command::ServiceOpenInBrowser {
-            target,
-            port: Some(port),
-        };
-        let dispatcher = detail.read(cx).deps().dispatcher.clone();
-        dispatcher.dispatch(command, cx);
+        if let Some(target) = self.target.clone() {
+            let port = Some(port);
+            self.dispatch(Command::ServiceOpenInBrowser { target, port }, cx);
+        }
     }
 
     /// "Show pods": sends `service::ShowPods`, which opens the Pods table filtered by the
     /// Service's selector.
     pub fn show_pods(&mut self, cx: &mut Context<Self>) {
-        let Some(detail) = self.detail.upgrade() else {
-            return;
-        };
-        let Some(target) = self.target.clone() else {
-            return;
-        };
-        let command = Command::ServiceShowPods { target };
-        let dispatcher = detail.read(cx).deps().dispatcher.clone();
-        dispatcher.dispatch(command, cx);
+        if let Some(target) = self.target.clone() {
+            self.dispatch(Command::ServiceShowPods { target }, cx);
+        }
     }
 
     /// Opens the detail of a pod or EndpointSlice row: sends `resource::Open`.
     pub(super) fn open_object(&mut self, target: ResourceRef, cx: &mut Context<Self>) {
-        let Some(detail) = self.detail.upgrade() else {
-            return;
-        };
-        let dispatcher = detail.read(cx).deps().dispatcher.clone();
-        dispatcher.dispatch(Command::ResourceOpen { target }, cx);
+        self.dispatch(Command::ResourceOpen { target }, cx);
+    }
+
+    fn dispatch(&self, command: Command, cx: &mut Context<Self>) {
+        if let Some(detail) = self.detail.upgrade() {
+            let dispatcher = detail.read(cx).deps().dispatcher.clone();
+            dispatcher.dispatch(command, cx);
+        }
     }
 
     /// The view as last built (tests read it).

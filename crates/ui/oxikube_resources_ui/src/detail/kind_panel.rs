@@ -3,7 +3,7 @@
 //! object the panel reads.
 
 use gpui::{AnyView, Context, Window};
-use oxikube_app::store::{ResourceStore, StoreObject};
+use oxikube_app::store::StoreObject;
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{Gvk, ResourceRef, Scope};
@@ -72,17 +72,6 @@ impl DetailView {
     /// subscribes to its own feeds and sends its buttons' commands through these.
     pub(crate) fn deps(&self) -> &DetailDeps {
         &self.deps
-    }
-
-    /// The store of the object's cluster while the session is connected: where a kind's panel
-    /// subscribes to the objects it lists beside the one shown.
-    pub(crate) fn followed_store(&self) -> Option<ResourceStore> {
-        self.connected_store()
-    }
-
-    /// The time ages are read against.
-    pub(crate) fn clock(&self) -> jiff::Timestamp {
-        self.now()
     }
 
     /// The kind's own panel, when its spec has one and it was drawn.

@@ -13,6 +13,7 @@ use oxikube_app::{PodsPlan, ServiceBackends};
 use super::model::FeedStatus;
 
 /// What the feeds hold. Cheap to read; all the work happens in [`Feeds::drain`].
+#[derive(Default)]
 pub(super) struct Feeds {
     store: Option<ResourceStore>,
     /// The Service the subscriptions are for: namespace, name and selector text.
@@ -25,22 +26,6 @@ pub(super) struct Feeds {
     pub(super) pods_status: FeedStatus,
     /// Whether the Service selects pods (a pod feed exists, or is being waited for).
     pub(super) selects_pods: bool,
-}
-
-impl Default for Feeds {
-    fn default() -> Self {
-        Self {
-            store: None,
-            key: None,
-            slices_sub: None,
-            pods_sub: None,
-            slices: Vec::new(),
-            pods: Vec::new(),
-            slices_status: FeedStatus::Loading,
-            pods_status: FeedStatus::Loading,
-            selects_pods: false,
-        }
-    }
 }
 
 impl Feeds {

@@ -2,10 +2,11 @@
 //! object's detail). Both are capped by the model.
 
 use gpui::{
-    AnyElement, Context, InteractiveElement as _, IntoElement as _, ParentElement as _,
+    AnyElement, Context, InteractiveElement as _, IntoElement as _, ParentElement as _, Stateful,
     StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use oxikube_app::columns::Tone;
+use oxikube_domain::ids::ResourceRef;
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{Tokens, u};
 
@@ -22,34 +23,27 @@ impl ServicePanel {
         tones: &ToneColors,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        const TITLE: &str = "Endpoint slices";
         match &view.slices {
-            Slices::Loading => section(tokens, "Endpoint slices", 0)
-                .child(note(tokens, "Loading…"))
+            Slices::Loading => noted(tokens, TITLE, "Loading…"),
+            Slices::Failed(why) => noted(
+                tokens,
+                TITLE,
+                &format!("Endpoint slices cannot be read: {why}"),
+            ),
+            Slices::Listed { rows, .. } if rows.is_empty() => noted(
+                tokens,
+                TITLE,
+                "No endpoint slices: nothing serves this service.",
+            ),
+            Slices::Listed { rows, more, .. } => section(tokens, TITLE, rows.len() + more)
+                .children(
+                    rows.iter()
+                        .enumerate()
+                        .map(|(i, row)| self.slice_row(row, i, tokens, tones, cx)),
+                )
+                .children((*more > 0).then(|| note(tokens, &format!("and {more} more"))))
                 .into_any_element(),
-            Slices::Failed(why) => section(tokens, "Endpoint slices", 0)
-                .child(note(
-                    tokens,
-                    &format!("Endpoint slices cannot be read: {why}"),
-                ))
-                .into_any_element(),
-            Slices::Listed { rows, more, .. } if rows.is_empty() => {
-                section(tokens, "Endpoint slices", 0)
-                    .child(note(
-                        tokens,
-                        "No endpoint slices: nothing serves this service.",
-                    ))
-                    .into_any_element()
-            }
-            Slices::Listed { rows, more, .. } => {
-                section(tokens, "Endpoint slices", rows.len() + more)
-                    .children(
-                        rows.iter()
-                            .enumerate()
-                            .map(|(i, row)| self.slice_row(row, i, tokens, tones, cx)),
-                    )
-                    .children((*more > 0).then(|| note(tokens, &format!("and {more} more"))))
-                    .into_any_element()
-            }
         }
     }
 
@@ -62,7 +56,6 @@ impl ServicePanel {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = tokens.colors;
-        let target = row.target.clone();
         let tone = if row.counts.not_ready == 0 && row.counts.ready > 0 {
             Tone::Ok
         } else if row.counts.ready == 0 {
@@ -70,23 +63,8 @@ impl ServicePanel {
         } else {
             Tone::Warn
         };
-        h_flex()
-            .id(("service-slice", index))
-            .debug_selector(move || format!("service-slice-{index}"))
-            .items_center()
-            .gap(u(tokens.spacing.md))
-            .px(u(tokens.spacing.lg))
-            .py(u(px(1.)))
-            .cursor_pointer()
-            .hover(|style| style.bg(colors.element_hover))
-            .on_click(cx.listener(move |this, _, _, cx| this.open_object(target.clone(), cx)))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .child(row.name.to_string()),
-            )
+        link_row("service-slice", index, row.target.clone(), tokens, cx)
+            .child(name_cell(&row.name))
             .child(cell(row.address_type.clone(), 56., colors.text_muted))
             .child(cell(row.ports.clone(), 90., colors.text_muted))
             .child(
@@ -108,28 +86,18 @@ impl ServicePanel {
         tones: &ToneColors,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        const TITLE: &str = "Backing pods";
         match &view.pods {
-            Pods::None(reason) => section(tokens, "Backing pods", 0)
-                .child(
-                    div()
-                        .debug_selector(|| "service-no-pods".to_owned())
-                        .child(note(tokens, reason.explanation())),
-                )
-                .into_any_element(),
-            Pods::Loading => section(tokens, "Backing pods", 0)
-                .child(note(tokens, "Loading…"))
-                .into_any_element(),
-            Pods::Failed(why) => section(tokens, "Backing pods", 0)
-                .child(note(tokens, &format!("Pods cannot be read: {why}")))
-                .into_any_element(),
-            Pods::Listed { rows, .. } if rows.is_empty() => section(tokens, "Backing pods", 0)
-                .child(
-                    div()
-                        .debug_selector(|| "service-pods-empty".to_owned())
-                        .child(note(tokens, "No pod matches the selector.")),
-                )
-                .into_any_element(),
-            Pods::Listed { rows, more, total } => section(tokens, "Backing pods", *total)
+            Pods::None(reason) => noted_as("service-no-pods", tokens, TITLE, reason.explanation()),
+            Pods::Loading => noted(tokens, TITLE, "Loading…"),
+            Pods::Failed(why) => noted(tokens, TITLE, &format!("Pods cannot be read: {why}")),
+            Pods::Listed { rows, .. } if rows.is_empty() => noted_as(
+                "service-pods-empty",
+                tokens,
+                TITLE,
+                "No pod matches the selector.",
+            ),
+            Pods::Listed { rows, more, total } => section(tokens, TITLE, *total)
                 .children(
                     rows.iter()
                         .enumerate()
@@ -149,27 +117,60 @@ impl ServicePanel {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = tokens.colors;
-        let target = row.target.clone();
-        h_flex()
-            .id(("service-pod", index))
-            .debug_selector(move || format!("service-pod-{index}"))
-            .items_center()
-            .gap(u(tokens.spacing.md))
-            .px(u(tokens.spacing.lg))
-            .py(u(px(1.)))
-            .cursor_pointer()
-            .hover(|style| style.bg(colors.element_hover))
-            .on_click(cx.listener(move |this, _, _, cx| this.open_object(target.clone(), cx)))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .child(row.name.to_string()),
-            )
+        link_row("service-pod", index, row.target.clone(), tokens, cx)
+            .child(name_cell(&row.name))
             .child(cell(row.ready.clone(), 36., colors.text_muted))
             .child(cell(row.status.clone(), 110., tones.of(row.tone)))
             .child(cell(row.ip.clone(), 100., colors.text_muted))
             .into_any_element()
     }
+}
+
+/// A titled block holding one note.
+fn noted(tokens: &Tokens, title: &'static str, text: &str) -> AnyElement {
+    section(tokens, title, 0)
+        .child(note(tokens, text))
+        .into_any_element()
+}
+
+/// [`noted`], its note findable by `selector` in tests.
+fn noted_as(
+    selector: &'static str,
+    tokens: &Tokens,
+    title: &'static str,
+    text: &str,
+) -> AnyElement {
+    section(tokens, title, 0)
+        .child(
+            div()
+                .debug_selector(move || selector.to_owned())
+                .child(note(tokens, text)),
+        )
+        .into_any_element()
+}
+
+/// A clickable row that opens `target`'s detail; `id-index` names it for tests.
+fn link_row(
+    id: &'static str,
+    index: usize,
+    target: ResourceRef,
+    tokens: &Tokens,
+    cx: &mut Context<ServicePanel>,
+) -> Stateful<gpui::Div> {
+    let hover = tokens.colors.element_hover;
+    h_flex()
+        .id((id, index))
+        .debug_selector(move || format!("{id}-{index}"))
+        .items_center()
+        .gap(u(tokens.spacing.md))
+        .px(u(tokens.spacing.lg))
+        .py(u(px(1.)))
+        .cursor_pointer()
+        .hover(move |style| style.bg(hover))
+        .on_click(cx.listener(move |this, _, _, cx| this.open_object(target.clone(), cx)))
+}
+
+/// The flexible first cell of a row: an object's name.
+fn name_cell(name: &str) -> gpui::Div {
+    div().flex_1().min_w_0().truncate().child(name.to_owned())
 }

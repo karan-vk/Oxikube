@@ -201,7 +201,7 @@ impl DetailView {
     }
 
     /// The time ages are read against.
-    pub(super) fn now(&self) -> Timestamp {
+    pub(crate) fn now(&self) -> Timestamp {
         self.now_override.unwrap_or_else(|| {
             #[cfg(test)]
             {
