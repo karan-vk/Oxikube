@@ -132,13 +132,8 @@ fn the_list_cells_match_the_servers_crd_table() {
     let res = widgets();
     // The API server's own CRD table prints `v1(storage)` (served versions, storage marked).
     assert_eq!(crd_versions_text(&res), "v1beta1,v1(storage)");
-    let s = CrdSummary::from_resource(&res).unwrap();
-    assert_eq!(s.versions_text(), crd_versions_text(&res));
     // Plural, singular, short names; `widget` appears once.
     assert_eq!(crd_aliases_text(&res), "widgets,widget,wd");
-    let aliases = s.aliases();
-    let aliases: Vec<&str> = aliases.iter().map(|a| &**a).collect();
-    assert_eq!(aliases.join(","), crd_aliases_text(&res));
 }
 
 #[test]
@@ -150,7 +145,7 @@ fn a_bare_crd_degrades_to_defaults() {
     assert_eq!(s.conversion, CrdConversion::None);
     assert_eq!(s.established(), ConditionStatus::Unknown);
     assert!(s.display_version().is_none());
-    assert_eq!(s.versions_text(), "");
+    assert_eq!(crd_versions_text(&crd(json!({}), json!({}))), "");
 
     let cluster = crd(
         json!({"scope": "Cluster", "conversion": {"strategy": "None"},

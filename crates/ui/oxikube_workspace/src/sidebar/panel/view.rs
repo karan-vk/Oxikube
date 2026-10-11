@@ -174,9 +174,7 @@ impl SidebarPanel {
             })
             .into_any_element()
     }
-}
 
-impl SidebarPanel {
     /// The Custom Resources search field, indented like the groups it filters.
     fn render_search(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();

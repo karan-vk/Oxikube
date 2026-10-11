@@ -13,8 +13,6 @@ mod cells;
 
 pub use cells::{crd_aliases_text, crd_versions_text, version_order};
 
-use cells::push_version;
-
 use super::{
     Condition, ConditionStatus, ViewError, arc_of, arr_of, bool_of, check_kind, i64_of, str_of, sub,
 };
@@ -221,31 +219,6 @@ impl CrdSummary {
     /// The version `name`, when the CRD declares it.
     pub fn version(&self, name: &str) -> Option<&CrdVersionSummary> {
         self.versions.iter().find(|v| &*v.name == name)
-    }
-
-    /// The `Versions` column, as the API server's own CRD table prints it: the served versions
-    /// in the CRD's order, the storage one marked (`v1(storage),v1beta1`).
-    pub fn versions_text(&self) -> String {
-        let mut out = String::new();
-        for v in self.versions.iter().filter(|v| v.served) {
-            push_version(&mut out, &v.name, v.storage);
-        }
-        out
-    }
-
-    /// What `kubectl get` and the `:` jump bar accept for the kind (k9s' aliases): the plural,
-    /// the singular and the short names, without repeats.
-    pub fn aliases(&self) -> Vec<Arc<str>> {
-        let mut out: Vec<Arc<str>> = Vec::new();
-        let names = std::iter::once(&self.names.plural)
-            .chain(self.names.singular.as_ref())
-            .chain(&self.names.short_names);
-        for name in names {
-            if !name.is_empty() && !out.contains(name) {
-                out.push(name.clone());
-            }
-        }
-        out
     }
 }
 

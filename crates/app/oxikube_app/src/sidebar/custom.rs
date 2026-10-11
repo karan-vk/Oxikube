@@ -62,9 +62,7 @@ impl CustomResourceGroup {
             kinds,
         })
     }
-}
 
-impl CustomResourceGroup {
     /// The group without the kinds `claimed` (by group and kind) says another sidebar section
     /// lists already, such as the Gateway API under Network or VolumeSnapshots under Storage, so
     /// no kind is listed twice. `None` when every kind is claimed (the group is not shown).

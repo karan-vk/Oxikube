@@ -6,8 +6,10 @@ use super::super::{arr_of, bool_of, str_of, sub};
 use crate::json::JsonRef;
 use crate::resource::Resource;
 
-/// The `Versions` cell of a CRD straight from its JSON, without building a [`CrdSummary`]
-/// (the CRD list draws it per visible row). Same text as [`CrdSummary::versions_text`].
+/// The `Versions` cell of a CRD straight from its JSON, without building a
+/// [`CrdSummary`](super::CrdSummary) (the CRD list draws it per visible row): the served versions
+/// in the CRD's order, the storage one marked (`v1(storage),v1beta1`), as the API server's own
+/// CRD table prints them.
 pub fn crd_versions_text(res: &Resource) -> String {
     let mut out = String::new();
     for v in arr_of(sub(res.json(), "spec"), "versions").iter() {
@@ -21,7 +23,7 @@ pub fn crd_versions_text(res: &Resource) -> String {
 }
 
 /// The `Aliases` cell of a CRD straight from its JSON: plural, singular and short names,
-/// comma-separated, without repeats. Same names as [`CrdSummary::aliases`].
+/// comma-separated, without repeats: what `kubectl get` and the `:` jump bar accept for the kind.
 pub fn crd_aliases_text(res: &Resource) -> String {
     let names = sub(sub(res.json(), "spec"), "names");
     let mut seen: Vec<&str> = Vec::new();
@@ -41,7 +43,7 @@ pub fn crd_aliases_text(res: &Resource) -> String {
     seen.join(",")
 }
 
-pub(super) fn push_version(out: &mut String, name: &str, storage: bool) {
+fn push_version(out: &mut String, name: &str, storage: bool) {
     if !out.is_empty() {
         out.push(',');
     }
