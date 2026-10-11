@@ -40,7 +40,7 @@ impl ViewDeps {
         cx.new(|cx| CatalogView::new(deps, window, cx))
     }
 
-    /// Shows `view` ([`CATALOG_VIEW`], [`SOURCES_VIEW`] or [`CHART_GALLERY_VIEW`]) in
+    /// Shows `view` ([`CATALOG_VIEW`], [`SOURCES_VIEW`] or `CHART_GALLERY_VIEW`) in
     /// `workspace`: the open tab when there is one, else a new one. Any other id is ignored (`view::Open` validates it first).
     pub fn open(
         &self,

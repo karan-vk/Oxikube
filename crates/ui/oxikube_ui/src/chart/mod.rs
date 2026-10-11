@@ -32,7 +32,7 @@
 //!
 //! Decimating (to the pixel columns, keeping every spike), projecting, choosing ticks, measuring
 //! labels and tessellating happen when the data, the size, the zoom or the theme changes
-//! ([`cache`]); a repaint of an unchanged chart is a handful of quads plus one translated copy of
+//! (the `cache` module); a repaint of an unchanged chart is a handful of quads plus one translated copy of
 //! each cached path (GPUI scales a path it is given, so that copy is the floor). Hover re-renders
 //! the chart entity only, and only when the snapped sample changes. Charts run no animation, so
 //! reduce-motion has nothing to switch off.
