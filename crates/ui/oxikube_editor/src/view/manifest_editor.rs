@@ -30,7 +30,7 @@ use super::model::ManifestModel;
 use super::schemas::SchemaSource;
 use super::validation::{VALIDATION_DEBOUNCE, validate_text_with};
 use super::{ToggleManagedFields, ToggleReadOnly, ToggleSecretMask, ToggleSoftWrap};
-use crate::open::{ResourceBinding, ResourceOpen};
+use crate::open::{RenderOptions, ResourceBinding, ResourceOpen};
 use crate::settings::{EditorSettings, apply_changes};
 
 /// What a [`ManifestEditor`] opens with.
@@ -96,7 +96,17 @@ impl ManifestEditor {
             });
         }
         let clean_version = editor.read(cx).version();
-        let binding = parts.resource.map(ResourceBinding::new);
+        let mut binding = parts.resource.map(ResourceBinding::new);
+        if let Some(binding) = binding.as_mut() {
+            // `show_managed_fields` / `mask_secrets` are the defaults of a fresh open.
+            let settings = EditorSettings::resolve(Some(&binding.target.cluster), cx);
+            let options = RenderOptions {
+                managed_fields: settings.show_managed_fields,
+                reveal_secrets: !settings.mask_secrets,
+            };
+            binding.options = options;
+            binding.shown_options = options;
+        }
         let title = binding.as_ref().map_or(parts.title, ResourceBinding::title);
         let subscriptions = vec![
             cx.subscribe_in(&editor, window, Self::on_editor_event),

@@ -40,11 +40,11 @@ serde-saphyr.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
-oxikube_assets.workspace = true
 async-trait.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 insta.workspace = true
+oxikube_assets.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
