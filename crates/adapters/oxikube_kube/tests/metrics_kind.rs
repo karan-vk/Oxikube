@@ -14,7 +14,6 @@ use k8s_openapi::api::rbac::v1::PolicyRule;
 use kube::client::{Body, ClientBuilder};
 use kube::config::KubeConfigOptions;
 use kube::{Client, Config};
-use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_domain::metrics::{MetricsSample, MetricsSubject, MissingReason};
 use oxikube_domain::session::NamespaceSelection;
@@ -135,6 +134,14 @@ async fn pod_metrics_cover_kube_system_in_one_namespace_and_in_all() {
         .find(|s| pod_name(s).1.starts_with("metrics-server-"))
         .expect("a sample for the metrics-server pod itself");
     assert!(server.cpu.value().is_some() && server.memory_bytes().is_some_and(|b| b > 0));
+    // The per-container breakdown is kept and adds up to the pod total.
+    assert!(!server.containers.is_empty(), "container entries");
+    let summed: u64 = server
+        .containers
+        .iter()
+        .filter_map(|c| c.memory.value())
+        .sum();
+    assert_eq!(Some(summed), server.memory_bytes());
 
     let all = samples_when_ready("all-namespace pod metrics", || {
         port.pod_metrics(&id, &NamespaceSelection::All)
@@ -229,7 +236,7 @@ async fn a_cluster_without_the_metrics_group_is_unavailable_not_an_error() {
 }
 
 #[tokio::test]
-async fn an_account_without_rights_on_metrics_gets_forbidden() {
+async fn an_account_without_rights_on_metrics_is_forbidden_not_an_error() {
     let Some(kind) = common::kind().await else {
         return;
     };
@@ -253,15 +260,15 @@ async fn an_account_without_rights_on_metrics_gets_forbidden() {
     let port = KubeMetrics::new((*client).clone(), cluster(&kind));
     let id = cluster(&kind);
 
-    let err = wait_until("RBAC to deny metrics", DEADLINE, || async {
-        port.node_metrics(&id).await.err()
+    let denied = MetricsOutcome::Unavailable(MissingReason::Forbidden);
+    wait_until("RBAC to deny metrics", DEADLINE, || async {
+        (port.node_metrics(&id).await.ok()? == denied).then_some(())
     })
     .await;
-    assert_eq!(err.kind(), ErrorKind::Forbidden);
     let namespaces = NamespaceSelection::from_names([ns.name()]);
-    let err = port
+    let pods = port
         .pod_metrics(&id, &namespaces)
         .await
-        .expect_err("forbidden");
-    assert_eq!(err.kind(), ErrorKind::Forbidden);
+        .expect("forbidden is a visible state, not an error");
+    assert_eq!(pods, denied);
 }

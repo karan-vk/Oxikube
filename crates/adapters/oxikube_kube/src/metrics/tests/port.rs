@@ -163,8 +163,44 @@ async fn a_503_is_an_unavailable_apiservice_not_an_error() {
     let outcome = metrics(&api).node_metrics(&cluster()).await.unwrap();
     assert_eq!(
         outcome.unavailable_reason(),
-        Some(MissingReason::Unavailable)
+        Some(MissingReason::ApiUnavailable)
     );
+}
+
+#[tokio::test]
+async fn a_403_is_a_visible_forbidden_state_not_an_error() {
+    let api = FakeApi::new();
+    let body = status_body(
+        403,
+        "Forbidden",
+        "nodes.metrics.k8s.io is forbidden: User \"u\" cannot list resource \"nodes\"",
+    );
+    api.reply(NODES, 403, body.clone());
+    api.reply(ALL_PODS, 403, body.clone());
+    api.reply(&ns_pods("a"), 403, body);
+    let port = metrics(&api);
+
+    let nodes = port.node_metrics(&cluster()).await.unwrap();
+    assert_eq!(nodes.unavailable_reason(), Some(MissingReason::Forbidden));
+    let pods = port
+        .pod_metrics(&cluster(), &NamespaceSelection::All)
+        .await
+        .unwrap();
+    assert_eq!(pods.unavailable_reason(), Some(MissingReason::Forbidden));
+    let set = NamespaceSelection::from_names(["a"]);
+    let pods = port.pod_metrics(&cluster(), &set).await.unwrap();
+    assert_eq!(pods.unavailable_reason(), Some(MissingReason::Forbidden));
+}
+
+#[tokio::test]
+async fn a_500_stays_an_error() {
+    let api = FakeApi::new();
+    api.reply(NODES, 500, status_body(500, "InternalError", "boom"));
+    let err = metrics(&api)
+        .node_metrics(&cluster())
+        .await
+        .expect_err("a 500 is a failed call, not absence");
+    assert_ne!(err.kind(), ErrorKind::Validation);
 }
 
 #[tokio::test]
@@ -187,14 +223,13 @@ async fn one_namespace_absent_makes_the_whole_outcome_unavailable() {
         .unwrap();
     assert_eq!(
         outcome.unavailable_reason(),
-        Some(MissingReason::Unavailable)
+        Some(MissingReason::ApiUnavailable)
     );
 }
 
 #[tokio::test]
 async fn failures_of_the_call_stay_distinct_from_absence() {
     for (code, reason, kind, retryable) in [
-        (403, "Forbidden", ErrorKind::Forbidden, false),
         (401, "Unauthorized", ErrorKind::Auth, false),
         (429, "TooManyRequests", ErrorKind::Network, true),
         (504, "Timeout", ErrorKind::Timeout, true),

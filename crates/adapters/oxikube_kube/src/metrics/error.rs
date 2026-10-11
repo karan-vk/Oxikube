@@ -1,9 +1,10 @@
 //! What a failed `metrics.k8s.io` call means (ADR 0011).
 //!
-//! Absence is a result the UI renders ("metrics-server not installed"), so the two statuses
-//! that mean "this cluster cannot answer" become a [`MissingReason`]. Everything else is a
-//! failure of the call itself and goes through [`classify`](crate::auth::classify) unchanged,
-//! so a 403 stays `Forbidden` and timeouts stay retryable `Timeout`.
+//! Absence is a result the UI renders ("metrics-server not installed", "no permission to read
+//! metrics"), so the statuses that mean "this cluster cannot answer this user" become a
+//! [`MissingReason`]: 404 `NotInstalled`, 503 `ApiUnavailable`, 403 `Forbidden`. Everything else
+//! is a failure of the call itself and goes through [`classify`](crate::auth::classify)
+//! unchanged, so a 401 stays `Auth` and timeouts stay retryable `Timeout`.
 
 use oxikube_domain::OxiError;
 use oxikube_domain::metrics::MissingReason;
@@ -29,7 +30,11 @@ impl From<kube::Error> for Stop {
             // The APIService exists but its backend is not serving (pod starting, crashed,
             // failing availability checks): installed, not answering.
             kube::Error::Api(status) if status.code == 503 => {
-                Stop::Absent(MissingReason::Unavailable)
+                Stop::Absent(MissingReason::ApiUnavailable)
+            }
+            // RBAC denies `metrics.k8s.io`: a visible state, not a hard error.
+            kube::Error::Api(status) if status.code == 403 => {
+                Stop::Absent(MissingReason::Forbidden)
             }
             _ => Stop::Failed(classify(&err)),
         }

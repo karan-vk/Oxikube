@@ -8,10 +8,12 @@
 //!
 //! # Absence is a result, not an error
 //!
-//! A cluster without metrics-server is a normal state the UI renders ("metrics-server
-//! not installed"). It is returned as [`MetricsOutcome::Unavailable`] with a
-//! [`MissingReason`], never as an `Err` to be swallowed. `Err` is reserved for
-//! failures of the call itself (network, auth, ...).
+//! A cluster without metrics-server, one whose metrics APIService is not answering, or an
+//! account that RBAC denies `metrics.k8s.io` are normal states the UI renders as
+//! "metrics unavailable: `<reason>`". They are returned as [`MetricsOutcome::Unavailable`] with a
+//! [`MissingReason`] (`NotInstalled`, `ApiUnavailable`, `Forbidden`), never as an `Err` to be
+//! swallowed. `Err` is reserved for failures of the call itself (network, timeout, expired
+//! credentials, ...).
 //!
 //! Calls are batch calls: one request returns every sample in scope. They run off
 //! the UI thread, called by services.
@@ -57,11 +59,13 @@ impl MetricsOutcome {
 /// # Errors
 ///
 /// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
-/// [`Auth`](oxikube_domain::ErrorKind::Auth) /
-/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) and
+/// [`Auth`](oxikube_domain::ErrorKind::Auth) and
 /// [`Network`](oxikube_domain::ErrorKind::Network) /
 /// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for failures of the call itself.
-/// A cluster without metrics-server is [`MetricsOutcome::Unavailable`], not an error.
+/// A cluster without metrics-server (404), a metrics APIService that does not answer (503) and
+/// an RBAC denial (403) are [`MetricsOutcome::Unavailable`], not errors. A pod query over several
+/// namespaces is one outcome: a denial in any of them is `Forbidden` for the whole call, so a UI
+/// asking for a partial view should query the namespaces it can read.
 #[async_trait]
 pub trait MetricsPort: Send + Sync {
     /// One sample per node of `cluster`.

@@ -1,0 +1,29 @@
+{
+  "kind": "NodeMetricsList",
+  "apiVersion": "metrics.k8s.io/v1beta1",
+  "metadata": {},
+  "items": [
+    {
+      "metadata": {
+        "name": "oxikube-control-plane",
+        "creationTimestamp": "2026-10-03T12:00:05Z",
+        "labels": {"kubernetes.io/hostname": "oxikube-control-plane"}
+      },
+      "timestamp": "2026-10-03T12:00:00Z",
+      "window": "14.982s",
+      "usage": {"cpu": "196382978n", "memory": "1848836Ki"}
+    },
+    {
+      "metadata": {"name": "worker-1", "creationTimestamp": "2026-10-03T12:00:05Z"},
+      "timestamp": "2026-10-03T12:00:02Z",
+      "window": "20s",
+      "usage": {"cpu": "3491m", "memory": "3Gi"}
+    },
+    {
+      "metadata": {"name": "worker-2", "creationTimestamp": "2026-10-03T12:00:05Z"},
+      "timestamp": "2026-10-03T12:00:03Z",
+      "window": "1m0s",
+      "usage": {"cpu": "2", "memory": "512Mi"}
+    }
+  ]
+}

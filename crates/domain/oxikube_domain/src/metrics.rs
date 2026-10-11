@@ -32,12 +32,17 @@ use crate::quantity::{Quantity, QuantityFormat};
 pub enum MissingReason {
     /// The cluster does not serve `metrics.k8s.io` (metrics-server is not installed).
     NotInstalled,
+    /// The `metrics.k8s.io` APIService is registered but its backend does not answer
+    /// (HTTP 503: metrics-server starting, crashed or failing its availability checks).
+    ApiUnavailable,
     /// The API is served but has no data for this subject yet (new pod, scrape pending).
     NotYetAvailable,
-    /// The user may not read metrics for this subject.
+    /// The user may not read metrics (HTTP 403 on `metrics.k8s.io`, or no rights for this subject).
     Forbidden,
-    /// The metrics request failed for another reason.
-    Unavailable,
+    /// Any other reason: an unreadable or absent quantity in an otherwise served object.
+    /// (Named `unavailable` on the wire before the 503 case got its own variant.)
+    #[serde(alias = "unavailable")]
+    Other,
 }
 
 /// A metric value, or the visible reason there is none.
@@ -91,6 +96,20 @@ pub enum MetricsSubject {
     },
 }
 
+/// One container's reading inside a pod [`MetricsSample`].
+///
+/// metrics-server reports one entry per running container and none for init containers, so a
+/// pod's `containers` list never promises them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContainerUsage {
+    /// Container name.
+    pub name: Arc<str>,
+    /// CPU usage in nanocores.
+    pub cpu: Reading,
+    /// Working-set memory in bytes.
+    pub memory: Reading,
+}
+
 /// One CPU and memory reading for a node, pod or container.
 ///
 /// Field names are stable: the type is persisted and shown to agents.
@@ -107,6 +126,12 @@ pub struct MetricsSample {
     pub cpu: Reading,
     /// Working-set memory in bytes.
     pub memory: Reading,
+    /// For a pod: the per-container readings behind the summed `cpu` / `memory`, in the order the
+    /// server lists them. The total is all-or-nothing (missing when any container is unreadable,
+    /// never understated) while each entry stands alone. Empty for nodes and for samples that
+    /// carry only a total.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub containers: Vec<ContainerUsage>,
 }
 
 const NANOCORES_PER_MILLICORE: u64 = 1_000_000;
@@ -126,6 +151,7 @@ impl MetricsSample {
             window,
             cpu: Reading::Value(cpu_nanocores),
             memory: Reading::Value(memory_bytes),
+            containers: Vec::new(),
         }
     }
 
@@ -137,6 +163,7 @@ impl MetricsSample {
             window: None,
             cpu: Reading::Missing(reason),
             memory: Reading::Missing(reason),
+            containers: Vec::new(),
         }
     }
 
@@ -294,6 +321,61 @@ mod tests {
                 without
             );
         }
+    }
+
+    #[test]
+    fn containers_round_trip_and_are_omitted_when_empty() {
+        let mut pod_sample =
+            MetricsSample::new(MetricsSubject::Pod { pod: pod() }, ts(), None, 3, 4);
+        assert!(
+            serde_json::to_value(&pod_sample)
+                .unwrap()
+                .get("containers")
+                .is_none()
+        );
+        pod_sample.containers = vec![
+            ContainerUsage {
+                name: "app".into(),
+                cpu: Reading::Value(1),
+                memory: Reading::Value(2),
+            },
+            ContainerUsage {
+                name: "sidecar".into(),
+                cpu: Reading::Missing(MissingReason::Other),
+                memory: Reading::Value(2),
+            },
+        ];
+        let json = serde_json::to_value(&pod_sample).unwrap();
+        assert_eq!(
+            json["containers"][1]["cpu"],
+            serde_json::json!({"missing": "other"})
+        );
+        assert_eq!(
+            serde_json::from_value::<MetricsSample>(json).unwrap(),
+            pod_sample
+        );
+    }
+
+    #[test]
+    fn every_missing_reason_has_a_stable_wire_name() {
+        for (reason, name) in [
+            (MissingReason::NotInstalled, "not_installed"),
+            (MissingReason::ApiUnavailable, "api_unavailable"),
+            (MissingReason::NotYetAvailable, "not_yet_available"),
+            (MissingReason::Forbidden, "forbidden"),
+            (MissingReason::Other, "other"),
+        ] {
+            assert_eq!(
+                serde_json::to_value(reason).unwrap(),
+                serde_json::json!(name)
+            );
+        }
+    }
+
+    #[test]
+    fn the_old_unavailable_wire_name_still_reads_as_other() {
+        let r: MissingReason = serde_json::from_value(serde_json::json!("unavailable")).unwrap();
+        assert_eq!(r, MissingReason::Other);
     }
 
     #[test]

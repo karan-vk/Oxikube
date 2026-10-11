@@ -63,7 +63,7 @@ logs. Locally, without that variable, a failed test prints its namespace's event
 | `ExecPort` | `exec`, `attach`, `create_debug_container`, `node_shell` | `exec_terminal` (TTY echo, resize, exit code, attach and kill, debug container, node shell removed on kill, `NotFound`), `exec_scenarios` (attach to a long-running logger pod, a debug container in a pod with no shell) |
 | `TerminalBackend` (`KubeStream`) | `write`, `resize`, `output_stream`, `kill`, `reconnect` | `exec_kube_stream` (`interactive_tty` echo, `stty size` after a resize, non-zero exit, missing container, `Forbidden` without `pods/exec`, reconnect to a fresh shell, 50 open/drop cycles leave no task, flood throughput) |
 | `PortForwardPort` | `forward` | `portforward` (pod and service GET, named ports, errors, `Forbidden`), `portforward_restart` |
-| `MetricsPort` | `node_metrics`, `pod_metrics` | `metrics_kind` (present, absent as `Unavailable(NotInstalled)`, `Forbidden`) |
+| `MetricsPort` | `node_metrics`, `pod_metrics` | `metrics_kind` (present, absent as `Unavailable(NotInstalled)`, `Forbidden` as `Unavailable(Forbidden)`, not an error) |
 | `KubeEvents` | `watch` | `events_feed` (merged core and events.k8s.io, per-object feed, capacity) |
 | `WarningPort` | `subscribe` | `warnings_kind` (a PodSecurity `Warning:` header from the real API server reaches the port), plus unit tests of the header parser and the layer |
 | `FeedSource` (watch budget) | `open` via `FeedRegistry` | `budget_kind`, `budget_tracing` |

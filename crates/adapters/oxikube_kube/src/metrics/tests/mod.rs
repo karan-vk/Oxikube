@@ -3,6 +3,7 @@
 mod convert;
 mod duration;
 mod fallback;
+mod fixtures;
 mod port;
 
 use oxikube_domain::ids::{ClusterId, ContextName};
