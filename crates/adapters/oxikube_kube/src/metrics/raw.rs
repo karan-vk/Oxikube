@@ -19,6 +19,13 @@ pub(super) struct RawUsage {
     pub(super) memory: Option<String>,
 }
 
+/// One container's usage, by name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct RawContainer {
+    pub(super) name: String,
+    pub(super) usage: RawUsage,
+}
+
 /// One `NodeMetrics` object.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RawNode {
@@ -35,7 +42,7 @@ pub(super) struct RawPod {
     pub(super) name: String,
     pub(super) timestamp: Option<Timestamp>,
     pub(super) window: Option<SignedDuration>,
-    pub(super) containers: Vec<RawUsage>,
+    pub(super) containers: Vec<RawContainer>,
 }
 
 impl From<Usage> for RawUsage {
@@ -47,9 +54,12 @@ impl From<Usage> for RawUsage {
     }
 }
 
-impl From<Container> for RawUsage {
+impl From<Container> for RawContainer {
     fn from(container: Container) -> Self {
-        container.usage.into()
+        Self {
+            name: container.name,
+            usage: container.usage.into(),
+        }
     }
 }
 
@@ -75,7 +85,7 @@ impl From<PodMetrics> for RawPod {
             name: pod.metadata.name.unwrap_or_default(),
             timestamp: Some(pod.timestamp.0),
             window: window_of(pod.window),
-            containers: pod.containers.into_iter().map(RawUsage::from).collect(),
+            containers: pod.containers.into_iter().map(RawContainer::from).collect(),
         }
     }
 }
@@ -127,7 +137,10 @@ impl RawPod {
             .and_then(Value::as_array)
             .map(|all| {
                 all.iter()
-                    .map(|c| c.get("usage").map(usage_of).unwrap_or_default())
+                    .map(|c| RawContainer {
+                        name: str_at(c, "name").unwrap_or_default().to_owned(),
+                        usage: c.get("usage").map(usage_of).unwrap_or_default(),
+                    })
                     .collect()
             })
             .unwrap_or_default();

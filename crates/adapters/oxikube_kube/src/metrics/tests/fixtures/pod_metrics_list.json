@@ -1,0 +1,31 @@
+{
+  "kind": "PodMetricsList",
+  "apiVersion": "metrics.k8s.io/v1beta1",
+  "metadata": {},
+  "items": [
+    {
+      "metadata": {"name": "coredns-5d78c9869d-abcde", "namespace": "kube-system", "creationTimestamp": "2026-10-03T12:00:05Z"},
+      "timestamp": "2026-10-03T12:00:01Z",
+      "window": "15.5s",
+      "containers": [
+        {"name": "coredns", "usage": {"cpu": "1234567n", "memory": "22272Ki"}}
+      ]
+    },
+    {
+      "metadata": {"name": "web-7d9f8b6c5-x2x9q", "namespace": "default", "creationTimestamp": "2026-10-03T12:00:05Z"},
+      "timestamp": "2026-10-03T12:00:01Z",
+      "window": "15.5s",
+      "containers": [
+        {"name": "nginx", "usage": {"cpu": "250m", "memory": "64Mi"}},
+        {"name": "sidecar", "usage": {"cpu": "303u", "memory": "1Gi"}},
+        {"name": "exporter", "usage": {"cpu": "1", "memory": "5242880"}}
+      ]
+    },
+    {
+      "metadata": {"name": "just-started", "namespace": "default", "creationTimestamp": "2026-10-03T12:00:05Z"},
+      "timestamp": "2026-10-03T12:00:01Z",
+      "window": "15.5s",
+      "containers": []
+    }
+  ]
+}

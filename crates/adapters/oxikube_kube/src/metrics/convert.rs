@@ -9,7 +9,9 @@
 use jiff::Timestamp;
 use oxikube_domain::Quantity;
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
-use oxikube_domain::metrics::{MetricsSample, MetricsSubject, MissingReason, Reading};
+use oxikube_domain::metrics::{
+    ContainerUsage, MetricsSample, MetricsSubject, MissingReason, Reading,
+};
 
 use super::raw::{RawNode, RawPod, RawUsage};
 
@@ -42,35 +44,42 @@ impl Dimension {
 
 /// Sums one dimension over `usages` exactly, or `None` when any entry is absent or unreadable
 /// (a partial sum would understate the pod).
-fn sum(usages: &[RawUsage], dimension: Dimension) -> Option<Quantity> {
-    usages.iter().try_fold(Quantity::ZERO, |total, usage| {
+fn sum<'a>(
+    mut usages: impl Iterator<Item = &'a RawUsage>,
+    dimension: Dimension,
+) -> Option<Quantity> {
+    usages.try_fold(Quantity::ZERO, |total, usage| {
         let quantity = Quantity::parse(dimension.text(usage)?).ok()?;
         total.checked_add(&quantity)
     })
 }
 
-fn reading(usages: &[RawUsage], dimension: Dimension) -> Reading {
-    if usages.is_empty() {
+fn reading<'a>(
+    usages: impl Iterator<Item = &'a RawUsage> + Clone,
+    dimension: Dimension,
+) -> Reading {
+    if usages.clone().next().is_none() {
         // metrics-server has registered the pod but no container has been scraped yet.
         return Reading::Missing(MissingReason::NotYetAvailable);
     }
     match sum(usages, dimension).and_then(|total| dimension.to_units(&total)) {
         Some(units) => Reading::Value(units),
-        None => Reading::Missing(MissingReason::Unavailable),
+        None => Reading::Missing(MissingReason::Other),
     }
 }
 
 /// The sample of one node. `fetched_at` stands in when the server sent no readable timestamp.
 pub(super) fn node_sample(raw: RawNode, fetched_at: Timestamp) -> MetricsSample {
-    let usage = std::slice::from_ref(&raw.usage);
+    let usage = std::iter::once(&raw.usage);
     MetricsSample {
         subject: MetricsSubject::Node {
             node: raw.name.into(),
         },
         ts: raw.timestamp.unwrap_or(fetched_at),
         window: raw.window,
-        cpu: reading(usage, Dimension::Cpu),
+        cpu: reading(usage.clone(), Dimension::Cpu),
         memory: reading(usage, Dimension::Memory),
+        containers: Vec::new(),
     }
 }
 
@@ -82,11 +91,31 @@ pub(super) fn pod_sample(cluster: &ClusterId, raw: RawPod, fetched_at: Timestamp
         raw.namespace,
         raw.name,
     );
+    let usages = raw.containers.iter().map(|c| &c.usage);
+    let (cpu, memory) = (
+        reading(usages.clone(), Dimension::Cpu),
+        reading(usages, Dimension::Memory),
+    );
+    // One entry per container the server lists (init containers are never served), kept so the
+    // detail panel can break the pod's total down.
+    let containers = raw
+        .containers
+        .into_iter()
+        .map(|c| {
+            let usage = std::iter::once(&c.usage);
+            ContainerUsage {
+                name: c.name.into(),
+                cpu: reading(usage.clone(), Dimension::Cpu),
+                memory: reading(usage, Dimension::Memory),
+            }
+        })
+        .collect();
     MetricsSample {
         subject: MetricsSubject::Pod { pod },
         ts: raw.timestamp.unwrap_or(fetched_at),
         window: raw.window,
-        cpu: reading(&raw.containers, Dimension::Cpu),
-        memory: reading(&raw.containers, Dimension::Memory),
+        cpu,
+        memory,
+        containers,
     }
 }

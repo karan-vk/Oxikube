@@ -54,7 +54,7 @@ async fn a_container_without_usage_is_a_missing_reading_not_a_failed_list() {
         other => panic!("{other:?}"),
     };
     assert_eq!((name(0).as_str(), name(1).as_str()), ("new-pod", "ok-pod"));
-    assert_eq!(samples[0].cpu, Reading::Missing(MissingReason::Unavailable));
+    assert_eq!(samples[0].cpu, Reading::Missing(MissingReason::Other));
     assert_eq!(samples[1].cpu, Reading::Value(5_000_000));
     assert_eq!(api.hits(ALL_PODS), 2);
 }

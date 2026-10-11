@@ -5,7 +5,7 @@ use oxikube_domain::metrics::{MetricsSubject, MissingReason, Reading};
 
 use super::cluster;
 use crate::metrics::convert::{node_sample, pod_sample};
-use crate::metrics::raw::{RawNode, RawPod, RawUsage};
+use crate::metrics::raw::{RawContainer, RawNode, RawPod, RawUsage};
 
 fn now() -> Timestamp {
     "2026-10-04T00:00:00Z".parse().unwrap()
@@ -33,7 +33,14 @@ fn pod(containers: Vec<RawUsage>) -> RawPod {
         name: "coredns-0".into(),
         timestamp: Some("2026-10-03T12:00:01Z".parse().unwrap()),
         window: None,
-        containers,
+        containers: containers
+            .into_iter()
+            .enumerate()
+            .map(|(i, usage)| RawContainer {
+                name: format!("c{i}"),
+                usage,
+            })
+            .collect(),
     }
 }
 
@@ -135,7 +142,7 @@ fn a_pod_without_scraped_containers_is_not_yet_available() {
 #[test]
 fn an_unreadable_quantity_marks_only_that_reading_missing() {
     let sample = node_sample(node("12 cores", "64Mi"), now());
-    assert_eq!(sample.cpu, Reading::Missing(MissingReason::Unavailable));
+    assert_eq!(sample.cpu, Reading::Missing(MissingReason::Other));
     assert_eq!(sample.memory, Reading::Value(64 * 1024 * 1024));
     assert!(sample.is_partial());
 
@@ -145,7 +152,7 @@ fn an_unreadable_quantity_marks_only_that_reading_missing() {
         pod(vec![usage("100m", "1Mi"), usage("lots", "1Mi")]),
         now(),
     );
-    assert_eq!(sample.cpu, Reading::Missing(MissingReason::Unavailable));
+    assert_eq!(sample.cpu, Reading::Missing(MissingReason::Other));
     assert_eq!(sample.memory, Reading::Value(2 * 1024 * 1024));
 }
 
@@ -155,11 +162,11 @@ fn absent_and_negative_usage_are_missing_not_zero() {
     raw.usage.memory = None;
     assert_eq!(
         node_sample(raw, now()).memory,
-        Reading::Missing(MissingReason::Unavailable)
+        Reading::Missing(MissingReason::Other)
     );
     let sample = node_sample(node("-5m", "-1Ki"), now());
-    assert_eq!(sample.cpu, Reading::Missing(MissingReason::Unavailable));
-    assert_eq!(sample.memory, Reading::Missing(MissingReason::Unavailable));
+    assert_eq!(sample.cpu, Reading::Missing(MissingReason::Other));
+    assert_eq!(sample.memory, Reading::Missing(MissingReason::Other));
 }
 
 #[test]
@@ -174,4 +181,30 @@ fn utilisation_uses_domain_quantity_maths() {
         sample.memory_percent_of(&Quantity::parse("2Gi").unwrap()),
         Some(25.0)
     );
+}
+
+#[test]
+fn every_container_keeps_its_own_reading_beside_the_pod_total() {
+    let sample = pod_sample(
+        &cluster(),
+        pod(vec![
+            usage("100m", "10Mi"),
+            usage("lots", "1Gi"),
+            usage("1500u", "1Ki"),
+        ]),
+        now(),
+    );
+    let names: Vec<&str> = sample.containers.iter().map(|c| &*c.name).collect();
+    assert_eq!(names, ["c0", "c1", "c2"]);
+    assert_eq!(sample.containers[0].cpu, Reading::Value(100_000_000));
+    assert_eq!(sample.containers[0].memory, Reading::Value(10 << 20));
+    // The unreadable container is missing on its own, and only it.
+    assert_eq!(
+        sample.containers[1].cpu,
+        Reading::Missing(MissingReason::Other)
+    );
+    assert_eq!(sample.containers[1].memory, Reading::Value(1 << 30));
+    assert_eq!(sample.containers[2].cpu, Reading::Value(1_500_000));
+    assert_eq!(sample.cpu, Reading::Missing(MissingReason::Other));
+    assert!(node_sample(node("1", "1Ki"), now()).containers.is_empty());
 }

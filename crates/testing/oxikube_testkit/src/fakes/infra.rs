@@ -654,6 +654,39 @@ mod tests {
     }
 
     #[test]
+    fn metrics_round_trips_every_scripted_state() {
+        let fake = FakeMetricsPort::new();
+        let all = NamespaceSelection::default();
+        let sample = oxikube_domain::metrics::MetricsSample::new(
+            oxikube_domain::metrics::MetricsSubject::Node { node: "n".into() },
+            t0(),
+            None,
+            5,
+            6,
+        );
+        let mut scripted = vec![MetricsOutcome::Available(vec![sample])];
+        for reason in [
+            MissingReason::NotInstalled,
+            MissingReason::ApiUnavailable,
+            MissingReason::Forbidden,
+            MissingReason::Other,
+        ] {
+            scripted.push(MetricsOutcome::Unavailable(reason));
+        }
+        for outcome in &scripted {
+            fake.script().pod_metrics.push_ok(outcome.clone());
+        }
+        // Used through the trait object the app holds.
+        let port: Box<dyn MetricsPort> = Box::new(fake);
+        for outcome in scripted {
+            assert_eq!(
+                block_on(port.pod_metrics(&cluster(), &all)).unwrap(),
+                outcome
+            );
+        }
+    }
+
+    #[test]
     fn metrics_scripted_ok_err_and_unscripted() {
         let fake = FakeMetricsPort::new();
         fake.script()

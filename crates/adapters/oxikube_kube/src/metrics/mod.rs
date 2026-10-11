@@ -25,13 +25,22 @@
 //!
 //! # Absence
 //!
-//! A 404 on the group (no metrics-server) answers [`MissingReason::NotInstalled`](oxikube_domain::metrics::MissingReason::NotInstalled); a 503 (the
-//! APIService is registered but its backend is not serving) answers
-//! [`MissingReason::Unavailable`](oxikube_domain::metrics::MissingReason::Unavailable); both come back as `Ok(MetricsOutcome::Unavailable(..))`.
-//! A 403 is `Err(Forbidden)`, and timeouts and connection failures are retryable
-//! `Network` / `Timeout` errors, so the UI can tell "forbidden" and "try again" from "not
-//! installed". The group is not probed through discovery first: the list itself is the probe and
+//! Every status that means "this cluster cannot answer this user" comes back as
+//! `Ok(MetricsOutcome::Unavailable(reason))`, never as an `Err` to swallow:
+//!
+//! | Status | [`MissingReason`](oxikube_domain::metrics::MissingReason) | Meaning |
+//! |---|---|---|
+//! | 404 | `NotInstalled` | no `metrics.k8s.io` group: metrics-server is not installed |
+//! | 503 | `ApiUnavailable` | the APIService is registered but its backend does not answer |
+//! | 403 | `Forbidden` | RBAC denies `metrics.k8s.io` to this user |
+//!
+//! Anything else (401, 429, 5xx other than 503, timeouts, connection failures) is a failure of
+//! the call itself and stays an `Err` with its classified kind, retryable for `Network` /
+//! `Timeout`. The group is not probed through discovery first: the list itself is the probe and
 //! costs no extra request.
+//!
+//! A pod sample keeps one `containers` entry per container the server lists, beside the summed
+//! total. Init containers are not served by metrics-server and are not promised.
 //!
 //! # Fallback types
 //!
@@ -128,7 +137,7 @@ impl std::fmt::Debug for KubeMetrics {
     }
 }
 
-/// `Ok(Available)`, `Ok(Unavailable)` for absence, `Err` for a failed call.
+/// `Ok(Available)`, `Ok(Unavailable)` for absence (404, 503, 403), `Err` for a failed call.
 fn outcome(result: Result<Vec<MetricsSample>, Stop>, what: &str) -> OxiResult<MetricsOutcome> {
     match result {
         Ok(samples) => Ok(MetricsOutcome::Available(samples)),
