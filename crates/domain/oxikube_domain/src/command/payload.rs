@@ -615,6 +615,11 @@ pub enum Command {
         /// being overwritten.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         resource_version: Option<String>,
+        /// The change was reviewed against no live object (the preview showed a create). The
+        /// fallback then creates, so an object made since fails with `AlreadyExists` instead of
+        /// being replaced unseen.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        reviewed_absent: bool,
     },
     /// Delete one pod.
     #[serde(rename = "pod::Delete")]
@@ -1429,6 +1434,7 @@ mod tests {
                 field_manager: Some("oxikube".into()),
                 force: true,
                 resource_version: Some("42".into()),
+                reviewed_absent: true,
             },
             Command::PodDelete {
                 target: pod(),

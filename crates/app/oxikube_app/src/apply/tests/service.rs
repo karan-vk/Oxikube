@@ -210,6 +210,48 @@ fn a_server_without_apply_creates_a_new_object() {
 }
 
 #[test]
+fn a_create_reviewed_is_not_turned_into_a_replace_of_an_object_made_since() {
+    let t = Applying::new(false);
+    t.port().script().patch.push_err(unsupported());
+    let preview = t.preview(t.request(CONFIGMAP)).expect("preview");
+    assert!(preview.creates());
+    // Someone else creates the object before the user confirms.
+    t.port().insert(live_configmap("9"));
+    t.port().script().patch.push_err(unsupported());
+    t.port().script().create.push_err(
+        OxiError::conflict("configmaps \"web\" already exists").with_source(ConflictDetails {
+            reason: ConflictReason::AlreadyExists,
+            causes: Vec::new(),
+        }),
+    );
+    let error = t.apply(&preview).unwrap_err();
+    assert!(matches!(error, ApplyError::Stale(_)), "{error:?}");
+    assert_eq!(
+        t.writes()[2..],
+        [("patch", true), ("create", true)],
+        "no replace, nothing written"
+    );
+    assert_eq!(t.port().objects()[0].get_str("/data/mode"), Some("green"));
+}
+
+#[test]
+fn octal_numbers_are_read_as_kubectl_reads_them() {
+    let t = Applying::new(false);
+    let manifest = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: web\n  annotations: {mode: \"0644\"}\nspec:\n  defaultMode: 0644\n  short: 012\n  plain: 644\n";
+    t.preview(t.request(manifest)).expect("preview");
+    let writes = t.h.writes("a");
+    let sent = body(&writes[0]);
+    assert_eq!(sent["spec"]["defaultMode"], json!(420));
+    assert!(sent["spec"]["defaultMode"].is_u64() || sent["spec"]["defaultMode"].is_i64());
+    assert_eq!(sent["spec"]["short"], json!(10));
+    assert_eq!(sent["spec"]["plain"], json!(644));
+    assert_eq!(
+        sent["metadata"]["annotations"]["mode"], "0644",
+        "a string stays one"
+    );
+}
+
+#[test]
 fn a_rejected_field_comes_back_with_its_path() {
     let t = Applying::new(false);
     t.port().script().patch.push_err(

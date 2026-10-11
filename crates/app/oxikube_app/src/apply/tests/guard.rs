@@ -96,10 +96,48 @@ fn every_attempt_is_audited_with_the_object_and_never_the_manifest() {
         audit[0].detail.as_deref(),
         Some("manager=team-a force=false")
     );
-    // A new object: no reviewed version to carry.
+    // A new object: no reviewed version to carry, a create was reviewed.
     assert_eq!(
         audit[1].detail.as_deref(),
-        Some("manager=team-a force=false")
+        Some("manager=team-a force=false reviewed=create")
+    );
+}
+
+#[test]
+fn the_audit_names_the_namespace_the_object_is_written_to() {
+    let t = Applying::new(false);
+    // No namespace in the manifest or the request: written to, and audited in, `default`.
+    let preview = t.preview(t.request(CONFIGMAP)).expect("preview");
+    t.apply(&preview).expect("apply");
+    assert_eq!(t.port().objects()[0].namespace(), Some("default"));
+    // A cluster-scoped kind is audited without the request's namespace.
+    let namespace = t
+        .request("apiVersion: v1\nkind: Namespace\nmetadata:\n  name: shop\n")
+        .in_namespace(Some("default".into()));
+    t.preview(namespace).expect("preview");
+    // A declined confirmation is audited at the same place.
+    let command = t.request(CONFIGMAP).command(None);
+    let ctx = DispatchContext::new(Initiator::Ui, "alice").with_cluster(id("a"));
+    let asked = t.h.ask(command, ctx);
+    t.h.bus
+        .decline(asked.token)
+        .now_or_never()
+        .unwrap()
+        .unwrap();
+
+    let audit = t.h.audit();
+    let places: Vec<(&str, Option<&str>, AuditOutcome)> = audit
+        .iter()
+        .map(|r| (r.target.gvk.kind.as_ref(), r.target.namespace(), r.outcome))
+        .collect();
+    assert_eq!(
+        places,
+        [
+            ("ConfigMap", Some("default"), AuditOutcome::Succeeded),
+            ("ConfigMap", Some("default"), AuditOutcome::Succeeded),
+            ("Namespace", None, AuditOutcome::Succeeded),
+            ("ConfigMap", Some("default"), AuditOutcome::Cancelled),
+        ]
     );
 }
 

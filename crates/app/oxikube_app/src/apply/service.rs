@@ -84,10 +84,13 @@ impl ApplyService {
     /// # Errors
     ///
     /// As [`preview`](Self::preview), plus [`ApplyError::Stale`] when the fallback's reviewed
-    /// version is out of date and [`ApplyError::Unconfirmed`].
+    /// version is out of date (or the object a create was reviewed for exists now) and
+    /// [`ApplyError::Unconfirmed`].
     pub async fn apply(&self, preview: &ApplyPreview) -> Result<ApplyReport, ApplyError> {
         let request = &preview.request;
-        let command = request.command(preview.resource_version.clone());
+        // A preview that showed a create is applied as one: an object made since is not
+        // replaced unseen.
+        let command = request.reviewed_command(preview.resource_version.clone(), preview.creates());
         let output = self.dispatch(request, command, false).await?;
         let mut data = output.data.unwrap_or(Value::Null);
         Ok(ApplyReport {
@@ -158,10 +161,12 @@ impl ApplyService {
                         .collect();
                     return ApplyError::Conflicts(conflicts);
                 }
-                ConflictReason::StaleVersion => {
+                // An object made since a preview that showed a create is a change since the
+                // review too.
+                ConflictReason::StaleVersion | ConflictReason::AlreadyExists => {
                     return ApplyError::Stale(error.message().to_owned());
                 }
-                ConflictReason::AlreadyExists | ConflictReason::Other => {}
+                ConflictReason::Other => {}
             }
         }
         if error.kind() == ErrorKind::Validation {

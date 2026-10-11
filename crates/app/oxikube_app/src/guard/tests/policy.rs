@@ -93,6 +93,7 @@ fn cluster_and_audit_target_come_from_the_payload() {
         field_manager: None,
         force: false,
         resource_version: None,
+        reviewed_absent: false,
     };
     assert_eq!(policy::cluster_of(&apply), Some(&id("b")));
     let target = policy::audit_target(&apply, &id("b"));
@@ -126,6 +127,7 @@ fn summary_and_expected_name_name_the_target_and_cluster() {
         field_manager: None,
         force: false,
         resource_version: None,
+        reviewed_absent: false,
     };
     assert_eq!(policy::expected_name(&apply, "prod"), "prod");
     assert_eq!(

@@ -37,8 +37,11 @@ impl Manifest {
     /// A `Validation` error for text that is not YAML, that holds no object or several (several
     /// documents are applied one by one, E10-S09), or an object without the fields that name it.
     pub(crate) fn parse(text: &str) -> OxiResult<Self> {
+        // Read as kubectl reads it (YAML 1.1): `defaultMode: 0644` is the octal integer 420,
+        // not the decimal 644.0 a YAML 1.2 reader makes of it.
+        let options = serde_saphyr::options! { legacy_octal_numbers: true };
         // The parser's message quotes the text, which may be a Secret: it is dropped.
-        let documents: Vec<Value> = serde_saphyr::from_multiple(text)
+        let documents: Vec<Value> = serde_saphyr::from_multiple_with_options(text, options)
             .map_err(|_| OxiError::validation("the manifest is not valid YAML or JSON"))?;
         let mut documents: Vec<Value> = documents.into_iter().filter(|d| !d.is_null()).collect();
         let object = match documents.len() {
@@ -154,8 +157,11 @@ pub(crate) fn namespace_for(
     }
 }
 
-/// The object a `resource::Apply` names, for its audit record: the manifest's kind and name, in
-/// its namespace or `default`. `None` when the text does not name one object.
+/// The object a `resource::Apply` names, for its audit record when the cluster's discovery
+/// cannot be asked (no session): the manifest's kind and name, in its namespace or the
+/// command's, else in none. With a session the guard asks discovery instead
+/// ([`resolved_audit_target`](super::resolved_audit_target)), as the handler does. `None` when
+/// the text does not name one object.
 pub(crate) fn audit_target(
     cluster: &ClusterId,
     text: &str,

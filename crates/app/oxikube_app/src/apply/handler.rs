@@ -12,7 +12,8 @@
 //! server that cannot server-side apply the kind answers 415 (some aggregated APIs, old CRD
 //! setups), which the adapter reports as `Unsupported`: the object is then replaced (PUT) carrying
 //! the reviewed `resourceVersion`, so a change made since fails with a conflict instead of being
-//! overwritten, or created when it does not exist. A conflict with other managers comes back as a
+//! overwritten, or created when it does not exist. A create the user reviewed stays a create: an
+//! object made since fails with `AlreadyExists` instead of being replaced unseen. A conflict with other managers comes back as a
 //! `Conflict` error with its [`ConflictDetails`](oxikube_domain::ConflictDetails); a rejected field
 //! as a `Validation` error with its causes. Secret values are masked in everything returned.
 
@@ -133,6 +134,7 @@ async fn handle(
         field_manager,
         force,
         resource_version,
+        reviewed_absent,
     } = command
     else {
         return Err(OxiError::validation("not a resource::Apply command"));
@@ -168,9 +170,13 @@ async fn handle(
             plan.server_side(writer, false).await?,
         ),
         Err(error) if error.kind() == ErrorKind::Unsupported => {
-            let version = match plan.resource_version.clone() {
-                Some(version) => Some(version),
-                None => version_of(plan.live(reader.as_ref()).await?.as_ref()),
+            // The reviewed version, else none for a reviewed create (an object made since then
+            // fails with `AlreadyExists`, never replaced unseen), else the live one for a
+            // caller that reviewed nothing.
+            let version = match (plan.resource_version.clone(), reviewed_absent) {
+                (Some(version), _) => Some(version),
+                (None, true) => None,
+                (None, false) => version_of(plan.live(reader.as_ref()).await?.as_ref()),
             };
             plan.fallback(writer, version.as_deref(), true).await?;
             plan.fallback(writer, version.as_deref(), false).await?

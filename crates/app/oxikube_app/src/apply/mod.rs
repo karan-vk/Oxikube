@@ -34,6 +34,8 @@ mod tests;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 
+use crate::session::ClusterSessionManager;
+
 pub use handler::{DEFAULT_FIELD_MANAGER, register_commands};
 pub use service::ApplyService;
 pub use types::{
@@ -55,13 +57,40 @@ pub(crate) fn audit_target(command: &Command, cluster: &ClusterId) -> Option<Res
     manifest::audit_target(cluster, manifest, namespace.as_deref())
 }
 
+/// The object a `resource::Apply` names, in the namespace the handler writes it to: the
+/// cluster's discovery says whether the kind is namespaced, so an object no namespace is given
+/// for is recorded in `default`, as it is written, and a cluster-scoped one in none. `None` for
+/// any other command, a manifest that names no single object, or a cluster without a session
+/// (then [`audit_target`] answers).
+pub(crate) async fn resolved_audit_target(
+    command: &Command,
+    cluster: &ClusterId,
+    sessions: &ClusterSessionManager,
+) -> Option<ResourceRef> {
+    let Command::ResourceApply {
+        manifest,
+        namespace,
+        ..
+    } = command
+    else {
+        return None;
+    };
+    let manifest = manifest::Manifest::parse(manifest).ok()?;
+    let session = sessions.get(cluster)?;
+    let namespace = manifest
+        .resolve_namespace(&session, namespace.as_deref())
+        .await;
+    Some(manifest.target(cluster.clone(), namespace.as_deref()))
+}
+
 /// What the audit record of a `resource::Apply` adds to its target: the field manager, force
-/// and the reviewed version. Never the manifest.
+/// and the reviewed version (or `reviewed=create`). Never the manifest.
 pub(crate) fn audit_detail(command: &Command) -> Option<String> {
     let Command::ResourceApply {
         field_manager,
         force,
         resource_version,
+        reviewed_absent,
         ..
     } = command
     else {
@@ -71,6 +100,9 @@ pub(crate) fn audit_detail(command: &Command) -> Option<String> {
     let mut detail = format!("manager={manager} force={force}");
     if let Some(version) = resource_version {
         detail.push_str(&format!(" resource_version={version}"));
+    }
+    if *reviewed_absent {
+        detail.push_str(" reviewed=create");
     }
     Some(detail)
 }

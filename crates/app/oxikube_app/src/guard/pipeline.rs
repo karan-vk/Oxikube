@@ -43,26 +43,28 @@ impl MutationGuard {
         ctx: DispatchContext,
         handler: Arc<dyn CommandHandler>,
     ) -> Result<Outcome, DispatchError> {
-        let (cluster, context, target, writer, detail) = match self.admit(meta, &command, &ctx) {
-            Admission::Proceed {
-                cluster,
-                context,
-                target,
-                writer,
-                detail,
-            } => (cluster, context, target, writer, detail),
-            Admission::Confirm(request) => return Ok(Outcome::NeedsConfirmation(request)),
-            Admission::Deny { error, record } => {
-                if let Some(record) = record
-                    && let Err(err) = self.audit.record(record).await
-                {
-                    // The refusal stands; the record stays in the backlog and blocks
-                    // the next mutation until it is written.
-                    tracing::warn!(error = %err, "could not audit a refused mutation");
+        let resolved = self.resolved_target(&command, ctx.cluster.as_ref()).await;
+        let (cluster, context, target, writer, detail) =
+            match self.admit(meta, &command, &ctx, resolved) {
+                Admission::Proceed {
+                    cluster,
+                    context,
+                    target,
+                    writer,
+                    detail,
+                } => (cluster, context, target, writer, detail),
+                Admission::Confirm(request) => return Ok(Outcome::NeedsConfirmation(request)),
+                Admission::Deny { error, record } => {
+                    if let Some(record) = record
+                        && let Err(err) = self.audit.record(record).await
+                    {
+                        // The refusal stands; the record stays in the backlog and blocks
+                        // the next mutation until it is written.
+                        tracing::warn!(error = %err, "could not audit a refused mutation");
+                    }
+                    return Err(error);
                 }
-                return Err(error);
-            }
-        };
+            };
 
         dry_run_stage(command.effective_risk());
 
@@ -117,7 +119,13 @@ impl MutationGuard {
             .confirmations
             .take(token)
             .ok_or(ConfirmationError::Unknown)?;
-        let target = policy::audit_target(&pending.command, &pending.cluster);
+        let target = match self
+            .resolved_target(&pending.command, Some(&pending.cluster))
+            .await
+        {
+            Some(target) => target,
+            None => policy::audit_target(&pending.command, &pending.cluster),
+        };
         let record = AuditLog::describe(
             self.audit.entry(
                 &pending.who,
@@ -135,9 +143,28 @@ impl MutationGuard {
             .map_err(DispatchError::AuditFailed)
     }
 
+    /// The audit target of a `resource::Apply`, placed by the cluster's discovery as the handler
+    /// places the object (an object given no namespace is in `default`); `None` for any other
+    /// command, which [`policy::audit_target`] names from its payload.
+    async fn resolved_target(
+        &self,
+        command: &Command,
+        context_cluster: Option<&ClusterId>,
+    ) -> Option<ResourceRef> {
+        let cluster = policy::cluster_of(command).or(context_cluster)?;
+        crate::apply::resolved_audit_target(command, cluster, &self.sessions).await
+    }
+
     /// The synchronous, in-memory checks: cluster, session, read-only, connection,
-    /// confirmation.
-    fn admit(&self, meta: &CommandMeta, command: &Command, ctx: &DispatchContext) -> Admission {
+    /// confirmation. `resolved` is the audit target when it was looked up already
+    /// ([`resolved_target`](Self::resolved_target)).
+    fn admit(
+        &self,
+        meta: &CommandMeta,
+        command: &Command,
+        ctx: &DispatchContext,
+        resolved: Option<ResourceRef>,
+    ) -> Admission {
         let Some(cluster) = policy::cluster_of(command)
             .or(ctx.cluster.as_ref())
             .cloned()
@@ -147,7 +174,7 @@ impl MutationGuard {
                 record: None,
             };
         };
-        let target = policy::audit_target(command, &cluster);
+        let target = resolved.unwrap_or_else(|| policy::audit_target(command, &cluster));
         let detail = policy::audit_detail(command);
         let deny = |error: DispatchError, outcome: AuditOutcome| Admission::Deny {
             error,

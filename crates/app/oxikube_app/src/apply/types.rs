@@ -61,8 +61,18 @@ impl ApplyRequest {
         self
     }
 
-    /// The `resource::Apply` command for this request.
+    /// The `resource::Apply` command for this request, reviewed against nothing.
     pub(crate) fn command(&self, resource_version: Option<String>) -> Command {
+        self.reviewed_command(resource_version, false)
+    }
+
+    /// The `resource::Apply` command for this request, reviewed against the live object at
+    /// `resource_version`, or against no live object when `reviewed_absent`.
+    pub(crate) fn reviewed_command(
+        &self,
+        resource_version: Option<String>,
+        reviewed_absent: bool,
+    ) -> Command {
         Command::ResourceApply {
             cluster: self.cluster.clone(),
             namespace: self.namespace.clone(),
@@ -70,6 +80,7 @@ impl ApplyRequest {
             field_manager: self.field_manager.clone(),
             force: self.force,
             resource_version,
+            reviewed_absent,
         }
     }
 }
