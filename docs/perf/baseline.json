@@ -3,11 +3,58 @@
   "note": "Headless perf baseline for `cargo xtask perf --check` (docs/PERFORMANCE.md, Perf harness). Keyed by OS (`std::env::consts::OS`) then scenario then metric; *_ms metrics (p50/p95/p99) are in milliseconds and *_mib metrics (rss_mib, peak_rss_mib) are in MiB; all are medians across samples. Numbers come from the nightly's own runners (ubuntu-latest, macos-latest): refresh with `cargo xtask perf --from-report <perf-report artifact> --update-baseline`, never by hand.",
   "os": {
     "linux": {
-      "source": "github-actions ubuntu-latest nightly run 37715509006 (all scenarios, E08-F520 re-seed)",
-      "updated": "2026-10-08",
+      "source": "github-actions ubuntu-latest nightly run 37715509006 (logs-stream, scroll-10k, startup: E08-F520 re-seed); editor-5mb from nightly run 38096579563 (E10-S11 seed)",
+      "updated": "2026-10-11",
       "profile": "release-fast",
       "samples_per_scenario": 7,
       "scenarios": {
+        "editor-5mb": {
+          "draw_ms": {
+            "p50": 0.619,
+            "p95": 0.639,
+            "p99": 0.675
+          },
+          "frame_ms": {
+            "p50": 0.573,
+            "p95": 0.592,
+            "p99": 0.638
+          },
+          "open_ms": {
+            "p50": 318.361,
+            "p95": 318.361,
+            "p99": 318.361
+          },
+          "peak_rss_mib": {
+            "p50": 228.633,
+            "p95": 228.633,
+            "p99": 228.633
+          },
+          "rss_mib": {
+            "p50": 228.633,
+            "p95": 228.633,
+            "p99": 228.633
+          },
+          "scroll_draw_ms": {
+            "p50": 0.965,
+            "p95": 1.547,
+            "p99": 1.61
+          },
+          "scroll_frame_ms": {
+            "p50": 0.956,
+            "p95": 1.533,
+            "p99": 1.604
+          },
+          "slow_frame_pct": {
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+          },
+          "validation_ms": {
+            "p50": 346.406,
+            "p95": 346.406,
+            "p99": 346.406
+          }
+        },
         "logs-stream": {
           "draw_ms": {
             "p50": 2.342,

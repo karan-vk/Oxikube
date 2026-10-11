@@ -120,6 +120,49 @@ fn the_schema_is_asked_once_per_document_with_a_kind() {
 }
 
 #[test]
+fn the_items_of_a_list_are_checked_against_their_own_kinds() {
+    // `kubectl get -o yaml` wraps what it prints in a `kind: List` (E10-S11).
+    let text = "\
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    name: a
+  spec:
+    containers:
+      - name: nginx
+        imag: nginx
+- apiVersion: apps/v1
+  kind: Deployment
+  spec:
+    replicas: true
+metadata:
+  resourceVersion: \"\"
+";
+    let parsed = parse(text);
+    let mut asked = Vec::new();
+    let diags = validate_buffer(
+        &parsed,
+        |gvk| {
+            asked.push(gvk.to_string());
+            fixture_schemas(gvk)
+        },
+        &ValidateOptions::default(),
+    );
+    // The list itself has no schema to ask for; each item is asked once.
+    assert_eq!(asked, ["v1/Pod", "apps/v1/Deployment"]);
+    assert_eq!(codes(&diags), ["unknown-field", "type-mismatch"]);
+    let seen: Vec<&str> = diags.iter().map(|d| underlined(text, d)).collect();
+    assert_eq!(seen, ["imag", "true"]);
+    assert_eq!(
+        diags[0].path.to_string(),
+        "items[0].spec.containers[0].imag"
+    );
+}
+
+#[test]
 fn syntax_errors_are_diagnostics_too() {
     let text = "apiVersion: v1\nkind: Pod\nspec:\n  containers: [a\n";
     let (parsed, diags) = check_buffer(text);

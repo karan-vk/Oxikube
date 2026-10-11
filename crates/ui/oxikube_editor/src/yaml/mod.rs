@@ -27,7 +27,7 @@ mod tree;
 
 pub use cache::ParseCache;
 pub use node::{CollectionStyle, Node, NodeId, NodeKind, Role, ScalarStyle};
-pub use parse::{parse, parse_shared};
+pub use parse::{parse, parse_cancellable, parse_shared};
 pub use path::{DocPath, JsonPath, PathParseError, PathSegment};
 pub use result::{KeyAt, ParseResult, SyntaxDiagnostic};
 pub use tree::DocTree;

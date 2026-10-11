@@ -1,13 +1,13 @@
 //! [`ManifestEditor`]: the manifest editor view, a workspace item over [`CodeEditor`].
 //!
-//! Validation follows the buffer: every change restarts a [`VALIDATION_DEBOUNCE`] timer (the
-//! previous task is dropped, which cancels it), then the text is taken as a snapshot (the rope is
-//! shared, so this is cheap on the UI thread), parsed and validated on the background executor,
-//! and the result is shown only if the buffer is still at the version it was computed for. The
-//! schemas a document's kind needs are fetched once per editor through its cluster's
-//! `SchemaPort`, on the Kubernetes runtime (`oxikube_runtime::spawn_kube`), and the buffer is
-//! validated again when one arrives. Nothing blocks the UI thread, and a keystroke costs the
-//! editor's own edit plus a timer restart.
+//! Validation follows the buffer: every change cancels the running pass and restarts a
+//! [`VALIDATION_DEBOUNCE`] timer, then the text is taken as a snapshot (the rope is shared, so this
+//! is cheap on the UI thread), parsed and validated on the background executor (a large buffer in
+//! chunks, the visible objects first), and a result is shown only if the buffer is still at the
+//! version it was computed for (`pipeline`). The schemas a document's kind needs are fetched once
+//! per editor through its cluster's `SchemaPort`, on the Kubernetes runtime
+//! (`oxikube_runtime::spawn_kube`), and the buffer is validated again when one arrives. Nothing
+//! blocks the UI thread, and a keystroke costs the editor's own edit plus a timer restart.
 
 use std::rc::Rc;
 use std::time::Duration;
@@ -16,9 +16,8 @@ use gpui::{
     AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, Styled as _, Subscription, Task, Window,
 };
-use oxikube_domain::OxiError;
 use oxikube_domain::command::Command;
-use oxikube_domain::ids::{ClusterId, Gvk};
+use oxikube_domain::ids::ClusterId;
 use oxikube_keymap::{KeyContextBuilder, KeyContextual, contexts};
 use oxikube_settings::SettingsStore;
 use oxikube_ui::ActiveTokens as _;
@@ -30,11 +29,12 @@ use super::live::{LiveLink, LiveSource};
 use super::model::ManifestModel;
 use super::notice::Notice;
 use super::schemas::SchemaSource;
-use super::validation::{VALIDATION_DEBOUNCE, validate_text_in};
+use super::validation::VALIDATION_DEBOUNCE;
 use super::{
     ConvertToJson, ConvertToYaml, ReloadFromServer, ShowDiff, ToggleDiffLayout,
     ToggleManagedFields, ToggleReadOnly, ToggleSecretMask, ToggleSoftWrap,
 };
+use crate::cancel::CancelOnDrop;
 use crate::json::{Language, LanguageMode};
 use crate::open::{RenderOptions, ResourceBinding, ResourceOpen};
 use crate::settings::{EditorSettings, apply_changes};
@@ -59,10 +59,11 @@ pub struct ManifestEditorParts {
 
 /// The manifest editor: a YAML buffer with schema diagnostics, as a workspace item.
 ///
-/// Every change restarts a [`VALIDATION_DEBOUNCE`] timer; the buffer is then validated on the
-/// background executor and the result shown only if the buffer has not changed since. The
-/// schemas its kinds need are fetched once, through the cluster's `SchemaPort` on the Kubernetes
-/// runtime. Nothing blocks the UI thread.
+/// Every change cancels the running validation and restarts a [`VALIDATION_DEBOUNCE`] timer; the
+/// buffer is then validated on the background executor (a large one in chunks, the visible
+/// objects first, its diagnostics filling in as they come) and a result shown only if the buffer
+/// has not changed since. The schemas its kinds need are fetched once, through the cluster's
+/// `SchemaPort` on the Kubernetes runtime. Nothing blocks the UI thread.
 pub struct ManifestEditor {
     pub(crate) editor: Entity<CodeEditor>,
     pub(crate) model: ManifestModel,
@@ -86,10 +87,17 @@ pub struct ManifestEditor {
     pub(super) keep_notice: bool,
     /// A running conversion; replacing it cancels the old one.
     pub(super) conversion: Option<Task<()>>,
-    /// The pending or running validation; replacing it cancels the old one.
-    validation: Option<Task<()>>,
+    /// The pending or running validation pass; replacing it cancels the old one.
+    pub(super) validation: Option<Task<()>>,
+    /// The token of the latest pass: cancelled when the buffer changes and when the editor is
+    /// dropped (the tab closes), so a parse or chunk already running on the background executor
+    /// stops at its next poll.
+    pub(super) pass_cancel: CancelOnDrop,
+    /// A pass has taken the buffer and not finished (set and cleared by the pass itself; the task
+    /// field is never cleared from inside the task).
+    pub(super) pass_running: bool,
     /// Schema fetches in flight; dropped (and aborted) with the editor.
-    schema_fetches: Vec<Task<()>>,
+    pub(super) schema_fetches: Vec<Task<()>>,
     /// The live object: its watch, the banner's state and the diff panel (E10-S07).
     pub(super) live: LiveLink,
     _subscriptions: Vec<Subscription>,
@@ -158,6 +166,8 @@ impl ManifestEditor {
             keep_notice: false,
             conversion: None,
             validation: None,
+            pass_cancel: CancelOnDrop::default(),
+            pass_running: false,
             schema_fetches: Vec::new(),
             live: LiveLink::new(parts.live),
             _subscriptions: subscriptions,
@@ -307,93 +317,6 @@ impl ManifestEditor {
                 cx.notify();
             }
         }
-    }
-
-    /// Validates the buffer after `delay`; a later call cancels this one.
-    pub(crate) fn schedule_validation(
-        &mut self,
-        delay: Duration,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if !self.settings(cx).validation {
-            // Off: no squiggles, no work, no schema fetches.
-            self.validation = None;
-            let model = &mut self.model;
-            self.editor.update(cx, |editor, cx| {
-                model.clear(&mut editor.api(window, cx));
-            });
-            return;
-        }
-        self.validation = Some(cx.spawn_in(window, async move |this, cx| {
-            if !delay.is_zero() {
-                cx.background_executor().timer(delay).await;
-            }
-            let Ok((snapshot, known, mode, masking)) = this.update(cx, |view, cx| {
-                (
-                    view.editor.read(cx).snapshot(cx),
-                    view.model.known().clone(),
-                    view.model.mode(),
-                    view.binding.as_ref().is_some_and(ResourceBinding::masking),
-                )
-            }) else {
-                return;
-            };
-            let mut result = cx
-                .background_spawn(async move {
-                    validate_text_in(
-                        snapshot.version(),
-                        snapshot.to_text(),
-                        &known,
-                        mode,
-                        masking,
-                    )
-                })
-                .await;
-            let _ = this.update_in(cx, |view, window, cx| {
-                let missing = std::mem::take(&mut result.missing);
-                let model = &mut view.model;
-                view.editor.update(cx, |editor, cx| {
-                    model.accept(&mut editor.api(window, cx), result);
-                });
-                for gvk in view.model.to_fetch(&missing) {
-                    view.fetch_schema(gvk, window, cx);
-                }
-                cx.notify();
-            });
-        }));
-    }
-
-    /// Fetches `gvk`'s schema off the UI thread and validates again when it arrives.
-    fn fetch_schema(&mut self, gvk: Gvk, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(source) = self.schemas.clone() else {
-            // No cluster: syntax only.
-            self.model
-                .schema_arrived(gvk, Err(OxiError::not_found("no cluster")));
-            return;
-        };
-        let (Some(port), Some(_)) = (source.port(cx), oxikube_runtime::mode(cx)) else {
-            // Not connected yet: asked again on the next validation.
-            self.model.forget_fetch(&gvk);
-            return;
-        };
-        let cluster = source.cluster().clone();
-        let wanted = gvk.clone();
-        let fetch =
-            oxikube_runtime::spawn_kube(
-                cx,
-                async move { port.schema_for(&cluster, &wanted).await },
-            );
-        self.schema_fetches
-            .push(cx.spawn_in(window, async move |this, cx| {
-                let outcome = fetch
-                    .await
-                    .unwrap_or_else(|error| Err(OxiError::internal(error.to_string())));
-                let _ = this.update_in(cx, |view, window, cx| {
-                    view.model.schema_arrived(gvk, outcome);
-                    view.schedule_validation(Duration::ZERO, window, cx);
-                });
-            }));
     }
 }
 

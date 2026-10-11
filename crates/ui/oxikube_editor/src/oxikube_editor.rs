@@ -14,7 +14,9 @@
 //! | [`json`] | E10-S10 | JSON mode: [`json::Language`], the strict JSON check, YAML to JSON conversion |
 //! | [`open`] | E10-S06 | an editor opened from a live object: [`open::render_resource`], Secret masking, the `resource::Edit` row actions |
 //! | [`diff`] | E10-S07 | diff vs live, the three-way merge, the changed-on-server state machine |
+//! | [`cancel`] | E10-S11 | [`cancel::CancelToken`]: how a stale parse or validation stops early |
 
+pub mod cancel;
 pub mod diff;
 pub mod json;
 pub mod open;

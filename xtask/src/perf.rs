@@ -11,14 +11,17 @@
 //! 5. `--check`: compares with the baseline for this OS; fails when any p50/p95/p99 is more than
 //!    `--tolerance` (20 %) AND more than the absolute noise floor of its class slower
 //!    (`floors::MetricClass`): `--noise-floor-ms` (0.25 ms) for frame and stage `*_ms` metrics,
-//!    `--noise-floor-cold-ms` (40 ms) for the cold-start milestones, `--noise-floor-mib` (8 MiB)
-//!    for `*_mib` memory metrics.
+//!    `--noise-floor-cold-ms` (40 ms) for the cold-start milestones (and the editor's 5 MB open and
+//!    validation pass), `--noise-floor-mib` (8 MiB) for `*_mib` memory metrics, one percentage
+//!    point for `*_pct` shares.
 //!    Missing baselines are reported, not fatal; a baselined scenario that stops running is fatal.
 //! 6. `--update-baseline`: writes this run's numbers into the baseline for this OS.
 //! 7. Budgets (always, unless `--skip-budgets`): the absolute limits of ADR 0013 on the p95 across
 //!    the run's cold launches (`budget::BUDGETS`: the first interactive frame ≤ 400 ms, failing
 //!    beyond +20 %; settings + theme + keymap ≤ 30 ms, E05-S13; the table's first rows < 1 s and
-//!    its frame under churn ≥ 55 fps, E07-S09).
+//!    its frame under churn ≥ 55 fps, E07-S09; the log view's frames, E08; the editor's 5 MB open
+//!    ≤ 500 ms, keystroke to frame ≤ 16 ms, scrolling frame ≤ 8 ms and < 1 % frames over 16 ms,
+//!    E10-S11).
 //!
 //! Every scenario process runs with `KUBECONFIG` set to the reference fixture: 3 kubeconfigs with
 //! 20 contexts (`fixture`), and with `RUST_LIB_BACKTRACE=0` ([`sample_command`]).

@@ -31,6 +31,16 @@ pub(crate) fn span_to_positions(rope: &Rope, range: &Range<usize>) -> Range<Posi
     }
 }
 
+/// The bytes of buffer lines `rows` (end exclusive). Both ends are clamped to the buffer's last
+/// line, because the row range may come from a layout painted before the buffer shrank.
+pub(crate) fn rows_to_bytes(rope: &Rope, rows: Range<usize>) -> Range<usize> {
+    let last_line = rope.lines_len().saturating_sub(1);
+    let start_row = rows.start.min(last_line);
+    let end_row = rows.end.saturating_sub(1).min(last_line).max(start_row);
+    let start = rope.line_start_offset(start_row);
+    start..rope.line_end_offset(end_row).max(start)
+}
+
 /// The number of characters on `line`, without its line break.
 fn line_chars(rope: &Rope, line: u32) -> u32 {
     rope.offset_to_position(rope.line_end_offset(line as usize))
@@ -114,6 +124,31 @@ mod tests {
 
     fn diag(range: Range<usize>, level: DiagnosticLevel) -> EditorDiagnostic {
         EditorDiagnostic::new(range, level, "bad\nmore")
+    }
+
+    #[test]
+    fn rows_map_to_their_bytes() {
+        let rope = Rope::from("a: 1\nb: 2\nc: 3\n");
+        assert_eq!(rows_to_bytes(&rope, 0..1), 0..4);
+        assert_eq!(rows_to_bytes(&rope, 1..3), 5..14);
+    }
+
+    #[test]
+    fn stale_rows_past_a_shrunk_buffer_are_clamped() {
+        // A layout painted at row 5000 of a large buffer, then the buffer was emptied or cut
+        // short before the next frame: no panic, the range stays inside the buffer.
+        for text in ["", "a: 1", "a: 1\nb: 2\n"] {
+            let rope = Rope::from(text);
+            let range = rows_to_bytes(&rope, 5000..5040);
+            assert!(
+                range.start <= range.end && range.end <= rope.len(),
+                "{text:?}: {range:?}"
+            );
+        }
+        // An empty or inverted row range does not panic either.
+        let rope = Rope::from("a: 1\nb: 2\n");
+        assert_eq!(rows_to_bytes(&rope, 1..1), 5..9);
+        assert_eq!(rows_to_bytes(&rope, 0..0), 0..4);
     }
 
     #[test]

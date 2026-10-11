@@ -2,8 +2,9 @@
 //! it is tested without a window (`tests` below use a plain struct as the editor).
 //!
 //! It keeps the schemas the buffer's kinds need (which to fetch, which arrived, which the cluster
-//! does not have), drops a validation result computed for an older buffer version and counts the
-//! problems the toolbar shows.
+//! does not have), drops a validation result computed for an older buffer version, counts the
+//! problems the toolbar shows and how far a large buffer's pass has got, caches the latest parse
+//! (a schema arriving re-validates without re-parsing) and counts the passes ([`PassStats`]).
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -13,8 +14,10 @@ use oxikube_domain::schema::JsonSchema;
 use oxikube_domain::{ErrorKind, OxiResult};
 use oxikube_ui::editor::{DiagnosticLevel, EditorApi};
 
+use super::progressive::Coverage;
 use super::validation::{KnownSchemas, Validation};
 use crate::json::{Language, LanguageMode};
+use crate::yaml::{ParseCache, ParseResult};
 
 /// How many problems the shown diagnostics hold.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -34,6 +37,21 @@ pub enum Accepted {
     Stale,
 }
 
+/// What the validation passes of one editor did, for tests and the perf scenario.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PassStats {
+    /// Passes started: the debounce elapsed (or a schema arrived) and the buffer was taken.
+    pub started: u64,
+    /// Passes whose every chunk was checked for the buffer as it still was.
+    pub completed: u64,
+    /// Passes stopped because the buffer changed (or a newer pass replaced them).
+    pub cancelled: u64,
+    /// Parses run (a pass over a version already parsed reuses the cached parse).
+    pub parses: u64,
+    /// Chunks checked, by all passes.
+    pub chunks: u64,
+}
+
 /// The manifest editor's state beyond the buffer: the schemas the buffer's kinds need (which to
 /// fetch, which arrived, which the cluster does not have), the buffer version whose diagnostics
 /// are shown (a result computed for an older version is dropped) and the problem counts the
@@ -47,6 +65,9 @@ pub struct ManifestModel {
     shown: Option<u64>,
     mode: LanguageMode,
     language: Language,
+    coverage: Coverage,
+    parsed: ParseCache,
+    stats: PassStats,
 }
 
 impl ManifestModel {
@@ -85,6 +106,7 @@ impl ManifestModel {
         }
         self.problems = Problems::default();
         self.shown = None;
+        self.coverage = Coverage::default();
     }
 
     /// Records the language the editor was created with (before any check has run).
@@ -97,6 +119,31 @@ impl ManifestModel {
         self.shown
     }
 
+    /// How much of the buffer the shown diagnostics cover (a large buffer fills in chunk by chunk).
+    pub fn coverage(&self) -> Coverage {
+        self.coverage
+    }
+
+    /// What the validation passes did so far.
+    pub fn stats(&self) -> PassStats {
+        self.stats
+    }
+
+    /// Counts for the passes (the view's pipeline updates them).
+    pub(super) fn stats_mut(&mut self) -> &mut PassStats {
+        &mut self.stats
+    }
+
+    /// The cached parse of `version`, if the last parse was of it.
+    pub fn parsed(&self, version: u64) -> Option<Arc<ParseResult>> {
+        self.parsed.get(version)
+    }
+
+    /// Keeps `parsed` as the parse of `version`; the previous one is released.
+    pub fn cache_parse(&mut self, version: u64, parsed: Arc<ParseResult>) {
+        self.parsed.insert(version, parsed);
+    }
+
     /// Kinds whose schema could not be fetched (not "the cluster has none"), with the reason.
     pub fn unavailable(&self) -> &[(Gvk, String)] {
         &self.unavailable
@@ -106,6 +153,7 @@ impl ManifestModel {
     pub fn changed(&mut self) {
         self.problems = Problems::default();
         self.shown = None;
+        self.coverage = Coverage::default();
     }
 
     /// Shows `result` when it is for the buffer's current version and language mode; drops it
@@ -131,6 +179,7 @@ impl ManifestModel {
             warnings: count(DiagnosticLevel::Warning),
         };
         self.shown = Some(result.version);
+        self.coverage = result.coverage;
         editor.set_diagnostics(result.diagnostics);
         Accepted::Shown
     }
@@ -138,6 +187,7 @@ impl ManifestModel {
     /// Validation is off: drops the diagnostics shown and the problem counts.
     pub fn clear(&mut self, editor: &mut dyn EditorApi) {
         // After an edit nothing is shown (the editor dropped it): nothing to do per keystroke.
+        self.coverage = Coverage::default();
         if self.shown.take().is_some() {
             self.problems = Problems::default();
             editor.set_diagnostics(Vec::new());

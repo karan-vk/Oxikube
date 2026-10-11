@@ -207,9 +207,9 @@ Two rules keep a scenario measuring what the app does (E07-F509, see
 | `scroll-10k` (alias `table-scroll-10k`) | measured (E07-S09, see [Resource table](#resource-table-10-000-pods-under-churn-e07-s09)) | `first_rows_ms` (table created on a warm feed to the first frame showing all 10 000 pods), `frame_ms` / `draw_ms` scrolling 3 rows a frame while the feed delivers a 10-event batch a frame, `rss_mib` / `peak_rss_mib`; fails unless every batch is counted as feed deltas and `max_notifies_per_frame` ≤ 1 |
 | `palette` | measured (E11-S03) | the command palette over 2 000 registered commands (fixture commands in every category, view and selection shape; 1 500 available for a table with a pod selected): `open_ms` (building the view, which classifies the commands and puts the recents first, to the end of the first frame listing them; a fresh process, so it includes the real text system's first glyph shaping), then 120 scripted frames typing `fixture 19 pod` one character a frame (cleared after the last): `frame_ms` / `draw_ms` (the matches of 2 000 candidates, above 512 on the background executor, and the frame showing them), `rss_mib` / `peak_rss_mib`. Local macOS, `release-fast`, median of 5: `open_ms` 20 (the palette's own part is 1.5 ms: `cargo run -p oxikube_palette --features test-support --profile release-fast --example command_palette_bench` reports classify 0.18, open 1.3, keystroke to matches 0.75, frame 0.28, all p50 ms), `frame_ms` p50 0.31 / p95 1.45, `draw_ms` p95 0.72. Baseline: seeded from the nightly run like the others. Since E11-S11 the matching is `oxikube_app::FuzzyService` (see "Palette fuzzy ranking" below) |
 | `logs-stream` | measured (E08-S02, see [Log viewer](#log-viewer-streaming-5-000-liness-e08-s02)) | the log view streaming 5 000 lines/s after a 1 000-line tail, 120 scripted frames per mode: `frame_ms` / `draw_ms` (wrap off, following), `paused_*`, `wrap_*`, `wrap_paused_*`, `search_*` / `filter_*` (E08-S03: a regex search highlighting / filtering while it streams), `merged_*`, `merged_wrap_*` (E08-S04: the same lines merged from 10 pods of a Deployment), `rss_mib` / `peak_rss_mib`; fails unless every mode receives the lines at that rate and `max_notifies_per_frame` ≤ 1 |
-| `editor-5mb` | unavailable: the `ManifestEditor` view exists (E10-S04; `cargo run -p oxikube_editor --profile release-fast --example typing_bench` measures keystroke-to-frame on a 2k-line manifest on the test platform); the 5 MB scenario needs E10-S11 #153 (large-file and performance hardening) | open time, typing latency |
+| `editor-5mb` | measured (E10-S11, see [Manifest editor](#manifest-editor-a-5-mb-dump-e10-s11)) | the manifest editor over a 5 MB `kubectl get -o yaml` dump (a `kind: List` of about 12 000 pods, an error planted in every 20th) checked against the Pod schema: `open_ms` (building the view with the text to the end of its first frame), `frame_ms` / `draw_ms` (120 frames typing one keystroke each into a visible line, the clock moving one 120 Hz frame between them so the 150 ms debounce keeps restarting), `validation_ms` (the whole pass the pause starts, run on the test scheduler: its CPU time), `scroll_frame_ms` / `scroll_draw_ms` (120 frames scrolling from the top to the end with the diagnostics drawn), `slow_frame_pct` (typing and scrolling frames over 16 ms), `rss_mib` / `peak_rss_mib`; fails unless every planted error is found and the gutter paints no more markers than lines on screen |
 
-A scenario whose view is not built yet writes `status: "unavailable"` and a specific `reason` into the JSON report, prints `UNAVAILABLE: <reason>` with the enabling stories, and exits 0. For `editor-5mb`, E10-S11 unblocks implementation (E05-S11 and E10-S04 have landed). The story that builds that view replaces the stub in `bins/oxikube/src/perf_scenario/mod.rs` with a script driven by `oxikube_runtime::perf::harness::run_frames` and record a baseline in the same PR. The scripted path and the sample schema are covered by a `#[gpui::test]` that drives a fake feed through the same driver (`oxikube_runtime::perf::harness`).
+A scenario whose view is not built yet writes `status: "unavailable"` and a specific `reason` into the JSON report, prints `UNAVAILABLE: <reason>` with the enabling stories, and exits 0; every scenario is scripted today (`editor-5mb` was the last, E10-S11). The scripted path and the sample schema are covered by a `#[gpui::test]` that drives a fake feed through the same driver (`oxikube_runtime::perf::harness`).
 
 ### Baseline and the nightly gate
 
@@ -1442,6 +1442,64 @@ budget in `cargo test` with slack for debug builds.
 Unchanged by the swap (`cargo xtask perf palette`, median of 5, release-fast): `open_ms` 21, `frame_ms` p50 0.30 / p95
 1.45, `draw_ms` p95 0.71, 0 dropped frames; `cargo xtask perf startup`: `init_features_ms` 0.055 (the history loader and
 writers are background GPUI tasks, none on Tokio, so the idle app still holds no Tokio task), first frame p50 130 ms.
+
+## Manifest editor: a 5 MB dump (E10-S11)
+
+Budget: typing latency ≤ 16 ms with validation debounced, a 5 MB file opens in ≤ 500 ms (the
+Editor row above); the epic: a 5 MB `kubectl get -o yaml` dump opens and scrolls with fewer than
+1 % of frames over 16 ms.
+
+How the editor stays inside it (`oxikube_editor::view::pipeline`):
+
+- A keystroke costs the library's edit (rope, incremental tree-sitter with a 2 ms synchronous
+  budget, then a background reparse) and a timer restart: the previous validation pass is
+  cancelled (`CancelToken`) and a new one waits for a 150 ms pause. Nothing parses the YAML model
+  on the UI thread.
+- The pass runs on the background executor from a snapshot of the rope: the parse (about 110 ms at
+  5 MB, cancellable every 4 096 parser events, so a stale one stops within about 1 ms), reused
+  from the parse cache when only a schema changed; then the objects (each document, or each item of
+  a `kind: List`) in chunks: one below 1 MiB; above it the objects on screen first, then about
+  256 KiB per chunk, the findings shown after each chunk ("Large file (5.2 MB) · checking 40 %" in
+  the toolbar). Validating all 12 000 pods of the dump takes about 13 ms.
+- The gutter markers and end-of-line messages are painted for the visible lines only (a binary
+  search into per-line summaries); the squiggles are the library's, looked up for the visible byte
+  range in its `DiagnosticSet` sum tree. `CodeEditor::overlay_stats` reports what each paint drew,
+  and `tests/large_file.rs` asserts that, scrolled to the end of the 5 MB dump with 1 000
+  diagnostics, at most a screenful is painted.
+
+### Measuring it
+
+```
+cargo xtask perf editor-5mb                     # headless, 5 fresh processes, budgets checked
+cargo test -p oxikube_editor --test large_file  # pipeline and gutter tests on the 5 MB fixture
+```
+
+### Numbers (E10-S11, M-series laptop, release-fast)
+
+Headless (`cargo xtask perf editor-5mb`, median of 5 fresh processes; CPU, layout and paint
+preparation, no present and no GPU time):
+
+| Metric | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| `open_ms` (5 243 161 bytes, across launches) | 156 ms | 185 ms | | |
+| `draw_ms` (keystroke to frame) | 0.41 ms | 0.60 ms | 0.66 ms | 1.02 ms |
+| `frame_ms` (typing) | 0.38 ms | 0.55 ms | 0.59 ms | 0.61 ms |
+| `scroll_frame_ms` | 0.76 ms | 1.50 ms | 1.80 ms | 4.10 ms |
+| `validation_ms` (one pass, across launches) | 208 ms | 253 ms | | |
+| `slow_frame_pct` | 0 % | 0 % | | |
+| `peak_rss_mib` | 174 MiB | | | |
+
+**Baseline.** `editor-5mb` is seeded for `linux` in [`docs/perf/baseline.json`](perf/baseline.json)
+from nightly run 38096579563 on the story branch (only that scenario was taken from the report, so
+the other scenarios keep their E08-F520 numbers). The runner measured `open_ms` p50 318 ms,
+`validation_ms` 346 ms, `draw_ms` p95 0.64 ms, `scroll_frame_ms` p95 1.53 ms, `slow_frame_pct` 0 and
+`peak_rss_mib` 229. The `macos` seed waits for the macOS perf smoke tests to pass again (#592; seed:
+#643). Until then the advisory macOS check reports the scenario as `MISSING`.
+
+Before this story the same open took 220 to 340 ms in a headless probe (unchanged code path: the
+rope and the display map; the spread is the machine), a keystroke 0.4 to 1.7 ms, and every pause
+ran a parse of the whole buffer to the end even when the next keystroke had already made it stale;
+a `kind: List` dump got syntax checks only (its items were not validated).
 
 ## Load fixture: `cargo xtask load-pods`
 

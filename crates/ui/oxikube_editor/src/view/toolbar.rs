@@ -1,6 +1,8 @@
-//! The editor's toolbar: what is checked against what (the cluster, or syntax only), the problem
-//! count, and the Read-only, Wrap and Diff (vs live, E10-S07) toggles. Each toggle sends its
-//! `editor::*` command, like the keys and the palette.
+//! The editor's toolbar: what is checked against what (the cluster, or syntax only), the
+//! large-file notice (E10-S11: above 1 MiB the buffer is validated in chunks, the visible objects
+//! first, and the notice says how far the pass has got), the problem count, and the Read-only,
+//! Wrap and Diff (vs live, E10-S07) toggles. Each toggle sends its `editor::*` command, like the
+//! keys and the palette.
 //!
 //! The bus commands carry no target: [`EditorViews`](super::EditorViews) acts on the focused
 //! editor. gpui-component's `Button` keeps the focus where it was on mouse-down, so a toggle
@@ -15,11 +17,12 @@ use oxikube_domain::command::Command;
 use oxikube_keymap::contexts;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{Disableable as _, Selectable as _, h_flex};
-use oxikube_ui::tooltip::tooltip_for_action;
+use oxikube_ui::tooltip::{Tooltip, tooltip_for_action};
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::manifest_editor::ManifestEditor;
 use super::model::Problems;
+use super::progressive::{Coverage, LARGE_BUFFER_BYTES};
 use super::{
     ConvertToJson, ConvertToYaml, ShowDiff, ToggleManagedFields, ToggleReadOnly, ToggleSecretMask,
     ToggleSoftWrap,
@@ -83,6 +86,23 @@ impl ManifestEditor {
             )
             .children(self.resource_notice(cx))
             .child(div().flex_1())
+            .children(
+                large_file_text(self.editor.read(cx).len(cx), self.model.coverage()).map(|text| {
+                    div()
+                        .id("manifest-large-file")
+                        .debug_selector(|| "manifest-large-file".into())
+                        .flex_none()
+                        .text_color(tokens.colors.text_muted)
+                        .tooltip(|window, cx| {
+                            Tooltip::new(
+                                "Validated in the background in chunks, the visible \
+                                     objects first",
+                            )
+                            .build(window, cx)
+                        })
+                        .child(text)
+                }),
+            )
             .child(
                 div()
                     .id("manifest-problems")
@@ -314,6 +334,20 @@ impl ManifestEditor {
     }
 }
 
+/// "Large file (5.0 MB)", plus "checking 40 %" while a pass is filling in its diagnostics; `None`
+/// below [`LARGE_BUFFER_BYTES`].
+pub(crate) fn large_file_text(bytes: usize, coverage: Coverage) -> Option<String> {
+    if bytes < LARGE_BUFFER_BYTES {
+        return None;
+    }
+    let size = format!("Large file ({:.1} MB)", bytes as f64 / 1e6);
+    if coverage.is_complete() {
+        return Some(size);
+    }
+    let percent = coverage.done * 100 / coverage.total.max(1);
+    Some(format!("{size} · checking {percent} %"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,5 +359,19 @@ mod tests {
         assert_eq!(p(1, 0), "1 error");
         assert_eq!(p(0, 2), "2 warnings");
         assert_eq!(p(2, 1), "2 errors · 1 warning");
+    }
+
+    #[test]
+    fn the_large_file_notice_shows_progress() {
+        let done = Coverage { done: 5, total: 5 };
+        assert_eq!(large_file_text(LARGE_BUFFER_BYTES - 1, done), None);
+        assert_eq!(
+            large_file_text(5_242_880, done).as_deref(),
+            Some("Large file (5.2 MB)")
+        );
+        assert_eq!(
+            large_file_text(5_242_880, Coverage { done: 2, total: 5 }).as_deref(),
+            Some("Large file (5.2 MB) · checking 40 %")
+        );
     }
 }

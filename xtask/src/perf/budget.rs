@@ -104,6 +104,37 @@ pub const BUDGETS: &[Budget] = &[
         "merged_wrap_frame_ms",
         "5 000 lines/s merged from 10 pods, wrapped, following (headless frame, p95)",
     ),
+    Budget {
+        scenario: "editor-5mb",
+        metric: "open_ms",
+        // E10-S11: "5 MB open < 500 ms" (docs/PERFORMANCE.md, Editor).
+        limit: 500.0,
+        tolerance: 0.0,
+        what: "a 5 MB manifest opens to its first frame (headless)",
+    },
+    Budget {
+        scenario: "editor-5mb",
+        metric: "draw_ms",
+        // E10-S11: "typing latency < 16 ms with validation debounced".
+        limit: 16.0,
+        tolerance: 0.0,
+        what: "keystroke to frame in a 5 MB manifest, validation debounced (headless, p95)",
+    },
+    Budget {
+        scenario: "editor-5mb",
+        metric: "scroll_frame_ms",
+        limit: 8.0,
+        tolerance: 0.0,
+        what: "scrolling a 5 MB manifest with its diagnostics (headless frame, p95)",
+    },
+    Budget {
+        scenario: "editor-5mb",
+        metric: "slow_frame_pct",
+        // The epic: frames over 16 ms < 1 % while typing and scrolling a 5 MB dump.
+        limit: 1.0,
+        tolerance: 0.0,
+        what: "typing and scrolling frames over 16 ms in a 5 MB manifest (%)",
+    },
 ];
 
 /// A `logs-stream` frame budget (E08-S02, the JSON modes E08-S05, the search modes E08-S03, the merged modes E08-S04):
@@ -319,6 +350,43 @@ mod tests {
         assert_eq!(verdicts(&r)[4], Verdict::Fail);
         r.os = "linux".into();
         assert_eq!(verdicts(&r)[4], Verdict::Fail, "every OS since #509");
+    }
+
+    #[test]
+    fn the_editor_budgets_hold_open_typing_scrolling_and_slow_frames() {
+        let mut r = report(Some(100.0), 1.0);
+        let mut launches = BTreeMap::new();
+        launches.insert("open_ms".to_owned(), pct(210.0));
+        launches.insert("slow_frame_pct".to_owned(), pct(0.0));
+        let mut metrics = BTreeMap::new();
+        metrics.insert("draw_ms".to_owned(), pct(0.8));
+        metrics.insert("scroll_frame_ms".to_owned(), pct(1.7));
+        r.scenarios.insert(
+            "editor-5mb".to_owned(),
+            ScenarioResult {
+                status: Status::Ok,
+                reason: None,
+                enabled_by: vec![],
+                samples: 5,
+                metrics,
+                counters: Counters::default(),
+                launches,
+            },
+        );
+        let editor = |r: &Report| -> Vec<Verdict> {
+            check(r, BUDGETS)
+                .iter()
+                .filter(|row| row.budget.scenario == "editor-5mb")
+                .map(|row| row.verdict)
+                .collect()
+        };
+        assert_eq!(editor(&r), [Verdict::Within; 4]);
+        let e = r.scenarios.get_mut("editor-5mb").unwrap();
+        e.launches.insert("open_ms".to_owned(), pct(500.5));
+        e.metrics.insert("draw_ms".to_owned(), pct(16.5));
+        e.metrics.insert("scroll_frame_ms".to_owned(), pct(8.5));
+        e.launches.insert("slow_frame_pct".to_owned(), pct(1.7));
+        assert_eq!(editor(&r), [Verdict::Fail; 4]);
     }
 
     #[test]

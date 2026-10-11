@@ -10,9 +10,14 @@ use super::dupes::duplicate_keys;
 use super::node::{CollectionStyle, NodeKind, ScalarStyle};
 use super::recover::{Resume, SegmentEnds, find_resume, scan_start};
 use super::result::{ParseResult, SyntaxDiagnostic};
+use crate::cancel::{CancelToken, Cancelled};
 
 /// Diagnostics per buffer; recovery gives up on the rest of the text when it reaches this many.
 const MAX_DIAGNOSTICS: usize = 1_000;
+
+/// Parser events between two polls of the [`CancelToken`]: a few hundred microseconds of work, so
+/// a cancelled 5 MB parse (about a million events) stops almost at once.
+const EVENTS_PER_POLL: u32 = 4_096;
 
 /// Parses a YAML buffer (one or more `---` documents) into its spanned model. Never fails and
 /// never panics: invalid YAML yields the tree built so far plus [`SyntaxDiagnostic`]s.
@@ -34,13 +39,25 @@ pub fn parse(text: &str) -> ParseResult {
 /// the error, so it is reported as an error too.
 #[must_use]
 pub fn parse_shared(text: Arc<str>) -> ParseResult {
+    match parse_cancellable(text, &CancelToken::new()) {
+        Ok(parsed) => parsed,
+        // Nobody else holds the token.
+        Err(Cancelled) => unreachable!("a fresh token is never cancelled"),
+    }
+}
+
+/// [`parse_shared`] that stops early, returning [`Cancelled`], once `cancel` is cancelled. The
+/// token is polled every few thousand parser events and between recovery runs, so a stale parse
+/// of a large buffer gives its core back within a fraction of a millisecond.
+pub fn parse_cancellable(text: Arc<str>, cancel: &CancelToken) -> Result<ParseResult, Cancelled> {
     let mut builder = Builder::new();
     let mut diagnostics = Vec::new();
     let mut span = 0..text.len();
     let mut continuing = false;
     let mut segments = SegmentEnds::default();
     let end = loop {
-        let outcome = run(&text, span.clone(), continuing, &mut builder);
+        cancel.check()?;
+        let outcome = run(&text, span.clone(), continuing, &mut builder, cancel)?;
         builder.end_run();
         let open: Vec<_> = builder.open_blocks().collect();
         let (resume, last_end) = match outcome {
@@ -91,11 +108,11 @@ pub fn parse_shared(text: Arc<str>) -> ParseResult {
         duplicate_keys(doc, &text, &mut diagnostics, MAX_DIAGNOSTICS);
     }
     diagnostics.sort_by_key(|d| d.span.start);
-    ParseResult {
+    Ok(ParseResult {
         text,
         docs,
         diagnostics,
-    }
+    })
 }
 
 /// A parser run that stopped on a syntax error.
@@ -109,26 +126,32 @@ struct RunFailure {
 
 /// Feeds one parser run over `text[span]` into the builder and returns the end of its last
 /// event. A `continuing` run (the rest of a collection open at an error) adds to the current
-/// document, so its document start and end are ignored.
+/// document, so its document start and end are ignored. The outer `Err` is a cancellation.
 fn run(
     text: &str,
     span: Range<usize>,
     continuing: bool,
     builder: &mut Builder,
-) -> Result<usize, RunFailure> {
+    cancel: &CancelToken,
+) -> Result<Result<usize, RunFailure>, Cancelled> {
     let base = span.start;
     let source = &text[span];
     let mut last_end = base;
+    let mut events: u32 = 0;
     for next in Parser::new_from_str_with_options(source, options! { emit_comments: false }) {
+        events = events.wrapping_add(1);
+        if events.is_multiple_of(EVENTS_PER_POLL) {
+            cancel.check()?;
+        }
         let (event, span) = match next {
             Ok(pair) => pair,
             Err(error) => {
                 let at = base + error.marker().byte_offset().unwrap_or(0);
-                return Err(RunFailure {
+                return Ok(Err(RunFailure {
                     at: at.clamp(last_end, text.len()),
                     message: error.info(),
                     last_end,
-                });
+                }));
             }
         };
         let range = absolute(&span, base, text.len());
@@ -164,7 +187,7 @@ fn run(
             _ => {}
         }
     }
-    Ok(last_end)
+    Ok(Ok(last_end))
 }
 
 /// A span in buffer offsets. granit-parser always has byte offsets for `&str` input; a missing
@@ -238,5 +261,37 @@ fn collection_style(style: StructureStyle) -> CollectionStyle {
     match style {
         StructureStyle::Flow => CollectionStyle::Flow,
         StructureStyle::Block => CollectionStyle::Block,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn big() -> Arc<str> {
+        let mut text = String::new();
+        for i in 0..2_000 {
+            text.push_str(&format!(
+                "---\nkind: Pod\nmetadata:\n  name: p{i}\n  labels: {{a: b}}\n"
+            ));
+        }
+        Arc::from(text)
+    }
+
+    #[test]
+    fn a_running_token_parses_the_same_as_parse_shared() {
+        let text = big();
+        let token = CancelToken::new();
+        assert_eq!(
+            parse_cancellable(text.clone(), &token),
+            Ok(parse_shared(text))
+        );
+    }
+
+    #[test]
+    fn a_cancelled_token_stops_the_parse() {
+        let token = CancelToken::new();
+        token.cancel();
+        assert_eq!(parse_cancellable(big(), &token), Err(Cancelled));
     }
 }

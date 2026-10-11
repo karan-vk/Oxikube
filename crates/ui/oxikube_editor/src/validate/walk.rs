@@ -10,7 +10,11 @@ use super::diagnostic::{Diagnostic, DiagnosticCode, Severity};
 use super::options::ValidateOptions;
 use super::scalar::{ValueType, matches_enum, scalar_type};
 use super::suggest::nearest;
+use crate::cancel::CancelToken;
 use crate::yaml::{DocTree, NodeId, NodeKind, ScalarStyle};
+
+/// Nodes visited between two polls of the [`CancelToken`]: well under a millisecond of work.
+const NODES_PER_POLL: u32 = 256;
 
 /// Compiled `pattern`s, by pattern text. A pattern that does not compile (a Go-only construct)
 /// is remembered as such and never reported: the validator must not invent errors.
@@ -40,6 +44,12 @@ pub(super) struct Walk<'a> {
     /// partial tree, so `required` is not judged there.
     pub(super) errors: &'a [usize],
     pub(super) out: Vec<Diagnostic>,
+    /// Polled every [`NODES_PER_POLL`] nodes; once cancelled the walk unwinds without reporting.
+    pub(super) cancel: &'a CancelToken,
+    /// Nodes visited so far.
+    pub(super) steps: u32,
+    /// The token was found cancelled: `out` is incomplete and must be dropped.
+    pub(super) cancelled: bool,
 }
 
 const INT_OR_STRING: [SchemaType; 2] = [SchemaType::Integer, SchemaType::String];
@@ -106,9 +116,14 @@ impl Walk<'_> {
 
     /// Checks the node `id` against `schema`. `is_root` is the document's root mapping.
     pub(super) fn walk(&mut self, id: NodeId, schema: &JsonSchema, is_root: bool) {
-        if schema.truncated || self.full() {
+        if self.cancelled || schema.truncated || self.full() {
             return;
         }
+        if self.steps.is_multiple_of(NODES_PER_POLL) && self.cancel.is_cancelled() {
+            self.cancelled = true;
+            return;
+        }
+        self.steps = self.steps.wrapping_add(1);
         match self.doc.node(id).kind {
             // Aliases and merge keys are not expanded: nothing to judge here.
             NodeKind::Alias { .. } => {}

@@ -6,8 +6,9 @@
 //! (`oxikube_testkit::headless`): numbers are CPU, layout and paint preparation, no present and no
 //! GPU time.
 //!
-//! Scenarios whose views do not exist yet report `unavailable` (exit 0) with the stories that
-//! enable them, so the harness, the nightly job and the baseline format are in place before them.
+//! A scenario whose view does not exist yet reports `unavailable` (exit 0) with the stories that
+//! enable it, so the harness, the nightly job and the baseline format are in place before it
+//! (`ScenarioSample::unavailable`); every scenario is scripted today.
 //!
 //! - `startup` ([`startup`]): the real init order, the main window behind the startup
 //!   placeholder, the first interactive frame and the per-stage breakdown (E05-S13).
@@ -17,6 +18,8 @@
 //!   a query (E11-S03).
 //! - `logs-stream` ([`logs_stream`]): the log view streaming 5 000 lines/s, wrap off/on and
 //!   autoscroll on/paused (E08-S02), and with a search highlighting or filtering (E08-S03).
+//! - `editor-5mb` ([`editor_5mb`]): the manifest editor over a 5 MB `kubectl get -o yaml` dump:
+//!   open, typing, the debounced validation pass, scrolling with diagnostics (E10-S11).
 //!
 //! The view-driving scenarios mount their view as the app's window does ([`window_root`]), so it
 //! is drawn with the app's text style; a sample fails if its text falls back to another family
@@ -24,6 +27,7 @@
 //! `cargo xtask perf` sets): with them on, every error built on a hot path captures a stack trace
 //! and the numbers stop being comparable, so a sample warns about it on stderr.
 
+mod editor_5mb;
 mod logs_stream;
 mod palette;
 mod scroll_10k;
@@ -56,13 +60,7 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
         scroll_10k::NAME | "table-scroll-10k" => scroll_10k::run(probe),
         palette::NAME => palette::run(probe),
         logs_stream::NAME => logs_stream::run(probe),
-        "editor-5mb" => Ok(ScenarioSample::unavailable(
-            name,
-            "not scripted yet: the manifest editor view exists (E10-S04, `cargo run -p \
-             oxikube_editor --profile release-fast --example typing_bench` for 2k lines); the \
-             5 MB open-and-type scenario is E10-S11's",
-            &["E10-S11 #153"],
-        )),
+        editor_5mb::NAME => editor_5mb::run(probe),
         other => {
             eprintln!(
                 "oxikube: unknown perf scenario `{other}` (startup, scroll-10k or \
