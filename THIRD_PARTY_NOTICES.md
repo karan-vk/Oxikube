@@ -99,6 +99,14 @@ Entries:
   server's limit. The MIT notice and permission text are the file header (same text as below).
   `build/suspend.rs` (the `spec.suspend` merge patch) is the one-line `CronJobSuspend` patch of
   `src/network/mod.rs` rewritten, with no kdash code in it.
+- `crates/domain/oxikube_domain/src/build/restart.rs`: the rollout-restart case of
+  `ResourcePatch::to_merge_patch` (the pod template annotation `kubectl.kubernetes.io/restartedAt`)
+  from `src/network/mod.rs` @ c303673 (v2.1.1), E12-S05. Reworked so the timestamp is an argument
+  (the app's `ClockPort`, not the system clock) and the body is built in the domain, shared by the
+  app's `workload::Restart` handler and the kube adapter's `ResourcePatch`. The MIT notice and
+  permission text are the file header (same text as below). `build/images.rs` (`kubectl set image`
+  as a strategic merge patch) is written from the Kubernetes API's merge-key rules, with no kdash
+  code in it.
 - `crates/adapters/oxikube_kube/src/algorithms/cronjob.rs`: ports `trigger_cronjob` (clone
   `spec.jobTemplate` into a `Job` with `generateName: <cronjob>-manual-`, the
   `cronjob.kubernetes.io/instantiate` annotation and an owner reference to the CronJob) from

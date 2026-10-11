@@ -31,6 +31,8 @@ actions!(
         DeleteSelected,
         ShellSelected,
         ScaleSelected,
+        RestartSelected,
+        SetImageSelected,
         AttachSelected,
         CordonSelected,
         UncordonSelected,
@@ -678,6 +680,55 @@ fn s_scales_the_workloads_that_can_scale_and_stays_a_shell_elsewhere(cx: &mut Te
             .collect::<Vec<_>>()
     });
     assert_eq!(keys, ["s"]);
+}
+
+#[gpui::test]
+fn r_restarts_and_i_sets_the_image_on_the_workloads_a_template_change_rolls(
+    cx: &mut TestAppContext,
+) {
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        for kind in ["Deployment", "StatefulSet", "DaemonSet"] {
+            assert_eq!(
+                runs(cx, "r", &strs(&table(kind, ""))),
+                Some("resource_table::RestartSelected"),
+                "{kind} on {platform:?}"
+            );
+            assert_eq!(
+                runs(cx, "i", &strs(&table(kind, ""))),
+                Some("resource_table::SetImageSelected"),
+                "{kind} on {platform:?}"
+            );
+        }
+        // A ReplicaSet's template change rolls nothing, a Pod has no template, and a Node's `r` is
+        // the drain of a later story: none of them restarts.
+        for kind in [
+            "ReplicaSet",
+            "ReplicationController",
+            "Pod",
+            "Node",
+            "Service",
+        ] {
+            assert_eq!(runs(cx, "r", &strs(&table(kind, ""))), None, "{kind}");
+            assert_eq!(runs(cx, "i", &strs(&table(kind, ""))), None, "{kind}");
+        }
+        // Typing into the table's filter field is text.
+        let editing = table("Deployment", "Editing");
+        assert_eq!(press(cx, "r", &strs(&editing)), Resolution::Unbound);
+        assert_eq!(press(cx, "i", &strs(&editing)), Resolution::Unbound);
+    }
+    // The palette shows the keys next to the commands.
+    install(cx, MAC, "");
+    let keys = |cx: &mut TestAppContext, command| {
+        cx.read(|cx| {
+            bindings_for_command(cx, command)
+                .into_iter()
+                .map(|info| info.keystrokes_text())
+                .collect::<Vec<_>>()
+        })
+    };
+    assert_eq!(keys(cx, CommandId::WORKLOAD_RESTART), ["r"]);
+    assert_eq!(keys(cx, CommandId::WORKLOAD_SET_IMAGE), ["i"]);
 }
 
 #[gpui::test]

@@ -411,12 +411,19 @@ impl oxikube_workspace::command_surface::CommandSurface for DetailView {
             .selecting(vec![self.target.clone()])
     }
 
-    /// Scale asks for the count in its dialog (E12-S04), so the palette runs it here.
+    /// Scale and Set image ask in their dialogs (E12-S04, E12-S05), so the palette runs them here;
+    /// Restart goes through the bus like the header's button does.
     fn own_commands(&self, _: &App) -> Vec<oxikube_domain::command::CommandId> {
-        match self.scale_state() {
-            Some(None) => vec![oxikube_domain::command::CommandId::WORKLOAD_SCALE],
-            _ => Vec::new(),
+        use oxikube_domain::command::CommandId;
+        let mut own = Vec::new();
+        if self.scale_state() == Some(None) {
+            own.push(CommandId::WORKLOAD_SCALE);
         }
+        if self.rollout_state() == Some(None) {
+            own.push(CommandId::WORKLOAD_RESTART);
+            own.push(CommandId::WORKLOAD_SET_IMAGE);
+        }
+        own
     }
 
     fn run_command(
@@ -426,10 +433,13 @@ impl oxikube_workspace::command_surface::CommandSurface for DetailView {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if command != oxikube_domain::command::CommandId::WORKLOAD_SCALE {
-            return false;
+        use oxikube_domain::command::CommandId;
+        match command {
+            CommandId::WORKLOAD_SCALE => self.open_scale(window, cx),
+            CommandId::WORKLOAD_RESTART => self.restart(cx),
+            CommandId::WORKLOAD_SET_IMAGE => self.open_set_image(window, cx),
+            _ => return false,
         }
-        self.open_scale(window, cx);
         true
     }
 }

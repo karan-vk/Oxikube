@@ -143,6 +143,9 @@
   o                resource_table::ShowNodeSelected
   shift-j          resource_table::JumpToOwnerSelected
   z                resource_table::SanitizeSelected
+[ResourceTable && !Editing && (kind == Deployment || kind == StatefulSet || kind == DaemonSet)]
+  i                resource_table::SetImageSelected
+  r                resource_table::RestartSelected
 [ResourceTable && Editing]
   escape           resource_table::ClearFilter
 [DetailDrawer && !Editing]

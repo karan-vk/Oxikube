@@ -76,6 +76,8 @@ fn confirm_copy(command: &Command) -> (&'static str, &'static str, bool) {
         Command::PodDelete { .. } => ("Delete the pod?", "Delete", true),
         Command::PodForceDelete { .. } => ("Force delete the pod?", "Force delete", true),
         Command::PodSanitize { .. } => ("Delete finished pods?", "Delete", true),
+        Command::WorkloadRestart { .. } => ("Restart the workload?", "Restart", false),
+        Command::WorkloadSetImage { .. } => ("Set the image?", "Set image", false),
         _ => ("Are you sure?", "Turn off", true),
     }
 }

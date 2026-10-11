@@ -39,8 +39,9 @@ use oxikube_ports::Patch;
 use serde_json::{Value, json};
 
 /// The pod template annotation `kubectl rollout restart` sets; a changed value changes the
-/// template, which makes the workload controller roll new pods.
-pub const RESTARTED_AT_ANNOTATION: &str = "kubectl.kubernetes.io/restartedAt";
+/// template, which makes the workload controller roll new pods. The domain owns the builder
+/// (`oxikube_domain::build::restart_patch`), which the app's `workload::Restart` also uses.
+pub use oxikube_domain::build::RESTARTED_AT_ANNOTATION;
 
 /// A small, well-known change to one object, expressed as a merge patch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,11 +69,7 @@ impl ResourcePatch {
     pub fn to_merge_patch(&self) -> Value {
         match self {
             Self::Scale(replicas) => json!({"spec": {"replicas": replicas}}),
-            Self::RolloutRestart { at } => json!({
-                "spec": {"template": {"metadata": {"annotations": {
-                    RESTARTED_AT_ANNOTATION: at.strftime("%Y-%m-%dT%H:%M:%SZ").to_string(),
-                }}}}
-            }),
+            Self::RolloutRestart { at } => oxikube_domain::build::restart_patch(*at),
             Self::Cordon => json!({"spec": {"unschedulable": true}}),
             Self::Uncordon => json!({"spec": {"unschedulable": false}}),
             Self::CronJobSuspend(suspend) => json!({"spec": {"suspend": suspend}}),

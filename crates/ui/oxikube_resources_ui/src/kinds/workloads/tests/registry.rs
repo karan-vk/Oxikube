@@ -61,6 +61,20 @@ fn the_four_kinds_offer_scale_and_a_panel_and_keep_their_sidebar_places(cx: &mut
         let daemonset = Gvk::new("apps", "v1", "DaemonSet");
         assert!(!KindSpecs::kind_for(cx, &daemonset).offers(CommandId::WORKLOAD_SCALE));
         assert!(KindSpecs::detail_for(cx, &daemonset).is_generic());
+        // Restart and Set image (E12-S05): Deployments, StatefulSets and DaemonSets, not the
+        // controllers whose pods a template change never rolls.
+        for (group, kind, offered) in [
+            ("apps", "Deployment", true),
+            ("apps", "StatefulSet", true),
+            ("apps", "DaemonSet", true),
+            ("apps", "ReplicaSet", false),
+            ("", "ReplicationController", false),
+        ] {
+            let meta = KindSpecs::kind_for(cx, &Gvk::new(group, "v1", kind));
+            for command in [CommandId::WORKLOAD_RESTART, CommandId::WORKLOAD_SET_IMAGE] {
+                assert_eq!(meta.offers(command), offered, "{kind} {command}");
+            }
+        }
         // Pods keep theirs.
         let pod = Gvk::new("", "v1", "Pod");
         assert!(!KindSpecs::kind_for(cx, &pod).offers(CommandId::WORKLOAD_SCALE));

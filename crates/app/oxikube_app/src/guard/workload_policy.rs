@@ -25,6 +25,23 @@ pub(super) fn summary(command: &Command, context: &str) -> Option<String> {
         Command::CronJobResume { target } | Command::JobResume { target } => {
             format!("Resume {} on {context}.", object_label(target))
         }
+        Command::WorkloadRestart { target } => format!(
+            "Restart {} on {context}: its pods are replaced by new ones in a rolling update, as \
+             `kubectl rollout restart` does.",
+            object_label(target)
+        ),
+        Command::WorkloadSetImage { target, images } => {
+            let changes = images
+                .iter()
+                .map(|change| format!("{} to {}", change.container, change.image))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "Set the image of {} on {context}: {changes}. Its pods are replaced by new ones \
+                 in a rolling update.",
+                object_label(target)
+            )
+        }
         Command::PodEvict { target } => format!(
             "Evict {} on {context}: it is asked to leave through the eviction API, which \
              respects PodDisruptionBudgets, and its controller starts a replacement.",

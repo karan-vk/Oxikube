@@ -5,7 +5,8 @@ use std::sync::Arc;
 use oxikube_app::namespaces::NamespaceCreator;
 use oxikube_app::{
     ActionContext, ActionState, ClusterSessionManager, CommandBus, DebugRunner, DeleteFlow,
-    ExecService, RowAction, RowActionRegistry, RowActions, ScaleRunner, WorkloadService,
+    ExecService, RowAction, RowActionRegistry, RowActions, ScaleRunner, SetImageRunner,
+    WorkloadService,
 };
 use oxikube_domain::Capabilities;
 use oxikube_domain::command::CommandId;
@@ -63,6 +64,8 @@ pub struct ResourceActions {
     namespace_creator: NamespaceCreator,
     /// The flows of the storage dialogs: PVC resize, set the default StorageClass (E12-S15).
     storage: StorageFlows,
+    /// Runs `workload::SetImage` for the set-image dialog (E12-S05).
+    set_image: SetImageRunner,
 }
 
 impl ResourceActions {
@@ -104,6 +107,7 @@ impl ResourceActions {
             debug: DebugRunner::new(bus.clone(), who.clone()),
             workloads: Arc::new(WorkloadService::new(sessions.clone())),
             scale: ScaleRunner::new(bus.clone(), who.clone()),
+            set_image: SetImageRunner::new(bus.clone(), who.clone()),
             storage: StorageFlows::new(bus, &sessions, &who),
             namespace_creator: NamespaceCreator::new(bus.clone(), who),
         }
@@ -154,6 +158,15 @@ impl ResourceActions {
     /// The flows behind the storage dialogs (resize a claim, set the default class).
     pub fn storage(&self) -> &StorageFlows {
         &self.storage
+    }
+
+    /// The flow that opens the set-image dialog in `workspace` (E12-S05): the table's "Set image"
+    /// action and the detail header's button.
+    pub fn set_image_flow(
+        &self,
+        workspace: gpui::WeakEntity<oxikube_workspace::Workspace>,
+    ) -> crate::kinds::SetImageFlow {
+        crate::kinds::SetImageFlow::new(self.workloads.clone(), self.set_image.clone(), workspace)
     }
 
     /// The delete flow.

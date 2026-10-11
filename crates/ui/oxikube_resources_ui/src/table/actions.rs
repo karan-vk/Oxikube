@@ -13,6 +13,8 @@
 //! `s` opens a shell in the pod, `a` attaches to it (E09-S08) and `shift-d` adds a debug
 //! container (E09-S10). On a Deployment, StatefulSet, ReplicaSet or ReplicationController `s` is
 //! k9s's scale instead: the keymap binds `resource_table::ScaleSelected` for those kinds (E12-S04).
+//! On a Deployment, StatefulSet or DaemonSet `r` restarts and `i` opens the set-image dialog
+//! (`RestartSelected`, `SetImageSelected`, E12-S05).
 //!
 //! E12-S16 adds `u` (use the namespace), `p` (pin it) for the Namespaces table and `0`-`9`
 //! (All, or the nth favourite) for every table: see `namespaces`.
@@ -83,6 +85,13 @@ actions!(
         /// on a Deployment, StatefulSet, ReplicaSet or ReplicationController: bound for those
         /// kinds only, where it replaces the shell key).
         ScaleSelected,
+        /// Restart the cursor row's workload (`workload::Restart`; k9s's `r` on a Deployment,
+        /// StatefulSet or DaemonSet: bound for those kinds only, so `r` stays free for a node's
+        /// drain). The bus asks its one confirmation.
+        RestartSelected,
+        /// Set the images of the cursor row's workload through the set-image dialog
+        /// (`workload::SetImage`; k9s's `i` on a Deployment, StatefulSet or DaemonSet).
+        SetImageSelected,
         /// Add a debug container to the cursor row's pod (`pod::Debug`, through the debug dialog;
         /// `shift-d`). A toast says why not for a kind that is not a pod, or on a read-only cluster.
         DebugSelected,

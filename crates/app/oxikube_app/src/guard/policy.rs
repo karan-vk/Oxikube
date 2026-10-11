@@ -160,6 +160,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::LogsCollapseLine { target }
         | Command::WorkloadScale { target, .. }
         | Command::WorkloadRestart { target }
+        | Command::WorkloadSetImage { target, .. }
         | Command::WorkloadViewLogs { target, .. }
         | Command::NodeCordon { target }
         | Command::NodeShell { target }
@@ -365,7 +366,7 @@ fn effective_image(image: &str) -> &str {
 
 /// What the audit record of a guarded `command` says besides its target, if anything: for
 /// `pod::Debug` the image, the target container, the program (never its arguments) and a chosen
-/// name; for `workload::Scale` the requested count; for `resource::Apply` the field manager, force
+/// name; for `workload::Scale` the requested count and for `workload::SetImage` the containers named; for `resource::Apply` the field manager, force
 /// and the reviewed version (never the manifest). Short, free of typed content, and redacted by the
 /// audit log like every field.
 pub fn audit_detail(command: &Command) -> Option<String> {
@@ -406,6 +407,15 @@ pub fn audit_detail(command: &Command) -> Option<String> {
             return Some(format!("clear_previous={clear_previous}"));
         }
         _ => {}
+    }
+    if let Command::WorkloadSetImage { images, .. } = command {
+        // Which containers were asked for, even when the request fails before the handler can say
+        // more; the handler adds each old and new image and the object's version.
+        let names: Vec<_> = images
+            .iter()
+            .map(|change| change.container.as_str())
+            .collect();
+        return Some(format!("containers={}", names.join(",")));
     }
     let Command::PodDebug {
         image,

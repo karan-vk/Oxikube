@@ -7,6 +7,7 @@
 //! | `deployment`, `statefulset`, `replicaset`, `replication_controller` | the kind's spec: its sidebar place (the Workloads section's order), its actions and the shared detail panel |
 //! | `panel` | [`WorkloadPanel`]: replicas, strategy, selector, pod template and the ReplicaSets and Pods the workload owns, each a link to the object's detail |
 //! | `scale` | `workload::Scale`: the row action, [`ScaleFlow`] and the [`ScaleDialog`] |
+//! | `rollout` | `workload::Restart` and `workload::SetImage` (E12-S05): the row actions, [`SetImageFlow`] and the [`SetImageDialog`] |
 //!
 //! # Columns
 //!
@@ -28,6 +29,7 @@ mod deployment;
 pub mod panel;
 mod replicaset;
 mod replication_controller;
+pub mod rollout;
 pub mod scale;
 mod statefulset;
 
@@ -40,10 +42,26 @@ use oxikube_domain::command::CommandId;
 use super::KindSpecs;
 
 pub use panel::WorkloadPanel;
+pub use rollout::{
+    ContainerField, RESTART_ORDER, SET_IMAGE_ORDER, SetImageDialog, SetImageFlow, SetImageStage,
+    rollout_row_actions,
+};
 pub use scale::{SCALE_ORDER, ScaleDialog, ScaleFlow, ScaleStage, scale_row_actions};
 
-/// What the four kinds can do beyond the generic actions: scale.
+/// What a ReplicaSet and a ReplicationController can do beyond the generic actions: scale.
 const ACTIONS: &[CommandId] = &[CommandId::WORKLOAD_SCALE];
+
+/// What a Deployment and a StatefulSet can do beyond the generic actions: scale, and the rollout
+/// verbs (E12-S05). A DaemonSet has the rollout verbs alone ([`ROLLOUT_ACTIONS`]).
+const ROLLING_ACTIONS: &[CommandId] = &[
+    CommandId::WORKLOAD_SCALE,
+    CommandId::WORKLOAD_RESTART,
+    CommandId::WORKLOAD_SET_IMAGE,
+];
+
+/// The rollout verbs, for the kinds whose pods a template change rolls (`oxikube_app::is_rollable`).
+pub(in crate::kinds) const ROLLOUT_ACTIONS: &[CommandId] =
+    &[CommandId::WORKLOAD_RESTART, CommandId::WORKLOAD_SET_IMAGE];
 
 /// Registers the four kinds.
 pub fn init(cx: &mut App) {

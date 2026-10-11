@@ -22,6 +22,7 @@
 //! | `full` | the full read for metadata-only and Table feeds, and the owners' scopes from discovery |
 //! | `exec` | "Shell" and "Attach" buttons in a pod's header (E09-S08), through the same [`ExecFlow`](crate::exec::ExecFlow) as the table's row actions |
 //! | `scale` | `scale_state` and `open_scale` (E12-S04): whether the view offers Scale and the flow that opens its dialog, for the workload panel's button and the palette |
+//! | `rollout` | "Restart" and "Set image" in the header of a Deployment, StatefulSet or DaemonSet (E12-S05): `rollout_state`, the buttons, `workload::Restart` through the bus and the set-image flow's dialog, also for the palette |
 //! | `editor_buttons` | "Edit" and "View YAML in Editor" in the header (E10-S06): `resource::Edit` / `resource::ViewYamlInEditor`, which open a `kind/name` manifest editor tab |
 //! | `events_feed` | the Events tab's subscription, started on first show |
 //! | `render`, `overview`, `parts`, `events_tab` | drawing: header, tab strip, the virtualised Overview (its stateless rows in `parts`) and Events lists |
@@ -67,6 +68,7 @@ mod overview;
 mod parts;
 mod render;
 mod reveal;
+mod rollout;
 mod scale;
 mod schema_tab;
 mod schema_view;

@@ -318,6 +318,16 @@
     }
   },
   {
+    // k9s: r restarts a workload (a rolling restart, confirmed first) and i sets its container
+    // images (E12-S05). Bound for the kinds a template change rolls: Deployments, StatefulSets and
+    // DaemonSets. Kind-scoped, so `r` stays free for a node's drain (E12-S10).
+    "context": "ResourceTable && !Editing && (kind == Deployment || kind == StatefulSet || kind == DaemonSet)",
+    "bindings": {
+      "r": "resource_table::RestartSelected",
+      "i": "resource_table::SetImageSelected"
+    }
+  },
+  {
     // The table's filter field has the focus: escape clears the filter and returns to the rows
     // (enter returns without clearing; the field handles it).
     "context": "ResourceTable && Editing",

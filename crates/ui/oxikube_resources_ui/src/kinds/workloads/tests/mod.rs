@@ -1,11 +1,13 @@
 //! The workload kinds (E12-S04) in the views: their specs and sidebar places (`registry`), the
-//! table (`columns`), the panel's data (`model`), the Scale action, key and dialog (`scale`) and the detail panel (`panel`).
+//! table (`columns`), the panel's data (`model`), the Scale action, key and dialog (`scale`), Restart
+//! and Set image (`rollout`) and the detail panel (`panel`).
 //! `#[gpui::test]`s over testkit fakes and the real bus and guard.
 
 mod columns;
 mod model;
 mod panel;
 mod registry;
+mod rollout;
 mod scale;
 
 use oxikube_domain::Resource;

@@ -156,6 +156,8 @@ pub(crate) struct Harness {
     pub prefs: Arc<FakePrefsWriter>,
     pub bus: CommandBus,
     pub calls: Calls,
+    /// The virtual clock the manager and the guard read: a test moves it with `advance`.
+    pub clock: Arc<FakeClockPort>,
 }
 
 impl Harness {
@@ -314,7 +316,7 @@ impl Harness {
         registry
             .install("test_extra", |reg| extra(reg, &calls, &manager))
             .expect("extra commands register");
-        let guard = MutationGuard::new(manager.clone(), state.clone(), clock);
+        let guard = MutationGuard::new(manager.clone(), state.clone(), clock.clone());
         Self {
             bus: CommandBus::new(registry, guard),
             manager,
@@ -322,6 +324,7 @@ impl Harness {
             state,
             prefs,
             calls,
+            clock,
         }
     }
 
