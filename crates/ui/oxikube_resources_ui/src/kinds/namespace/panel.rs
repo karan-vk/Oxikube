@@ -25,7 +25,7 @@ pub(super) fn build(detail: WeakEntity<DetailView>, _: &mut Window, cx: &mut App
     .into()
 }
 
-/// The panel. See the [module docs](self).
+/// The panel.
 pub struct NamespacePanel {
     detail: WeakEntity<DetailView>,
 }

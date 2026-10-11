@@ -35,7 +35,7 @@ pub const PODS_COLUMN: &str = "pods";
 /// Shown when no open feed covers the namespace.
 const UNKNOWN: &str = "–";
 
-/// The core Namespace columns plus the live pod count. See the [module docs](self).
+/// The core Namespace columns plus the live pod count. See the module docs.
 pub struct NamespaceColumns {
     base: Arc<dyn ColumnProvider>,
     store: Option<ResourceStore>,

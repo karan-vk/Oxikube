@@ -34,7 +34,7 @@ pub enum CreateStage {
     Creating,
 }
 
-/// The create-namespace dialog. See the [module docs](self).
+/// The create-namespace dialog.
 pub struct CreateNamespaceDialog {
     cluster: ClusterId,
     context: SharedString,
