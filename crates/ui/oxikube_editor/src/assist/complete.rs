@@ -66,7 +66,7 @@ pub fn can_complete(text: &str, offset: usize) -> bool {
 ///
 /// * **Key position** (a half-typed key, a blank line, after `- `): the properties of the
 ///   enclosing object that are not already present, required ones first, filtered by the typed
-///   word; plus the blocks of [`snippets`] for lists the object can hold.
+///   word; plus the blocks of `snippets` for lists the object can hold.
 /// * **Value position** (`restartPolicy: `): the field's `enum` members, or `true` / `false`.
 /// * Nothing in a comment or block scalar, where the schema is open (a free-form object,
 ///   `x-kubernetes-preserve-unknown-fields`, a `additionalProperties` map), or for a kind
