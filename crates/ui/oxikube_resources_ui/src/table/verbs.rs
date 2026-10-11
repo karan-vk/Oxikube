@@ -14,6 +14,8 @@
 //! | `shift-f` | `PortForward` | `pod::PortForward` | the row action port forwarding registers; a toast says so until then |
 //! | `f` | `ShowPortForwards` | | a toast says so until port forwarding is installed |
 //! | `ctrl-w` | `ToggleWide` | `table::ToggleWide` | the wide columns of every table of the kind show or hide |
+//! | `u` (Services) | `ShowServicePods` | `service::ShowPods` | the Pods table, filtered by the Service's selector (E12-S13) |
+//! | `o` (Services) | `OpenInBrowser` | `service::OpenInBrowser` | a port of the Service in the browser, once port forwarding is installed (E12-S13) |
 //!
 //! `ctrl-d` (delete), `s` (shell) and `a` (attach) are in [`row_actions`](super::row_actions).
 //! The row-bound verbs act on the cursor row of a multi-selection and say so.
@@ -24,7 +26,8 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::Toast;
 
 use super::actions::{
-    EditSelected, PortForward, ShowPortForwards, ToggleWide, ViewDescribe, ViewLogs, ViewYaml,
+    EditSelected, OpenInBrowser, PortForward, ShowPortForwards, ShowServicePods, ToggleWide,
+    ViewDescribe, ViewLogs, ViewYaml,
 };
 use super::view::ResourceTable;
 use crate::exec::PORT_FORWARDING_UNAVAILABLE;
@@ -83,6 +86,30 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::POD_PORT_FORWARD, targets, window, cx);
+    }
+
+    /// `u` on a Service: the `service::ShowPods` row action, the Pods table filtered by the
+    /// Service's selector.
+    pub(super) fn on_show_service_pods(
+        &mut self,
+        _: &ShowServicePods,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::SERVICE_SHOW_PODS, targets, window, cx);
+    }
+
+    /// `o` on a Service: the `service::OpenInBrowser` row action, which a port-forward manager
+    /// registers; a toast says so until then.
+    pub(super) fn on_open_in_browser(
+        &mut self,
+        _: &OpenInBrowser,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::SERVICE_OPEN_IN_BROWSER, targets, window, cx);
     }
 
     /// `f`: the list of active port forwards, which port forwarding provides.

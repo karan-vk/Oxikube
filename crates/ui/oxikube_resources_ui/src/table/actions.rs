@@ -23,6 +23,9 @@
 //! `ctrl-d` / `ctrl-u` (half a page), `d d` (the delete dialog, like `delete`) and `y y` (copy the
 //! name) in the same key context, on these same actions.
 //!
+//! A Service's own verbs (E12-S13) are bound with a `kind == Service` section: `u` shows the pods
+//! its selector picks, `o` opens a port in the browser.
+//!
 //! Users rebind them in `keymap.json`.
 
 use gpui::actions;
@@ -97,5 +100,12 @@ actions!(
         /// Show or hide the wide columns of this kind's tables (`table::ToggleWide`; k9s's
         /// `ctrl-w`).
         ToggleWide,
+        /// Open the Pods table filtered by the cursor row's Service selector
+        /// (`service::ShowPods`; `u`, bound where `kind == Service`).
+        ShowServicePods,
+        /// Forward a port of the cursor row's Service and open it in the browser
+        /// (`service::OpenInBrowser`; `o`, bound where `kind == Service`). A toast says so while
+        /// no port-forward manager is installed.
+        OpenInBrowser,
     ]
 );

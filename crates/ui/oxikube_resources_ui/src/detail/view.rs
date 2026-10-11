@@ -201,7 +201,7 @@ impl DetailView {
     }
 
     /// The time ages are read against.
-    pub(super) fn now(&self) -> Timestamp {
+    pub(crate) fn now(&self) -> Timestamp {
         self.now_override.unwrap_or_else(|| {
             #[cfg(test)]
             {
@@ -343,6 +343,9 @@ impl DetailView {
 
     /// Releases the feeds (the view is going away).
     pub(super) fn release(&mut self) {
+        // The kind's panel may follow feeds of its own (a Service's slices and pods): dropping it
+        // lets them go with the object's.
+        self.kind_panel = KindPanel::Built(None);
         self.feed_task = None;
         self.subscription = None;
         self.full_task = None;

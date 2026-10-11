@@ -12,6 +12,9 @@
 //!   the other Config-section summaries (E12-S12), in `config`.
 //! * [`CrdSummary`] for CustomResourceDefinitions: names, versions and their printer columns,
 //!   conversion and conditions (E12-S17).
+//! * [`ServiceSummary`], [`EndpointSliceSummary`] and [`EndpointsSummary`] for Services and where
+//!   their traffic goes (E12-S13): kubectl's port and external-IP text, the load balancer state,
+//!   ready endpoint counts, named target ports resolved against a pod.
 //! * [`Health`] and [`health_of`]: the one rule for "is this object healthy" behind overview
 //!   tiles and sidebar counts.
 //!
@@ -39,11 +42,13 @@ use jiff::Timestamp;
 
 mod config;
 mod crd;
+mod endpoints;
 mod health;
 mod job;
 mod node;
 mod pod;
 mod pod_health;
+mod service;
 mod workload;
 
 pub use config::{
@@ -57,12 +62,20 @@ pub use crd::{
     CrdConversion, CrdNames, CrdSummary, CrdVersionSummary, PrinterColumn, crd_aliases_text,
     crd_versions_text, version_order,
 };
+pub use endpoints::{
+    EndpointPort, EndpointSliceSummary, EndpointSummary, EndpointTarget, EndpointsAddress,
+    EndpointsSummary, ReadyCounts, SERVICE_NAME_LABEL, ready_counts,
+};
 pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};
 pub use node::NodeSummary;
 pub use pod::{
     ComputeResources, ContainerKind, ContainerPort, ContainerState, ContainerSummary, PodPhase,
     PodSummary, Probes, QosClass, ResourceAmounts, TerminatedState,
+};
+pub use service::{
+    NoSelector, ServicePortSummary, ServiceStatus, ServiceSummary, ServiceType, TargetPort,
+    resolve_target_port,
 };
 pub use workload::{WorkloadKind, WorkloadSummary};
 

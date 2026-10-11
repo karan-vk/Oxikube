@@ -265,6 +265,10 @@ impl CommandId {
     /// `resource::ViewYamlInEditor`: open a resource's YAML read-only in a manifest editor tab.
     pub const RESOURCE_VIEW_YAML_IN_EDITOR: CommandId =
         CommandId::new("resource::ViewYamlInEditor");
+    /// `service::OpenInBrowser`: forward a Service port and open it in the browser.
+    pub const SERVICE_OPEN_IN_BROWSER: CommandId = CommandId::new("service::OpenInBrowser");
+    /// `service::ShowPods`: open the pods a Service selects, in a table filtered by its selector.
+    pub const SERVICE_SHOW_PODS: CommandId = CommandId::new("service::ShowPods");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
     /// `table::ToggleWide`: show or hide the wide columns (`kubectl -o wide`) of a kind's tables.
@@ -1263,6 +1267,26 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Starts a port-forward to a pod behind the Service and opens the local end in the browser. A
+    // forward changes nothing in the cluster, so it is a read like `pod::PortForward` (what the
+    // forward may do is the port-forward manager's guard policy, E15); it needs the capability.
+    CommandMeta::read(
+        CommandId::SERVICE_OPEN_IN_BROWSER,
+        "Open Service in Browser",
+        CommandScope::Selection,
+        Capabilities::PORTFORWARD,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Service")),
+    // Opens a table of pods filtered by the Service's selector (`-l`): navigation, a read.
+    CommandMeta::read(
+        CommandId::SERVICE_SHOW_PODS,
+        "Show Service Pods",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Service")),
     // Moves focus inside a window, never touches the cluster: allowed in read-only mode.
     CommandMeta::read(
         CommandId::TABLE_FOCUS_FILTER,

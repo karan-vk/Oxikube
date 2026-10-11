@@ -241,6 +241,16 @@
     }
   },
   {
+    // A Service's own verbs (E12-S13): `u` opens the Pods table filtered by the Service's selector
+    // (k9s's used-by), `o` forwards a port and opens it in the browser (offered once port
+    // forwarding is installed). The `kind` value is the table's kind.
+    "context": "ResourceTable && !Editing && kind == Service",
+    "bindings": {
+      "u": "resource_table::ShowServicePods",
+      "o": "resource_table::OpenInBrowser"
+    }
+  },
+  {
     // The table's filter field has the focus: escape clears the filter and returns to the rows
     // (enter returns without clearing; the field handles it).
     "context": "ResourceTable && Editing",

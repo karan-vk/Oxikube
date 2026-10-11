@@ -140,6 +140,65 @@ fn namespace_and_service_account() {
 }
 
 #[test]
+fn service_columns_are_the_lens_set_with_status() {
+    use crate::columns::{ColumnProvider as _, CoreColumns};
+    let columns = CoreColumns::new().columns(
+        &oxikube_domain::ids::Gvk::new("", "v1", "Service"),
+        oxikube_domain::Capabilities::empty(),
+    );
+    let default: Vec<&str> = columns
+        .iter()
+        .filter(|c| !c.wide)
+        .map(|c| c.id.as_str())
+        .collect();
+    assert_eq!(
+        default,
+        [
+            "name",
+            "namespace",
+            "type",
+            "cluster-ip",
+            "external-ip",
+            "ports",
+            "selector",
+            "status",
+            "age"
+        ]
+    );
+
+    let pending = namespaced(
+        "v1",
+        "Service",
+        json!({"spec": {"type": "LoadBalancer"}, "status": {"loadBalancer": {}}}),
+    );
+    check(
+        &pending,
+        &[("external-ip", "<pending>"), ("status", "Pending")],
+    );
+    let assigned = namespaced(
+        "v1",
+        "Service",
+        json!({"spec": {"type": "LoadBalancer"},
+               "status": {"loadBalancer": {"ingress": [{"ip": "1.2.3.4"}]}}}),
+    );
+    check(&assigned, &[("status", "Assigned")]);
+    check(&fx::service(), &[("status", "Active")]);
+    let headless = namespaced(
+        "v1",
+        "Service",
+        json!({"spec": {"clusterIP": "None", "selector": {"app": "db", "tier": "data"}}}),
+    );
+    check(
+        &headless,
+        &[
+            ("cluster-ip", "None"),
+            ("ports", ""),
+            ("selector", "app=db,tier=data"),
+        ],
+    );
+}
+
+#[test]
 fn services_and_endpoints() {
     check(
         &fx::service(),

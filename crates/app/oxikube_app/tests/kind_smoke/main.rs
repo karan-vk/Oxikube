@@ -33,6 +33,7 @@ mod logs_churn;
 mod logs_search;
 mod node_shell;
 mod scoped_feeds;
+mod service_backends;
 mod two_clusters;
 mod workloads;
 

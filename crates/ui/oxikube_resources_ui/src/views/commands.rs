@@ -6,7 +6,7 @@
 //! `resource::CopyYaml`, `resource::SaveYaml`, `resource::ToggleManagedFields`,
 //! `resource::RefreshDescribe` (E07-S06), `resource::Find`, `resource::NextMatch` and
 //! `resource::PreviousMatch` (E11-S06, find in the YAML and Describe text), and the k9s verbs `resource::ViewYaml`,
-//! `resource::ViewDescribe` and `table::ToggleWide` (E11-S07).
+//! `resource::ViewDescribe` and `table::ToggleWide` (E11-S07), and `service::ShowPods` (E12-S13).
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, pin it
 //! as a tab, select rows, restart a feed (a read) or write the user's clipboard. Each is declared
@@ -27,7 +27,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 20] = [
+pub const RESOURCE_COMMANDS: [CommandId; 21] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -48,6 +48,7 @@ pub const RESOURCE_COMMANDS: [CommandId; 20] = [
     CommandId::RESOURCE_VIEW_YAML,
     CommandId::RESOURCE_VIEW_DESCRIBE,
     CommandId::TABLE_TOGGLE_WIDE,
+    CommandId::SERVICE_SHOW_PODS,
 ];
 
 /// A resource command, resolved, for the UI thread.
@@ -101,6 +102,11 @@ pub enum ViewRequest {
         /// The kind.
         gvk: Gvk,
     },
+    /// Open the table of the pods the Service `target` selects, filtered by its selector
+    /// (`service::ShowPods`, E12-S13).
+    ShowServicePods(ResourceRef),
+    /// Open a URL in the operating system's browser (the end of `service::OpenInBrowser`).
+    OpenUrl(String),
     /// Open the list of `cluster`'s CustomResourceDefinitions (`crd::OpenList`, E07-S07).
     OpenCrdList(ClusterId),
     /// Open the table of the custom resources the CRD `name` defines, for its served storage
@@ -174,6 +180,7 @@ impl ResourceCommandSink {
                 cluster: cluster.clone(),
                 gvk: gvk.clone(),
             },
+            Command::ServiceShowPods { target } => ViewRequest::ShowServicePods(target.clone()),
             Command::CrdOpenList { cluster } => ViewRequest::OpenCrdList(cluster.clone()),
             Command::CrdOpenResources { cluster, name } => ViewRequest::OpenCrdResources {
                 cluster: cluster.clone(),

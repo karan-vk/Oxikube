@@ -14,6 +14,7 @@ mod props;
 mod refcount;
 mod registry;
 mod scope;
+mod service_backends;
 
 use std::sync::Arc;
 use std::time::Duration;

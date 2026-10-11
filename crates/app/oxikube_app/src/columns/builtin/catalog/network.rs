@@ -16,8 +16,9 @@ const SERVICE: &[ColumnDef] = &[
     ColumnDef::new("cluster-ip", "Cluster IP", Text("/spec/clusterIP")),
     ColumnDef::new("external-ip", "External IP", Func(f::service_external_ip)),
     ColumnDef::new("ports", "Ports", Func(f::service_ports)),
+    ColumnDef::new("selector", "Selector", Func(f::service_selector)),
+    ColumnDef::new("status", "Status", Func(f::service_status)),
     AGE,
-    ColumnDef::new("selector", "Selector", Func(f::service_selector)).wide(),
     LABELS,
 ];
 

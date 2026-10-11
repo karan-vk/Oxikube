@@ -557,6 +557,22 @@ pub enum Command {
         /// The kind listed.
         gvk: Gvk,
     },
+    /// Forward a local port to a pod behind a Service and open `http://localhost:<port>` in the
+    /// browser. Offered only where a port-forward manager is installed.
+    #[serde(rename = "service::OpenInBrowser")]
+    ServiceOpenInBrowser {
+        /// The Service.
+        target: ResourceRef,
+        /// The Service port to open; `None` opens the first TCP port.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<u16>,
+    },
+    /// Open the table of the pods a Service selects, filtered by its selector (`-l app=web`).
+    #[serde(rename = "service::ShowPods")]
+    ServiceShowPods {
+        /// The Service.
+        target: ResourceRef,
+    },
     /// Focus the filter bar of a kind's resource table (`/` in a table): the next keys type a
     /// filter (`/text`, `/!text`, `/-l selector`, `/-f fuzzy`).
     #[serde(rename = "table::FocusFilter")]
@@ -1157,6 +1173,8 @@ impl Command {
             Command::ResourcePreviousMatch { .. } => CommandId::RESOURCE_PREVIOUS_MATCH,
             Command::ResourceRefreshDescribe { .. } => CommandId::RESOURCE_REFRESH_DESCRIBE,
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
+            Command::ServiceOpenInBrowser { .. } => CommandId::SERVICE_OPEN_IN_BROWSER,
+            Command::ServiceShowPods { .. } => CommandId::SERVICE_SHOW_PODS,
             Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
             Command::TableSetFilter { .. } => CommandId::TABLE_SET_FILTER,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
@@ -1262,6 +1280,8 @@ impl Command {
             | Command::PodExec { target, .. }
             | Command::PodDebug { target, .. }
             | Command::PodPortForward { target, .. }
+            | Command::ServiceOpenInBrowser { target, .. }
+            | Command::ServiceShowPods { target }
             | Command::PodViewLogs { target, .. }
             | Command::LogsClear { target }
             | Command::LogsCopy { target }
@@ -1323,6 +1343,10 @@ mod tests {
 
     fn pod() -> ResourceRef {
         ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "default", "web-0")
+    }
+
+    fn service() -> ResourceRef {
+        ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Service"), "default", "web")
     }
 
     fn deployment() -> ResourceRef {
@@ -1537,6 +1561,11 @@ mod tests {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
             },
+            Command::ServiceOpenInBrowser {
+                target: service(),
+                port: Some(80),
+            },
+            Command::ServiceShowPods { target: service() },
             Command::TableFocusFilter {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
@@ -1921,6 +1950,8 @@ mod tests {
                     | Command::ResourcePreviousMatch { .. }
                     | Command::ResourceRefreshDescribe { .. }
                     | Command::ResourceSelectAll { .. }
+                    | Command::ServiceOpenInBrowser { .. }
+                    | Command::ServiceShowPods { .. }
                     | Command::TableFocusFilter { .. }
                     | Command::TableSetFilter { .. }
                     | Command::ResourceViewYaml { .. }

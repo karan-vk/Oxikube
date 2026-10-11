@@ -90,8 +90,9 @@ impl DetailView {
         }
     }
 
-    /// The store of the cluster's session, while it is connected.
-    pub(super) fn connected_store(&self) -> Option<ResourceStore> {
+    /// The store of the cluster's session, while it is connected (a kind's panel subscribes to
+    /// the objects it lists beside the one shown through it).
+    pub(crate) fn connected_store(&self) -> Option<ResourceStore> {
         let session = self.deps.sessions.get(&self.target.cluster)?;
         if !session.is_connected() {
             return None;

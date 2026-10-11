@@ -8,6 +8,7 @@ use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{Gvk, ResourceRef, Scope};
 
+use super::state::DetailDeps;
 use super::view::DetailView;
 use crate::kinds::DetailRenderer;
 
@@ -65,6 +66,12 @@ impl DetailView {
         self.deps
             .dispatcher
             .dispatch(Command::ResourceOpen { target }, cx);
+    }
+
+    /// What the view is built over: the sessions, the stores, the dispatcher. A kind's panel
+    /// subscribes to its own feeds and sends its buttons' commands through these.
+    pub(crate) fn deps(&self) -> &DetailDeps {
+        &self.deps
     }
 
     /// The kind's own panel, when its spec has one and it was drawn.

@@ -26,6 +26,8 @@ actions!(
         PortForward,
         ShowPortForwards,
         ToggleWide,
+        ShowServicePods,
+        OpenInBrowser,
         DeleteSelected,
         ShellSelected,
         AttachSelected,
@@ -414,6 +416,36 @@ fn cronjobs_trigger_on_t_and_cronjobs_and_jobs_suspend_on_s(cx: &mut TestAppCont
 }
 
 #[gpui::test]
+fn a_services_verbs_are_bound_on_service_tables_only(cx: &mut TestAppContext) {
+    // E12-S13: `u` shows the pods a Service selects, `o` opens a port in the browser.
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        let services = table("Service", "");
+        assert_eq!(
+            runs(cx, "u", &strs(&services)),
+            Some("resource_table::ShowServicePods")
+        );
+        assert_eq!(
+            runs(cx, "o", &strs(&services)),
+            Some("resource_table::OpenInBrowser")
+        );
+        for kind in ["Pod", "Deployment", "Endpoints"] {
+            let stack = table(kind, "");
+            assert_eq!(runs(cx, "u", &strs(&stack)), None, "u on {kind}");
+            assert_eq!(runs(cx, "o", &strs(&stack)), None, "o on {kind}");
+        }
+        // A Service table keeps the generic verbs.
+        assert_eq!(
+            runs(cx, "y", &strs(&services)),
+            Some("resource_table::ViewYaml")
+        );
+        // Typing into the filter field stays text.
+        let editing = table("Service", "Editing");
+        assert_eq!(press(cx, "u", &strs(&editing)), Resolution::Unbound);
+    }
+}
+
+#[gpui::test]
 fn the_palette_finds_the_keys_of_the_cronjob_commands(cx: &mut TestAppContext) {
     install(cx, MAC, "");
     let keys = |cx: &mut TestAppContext, command| {
@@ -438,6 +470,20 @@ fn the_palette_finds_the_keys_of_the_cronjob_commands(cx: &mut TestAppContext) {
             "{command}: {found:?}"
         );
     }
+}
+
+#[gpui::test]
+fn the_service_verbs_stand_for_their_commands(cx: &mut TestAppContext) {
+    use oxikube_keymap::ActionRegistry;
+    install(cx, MAC, "");
+    assert_eq!(
+        ActionRegistry::commands_of("resource_table::ShowServicePods"),
+        [CommandId::SERVICE_SHOW_PODS]
+    );
+    assert_eq!(
+        ActionRegistry::commands_of("resource_table::OpenInBrowser"),
+        [CommandId::SERVICE_OPEN_IN_BROWSER]
+    );
 }
 
 #[gpui::test]

@@ -32,11 +32,20 @@ pub(crate) fn kind(
     }
 }
 
-/// The kinds the tests serve: pods, replica sets, deployments, secrets, nodes, the Widget custom
-/// kind and the CRD kind.
+/// The kinds the tests serve: pods, services and their endpoints, replica sets, deployments,
+/// secrets, nodes, the Widget custom kind and the CRD kind.
 pub(crate) fn kinds() -> Vec<ResourceKind> {
     vec![
         kind("", "v1", "Pod", "pods", true),
+        kind("", "v1", "Service", "services", true),
+        kind("", "v1", "Endpoints", "endpoints", true),
+        kind(
+            "discovery.k8s.io",
+            "v1",
+            "EndpointSlice",
+            "endpointslices",
+            true,
+        ),
         kind("apps", "v1", "ReplicaSet", "replicasets", true),
         kind("apps", "v1", "Deployment", "deployments", true),
         kind("", "v1", "Secret", "secrets", true),

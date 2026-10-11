@@ -112,6 +112,8 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_show_port_forwards))
             .on_action(cx.listener(Self::on_trigger))
             .on_action(cx.listener(Self::on_toggle_suspend))
+            .on_action(cx.listener(Self::on_show_service_pods))
+            .on_action(cx.listener(Self::on_open_in_browser))
             .on_action(cx.listener(Self::on_toggle_wide))
             .on_action(cx.listener(Self::on_focus_filter))
             .on_action(cx.listener(Self::on_clear_filter))

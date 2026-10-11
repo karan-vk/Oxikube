@@ -26,6 +26,13 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   shows the kinds its discovery serves. A kind story adds `kinds/<kind>/` and registers its own spec.
 - `kinds::pods` (E12-S02): the Pod spec: `PodColumns` (Lens and k9s columns, IP / Node / QoS hidden,
   usage `–` until E13's metrics) and `ContainersPanel`, the containers drill-down at the top of a pod's detail.
+- `kinds::service`, `kinds::endpoints` (E12-S13): Services, Endpoints and EndpointSlices. The
+  Service's detail panel lists its ports (a named `targetPort` resolved against a backing pod),
+  its EndpointSlices with ready counts and its backing pods, through two server-side
+  label-selected feeds that live as long as the detail is open. "Show Pods" (`u`, `service::ShowPods`)
+  opens the Pods table filtered by the selector. "Open in Browser" (`o`, `service::OpenInBrowser`)
+  appears once the port-forward manager installs its opener (`ServiceBrowser::enable` plus
+  `register_open_in_browser`); a Service without a selector says why it has no pods.
 - `table` (E07-S03): `ResourceTable`, the generic virtualised table of one kind (store
   subscription, sort through the store, column layout per kind, multi-select, keyboard, context
   menu, status colours from the theme's `oxikube` block).
