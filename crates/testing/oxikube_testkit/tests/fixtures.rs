@@ -395,6 +395,7 @@ fn node_builders_match_node_fixtures() {
         n(node()
             .name("oxikube-control-plane")
             .role("control-plane")
+            .taint("node-role.kubernetes.io/control-plane", "", "NoSchedule")
             .build()),
         n(fixtures::node_control_plane())
     );

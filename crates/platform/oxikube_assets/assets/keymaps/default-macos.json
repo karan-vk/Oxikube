@@ -277,6 +277,16 @@
     }
   },
   {
+    // k9s node verbs (E12-S09): c cordons and u uncordons the cursor row's node. Scoped to
+    // `kind == Node` so the keys stay free for other kinds (u is "used by" on ConfigMaps, Secrets
+    // and ServiceAccounts). Both ask for one click and are blocked on a read-only cluster.
+    "context": "ResourceTable && !Editing && kind == Node",
+    "bindings": {
+      "c": "resource_table::CordonSelected",
+      "u": "resource_table::UncordonSelected"
+    }
+  },
+  {
     // The table's filter field has the focus: escape clears the filter and returns to the rows
     // (enter returns without clearing; the field handles it).
     "context": "ResourceTable && Editing",

@@ -90,6 +90,7 @@ pub use schema::{
     AdditionalProperties, JsonSchema, Properties, SchemaType, XK8s, flatten_schema, root_schema_for,
 };
 pub use view::{
-    ContainerSummary, CronJobSummary, JobSummary, NodeSummary, PodSummary, ViewError,
-    WorkloadSummary,
+    AllocationLine, AllocationResource, ContainerSummary, CronJobSummary, Demand, JobSummary,
+    NodeAllocation, NodeDetail, NodeSummary, NodeTaint, PodPlacement, PodSummary, TaintEffect,
+    ViewError, WorkloadSummary,
 };

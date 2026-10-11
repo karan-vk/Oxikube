@@ -137,6 +137,9 @@
   u                resource_table::ShowServicePods
 [ResourceTable && !Editing && (kind == Deployment || kind == StatefulSet || kind == ReplicaSet || kind == ReplicationController)]
   s                resource_table::ScaleSelected
+[ResourceTable && !Editing && kind == Node]
+  c                resource_table::CordonSelected
+  u                resource_table::UncordonSelected
 [ResourceTable && Editing]
   escape           resource_table::ClearFilter
 [DetailDrawer && !Editing]

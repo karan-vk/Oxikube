@@ -23,6 +23,7 @@ mod logs;
 mod metrics;
 mod namespaces;
 mod network;
+mod node_actions;
 mod node_shell;
 mod palette;
 mod resources;

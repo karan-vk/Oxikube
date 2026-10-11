@@ -66,7 +66,10 @@ pub mod scripted_feed;
 pub mod storage;
 pub mod test_ports;
 
-pub use builders::{daemonset, deployment, job, node, pod, replicaset, resource, statefulset};
+pub use builders::{
+    NodeBuilder, PodBuilder, daemonset, deployment, job, node, pod, replicaset, resource,
+    statefulset,
+};
 pub use fakes::*;
 pub use script::{CallLog, Script, StreamGauge, Timeline, unscripted};
 pub use scripted_feed::{ScriptedFeed, TICK};

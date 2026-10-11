@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{AnyView, App, Context, Window};
-use oxikube_app::store::StoreObject;
+use oxikube_app::store::{ResourceStore, StoreObject};
 use oxikube_app::{ClusterSessionManager, ColumnsContext};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
@@ -147,6 +147,11 @@ impl DetailView {
             store,
             shared: self.deps.columns.clone(),
         }
+    }
+
+    /// The store the object is read from, `None` while the session is not connected.
+    pub(crate) fn store(&self) -> Option<&ResourceStore> {
+        self.store.as_ref()
     }
 
     /// The kind's own panel, when its spec has one and it was drawn.

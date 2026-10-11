@@ -200,6 +200,17 @@ impl StoreInner {
         Some(read(&st))
     }
 
+    /// Runs `change` on the entry of `key` under its lock, if there is one.
+    pub fn with_entry_mut<R>(
+        &self,
+        key: &FeedKey,
+        change: impl FnOnce(&mut EntryState) -> R,
+    ) -> Option<R> {
+        let entry = self.entries.lock().get(key).cloned()?;
+        let mut st = entry.state.lock();
+        Some(change(&mut st))
+    }
+
     /// Runs `task` on the store's spawner, abortable through the returned guard.
     pub fn spawn(&self, task: impl Future<Output = ()> + Send + 'static) -> TaskGuard {
         spawn_guarded(&self.runtime.spawner, task)

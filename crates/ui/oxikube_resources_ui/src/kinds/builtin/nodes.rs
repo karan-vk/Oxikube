@@ -1,18 +1,13 @@
-//! Nodes: a section that is one kind.
+//! Nodes: a section that is one kind, registered by `kinds::node` (E12-S09).
 
 use gpui::App;
-use oxikube_app::Section;
-use oxikube_domain::command::CommandId;
 
-use super::{Builtin, cluster, register};
+use crate::kinds::KindSpecs;
 
-const NODES: &[Builtin] = &[cluster("", "v1", "Node", "nodes", "Nodes")];
-
-/// A node's own actions: a shell on it (E09-S09). Cordon, uncordon and drain arrive with E12-S09
-/// and E12-S10.
-const NODE_ACTIONS: &[CommandId] = &[CommandId::NODE_SHELL];
-
-/// Registers Nodes.
+/// Registers Nodes: the table's columns, the node panel and the node actions (a shell on it,
+/// cordon and uncordon) all come from [`node::spec`](crate::kinds::node::spec).
 pub fn init(cx: &mut App) {
-    register(cx, Section::NODES, NODES, |_| NODE_ACTIONS);
+    if let Err(error) = KindSpecs::register(cx, crate::kinds::node::spec()) {
+        tracing::error!(%error, "the Node kind was not registered");
+    }
 }

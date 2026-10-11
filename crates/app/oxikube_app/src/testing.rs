@@ -262,6 +262,14 @@ impl Harness {
         })
     }
 
+    /// The standard harness with the real `node::Cordon` and `node::Uncordon` handlers
+    /// (E12-S09) in place of the recording test one, over the fake resource ports.
+    pub fn with_node_handlers() -> Self {
+        Self::build(&[CommandId::NODE_UNCORDON], |reg, _, _| {
+            crate::nodes::register_commands(reg)
+        })
+    }
+
     fn build(
         skip: &[CommandId],
         extra: impl FnOnce(

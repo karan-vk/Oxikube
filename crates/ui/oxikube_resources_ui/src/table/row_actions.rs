@@ -15,7 +15,10 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::command_surface::CommandSurface;
 use oxikube_workspace::{Toast, Workspace};
 
-use super::actions::{AttachSelected, DebugSelected, DeleteSelected, ScaleSelected, ShellSelected};
+use super::actions::{
+    AttachSelected, CordonSelected, DebugSelected, DeleteSelected, ScaleSelected, ShellSelected,
+    UncordonSelected,
+};
 use super::view::ResourceTable;
 use crate::actions::{ActionEntry, DeleteDialog, ResourceActions};
 use crate::exec::{ExecFlow, ExecKind};
@@ -251,6 +254,26 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::POD_ATTACH, targets, window, cx);
+    }
+
+    pub(super) fn on_cordon(
+        &mut self,
+        _: &CordonSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::NODE_CORDON, targets, window, cx);
+    }
+
+    pub(super) fn on_uncordon(
+        &mut self,
+        _: &UncordonSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::NODE_UNCORDON, targets, window, cx);
     }
 
     pub(super) fn on_debug(

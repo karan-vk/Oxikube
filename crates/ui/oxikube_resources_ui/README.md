@@ -46,6 +46,10 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   and their classes; a detail panel per kind (a claim lists its bound volume and the Pods that mount it);
   "Resize…" (`pvc::Resize`, `shift-r`) and "Set as Default" (`storageclass::SetDefault`, `shift-s`) as row
   actions with their dialogs, through the guard.
+- `kinds::node` (E12-S09): the Nodes spec. The table's columns (Roles, Status, Version, OS, Kernel,
+  Internal IP, Pods, CPU%, Mem%, Taints, Schedulable, Age; instance type and zone as wide columns),
+  the detail panel (cordon badge and button, conditions, allocation bars from the pods on the node,
+  taints, pods, capacity, images) and the "Cordon" / "Uncordon" actions (keys `c` / `u` on Nodes).
 - `table` (E07-S03): `ResourceTable`, the generic virtualised table of one kind (store
   subscription, sort through the store, column layout per kind, multi-select, keyboard, context
   menu, status colours from the theme's `oxikube` block).

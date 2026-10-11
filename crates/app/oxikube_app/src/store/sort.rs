@@ -52,12 +52,20 @@ pub struct CellSortKey {
     pub column: ColumnId,
     /// Who reads the cells (the table's provider).
     pub provider: Arc<dyn ColumnProvider>,
+    /// The provider's [`rank_epoch`](ColumnProvider::rank_epoch) when the key was made. Part of
+    /// the key's identity, so handing the store a key made later re-ranks the rows.
+    pub epoch: u64,
 }
 
 impl CellSortKey {
     /// Sort by `column` of `provider`.
     pub fn new(column: ColumnId, provider: Arc<dyn ColumnProvider>) -> Self {
-        Self { column, provider }
+        let epoch = provider.rank_epoch(&column);
+        Self {
+            column,
+            provider,
+            epoch,
+        }
     }
 
     fn value_of(&self, object: &StoreObject) -> SortValue {
@@ -66,9 +74,10 @@ impl CellSortKey {
 }
 
 impl PartialEq for CellSortKey {
-    /// Same column of the same provider instance.
+    /// Same column of the same provider instance, ranked at the same epoch.
     fn eq(&self, other: &Self) -> bool {
         self.column == other.column
+            && self.epoch == other.epoch
             && std::ptr::addr_eq(Arc::as_ptr(&self.provider), Arc::as_ptr(&other.provider))
     }
 }

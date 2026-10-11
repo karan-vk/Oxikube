@@ -17,6 +17,9 @@
 //! E12-S16 adds `u` (use the namespace), `p` (pin it) for the Namespaces table and `0`-`9`
 //! (All, or the nth favourite) for every table: see `namespaces`.
 //!
+//! `c` cordons and `u` uncordons the cursor row's node (E12-S09), bound in a section scoped to
+//! `kind == Node` so `u` stays free for "used by" on the kinds that get it (#397).
+//!
 //! The k9s verbs of E11-S07 live next to them: `y` shows the YAML, `d` describes, `e` edits, `l`
 //! opens the logs, `shift-f` forwards a port, `f` lists the forwards and `ctrl-w` toggles the wide
 //! columns. Each is a view action that stands for a command of the same meaning (the table in
@@ -83,6 +86,12 @@ actions!(
         /// Add a debug container to the cursor row's pod (`pod::Debug`, through the debug dialog;
         /// `shift-d`). A toast says why not for a kind that is not a pod, or on a read-only cluster.
         DebugSelected,
+        /// Cordon the cursor row's node (`node::Cordon`; k9s's `c`, Nodes only). A toast says why
+        /// not for another kind, or on a read-only cluster; a multi-selection acts on the cursor
+        /// row and says so.
+        CordonSelected,
+        /// Uncordon the cursor row's node (`node::Uncordon`; k9s's `u` on Nodes).
+        UncordonSelected,
         /// Show the cursor row's YAML in the detail drawer (`resource::ViewYaml`; k9s's `y`).
         ViewYaml,
         /// Show the cursor row's `kubectl describe` text in the detail drawer

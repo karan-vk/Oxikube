@@ -827,6 +827,9 @@ pub struct NodeBuilder {
     roles: Vec<String>,
     kubelet: String,
     conditions: Vec<(String, bool)>,
+    taints: Vec<Value>,
+    allocatable: (String, String, String),
+    images: Vec<Value>,
 }
 
 /// A ready, schedulable node named [`NODE`] with no role.
@@ -840,6 +843,9 @@ pub fn node() -> NodeBuilder {
         roles: Vec::new(),
         kubelet: "v1.33.1".to_owned(),
         conditions: Vec::new(),
+        taints: Vec::new(),
+        allocatable: ("4".to_owned(), "16Gi".to_owned(), "110".to_owned()),
+        images: Vec::new(),
     }
 }
 
@@ -889,6 +895,45 @@ impl NodeBuilder {
         self
     }
 
+    /// Adds a taint (`value` empty for none), for example
+    /// `.taint("dedicated", "gpu", "NoSchedule")`.
+    #[must_use]
+    pub fn taint(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+        effect: impl Into<String>,
+    ) -> Self {
+        let value = value.into();
+        let mut taint = json!({"key": key.into(), "effect": effect.into()});
+        if !value.is_empty() {
+            taint["value"] = json!(value);
+        }
+        self.taints.push(taint);
+        self
+    }
+
+    /// Sets `status.allocatable` (and `capacity`) CPU, memory and pods; the default is
+    /// `4`, `16Gi`, `110`.
+    #[must_use]
+    pub fn allocatable(
+        mut self,
+        cpu: impl Into<String>,
+        memory: impl Into<String>,
+        pods: impl Into<String>,
+    ) -> Self {
+        self.allocatable = (cpu.into(), memory.into(), pods.into());
+        self
+    }
+
+    /// Adds an entry to `status.images`.
+    #[must_use]
+    pub fn image(mut self, name: impl Into<String>, size_bytes: u64) -> Self {
+        self.images
+            .push(json!({"names": [name.into()], "sizeBytes": size_bytes}));
+        self
+    }
+
     /// The Node as JSON.
     pub fn json(&self) -> Value {
         let mut meta = self.meta.clone();
@@ -897,10 +942,17 @@ impl NodeBuilder {
                 .insert(format!("node-role.kubernetes.io/{role}"), String::new());
         }
         let mut spec = json!({"podCIDR": "10.244.1.0/24"});
+        let mut taints = self.taints.clone();
         if self.cordoned {
             spec["unschedulable"] = json!(true);
-            spec["taints"] = json!([{"key": "node.kubernetes.io/unschedulable",
-                "effect": "NoSchedule", "timeAdded": STARTED}]);
+            taints.insert(
+                0,
+                json!({"key": "node.kubernetes.io/unschedulable",
+                    "effect": "NoSchedule", "timeAdded": STARTED}),
+            );
+        }
+        if !taints.is_empty() {
+            spec["taints"] = json!(taints);
         }
         let mut conditions: Vec<Value> = ["MemoryPressure", "DiskPressure", "PIDPressure"]
             .iter()
@@ -931,8 +983,10 @@ impl NodeBuilder {
                 {"type": "InternalIP", "address": NODE_IP},
                 {"type": "Hostname", "address": self.meta.name}
             ],
-            "allocatable": {"cpu": "4", "memory": "16Gi", "pods": "110", "ephemeral-storage": "100Gi"},
-            "capacity": {"cpu": "4", "memory": "16Gi", "pods": "110", "ephemeral-storage": "100Gi"},
+            "allocatable": {"cpu": self.allocatable.0, "memory": self.allocatable.1,
+                "pods": self.allocatable.2, "ephemeral-storage": "100Gi"},
+            "capacity": {"cpu": self.allocatable.0, "memory": self.allocatable.1,
+                "pods": self.allocatable.2, "ephemeral-storage": "100Gi"},
             "conditions": conditions,
             "nodeInfo": {
                 "architecture": "amd64",
@@ -943,6 +997,10 @@ impl NodeBuilder {
                 "osImage": "Debian GNU/Linux 12 (bookworm)"
             }
         });
+        let mut status = status;
+        if !self.images.is_empty() {
+            status["images"] = json!(self.images);
+        }
         json!({"apiVersion": "v1", "kind": "Node", "metadata": meta.to_json(),
             "spec": spec, "status": status})
     }

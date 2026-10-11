@@ -303,7 +303,8 @@ impl ResourceCall {
 ///   return it; `create` of an existing object is `Conflict`, `replace` of a missing one
 ///   `NotFound`. `delete` removes the object (unless dry run) and returns `Deleted`.
 /// * `patch` with [`PatchKind::Apply`] (server-side apply) stores the body as the object
-///   (unless dry run) and returns it; other patch kinds are unscripted.
+///   (unless dry run) and returns it; a [`PatchKind::Merge`] of a stored object stores the merged
+///   document (unless dry run) and returns it; other patch kinds are unscripted.
 /// * Every other method returns the [`unscripted`](crate::unscripted) error.
 ///
 /// Scripted watch timelines are replayed against [`clock`](Self::clock): offsets count

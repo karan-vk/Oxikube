@@ -54,6 +54,23 @@ impl ResourceTable {
         }
     }
 
+    /// Hands the store the sort again when the sorted column's cells read state outside their
+    /// object that has moved since (the Pods column counts pods, CPU% reads metrics): the store
+    /// keeps the rank it gave a row when its object arrived, so without this the order would
+    /// stay what the cells once said. The key carries the provider's epoch
+    /// ([`ColumnProvider::rank_epoch`]), so a changed one differs from the subscription's and
+    /// the store ranks again, off the UI thread. Called by the once-a-second tick.
+    pub(super) fn follow_rank(&mut self, cx: &mut Context<Self>) {
+        let key = self.sort_key(cx);
+        if self
+            .subscription
+            .as_ref()
+            .is_some_and(|subscription| subscription.query().sort != key)
+        {
+            self.apply_sort(cx);
+        }
+    }
+
     /// Subscribes to the session's store, or moves the subscription to the session's current
     /// scope. Does nothing while the session is not connected (the tab shows the connect view;
     /// the rows stay until it reconnects).

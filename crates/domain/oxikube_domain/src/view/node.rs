@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use jiff::Timestamp;
 
+use super::node_taint::NodeTaint;
 use super::{
     Condition, ConditionStatus, ViewError, arc_of, arr_of, bool_of, check_kind, str_of, sub,
 };
@@ -15,6 +16,16 @@ use crate::resource::Resource;
 const ROLE_PREFIX: &str = "node-role.kubernetes.io/";
 /// Legacy label whose value names a role: `kubernetes.io/role=master`.
 const ROLE_LABEL: &str = "kubernetes.io/role";
+/// Instance type labels, current then legacy.
+const INSTANCE_TYPE_LABELS: [&str; 2] = [
+    "node.kubernetes.io/instance-type",
+    "beta.kubernetes.io/instance-type",
+];
+/// Zone labels, current then legacy.
+const ZONE_LABELS: [&str; 2] = [
+    "topology.kubernetes.io/zone",
+    "failure-domain.beta.kubernetes.io/zone",
+];
 
 /// One row of a node table: the `kubectl get nodes -o wide` columns, typed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,6 +64,12 @@ pub struct NodeSummary {
     pub allocatable_memory: Option<Quantity>,
     /// `status.allocatable.pods`, when present and parseable.
     pub allocatable_pods: Option<Quantity>,
+    /// `spec.taints`, in API order.
+    pub taints: Vec<NodeTaint>,
+    /// The `node.kubernetes.io/instance-type` label (or its legacy spelling).
+    pub instance_type: Option<Arc<str>>,
+    /// The `topology.kubernetes.io/zone` label (or its legacy spelling).
+    pub zone: Option<Arc<str>>,
     /// `metadata.creationTimestamp`.
     pub created: Option<Timestamp>,
 }
@@ -115,8 +132,22 @@ impl NodeSummary {
             allocatable_cpu: quantity("cpu"),
             allocatable_memory: quantity("memory"),
             allocatable_pods: quantity("pods"),
+            taints: NodeTaint::of_node(res),
+            instance_type: Self::instance_type_of(res).cloned(),
+            zone: Self::zone_of(res).cloned(),
             created: res.meta.creation,
         })
+    }
+
+    /// The instance type label of a Node (current or legacy spelling), without building the whole
+    /// summary: for a table cell.
+    pub fn instance_type_of(res: &Resource) -> Option<&Arc<str>> {
+        first_label(res, &INSTANCE_TYPE_LABELS)
+    }
+
+    /// The zone label of a Node (current or legacy spelling), without building the whole summary.
+    pub fn zone_of(res: &Resource) -> Option<&Arc<str>> {
+        first_label(res, &ZONE_LABELS)
     }
 
     /// Whether the last `Ready` condition is `True`.
@@ -149,6 +180,13 @@ impl NodeSummary {
     pub fn age(&self, now: Timestamp) -> Option<Age> {
         self.created.map(|c| Age::between(c, now))
     }
+}
+
+/// The value of the first of `keys` the node carries.
+fn first_label<'a>(res: &'a Resource, keys: &[&str]) -> Option<&'a Arc<str>> {
+    keys.iter()
+        .find_map(|key| res.meta.labels.get(key))
+        .filter(|v| !v.is_empty())
 }
 
 /// Roles from the node's labels. Labels are a `BTreeMap`, but the two label forms interleave,

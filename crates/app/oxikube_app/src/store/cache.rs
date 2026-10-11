@@ -8,8 +8,10 @@ use std::sync::Arc;
 use super::counts::{KindCount, Tally};
 use super::feed::{FeedBatch, ObjectDelta};
 use super::keyset::KeySet;
+use super::nodes::{NodeBuild, NodeIndex, PodsByNode};
 use super::object::{FeedScope, ObjectKey, StoreObject};
 use super::query::StoreFilter;
+use super::spawn::TaskGuard;
 
 /// What one applied batch changed: the final state of every key it touched.
 #[derive(Debug, Default)]
@@ -43,6 +45,16 @@ pub(crate) struct ObjectCache {
     by_name: HashMap<Arc<str>, KeySet>,
     by_namespace: HashMap<Arc<str>, KeySet>,
     by_label: HashMap<(Arc<str>, Arc<str>), KeySet>,
+    /// Pods grouped by node, kept while a lease asks for it (`store::nodes`, E12-S09).
+    node_index: NodeIndex,
+    /// How many leases want [`node_index`](Self::node_index).
+    node_trackers: usize,
+    /// Numbers the builds of the index, so a result that outlived its request is recognised.
+    node_generation: u64,
+    /// The running first build of the index; dropped (aborting it) with the last claim or when
+    /// a newer build replaces it. A finished build's guard stays until then: the build never
+    /// drops its own guard.
+    node_build: Option<TaskGuard>,
 }
 
 impl ObjectCache {
@@ -89,6 +101,58 @@ impl ObjectCache {
     /// The cached object named `name` in no namespace (a cluster-scoped kind), if any.
     pub fn cluster_object(&self, name: &str) -> Option<&Arc<StoreObject>> {
         self.objects.get(&ObjectKey::new(None, name))
+    }
+
+    /// Starts (or joins) the pods-by-node index. When it has to be built from pods already
+    /// cached, returns the snapshot to build it from (the caller builds off this lock and hands
+    /// the result to [`finish_nodes`](Self::finish_nodes)); the index answers once that is done.
+    pub fn track_nodes(&mut self) -> Option<NodeBuild> {
+        self.node_trackers += 1;
+        if !matches!(self.node_index, NodeIndex::Off) {
+            return None;
+        }
+        if self.objects.is_empty() {
+            // Nothing to build from: deltas fill it in.
+            self.node_index = NodeIndex::Ready(PodsByNode::default());
+            return None;
+        }
+        self.node_generation += 1;
+        self.node_build = None;
+        self.node_index.begin(self.node_generation);
+        Some(NodeBuild {
+            generation: self.node_generation,
+            objects: self.objects.values().cloned().collect(),
+        })
+    }
+
+    /// Keeps the task building generation `generation` alive while that build is the one in
+    /// progress; a guard for a build that already finished or was superseded is dropped.
+    pub fn hold_build(&mut self, generation: u64, build: TaskGuard) {
+        if self.node_index.is_building(generation) {
+            self.node_build = Some(build);
+        }
+    }
+
+    /// Installs the index built from the snapshot of generation `generation`, replaying what
+    /// changed since. Dropped when the claim is gone or superseded.
+    pub fn finish_nodes(&mut self, generation: u64, built: PodsByNode) {
+        let objects = &self.objects;
+        self.node_index
+            .finish(generation, built, |key| objects.get(key));
+    }
+
+    /// Releases one claim on the index; the last one drops it.
+    pub fn untrack_nodes(&mut self) {
+        self.node_trackers = self.node_trackers.saturating_sub(1);
+        if self.node_trackers == 0 {
+            self.node_build = None;
+            self.node_index = NodeIndex::Off;
+        }
+    }
+
+    /// The pods-by-node index, once it is built and while someone tracks it.
+    pub fn pods_by_node(&self) -> Option<&PodsByNode> {
+        self.node_index.ready()
     }
 
     pub fn values(&self) -> impl Iterator<Item = &Arc<StoreObject>> {
@@ -164,6 +228,7 @@ impl ObjectCache {
         }
         self.index(&key, &object);
         self.tally.add(&object);
+        self.node_index.note_upsert(&key, &object);
         self.objects.insert(key, object);
         true
     }
@@ -172,6 +237,7 @@ impl ObjectCache {
         let old = self.objects.remove(key)?;
         self.unindex(key, &old);
         self.tally.sub(&old);
+        self.node_index.note_remove(key);
         Some(old)
     }
 

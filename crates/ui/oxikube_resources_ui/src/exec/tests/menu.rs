@@ -31,7 +31,7 @@ fn a_pod_offers_shell_attach_and_debug_after_logs_and_a_node_offers_only_its_own
     let nodes = f.open(crate::actions::tests::nodes_kind());
     assert_eq!(
         labels(&mut f, &nodes),
-        ["Shell", "Delete"],
+        ["Shell", "Cordon", "Uncordon", "Delete"],
         "a node's Shell is `node::Shell`, not a pod's; it has no Attach"
     );
 }
