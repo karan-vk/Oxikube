@@ -32,7 +32,7 @@ pub struct ContainerLine {
     pub resources: String,
 }
 
-/// The panel's data. See the [module docs](self).
+/// The panel's data. See the module docs.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PanelModel {
     /// The object version it was built from, to rebuild only when it changes.

@@ -183,7 +183,7 @@ pub struct TemplateContainer {
     pub limits: Vec<(Arc<str>, Arc<str>)>,
 }
 
-/// The detail panel's view of a replica-based controller. See the [module docs](self).
+/// The detail panel's view of a replica-based controller. See the `workload_detail` module docs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkloadDetail {
     /// Which controller.
