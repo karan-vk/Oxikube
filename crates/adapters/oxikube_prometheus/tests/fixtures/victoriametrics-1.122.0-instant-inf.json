@@ -1,0 +1,1 @@
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1791707599,"+Inf"]},{"metric":{"s":"neg"},"value":[1791707599,"-Inf"]}]},"stats":{"seriesFetched": "0","executionTimeMsec":0}}

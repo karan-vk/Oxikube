@@ -22,5 +22,8 @@ busybox:1.37
 # nginx that answers its welcome page at once: port-forward scenarios.
 nginx:1.27-alpine
 
+# Prometheus scraping itself: the oxikube_prometheus kind suite (a real server behind a port-forward).
+prom/prometheus:v3.5.0
+
 # Installed by `kind-up` itself (fixtures/metrics-server/kustomization.yaml pins the release).
 registry.k8s.io/metrics-server/metrics-server:v0.9.0

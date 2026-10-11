@@ -192,6 +192,10 @@ tempfile = "3"
 # Names gpui's `FxHashMap` in a test keyboard mapper (already in the lock through gpui).
 rustc-hash = "2"
 wiremock = "0.6"
+# Self-signed certificates and a TLS server for `oxikube_prometheus`'s TLS-failure tests. ring only,
+# never aws-lc-rs (one TLS provider).
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring", "pem"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
 
 # --- xtask ---
 cargo_metadata = "0.23"

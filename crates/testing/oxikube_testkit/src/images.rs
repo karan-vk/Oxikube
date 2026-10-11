@@ -27,6 +27,10 @@ pub const BUSYBOX: &str = "busybox:1.37";
 /// nginx, small, serving its welcome page on port 80 as soon as it starts.
 pub const NGINX: &str = "nginx:1.27-alpine";
 
+/// Prometheus, scraping itself: the `oxikube_prometheus` kind suite queries a real server through a
+/// port-forward.
+pub const PROMETHEUS: &str = "prom/prometheus:v3.5.0";
+
 /// The images of [`LIST`], in file order, without comments, blanks or duplicates.
 pub fn all() -> Vec<&'static str> {
     parse(LIST)
@@ -80,7 +84,14 @@ mod tests {
     #[test]
     fn the_list_names_every_constant_once() {
         let all = all();
-        for image in [PAUSE, PAUSE_PREVIOUS, E2E_BUSYBOX, BUSYBOX, NGINX] {
+        for image in [
+            PAUSE,
+            PAUSE_PREVIOUS,
+            E2E_BUSYBOX,
+            BUSYBOX,
+            NGINX,
+            PROMETHEUS,
+        ] {
             assert_eq!(all.iter().filter(|i| **i == image).count(), 1, "{image}");
         }
     }
