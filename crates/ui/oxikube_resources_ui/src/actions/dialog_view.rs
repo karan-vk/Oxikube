@@ -8,6 +8,7 @@ use gpui::{
 use oxikube_app::object_label;
 use oxikube_domain::command::Propagation;
 use oxikube_domain::safety::Risk;
+use oxikube_domain::view::NoteLevel;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::dialog::{DialogFooter, DialogHeader, DialogTitle};
 use oxikube_ui::input::Input;
@@ -153,6 +154,21 @@ impl DeleteDialog {
                     .text_color(colors.warning)
                     .child(Icon::new(IconName::TriangleAlert).size(u(px(14.))))
                     .child(warning)
+            }))
+            .children(self.notes.iter().enumerate().map(|(ix, note)| {
+                let colour = match note.level {
+                    NoteLevel::Danger => colors.error,
+                    NoteLevel::Warning => colors.warning,
+                    NoteLevel::Info => colors.text_muted,
+                };
+                h_flex()
+                    .debug_selector(move || format!("delete-note-{ix}"))
+                    .gap(u(px(8.)))
+                    .items_start()
+                    .text_size(u(px(12.)))
+                    .text_color(colour)
+                    .child(Icon::new(IconName::TriangleAlert).size(u(px(14.))))
+                    .child(div().flex_1().min_w_0().child(note.text.clone()))
             }))
             .children(self.asks_propagation().then(|| self.propagation_row(cx)))
             .children(typed)

@@ -24,6 +24,11 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ("resource_table::CopyName", CommandId::RESOURCE_COPY_NAME),
     ("resource_table::SelectAll", CommandId::RESOURCE_SELECT_ALL),
     ("resource_table::DeleteSelected", CommandId::RESOURCE_DELETE),
+    // A Namespace is deleted by its own command (the type-the-name dialog with its warnings).
+    (
+        "resource_table::DeleteSelected",
+        CommandId::NAMESPACE_DELETE,
+    ),
     ("resource_table::FocusFilter", CommandId::TABLE_FOCUS_FILTER),
     ("resource_table::ShellSelected", CommandId::POD_SHELL),
     ("resource_table::ShellSelected", CommandId::NODE_SHELL),
@@ -40,6 +45,17 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ("resource_table::ViewLogs", CommandId::POD_VIEW_LOGS),
     ("resource_table::ViewLogs", CommandId::WORKLOAD_VIEW_LOGS),
     ("resource_table::PortForward", CommandId::POD_PORT_FORWARD),
+    // The Namespaces table (E12-S16): `u` uses the namespace under the cursor, `p` pins it; the
+    // digits select All or the nth favourite in every table.
+    ("resource_table::UseNamespace", CommandId::NAMESPACE_SELECT),
+    (
+        "resource_table::ToggleFavouriteNamespace",
+        CommandId::NAMESPACE_TOGGLE_FAVOURITE,
+    ),
+    (
+        "resource_table::SelectNamespaceSlot",
+        CommandId::NAMESPACE_USE_FAVOURITE,
+    ),
     // `resource_table::ShowPortForwards` (`f`) is deliberately absent: its handler only toasts
     // "not available yet" until port forwarding lands, so it stands for no command. Once it
     // dispatches `view::Open` with the view `port_forwards`, list it here and drop it from

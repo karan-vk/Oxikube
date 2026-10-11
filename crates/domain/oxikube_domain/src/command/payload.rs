@@ -1,5 +1,7 @@
 //! The [`Command`] payload enum: navigation plus resource verbs.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::id::CommandId;
@@ -195,6 +197,38 @@ pub enum Command {
         cluster: ClusterId,
         /// The namespace to pin or unpin.
         namespace: String,
+    },
+    /// Select all namespaces (`slot` 0) or the nth favourite (`slot` 1 to 9) of a cluster, as
+    /// k9s's number keys do. A slot with no favourite changes nothing.
+    #[serde(rename = "namespace::UseFavourite")]
+    NamespaceUseFavourite {
+        /// The cluster whose selection changes.
+        cluster: ClusterId,
+        /// `0` for all namespaces, `1` to `9` for the nth favourite.
+        slot: u8,
+    },
+    /// Create a namespace (E12-S16): a manifest of the name and labels, created under the guard.
+    #[serde(rename = "namespace::Create")]
+    NamespaceCreate {
+        /// The cluster to create it in.
+        cluster: ClusterId,
+        /// The namespace name (a DNS label).
+        name: String,
+        /// Labels to set on it.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        labels: BTreeMap<String, String>,
+    },
+    /// Delete a namespace and everything in it (E12-S16). Irreversible: the user types the
+    /// name. Deleting is asynchronous: the namespace goes `Terminating` until its contents and
+    /// finalizers are gone.
+    #[serde(rename = "namespace::Delete")]
+    NamespaceDelete {
+        /// The namespace.
+        target: ResourceRef,
+        /// How many objects of each kind the namespace held when the user asked (kind to count),
+        /// kept in the audit record. Informational: empty when the caller did not look.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        contents: BTreeMap<String, u32>,
     },
     /// Add a kubeconfig source: a file, a directory, the default entry, or pasted text that
     /// Oxikube stores as its own file. Changes the settings list and local files, never a
@@ -1111,6 +1145,9 @@ impl Command {
             Command::ClusterApplyPreset { .. } => CommandId::CLUSTER_APPLY_PRESET,
             Command::NamespaceSelect { .. } => CommandId::NAMESPACE_SELECT,
             Command::NamespaceToggleFavourite { .. } => CommandId::NAMESPACE_TOGGLE_FAVOURITE,
+            Command::NamespaceUseFavourite { .. } => CommandId::NAMESPACE_USE_FAVOURITE,
+            Command::NamespaceCreate { .. } => CommandId::NAMESPACE_CREATE,
+            Command::NamespaceDelete { .. } => CommandId::NAMESPACE_DELETE,
             Command::KubeconfigAddSource { .. } => CommandId::KUBECONFIG_ADD_SOURCE,
             Command::KubeconfigRemoveSource { .. } => CommandId::KUBECONFIG_REMOVE_SOURCE,
             Command::KubeconfigReload => CommandId::KUBECONFIG_RELOAD,
@@ -1326,6 +1363,7 @@ impl Command {
             | Command::WorkloadScale { target, .. }
             | Command::WorkloadRestart { target }
             | Command::WorkloadViewLogs { target, .. }
+            | Command::NamespaceDelete { target, .. }
             | Command::NodeCordon { target }
             | Command::NodeShell { target }
             | Command::NodeUncordon { target }
@@ -1459,6 +1497,23 @@ mod tests {
             Command::NamespaceToggleFavourite {
                 cluster: cluster(),
                 namespace: "kube-system".into(),
+            },
+            Command::NamespaceUseFavourite {
+                cluster: cluster(),
+                slot: 2,
+            },
+            Command::NamespaceCreate {
+                cluster: cluster(),
+                name: "team-a".into(),
+                labels: BTreeMap::from([("team".to_owned(), "a".to_owned())]),
+            },
+            Command::NamespaceDelete {
+                target: ResourceRef::cluster_scoped(
+                    cluster(),
+                    Gvk::new("", "v1", "Namespace"),
+                    "team-a",
+                ),
+                contents: BTreeMap::from([("Pod".to_owned(), 12)]),
             },
             Command::KubeconfigAddSource {
                 source: NewKubeconfigSource::File {
@@ -1906,6 +1961,7 @@ mod tests {
                     | Command::ClusterSelect { .. }
                     | Command::NamespaceSelect { .. }
                     | Command::NamespaceToggleFavourite { .. }
+                    | Command::NamespaceUseFavourite { .. }
                     | Command::ViewOpen { .. }
                     | Command::PaletteToggle
                     | Command::PaletteClearRecents

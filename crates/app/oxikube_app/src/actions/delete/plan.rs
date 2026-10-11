@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use oxikube_domain::command::{Command, CommandId, Propagation};
+use oxikube_domain::command::{Command, Propagation};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::safety::{ConfirmTier, Risk};
 
@@ -108,7 +108,13 @@ pub struct DeleteFlow {
     sessions: ClusterSessionManager,
     pub(super) who: Arc<str>,
     pub(super) concurrency: usize,
+    /// The command that deletes one object; `resource::Delete` unless a kind has its own.
+    builder: Option<Arc<CommandBuilder>>,
 }
+
+/// Builds the command that deletes one object with a propagation: what a kind with its own
+/// delete command (a Namespace) gives [`DeleteFlow::with_command`].
+pub type CommandBuilder = dyn Fn(&ResourceRef, Propagation) -> Command + Send + Sync;
 
 impl std::fmt::Debug for DeleteFlow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -125,7 +131,21 @@ impl DeleteFlow {
             sessions,
             who: who.into(),
             concurrency: super::run::CONCURRENCY,
+            builder: None,
         }
+    }
+
+    /// The same flow deleting each object with the command `builder` makes instead of
+    /// `resource::Delete`: a Namespace's own `namespace::Delete`, which carries what the
+    /// namespace holds into its audit record. The plan asks what that command's guard policy
+    /// asks, so the dialog and the guard still agree.
+    #[must_use]
+    pub fn with_command(
+        mut self,
+        builder: impl Fn(&ResourceRef, Propagation) -> Command + Send + Sync + 'static,
+    ) -> Self {
+        self.builder = Some(Arc::new(builder));
+        self
     }
 
     /// How many objects are deleted at once (at least one). The default is a few; one makes the
@@ -152,15 +172,18 @@ impl DeleteFlow {
         if targets.iter().any(|t| t.cluster != cluster) {
             return Err(DeleteError::MixedClusters);
         }
-        let meta = oxikube_domain::command::lookup(CommandId::RESOURCE_DELETE)
-            .expect("resource::Delete is declared");
         let items: Vec<PlannedDelete> = targets
             .iter()
             .map(|target| {
-                let command = Command::ResourceDelete {
-                    target: target.clone(),
-                    propagation,
+                let command = match &self.builder {
+                    Some(builder) => builder(target, propagation),
+                    None => Command::ResourceDelete {
+                        target: target.clone(),
+                        propagation,
+                    },
                 };
+                let meta = oxikube_domain::command::lookup(command.id())
+                    .expect("every command is declared");
                 PlannedDelete {
                     target: target.clone(),
                     tier: policy::confirm_tier_for(meta, &command),

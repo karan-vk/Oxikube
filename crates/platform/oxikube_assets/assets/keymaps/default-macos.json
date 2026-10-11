@@ -212,7 +212,28 @@
       // the jump history back and forward, `-` goes to the view before this one and back again.
       "[": "jump::Back",
       "]": "jump::Forward",
-      "-": "jump::Last"
+      "-": "jump::Last",
+      // k9s: 0 watches all namespaces, 1-9 the nth favourite (E12-S16). A favourite is pinned with
+      // `p` on the Namespaces table or the star in the namespace selector.
+      "0": ["resource_table::SelectNamespaceSlot", { "slot": 0 }],
+      "1": ["resource_table::SelectNamespaceSlot", { "slot": 1 }],
+      "2": ["resource_table::SelectNamespaceSlot", { "slot": 2 }],
+      "3": ["resource_table::SelectNamespaceSlot", { "slot": 3 }],
+      "4": ["resource_table::SelectNamespaceSlot", { "slot": 4 }],
+      "5": ["resource_table::SelectNamespaceSlot", { "slot": 5 }],
+      "6": ["resource_table::SelectNamespaceSlot", { "slot": 6 }],
+      "7": ["resource_table::SelectNamespaceSlot", { "slot": 7 }],
+      "8": ["resource_table::SelectNamespaceSlot", { "slot": 8 }],
+      "9": ["resource_table::SelectNamespaceSlot", { "slot": 9 }]
+    }
+  },
+  {
+    // The Namespaces table (E12-S16): u uses the namespace under the cursor (k9s), p pins it.
+    // Scoped by kind, so the bare `u` stays free for other kinds' verbs (used-by on workloads).
+    "context": "ResourceTable && !Editing && kind == Namespace",
+    "bindings": {
+      "u": "resource_table::UseNamespace",
+      "p": "resource_table::ToggleFavouriteNamespace"
     }
   },
   {

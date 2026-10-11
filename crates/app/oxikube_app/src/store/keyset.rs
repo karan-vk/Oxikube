@@ -53,6 +53,15 @@ impl KeySet {
         }
     }
 
+    /// How many keys the set holds.
+    pub fn len(&self) -> usize {
+        match self {
+            KeySet::Empty => 0,
+            KeySet::One(_) => 1,
+            KeySet::Many(set) => set.len(),
+        }
+    }
+
     /// Whether the set has no keys.
     pub fn is_empty(&self) -> bool {
         matches!(self, KeySet::Empty)

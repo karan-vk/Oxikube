@@ -116,6 +116,9 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_show_service_pods))
             .on_action(cx.listener(Self::on_open_in_browser))
             .on_action(cx.listener(Self::on_toggle_wide))
+            .on_action(cx.listener(Self::on_use_namespace))
+            .on_action(cx.listener(Self::on_toggle_favourite_namespace))
+            .on_action(cx.listener(Self::on_select_namespace_slot))
             .on_action(cx.listener(Self::on_focus_filter))
             .on_action(cx.listener(Self::on_clear_filter))
             .child(toolbar)
@@ -132,10 +135,17 @@ impl Render for ResourceTable {
 impl ResourceTable {
     /// The "New" button (E10-S09): `resource::Create`, the "Create resource" picker of the
     /// manifest editor for this table's cluster (the palette and `cmd-alt-n` run the same
-    /// command).
+    /// command). On the Namespaces table (E12-S16) it opens the create-namespace dialog instead,
+    /// which asks a name and labels and sends `namespace::Create`.
     fn create_button(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let cluster = self.cluster.clone();
         let dispatcher = self.deps.dispatcher.clone();
+        let namespaces = self.kind.gvk.is_namespace();
+        let tooltip = if namespaces {
+            "Create a namespace"
+        } else {
+            "Create a resource from a template"
+        };
         div()
             .debug_selector(|| "resource-table-create".into())
             .child(
@@ -143,8 +153,12 @@ impl ResourceTable {
                     .label("New")
                     .ghost()
                     .xsmall()
-                    .tooltip("Create a resource from a template")
-                    .on_click(cx.listener(move |_, _, _, cx| {
+                    .tooltip(tooltip)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        if namespaces {
+                            this.open_create_namespace(window, cx);
+                            return;
+                        }
                         dispatcher.dispatch(
                             Command::ResourceCreate {
                                 cluster: Some(cluster.clone()),

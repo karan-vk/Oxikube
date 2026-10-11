@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use oxikube_app::namespaces::NamespaceCreator;
 use oxikube_app::{
     ActionContext, ActionState, ClusterSessionManager, CommandBus, DebugRunner, DeleteFlow,
     ExecService, RowAction, RowActionRegistry, RowActions, ScaleRunner, WorkloadService,
@@ -56,6 +57,8 @@ pub struct ResourceActions {
     /// Reads a workload's scale and runs `workload::Scale` for the scale dialog (E12-S04).
     workloads: Arc<WorkloadService>,
     scale: ScaleRunner,
+    /// Runs `namespace::Create` for the create dialog (E12-S16).
+    namespace_creator: NamespaceCreator,
 }
 
 impl ResourceActions {
@@ -91,6 +94,7 @@ impl ResourceActions {
             debug: DebugRunner::new(bus.clone(), who.clone()),
             workloads: Arc::new(WorkloadService::new(sessions)),
             scale: ScaleRunner::new(bus.clone(), who),
+            namespace_creator: NamespaceCreator::new(bus.clone(), who),
         }
     }
 
@@ -128,6 +132,12 @@ impl ResourceActions {
         workspace: gpui::WeakEntity<oxikube_workspace::Workspace>,
     ) -> crate::kinds::ScaleFlow {
         crate::kinds::ScaleFlow::new(self.workloads.clone(), self.scale.clone(), workspace)
+    }
+
+    /// The runner of `namespace::Create` for the create-namespace dialog: dispatches on the same
+    /// bus, as the user.
+    pub fn namespace_creator(&self) -> NamespaceCreator {
+        self.namespace_creator.clone()
     }
 
     /// The delete flow.

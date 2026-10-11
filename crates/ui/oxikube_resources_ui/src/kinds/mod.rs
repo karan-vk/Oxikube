@@ -23,6 +23,7 @@
 //! | `job`, `cronjob` | Jobs and CronJobs (E12-S08): the kind specs and their row actions, [`row_actions`] |
 //! | `endpoints` | Endpoints and EndpointSlices (E12-S13): the detail panel |
 //! | `service` | Services (E12-S13): the detail panel, the open-in-browser hook and the row actions |
+//! | `namespace` | E12-S16: the Namespaces kind: columns with a live pod count, row actions, panel, create dialog |
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
 //! | [`crd`] | the CustomResourceDefinition kind (E12-S17): its spec and the definition panel of its detail |
 //! | `pods` | Pods (E12-S02): their own columns and the containers drill-down |
@@ -59,6 +60,7 @@ pub mod network;
 mod parts;
 pub mod pods;
 pub mod service;
+pub mod namespace;
 mod sidebar;
 mod spec;
 mod specs;

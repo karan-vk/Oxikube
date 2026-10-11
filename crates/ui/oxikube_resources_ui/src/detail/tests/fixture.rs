@@ -50,6 +50,7 @@ pub(crate) fn kinds() -> Vec<ResourceKind> {
         kind("apps", "v1", "Deployment", "deployments", true),
         kind("", "v1", "Secret", "secrets", true),
         kind("", "v1", "Node", "nodes", false),
+        kind("", "v1", "Namespace", "namespaces", false),
         kind("example.com", "v1", "Widget", "widgets", true),
         kind(
             "apiextensions.k8s.io",

@@ -9,6 +9,7 @@ mod feeds;
 mod filter;
 mod filter_bar;
 mod incremental;
+mod namespaces;
 mod order;
 mod props;
 mod refcount;

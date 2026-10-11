@@ -9,6 +9,7 @@
 
 use gpui::{AppContext as _, Context, Window};
 use oxikube_app::CommandTarget;
+use oxikube_app::namespaces::{delete_advice, delete_command};
 use oxikube_domain::command::{CommandId, ViewContext};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::command_surface::CommandSurface;
@@ -65,6 +66,17 @@ impl ResourceTable {
         let Some(actions) = self.deps.actions.clone() else {
             return;
         };
+        // A Namespace is deleted by its own command (the generic delete does not offer it).
+        let command = if command == CommandId::RESOURCE_DELETE && self.kind.gvk.is_namespace() {
+            CommandId::NAMESPACE_DELETE
+        } else {
+            command
+        };
+        // Creating needs no row: it asks for a name in its own dialog.
+        if command == CommandId::NAMESPACE_CREATE && self.kind.gvk.is_namespace() {
+            self.open_create_namespace(window, cx);
+            return;
+        }
         if targets.is_empty() {
             self.say_no_row(cx);
             return;
@@ -88,7 +100,7 @@ impl ResourceTable {
         if let Some(target) = &cursor_target {
             self.say_cursor_row(command, entry.action.label(), target, selected, cx);
         }
-        if command == CommandId::RESOURCE_DELETE {
+        if command == CommandId::RESOURCE_DELETE || command == CommandId::NAMESPACE_DELETE {
             self.begin_delete(&actions, targets, window, cx);
         } else if command == CommandId::WORKLOAD_SCALE {
             // The dialog asks for the count; the command is sent when the user confirms it.
@@ -139,17 +151,37 @@ impl ResourceTable {
             tracing::warn!("a resource table without a workspace cannot open the delete dialog");
             return;
         };
-        let plan = match actions.flow().plan(&targets, Default::default()) {
+        // A Namespace is deleted by `namespace::Delete`, carrying what it holds (counted from the
+        // caches the app already has) and warned about before the name is typed.
+        let mut flow = actions.flow().clone();
+        let mut notes = Vec::new();
+        if self.kind.gvk.is_namespace() {
+            let several = targets.len() > 1;
+            let mut contents = std::collections::HashMap::new();
+            for target in &targets {
+                let advice = delete_advice(self.store.as_ref(), &target.name);
+                notes.extend(advice.notes.into_iter().map(|mut note| {
+                    if several {
+                        note.text = format!("{}: {}", target.name, note.text);
+                    }
+                    note
+                }));
+                contents.insert(target.name.to_string(), advice.contents);
+            }
+            notes.sort_by_key(|note| std::cmp::Reverse(note.level));
+            flow = flow.with_command(delete_command(contents));
+        }
+        let plan = match flow.plan(&targets, Default::default()) {
             Ok(plan) => plan,
             Err(error) => {
                 self.toast(Toast::error(error.to_string()), cx);
                 return;
             }
         };
-        let flow = actions.flow().clone();
         let host = workspace.downgrade();
         workspace.update(cx, |workspace, cx| {
-            let dialog = cx.new(|cx| DeleteDialog::new(flow, plan, host, window, cx));
+            let dialog =
+                cx.new(|cx| DeleteDialog::new(flow, plan, host, window, cx).with_notes(notes));
             workspace.show_modal(dialog.clone(), window, cx);
             dialog.update(cx, |dialog, cx| dialog.focus_input(window, cx));
         });
@@ -172,6 +204,7 @@ impl ResourceTable {
         cx: &mut Context<Self>,
     ) {
         let targets = self.action_targets(cx);
+        // `run_action` turns this into `namespace::Delete` on the Namespaces table.
         self.run_action(CommandId::RESOURCE_DELETE, targets, window, cx);
     }
 

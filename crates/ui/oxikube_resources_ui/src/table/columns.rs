@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use gpui::{App, AppContext as _, Context};
-use oxikube_app::store::FeedKind;
-use oxikube_app::{Column, ColumnId, ColumnProvider, TableColumns};
+use oxikube_app::store::{FeedKind, ResourceStore};
+use oxikube_app::{Column, ColumnId, ColumnProvider, ColumnsContext, TableColumns};
 use oxikube_domain::Capabilities;
 use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_domain::kinds::ResourceKind;
@@ -100,6 +100,42 @@ impl ResourceTable {
             self.apply_sort(cx);
         }
     }
+}
+
+/// The kind's own provider for this table: the spec's static one, else the one its spec builds for
+/// this cluster over the cluster's store ([`scoped_provider`]). `None`: the shared one.
+pub(super) fn own_provider(
+    cx: &App,
+    cluster: &ClusterId,
+    kind: &ResourceKind,
+    deps: &ResourceTableDeps,
+    store: Option<ResourceStore>,
+) -> Option<Arc<dyn ColumnProvider>> {
+    crate::kinds::KindSpecs::columns_for(cx, &kind.gvk)
+        .or_else(|| scoped_provider(cx, cluster, kind, deps, store))
+}
+
+/// The provider a kind's spec builds for this cluster over its store (a Namespace's live pod
+/// count), `store` when the caller has it, else the session's. `None` for a kind whose columns do
+/// not depend on the cluster.
+pub(super) fn scoped_provider(
+    cx: &App,
+    cluster: &ClusterId,
+    kind: &ResourceKind,
+    deps: &ResourceTableDeps,
+    store: Option<ResourceStore>,
+) -> Option<Arc<dyn ColumnProvider>> {
+    let store = store.or_else(|| {
+        deps.sessions
+            .get(cluster)
+            .and_then(|session| deps.stores.for_session(&session))
+    });
+    let context = ColumnsContext {
+        cluster: cluster.clone(),
+        store,
+        shared: deps.columns.clone(),
+    };
+    crate::kinds::KindSpecs::columns_in(cx, &kind.gvk, &context)
 }
 
 /// The provider a new table starts with: the kind's own (its spec's, E12-S01), else the core

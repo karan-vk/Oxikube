@@ -13,6 +13,7 @@ use gpui::{
 use oxikube_app::{DeleteFlow, DeletePlan, DeleteReport};
 use oxikube_domain::command::Propagation;
 use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::view::DeleteNote;
 use oxikube_runtime::spawn_kube;
 use oxikube_ui::input::{InputEvent, InputState};
 use oxikube_workspace::modal::{ModalPlacement, ModalView};
@@ -36,6 +37,8 @@ pub struct DeleteDialog {
     pub(super) typed: Entity<InputState>,
     pub(super) stage: Stage,
     pub(super) report: Option<DeleteReport>,
+    /// What else to tell the user before they confirm (a Namespace's warnings and contents).
+    pub(super) notes: Vec<DeleteNote>,
     /// Why nothing ran (the phrase did not match), shown under the field.
     pub(super) error: Option<SharedString>,
     workspace: gpui::WeakEntity<Workspace>,
@@ -86,11 +89,25 @@ impl DeleteDialog {
             typed,
             stage: Stage::Confirm,
             report: None,
+            notes: Vec::new(),
             error: None,
             workspace,
             focus: cx.focus_handle(),
             _subscriptions: subscriptions,
         }
+    }
+
+    /// The same dialog also showing `notes` above the question (most severe first): the kind's
+    /// own warnings and what the object holds.
+    #[must_use]
+    pub fn with_notes(mut self, notes: Vec<DeleteNote>) -> Self {
+        self.notes = notes;
+        self
+    }
+
+    /// The notes the dialog shows.
+    pub fn notes(&self) -> &[DeleteNote] {
+        &self.notes
     }
 
     /// Focuses the field the user has to type in, or the dialog itself when it has none.

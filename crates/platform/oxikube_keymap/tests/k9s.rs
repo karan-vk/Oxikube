@@ -36,7 +36,9 @@ actions!(
         ClearFilter,
         ClearSelection,
         TriggerSelected,
-        ToggleSuspendSelected
+        ToggleSuspendSelected,
+        UseNamespace,
+        ToggleFavouriteNamespace
     ]
 );
 actions!(resource_detail, [Close]);
@@ -49,6 +51,12 @@ actions!(log_view, [ToggleAutoscroll, ToggleWrap, Find]);
 #[action(namespace = resource_detail)]
 struct ShowTab {
     index: u8,
+}
+
+#[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
+#[action(namespace = resource_table)]
+struct SelectNamespaceSlot {
+    slot: u8,
 }
 
 const MAC: KeymapPlatform = KeymapPlatform::MacOs;
@@ -621,4 +629,120 @@ fn the_bindings_in_force_follow_the_context_stack(cx: &mut TestAppContext) {
     sorted.sort();
     sorted.dedup();
     assert_eq!(sorted.len(), in_terminal.len());
+}
+
+const SLOT: &str = "resource_table::SelectNamespaceSlot";
+
+#[gpui::test]
+fn the_namespace_keys_are_scoped_to_the_table_and_the_namespace_kind(cx: &mut TestAppContext) {
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        // On the Namespaces table: `u` uses the namespace under the cursor (k9s), `p` pins it.
+        let namespaces = table("Namespace", "");
+        assert_eq!(
+            runs(cx, "u", &strs(&namespaces)),
+            Some("resource_table::UseNamespace"),
+            "{platform:?}"
+        );
+        assert_eq!(
+            runs(cx, "p", &strs(&namespaces)),
+            Some("resource_table::ToggleFavouriteNamespace")
+        );
+        // The digits select All (0) or the nth favourite, in any table.
+        for kind in ["Namespace", "Pod", "Deployment"] {
+            let stack = table(kind, "");
+            for digit in 0..=9 {
+                assert_eq!(
+                    runs(cx, &digit.to_string(), &strs(&stack)),
+                    Some(SLOT),
+                    "{digit} on {kind} ({platform:?})"
+                );
+            }
+        }
+        // `u` and `p` are the Namespaces table's: other kinds keep them free (E12-S18 binds
+        // used-by to `u` on its own kinds).
+        for kind in ["Pod", "Deployment", "Node"] {
+            let stack = table(kind, "");
+            for keys in ["u", "p"] {
+                assert_eq!(
+                    press(cx, keys, &strs(&stack)),
+                    Resolution::Unbound,
+                    "{keys} on {kind}"
+                );
+            }
+        }
+    }
+}
+
+#[gpui::test]
+fn the_namespace_keys_are_text_where_text_is_typed_and_keys_only_in_the_table(
+    cx: &mut TestAppContext,
+) {
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        let editing = table("Namespace", "Editing");
+        let mut field = editing.clone();
+        field.push("Input".into());
+        for stack in [&editing, &field] {
+            for keys in ["u", "p", "0", "1", "9"] {
+                assert_eq!(
+                    press(cx, keys, &strs(stack)),
+                    Resolution::Unbound,
+                    "{keys} typed into the filter ({platform:?})"
+                );
+            }
+        }
+        for keys in ["u", "p", "0", "1", "9"] {
+            assert_eq!(
+                press(cx, keys, &TERMINAL),
+                Resolution::Unbound,
+                "{keys} reaches the shell"
+            );
+        }
+        // Outside a table the digit is that view's: the detail drawer's tabs, nothing at all in a
+        // bare cluster tab.
+        let drawer = [
+            "Workspace",
+            "ClusterTab connected",
+            "Workspace",
+            "Pane",
+            "DetailDrawer kind=Namespace mount=drawer",
+        ];
+        assert_eq!(runs(cx, "1", &drawer), Some("resource_detail::ShowTab"));
+        assert_eq!(
+            press(
+                cx,
+                "1",
+                &["Workspace", "ClusterTab connected", "Workspace", "Pane"]
+            ),
+            Resolution::Unbound
+        );
+        assert_eq!(
+            press(cx, "1", &["Workspace", "Catalog"]),
+            Resolution::Unbound
+        );
+    }
+}
+
+#[gpui::test]
+fn the_namespace_actions_stand_for_commands(cx: &mut TestAppContext) {
+    use oxikube_keymap::ActionRegistry;
+    install(cx, MAC, "");
+    for (action, command) in [
+        ("resource_table::UseNamespace", CommandId::NAMESPACE_SELECT),
+        (
+            "resource_table::ToggleFavouriteNamespace",
+            CommandId::NAMESPACE_TOGGLE_FAVOURITE,
+        ),
+        (SLOT, CommandId::NAMESPACE_USE_FAVOURITE),
+        (
+            "resource_table::DeleteSelected",
+            CommandId::NAMESPACE_DELETE,
+        ),
+    ] {
+        assert!(
+            ActionRegistry::commands_of(action).contains(&command),
+            "{action} stands for {command}"
+        );
+    }
 }

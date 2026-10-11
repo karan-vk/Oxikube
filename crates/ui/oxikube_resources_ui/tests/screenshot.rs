@@ -37,6 +37,11 @@
 //!   the Pod kind's own columns with a metrics source, and a pod's detail opening on its
 //!   containers sub-table (E12-S02).
 //!
+//! - `namespaces_table_dark`, `namespaces_table_light` (`namespaces`): the Namespaces table with its
+//!   Pods column (E12-S16); `namespaces_delete_dark`, `namespaces_delete_light`: the delete dialog
+//!   of a namespace with HNC children and a lot in it; `namespaces_create_dark`: the create dialog
+//!   showing an invalid name.
+//!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
 //! process main thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so
@@ -82,6 +87,8 @@ mod network;
 mod pods;
 #[path = "screenshot/service.rs"]
 mod service;
+#[path = "screenshot/namespaces.rs"]
+mod namespaces;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
@@ -265,6 +272,7 @@ fn main() -> ExitCode {
         exec::run(),
         pods::run(),
         service::run(),
+        namespaces::run(),
     ];
     let mut failed = false;
     for result in results {

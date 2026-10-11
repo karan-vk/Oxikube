@@ -229,15 +229,20 @@ fn every_vim_binding_moves_inside_the_table_or_dispatches_a_command() {
         }
     }
     // Delete and copy-name are the existing guarded commands, not a new action.
-    for (action, command) in [
-        ("resource_table::DeleteSelected", "resource::Delete"),
-        ("resource_table::CopyName", "resource::CopyName"),
+    // (A Namespace is deleted by its own guarded command, E12-S16: `dd` still opens the one
+    // delete dialog.)
+    for (action, commands) in [
+        (
+            "resource_table::DeleteSelected",
+            &["resource::Delete", "namespace::Delete"][..],
+        ),
+        ("resource_table::CopyName", &["resource::CopyName"][..]),
     ] {
         let ids: Vec<_> = ActionRegistry::commands_of(action)
             .iter()
             .map(|id| id.as_str().to_owned())
             .collect();
-        assert_eq!(ids, [command], "{action}");
+        assert_eq!(ids, commands, "{action}");
     }
 }
 

@@ -74,8 +74,16 @@ fn actions_rig(
             |_: Command, _: HandlerContext| async { Ok(CommandOutput::none()) },
         )
         .unwrap();
-    // The CronJob and Job actions (E12-S08): do-nothing handlers behind the real guard (the
-    // workloads rig below installs the real ones, with `workload::Scale`).
+    // The real `namespace::Create` / `namespace::Delete` (E12-S16) behind the real guard.
+    registry
+        .install(
+            "oxikube_app::namespaces",
+            oxikube_app::namespaces::register_commands,
+        )
+        .unwrap();
+    // The CronJob and Job actions (E12-S08), and Namespaces' "use" and "pin" (E12-S16):
+    // do-nothing handlers behind the real guard (the workloads rig below installs the real
+    // ones, with `workload::Scale`; the table sends "use" and "pin" to the recording dispatcher).
     for id in [
         CommandId::CRONJOB_TRIGGER,
         CommandId::CRONJOB_SUSPEND,
@@ -85,7 +93,11 @@ fn actions_rig(
     ]
     .into_iter()
     .filter(|_| !workloads)
-    {
+    .chain([
+        CommandId::NAMESPACE_SELECT,
+        CommandId::NAMESPACE_USE_FAVOURITE,
+        CommandId::NAMESPACE_TOGGLE_FAVOURITE,
+    ]) {
         registry
             .register(
                 *command::lookup(id).unwrap(),
@@ -162,6 +174,9 @@ fn actions_rig(
         rows.register(spec).unwrap();
     }
     for spec in crate::kinds::row_actions() {
+        rows.register(spec).unwrap();
+    }
+    for spec in crate::kinds::namespace::namespace_row_actions() {
         rows.register(spec).unwrap();
     }
     if exec {

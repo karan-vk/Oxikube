@@ -25,7 +25,7 @@ use oxikube_ui::table::TableOptions;
 use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent, Workspace};
 
 use super::cell_cache::CellCache;
-use super::columns::{ColumnScope, initial_provider};
+use super::columns::{ColumnScope, initial_provider, own_provider};
 use super::delegate::RowsDelegate;
 use super::layout::ColumnLayout;
 use super::prefs::{ColumnPrefs, PrefsWriter};
@@ -152,7 +152,7 @@ impl ResourceTable {
         cx: &mut Context<Self>,
     ) -> Self {
         let title: SharedString = plural_title(&kind).into();
-        let own_columns = crate::kinds::KindSpecs::columns_for(cx, &kind.gvk);
+        let own_columns = own_provider(cx, &cluster, &kind, &deps, None);
         let provider = initial_provider(&cluster, &kind, &deps, own_columns.as_ref());
         let scope = ColumnScope::of(&deps, &cluster, &kind);
         let layout = ColumnLayout::new(
