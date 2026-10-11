@@ -17,6 +17,10 @@ pub struct Resolved {
 /// Where the provider that answered goes: the query side. The binary implements it over
 /// `oxikube_prometheus::PrometheusPort`, so the endpoint a query uses is set in the same step as
 /// the state a view shows. `None` forgets the cluster's endpoint.
+///
+/// The service calls it while holding its state lock, so a newer decision is never overwritten by
+/// an older one. An implementation is a quick in-memory set: it must not block and must not call
+/// back into the [`MetricsProviderService`](super::MetricsProviderService).
 pub trait EndpointSink: Send + Sync {
     /// `cluster`'s provider is now `resolved`, or none.
     fn publish(&self, cluster: &ClusterId, resolved: Option<&Resolved>);

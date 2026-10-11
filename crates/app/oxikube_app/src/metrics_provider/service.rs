@@ -275,9 +275,17 @@ impl Inner {
     }
 
     fn forget(&self, cluster: &ClusterId) {
-        let removed = self.state.lock().entries.remove(cluster);
+        let removed = {
+            // Published under the lock, like every other publish: the table and the sink move
+            // together, so an older decision cannot land after a newer one.
+            let mut state = self.state.lock();
+            let removed = state.entries.remove(cluster);
+            if removed.is_some() {
+                self.sink.publish(cluster, None);
+            }
+            removed
+        };
         if removed.is_some() {
-            self.sink.publish(cluster, None);
             let _ = self.changes.send(cluster.clone());
         }
     }
@@ -355,17 +363,20 @@ impl Inner {
                 _task: task,
             },
         );
-        drop(guard);
+        // Under the lock, so a run that finishes meanwhile cannot publish before this does.
         if publish {
             self.sink.publish(cluster, None);
         }
+        drop(guard);
         let _ = self.changes.send(cluster.clone());
     }
 
     /// A run ended: record its result unless a newer run (or a forget) superseded it.
     fn finish(&self, cluster: &ClusterId, run: u64, mode: MetricsMode, found: Found) {
         let Found { result, endpoint } = found;
-        let status = {
+        {
+            // The publish is under the lock too: the table and the sink must agree, and a newer
+            // evaluate or forget (which publishes under it) must not be overwritten by this one.
             let mut state = self.state.lock();
             let Some(entry) = state.entries.get_mut(cluster).filter(|e| e.run == run) else {
                 return;
@@ -378,14 +389,13 @@ impl Inner {
                 settings: entry.status.settings.clone(),
             });
             entry.status = status.clone();
-            status
-        };
-        let resolved = status
-            .provider()
-            .cloned()
-            .zip(endpoint)
-            .map(|(provider, endpoint)| Resolved { provider, endpoint });
-        self.sink.publish(cluster, resolved.as_ref());
+            let resolved = status
+                .provider()
+                .cloned()
+                .zip(endpoint)
+                .map(|(provider, endpoint)| Resolved { provider, endpoint });
+            self.sink.publish(cluster, resolved.as_ref());
+        }
         let _ = self.changes.send(cluster.clone());
     }
 }

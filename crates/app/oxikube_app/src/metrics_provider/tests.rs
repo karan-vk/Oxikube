@@ -592,3 +592,86 @@ async fn attaching_alone_spawns_nothing_and_following_is_the_hosts_to_run() {
     assert_eq!(h.detects(), 1);
     following.abort();
 }
+
+/// A sink that behaves like the real one (a setter: the last call wins) and holds the first
+/// `Some` it is given until released, so a test can put a settings change in that window.
+struct GatedSink {
+    current: Mutex<Option<DetectedProvider>>,
+    entered: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+    release: Mutex<std::sync::mpsc::Receiver<()>>,
+}
+
+impl EndpointSink for GatedSink {
+    fn publish(&self, _: &ClusterId, resolved: Option<&Resolved>) {
+        if resolved.is_some()
+            && let Some(entered) = self.entered.lock().take()
+        {
+            let _ = entered.send(());
+            let _ = self.release.lock().recv_timeout(Duration::from_secs(10));
+        }
+        *self.current.lock() = resolved.map(|r| r.provider.clone());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_late_result_never_overwrites_a_newer_disable_at_the_sink() {
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let sink = Arc::new(GatedSink {
+        current: Mutex::new(None),
+        entered: Mutex::new(Some(entered_tx)),
+        release: Mutex::new(release_rx),
+    });
+    let connector = Arc::new(FakeClusterConnectorPort::new());
+    let source = Arc::new(FakeClusterSourcePort::new().with_contexts([context("a")]));
+    let sessions =
+        ClusterSessionManager::new(connector, source, Arc::new(FakeClockPort::default()));
+    sessions.set_prefs_table(ClusterPrefsTable::default());
+    let detector = Arc::new(FakeProviderDetectorPort::new());
+    detector.script().detect.push_ok(found());
+    let service = MetricsProviderService::new(sessions.clone(), detector, sink.clone());
+    service.start(tokio_spawner());
+
+    // The run finishes and is inside the sink, holding the endpoint back.
+    sessions.connect(&id("a")).await.expect("connect");
+    entered_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the run reached the sink");
+
+    // The user turns metrics off in that window.
+    sessions.set_prefs_table(
+        ClusterPrefsTable::new(ClusterPrefs::default()).with_cluster(
+            id("a"),
+            ClusterPrefs {
+                prometheus: Some(PrometheusOverride {
+                    mode: MetricsMode::Off,
+                    ..PrometheusOverride::default()
+                }),
+                ..ClusterPrefs::default()
+            },
+        ),
+    );
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    let change = {
+        let service = service.clone();
+        std::thread::spawn(move || {
+            service.settings_changed();
+            let _ = done_tx.send(());
+        })
+    };
+    // Ordered correctly, the change waits for the run's publish; give it time to get that far
+    // (when it does not wait it is done at once, so this ends early).
+    let _ = done_rx.recv_timeout(Duration::from_millis(300));
+    release_tx.send(()).expect("release the run");
+    change.join().expect("the settings change");
+
+    assert!(matches!(
+        service.status(&id("a")).state,
+        ProviderState::Disabled
+    ));
+    assert_eq!(
+        *sink.current.lock(),
+        None,
+        "the endpoint of the older run must not outlive the newer disable"
+    );
+}
