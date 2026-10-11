@@ -42,31 +42,10 @@ pub(super) fn cell<'a>(
         ),
         CPU => usage(pod, Metric::Cpu, metrics, now),
         MEMORY => usage(pod, Metric::Memory, metrics, now),
-        CPU_OF_REQUEST => percent(
-            pod,
-            Metric::Cpu,
-            s.resources.requests.cpu,
-            false,
-            metrics,
-            now,
-        ),
-        CPU_OF_LIMIT => percent(pod, Metric::Cpu, s.resources.limits.cpu, true, metrics, now),
-        MEMORY_OF_REQUEST => percent(
-            pod,
-            Metric::Memory,
-            s.resources.requests.memory,
-            false,
-            metrics,
-            now,
-        ),
-        MEMORY_OF_LIMIT => percent(
-            pod,
-            Metric::Memory,
-            s.resources.limits.memory,
-            true,
-            metrics,
-            now,
-        ),
+        CPU_OF_REQUEST => percent(pod, s, Metric::Cpu, false, metrics, now),
+        CPU_OF_LIMIT => percent(pod, s, Metric::Cpu, true, metrics, now),
+        MEMORY_OF_REQUEST => percent(pod, s, Metric::Memory, false, metrics, now),
+        MEMORY_OF_LIMIT => percent(pod, s, Metric::Memory, true, metrics, now),
         IP => owned(s.ip.as_ref()),
         NODE => owned(s.node.as_ref()),
         NOMINATED_NODE => owned(s.nominated_node.as_ref()),
@@ -127,12 +106,21 @@ fn usage_value(
 /// 100 %.
 fn percent<'a>(
     pod: &Resource,
+    summary: &PodSummary,
     metric: Metric,
-    of: Option<Quantity>,
     limit: bool,
     metrics: Option<&dyn MetricsSource>,
     now: Timestamp,
 ) -> Cell<'a> {
+    let amounts = if limit {
+        summary.resources.limits
+    } else {
+        summary.resources.requests
+    };
+    let of = match metric {
+        Metric::Cpu => amounts.cpu,
+        Metric::Memory => amounts.memory,
+    };
     let Some(pct) = of.and_then(|total| usage_value(pod, metric, metrics, now)?.percent_of(&total))
     else {
         return absent();

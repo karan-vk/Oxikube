@@ -2,12 +2,10 @@
 //! per pod version from the domain's [`ContainerSummary`] (never in render).
 
 use gpui::SharedString;
+use oxikube_app::columns::pods::ABSENT;
 use oxikube_app::columns::{Tone, status_tone};
 use oxikube_domain::view::{ContainerState, ResourceAmounts};
 use oxikube_domain::{ContainerSummary, Quantity, Resource};
-
-/// What a missing value reads (no request, no limit, no port).
-const ABSENT: &str = "–";
 
 /// The sub-table's columns: id (the cell's test selector), title, width in unscaled pixels,
 /// right-aligned. k9s' containers view, in its order: IDX, NAME, IMAGE, READY, STATE, RESTARTS,

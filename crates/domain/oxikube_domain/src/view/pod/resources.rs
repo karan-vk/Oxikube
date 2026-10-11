@@ -71,18 +71,16 @@ impl ComputeResources {
         let pick = |amounts: fn(&ComputeResources) -> Option<Quantity>, limit: bool| {
             total(&containers, &inits, amounts, limit)
         };
-        if out.requests.cpu.is_none() {
-            out.requests.cpu = pick(|r| r.requests.cpu, false);
-        }
-        if out.requests.memory.is_none() {
-            out.requests.memory = pick(|r| r.requests.memory, false);
-        }
-        if out.limits.cpu.is_none() {
-            out.limits.cpu = pick(|r| r.limits.cpu, true);
-        }
-        if out.limits.memory.is_none() {
-            out.limits.memory = pick(|r| r.limits.memory, true);
-        }
+        out.requests.cpu = out.requests.cpu.or_else(|| pick(|r| r.requests.cpu, false));
+        out.requests.memory = out
+            .requests
+            .memory
+            .or_else(|| pick(|r| r.requests.memory, false));
+        out.limits.cpu = out.limits.cpu.or_else(|| pick(|r| r.limits.cpu, true));
+        out.limits.memory = out
+            .limits
+            .memory
+            .or_else(|| pick(|r| r.limits.memory, true));
         out
     }
 }

@@ -27,7 +27,6 @@
 //!
 //! The restart count follows the printer too: while init containers are still running it sums
 //! every init container; afterwards it sums sidecars and regular containers.
-
 //!
 //! | File | Holds |
 //! |---|---|

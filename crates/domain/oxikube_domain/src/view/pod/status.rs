@@ -48,13 +48,13 @@ impl<'a> StatusRow<'a> {
             let count = count_of(cs, "restartCount");
             let finished = last_finished_at(cs);
             restarts = restarts.saturating_add(count);
-            last_restart = later(last_restart, finished);
+            last_restart = last_restart.max(finished);
             let restartable = str_of(cs, "name")
                 .and_then(|name| init_specs.iter().find(|&c| str_of(c, "name") == Some(name)))
                 .is_some_and(is_restartable);
             if restartable {
                 sidecar_restarts = sidecar_restarts.saturating_add(count);
-                sidecar_last_restart = later(sidecar_last_restart, finished);
+                sidecar_last_restart = sidecar_last_restart.max(finished);
             }
 
             let state = StateView::of(cs);
@@ -90,7 +90,7 @@ impl<'a> StatusRow<'a> {
             let mut error_reason = None;
             for cs in arr_of(status, "containerStatuses").iter_rev() {
                 restarts = restarts.saturating_add(count_of(cs, "restartCount"));
-                last_restart = later(last_restart, last_finished_at(cs));
+                last_restart = last_restart.max(last_finished_at(cs));
                 let state = StateView::of(cs);
                 if let Some(r) = state.waiting.and_then(|w| str_of(w, "reason")) {
                     reason = Cow::Borrowed(r);
@@ -161,10 +161,6 @@ fn exit_text(prefix: &str, terminated: JsonRef<'_>) -> String {
 /// `lastState.terminated.finishedAt` of a container status.
 fn last_finished_at(cs: JsonRef<'_>) -> Option<Timestamp> {
     obj_of(sub(cs, "lastState"), "terminated").and_then(|t| ts_of(t, "finishedAt"))
-}
-
-fn later(a: Option<Timestamp>, b: Option<Timestamp>) -> Option<Timestamp> {
-    a.max(b)
 }
 
 fn len_u32(n: usize) -> u32 {
