@@ -392,7 +392,14 @@
       "alt-v": "editor::ToggleSecretMask",
       "cmd-alt-r": "editor::ToggleReadOnly",
       "cmd-alt-j": "editor::ConvertToJson",
-      "cmd-alt-y": "editor::ConvertToYaml"
+      "cmd-alt-y": "editor::ConvertToYaml",
+      // Diff vs live (E10-S07): cmd-shift-d shows the diff against the live object in the bottom
+      // panel, cmd-alt-shift-d switches it between side by side and inline, cmd-alt-shift-r
+      // reloads the buffer from the server. The banner's Merge and Keep mine are buttons (and
+      // palette entries). Not cmd-alt-d: macOS takes it to hide the Dock.
+      "cmd-shift-d": "editor::ShowDiff",
+      "cmd-alt-shift-d": "editor::ToggleDiffLayout",
+      "cmd-alt-shift-r": "editor::ReloadFromServer"
     }
   },
   {

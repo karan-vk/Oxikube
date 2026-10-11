@@ -598,6 +598,25 @@ crate's `README.md` for its allowed dependencies. Highlights:
   validator also checks a `kind: List` item by item against each item's own `apiVersion` and `kind`. Bench:
   `cargo bench -p oxikube_editor --bench convert` (2k lines about 1 ms, 5 MB about 130 ms, all off the UI thread; the UI thread
   then replaces the text: about 8 ms for 2k lines, about 95 ms for the 5 MB result, a one-off per explicit conversion).
+- `oxikube_editor::diff` (E10-S07) — diff vs live, pure (no gpui) so the apply preview (E10-S08), the dry-run preview
+  (E19-S07) and the cross-cluster diff (E20-S09) reuse it without the editor widget. The buffer is read as values
+  (`serde-saphyr`: comments gone), both sides are `normalize`d (`IGNORED_FIELDS`, the one list: `metadata.managedFields`,
+  `resourceVersion`, `generation`, `uid`, `creationTimestamp`, `selfLink`, and `status`; keys sorted; a Secret's values
+  fingerprinted, never shown) and written by the domain's YAML writer, then `ManifestDiff` (`similar` line diff, 3 lines of
+  context, unchanged stretches folded) lays the rows out inline and side by side. `ThreeWayMerge` (`similar::TextMerge`)
+  merges the buffer's own text with the server's against the text it was loaded from, so comments survive; conflicts are
+  settled per hunk. `LiveSync` is the Clean / Dirty / Banner / Merging state machine (base, live, mine; a status-only change
+  never raises the banner). `Renderer` writes an object as a buffer holds it (default `buffer_text`: managedFields gone,
+  keys sorted, Secret values masked). The view side is `oxikube_editor::view::live`: one `metadata.name` field-selector
+  watch per followed editor through the session's `ResourceReader` (`LiveSource`, `SessionLive`; it counts toward the
+  watch budget), on `spawn_kube`, coalesced to the latest state, rendered and normalised off the UI thread, released when
+  the tab closes (`Item::on_close`) or the editor drops. Commands: `editor::ShowDiff` (`cmd-shift-d` / `ctrl-shift-d`, the diff
+  in the bottom panel, a `uniform_list`), `editor::ToggleDiffLayout` (`cmd-alt-shift-d`), `editor::ReloadFromServer`
+  (`cmd-alt-shift-r`; an editor not following an object loads the one its manifest names), and the banner's
+  `editor::MergeFromServer`, `editor::KeepMine`, `editor::TakeMine` / `editor::TakeServer` (a side per conflict) and
+  `editor::AcceptMerge`; all read the cluster and change the buffer only. `ManifestEditor::follow_object` is the entry for
+  an editor opened from a resource (E10-S06). Bench: `cargo run -p oxikube_editor --profile release-fast --example
+  live_bench`.
 - `oxikube_ui::code_view` (E07-P598) — `CodeView`, the read-only text view of the detail's YAML and Describe tabs: the text as
   an `Arc<str>`, its display rows (`RowMap`: soft wrap at the measured width, or lines cut at `MAX_ROW_COLS`) and its
   tree-sitter parse (gpui-component's `SyntaxHighlighter`) made on the background executor; a `uniform_list` shapes only the

@@ -1,6 +1,7 @@
 //! The spanned YAML model (E10-S02): the buffer parsed into per-document node trees where every
 //! node knows its byte span and its JSON path, for schema diagnostics (E10-S03), hover and
-//! completion (E10-S05) and the diff (E10-S07).
+//! completion (E10-S05). The diff (E10-S07) compares values, so it reads the buffer as values
+//! (`crate::diff`).
 //!
 //! The text stays the source of truth: nothing here re-serialises it. Scalars keep their source
 //! notation and text only (YAML 1.2 core: bare `yes` is a string); typing them is the validator's

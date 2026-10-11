@@ -126,6 +126,7 @@ fn main() {
             schemas: Some(Rc::new(Schemas { cluster, port })),
             dispatcher: Rc::new(NoBus),
             resource: None,
+            live: None,
         };
         let entity = cx.new(|cx| ManifestEditor::new(parts, window, cx));
         editor = Some(entity.clone());

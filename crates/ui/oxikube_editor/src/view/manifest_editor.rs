@@ -13,8 +13,8 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
-    AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, SharedString, Styled as _, Subscription, Task, Window,
+    AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, SharedString, Styled as _, Subscription, Task, Window,
 };
 use oxikube_domain::OxiError;
 use oxikube_domain::command::Command;
@@ -26,13 +26,14 @@ use oxikube_ui::editor::{CodeEditor, CodeEditorEvent, CodeEditorOptions, EditorA
 use oxikube_ui::layout::v_flex;
 use oxikube_workspace::{CommandDispatcher, ItemEvent};
 
+use super::live::{LiveLink, LiveSource};
 use super::model::ManifestModel;
 use super::notice::Notice;
 use super::schemas::SchemaSource;
 use super::validation::{VALIDATION_DEBOUNCE, validate_text_in};
 use super::{
-    ConvertToJson, ConvertToYaml, ToggleManagedFields, ToggleReadOnly, ToggleSecretMask,
-    ToggleSoftWrap,
+    ConvertToJson, ConvertToYaml, ReloadFromServer, ShowDiff, ToggleDiffLayout,
+    ToggleManagedFields, ToggleReadOnly, ToggleSecretMask, ToggleSoftWrap,
 };
 use crate::json::{Language, LanguageMode};
 use crate::open::{RenderOptions, ResourceBinding, ResourceOpen};
@@ -51,6 +52,9 @@ pub struct ManifestEditorParts {
     /// The live object to read and show (E10-S06); `None` for an editor on free text. The tab is
     /// then titled `kind/name` and `text` is ignored: the buffer fills when the object is read.
     pub resource: Option<ResourceOpen>,
+    /// The cluster whose objects the buffer is compared with (the diff vs live, the
+    /// changed-on-server banner); `None` has no live object.
+    pub live: Option<Rc<dyn LiveSource>>,
 }
 
 /// The manifest editor: a YAML buffer with schema diagnostics, as a workspace item.
@@ -86,6 +90,8 @@ pub struct ManifestEditor {
     validation: Option<Task<()>>,
     /// Schema fetches in flight; dropped (and aborted) with the editor.
     schema_fetches: Vec<Task<()>>,
+    /// The live object: its watch, the banner's state and the diff panel (E10-S07).
+    pub(super) live: LiveLink,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -153,6 +159,7 @@ impl ManifestEditor {
             conversion: None,
             validation: None,
             schema_fetches: Vec::new(),
+            live: LiveLink::new(parts.live),
             _subscriptions: subscriptions,
         };
         if this.binding.is_some() {
@@ -257,6 +264,12 @@ impl ManifestEditor {
         cx.notify();
     }
 
+    /// Puts the keyboard focus in the buffer (a button acts on its own editor: the bus commands
+    /// act on the focused one).
+    pub(super) fn focus_buffer(&self, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.editor.focus_handle(cx), cx);
+    }
+
     /// Sends `command` to the bus (the keys, the toolbar and the palette all end up here).
     pub(crate) fn send(&self, command: Command, cx: &mut Context<Self>) {
         self.dispatcher.dispatch(command, cx);
@@ -278,6 +291,7 @@ impl ManifestEditor {
                     self.notice = None;
                 }
                 self.schedule_validation(VALIDATION_DEBOUNCE, window, cx);
+                self.live_buffer_changed(*version, window, cx);
                 // The dirty dot appears with the first edit.
                 if *version == self.clean_version + 1 {
                     cx.emit(ItemEvent::UpdateTab);
@@ -416,11 +430,22 @@ impl Render for ManifestEditor {
             .on_action(cx.listener(|this, _: &ConvertToYaml, _, cx| {
                 this.send(Command::EditorConvertToYaml, cx);
             }))
+            .on_action(cx.listener(|this, _: &ShowDiff, _, cx| {
+                this.send(Command::EditorShowDiff, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleDiffLayout, _, cx| {
+                this.send(Command::EditorToggleDiffLayout, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ReloadFromServer, _, cx| {
+                this.send(Command::EditorReloadFromServer, cx);
+            }))
             .size_full()
             .bg(colors.background)
             .text_color(colors.text)
             .child(self.toolbar(cx))
             .children(self.notice_bar(cx))
+            .children(self.banner(cx))
             .child(gpui::div().flex_1().min_h_0().child(self.editor.clone()))
+            .children(self.diff_panel(cx))
     }
 }

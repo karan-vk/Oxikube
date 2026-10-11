@@ -60,6 +60,10 @@
 //!     "To JSON" button, the palette) replace the buffer with the same data in the other language
 //!     as one undo step, `editor::UseJson` / `editor::UseYaml` (the editor's language chip) read it
 //!     as the other language without touching the text.
+//!     Its diff vs live (E10-S07): `editor::ReloadFromServer` (`cmd-alt-shift-r`) loads the object the
+//!     manifest names from the cluster's session and follows it through a watch, `editor::ShowDiff`
+//!     (`cmd-shift-d`) shows the diff in the editor's bottom panel, and the changed-on-server
+//!     banner's Merge / Reload / Keep mine.
 //! 14. the `:` jump bar (E11-S05, `jump`): `:pods`, `:deploy kube-system`, `:pod /re app=x`,
 //!     `:ctx prod`, `:ns`, `:q`, opened by `:` in a resource table or `palette::OpenJump`; a line
 //!     runs as `resource::OpenList`, `namespace::Select`, `table::SetFilter`, `cluster::Select` and

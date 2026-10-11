@@ -13,7 +13,9 @@
 //! | [`settings`] | E10-S12 | the `editor` settings: tab size, font, wrap, validation, masking, field manager |
 //! | [`json`] | E10-S10 | JSON mode: [`json::Language`], the strict JSON check, YAML to JSON conversion |
 //! | [`open`] | E10-S06 | an editor opened from a live object: [`open::render_resource`], Secret masking, the `resource::Edit` row actions |
+//! | [`diff`] | E10-S07 | diff vs live, the three-way merge, the changed-on-server state machine |
 
+pub mod diff;
 pub mod json;
 pub mod open;
 pub mod settings;

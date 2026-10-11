@@ -118,6 +118,7 @@ impl Fixture {
                 schemas,
                 dispatcher: Rc::new(NoBus),
                 resource: None,
+                live: None,
             };
             let editor = cx.new(|cx| ManifestEditor::new(parts, window, cx));
             workspace.update(cx, |ws, cx| ws.open_item(editor.clone(), window, cx));

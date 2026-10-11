@@ -136,6 +136,13 @@ impl ManifestEditor {
             }
         });
         self.clean_version = self.editor.read(cx).version();
+        if let Some((held, options)) = self
+            .binding
+            .as_ref()
+            .and_then(|b| Some((b.resource.clone()?, b.shown_options)))
+        {
+            self.follow_opened(held, options, window, cx);
+        }
         self.schedule_validation(std::time::Duration::ZERO, window, cx);
         cx.emit(ItemEvent::UpdateTab);
         cx.notify();

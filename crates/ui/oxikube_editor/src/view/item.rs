@@ -2,7 +2,7 @@
 //! changed) and what it never does: it is not saved with the layout and not restored, because a
 //! manifest can hold Secret data and buffer contents never go to disk (non-negotiable 5).
 
-use gpui::{App, EventEmitter, FocusHandle, Focusable, SharedString};
+use gpui::{App, Context, EventEmitter, FocusHandle, Focusable, SharedString, Window};
 use oxikube_ui::IconName;
 use oxikube_workspace::{Item, ItemEvent, TabContent};
 
@@ -38,6 +38,12 @@ impl Item for ManifestEditor {
             )
             .into(),
         )
+    }
+
+    /// The watch on the live object (E10-S07) goes with the tab, even while something else
+    /// still holds the editor.
+    fn on_close(&mut self, _: &mut Window, _: &mut Context<Self>) {
+        self.release_live();
     }
 
     // `serialized_kind` and `serialize` keep their `None` defaults: see the module docs.

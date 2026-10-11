@@ -197,7 +197,10 @@
   alt-z            editor::ToggleSoftWrap
   ctrl-alt-j       editor::ConvertToJson
   ctrl-alt-r       editor::ToggleReadOnly
+  ctrl-alt-shift-d editor::ToggleDiffLayout
+  ctrl-alt-shift-r editor::ReloadFromServer
   ctrl-alt-y       editor::ConvertToYaml
+  ctrl-shift-d     editor::ShowDiff
 [Terminal || ManifestEditor || Palette || JumpBar || Input || Editing]
   :                null
   ?                null

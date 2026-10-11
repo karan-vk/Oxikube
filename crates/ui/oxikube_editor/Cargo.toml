@@ -35,8 +35,11 @@ schemars.workspace = true
 serde.workspace = true
 # Schema `enum` values are JSON.
 serde_json.workspace = true
-# `open::render_resource` writes the object as YAML (the repo's writer, not serde_yml).
+# `open::render_resource` writes the object as YAML (the repo's writer, not serde_yml); `diff` (E10-S07)
+# reads the buffer as values and writes both sides with it.
 serde-saphyr.workspace = true
+# `diff` (E10-S07): line diffs and the three-way merge.
+similar.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
@@ -65,6 +68,14 @@ path = "tests/screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# Diff vs live (E10-S07): the changed-on-server banner, the diff side by side and inline.
+# `cargo test -p oxikube_editor --features screenshot --test diff_screenshot`
+[[test]]
+name = "diff_screenshot"
+path = "tests/diff_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 # `cargo bench -p oxikube_editor --bench yaml_parse` (E10-S02, reused by E10-S11): parse time of a
 # 2k-line manifest and a 5 MB dump.
 [[bench]]
@@ -87,6 +98,11 @@ harness = false
 # (test platform): `cargo run -p oxikube_editor --profile release-fast --example typing_bench`
 [[example]]
 name = "typing_bench"
+
+# Typing in a Deployment tab whose live object changes every second, the diff open (E10-S07):
+# `cargo run -p oxikube_editor --profile release-fast --example live_bench`
+[[example]]
+name = "live_bench"
 
 [lints]
 workspace = true

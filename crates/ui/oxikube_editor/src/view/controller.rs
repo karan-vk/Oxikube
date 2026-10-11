@@ -8,9 +8,11 @@
 //!   object in the object's cluster tab, titled `kind/name`, or focuses the tab that already
 //!   holds the object. The object is read fresh, off the UI thread, by the editor itself.
 //! - **ToggleReadOnly** / **ToggleSoftWrap** / **ToggleManagedFields** / **ToggleSecretMask** /
-//!   **ConvertTo** / **UseLanguage** act on the focused editor, else the active pane's item when it
-//!   is one. The toolbar's toggles
-//!   focus their own editor before they send, so a click acts on the editor clicked.
+//!   **ConvertTo** / **UseLanguage**, and the diff vs live requests (E10-S07: **ShowDiff**,
+//!   **ReloadFromServer**, **MergeFromServer**, **KeepMine**, a side per conflict,
+//!   **AcceptMerge**) act on the focused editor, else the active pane's item when it is one. The
+//!   toolbar's toggles focus their own editor before they send, so a click acts on the editor
+//!   clicked.
 //!
 //! It also tells the user, with a warning toast, about an `editor` setting that was rejected
 //! (E10-S12).
@@ -34,6 +36,7 @@ use oxikube_settings::SettingsStore;
 use oxikube_workspace::{ClusterTabs, CommandDispatcher, Workspace};
 
 use super::commands::EditorRequest;
+use super::live::{LiveSource, SessionLive};
 use super::manifest_editor::{ManifestEditor, ManifestEditorParts};
 use super::schemas::{SchemaSource, SessionSchemas};
 use crate::open::{OpenMode, ResourceOpen};
@@ -61,6 +64,11 @@ pub trait EditorHost: 'static {
     /// Whether `cluster` is in read-only mode (an edit tab then opens read-only).
     fn cluster_read_only(&self, _: &ClusterId) -> bool {
         false
+    }
+
+    /// The live objects of `cluster` (the diff vs live); `None` has none.
+    fn live(&self, _cluster: &ClusterId) -> Option<Rc<dyn LiveSource>> {
+        None
     }
 }
 
@@ -109,6 +117,13 @@ impl EditorHost for ClusterEditorHost {
         self.sessions
             .get(cluster)
             .is_some_and(|session| session.read_only())
+    }
+
+    fn live(&self, cluster: &ClusterId) -> Option<Rc<dyn LiveSource>> {
+        Some(Rc::new(SessionLive::new(
+            self.sessions.clone(),
+            cluster.clone(),
+        )))
     }
 }
 
@@ -203,6 +218,9 @@ impl EditorViews {
                     editor.use_language(language, window, cx);
                 });
             }
+            request => this.on_target(window, cx, |editor, window, cx| {
+                apply_live_request(editor, request, window, cx);
+            }),
         });
     }
 
@@ -249,7 +267,12 @@ impl EditorViews {
         let parts = ManifestEditorParts {
             title: format!("Untitled-{}", self.opened).into(),
             text: String::new(),
-            schemas: cluster.map(|cluster| self.deps.host.schemas(&cluster)),
+            schemas: cluster
+                .as_ref()
+                .map(|cluster| self.deps.host.schemas(cluster)),
+            live: cluster
+                .as_ref()
+                .and_then(|cluster| self.deps.host.live(cluster)),
             dispatcher: self.deps.dispatcher.clone(),
             resource: None,
         };
@@ -292,6 +315,7 @@ impl EditorViews {
             title: SharedString::default(),
             text: String::new(),
             schemas: Some(host.schemas(cluster)),
+            live: host.live(cluster),
             dispatcher: self.deps.dispatcher.clone(),
             resource: Some(ResourceOpen {
                 target: target.clone(),
@@ -327,6 +351,25 @@ impl EditorViews {
             return Some(workspace);
         }
         self.deps.window_workspace.upgrade()
+    }
+}
+
+/// The diff vs live requests (E10-S07) on `editor`.
+fn apply_live_request(
+    editor: &mut ManifestEditor,
+    request: EditorRequest,
+    window: &mut Window,
+    cx: &mut Context<ManifestEditor>,
+) {
+    match request {
+        EditorRequest::ShowDiff => editor.toggle_diff(window, cx),
+        EditorRequest::ToggleDiffLayout => editor.toggle_diff_layout(cx),
+        EditorRequest::ReloadFromServer => editor.reload_from_server(window, cx),
+        EditorRequest::MergeFromServer => editor.merge_from_server(window, cx),
+        EditorRequest::KeepMine => editor.keep_mine(cx),
+        EditorRequest::Take { conflict, side } => editor.take_side(conflict, side, cx),
+        EditorRequest::AcceptMerge => editor.accept_merge(window, cx),
+        _ => {}
     }
 }
 
