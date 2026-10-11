@@ -126,6 +126,7 @@ fn render_of(object: Resource, light: bool, tab: DetailTab) -> anyhow::Result<Rg
             columns: Arc::new(CoreColumns::new()),
             dispatcher: Rc::new(Ignore),
             exec: None,
+            scale: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

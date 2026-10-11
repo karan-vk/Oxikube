@@ -103,6 +103,7 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_delete))
             .on_action(cx.listener(Self::on_shell))
             .on_action(cx.listener(Self::on_attach))
+            .on_action(cx.listener(Self::on_scale))
             .on_action(cx.listener(Self::on_debug))
             .on_action(cx.listener(Self::on_view_yaml))
             .on_action(cx.listener(Self::on_view_describe))

@@ -207,8 +207,7 @@
       // k9s verbs on the cursor row (E11-S07): y the YAML, d describe, e edit, l logs (a pod's, or
       // a workload's pods), shift-f forward a port, f the active forwards. `ctrl-w` shows or hides
       // the wide columns. `s` above is a shell on a Pod or a Node; the kind-scoped sections below
-      // rebind it (CronJobs and Jobs suspend, E12-S08; E12 binds scale on workloads with a
-      // `kind == Deployment` section).
+      // rebind it (scale on workloads, E12-S04; CronJobs and Jobs suspend, E12-S08).
       "y": "resource_table::ViewYaml",
       "d": "resource_table::ViewDescribe",
       "e": "resource_table::EditSelected",
@@ -248,6 +247,15 @@
     "bindings": {
       "u": "resource_table::ShowServicePods",
       "o": "resource_table::OpenInBrowser"
+    }
+  },
+  {
+    // k9s: s scales a workload instead of opening a shell (E12-S04). Bound for the kinds that
+    // have a scale (a DaemonSet has none), after the section above so it wins the tie: the
+    // table's context carries `kind`. The other action stories add their kind-scoped verbs here.
+    "context": "ResourceTable && !Editing && (kind == Deployment || kind == StatefulSet || kind == ReplicaSet || kind == ReplicationController)",
+    "bindings": {
+      "s": "resource_table::ScaleSelected"
     }
   },
   {

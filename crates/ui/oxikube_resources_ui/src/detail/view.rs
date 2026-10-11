@@ -399,4 +399,26 @@ impl oxikube_workspace::command_surface::CommandSurface for DetailView {
             .of_kind(self.target.gvk.clone())
             .selecting(vec![self.target.clone()])
     }
+
+    /// Scale asks for the count in its dialog (E12-S04), so the palette runs it here.
+    fn own_commands(&self, _: &App) -> Vec<oxikube_domain::command::CommandId> {
+        match self.scale_state() {
+            Some(None) => vec![oxikube_domain::command::CommandId::WORKLOAD_SCALE],
+            _ => Vec::new(),
+        }
+    }
+
+    fn run_command(
+        &mut self,
+        command: oxikube_domain::command::CommandId,
+        _: Vec<ResourceRef>,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if command != oxikube_domain::command::CommandId::WORKLOAD_SCALE {
+            return false;
+        }
+        self.open_scale(window, cx);
+        true
+    }
 }

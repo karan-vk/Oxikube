@@ -20,7 +20,8 @@ pub const WORKLOAD_COMMANDS: [CommandId; 5] = [
 ];
 
 /// Registers `cronjob::Trigger`, `cronjob::Suspend`, `cronjob::Resume`, `job::Suspend` and
-/// `job::Resume` on `registry` (the binary installs them under `oxikube_app::workloads`).
+/// `job::Resume` on `registry`, and `workload::Scale` (E12-S04), which the binary installs under
+/// `oxikube_app::workloads`.
 ///
 /// A handler runs only after the guard let the command through: the read-only check, the
 /// confirmation and the audit precondition are the guard's. The trigger names the Job it made in
@@ -34,6 +35,7 @@ pub fn register_commands(
     sessions: ClusterSessionManager,
 ) -> Result<(), RegisterError> {
     let service = WorkloadService::new(sessions);
+    super::scale_command::register_scale(registry, service.clone())?;
     for id in WORKLOAD_COMMANDS {
         let meta = *command::lookup(id).ok_or(RegisterError::Undeclared(id))?;
         let service = service.clone();

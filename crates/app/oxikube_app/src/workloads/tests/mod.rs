@@ -3,6 +3,10 @@
 //! fake cluster `a`.
 
 mod guard;
+mod plan;
+mod runner;
+mod scale_guard;
+mod scale_service;
 mod suspend;
 mod trigger;
 
@@ -10,11 +14,11 @@ use oxikube_domain::Resource;
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_ports::Scale;
 use oxikube_testkit::{FakeResourcePort, ResourceCall};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-use super::register_commands;
 use crate::command_bus::{CommandOutput, DispatchContext, DispatchError};
 use crate::testing::{Harness, id};
 
@@ -26,7 +30,7 @@ pub(super) struct Workloads {
 impl Workloads {
     /// Cluster `a` connected (read-only when asked) holding [`cronjob`] `nightly`.
     pub fn new(read_only: bool) -> Self {
-        let h = Harness::with_extra(|reg, _, sessions| register_commands(reg, sessions.clone()));
+        let h = Harness::with_workloads();
         h.connect("a", read_only);
         let t = Self { h };
         t.port().insert(cronjob("nightly"));
@@ -134,5 +138,29 @@ pub(super) fn job_ref(name: &str) -> ResourceRef {
 pub(super) fn trigger(name: &str) -> Command {
     Command::CronJobTrigger {
         target: cronjob_ref(name),
+    }
+}
+
+/// A scalable workload `name` of `kind` in the `shop` namespace of `cluster`.
+pub(super) fn workload(cluster: &str, group: &str, kind: &str, name: &str) -> ResourceRef {
+    ResourceRef::namespaced(id(cluster), Gvk::new(group, "v1", kind), "shop", name)
+}
+
+/// Deployment `shop/web` of `cluster`.
+pub(super) fn deployment(cluster: &str) -> ResourceRef {
+    workload(cluster, "apps", "Deployment", "web")
+}
+
+pub(super) fn scale_to(target: ResourceRef, replicas: u32) -> Command {
+    Command::WorkloadScale { target, replicas }
+}
+
+/// The `scale` subresource as the server answers it.
+pub(super) fn scale(spec: i32, status: i32) -> Scale {
+    Scale {
+        replicas: spec,
+        current_replicas: status,
+        selector: None,
+        resource_version: None,
     }
 }

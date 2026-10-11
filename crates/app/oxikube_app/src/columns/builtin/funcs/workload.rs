@@ -5,10 +5,11 @@ use std::borrow::Cow;
 
 use jiff::Timestamp;
 use oxikube_domain::json::JsonRef;
+use oxikube_domain::view::{ConditionLevel, conditions_summary, workload_conditions as conditions};
 use oxikube_domain::{Resource, WorkloadSummary};
 
 use super::{images_text, ready_tone, selector_text};
-use crate::columns::{Cell, CellSort};
+use crate::columns::{Cell, CellSort, Tone};
 
 fn summary(res: &Resource) -> Option<WorkloadSummary> {
     WorkloadSummary::from_resource(res).ok()
@@ -54,6 +55,19 @@ pub(crate) fn workload_updated<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'
 /// `AVAILABLE`.
 pub(crate) fn workload_available<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     count(res, |s| s.available)
+}
+
+/// `CONDITIONS`: `Available,Progressing`, with `=False` on the ones that do not hold; amber when a
+/// condition is short, red when one is a fault. Empty for a controller that reports none.
+pub(crate) fn workload_conditions<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    let (text, level) = conditions_summary(&conditions(res));
+    let tone = match level {
+        ConditionLevel::Neutral => Tone::Neutral,
+        ConditionLevel::Ok => Tone::Ok,
+        ConditionLevel::Warn => Tone::Warn,
+        ConditionLevel::Error => Tone::Error,
+    };
+    Cell::text(text).with_tone(tone)
 }
 
 /// `IMAGES` of the pod template, comma-separated.

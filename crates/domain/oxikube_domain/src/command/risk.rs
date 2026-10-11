@@ -44,6 +44,8 @@ impl Command {
                 target,
                 propagation,
             } => declared.max(delete_risk(&target.gvk, *propagation)),
+            // Scaling up or down is low; scaling to zero stops every pod of the workload.
+            Command::WorkloadScale { replicas: 0, .. } => declared.max(Risk::Medium),
             _ => declared,
         })
     }
@@ -52,8 +54,9 @@ impl Command {
 impl CommandMeta {
     /// The risk the MCP tool stub advertises: the worst case over every target the command can
     /// name. A tool is one static entry that cannot vary by target, so it must not understate
-    /// what `resource.delete` does to a Namespace or PersistentVolume; for every other command
-    /// it is the declared [`CommandMeta::risk`]. An exec-class command ([`CommandMeta::exec`])
+    /// what `resource.delete` does to a Namespace or PersistentVolume, or what `workload.scale`
+    /// does when it scales to zero; for every other command it is the declared
+    /// [`CommandMeta::risk`]. An exec-class command ([`CommandMeta::exec`])
     /// declares no risk (it changes no object), but a shell can do anything the container's user
     /// can, so its tool stub advertises [`Risk::High`]. The guard still decides per target
     /// ([`Command::effective_risk`]).
@@ -64,6 +67,9 @@ impl CommandMeta {
         let declared = self.risk?;
         Some(if self.id == CommandId::RESOURCE_DELETE {
             declared.max(Risk::Irreversible)
+        } else if self.id == CommandId::WORKLOAD_SCALE {
+            // The worst case is a scale to zero.
+            declared.max(Risk::Medium)
         } else {
             declared
         })
@@ -152,6 +158,37 @@ mod tests {
             target: ResourceRef::cluster_scoped(cluster, gvk("", "Pod"), "x"),
         };
         assert_eq!(read.effective_risk(), None);
+    }
+
+    #[test]
+    fn scaling_is_low_and_scaling_to_zero_is_medium() {
+        let cluster = ClusterId::new("~/.kube/config", &ContextName::new("kind"));
+        let scale = |replicas| Command::WorkloadScale {
+            target: ResourceRef::namespaced(
+                cluster.clone(),
+                gvk("apps", "Deployment"),
+                "ns",
+                "web",
+            ),
+            replicas,
+        };
+        assert_eq!(scale(3).effective_risk(), Some(Risk::Low));
+        assert_eq!(scale(1).effective_risk(), Some(Risk::Low));
+        assert_eq!(scale(0).effective_risk(), Some(Risk::Medium));
+        // Both confirm once; the Medium dialog names the target and the cluster.
+        for replicas in [0, 5] {
+            assert_eq!(
+                scale(replicas).effective_risk().map(Risk::confirm_tier),
+                Some(crate::safety::ConfirmTier::Simple)
+            );
+        }
+        let meta = super::super::lookup(CommandId::WORKLOAD_SCALE).unwrap();
+        assert_eq!(meta.risk, Some(Risk::Low));
+        assert_eq!(
+            meta.tool_risk(),
+            Some(Risk::Medium),
+            "the stub advertises the worst case"
+        );
     }
 
     #[test]

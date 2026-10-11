@@ -11,7 +11,8 @@
 //! move, shift extends, `enter` opens, `escape` clears, `cmd-a` / `ctrl-a` selects all,
 //! `cmd-c` / `ctrl-c` copies the name, `delete` (and k9s's `ctrl-d`) opens the delete dialog,
 //! `s` opens a shell in the pod, `a` attaches to it (E09-S08) and `shift-d` adds a debug
-//! container (E09-S10).
+//! container (E09-S10). On a Deployment, StatefulSet, ReplicaSet or ReplicationController `s` is
+//! k9s's scale instead: the keymap binds `resource_table::ScaleSelected` for those kinds (E12-S04).
 //!
 //! The k9s verbs of E11-S07 live next to them: `y` shows the YAML, `d` describes, `e` edits, `l`
 //! opens the logs, `shift-f` forwards a port, `f` lists the forwards and `ctrl-w` toggles the wide
@@ -70,6 +71,10 @@ actions!(
         ShellSelected,
         /// Attach to the cursor row's pod (`pod::Attach`; k9s's `a`).
         AttachSelected,
+        /// Scale the cursor row's workload through the scale dialog (`workload::Scale`; k9s's `s`
+        /// on a Deployment, StatefulSet, ReplicaSet or ReplicationController: bound for those
+        /// kinds only, where it replaces the shell key).
+        ScaleSelected,
         /// Add a debug container to the cursor row's pod (`pod::Debug`, through the debug dialog;
         /// `shift-d`). A toast says why not for a kind that is not a pod, or on a read-only cluster.
         DebugSelected,

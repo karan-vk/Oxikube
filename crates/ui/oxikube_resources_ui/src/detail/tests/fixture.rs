@@ -132,9 +132,26 @@ impl Detail {
         Self::over(Fixture::with_exec(cx), objects)
     }
 
+    /// [`Self::new`] over the fixture with `workload::Scale` (E12-S04), serving `served` too.
+    pub(crate) fn with_workloads(
+        cx: &mut TestAppContext,
+        served: impl IntoIterator<Item = ResourceKind>,
+        objects: impl IntoIterator<Item = Resource>,
+    ) -> Self {
+        let f = Fixture::with_workloads(cx);
+        let mut served_kinds = kinds();
+        served_kinds.extend(served);
+        f.ports().discovery.set_kinds(served_kinds);
+        Self::connected(f, objects)
+    }
+
     fn over(f: Fixture, objects: impl IntoIterator<Item = Resource>) -> Self {
+        f.ports().discovery.set_kinds(kinds());
+        Self::connected(f, objects)
+    }
+
+    fn connected(f: Fixture, objects: impl IntoIterator<Item = Resource>) -> Self {
         let ports = f.ports();
-        ports.discovery.set_kinds(kinds());
         for object in objects {
             ports.resources.insert(object);
         }

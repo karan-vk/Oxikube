@@ -131,7 +131,8 @@ pub fn start_views(
 /// Logs" on pods (E08-S02) and on workloads and Services (E08-S04), "Shell" and "Attach" on
 /// pods (E09-S08), "View YAML" and "Describe" on every kind (E11-S07), "Edit" and "View YAML in
 /// Editor" on every kind (E10-S06), and the per-kind actions of `oxikube_resources_ui::kinds` (E12:
-/// "Trigger", "Suspend" and "Resume" on CronJobs and Jobs, E12-S08; "Show Pods" and "Open in
+/// "Trigger", "Suspend" and "Resume" on CronJobs and Jobs, E12-S08; "Scale" on Deployments,
+/// StatefulSets, ReplicaSets and ReplicationControllers, E12-S04; "Show Pods" and "Open in
 /// Browser" on Services, E12-S13).
 pub fn row_actions() -> RowActionRegistry {
     let mut registry = RowActionRegistry::core();

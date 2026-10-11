@@ -14,7 +14,7 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::command_surface::CommandSurface;
 use oxikube_workspace::{Toast, Workspace};
 
-use super::actions::{AttachSelected, DebugSelected, DeleteSelected, ShellSelected};
+use super::actions::{AttachSelected, DebugSelected, DeleteSelected, ScaleSelected, ShellSelected};
 use super::view::ResourceTable;
 use crate::actions::{ActionEntry, DeleteDialog, ResourceActions};
 use crate::exec::{ExecFlow, ExecKind};
@@ -90,6 +90,15 @@ impl ResourceTable {
         }
         if command == CommandId::RESOURCE_DELETE {
             self.begin_delete(&actions, targets, window, cx);
+        } else if command == CommandId::WORKLOAD_SCALE {
+            // The dialog asks for the count; the command is sent when the user confirms it.
+            if let Some(target) = targets.into_iter().next() {
+                let workspace = self
+                    .workspace
+                    .clone()
+                    .unwrap_or_else(gpui::WeakEntity::new_invalid);
+                actions.scale_flow(workspace).begin(target, window, cx);
+            }
         } else if let Some(service) = actions
             .exec_service()
             .filter(|_| ExecKind::of(command).is_some() || command == CommandId::POD_DEBUG)
@@ -180,6 +189,17 @@ impl ResourceTable {
             CommandId::POD_SHELL
         };
         self.run_action(command, targets, window, cx);
+    }
+
+    /// `s` on a workload: the scale dialog for the cursor row (`workload::Scale`; k9s's scale key).
+    pub(super) fn on_scale(
+        &mut self,
+        _: &ScaleSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::WORKLOAD_SCALE, targets, window, cx);
     }
 
     pub(super) fn on_attach(

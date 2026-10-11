@@ -7,6 +7,7 @@ use oxikube_domain::safety::{ConfirmTier, Risk};
 use oxikube_ports::{ClusterPrefs, NodeShellSpec};
 
 use crate::actions::object_label;
+use crate::workloads::replicas_word;
 
 /// The confirmation tier the guard asks for before running a command.
 ///
@@ -254,6 +255,9 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
     if let Some(summary) = workload_summary(command, context) {
         return summary;
     }
+    if let Command::WorkloadScale { target, replicas } = command {
+        return scale_summary(target, *replicas, context);
+    }
     match command.target() {
         Some(target) => {
             let object = match target.namespace() {
@@ -289,6 +293,21 @@ fn workload_summary(command: &Command, context: &str) -> Option<String> {
         }
         _ => return None,
     })
+}
+
+/// The confirmation text of `workload::Scale`: the workload, the count, and for zero that every
+/// pod stops.
+fn scale_summary(workload: &ResourceRef, replicas: u32, context: &str) -> String {
+    let zero = if replicas == 0 {
+        " (stops all of its pods)"
+    } else {
+        ""
+    };
+    format!(
+        "Scale {} to {replicas} {}{zero} on {context}",
+        object_label(workload),
+        replicas_word(replicas)
+    )
 }
 
 /// The confirmation text of `pod::Debug`: the pod, the image and the target container, and that the
@@ -327,11 +346,16 @@ fn effective_image(image: &str) -> &str {
 
 /// What the audit record of a guarded `command` says besides its target, if anything: for
 /// `pod::Debug` the image, the target container, the program (never its arguments) and a chosen
-/// name; for `resource::Apply` the field manager, force and the reviewed version (never the
-/// manifest). Short, free of typed content, and redacted by the audit log like every field.
+/// name; for `workload::Scale` the requested count; for `resource::Apply` the field manager, force
+/// and the reviewed version (never the manifest). Short, free of typed content, and redacted by the
+/// audit log like every field.
 pub fn audit_detail(command: &Command) -> Option<String> {
     if let Some(detail) = crate::apply::audit_detail(command) {
         return Some(detail);
+    }
+    if let Command::WorkloadScale { replicas, .. } = command {
+        // The handler adds `before=` and `after=` (`Mutation::note`).
+        return Some(format!("replicas={replicas}"));
     }
     let Command::PodDebug {
         image,

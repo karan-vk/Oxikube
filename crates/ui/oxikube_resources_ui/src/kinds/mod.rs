@@ -26,6 +26,7 @@
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
 //! | [`crd`] | the CustomResourceDefinition kind (E12-S17): its spec and the definition panel of its detail |
 //! | `pods` | Pods (E12-S02): their own columns and the containers drill-down |
+//! | `workloads` | Deployments, StatefulSets, ReplicaSets and ReplicationControllers (E12-S04): their specs, the detail panel (replicas, strategy, selector, pod template, owned ReplicaSets and Pods) and the Scale dialog |
 //!
 //! # Adding a kind's own panel or columns (E12-S02 and on)
 //!
@@ -60,6 +61,7 @@ pub mod service;
 mod sidebar;
 mod spec;
 mod specs;
+pub mod workloads;
 
 #[cfg(test)]
 mod tests;
@@ -68,6 +70,9 @@ pub use config::ConfigPanel;
 pub use detail::{DetailRenderer, DetailViewFactory};
 pub use spec::KindSpec;
 pub use specs::KindSpecs;
+pub use workloads::{
+    SCALE_ORDER, ScaleDialog, ScaleFlow, ScaleStage, WorkloadPanel, scale_row_actions,
+};
 
 use gpui::App;
 use oxikube_app::RowActionSpec;
@@ -78,6 +83,7 @@ pub fn row_actions() -> Vec<RowActionSpec> {
     job::row_actions()
         .into_iter()
         .chain(cronjob::row_actions())
+        .chain(scale_row_actions())
         .collect()
 }
 

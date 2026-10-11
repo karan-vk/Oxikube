@@ -1,4 +1,5 @@
-//! [`WorkloadService`]: the logic of the trigger, suspend and resume commands.
+//! [`WorkloadService`]: the logic of the trigger, suspend and resume commands (the scale half is
+//! in `scale`).
 
 use std::sync::Arc;
 
@@ -39,7 +40,7 @@ pub struct SuspendOutcome {
 /// bypass read-only mode, the confirmation or the audit.
 #[derive(Clone, Debug)]
 pub struct WorkloadService {
-    sessions: ClusterSessionManager,
+    pub(super) sessions: ClusterSessionManager,
 }
 
 impl WorkloadService {
@@ -175,7 +176,7 @@ impl WorkloadService {
             .await
     }
 
-    fn reader(&self, cluster: &ClusterId) -> OxiResult<Arc<dyn ResourceReader>> {
+    pub(super) fn reader(&self, cluster: &ClusterId) -> OxiResult<Arc<dyn ResourceReader>> {
         self.sessions
             .get(cluster)
             .ok_or_else(|| OxiError::not_found("the cluster is not open"))?

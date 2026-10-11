@@ -1496,11 +1496,12 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Low for N > 0, raised to Medium for N = 0 by `Command::effective_risk` (E12-S04).
     CommandMeta::mutation(
         CommandId::WORKLOAD_SCALE,
         "Scale Workload",
         CommandScope::Selection,
-        Risk::Medium,
+        Risk::Low,
         NONE,
     )
     .in_views(TABLE_VIEWS)
@@ -1702,7 +1703,9 @@ mod tests {
             COMMANDS
                 .iter()
                 .filter(|m| !m.exec)
-                .all(|m| m.tool_risk() == m.risk || m.id == CommandId::RESOURCE_DELETE)
+                .all(|m| m.tool_risk() == m.risk
+                    || m.id == CommandId::RESOURCE_DELETE
+                    || m.id == CommandId::WORKLOAD_SCALE)
         );
     }
 
