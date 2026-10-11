@@ -244,6 +244,9 @@ impl ColumnLayout {
             // An IPv4 address; an IPv6 one truncates to a tooltip.
             ("ip", _, _) => 110.,
             (_, SortKind::Age, _) => 70.,
+            // A pod's `%CPU/R` ... `%MEM/L` (E12-S02): the title and its sort icon, at most four
+            // digits below them.
+            (id, _, _) if id.ends_with("-pct") => 86.,
             (_, SortKind::Number | SortKind::Quantity, _) | (_, _, Align::Right) => 90.,
             _ => 140.,
         }

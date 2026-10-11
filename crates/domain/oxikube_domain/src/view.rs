@@ -61,8 +61,8 @@ pub use health::{Health, has_health_rule, health_of};
 pub use job::{CronJobSummary, JobStatus, JobSummary};
 pub use node::NodeSummary;
 pub use pod::{
-    ContainerKind, ContainerState, ContainerSummary, PodPhase, PodSummary, QosClass,
-    TerminatedState,
+    ComputeResources, ContainerKind, ContainerPort, ContainerState, ContainerSummary, PodPhase,
+    PodSummary, Probes, QosClass, ResourceAmounts, TerminatedState,
 };
 pub use workload::{WorkloadKind, WorkloadSummary};
 

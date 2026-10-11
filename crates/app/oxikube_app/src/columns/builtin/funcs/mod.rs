@@ -32,7 +32,7 @@ use crate::columns::Tone;
 /// The tone of a status word (`Running`, `CrashLoopBackOff`, `Bound`, `Init:1/2`...), by the
 /// words kubectl, Lens and k9s colour: failures red, transitions amber, healthy green, and
 /// anything unrecognised neutral.
-pub(crate) fn status_tone(status: &str) -> Tone {
+pub fn status_tone(status: &str) -> Tone {
     const ERROR: &[&str] = &[
         "Error",
         "Err",

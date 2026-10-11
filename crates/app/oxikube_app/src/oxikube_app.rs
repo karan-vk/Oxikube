@@ -78,7 +78,7 @@ pub use catalog::{
     CatalogEntry, ClusterCatalog, ClusterCommandOutcome, ClusterCommands, FavouriteChanged,
     FavouritesLagged,
 };
-pub use columns::{Cell, Column, ColumnId, ColumnProvider, CoreColumns, TableColumns};
+pub use columns::{Cell, Column, ColumnId, ColumnProvider, CoreColumns, PodColumns, TableColumns};
 pub use command_bus::{
     CommandBus, CommandContext, CommandHandler, CommandIndex, CommandInfo, CommandOutput,
     CommandRegistry, CommandTarget, DispatchContext, DispatchError, DuplicateCommand,

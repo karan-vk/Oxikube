@@ -185,6 +185,13 @@ pub struct PodBuilder {
     node: Option<String>,
     ip: Option<String>,
     terminating: bool,
+    /// `(cpu, memory)` requests; `None`: the defaults.
+    requests: Option<(String, String)>,
+    /// `(cpu, memory)` limits; `None`: no limits.
+    limits: Option<(String, String)>,
+    service_account: Option<String>,
+    /// `(kind, name)` of the controller owner.
+    controller: Option<(String, String)>,
 }
 
 /// A running, ready pod named `pod` in [`NAMESPACE`].
@@ -197,6 +204,10 @@ pub fn pod() -> PodBuilder {
         node: None,
         ip: None,
         terminating: false,
+        requests: None,
+        limits: None,
+        service_account: None,
+        controller: None,
     }
 }
 
@@ -311,6 +322,35 @@ impl PodBuilder {
         self
     }
 
+    /// Sets the container's CPU and memory requests (default `100m` / `128Mi`).
+    #[must_use]
+    pub fn requests(mut self, cpu: impl Into<String>, memory: impl Into<String>) -> Self {
+        self.requests = Some((cpu.into(), memory.into()));
+        self
+    }
+
+    /// Sets the container's CPU and memory limits (default: none).
+    #[must_use]
+    pub fn limits(mut self, cpu: impl Into<String>, memory: impl Into<String>) -> Self {
+        self.limits = Some((cpu.into(), memory.into()));
+        self
+    }
+
+    /// Sets `spec.serviceAccountName` (default `default`).
+    #[must_use]
+    pub fn service_account(mut self, name: impl Into<String>) -> Self {
+        self.service_account = Some(name.into());
+        self
+    }
+
+    /// Adds a controller owner reference (`apps/v1` for `ReplicaSet`, `StatefulSet`,
+    /// `DaemonSet`; `batch/v1` for `Job`; else `v1`).
+    #[must_use]
+    pub fn controlled_by(mut self, kind: impl Into<String>, name: impl Into<String>) -> Self {
+        self.controller = Some((kind.into(), name.into()));
+        self
+    }
+
     /// The Pod as JSON.
     pub fn json(&self) -> Value {
         let mut meta = self.meta.clone();
@@ -333,16 +373,23 @@ impl PodBuilder {
                 | PodState::Init { .. }
         );
 
-        let container = json!({
+        let (cpu, memory) = self
+            .requests
+            .clone()
+            .unwrap_or_else(|| ("100m".to_owned(), "128Mi".to_owned()));
+        let mut container = json!({
             "name": "app",
             "image": self.image,
             "ports": [{"containerPort": 8080, "protocol": "TCP"}],
-            "resources": {"requests": {"cpu": "100m", "memory": "128Mi"}}
+            "resources": {"requests": {"cpu": cpu, "memory": memory}}
         });
+        if let Some((cpu, memory)) = &self.limits {
+            container["resources"]["limits"] = json!({"cpu": cpu, "memory": memory});
+        }
         let mut spec = json!({
             "containers": [container],
             "restartPolicy": "Always",
-            "serviceAccountName": "default"
+            "serviceAccountName": self.service_account.as_deref().unwrap_or("default")
         });
         if scheduled {
             spec["nodeName"] = json!(self.node.as_deref().unwrap_or(NODE));
@@ -456,7 +503,19 @@ impl PodBuilder {
             status["containerStatuses"] = json!([cs]);
         }
 
-        json!({"apiVersion": "v1", "kind": "Pod", "metadata": meta.to_json(), "spec": spec, "status": status})
+        let mut metadata = meta.to_json();
+        if let Some((kind, name)) = &self.controller {
+            let api_version = match kind.as_str() {
+                "ReplicaSet" | "StatefulSet" | "DaemonSet" => "apps/v1",
+                "Job" => "batch/v1",
+                _ => "v1",
+            };
+            metadata["ownerReferences"] = json!([{
+                "apiVersion": api_version, "kind": kind, "name": name,
+                "uid": format!("uid-{name}"), "controller": true, "blockOwnerDeletion": true
+            }]);
+        }
+        json!({"apiVersion": "v1", "kind": "Pod", "metadata": metadata, "spec": spec, "status": status})
     }
 }
 

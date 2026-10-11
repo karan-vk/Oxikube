@@ -170,7 +170,13 @@ Test data ported (Copyright 2014 The Kubernetes Authors, Apache-2.0):
 Semantics only, no code copied: the `kubectl get` column rules of `printPod`, `printNode`
 (`findNodeRoles`), `printJob`, `printCronJob` and the apps workload printers in
 `pkg/printers/internalversion/printers.go`, reimplemented over raw JSON in
-`oxikube_domain::view`. The test cases are written for Oxikube.
+`oxikube_domain::view`. The test cases are written for Oxikube, except:
+
+Test data ported (Copyright 2014 The Kubernetes Authors, Apache-2.0):
+- `crates/domain/oxikube_domain/tests/pod_printer_v136.rs`: the cases of `TestPrintPod` and
+  `TestPrintPodWithRestartableInitContainer` in `pkg/printers/internalversion/printers_test.go` at
+  `release-1.36`, each Go pod literal rewritten as JSON with its READY / STATUS / RESTARTS cells
+  (E12-S02). The file carries the Apache-2.0 header.
 
 ## gpui-kit / gpui-component (Apache-2.0) — https://github.com/longbridge/gpui-kit
 Used as a dependency through `oxikube_ui`. Bundled Lucide icons (ISC) via `gpui-kit-assets`.

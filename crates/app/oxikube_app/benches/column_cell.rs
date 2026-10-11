@@ -13,7 +13,7 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use jiff::Timestamp;
-use oxikube_app::columns::{ColumnId, ColumnProvider, CoreColumns};
+use oxikube_app::columns::{ColumnId, ColumnProvider, CoreColumns, PodColumns};
 use oxikube_app::store::StoreObject;
 use oxikube_domain::Capabilities;
 use oxikube_testkit::{fixtures, pod};
@@ -101,5 +101,41 @@ fn main() {
     });
     bench("columns(): memoised header", samples, || {
         black_box(provider.columns(black_box(&kind), Capabilities::METRICS));
+    });
+
+    // E12-S02: the Pod kind's own provider. A row reads one memoised `PodSummary`; a new
+    // version of a pod (a watch delta) pays one derivation.
+    let pods = PodColumns::new();
+    let pod_row = ids(&[
+        "name",
+        "namespace",
+        "ready",
+        "status",
+        "restarts",
+        "cpu",
+        "memory",
+        "cpu-request-pct",
+        "cpu-limit-pct",
+        "memory-request-pct",
+        "memory-limit-pct",
+        "service-account",
+        "controlled-by",
+        "age",
+    ]);
+    bench("PodColumns row: 14 default columns", samples, || {
+        for id in &pod_row {
+            black_box(pods.cell(black_box(&pod_obj), id, now));
+        }
+    });
+    let built = pod().restarts(3).node("worker-1").ip("10.0.0.1").build();
+    bench("PodColumns: derive (new version)", samples, || {
+        // A clone shares the document: re-wrap it so every call is a new version.
+        let fresh = StoreObject::Resource(
+            oxikube_domain::Resource::from_json(built.to_value()).expect("a pod"),
+        );
+        black_box(pods.cell(black_box(&fresh), &ColumnId::new("status"), now));
+    });
+    bench("  of which: Resource::from_json", samples, || {
+        black_box(oxikube_domain::Resource::from_json(built.to_value()).expect("a pod"));
     });
 }
