@@ -24,7 +24,7 @@ use crate::json::Language;
 use crate::open::OpenMode;
 
 /// The commands [`register_commands`] handles.
-pub const EDITOR_COMMANDS: [CommandId; 19] = [
+pub const EDITOR_COMMANDS: [CommandId; 21] = [
     CommandId::EDITOR_NEW_MANIFEST,
     CommandId::EDITOR_TOGGLE_MANAGED_FIELDS,
     CommandId::EDITOR_TOGGLE_READ_ONLY,
@@ -44,6 +44,8 @@ pub const EDITOR_COMMANDS: [CommandId; 19] = [
     CommandId::EDITOR_TAKE_MINE,
     CommandId::EDITOR_TAKE_SERVER,
     CommandId::EDITOR_ACCEPT_MERGE,
+    CommandId::EDITOR_TRIGGER_COMPLETION,
+    CommandId::EDITOR_SHOW_HOVER,
 ];
 
 /// What the window's manifest editors should do.
@@ -96,6 +98,10 @@ pub enum EditorRequest {
     },
     /// `editor::AcceptMerge`: the settled merge into the buffer.
     AcceptMerge,
+    /// `editor::TriggerCompletion` on the focused editor, else the active pane's.
+    TriggerCompletion,
+    /// `editor::ShowHover` on the focused editor, else the active pane's.
+    ShowHover,
 }
 
 impl EditorRequest {
@@ -133,6 +139,8 @@ impl EditorRequest {
                 side: MergeSide::Server,
             }),
             Command::EditorAcceptMerge => Some(EditorRequest::AcceptMerge),
+            Command::EditorTriggerCompletion => Some(EditorRequest::TriggerCompletion),
+            Command::EditorShowHover => Some(EditorRequest::ShowHover),
             _ => None,
         }
     }

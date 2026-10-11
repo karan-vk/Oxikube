@@ -9,6 +9,7 @@
 //! |---|---|---|
 //! | [`yaml`] | E10-S02 | the spanned YAML model (granit-parser) |
 //! | [`validate`] | E10-S03 | schema validation into diagnostics |
+//! | [`assist`] | E10-S05 | hover docs and completion from the schema |
 //! | [`view`] | E10-S04 | [`view::ManifestEditor`], the `editor::*` commands |
 //! | [`settings`] | E10-S12 | the `editor` settings: tab size, font, wrap, validation, masking, field manager |
 //! | [`json`] | E10-S10 | JSON mode: [`json::Language`], the strict JSON check, YAML to JSON conversion |
@@ -16,6 +17,7 @@
 //! | [`diff`] | E10-S07 | diff vs live, the three-way merge, the changed-on-server state machine |
 //! | [`cancel`] | E10-S11 | [`cancel::CancelToken`]: how a stale parse or validation stops early |
 
+pub mod assist;
 pub mod cancel;
 pub mod diff;
 pub mod json;

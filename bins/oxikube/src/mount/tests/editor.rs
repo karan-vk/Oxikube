@@ -8,6 +8,9 @@
 //!
 //! Diff vs live (E10-S07): the reload key loads the object a typed manifest names from the connected
 //! cluster (its session's resource port) and the diff key opens the diff against it.
+//!
+//! Hover and completion (E10-S05): the shipped keys complete and document what is typed, from the
+//! connected cluster's schema.
 
 use std::sync::Arc;
 
@@ -399,4 +402,84 @@ fn the_reload_key_loads_the_named_object_and_the_diff_key_compares_with_it(
         .update(|_, cx| editor.read(cx).diff())
         .expect("the diff against the live object");
     assert!(diff.is_empty(), "the buffer holds the live object");
+}
+
+/// Hover and completion (E10-S05): the cluster's schema completes and documents what is typed.
+#[gpui::test]
+fn the_cluster_schema_completes_and_documents_what_is_typed_in_the_running_app(
+    cx: &mut TestAppContext,
+) {
+    use oxikube_ui::editor::EditorApi as _;
+
+    let ports = TestPorts::seeded();
+    let schema = JsonSchema::from_value(&json!({
+        "type": "object",
+        "properties": {
+            "apiVersion": {"type": "string", "description": "The versioned schema of this object."},
+            "kind": {"type": "string"},
+            "data": {
+                "type": "object",
+                "description": "Data contains the configuration data.",
+                "additionalProperties": {"type": "string"}
+            },
+            "immutable": {"type": "boolean", "description": "Whether the data can change."}
+        }
+    }));
+    ports
+        .connector
+        .ports_for(&TestPorts::cluster_id())
+        .schemas
+        .insert(
+            TestPorts::cluster_id(),
+            Gvk::new("", "v1", "ConfigMap"),
+            Arc::new(schema),
+        );
+    let mut app = App::start(cx, ports);
+    app.press("enter");
+    let tab = app.cluster_tabs().pop().expect("the cluster tab");
+    let workspace = app.vcx.update(|_, cx| tab.read(cx).workspace().clone());
+    app.press(new_manifest_key());
+    let editor = app
+        .vcx
+        .update(|_, cx| workspace.read(cx).items_of_type::<ManifestEditor>())
+        .pop()
+        .expect("the editor opened in the cluster tab");
+    let code = app.vcx.update(|_, cx| editor.read(cx).editor().clone());
+    let settle = |app: &mut App| {
+        app.vcx.executor().advance_clock(VALIDATION_DEBOUNCE * 2);
+        app.vcx.run_until_parked();
+    };
+    let menu = |app: &mut App| app.vcx.update(|_, cx| code.read(cx).open_completions(cx));
+
+    // The schema is fetched once the buffer names its kind; then typing a field completes it.
+    app.vcx.simulate_input("apiVersion: v1\nkind: ConfigMap\n");
+    settle(&mut app);
+    app.vcx.simulate_input("im");
+    settle(&mut app);
+    assert_eq!(menu(&mut app), ["immutable"]);
+    app.press("enter");
+    settle(&mut app);
+    let text = app
+        .vcx
+        .update(|window, cx| code.update(cx, |c, cx| c.api(window, cx).text().to_string()));
+    assert_eq!(text, "apiVersion: v1\nkind: ConfigMap\nimmutable: ");
+
+    // The shipped keys: ctrl-space completes at the cursor, ctrl-shift-space shows the docs.
+    app.vcx.simulate_input("true\nd");
+    settle(&mut app);
+    app.press("escape");
+    app.press("ctrl-space");
+    settle(&mut app);
+    assert_eq!(menu(&mut app), ["data"]);
+    app.press("escape");
+    let at = text.find("kind").unwrap() + 1;
+    app.vcx
+        .update(|window, cx| code.update(cx, |c, cx| c.api(window, cx).select(at..at)));
+    app.press("ctrl-shift-space");
+    settle(&mut app);
+    let (_, docs) = app
+        .vcx
+        .update(|_, cx| code.read(cx).open_hover(cx))
+        .expect("the docs of `kind`");
+    assert!(docs.starts_with("**kind** · `string`"), "{docs}");
 }

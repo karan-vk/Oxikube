@@ -8,7 +8,7 @@
 //!   object in the object's cluster tab, titled `kind/name`, or focuses the tab that already
 //!   holds the object. The object is read fresh, off the UI thread, by the editor itself.
 //! - **ToggleReadOnly** / **ToggleSoftWrap** / **ToggleManagedFields** / **ToggleSecretMask** /
-//!   **ConvertTo** / **UseLanguage**, and the diff vs live requests (E10-S07: **ShowDiff**,
+//!   **ConvertTo** / **UseLanguage**, **TriggerCompletion** / **ShowHover** (E10-S05), and the diff vs live requests (E10-S07: **ShowDiff**,
 //!   **ReloadFromServer**, **MergeFromServer**, **KeepMine**, a side per conflict,
 //!   **AcceptMerge**) act on the focused editor, else the active pane's item when it is one. The
 //!   toolbar's toggles focus their own editor before they send, so a click acts on the editor
@@ -207,6 +207,12 @@ impl EditorViews {
             }),
             EditorRequest::ToggleSoftWrap => this.on_target(window, cx, |editor, window, cx| {
                 editor.toggle_soft_wrap(window, cx);
+            }),
+            EditorRequest::TriggerCompletion => this.on_target(window, cx, |editor, window, cx| {
+                editor.show_completions(window, cx);
+            }),
+            EditorRequest::ShowHover => this.on_target(window, cx, |editor, window, cx| {
+                editor.show_hover(window, cx);
             }),
             EditorRequest::ConvertTo(language) => {
                 this.on_target(window, cx, move |editor, window, cx| {

@@ -25,7 +25,7 @@ pub fn flatten_schema(
 ///
 /// Merge rules: types are the first non-empty list; properties merge with later
 /// entries winning on name clashes; `required` unions; `items` is the last
-/// present; `enum` is the first non-empty; `pattern`/`format`/`description`
+/// present; `enum` is the first non-empty; `pattern`/`format`/`description`/`default`
 /// are the last present; `additionalProperties` is the last non-default;
 /// `XK8s` ORs the flags and takes the last `list_type` with unioned map keys;
 /// `truncated` ORs.
@@ -51,6 +51,9 @@ fn merge_all_of(entries: Vec<JsonSchema>) -> JsonSchema {
         }
         if entry.description.is_some() {
             merged.description = entry.description;
+        }
+        if entry.default.is_some() {
+            merged.default = entry.default;
         }
         if !matches!(entry.additional_properties, AdditionalProperties::Allowed) {
             merged.additional_properties = entry.additional_properties;
@@ -200,6 +203,9 @@ fn parse_node(
         .and_then(serde_json::Value::as_str)
     {
         schema.description = Some(description.to_owned());
+    }
+    if let Some(default) = object.get("default") {
+        schema.default = Some(default.clone());
     }
     schema.additional_properties = parse_additional(object, components, stack, depth);
     schema.xk8s = parse_xk8s(object);

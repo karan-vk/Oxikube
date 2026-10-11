@@ -15,16 +15,19 @@ use std::sync::Arc;
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement,
-    ParentElement as _, Pixels, Render, SharedString, Styled as _, Subscription, Window, div, px,
+    AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    InteractiveElement as _, IntoElement, ParentElement as _, Pixels, Render, SharedString,
+    Styled as _, Subscription, Task, Window, div, px,
 };
 use gpui_component::input::{
-    Editor, EditorState, InputEvent, RangeDecorationCollection, Rope, TextDecorationCollection,
+    Editor, EditorState, Enter, Escape, InputEvent, MoveDown, MoveUp, RangeDecorationCollection,
+    Rope, TextDecorationCollection,
 };
 
 #[cfg(doc)]
 use super::api::EditorApi;
 use super::api::{EditorDiagnostic, EditorFont};
+use super::assist::EditorAssist;
 use super::live::LiveEditor;
 use super::overlay::{OverlayStats, diagnostics_overlay, status_label};
 use super::positions::{LineSummary, rows_to_bytes};
@@ -81,11 +84,29 @@ pub enum CodeEditorEvent {
 /// into a string off it.
 #[derive(Clone)]
 pub struct TextSnapshot {
-    rope: Rope,
+    pub(super) rope: Rope,
     version: u64,
 }
 
 impl TextSnapshot {
+    /// A snapshot of `rope` (the library's text) at `version`.
+    pub(super) fn of(rope: Rope, version: u64) -> Self {
+        Self { rope, version }
+    }
+
+    /// Whether both snapshots hold the same text, whatever their versions. Compares the text
+    /// (memory speed), so call it off the UI thread for a large buffer.
+    pub fn same_text(&self, other: &TextSnapshot) -> bool {
+        self.rope == other.rope
+    }
+
+    /// The bytes `from..to` of the text (clamped to the buffer).
+    pub(super) fn text_between(&self, from: usize, to: usize) -> String {
+        let len = self.rope.len();
+        let to = to.min(len);
+        self.rope.slice(from.min(to)..to).to_string()
+    }
+
     /// The version the snapshot was taken at.
     pub fn version(&self) -> u64 {
         self.version
@@ -114,6 +135,10 @@ pub struct CodeEditor {
     pub(super) fills: Option<RangeDecorationCollection>,
     pub(super) frames: Option<RangeDecorationCollection>,
     overlay_stats: Rc<Cell<OverlayStats>>,
+    /// Hover and completion (`set_assist`), if the owner gave the editor any.
+    pub(super) assist: Option<Arc<dyn EditorAssist>>,
+    /// The keyboard-opened completion or hover being computed; replacing it cancels the old one.
+    pub(super) assist_task: Task<()>,
     _events: Subscription,
 }
 
@@ -157,6 +182,8 @@ impl CodeEditor {
             fills: None,
             frames: None,
             overlay_stats: Rc::default(),
+            assist: None,
+            assist_task: Task::ready(()),
             _events: events,
         }
     }
@@ -294,6 +321,19 @@ impl Render for CodeEditor {
         div()
             .relative()
             .size_full()
+            // The completion menu's keys, before the editor's own (see `route_to_menu`).
+            .capture_action(cx.listener(|this, action: &Enter, window, cx| {
+                this.route_to_menu(action, window, cx);
+            }))
+            .capture_action(cx.listener(|this, action: &Escape, window, cx| {
+                this.route_to_menu(action, window, cx);
+            }))
+            .capture_action(cx.listener(|this, action: &MoveUp, window, cx| {
+                this.route_to_menu(action, window, cx);
+            }))
+            .capture_action(cx.listener(|this, action: &MoveDown, window, cx| {
+                this.route_to_menu(action, window, cx);
+            }))
             .child(
                 Editor::new(&self.state)
                     // The element re-applies these to the state on every render.

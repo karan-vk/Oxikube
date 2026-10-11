@@ -83,6 +83,10 @@ impl CommandId {
     pub const EDITOR_USE_JSON: CommandId = CommandId::new("editor::UseJson");
     /// `editor::UseYaml`: read the focused manifest editor's buffer as YAML (highlighting and checks).
     pub const EDITOR_USE_YAML: CommandId = CommandId::new("editor::UseYaml");
+    /// `editor::ShowHover`: show the schema docs of the token at the cursor.
+    pub const EDITOR_SHOW_HOVER: CommandId = CommandId::new("editor::ShowHover");
+    /// `editor::TriggerCompletion`: open the completion menu at the cursor.
+    pub const EDITOR_TRIGGER_COMPLETION: CommandId = CommandId::new("editor::TriggerCompletion");
     /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `jump::Back`: run the previous command of the `:` jump bar's history again.
@@ -488,6 +492,15 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     )
     .in_views(EDITOR_VIEW),
+    // Hover docs and completion (E10-S05) read the buffer and the cluster's schemas, and change
+    // the buffer only when the user picks an entry.
+    CommandMeta::read(
+        CommandId::EDITOR_SHOW_HOVER,
+        "Show Field Docs",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
     CommandMeta::read(
         CommandId::EDITOR_TAKE_MINE,
         "Take My Side of a Merge Conflict",
@@ -538,6 +551,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::EDITOR_TOGGLE_SOFT_WRAP,
         "Toggle Editor Soft Wrap",
+        CommandScope::Global,
+        NONE,
+    )
+    .in_views(EDITOR_VIEW),
+    CommandMeta::read(
+        CommandId::EDITOR_TRIGGER_COMPLETION,
+        "Show Completions",
         CommandScope::Global,
         NONE,
     )

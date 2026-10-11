@@ -191,7 +191,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::EditorConvertToJson
         | Command::EditorConvertToYaml
         | Command::EditorUseJson
-        | Command::EditorUseYaml => None,
+        | Command::EditorUseYaml
+        | Command::EditorTriggerCompletion
+        | Command::EditorShowHover => None,
         Command::EditorShowDiff
         | Command::EditorToggleDiffLayout
         | Command::EditorReloadFromServer

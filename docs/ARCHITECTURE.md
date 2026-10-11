@@ -511,7 +511,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   each line in the visible range (`EditorState::range_to_bounds`; the library has no inline widgets), with an accessible status
   element ("1 error, 0 warnings"). An edit drops the diagnostics (the library resets them) and bumps the version. The read-only
   helpers (`read_only_state`, `set_text`, `code_view`) stay. gpui-component links tree-sitter 0.26, so the workspace pins
-  `tree-sitter = "0.26"` (one native library may be linked).
+  `tree-sitter = "0.26"` (one native library may be linked). E10-S05 adds `EditorAssist` (`editor/assist.rs`, `assist_bridge.rs`):
+  hover docs and completion a feature view supplies in our types (`HoverInfo`, `CompletionEntry`, byte offsets, called on the
+  background executor with a `TextSnapshot`), plugged into the library's `HoverProvider` / `CompletionProvider` by
+  `CodeEditor::set_assist` (the one place that names `lsp-types`; typed completions wait `COMPLETION_DEBOUNCE`, 40 ms, so a
+  burst of keys computes once), with `show_completions` / `show_hover` for the keyboard.
 - `oxikube_editor::yaml` (E10-S02) — the spanned YAML model the manifest editor's intelligence works on, pure Rust (no gpui) so
   it runs on the background executor and in plain unit tests. `parse(text) -> ParseResult` (granit-parser 1.3 events, comments
   off; its types stay in `yaml/parse.rs`): one `DocTree` per `---` document, each a flat pre-order `Vec<Node>` (byte `span` in
@@ -540,6 +544,23 @@ crate's `README.md` for its allowed dependencies. Highlights:
   document (`kind: List` from `kubectl get -o yaml`, or a typed `PodList`), each against its own kind's schema;
   `validate_units` checks a slice of them and polls a `CancelToken` (`oxikube_editor::cancel`) before each unit and every 256
   nodes, as `yaml::parse_cancellable` does every 4 096 parser events, so a stale run stops within a millisecond.
+- `oxikube_editor::assist` (E10-S05) — hover docs and completion from the schema, pure like `validate` (no gpui, no
+  `SchemaPort` call, nothing on the UI thread). `hover_at(&ParseResult, schema_for, offset) -> Option<HoverDoc>` finds the
+  key, value or list item under the offset (`offset -> node -> path`, O(depth)), walks the flattened `Arc<JsonSchema>` down that
+  path (`lookup`: `properties`, then a schema-valued `additionalProperties` map value, `items`) and returns name, type
+  (`integer`, `string (enum)`, `array of object`, `map of string`), description, allowed values, default, format and whether the
+  parent requires it; `to_markdown()` is the popup. `complete_at(&Buffer, schema_for, offset) -> Vec<CompletionItem>` reads the
+  cursor's line lexically (`line`: a comment, flow collection, block scalar or tab indent gets nothing and costs no parse),
+  then, for a key position, parses a copy of the text where that line is a complete `key:` (the half-typed line `ima` is not
+  YAML; the partial tree drops it) and takes the key's parent mapping as the path: its schema's properties not already present,
+  required first, filtered by the typed word, plus the container / volume blocks of `snippets` (items of the list a schema
+  property names, so one table serves Pod, Deployment, Job; inserted verbatim, no tab stops); for a value position the field's
+  `enum` members or `true` / `false` (strings that would read as another type are quoted). Where the schema is open
+  (free-form, `x-kubernetes-preserve-unknown-fields`, cut off by a `$ref` cycle) nothing is offered or documented; a map
+  (`additionalProperties`) offers no keys. `ManifestAssist` implements `oxikube_ui::editor::EditorAssist` over the schemas the
+  editor has fetched (`set_schemas`) and keeps the last parse by text (the validation pass hands its parse over), so a hover
+  after a pause parses nothing. Bench: `cargo bench -p oxikube_editor --bench assist` (2k lines: hover 0.5 us, value
+  completion 1 us, key completion 0.9 ms with its parse; a 5 MB buffer's key completion 75 ms off the UI thread).
 - `oxikube_editor::view` (E10-S04) — `ManifestEditor`, the manifest editor as a workspace `Item` over `CodeEditor` (key context
   `ManifestEditor`, `mode == yaml`, `Editing` while the buffer has the focus). Every change cancels the running pass (its
   `CancelToken`) and restarts a 150 ms debounce (`VALIDATION_DEBOUNCE`; replacing the task drops the old one); then a
@@ -553,7 +574,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ManifestModel`, written against `EditorApi` only and tested with a fake editor. Commands: `editor::NewManifest` (palette
   "New Manifest", `cmd-shift-e` / `ctrl-shift-e`: an empty editor in the shown cluster's tab, else the window's), and the
   focused editor's `editor::ToggleReadOnly` (`cmd-alt-r` / `ctrl-alt-r`, a view state, not the cluster's read-only) and
-  `editor::ToggleSoftWrap` (`alt-z`); the bus handlers queue an `EditorRequest` on the window's `EditorViewSink`, applied by
+  `editor::ToggleSoftWrap` (`alt-z`), and (E10-S05) `editor::TriggerCompletion` (`ctrl-space`, "Show Completions"; the menu also
+  opens as a field name is typed) and `editor::ShowHover` (`ctrl-shift-space`, "Show Field Docs"; the pointer shows the same
+  popup); the bus handlers queue an `EditorRequest` on the window's `EditorViewSink`, applied by
   `EditorViews` through an `EditorHost` (`ClusterEditorHost`). The editor is never serialised with the layout (a manifest
   can hold Secret data). Bench: `cargo run -p oxikube_editor --profile release-fast --example typing_bench`; the 5 MB
   scenario `cargo xtask perf editor-5mb` (open, typing, the pass, scrolling; budgets in `xtask/src/perf/budget.rs`). The

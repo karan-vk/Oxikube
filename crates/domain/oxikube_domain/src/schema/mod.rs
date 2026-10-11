@@ -148,6 +148,9 @@ pub struct JsonSchema {
     pub format: Option<String>,
     /// Human documentation of the field, if present.
     pub description: Option<String>,
+    /// The `default` the API server applies when the field is absent, if the schema states one
+    /// (shown by the editor's hover; never used to judge a value).
+    pub default: Option<serde_json::Value>,
     /// What object properties outside [`properties`](Self::properties) allow.
     pub additional_properties: AdditionalProperties,
     /// The `x-kubernetes-*` extensions of this node.

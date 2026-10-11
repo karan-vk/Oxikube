@@ -399,6 +399,8 @@
     // step). The editor's own keys stay as they are: ctrl-f / ctrl-h search and replace,
     // ctrl-z / ctrl-y undo and redo, shift-alt-up / shift-alt-down add a cursor (ctrl-alt-up /
     // ctrl-alt-down on Windows).
+    // ctrl-space opens the completion menu (it also opens as fields are typed) and ctrl-shift-space
+    // shows the docs of the token at the cursor (hovering it does too; E10-S05).
     "context": "ManifestEditor",
     "bindings": {
       "alt-z": "editor::ToggleSoftWrap",
@@ -413,7 +415,9 @@
       // palette entries). Not ctrl-alt-d: desktops take it to show the desktop.
       "ctrl-shift-d": "editor::ShowDiff",
       "ctrl-alt-shift-d": "editor::ToggleDiffLayout",
-      "ctrl-alt-shift-r": "editor::ReloadFromServer"
+      "ctrl-alt-shift-r": "editor::ReloadFromServer",
+      "ctrl-space": "editor::TriggerCompletion",
+      "ctrl-shift-space": "editor::ShowHover"
     }
   },
   {

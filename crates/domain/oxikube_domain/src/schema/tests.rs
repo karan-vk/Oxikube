@@ -324,3 +324,22 @@ fn keywords_beside_all_of_merge_with_the_entries() {
     assert_eq!(schema.required, ["a", "b"]);
     assert_eq!(schema.description.as_deref(), Some("wrapper"));
 }
+
+#[test]
+fn default_is_kept_including_beside_an_all_of_wrapper() {
+    let components = json!({"Proto": {"type": "string", "default": "TCP"}});
+    let plain = flatten_schema(
+        &json!({"type": "integer", "default": 3}),
+        components.as_object().unwrap(),
+    );
+    assert_eq!(plain.default, Some(json!(3)));
+    let wrapped = flatten_schema(
+        &json!({"allOf": [{"$ref": "#/components/schemas/Proto"}], "description": "d"}),
+        components.as_object().unwrap(),
+    );
+    assert_eq!(wrapped.default, Some(json!("TCP")));
+    assert_eq!(
+        flatten_schema(&json!({"type": "string"}), &serde_json::Map::new()).default,
+        None
+    );
+}

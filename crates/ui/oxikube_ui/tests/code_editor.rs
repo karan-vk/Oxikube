@@ -1,8 +1,9 @@
 //! The code editor behind `EditorApi` (E10-S04): squiggles from our diagnostics, read-only,
 //! undo and redo, folding, multiple cursors and soft wrap, driven through the keymap the library
-//! binds, as a user would.
+//! binds, as a user would; and (E10-S05) hover and completion through an `EditorAssist`.
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use gpui::{
     AppContext as _, Context, Entity, Focusable as _, IntoElement, Modifiers, ParentElement as _,
@@ -10,8 +11,9 @@ use gpui::{
 };
 use oxikube_testkit::gpui_test::{TestApp, TestWindow};
 use oxikube_ui::editor::{
-    CodeEditor, CodeEditorEvent, CodeEditorOptions, Decoration, DecorationStyle, DiagnosticLevel,
-    EditorApi as _, EditorDiagnostic, EditorFont,
+    COMPLETION_DEBOUNCE, CodeEditor, CodeEditorEvent, CodeEditorOptions, CompletionEntry,
+    Decoration, DecorationStyle, DiagnosticLevel, EditorApi as _, EditorAssist, EditorDiagnostic,
+    EditorFont, EntryKind, HoverInfo, TextSnapshot,
 };
 
 /// A 320 px wide window around one editor, focused.
@@ -275,6 +277,143 @@ fn decorations_follow_edits(cx: &mut TestAppContext) {
     );
     with_api(&mut window, |api| api.clear_decorations());
     assert!(with_api(&mut window, |api| api.decorations()).is_empty());
+}
+
+/// A fake [`EditorAssist`]: completes the words `alpha` and `beta` and documents `alpha`.
+struct Words;
+
+impl EditorAssist for Words {
+    fn hover(&self, text: &TextSnapshot, offset: usize) -> Option<HoverInfo> {
+        let text = text.to_text();
+        let start = text.find("alpha")?;
+        (start..start + 5).contains(&offset).then(|| HoverInfo {
+            range: start..start + 5,
+            markdown: "**alpha** the first".to_owned(),
+        })
+    }
+
+    fn complete(&self, text: &TextSnapshot, offset: usize) -> Vec<CompletionEntry> {
+        let text = text.to_text();
+        let start = text[..offset]
+            .rfind(|c: char| !c.is_alphanumeric())
+            .map_or(0, |i| i + 1);
+        let typed = &text[start..offset];
+        ["alpha", "beta"]
+            .into_iter()
+            .filter(|word| word.starts_with(typed))
+            .map(|word| CompletionEntry {
+                label: word.to_owned(),
+                kind: EntryKind::Value,
+                detail: None,
+                documentation: None,
+                insert_text: format!("{word}: "),
+                replace: start..offset,
+            })
+            .collect()
+    }
+}
+
+fn with_words(cx: &mut TestAppContext) -> TestWindow<Host> {
+    let mut window = open(cx, "");
+    let editor = window.read_root(|host, _| host.editor.clone());
+    window.update_root(|_, _, cx| {
+        editor.update(cx, |editor, cx| editor.set_assist(Arc::new(Words), cx))
+    });
+    window
+}
+
+fn open_menu(window: &mut TestWindow<Host>) -> Vec<String> {
+    window.read_root(|host, cx| host.editor.read(cx).open_completions(cx))
+}
+
+fn settle(window: &mut TestWindow<Host>) {
+    window.advance_clock(COMPLETION_DEBOUNCE * 2);
+}
+
+#[gpui::test]
+fn typed_words_open_the_assist_menu_and_enter_accepts_without_a_newline(cx: &mut TestAppContext) {
+    let mut window = with_words(cx);
+    window.simulate_input("al");
+    settle(&mut window);
+    assert_eq!(open_menu(&mut window), ["alpha"]);
+    window.simulate_keystrokes("enter");
+    window.advance_clock(COMPLETION_DEBOUNCE);
+    assert_eq!(text(&mut window), "alpha: ", "no newline after the entry");
+    assert!(open_menu(&mut window).is_empty());
+}
+
+#[gpui::test]
+fn escape_and_the_arrows_belong_to_the_menu_while_it_is_open(cx: &mut TestAppContext) {
+    let mut window = with_words(cx);
+    window.simulate_input("x\na");
+    settle(&mut window);
+    assert_eq!(open_menu(&mut window), ["alpha"]);
+    window.simulate_keystrokes("up");
+    assert_eq!(
+        with_api(&mut window, |api| api.selections()),
+        vec![3..3],
+        "up did not move the cursor"
+    );
+    window.simulate_keystrokes("escape");
+    assert!(open_menu(&mut window).is_empty());
+    assert_eq!(text(&mut window), "x\na");
+}
+
+#[gpui::test]
+fn the_keyboard_opens_the_menu_and_the_docs(cx: &mut TestAppContext) {
+    let mut window = with_words(cx);
+    with_api(&mut window, |api| api.set_text("alpha beta"));
+    select(&mut window, 10..10);
+    let editor = window.read_root(|host, _| host.editor.clone());
+    window.update_root(|_, window, cx| editor.update(cx, |e, cx| e.show_completions(window, cx)));
+    settle(&mut window);
+    assert_eq!(
+        open_menu(&mut window),
+        ["beta"],
+        "the word before the cursor is `beta`"
+    );
+    window.simulate_keystrokes("escape");
+
+    select(&mut window, 2..2);
+    window.update_root(|_, window, cx| editor.update(cx, |e, cx| e.show_hover(window, cx)));
+    settle(&mut window);
+    let hover = window.read_root(|host, cx| host.editor.read(cx).open_hover(cx));
+    assert_eq!(hover, Some((0..5, "**alpha** the first".to_owned())));
+}
+
+#[gpui::test]
+fn an_answer_for_an_older_buffer_is_dropped(cx: &mut TestAppContext) {
+    let mut window = with_words(cx);
+    with_api(&mut window, |api| api.set_text("al"));
+    select(&mut window, 2..2);
+    let editor = window.read_root(|host, _| host.editor.clone());
+    window.update_root(|_, window, cx| editor.update(cx, |e, cx| e.show_completions(window, cx)));
+    // The buffer changes before the background answer lands.
+    with_api(&mut window, |api| api.set_text("zz"));
+    settle(&mut window);
+    assert!(open_menu(&mut window).is_empty());
+}
+
+#[gpui::test]
+fn a_read_only_editor_shows_docs_but_offers_no_completions(cx: &mut TestAppContext) {
+    let mut window = with_words(cx);
+    with_api(&mut window, |api| {
+        api.set_text("alpha beta");
+        api.set_read_only(true);
+    });
+    select(&mut window, 10..10);
+    let editor = window.read_root(|host, _| host.editor.clone());
+    window.update_root(|_, window, cx| editor.update(cx, |e, cx| e.show_completions(window, cx)));
+    settle(&mut window);
+    assert!(open_menu(&mut window).is_empty());
+    select(&mut window, 2..2);
+    window.update_root(|_, window, cx| editor.update(cx, |e, cx| e.show_hover(window, cx)));
+    settle(&mut window);
+    assert!(
+        window
+            .read_root(|host, cx| host.editor.read(cx).open_hover(cx))
+            .is_some()
+    );
 }
 
 #[gpui::test]
