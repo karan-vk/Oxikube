@@ -13,7 +13,7 @@ fn sample(id: CommandId) -> Command {
     match id {
         CommandId::NODE_DRAIN => Command::NodeDrain {
             target: node("a", "worker-1"),
-            force: false,
+            flags: oxikube_domain::drain::DrainFlags::default(),
         },
         CommandId::NODE_UNCORDON => Command::NodeUncordon {
             target: node("a", "worker-1"),

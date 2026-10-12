@@ -45,6 +45,13 @@ impl Mutation {
         self.writer.as_ref()
     }
 
+    /// The cluster's writer as a shared handle, for work that outlives a borrow but not the
+    /// handler (the drain stream the `DrainPort` returns). Crate-private: it stays inside the
+    /// handler of the command the guard admitted, like [`writer`](Self::writer).
+    pub(crate) fn writer_handle(&self) -> Arc<dyn ResourceWriter> {
+        self.writer.clone()
+    }
+
     /// Whether the dispatch asked for a server-side dry run.
     pub fn dry_run(&self) -> bool {
         self.dry_run

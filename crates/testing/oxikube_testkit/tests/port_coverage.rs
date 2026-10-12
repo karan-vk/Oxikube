@@ -9,7 +9,7 @@ use std::sync::Arc;
 use oxikube_ports::{
     AccessReviewPort, AgentClient, AgentPort, ClockPort, CloudDiscoveryPort, ClusterConnectorPort,
     ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort, DiscoveryPort,
-    ExecPort, ExecStreamPort, FsPort, HelmPort, IntegrationPort, LogPort, MetricsPort,
+    DrainPort, ExecPort, ExecStreamPort, FsPort, HelmPort, IntegrationPort, LogPort, MetricsPort,
     NotifierPort, PortForwardPort, PromqlEndpointPort, PromqlPort, ProviderDetectorPort,
     QueryCataloguePort, ResourcePort, ResourceReader, ResourceWriter, SchemaPort, SecretStorePort,
     ServiceProxyPort, StatePort, TableFeedPort, TerminalBackend, ToolDef, ToolName, ToolPort,
@@ -54,6 +54,7 @@ const FAKES: &[(&str, &str)] = &[
     ("AccessReviewPort", "FakeAccessReviewPort"),
     ("WarningPort", "FakeWarningPort"),
     ("SchemaPort", "FakeSchemaPort"),
+    ("DrainPort", "FakeDrainPort"),
 ];
 
 /// Traits in `oxikube_ports` that are not ports: blanket combinations, extensions, and
@@ -109,6 +110,7 @@ fn fakes_are_port_trait_objects() {
     let _: Arc<dyn AccessReviewPort> = Arc::new(FakeAccessReviewPort::new());
     let _: Arc<dyn WarningPort> = Arc::new(FakeWarningPort::new());
     let _: Arc<dyn SchemaPort> = Arc::new(FakeSchemaPort::new());
+    let _: Arc<dyn DrainPort> = Arc::new(FakeDrainPort::new());
 }
 
 /// Every `pub trait` declared in `oxikube_ports/src` is either a port with a listed fake

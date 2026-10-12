@@ -113,7 +113,10 @@ fn summary_and_expected_name_name_the_target_and_cluster() {
     );
     let drain = Command::NodeDrain {
         target: node("a", "worker-1"),
-        force: true,
+        flags: oxikube_domain::drain::DrainFlags {
+            force: true,
+            ..Default::default()
+        },
     };
     assert_eq!(
         policy::summary(drain.meta(), &drain, "prod"),

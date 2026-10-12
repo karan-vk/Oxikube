@@ -1,8 +1,8 @@
-//! What the algorithms share: the kinds they touch and paginated listing over a `ResourcePort`.
+//! What the algorithms share: the kinds they touch and paginated listing over a `ResourceReader`.
 
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::{OxiResult, Resource};
-use oxikube_ports::{ListOptions, ResourcePort};
+use oxikube_ports::{ListOptions, ResourceReader};
 
 pub(crate) fn pod_gvk() -> Gvk {
     Gvk::new("", "v1", "Pod")
@@ -30,7 +30,7 @@ pub(crate) fn replicaset_gvk() -> Gvk {
 
 /// Every object `options` selects, following continue tokens to the last page.
 pub(crate) async fn list_all(
-    port: &dyn ResourcePort,
+    port: &dyn ResourceReader,
     gvk: &Gvk,
     namespace: Option<&str>,
     mut options: ListOptions,

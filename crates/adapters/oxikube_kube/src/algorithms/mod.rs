@@ -16,7 +16,7 @@
 //! | [`trigger_cronjob`]: `jobTemplate` to a `Job` with `generateName` and an owner reference | `cronjob` (kdash port) | `create job --from=cronjob/x` |
 //! | [`rollout_history`]: revisions with change cause and images | `rollout` | `rollout history` |
 //! | [`rollout_undo`]: pick the ReplicaSet by revision, patch the template back | `rollout` | `rollout undo` |
-//! | [`drain`]: plan, cordon, evict with PDB retry, wait for pods to go | `drain` | `drain` |
+//! | [`drain`]: plan, cordon, evict with PDB retry, wait for pods to go; [`KubeDrain`] is it as the `DrainPort` (E12-S10) | `drain` | `drain` |
 //!
 //! # Ports, not adapters
 //!
@@ -42,8 +42,8 @@ mod tests;
 
 pub use cronjob::{INSTANTIATE_ANNOTATION, trigger_cronjob};
 pub use drain::{
-    BlockReason, BlockedPod, DrainOptions, DrainPlan, DrainProgress, DrainSummary, PodRef,
-    SkipReason, SkippedPod, drain, drain_to_completion, plan_drain,
+    BlockReason, BlockedPod, DrainOptions, DrainPlan, DrainProgress, DrainSummary, KubeDrain,
+    PodRef, SkipReason, SkippedPod, drain, drain_to_completion, drain_with, plan_drain,
 };
 pub use oxikube_domain::build::job_from_cronjob;
 pub use rollout::{

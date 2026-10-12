@@ -39,6 +39,9 @@ pub struct DetailDeps {
     /// Opens the rollback dialog from a workload's panel (E12-S06). `None`: the panel has no
     /// Rollback button.
     pub rollback: Option<RollbackFlow>,
+    /// Opens the drain dialog from a node's panel (E12-S10). `None`: the panel has no Drain
+    /// button.
+    pub drain: Option<crate::kinds::node::drain::DrainOpener>,
 }
 
 impl From<&ResourceTableDeps> for DetailDeps {
@@ -52,6 +55,7 @@ impl From<&ResourceTableDeps> for DetailDeps {
             scale: None,
             set_image: None,
             rollback: None,
+            drain: None,
         }
     }
 }

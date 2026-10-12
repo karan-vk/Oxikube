@@ -1181,14 +1181,17 @@ pub enum Command {
         /// The node.
         target: ResourceRef,
     },
-    /// Cordon a node and evict its pods.
+    /// Cordon a node and evict its pods the way `kubectl drain` does (E12-S10): DaemonSet and
+    /// mirror pods skipped, PodDisruptionBudgets waited out, per-pod progress.
     #[serde(rename = "node::Drain")]
     NodeDrain {
         /// The node.
         target: ResourceRef,
-        /// Also evict pods not managed by a controller.
-        #[serde(default)]
-        force: bool,
+        /// The `kubectl drain` flags (`ignore_daemonsets`, `delete_emptydir_data`, `force`,
+        /// `grace_period_secs`, `timeout_secs`), flat in the payload; missing ones take the
+        /// [`DrainFlags`](crate::drain::DrainFlags) defaults.
+        #[serde(flatten)]
+        flags: crate::drain::DrainFlags,
     },
     /// Run a CronJob now: create a Job from its `spec.jobTemplate` with a generated name and the
     /// CronJob as its owner (`kubectl create job --from=cronjob/x`, E12-S08).
@@ -1968,7 +1971,10 @@ mod tests {
             Command::NodeUncordon { target: node() },
             Command::NodeDrain {
                 target: node(),
-                force: true,
+                flags: crate::drain::DrainFlags {
+                    force: true,
+                    ..crate::drain::DrainFlags::default()
+                },
             },
             Command::IngressClassSetDefault {
                 target: ingress_class(),

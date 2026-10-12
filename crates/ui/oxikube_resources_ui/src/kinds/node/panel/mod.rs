@@ -137,6 +137,36 @@ impl NodePanel {
         };
         dispatcher.dispatch(command, cx);
     }
+
+    /// Whether the panel offers "Drain…": the app gave a drain dialog.
+    pub(crate) fn offers_drain(&self, cx: &gpui::App) -> bool {
+        self.detail
+            .upgrade()
+            .is_some_and(|detail| detail.read(cx).deps().drain.is_some())
+    }
+
+    /// Opens the drain dialog for the node (the same dialog as the table's "Drain…" and `r`). Does
+    /// nothing while drains are blocked (read-only) or without a dialog to open.
+    pub fn open_drain(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.blocked.is_some() {
+            return;
+        }
+        let Some(detail) = self.detail.upgrade() else {
+            return;
+        };
+        let (opener, dispatcher, target) = {
+            let view = detail.read(cx);
+            let deps = view.deps();
+            (
+                deps.drain.clone(),
+                deps.dispatcher.clone(),
+                view.target().clone(),
+            )
+        };
+        if let Some(opener) = opener {
+            opener.open(dispatcher, target, window, cx);
+        }
+    }
 }
 
 impl Render for NodePanel {

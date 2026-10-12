@@ -1,11 +1,12 @@
 //! Nodes (E12-S09): the node table's columns, the node detail panel and the cordon and uncordon
-//! actions, registered through the kind registry (E12-S01).
+//! actions, registered through the kind registry (E12-S01); drain (E12-S10).
 //!
 //! | File | Holds |
 //! |---|---|
 //! | `spec` | [`spec`]: the Nodes [`KindSpec`](super::KindSpec): per-table [`NodeColumns`](oxikube_app::nodes::NodeColumns), the panel, the actions |
 //! | `actions` | [`node_row_actions`]: "Cordon" and "Uncordon" in the row menu (the bus, the palette and the `c` / `u` keys run the same commands) |
 //! | `panel` | [`NodePanel`]: conditions, allocation bars, capacity, taints, system info, pods and images above the generic Overview |
+//! | `drain` | [`drain::DrainDialog`]: `node::Drain` with its options, plan, typed name, per-pod progress and cancel ("Drain…" in the menu, the palette, `r`, the panel's button) |
 //!
 //! # Where the numbers come from
 //!
@@ -25,6 +26,7 @@
 //! calls a mutating port.
 
 mod actions;
+pub mod drain;
 mod panel;
 mod spec;
 

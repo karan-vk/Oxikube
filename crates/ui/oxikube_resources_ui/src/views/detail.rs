@@ -87,6 +87,16 @@ impl ResourceViews {
             .actions
             .as_ref()
             .map(|actions| actions.rollback_flow(workspace.downgrade()));
+        // A node's panel drains through the same dialog as the table's menu and `r`.
+        deps.drain = self
+            .deps
+            .table
+            .actions
+            .as_ref()
+            .and_then(|actions| actions.drain_flow())
+            .map(|flow| {
+                crate::kinds::node::drain::DrainOpener::new(flow.clone(), workspace.downgrade())
+            });
         let target = target.clone();
         let origin = self
             .tables(&target.cluster, &target.gvk, cx)

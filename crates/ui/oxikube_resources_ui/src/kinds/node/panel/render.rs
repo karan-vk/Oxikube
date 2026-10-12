@@ -165,6 +165,26 @@ impl NodePanel {
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_cordon(cx))),
                 ),
             )
+            .when(self.offers_drain(cx), |row| {
+                let tooltip = self.blocked.clone().unwrap_or_else(|| {
+                    "Cordon the node and evict its pods (kubectl drain)".to_owned()
+                });
+                row.child(
+                    div()
+                        .debug_selector(|| "node-panel-drain".to_owned())
+                        .child(
+                            Button::new("node-panel-drain")
+                                .xsmall()
+                                .outline()
+                                .label("Drain…")
+                                .tooltip(tooltip)
+                                .disabled(self.blocked.is_some())
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.open_drain(window, cx)),
+                                ),
+                        ),
+                )
+            })
             .into_any_element()
     }
 

@@ -37,6 +37,7 @@ actions!(
         AttachSelected,
         CordonSelected,
         UncordonSelected,
+        DrainSelected,
         FocusFilter,
         ClearFilter,
         ClearSelection,
@@ -208,6 +209,36 @@ fn c_and_u_cordon_and_uncordon_on_the_nodes_table_only(cx: &mut TestAppContext) 
     assert_eq!(
         ActionRegistry::commands_of("resource_table::UncordonSelected"),
         [oxikube_domain::command::CommandId::NODE_UNCORDON]
+    );
+}
+
+/// The drain verb (E12-S10): `r` on the Nodes table opens the drain dialog, on every OS; it stands
+/// for `node::Drain`, is not bound on a Pods or Secrets table, and is text in the filter.
+#[gpui::test]
+fn r_drains_on_the_nodes_table_only(cx: &mut TestAppContext) {
+    use oxikube_keymap::ActionRegistry;
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        let nodes = table("Node", "");
+        assert_eq!(
+            runs(cx, "r", &strs(&nodes)),
+            Some("resource_table::DrainSelected"),
+            "{platform:?}"
+        );
+        for kind in ["Pod", "Secret"] {
+            let other = table(kind, "");
+            assert_ne!(
+                runs(cx, "r", &strs(&other)),
+                Some("resource_table::DrainSelected"),
+                "r on {kind} ({platform:?})"
+            );
+        }
+        let typing = table("Node", "Editing");
+        assert_eq!(press(cx, "r", &strs(&typing)), Resolution::Unbound);
+    }
+    assert_eq!(
+        ActionRegistry::commands_of("resource_table::DrainSelected"),
+        [oxikube_domain::command::CommandId::NODE_DRAIN]
     );
 }
 

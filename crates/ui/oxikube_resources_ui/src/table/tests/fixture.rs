@@ -24,8 +24,8 @@ use oxikube_domain::kinds::ResourceKind;
 use oxikube_keymap::KeymapOptions;
 use oxikube_ports::{ClockPort, ClusterContext, SourceId};
 use oxikube_testkit::{
-    FakeClockPort, FakeClusterConnectorPort, FakeClusterPorts, FakeClusterSourcePort, FakeFsPort,
-    FakeStatePort,
+    FakeClockPort, FakeClusterConnectorPort, FakeClusterPorts, FakeClusterSourcePort,
+    FakeDrainPort, FakeFsPort, FakeStatePort,
 };
 use oxikube_workspace::sidebar::{self, SidebarDeps};
 use oxikube_workspace::test_support::open_workspace;
@@ -50,8 +50,20 @@ fn actions_rig(
     exec: bool,
     workloads: bool,
     storage: bool,
+    drain: &Arc<FakeDrainPort>,
 ) -> ResourceActions {
     let mut registry = CommandRegistry::new();
+    // `node::Drain` (E12-S10): the real handler and node service over the scripted drain port.
+    let nodes = Arc::new(oxikube_app::nodes::NodeService::new(
+        drain.clone(),
+        sessions.clone(),
+        clock.clone(),
+    ));
+    registry
+        .install("oxikube_app::nodes", |r| {
+            oxikube_app::nodes::register_drain_command(r, nodes.clone())
+        })
+        .unwrap();
     registry
         .install(
             "oxikube_app::actions",
@@ -176,6 +188,7 @@ fn actions_rig(
         registry,
         MutationGuard::new(sessions.clone(), state.clone(), clock),
     );
+    nodes.set_audit(bus.guard().audit_handle());
     let mut rows = RowActionRegistry::core();
     rows.register(
         RowActionSpec::new(CommandId::POD_VIEW_LOGS, |target| Command::PodViewLogs {
@@ -214,7 +227,10 @@ fn actions_rig(
             rows.register(spec).unwrap();
         }
     }
-    let actions = ResourceActions::with_registry(&bus, sessions.clone(), "alice", &rows);
+    let actions =
+        ResourceActions::with_registry(&bus, sessions.clone(), "alice", &rows).with_drain(
+            oxikube_app::nodes::DrainFlow::new(bus.clone(), nodes, "alice"),
+        );
     if exec {
         actions.with_exec(Arc::new(oxikube_app::ExecService::new(sessions.clone())))
     } else {
@@ -289,6 +305,8 @@ pub(crate) struct Fixture {
     pub(crate) clock: Arc<FakeClockPort>,
     pub(crate) dispatcher: Dispatcher,
     pub(crate) deps: ResourceTableDeps,
+    /// The drain port behind `node::Drain` (E12-S10); script a run before draining.
+    pub(crate) drain: Arc<FakeDrainPort>,
     _open_kinds: Task<()>,
 }
 
@@ -370,6 +388,7 @@ impl Fixture {
                 });
         let tabs = vcx.update(|window, cx| ClusterTabs::start(&workspace, tabs_deps, window, cx));
         let clock_port: Arc<dyn ClockPort> = clock.clone();
+        let drain = Arc::new(FakeDrainPort::new());
         // One object at a time: scripted responses then follow the selection's order.
         let actions = (rig != Rig::None).then(|| {
             actions_rig(
@@ -380,6 +399,7 @@ impl Fixture {
                 rig == Rig::Exec,
                 rig == Rig::Workloads,
                 rig == Rig::Storage,
+                &drain,
             )
             .with_concurrency(1)
         });
@@ -437,6 +457,7 @@ impl Fixture {
             clock,
             dispatcher,
             deps,
+            drain,
             _open_kinds: open_kinds,
         }
     }

@@ -64,6 +64,7 @@ fn render(object: Resource, light: bool) -> anyhow::Result<RgbaImage> {
             exec: None,
             scale: None,
             set_image: None,
+            drain: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

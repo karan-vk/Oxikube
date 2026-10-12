@@ -220,7 +220,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         },
         "node::Drain" => Command::NodeDrain {
             target: node(name, "worker-1"),
-            force: false,
+            flags: oxikube_domain::drain::DrainFlags::default(),
         },
         "node::Shell" => Command::NodeShell {
             target: node(name, "worker-1"),

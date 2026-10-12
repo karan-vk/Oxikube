@@ -32,6 +32,10 @@
 //! - `detail_node_dark`, `detail_node_light` (`node`): the detail drawer of a cordoned worker
 //!   (E12-S09): the badge, conditions, the allocation bars from the pods on the node, taints,
 //!   pods, images, capacity and system info.
+//! - `drain_plan_dark`, `drain_plan_light`, `drain_progress_dark`, `drain_progress_light` (`drain`):
+//!   the drain dialog of a node with a pod that blocks the drain (the plan, nothing changed), and
+//!   the drain under way with `--force`: one pod deleted, one blocked by a PodDisruptionBudget
+//!   (E12-S10).
 //! - `exec_picker_dark`, `exec_picker_light` (`exec`): the container picker of a pod with three
 //!   containers, the default one selected (E09-S08; the generic picker of E11-S02 since).
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
@@ -87,6 +91,8 @@ mod config;
 mod crd;
 #[path = "screenshot/detail.rs"]
 mod detail;
+#[path = "screenshot/drain.rs"]
+mod drain;
 #[path = "screenshot/exec.rs"]
 mod exec;
 #[path = "screenshot/namespaces.rs"]
@@ -286,6 +292,7 @@ fn main() -> ExitCode {
         network::run(),
         exec::run(),
         node::run(),
+        drain::run(),
         pods::run(),
         service::run(),
         namespaces::run(),

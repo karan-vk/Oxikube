@@ -38,8 +38,8 @@ fn a_pod_and_another_kind_get_the_actions_the_registry_has_for_them(cx: &mut Tes
     let nodes = f.open(nodes_kind());
     assert_eq!(
         labels(&mut f, &nodes),
-        ["Cordon", "Uncordon", "Delete"],
-        "no pod-only action on a node; its own are cordon and uncordon (E12-S09)"
+        ["Cordon", "Uncordon", "Drain…", "Delete"],
+        "no pod-only action on a node; its own are cordon, uncordon (E12-S09) and drain (E12-S10)"
     );
 
     let status = f.open(readonly_kind());

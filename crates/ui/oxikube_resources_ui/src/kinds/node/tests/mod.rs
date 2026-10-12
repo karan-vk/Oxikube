@@ -1,8 +1,10 @@
 //! Node tests (E12-S09): the table's columns and its live Pods column, the cordon badge after a
-//! patch (`table`), the detail panel (`panel`) and the actions and keys (`actions`). All
+//! patch (`table`), the detail panel (`panel`), the actions and keys (`actions`) and the drain
+//! dialog (`drain`, E12-S10). All
 //! `#[gpui::test]`s over testkit fakes, through the real bus where a command is sent.
 
 mod actions;
+mod drain;
 mod panel;
 mod table;
 

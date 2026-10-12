@@ -66,6 +66,9 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   collapsible Owner chain, Node, Environment, Mounts, Probes, Volumes, Tolerations and Affinity sections; ConfigMap and
   Secret references resolved on demand with Secret values masked, in memory only) and the pod row actions Evict, Delete,
   Force delete, Sanitize, Jump to owner and Show node, with the keys `ctrl-k`, `z`, `o` and `shift-j` (`table::pod_keys`).
+- `kinds::node::drain` (E12-S10): the drain dialog ("Drain…" in the menu, the palette, `r` on Nodes,
+  the panel's button): `kubectl drain` switches, grace period and timeout, the plan before anything
+  changes, the node's name typed, per-pod progress (Blocked by PDB included), cancel and uncordon.
 - `table` (E07-S03): `ResourceTable`, the generic virtualised table of one kind (store
   subscription, sort through the store, column layout per kind, multi-select, keyboard, context
   menu, status colours from the theme's `oxikube` block).

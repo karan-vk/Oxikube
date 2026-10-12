@@ -17,7 +17,7 @@
 //! | `oxikube_workspace` | `cluster::Select`, `SwitchTab`, `NextTab`, `PreviousTab`, `CloseTab` |
 //! | `oxikube` | `view::Open` for the catalog home, the kubeconfig sources screen and the chart gallery, `charts::OpenGallery` (the gallery's palette command, E13-S07); `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
-//! | `oxikube_app::nodes` | `node::Cordon`, `node::Uncordon` (guarded: blocked read-only, risk low so one click confirms, a server dry run of the `spec.unschedulable` patch before the real one, audit with the node and the initiator; E12-S09) |
+//! | `oxikube_app::nodes` | `node::Cordon`, `node::Uncordon` (guarded: blocked read-only, risk low so one click confirms, a server dry run of the `spec.unschedulable` patch before the real one, audit with the node and the initiator; E12-S09); `node::Drain` (guarded: blocked read-only, risk high so the node's name is typed, `kubectl drain` through the kube adapter's `KubeDrain` with the guard's writer, one audit record for the drain and one per pod sharing a batch id; E12-S10) |
 //! | `oxikube_app::apply` | `resource::Apply` (guarded: blocked read-only, risk low with the editor's diff preview as the confirmation, a server dry run before every apply, server-side apply as the `editor.field_manager`, the replace fallback at the reviewed `resourceVersion`, audit; E10-S08). The manifest editor runs it through `ApplyService` |
 //! | `oxikube_app::workloads` | `cronjob::Trigger` (a Job from the CronJob's template), `cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume` (guarded: blocked read-only, risk low so a simple confirm, a server dry run first, audit with the created Job's name; E12-S08), `workload::Scale` (E12-S04: the `scale` subresource, risk low and medium for zero, audit with `before=` and `after=`), `workload::Rollback` (E12-S06: `kubectl rollout undo` from a Deployment's ReplicaSets or a StatefulSet's / DaemonSet's ControllerRevisions, risk medium, a server dry run first, audit with `from=` and `to=`), `workload::Restart` and `workload::SetImage` (E12-S05: the pod template's `restartedAt` merge patch and a strategic image patch, risk low, audit with the time or the old and new images and the server's `rv=`), `pod::Evict`, `pod::Delete` (risk medium, a simple confirm naming the pod), `pod::ForceDelete` (high: the pod's name typed), `pod::Sanitize` (the Completed and Failed pods of a view; one audit record per pod under a batch id; E12-S03) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10), `secret::Reveal` (a Secret's values decoded in memory in its detail, `x`, E12-S11); `pod::JumpToOwner`, `pod::ShowNode` (read the pod, open its owner or node in the drawer; E12-S03) |
@@ -112,6 +112,9 @@ pub struct BusParts {
     pub terminal_views: TerminalViewSink,
     /// Where `help::Show` sends its request (the window shows the overlay on the UI thread).
     pub help: HelpSink,
+    /// The node service `node::Drain` runs on (E12-S10): the kube adapter's drain algorithm, the
+    /// followers of the drain dialog, the per-pod audit records.
+    pub nodes: Arc<oxikube_app::nodes::NodeService>,
     /// The app's exec service: `pod::Debug` adds its container through it (E09-S10), and
     /// `node::Shell`'s handler dry-runs the shell pod and leaves the permit the node's terminal
     /// opens with (E09-S09).
@@ -186,8 +189,12 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         "oxikube_app::actions",
         oxikube_app::actions::register_commands,
     )?;
-    // `node::Cordon` and `node::Uncordon` (E12-S09): guarded, confirmed once, audited.
-    registry.install("oxikube_app::nodes", oxikube_app::nodes::register_commands)?;
+    // `node::Cordon` and `node::Uncordon` (E12-S09): guarded, confirmed once, audited; `node::Drain`
+    // (E12-S10): guarded, the node's name typed, the drain and each pod audited.
+    registry.install("oxikube_app::nodes", |r| {
+        oxikube_app::nodes::register_commands(r)?;
+        oxikube_app::nodes::register_drain_command(r, parts.nodes)
+    })?;
     registry.install("oxikube_resources_ui", |r| {
         oxikube_resources_ui::navigate::register_commands(r, parts.kinds)?;
         oxikube_resources_ui::register_commands(r, parts.resources)

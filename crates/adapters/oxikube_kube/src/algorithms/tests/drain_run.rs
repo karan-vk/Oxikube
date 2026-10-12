@@ -364,3 +364,63 @@ async fn the_stream_does_nothing_until_it_is_polled() {
     drop(stream);
     assert!(api.requests().is_empty());
 }
+
+/// `KubeDrain`, the port the app drains through, reads through the reader it is given and sends
+/// the cordon and the evictions through the writer only (the guard's gated one, in the app).
+#[tokio::test(start_paused = true)]
+async fn kube_drain_reads_through_the_reader_and_writes_through_the_writer() {
+    use futures::StreamExt as _;
+    use oxikube_ports::DrainPort as _;
+
+    let reads = server();
+    reads.reply(NODE, 200, node_json(false));
+    reads.reply(
+        PODS,
+        200,
+        pod_list(vec![pod_json("a", "n1", Some("ReplicaSet"))]),
+    );
+    reads.reply(&pod_path("a"), 404, gone());
+    let writes_to = server();
+    writes_to.reply(NODE, 200, node_json(true));
+    writes_to.reply(&eviction_path("a"), 201, accepted());
+
+    let steps: Vec<_> = crate::KubeDrain
+        .drain(
+            Arc::new(resources(&reads)),
+            Arc::new(resources(&writes_to)),
+            "n1",
+            DrainOptions::default(),
+        )
+        .collect()
+        .await;
+    let steps = progress(steps);
+    assert_eq!(
+        labels(&steps),
+        [
+            "Planned",
+            "Cordoned(false)",
+            "Evicting(a,1)",
+            "Evicted(a)",
+            "Gone(a)",
+            "Finished"
+        ]
+    );
+    assert!(finished(&steps).is_complete());
+    assert!(
+        writes(&reads).is_empty(),
+        "nothing is written through the reader"
+    );
+    let sent: Vec<_> = writes(&writes_to)
+        .iter()
+        .map(|r| r.method.clone())
+        .collect();
+    assert_eq!(
+        sent,
+        [Method::PATCH, Method::POST],
+        "the cordon, then the eviction"
+    );
+    assert!(
+        calls(&writes_to).iter().all(|r| r.method != Method::GET),
+        "nothing is read through the writer"
+    );
+}
