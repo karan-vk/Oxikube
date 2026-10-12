@@ -2,15 +2,20 @@
 //!
 //! The pure lookups are O(depth) on the parsed tree, and completion adds one parse of the text
 //! with the cursor's line completed. The bounds are generous for a debug build on a busy CI
-//! machine; `cargo bench -p oxikube_editor --bench assist` prints the real numbers.
+//! machine; `cargo bench -p oxikube_editor --bench assist` prints the real numbers. The schema is
+//! built before the clock starts, as the app's schema cache hands out a ready `Arc`: building the
+//! fixture inside the timed call measured the test's setup, not the lookup.
 
 #[path = "assist/common.rs"]
 mod common;
 
 use std::fmt::Write as _;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use common::*;
+use oxikube_domain::ids::Gvk;
+use oxikube_domain::schema::JsonSchema;
 use oxikube_editor::assist::{Buffer, complete_at, hover_at};
 use oxikube_editor::yaml::parse;
 
@@ -29,14 +34,21 @@ fn big_pod() -> String {
 
 const FRAME: Duration = Duration::from_millis(100);
 
+/// `schemas` for the Pod with the schema built once, up front, like the app's schema cache.
+fn cached_pod_schema() -> impl Fn(&Gvk) -> Option<Arc<JsonSchema>> {
+    let pod = pod_schema();
+    move |gvk| (&*gvk.kind == "Pod").then(|| Arc::clone(&pod))
+}
+
 #[test]
 fn hover_on_the_last_container_of_a_2k_line_manifest_is_instant() {
     let text = big_pod();
     assert!(text.lines().count() >= 2_000);
     let parsed = parse(&text);
     let at = text.rfind("imagePullPolicy").unwrap() + 3;
+    let schemas = cached_pod_schema();
     let started = Instant::now();
-    let doc = hover_at(&parsed, schemas, at).expect("hover");
+    let doc = hover_at(&parsed, &schemas, at).expect("hover");
     let took = started.elapsed();
     assert_eq!(doc.path.to_string(), "spec.containers[199].imagePullPolicy");
     // Debug-build bound; the lookup is a binary search and a walk up the parents.
@@ -45,12 +57,13 @@ fn hover_on_the_last_container_of_a_2k_line_manifest_is_instant() {
 
 #[test]
 fn completion_in_the_last_container_of_a_2k_line_manifest_fits_the_budget() {
+    let schemas = cached_pod_schema();
     let mut text = big_pod();
     text.push_str("    - name: last\n      ima");
     let at = text.len();
     let buffer = Buffer::new(text.as_str());
     let started = Instant::now();
-    let items = complete_at(&buffer, schemas, at);
+    let items = complete_at(&buffer, &schemas, at);
     let took = started.elapsed();
     assert_eq!(labels(&items), ["image", "imagePullPolicy"]);
     assert!(
@@ -64,7 +77,7 @@ fn completion_in_the_last_container_of_a_2k_line_manifest_fits_the_budget() {
     text.push_str("    - name: last\n      imagePullPolicy: ");
     let buffer = Buffer::new(text.as_str());
     let first = Instant::now();
-    let items = complete_at(&buffer, schemas, text.len());
+    let items = complete_at(&buffer, &schemas, text.len());
     assert_eq!(items.len(), 3);
     assert!(
         first.elapsed() < FRAME,
@@ -72,7 +85,7 @@ fn completion_in_the_last_container_of_a_2k_line_manifest_fits_the_budget() {
         first.elapsed()
     );
     let again = Instant::now();
-    let _ = complete_at(&buffer, schemas, text.len());
+    let _ = complete_at(&buffer, &schemas, text.len());
     assert!(
         again.elapsed() < Duration::from_millis(16),
         "{:?}",
