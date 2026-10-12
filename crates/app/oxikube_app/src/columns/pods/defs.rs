@@ -39,6 +39,15 @@ pub const NOMINATED_NODE: &str = "nominated-node";
 /// it).
 pub const LAST_RESTART: &str = "last-restart";
 
+/// Whether `id` is one of the columns that read the metrics source: CPU, Memory and the four
+/// `%` columns.
+pub(super) fn is_usage(id: &str) -> bool {
+    matches!(
+        id,
+        CPU | MEMORY | CPU_OF_REQUEST | CPU_OF_LIMIT | MEMORY_OF_REQUEST | MEMORY_OF_LIMIT
+    )
+}
+
 /// One column: id, title, tooltip, hidden by default, alignment, sort.
 type Def = (
     &'static str,

@@ -22,9 +22,17 @@
 //! A [`MetricsSource`] set with [`PodColumns::set_metrics`] fills CPU and Memory with its cells
 //! and the `%` columns from those cells' [`CellSort::Quantity`](crate::columns::CellSort)
 //! values (CPU in cores, memory in bytes), so a source only has to give a usage cell its exact
-//! quantity as the sort key.
+//! quantity as the sort key. The `/L` columns are toned by the source's
+//! [`UsageThresholds`](crate::columns::UsageThresholds).
+//!
+//! The provider serves every cluster (its summary memo is keyed by UID), but a pod's usage
+//! belongs to one cluster: [`PodColumns::in_cluster`] wraps the shared provider with that
+//! cluster's source (E13-S03, `ClusterUsage`), and the Pod kind builds one per table. The usage
+//! columns' [`rank_epoch`](ColumnProvider::rank_epoch) follows the source's
+//! [`epoch`](MetricsSource::epoch), so a table sorted by CPU ranks again when a poll lands.
 
 mod cells;
+mod cluster;
 mod defs;
 mod memo;
 
@@ -37,6 +45,7 @@ use parking_lot::RwLock;
 
 pub use cells::ABSENT;
 pub(crate) use cells::cell as summary_cell;
+pub use cluster::ClusterPodColumns;
 pub use defs::*;
 
 use super::builtin::{MetricsSource, meta_cell};
@@ -100,8 +109,30 @@ impl PodColumns {
         self.memo.derived()
     }
 
+    /// These columns reading usage from `metrics` (one cluster's samples) instead of the source
+    /// set with [`set_metrics`](Self::set_metrics), which stays the fallback when `metrics` is
+    /// `None`. The summary memo stays shared.
+    pub fn in_cluster(
+        self: &Arc<Self>,
+        metrics: Option<Arc<dyn MetricsSource>>,
+    ) -> ClusterPodColumns {
+        ClusterPodColumns::new(self.clone(), metrics)
+    }
+
     /// The cell of a full or metadata-only Pod.
     fn resource_cell<'a>(&self, pod: &'a Resource, column: &ColumnId, now: Timestamp) -> Cell<'a> {
+        let metrics = self.metrics.read();
+        self.resource_cell_with(pod, column, metrics.as_deref(), now)
+    }
+
+    /// The cell of a full or metadata-only Pod, with usage from `metrics`.
+    fn resource_cell_with<'a>(
+        &self,
+        pod: &'a Resource,
+        column: &ColumnId,
+        metrics: Option<&dyn MetricsSource>,
+        now: Timestamp,
+    ) -> Cell<'a> {
         let id = column.as_str();
         if matches!(
             id,
@@ -112,8 +143,21 @@ impl PodColumns {
         let Some(summary) = self.memo.get(pod) else {
             return Cell::empty();
         };
-        let metrics = self.metrics.read();
-        cells::cell(id, pod, &summary, metrics.as_deref(), now).unwrap_or_else(Cell::empty)
+        cells::cell(id, pod, &summary, metrics, now).unwrap_or_else(Cell::empty)
+    }
+
+    /// The cell of `object` with usage from `metrics`.
+    fn cell_with<'a>(
+        &self,
+        object: &'a StoreObject,
+        column: &ColumnId,
+        metrics: Option<&dyn MetricsSource>,
+        now: Timestamp,
+    ) -> Cell<'a> {
+        match object {
+            StoreObject::Resource(pod) => self.resource_cell_with(pod, column, metrics, now),
+            StoreObject::Row(row) => meta_cell(&row.meta, column, now),
+        }
     }
 }
 
@@ -126,6 +170,15 @@ impl ColumnProvider for PodColumns {
         match object {
             StoreObject::Resource(pod) => self.resource_cell(pod, column, now),
             StoreObject::Row(row) => meta_cell(&row.meta, column, now),
+        }
+    }
+
+    /// The usage columns: the source's epoch. The rest read the pod alone.
+    fn rank_epoch(&self, column: &ColumnId) -> u64 {
+        if defs::is_usage(column.as_str()) {
+            self.metrics.read().as_ref().map_or(0, |m| m.epoch())
+        } else {
+            0
         }
     }
 }

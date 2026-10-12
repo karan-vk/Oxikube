@@ -12,6 +12,7 @@
 //! | [`GpuVendorsHandle`] | the hot-reloadable `metrics.gpu_vendors` table the aggregator reads (the binary pushes settings changes into it) |
 //! | [`NodeAllocation`] | one node: allocatable, the requests and limits of the pods on it, pod count |
 //! | [`NamespaceAllocation`] | one namespace: pod count, requests and limits, compared with a quota's `hard` amounts |
+//! | [`live`] (E13-S03) | [`MetricsService`]: live CPU and memory from metrics-server, polled per cluster while someone looks, kept per node and pod in [`ClusterUsage`] (the metrics columns' source) |
 //!
 //! # Rules
 //!
@@ -31,6 +32,7 @@
 //! call it there), never in a frame.
 
 mod aggregator;
+pub mod live;
 mod namespaces;
 mod nodes;
 #[cfg(test)]
@@ -38,6 +40,10 @@ mod tests;
 mod vendors;
 
 pub use aggregator::UtilisationAggregator;
+pub use live::{
+    ClusterUsage, LiveMetricsConfig, LiveMetricsConfigTable, MetricsInterest, MetricsKind,
+    MetricsService, MetricsState, MetricsVisibility,
+};
 pub use namespaces::{NamespaceAllocation, allocate_namespaces};
 pub use nodes::{NodeAllocation, allocate_nodes};
 pub use vendors::GpuVendorsHandle;

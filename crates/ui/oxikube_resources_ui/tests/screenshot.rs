@@ -38,8 +38,9 @@
 //!   containers, with the defaults (busybox, `sh`) and the note that the container is permanent
 //!   (E09-S10).
 //! - `pods_columns_dark`, `detail_pod_containers_dark`, `detail_pod_containers_light` (`pods`):
-//!   the Pod kind's own columns with a metrics source, and a pod's detail opening on its
-//!   containers sub-table (E12-S02).
+//!   the Pod kind's own columns with live metrics toned by the thresholds (E13-S03), and a pod's
+//!   detail opening on its containers sub-table with each container's usage (E12-S02, E13-S03);
+//!   `pods_metrics_unavailable_dark`: the `metrics unavailable: <reason>` badge.
 //!
 //! - `namespaces_table_dark`, `namespaces_table_light` (`namespaces`): the Namespaces table with its
 //!   Pods column (E12-S16); `namespaces_delete_dark`, `namespaces_delete_light`: the delete dialog

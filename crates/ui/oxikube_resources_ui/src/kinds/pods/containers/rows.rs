@@ -1,15 +1,20 @@
 //! [`ContainerRow`]: one row of the containers sub-table as display text and tones, built once
-//! per pod version from the domain's [`ContainerSummary`] (never in render).
+//! per pod version and once per metrics poll from the domain's [`ContainerSummary`] and the
+//! container's reading (never in render).
 
 use gpui::SharedString;
+use oxikube_app::ClusterUsage;
 use oxikube_app::columns::pods::ABSENT;
-use oxikube_app::columns::{Tone, status_tone};
+use oxikube_app::columns::{Tone, UsageThresholds, status_tone};
+use oxikube_app::metrics::live::ContainerUsageCells;
+use oxikube_domain::metrics::ContainerUsage;
 use oxikube_domain::view::{ContainerState, ResourceAmounts};
 use oxikube_domain::{ContainerSummary, Quantity, Resource};
 
 /// The sub-table's columns: id (the cell's test selector), title, width in unscaled pixels,
 /// right-aligned. k9s' containers view, in its order: IDX, NAME, IMAGE, READY, STATE, RESTARTS,
-/// PROBES (L:R:S), PORTS, then CPU and memory as `request/limit`.
+/// PROBES (L:R:S), usage (CPU, MEM, E13-S03), requests/limits (`request/limit`), the usage over
+/// them (`%CPU/R` ... `%MEM/L`, the `/L` ones toned by `metrics.thresholds`), PORTS.
 pub(super) const COLUMNS: &[(&str, &str, f32, bool)] = &[
     ("idx", "#", 28., true),
     ("name", "Name", 150., false),
@@ -18,10 +23,19 @@ pub(super) const COLUMNS: &[(&str, &str, f32, bool)] = &[
     ("state", "State", 130., false),
     ("restarts", "Restarts", 64., true),
     ("probes", "Probes L:R:S", 100., false),
-    ("ports", "Ports", 140., false),
+    ("cpu-usage", "CPU", 60., true),
+    ("memory-usage", "MEM", 64., true),
     ("cpu", "CPU R/L", 100., true),
     ("memory", "Mem R/L", 110., true),
+    ("cpu-request-pct", "%CPU/R", 60., true),
+    ("cpu-limit-pct", "%CPU/L", 60., true),
+    ("memory-request-pct", "%MEM/R", 60., true),
+    ("memory-limit-pct", "%MEM/L", 60., true),
+    ("ports", "Ports", 140., false),
 ];
+
+/// How many columns there are.
+const WIDTH: usize = 16;
 
 /// One container, ready to draw.
 #[derive(Clone, Debug, PartialEq)]
@@ -50,11 +64,16 @@ pub struct ContainerRow {
     pub cpu: SharedString,
     /// Memory `request/limit` (`128Mi/256Mi`).
     pub memory: SharedString,
+    /// Usage from metrics-server and its share of the request and limit; `–` without a reading.
+    pub usage: ContainerUsageCells,
 }
 
 impl ContainerRow {
     /// The texts of the cells, in `COLUMNS` order (the name without its marker).
-    pub fn cells(&self) -> [SharedString; 10] {
+    pub fn cells(&self) -> [SharedString; WIDTH] {
+        let text =
+            |cell: &oxikube_app::Cell<'static>| SharedString::from(cell.display().to_owned());
+        let u = &self.usage;
         [
             self.index.to_string().into(),
             self.name.clone(),
@@ -63,26 +82,54 @@ impl ContainerRow {
             self.state.clone(),
             self.restarts.clone(),
             self.probes.into(),
-            self.ports.clone(),
+            text(&u.cpu),
+            text(&u.memory),
             self.cpu.clone(),
             self.memory.clone(),
+            text(&u.cpu_of_request),
+            text(&u.cpu_of_limit),
+            text(&u.memory_of_request),
+            text(&u.memory_of_limit),
+            self.ports.clone(),
         ]
+    }
+
+    /// The tone of column `id` (the usage `%` cells' thresholds), `None` for a column drawn in
+    /// its own colour.
+    pub fn usage_tone(&self, id: &str) -> Option<Tone> {
+        let u = &self.usage;
+        Some(match id {
+            "cpu-limit-pct" => u.cpu_of_limit.tone(),
+            "memory-limit-pct" => u.memory_of_limit.tone(),
+            _ => return None,
+        })
     }
 }
 
-/// The rows of `pod`'s containers; empty for an object that is not a pod.
-pub fn rows_of(pod: &Resource) -> Vec<ContainerRow> {
+/// The rows of `pod`'s containers with their readings from `usage` (the pod's cluster); empty
+/// for an object that is not a pod.
+pub fn rows_of(pod: &Resource, usage: Option<&ClusterUsage>) -> Vec<ContainerRow> {
     let Ok(containers) = ContainerSummary::list_from_resource(pod) else {
         return Vec::new();
     };
+    let readings = match (usage, pod.meta.namespace.as_deref()) {
+        (Some(usage), Some(namespace)) => usage.containers(namespace, &pod.meta.name),
+        _ => Vec::new(),
+    };
+    let thresholds = usage.map(ClusterUsage::thresholds).unwrap_or_default();
     containers
         .iter()
         .enumerate()
-        .map(|(index, c)| row(index, c))
+        .map(|(index, c)| row(index, c, &readings, &thresholds))
         .collect()
 }
 
-fn row(index: usize, c: &ContainerSummary) -> ContainerRow {
+fn row(
+    index: usize,
+    c: &ContainerSummary,
+    readings: &[ContainerUsage],
+    thresholds: &UsageThresholds,
+) -> ContainerRow {
     let state = c.state.label().to_owned();
     let state_tone = match &c.state {
         // A container that is up but not ready reads amber, as the pod's Ready column does.
@@ -111,6 +158,12 @@ fn row(index: usize, c: &ContainerSummary) -> ContainerRow {
         ports: ports.into(),
         cpu: pair(&c.resources.requests, &c.resources.limits, |a| a.cpu),
         memory: pair(&c.resources.requests, &c.resources.limits, |a| a.memory),
+        usage: ContainerUsageCells::new(
+            readings.iter().find(|r| *r.name == *c.name),
+            &c.resources.requests,
+            &c.resources.limits,
+            thresholds,
+        ),
     }
 }
 

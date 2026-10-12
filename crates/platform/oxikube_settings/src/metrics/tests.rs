@@ -87,3 +87,86 @@ fn the_schema_describes_the_key() {
         "{schema}"
     );
 }
+
+#[test]
+fn the_live_defaults_match_default_json() {
+    let store = store("{}");
+    let settings = store.get::<MetricsSettings>(None);
+    assert_eq!(settings.poll_interval_secs, DEFAULT_POLL_INTERVAL_SECS);
+    assert_eq!(settings.cpu, UsageLevel::default());
+    assert_eq!(
+        settings.memory,
+        UsageLevel {
+            warn: 70,
+            critical: 90
+        }
+    );
+
+    let defaults: serde_json::Value =
+        serde_json_lenient::from_str(oxikube_assets::default_settings()).unwrap();
+    assert_eq!(defaults["metrics"]["poll_interval_secs"], 15);
+    assert_eq!(defaults["metrics"]["thresholds"]["cpu"]["warn"], 70);
+    assert_eq!(defaults["metrics"]["thresholds"]["memory"]["critical"], 90);
+}
+
+#[test]
+fn a_cluster_overrides_one_level_and_keeps_the_rest() {
+    let id = "3f2a9c1b7d4e8a60";
+    let store = store(&format!(
+        r#"{{ "metrics": {{ "poll_interval_secs": 30 }},
+            "clusters": {{ "{id}": {{ "metrics": {{ "thresholds": {{ "cpu": {{ "warn": 50 }} }} }} }} }} }}"#
+    ));
+    let global = store.get::<MetricsSettings>(None);
+    assert_eq!(global.poll_interval_secs, 30);
+    let cluster: ClusterId = id.parse().unwrap();
+    let located = store.get::<MetricsSettings>(Some(crate::SettingsLocation { cluster: &cluster }));
+    assert_eq!(
+        located.cpu,
+        UsageLevel {
+            warn: 50,
+            critical: 90
+        }
+    );
+    assert_eq!(located.memory, UsageLevel::default());
+    assert_eq!(
+        located.poll_interval_secs, 30,
+        "the global interval still applies"
+    );
+}
+
+#[test]
+fn out_of_range_values_are_kept_in_range() {
+    let store = store(
+        r#"{ "metrics": { "poll_interval_secs": 1,
+             "thresholds": { "cpu": { "warn": 95, "critical": 80 }, "memory": { "critical": 0 } } } }"#,
+    );
+    let settings = store.get::<MetricsSettings>(None);
+    assert_eq!(settings.poll_interval_secs, MIN_POLL_INTERVAL_SECS);
+    assert_eq!(
+        settings.cpu,
+        UsageLevel {
+            warn: 80,
+            critical: 80
+        }
+    );
+    assert_eq!(
+        settings.memory,
+        UsageLevel {
+            warn: 1,
+            critical: 1
+        }
+    );
+    let slow = self::store(r#"{ "metrics": { "poll_interval_secs": 100000 } }"#);
+    assert_eq!(
+        slow.get::<MetricsSettings>(None).poll_interval_secs,
+        MAX_POLL_INTERVAL_SECS
+    );
+}
+
+#[test]
+fn the_schema_describes_the_live_keys() {
+    let schema = serde_json::to_string(&store("{}").json_schema()).unwrap();
+    for key in ["poll_interval_secs", "thresholds", "critical", "warn"] {
+        assert!(schema.contains(key), "{key}");
+    }
+}

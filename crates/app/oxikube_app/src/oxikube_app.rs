@@ -36,6 +36,7 @@
 //! | [`secrets`] | E12-S11 | [`SecretService`]: decode a Secret's values in memory, encode them back, summarise a Secret without its values ([`SecretSummary`]: key names and sizes, registry logins without passwords, a TLS certificate's subject and expiry), validate and build a new Secret ([`NewSecret`]: Opaque, Docker registry, TLS), and the manifest of a decoded editor re-encoded to base64 for `resource::Apply`; `tools::k8s::get_secret` (`k8s.get_secret`: masked unless a [`RevealPolicy`](tools::k8s::RevealPolicy) allows values, denied by default) |
 //! | [`columns`] | E07-S02 | [`ColumnProvider`]: table columns and cells per kind. [`CoreColumns`] (a table-driven catalogue of ~40 core kinds; Ready / Status / Restarts from the domain view-models; CPU and memory as pending metrics hooks) and [`TableColumns`] (a Table feed's server columns, `priority > 0` as `wide`); [`Cell`]s carry text, a typed sort key and a tone |
 //! | [`metrics`] | E13-S02 | [`UtilisationAggregator`]: per-pod `%CPU/R`-style percents, per-node ([`NodeAllocation`]) and per-namespace ([`NamespaceAllocation`]) requests and limits over resource snapshots, with the hot-reloadable GPU vendor list ([`GpuVendorsHandle`], `metrics.gpu_vendors`); the pure maths is `oxikube_domain::utilisation` |
+//! | [`metrics::live`] | E13-S03 | [`MetricsService`]: per-cluster metrics-server polling (default 15 s, backoff on error, paused with no visible consumer), [`ClusterUsage`] (latest sample and a 60-sample ring per node and pod; the Pods and Nodes tables' metrics source), [`MetricsState`] (`metrics unavailable: <reason>`) |
 //! | [`namespaces`] | E12-S16 | the Namespace kind: `namespace::Create` / `namespace::Delete` handlers (guarded), [`delete_advice`](namespaces::delete_advice) (HNC and system-namespace warnings, counts of what a namespace holds) and [`NamespaceColumns`](namespaces::NamespaceColumns) (a live Pods count from the pods feed's per-namespace index) |
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
@@ -111,8 +112,9 @@ pub use kinds::{
     KindVisibility, RegisterKindError, Section, ServedKinds, SidebarSlot, SidebarTree,
 };
 pub use metrics::{
-    GpuVendorsHandle, NamespaceAllocation, NodeAllocation, UtilisationAggregator,
-    allocate_namespaces, allocate_nodes,
+    ClusterUsage, GpuVendorsHandle, LiveMetricsConfig, LiveMetricsConfigTable, MetricsInterest,
+    MetricsKind, MetricsService, MetricsState, MetricsVisibility, NamespaceAllocation,
+    NodeAllocation, UtilisationAggregator, allocate_namespaces, allocate_nodes,
 };
 pub use metrics_provider::{EndpointSink, MetricsProviderService, ProviderState, ProviderStatus};
 pub use network::{

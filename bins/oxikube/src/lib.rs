@@ -37,6 +37,7 @@ pub mod app_state;
 pub mod cluster_prefs;
 pub mod history;
 pub mod kube_ports;
+pub mod live_metrics;
 pub mod metrics_provider;
 pub mod metrics_settings;
 pub mod mount;

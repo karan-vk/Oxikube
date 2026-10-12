@@ -105,8 +105,9 @@ fn usage_value(
 }
 
 /// Usage over `of` (the pod's request or limit) in whole percent, k9s' `%CPU/R` style: `–`
-/// without a sample or without the request or limit. Over a limit, amber from 80 % and red from
-/// 100 %.
+/// without a sample or without the request or limit. Over a limit, amber and red from the
+/// source's [`UsageThresholds`](crate::columns::UsageThresholds) (k9s' 70 % and 90 % by
+/// default); over a request, neutral.
 fn percent<'a>(
     pod: &Resource,
     summary: &PodSummary,
@@ -128,9 +129,8 @@ fn percent<'a>(
     else {
         return absent();
     };
-    let tone = match pct {
-        p if limit && p >= 100.0 => Tone::Error,
-        p if limit && p >= 80.0 => Tone::Warn,
+    let tone = match metrics {
+        Some(source) if limit => source.thresholds().of(metric == Metric::Cpu).tone(pct),
         _ => Tone::Neutral,
     };
     Cell::float(format!("{pct:.0}"), pct).with_tone(tone)

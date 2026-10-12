@@ -4,7 +4,8 @@
 //! |---|---|
 //! | `service` | [`set_unschedulable`]: cordon and uncordon, the `spec.unschedulable` patch through the guard's [`Mutation`](crate::Mutation) |
 //! | `commands` | [`register_commands`]: the `node::Cordon` and `node::Uncordon` handlers |
-//! | `columns` | [`NodeColumns`]: the node table's columns (Pods from the pods-by-node index, CPU% and Memory% as metrics slots), [`node_columns`], [`NodeUsageSource`] |
+//! | `columns` | [`NodeColumns`]: the node table's columns (Pods from the pods-by-node index), [`node_columns`] |
+//! | `usage` | [`NodeUsageSource`], [`NodeUsage`]: the CPU, Mem, CPU% and Mem% cells, from E13's metrics |
 //! | `pods` | [`list_node_pods`]: the field-selector fallback behind the detail when the Pod feed is not active |
 //!
 //! # Cordon and uncordon
@@ -31,11 +32,13 @@ mod columns;
 mod commands;
 mod pods;
 mod service;
+mod usage;
 
 #[cfg(test)]
 mod tests;
 
-pub use columns::{NodeColumns, NodeUsage, NodeUsageSource, node_columns};
+pub use columns::{NodeColumns, node_columns};
 pub use commands::register_commands;
 pub use pods::{NodePods, list_node_pods};
 pub use service::{NodeOutcome, set_unschedulable};
+pub use usage::{NodeUsage, NodeUsageSource};

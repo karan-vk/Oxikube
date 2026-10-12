@@ -192,7 +192,11 @@ fn percent_columns_divide_usage_by_the_request_and_the_limit() {
     assert_eq!(text(&p, &o, MEMORY_OF_REQUEST), "180");
     assert_eq!(text(&p, &o, MEMORY_OF_LIMIT), "90");
     let mem_l = p.cell(&o, &ColumnId::new(MEMORY_OF_LIMIT), now());
-    assert_eq!(mem_l.tone(), Tone::Warn, "90 % of the limit");
+    assert_eq!(
+        mem_l.tone(),
+        Tone::Error,
+        "90 % of the limit reaches k9s' critical threshold"
+    );
     assert_eq!(mem_l.sort(), CellSort::Float(89.84375));
 
     // No limits: the `/L` columns read `–`; the `/R` ones still divide.

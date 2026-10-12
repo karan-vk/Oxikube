@@ -64,7 +64,9 @@ fn the_default_columns_are_the_stories_and_the_rest_are_wide() {
             "kernel",
             "internal-ip",
             "pods",
+            "cpu",
             "cpu-percent",
+            "memory",
             "memory-percent",
             "taints",
             "schedulable",
@@ -83,7 +85,9 @@ fn the_default_columns_are_the_stories_and_the_rest_are_wide() {
             "Kernel",
             "Internal IP",
             "Pods",
+            "CPU",
             "CPU%",
+            "Mem",
             "Mem%",
             "Taints",
             "Schedulable",
@@ -173,7 +177,7 @@ fn instance_type_and_zone_come_from_the_labels() {
 fn pods_and_metrics_show_a_dash_until_something_supplies_them() {
     let provider = NodeColumns::new();
     let n = object(node());
-    for column in ["pods", "cpu-percent", "memory-percent"] {
+    for column in ["pods", "cpu", "memory", "cpu-percent", "memory-percent"] {
         let cell = provider.cell(&n, &ColumnId::new(column), now());
         assert_eq!(cell.display(), "–", "{column}");
         assert_eq!(cell.sort(), CellSort::None, "{column} sinks when sorted");
@@ -203,6 +207,19 @@ fn cpu_and_memory_percent_are_usage_over_allocatable() {
     let n = object(node());
     assert_eq!(text(&provider, &n, "cpu-percent"), "25%");
     assert_eq!(text(&provider, &n, "memory-percent"), "75%");
+    // The absolute usage beside the percent, sorted by the exact quantity.
+    let cpu = provider.cell(&n, &ColumnId::new("cpu"), now());
+    assert_eq!(cpu.display(), "1000m");
+    assert_eq!(
+        cpu.sort(),
+        CellSort::Quantity(oxikube_domain::Quantity::from_milli(1000))
+    );
+    let memory = provider.cell(&n, &ColumnId::new("memory"), now());
+    assert_eq!(memory.display(), "12288Mi");
+    assert_eq!(
+        memory.sort(),
+        CellSort::Quantity(oxikube_domain::Quantity::from_value(12 << 30))
+    );
     assert_eq!(
         provider
             .cell(&n, &ColumnId::new("memory-percent"), now())
@@ -216,6 +233,7 @@ fn cpu_and_memory_percent_are_usage_over_allocatable() {
     // A node without a sample.
     let cold = object(node().name("cold"));
     assert_eq!(text(&provider, &cold, "cpu-percent"), "–");
+    assert_eq!(text(&provider, &cold, "cpu"), "–");
 }
 
 /// A usage source whose samples move on demand.
@@ -247,6 +265,13 @@ fn sorting_by_usage_is_stale_when_a_sample_arrives_unless_the_epoch_moves() {
         "a new sample re-ranks CPU%"
     );
     assert_ne!(provider.rank_epoch(&memory), before.1, "and Mem%");
+    for absolute in ["cpu", "memory"] {
+        assert_eq!(
+            provider.rank_epoch(&ColumnId::new(absolute)),
+            1,
+            "and {absolute}"
+        );
+    }
     // Columns that read the node alone never ask for a re-rank, and neither does a provider
     // without a usage source.
     assert_eq!(provider.rank_epoch(&ColumnId::new("version")), 0);

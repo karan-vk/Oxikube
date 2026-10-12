@@ -3,7 +3,7 @@
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
     AliasRegistry, ClusterCatalog, ClusterCommands, ClusterSessionManager, IntegrationRegistry,
-    MutationGuard, UtilisationAggregator,
+    MetricsService, MutationGuard, UtilisationAggregator,
 };
 
 use super::AppPorts;
@@ -38,6 +38,9 @@ pub struct ClusterServices {
     /// Which Prometheus-compatible service each cluster's history graphs come from, and the
     /// PromQL port that queries it (E13-S05). Idle until `metrics_provider::start`.
     pub metrics: MetricsServices,
+    /// Live CPU and memory from metrics-server, polled per cluster while a table shows it
+    /// (E13-S03). Idle until `live_metrics::start`.
+    pub live_metrics: MetricsService,
 }
 
 impl ClusterServices {
@@ -60,6 +63,7 @@ impl ClusterServices {
             clusters.clock.clone(),
         );
         let metrics = metrics_provider::build(ports, &sessions);
+        let live_metrics = MetricsService::new(sessions.clone(), clusters.clock.clone());
         Self {
             cluster_commands: ClusterCommands::new(sessions.clone(), catalog.clone()),
             sessions,
@@ -69,6 +73,7 @@ impl ClusterServices {
             aliases: AliasRegistry::new(),
             utilisation: UtilisationAggregator::default(),
             metrics,
+            live_metrics,
         }
     }
 
