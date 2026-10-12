@@ -52,6 +52,16 @@ pub(in crate::kinds) fn spec_at(kind: &str, actions: &[CommandId]) -> KindSpec {
     spec(builtin, Section::WORKLOADS, ix * 10, actions)
 }
 
+/// The actions of a kind without a module of its own: a DaemonSet restarts and takes new images
+/// (E12-S05; its panel and the rest are E12-S07's), anything else has the generic ones.
+fn rollout_or_generic(kind: &Builtin) -> &'static [CommandId] {
+    if kind.kind == "DaemonSet" {
+        crate::kinds::workloads::ROLLOUT_ACTIONS
+    } else {
+        generic(kind)
+    }
+}
+
 /// Registers the Workloads section's kinds other than Pods, from rank 20: the ones with a module
 /// of their own through it, the rest with the generic spec.
 pub fn init(cx: &mut App) {
@@ -63,7 +73,13 @@ pub fn init(cx: &mut App) {
         .collect();
     for (ix, kind) in generic_kinds {
         let rank_slot = u32::try_from(ix).unwrap_or(0) + 2;
-        register_from(cx, Section::WORKLOADS, &[kind], rank_slot, generic);
+        register_from(
+            cx,
+            Section::WORKLOADS,
+            &[kind],
+            rank_slot,
+            rollout_or_generic,
+        );
     }
     crate::kinds::workloads::init(cx);
     crate::kinds::job::init(cx);

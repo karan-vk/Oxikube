@@ -354,6 +354,8 @@ impl CommandId {
     pub const WORKLOAD_RESTART: CommandId = CommandId::new("workload::Restart");
     /// `workload::Scale`: set a workload's replica count.
     pub const WORKLOAD_SCALE: CommandId = CommandId::new("workload::Scale");
+    /// `workload::SetImage`: change the image of containers of a workload's pod template.
+    pub const WORKLOAD_SET_IMAGE: CommandId = CommandId::new("workload::SetImage");
     /// `workload::ViewLogs`: open the merged logs of a workload's or a Service's pods.
     pub const WORKLOAD_VIEW_LOGS: CommandId = CommandId::new("workload::ViewLogs");
 }
@@ -1658,11 +1660,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // A rolling restart replaces pods one batch at a time and changes no spec: low risk (E12-S05).
     CommandMeta::mutation(
         CommandId::WORKLOAD_RESTART,
         "Restart Workload",
         CommandScope::Selection,
-        Risk::Medium,
+        Risk::Low,
         NONE,
     )
     .in_views(TABLE_VIEWS)
@@ -1671,6 +1674,16 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::mutation(
         CommandId::WORKLOAD_SCALE,
         "Scale Workload",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
+    // Changes the pod template, so it rolls the workload: low risk, one confirmation (E12-S05).
+    CommandMeta::mutation(
+        CommandId::WORKLOAD_SET_IMAGE,
+        "Set Workload Image",
         CommandScope::Selection,
         Risk::Low,
         NONE,
@@ -1868,6 +1881,32 @@ mod tests {
         // Reveal and edit act on a selected Secret only.
         for id in [CommandId::SECRET_REVEAL, CommandId::SECRET_EDIT_DECODED] {
             let meta = lookup(id).expect("declared");
+            assert!(meta.availability.selection.needs_selection(), "{id}");
+        }
+    }
+
+    #[test]
+    fn restart_and_set_image_are_low_risk_one_confirmation_mutations_with_tool_stubs() {
+        // E12-S05: both change a workload's pod template and roll it; the guard confirms once.
+        for (id, title, tool) in [
+            (
+                CommandId::WORKLOAD_RESTART,
+                "Restart Workload",
+                "k8s.workload_restart",
+            ),
+            (
+                CommandId::WORKLOAD_SET_IMAGE,
+                "Set Workload Image",
+                "k8s.workload_set_image",
+            ),
+        ] {
+            let meta = lookup(id).expect("registered");
+            assert!(meta.mutating && !meta.exec && !meta.privileged, "{id}");
+            assert_eq!(meta.title, title);
+            assert_eq!(meta.risk, Some(Risk::Low), "{id}");
+            assert_eq!(meta.tool_risk(), Some(Risk::Low), "{id}");
+            assert_eq!(meta.confirm, ConfirmTier::Simple, "{id}");
+            assert_eq!(id.tool_name(), tool);
             assert!(meta.availability.selection.needs_selection(), "{id}");
         }
     }

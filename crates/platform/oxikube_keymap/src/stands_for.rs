@@ -39,6 +39,18 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     // `c` / `u` on the Nodes table (E12-S09).
     ("resource_table::CordonSelected", CommandId::NODE_CORDON),
     ("resource_table::UncordonSelected", CommandId::NODE_UNCORDON),
+    // `r` and `i` on a Deployment, StatefulSet or DaemonSet (E12-S05).
+    (
+        "resource_table::RestartSelected",
+        CommandId::WORKLOAD_RESTART,
+    ),
+    (
+        "resource_table::SetImageSelected",
+        CommandId::WORKLOAD_SET_IMAGE,
+    ),
+    // The same two keys in the focused detail drawer.
+    ("resource_detail::Restart", CommandId::WORKLOAD_RESTART),
+    ("resource_detail::SetImage", CommandId::WORKLOAD_SET_IMAGE),
     ("resource_table::DebugSelected", CommandId::POD_DEBUG),
     ("resource_table::ViewYaml", CommandId::RESOURCE_VIEW_YAML),
     (

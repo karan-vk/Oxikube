@@ -57,6 +57,8 @@ impl Render for DetailView {
             .on_action(cx.listener(Self::on_close_find))
             .on_action(cx.listener(Self::on_reveal_secret))
             .on_action(cx.listener(Self::on_edit_secret_decoded))
+            .on_action(cx.listener(Self::on_restart))
+            .on_action(cx.listener(Self::on_set_image))
             .size_full()
             .overflow_hidden()
             .bg(colors.surface)
@@ -146,6 +148,7 @@ impl DetailView {
                             .child(name.to_string()),
                     )
                     .children(self.exec_buttons(cx))
+                    .children(self.rollout_buttons(cx))
                     .child(self.editor_buttons(cx))
                     .when(mount == Mount::Drawer, |row| {
                         row.child(

@@ -757,8 +757,8 @@ impl ResourceWriter for FakeResourcePort {
         });
         self.script.patch.next_or_else(|| match &patch.kind {
             // A server-side apply of a whole object: the body is what the store holds afterwards
-            // (no field-ownership bookkeeping); a merge patch merges into the stored object. Other
-            // patch kinds must be scripted.
+            // (no field-ownership bookkeeping); a merge or strategic patch merges into the stored
+            // object. Other patch kinds must be scripted.
             PatchKind::Apply { .. } => {
                 let res = object_from_body(&patch.body, namespace)?;
                 if res.kind != *kind || res.name() != name {
@@ -779,6 +779,20 @@ impl ResourceWriter for FakeResourcePort {
                     .ok_or_else(|| OxiError::not_found(format!("{kind} {name} not found")))?;
                 let mut merged = live.to_value();
                 super::merge::merge_patch(&mut merged, &patch.body);
+                let res = object_from_body(&merged, namespace)?;
+                if !options.dry_run {
+                    self.insert(res.clone());
+                }
+                Ok(res)
+            }
+            // A strategic merge patch of a built-in kind: lists keyed by `name` (a pod template's
+            // containers) merge by name, everything else as a merge patch.
+            PatchKind::Strategic => {
+                let live = self
+                    .find(kind, namespace, name)
+                    .ok_or_else(|| OxiError::not_found(format!("{kind} {name} not found")))?;
+                let mut merged = live.to_value();
+                super::merge::strategic_merge_patch(&mut merged, &patch.body);
                 let res = object_from_body(&merged, namespace)?;
                 if !options.dry_run {
                     self.insert(res.clone());

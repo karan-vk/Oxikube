@@ -462,6 +462,18 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
                 "api",
             ),
         },
+        "workload::SetImage" => Command::WorkloadSetImage {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("apps", "v1", "Deployment"),
+                "default",
+                "api",
+            ),
+            images: vec![oxikube_domain::command::ImageChange::new(
+                "web",
+                "nginx:1.27",
+            )],
+        },
         "workload::Scale" => Command::WorkloadScale {
             target: ResourceRef::namespaced(
                 cluster,

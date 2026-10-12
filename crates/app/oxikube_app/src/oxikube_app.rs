@@ -149,6 +149,7 @@ pub use templates::{
 };
 pub use tools::ToolRegistry;
 pub use workloads::{
-    MAX_REPLICAS, ScalePlan, ScaleReport, ScaleResult, ScaleRunner, SuspendOutcome, Triggered,
-    WorkloadService, is_scalable, parse_replicas, replicas_word,
+    MAX_REPLICAS, RestartResult, ScalePlan, ScaleReport, ScaleResult, ScaleRunner, SetImagePlan,
+    SetImageReport, SetImageResult, SetImageRunner, SuspendOutcome, Triggered, WorkloadService,
+    is_rollable, is_scalable, parse_replicas, replicas_word,
 };

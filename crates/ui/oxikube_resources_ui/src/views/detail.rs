@@ -73,6 +73,13 @@ impl ResourceViews {
             .actions
             .as_ref()
             .map(|actions| actions.scale_flow(workspace.downgrade()));
+        // A workload's header restarts and sets images through the same flow as the table's menu.
+        deps.set_image = self
+            .deps
+            .table
+            .actions
+            .as_ref()
+            .map(|actions| actions.set_image_flow(workspace.downgrade()));
         let target = target.clone();
         let origin = self
             .tables(&target.cluster, &target.gvk, cx)

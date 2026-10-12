@@ -42,6 +42,10 @@ actions!(
         /// Opens the Secret in the manifest editor with its values as text
         /// (`secret::EditDecoded`; `shift-e`).
         EditSecretDecoded,
+        /// Restarts the shown Deployment, StatefulSet or DaemonSet (`workload::Restart`; k9s's `r`).
+        Restart,
+        /// Opens the set-image dialog for the shown workload (`workload::SetImage`; k9s's `i`).
+        SetImage,
     ]
 );
 

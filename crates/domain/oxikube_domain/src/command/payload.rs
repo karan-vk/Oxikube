@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::id::CommandId;
+use super::image::ImageChange;
 use super::kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource};
 use super::meta::CommandMeta;
 use super::registry;
@@ -1097,11 +1098,22 @@ pub enum Command {
         /// Desired replicas.
         replicas: u32,
     },
-    /// Rolling-restart a workload.
+    /// Rolling-restart a workload: stamp its pod template with a new
+    /// `kubectl.kubernetes.io/restartedAt` so its controller rolls fresh pods
+    /// (`kubectl rollout restart`, E12-S05).
     #[serde(rename = "workload::Restart")]
     WorkloadRestart {
-        /// The workload to restart.
+        /// The Deployment, StatefulSet or DaemonSet to restart.
         target: ResourceRef,
+    },
+    /// Change the image of one or more containers of a workload's pod template
+    /// (`kubectl set image`, E12-S05), which rolls the workload.
+    #[serde(rename = "workload::SetImage")]
+    WorkloadSetImage {
+        /// The Deployment, StatefulSet or DaemonSet.
+        target: ResourceRef,
+        /// The containers (or init containers) to change and their new images.
+        images: Vec<ImageChange>,
     },
     /// Open the logs of every pod of a workload or Service merged by time, one colour per pod
     /// (stern-style). The pods are the ones the object's selector matches.
@@ -1381,6 +1393,7 @@ impl Command {
             Command::LogsCollapseLine { .. } => CommandId::LOGS_COLLAPSE_LINE,
             Command::WorkloadScale { .. } => CommandId::WORKLOAD_SCALE,
             Command::WorkloadRestart { .. } => CommandId::WORKLOAD_RESTART,
+            Command::WorkloadSetImage { .. } => CommandId::WORKLOAD_SET_IMAGE,
             Command::WorkloadViewLogs { .. } => CommandId::WORKLOAD_VIEW_LOGS,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
             Command::NodeShell { .. } => CommandId::NODE_SHELL,
@@ -1480,6 +1493,7 @@ impl Command {
             | Command::LogsCollapseLine { target }
             | Command::WorkloadScale { target, .. }
             | Command::WorkloadRestart { target }
+            | Command::WorkloadSetImage { target, .. }
             | Command::WorkloadViewLogs { target, .. }
             | Command::NamespaceDelete { target, .. }
             | Command::NodeCordon { target }
@@ -1925,6 +1939,10 @@ mod tests {
             },
             Command::WorkloadRestart {
                 target: deployment(),
+            },
+            Command::WorkloadSetImage {
+                target: deployment(),
+                images: vec![ImageChange::new("web", "nginx:1.27")],
             },
             Command::NodeCordon { target: node() },
             Command::NodeShell { target: node() },

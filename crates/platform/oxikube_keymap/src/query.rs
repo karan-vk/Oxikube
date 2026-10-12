@@ -52,13 +52,15 @@ pub fn bindings_for_action(cx: &App, action: &dyn Action) -> Vec<BindingInfo> {
 }
 
 /// The bindings that run `command`: those of the action named like it, then those of the view
-/// actions that stand for it ([`stands_for`](crate::stands_for)), each list strongest first. What
+/// actions that stand for it ([`stands_for`](crate::stands_for)), each list strongest first, a key shown once even when several views bind it. What
 /// the palette (E11-S03) shows next to a command; empty when nothing is bound.
 pub fn bindings_for_command(cx: &App, command: CommandId) -> Vec<BindingInfo> {
     let mut out = bindings_for_action_name(cx, command.as_str(), None);
     for name in crate::stands_for::view_actions_of(command) {
         for info in bindings_for_action_name(cx, name, None) {
-            if !out.contains(&info) {
+            // One entry per key: `r` in the table and `r` in the detail drawer both restart.
+            let shown = info.keystrokes_text();
+            if !out.contains(&info) && !out.iter().any(|b| b.keystrokes_text() == shown) {
                 out.push(info);
             }
         }

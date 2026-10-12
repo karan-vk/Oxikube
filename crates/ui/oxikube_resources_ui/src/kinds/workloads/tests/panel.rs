@@ -238,7 +238,14 @@ fn the_palette_runs_scale_through_the_focused_detail(cx: &mut TestAppContext) {
     let mut d = window(cx);
     let (view, _panel) = open_panel(&mut d, &web_ref());
     let own = d.f.vcx.update(|_, cx| view.read(cx).own_commands(cx));
-    assert_eq!(own, [oxikube_domain::command::CommandId::WORKLOAD_SCALE]);
+    assert_eq!(
+        own,
+        [
+            oxikube_domain::command::CommandId::WORKLOAD_SCALE,
+            oxikube_domain::command::CommandId::WORKLOAD_RESTART,
+            oxikube_domain::command::CommandId::WORKLOAD_SET_IMAGE
+        ]
+    );
     d.f.ports()
         .resources
         .script()

@@ -6,10 +6,12 @@ mod guard;
 mod plan;
 mod pods;
 mod refs;
+mod restart;
 mod runner;
 mod sanitize;
 mod scale_guard;
 mod scale_service;
+mod set_image;
 mod suspend;
 mod trigger;
 
@@ -186,6 +188,45 @@ pub(super) fn pod(name: &str, phase: &str) -> Resource {
     .expect("a valid object")
 }
 
+/// A Deployment, StatefulSet or DaemonSet `name` of `kind` in `shop` with an init container
+/// `migrate`, a container `web` and a container `sidecar`, `annotations` on its pod template
+/// (none when `None`: the map is absent, as in a hand-written manifest) and resourceVersion `7`.
+pub(super) fn rollable(kind: &str, name: &str, annotations: Option<Value>) -> Resource {
+    let mut template_meta = json!({"labels": {"app": name}});
+    if let Some(annotations) = annotations {
+        template_meta["annotations"] = annotations;
+    }
+    Resource::from_json(json!({
+        "apiVersion": "apps/v1", "kind": kind,
+        "metadata": {
+            "name": name, "namespace": "shop", "uid": format!("{name}-uid"),
+            "resourceVersion": "7",
+        },
+        "spec": {"template": {"metadata": template_meta, "spec": {
+            "initContainers": [{"name": "migrate", "image": "app:1", "args": ["up"]}],
+            "containers": [
+                {"name": "web", "image": "nginx:1.26", "ports": [{"containerPort": 80}]},
+                {"name": "sidecar", "image": "envoy:1"},
+            ],
+        }}},
+    }))
+    .expect("a valid object")
+}
+
 pub(super) fn pod_ref(name: &str) -> ResourceRef {
     ResourceRef::namespaced(id("a"), Gvk::new("", "v1", "Pod"), "default", name)
+}
+
+pub(super) fn restart_of(target: ResourceRef) -> Command {
+    Command::WorkloadRestart { target }
+}
+
+pub(super) fn set_image_of(target: ResourceRef, images: &[(&str, &str)]) -> Command {
+    Command::WorkloadSetImage {
+        target,
+        images: images
+            .iter()
+            .map(|(container, image)| oxikube_domain::command::ImageChange::new(*container, *image))
+            .collect(),
+    }
 }

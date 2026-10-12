@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use indexmap::IndexMap;
+use jiff::Timestamp;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPhase};
 use oxikube_domain::{ClusterColour, OxiError, OxiResult};
@@ -108,6 +109,12 @@ impl ClusterSessionManager {
         };
         drop(released);
         true
+    }
+
+    /// The current time on the injected clock: what a command that stamps an object (a rollout
+    /// restart's `restartedAt`) uses, so tests with a fake clock are deterministic.
+    pub fn now(&self) -> Timestamp {
+        self.shared.clock.now()
     }
 
     /// A snapshot of one session.

@@ -32,6 +32,10 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   one spec file each, with the shared detail `WorkloadPanel` (replicas, strategy, selector, pod
   template, owned ReplicaSets and Pods as links) and the Scale dialog (`workload::Scale`: context
   menu, palette, `s` on those kinds, the panel's button).
+- `kinds::workloads::rollout` (E12-S05): Restart and Set image for Deployments, StatefulSets and
+  DaemonSets (`workload::Restart`, `workload::SetImage`): context menu, palette, `r` and `i` in the
+  table for those kinds, the detail header's buttons, and the set-image dialog (a field per
+  container, the old-to-new diff).
 - `kinds::pods` (E12-S02): the Pod spec: `PodColumns` (Lens and k9s columns, IP / Node / QoS hidden,
   usage `–` until E13's metrics) and `ContainersPanel`, the containers drill-down at the top of a pod's detail.
 - `kinds::service`, `kinds::endpoints` (E12-S13): Services, Endpoints and EndpointSlices. The

@@ -16,8 +16,8 @@ use oxikube_workspace::command_surface::CommandSurface;
 use oxikube_workspace::{Toast, Workspace};
 
 use super::actions::{
-    AttachSelected, CordonSelected, DebugSelected, DeleteSelected, ScaleSelected, ShellSelected,
-    UncordonSelected,
+    AttachSelected, CordonSelected, DebugSelected, DeleteSelected, RestartSelected, ScaleSelected,
+    SetImageSelected, ShellSelected, UncordonSelected,
 };
 use super::view::ResourceTable;
 use crate::actions::{ActionEntry, DeleteDialog, ResourceActions};
@@ -143,6 +143,15 @@ impl ResourceTable {
             CommandId::PVC_RESIZE | CommandId::STORAGECLASS_SET_DEFAULT
         ) {
             self.begin_storage_dialog(&actions, command, targets, window, cx);
+        } else if command == CommandId::WORKLOAD_SET_IMAGE {
+            // The dialog asks for the images; the command is sent when the user confirms it.
+            if let Some(target) = targets.into_iter().next() {
+                let workspace = self
+                    .workspace
+                    .clone()
+                    .unwrap_or_else(gpui::WeakEntity::new_invalid);
+                actions.set_image_flow(workspace).begin(target, window, cx);
+            }
         } else if let Some(service) = actions
             .exec_service()
             .filter(|_| ExecKind::of(command).is_some() || command == CommandId::POD_DEBUG)
@@ -266,6 +275,30 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::WORKLOAD_SCALE, targets, window, cx);
+    }
+
+    /// `r` on a Deployment, StatefulSet or DaemonSet: `workload::Restart` for the cursor row (k9s's
+    /// restart key; the bus asks its one confirmation).
+    pub(super) fn on_restart(
+        &mut self,
+        _: &RestartSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::WORKLOAD_RESTART, targets, window, cx);
+    }
+
+    /// `i` on a Deployment, StatefulSet or DaemonSet: the set-image dialog for the cursor row
+    /// (`workload::SetImage`; k9s's set-image key).
+    pub(super) fn on_set_image(
+        &mut self,
+        _: &SetImageSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::WORKLOAD_SET_IMAGE, targets, window, cx);
     }
 
     pub(super) fn on_attach(

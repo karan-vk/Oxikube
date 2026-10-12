@@ -8,7 +8,7 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::safety::ConfirmTier;
 use oxikube_domain::{OxiError, OxiResult};
 
-use crate::command_bus::{CommandBus, DispatchContext, Outcome};
+use crate::command_bus::{CommandBus, CommandOutput, DispatchContext, Outcome};
 use crate::guard::Confirmation;
 
 /// What a finished `workload::Scale` says.
@@ -61,32 +61,7 @@ impl ScaleRunner {
             target: target.clone(),
             replicas,
         };
-        let context = || {
-            DispatchContext::new(Initiator::Ui, self.who.clone())
-                .with_cluster(target.cluster.clone())
-        };
-        let outcome = self.bus.dispatch(command.clone(), context()).await?;
-        let outcome = match outcome {
-            Outcome::NeedsConfirmation(asked) => {
-                // The dialog showed the simple confirmation; anything stricter is a person's.
-                if asked.tier > ConfirmTier::Simple {
-                    self.bus.decline(asked.token).await?;
-                    return Err(OxiError::conflict(
-                        "the confirmation this needs changed; try again",
-                    ));
-                }
-                self.bus
-                    .dispatch(
-                        command,
-                        context().with_confirmation(Confirmation::simple(asked.token)),
-                    )
-                    .await?
-            }
-            done => done,
-        };
-        let Outcome::Completed(output) = outcome else {
-            return Err(OxiError::conflict("the confirmation was not accepted"));
-        };
+        let output = run_confirmed(&self.bus, &self.who, command).await?;
         Ok(ScaleReport {
             after: output
                 .data
@@ -98,4 +73,47 @@ impl ScaleRunner {
                 .unwrap_or_else(|| "the workload was scaled".to_owned()),
         })
     }
+}
+
+/// Dispatches `command` on `bus` as the user (`Initiator::Ui`), answering the guard's simple
+/// confirmation once on behalf of a dialog that already asked, and returns the handler's output.
+///
+/// This is not a way around the guard: the command still passes the read-only check, the server
+/// dry run and the audit record. A tier above simple is a person's to answer, so it is declined.
+///
+/// # Errors
+///
+/// What the dispatch returns (`Forbidden` for a read-only cluster, the handler's own error) and
+/// `Conflict` when the confirmation changed or was not accepted.
+pub(super) async fn run_confirmed(
+    bus: &CommandBus,
+    who: &Arc<str>,
+    command: Command,
+) -> OxiResult<CommandOutput> {
+    let Some(cluster) = command.target().map(|target| target.cluster.clone()) else {
+        return Err(OxiError::internal("a confirmed command names no object"));
+    };
+    let context = || DispatchContext::new(Initiator::Ui, who.clone()).with_cluster(cluster.clone());
+    let outcome = bus.dispatch(command.clone(), context()).await?;
+    let outcome = match outcome {
+        Outcome::NeedsConfirmation(asked) => {
+            // The dialog showed the simple confirmation; anything stricter is a person's.
+            if asked.tier > ConfirmTier::Simple {
+                bus.decline(asked.token).await?;
+                return Err(OxiError::conflict(
+                    "the confirmation this needs changed; try again",
+                ));
+            }
+            bus.dispatch(
+                command,
+                context().with_confirmation(Confirmation::simple(asked.token)),
+            )
+            .await?
+        }
+        done => done,
+    };
+    let Outcome::Completed(output) = outcome else {
+        return Err(OxiError::conflict("the confirmation was not accepted"));
+    };
+    Ok(output)
 }

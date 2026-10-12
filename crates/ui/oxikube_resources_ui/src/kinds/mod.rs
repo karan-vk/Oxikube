@@ -30,7 +30,7 @@
 //! | `builtin` | the built-in kinds by sidebar section (Freelens' order), each section module with its own `init(cx)` |
 //! | [`crd`] | the CustomResourceDefinition kind (E12-S17): its spec and the definition panel of its detail |
 //! | `pods` | Pods (E12-S02): their own columns and the containers drill-down |
-//! | `workloads` | Deployments, StatefulSets, ReplicaSets and ReplicationControllers (E12-S04): their specs, the detail panel (replicas, strategy, selector, pod template, owned ReplicaSets and Pods) and the Scale dialog |
+//! | `workloads` | Deployments, StatefulSets, ReplicaSets and ReplicationControllers (E12-S04): their specs, the detail panel (replicas, strategy, selector, pod template, owned ReplicaSets and Pods) and the Scale dialog; Restart and the Set image dialog (E12-S05, also for DaemonSets) |
 //!
 //! # Adding a kind's own panel or columns (E12-S02 and on)
 //!
@@ -87,7 +87,9 @@ pub use spec::KindSpec;
 pub use specs::KindSpecs;
 pub use storage::storage_row_actions;
 pub use workloads::{
-    SCALE_ORDER, ScaleDialog, ScaleFlow, ScaleStage, WorkloadPanel, scale_row_actions,
+    ContainerField, RESTART_ORDER, SCALE_ORDER, SET_IMAGE_ORDER, ScaleDialog, ScaleFlow,
+    ScaleStage, SetImageDialog, SetImageFlow, SetImageStage, WorkloadPanel, rollout_row_actions,
+    scale_row_actions,
 };
 
 use gpui::App;
@@ -103,6 +105,7 @@ pub fn row_actions() -> Vec<RowActionSpec> {
         .chain(network::network_row_actions())
         .chain(storage_row_actions())
         .chain(pods::row_actions())
+        .chain(rollout_row_actions())
         .collect()
 }
 

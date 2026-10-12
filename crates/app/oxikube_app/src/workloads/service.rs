@@ -169,7 +169,7 @@ impl WorkloadService {
     }
 
     /// The live object `target`.
-    async fn read(&self, target: &ResourceRef) -> OxiResult<Resource> {
+    pub(super) async fn read(&self, target: &ResourceRef) -> OxiResult<Resource> {
         let reader = self.reader(&target.cluster)?;
         reader
             .get(&target.gvk, target.namespace(), &target.name)
@@ -204,7 +204,7 @@ impl WorkloadService {
 }
 
 /// The write options of these commands: the app's field manager, and a dry run when asked.
-fn options(dry_run: bool) -> WriteOptions {
+pub(super) fn options(dry_run: bool) -> WriteOptions {
     WriteOptions {
         dry_run,
         ..WriteOptions::default().manager(DEFAULT_FIELD_MANAGER)
