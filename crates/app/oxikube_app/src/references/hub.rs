@@ -27,11 +27,6 @@ pub struct ReferenceHub {
 static SHARED: LazyLock<ReferenceHub> = LazyLock::new(ReferenceHub::default);
 
 impl ReferenceHub {
-    /// An empty hub (tests; the app uses [`shared`](Self::shared)).
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// The process-wide hub: a kind's column factory runs without a GPUI context
     /// (`KindColumns::PerCluster`), so the views that share a feed meet here.
     pub fn shared() -> &'static ReferenceHub {

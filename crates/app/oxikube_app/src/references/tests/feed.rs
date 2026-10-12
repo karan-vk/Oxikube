@@ -228,7 +228,7 @@ fn the_hub_shares_one_feed_and_releases_the_pods_with_the_last_user() {
         .push_ok(timeline(vec![vec![Delta::Restarted(vec![pod_cm(
             "web-0", "shop", "cfg",
         )])]]));
-    let hub = ReferenceHub::new();
+    let hub = ReferenceHub::default();
     let cluster = id(CLUSTER);
     assert_eq!(hub.live(&cluster), 0, "nothing runs until a view asks");
 
@@ -279,7 +279,7 @@ fn the_hub_shares_one_feed_and_releases_the_pods_with_the_last_user() {
 fn a_feed_over_a_replaced_store_is_not_reused() {
     let rig = Rig::new();
     let other = Rig::new();
-    let hub = ReferenceHub::new();
+    let hub = ReferenceHub::default();
     let a = hub.acquire(&rig.store, &rig.sessions.manager);
     let b = hub.acquire(&other.store, &other.sessions.manager);
     assert!(

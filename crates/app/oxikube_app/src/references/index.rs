@@ -198,10 +198,10 @@ impl ReferenceIndex {
             UsageStatus::Unavailable(reason) => return Usage::Unavailable(reason.clone()),
             UsageStatus::Ready => {}
         }
-        let partial = kind.is_cluster_scoped() && state.scope != WatchScope::Cluster;
-        if !kind.is_cluster_scoped() && !namespace.is_some_and(|ns| covered(&state.scope, ns)) {
+        if !in_scope(&state.scope, kind, namespace) {
             return Usage::OutsideScope;
         }
+        let partial = kind.is_cluster_scoped() && state.scope != WatchScope::Cluster;
         let pods = state
             .tables
             .users(kind, namespace, name)
@@ -226,7 +226,7 @@ impl ReferenceIndex {
         if state.status != UsageStatus::Ready {
             return None;
         }
-        if !kind.is_cluster_scoped() && !namespace.is_some_and(|ns| covered(&state.scope, ns)) {
+        if !in_scope(&state.scope, kind, namespace) {
             return None;
         }
         Some(
@@ -252,6 +252,12 @@ impl ReferenceIndex {
     pub fn indexed(&self) -> usize {
         self.state.read().tables.indexed()
     }
+}
+
+/// Whether the Pods that could use the object are read: always for a cluster-scoped kind (its
+/// answer is then partial), else when its namespace is selected.
+fn in_scope(scope: &WatchScope, kind: RefKind, namespace: Option<&str>) -> bool {
+    kind.is_cluster_scoped() || namespace.is_some_and(|ns| covered(scope, ns))
 }
 
 fn covered(scope: &WatchScope, namespace: &str) -> bool {

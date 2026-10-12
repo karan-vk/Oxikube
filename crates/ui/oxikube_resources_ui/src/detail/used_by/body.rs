@@ -127,11 +127,11 @@ impl DetailView {
         let colors = tokens.colors;
         // The workloads of a namespaced object are in its namespace; a PriorityClass's are
         // everywhere, so each says where it is.
-        let namespace = self
-            .ref_kind()
-            .is_some_and(|kind| kind.is_cluster_scoped())
-            .then(|| target.namespace.as_deref().map(str::to_owned))
-            .flatten();
+        let namespace = target
+            .namespace
+            .as_deref()
+            .filter(|_| self.ref_kind().is_some_and(|kind| kind.is_cluster_scoped()))
+            .map(str::to_owned);
         let (open, kind, name) = (
             target.clone(),
             target.gvk.kind.to_string(),

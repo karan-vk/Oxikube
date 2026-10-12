@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use oxikube_domain::view::storage::pod_is_active;
 use oxikube_domain::view::{PodRef, RefKind, pod_references};
-use oxikube_domain::{OwnerRef, Resource};
+use oxikube_domain::{ObjectMeta, OwnerRef, Resource};
 
 use super::answer::PodKey;
 use crate::store::StoreObject;
@@ -49,13 +49,14 @@ impl Desired {
         if refs.is_empty() {
             return None;
         }
-        let owner = pod
-            .meta
-            .controller_ref()
-            .or_else(|| pod.meta.owner_refs.first())
-            .cloned();
+        let owner = primary_owner(&pod.meta).cloned();
         Some(Self { refs, owner })
     }
+}
+
+/// The controller of `meta` (else its first owner): the one a workload is found from.
+pub(super) fn primary_owner(meta: &ObjectMeta) -> Option<&OwnerRef> {
+    meta.controller_ref().or_else(|| meta.owner_refs.first())
 }
 
 /// The identity of `object` in the index.

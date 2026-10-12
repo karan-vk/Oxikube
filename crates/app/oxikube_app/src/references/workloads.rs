@@ -25,6 +25,7 @@ use parking_lot::Mutex;
 
 use super::answer::{PodUse, Usage};
 use super::index::ReferenceIndex;
+use super::tables::primary_owner;
 
 /// How many owners up the chain walks: Pod, ReplicaSet, Deployment is two; a Rollout or an
 /// operator's custom resource a few more.
@@ -229,10 +230,7 @@ async fn top_of(reader: &dyn ResourceReader, cache: &OwnerCache, start: &OwnerKe
             .get_opt(&current.gvk(), Some(&current.namespace), &current.name)
             .await;
         let next = match object {
-            Ok(Some(object)) => object
-                .meta
-                .controller_ref()
-                .or_else(|| object.meta.owner_refs.first())
+            Ok(Some(object)) => primary_owner(&object.meta)
                 .and_then(owned)
                 .map(|owner| OwnerKey::of(owner, &current.namespace)),
             // Gone or unreadable: it is still the best name there is, but not worth remembering.
