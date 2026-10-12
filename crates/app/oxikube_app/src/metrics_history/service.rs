@@ -13,7 +13,7 @@ use oxikube_ports::{
 
 use super::charts::{ChartDef, Measure, Reference};
 use super::data::{
-    ChartData, HistoryError, ReferenceLine, SeriesData, lines_of, reference_kind, reference_lines,
+    ChartData, HistoryError, SeriesData, lines_of, readings_of, reference_kind, reference_lines,
 };
 use crate::metrics_provider::{MetricsProviderService, ProviderStatus};
 
@@ -235,7 +235,21 @@ impl MetricsHistoryService {
         for lines in measured {
             data.series.extend(lines?);
         }
-        data.references = referenced.into_iter().flatten().collect();
+        // Lines are named once the number of charted series is known (see `reference_lines`).
+        let charted = data.series.len();
+        data.references = chart
+            .references
+            .iter()
+            .zip(referenced)
+            .flat_map(|(reference, readings)| {
+                reference_lines(
+                    readings,
+                    charted,
+                    reference.label,
+                    reference_kind(reference.label),
+                )
+            })
+            .collect();
         Ok(data)
     }
 
@@ -262,14 +276,15 @@ impl MetricsHistoryService {
         Ok(lines_of(&result, query.series_label, measure.name, several))
     }
 
-    /// A reference line that cannot be fetched is left out: the chart is still the measure.
+    /// The readings of a reference source. One that cannot be fetched has none: the chart is
+    /// still the measure.
     async fn run_reference(
         &self,
         cluster: &ClusterId,
         provider: MetricsProviderKind,
         reference: &Reference,
         plan: RangePlan,
-    ) -> Vec<ReferenceLine> {
+    ) -> Vec<(Option<String>, f64)> {
         let query = match self
             .catalogue
             .build(provider, &reference.request, plan.rate_window)
@@ -285,12 +300,7 @@ impl MetricsHistoryService {
             .query_range(cluster, &query.promql, plan.range)
             .await
         {
-            Ok(result) => reference_lines(
-                &result,
-                query.series_label,
-                reference.label,
-                reference_kind(reference.label),
-            ),
+            Ok(result) => readings_of(&result, query.series_label),
             Err(error) => {
                 tracing::debug!(%error, label = reference.label, "reference query failed");
                 Vec::new()

@@ -155,11 +155,11 @@ impl PromqlPort for Scripted {
         } else if query.contains("container:cpu_requests") {
             vec![flat(range, &app, 0.25), flat(range, &proxy, 0.05)]
         } else if query.contains("container:cpu_limits") {
-            vec![flat(range, &app, 0.5)]
+            vec![flat(range, &app, 0.5), flat(range, &proxy, 0.5)]
         } else if query.contains("container:memory_requests") {
             vec![flat(range, &app, 256e6), flat(range, &proxy, 64e6)]
         } else if query.contains("container:memory_limits") {
-            vec![flat(range, &app, 384e6)]
+            vec![flat(range, &app, 384e6), flat(range, &proxy, 384e6)]
         } else if query.contains("network_rx") {
             vec![line(range, &[], wave(0.3, 12e3, 8e3))]
         } else if query.contains("network_tx") {

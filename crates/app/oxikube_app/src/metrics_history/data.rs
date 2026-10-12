@@ -136,17 +136,14 @@ pub(super) fn lines_of(
         .collect()
 }
 
-/// The reference lines of one source's result: the last reading of each series. Series that are
-/// zero or have no reading add no line (a container without a limit has none). When every series
-/// has the same value (a workload's pods) one line carries `label`; when they differ each is
-/// named after its series.
-pub(super) fn reference_lines(
+/// The last reading of each series of one reference source (requests, limits, capacity). Series
+/// that are zero or have no reading are left out: a container without a limit has none. Turned
+/// into lines by [`reference_lines`] once the number of charted series is known.
+pub(super) fn readings_of(
     result: &[PromqlSeries],
     series_label: Option<&str>,
-    label: &str,
-    kind: ReferenceKind,
-) -> Vec<ReferenceLine> {
-    let mut readings: Vec<(Option<String>, f64)> = result
+) -> Vec<(Option<String>, f64)> {
+    result
         .iter()
         .filter_map(|series| {
             let value = series
@@ -163,13 +160,25 @@ pub(super) fn reference_lines(
                 (name, value)
             })
         })
-        .collect();
+        .collect()
+}
+
+/// The reference lines of one source's `readings`, for a chart drawing `charted` series. When
+/// every charted series has a reading and they all agree (a workload's pods) one line carries
+/// `label`. Otherwise each line is named after its series, so the limit of one container among
+/// several is never read as pod-wide.
+pub(super) fn reference_lines(
+    mut readings: Vec<(Option<String>, f64)>,
+    charted: usize,
+    label: &str,
+    kind: ReferenceKind,
+) -> Vec<ReferenceLine> {
     let first = match readings.first() {
         Some((_, value)) => *value,
         None => return Vec::new(),
     };
     let same = |a: f64, b: f64| (a - b).abs() <= b.abs() * 1e-9;
-    if readings.iter().all(|(_, v)| same(*v, first)) {
+    if readings.len() == charted && readings.iter().all(|(_, v)| same(*v, first)) {
         return vec![ReferenceLine {
             label: label.to_owned(),
             value: first,

@@ -334,7 +334,7 @@ fn the_pod_panel_has_per_container_lines_and_request_and_limit_lines(cx: &mut Te
             [
                 ("app requests".to_owned(), 0.25),
                 ("sidecar requests".to_owned(), 0.05),
-                ("limits".to_owned(), 0.5)
+                ("app limits".to_owned(), 0.5)
             ]
         );
     });

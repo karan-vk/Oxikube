@@ -305,9 +305,9 @@ async fn per_container_series_and_threshold_lines_are_built_from_the_fixture() {
         [
             ("app requests", 0.5, ReferenceKind::Soft),
             ("sidecar requests", 0.1, ReferenceKind::Soft),
-            ("limits", 1.0, ReferenceKind::Hard),
+            ("app limits", 1.0, ReferenceKind::Hard),
         ],
-        "differing requests are named by container; the single limit is just `limits`"
+        "differing requests are named by container; a limit only one container has keeps its name"
     );
     assert!(!cpu.is_empty());
 
