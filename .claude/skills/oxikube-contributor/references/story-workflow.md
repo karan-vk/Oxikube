@@ -60,3 +60,10 @@ behind a TODO; use a feature flag or keep the slice self-contained.
 The template asks for: story ID + link, summary, how each acceptance criterion is met,
 guard tier for any mutation, commands/tools added, settings/keymaps added, tests added and
 how to run them, screenshots for UI, vendored code and licence notes, follow-ups filed.
+
+## Running a whole epic
+
+Multi-story epics run through the `oxikube-epics` workflow (`.claude/workflows/oxikube-epics.js`).
+It implements, reviews and merges each story along these lines. See `scripts/factory/README.md`
+for the config, how a rerun picks up where it stopped, and why merges push before the full
+local gate (CI on the up-to-date head is the authority).

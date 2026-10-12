@@ -74,6 +74,8 @@ jobs:
         with:
           key: integration
           cache-on-failure: true
+          # PRs restore main's (scheduled) cache but never save their own: ci.yml explains.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: helm/kind-action@v1
         with:
           cluster_name: oxikube
@@ -136,6 +138,8 @@ jobs:
         with:
           key: integration-terminal
           cache-on-failure: true
+          # PRs restore main's (scheduled) cache but never save their own: ci.yml explains.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Linux system dependencies (GPUI)
         run: |
           sudo apt-get update
