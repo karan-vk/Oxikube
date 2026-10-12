@@ -63,8 +63,8 @@ pub mod namespaces;
 pub mod network;
 pub mod nodes;
 pub mod overview;
-pub mod rollout;
 pub mod references;
+pub mod rollout;
 pub mod search;
 pub mod secrets;
 pub mod session;
@@ -131,12 +131,12 @@ pub use network::{
     register_open_in_browser,
 };
 pub use overview::{FixedWarnings, NoRecentWarnings, RecentWarnings, WarningRow};
-pub use rollout::{
-    RollbackOutcome, RollbackReport, RollbackResult, RollbackRunner, RolloutHistory, RolloutService,
-};
 pub use references::{
     OwnerCache, PodKey, PodUse, ReferenceFeed, ReferenceHub, ReferenceIndex, Usage, UsageStatus,
     UsedBy, WorkloadUse, used_by,
+};
+pub use rollout::{
+    RollbackOutcome, RollbackReport, RollbackResult, RollbackRunner, RolloutHistory, RolloutService,
 };
 pub use search::aliases::{
     AliasConflict, AliasEntry, AliasFollow, AliasRegistry, AliasSource, AliasTable, ConflictKind,
