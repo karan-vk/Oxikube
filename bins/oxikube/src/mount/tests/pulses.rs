@@ -10,6 +10,7 @@ use oxikube_app::command_bus::DispatchContext;
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::metrics::{MetricsSample, MetricsSubject, MissingReason};
+use oxikube_overview_ui::ClusterOverview;
 use oxikube_overview_ui::pulses::PulsesView;
 use oxikube_ports::MetricsOutcome;
 use oxikube_resources_ui::table::ResourceTable;
@@ -169,6 +170,15 @@ fn the_page_polls_the_nodes_only_while_it_is_the_displayed_tab(cx: &mut TestAppC
         .vcx
         .update(|_, cx| AppState::global(cx).services().live_metrics.clone());
     let cluster = TestPorts::cluster_id();
+    // The cluster overview (the first screen, E13-S09) polls the nodes while it is shown; this
+    // test is about the Pulses page, so the overview is put away first.
+    let ws = app.tab_workspace();
+    app.vcx.update(|_, cx| {
+        for overview in ws.read(cx).items_of_type::<ClusterOverview>() {
+            overview.update(cx, |overview, cx| overview.set_tab_shown(false, cx));
+        }
+    });
+    app.vcx.run_until_parked();
     assert!(
         !service.is_polling(&cluster),
         "no table and no page: nothing polls"
@@ -184,7 +194,6 @@ fn the_page_polls_the_nodes_only_while_it_is_the_displayed_tab(cx: &mut TestAppC
     assert!(service.is_polling(&cluster), "the page watches the nodes");
 
     // Another tab of the cluster in front: the page is hidden and lets go.
-    let ws = app.tab_workspace();
     let other = app.vcx.update(|window, cx| {
         let first = ws
             .read(cx)

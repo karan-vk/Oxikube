@@ -235,7 +235,7 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         oxikube_settings_ui::metrics::register_commands(r, parts.metrics_pages)
     })?;
     registry.install("oxikube_overview_ui", |r| {
-        oxikube_overview_ui::pulses::register_commands(r, parts.pulses_pages)
+        oxikube_overview_ui::pulses::register_commands(r, parts.pulses_pages)?;
         oxikube_overview_ui::register_commands(r, parts.overview_pages)
     })?;
     registry.install("oxikube_editor", |r| {

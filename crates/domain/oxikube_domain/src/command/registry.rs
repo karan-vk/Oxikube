@@ -499,18 +499,18 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Cluster,
         NONE,
     ),
+    // Opens a page; reads what the session's store and the metrics services already hold.
+    CommandMeta::read(
+        CommandId::CLUSTER_SHOW_OVERVIEW,
+        "Cluster Overview",
+        CommandScope::Cluster,
+        NONE,
+    ),
     // Opens a page; the page counts what the stores already watch and reads metrics-server, and
     // changes nothing in the cluster.
     CommandMeta::read(
         CommandId::CLUSTER_SHOW_PULSES,
         "Show Pulses",
-        CommandScope::Cluster,
-        NONE,
-    ),
-    // Opens a page; reads what the session's store and the metrics services already hold.
-    CommandMeta::read(
-        CommandId::CLUSTER_SHOW_OVERVIEW,
-        "Cluster Overview",
         CommandScope::Cluster,
         NONE,
     ),
