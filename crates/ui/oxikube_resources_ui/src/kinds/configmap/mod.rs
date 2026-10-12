@@ -16,6 +16,7 @@ mod rows;
 
 use gpui::{App, AppContext as _};
 use oxikube_app::{KindMeta, Section};
+use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{Gvk, Scope};
 
 pub use panel::ConfigMapPanel;
@@ -35,7 +36,8 @@ pub fn spec() -> KindSpec {
         "ConfigMaps",
         Scope::Namespaced,
     )
-    .in_section(Section::CONFIG, RANK);
+    .in_section(Section::CONFIG, RANK)
+    .with_actions([CommandId::RESOURCE_SHOW_USED_BY]);
     KindSpec::new(meta).with_detail(DetailRenderer::panel(|detail, _, cx| {
         cx.new(|cx| ConfigMapPanel::new(detail, cx)).into()
     }))

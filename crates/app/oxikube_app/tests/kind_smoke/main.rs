@@ -46,6 +46,7 @@ mod scoped_feeds;
 mod service_backends;
 mod storage;
 mod two_clusters;
+mod used_by;
 mod workloads;
 
 use std::future::Future;

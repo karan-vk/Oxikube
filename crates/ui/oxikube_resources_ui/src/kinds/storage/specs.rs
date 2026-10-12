@@ -52,7 +52,7 @@ pub(super) fn specs() -> Vec<KindSpec> {
                 "Persistent Volume Claims",
                 Scope::Namespaced,
                 10,
-                &[CommandId::PVC_RESIZE],
+                &[CommandId::PVC_RESIZE, CommandId::RESOURCE_SHOW_USED_BY],
             )
             .with_columns_per_cluster(ClaimColumns::for_cluster),
         )

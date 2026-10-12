@@ -39,6 +39,7 @@ impl Render for DetailView {
             DetailTab::Overview => self.overview_body(cx),
             DetailTab::Events => self.events_body(cx),
             DetailTab::Schema => self.schema_body(cx),
+            DetailTab::UsedBy => self.used_by_body(cx),
             DetailTab::Yaml => self.yaml_body(cx),
             DetailTab::Describe => self.describe_body(cx),
         };

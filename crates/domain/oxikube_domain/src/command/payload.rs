@@ -613,6 +613,14 @@ pub enum Command {
         /// The Service.
         target: ResourceRef,
     },
+    /// Show what uses a ServiceAccount, ConfigMap, Secret, PersistentVolumeClaim or PriorityClass:
+    /// its detail opens on the "Used by" tab (E12-S18; `u`, k9s's used-by). The workloads come from
+    /// the Pods' specs; nothing is changed or written.
+    #[serde(rename = "resource::ShowUsedBy")]
+    ResourceShowUsedBy {
+        /// The object to show the users of.
+        target: ResourceRef,
+    },
     /// Focus the filter bar of a kind's resource table (`/` in a table): the next keys type a
     /// filter (`/text`, `/!text`, `/-l selector`, `/-f fuzzy`).
     #[serde(rename = "table::FocusFilter")]
@@ -1355,6 +1363,7 @@ impl Command {
             Command::ResourceSelectAll { .. } => CommandId::RESOURCE_SELECT_ALL,
             Command::ServiceOpenInBrowser { .. } => CommandId::SERVICE_OPEN_IN_BROWSER,
             Command::ServiceShowPods { .. } => CommandId::SERVICE_SHOW_PODS,
+            Command::ResourceShowUsedBy { .. } => CommandId::RESOURCE_SHOW_USED_BY,
             Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
             Command::TableSetFilter { .. } => CommandId::TABLE_SET_FILTER,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
@@ -1480,6 +1489,7 @@ impl Command {
             | Command::PodPortForward { target, .. }
             | Command::ServiceOpenInBrowser { target, .. }
             | Command::ServiceShowPods { target }
+            | Command::ResourceShowUsedBy { target }
             | Command::PodViewLogs { target, .. }
             | Command::LogsClear { target }
             | Command::LogsCopy { target }
@@ -1812,6 +1822,7 @@ mod tests {
                 port: Some(80),
             },
             Command::ServiceShowPods { target: service() },
+            Command::ResourceShowUsedBy { target: pod() },
             Command::TableFocusFilter {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
@@ -2240,6 +2251,7 @@ mod tests {
                     | Command::ResourceSelectAll { .. }
                     | Command::ServiceOpenInBrowser { .. }
                     | Command::ServiceShowPods { .. }
+                    | Command::ResourceShowUsedBy { .. }
                     | Command::TableFocusFilter { .. }
                     | Command::TableSetFilter { .. }
                     | Command::ResourceViewYaml { .. }

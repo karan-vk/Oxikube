@@ -291,6 +291,9 @@ impl CommandId {
     pub const SERVICE_SHOW_PODS: CommandId = CommandId::new("service::ShowPods");
     /// `storageclass::SetDefault`: make a StorageClass the cluster's default.
     pub const STORAGECLASS_SET_DEFAULT: CommandId = CommandId::new("storageclass::SetDefault");
+    /// `resource::ShowUsedBy`: open a ServiceAccount, ConfigMap, Secret, claim or PriorityClass on
+    /// its "Used by" tab (k9s `u`).
+    pub const RESOURCE_SHOW_USED_BY: CommandId = CommandId::new("resource::ShowUsedBy");
     /// `secret::Create`: open the "Create secret" dialog (Opaque, Docker registry, TLS).
     pub const SECRET_CREATE: CommandId = CommandId::new("secret::Create");
     /// `secret::EditDecoded`: open a Secret in the manifest editor with its values decoded.
@@ -1360,6 +1363,18 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     )
     .in_views(TABLE_VIEW),
+    // Opens an object's "Used by" tab (E12-S18): the workloads whose Pods name it. Reads the Pods
+    // the session already watches and, for the owner chain, a few objects; navigation, a read.
+    // `One`: the kinds it applies to are the row action's filter, because a command can name a
+    // single kind only.
+    CommandMeta::read(
+        CommandId::RESOURCE_SHOW_USED_BY,
+        "Show Used By",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     // A display option of the open YAML tab; changes nothing in the cluster.
     CommandMeta::read(
         CommandId::RESOURCE_TOGGLE_MANAGED_FIELDS,
@@ -1928,6 +1943,20 @@ mod tests {
             assert_eq!(id.tool_name(), tool);
             assert!(meta.availability.selection.needs_selection(), "{id}");
         }
+    }
+
+    #[test]
+    fn show_used_by_is_a_read_with_a_tool_stub() {
+        // E12-S18: `u` opens the "Used by" tab; it reads the Pods the session already watches and
+        // changes nothing, so no guard tier and no confirmation, allowed on a read-only cluster.
+        let id = CommandId::RESOURCE_SHOW_USED_BY;
+        let meta = lookup(id).expect("declared");
+        assert!(!meta.mutating && !meta.privileged && !meta.exec);
+        assert_eq!(meta.confirm, ConfirmTier::None);
+        assert_eq!(meta.risk, None);
+        assert!(!meta.availability.requires_writable);
+        assert!(meta.availability.selection.needs_selection());
+        assert_eq!(id.tool_name(), "k8s.resource_show_used_by");
     }
 
     #[test]

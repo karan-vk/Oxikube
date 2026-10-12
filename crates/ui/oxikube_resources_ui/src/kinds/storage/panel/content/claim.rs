@@ -3,8 +3,9 @@
 use std::sync::Arc;
 
 use oxikube_app::columns::Tone;
-use oxikube_app::{PvcUsage, UsageStatus};
+use oxikube_app::{ReferenceIndex, Usage};
 use oxikube_domain::ids::Gvk;
+use oxikube_domain::view::RefKind;
 use oxikube_domain::view::storage::PvcSummary;
 
 use super::{
@@ -48,21 +49,20 @@ pub fn claim_content(claim: &PvcSummary) -> PanelContent {
     }
 }
 
-/// The "Mounted by" block of a claim: the active Pods that mount it, from the usage index.
-pub fn usage_block(usage: &dyn PvcUsage, namespace: &str, claim: &str) -> Block {
+/// The "Mounted by" block of a claim: the active Pods that mount it, from the reference index.
+pub fn usage_block(index: &ReferenceIndex, namespace: &str, claim: &str) -> Block {
     let note = |text: String| Block {
         title: "Mounted by",
         lines: vec![plain(text)],
         note: true,
     };
-    match usage.status() {
-        UsageStatus::Warming => note("Reading the pods…".to_owned()),
-        UsageStatus::Unavailable(reason) => note(format!("The pods cannot be read: {reason}")),
-        UsageStatus::Ready if !usage.covers(namespace) => note(format!(
+    match index.usage(RefKind::PersistentVolumeClaim, Some(namespace), claim) {
+        Usage::Warming => note("Reading the pods…".to_owned()),
+        Usage::Unavailable(reason) => note(format!("The pods cannot be read: {reason}")),
+        Usage::OutsideScope => note(format!(
             "The pods of {namespace} are not read (outside the selected namespaces)."
         )),
-        UsageStatus::Ready => {
-            let pods = usage.users(namespace, claim);
+        Usage::Pods { pods, .. } => {
             if pods.is_empty() {
                 return note("No pod mounts this claim.".to_owned());
             }
@@ -70,11 +70,11 @@ pub fn usage_block(usage: &dyn PvcUsage, namespace: &str, claim: &str) -> Block 
                 .iter()
                 .take(MAX_PODS_LISTED)
                 .map(|pod| Line {
-                    text: pod.to_string(),
+                    text: pod.pod.name.to_string(),
                     link: Some(Link {
                         gvk: Gvk::new("", "v1", "Pod"),
                         namespace: Some(Arc::from(namespace)),
-                        name: pod.clone(),
+                        name: pod.pod.name.clone(),
                     }),
                 })
                 .collect();

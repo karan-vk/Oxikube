@@ -2,9 +2,7 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `usage` | [`PvcUsage`], [`PvcUsageIndex`]: which Pods mount which claim, kept incrementally from the Pods feed |
-//! | `feed` | [`PvcUsageFeed`]: the abort-on-drop task that feeds an index from a store, following the namespace selection |
-//! | `columns` | [`PvcColumns`]: the claims table's columns, with the Pods (used by) column |
+//! | `columns` | [`PvcColumns`]: the claims table's columns, with the Pods (used by) column read from the shared [`ReferenceIndex`](crate::references::ReferenceIndex) (E12-S18; E12-S15's interim claim index is gone) |
 //! | `audit` | the audit detail of a resize that does not name its old size |
 //! | `read` | the claim-and-class read the resize handler and its flow share |
 //! | `commands` | [`register_commands`]: the `pvc::Resize` and `storageclass::SetDefault` handlers |
@@ -22,15 +20,13 @@
 //!
 //! The Pods column is one hash lookup per visible cell. The index is maintained off the UI thread
 //! from the Pods subscription's deltas; a Pod update that mounts the same claims costs one walk
-//! of its `spec.volumes` and no write lock. See `PvcUsageIndex`.
+//! of its `spec.volumes` and no write lock. See `ReferenceIndex`.
 
 mod audit;
 mod columns;
 mod commands;
-mod feed;
 mod flow;
 mod read;
-mod usage;
 
 #[cfg(test)]
 mod tests;
@@ -38,9 +34,7 @@ mod tests;
 pub(crate) use audit::resolved_audit_detail;
 pub use columns::{PODS_COLUMN, PvcColumns};
 pub use commands::register_commands;
-pub use feed::PvcUsageFeed;
 pub use flow::{
     DefaultClassContext, DefaultClassFlow, DefaultClassReport, ResizeContext, ResizeFlow,
     ResizeReport,
 };
-pub use usage::{PvcUsage, PvcUsageIndex, UsageStatus};

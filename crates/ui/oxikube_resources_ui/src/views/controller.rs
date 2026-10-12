@@ -147,6 +147,12 @@ impl ResourceViews {
             ViewRequest::Find { target, pattern } => {
                 self.find_in_detail(&target, pattern.as_deref(), window, cx);
             }
+            ViewRequest::ShowUsedBy(target) => {
+                // Only the five referenced kinds have the tab; any other keeps the tab it has.
+                if oxikube_domain::view::RefKind::from_gvk(&target.gvk).is_some() {
+                    self.show_detail_tab(&target, DetailTab::UsedBy, window, cx);
+                }
+            }
             ViewRequest::RevealSecret { target, key } => {
                 self.reveal_in_detail(&target, key.as_deref(), window, cx);
             }
@@ -182,6 +188,7 @@ impl ResourceViews {
             ViewRequest::PinDetail(_)
             | ViewRequest::ViewYaml(_)
             | ViewRequest::ViewDescribe(_)
+            | ViewRequest::ShowUsedBy(_)
             | ViewRequest::ShowServicePods(_)
             | ViewRequest::RevealSecret { .. }
             | ViewRequest::JumpToOwner(_)

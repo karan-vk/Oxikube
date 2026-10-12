@@ -30,13 +30,14 @@ use oxikube_app::guard::Confirmation;
 use oxikube_app::session::{ClusterSessionManager, SessionManagerConfig, SessionOptions};
 use oxikube_app::store::{ResourceStore, Spawner, StoreOptions, StorePorts, StoreRuntime};
 use oxikube_app::{
-    CommandBus, DefaultClassFlow, MutationGuard, PvcUsage, PvcUsageFeed, ResizeFlow, UsageStatus,
+    CommandBus, DefaultClassFlow, MutationGuard, ReferenceFeed, ResizeFlow, UsageStatus,
 };
 use oxikube_domain::ErrorKind;
 use oxikube_domain::audit::{AuditOutcome, Initiator};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::session::NamespaceSelection;
+use oxikube_domain::view::RefKind;
 use oxikube_domain::view::storage::{Expansion, ResizeBlock};
 use oxikube_kube::{ConnectorConfig, KubeConnector, KubeDiscovery, KubeResources, PoolConfig};
 use oxikube_testkit::integration::TestNamespace;
@@ -374,21 +375,30 @@ async fn resize_set_default_and_used_by_against_a_kind_cluster() {
         },
         StoreOptions::default(),
     );
-    let feed = PvcUsageFeed::start(&store, &manager);
+    let feed = ReferenceFeed::start(&store, &manager);
     let index = feed.index().clone();
     crate::eventually(
         "the pod to be counted",
         || format!("{index:?}"),
-        || async { index.count(ns.name(), "data") == Some(1) },
+        || async {
+            index.count(RefKind::PersistentVolumeClaim, Some(ns.name()), "data") == Some(1)
+        },
     )
     .await;
     assert_eq!(index.status(), UsageStatus::Ready);
-    assert_eq!(index.count(ns.name(), "frozen"), Some(0));
     assert_eq!(
-        index
-            .users(ns.name(), "data")
+        index.count(RefKind::PersistentVolumeClaim, Some(ns.name()), "frozen"),
+        Some(0)
+    );
+    let oxikube_app::Usage::Pods { pods: users, .. } =
+        index.usage(RefKind::PersistentVolumeClaim, Some(ns.name()), "data")
+    else {
+        panic!("the pods are known");
+    };
+    assert_eq!(
+        users
             .iter()
-            .map(|p| p.to_string())
+            .map(|p| p.pod.name.to_string())
             .collect::<Vec<_>>(),
         ["user"]
     );
@@ -398,7 +408,9 @@ async fn resize_set_default_and_used_by_against_a_kind_cluster() {
     crate::eventually(
         "the pod to be forgotten",
         || format!("{index:?}"),
-        || async { index.count(ns.name(), "data") == Some(0) },
+        || async {
+            index.count(RefKind::PersistentVolumeClaim, Some(ns.name()), "data") == Some(0)
+        },
     )
     .await;
     drop(feed);

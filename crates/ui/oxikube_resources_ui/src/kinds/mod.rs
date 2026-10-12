@@ -112,6 +112,7 @@ pub fn row_actions() -> Vec<RowActionSpec> {
         .chain(pods::row_actions())
         .chain(rollout_row_actions())
         .chain(rollback_row_actions())
+        .chain(crate::used_by::row_actions())
         .collect()
 }
 
@@ -127,4 +128,5 @@ pub fn register_config_kinds(cx: &mut App) {
 pub fn init(cx: &mut App) {
     pods::init(cx);
     builtin::init(cx);
+    crate::used_by::init(cx);
 }

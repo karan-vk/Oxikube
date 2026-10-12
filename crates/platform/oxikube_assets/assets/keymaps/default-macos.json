@@ -277,6 +277,16 @@
     }
   },
   {
+    // E12-S18, k9s's used-by: u opens the detail of the cursor row on its "Used by" tab, the
+    // workloads whose Pods name a ServiceAccount, ConfigMap, Secret, PersistentVolumeClaim or
+    // PriorityClass. Scoped to those kinds, so `u` stays free for the others (Namespaces use it as
+    // "use namespace", Services as "show pods", Nodes as "uncordon").
+    "context": "ResourceTable && !Editing && (kind == ServiceAccount || kind == ConfigMap || kind == Secret || kind == PersistentVolumeClaim || kind == PriorityClass)",
+    "bindings": {
+      "u": "resource_table::ShowUsedBy"
+    }
+  },
+  {
     // k9s node verbs (E12-S09): c cordons and u uncordons the cursor row's node. Scoped to
     // `kind == Node` so the keys stay free for other kinds (u is "used by" on ConfigMaps, Secrets
     // and ServiceAccounts). Both ask for one click and are blocked on a read-only cluster.

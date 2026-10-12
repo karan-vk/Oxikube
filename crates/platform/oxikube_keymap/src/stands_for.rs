@@ -121,6 +121,11 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_table::SetDefaultClass",
         CommandId::STORAGECLASS_SET_DEFAULT,
     ),
+    // Used-by on the five referenced kinds (E12-S18).
+    (
+        "resource_table::ShowUsedBy",
+        CommandId::RESOURCE_SHOW_USED_BY,
+    ),
     // A Secret's reveal and decoded edit (E12-S11).
     ("resource_table::RevealSelected", CommandId::SECRET_REVEAL),
     (

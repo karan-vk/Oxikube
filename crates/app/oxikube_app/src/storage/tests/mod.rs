@@ -4,11 +4,10 @@
 //! * `resize`: `pvc::Resize` (growth, expansion, read-only, dry run, the stale size, audit)
 //! * `default_class`: `storageclass::SetDefault`
 //! * `flows`: the two dialogs' flows
-//! * `usage`: the Pods (used by) index and the claims columns
-//! * `feed`: the index kept from a store's Pods feed
+//! * `usage`: the claims columns' Pods (used by) cell over the shared reference index (the index
+//!   itself is tested in `references::tests`)
 
 mod default_class;
-mod feed;
 mod flows;
 mod resize;
 mod usage;

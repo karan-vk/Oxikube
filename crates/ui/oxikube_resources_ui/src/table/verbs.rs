@@ -16,6 +16,7 @@
 //! | `ctrl-w` | `ToggleWide` | `table::ToggleWide` | the wide columns of every table of the kind show or hide |
 //! | `u` (Services) | `ShowServicePods` | `service::ShowPods` | the Pods table, filtered by the Service's selector (E12-S13) |
 //! | `o` (Services) | `OpenInBrowser` | `service::OpenInBrowser` | a port of the Service in the browser, once port forwarding is installed (E12-S13) |
+//! | `u` (SA, ConfigMap, Secret, PVC, PriorityClass) | `ShowUsedBy` | `resource::ShowUsedBy` | the detail drawer opens on its "Used by" tab: the workloads whose Pods name the object (E12-S18) |
 //! | `x` | `RevealSelected` | `secret::Reveal` | a Secret's detail opens with its values decoded, in memory (E12-S11) |
 //! | `shift-e` | `EditDecodedSelected` | `secret::EditDecoded` | a Secret in the editor with its values as text (E12-S11) |
 //!
@@ -29,7 +30,7 @@ use oxikube_workspace::Toast;
 
 use super::actions::{
     EditDecodedSelected, EditSelected, OpenInBrowser, PortForward, RevealSelected,
-    ShowPortForwards, ShowServicePods, ToggleWide, ViewDescribe, ViewLogs, ViewYaml,
+    ShowPortForwards, ShowServicePods, ShowUsedBy, ToggleWide, ViewDescribe, ViewLogs, ViewYaml,
 };
 use super::view::ResourceTable;
 use crate::exec::PORT_FORWARDING_UNAVAILABLE;
@@ -122,6 +123,18 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::SERVICE_SHOW_PODS, targets, window, cx);
+    }
+
+    /// `u` on a ServiceAccount, ConfigMap, Secret, claim or PriorityClass: the
+    /// `resource::ShowUsedBy` row action, the detail on its "Used by" tab.
+    pub(super) fn on_show_used_by(
+        &mut self,
+        _: &ShowUsedBy,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::RESOURCE_SHOW_USED_BY, targets, window, cx);
     }
 
     /// `o` on a Service: the `service::OpenInBrowser` row action, which a port-forward manager

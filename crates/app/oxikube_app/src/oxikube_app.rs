@@ -64,6 +64,7 @@ pub mod network;
 pub mod nodes;
 pub mod overview;
 pub mod rollout;
+pub mod references;
 pub mod search;
 pub mod secrets;
 pub mod session;
@@ -133,6 +134,10 @@ pub use overview::{FixedWarnings, NoRecentWarnings, RecentWarnings, WarningRow};
 pub use rollout::{
     RollbackOutcome, RollbackReport, RollbackResult, RollbackRunner, RolloutHistory, RolloutService,
 };
+pub use references::{
+    OwnerCache, PodKey, PodUse, ReferenceFeed, ReferenceHub, ReferenceIndex, Usage, UsageStatus,
+    UsedBy, WorkloadUse, used_by,
+};
 pub use search::aliases::{
     AliasConflict, AliasEntry, AliasFollow, AliasRegistry, AliasSource, AliasTable, ConflictKind,
     Resolution,
@@ -149,8 +154,8 @@ pub use session::{
 pub use sidebar::{AccessOutcome, CustomKind, CustomResourceGroup};
 pub use sources::{KubeconfigSourcesService, SourceListStore, SourceRow};
 pub use storage::{
-    DefaultClassContext, DefaultClassFlow, DefaultClassReport, PODS_COLUMN, PvcColumns, PvcUsage,
-    PvcUsageFeed, PvcUsageIndex, ResizeContext, ResizeFlow, ResizeReport, UsageStatus,
+    DefaultClassContext, DefaultClassFlow, DefaultClassReport, PODS_COLUMN, PvcColumns,
+    ResizeContext, ResizeFlow, ResizeReport,
 };
 pub use store::{
     BucketCounts, CountState, CountTarget, CountsLease, KindCount, ResourceStore, ResourceStores,

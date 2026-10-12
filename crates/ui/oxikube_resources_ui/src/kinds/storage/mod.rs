@@ -4,7 +4,7 @@
 //! | File | Holds |
 //! |---|---|
 //! | `specs` | the five kinds' [`KindSpec`](crate::kinds::KindSpec)s: sidebar slot (Storage), detail panel, actions, and the claims' per-cluster columns |
-//! | `usage` | the claims' "used by" feed, shared by the claims table and the claim detail of a cluster, and the claims' column provider |
+//! | `usage` | the claims' column provider; its Pods column reads the cluster's shared reference feed (`crate::used_by::reference_feed`, E12-S18) |
 //! | `panel` | the detail panels: `StoragePanel` over `PanelContent` |
 //! | `dialogs` | [`ResizeDialog`](dialogs::ResizeDialog) and [`DefaultClassDialog`](dialogs::DefaultClassDialog) |
 //! | `actions` | the row actions ("Resize…", "Set as Default") and the kind filters |
@@ -33,8 +33,8 @@
 //! # Performance
 //!
 //! The Pods column is a hash lookup per visible cell against an index maintained from the Pods
-//! subscription off the UI thread (`oxikube_app::storage`). The feed exists only while a claims
-//! table or a claim detail is open, and is shared between them.
+//! subscription off the UI thread (`oxikube_app::references`). The feed exists only while a claims
+//! table, a claim detail or a "Used by" tab is open, and is shared between them.
 
 mod actions;
 pub mod dialogs;

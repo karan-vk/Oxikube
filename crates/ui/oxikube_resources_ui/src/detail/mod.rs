@@ -13,7 +13,8 @@
 //! | `yaml` | the YAML tab (E07-S06): [`yaml_text`] (managedFields, Secret masking) as a pure function run off the UI thread, the read-only code view, the toolbar |
 //! | `describe` | the Describe tab (E07-S06): `DescribePort` read on the Tokio bridge, spinner, error with Retry, refresh |
 //! | `events` | [`EventRow`], [`events_about`]: the events of the object from the namespace's `Event` feed |
-//! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, and a CRD's Schema |
+//! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, a CRD's Schema, and the Used by tab of a ServiceAccount, ConfigMap, Secret, claim or PriorityClass |
+//! | `used_by` | the Used by tab (E12-S18): the workloads whose Pods name the object, from the shared reference index; a lease on the Pods feed held while the tab is up |
 //! | `state` | [`DetailDeps`], [`Mount`], [`DetailState`]: what the view is built over and how the object stands |
 //! | `keys` | the `Detail` key context and its actions (E07-U559): close, step the table, switch tab |
 //! | `ages` | the age tick (E07-F566): a shown detail redraws for ages only when one reads differently |
@@ -76,6 +77,7 @@ mod schema_tab;
 mod schema_view;
 mod state;
 mod tabs;
+mod used_by;
 mod view;
 mod yaml;
 

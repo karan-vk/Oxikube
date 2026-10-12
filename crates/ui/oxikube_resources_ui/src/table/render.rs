@@ -134,6 +134,7 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_trigger))
             .on_action(cx.listener(Self::on_toggle_suspend))
             .on_action(cx.listener(Self::on_show_service_pods))
+            .on_action(cx.listener(Self::on_show_used_by))
             .on_action(cx.listener(Self::on_open_in_browser))
             .on_action(cx.listener(Self::on_toggle_wide))
             .on_action(cx.listener(Self::on_use_namespace))

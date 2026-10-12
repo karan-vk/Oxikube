@@ -87,6 +87,7 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
             | CommandId::JOB_SUSPEND
             | CommandId::JOB_RESUME
             | CommandId::SERVICE_SHOW_PODS
+            | CommandId::RESOURCE_SHOW_USED_BY
             | CommandId::SERVICE_OPEN_IN_BROWSER
             | CommandId::WORKLOAD_SCALE
             | CommandId::NAMESPACE_SELECT
@@ -159,6 +160,10 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
         CommandId::SECRET_EDIT_DECODED => Some("Edit decoded is available for Secrets"),
         CommandId::POD_PORT_FORWARD => Some(PORT_FORWARDING_UNAVAILABLE),
         CommandId::SERVICE_SHOW_PODS => Some("Show Pods is available for Services"),
+        CommandId::RESOURCE_SHOW_USED_BY => Some(
+            "Used by is available for Service Accounts, ConfigMaps, Secrets, Persistent Volume \
+             Claims and Priority Classes",
+        ),
         CommandId::SERVICE_OPEN_IN_BROWSER => {
             Some("Open in Browser is available for Services once port forwarding is installed")
         }
