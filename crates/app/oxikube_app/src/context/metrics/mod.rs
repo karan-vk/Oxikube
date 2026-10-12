@@ -9,6 +9,9 @@
 //! <reason>`), so the prompt carries the reason instead of a silent gap; a mention of the wrong
 //! shape is a validation error.
 //!
+//! Samples older than [`STALE_AFTER`](render::STALE_AFTER) (polling stops when nothing observes
+//! the cluster, and the ring is kept) are quoted as `latest`, not `now`, with their age.
+//!
 //! Read-only, allowed on a read-only cluster. Nothing here is a secret; the reason text still
 //! passes through `oxikube_domain::redact`. The body is cut to the caller's byte budget oldest
 //! sample first, and the block says how many were left out.
@@ -160,6 +163,15 @@ impl ContextProviderPort for MetricsContextProvider {
             .then(|| usage.state(MetricsKind::Pods).unavailable_text())
             .flatten();
 
+        // Polling stops when nothing observes the cluster, but the ring is kept: say how old the
+        // newest sample is rather than let it pass as current.
+        let now = self.deps.clock.now();
+        let stale_for = (origin == Origin::History)
+            .then(|| points.last())
+            .flatten()
+            .map(|last| now.duration_since(last.at))
+            .filter(|age| *age > render::STALE_AFTER);
+
         let metrics = PodMetrics {
             cluster: &title,
             cluster_id: cluster.as_ref(),
@@ -168,6 +180,7 @@ impl ContextProviderPort for MetricsContextProvider {
             points: &points,
             origin,
             poll_note: poll_note.as_deref(),
+            stale_for,
             containers: &containers,
             resources: resources.as_ref().map_err(String::as_str),
         };

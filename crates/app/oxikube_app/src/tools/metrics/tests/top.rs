@@ -188,18 +188,77 @@ async fn a_forbidden_or_failed_read_is_unavailable_too() {
 }
 
 #[tokio::test]
-async fn top_pods_names_the_cluster_when_several_are_connected_or_none() {
+async fn top_pods_with_no_cluster_connected_is_a_tool_error_the_model_sees() {
     let h = Harness::new();
     let none = h.call(TOP_PODS, json!({})).await.unwrap();
-    assert!(
-        none.is_error,
-        "no cluster is connected: a tool error the model sees"
-    );
+    assert!(none.is_error, "a tool error the model sees");
     assert!(
         text(&none).contains("no cluster is connected"),
         "{}",
         text(&none)
     );
+}
+
+#[tokio::test]
+async fn top_pods_refuses_to_pick_when_several_clusters_are_connected() {
+    let h = Harness::new();
+    h.connect().await;
+    h.connect_other().await;
+    let error = h
+        .call(TOP_PODS, json!({}))
+        .await
+        .expect_err("a malformed call, not a tool error");
+    assert_eq!(error.kind(), oxikube_domain::ErrorKind::Validation);
+    assert!(
+        error.message().contains("name the cluster"),
+        "{}",
+        error.message()
+    );
+    assert!(
+        h.metrics().recorded_calls().is_empty(),
+        "no cluster was read"
+    );
+}
+
+#[tokio::test]
+async fn top_pods_names_its_cluster_and_reports_one_that_is_unknown_or_disconnected() {
+    use oxikube_ports::ToolContext;
+
+    let h = Harness::new();
+    h.connect().await;
+    h.connect_other().await;
+
+    // Naming the cluster resolves the ambiguity.
+    h.metrics()
+        .script()
+        .pod_metrics
+        .push_ok(available(vec![pod_sample("shop", "web-0", at(0), 10, 10)]));
+    let named = ToolContext::agent().with_cluster(cluster());
+    let out = h.tools.invoke(TOP_PODS, json!({}), &named).await.unwrap();
+    assert!(!out.is_error, "{:?}", out.content);
+
+    // A cluster with no session.
+    let ghost = oxikube_domain::ids::ClusterId::new(
+        "/home/me/.kube/config",
+        &oxikube_domain::ids::ContextName::new("ghost"),
+    );
+    let ctx = ToolContext::agent().with_cluster(ghost);
+    let out = h.tools.invoke(TOP_PODS, json!({}), &ctx).await.unwrap();
+    assert!(out.is_error);
+    assert!(
+        text(&out).contains("no session for cluster"),
+        "{}",
+        text(&out)
+    );
+
+    // A known cluster that is not connected.
+    h.sessions
+        .disconnect(&super::other_cluster())
+        .expect("disconnect");
+    let ctx = ToolContext::agent().with_cluster(super::other_cluster());
+    let out = h.tools.invoke(TOP_PODS, json!({}), &ctx).await.unwrap();
+    assert!(out.is_error);
+    assert!(text(&out).contains("is not connected"), "{}", text(&out));
 }
 
 #[tokio::test]

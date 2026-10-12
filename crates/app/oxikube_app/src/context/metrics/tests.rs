@@ -6,7 +6,7 @@ use oxikube_ports::{ContextScope, MetricsOutcome};
 
 use crate::metrics::live::MetricsKind;
 use crate::tools::metrics::tests::{
-    Harness, at, available, cluster, node_sample, pod_object, pod_sample,
+    Harness, at, available, cluster, node_sample, other_cluster, pod_object, pod_sample,
 };
 
 /// Feeds `n` polls of `shop/web-0` into the ring buffer, 15 s apart.
@@ -220,4 +220,59 @@ async fn a_failed_poll_keeps_the_older_samples_with_a_note() {
         "{}",
         blocks[0].body
     );
+}
+
+#[tokio::test]
+async fn samples_from_a_cluster_nobody_polls_any_more_are_marked_stale() {
+    let h = Harness::new();
+    h.connect().await;
+    h.objects().insert(pod_object("shop", "web-0"));
+    poll(&h, 3);
+
+    // Fresh: the clock is at the newest sample.
+    h.clock.advance(std::time::Duration::from_secs(30));
+    let body = &resolve(&h, "@metrics/pod/shop/web-0", &ContextScope::new()).await[0].body;
+    assert!(body.contains("# now: cpu 52m"), "{body}");
+    assert!(!body.contains("not current"), "{body}");
+
+    // Two hours on with the ring kept (the tab was hidden, so nothing polled).
+    h.clock.advance(std::time::Duration::from_secs(2 * 3600));
+    let body = &resolve(&h, "@metrics/pod/shop/web-0", &ContextScope::new()).await[0].body;
+    assert!(
+        body.contains("# note: the newest sample is 2h old (polling is not running or is failing)"),
+        "{body}"
+    );
+    assert!(body.contains("# latest (not current): cpu 52m"), "{body}");
+    assert!(!body.contains("# now:"), "{body}");
+}
+
+#[tokio::test]
+async fn several_connected_clusters_need_one_named_and_an_unknown_one_is_refused() {
+    let h = Harness::new();
+    h.connect().await;
+    h.connect_other().await;
+    h.objects().insert(pod_object("shop", "web-0"));
+    poll(&h, 1);
+
+    let error = h
+        .contexts
+        .resolve_text("@metrics/pod/shop/web-0", &ContextScope::new())
+        .await
+        .expect_err("ambiguous");
+    assert_eq!(error.kind(), ErrorKind::Validation);
+    assert!(error.message().contains("name the cluster"));
+
+    let named = ContextScope::new().with_cluster(cluster());
+    let blocks = resolve(&h, "@metrics/pod/shop/web-0", &named).await;
+    assert!(blocks[0].body.contains("# pod: shop/web-0"));
+
+    h.sessions.disconnect(&other_cluster()).expect("disconnect");
+    let scope = ContextScope::new().with_cluster(other_cluster());
+    let error = h
+        .contexts
+        .resolve_text("@metrics/pod/shop/web-0", &scope)
+        .await
+        .expect_err("not connected");
+    assert_eq!(error.kind(), ErrorKind::Network);
+    assert!(error.message().contains("is not connected"));
 }

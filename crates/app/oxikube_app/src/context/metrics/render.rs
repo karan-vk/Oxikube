@@ -2,6 +2,7 @@
 
 use std::fmt::Write as _;
 
+use jiff::SignedDuration;
 use oxikube_domain::agent::{ContextBlock, MAX_CONTEXT_BLOCK_BYTES};
 use oxikube_domain::metrics::ContainerUsage;
 use oxikube_domain::utilisation::{PodResources, Utilisation};
@@ -10,6 +11,9 @@ use crate::metrics::live::{UsagePoint, cpu_text, memory_text, percent_text, read
 
 /// Most samples quoted; the ring holds 60, a prompt needs the recent shape.
 pub(super) const MAX_SAMPLES: usize = 20;
+
+/// A newest sample older than this is not current: polling has stopped or is failing.
+pub(super) const STALE_AFTER: SignedDuration = SignedDuration::from_secs(120);
 
 /// Bytes kept for the header, the requests and limits, and the containers.
 const RESERVE: usize = 1_536;
@@ -34,6 +38,8 @@ pub(super) struct PodMetrics<'a> {
     pub(super) origin: Origin,
     /// `metrics unavailable: ...` when the last poll failed and the samples are older.
     pub(super) poll_note: Option<&'a str>,
+    /// How old the newest sample is, when that is past [`STALE_AFTER`].
+    pub(super) stale_for: Option<SignedDuration>,
     pub(super) containers: &'a [ContainerUsage],
     /// `Err` is why requests and limits are not quoted.
     pub(super) resources: Result<&'a PodResources, &'a str>,
@@ -41,6 +47,17 @@ pub(super) struct PodMetrics<'a> {
 
 fn figure(value: Option<u64>, text: fn(u64) -> String) -> String {
     value.map_or_else(|| "n/a".to_owned(), text)
+}
+
+/// `45s`, `7m`, `2h`, `3d`: the coarsest whole unit.
+fn age_text(age: SignedDuration) -> String {
+    let s = age.as_secs();
+    match s {
+        ..120 => format!("{s}s"),
+        ..7_200 => format!("{}m", s / 60),
+        ..172_800 => format!("{}h", s / 3_600),
+        _ => format!("{}d", s / 86_400),
+    }
 }
 
 fn amount(q: &oxikube_domain::Quantity) -> String {
@@ -68,6 +85,14 @@ pub(super) fn block(m: &PodMetrics<'_>, cap: usize) -> ContextBlock {
     if let Some(note) = m.poll_note {
         let _ = writeln!(head, "# note: {note} (the samples below are older)");
     }
+    if let Some(age) = m.stale_for {
+        let _ = writeln!(
+            head,
+            "# note: the newest sample is {} old (polling is not running or is failing), so \
+             the figures below are not current",
+            age_text(age)
+        );
+    }
     if let (Some(first), Some(last)) = (m.points.first(), m.points.last()) {
         let _ = writeln!(
             head,
@@ -93,9 +118,14 @@ pub(super) fn block(m: &PodMetrics<'_>, cap: usize) -> ContextBlock {
                     last.memory_quantity().as_ref(),
                     resources,
                 );
+                let label = if m.stale_for.is_some() {
+                    "latest (not current)"
+                } else {
+                    "now"
+                };
                 let _ = writeln!(
                     head,
-                    "# now: cpu {} ({} of requests, {} of limits), memory {} ({} of requests, {} of limits)",
+                    "# {label}: cpu {} ({} of requests, {} of limits), memory {} ({} of requests, {} of limits)",
                     figure(last.cpu_nanocores, cpu_text),
                     percent_text(u.cpu_of_requests),
                     percent_text(u.cpu_of_limits),

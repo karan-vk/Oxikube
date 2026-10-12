@@ -41,6 +41,11 @@ pub(crate) fn cluster() -> ClusterId {
     ClusterId::new("/home/me/.kube/config", &ContextName::new("dev"))
 }
 
+/// A second cluster `prod`, known to the harness but connected only on request.
+pub(crate) fn other_cluster() -> ClusterId {
+    ClusterId::new("/home/me/.kube/config", &ContextName::new("prod"))
+}
+
 pub(crate) fn t0() -> Timestamp {
     "2026-01-01T00:00:00Z".parse().expect("a timestamp")
 }
@@ -120,6 +125,7 @@ fn tokio_spawner() -> Arc<dyn Spawner> {
 pub(crate) struct Harness {
     pub(crate) sessions: ClusterSessionManager,
     pub(crate) connector: Arc<FakeClusterConnectorPort>,
+    pub(crate) clock: Arc<FakeClockPort>,
     pub(crate) live: MetricsService,
     pub(crate) provider: MetricsProviderService,
     pub(crate) detector: Arc<FakeProviderDetectorPort>,
@@ -138,8 +144,13 @@ impl Harness {
     pub(crate) fn with_prefs(prefs: ClusterPrefsTable) -> Self {
         let context = ContextName::new("dev");
         let entry = ClusterContext::new(cluster(), context, SourceId("kubeconfig".into()));
+        let prod = ClusterContext::new(
+            other_cluster(),
+            ContextName::new("prod"),
+            SourceId("kubeconfig".into()),
+        );
         let connector = Arc::new(FakeClusterConnectorPort::new());
-        let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry]));
+        let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry, prod]));
         let sessions = ClusterSessionManager::new(
             connector.clone(),
             source,
@@ -160,7 +171,7 @@ impl Harness {
             provider: provider.clone(),
             promql: promql.clone(),
             catalogue: catalogue.clone(),
-            clock: clock,
+            clock: clock.clone(),
         };
         let tools = ToolRegistry::new();
         let contexts = ContextRegistry::new();
@@ -168,6 +179,7 @@ impl Harness {
         Self {
             sessions,
             connector,
+            clock,
             live,
             provider,
             detector,
@@ -180,6 +192,14 @@ impl Harness {
 
     pub(crate) async fn connect(&self) {
         self.sessions.connect(&cluster()).await.expect("connect");
+    }
+
+    /// Connects `prod` as well.
+    pub(crate) async fn connect_other(&self) {
+        self.sessions
+            .connect(&other_cluster())
+            .await
+            .expect("connect prod");
     }
 
     /// Connects, with detection finding `kind`.
