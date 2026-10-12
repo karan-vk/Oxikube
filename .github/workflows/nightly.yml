@@ -202,9 +202,123 @@ jobs:
           path: perf/report-*.json
           if-no-files-found: warn
 
+  # The metrics path against real stacks (E13-S13, ADR 0011): kind with the pinned metrics-server
+  # (`kind-up`), then the pinned kube-prometheus-stack and VictoriaMetrics single-node
+  # (`cargo xtask kind-metrics-stack`, charts and versions in
+  # crates/testing/oxikube_testkit/fixtures/metrics-stack/charts.json). The stacks are test fixtures
+  # in this throwaway cluster only: Oxikube never installs a metrics stack into a user's cluster.
+  #   tier 1, metrics-server: the adapter, the live service and its rings, the Pods and Nodes
+  #     tables, the overview's tiles, and the absent case (`metrics unavailable: <reason>`);
+  #   tier 2, the stacks: auto-detection and classification of kube-prometheus, the detail panels'
+  #     and the overview's graphs, VictoriaMetrics as a manual endpoint under a path prefix.
+  # Waits retry readiness only (a scrape landing), never an assertion; an assertion names its PromQL.
+  # A failure uploads the suites' output, the stacks' pods, events and logs, and the kind logs.
+  metrics-stack:
+    name: metrics stack (kind)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      OXIKUBE_TEST_CONTEXT: kind-oxikube
+      OXIKUBE_TEST_PROMETHEUS_STACK: "1"
+      OXIKUBE_TEST_VICTORIA_METRICS: "1"
+      OXIKUBE_TEST_DIAGNOSTICS_DIR: ${{ github.workspace }}/metrics-artifacts/namespaces
+      # The adapters and the app services on metrics-server and the stacks (no UI).
+      CORE_SUITE: >-
+        cargo test -p oxikube_kube -p oxikube_prometheus
+        --features oxikube_kube/integration,oxikube_prometheus/integration
+        --test metrics_kind --test kind_prometheus --test kind_catalogue --no-fail-fast
+      APP_SUITE: >-
+        cargo test -p oxikube_app --features integration --test kind_smoke --no-fail-fast
+      # The app end to end, headless: tables, overview, detection, graphs, manual endpoint.
+      UI_SUITE: >-
+        cargo test -p oxikube --features integration
+        --test kind_metrics_server --test kind_metrics_stack --test kind_metrics --test kind_allocation
+        --no-fail-fast
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: metrics-stack
+          cache-on-failure: true
+      - name: Linux system dependencies (GPUI)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libfontconfig-dev libfreetype-dev libglib2.0-dev libssl-dev \
+            libvulkan1 libvulkan-dev libwayland-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev cmake clang pkg-config
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: oxikube
+          wait: 120s
+      # Built while nothing else runs, so the test steps' time is the suites' own.
+      - name: Build the suites
+        run: |
+          $CORE_SUITE --no-run
+          $APP_SUITE --no-run
+          $UI_SUITE --no-run
+      - name: Test images, metrics-server and fixtures
+        run: cargo run -q -p xtask -- kind-up --name oxikube
+      - name: Metrics stack (pinned charts)
+        timeout-minutes: 15
+        run: |
+          mkdir -p metrics-artifacts
+          helm version | tee metrics-artifacts/versions.txt
+          set -o pipefail
+          cargo run -q -p xtask -- kind-metrics-stack --name oxikube 2>&1 | tee -a metrics-artifacts/versions.txt
+      - name: Metrics suite (adapters)
+        timeout-minutes: 15
+        run: |
+          set -o pipefail
+          $CORE_SUITE -- --nocapture 2>&1 | tee metrics-artifacts/core-suite.log
+      - name: Metrics suite (app services)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          $APP_SUITE -- metrics --nocapture 2>&1 | tee metrics-artifacts/app-suite.log
+      - name: Metrics suite (the app, headless)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
+          $UI_SUITE -- --nocapture 2>&1 | tee metrics-artifacts/ui-suite.log
+      # Status, events and the stacks' own logs: no credentials (the suites mint none here) and no
+      # object payloads.
+      - name: Collect metrics diagnostics
+        if: ${{ failure() }}
+        run: |
+          mkdir -p metrics-artifacts
+          kubectl --context kind-oxikube get pods -A -o wide > metrics-artifacts/pods.txt || true
+          kubectl --context kind-oxikube get events -A -o wide \
+            --sort-by=.metadata.creationTimestamp > metrics-artifacts/events.txt || true
+          kubectl --context kind-oxikube get apiservice v1beta1.metrics.k8s.io -o yaml \
+            > metrics-artifacts/metrics-apiservice.yaml || true
+          for ns in monitoring oxikube-vm; do
+            for pod in $(kubectl --context kind-oxikube -n "$ns" get pods -o name); do
+              kubectl --context kind-oxikube -n "$ns" logs "$pod" --all-containers --tail=300 \
+                > "metrics-artifacts/logs-$ns-${pod#pod/}.txt" 2>&1 || true
+            done
+          done
+          kubectl --context kind-oxikube -n kube-system logs deployment/metrics-server --tail=300 \
+            > metrics-artifacts/logs-metrics-server.txt 2>&1 || true
+          kind export logs metrics-artifacts/kind --name oxikube || true
+      - name: Upload metrics artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: metrics-stack-${{ github.run_id }}-${{ github.run_attempt }}
+          path: metrics-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Teardown
+        if: always()
+        run: cargo run -q -p xtask -- kind-down --name oxikube || true
+
   report-failure:
     name: report failure
-    needs: [matrix, perf]
+    needs: [matrix, perf, metrics-stack]
     # Only real failures (a leg timing out counts as a failure). A cancelled run is a person
     # stopping it, which is not a regression to report. Green runs skip this job entirely.
     if: ${{ failure() }}

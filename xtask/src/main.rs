@@ -5,6 +5,7 @@
 //! - `lint-deps`      enforce the hexagonal dependency direction (see docs/ARCHITECTURE.md)
 //! - `check-gpui-pin` verify gpui-pre / gpui-component pins are exact and aligned
 //! - `kind-up` / `kind-down`  local kind cluster for integration tests, with the test images pre-pulled (E01-S09, E04-B01)
+//! - `kind-metrics-stack`  pinned kube-prometheus-stack and VictoriaMetrics in a kind TEST cluster, for the nightly metrics suite (E13-S13)
 //! - `load-pods`      create N pause pods (+ optional churn) for perf work (E01-S10)
 //! - `perf`           headless perf scenarios, report, baseline check (E01-S14); `--windowed`: the
 //!                    real-window scenarios of ADR 0016 (E01-P587)
@@ -14,6 +15,7 @@
 mod check_gpui_pin;
 mod kind;
 mod kind_images;
+mod kind_metrics_stack;
 mod lint_deps;
 mod load_pods;
 mod perf;
@@ -49,6 +51,14 @@ enum Cmd {
         #[arg(long, default_value = "oxikube")]
         name: String,
     },
+    /// Install (or with `--down` remove) the pinned kube-prometheus-stack and VictoriaMetrics
+    /// fixtures of the nightly metrics suite in a kind test cluster.
+    KindMetricsStack {
+        #[arg(long, default_value = "oxikube")]
+        name: String,
+        #[arg(long)]
+        down: bool,
+    },
     /// Create N pause pods across namespaces; `--churn` keeps deleting/recreating them.
     LoadPods(load_pods::Args),
     /// Run headless perf scenarios; `--check` gates on docs/perf/baseline.json (+20 %);
@@ -65,6 +75,8 @@ fn main() -> anyhow::Result<()> {
         Cmd::CheckGpuiPin => check_gpui_pin::run(),
         Cmd::KindUp { name } => kind::up(&name),
         Cmd::KindDown { name } => kind::down(&name),
+        Cmd::KindMetricsStack { name, down: false } => kind_metrics_stack::up(&name),
+        Cmd::KindMetricsStack { name, down: true } => kind_metrics_stack::down(&name),
         Cmd::LoadPods(args) => load_pods::run(&args),
         Cmd::Perf(args) => perf::run(&args),
         Cmd::GenSettingsSchema(args) => settings_schema::run(&args),

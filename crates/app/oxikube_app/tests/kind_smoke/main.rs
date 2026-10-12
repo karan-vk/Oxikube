@@ -34,6 +34,7 @@ mod logs_agent;
 mod logs_aggregate;
 mod logs_churn;
 mod logs_search;
+mod metrics_absent;
 mod metrics_agent;
 mod namespaces;
 mod node_shell;

@@ -1,0 +1,21 @@
+{
+  "_comment": "The tier-2 metrics fixtures (E13-S13), installed into a kind TEST cluster only by `cargo xtask kind-metrics-stack` (the nightly `metrics-stack` job). Oxikube itself never installs a stack. Charts are pinned so a nightly run is reproducible; the suites print these versions. `values` is a file next to this one.",
+  "charts": [
+    {
+      "release": "kube-prometheus-stack",
+      "chart": "kube-prometheus-stack",
+      "repo": "https://prometheus-community.github.io/helm-charts",
+      "version": "92.3.0",
+      "namespace": "monitoring",
+      "values": "kube-prometheus-stack.values.yaml"
+    },
+    {
+      "release": "vmsingle-test",
+      "chart": "victoria-metrics-single",
+      "repo": "https://victoriametrics.github.io/helm-charts",
+      "version": "0.48.0",
+      "namespace": "oxikube-vm",
+      "values": "victoria-metrics-single.values.yaml"
+    }
+  ]
+}

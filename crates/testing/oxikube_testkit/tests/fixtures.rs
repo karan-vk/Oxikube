@@ -24,15 +24,19 @@ fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures")
 }
 
-/// Every `*.json` under `fixtures/`, relative, skipping the kind manifests and the
-/// OpenAPI schema documents (which are not `Resource`s; see
+/// Every `*.json` under `fixtures/`, relative, skipping the kind manifests, the metrics stack's
+/// chart pins and the OpenAPI schema documents (which are not `Resource`s; see
 /// `every_openapi_fixture_is_registered_and_shaped`).
 fn json_files_on_disk(dir: &Path, root: &Path, out: &mut Vec<String>) {
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
         if path.is_dir() {
             if path.file_name().is_some_and(|n| {
-                n == "cluster" || n == "metrics-server" || n == "openapi" || n == "tables"
+                n == "cluster"
+                    || n == "metrics-server"
+                    || n == "metrics-stack"
+                    || n == "openapi"
+                    || n == "tables"
             }) {
                 continue;
             }
