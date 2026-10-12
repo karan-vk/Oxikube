@@ -76,17 +76,35 @@ fn cpu(app: &mut App, table: &gpui::Entity<ResourceTable>) -> String {
 fn the_pods_table_shows_usage_polled_for_the_shown_cluster_only(cx: &mut TestAppContext) {
     let ports = TestPorts::seeded();
     let metrics = metrics_port(&ports);
-    metrics.script().pod_metrics.push_ok(reading());
+    // The cluster overview (the first screen, E13-S09) polls nodes and pods while it is shown;
+    // the Pods table polls the pods again when it opens.
+    metrics
+        .script()
+        .pod_metrics
+        .push_ok(reading())
+        .push_ok(reading());
+    metrics
+        .script()
+        .node_metrics
+        .push_ok(MetricsOutcome::Available(Vec::new()));
     let mut app = App::start(cx, ports);
     let table = open_pods(&mut app);
 
+    let calls = metrics.recorded_calls();
     assert_eq!(
-        metrics.recorded_calls(),
-        [MetricsCall::PodMetrics(
+        calls.last(),
+        Some(&MetricsCall::PodMetrics(
             TestPorts::cluster_id(),
             NamespaceSelection::All
-        )],
-        "the open Pods table asked for its cluster's pods, once"
+        )),
+        "the open Pods table asked for its cluster's pods: {calls:?}"
+    );
+    assert!(
+        calls.iter().all(|call| match call {
+            MetricsCall::NodeMetrics(cluster) | MetricsCall::PodMetrics(cluster, _) =>
+                *cluster == TestPorts::cluster_id(),
+        }),
+        "only the shown cluster is polled"
     );
     assert_eq!(cpu(&mut app, &table), "250m");
     assert!(!app.drawn("resource-table-metrics"), "metrics are there");

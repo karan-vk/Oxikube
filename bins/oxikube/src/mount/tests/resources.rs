@@ -1,5 +1,6 @@
-//! The resource views of a cluster tab on the real init path (E07-S11): the Workloads overview is
-//! the first screen of a connected cluster, the sidebar shows count badges from the store, and a
+//! The resource views of a cluster tab on the real init path (E07-S11): the cluster overview
+//! (E13-S09) is the first screen of a connected cluster, the Workloads overview is the sidebar's
+//! Workloads > Overview, the sidebar shows count badges from the store, and a
 //! tile or sidebar click reaches `resource::OpenList` on the bus, which opens the kind's table
 //! (E07-S03). Enter on a row opens the detail drawer in the cluster tab, and "Pin as tab" makes
 //! it a tab (E07-S05); its YAML and Describe tabs show the object and the describe text read through
@@ -14,6 +15,7 @@ use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
+use oxikube_overview_ui::ClusterOverview;
 use oxikube_ports::{DescribeOutput, DescribeSource};
 use oxikube_resources_ui::detail::{DescribeState, DetailDrawer, DetailTab, DetailView, Mount};
 use oxikube_resources_ui::overview_lite::WorkloadsOverview;
@@ -32,6 +34,12 @@ impl App {
     }
 
     fn overviews(&mut self) -> usize {
+        let ws = self.tab_workspace();
+        self.vcx
+            .update(|_, cx| ws.read(cx).items_of_type::<ClusterOverview>().len())
+    }
+
+    fn workloads_overviews(&mut self) -> usize {
         let ws = self.tab_workspace();
         self.vcx
             .update(|_, cx| ws.read(cx).items_of_type::<WorkloadsOverview>().len())
@@ -86,22 +94,33 @@ impl App {
 }
 
 #[gpui::test]
-fn a_connected_cluster_opens_on_the_workloads_overview(cx: &mut TestAppContext) {
+fn a_connected_cluster_opens_on_the_cluster_overview(cx: &mut TestAppContext) {
     let mut app = App::start(cx, TestPorts::seeded());
     assert_eq!(app.cluster_tabs().len(), 0);
     app.press("enter");
-    assert_eq!(app.overviews(), 1, "the overview is the tab's first screen");
+    assert_eq!(
+        app.overviews(),
+        1,
+        "the cluster overview is the tab's first screen"
+    );
     app.tick();
     for tile in [
-        "deployments",
-        "statefulsets",
-        "daemonsets",
-        "replicasets",
-        "jobs",
-        "cronjobs",
-        "pods",
+        "nodes-ready",
+        "nodes-not-ready",
+        "pods-running",
+        "pods-pending",
+        "pods-failed",
+        "pods-succeeded",
     ] {
         assert!(app.drawn(&format!("overview-tile-{tile}")), "{tile} tile");
+    }
+    for card in [
+        "overview-capacity",
+        "overview-top",
+        "overview-info",
+        "overview-warnings",
+    ] {
+        assert!(app.drawn(card), "{card}");
     }
     let stores = app
         .vcx
@@ -152,13 +171,13 @@ pub(super) fn kind(group: &str, version: &str, name: &str, plural: &str) -> Reso
 #[gpui::test]
 fn a_tile_click_opens_the_kinds_table(cx: &mut TestAppContext) {
     let mut app = App::start(cx, TestPorts::seeded());
-    app.serve([kind("apps", "v1", "Deployment", "deployments")]);
+    app.serve([kind("", "v1", "Pod", "pods")]);
     app.press("enter");
     app.tick();
-    app.click("overview-tile-deployments");
+    app.click("overview-tile-pods-running");
     app.tick();
     // `resource::OpenList` ran on the bus and the generic table (the kind view) opened the list.
-    assert_eq!(app.tables(), ["Deployment"]);
+    assert_eq!(app.tables(), ["Pod"]);
 }
 
 #[gpui::test]
@@ -170,9 +189,12 @@ fn sidebar_entries_and_the_cluster_section_navigate(cx: &mut TestAppContext) {
     app.click("sidebar-entry-workloads/pods");
     app.tick();
     assert_eq!(app.tables(), ["Pod"]);
-    // The "Cluster" heading goes back to the overview: the open one, not a second.
+    // The "Cluster" heading goes back to the cluster overview: the open one, not a second.
     app.click("sidebar-section-cluster");
     assert_eq!(app.overviews(), 1);
+    // Workloads > Overview opens the Workloads overview (E07-S11).
+    app.click("sidebar-entry-workloads/workloads-overview");
+    assert_eq!(app.workloads_overviews(), 1);
 }
 
 #[gpui::test]

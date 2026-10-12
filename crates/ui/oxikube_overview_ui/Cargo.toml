@@ -19,6 +19,7 @@ oxikube_app.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
 oxikube_ports.workspace = true
+# `spawn_kube` (the version read and the history queries) and `notify_coalesced`.
 oxikube_runtime.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
@@ -31,20 +32,30 @@ gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
+parking_lot.workspace = true
 serde_json.workspace = true
 
 [features]
 default = []
-# `pulses::test_support`: a page with live-looking data and no cluster, for the screenshot test.
+# `pulses::test_support` (a page with live-looking data and no cluster) and `test_support` (sample
+# snapshots and a preview constructor): for the `#[gpui::test]`s and the screenshot tests of this
+# crate and of the binary.
 test-support = []
-# Headless GPU screenshot of the pulses page (`tests/screenshot.rs`; harness = false so it runs on
-# the process main thread). Needs Metal / Vulkan, so never part of the default gate; the nightly
-# workflow runs it: `cargo test -p oxikube_overview_ui --features screenshot --test screenshot`.
+# Headless GPU screenshots (`tests/screenshot.rs` for the pulses page, `tests/overview_screenshot.rs`
+# for the overview; harness = false so they run on the process main thread). Need Metal / Vulkan, so
+# never part of the default gate; the nightly workflow runs them:
+# `cargo test -p oxikube_overview_ui --features screenshot --test screenshot` (and `--test overview_screenshot`).
 screenshot = ["test-support"]
 
 [[test]]
 name = "screenshot"
 path = "tests/screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+[[test]]
+name = "overview_screenshot"
+path = "tests/overview_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 

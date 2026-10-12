@@ -31,6 +31,7 @@
 //! | `oxikube_app::metrics_provider` | `cluster::RedetectMetrics` (run provider detection again, or re-check the configured endpoint), `cluster::ToggleMetrics` (`prometheus.enabled` in `settings.json`); neither changes a cluster (E13-S05) |
 //! | `oxikube_settings_ui` | `cluster::ShowMetricsSettings` (the cluster's metrics page, a tab of its tab; E13-S05) |
 //! | `oxikube_overview_ui` | `cluster::ShowPulses` (the cluster's pulses page, `:pulses`; E13-S10) |
+//! | `oxikube_overview_ui` | `cluster::ShowOverview` (the cluster's overview, a tab of its tab; reads only; E13-S09) |
 //! | `oxikube_editor` | `editor::NewManifest` (an empty manifest editor in the shown cluster's tab, its YAML checked against that cluster's schemas), `resource::Create` (the "Create resource" picker, or one template, opened in a new editor with the cluster's selected namespace filled in; E10-S09: it writes nothing, the objects are made by `resource::Apply`, one per document), `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (the focused editor's view toggles; E10-S04), `editor::TriggerCompletion` / `editor::ShowHover` (the focused editor's completion menu and field docs at the cursor, from the cluster's schema; E10-S05), `resource::Edit`, `resource::ViewYamlInEditor` (a `kind/name` editor tab on a freshly read object, E10-S06), `editor::ToggleManagedFields`, `editor::ToggleSecretMask` (E10-S06), `editor::ConvertToJson`, `editor::ConvertToYaml` (the buffer as the other language, one undo step), `editor::UseJson`, `editor::UseYaml` (the language the buffer is read as; E10-S10), `secret::EditDecoded` (a Secret in an editor tab with its values as text, base64-encoded again by `resource::Apply`; E12-S11), `secret::Create` (the "Create secret" dialog: Opaque, Docker registry or TLS, validated before an editor tab opens with the manifest; E12-S11), `editor::ShowDiff` / `ToggleDiffLayout` / `ReloadFromServer` / `MergeFromServer` / `KeepMine` / `TakeMine` / `TakeServer` / `AcceptMerge` (diff vs live and the changed-on-server banner of the focused editor: read the object, change the buffer only; E10-S07) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
@@ -141,6 +142,9 @@ pub struct BusParts {
     /// Where `cluster::ShowPulses` sends the cluster whose pulses to open (applied on the UI
     /// thread; E13-S10).
     pub pulses_pages: oxikube_overview_ui::pulses::PulsesRequestSink,
+    /// Where `cluster::ShowOverview` sends the cluster whose overview to open (applied on the UI
+    /// thread; E13-S09).
+    pub overview_pages: oxikube_overview_ui::OverviewRequestSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -231,7 +235,8 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         oxikube_settings_ui::metrics::register_commands(r, parts.metrics_pages)
     })?;
     registry.install("oxikube_overview_ui", |r| {
-        oxikube_overview_ui::pulses::register_commands(r, parts.pulses_pages)
+        oxikube_overview_ui::pulses::register_commands(r, parts.pulses_pages)?;
+        oxikube_overview_ui::register_commands(r, parts.overview_pages)
     })?;
     registry.install("oxikube_editor", |r| {
         oxikube_editor::view::register_commands(r, parts.editors)

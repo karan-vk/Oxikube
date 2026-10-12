@@ -89,6 +89,11 @@ harness = false
 name = "live_metrics"
 harness = false
 
+# `cargo bench -p oxikube_app --bench cluster_overview` (E13-S09): the overview feed's tally, distribution and top-N.
+[[bench]]
+name = "cluster_overview"
+harness = false
+
 # `cargo bench -p oxikube_app --bench log_ingest` (E08-S01): lines through a LogService session.
 [[bench]]
 name = "log_ingest"

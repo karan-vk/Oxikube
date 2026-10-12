@@ -102,6 +102,7 @@ mod jump;
 mod keymap;
 mod logs;
 mod metrics;
+mod overview;
 mod palette;
 mod pulses;
 mod resources;
@@ -195,6 +196,10 @@ pub struct Wiring {
     _follow_metrics: crate::metrics_provider::MetricsFollow,
     /// Live metrics (E13-S03): the service's pollers, its settings and this window's shown tab.
     _live_metrics: crate::live_metrics::LiveMetricsFollow,
+    /// Opens the cluster overviews for `cluster::ShowOverview` (E13-S09).
+    _overview_pages: Task<()>,
+    /// Tells the overviews whether their cluster's tab is shown (E13-S09).
+    _follow_overviews: Subscription,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -255,6 +260,15 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
     let pulses_stores = stores.clone();
+    // The Events feed (E14) replaces this; until then the overviews say there are none.
+    let warnings: Arc<dyn oxikube_app::RecentWarnings> = Arc::new(oxikube_app::NoRecentWarnings);
+    // The cluster overview (E13-S09): every cluster tab's first screen.
+    let overview_deps = overview::deps(
+        &services,
+        stores.clone(),
+        dispatcher.clone(),
+        warnings.clone(),
+    );
     let tab_deps = tabs::TabDeps {
         sessions: services.sessions.clone(),
         namespaces: services.namespaces.clone(),
@@ -263,9 +277,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         dispatcher: dispatcher.clone(),
         workspace: workspace.downgrade(),
         stores: stores.clone(),
-        // The Events feed (E14) replaces this; until then the overview says there are none.
-        warnings: Arc::new(oxikube_app::NoRecentWarnings),
+        warnings,
         resources: resources_slot.clone(),
+        overview: overview_deps.clone(),
     };
     let tabs_deps = ClusterTabsDeps::new(
         services.sessions.clone(),
@@ -308,6 +322,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         ports.clusters.clock.clone(),
     ));
     let (pulses_sink, pulses_rx) = oxikube_overview_ui::pulses::PulsesRequestSink::channel();
+    let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         nodes: nodes.clone(),
         cluster_commands: services.cluster_commands.clone(),
@@ -335,6 +350,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         metrics_settings: Arc::new(crate::metrics_provider::SettingsMetricsWriter::new(cx)),
         metrics_pages: metrics_sink,
         pulses_pages: pulses_sink,
+        overview_pages: overview_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -554,6 +570,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    let overview_pages =
+        overview::start_views(overview_deps, tabs.downgrade(), overview_rx, window, cx);
+    let follow_overviews = overview::follow_tabs(&tabs, cx);
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -579,6 +598,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _pulses_pages: pulses_pages,
         _follow_metrics: follow_metrics,
         _live_metrics: live_metrics,
+        _overview_pages: overview_pages,
+        _follow_overviews: follow_overviews,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

@@ -40,10 +40,12 @@ fn init_registers_the_built_in_kinds_and_fills_the_sidebar(cx: &mut TestAppConte
     // Generous for a debug build; the release cost is reported in the PR.
     assert!(elapsed.as_millis() < 250, "registering took {elapsed:?}");
 
-    // Freelens' order of the Workloads section, from the registry.
+    // Freelens' order of the Workloads section, from the registry, after the Workloads overview
+    // page (E13-S09: the "Cluster" header is the cluster overview).
     assert_eq!(
         entry_ids(&sections, "workloads"),
         [
+            "workloads-overview",
             "pods",
             "deployments",
             "daemonsets",

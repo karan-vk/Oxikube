@@ -652,7 +652,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   view until it is laid out; `resource::CopyYaml` and `resource::SaveYaml` (file dialog, then `FsPort::write`) write
   exactly that text. The Describe tab (`detail::describe`) reads the connection's `DescribePort` on the Tokio bridge on first
   show (spinner, error with Retry, `resource::RefreshDescribe`), the previous text staying while it refreshes; its text is shown in a
-  plain-text `CodeView`. The view carries the `Detail` key context (E07-U559, `detail::keys`, `mount == drawer|tab`): `escape` closes the drawer and the workspace refocuses the table, `j` / `k` and the arrows call `ResourceTable::step_detail` on the table it was opened from (the cursor moves and `resource::Open` shows the new object), `1`-`5` switch tabs; conditions are two lines (type, status, age; then the muted reason and message) and label, annotation and status keys are cut with a tooltip. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the first screen of a connected cluster tab
+  plain-text `CodeView`. The view carries the `Detail` key context (E07-U559, `detail::keys`, `mount == drawer|tab`): `escape` closes the drawer and the workspace refocuses the table, `j` / `k` and the arrows call `ResourceTable::step_detail` on the table it was opened from (the cursor moves and `resource::Open` shows the new object), `1`-`5` switch tabs; conditions are two lines (type, status, age; then the muted reason and message) and label, annotation and status keys are cut with a tooltip. Module `overview_lite` (E07-S11): `WorkloadsOverview`, the sidebar's Workloads > Overview (the first screen of a connected cluster tab until the cluster overview of E13-S09)
   (a workspace `Item`): one card per `Tile` of the `TileRegistry` (Pods, Deployments, DaemonSets, StatefulSets,
   ReplicaSets, Jobs, CronJobs): the total and healthy from `WorkloadCounters`, read once a second and redrawn coalesced only on
   change, and (E12-S07) a stacked status bar with a legend per bucket (`bars`, `card`); a click on the header sends
@@ -749,6 +749,35 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `path_prefix`, `auth` (`none` | `bearer` | `basic`), `auth_user`, `auth_secret` (a keychain entry's name, never the token).
   Defaults are in `default.json`, the schema in `settings.schema.json`, edits hot reload through `ClusterSettings::observe`.
   `PrometheusOverride::manual_endpoint` turns the resolved block into a `PromEndpoint` or says in a sentence what is missing.
+- `oxikube_app::cluster_overview` (E13-S09) — the cluster overview's numbers, kept off the UI thread. `OverviewFeed::start`
+  subscribes to the session store's cluster-wide Pod and Node feeds (through the watch budget) and registers interest in the
+  `MetricsService`'s node and pod metrics; its driver (a future the view runs on a background task and drops to release all
+  of it) mirrors each subscription's rows (`Mirror`, to know what a `RowOp::Remove` removed) and keeps `PodTally` (pods by
+  phase, the summed `Demand` of the pods on nodes, from `PodPlacement`) and `NodeTally` (ready / not ready / unknown /
+  cordoned, the allocatable sum) per delta, never by recounting; on a metrics poll it sums the nodes' usage and picks the top
+  pods and namespaces with a bounded heap (`TopHeap`, `top_consumers`, through `ClusterUsage::visit_pods`); it publishes an
+  `OverviewSnapshot` (feed states, counts, capacity, usage, top lists, the `Distribution`) after each batch and wakes the
+  reader once (coalesced). `detect_distribution` is a pure table (`RULES`: OpenShift, EKS, GKE, AKS, k3s, RKE2, k0s, kind,
+  minikube, MicroK8s, Docker Desktop from the version string, node labels, `providerID`, a node name; `unknown` otherwise,
+  never a guess from a cloud alone). `fetch_cluster_history` runs the cluster-scope CPU and memory queries (usage and requests,
+  the last hour) of the provider's catalogue on the `PromqlPort`; `HistoryAvailability` reads a `ProviderStatus` through
+  `ProviderSource` (implemented by `MetricsProviderService`). `cargo bench -p oxikube_app --bench cluster_overview`.
+- `oxikube_app::overview` (E12-S07, E13-S09) — `RecentWarnings`, the warnings hook the Events feed (E14) implements;
+  `NoRecentWarnings` until then.
+- `oxikube_overview_ui` (E13-S09) — `ClusterOverview`, a cluster tab's landing page (a workspace item, key
+  `cluster-overview`): health tiles (nodes ready / not ready, pods by phase; a click sends `resource::OpenList`), capacity and
+  allocation bars (requests fill, limits mark, live usage bar; CPU, memory, pods), top CPU and memory pods and namespaces (a
+  row sends `resource::Open`), recent warnings (the `RecentWarnings` hook), cluster info (context, version read once per
+  connection on `spawn_kube`, distribution, node count, API server with credentials and query cut out), and with a
+  Prometheus-compatible endpoint the last hour's CPU and memory as `oxikube_ui::chart` graphs plus sparklines
+  (`HistoryPanel`, queried on `spawn_kube` when shown, every minute and on provider changes). The live part (the feed's
+  driver on a background task, the publish listener redrawing at most ten times a second through `notify_coalesced`, the
+  warnings timer, the queries) runs only while the cluster is connected, the item is its pane's displayed tab and the cluster
+  tab is shown (`set_tab_shown`); otherwise it is dropped and the feeds released. Absence is visible: `metrics unavailable:
+  <reason>` (a click runs `cluster::ShowMetricsSettings`), "no access" for a forbidden feed, never a zero.
+  `cluster::ShowOverview` (palette "Cluster Overview", tool stub `app.cluster_show_overview`) opens it through
+  `OverviewViews`; `init` adds "Cluster overview" to the sidebar's Metrics section. `test_support` previews the three modes;
+  `tests/overview_screenshot.rs` (`--features screenshot`) photographs them in both themes.
 - `oxikube_settings_ui::metrics` (E13-S05) — the cluster's metrics page: `MetricsSettingsModel` (the whole page as plain data
   with its wording: the headline and its tone, `metrics unavailable: <reason>`, the services looked at, the settings in effect),
   `MetricsSettingsView` (a workspace item of the cluster's tab; "Look again" and "Turn history metrics off / on" are bus
@@ -1425,6 +1454,12 @@ weaken `cargo xtask lint-deps`.
   nothing runs on the Tokio runtime until a cluster connects; nothing is probed for a cluster whose settings turn metrics off) and passes every
   settings change to it. `mount::metrics` opens the page for `cluster::ShowMetricsSettings` and routes the sidebar's Metrics
   entry to the same command.
+- `overview` (E13-S09, `mount::overview`): every cluster tab's first screen is the `ClusterOverview` once the cluster is
+  connected; the sidebar's "Cluster" header (page `overview`) and Metrics > Cluster overview open it, `cluster::ShowOverview`
+  is applied by `OverviewViews` on the UI thread, and `follow_tabs` tells each overview whether its cluster's tab is shown
+  (a hidden one releases its feeds). The deps carry the live `MetricsService`, the `MetricsProviderService` with the PromQL
+  port and the catalogue, and `NoRecentWarnings` until E14. The Workloads overview moved to Workloads > Overview (page
+  `workloads-overview`, gated like the Pods entry).
 - `live_metrics` (E13-S03): `ClusterServices::live_metrics` holds the `MetricsService`; each window's mount
   (`live_metrics::start`) hands it to the views (`oxikube_resources_ui::metrics::set_service`, before the resource views
   start), attaches the Tokio bridge for its pollers, follows the session updates on the foreground, pushes the `metrics`

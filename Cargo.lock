@@ -6186,6 +6186,7 @@ dependencies = [
  "oxikube_testkit",
  "oxikube_ui",
  "oxikube_workspace",
+ "parking_lot",
  "serde_json",
  "tracing",
 ]

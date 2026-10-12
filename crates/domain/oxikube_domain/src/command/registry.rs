@@ -46,6 +46,8 @@ impl CommandId {
         CommandId::new("cluster::ShowMetricsSettings");
     /// `cluster::ShowPulses`: open a cluster's pulses page.
     pub const CLUSTER_SHOW_PULSES: CommandId = CommandId::new("cluster::ShowPulses");
+    /// `cluster::ShowOverview`: open a cluster's overview page.
+    pub const CLUSTER_SHOW_OVERVIEW: CommandId = CommandId::new("cluster::ShowOverview");
     /// `cluster::SwitchTab`: show the nth cluster tab.
     pub const CLUSTER_SWITCH_TAB: CommandId = CommandId::new("cluster::SwitchTab");
     /// `cluster::ToggleFavourite`: mark or unmark a cluster as a favourite.
@@ -494,6 +496,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
         "Cluster Metrics Settings",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // Opens a page; reads what the session's store and the metrics services already hold.
+    CommandMeta::read(
+        CommandId::CLUSTER_SHOW_OVERVIEW,
+        "Cluster Overview",
         CommandScope::Cluster,
         NONE,
     ),

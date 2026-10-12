@@ -111,6 +111,31 @@ impl ClusterUsage {
             .unwrap_or_default()
     }
 
+    /// Calls `f` with the latest reading of every node, under one read lock. For whole-cluster
+    /// passes off the UI thread (the cluster overview's usage totals, E13-S09).
+    pub fn visit_nodes(&self, mut f: impl FnMut(&Arc<str>, &UsagePoint)) {
+        let data = self.data.read();
+        for (name, ring) in &data.nodes {
+            if let Some(point) = ring.latest() {
+                f(name, &point);
+            }
+        }
+    }
+
+    /// Calls `f` with the namespace, name and latest reading of every pod, under one read lock;
+    /// the pods of one namespace come one after the other. For whole-cluster passes off the UI
+    /// thread (the cluster overview's top consumers, E13-S09).
+    pub fn visit_pods(&self, mut f: impl FnMut(&Arc<str>, &Arc<str>, &UsagePoint)) {
+        let data = self.data.read();
+        for (namespace, pods) in &data.pods {
+            for (name, series) in pods {
+                if let Some(point) = series.ring.latest() {
+                    f(namespace, name, &point);
+                }
+            }
+        }
+    }
+
     /// How many nodes and pods have readings.
     pub fn counts(&self) -> (usize, usize) {
         let data = self.data.read();
