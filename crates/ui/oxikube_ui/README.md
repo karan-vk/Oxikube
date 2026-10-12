@@ -55,6 +55,9 @@ app.run(|cx| {
   (`set_unavailable(Some("No Prometheus endpoint".into()), cx)`); `Sparkline::new(id, points)` is the axis-less form for
   table cells. Colours come from the active tokens (`ChartPalette`). `chart::gallery::ChartGallery` shows every state
   (the app's "Open Chart Gallery" command opens it).
+- **Allocation bar** (`oxikube_ui::allocation_bar::AllocationBar`, E13-S11): `AllocationBar::new(0.6).tone(Tone::Warn).limits_mark(Some(0.9)).usage(Some(0.3))`,
+  a stateless element: the fill in a status colour, a thin usage bar along the bottom edge, a limits tick. The caller
+  prints the numbers beside it; `usage(None)` draws no usage segment (no reading is not a zero).
 - Everything else (`dock`, `dialog`, `menu`, `input`, `tabs`, `sidebar`, `markdown`,
   `button`, `layout`) is a curated re-export under our names; there is no `pub use gpui_component::*`.
 

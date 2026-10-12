@@ -63,6 +63,9 @@ fn from_spec(spec: JsonRef<'_>, gpus: &GpuVendors) -> PodResources {
     if !limits.memory.is_zero() {
         limits.memory += overhead.memory;
     }
+    if !limits.ephemeral.is_zero() {
+        limits.ephemeral += overhead.ephemeral;
+    }
     PodResources { requests, limits }
 }
 

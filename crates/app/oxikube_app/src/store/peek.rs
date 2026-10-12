@@ -1,5 +1,5 @@
-//! Reading the caches without subscribing (E12-S16): a count of one namespace's objects and the
-//! objects of a cluster-scoped kind, for the Namespaces table's pod counts and the delete dialog's
+//! Reading the caches without subscribing (E12-S16): a count of one namespace's objects, the
+//! objects of one namespace (E13-S11) and the objects of a cluster-scoped kind, for the Namespaces table's pod counts and the delete dialog's
 //! warnings.
 //!
 //! Like [`ResourceStore::counts`], these only read: a kind nobody watches answers `None` and no
@@ -43,6 +43,28 @@ impl ResourceStore {
         // per visible row.
         counted(&FeedKey::new(gvk.clone(), FeedScope::Cluster)).or_else(|| {
             counted(&FeedKey::new(
+                gvk.clone(),
+                FeedScope::Namespace(namespace.into()),
+            ))
+        })
+    }
+
+    /// The cached objects of `gvk` in `namespace`, from a feed that is already open and listed
+    /// (the kind's cluster-wide feed, else the namespace's own), in no particular order. `None`
+    /// when no open feed covers the namespace, so a caller shows "not loaded" instead of an empty
+    /// namespace that may be wrong (E13-S11: the allocation sums of a namespace).
+    ///
+    /// The cost is the number of objects in the namespace (one `Arc` clone each), not of the feed.
+    pub fn namespace_objects(&self, gvk: &Gvk, namespace: &str) -> Option<Vec<Arc<StoreObject>>> {
+        let read = |key: &FeedKey| {
+            self.inner()
+                .with_entry(key, |st| {
+                    listed(st).then(|| st.cache.in_namespace(namespace))
+                })
+                .flatten()
+        };
+        read(&FeedKey::new(gvk.clone(), FeedScope::Cluster)).or_else(|| {
+            read(&FeedKey::new(
                 gvk.clone(),
                 FeedScope::Namespace(namespace.into()),
             ))

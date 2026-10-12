@@ -80,6 +80,8 @@ pub struct AmountPercents {
     pub cpu: Option<f64>,
     /// Memory percent.
     pub memory: Option<f64>,
+    /// Ephemeral storage percent.
+    pub ephemeral: Option<f64>,
     /// Per GPU resource name present in either operand.
     pub gpu: BTreeMap<Arc<str>, Option<f64>>,
 }
@@ -97,6 +99,7 @@ impl ResourceAmounts {
         AmountPercents {
             cpu: percent(&self.cpu, &base.cpu),
             memory: percent(&self.memory, &base.memory),
+            ephemeral: percent(&self.ephemeral, &base.ephemeral),
             gpu,
         }
     }

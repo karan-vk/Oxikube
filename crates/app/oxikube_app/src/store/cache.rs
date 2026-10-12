@@ -99,6 +99,17 @@ impl ObjectCache {
         self.by_namespace.get(namespace).map_or(0, KeySet::len)
     }
 
+    /// The objects in `namespace`, from the namespace index: the cost is the size of the answer,
+    /// not of the cache.
+    pub fn in_namespace(&self, namespace: &str) -> Vec<Arc<StoreObject>> {
+        self.by_namespace
+            .get(namespace)
+            .into_iter()
+            .flat_map(KeySet::iter)
+            .filter_map(|key| self.objects.get(key).cloned())
+            .collect()
+    }
+
     /// The cached object named `name` in no namespace (a cluster-scoped kind), if any.
     pub fn cluster_object(&self, name: &str) -> Option<&Arc<StoreObject>> {
         self.objects.get(&ObjectKey::new(None, name))

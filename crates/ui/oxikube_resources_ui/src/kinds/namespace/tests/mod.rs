@@ -1,6 +1,7 @@
 //! The Namespaces kind in the real table, dialogs and detail over testkit fakes (a real
 //! `CommandBus` and `MutationGuard`; no cluster, no threads).
 
+mod allocation;
 mod create;
 mod delete;
 mod keys;

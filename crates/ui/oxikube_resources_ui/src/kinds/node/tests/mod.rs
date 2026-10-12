@@ -5,6 +5,7 @@
 
 mod actions;
 mod drain;
+mod allocation;
 mod panel;
 mod table;
 
@@ -68,4 +69,17 @@ pub(super) fn tick(d: &mut Detail) {
 /// A node worth looking at: 4 CPU / 16 GiB / 110 pods allocatable.
 pub(super) fn worker() -> Resource {
     node().name("worker-1").build()
+}
+
+/// The text of the CPU requests line of the panel's allocation section.
+pub(super) fn cpu_requests(d: &mut Detail, panel: &Entity<NodePanel>) -> String {
+    use oxikube_app::allocation::AllocationKind;
+    d.f.vcx.update(|_, cx| {
+        panel
+            .read(cx)
+            .allocation_view()
+            .and_then(|view| view.row(&AllocationKind::Cpu))
+            .map(|row| row.requests_text())
+            .expect("the allocation is built")
+    })
 }

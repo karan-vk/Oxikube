@@ -6,11 +6,13 @@
 //!
 //! | Item | Holds |
 //! |---|---|
-//! | [`ResourceAmounts`] | CPU and memory as exact [`Quantity`](crate::Quantity) values plus whole-number GPU counts per vendor resource name |
+//! | [`ResourceAmounts`] | CPU, memory and ephemeral storage as exact [`Quantity`](crate::Quantity) values plus whole-number GPU counts per vendor resource name |
 //! | [`GpuVendors`], [`GpuVendorsTable`] | which extended resource names count as GPUs (`metrics.gpu_vendors`), globally and per cluster |
 //! | [`aggregate_pod_requests_limits`], [`PodResources`], [`PodAllocation`] | a pod's effective requests and limits, and where it is allocated |
 //! | [`NodeAllocatable`] | what a node offers (`status.allocatable`) |
 //! | [`percent`], [`Utilisation`], [`AmountPercents`] | usage over a base, `None` when the base is zero |
+//! | [`QuotaCaps`], [`ResourceCaps`] | what a namespace's `ResourceQuota`s cap (the tightest hard amount per resource; scoped quotas apart) (E13-S11) |
+//! | [`UnsetPods`] | how many pods set no request or limit, per resource (E13-S11) |
 //!
 //! # Rules
 //!
@@ -57,11 +59,15 @@ mod node;
 mod percent;
 mod pod;
 mod quantities;
+mod quota;
 #[cfg(test)]
 mod tests;
+mod unset;
 
 pub use amounts::ResourceAmounts;
 pub use gpu::{DEFAULT_GPU_VENDORS, GpuVendors, GpuVendorsTable};
 pub use node::NodeAllocatable;
 pub use percent::{AmountPercents, Utilisation, percent};
 pub use pod::{PodAllocation, PodResources, aggregate_pod_requests_limits};
+pub use quota::{QuotaCaps, ResourceCaps};
+pub use unset::UnsetPods;

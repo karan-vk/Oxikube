@@ -15,6 +15,7 @@
 //!
 //! | File | Holds |
 //! |---|---|
+//! | `allocation` | the allocation section the Node and Namespace panels share (E13-S11): requests, limits and live usage bars, and the task that polls for usage |
 //! | `spec` | [`KindSpec`]: the app's [`KindMeta`] plus the [`DetailRenderer`] |
 //! | `detail` | [`DetailRenderer`]: the generic detail, or a view factory for the kind's panel |
 //! | `specs` | [`KindSpecs`]: the GPUI global, registration and lookups (`kind_for` never fails) |
@@ -53,6 +54,7 @@
 //!
 //! [`KindMeta`]: oxikube_app::KindMeta
 
+pub(crate) mod allocation;
 mod builtin;
 mod config;
 pub(crate) mod configmap;
