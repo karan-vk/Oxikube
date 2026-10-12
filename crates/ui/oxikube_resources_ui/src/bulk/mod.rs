@@ -50,5 +50,5 @@ mod tests;
 
 pub use dialog::{BulkDialog, BulkSample, BulkStage};
 pub use editor::{EditorRow, LabelEditor};
-pub use flow::{BulkFlow, SELECTION_LABEL_ORDER, bulk_row_actions};
+pub use flow::{BulkFlow, bulk_row_actions};
 pub use kind::BulkKind;

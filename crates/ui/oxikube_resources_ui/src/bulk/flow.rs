@@ -13,10 +13,10 @@ use super::dialog::{BulkDialog, BulkSample};
 use super::kind::BulkKind;
 
 /// Where "Edit labels" sits in a menu: after the kind's own actions, before the generic delete.
-pub const SELECTION_LABEL_ORDER: u16 = 880;
+const SELECTION_LABEL_ORDER: u16 = 880;
 
-/// The row actions of the bulk commands: `selection::Label`, for any kind the server can patch, one object or several
-/// ("Edit labels"). Delete and restart are the existing row actions that become the bulk ones when
+/// The row actions of the bulk commands: `selection::Label`, for any kind the server can patch,
+/// one object or several ("Edit labels"). Delete and restart are the existing row actions that become the bulk ones when
 /// several rows are selected ([`BulkKind::of_action`]); `selection::Delete` and
 /// `selection::Restart` still appear in the palette through the table's own commands.
 ///

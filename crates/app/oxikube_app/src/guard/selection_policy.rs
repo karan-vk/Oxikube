@@ -2,14 +2,15 @@
 //! the audit detail. Names and counts only: never a label value, never an annotation value.
 
 use oxikube_domain::command::{Command, Propagation};
-use oxikube_domain::selection::SelectionSummary;
+use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::selection::{SelectionSummary, edit_counts};
 
 /// How many kinds the confirmation lists before it folds the rest.
 const MAX_LINES: usize = 6;
 
 /// The one-line confirmation of a bulk command, `None` for any other command.
 pub(super) fn summary(command: &Command, context: &str) -> Option<String> {
-    let what = |targets: &[oxikube_domain::ids::ResourceRef]| {
+    let what = |targets: &[ResourceRef]| {
         let counts = SelectionSummary::of(targets);
         let objects = match counts.total() {
             1 => "1 object".to_owned(),
@@ -46,8 +47,7 @@ pub(super) fn summary(command: &Command, context: &str) -> Option<String> {
             edits,
         } => {
             let (objects, lines) = what(targets);
-            let sets = edits.iter().filter(|edit| edit.value.is_some()).count();
-            let removes = edits.len() - sets;
+            let (sets, removes) = edit_counts(edits);
             format!(
                 "Change {sets} and remove {removes} {}{} on {objects} on {context}: {lines}.",
                 field.noun(),
@@ -76,11 +76,10 @@ pub(super) fn detail(command: &Command) -> Option<String> {
         .collect();
     let mut detail = format!("items={} kinds={}", counts.total(), kinds.join(","));
     if let Command::SelectionLabel { field, edits, .. } = command {
-        let sets = edits.iter().filter(|edit| edit.value.is_some()).count();
+        let (sets, removes) = edit_counts(edits);
         detail.push_str(&format!(
-            " field={} set={sets} remove={}",
-            field.key(),
-            edits.len() - sets
+            " field={} set={sets} remove={removes}",
+            field.key()
         ));
     }
     Some(detail)

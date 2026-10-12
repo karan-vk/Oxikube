@@ -13,7 +13,7 @@ mod labels;
 mod summary;
 
 pub use labels::{
-    LabelEdit, LabelField, LabelPreview, MAX_EDITS, label_merge_patch, preview_edits,
+    LabelEdit, LabelField, LabelPreview, MAX_EDITS, edit_counts, label_merge_patch, preview_edits,
     selector_warning, validate_edits,
 };
 pub use summary::{GroupCount, SelectionSummary};

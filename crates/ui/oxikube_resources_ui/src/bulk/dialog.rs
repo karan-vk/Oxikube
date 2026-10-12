@@ -13,6 +13,7 @@ use gpui::{
 use oxikube_app::{BulkReport, SelectionFlow, SelectionPlan};
 use oxikube_domain::command::{Command, Propagation};
 use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::selection::{LabelEdit, LabelField};
 use oxikube_ui::input::InputState;
 use oxikube_workspace::Workspace;
 use oxikube_workspace::modal::{ModalPlacement, ModalView};
@@ -122,10 +123,7 @@ impl BulkDialog {
         kind: BulkKind,
         targets: Vec<ResourceRef>,
         propagation: Propagation,
-        label: Option<(
-            oxikube_domain::selection::LabelField,
-            Vec<oxikube_domain::selection::LabelEdit>,
-        )>,
+        label: Option<(LabelField, Vec<LabelEdit>)>,
     ) -> Command {
         match kind {
             BulkKind::Delete => Command::SelectionDelete {
@@ -246,11 +244,7 @@ impl BulkDialog {
     }
 
     /// Switches the editor between labels and annotations.
-    pub fn set_field(
-        &mut self,
-        field: oxikube_domain::selection::LabelField,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_field(&mut self, field: LabelField, cx: &mut Context<Self>) {
         if let Some(editor) = self.editor.as_mut()
             && self.stage == BulkStage::Confirm
             && editor.field != field
@@ -280,9 +274,5 @@ impl BulkDialog {
         if self.stage != BulkStage::Running {
             cx.emit(DismissEvent);
         }
-    }
-
-    pub(super) fn on_enter(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.confirm(cx);
     }
 }

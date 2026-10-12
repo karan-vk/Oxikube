@@ -8,7 +8,7 @@ use oxikube_domain::selection::validate_edits;
 use oxikube_domain::{OxiError, OxiResult};
 
 use super::ops::{delete_row, label_row, restart_row};
-use super::report::{BulkReport, BulkRow};
+use super::report::{BulkReport, BulkRow, BulkStatus};
 use super::rows::Batch;
 use crate::actions::object_label;
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
@@ -69,58 +69,15 @@ async fn handle(
         id: &batch_id,
         via: id,
     };
-    let (verb, rows) = match &command {
-        Command::SelectionDelete { propagation, .. } => (
-            "deleted",
-            run_each(targets, CONCURRENCY, |target| {
-                let batch = &batch;
-                async move {
-                    let status = delete_row(batch, &target, *propagation).await;
-                    BulkRow { target, status }
-                }
-            })
-            .await,
-        ),
-        Command::SelectionRestart { .. } => {
-            if let Some(other) = targets.iter().find(|target| !is_rollable(&target.gvk)) {
-                return Err(OxiError::validation(format!(
-                    "{} cannot be restarted: only Deployments, StatefulSets and DaemonSets can.",
-                    object_label(other)
-                )));
-            }
-            (
-                "restarted",
-                run_each(targets, CONCURRENCY, |target| {
-                    let batch = &batch;
-                    async move {
-                        let status = restart_row(batch, service, &target).await;
-                        BulkRow { target, status }
-                    }
-                })
-                .await,
-            )
+    let verb = check(&command, &targets)?;
+    let rows = run_each(targets, CONCURRENCY, |target| {
+        let (batch, command) = (&batch, &command);
+        async move {
+            let status = work(batch, service, command, &target).await;
+            BulkRow { target, status }
         }
-        Command::SelectionLabel { field, edits, .. } => {
-            validate_edits(*field, edits)?;
-            (
-                "labelled",
-                run_each(targets, CONCURRENCY, |target| {
-                    let batch = &batch;
-                    async move {
-                        let status = label_row(batch, &target, *field, edits).await;
-                        BulkRow { target, status }
-                    }
-                })
-                .await,
-            )
-        }
-        other => {
-            return Err(OxiError::validation(format!(
-                "{} is not a bulk command",
-                other.id()
-            )));
-        }
-    };
+    })
+    .await;
     let report = BulkReport {
         batch: batch_id,
         dry_run: mutation.dry_run(),
@@ -138,6 +95,50 @@ async fn handle(
         message: Some(report.summary()),
         data: Some(report.to_data()),
     })
+}
+
+/// Checks what the command asks of every object before the first request and returns the word
+/// its report uses for what it did.
+fn check(command: &Command, targets: &[ResourceRef]) -> OxiResult<&'static str> {
+    match command {
+        Command::SelectionDelete { .. } => Ok("deleted"),
+        Command::SelectionRestart { .. } => {
+            if let Some(other) = targets.iter().find(|target| !is_rollable(&target.gvk)) {
+                return Err(OxiError::validation(format!(
+                    "{} cannot be restarted: only Deployments, StatefulSets and DaemonSets can.",
+                    object_label(other)
+                )));
+            }
+            Ok("restarted")
+        }
+        Command::SelectionLabel { field, edits, .. } => {
+            validate_edits(*field, edits)?;
+            Ok("labelled")
+        }
+        other => Err(OxiError::validation(format!(
+            "{} is not a bulk command",
+            other.id()
+        ))),
+    }
+}
+
+/// The work on one object of the batch.
+async fn work(
+    batch: &Batch<'_>,
+    service: &WorkloadService,
+    command: &Command,
+    target: &ResourceRef,
+) -> BulkStatus {
+    match command {
+        Command::SelectionDelete { propagation, .. } => {
+            delete_row(batch, target, *propagation).await
+        }
+        Command::SelectionRestart { .. } => restart_row(batch, service, target).await,
+        Command::SelectionLabel { field, edits, .. } => {
+            label_row(batch, target, *field, edits).await
+        }
+        other => BulkStatus::Failed(format!("{} is not a bulk command", other.id())),
+    }
 }
 
 /// The objects of the batch: at least one, a few thousand at most, all in the permit's cluster,

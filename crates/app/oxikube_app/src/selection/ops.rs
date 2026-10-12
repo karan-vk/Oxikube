@@ -2,7 +2,7 @@
 
 use oxikube_domain::command::{CommandId, Propagation};
 use oxikube_domain::ids::ResourceRef;
-use oxikube_domain::selection::{LabelEdit, LabelField, label_merge_patch};
+use oxikube_domain::selection::{LabelEdit, LabelField, edit_counts, label_merge_patch};
 use oxikube_ports::Patch;
 
 use super::report::BulkStatus;
@@ -77,12 +77,8 @@ pub(super) async fn label_row(
     field: LabelField,
     edits: &[LabelEdit],
 ) -> BulkStatus {
-    let sets = edits.iter().filter(|edit| edit.value.is_some()).count();
-    let detail = format!(
-        "field={} set={sets} remove={}",
-        field.key(),
-        edits.len() - sets
-    );
+    let (sets, removes) = edit_counts(edits);
+    let detail = format!("field={} set={sets} remove={removes}", field.key());
     batch
         .row(CommandId::SELECTION_LABEL, target, Some(&detail), async {
             let patch = Patch::merge(label_merge_patch(field, edits));

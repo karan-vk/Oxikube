@@ -7,7 +7,7 @@ use gpui::{
 };
 use oxikube_domain::command::Propagation;
 use oxikube_domain::safety::Risk;
-use oxikube_domain::selection::{LabelField, selector_warning};
+use oxikube_domain::selection::selector_warning;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::dialog::{DialogFooter, DialogHeader, DialogTitle};
 use oxikube_ui::input::Input;
@@ -39,16 +39,12 @@ impl BulkDialog {
         let n = self.plan.summary().total();
         let noun = self.count_noun();
         let s = if n == 1 { "" } else { "s" };
-        match self.kind {
-            BulkKind::Delete => format!("Delete {n} {noun}{s}?").into(),
-            BulkKind::Restart => format!("Restart {n} {noun}{s}?").into(),
-            BulkKind::Label => {
-                let word = self.editor.as_ref().map_or("labels", |e| match e.field {
-                    LabelField::Labels => "labels",
-                    LabelField::Annotations => "annotations",
-                });
+        match (self.kind, &self.editor) {
+            (BulkKind::Label, editor) => {
+                let word = editor.as_ref().map_or("labels", |e| e.field.key());
                 format!("Edit {word} of {n} {noun}{s}").into()
             }
+            (kind, _) => format!("{} {n} {noun}{s}?", kind.verb()).into(),
         }
     }
 

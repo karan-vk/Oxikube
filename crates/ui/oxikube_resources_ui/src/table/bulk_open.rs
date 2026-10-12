@@ -55,12 +55,11 @@ impl ResourceTable {
             return;
         };
         let sample = self.bulk_sample(&targets, cx);
-        match actions
+        if let Err(error) = actions
             .bulk_flow(workspace)
             .begin(kind, targets, sample, window, cx)
         {
-            Ok(_) => {}
-            Err(error) => self.toast(Toast::error(error.to_string()), cx),
+            self.toast(Toast::error(error.to_string()), cx);
         }
     }
 

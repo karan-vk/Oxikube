@@ -140,6 +140,8 @@ impl BulkDialog {
             .ok();
     }
 
+    /// A field of the dialog changed (the typed phrase or an editor input): the button and the
+    /// preview follow; Enter confirms.
     pub(super) fn on_typed(
         &mut self,
         _: &Entity<InputState>,

@@ -176,6 +176,12 @@ fn is_dns_subdomain(text: &str) -> bool {
         })
 }
 
+/// How many of `edits` set a key and how many remove one: `(sets, removes)`.
+pub fn edit_counts(edits: &[LabelEdit]) -> (usize, usize) {
+    let sets = edits.iter().filter(|edit| edit.value.is_some()).count();
+    (sets, edits.len() - sets)
+}
+
 /// The JSON merge patch (RFC 7386) that applies `edits` to `field`:
 /// `{"metadata":{"labels":{"app":"web","old":null}}}`. A `null` removes the key (or does nothing
 /// where the object never had it), a string sets it, every other key is left alone.

@@ -5,7 +5,7 @@ use gpui::{App, AppContext as _, Context, Entity, Subscription, Window};
 use oxikube_domain::selection::{
     LabelEdit, LabelField, LabelPreview, MAX_EDITS, preview_edits, validate_edits,
 };
-use oxikube_ui::input::{InputEvent, InputState};
+use oxikube_ui::input::InputState;
 
 use super::dialog::BulkDialog;
 
@@ -61,7 +61,7 @@ impl LabelEditor {
         let value = cx.new(|cx| InputState::new(window, cx).placeholder("value"));
         for input in [&key, &value] {
             self._subscriptions
-                .push(cx.subscribe_in(input, window, BulkDialog::on_editor_input));
+                .push(cx.subscribe_in(input, window, BulkDialog::on_typed));
         }
         self.rows.push(EditorRow {
             key,
@@ -163,28 +163,5 @@ impl LabelEditor {
             current.iter().map(|(k, v)| (k.as_str(), v.as_str())),
             &self.edits(cx),
         )
-    }
-}
-
-impl BulkDialog {
-    /// A row's field changed: the preview and the button follow.
-    pub(super) fn on_editor_input(
-        &mut self,
-        _: &Entity<InputState>,
-        event: &InputEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            InputEvent::Change => {
-                self.error = None;
-                cx.notify();
-            }
-            InputEvent::PressEnter { .. } => {
-                // Enter in the last row's value adds a row; Enter anywhere else applies.
-                self.on_enter(window, cx);
-            }
-            InputEvent::Focus | InputEvent::Blur => {}
-        }
     }
 }
