@@ -57,13 +57,25 @@ impl PulsesView {
                 return;
             }
         }
-        let nodes = self.model.tile("nodes").and_then(|t| match &t.count {
-            CountState::Counted(count) => Some(count.total),
-            _ => None,
-        });
-        // The nodes are not listed yet: wait for them (the tick looks again).
-        let Some(nodes) = nodes else {
-            return;
+        // The sums need the nodes' allocatable, so the nodes must be listed. When they cannot be,
+        // the gauges say why rather than wait for ever.
+        let nodes = match self.model.tile("nodes").map(|t| &t.count) {
+            Some(CountState::Counted(count)) => count.total,
+            Some(CountState::NoAccess { .. }) => {
+                return self.nodes_missing("you may not list the nodes", cx);
+            }
+            Some(CountState::OverBudget { .. }) => {
+                return self.nodes_missing("the nodes are over the watch budget", cx);
+            }
+            Some(CountState::Failed { message }) => {
+                let reason = format!("the nodes could not be listed: {message}");
+                return self.nodes_missing(&reason, cx);
+            }
+            Some(CountState::NotWatched) if self.settled() => {
+                return self.nodes_missing("the nodes are not watched", cx);
+            }
+            // Still listing (the tick looks again).
+            _ => return,
         };
         let stamp = (usage.epoch(), nodes);
         if self.gauge_stamp == Some(stamp) {
@@ -89,6 +101,16 @@ impl PulsesView {
             this.update(cx, |this, cx| this.apply_utilisation(sums, cx))
                 .ok();
         }));
+    }
+
+    /// Metrics are there but the nodes they are measured against are not: both gauges say so.
+    fn nodes_missing(&mut self, reason: &str, cx: &mut Context<Self>) {
+        self.gauge_stamp = None;
+        self.gauge_task = None;
+        self.show_gauges(
+            ClusterFigure::Unavailable(format!("metrics unavailable: {reason}")),
+            cx,
+        );
     }
 
     fn apply_utilisation(&mut self, sums: Option<ClusterUtilisation>, cx: &mut Context<Self>) {

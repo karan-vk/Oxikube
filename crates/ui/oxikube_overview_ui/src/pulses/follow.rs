@@ -116,7 +116,17 @@ impl PulsesView {
         {
             self.interest = Some(metrics.watch(&self.cluster, MetricsKind::Nodes));
         }
+        // A new selection: the one-off counts were made under the old one.
+        let rescoped = self.scoped_to.as_ref().is_some_and(|old| *old != selection);
+        self.scoped_to = Some(selection);
+        if rescoped {
+            self.rescope_recounts();
+        }
         self.refresh_counts(cx);
+        if rescoped {
+            let now = self.now();
+            self.fetch_due(now, cx);
+        }
         self.refresh_cluster(cx);
         cx.notify();
     }

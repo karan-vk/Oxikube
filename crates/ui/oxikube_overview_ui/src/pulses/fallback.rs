@@ -7,6 +7,7 @@
 //! owned by the page: closing it aborts the one in flight.
 
 use oxikube_app::fetch_count;
+use oxikube_domain::ids::Scope;
 use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 use oxikube_runtime::{notify_coalesced, spawn_kube};
 
@@ -29,6 +30,18 @@ pub(super) struct Recount {
 }
 
 impl Recount {
+    /// Whether a request is out.
+    #[cfg(test)]
+    pub(super) fn is_out(&self) -> bool {
+        self.out
+    }
+
+    /// Pretends a request is out, for a test of what a selection change drops.
+    #[cfg(test)]
+    pub(super) fn mark_out_for_test(&mut self) {
+        self.out = true;
+    }
+
     /// Drops the request in flight, if any. When it was last asked for is kept.
     pub(super) fn cancel(&mut self) {
         self.task = None;
@@ -47,6 +60,23 @@ impl PulsesView {
                 .is_none_or(|at| now - at >= FALLBACK_INTERVAL.as_secs_f64());
             if due && !recount.out {
                 self.fetch(index, now, cx);
+            }
+        }
+    }
+
+    /// The namespace selection changed: what the namespaced kinds were counted once under no
+    /// longer holds. Forgets those counts and drops their requests in flight (a late answer must
+    /// not land in the tile), so the next [`fetch_due`](Self::fetch_due) asks again under the
+    /// new selection. Cluster-scoped kinds do not depend on the selection and are left alone.
+    pub(super) fn rescope_recounts(&mut self) {
+        self.model.clear_namespaced_fallbacks();
+        for (index, tile) in self.model.tiles().iter().enumerate() {
+            let namespaced = tile
+                .spec
+                .target()
+                .is_some_and(|t| t.scope == Scope::Namespaced);
+            if namespaced {
+                self.recounts[index] = Recount::default();
             }
         }
     }

@@ -311,3 +311,47 @@ fn the_cluster_is_polled_only_while_the_page_is_displayed(cx: &mut TestAppContex
         "the last interest gone, nothing polls"
     );
 }
+
+fn refuse_all() -> oxikube_app::store::StoreOptions {
+    oxikube_app::store::StoreOptions {
+        budget: Arc::new(oxikube_app::store::MaxFeeds::new(0)),
+        ..no_grace()
+    }
+}
+
+#[gpui::test]
+fn gauges_say_why_when_the_nodes_cannot_be_listed(cx: &mut TestAppContext) {
+    // metrics-server answers, but the watch budget refused the nodes' feed.
+    let mut fx = Fixture::open_seeded(cx, refuse_all(), |_| {});
+    fx.ticks(2);
+    poll(&fx, at(1), vec![sample("n1", at(0), 1000, 1024)]);
+    fx.ticks(2);
+    for id in ["cluster-cpu", "cluster-memory"] {
+        let tile = face(&mut fx, id);
+        assert_eq!(tile.value, "–", "{id}");
+        assert_eq!(
+            tile.caption, "metrics unavailable: the nodes are over the watch budget",
+            "{id}: a reason, not 'Waiting for metrics' for ever"
+        );
+    }
+}
+
+#[gpui::test]
+fn gauges_say_so_when_the_nodes_are_forbidden(cx: &mut TestAppContext) {
+    let mut fx = Fixture::open_seeded(cx, no_grace(), |ports| {
+        for _ in 0..14 {
+            ports
+                .resources
+                .script()
+                .watch
+                .push_err(oxikube_domain::OxiError::forbidden("nodes is forbidden"));
+        }
+    });
+    fx.ticks(2);
+    poll(&fx, at(1), vec![sample("n1", at(0), 1000, 1024)]);
+    fx.ticks(2);
+    assert_eq!(
+        face(&mut fx, "cluster-cpu").caption,
+        "metrics unavailable: you may not list the nodes"
+    );
+}

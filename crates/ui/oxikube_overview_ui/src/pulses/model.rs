@@ -10,6 +10,7 @@
 
 use oxikube_app::columns::UsageThresholds;
 use oxikube_app::{CountState, CountTarget};
+use oxikube_domain::ids::Scope;
 
 use super::face::{ClusterFigure, Fallback, TileFace, cluster_face, kind_face};
 use super::ring::PulseRing;
@@ -181,12 +182,17 @@ impl PulsesModel {
         true
     }
 
-    /// Forgets every one-off count, so the kinds that still lack a feed ask again.
-    pub fn clear_fallbacks(&mut self) -> bool {
+    /// Forgets the one-off count of every namespaced kind: they were counted under a namespace
+    /// selection that no longer holds. Returns whether any tile changed.
+    pub fn clear_namespaced_fallbacks(&mut self) -> bool {
         let thresholds = self.thresholds;
         let mut changed = false;
         for tile in &mut self.tiles {
-            if tile.fallback != Fallback::None {
+            let namespaced = tile
+                .spec
+                .target()
+                .is_some_and(|t| t.scope == Scope::Namespaced);
+            if namespaced && tile.fallback != Fallback::None {
                 tile.fallback = Fallback::None;
                 tile.face = tile.compute_face(&thresholds);
                 changed = true;

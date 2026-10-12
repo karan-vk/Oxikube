@@ -14,6 +14,7 @@ use oxikube_app::{
 };
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::session::NamespaceSelection;
 use oxikube_keymap::{KeyContextBuilder, contexts};
 use oxikube_ports::ClockPort;
 use oxikube_ui::layout::v_flex;
@@ -65,6 +66,8 @@ pub struct PulsesView {
     pub(super) active: bool,
     /// Ticks since the lease was made: a kind not watched after the first few is really not.
     pub(super) age: u32,
+    /// The namespace selection the lease and the one-off counts are scoped to.
+    pub(super) scoped_to: Option<NamespaceSelection>,
     /// Seconds (clock) of the last history sample.
     pub(super) last_sample: Option<f64>,
     /// The one-off count of each tile, by tile.
@@ -101,6 +104,7 @@ impl PulsesView {
             interest: None,
             active: true,
             age: 0,
+            scoped_to: None,
             last_sample: None,
             recounts: (0..tiles).map(|_| Recount::default()).collect(),
             gauge_task: None,

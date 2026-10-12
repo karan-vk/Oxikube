@@ -7,10 +7,11 @@ use gpui::TestAppContext;
 use oxikube_app::CountState;
 use oxikube_app::store::{MaxFeeds, StoreOptions};
 use oxikube_domain::OxiError;
+use oxikube_domain::session::NamespaceSelection;
 use oxikube_ports::ListPage;
 use oxikube_testkit::{ResourceCall, pod};
 
-use super::{Fixture, no_grace};
+use super::{Fixture, cluster, no_grace};
 use crate::pulses::{FALLBACK_INTERVAL, Level, SETTLE_TICKS};
 
 fn refuse_all() -> StoreOptions {
@@ -132,5 +133,82 @@ fn a_kind_with_a_feed_is_never_counted_by_request(cx: &mut TestAppContext) {
         metadata_calls(&fx),
         0,
         "the feeds count; nothing asks the API server"
+    );
+}
+
+#[gpui::test]
+fn a_new_namespace_selection_counts_the_unwatched_kinds_again(cx: &mut TestAppContext) {
+    let mut fx = Fixture::open_seeded(cx, refuse_all(), |ports| {
+        // Under every namespace pods are 4; under namespace "b" they are 2.
+        for _ in 0..14 {
+            ports
+                .resources
+                .script()
+                .list_metadata
+                .push_ok(meta_page(1, Some(3)));
+        }
+        for _ in 0..14 {
+            ports
+                .resources
+                .script()
+                .list_metadata
+                .push_ok(meta_page(1, Some(1)));
+        }
+    });
+    fx.ticks(2);
+    let value = |fx: &mut Fixture, id: &'static str| {
+        fx.read(move |p| p.model().tile(id).expect("a tile").face().value.clone())
+    };
+    assert_eq!(value(&mut fx, "pods"), "4");
+    let first = metadata_calls(&fx);
+
+    fx.sessions
+        .set_namespace_selection(&cluster(), NamespaceSelection::single("b"))
+        .expect("selected");
+    fx.vcx.run_until_parked();
+    assert_eq!(
+        value(&mut fx, "pods"),
+        "2",
+        "the count of the old selection is not shown under the new one, and the new one is asked \
+         for at once, not after the interval"
+    );
+    // The cluster-scoped kinds do not depend on the selection and are not asked again.
+    let namespaced = fx.read(|p| {
+        p.model()
+            .tiles()
+            .iter()
+            .filter(|t| {
+                t.spec
+                    .target()
+                    .is_some_and(|t| t.scope == oxikube_domain::ids::Scope::Namespaced)
+            })
+            .count()
+    });
+    assert_eq!(metadata_calls(&fx), first + namespaced);
+}
+
+#[gpui::test]
+fn a_selection_change_drops_the_counts_in_flight(cx: &mut TestAppContext) {
+    let mut fx = Fixture::open_seeded(cx, refuse_all(), |_| {});
+    fx.ticks(2);
+    // A request is out for a namespaced kind, as if it had not answered yet.
+    fx.vcx.update(|_, cx| {
+        fx.page.update(cx, |page, _| {
+            let pods = page
+                .model
+                .tiles()
+                .iter()
+                .position(|t| t.spec.id == "pods")
+                .expect("pods");
+            page.recounts[pods].mark_out_for_test();
+        });
+    });
+    fx.sessions
+        .set_namespace_selection(&cluster(), NamespaceSelection::single("b"))
+        .expect("selected");
+    fx.vcx.run_until_parked();
+    assert!(
+        !fx.read(|p| p.recounts.iter().any(|r| r.is_out())),
+        "nothing from the old selection is still out"
     );
 }
