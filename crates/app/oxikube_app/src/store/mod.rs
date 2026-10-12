@@ -105,8 +105,8 @@ pub use config::{
     DEFAULT_IDLE_GRACE, FeedInfo, StoreConfig, StoreOptions, StoreProbe, StoreRuntime,
 };
 pub use counts::{
-    BucketCounts, CORE_TARGETS, CoreTarget, CountState, CountTarget, CountsLease, KindCount,
-    WorkloadCounters,
+    BucketCounts, CORE_TARGETS, CoreTarget, CountState, CountTarget, CountsLease, FetchedCount,
+    KindCount, WorkloadCounters, fetch_count,
 };
 pub use delta::{FeedState, RowChange, RowOp, StoreDelta};
 pub use feed::{StorePorts, TableColumns};

@@ -209,6 +209,7 @@ Two rules keep a scenario measuring what the app does (E07-F509, see
 | `logs-stream` | measured (E08-S02, see [Log viewer](#log-viewer-streaming-5-000-liness-e08-s02)) | the log view streaming 5 000 lines/s after a 1 000-line tail, 120 scripted frames per mode: `frame_ms` / `draw_ms` (wrap off, following), `paused_*`, `wrap_*`, `wrap_paused_*`, `search_*` / `filter_*` (E08-S03: a regex search highlighting / filtering while it streams), `merged_*`, `merged_wrap_*` (E08-S04: the same lines merged from 10 pods of a Deployment), `rss_mib` / `peak_rss_mib`; fails unless every mode receives the lines at that rate and `max_notifies_per_frame` ≤ 1 |
 | `editor-5mb` | measured (E10-S11, see [Manifest editor](#manifest-editor-a-5-mb-dump-e10-s11)) | the manifest editor over a 5 MB `kubectl get -o yaml` dump (a `kind: List` of about 12 000 pods, an error planted in every 20th) checked against the Pod schema: `open_ms` (building the view with the text to the end of its first frame), `frame_ms` / `draw_ms` (120 frames typing one keystroke each into a visible line, the clock moving one 120 Hz frame between them so the 150 ms debounce keeps restarting), `validation_ms` (the whole pass the pause starts, run on the test scheduler: its CPU time), `scroll_frame_ms` / `scroll_draw_ms` (120 frames scrolling from the top to the end with the diagnostics drawn), `slow_frame_pct` (typing and scrolling frames over 16 ms), `rss_mib` / `peak_rss_mib`; fails unless every planted error is found and the gutter paints no more markers than lines on screen |
 | `charts` | measured (E13-S07, see [Charts](#charts-12-sparklines-and-3-area-charts-e13-s07)) | the overview's worst case, 12 sparklines and 3 area charts of 5 760 points (24 h at 15 s) in the app's window root: `frame_ms` / `draw_ms` (120 frames with nothing changed: the paint from cached geometry), `tick_frame_ms` / `tick_draw_ms` (120 frames each handing all 15 new data, so every piece re-decimates, re-projects and re-tessellates once per frame), `hover_frame_ms` / `hover_draw_ms` (a chart's tooltip following a sweeping cursor), `rss_mib` / `peak_rss_mib`; fails when a repaint rebuilt any geometry or a tick built more than once per piece |
+| `pulses` | measured (E13-S10, see [Pulses](#pulses-16-tiles-e13-s10)) | the pulses page, 16 tiles with 14 sparklines of 60 samples, in the app's window root: `frame_ms` / `draw_ms` (120 frames with nothing changed) and `tick_frame_ms` / `tick_draw_ms` (every tile takes a new sample on every frame: the worst case, the page samples every 5 s), `rss_mib` |
 
 A scenario whose view is not built yet writes `status: "unavailable"` and a specific `reason` into the JSON report, prints `UNAVAILABLE: <reason>` with the enabling stories, and exits 0; every scenario is scripted today (`editor-5mb` was the last, E10-S11). The scripted path and the sample schema are covered by a `#[gpui::test]` that drives a fake feed through the same driver (`oxikube_runtime::perf::harness`).
 
@@ -1657,3 +1658,17 @@ no such number has been verified here. Do not put "10 k Running" in a report wit
 8. Animations are short (≤ 150 ms), GPU-cheap, and off under reduce-motion.
 9. Every PR touching a hot path reports before/after numbers from `--perf` in the
    "Performance" section of the PR template.
+
+## Pulses: 16 tiles (E13-S10)
+
+The pulses page stays open with live updates: p95 frame at most 8 ms, idle CPU under 1 %.
+
+- **Costs.** A tick of the page is 14 O(1) reads of the store's running tallies per second and no redraw unless a count changed
+  (`notify_coalesced`); a history sample is taken every 5 s; a sparkline re-tessellates only when its `Arc` of samples is
+  replaced (the `PulseRing` hands out the same `Arc` until a push). The cluster gauges are summed on the background executor,
+  only when the metrics service published a poll or the node count changed. A page that is not the displayed tab holds no lease
+  and no metrics interest, so nothing is counted or polled for it.
+- **Headless** (`oxikube --perf-scenario pulses`, release-fast, Apple silicon, 3 runs): repaint `frame_ms` p50 0.8, p95 1.4; tick
+  (all 16 tiles sampled on every frame) p50 1.1, p95 1.8; rss 49 MiB; 0 dropped frames.
+- Not measured here: the 10 000-pod churn fixture on a kind cluster (it needs the shared cluster's 10 000 pods; the page reads
+  tallies, so churn costs it nothing beyond what the pods table's feed already costs).

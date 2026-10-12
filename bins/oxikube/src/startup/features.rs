@@ -41,6 +41,11 @@ pub const FEATURES: &[Feature] = &[
         name: "oxikube_settings_ui",
         init: oxikube_settings_ui::init,
     },
+    // After `oxikube_settings_ui`: the pulses entry joins the Metrics section it registers.
+    Feature {
+        name: "oxikube_overview_ui",
+        init: oxikube_overview_ui::init,
+    },
     Feature {
         name: "oxikube_palette",
         init: oxikube_palette::command_palette::init,

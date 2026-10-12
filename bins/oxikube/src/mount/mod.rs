@@ -84,6 +84,9 @@
 //!     Pods and Nodes tables and a pod's containers (set before the resource views start), polls
 //!     metrics-server for the cluster tab this window shows (only while a table watches) and
 //!     follows the `metrics` setting.
+//! 17. pulses (E13-S10, `mount::pulses`): `cluster::ShowPulses` (`:pulses`, the palette's "Show
+//!     Pulses", the sidebar's Pulses entry) opens the cluster's pulses page in its tab: a gauge and a
+//!     short history per core kind and the cluster's CPU and memory, drilling into the tables.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -100,6 +103,7 @@ mod keymap;
 mod logs;
 mod metrics;
 mod palette;
+mod pulses;
 mod resources;
 mod tabs;
 mod terminal;
@@ -185,6 +189,8 @@ pub struct Wiring {
     _quit: Task<()>,
     /// Opens the cluster metrics pages for `cluster::ShowMetricsSettings` (E13-S05).
     _metrics_pages: Task<()>,
+    /// Opens the cluster pulses pages for `cluster::ShowPulses` (E13-S10).
+    _pulses_pages: Task<()>,
     /// Follows the sessions and the settings for the metrics provider service (E13-S05).
     _follow_metrics: crate::metrics_provider::MetricsFollow,
     /// Live metrics (E13-S03): the service's pollers, its settings and this window's shown tab.
@@ -213,6 +219,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher: Rc<dyn CommandDispatcher> = Rc::new(bus_dispatcher.clone());
     let dispatcher_for_keymap = dispatcher.clone();
     let dispatcher_for_metrics = dispatcher.clone();
+    let dispatcher_for_pulses = dispatcher.clone();
 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
@@ -247,6 +254,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
+    let pulses_stores = stores.clone();
     let tab_deps = tabs::TabDeps {
         sessions: services.sessions.clone(),
         namespaces: services.namespaces.clone(),
@@ -299,6 +307,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         services.sessions.clone(),
         ports.clusters.clock.clone(),
     ));
+    let (pulses_sink, pulses_rx) = oxikube_overview_ui::pulses::PulsesRequestSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         nodes: nodes.clone(),
         cluster_commands: services.cluster_commands.clone(),
@@ -325,6 +334,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         metrics: services.metrics.provider.clone(),
         metrics_settings: Arc::new(crate::metrics_provider::SettingsMetricsWriter::new(cx)),
         metrics_pages: metrics_sink,
+        pulses_pages: pulses_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -529,6 +539,21 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // Pulses (E13-S10): `cluster::ShowPulses` (`:pulses`, the palette, the sidebar's Pulses entry)
+    // opens the page in the cluster tab.
+    let pulses_pages = pulses::start_views(
+        pulses::PulsesParts {
+            sessions: services.sessions.clone(),
+            stores: pulses_stores,
+            dispatcher: dispatcher_for_pulses,
+            metrics: services.live_metrics.clone(),
+            clock: ports.clusters.clock.clone(),
+        },
+        tabs.downgrade(),
+        pulses_rx,
+        window,
+        cx,
+    );
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -551,6 +576,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _quit: quit,
         _editor_views: editor_views,
         _metrics_pages: metrics_pages,
+        _pulses_pages: pulses_pages,
         _follow_metrics: follow_metrics,
         _live_metrics: live_metrics,
     });

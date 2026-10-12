@@ -126,6 +126,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             colour: Some(RED),
         },
         "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
+        "cluster::ShowPulses" => Command::ClusterShowPulses { cluster },
         "cluster::SwitchTab" => Command::ClusterSwitchTab { index: 1 },
         "cluster::ToggleFavourite" => Command::ClusterToggleFavourite {
             cluster,

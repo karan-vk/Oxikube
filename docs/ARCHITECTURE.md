@@ -737,6 +737,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `MetricsSettingsView` (a workspace item of the cluster's tab; "Look again" and "Turn history metrics off / on" are bus
   commands) and `MetricsViews` (`cluster::ShowMetricsSettings` opens the page in the cluster's tab). The sidebar's "Metrics"
   section ("Provider and settings") and the palette ("Cluster Metrics Settings") reach it.
+- `oxikube_overview_ui::pulses` (E13-S10) — the pulses page (`:pulses`, k9s' pulses): sixteen tiles on a four-column grid, the
+  cluster's CPU and memory and fourteen core kinds (nodes, namespaces, pods, deployments, stateful sets, daemon sets, jobs, cron
+  jobs, PVs, PVCs, HPAs, ingresses, network policies, service accounts), each with a number, a gauge and a 60-sample sparkline.
+  `PulsesModel` is the page as plain data (`TileFace` wording per state, `PulseRing` history, grid selection); `PulsesView` is a
+  workspace item of the cluster's tab with the `Pulses` key context (arrows / `hjkl` move, `enter` opens the tile's table with
+  `resource::OpenList`, `r` counts again, `esc` closes). Counts come from the store's running tallies through a `CountsLease`
+  (the watch budget decides; a refused kind shows a one-off `fetch_count`, a metadata list with `limit=1`, marked "counted
+  once"); the gauges come from `oxikube_app::metrics::cluster_utilisation` over the per-node rings of `MetricsService`, toned by
+  `metrics.thresholds`, or say `metrics unavailable: <reason>`. The page holds the lease and a `MetricsInterest` only while it is
+  the displayed tab. `cluster::ShowPulses` (a read, tool `app.cluster_show_pulses`) opens it: the palette's "Show Pulses", the
+  `:pulses` / `:pulse` / `:pu` reserved words of the jump bar, and the sidebar's Metrics > Pulses entry; the window's
+  `PulsesViews` applies it (`mount::pulses`).
 - `oxikube_ui::editor` (E07-S06, E10-S04) — gpui-component's editor (`tree-sitter-yaml` feature) behind our own API. `EditorApi`
   is the trait feature views use, in UTF-8 byte offsets and our types (`text`/`set_text`, `version`, `selections`/`select`,
   `set_read_only`, `set_soft_wrap`, `set_diagnostics(Vec<EditorDiagnostic>)`, `add_decoration`/`decorations`/

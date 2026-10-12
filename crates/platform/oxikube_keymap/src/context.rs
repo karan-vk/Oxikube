@@ -93,6 +93,8 @@ pub mod contexts {
     pub const MODAL: &str = "Modal";
     /// The cluster catalog home.
     pub const CATALOG: &str = "Catalog";
+    /// The pulses page (E13-S10): a grid of gauges, one tile selected.
+    pub const PULSES: &str = "Pulses";
     /// The contexts of the Phase 1 views, the ones the default keymaps define sections for
     /// (E11-S07), in the order of the table in the [module docs](super). A new view that takes
     /// keys adds its name here so the defaults tests cover it.

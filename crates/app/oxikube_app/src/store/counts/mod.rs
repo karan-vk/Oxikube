@@ -7,6 +7,7 @@
 //! | the answer for one kind: [`CountState`], [`KindCount`] | this file |
 //! | reading counts off the cache, never starting a feed: [`ResourceStore::counts`] | `read` |
 //! | holding the feeds a view needs open: [`CountsLease`] | `lease` |
+//! | one request for a kind that has no feed (E13-S10): [`fetch_count`] | `fetch` |
 //! | the running tally every feed's cache keeps | `tally` |
 //! | the Workloads overview's counters, a lease plus the last states (E12-S07): [`WorkloadCounters`] | `workloads` |
 //!
@@ -44,12 +45,14 @@
 //! A `403` on the feed is [`CountState::NoAccess`], never a zero, so a user without `list` on
 //! pods sees "no access" instead of an empty cluster.
 
+mod fetch;
 mod lease;
 mod read;
 mod tally;
 mod target;
 mod workloads;
 
+pub use fetch::{FetchedCount, fetch_count};
 pub use lease::CountsLease;
 pub use target::{CORE_TARGETS, CoreTarget, CountTarget};
 pub use workloads::WorkloadCounters;

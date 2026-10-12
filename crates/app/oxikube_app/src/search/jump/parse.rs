@@ -3,9 +3,10 @@
 //! The grammar, in the order tokens are read:
 //!
 //! ```text
-//! line     = [ ":" ] ( resource | ctx | ns | quit | history )
+//! line     = [ ":" ] ( resource | ctx | ns | pulses | quit | history )
 //! resource = alias { ns | "/" filter | selector | "@" context }     (each at most once)
 //! ctx      = "ctx" [ name ]        ns   = "ns" [ name ]        quit = "q" | "quit"
+//! pulses   = "pulses" | "pulse" | "pu"
 //! history  = "-" | "[" | "]"
 //! ```
 //!
@@ -34,7 +35,7 @@ pub fn parse(line: &str) -> Result<JumpCommand, ParseError> {
         return Err(ParseError::new(
             ParseErrorKind::Empty,
             Span::new(line.len(), line.len()),
-            "Type a resource (pods, deploy), `ctx`, `ns` or `q`",
+            "Type a resource (pods, deploy), `ctx`, `ns`, `pulses` or `q`",
         ));
     };
     let rest = &tokens[1..];
@@ -47,6 +48,10 @@ pub fn parse(line: &str) -> Result<JumpCommand, ParseError> {
         "q" | "quit" => {
             no_more(rest, "`q` takes no arguments")?;
             Ok(JumpCommand::Quit)
+        }
+        "pulses" | "pulse" | "pu" => {
+            no_more(rest, "`pulses` takes no arguments")?;
+            Ok(JumpCommand::Pulses)
         }
         "ctx" | "context" => Ok(JumpCommand::Ctx(optional_name(rest, "ctx")?)),
         "ns" => Ok(JumpCommand::Ns(optional_name(rest, "ns")?)),

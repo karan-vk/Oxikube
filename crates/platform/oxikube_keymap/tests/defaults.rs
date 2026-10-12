@@ -193,6 +193,16 @@ const VIEW_LOCAL: &[&str] = &[
     "jump_bar::Complete",
     // The log viewer's selection.
     "log_view::ClearSelection",
+    // The pulses page (E13-S10): the selection over its tiles, counting again, closing the tab.
+    // `pulses::Open` is a command (`resource::OpenList`, in `stands_for`).
+    "pulses::SelectLeft",
+    "pulses::SelectRight",
+    "pulses::SelectUp",
+    "pulses::SelectDown",
+    "pulses::SelectFirst",
+    "pulses::SelectLast",
+    "pulses::Refresh",
+    "pulses::Close",
     // The bottom dock's terminal panel and the OS application menu.
     "terminal_panel::TogglePanel",
     "oxikube::Hide",

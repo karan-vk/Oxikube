@@ -22,6 +22,8 @@
 //!   open, typing, the debounced validation pass, scrolling with diagnostics (E10-S11).
 //! - `charts` ([`charts`]): the overview's worst case, 12 sparklines and 3 area charts of 5 760
 //!   points: repaint, a data tick on every frame, a hover sweep (E13-S07).
+//! - `pulses` ([`pulses`]): the pulses page, 16 tiles with 14 sparklines: repaint, and every tile
+//!   taking a new sample on every frame (E13-S10).
 //!
 //! The view-driving scenarios mount their view as the app's window does ([`window_root`]), so it
 //! is drawn with the app's text style; a sample fails if its text falls back to another family
@@ -33,6 +35,7 @@ mod charts;
 mod editor_5mb;
 mod logs_stream;
 mod palette;
+mod pulses;
 mod scroll_10k;
 mod startup;
 mod window_root;
@@ -65,10 +68,11 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
         logs_stream::NAME => logs_stream::run(probe),
         editor_5mb::NAME => editor_5mb::run(probe),
         charts::NAME => charts::run(probe),
+        pulses::NAME => pulses::run(probe),
         other => {
             eprintln!(
                 "oxikube: unknown perf scenario `{other}` (startup, scroll-10k or \
-                 table-scroll-10k, palette, logs-stream, editor-5mb, charts)"
+                 table-scroll-10k, palette, logs-stream, editor-5mb, charts, pulses)"
             );
             return ExitCode::from(2);
         }

@@ -211,6 +211,20 @@
   alt-f            log_view::ToggleFilterMode
   alt-i            log_view::ToggleInverse
   escape           log_view::CloseSearch
+[Pulses]
+  down             pulses::SelectDown
+  end              pulses::SelectLast
+  enter            pulses::Open
+  escape           pulses::Close
+  h                pulses::SelectLeft
+  home             pulses::SelectFirst
+  j                pulses::SelectDown
+  k                pulses::SelectUp
+  l                pulses::SelectRight
+  left             pulses::SelectLeft
+  r                pulses::Refresh
+  right            pulses::SelectRight
+  up               pulses::SelectUp
 [(everywhere)]
   ctrl-`           terminal_panel::TogglePanel
   ctrl-~           terminal::New

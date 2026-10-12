@@ -4,6 +4,7 @@
 mod buckets;
 mod budget;
 mod churn;
+mod count_fetch;
 mod counts;
 mod diagnostics;
 mod feeds;

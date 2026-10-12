@@ -1,6 +1,7 @@
 //! Tests of node and namespace aggregation, hot reload of the GPU list, and invariants.
 
 mod allocation;
+mod cluster;
 mod reload;
 
 use oxikube_domain::Resource;

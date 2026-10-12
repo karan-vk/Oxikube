@@ -128,6 +128,15 @@ fn q_and_quit_quit() {
 }
 
 #[test]
+fn pulses_has_k9s_short_forms_and_takes_no_arguments() {
+    for line in ["pulses", "pulse", "pu", ":Pulses"] {
+        assert_eq!(parse(line), Ok(JumpCommand::Pulses), "{line}");
+    }
+    assert!(parse("pulses kube-system").is_err());
+    assert!(parse("pulses @prod").is_err());
+}
+
+#[test]
 fn the_history_words() {
     for (line, step) in [
         ("-", HistoryStep::Last),
