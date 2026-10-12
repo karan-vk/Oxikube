@@ -212,7 +212,7 @@ Findings with skeptic verdicts: ${JSON.stringify(judged)}`
 const mergePrompt = (s, pr) => `${ctx(s)}
 
 TASK: land PR #${pr} (story ${s.id}). You hold the merge lock: no other story of this run merges while you work, but other sessions may still push to main, so loop until merged. Branch protection requires the branch to be up to date with main and CI green on that exact head, so CI is the authority and every minute you hold the lock delays every other story: never run the full gate before pushing, run it alongside CI.
-1. \`git -C ${WT}/${s.id} fetch origin\` and rebase ${s.branch} onto origin/main. Resolve conflicts carefully (typical: crate roots' module lists, Cargo.toml/Cargo.lock, tests/common, default.json, docs/ARCHITECTURE.md, docs/CONTEXT.md, THIRD_PARTY_NOTICES.md): keep BOTH sides' additions; regenerate Cargo.lock with cargo rather than hand-merging.
+1. If ${WT}/${s.id} does not exist (a rerun), recreate it: \`git -C ${MAIN} fetch origin\`, \`git -C ${MAIN} worktree add ${WT}/${s.id} ${s.branch}\` (or from \`origin/${s.branch}\`), \`cp -cR ${MAIN}/target ${WT}/${s.id}/target\`. \`git -C ${WT}/${s.id} fetch origin\` and rebase ${s.branch} onto origin/main. Resolve conflicts carefully (typical: crate roots' module lists, Cargo.toml/Cargo.lock, tests/common, default.json, docs/ARCHITECTURE.md, docs/CONTEXT.md, THIRD_PARTY_NOTICES.md): keep BOTH sides' additions; regenerate Cargo.lock with cargo rather than hand-merging.
 2. Quick gate (a few minutes): \`cargo fmt --all --check\`, \`cargo xtask lint-deps\`, \`cargo check --workspace --all-targets\` (catches APIs another story changed). Fix anything red (stay in scope; if the rebase brought a changed API from another story, adapt this story's code).
 3. \`git push --force-with-lease origin ${s.branch}\` so CI starts at once. While it runs, run the rest of the gate locally: \`cargo clippy --workspace --all-targets -- -D warnings\` (plus \`--features integration\` on touched crates that have it), \`cargo test --workspace --no-fail-fast\` (run_in_background, 600000 ms timeout), \`cargo deny check\` if Cargo.lock changed, and this story's integration tests if any. If the local run goes red first, fix and push right away (the push cancels the stale CI run). Then \`gh pr checks ${pr} --repo karan-vk/Oxikube --watch --interval 30\` (required: "fmt + lint-deps + gpui-pin + deny", "clippy + test (ubuntu-latest)", "clippy + test (macos-latest)"). If a check fails, read the log (\`gh run view --log-failed\`), fix, push, watch again. If main moved (branch not up to date), go back to step 1.
 4. Before merging confirm: the reviewer review is posted, the Code review section is complete, no unresolved findings. Then \`gh pr merge ${pr} --repo karan-vk/Oxikube --squash\` (PR title is the squash subject; strip any co-author trailers from the squash body).
@@ -256,7 +256,7 @@ const TRIAGE_SCHEMA = {
 const triagePrompt = (s) => `Read-only GitHub lookup for story ${s.id} (issue #${s.issue}, branch ${s.branch}) in karan-vk/Oxikube. Do not edit anything.
 Run \`gh pr list --repo karan-vk/Oxikube --head ${s.branch} --state all --json number,state,mergedAt\`${s.pr ? ` and also look at PR #${s.pr}` : ''}.
 - A MERGED PR for the branch -> state "merged".
-- An OPEN PR: run \`gh api repos/karan-vk/Oxikube/pulls/<n>/reviews --jq '.[].body'\`; if any review body starts with "Reviewer pass" -> "reviewed", else "pr_open".
+- An OPEN PR: run \`gh api repos/karan-vk/Oxikube/pulls/<n>/reviews --jq '.[].body'\` and \`gh pr view <n> --repo karan-vk/Oxikube --json body --jq .body\`. If a review body starts with "Reviewer pass" AND the PR body no longer says the reviewer pass is "pending" (the reviewer pass clears that only after its fixes are pushed) -> "reviewed", else "pr_open".
 - No PR (or only closed, unmerged ones) -> "none".
 Return the PR number (0 if none).`
 
@@ -281,7 +281,7 @@ async function reviewerPass(s, prNumber) {
 
 async function storyChain(s, triage) {
   const rec = { id: s.id, issue: s.issue, merged: false }
-  if (triage && triage.pr && (triage.state === 'reviewed' || triage.state === 'pr_open')) {
+  if (triage.pr && (triage.state === 'reviewed' || triage.state === 'pr_open')) {
     rec.pr = triage.pr
     // An open PR already had its author pass (the PR is opened after it); only the reviewer pass may be missing.
     if (triage.state === 'pr_open') rec.reviewer = await reviewerPass(s, triage.pr)
@@ -330,7 +330,10 @@ function run(id) {
     runs[id] = (async () => {
       const s = BY_ID[id]
       // Triage before waiting on dependencies: a merged story never waits.
-      const triage = await agent(triagePrompt(s), { label: `triage:${s.id}`, phase: 'Triage', model: 'haiku', effort: 'low', schema: TRIAGE_SCHEMA })
+      const triageOpts = { label: `triage:${s.id}`, phase: 'Triage', model: 'haiku', effort: 'low', schema: TRIAGE_SCHEMA }
+      const triage = (await agent(triagePrompt(s), triageOpts)) || (await agent(triagePrompt(s), { ...triageOpts, model: 'sonnet', label: triageOpts.label + ' (retry)' }))
+      // Unknown state: guessing "no PR" could re-implement a merged story, so stop here instead.
+      if (!triage) return { id, issue: s.issue, merged: false, reason: 'triage failed' }
       if (triage && triage.state === 'merged') {
         log(`${id}: already merged (PR #${triage.pr}), skipping`)
         return { id, issue: s.issue, merged: true, pr: triage.pr, reason: 'already merged' }
@@ -357,7 +360,7 @@ if (results.some(r => r && r.merged && r.reason !== 'already merged')) {
   mainHealth = await ag(`Check that main of karan-vk/Oxikube is green after this run's merges. Main checkout: ${MAIN} (never edit, commit or switch branches there).
 1. \`gh run list --repo karan-vk/Oxikube --workflow ci.yml --branch main --limit 1 --json databaseId,status,conclusion,headSha\`; if it is not finished, \`gh run watch <id> --repo karan-vk/Oxikube --exit-status\`.
 2. If it is green, return "green" with the sha.
-3. If it is red: \`gh run view <id> --repo karan-vk/Oxikube --log-failed\`, create a worktree \`git -C ${MAIN} worktree add ${WT}/main-health -b fix/main-health-<short sha> origin/main\` (seed it with \`cp -cR ${MAIN}/target ${WT}/main-health/target\`), fix every failure (the CI test step uses --no-fail-fast, so the log lists all of them), run the failing crates' tests and \`cargo clippy --workspace --all-targets -- -D warnings\`, commit "fix: get main green after ${TEAM}", push, open a PR, watch its checks, and merge it with \`gh pr merge --squash\` once green. Then remove the worktree. Return what was red and the PR number.`,
+3. If it is red: \`gh run view <id> --repo karan-vk/Oxikube --log-failed\`, \`git -C ${MAIN} fetch origin\` (the merges happened on GitHub), create a worktree \`git -C ${MAIN} worktree add ${WT}/main-health -b fix/main-health-<short sha> origin/main\` (seed it with \`cp -cR ${MAIN}/target ${WT}/main-health/target\`), fix every failure (the CI test step uses --no-fail-fast, so the log lists all of them), run the failing crates' tests and \`cargo clippy --workspace --all-targets -- -D warnings\`, commit "fix: get main green after ${TEAM}", push, open a PR, watch its checks, and merge it with \`gh pr merge --squash\` once green. Then remove the worktree. Return what was red and the PR number.`,
     { label: 'main-health', phase: 'Main health', model: 'sonnet' })
 }
 return { epics: EPICS.map(e => e.id), results, deviations, mainHealth }

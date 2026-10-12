@@ -48,10 +48,11 @@ story:
 | GitHub state | What the run does |
 |---|---|
 | PR merged | skips the story; dependents go ahead |
-| PR open, with a "Reviewer pass" review | merges it |
-| PR open, no reviewer review | runs the reviewer pass, then merges |
+| PR open, reviewer pass finished (review posted, "pending" cleared from the PR body) | merges it |
+| PR open, reviewer pass missing or unfinished | runs the reviewer pass, then merges |
 | no PR | full pipeline; an existing branch or worktree is picked up and finished |
 
+If triage fails twice, the story stops with `triage failed`; it is never treated as "no PR".
 Rerun the same config to continue a stopped run. Use `resumeFromRunId` only within the same
 user turn: a resume from a later turn misses the agent cache.
 
@@ -66,14 +67,16 @@ are serial, and each one costs a full CI run. The run's critical path is about
   instead of every parallel agent doing its own cold GPUI build.
 - **Merge.** The merge step rebases, runs a quick gate (fmt, lint-deps,
   `cargo check --workspace --all-targets`), and pushes. CI then starts right away, and the
-  full local gate runs alongside it. The merge lock is never held for a local gate that only
-  repeats CI.
+  full local gate runs alongside it, so a local failure shows before CI's and the gate adds no
+  wait unless it is slower than CI.
 - **CI.** Only `main` saves Rust caches; PRs restore them. Before, PR caches pushed main's
   out of the 10 GB quota, so most runs compiled about 950 crates from scratch. The build legs
   no longer wait for the lint job. `cargo test` runs with `--no-fail-fast`. The xtask test that
   rebuilt the app binary (60–125 s) is opt-in, because `gen-settings-schema --check` already
-  covers it.
-- **Dependabot.** Updates come as one grouped PR a week with no automatic rebase. Story PRs no
+  covers it. Runs on `main` are never cancelled by a newer push: a cancelled run saves no
+  cache.
+- **Dependabot.** Minor and patch updates come as one grouped PR a week (majors stay separate),
+  with no automatic rebase. Story PRs no
   longer queue behind four dependency PRs re-running CI on every merge.
 - **Main health.** After the last merge, one agent waits for main's CI and fixes any
   failures. Fast merges and cross-story test drift then get caught the same day (#686).
