@@ -4,7 +4,10 @@
 
 mod guard;
 mod plan;
+mod pods;
+mod refs;
 mod runner;
+mod sanitize;
 mod scale_guard;
 mod scale_service;
 mod suspend;
@@ -30,6 +33,7 @@ pub(super) struct Workloads {
 impl Workloads {
     /// Cluster `a` connected (read-only when asked) holding [`cronjob`] `nightly`.
     pub fn new(read_only: bool) -> Self {
+        // The real `pod::Delete` handler replaces the harness's recording one.
         let h = Harness::with_workloads();
         h.connect("a", read_only);
         let t = Self { h };
@@ -163,4 +167,25 @@ pub(super) fn scale(spec: i32, status: i32) -> Scale {
         selector: None,
         resource_version: None,
     }
+}
+
+/// A Pod `name` in `default` in `phase`, owned by the ReplicaSet `web-5d` (a controller).
+pub(super) fn pod(name: &str, phase: &str) -> Resource {
+    Resource::from_json(json!({
+        "apiVersion": "v1", "kind": "Pod",
+        "metadata": {
+            "name": name, "namespace": "default", "uid": format!("{name}-uid"),
+            "ownerReferences": [{
+                "apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "web-5d",
+                "uid": "rs-uid", "controller": true
+            }],
+        },
+        "spec": {"nodeName": "worker-1", "containers": [{"name": "app", "image": "web:1"}]},
+        "status": {"phase": phase},
+    }))
+    .expect("a valid object")
+}
+
+pub(super) fn pod_ref(name: &str) -> ResourceRef {
+    ResourceRef::namespaced(id("a"), Gvk::new("", "v1", "Pod"), "default", name)
 }

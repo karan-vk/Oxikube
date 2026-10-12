@@ -86,6 +86,16 @@ fn actions_rig(
             oxikube_app::namespaces::register_commands,
         )
         .unwrap();
+    // The pod commands (E12-S03) are the app's own over the session manager: a pod's delete is
+    // `pod::Delete`, which the fake resource port answers like `resource::Delete`. (The workloads
+    // rig below installs them with the rest.)
+    if !workloads {
+        registry
+            .install("oxikube_app::workloads", |r| {
+                oxikube_app::workloads::register_pod_commands(r, sessions.clone())
+            })
+            .unwrap();
+    }
     // The CronJob and Job actions (E12-S08), and Namespaces' "use" and "pin" (E12-S16):
     // do-nothing handlers behind the real guard (the workloads rig below installs the real
     // ones, with `workload::Scale`; the table sends "use" and "pin" to the recording dispatcher).

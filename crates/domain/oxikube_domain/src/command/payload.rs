@@ -760,6 +760,49 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         grace_period_seconds: Option<u32>,
     },
+    /// Evict one pod through the eviction subresource, which honours PodDisruptionBudgets (E12-S03).
+    /// A budget that forbids it refuses with "blocked by disruption budget".
+    #[serde(rename = "pod::Evict")]
+    PodEvict {
+        /// The pod to evict.
+        target: ResourceRef,
+    },
+    /// Delete one pod with grace period 0 (k9s's kill, `ctrl-k`; `kubectl delete --force
+    /// --grace-period=0`, E12-S03): the kubelet is not waited for, so a container may still run
+    /// on a node that cannot be reached. Confirmed by typing the pod's name.
+    #[serde(rename = "pod::ForceDelete")]
+    PodForceDelete {
+        /// The pod to delete.
+        target: ResourceRef,
+    },
+    /// Delete the Completed (`Succeeded`) and `Failed` pods of a view (k9s's `z`, E12-S03). With
+    /// `targets` the pods the view shows; without, every such pod of `namespace` (or of the whole
+    /// cluster). Each pod is re-read and skipped unless it still is Completed or Failed, and is
+    /// deleted and audited on its own under one shared batch id.
+    #[serde(rename = "pod::Sanitize")]
+    PodSanitize {
+        /// The cluster.
+        cluster: ClusterId,
+        /// The namespace to sweep when `targets` is empty; `None`: every namespace.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
+        /// The pods to sweep (the table's rows in view); empty: list them from the cluster.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        targets: Vec<ResourceRef>,
+    },
+    /// Open the controller of a pod (its ReplicaSet, a Job's pod's Job, a static pod's Node): k9s's
+    /// `shift-j` (E12-S03). Reads the pod; changes nothing.
+    #[serde(rename = "pod::JumpToOwner")]
+    PodJumpToOwner {
+        /// The pod.
+        target: ResourceRef,
+    },
+    /// Open the Node a pod runs on: k9s's `o` (E12-S03). Reads the pod; changes nothing.
+    #[serde(rename = "pod::ShowNode")]
+    PodShowNode {
+        /// The pod.
+        target: ResourceRef,
+    },
     /// Open an interactive shell in a container: `bash`, else `sh` (the `terminal.exec_shells`
     /// chain), probed with a quick exec. An exec-class command: blocked on a read-only cluster
     /// unless `exec_in_read_only` allows it, never confirmed, audited on every open.
@@ -1298,6 +1341,11 @@ impl Command {
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
             Command::ResourceApply { .. } => CommandId::RESOURCE_APPLY,
             Command::PodDelete { .. } => CommandId::POD_DELETE,
+            Command::PodEvict { .. } => CommandId::POD_EVICT,
+            Command::PodForceDelete { .. } => CommandId::POD_FORCE_DELETE,
+            Command::PodSanitize { .. } => CommandId::POD_SANITIZE,
+            Command::PodJumpToOwner { .. } => CommandId::POD_JUMP_TO_OWNER,
+            Command::PodShowNode { .. } => CommandId::POD_SHOW_NODE,
             Command::PodShell { .. } => CommandId::POD_SHELL,
             Command::PodAttach { .. } => CommandId::POD_ATTACH,
             Command::PodExec { .. } => CommandId::POD_EXEC,
@@ -1391,6 +1439,10 @@ impl Command {
             | Command::SecretEditDecoded { target }
             | Command::ResourceDelete { target, .. }
             | Command::PodDelete { target, .. }
+            | Command::PodEvict { target }
+            | Command::PodForceDelete { target }
+            | Command::PodJumpToOwner { target }
+            | Command::PodShowNode { target }
             | Command::PodShell { target, .. }
             | Command::PodAttach { target, .. }
             | Command::PodExec { target, .. }
@@ -1770,6 +1822,15 @@ mod tests {
                 target: pod(),
                 grace_period_seconds: Some(0),
             },
+            Command::PodEvict { target: pod() },
+            Command::PodForceDelete { target: pod() },
+            Command::PodSanitize {
+                cluster: cluster(),
+                namespace: Some("default".into()),
+                targets: vec![pod()],
+            },
+            Command::PodJumpToOwner { target: pod() },
+            Command::PodShowNode { target: pod() },
             Command::PodShell {
                 target: pod(),
                 container: Some("app".into()),

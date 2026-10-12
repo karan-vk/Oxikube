@@ -219,10 +219,20 @@ impl CommandId {
     pub const POD_DEBUG: CommandId = CommandId::new("pod::Debug");
     /// `pod::Delete`: delete one pod.
     pub const POD_DELETE: CommandId = CommandId::new("pod::Delete");
+    /// `pod::Evict`: evict one pod through the eviction subresource (honours PodDisruptionBudgets).
+    pub const POD_EVICT: CommandId = CommandId::new("pod::Evict");
     /// `pod::Exec`: run a command (or shell) in a container.
     pub const POD_EXEC: CommandId = CommandId::new("pod::Exec");
+    /// `pod::ForceDelete`: delete one pod with grace period 0 (k9s's kill).
+    pub const POD_FORCE_DELETE: CommandId = CommandId::new("pod::ForceDelete");
+    /// `pod::JumpToOwner`: open the controller that owns a pod.
+    pub const POD_JUMP_TO_OWNER: CommandId = CommandId::new("pod::JumpToOwner");
     /// `pod::PortForward`: forward a local port to a pod port.
     pub const POD_PORT_FORWARD: CommandId = CommandId::new("pod::PortForward");
+    /// `pod::Sanitize`: delete the Completed and Failed pods of a view.
+    pub const POD_SANITIZE: CommandId = CommandId::new("pod::Sanitize");
+    /// `pod::ShowNode`: open the Node a pod runs on.
+    pub const POD_SHOW_NODE: CommandId = CommandId::new("pod::ShowNode");
     /// `pod::Shell`: open an interactive shell in a container (`bash`, else `sh`).
     pub const POD_SHELL: CommandId = CommandId::new("pod::Shell");
     /// `pod::ViewLogs`: open a pod's logs.
@@ -1111,10 +1121,40 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Pod")),
+    // E12-S03. Evicting or deleting one pod is routine (medium: a simple confirm naming the pod
+    // and cluster); a force delete skips the kubelet's grace and so takes the typed name (high).
+    // A sweep of Completed and Failed pods is one delete each at medium.
+    CommandMeta::mutation(
+        CommandId::POD_EVICT,
+        "Evict Pod",
+        CommandScope::Selection,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
     CommandMeta::exec(
         CommandId::POD_EXEC,
         "Exec into Container",
         CommandScope::Selection,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
+    CommandMeta::mutation(
+        CommandId::POD_FORCE_DELETE,
+        "Force Delete Pod",
+        CommandScope::Selection,
+        Risk::High,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
+    // Navigation: reads the pod and opens another object's detail.
+    CommandMeta::read(
+        CommandId::POD_JUMP_TO_OWNER,
+        "Jump to Owner",
+        CommandScope::Selection,
+        NONE,
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Pod")),
@@ -1126,9 +1166,25 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Pod")),
+    CommandMeta::mutation(
+        CommandId::POD_SANITIZE,
+        "Sanitize Pods",
+        CommandScope::Cluster,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS),
     CommandMeta::exec(CommandId::POD_SHELL, "Shell", CommandScope::Selection)
         .in_views(TABLE_VIEWS)
         .selecting(SelectionKind::core("Pod")),
+    CommandMeta::read(
+        CommandId::POD_SHOW_NODE,
+        "Show Node",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
     CommandMeta::read(
         CommandId::POD_VIEW_LOGS,
         "View Logs",

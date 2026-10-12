@@ -74,6 +74,8 @@ pub struct ResourceViews {
     pub(super) service_task: Option<Task<()>>,
     /// The "save YAML" in flight: the dialog, then the write (a newer one replaces it).
     pub(super) save_task: Option<Task<()>>,
+    /// The pod read for `pod::JumpToOwner` or `pod::ShowNode` (a newer one replaces it).
+    pub(super) neighbour_task: Option<Task<()>>,
     _requests: Task<()>,
 }
 
@@ -108,6 +110,7 @@ impl ResourceViews {
                 failed_opens: HashMap::new(),
                 service_task: None,
                 save_task: None,
+                neighbour_task: None,
                 _requests: pump,
             }
         });
@@ -160,6 +163,12 @@ impl ResourceViews {
                 self.open_crd_resources(&cluster, name, window, cx);
             }
             ViewRequest::ShowServicePods(target) => self.show_service_pods(&target, window, cx),
+            ViewRequest::JumpToOwner(pod) => {
+                self.open_neighbour(pod, super::pod_nav::Neighbour::Owner, window, cx);
+            }
+            ViewRequest::ShowNode(pod) => {
+                self.open_neighbour(pod, super::pod_nav::Neighbour::Node, window, cx);
+            }
             other => self.apply(other, cx),
         }
     }
@@ -175,6 +184,8 @@ impl ResourceViews {
             | ViewRequest::ViewDescribe(_)
             | ViewRequest::ShowServicePods(_)
             | ViewRequest::RevealSecret { .. }
+            | ViewRequest::JumpToOwner(_)
+            | ViewRequest::ShowNode(_)
             | ViewRequest::OpenCrdResources { .. } => {}
             ViewRequest::OpenUrl(url) => cx.open_url(&url),
             ViewRequest::ToggleWide { cluster, gvk } => {

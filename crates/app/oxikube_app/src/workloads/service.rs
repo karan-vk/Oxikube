@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use oxikube_domain::build::{job_from_cronjob, suspend_patch};
-use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
+use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef, Scope};
 use oxikube_domain::{JobSummary, OxiError, OxiResult, Resource};
 use oxikube_ports::{Patch, ResourceReader, WriteOptions};
 
@@ -182,6 +182,24 @@ impl WorkloadService {
             .ok_or_else(|| OxiError::not_found("the cluster is not open"))?
             .resources()
             .ok_or_else(|| OxiError::conflict("the cluster is not connected"))
+    }
+}
+
+impl WorkloadService {
+    /// Whether kind `gvk` is namespaced, as the cluster's discovery says; a kind it does not know
+    /// is namespaced unless it is a Node.
+    pub(super) async fn scope_of(&self, cluster: &ClusterId, gvk: &Gvk) -> Scope {
+        let discovery = self.sessions.get(cluster).and_then(|s| s.discovery());
+        if let Some(discovery) = discovery
+            && let Ok(Some(kind)) = discovery.resolve(gvk).await
+        {
+            return kind.scope();
+        }
+        if gvk.is_node() {
+            Scope::Cluster
+        } else {
+            Scope::Namespaced
+        }
     }
 }
 

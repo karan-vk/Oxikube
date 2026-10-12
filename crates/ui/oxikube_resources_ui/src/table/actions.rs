@@ -112,6 +112,17 @@ actions!(
         /// Run the cursor row's CronJob now (`cronjob::Trigger`; k9s's `t`, bound on CronJob
         /// tables). Creates a Job from the template, confirmed first.
         TriggerSelected,
+        /// Force delete the cursor row's pod (`pod::ForceDelete`; k9s's kill, `ctrl-k`, bound on Pod
+        /// tables). Grace period 0; the pod's name is typed to confirm.
+        KillSelected,
+        /// Delete the Completed and Failed pods of this table's view (`pod::Sanitize`; k9s's `z`,
+        /// bound on Pod tables), after a confirmation with the count.
+        SanitizeSelected,
+        /// Open the Node the cursor row's pod runs on (`pod::ShowNode`; k9s's `o`).
+        ShowNodeSelected,
+        /// Open the controller that owns the cursor row's pod (`pod::JumpToOwner`; k9s's
+        /// `shift-j`).
+        JumpToOwnerSelected,
         /// Suspend the cursor row's CronJob or Job, or resume it when it is suspended
         /// (`cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume`; k9s's `s`,
         /// bound on CronJob and Job tables).

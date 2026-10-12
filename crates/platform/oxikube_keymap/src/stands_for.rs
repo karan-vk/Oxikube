@@ -29,6 +29,7 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_table::DeleteSelected",
         CommandId::NAMESPACE_DELETE,
     ),
+    ("resource_table::DeleteSelected", CommandId::POD_DELETE),
     ("resource_table::FocusFilter", CommandId::TABLE_FOCUS_FILTER),
     ("resource_table::ShellSelected", CommandId::POD_SHELL),
     ("resource_table::ShellSelected", CommandId::NODE_SHELL),
@@ -111,6 +112,15 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     (
         "resource_detail::EditSecretDecoded",
         CommandId::SECRET_EDIT_DECODED,
+    ),
+    // Pods (E12-S03): `ctrl-k` kills (force delete), `z` sanitizes, `o` shows the node, `shift-j`
+    // jumps to the owner.
+    ("resource_table::KillSelected", CommandId::POD_FORCE_DELETE),
+    ("resource_table::SanitizeSelected", CommandId::POD_SANITIZE),
+    ("resource_table::ShowNodeSelected", CommandId::POD_SHOW_NODE),
+    (
+        "resource_table::JumpToOwnerSelected",
+        CommandId::POD_JUMP_TO_OWNER,
     ),
     // The resource detail's find in the YAML and Describe text (E11-S06). `resource_detail::CloseFind`
     // only closes the field and gives the keys back to the detail, so it is view-local.

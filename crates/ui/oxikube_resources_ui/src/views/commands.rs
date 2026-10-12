@@ -6,8 +6,9 @@
 //! `resource::CopyYaml`, `resource::SaveYaml`, `resource::ToggleManagedFields`,
 //! `resource::RefreshDescribe` (E07-S06), `resource::Find`, `resource::NextMatch` and
 //! `resource::PreviousMatch` (E11-S06, find in the YAML and Describe text), and the k9s verbs `resource::ViewYaml`,
-//! `resource::ViewDescribe` and `table::ToggleWide` (E11-S07), `service::ShowPods` (E12-S13) and
-//! `secret::Reveal` (E12-S11, a Secret's values decoded in memory in its detail).
+//! `resource::ViewDescribe` and `table::ToggleWide` (E11-S07), `service::ShowPods` (E12-S13),
+//! `secret::Reveal` (E12-S11, a Secret's values decoded in memory in its detail) and the pod
+//! navigation `pod::JumpToOwner` and `pod::ShowNode` (E12-S03).
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, pin it
 //! as a tab, select rows, restart a feed (a read) or write the user's clipboard. Each is declared
@@ -28,7 +29,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 22] = [
+pub const RESOURCE_COMMANDS: [CommandId; 24] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -51,6 +52,8 @@ pub const RESOURCE_COMMANDS: [CommandId; 22] = [
     CommandId::TABLE_TOGGLE_WIDE,
     CommandId::SERVICE_SHOW_PODS,
     CommandId::SECRET_REVEAL,
+    CommandId::POD_JUMP_TO_OWNER,
+    CommandId::POD_SHOW_NODE,
 ];
 
 /// A resource command, resolved, for the UI thread.
@@ -104,6 +107,10 @@ pub enum ViewRequest {
         /// The one key to toggle; every key when `None`.
         key: Option<String>,
     },
+    /// Open the controller that owns the pod (`pod::JumpToOwner`, `shift-j`, E12-S03).
+    JumpToOwner(ResourceRef),
+    /// Open the node the pod runs on (`pod::ShowNode`, `o`, E12-S03).
+    ShowNode(ResourceRef),
     /// Show or hide the wide columns of the tables of `gvk` in `cluster` (`table::ToggleWide`,
     /// `ctrl-w`).
     ToggleWide {
@@ -190,6 +197,8 @@ impl ResourceCommandSink {
                 target: target.clone(),
                 key: key.clone(),
             },
+            Command::PodJumpToOwner { target } => ViewRequest::JumpToOwner(target.clone()),
+            Command::PodShowNode { target } => ViewRequest::ShowNode(target.clone()),
             Command::TableToggleWide { cluster, gvk } => ViewRequest::ToggleWide {
                 cluster: cluster.clone(),
                 gvk: gvk.clone(),

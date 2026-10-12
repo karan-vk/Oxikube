@@ -54,6 +54,10 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   preview created when a key is expanded, capped at 64 KiB) and the Secrets panel (masked keys, the type's
   facts, reveal and "Edit decoded"); `detail::reveal` holds a revealed Secret in the detail's memory only
   (per tab, `REVEAL_TIMEOUT`), `x` / `shift-e` are bound to `kind == Secret`.
+- `kinds::pods::panel`, `kinds::pods::actions` (E12-S03): the pod detail panel (an action bar, the containers table and the
+  collapsible Owner chain, Node, Environment, Mounts, Probes, Volumes, Tolerations and Affinity sections; ConfigMap and
+  Secret references resolved on demand with Secret values masked, in memory only) and the pod row actions Evict, Delete,
+  Force delete, Sanitize, Jump to owner and Show node, with the keys `ctrl-k`, `z`, `o` and `shift-j` (`table::pod_keys`).
 - `table` (E07-S03): `ResourceTable`, the generic virtualised table of one kind (store
   subscription, sort through the store, column layout per kind, multi-select, keyboard, context
   menu, status colours from the theme's `oxikube` block).

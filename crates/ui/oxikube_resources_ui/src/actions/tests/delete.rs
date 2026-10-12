@@ -73,7 +73,10 @@ fn deleting_a_pod_is_one_confirm_and_one_guarded_command(cx: &mut TestAppContext
     assert_eq!(audit.len(), 1);
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
     assert_eq!(audit[0].initiator, Initiator::Ui);
-    assert_eq!(&*audit[0].cmd, "resource::Delete");
+    assert_eq!(
+        &*audit[0].cmd, "pod::Delete",
+        "a pod's delete is its own command"
+    );
     assert_eq!(&*audit[0].who, "alice");
     // One object that went well closes the dialog with a toast.
     assert!(super::dialog(&mut f).is_none());

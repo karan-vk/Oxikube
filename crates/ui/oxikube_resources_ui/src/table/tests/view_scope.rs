@@ -113,7 +113,7 @@ fn moving_to_another_namespace_shows_loading_until_the_snapshot(cx: &mut TestApp
 #[gpui::test]
 fn the_selection_keeps_the_rows_that_stay(cx: &mut TestAppContext) {
     let (mut f, table) = three_pods(cx);
-    f.keys(&table, "j shift-j shift-j");
+    f.keys(&table, "j shift-down shift-down");
     assert_eq!(f.selected(&table), ["a", "b", "c"]);
 
     select_now(&mut f, NamespaceSelection::single("y"));

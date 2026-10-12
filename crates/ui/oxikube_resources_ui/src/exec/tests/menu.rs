@@ -25,7 +25,18 @@ fn a_pod_offers_shell_attach_and_debug_after_logs_and_a_node_offers_only_its_own
     let pods = f.open_pods();
     assert_eq!(
         labels(&mut f, &pods),
-        ["Logs", "Shell", "Attach", "Debug", "Delete"]
+        [
+            "Jump to Owner",
+            "Show Node",
+            "Logs",
+            "Shell",
+            "Attach",
+            "Debug",
+            "Evict",
+            "Delete",
+            "Force Delete",
+            "Sanitize"
+        ]
     );
 
     let nodes = f.open(crate::actions::tests::nodes_kind());
@@ -42,7 +53,8 @@ fn a_selection_of_several_pods_offers_neither(cx: &mut TestAppContext) {
     f.connect_with([p("x", "web-0", "1"), p("x", "web-1", "1")]);
     let pods = f.open_pods();
     f.update(&pods, |t, cx| t.select_all(cx));
-    assert_eq!(labels(&mut f, &pods), ["Delete 2 objects"]);
+    // A sweep acts on the view, so it is offered (without a count) for a selection too.
+    assert_eq!(labels(&mut f, &pods), ["Delete 2 objects", "Sanitize"]);
 }
 
 #[gpui::test]
@@ -52,8 +64,8 @@ fn the_menu_item_opens_a_shell_in_the_pods_only_container(cx: &mut TestAppContex
     let _table = f.open_pods();
     f.dispatcher.clear();
     crate::actions::tests::right_click(&mut f, 0);
-    // Open, Copy Name, Select All, Logs, Shell.
-    crate::actions::tests::choose(&mut f, 4);
+    // Open, Copy Name, Select All, Jump to Owner, Show Node, Logs, Shell.
+    crate::actions::tests::choose(&mut f, 6);
     f.settle();
     let sent = sent_exec(&f);
     assert!(
@@ -162,7 +174,7 @@ fn a_read_only_cluster_greys_them_out_unless_it_allows_shells(cx: &mut TestAppCo
     assert!(shell.is_enabled());
     let delete = entries
         .iter()
-        .find(|e| e.command() == CommandId::RESOURCE_DELETE)
+        .find(|e| e.command() == CommandId::POD_DELETE)
         .unwrap();
     assert!(
         !delete.is_enabled(),

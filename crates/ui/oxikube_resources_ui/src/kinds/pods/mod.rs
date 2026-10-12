@@ -15,8 +15,12 @@
 //! |---|---|
 //! | `mod` | the spec and its registration, [`set_metrics_source`] |
 //! | `containers` | [`ContainersPanel`], its rows and their drawing |
+//! | `panel` | [`PodPanel`] (E12-S03): the action bar, the containers table and the sections (owner chain, node, environment, mounts, probes, volumes, tolerations, affinity) |
+//! | `actions` | the row actions of E12-S03: Evict, Delete, Force delete, Sanitize, Jump to owner, Show node |
 
+pub mod actions;
 pub mod containers;
+pub mod panel;
 
 use std::sync::Arc;
 
@@ -26,20 +30,29 @@ use oxikube_app::{KindMeta, PodColumns, Section};
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{Gvk, Scope};
 
+pub use actions::row_actions;
 pub use containers::ContainersPanel;
+pub use panel::PodPanel;
 
 use super::{DetailRenderer, KindSpec, KindSpecs};
 
 /// Pods' slot in the Workloads section: first (the other workloads start at 20).
 pub const RANK: u32 = 10;
 
-/// A pod's own actions, as E08 and E09 ship them: logs, shell, attach, debug, port forward.
+/// A pod's own actions: logs, shell, attach, debug and port forward as E08 and E09 ship them,
+/// and E12-S03's jump to owner, show node, evict, delete, force delete and sanitize.
 const POD_ACTIONS: &[CommandId] = &[
     CommandId::POD_VIEW_LOGS,
     CommandId::POD_SHELL,
     CommandId::POD_ATTACH,
     CommandId::POD_DEBUG,
     CommandId::POD_PORT_FORWARD,
+    CommandId::POD_JUMP_TO_OWNER,
+    CommandId::POD_SHOW_NODE,
+    CommandId::POD_EVICT,
+    CommandId::POD_DELETE,
+    CommandId::POD_FORCE_DELETE,
+    CommandId::POD_SANITIZE,
 ];
 
 /// The registered pod columns, so E13 can hand them its metrics source.
@@ -55,7 +68,7 @@ pub fn spec(columns: Arc<PodColumns>) -> KindSpec {
         .in_section(Section::WORKLOADS, RANK)
         .with_actions(POD_ACTIONS.iter().copied())
         .with_columns(columns);
-    KindSpec::new(meta).with_detail(DetailRenderer::panel(ContainersPanel::build))
+    KindSpec::new(meta).with_detail(DetailRenderer::panel(PodPanel::build))
 }
 
 /// Registers the Pod kind (once; a second call does nothing).

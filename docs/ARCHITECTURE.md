@@ -786,6 +786,55 @@ crate's `README.md` for its allowed dependencies. Highlights:
   are a merge patch of `spec.suspend` (`oxikube_domain::build::suspend_patch`); a finished Job (`Complete` or `Failed`,
   `JobSummary::is_finished`) is not resumed. Time is not read here: ages, durations and the last schedule come from the
   table's per-frame `now`.
+- `oxikube_app::workloads` pod actions (E12-S03) — `pod::Evict`, `pod::Delete`, `pod::ForceDelete` and `pod::Sanitize`
+  (tools `k8s.pod_evict`, `k8s.pod_delete`, `k8s.pod_force_delete`, `k8s.pod_sanitize`), handled by `WorkloadService`
+  next to the CronJob and Job commands. The guard tiers follow `docs/CONTEXT.md`: evict, delete and sanitize are `Medium`
+  (a simple confirmation that names the pod, or the count of a sweep), force delete is `High` (the pod's name typed);
+  `Command::effective_risk` raises any `pod::Delete` with `grace_period_seconds: Some(0)` to `High`, so no spelling dodges
+  the typed name. Every one rehearses on the server first (`dryRun=All`; an eviction too, so a PodDisruptionBudget's 429
+  surfaces before anything is sent): the adapter's `EvictionBlocked` marker (moved to `oxikube_domain::error_details`, read
+  with `OxiError::eviction_blocked`) becomes a retryable `Conflict` that says "blocked by disruption budget <name>", not a
+  raw status. Evict uses `ResourceWriter::evict`; delete sets the background propagation and the grace period; force
+  delete sets grace 0. A sweep (`pod::Sanitize`, k9s `z`) takes the pods of the table's view (or, from an agent, lists
+  the namespace's `status.phase=Succeeded` and `Failed` pods through server-side field selectors), reads each pod again
+  (a pod that is running again is skipped), and deletes them in `WorkloadService::delete_each`, the batch runner E12-S19
+  reuses: the guard writes the command's own audit record (`batch=<id> pods=<n>`, against the namespace), and the
+  handler writes one more per pod through `HandlerContext::audit` (the guard's `AuditLog`: `pod::Delete`, the command's
+  initiator, `batch=<id> via=pod::Sanitize`, fail closed: a pod is deleted only once its record can be written). The reads
+  of the pod panel are on `WorkloadService` too, one `get` each and never a feed: `owner_chain` (Pod, ReplicaSet,
+  Deployment: the controller at each level, scopes from discovery), `owner_of`, `node_of` and `env_sources` (the ConfigMaps
+  and Secrets the environment names, each once; a missing one is `NotFound`, one the user may not read `Unavailable`).
+  `DeleteFlow::plan` maps a pod's ordinary (background) delete to `pod::Delete`, so the table's `delete` / `ctrl-d`, the
+  menu, the palette and an agent run one command; the core `resource::Delete` row action skips pods. The kube adapter
+  builds its eviction client without automatic retries lazily (`KubeResources::with_lazy_unretried_client`, wired by
+  `KubeConnector`): the shared client retries a 429 with backoff for minutes, which would hold a PodDisruptionBudget's
+  refusal back (found by the kind test).
+- `oxikube_domain::view::PodDetail` (E12-S03) — what the pod panel adds to the containers table, built from the pod's JSON
+  alone: each container's `env` / `envFrom` (`EnvVar`, `EnvFrom`), mounts, probes; the pod's volumes, tolerations, affinity
+  lines (node selector, node and pod affinity, topology spread), node and owners. `ContainerDetail::env_rows` resolves the
+  environment against the lookups the caller made (`EnvSources`): `configMapKeyRef`, `secretKeyRef`, `fieldRef`,
+  `resourceFieldRef` and `envFrom` with its prefix, an `env` entry replacing an `envFrom` key of the same name, a missing
+  object or key as `Missing` (with `optional`), a ConfigMap value as text and a Secret value as `SecretValue`, which has no
+  `Display`, no `Serialize` and a `Debug` that prints nothing (decoded values live in memory only).
+- `oxikube_resources_ui::kinds::pods::panel` and `kinds::pods::actions` (E12-S03) — the pod detail panel and the row
+  actions. `PodPanel` (the pod's `DetailRenderer`) draws a fixed action bar (Logs, Evict, Delete, Force delete, Jump to
+  owner, Show node, each the command the menu and the keys send, greyed out with the reason on a read-only cluster), the
+  containers sub-table of E12-S02 and collapsible sections: Owner chain and Node (open), Environment, Mounts, Probes,
+  Volumes, Tolerations, Affinity (collapsed). The model is built once per version of the pod in the detail view's observer
+  (`PodModel`, `Section`, `Row`), never in `render`; the owner chain is read when the owners change, and the environment
+  only when its section is first opened (so a Secret is not read because a pod is open). A Secret's value shows as
+  `••••••••` until the row's eye button is pressed; it is held in the panel and nowhere else. Rows are one line of one
+  height and a section is cut at 300 rows with a count. Row actions `Jump to Owner` (40), `Show Node` (50), `Evict` (200),
+  `Delete` (900, bulk: the delete dialog takes a selection), `Force Delete` (910) and `Sanitize` (920, bulk: it acts on the
+  table's view whatever is selected). Keys, in a `kind == Pod` section of the default keymaps: `ctrl-k` force delete
+  (`resource_table::KillSelected`), `z` sanitize (`SanitizeSelected`), `o` show node (`ShowNodeSelected`), `shift-j` jump to
+  owner (`JumpToOwnerSelected`, which on pod tables replaces `shift-j`'s selection extension; `shift-down` still extends).
+  `pod::JumpToOwner` and `pod::ShowNode` are bus commands that `ResourceViews` handles (`views::pod_nav`): one `get` of the
+  pod through `spawn_kube`, then the drawer opens on the owner or the node, or a toast says there is none.
+- `oxikube_workspace::cluster::runner` and `modal::DialogModal` (E12-S03) — the runner answers a `TypeName` confirmation
+  with a dialog that asks for the guard's `expected_name` (`DialogModal::require_typed`: the confirm button is disabled and
+  Enter does nothing until the field holds exactly that text; the answer is `Confirmation::typed`). Pod commands have
+  their own titles and confirm labels. Every later action story with a `High` command (node drain) gets the same dialog.
 - `oxikube_app::apply` + `oxikube_editor::view::apply` (E10-S08) — applying one manifest: `ApplyService` (the one apply
   pipeline; E20 extends it to many objects, plan review #397) dispatches `resource::Apply` through the `CommandBus`, so the
   `MutationGuard` blocks it on a read-only cluster (re-checked before each request), confirms it at risk `Low` (the editor's
@@ -1340,7 +1389,8 @@ field not declared in schema", `mutate::typed_patch`, E10-S13): that is a `Valid
 one cause per field the message names, so the editor marks them as it does a 422's.
 `oxikube_kube::subresource` (E04-S06) keeps `Network` and `retryable` for an eviction that a
 PodDisruptionBudget refuses (HTTP 429) and attaches an `EvictionBlocked` marker with the budget's
-explanation (`eviction_blocked(&err)`), which a drain waits on; no new `ErrorKind`.
+explanation (`eviction_blocked(&err)`, since E12-S03 `OxiError::eviction_blocked` in the domain, so the app can name the
+budget), which a drain waits on; no new `ErrorKind`.
 `oxikube_kube::algorithms` (E04-S07) adds only `Validation` (input it refuses: a CronJob without a
 template, a drain a pod blocks), `Conflict` (a paused Deployment, a drain that left pods) and the
 port's own errors.

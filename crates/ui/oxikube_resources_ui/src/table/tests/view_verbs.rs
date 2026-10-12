@@ -158,7 +158,8 @@ fn e_and_the_port_forward_keys_say_when_their_feature_is_not_installed(cx: &mut 
 #[gpui::test]
 fn row_verbs_act_on_the_cursor_row_of_a_selection_and_say_so(cx: &mut TestAppContext) {
     let (mut f, table) = open(cx);
-    f.keys(&table, "shift-j");
+    // (`shift-j` jumps to the owner on a Pod table, E12-S03; `shift-down` extends.)
+    f.keys(&table, "shift-down");
     assert_eq!(f.selected(&table), ["apple-1", "web-1"]);
     f.keys(&table, "l");
     let sent = f.dispatcher.sent();

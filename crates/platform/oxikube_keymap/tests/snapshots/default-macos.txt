@@ -143,6 +143,11 @@
 [ResourceTable && !Editing && kind == Secret]
   shift-e          resource_table::EditDecodedSelected
   x                resource_table::RevealSelected
+[ResourceTable && !Editing && kind == Pod]
+  ctrl-k           resource_table::KillSelected
+  o                resource_table::ShowNodeSelected
+  shift-j          resource_table::JumpToOwnerSelected
+  z                resource_table::SanitizeSelected
 [ResourceTable && Editing]
   escape           resource_table::ClearFilter
 [DetailDrawer && !Editing]

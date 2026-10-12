@@ -296,7 +296,7 @@ impl ResourceCall {
 ///
 /// * `list`, `list_metadata`, `get`, `get_opt` read the store (`get` of a missing object
 ///   is `NotFound`). Label selectors support `k=v`, `k==v`, `k!=v`, `k` and `!k`; field
-///   selectors support `metadata.name` and `metadata.namespace` equality.
+///   selectors support `metadata.name`, `metadata.namespace` and `status.phase` equality.
 /// * `watch` replays one `Restarted` batch with the matching stored objects, then stays
 ///   open.
 /// * `create` / `replace` parse the body into a `Resource`, store it (unless dry run) and
@@ -431,6 +431,10 @@ impl FakeResourcePort {
                 fields.as_ref().is_none_or(|f| {
                     f.iter().all(|(field, value)| match field.as_str() {
                         "metadata.name" => o.name() == value,
+                        "status.phase" => {
+                            o.json().pointer("/status/phase").and_then(|p| p.as_str())
+                                == Some(value.as_str())
+                        }
                         _ => o.namespace() == Some(value.as_str()),
                     })
                 })
@@ -539,7 +543,7 @@ fn parse_field_selector(selector: &str) -> OxiResult<Vec<(String, String)>> {
                 .or_else(|| term.split_once('='))
                 .ok_or_else(|| OxiError::unsupported(format!("{PORT}: field selector {term:?}")))?;
             let k = k.trim();
-            if k == "metadata.name" || k == "metadata.namespace" {
+            if matches!(k, "metadata.name" | "metadata.namespace" | "status.phase") {
                 Ok((k.to_owned(), v.trim().to_owned()))
             } else {
                 Err(OxiError::unsupported(format!(
@@ -802,6 +806,18 @@ impl ResourceWriter for FakeResourcePort {
             if self.find(kind, namespace, name).is_none() {
                 return Err(OxiError::not_found(format!("{kind} {name} not found")));
             }
+            // Like the server: a UID precondition refuses a re-created namesake.
+            let wanted = options
+                .preconditions
+                .as_ref()
+                .and_then(|p| p.uid.as_deref());
+            if let (Some(wanted), Some(found)) = (wanted, self.find(kind, namespace, name)) {
+                if found.meta.uid.as_deref() != Some(wanted) {
+                    return Err(OxiError::conflict(format!(
+                        "{kind} {name}: the UID precondition failed"
+                    )));
+                }
+            }
             if !options.dry_run {
                 self.store.lock().retain(|o| {
                     !(&o.kind == kind && o.namespace() == namespace && o.name() == name)
@@ -1019,7 +1035,7 @@ mod tests {
         let unsupported = block_on(fake.list(
             &pods(),
             None,
-            &ListOptions::default().fields("status.phase=Running"),
+            &ListOptions::default().fields("spec.nodeName=worker-1"),
         ))
         .unwrap_err();
         assert_eq!(unsupported.kind(), ErrorKind::Unsupported);

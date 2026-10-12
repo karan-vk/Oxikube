@@ -86,6 +86,12 @@ impl RowActionSpec {
     }
 }
 
+/// Kinds the server can delete, except namespaces (their own delete flow) and pods, whose delete is `pod::Delete` (E12-S03; the pod
+/// kind registers it as its own row action, so a pod's menu has one "Delete").
+fn deletable_not_pod(kind: &ResourceKind) -> bool {
+    kind.supports(Verb::Delete) && !kind.gvk.is_pod() && !kind.gvk.is_namespace()
+}
+
 /// Two specs for one command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("{0} is already a row action")]
@@ -122,9 +128,7 @@ impl RowActionRegistry {
                     }
                 })
                 .label("Delete")
-                .kinds(KindFilter::Matching(|kind| {
-                    kind.supports(Verb::Delete) && !kind.gvk.is_namespace()
-                }))
+                .kinds(KindFilter::Matching(deletable_not_pod))
                 .bulk()
                 .order(900),
             )

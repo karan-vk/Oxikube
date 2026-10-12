@@ -93,6 +93,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::TableFocusFilter { cluster, .. }
         | Command::TableToggleWide { cluster, .. }
         | Command::TableSetFilter { cluster, .. }
+        | Command::PodSanitize { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::TerminalNew { cluster }
         | Command::EditorNewManifest { cluster }
@@ -118,6 +119,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceDelete { target, .. }
         | Command::NamespaceDelete { target, .. }
         | Command::PodDelete { target, .. }
+        | Command::PodEvict { target }
+        | Command::PodForceDelete { target }
+        | Command::PodJumpToOwner { target }
+        | Command::PodShowNode { target }
         | Command::PodShell { target, .. }
         | Command::PodAttach { target, .. }
         | Command::PodExec { target, .. }
@@ -242,6 +247,14 @@ pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
     if let Command::NamespaceCreate { name, .. } = command {
         return ResourceRef::cluster_scoped(cluster.clone(), Gvk::namespace(), &**name);
     }
+    // A sweep of one namespace is recorded against that namespace.
+    if let Command::PodSanitize {
+        namespace: Some(namespace),
+        ..
+    } = command
+    {
+        return ResourceRef::cluster_scoped(cluster.clone(), Gvk::namespace(), namespace.as_str());
+    }
     command.target().cloned().unwrap_or_else(|| {
         let gvk = Gvk::new("oxikube.io", "v1", "Cluster");
         ResourceRef::cluster_scoped(cluster.clone(), gvk, "*")
@@ -265,7 +278,7 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
             context,
         );
     }
-    if let Some(summary) = workload_summary(command, context) {
+    if let Some(summary) = super::workload_policy::summary(command, context) {
         return summary;
     }
     if let Command::WorkloadScale { target, replicas } = command {
@@ -299,31 +312,6 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
         } => format!("{base}. Clears the default flag of the other Ingress classes."),
         _ => base,
     }
-}
-
-/// The confirmation text of the workload commands (E12-S08), which say what happens beyond the
-/// name: a trigger creates a Job, a Job's suspend deletes its running pods. `None` for any other
-/// command.
-fn workload_summary(command: &Command, context: &str) -> Option<String> {
-    Some(match command {
-        Command::CronJobTrigger { target } => format!(
-            "Run {} now on {context}: a Job is created from its job template, as `kubectl create \
-             job --from` does.",
-            object_label(target)
-        ),
-        Command::CronJobSuspend { target } => format!(
-            "Suspend {} on {context}: it creates no Jobs until it is resumed.",
-            object_label(target)
-        ),
-        Command::JobSuspend { target } => format!(
-            "Suspend {} on {context}: its running pods are deleted until it is resumed.",
-            object_label(target)
-        ),
-        Command::CronJobResume { target } | Command::JobResume { target } => {
-            format!("Resume {} on {context}.", object_label(target))
-        }
-        _ => return None,
-    })
 }
 
 /// The confirmation text of `workload::Scale`: the workload, the count, and for zero that every

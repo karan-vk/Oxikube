@@ -195,6 +195,8 @@ pub(crate) struct Fixture {
     /// How many times the `pod::Debug` handler ran.
     pub debugs: Arc<Mutex<u32>>,
     pub deletes: Arc<Mutex<usize>>,
+    /// How many `pod::ForceDelete` handlers ran.
+    pub force_deletes: Arc<Mutex<usize>>,
     /// How many `node::Shell` handlers ran.
     pub node_shells: Arc<Mutex<usize>>,
     /// How many `cronjob::Trigger` handlers ran.
@@ -253,6 +255,22 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
                     cx.require_mutation()?;
                     *counter.lock() += 1;
                     Ok(CommandOutput::message("Deleted"))
+                }
+            },
+        )
+        .unwrap();
+    // `pod::ForceDelete` (E12-S03): the guard's `TypeName` tier, so the dialog asks for the name.
+    let force_deletes = Arc::new(Mutex::new(0));
+    let counter = force_deletes.clone();
+    registry
+        .register(
+            *command::lookup(CommandId::POD_FORCE_DELETE).unwrap(),
+            move |_: Command, cx: HandlerContext| {
+                let counter = counter.clone();
+                async move {
+                    cx.require_mutation()?;
+                    *counter.lock() += 1;
+                    Ok(CommandOutput::message("Force deleted"))
                 }
             },
         )
@@ -377,6 +395,7 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
         runner,
         deletes,
         debugs,
+        force_deletes,
         node_shells,
         triggers,
         opened,

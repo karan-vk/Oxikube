@@ -47,6 +47,34 @@ fn a_pod_plan_needs_one_click() {
 }
 
 #[test]
+fn a_pod_is_deleted_by_pod_delete_unless_another_propagation_was_chosen() {
+    use oxikube_domain::command::{Command, CommandId};
+    let h = Harness::with_delete_handler();
+    h.connect("a", false);
+    let flow = flow(&h);
+    let background = flow.plan(&[pod("web-0")], Propagation::Background).unwrap();
+    assert_eq!(background.items()[0].command.id(), CommandId::POD_DELETE);
+    assert!(matches!(
+        &background.items()[0].command,
+        Command::PodDelete {
+            grace_period_seconds: None,
+            ..
+        }
+    ));
+    // Another propagation is the user's choice, which only `resource::Delete` carries.
+    let orphan = flow.plan(&[pod("web-0")], Propagation::Orphan).unwrap();
+    assert_eq!(orphan.items()[0].command.id(), CommandId::RESOURCE_DELETE);
+    // A cascading delete is the generic one, which takes the typed name.
+    let cascade = flow.plan(&[pod("web-0")], Propagation::Foreground).unwrap();
+    assert_eq!(cascade.items()[0].command.id(), CommandId::RESOURCE_DELETE);
+    assert_eq!(cascade.tier(), ConfirmTier::TypeName);
+    // Other kinds keep `resource::Delete`.
+    let config_map = namespaced("a", "", "ConfigMap", "cfg");
+    let plan = flow.plan(&[config_map], Propagation::Background).unwrap();
+    assert_eq!(plan.items()[0].command.id(), CommandId::RESOURCE_DELETE);
+}
+
+#[test]
 fn a_namespace_plan_asks_for_its_name() {
     let h = Harness::with_delete_handler();
     h.connect("a", false);

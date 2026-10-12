@@ -119,8 +119,13 @@ fn another_kind_has_no_rows() {
 }
 
 fn panel(d: &mut Detail, view: &Entity<DetailView>) -> Entity<ContainersPanel> {
-    d.read(view, |v| v.kind_panel().cloned())
+    let pod_panel = d
+        .read(view, |v| v.kind_panel().cloned())
         .expect("the pod's panel")
+        .downcast::<crate::kinds::pods::PodPanel>()
+        .expect("the pod panel");
+    d.f.vcx
+        .update(|_, cx| pod_panel.read(cx).containers().clone())
         .downcast::<ContainersPanel>()
         .expect("the containers panel")
 }

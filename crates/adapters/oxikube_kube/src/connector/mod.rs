@@ -69,10 +69,10 @@ use crate::kubeconfig::LoadedKubeconfig;
 use crate::logs::KubeLogs;
 use crate::metrics::KubeMetrics;
 use crate::openapi::OpenApiSchemas;
-use crate::pool::{ClientPool, PoolConfig};
+use crate::pool::{ClientPool, PoolConfig, RetryMode};
 use crate::remote::exec::KubeExec;
 use crate::remote::portforward::KubePortForward;
-use crate::resources::KubeResources;
+use crate::resources::{KubeResources, LazyClient};
 use crate::service_proxy::KubeServiceProxy;
 use crate::warnings::WarningHub;
 
@@ -114,6 +114,13 @@ struct Shared {
     /// Builds the pool for one exec-plugin policy; pools are built lazily and kept.
     pools: Mutex<HashMap<ExecInteractivity, Arc<ClientPool>>>,
     factory: Box<PoolFactory>,
+    /// The same for the pools whose clients never retry (an eviction a PodDisruptionBudget
+    /// refuses must come back at once, E12-S03); `None` for a connector built from custom pools,
+    /// whose evictions then share the retrying client.
+    unretried: Option<(
+        Mutex<HashMap<ExecInteractivity, Arc<ClientPool>>>,
+        Box<PoolFactory>,
+    )>,
     config: ConnectorConfig,
     rules: Arc<RulesCache>,
     /// The live connection of each cluster, weakly: the connection's guard owns the state.
@@ -134,7 +141,7 @@ impl KubeConnector {
     /// A connector over `kubeconfig`. `pool` carries the client settings; its `exec_policy` is
     /// replaced by the one each connect request asks for.
     pub fn new(kubeconfig: Kubeconfig, pool: PoolConfig, config: ConnectorConfig) -> Self {
-        Self::with_pools(
+        let build = move |config: PoolConfig, kubeconfig: Kubeconfig| {
             move |interactivity| {
                 let exec_policy = match interactivity {
                     ExecInteractivity::Never => ExecInteractivePolicy::Never,
@@ -145,10 +152,21 @@ impl KubeConnector {
                     kubeconfig.clone(),
                     PoolConfig {
                         exec_policy,
-                        ..pool.clone()
+                        ..config.clone()
                     },
                 )
+            }
+        };
+        let unretried = build(
+            PoolConfig {
+                retry: RetryMode::Disabled,
+                ..pool
             },
+            kubeconfig.clone(),
+        );
+        Self::from_factories(
+            Box::new(build(pool, kubeconfig)),
+            Some(Box::new(unretried)),
             config,
         )
     }
@@ -159,10 +177,19 @@ impl KubeConnector {
         factory: impl Fn(ExecInteractivity) -> ClientPool + Send + Sync + 'static,
         config: ConnectorConfig,
     ) -> Self {
+        Self::from_factories(Box::new(factory), None, config)
+    }
+
+    fn from_factories(
+        factory: Box<PoolFactory>,
+        unretried: Option<Box<PoolFactory>>,
+        config: ConnectorConfig,
+    ) -> Self {
         Self {
             shared: Arc::new(Shared {
                 pools: Mutex::new(HashMap::new()),
-                factory: Box::new(factory),
+                factory,
+                unretried: unretried.map(|factory| (Mutex::new(HashMap::new()), factory)),
                 rules: Arc::new(RulesCache::new(config.rules_ttl)),
                 config,
                 live: Mutex::new(HashMap::new()),
@@ -229,7 +256,13 @@ impl KubeConnector {
         let pools: Vec<Arc<ClientPool>> = {
             let pools = self.shared.pools.lock();
             *self.shared.latest.lock() = Some(loaded.clone());
-            pools.values().cloned().collect()
+            let unretried = self
+                .shared
+                .unretried
+                .as_ref()
+                .map(|(pools, _)| pools.lock().values().cloned().collect::<Vec<_>>())
+                .unwrap_or_default();
+            pools.values().cloned().chain(unretried).collect()
         };
         let mut dropped: Vec<ContextName> = pools
             .iter()
@@ -256,6 +289,25 @@ impl KubeConnector {
             }),
             None => Arc::new(describe::NoDescribe),
         }
+    }
+
+    /// The pool whose clients never retry, for this exec-plugin policy; `None` for a connector
+    /// built from custom pools.
+    fn unretried_pool(&self, interactivity: ExecInteractivity) -> Option<Arc<ClientPool>> {
+        let (pools, factory) = self.shared.unretried.as_ref()?;
+        Some(
+            pools
+                .lock()
+                .entry(interactivity)
+                .or_insert_with(|| {
+                    let pool = factory(interactivity);
+                    if let Some(loaded) = self.shared.latest.lock().as_ref() {
+                        pool.replace_loaded(loaded);
+                    }
+                    Arc::new(pool)
+                })
+                .clone(),
+        )
     }
 
     fn pool(&self, interactivity: ExecInteractivity) -> Arc<ClientPool> {
@@ -289,7 +341,17 @@ impl ClusterConnectorPort for KubeConnector {
         let client = (*pool.get(&request.context).await?).clone();
 
         let discovery = KubeDiscovery::new(client.clone());
-        let resources = KubeResources::new(client.clone(), discovery.clone());
+        let mut resources = KubeResources::new(client.clone(), discovery.clone());
+        if let Some(unretried) = self.unretried_pool(request.exec_interactivity) {
+            // Built on the first eviction: a refusal by a PodDisruptionBudget must not be retried
+            // for minutes by the shared client's backoff.
+            let context = request.context.clone();
+            resources =
+                resources.with_lazy_unretried_client(Arc::new(LazyClient::new(move || {
+                    let (pool, context) = (unretried.clone(), context.clone());
+                    Box::pin(async move { Ok((*pool.get(&context).await?).clone()) })
+                })));
+        }
         let access = KubeAccess::new(
             pool.clone(),
             self.shared.rules.clone(),

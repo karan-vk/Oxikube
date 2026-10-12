@@ -33,9 +33,11 @@
 //! | `mod` | [`PodPhase`], [`QosClass`], [`PodSummary`] |
 //! | `status` | the printer's `READY` / `STATUS` / `RESTARTS` derivation |
 //! | `container` | [`ContainerSummary`] and its [`ContainerState`] |
+//! | `detail` | [`PodDetail`] (E12-S03): environment, mounts, probes, volumes, tolerations, affinity, node and owners for the detail panel |
 //! | `resources` | [`ComputeResources`] (requests and limits, the pod's effective totals), [`Probes`], [`ContainerPort`] |
 
 mod container;
+mod detail;
 mod resources;
 mod status;
 
@@ -44,6 +46,11 @@ use std::sync::Arc;
 use jiff::Timestamp;
 
 pub use container::{ContainerKind, ContainerState, ContainerSummary, TerminatedState};
+pub use detail::{
+    AffinityLine, ContainerDetail, EnvFrom, EnvRow, EnvSource, EnvSources, EnvValue, EnvVar, MASK,
+    Missing, MountSummary, Origin, PodDetail, ProbeDetail, ProbeKind, SecretValue, SourceData,
+    SourceKind, SourceState, SourceValue, Toleration, VolumeSummary, node_of,
+};
 pub use resources::{ComputeResources, ContainerPort, Probes, ResourceAmounts};
 pub(super) use status::{StateView, is_restartable};
 

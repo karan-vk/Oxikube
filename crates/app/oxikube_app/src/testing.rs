@@ -237,12 +237,17 @@ impl Harness {
         Self::build(&[], extra)
     }
 
-    /// The standard harness with the real `resource::Delete` handler (E07-S08) in place of the
-    /// recording test one, over the fake resource ports.
+    /// The standard harness with the real `resource::Delete` handler (E07-S08) and the real
+    /// `pod::Delete` handler (E12-S03: a pod is deleted by that command) in place of the
+    /// recording test ones, over the fake resource ports.
     pub fn with_delete_handler() -> Self {
-        Self::build(&[CommandId::RESOURCE_DELETE], |reg, _, _| {
-            crate::actions::register_commands(reg)
-        })
+        Self::build(
+            &[CommandId::RESOURCE_DELETE, CommandId::POD_DELETE],
+            |reg, _, sessions| {
+                crate::actions::register_commands(reg)?;
+                crate::workloads::register_pod_commands(reg, sessions.clone())
+            },
+        )
     }
 
     /// The standard harness with the real `ingressclass::SetDefault` handler (E12-S14) over the
@@ -253,13 +258,14 @@ impl Harness {
         })
     }
 
-    /// The standard harness with the real workload handlers (`cronjob::*`, `job::*` of E12-S08
-    /// and `workload::Scale` of E12-S04) in place of the recording test one, over the fake
+    /// The standard harness with the real workload handlers (`cronjob::*`, `job::*` of E12-S08,
+    /// `workload::Scale` of E12-S04 and the `pod::*` ones of E12-S03) in place of the recording test one, over the fake
     /// resource ports.
     pub fn with_workloads() -> Self {
-        Self::build(&[CommandId::WORKLOAD_SCALE], |reg, _, manager| {
-            crate::workloads::register_commands(reg, manager.clone())
-        })
+        Self::build(
+            &[CommandId::WORKLOAD_SCALE, CommandId::POD_DELETE],
+            |reg, _, manager| crate::workloads::register_commands(reg, manager.clone()),
+        )
     }
 
     /// The standard harness with the real `node::Cordon` and `node::Uncordon` handlers
@@ -270,7 +276,9 @@ impl Harness {
         })
     }
 
-    fn build(
+    /// The standard harness without the recording test handlers of `skip` (a real handler takes
+    /// their place in `extra`), plus the commands `extra` registers.
+    pub fn build(
         skip: &[CommandId],
         extra: impl FnOnce(
             &mut CommandRegistry,

@@ -48,7 +48,11 @@
 
 mod commands;
 mod plan;
+mod pod_commands;
+mod pods;
+mod refs;
 mod runner;
+mod sanitize;
 mod scale;
 mod scale_command;
 mod service;
@@ -56,7 +60,10 @@ mod service;
 #[cfg(test)]
 mod tests;
 
-pub use commands::{WORKLOAD_COMMANDS, register_commands};
+pub use commands::{WORKLOAD_COMMANDS, register_commands, register_pod_commands};
 pub use plan::{MAX_REPLICAS, ScalePlan, ScaleResult, is_scalable, parse_replicas, replicas_word};
+pub use pod_commands::POD_COMMANDS;
+pub use pods::{Evicted, PodDeleted};
 pub use runner::{ScaleReport, ScaleRunner};
+pub use sanitize::{MAX_SWEEP, PodResult, PodStatus, Sweep};
 pub use service::{SuspendOutcome, Triggered, WorkloadService};

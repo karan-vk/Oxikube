@@ -49,6 +49,7 @@ mod mutation;
 mod pipeline;
 pub mod policy;
 pub mod posture;
+mod workload_policy;
 
 #[cfg(test)]
 mod tests;

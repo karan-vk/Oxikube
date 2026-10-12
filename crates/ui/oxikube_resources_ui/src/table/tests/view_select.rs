@@ -94,7 +94,7 @@ fn keys_move_extend_open_select_all_and_clear(cx: &mut TestAppContext) {
     );
     f.keys(&table, "down k");
     assert_eq!(f.selected(&table), ["b"]);
-    f.keys(&table, "shift-j shift-down");
+    f.keys(&table, "shift-down shift-down");
     assert_eq!(f.selected(&table), ["b", "c", "d"]);
 
     f.dispatcher.clear();

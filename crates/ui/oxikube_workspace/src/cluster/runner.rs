@@ -31,6 +31,7 @@ use oxikube_app::{
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::safety::ConfirmTier;
 use oxikube_runtime::spawn_kube;
 
 use super::echo::SessionEcho;
@@ -71,6 +72,10 @@ fn confirm_copy(command: &Command) -> (&'static str, &'static str, bool) {
         Command::CronJobResume { .. } | Command::JobResume { .. } => {
             ("Resume it?", "Resume", false)
         }
+        Command::PodEvict { .. } => ("Evict the pod?", "Evict", true),
+        Command::PodDelete { .. } => ("Delete the pod?", "Delete", true),
+        Command::PodForceDelete { .. } => ("Force delete the pod?", "Force delete", true),
+        Command::PodSanitize { .. } => ("Delete finished pods?", "Delete", true),
         _ => ("Are you sure?", "Turn off", true),
     }
 }
@@ -237,6 +242,12 @@ impl ClusterCommandRunner {
     ) {
         let token = request.token;
         let (title, confirm_label, destructive) = confirm_copy(&command);
+        // The `TypeName` tier (a force delete): the dialog confirms only once the name is typed,
+        // and the answer carries it for the guard to check again.
+        let typed = request
+            .expected_name
+            .clone()
+            .filter(|_| request.tier == ConfirmTier::TypeName);
         let (on_confirm, on_decline) = (self.clone(), self.clone());
         self.workspace
             .update(cx, |workspace, cx| {
@@ -249,18 +260,22 @@ impl ClusterCommandRunner {
                     } else {
                         modal
                     };
+                    let modal = match &typed {
+                        Some(name) => modal.require_typed(name.clone(), window, cx),
+                        None => modal,
+                    };
                     modal
                         .on_confirm(move |window, cx| {
-                            on_confirm.dispatch(
-                                command.clone(),
-                                Some(Confirmation::simple(token)),
-                                window,
-                                cx,
-                            );
+                            let answer = match &typed {
+                                Some(name) => Confirmation::typed(token, name.clone()),
+                                None => Confirmation::simple(token),
+                            };
+                            on_confirm.dispatch(command.clone(), Some(answer), window, cx);
                         })
                         .on_cancel(move |_, cx| on_decline.decline(token, cx))
                 });
-                workspace.show_modal(dialog, window, cx);
+                workspace.show_modal(dialog.clone(), window, cx);
+                dialog.update(cx, |dialog, cx| dialog.focus_typed(window, cx));
             })
             .ok();
     }

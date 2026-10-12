@@ -81,7 +81,9 @@ pub use command::{
     Capabilities, Capability, Command, CommandId, CommandMeta, CommandScope, Propagation,
 };
 pub use error::{ErrorKind, OxiError, OxiResult};
-pub use error_details::{ConflictDetails, ConflictReason, FieldCause, ValidationDetails};
+pub use error_details::{
+    ConflictDetails, ConflictReason, EvictionBlocked, FieldCause, ValidationDetails,
+};
 pub use human_error::HumanError;
 pub use json::{JsonDoc, JsonRef};
 pub use metric_query::{

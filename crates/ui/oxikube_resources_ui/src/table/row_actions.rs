@@ -82,7 +82,23 @@ impl ResourceTable {
             self.open_create_namespace(window, cx);
             return true;
         }
-        if targets.is_empty() {
+        // A pod's delete is `pod::Delete`: the key, the palette's `resource::Delete` and the menu
+        // all open the one delete dialog, which plans the pod's own command (E12-S03).
+        let command = if command == CommandId::RESOURCE_DELETE && self.kind.gvk.is_pod() {
+            CommandId::POD_DELETE
+        } else {
+            command
+        };
+        // A sweep of the view needs no row (an empty selection is the usual case).
+        let targets = if command == CommandId::POD_SANITIZE && targets.is_empty() {
+            self.cursor_row(cx)
+                .and_then(|row| self.row_ref(row, cx))
+                .into_iter()
+                .collect()
+        } else {
+            targets
+        };
+        if targets.is_empty() && command != CommandId::POD_SANITIZE {
             self.say_no_row(cx);
             return false;
         }
@@ -105,7 +121,13 @@ impl ResourceTable {
         if let Some(target) = &cursor_target {
             self.say_cursor_row(command, entry.action.label(), target, selected, cx);
         }
-        if command == CommandId::RESOURCE_DELETE || command == CommandId::NAMESPACE_DELETE {
+        if command == CommandId::POD_SANITIZE {
+            // A sweep acts on the view, whatever is selected.
+            self.sanitize_view(cx);
+        } else if matches!(
+            command,
+            CommandId::RESOURCE_DELETE | CommandId::POD_DELETE | CommandId::NAMESPACE_DELETE
+        ) {
             self.begin_delete(&actions, targets, window, cx);
         } else if command == CommandId::WORKLOAD_SCALE {
             // The dialog asks for the count; the command is sent when the user confirms it.
@@ -324,6 +346,11 @@ impl CommandSurface for ResourceTable {
             })
         {
             own.push(CommandId::NAMESPACE_CREATE);
+        }
+        // A pod's delete is `pod::Delete`, and `resource::Delete` is the same dialog for it: the
+        // palette hands either to this table (E12-S03).
+        if own.contains(&CommandId::POD_DELETE) {
+            own.push(CommandId::RESOURCE_DELETE);
         }
         own
     }

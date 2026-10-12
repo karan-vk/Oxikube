@@ -16,8 +16,6 @@
 //!                          "message": "The disruption budget web needs 2 healthy pods and has 2 currently"}]}}
 //! ```
 
-use std::fmt;
-
 use kube::core::Status;
 use oxikube_domain::OxiError;
 use oxikube_ports::Subresource;
@@ -25,28 +23,13 @@ use oxikube_ports::Subresource;
 use crate::auth::redacted_line;
 use crate::mutate::write_error;
 
-/// Marker attached (as the error source) to the retryable error of an eviction that a
-/// PodDisruptionBudget refuses (HTTP 429). Read it with [`eviction_blocked`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvictionBlocked {
-    /// The budget's explanation from the server, redacted and bounded to one line (for
-    /// example `The disruption budget web needs 2 healthy pods and has 2 currently`).
-    pub reason: String,
-}
-
-impl fmt::Display for EvictionBlocked {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "blocked by a PodDisruptionBudget: {}", self.reason)
-    }
-}
-
-impl std::error::Error for EvictionBlocked {}
+pub use oxikube_domain::EvictionBlocked;
 
 /// The [`EvictionBlocked`] marker of an eviction error, `None` for every other error. A caller
-/// that drains waits and retries when this is `Some`.
+/// that drains waits and retries when this is `Some`. (The marker type lives in the domain, so
+/// the app can say "blocked by a disruption budget" without naming the adapter.)
 pub fn eviction_blocked(err: &OxiError) -> Option<&EvictionBlocked> {
-    use std::error::Error;
-    err.source()?.downcast_ref::<EvictionBlocked>()
+    err.eviction_blocked()
 }
 
 /// The error for a subresource the kind does not serve (the object exists, the path 404s).

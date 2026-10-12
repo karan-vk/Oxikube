@@ -20,8 +20,20 @@ fn a_pod_and_another_kind_get_the_actions_the_registry_has_for_them(cx: &mut Tes
     let mut f = Fixture::with_actions(cx);
     f.connect_with([p("x", "web-0", "1")]);
     let pods = f.open_pods();
-    // Pods have the per-kind action; delete is for every kind the server can delete.
-    assert_eq!(labels(&mut f, &pods), ["Logs", "Delete"]);
+    // Pods have the per-kind actions (E12-S03 adds the navigation, evict, delete, force delete and
+    // sanitize); delete is for every kind the server can delete.
+    assert_eq!(
+        labels(&mut f, &pods),
+        [
+            "Jump to Owner",
+            "Show Node",
+            "Logs",
+            "Evict",
+            "Delete",
+            "Force Delete",
+            "Sanitize"
+        ]
+    );
 
     let nodes = f.open(nodes_kind());
     assert_eq!(
@@ -48,7 +60,7 @@ fn the_palette_list_is_the_menu_list_with_the_same_state(cx: &mut TestAppContext
     let entries = f.vcx.update(|_, cx| pods.read(cx).action_entries(cx));
     let delete = entries
         .iter()
-        .find(|e| e.command() == CommandId::RESOURCE_DELETE)
+        .find(|e| e.command() == CommandId::POD_DELETE)
         .expect("delete is listed, disabled");
     assert!(!delete.is_enabled());
     assert_eq!(
@@ -69,8 +81,8 @@ fn the_context_menu_item_opens_the_delete_dialog(cx: &mut TestAppContext) {
     let table = f.open_pods();
     assert_eq!(f.names(&table), ["web-0", "web-1"]);
     right_click(&mut f, 1);
-    // Open, Copy Name, Select All, Logs, Delete.
-    choose(&mut f, 4);
+    // Open, Copy Name, Select All, Jump to Owner, Show Node, Logs, Evict, Delete.
+    choose(&mut f, 7);
     let dialog = dialog(&mut f).expect("the delete dialog opened");
     let (items, tier) = f.vcx.update(|_, cx| {
         let d = dialog.read(cx);
@@ -98,7 +110,7 @@ fn the_per_kind_action_dispatches_its_command(cx: &mut TestAppContext) {
     let _table = f.open_pods();
     f.dispatcher.clear();
     right_click(&mut f, 0);
-    choose(&mut f, 3); // Logs
+    choose(&mut f, 5); // Logs, after Open, Copy Name, Select All, Jump to Owner and Show Node
     let sent = f.dispatcher.sent();
     assert!(
         matches!(sent.as_slice(), [oxikube_domain::command::Command::PodViewLogs { target, .. }] if &*target.name == "web-0"),
@@ -154,7 +166,7 @@ fn a_disabled_action_is_a_disabled_item_with_its_reason(cx: &mut TestAppContext)
     };
 
     // Enabled: one clickable item, no reason line.
-    let items = items_of(&mut f, CommandId::RESOURCE_DELETE);
+    let items = items_of(&mut f, CommandId::POD_DELETE);
     assert!(
         matches!(
             items.as_slice(),
@@ -171,7 +183,7 @@ fn a_disabled_action_is_a_disabled_item_with_its_reason(cx: &mut TestAppContext)
     f.sessions
         .set_read_only(&crate::table::tests::fixture::cluster(), true)
         .unwrap();
-    let items = items_of(&mut f, CommandId::RESOURCE_DELETE);
+    let items = items_of(&mut f, CommandId::POD_DELETE);
     match items.as_slice() {
         [
             PopupMenuItem::Item {
