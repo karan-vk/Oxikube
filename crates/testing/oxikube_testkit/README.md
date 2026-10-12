@@ -54,6 +54,19 @@ Port fakes, fixtures, builders, kind helpers, gpui test helpers.
   `resource("test.oxikube.dev/v1", "Widget")`. They share the fixtures' defaults, and
   `tests/fixtures.rs` checks that they match the corresponding fixtures field by field.
 
+## The section matrix (always on, E12-S20)
+
+- `sections::catalog()`: one `KindCase` per kind the cluster sidebar lists (Freelens' catalog,
+  research §A1) plus the CRD list: its sidebar entry, its columns (wide ones end in `*`), its own
+  row actions, whether its detail has a panel, and `case.seed(&Seed { namespace, stem })`, a
+  manifest a real API server accepts (`seed_resource` for the fakes). Seeds are inert on a shared
+  cluster: no replicas, a suspended Job and CronJob, webhook configurations without webhooks, a
+  class nobody provisions for; cluster-scoped names carry the test's stem.
+- Its suites: `bins/oxikube` `mount::tests::sections` (registry, tables, details, row actions and
+  the guard matrix over fakes), `startup::tests::k9s_verbs` (the k9s keys per kind) and
+  `tests/kind_sections` (the same against kind). A kind, column or action that changes fails them
+  until the case changes with it.
+
 ## Kind pods for the exec and terminal suites (feature `integration`)
 
 - `integration::pods` returns pod manifests as JSON for `kubectl apply` or `serde_json::from_value`:

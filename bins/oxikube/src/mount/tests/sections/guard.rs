@@ -1,0 +1,193 @@
+//! The guard matrix (epic criterion 3): every mutating row action of every kind, dispatched on the
+//! app's own bus the way its row sends it, is guarded as declared.
+//!
+//! For each one: the documented risk and tier are the declared ones (a dropped tier fails here),
+//! the bus asks for that tier before anything runs, a confirmed dispatch leaves an audit record,
+//! a read-only cluster refuses it for the user and for an agent before any request (audited as
+//! denied), and it has an MCP tool stub. [`RISKS`] holds every mutating command the app declares:
+//! a new one without an entry fails, so it cannot ship unguarded by this matrix.
+
+use futures::executor::block_on;
+use gpui::TestAppContext;
+use oxikube_app::command_bus::{DispatchContext, DispatchError, Outcome};
+use oxikube_app::guard::Confirmation;
+use oxikube_domain::Capabilities;
+use oxikube_domain::audit::{AuditOutcome, Initiator};
+use oxikube_domain::command::{COMMANDS, CommandId};
+use oxikube_domain::safety::{ConfirmTier, Risk};
+use oxikube_testkit::TestPorts;
+use oxikube_testkit::sections::catalog;
+
+use super::super::App;
+use super::{served, target};
+use crate::app_state::AppState;
+
+/// The risk of every mutating command (docs/CONTEXT.md, "Risk / ConfirmTier"): low and medium
+/// confirm with one click, high and irreversible with the name typed.
+const RISKS: &[(CommandId, Risk)] = &[
+    (CommandId::CRONJOB_RESUME, Risk::Low),
+    (CommandId::CRONJOB_SUSPEND, Risk::Low),
+    (CommandId::CRONJOB_TRIGGER, Risk::Low),
+    (CommandId::INGRESS_CLASS_SET_DEFAULT, Risk::Low),
+    (CommandId::JOB_RESUME, Risk::Low),
+    (CommandId::JOB_SUSPEND, Risk::Low),
+    (CommandId::NAMESPACE_CREATE, Risk::Low),
+    (CommandId::NAMESPACE_DELETE, Risk::Irreversible),
+    (CommandId::NODE_CORDON, Risk::Low),
+    (CommandId::NODE_DRAIN, Risk::High),
+    // A privileged pod on the node (E09-S09): a mutation, though it ends in a shell.
+    (CommandId::NODE_SHELL, Risk::Medium),
+    (CommandId::NODE_UNCORDON, Risk::Low),
+    (CommandId::POD_DEBUG, Risk::Low),
+    (CommandId::POD_DELETE, Risk::Medium),
+    (CommandId::POD_EVICT, Risk::Medium),
+    (CommandId::POD_FORCE_DELETE, Risk::High),
+    (CommandId::POD_SANITIZE, Risk::Medium),
+    (CommandId::PVC_RESIZE, Risk::Medium),
+    // The manifest editor's apply (E10); a Secret's "Edit decoded" applies through it.
+    (CommandId::RESOURCE_APPLY, Risk::Low),
+    (CommandId::RESOURCE_DELETE, Risk::Medium),
+    (CommandId::STORAGECLASS_SET_DEFAULT, Risk::Low),
+    (CommandId::WORKLOAD_RESTART, Risk::Low),
+    (CommandId::WORKLOAD_ROLLBACK, Risk::Medium),
+    (CommandId::WORKLOAD_SCALE, Risk::Low),
+    (CommandId::WORKLOAD_SET_IMAGE, Risk::Low),
+];
+
+fn documented(id: CommandId) -> (Risk, ConfirmTier) {
+    let risk = RISKS
+        .iter()
+        .find(|(known, _)| *known == id)
+        .map(|(_, risk)| *risk)
+        .unwrap_or_else(|| panic!("{id} is a mutation with no entry in the guard matrix"));
+    let tier = match risk {
+        Risk::Low | Risk::Medium => ConfirmTier::Simple,
+        Risk::High | Risk::Irreversible => ConfirmTier::TypeName,
+    };
+    (risk, tier)
+}
+
+/// Where the guard raises a tier for the object a command names (`delete_risk`): deleting a Node
+/// or a PersistentVolume asks for the name typed.
+const RAISED_BY_TARGET: &[(CommandId, &str, ConfirmTier)] = &[
+    (CommandId::RESOURCE_DELETE, "Node", ConfirmTier::TypeName),
+    (
+        CommandId::RESOURCE_DELETE,
+        "PersistentVolume",
+        ConfirmTier::TypeName,
+    ),
+];
+
+/// The tier the guard asks for `id` on a `kind`: the documented one, or the raised one.
+fn expected_tier(id: CommandId, kind: &str) -> ConfirmTier {
+    RAISED_BY_TARGET
+        .iter()
+        .find(|(raised, on, _)| *raised == id && *on == kind)
+        .map_or_else(|| documented(id).1, |(_, _, tier)| *tier)
+}
+
+fn ui() -> DispatchContext {
+    DispatchContext::new(Initiator::Ui, "alice")
+}
+
+#[test]
+fn every_mutating_command_the_app_declares_has_a_matrix_entry() {
+    let declared: Vec<CommandId> = COMMANDS
+        .iter()
+        .filter(|meta| meta.mutating)
+        .map(|meta| meta.id)
+        .collect();
+    let listed: Vec<CommandId> = RISKS.iter().map(|(id, _)| *id).collect();
+    assert_eq!(
+        declared, listed,
+        "a mutation was added or removed: give it a row in RISKS (and a row action that \
+         the matrix dispatches, or say why not)"
+    );
+    for meta in COMMANDS.iter().filter(|meta| meta.mutating) {
+        let (risk, tier) = documented(meta.id);
+        assert_eq!(meta.risk, Some(risk), "{}", meta.id);
+        assert_eq!(meta.confirm, tier, "{}", meta.id);
+    }
+}
+
+#[gpui::test]
+fn every_kinds_mutations_are_guarded_audited_and_tools(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.connect_sections();
+    let bus = app.bus();
+    let rows = app.row_actions();
+    let sessions = app
+        .vcx
+        .update(|_, cx| AppState::global(cx).services().sessions.clone());
+    let cluster = TestPorts::cluster_id();
+    let mut checked = 0;
+    for case in catalog() {
+        let target = target(case);
+        let mutations = rows
+            .actions_for(&served(case), Capabilities::all())
+            .into_iter()
+            .filter(|action| action.meta().mutating);
+        for action in mutations {
+            let id = action.meta().id;
+            let what = format!("{id} on a {}", case.kind);
+            let tier = expected_tier(id, case.kind);
+            assert!(bus.tool(id).is_some(), "{what}: an MCP tool stub");
+            let command = action.command_for(&target);
+
+            // Asked first, at the declared tier; nothing ran.
+            let audited = app.ports.state.audit_log().len();
+            let request = match block_on(bus.dispatch(command.clone(), ui())) {
+                Ok(Outcome::NeedsConfirmation(request)) => request,
+                other => panic!("{what}: expected a confirmation request, got {other:?}"),
+            };
+            assert_eq!(request.tier, tier, "{what}");
+            assert_eq!(request.command, id, "{what}");
+            assert_eq!(app.ports.state.audit_log().len(), audited, "{what}");
+
+            // Confirmed: it runs (the fakes may refuse it) and leaves its audit record.
+            let confirmation = match tier {
+                ConfirmTier::TypeName => Confirmation::typed(
+                    request.token,
+                    request.expected_name.clone().expect("a name to type"),
+                ),
+                _ => Confirmation::simple(request.token),
+            };
+            let _ = block_on(bus.dispatch(command.clone(), ui().with_confirmation(confirmation)));
+            let records = app.ports.state.audit_log();
+            assert!(
+                records[audited..]
+                    .iter()
+                    .any(|r| r.cmd.as_ref() == id.as_str() && r.outcome != AuditOutcome::Denied),
+                "{what}: a confirmed dispatch is audited"
+            );
+
+            // Read-only: refused for the user and for an agent, before any request, audited.
+            sessions.set_read_only(&cluster, true).expect("a session");
+            let writes = app.seeded_resources().mutating_calls().len();
+            let audited = app.ports.state.audit_log().len();
+            for initiator in [Initiator::Ui, Initiator::Agent] {
+                let refused =
+                    block_on(bus.dispatch(command.clone(), DispatchContext::new(initiator, "x")));
+                assert!(
+                    matches!(refused, Err(DispatchError::ReadOnly { .. })),
+                    "{what} read-only for {initiator}: {refused:?}"
+                );
+            }
+            assert_eq!(
+                app.seeded_resources().mutating_calls().len(),
+                writes,
+                "{what}: nothing reached the cluster"
+            );
+            let denied = app.ports.state.audit_log()[audited..]
+                .iter()
+                .filter(|r| r.cmd.as_ref() == id.as_str() && r.outcome == AuditOutcome::Denied)
+                .count();
+            assert_eq!(denied, 2, "{what}: both refusals are audited");
+            sessions.set_read_only(&cluster, false).expect("a session");
+            checked += 1;
+        }
+    }
+    // Every kind's delete, plus the kind actions of the workloads, nodes, namespaces, network
+    // and storage stories.
+    assert!(checked >= 60, "{checked} mutations checked");
+}

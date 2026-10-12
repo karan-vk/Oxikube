@@ -183,6 +183,8 @@ fn panel(light: bool) -> anyhow::Result<RgbaImage> {
             exec: None,
             scale: None,
             drain: None,
+            set_image: None,
+            rollback: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

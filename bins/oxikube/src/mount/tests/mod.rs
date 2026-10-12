@@ -34,6 +34,7 @@ mod rollback;
 mod rollout;
 mod scale;
 mod secrets;
+mod sections;
 mod signin;
 mod storage;
 mod tail;

@@ -275,3 +275,41 @@ fn the_screenshot_step_matcher_reads_package_feature_and_test() {
     assert!(nightly_runs(&lines, "b", "screenshot", None));
     assert!(!nightly_runs(&lines, "c", "screenshot", None));
 }
+
+/// The detail panels of the main kinds (epic E12, E12-S20): Pod, Deployment, Node, Secret (masked),
+/// Service and CRD, each a golden of `oxikube_resources_ui`'s screenshot test that the nightly
+/// compares. A golden that is dropped, or a test that stops rendering it, fails here, not unseen.
+const E12_DETAIL_GOLDENS: &[&str] = &[
+    "detail_pod_panel_dark",
+    "detail_deployment_dark",
+    "detail_node_dark",
+    "detail_secret_tls_dark",
+    "detail_service_dark",
+    "detail_crd_schema_dark",
+];
+
+#[test]
+fn nightly_compares_the_six_e12_detail_panel_goldens() {
+    let crate_dir = "crates/ui/oxikube_resources_ui";
+    let sources: String = fs::read_dir(repo_root().join(crate_dir).join("tests/screenshot"))
+        .expect("the screenshot modules")
+        .filter_map(|entry| fs::read_to_string(entry.ok()?.path()).ok())
+        .collect();
+    for name in E12_DETAIL_GOLDENS {
+        let (width, height) = png_size(&format!("{crate_dir}/tests/goldens/macos/{name}.png"));
+        assert!(width > 0 && height > 0, "{name}");
+        assert!(
+            sources.contains(&format!("\"{name}\"")),
+            "no screenshot test renders {name}"
+        );
+    }
+    assert!(
+        nightly_runs(
+            &nightly_cargo_test_lines(),
+            "oxikube_resources_ui",
+            "screenshot",
+            Some("screenshot")
+        ),
+        "the nightly no longer runs the resource views' screenshot test"
+    );
+}

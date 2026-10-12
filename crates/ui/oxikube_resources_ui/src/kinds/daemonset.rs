@@ -11,8 +11,9 @@
 //!   counts, the update strategy (`RollingUpdate` with its max unavailable, or `OnDelete`), the
 //!   pod selector, the node selector, the pod template and the pods the DaemonSet owns, each a
 //!   link to the pod's detail.
-//! * **Actions**: none of its own. A DaemonSet has no `scale` subresource (one pod per node), so
-//!   `workload::Scale` is not offered; Restart and rollback are E12-S05 and E12-S06.
+//! * **Actions**: the rollout verbs (Restart, Set image; E12-S05) and rollback (E12-S06), the
+//!   [`ROLLOUT_ACTIONS`](super::workloads::ROLLOUT_ACTIONS) its rows offer. A DaemonSet has no
+//!   `scale` subresource (one pod per node), so `workload::Scale` is not offered.
 //!
 //! # How a user gets here
 //!
@@ -25,11 +26,12 @@ use gpui::App;
 use super::KindSpec;
 use super::KindSpecs;
 use super::builtin::workloads::spec_at;
-use super::workloads::panel;
+use super::workloads::{ROLLOUT_ACTIONS, panel};
 
-/// DaemonSet: the Workloads section's entry, no extra actions, and the workload panel.
+/// DaemonSet: the Workloads section's entry, the rollout verbs and rollback, and the workload
+/// panel.
 pub(super) fn spec() -> KindSpec {
-    spec_at("DaemonSet", &[]).with_detail(panel::renderer())
+    spec_at("DaemonSet", ROLLOUT_ACTIONS).with_detail(panel::renderer())
 }
 
 /// Registers the DaemonSet kind.
