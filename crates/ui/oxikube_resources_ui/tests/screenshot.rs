@@ -50,6 +50,11 @@
 //!   Pods column (E12-S16); `namespaces_delete_dark`, `namespaces_delete_light`: the delete dialog
 //!   of a namespace with HNC children and a lot in it; `namespaces_create_dark`: the create dialog
 //!   showing an invalid name.
+//! - `detail_namespace_dark`, `detail_namespace_light`, `detail_namespace_unavailable_dark`
+//!   (`namespace_allocation`): the namespace panel's allocation section (E13-S11): requests, limits
+//!   and live usage against a ResourceQuota, the quota's own used-against-hard lines, and the
+//!   same namespace without metrics-server and without a quota. `detail_node_dark`,
+//!   `detail_node_light` and `detail_node_unavailable_dark` (`node`) show the node's.
 //! - `storage_claims_table_*`, `storage_claim_panel_*`, `storage_resize_dialog_*` (`storage`): the
 //!   claims table with its Pods (used by) column, a claim's detail panel with the Pods that mount
 //!   it, and the resize dialog refusing a shrink, in both themes (E12-S15).
@@ -95,6 +100,8 @@ mod detail;
 mod drain;
 #[path = "screenshot/exec.rs"]
 mod exec;
+#[path = "screenshot/namespace_allocation.rs"]
+mod namespace_allocation;
 #[path = "screenshot/namespaces.rs"]
 mod namespaces;
 #[path = "screenshot/network.rs"]
@@ -296,6 +303,7 @@ fn main() -> ExitCode {
         pods::run(),
         service::run(),
         namespaces::run(),
+        namespace_allocation::run(),
         storage::run(),
     ];
     let mut failed = false;

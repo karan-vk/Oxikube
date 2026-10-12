@@ -5,16 +5,22 @@
 //! requests and limits, one pod's four percents, and the allocation of 10 000 pods over 100
 //! nodes and 50 namespaces. Under `cargo test --all-targets` (no `--bench` flag) it runs one
 //! small iteration as a smoke test.
+//!
+//! It also times what the allocation panels (E13-S11) do when their pods change: a node's panel
+//! (110 pods: sums plus view) and a namespace's (2 000 pods: sums plus view, with a quota).
 
 #![allow(clippy::print_stdout, reason = "a benchmark reports on stdout")]
 
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
+use oxikube_app::allocation::{AllocationView, UsageState};
 use oxikube_app::{UtilisationAggregator, allocate_namespaces, allocate_nodes};
 use oxikube_domain::Resource;
 use oxikube_domain::ids::{ClusterId, ContextName};
-use oxikube_domain::utilisation::{GpuVendors, Utilisation, aggregate_pod_requests_limits};
+use oxikube_domain::utilisation::{
+    GpuVendors, QuotaCaps, Utilisation, aggregate_pod_requests_limits,
+};
 use serde_json::json;
 
 const PODS: usize = 10_000;
@@ -22,11 +28,19 @@ const NODES: usize = 100;
 const NAMESPACES: usize = 50;
 
 fn pod(i: usize) -> Resource {
+    pod_at(
+        i,
+        &format!("ns-{}", i % NAMESPACES),
+        &format!("node-{}", i % NODES),
+    )
+}
+
+fn pod_at(i: usize, namespace: &str, node: &str) -> Resource {
     Resource::from_json(json!({
         "apiVersion": "v1", "kind": "Pod",
-        "metadata": {"name": format!("pod-{i:05}"), "namespace": format!("ns-{}", i % NAMESPACES)},
+        "metadata": {"name": format!("pod-{i:05}"), "namespace": namespace},
         "spec": {
-            "nodeName": format!("node-{}", i % NODES),
+            "nodeName": node,
             "initContainers": [{"name": "init", "resources": {"requests": {"cpu": "100m", "memory": "64Mi"}}}],
             "containers": [
                 {"name": "app", "resources": {
@@ -115,5 +129,29 @@ fn main() {
     });
     time("namespaces: totals of 10k pods", samples, 1, || {
         black_box(allocate_namespaces(&pods, &gpus));
+    });
+
+    // What a panel redoes when one of its pods changes.
+    let on_node: Vec<Resource> = (0..110).map(|i| pod_at(i, "ns-0", "node-0")).collect();
+    time("node panel: 110 pods, sums + view", samples, 100, || {
+        let all = allocate_nodes(&nodes[..1], &on_node, &gpus);
+        black_box(AllocationView::for_node(&all[0], &UsageState::Pending));
+    });
+    let in_namespace: Vec<Resource> = (0..2000).map(|i| pod_at(i, "ns-0", "node-0")).collect();
+    let quota = Resource::from_json(json!({
+        "apiVersion": "v1", "kind": "ResourceQuota",
+        "metadata": {"name": "q", "namespace": "ns-0"},
+        "spec": {"hard": {"requests.cpu": "1000", "limits.cpu": "2000", "pods": "5000"}},
+    }))
+    .unwrap();
+    time("namespace panel: 2k pods, sums + view", samples, 1, || {
+        let all = allocate_namespaces(&in_namespace, &gpus);
+        let (caps, scoped) = QuotaCaps::tightest([&quota], &gpus);
+        black_box(AllocationView::for_namespace(
+            &all[0],
+            &caps,
+            scoped,
+            &UsageState::Pending,
+        ));
     });
 }

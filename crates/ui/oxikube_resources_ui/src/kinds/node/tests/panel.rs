@@ -9,7 +9,8 @@ use oxikube_domain::command::Command;
 use oxikube_ports::{Delta, DeltaBatch, ListPage};
 use oxikube_testkit::{ResourceCall, Timeline, node, pod};
 
-use super::{node_detail, node_ref, panel_of, pod_on, tick, worker};
+use super::{cpu_requests, node_detail, node_ref, panel_of, pod_on, tick, worker};
+use oxikube_app::allocation::AllocationKind;
 
 /// Worker-1 with two scheduled pods, one on another node and one that finished.
 fn busy_cluster() -> Vec<oxikube_domain::Resource> {
@@ -61,18 +62,23 @@ fn the_panel_draws_allocation_taints_images_and_pods(cx: &mut TestAppContext) {
     }
     assert!(!d.shown("node-panel-cordoned"), "the node is schedulable");
 
-    let allocation =
-        d.f.vcx
-            .update(|_, cx| panel.read(cx).allocation_now())
-            .expect("the pods are known");
+    let text = |d: &mut crate::detail::tests::fixture::Detail, kind: &AllocationKind| {
+        d.f.vcx.update(|_, cx| {
+            let panel = panel.read(cx);
+            let row = panel.allocation_view()?.row(kind)?.clone();
+            Some((row.requests_text(), row.limits_text()))
+        })
+    };
     // 250m + 750m of 4 CPU; limits 500m + 1; memory 256Mi + 1Gi of 16Gi, limits 512Mi + 2Gi.
-    assert_eq!(allocation.cpu.requests_text(), "1000m (25%)");
-    assert_eq!(allocation.cpu.allocatable_text(), "4000m");
-    assert_eq!(allocation.cpu.limits_text(), "1500m (37%)");
-    assert_eq!(allocation.memory.requests_text(), "1.3 GiB (7%)");
-    assert_eq!(allocation.memory.limits_text(), "2.5 GiB (15%)");
+    let (requests, limits) = text(&mut d, &AllocationKind::Cpu).expect("the pods are known");
+    assert_eq!(requests, "1000m of 4000m (25%)");
+    assert_eq!(limits.as_deref(), Some("1500m of 4000m (37%)"));
+    let (requests, limits) = text(&mut d, &AllocationKind::Memory).unwrap();
+    assert_eq!(requests, "1.3 GiB of 16 GiB (7%)");
+    assert_eq!(limits.as_deref(), Some("2.5 GiB of 16 GiB (15%)"));
+    let (pods, _) = text(&mut d, &AllocationKind::Pods).unwrap();
     assert_eq!(
-        allocation.pods.requests, 2,
+        pods, "2 of 110 (1%)",
         "the pod of another node and the finished one are out"
     );
     let names = d.f.vcx.update(|_, cx| panel.read(cx).pod_names());
@@ -133,12 +139,7 @@ fn the_pods_list_follows_the_cluster(cx: &mut TestAppContext) {
         .advance_clock(Duration::from_millis(1100));
     d.settle();
     assert_eq!(names(&mut d), ["x/p1", "x/p2"]);
-    let cpu =
-        d.f.vcx
-            .update(|_, cx| panel.read(cx).allocation_now())
-            .unwrap()
-            .cpu;
-    assert_eq!(cpu.requests, 300);
+    assert_eq!(cpu_requests(&mut d, &panel), "300m of 4000m (7%)");
 
     resources.clock().advance(Duration::from_secs(1));
     d.settle();
@@ -239,12 +240,7 @@ fn without_the_pod_feed_the_panel_lists_the_nodes_pods_once(cx: &mut TestAppCont
         Some(false),
         "the list answered"
     );
-    let cpu =
-        d.f.vcx
-            .update(|_, cx| panel.read(cx).allocation_now())
-            .unwrap()
-            .cpu;
-    assert_eq!(cpu.requests, 1500);
+    assert_eq!(cpu_requests(&mut d, &panel), "1500m of 4000m (37%)");
     assert!(d.shown("node-allocation-cpu-fill"));
 
     let lists: Vec<_> = resources
@@ -393,7 +389,7 @@ fn a_pod_row_opens_the_pod(cx: &mut TestAppContext) {
             .expect("the panel is drawn");
     d.f.vcx.simulate_event(gpui::ScrollWheelEvent {
         position: panel_box.center(),
-        delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(-100.))),
+        delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(-260.))),
         modifiers: gpui::Modifiers::none(),
         touch_phase: gpui::TouchPhase::Moved,
     });

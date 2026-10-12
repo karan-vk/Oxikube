@@ -56,8 +56,14 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   actions with their dialogs, through the guard.
 - `kinds::node` (E12-S09): the Nodes spec. The table's columns (Roles, Status, Version, OS, Kernel,
   Internal IP, Pods, CPU%, Mem%, Taints, Schedulable, Age; instance type and zone as wide columns),
-  the detail panel (cordon badge and button, conditions, allocation bars from the pods on the node,
-  taints, pods, capacity, images) and the "Cordon" / "Uncordon" actions (keys `c` / `u` on Nodes).
+  the detail panel (cordon badge and button, conditions, the allocation section (E13-S11: requests,
+  limits and live usage against allocatable, ephemeral storage and GPUs, the pods that set none,
+  `metrics unavailable: <reason>` without metrics), taints, pods, capacity, images) and the "Cordon" /
+  "Uncordon" actions (keys `c` / `u` on Nodes).
+- `kinds::allocation`, `kinds::namespace` (E13-S11): the allocation section both panels share (rows over
+  `oxikube_app::allocation`, drawn with `oxikube_ui::allocation_bar::AllocationBar`; a usage poll that
+  runs only while the panel is open) and the Namespace panel's use of it: the pods of the namespace summed
+  against its ResourceQuotas, each quota's used-against-hard lines below.
 - `kinds::configmap`, `kinds::secret` (E12-S11): the ConfigMaps panel (uniform key rows, a language-aware
   preview created when a key is expanded, capped at 64 KiB) and the Secrets panel (masked keys, the type's
   facts, reveal and "Edit decoded"); `detail::reveal` holds a revealed Secret in the detail's memory only

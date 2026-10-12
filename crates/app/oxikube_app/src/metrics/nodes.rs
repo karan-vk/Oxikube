@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use oxikube_domain::Resource;
 use oxikube_domain::utilisation::{
-    AmountPercents, GpuVendors, NodeAllocatable, PodAllocation, ResourceAmounts,
+    AmountPercents, GpuVendors, NodeAllocatable, PodAllocation, ResourceAmounts, UnsetPods,
 };
 
 /// One node's allocation, as `kubectl describe node` shows under "Allocated resources".
@@ -20,6 +20,9 @@ pub struct NodeAllocation {
     pub limits: ResourceAmounts,
     /// Pods on the node that still hold resources.
     pub pods: u32,
+    /// How many of those pods set no request or limit, per resource (E13-S11): the reason a
+    /// total of requests looks low.
+    pub unset: UnsetPods,
 }
 
 impl NodeAllocation {
@@ -58,6 +61,7 @@ pub fn allocate_nodes<'a>(
             requests: ResourceAmounts::zero(),
             limits: ResourceAmounts::zero(),
             pods: 0,
+            unset: UnsetPods::default(),
         })
         .collect();
     let index: HashMap<Arc<str>, usize> = out
@@ -79,6 +83,7 @@ pub fn allocate_nodes<'a>(
         target.requests += &pod.resources.requests;
         target.limits += &pod.resources.limits;
         target.pods += 1;
+        target.unset.add(&pod.resources);
     }
     out
 }

@@ -5,15 +5,15 @@
 //! | `mod` | the entity: what it follows, the one-second tick, the actions |
 //! | `data` | the derived view-models and rows ([`NodeData`](data::NodeData), [`PodsOnNode`](data::PodsOnNode)) |
 //! | `refresh` | following the node, the pods-by-node index and the one-time list |
-//! | `render` | the frame: the cordon badge and button, the allocation bars |
+//! | `render` | the frame: the cordon badge and button, the allocation section |
 //! | `sections` | conditions, taints, capacity, system info |
 //! | `lists` | the pods and the images, virtualised |
-//! | `bars` | the allocation bar |
+//! | `allocation` | the allocation section (E13-S11): the view built from the pods, the usage it polls for |
 //!
 //! The panel keeps a lease on the pods-by-node index while the detail is open (releasing it with
 //! the detail) and reads it once a second, or when the node changes, never from `render`.
 
-mod bars;
+mod allocation;
 mod data;
 mod lists;
 mod refresh;
@@ -25,11 +25,14 @@ use std::time::Duration;
 use gpui::{
     Context, IntoElement, Render, Subscription, Task, UniformListScrollHandle, WeakEntity, Window,
 };
+use oxikube_app::allocation::{AllocationView, UsageState};
 use oxikube_app::store::{NodeLoadsLease, ResourceStore};
 use oxikube_domain::Command;
+use oxikube_settings::{MetricsSettings, Settings as _};
 
 use self::data::{Followed, NodeData, PodsOnNode};
 use crate::detail::DetailView;
+use crate::kinds::allocation::poll_usage;
 
 /// How often the panel looks at the pods on its node while it has none to show (the Pod feed is
 /// still listing): the first answer appears within a quarter of a second of the feed's.
@@ -66,8 +69,16 @@ pub struct NodePanel {
     blocked: Option<String>,
     pods_scroll: UniformListScrollHandle,
     images_scroll: UniformListScrollHandle,
+    /// The allocation section, rebuilt when the node, its pods, the usage or the GPU list change.
+    view: Option<AllocationView>,
+    /// The last answer of the metrics port.
+    usage: UsageState,
     _follow: Option<Subscription>,
     _tick: Task<()>,
+    /// Polls the metrics port while the panel is open (dropped with it).
+    _usage: Task<()>,
+    /// Rebuilds the allocation when `metrics.gpu_vendors` changes.
+    _gpus: Subscription,
 }
 
 impl NodePanel {
@@ -94,6 +105,15 @@ impl NodePanel {
                 }
             }
         });
+        let usage = poll_usage(
+            cx,
+            |panel: &Self, cx| panel.usage_target(cx),
+            |panel, state, cx| panel.usage_arrived(state, cx),
+        );
+        let gpus = MetricsSettings::observe_in(cx, |panel: &mut Self, cx| {
+            panel.rebuild_view(cx);
+            cx.notify();
+        });
         // Built while the detail draws (it is leased then, so it cannot be read here): the first
         // look is the next thing the foreground does.
         cx.spawn(async move |this, cx| {
@@ -112,8 +132,12 @@ impl NodePanel {
             blocked: None,
             pods_scroll: UniformListScrollHandle::new(),
             images_scroll: UniformListScrollHandle::new(),
+            view: None,
+            usage: UsageState::Pending,
             _follow: follow,
             _tick: tick,
+            _usage: usage,
+            _gpus: gpus,
         }
     }
 
@@ -184,12 +208,9 @@ pub(crate) fn of(view: &gpui::AnyView) -> gpui::Entity<NodePanel> {
 /// What the tests look at: the panel's state, not its pixels.
 #[cfg(test)]
 impl NodePanel {
-    /// The allocation of the node under the pods the panel shows.
-    pub(crate) fn allocation_now(&self) -> Option<oxikube_domain::NodeAllocation> {
-        Some(oxikube_domain::NodeAllocation::new(
-            &self.node.as_ref()?.summary,
-            &self.pods.as_ref()?.demand,
-        ))
+    /// The allocation section as the panel last built it.
+    pub(crate) fn allocation_view(&self) -> Option<&AllocationView> {
+        self.view.as_ref()
     }
 
     /// `namespace/name` of the pods listed, in order.

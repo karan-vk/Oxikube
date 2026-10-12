@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use oxikube_domain::Resource;
-use oxikube_domain::utilisation::{AmountPercents, GpuVendors, PodAllocation, ResourceAmounts};
+use oxikube_domain::utilisation::{
+    AmountPercents, GpuVendors, PodAllocation, ResourceAmounts, UnsetPods,
+};
 
 /// One namespace's totals over the pods that still hold resources.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,11 +19,14 @@ pub struct NamespaceAllocation {
     pub requests: ResourceAmounts,
     /// Sum of effective limits (compare with a quota's `limits.*` hard amounts).
     pub limits: ResourceAmounts,
+    /// How many of the pods set no request or limit, per resource (E13-S11).
+    pub unset: UnsetPods,
 }
 
 impl NamespaceAllocation {
     /// Requests as a percent of a quota's hard requests (`None` per resource the quota does not
-    /// cap). The input of the allocation views (E13-S11); parsing the quota object is theirs.
+    /// cap). The input of the allocation views (E13-S11), which parse the quota with
+    /// [`QuotaCaps`](oxikube_domain::utilisation::QuotaCaps).
     pub fn requests_vs(&self, hard: &ResourceAmounts) -> AmountPercents {
         self.requests.percent_of(hard)
     }
@@ -53,10 +58,12 @@ pub fn allocate_namespaces<'a>(
                 pods: 0,
                 requests: ResourceAmounts::zero(),
                 limits: ResourceAmounts::zero(),
+                unset: UnsetPods::default(),
             });
         entry.requests += &pod.resources.requests;
         entry.limits += &pod.resources.limits;
         entry.pods += 1;
+        entry.unset.add(&pod.resources);
     }
     by_namespace.into_values().collect()
 }

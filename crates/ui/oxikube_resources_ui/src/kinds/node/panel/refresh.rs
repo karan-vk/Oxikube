@@ -40,6 +40,9 @@ impl NodePanel {
         };
         changed |= self.follow_store(store);
         changed |= self.follow_pods(cx);
+        if changed {
+            self.rebuild_view(cx);
+        }
         changed |= self.follow_session(&detail, cx);
         if changed {
             cx.notify();
@@ -131,6 +134,7 @@ impl NodePanel {
                 self.fetch = Fetch::Failed(error.message().to_owned());
             }
         }
+        self.rebuild_view(cx);
         cx.notify();
     }
 

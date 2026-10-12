@@ -1,36 +1,100 @@
 //! The Namespace panel above the detail's Overview: the phase, what holds a terminating
-//! namespace (finalizers and the controller's blockers), HNC's markers, and "Use namespace".
+//! namespace (finalizers and the controller's blockers), HNC's markers, "Use namespace", and the
+//! allocation section (E13-S11): the namespace's requests, limits and live usage against its
+//! quotas.
 
 use gpui::{
     AnyView, App, AppContext as _, Context, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Styled as _, WeakEntity, Window, div, px,
+    ParentElement as _, Render, Styled as _, Subscription, Task, WeakEntity, Window, div, px,
 };
 use oxikube_domain::view::{NamespacePhase, NamespaceSummary};
+use oxikube_settings::{MetricsSettings, Settings as _};
 use oxikube_ui::button::Button;
-use oxikube_ui::layout::{h_flex, v_flex};
+use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
 
+use super::allocation::{AllocState, TICK, TICK_WAITING, quotas_block};
 use crate::detail::DetailView;
+use crate::kinds::allocation::{allocation_section, muted, poll_usage};
+use crate::table::ToneColors;
 
 /// Builds the panel for one detail view (a [`DetailRenderer`](crate::kinds::DetailRenderer)
 /// factory).
 pub(super) fn build(detail: WeakEntity<DetailView>, _: &mut Window, cx: &mut App) -> AnyView {
-    cx.new(|cx| {
-        // Follow the object: a namespace that starts terminating redraws the panel.
-        if let Some(view) = detail.upgrade() {
-            cx.observe(&view, |_, _, cx| cx.notify()).detach();
-        }
-        NamespacePanel { detail }
-    })
-    .into()
+    cx.new(|cx| NamespacePanel::new(detail, cx)).into()
 }
 
 /// The panel.
 pub struct NamespacePanel {
-    detail: WeakEntity<DetailView>,
+    pub(super) detail: WeakEntity<DetailView>,
+    /// The allocation section: its inputs, sums and notes.
+    pub(super) alloc: AllocState,
+    _follow: Option<Subscription>,
+    /// Looks at the namespace's pods and quotas in the store.
+    _tick: Task<()>,
+    /// Polls the metrics port while the panel is open (dropped with it).
+    _usage: Task<()>,
+    /// Sums again when `metrics.gpu_vendors` changes.
+    _gpus: Subscription,
 }
 
 impl NamespacePanel {
+    fn new(detail: WeakEntity<DetailView>, cx: &mut Context<Self>) -> Self {
+        // Follow the object: a namespace that starts terminating redraws the panel.
+        let follow = detail
+            .upgrade()
+            .map(|view| cx.observe(&view, |_, _, cx| cx.notify()));
+        let tick = cx.spawn(async move |this, cx| {
+            let mut wait = TICK_WAITING;
+            loop {
+                cx.background_executor().timer(wait).await;
+                let next = this.update(cx, |panel, cx| {
+                    if panel.refresh_allocation(cx) {
+                        cx.notify();
+                    }
+                    if panel.alloc.view().is_some() {
+                        TICK
+                    } else {
+                        TICK_WAITING
+                    }
+                });
+                match next {
+                    Ok(next) => wait = next,
+                    Err(_) => break,
+                }
+            }
+        });
+        let usage = poll_usage(
+            cx,
+            |panel: &Self, cx| panel.usage_target(cx),
+            |panel, state, cx| panel.usage_arrived(state, cx),
+        );
+        let gpus = MetricsSettings::observe_in(cx, |panel: &mut Self, cx| {
+            panel.alloc.invalidate();
+            panel.refresh_allocation(cx);
+            cx.notify();
+        });
+        // The detail is leased while it builds its panel: the first look is the next thing the
+        // foreground does.
+        cx.spawn(async move |this, cx| {
+            this.update(cx, |panel, cx| {
+                if panel.refresh_allocation(cx) {
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+        Self {
+            detail,
+            alloc: AllocState::default(),
+            _follow: follow,
+            _tick: tick,
+            _usage: usage,
+            _gpus: gpus,
+        }
+    }
+
     /// The namespace the detail shows, read off the object (one small JSON walk per draw).
     fn summary(&self, cx: &App) -> Option<NamespaceSummary> {
         let detail = self.detail.upgrade()?;
@@ -55,6 +119,7 @@ impl Render for NamespacePanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
+        let tones = ToneColors::current(cx);
         let Some(ns) = self.summary(cx) else {
             return div().into_any_element();
         };
@@ -137,6 +202,106 @@ impl Render for NamespacePanel {
                     ),
             )
             .children(lines)
+            .child(self.allocation(&tokens, &tones))
             .into_any_element()
+    }
+}
+
+impl NamespacePanel {
+    /// The allocation section: the aggregate against the quotas, then the quotas themselves.
+    fn allocation(&self, tokens: &oxikube_ui::Tokens, tones: &ToneColors) -> gpui::AnyElement {
+        let muted = |text: String, id: &'static str| {
+            muted(tokens, text).debug_selector(move || id.to_owned())
+        };
+        let heading = |text: &str, id: &'static str| {
+            div()
+                .debug_selector(move || id.to_owned())
+                .pt(u(tokens.spacing.lg))
+                .pb(u(tokens.spacing.sm))
+                .text_size(u(tokens.font.small))
+                .font_semibold()
+                .text_color(tokens.colors.text_muted)
+                .child(text.to_uppercase())
+        };
+        let mut out = v_flex()
+            .w_full()
+            .child(heading("Allocation", "namespace-allocation-heading"));
+        match self.alloc.view() {
+            Some(view) => {
+                if self.alloc.quotas().is_empty() && self.alloc.quota_note().is_none() {
+                    out = out.child(muted(
+                        "No ResourceQuota in this namespace: totals only.".to_owned(),
+                        "namespace-allocation-versus",
+                    ));
+                }
+                out = out.child(allocation_section(
+                    tokens,
+                    tones,
+                    view,
+                    "namespace-allocation",
+                ));
+            }
+            None => {
+                out = out.child(muted(
+                    self.alloc
+                        .note()
+                        .unwrap_or("Reading the pods of this namespace...")
+                        .to_owned(),
+                    "namespace-allocation-pending",
+                ));
+            }
+        }
+        if let Some(note) = self.alloc.quota_note() {
+            out = out.child(muted(note.to_owned(), "namespace-quota-note"));
+        }
+        if !self.alloc.quotas().is_empty() {
+            out = out
+                .child(heading("Quotas", "namespace-quotas-heading"))
+                .child(quotas_block(tokens, self.alloc.quotas()));
+        }
+        out.into_any_element()
+    }
+}
+
+/// The panel as a typed entity, for tests.
+#[cfg(test)]
+pub(crate) fn of(view: &AnyView) -> gpui::Entity<NamespacePanel> {
+    view.clone()
+        .downcast::<NamespacePanel>()
+        .expect("a namespace panel")
+}
+
+/// What the tests look at: the panel's state, not its pixels.
+#[cfg(test)]
+impl NamespacePanel {
+    /// The allocation section as last built.
+    pub(crate) fn allocation_view(&self) -> Option<&oxikube_app::allocation::AllocationView> {
+        self.alloc.view()
+    }
+
+    /// Why the allocation section is missing, if it is.
+    pub(crate) fn allocation_note(&self) -> Option<&str> {
+        self.alloc.note()
+    }
+
+    /// The quota lines as drawn: per quota, its name and `(resource, used / hard (n%))` lines.
+    pub(crate) fn quota_lines(&self) -> Vec<(String, Vec<(String, String)>)> {
+        self.alloc
+            .quotas()
+            .iter()
+            .map(|quota| {
+                let lines = quota
+                    .lines
+                    .iter()
+                    .map(|l| (l.resource.to_string(), super::allocation::line_text(l)))
+                    .collect();
+                (quota.name.to_string(), lines)
+            })
+            .collect()
+    }
+
+    /// Why the quotas are missing, if they are.
+    pub(crate) fn quota_note(&self) -> Option<&str> {
+        self.alloc.quota_note()
     }
 }

@@ -16,6 +16,7 @@
 #![cfg(feature = "integration")]
 
 mod aliases;
+mod allocation;
 mod auth_required;
 mod auto_reconnect;
 mod clock;

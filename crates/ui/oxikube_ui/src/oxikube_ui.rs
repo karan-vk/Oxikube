@@ -30,6 +30,8 @@
 //! - [`spinner`]: [`spinner::Spinner`], a loading indicator that stands still under reduce-motion.
 //! - [`tooltip`]: [`tooltip::Tooltip`], hover text for any element, and [`tooltip::tooltip_for_action`]
 //!   (the title plus the key bound to an action).
+//! - [`allocation_bar`]: [`allocation_bar::AllocationBar`], a three-segment bar (fill, usage, limits tick)
+//!   for requests, usage and limits against a capacity (E13-S11).
 //! - [`tile`]: [`tile::StatTile`], a clickable number with a caption (overview pages).
 //! - [`root`]: the window root, which owns the dialog, sheet and notification layers.
 //! - [`title_bar`]: the window title bar (drag area, window controls, traffic-light inset).
@@ -37,6 +39,7 @@
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction.
 
+pub mod allocation_bar;
 pub mod assets;
 pub mod button;
 pub mod chart;

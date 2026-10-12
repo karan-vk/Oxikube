@@ -1,4 +1,4 @@
-//! [`ResourceAmounts`]: CPU, memory and GPU counts as one summable value.
+//! [`ResourceAmounts`]: CPU, memory, ephemeral storage and GPU counts as one summable value.
 
 use std::collections::BTreeMap;
 use std::ops::{Add, AddAssign};
@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use crate::quantity::Quantity;
 
-/// CPU, memory and GPU amounts.
+/// CPU, memory, ephemeral storage and GPU amounts.
 ///
-/// CPU (cores) and memory (bytes) are exact [`Quantity`] values; GPUs are whole counts keyed by
+/// CPU (cores), memory and ephemeral storage (bytes) are exact [`Quantity`] values; GPUs are whole counts keyed by
 /// extended resource name (`nvidia.com/gpu`), because a GPU is not divisible the way a core is.
 /// The zero value (all fields empty) means "nothing set". The GPU map is ordered, so equal
 /// amounts compare equal and sums do not depend on the order of the terms.
@@ -20,6 +20,8 @@ pub struct ResourceAmounts {
     pub cpu: Quantity,
     /// Memory in bytes.
     pub memory: Quantity,
+    /// Ephemeral storage (`ephemeral-storage`) in bytes.
+    pub ephemeral: Quantity,
     /// GPU count per configured vendor resource name; absent names are zero.
     pub gpu: BTreeMap<Arc<str>, u64>,
 }
@@ -32,7 +34,10 @@ impl ResourceAmounts {
 
     /// Whether every amount is zero.
     pub fn is_zero(&self) -> bool {
-        self.cpu.is_zero() && self.memory.is_zero() && self.gpu.values().all(|&n| n == 0)
+        self.cpu.is_zero()
+            && self.memory.is_zero()
+            && self.ephemeral.is_zero()
+            && self.gpu.values().all(|&n| n == 0)
     }
 
     /// The GPU count for `resource`, zero when none.
@@ -49,6 +54,7 @@ impl ResourceAmounts {
     pub fn max_assign(&mut self, other: &ResourceAmounts) {
         self.cpu = self.cpu.max(other.cpu);
         self.memory = self.memory.max(other.memory);
+        self.ephemeral = self.ephemeral.max(other.ephemeral);
         for (name, &count) in &other.gpu {
             if count > 0 {
                 let slot = self.gpu.entry(name.clone()).or_insert(0);
@@ -62,6 +68,7 @@ impl AddAssign<&ResourceAmounts> for ResourceAmounts {
     fn add_assign(&mut self, rhs: &ResourceAmounts) {
         self.cpu += rhs.cpu;
         self.memory += rhs.memory;
+        self.ephemeral += rhs.ephemeral;
         for (name, &count) in &rhs.gpu {
             if count == 0 {
                 continue;

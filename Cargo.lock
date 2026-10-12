@@ -6254,6 +6254,7 @@ dependencies = [
  "insta",
  "jiff",
  "oxikube_app",
+ "oxikube_assets",
  "oxikube_domain",
  "oxikube_keymap",
  "oxikube_palette",

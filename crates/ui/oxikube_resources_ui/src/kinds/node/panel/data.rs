@@ -14,6 +14,9 @@ use oxikube_domain::{
 pub(super) struct NodeData {
     /// The `resourceVersion` it was built from: a new one rebuilds it.
     pub version: Option<Arc<str>>,
+    /// The object itself (a shared document), what the allocation section reads
+    /// `status.allocatable` from.
+    pub resource: Resource,
     pub summary: NodeSummary,
     pub detail: NodeDetail,
 }
@@ -23,6 +26,7 @@ impl NodeData {
     pub fn of(resource: &Resource) -> Option<Self> {
         Some(Self {
             version: resource.meta.resource_version.clone(),
+            resource: resource.clone(),
             summary: NodeSummary::from_resource(resource).ok()?,
             detail: NodeDetail::from_resource(resource),
         })
@@ -75,6 +79,8 @@ impl PodRow {
 pub(super) struct PodsOnNode {
     pub demand: Demand,
     pub rows: Vec<PodRow>,
+    /// The pods themselves (shared documents), what the allocation section sums.
+    pub resources: Vec<Resource>,
     /// Whether the store's live index answered (`false`: a one-time list).
     pub live: bool,
 }
@@ -89,6 +95,7 @@ impl PodsOnNode {
                 .filter_map(|o| o.resource())
                 .filter_map(PodRow::of)
                 .collect(),
+            resources: pods.iter().filter_map(|o| o.resource()).cloned().collect(),
             live: true,
         }
     }
@@ -98,6 +105,7 @@ impl PodsOnNode {
         Self {
             demand: found.demand,
             rows: found.pods.iter().filter_map(|p| PodRow::of(p)).collect(),
+            resources: found.pods.iter().map(|p| Resource::clone(p)).collect(),
             live: false,
         }
     }

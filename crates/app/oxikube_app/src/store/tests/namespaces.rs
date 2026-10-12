@@ -86,6 +86,68 @@ fn a_namespace_scoped_feed_only_knows_its_own_namespace() {
 }
 
 #[test]
+fn a_namespaces_objects_and_their_revision_are_read_off_the_open_feed() {
+    let mut h = Harness::new();
+    h.resources.script().watch.push_ok(timeline(vec![
+        batch(vec![Delta::Restarted(vec![
+            pod_in("x", "a"),
+            pod_in("x", "b"),
+            pod_in("y", "c"),
+        ])]),
+        batch(vec![Delta::Applied(pod_in("y", "d"))]),
+        batch(vec![Delta::Deleted(pod_in("x", "a"))]),
+    ]));
+    assert!(
+        h.store.namespace_objects(&pods(), "x").is_none(),
+        "nothing watches pods yet: unknown, not an empty namespace"
+    );
+    assert_eq!(h.store.namespace_revision(&pods(), "x"), None);
+    let _table = h.subscribe(all(pods()));
+    let names = |h: &Harness, ns: &str| {
+        let mut names: Vec<String> = h
+            .store
+            .namespace_objects(&pods(), ns)
+            .expect("listed")
+            .iter()
+            .map(|o| o.name().to_owned())
+            .collect();
+        names.sort();
+        names
+    };
+    assert_eq!(names(&h, "x"), ["a", "b"]);
+    assert_eq!(names(&h, "y"), ["c"]);
+    assert!(
+        names(&h, "empty").is_empty(),
+        "a listed feed knows the namespace is empty"
+    );
+
+    // Any change of the feed moves the revision; a read does not.
+    let listed = h.store.namespace_revision(&pods(), "x").expect("listed");
+    assert_eq!(h.store.namespace_revision(&pods(), "x"), Some(listed));
+    h.advance(1);
+    let after_apply = h.store.namespace_revision(&pods(), "x").unwrap();
+    assert!(after_apply > listed, "a pod of y arrived");
+    assert_eq!(names(&h, "y"), ["c", "d"]);
+    h.advance(1);
+    assert!(h.store.namespace_revision(&pods(), "x").unwrap() > after_apply);
+    assert_eq!(names(&h, "x"), ["b"]);
+    assert_eq!(h.resources.live_watches(), 1, "reading started nothing");
+}
+
+#[test]
+fn a_namespace_scoped_feed_serves_its_own_namespace_objects_only() {
+    let mut h = Harness::with_objects([pod_in("x", "a"), pod_in("y", "b")]);
+    let _table = h.subscribe(in_namespaces(pods(), &["x"]));
+    assert_eq!(
+        h.store.namespace_objects(&pods(), "x").map(|o| o.len()),
+        Some(1)
+    );
+    assert!(h.store.namespace_objects(&pods(), "y").is_none());
+    assert!(h.store.namespace_revision(&pods(), "x").is_some());
+    assert!(h.store.namespace_revision(&pods(), "y").is_none());
+}
+
+#[test]
 fn cluster_scoped_objects_are_read_by_name() {
     let mut h = Harness::with_objects([ns("a", json!({})), ns("b", json!({}))]);
     assert!(h.store.cluster_object(&namespaces(), "a").is_none());

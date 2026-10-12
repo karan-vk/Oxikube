@@ -4,7 +4,8 @@
 //! | File | Holds |
 //! |---|---|
 //! | `actions` | [`namespace_row_actions`]: Use namespace, Toggle favourite and Delete as row actions (each a command) |
-//! | `panel` | [`NamespacePanel`]: the phase, what holds a terminating namespace, HNC markers, "Use namespace" |
+//! | `panel` | [`NamespacePanel`]: the phase, what holds a terminating namespace, HNC markers, "Use namespace", the allocation section |
+//! | `allocation` | the allocation section (E13-S11): the namespace's pods summed against its ResourceQuotas, with live usage |
 //! | `create_dialog` | [`CreateNamespaceDialog`]: name and labels, checked as typed, `namespace::Create` |
 //!
 //! The columns are `oxikube_app::namespaces::NamespaceColumns` (Name, Status, Pods, Age, Labels;
@@ -20,8 +21,9 @@
 //! creates one.
 
 mod actions;
+mod allocation;
 mod create_dialog;
-mod panel;
+pub(crate) mod panel;
 
 #[cfg(test)]
 mod tests;

@@ -4,6 +4,7 @@ mod oracle;
 mod percent;
 mod pod;
 mod props;
+mod quota;
 
 use serde_json::{Value, json};
 

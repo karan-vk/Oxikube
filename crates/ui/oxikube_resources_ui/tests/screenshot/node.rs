@@ -1,6 +1,9 @@
-//! The detail drawer of a node, in the dark and the light theme (E12-S09): the node panel above
-//! the generic Overview. A cordoned worker with a taint of its own, a memory-pressure condition,
-//! three pods on it (CPU requests at 25 % of allocatable, limits past it), and images.
+//! The detail drawer of a node, in the dark and the light theme (E12-S09, E13-S11): the node panel
+//! above the generic Overview. A cordoned worker with a taint of its own, a memory-pressure
+//! condition, three pods on it (CPU requests at 25 % of allocatable, limits past it), two GPUs, and
+//! images; the allocation bars carry the live usage from metrics-server. A third picture
+//! (`detail_node_unavailable_dark`) is the same node without metrics-server: requests and limits
+//! stay, the usage line says why it is missing.
 //!
 //! The ages are read against a fixed "now", and the pods are listed by the store's pods-by-node
 //! index (two timer ticks after the first frame), so the picture does not change with the clock.
@@ -15,7 +18,8 @@ use oxikube_app::store::ResourceStores;
 use oxikube_app::{ClusterSessionManager, CoreColumns};
 use oxikube_domain::Resource;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
-use oxikube_ports::{ClockPort, ClusterContext, SourceId};
+use oxikube_domain::metrics::{MetricsSample, MetricsSubject, MissingReason};
+use oxikube_ports::{ClockPort, ClusterContext, MetricsOutcome, SourceId};
 use oxikube_resources_ui::detail::{DetailDeps, DetailView, Mount};
 use oxikube_resources_ui::table::store_runtime;
 use oxikube_testkit::{
@@ -45,26 +49,46 @@ fn worker() -> Resource {
         .image("ghcr.io/example/payments-api:2026.10.3", 412 << 20)
         .json();
     json["metadata"]["resourceVersion"] = json!("42");
+    json["status"]["allocatable"]["nvidia.com/gpu"] = json!("2");
     Resource::from_json(json).expect("a node")
 }
 
 fn on_worker(name: &str, requests: (&str, &str), limits: (&str, &str)) -> Resource {
-    pod()
+    let mut json = pod()
         .namespace("shop")
         .name(name)
         .node("worker-2")
         .running()
         .requests(requests.0, requests.1)
         .limits(limits.0, limits.1)
-        .build()
+        .json();
+    if name == "api-7c9d" {
+        json["spec"]["containers"][0]["resources"]["requests"]["nvidia.com/gpu"] = json!("1");
+        json["spec"]["containers"][0]["resources"]["limits"]["nvidia.com/gpu"] = json!("1");
+    }
+    Resource::from_json(json).expect("a pod")
 }
 
-fn render(light: bool) -> anyhow::Result<RgbaImage> {
+fn usage() -> MetricsOutcome {
+    let ts: Timestamp = "2026-01-10T00:00:00Z".parse().expect("a timestamp");
+    MetricsOutcome::Available(vec![MetricsSample::new(
+        MetricsSubject::Node {
+            node: "worker-2".into(),
+        },
+        ts,
+        None,
+        1_450_000_000,
+        6 << 30,
+    )])
+}
+
+fn render(light: bool, metrics: MetricsOutcome) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
     let connector = Arc::new(FakeClusterConnectorPort::new());
     let ports = connector.ports_for(&cluster);
+    ports.metrics.script().node_metrics.push_ok(metrics);
     for object in [
         worker(),
         on_worker("api-7c9d", ("300m", "1Gi"), ("1", "2Gi")),
@@ -111,8 +135,8 @@ fn render(light: bool) -> anyhow::Result<RgbaImage> {
         detail.update(cx, |detail, cx| detail.pin_now(now, cx));
     })?;
     // The first frame builds the panel; the Pod feed lists; the panel's quarter-second tick
-    // picks the pods up; the next frame draws the bars.
-    for _ in 0..2 {
+    // picks the pods up and the usage poll asks the metrics port; the next frame draws the bars.
+    for _ in 0..3 {
         cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;
         cx.run_until_parked();
         cx.advance_clock(Duration::from_millis(300));
@@ -124,6 +148,13 @@ fn render(light: bool) -> anyhow::Result<RgbaImage> {
 }
 
 pub(crate) fn run() -> anyhow::Result<()> {
-    check("detail_node_dark", render(false)?, WIDTH, HEIGHT)?;
-    check("detail_node_light", render(true)?, WIDTH, HEIGHT)
+    check("detail_node_dark", render(false, usage())?, WIDTH, HEIGHT)?;
+    check("detail_node_light", render(true, usage())?, WIDTH, HEIGHT)?;
+    let absent = MetricsOutcome::Unavailable(MissingReason::NotInstalled);
+    check(
+        "detail_node_unavailable_dark",
+        render(false, absent)?,
+        WIDTH,
+        HEIGHT,
+    )
 }
