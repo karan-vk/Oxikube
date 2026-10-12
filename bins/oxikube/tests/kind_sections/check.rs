@@ -85,10 +85,23 @@ pub fn kind(app: &mut Launched, context: &str, namespace: &str, case: &KindCase,
         "{}'s View Metrics row action",
         case.kind
     );
+    // `selection::Label` ("Edit labels", E12-S19) is offered on every kind the server can patch,
+    // which every seeded kind is, not as a kind's own action.
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.command() == CommandId::SELECTION_LABEL),
+        "{}'s Edit labels row action",
+        case.kind
+    );
     let own: Vec<CommandId> = entries
         .iter()
         .map(|e| e.command())
-        .filter(|id| !GENERIC.contains(id) && *id != CommandId::RESOURCE_VIEW_METRICS)
+        .filter(|id| {
+            !GENERIC.contains(id)
+                && *id != CommandId::RESOURCE_VIEW_METRICS
+                && *id != CommandId::SELECTION_LABEL
+        })
         .collect();
     assert_eq!(own, case.actions, "{}'s own row actions", case.kind);
 
