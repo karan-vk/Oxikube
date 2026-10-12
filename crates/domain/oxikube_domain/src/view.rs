@@ -66,8 +66,8 @@ mod node_load;
 mod node_taint;
 mod pod;
 mod pod_health;
-mod references;
 mod pod_selector;
+mod references;
 mod service;
 pub mod storage;
 mod workload;
@@ -111,8 +111,8 @@ pub use pod::{
     QosClass, ResourceAmounts, SecretValue, SourceData, SourceKind, SourceState, SourceValue,
     TerminatedState, Toleration, VolumeSummary, node_of,
 };
-pub use references::{PodRef, RefKind, pod_references};
 pub use pod_selector::pod_selector;
+pub use references::{PodRef, RefKind, pod_references};
 pub use service::{
     NoSelector, ServicePortSummary, ServiceStatus, ServiceSummary, ServiceType, TargetPort,
     resolve_target_port,

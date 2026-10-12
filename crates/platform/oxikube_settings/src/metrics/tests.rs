@@ -207,4 +207,3 @@ fn the_refresh_cadence_defaults_clamps_and_can_be_set_per_cluster() {
     let located = store.get::<MetricsSettings>(Some(crate::SettingsLocation { cluster: &cluster }));
     assert_eq!(located.history_refresh_secs, 15);
 }
-}

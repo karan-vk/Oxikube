@@ -108,10 +108,10 @@ mod detail;
 mod drain;
 #[path = "screenshot/exec.rs"]
 mod exec;
-#[path = "screenshot/namespace_allocation.rs"]
-mod namespace_allocation;
 #[path = "screenshot/metrics.rs"]
 mod metrics;
+#[path = "screenshot/namespace_allocation.rs"]
+mod namespace_allocation;
 #[path = "screenshot/namespaces.rs"]
 mod namespaces;
 #[path = "screenshot/network.rs"]
