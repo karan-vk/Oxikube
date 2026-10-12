@@ -71,6 +71,23 @@ fn the_setup_action_installs_what_rust_toolchain_toml_pins() {
     }
 }
 
+/// Only main saves Rust build caches. Each PR saved ~4 GB of its own, which evicted main's from
+/// the 10 GB repo quota, so most PR and merge runs compiled the workspace from scratch.
+#[test]
+fn pull_request_runs_never_save_rust_caches() {
+    for (name, text) in workflows() {
+        if !text.contains("pull_request") {
+            continue;
+        }
+        let caches = text.matches("Swatinem/rust-cache").count();
+        let guarded = text.matches("save-if:").count();
+        assert_eq!(
+            caches, guarded,
+            "{name}: every rust-cache step on a PR-triggered workflow needs a main-only `save-if`"
+        );
+    }
+}
+
 #[test]
 fn pr_ci_runs_the_gates_the_nightly_used_to_find_alone() {
     let ci = read(".github/workflows/ci.yml");

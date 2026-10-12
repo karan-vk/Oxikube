@@ -139,7 +139,12 @@ mod tests {
 
     /// The real workspace: the app binary reports every crate whose source registers a setting,
     /// and the guard fails when one is withheld from the generator's list.
+    ///
+    /// Ignored by default: it builds and runs the app binary (60-125 s in CI, the slowest test in
+    /// `cargo test --workspace`), and CI's `cargo xtask gen-settings-schema --check` step already
+    /// runs the same coverage check. Run it with `cargo test -p xtask -- --ignored`.
     #[test]
+    #[ignore = "builds the app; CI covers it via `gen-settings-schema --check`"]
     fn the_app_binary_links_every_settings_crate() {
         let metadata = cargo_metadata::MetadataCommand::new()
             .no_deps()
