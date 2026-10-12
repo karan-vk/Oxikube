@@ -84,9 +84,8 @@ pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
     let main = phase(&mut cx, &mut |_, _, _| {})?;
 
     // 2. Tick: every tile takes a new sample on every frame.
-    let tick_page = page.clone();
     let mut tick = phase(&mut cx, &mut |frame, _, cx| {
-        tick_page.update(cx, |page, cx| {
+        page.update(cx, |page, cx| {
             let at = PREVIEW_NOW + 5.0 * (frame + 1) as f64;
             for (i, tile) in page.model_mut().tiles_mut().iter_mut().enumerate() {
                 let latest = tile.ring.latest().unwrap_or(1.0);
