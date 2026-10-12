@@ -3,10 +3,10 @@
 use std::fmt::Write as _;
 
 use oxikube_domain::agent::{ContextBlock, MAX_CONTEXT_BLOCK_BYTES};
-use oxikube_domain::metrics::{ContainerUsage, Reading};
+use oxikube_domain::metrics::ContainerUsage;
 use oxikube_domain::utilisation::{PodResources, Utilisation};
 
-use crate::metrics::live::{UsagePoint, cpu_text, memory_text, reason_text};
+use crate::metrics::live::{UsagePoint, cpu_text, memory_text, percent_text, reading_text};
 
 /// Most samples quoted; the ring holds 60, a prompt needs the recent shape.
 pub(super) const MAX_SAMPLES: usize = 20;
@@ -39,13 +39,6 @@ pub(super) struct PodMetrics<'a> {
     pub(super) resources: Result<&'a PodResources, &'a str>,
 }
 
-fn reading(r: Reading, text: fn(u64) -> String) -> String {
-    match r {
-        Reading::Value(v) => text(v),
-        Reading::Missing(why) => format!("n/a ({})", reason_text(why)),
-    }
-}
-
 fn figure(value: Option<u64>, text: fn(u64) -> String) -> String {
     value.map_or_else(|| "n/a".to_owned(), text)
 }
@@ -56,10 +49,6 @@ fn amount(q: &oxikube_domain::Quantity) -> String {
     } else {
         q.to_string()
     }
-}
-
-fn percent(value: Option<f64>) -> String {
-    value.map_or_else(|| "-".to_owned(), |p| format!("{p:.1}%"))
 }
 
 /// The block for `m`, within `cap` bytes of body: older samples are dropped first, and the block
@@ -108,11 +97,11 @@ pub(super) fn block(m: &PodMetrics<'_>, cap: usize) -> ContextBlock {
                     head,
                     "# now: cpu {} ({} of requests, {} of limits), memory {} ({} of requests, {} of limits)",
                     figure(last.cpu_nanocores, cpu_text),
-                    percent(u.cpu_of_requests),
-                    percent(u.cpu_of_limits),
+                    percent_text(u.cpu_of_requests),
+                    percent_text(u.cpu_of_limits),
                     figure(last.memory_bytes, memory_text),
-                    percent(u.memory_of_requests),
-                    percent(u.memory_of_limits),
+                    percent_text(u.memory_of_requests),
+                    percent_text(u.memory_of_limits),
                 );
             }
         }
@@ -129,8 +118,8 @@ pub(super) fn block(m: &PodMetrics<'_>, cap: usize) -> ContextBlock {
                 tail,
                 "{}\t{}\t{}",
                 c.name,
-                reading(c.cpu, cpu_text),
-                reading(c.memory, memory_text)
+                reading_text(c.cpu, cpu_text),
+                reading_text(c.memory, memory_text)
             );
         }
     }

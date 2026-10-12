@@ -4,12 +4,14 @@
 use std::cmp::Ordering;
 
 use jiff::Timestamp;
-use oxikube_domain::metrics::{MetricsSample, MissingReason};
+use oxikube_domain::metrics::{MetricsSample, Reading};
 use oxikube_domain::{OxiError, OxiResult};
+use oxikube_ports::{MetricsOutcome, ToolOutput};
 use serde_json::{Value, json};
 
 use super::bounds::{DEFAULT_LIMIT, MAX_LIMIT};
-use crate::metrics::live::{cpu_text, memory_text, reason_text};
+use super::unavailable::unavailable;
+use crate::metrics::live::{cpu_text, memory_text, reading_text, reason_text};
 
 /// What a `top_*` call ranks by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,8 +59,8 @@ pub(super) fn sort_and_limit(args: &Value) -> OxiResult<(SortKey, usize)> {
 pub(super) struct Row {
     pub(super) namespace: Option<String>,
     pub(super) name: String,
-    pub(super) cpu_nanocores: Result<u64, MissingReason>,
-    pub(super) memory_bytes: Result<u64, MissingReason>,
+    pub(super) cpu: Reading,
+    pub(super) memory: Reading,
     pub(super) at: Timestamp,
     /// Usage as a percent of what the subject offers, when that is known (nodes).
     pub(super) cpu_percent: Option<f64>,
@@ -67,15 +69,11 @@ pub(super) struct Row {
 
 impl Row {
     pub(super) fn of(sample: &MetricsSample, namespace: Option<&str>, name: &str) -> Self {
-        let reading = |r: oxikube_domain::metrics::Reading| match r {
-            oxikube_domain::metrics::Reading::Value(v) => Ok(v),
-            oxikube_domain::metrics::Reading::Missing(why) => Err(why),
-        };
         Self {
             namespace: namespace.map(str::to_owned),
             name: name.to_owned(),
-            cpu_nanocores: reading(sample.cpu),
-            memory_bytes: reading(sample.memory),
+            cpu: sample.cpu,
+            memory: sample.memory,
             at: sample.ts,
             cpu_percent: None,
             memory_percent: None,
@@ -84,33 +82,27 @@ impl Row {
 
     fn key(&self, sort: SortKey) -> Option<u64> {
         match sort {
-            SortKey::Cpu => self.cpu_nanocores.ok(),
-            SortKey::Memory => self.memory_bytes.ok(),
+            SortKey::Cpu => self.cpu.value(),
+            SortKey::Memory => self.memory.value(),
         }
     }
 
     /// `250m`, or the reason there is no reading.
     pub(super) fn cpu_text(&self) -> String {
-        match self.cpu_nanocores {
-            Ok(n) => cpu_text(n),
-            Err(why) => format!("n/a ({})", reason_text(why)),
-        }
+        reading_text(self.cpu, cpu_text)
     }
 
     /// `128Mi`, or the reason there is no reading.
     pub(super) fn memory_text(&self) -> String {
-        match self.memory_bytes {
-            Ok(n) => memory_text(n),
-            Err(why) => format!("n/a ({})", reason_text(why)),
-        }
+        reading_text(self.memory, memory_text)
     }
 
     /// The row's figures as JSON: millicores and bytes as numbers, `null` for no reading.
     pub(super) fn figures(&self) -> Value {
         json!({
-            "cpu_millicores": self.cpu_nanocores.ok().map(|n| n / 1_000_000),
+            "cpu_millicores": self.cpu.value().map(|n| n / 1_000_000),
             "cpu": self.cpu_text(),
-            "memory_bytes": self.memory_bytes.ok(),
+            "memory_bytes": self.memory.value(),
             "memory": self.memory_text(),
         })
     }
@@ -134,4 +126,21 @@ pub(super) fn rank(rows: &mut [Row], sort: SortKey) {
 /// The newest sample time of `rows`.
 pub(super) fn newest(rows: &[Row]) -> Option<Timestamp> {
     rows.iter().map(|row| row.at).max()
+}
+
+/// The samples of a snapshot answer, or the visible `unavailable` result for a call that timed
+/// out (`None`), failed or found no metrics API.
+pub(super) fn samples_or_unavailable(
+    cluster: &str,
+    answer: Option<OxiResult<MetricsOutcome>>,
+) -> Result<Vec<MetricsSample>, ToolOutput> {
+    match answer {
+        None => Err(unavailable(
+            cluster,
+            "the metrics API did not answer in time",
+        )),
+        Some(Err(error)) => Err(unavailable(cluster, error.message())),
+        Some(Ok(MetricsOutcome::Unavailable(why))) => Err(unavailable(cluster, reason_text(why))),
+        Some(Ok(MetricsOutcome::Available(samples))) => Ok(samples),
+    }
 }

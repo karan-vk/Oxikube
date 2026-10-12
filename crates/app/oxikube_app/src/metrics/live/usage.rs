@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use jiff::Timestamp;
-use oxikube_domain::metrics::{ContainerUsage, MetricsSample, MetricsSubject};
+use oxikube_domain::metrics::{ContainerUsage, MetricsSample, MetricsSubject, Reading};
 use oxikube_domain::{OxiResult, Resource};
 use oxikube_ports::MetricsOutcome;
 use parking_lot::RwLock;
@@ -234,6 +234,19 @@ fn apply_pods(
 /// `250m`: CPU in whole millicores, as k9s and `kubectl top` print it.
 pub fn cpu_text(nanocores: u64) -> String {
     format!("{}m", nanocores / 1_000_000)
+}
+
+/// A reading as `text` formats it, or `n/a (<reason>)` for a missing one.
+pub(crate) fn reading_text(reading: Reading, text: fn(u64) -> String) -> String {
+    match reading {
+        Reading::Value(v) => text(v),
+        Reading::Missing(why) => format!("n/a ({})", super::state::reason_text(why)),
+    }
+}
+
+/// `12.5%`, or `-` when there is no figure.
+pub(crate) fn percent_text(percent: Option<f64>) -> String {
+    percent.map_or_else(|| "-".to_owned(), |p| format!("{p:.1}%"))
 }
 
 /// `128Mi`: memory in whole mebibytes (`512Ki` below one), as k9s and `kubectl top` print it.

@@ -1,27 +1,23 @@
 //! `k8s.top_nodes`: the nodes using the most CPU or memory.
 
-use std::collections::HashMap;
-use std::fmt::Write as _;
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::metrics::MetricsSubject;
 use oxikube_domain::utilisation::{GpuVendors, NodeAllocatable, percent};
 use oxikube_domain::{OxiResult, Quantity};
 use oxikube_ports::{
-    ContentPart, ListOptions, MetricsOutcome, ToolAnnotations, ToolContext, ToolDef, ToolName,
-    ToolOutput, ToolPort,
+    ContentPart, ListOptions, ToolAnnotations, ToolContext, ToolDef, ToolName, ToolOutput, ToolPort,
 };
 use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::fmt::Write as _;
 
-use super::bounds::{DEFAULT_LIMIT, MAX_LIMIT, SNAPSHOT_DEADLINE};
+use super::bounds::{DEFAULT_LIMIT, MAX_LIMIT};
 use super::cluster::resolve;
-use super::deadline::within;
+use super::deadline::within_snapshot_deadline;
 use super::install::MetricsAgentDeps;
-use super::top::{Row, newest, rank, sort_and_limit};
-use super::unavailable::unavailable;
-use crate::metrics::live::reason_text;
+use super::top::{Row, newest, rank, samples_or_unavailable, sort_and_limit};
+use crate::metrics::live::percent_text;
 use crate::session::ClusterSession;
 
 /// The tool's name.
@@ -54,7 +50,7 @@ impl TopNodesTool {
         let node = Gvk::new("", "v1", "Node");
         let options = ListOptions::default().limit(500);
         let listing = reader.list(&node, None, &options);
-        let Some(Ok(page)) = within(self.deps.clock.as_ref(), SNAPSHOT_DEADLINE, listing).await
+        let Some(Ok(page)) = within_snapshot_deadline(self.deps.clock.as_ref(), listing).await
         else {
             return Allocatable::new();
         };
@@ -86,24 +82,14 @@ impl ToolPort for TopNodesTool {
             Err(output) => return Ok(output),
         };
         let (cluster, title) = (session.id().clone(), session.title().to_owned());
-        let answer = within(
+        let answer = within_snapshot_deadline(
             self.deps.clock.as_ref(),
-            SNAPSHOT_DEADLINE,
             self.deps.live.node_snapshot(&cluster),
         )
         .await;
-        let samples = match answer {
-            None => {
-                return Ok(unavailable(
-                    &title,
-                    "the metrics API did not answer in time",
-                ));
-            }
-            Some(Err(error)) => return Ok(unavailable(&title, error.message())),
-            Some(Ok(MetricsOutcome::Unavailable(why))) => {
-                return Ok(unavailable(&title, reason_text(why)));
-            }
-            Some(Ok(MetricsOutcome::Available(samples))) => samples,
+        let samples = match samples_or_unavailable(&title, answer) {
+            Ok(samples) => samples,
+            Err(output) => return Ok(output),
         };
 
         let allocatable = self.allocatable(&session).await;
@@ -148,7 +134,6 @@ fn render(cluster: &str, sort: &str, total: usize, rows: &[Row]) -> ToolOutput {
     } else {
         text.push_str("NODE\tCPU\tCPU%\tMEMORY\tMEMORY%\n");
     }
-    let shown = |p: Option<f64>| p.map_or_else(|| "-".to_owned(), |p| format!("{p:.1}%"));
     let mut listed = Vec::with_capacity(rows.len());
     for row in rows {
         let _ = writeln!(
@@ -156,9 +141,9 @@ fn render(cluster: &str, sort: &str, total: usize, rows: &[Row]) -> ToolOutput {
             "{}\t{}\t{}\t{}\t{}",
             row.name,
             row.cpu_text(),
-            shown(row.cpu_percent),
+            percent_text(row.cpu_percent),
             row.memory_text(),
-            shown(row.memory_percent)
+            percent_text(row.memory_percent)
         );
         let mut entry = row.figures();
         entry["name"] = json!(row.name);
@@ -212,9 +197,4 @@ fn definition() -> ToolDef {
         idempotent: true,
         ..ToolAnnotations::default()
     })
-}
-
-/// The tool, shared.
-pub(super) fn tool(deps: &MetricsAgentDeps) -> Arc<TopNodesTool> {
-    Arc::new(TopNodesTool::new(deps.clone()))
 }

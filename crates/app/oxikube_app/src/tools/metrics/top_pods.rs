@@ -1,25 +1,20 @@
 //! `k8s.top_pods`: the pods using the most CPU or memory.
 
-use std::fmt::Write as _;
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use oxikube_domain::metrics::MetricsSubject;
 use oxikube_domain::session::NamespaceSelection;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
-    ContentPart, MetricsOutcome, ToolAnnotations, ToolContext, ToolDef, ToolName, ToolOutput,
-    ToolPort,
+    ContentPart, ToolAnnotations, ToolContext, ToolDef, ToolName, ToolOutput, ToolPort,
 };
 use serde_json::{Value, json};
+use std::fmt::Write as _;
 
-use super::bounds::{DEFAULT_LIMIT, MAX_LIMIT, SNAPSHOT_DEADLINE};
+use super::bounds::{DEFAULT_LIMIT, MAX_LIMIT};
 use super::cluster::resolve;
-use super::deadline::within;
+use super::deadline::within_snapshot_deadline;
 use super::install::MetricsAgentDeps;
-use super::top::{Row, newest, rank, sort_and_limit};
-use super::unavailable::unavailable;
-use crate::metrics::live::reason_text;
+use super::top::{Row, newest, rank, samples_or_unavailable, sort_and_limit};
 
 /// The tool's name.
 pub const TOP_PODS: &str = "k8s.top_pods";
@@ -71,24 +66,14 @@ impl ToolPort for TopPodsTool {
         let selection = namespace.as_deref().map_or(NamespaceSelection::All, |ns| {
             NamespaceSelection::from_names([ns])
         });
-        let answer = within(
+        let answer = within_snapshot_deadline(
             self.deps.clock.as_ref(),
-            SNAPSHOT_DEADLINE,
             self.deps.live.pod_snapshot(&cluster, &selection),
         )
         .await;
-        let samples = match answer {
-            None => {
-                return Ok(unavailable(
-                    &title,
-                    "the metrics API did not answer in time",
-                ));
-            }
-            Some(Err(error)) => return Ok(unavailable(&title, error.message())),
-            Some(Ok(MetricsOutcome::Unavailable(why))) => {
-                return Ok(unavailable(&title, reason_text(why)));
-            }
-            Some(Ok(MetricsOutcome::Available(samples))) => samples,
+        let samples = match samples_or_unavailable(&title, answer) {
+            Ok(samples) => samples,
+            Err(output) => return Ok(output),
         };
 
         let mut rows: Vec<Row> = samples
@@ -209,9 +194,4 @@ fn definition() -> ToolDef {
         idempotent: true,
         ..ToolAnnotations::default()
     })
-}
-
-/// The tool, shared.
-pub(super) fn tool(deps: &MetricsAgentDeps) -> Arc<TopPodsTool> {
-    Arc::new(TopPodsTool::new(deps.clone()))
 }

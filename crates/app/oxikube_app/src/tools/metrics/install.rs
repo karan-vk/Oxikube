@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use oxikube_ports::{ClockPort, PromqlPort, QueryCataloguePort};
 
-use super::{promql, top_nodes, top_pods};
+use super::{QueryPromqlTool, TopNodesTool, TopPodsTool};
 use crate::context::{ContextRegistry, MetricsContextProvider, RegisterProviderError};
 use crate::metrics::live::MetricsService;
 use crate::metrics_provider::MetricsProviderService;
@@ -56,9 +56,9 @@ pub fn install(
     contexts: &ContextRegistry,
     deps: &MetricsAgentDeps,
 ) -> Result<(), InstallError> {
-    tools.register(top_pods::tool(deps))?;
-    tools.register(top_nodes::tool(deps))?;
-    tools.register(promql::tool(deps))?;
+    tools.register(Arc::new(TopPodsTool::new(deps.clone())))?;
+    tools.register(Arc::new(TopNodesTool::new(deps.clone())))?;
+    tools.register(Arc::new(QueryPromqlTool::new(deps.clone())))?;
     contexts.register(Arc::new(MetricsContextProvider::new(deps.clone())))?;
     Ok(())
 }

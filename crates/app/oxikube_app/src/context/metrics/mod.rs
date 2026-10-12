@@ -21,6 +21,7 @@ mod tests;
 use async_trait::async_trait;
 use oxikube_domain::agent::ContextBlock;
 use oxikube_domain::ids::Gvk;
+use oxikube_domain::metrics::MetricsSubject;
 use oxikube_domain::redact::redact;
 use oxikube_domain::session::NamespaceSelection;
 use oxikube_domain::utilisation::{GpuVendors, PodResources, aggregate_pod_requests_limits};
@@ -69,6 +70,13 @@ impl ContextProviderPort for MetricsContextProvider {
         let session = session_for(&self.deps.sessions, scope.cluster.as_ref())?;
         let (cluster, title) = (session.id().clone(), session.title().to_owned());
         let (namespace, pod) = (target.namespace.as_str(), target.pod.as_str());
+        let not_found = || {
+            vec![error_block(
+                namespace,
+                pod,
+                &format!("pod {namespace}/{pod} was not found in {title}"),
+            )]
+        };
 
         // The pod itself: it must exist, and its spec gives the requests and limits.
         let resources: Result<PodResources, String> = match session.resources() {
@@ -82,19 +90,9 @@ impl ContextProviderPort for MetricsContextProvider {
                         aggregate_pod_requests_limits(&found, &GpuVendors::none())
                             .map_err(|e| e.to_string())
                     }
-                    Some(Ok(None)) => {
-                        return Ok(vec![error_block(
-                            namespace,
-                            pod,
-                            &format!("pod {namespace}/{pod} was not found in {title}"),
-                        )]);
-                    }
+                    Some(Ok(None)) => return Ok(not_found()),
                     Some(Err(error)) if error.kind() == ErrorKind::NotFound => {
-                        return Ok(vec![error_block(
-                            namespace,
-                            pod,
-                            &format!("pod {namespace}/{pod} was not found in {title}"),
-                        )]);
+                        return Ok(not_found());
                     }
                     Some(Err(error)) => Err(redact(error.message()).into_owned()),
                 }
@@ -137,7 +135,7 @@ impl ContextProviderPort for MetricsContextProvider {
                 }
                 MetricsOutcome::Available(samples) => {
                     let found = samples.iter().find(|s| match &s.subject {
-                        oxikube_domain::metrics::MetricsSubject::Pod { pod: p } => {
+                        MetricsSubject::Pod { pod: p } => {
                             p.namespace.as_deref() == Some(namespace) && &*p.name == pod
                         }
                         _ => false,

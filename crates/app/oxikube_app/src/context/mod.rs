@@ -1,6 +1,6 @@
 //! Agent context (E08-S09): the [`ContextRegistry`] that resolves `@`-mentions to
-//! [`ContextBlock`](oxikube_domain::agent::ContextBlock)s, the `@logs` and `@metrics` (E13-S12) providers, and the queue
-//! "Send to agent" fills until the agent panel (E27) exists.
+//! [`ContextBlock`](oxikube_domain::agent::ContextBlock)s, the `@logs` and `@metrics` (E13-S12)
+//! providers, and the queue "Send to agent" fills until the agent panel (E27) exists.
 //!
 //! Plain async Rust over the [`ContextProviderPort`](oxikube_ports::ContextProviderPort): no gpui,
 //! no kube, no `agent-client-protocol` (ADR 0008). The same providers serve the agent panel's

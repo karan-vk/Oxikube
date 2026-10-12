@@ -225,8 +225,3 @@ fn definition() -> ToolDef {
         ..ToolAnnotations::default()
     })
 }
-
-/// The tool, shared.
-pub(super) fn tool(deps: &MetricsAgentDeps) -> std::sync::Arc<QueryPromqlTool> {
-    std::sync::Arc::new(QueryPromqlTool::new(deps.clone()))
-}

@@ -56,3 +56,4 @@ pub use service::MetricsService;
 pub(crate) use state::reason_text;
 pub use state::{MetricsKind, MetricsState};
 pub use usage::{ClusterUsage, cpu_text, memory_text, usage_cell};
+pub(crate) use usage::{percent_text, reading_text};
