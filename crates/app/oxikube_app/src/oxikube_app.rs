@@ -33,6 +33,7 @@
 //! | [`tools`] | E08-S09 | [`ToolRegistry`]: read-only tools by name, listed, hidden without their capabilities and invoked after a schema check; `tools::k8s::get_logs` (`k8s.get_logs`: a pod's or a selector's newest lines, bounded and redacted) |
 //! | [`rollout`] | E12-S06 | [`RolloutService`]: a Deployment's, StatefulSet's or DaemonSet's revision history (ReplicaSets or ControllerRevisions, read on demand through the pure algorithm of `oxikube_domain::rollout`) and `kubectl rollout undo` as the guarded `workload::Rollback` (medium risk, a server dry run first, audit with `from=` and `to=`); [`RollbackRunner`] runs it from a dialog |
 //! | [`workloads`] | E12-S08, E12-S04, E12-S03 | [`WorkloadService`]: trigger a CronJob (a Job from its template, `kubectl create job --from`), suspend and resume CronJobs and Jobs, and scale the replica controllers (`workload::Scale`, low risk, medium for zero: [`WorkloadService::plan_scale`] reads the `scale` subresource and any autoscaler, [`WorkloadService::scale`] patches `spec.replicas` through it, [`ScaleRunner`] runs it from a dialog); the `cronjob::*`, `job::*` and `workload::Scale` handlers (guarded, audited with the Job's name or the replica counts); evict, delete, force delete and sweep pods (`pod::Evict`, `pod::Delete`, `pod::ForceDelete`, `pod::Sanitize`: medium, high for the force delete, one audit record per pod under a batch id); the pod panel's reads (owner chain, node, environment sources) |
+//! | [`overview`] | E12-S07 | the Workloads overview's inputs outside the store: [`RecentWarnings`](overview::RecentWarnings), the hook the Events feed (E14) implements for the warnings panel, with [`NoRecentWarnings`](overview::NoRecentWarnings) until then; the counters themselves are [`WorkloadCounters`] and the status buckets of `store::counts` |
 //! | [`network`] | E12-S13 | [`ServiceBackends`]: the label-selected store queries of a Service's detail (its EndpointSlices and its pods); [`plan_show_pods`], `service::ShowPods` as a jump; [`ServicePortOpener`], the hook the port-forward manager implements for `service::OpenInBrowser`, registered only when there is one |
 //! | [`secrets`] | E12-S11 | [`SecretService`]: decode a Secret's values in memory, encode them back, summarise a Secret without its values ([`SecretSummary`]: key names and sizes, registry logins without passwords, a TLS certificate's subject and expiry), validate and build a new Secret ([`NewSecret`]: Opaque, Docker registry, TLS), and the manifest of a decoded editor re-encoded to base64 for `resource::Apply`; `tools::k8s::get_secret` (`k8s.get_secret`: masked unless a [`RevealPolicy`](tools::k8s::RevealPolicy) allows values, denied by default) |
 //! | [`columns`] | E07-S02 | [`ColumnProvider`]: table columns and cells per kind. [`CoreColumns`] (a table-driven catalogue of ~40 core kinds; Ready / Status / Restarts from the domain view-models; CPU and memory as pending metrics hooks) and [`TableColumns`] (a Table feed's server columns, `priority > 0` as `wide`); [`Cell`]s carry text, a typed sort key and a tone |
@@ -59,6 +60,7 @@ pub mod metrics_provider;
 pub mod namespaces;
 pub mod network;
 pub mod nodes;
+pub mod overview;
 pub mod rollout;
 pub mod search;
 pub mod secrets;
@@ -123,6 +125,7 @@ pub use network::{
     OpenedServicePort, PodsPlan, ServiceBackends, ServicePortOpener, UrlSink, plan_show_pods,
     register_open_in_browser,
 };
+pub use overview::{FixedWarnings, NoRecentWarnings, RecentWarnings, WarningRow};
 pub use rollout::{
     RollbackOutcome, RollbackReport, RollbackResult, RollbackRunner, RolloutHistory, RolloutService,
 };
@@ -146,8 +149,8 @@ pub use storage::{
     PvcUsageFeed, PvcUsageIndex, ResizeContext, ResizeFlow, ResizeReport, UsageStatus,
 };
 pub use store::{
-    CountState, CountTarget, CountsLease, KindCount, ResourceStore, ResourceStores, StoreDelta,
-    StoreQuery, Subscription,
+    BucketCounts, CountState, CountTarget, CountsLease, KindCount, ResourceStore, ResourceStores,
+    StoreDelta, StoreQuery, Subscription, WorkloadCounters,
 };
 pub use templates::{
     Prefill, SkippedTemplate, Template, TemplateCatalog, TemplateOrigin, TemplateService,

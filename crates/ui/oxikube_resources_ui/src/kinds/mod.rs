@@ -21,6 +21,7 @@
 //! | `sidebar` | publishing the registry's sections and entries to the cluster sidebar |
 //! | `config` | the Config section's smaller kinds (E12-S12): quota bars, limit tables, autoscalers, budgets, classes, leases and the admission kinds, each a [`ConfigPanel`] over a domain view-model |
 //! | `job`, `cronjob` | Jobs and CronJobs (E12-S08): the kind specs and their row actions, [`row_actions`] |
+//! | `daemonset` | DaemonSets (E12-S07): the spec, the columns' reading and the detail panel (the workload panel with a DaemonSet's counts, update strategy and node selector) |
 //! | `endpoints` | Endpoints and EndpointSlices (E12-S13): the detail panel |
 //! | `service` | Services (E12-S13): the detail panel, the open-in-browser hook and the row actions |
 //! | `node` | Nodes (E12-S09): per-cluster columns (Pods from the pods-by-node index), the node panel and the cordon / uncordon row actions |
@@ -57,6 +58,7 @@ mod config;
 pub(crate) mod configmap;
 pub mod crd;
 mod cronjob;
+mod daemonset;
 mod detail;
 pub mod endpoints;
 pub(crate) mod job;

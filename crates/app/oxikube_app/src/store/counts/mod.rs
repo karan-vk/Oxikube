@@ -8,6 +8,7 @@
 //! | reading counts off the cache, never starting a feed: [`ResourceStore::counts`] | `read` |
 //! | holding the feeds a view needs open: [`CountsLease`] | `lease` |
 //! | the running tally every feed's cache keeps | `tally` |
+//! | the Workloads overview's counters, a lease plus the last states (E12-S07): [`WorkloadCounters`] | `workloads` |
 //!
 //! # Counting costs no feed
 //!
@@ -31,6 +32,13 @@
 //! [`oxikube_domain::view::health_of`] is the one rule. Table-feed rows carry no typed status,
 //! so a CRD or any kind served by the Table API has a total but no health.
 //!
+//! # Buckets (E12-S07)
+//!
+//! The tally also keeps one counter per status [`Bucket`] (`Running`, `Pending`, `Failed`... for
+//! pods; `Ready` and `Not ready` for controllers), moved in step with the health counters by the
+//! same add/remove on every delta: a pod going `Pending` to `Running` moves one count, nothing
+//! rescans. The Workloads overview draws its bars from [`KindCount::buckets`].
+//!
 //! # Forbidden kinds
 //!
 //! A `403` on the feed is [`CountState::NoAccess`], never a zero, so a user without `list` on
@@ -40,11 +48,65 @@ mod lease;
 mod read;
 mod tally;
 mod target;
+mod workloads;
 
 pub use lease::CountsLease;
 pub use target::{CORE_TARGETS, CoreTarget, CountTarget};
+pub use workloads::WorkloadCounters;
 
 pub(crate) use tally::Tally;
+
+use oxikube_domain::view::Bucket;
+
+/// How many of a kind's rated objects are in each status [`Bucket`]: the bars of the Workloads
+/// overview. A table indexed by [`Bucket::index`], so reading and updating it is O(1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BucketCounts([usize; Bucket::COUNT]);
+
+impl BucketCounts {
+    /// The counts of `buckets`, one per item (a fixture, or a view-model built off the store).
+    pub fn of(buckets: impl IntoIterator<Item = Bucket>) -> Self {
+        let mut counts = Self::default();
+        for bucket in buckets {
+            counts.add(bucket);
+        }
+        counts
+    }
+
+    /// How many objects are in `bucket`.
+    pub fn get(&self, bucket: Bucket) -> usize {
+        self.0[bucket.index()]
+    }
+
+    /// Counts one more object in `bucket`.
+    pub(crate) fn add(&mut self, bucket: Bucket) {
+        self.0[bucket.index()] += 1;
+    }
+
+    /// Counts one object out of `bucket`.
+    pub(crate) fn sub(&mut self, bucket: Bucket) {
+        let slot = &mut self.0[bucket.index()];
+        *slot = slot.saturating_sub(1);
+    }
+
+    /// Adds every bucket of `other`.
+    pub(crate) fn merge(&mut self, other: &BucketCounts) {
+        for (mine, theirs) in self.0.iter_mut().zip(other.0) {
+            *mine += theirs;
+        }
+    }
+
+    /// The non-empty buckets among `order`, with their counts, in that order.
+    pub fn in_order<'a>(
+        &'a self,
+        order: &'a [Bucket],
+    ) -> impl Iterator<Item = (Bucket, usize)> + 'a {
+        order
+            .iter()
+            .map(|b| (*b, self.get(*b)))
+            .filter(|(_, n)| *n > 0)
+    }
+}
 
 /// How many objects of a kind there are and how many of them are healthy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -55,6 +117,8 @@ pub struct KindCount {
     pub rated: usize,
     /// How many of the rated objects are healthy.
     pub healthy: usize,
+    /// The rated objects by status bucket (they sum to [`rated`](Self::rated)).
+    pub buckets: BucketCounts,
 }
 
 impl KindCount {

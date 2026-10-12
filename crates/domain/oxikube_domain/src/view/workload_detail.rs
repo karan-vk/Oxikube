@@ -202,22 +202,25 @@ pub struct WorkloadDetail {
     pub revision_history_limit: Option<u32>,
     /// A StatefulSet's governing Service (`spec.serviceName`).
     pub service_name: Option<Arc<str>>,
+    /// The pod template's `nodeSelector` in key order (what limits a DaemonSet to some nodes);
+    /// empty when the pods may run anywhere.
+    pub node_selector: Vec<(Arc<str>, Arc<str>)>,
 }
 
 impl WorkloadDetail {
-    /// The detail of a Deployment, StatefulSet, ReplicaSet or ReplicationController.
+    /// The detail of a Deployment, StatefulSet, DaemonSet, ReplicaSet or ReplicationController.
     ///
     /// # Errors
     ///
-    /// [`ViewError::WrongKind`] for any other kind (a DaemonSet included: it is not scalable and
-    /// has its own panel).
+    /// [`ViewError::WrongKind`] for any other kind.
     pub fn from_resource(res: &Resource) -> Result<Self, ViewError> {
         check_kind(
             res,
-            "Deployment, StatefulSet, ReplicaSet or ReplicationController",
+            "Deployment, StatefulSet, DaemonSet, ReplicaSet or ReplicationController",
             &[
                 ("apps", "Deployment"),
                 ("apps", "StatefulSet"),
+                ("apps", "DaemonSet"),
                 ("apps", "ReplicaSet"),
                 ("", "ReplicationController"),
             ],
@@ -250,6 +253,9 @@ impl WorkloadDetail {
             service_name: (kind == WorkloadKind::StatefulSet)
                 .then(|| arc_of(spec, "serviceName"))
                 .flatten(),
+            node_selector: obj_of(pod, "nodeSelector")
+                .map(string_pairs)
+                .unwrap_or_default(),
         })
     }
 }
@@ -347,8 +353,22 @@ fn strategy(kind: WorkloadKind, spec: JsonRef<'_>) -> Option<Strategy> {
             }
             Some(Strategy { kind, parameters })
         }
-        WorkloadKind::ReplicaSet
-        | WorkloadKind::ReplicationController
-        | WorkloadKind::DaemonSet => None,
+        WorkloadKind::DaemonSet => {
+            let strategy = sub(spec, "updateStrategy");
+            let kind = strategy_type(strategy);
+            let mut parameters = Vec::new();
+            if &*kind == "RollingUpdate" {
+                let rolling = sub(strategy, "rollingUpdate");
+                parameters.push((
+                    "Max unavailable",
+                    int_or_percent(rolling, "maxUnavailable").unwrap_or_else(|| "1".into()),
+                ));
+                if let Some(surge) = int_or_percent(rolling, "maxSurge") {
+                    parameters.push(("Max surge", surge));
+                }
+            }
+            Some(Strategy { kind, parameters })
+        }
+        WorkloadKind::ReplicaSet | WorkloadKind::ReplicationController => None,
     }
 }

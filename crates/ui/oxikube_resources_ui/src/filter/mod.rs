@@ -1,4 +1,4 @@
-//! The filter bar of a resource table (E07-S04): `/text`, `/!text`, `/-l k=v`, `/-f fuzzy`.
+//! The filter bar of a resource table (E07-S04): `/text`, `/!text`, `/-l k=v`, `/-f fuzzy`, `/-s status` (E12-S07).
 //!
 //! | File | Holds |
 //! |---|---|

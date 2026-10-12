@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_domain::session::WatchScope;
+use oxikube_domain::view::{Bucket, bucket_of, health_of};
 
 use super::filter::NameFilter;
 use super::object::{FeedScope, StoreObject};
@@ -94,6 +95,9 @@ pub struct StoreFilter {
     pub labels: Option<LabelSelector>,
     /// The name pattern of the `/` filter: text or regex, inverse, or fuzzy (E07-S04).
     pub pattern: Option<NameFilter>,
+    /// Only the objects in this status bucket (the `-s` filter, E12-S07). Kinds without a health
+    /// rule, and metadata-only objects, are in none.
+    pub status: Option<Bucket>,
 }
 
 impl StoreFilter {
@@ -120,6 +124,7 @@ impl StoreFilter {
             && self.namespaces.is_none()
             && self.labels.as_ref().is_none_or(LabelSelector::is_empty)
             && self.pattern.as_ref().is_none_or(NameFilter::is_empty)
+            && self.status.is_none()
     }
 
     /// Whether every object this filter passes is also passed by `older`, so applying it to
@@ -129,7 +134,8 @@ impl StoreFilter {
         let same_fields = self.text == older.text
             && self.name == older.name
             && self.namespaces == older.namespaces
-            && self.labels == older.labels;
+            && self.labels == older.labels
+            && self.status == older.status;
         same_fields
             && match (&self.pattern, &older.pattern) {
                 (_, None) => true,
@@ -152,7 +158,16 @@ impl StoreFilter {
                 .is_none_or(|set| meta.namespace.as_deref().is_some_and(|ns| set.contains(ns)))
             && self.labels.as_ref().is_none_or(|s| s.matches(&meta.labels))
             && self.pattern.as_ref().is_none_or(|p| p.matches(&meta.name))
+            && self.status.is_none_or(|bucket| in_bucket(object, bucket))
     }
+}
+
+/// Whether `object` falls in `bucket`: it has a typed body and a health rule.
+fn in_bucket(object: &StoreObject, bucket: Bucket) -> bool {
+    object
+        .resource()
+        .and_then(|res| Some(bucket_of(res, health_of(res)?)))
+        == Some(bucket)
 }
 
 /// ASCII-case-insensitive substring search without allocating.

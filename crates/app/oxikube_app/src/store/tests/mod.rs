@@ -1,6 +1,7 @@
 //! Store tests over `FakeResourcePort` / `FakeTableFeedPort` scripts, on a deterministic
 //! executor (no runtime, no threads) and the fake clock.
 
+mod buckets;
 mod budget;
 mod churn;
 mod counts;
@@ -17,6 +18,7 @@ mod refcount;
 mod registry;
 mod scope;
 mod service_backends;
+mod workload_counters;
 
 use std::sync::Arc;
 use std::time::Duration;

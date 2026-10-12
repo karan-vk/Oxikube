@@ -14,13 +14,13 @@ fn the_workload_tiles_are_the_seven_kinds_in_order() {
     assert_eq!(
         titles,
         [
+            "Pods",
             "Deployments",
-            "StatefulSets",
             "DaemonSets",
+            "StatefulSets",
             "ReplicaSets",
             "Jobs",
-            "CronJobs",
-            "Pods"
+            "CronJobs"
         ]
     );
     let kinds: Vec<String> = workload_tiles()
@@ -30,13 +30,13 @@ fn the_workload_tiles_are_the_seven_kinds_in_order() {
     assert_eq!(
         kinds,
         [
+            "Pod",
             "Deployment",
-            "StatefulSet",
             "DaemonSet",
+            "StatefulSet",
             "ReplicaSet",
             "Job",
-            "CronJob",
-            "Pod"
+            "CronJob"
         ]
     );
 }
@@ -51,8 +51,8 @@ fn init_registers_them_and_a_later_tile_slots_in_by_order(cx: &mut TestAppContex
             .map(|t| t.id.to_string())
             .collect();
         assert_eq!(ids.len(), 7, "idempotent");
-        assert_eq!(ids.first().map(String::as_str), Some("deployments"));
-        assert_eq!(ids.last().map(String::as_str), Some("pods"));
+        assert_eq!(ids.first().map(String::as_str), Some("pods"));
+        assert_eq!(ids.last().map(String::as_str), Some("cronjobs"));
 
         // A metrics tile of a later epic registers itself between two of ours.
         let target = CountTarget::core("", "nodes").expect("nodes");
@@ -69,7 +69,10 @@ fn init_registers_them_and_a_later_tile_slots_in_by_order(cx: &mut TestAppContex
             .iter()
             .map(|t| t.id.to_string())
             .collect();
-        assert_eq!(ids[2], "nodes");
+        assert_eq!(
+            ids[2], "nodes",
+            "slots in between Deployments and DaemonSets"
+        );
         // The same id replaces it.
         TileRegistry::register(
             cx,

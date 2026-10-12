@@ -48,17 +48,17 @@ impl TileRegistry {
 
 /// The workload tiles in order: API group, plural of the kind counted, heading.
 const WORKLOADS: [(&str, &str, &str); 7] = [
+    ("", "pods", "Pods"),
     ("apps", "deployments", "Deployments"),
-    ("apps", "statefulsets", "StatefulSets"),
     ("apps", "daemonsets", "DaemonSets"),
+    ("apps", "statefulsets", "StatefulSets"),
     ("apps", "replicasets", "ReplicaSets"),
     ("batch", "jobs", "Jobs"),
     ("batch", "cronjobs", "CronJobs"),
-    ("", "pods", "Pods"),
 ];
 
-/// The seven workload tiles: Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs, CronJobs,
-/// Pods.
+/// The seven workload tiles, in the Workloads sidebar section's order: Pods, Deployments,
+/// DaemonSets, StatefulSets, ReplicaSets, Jobs, CronJobs.
 pub fn workload_tiles() -> Vec<Tile> {
     WORKLOADS
         .iter()

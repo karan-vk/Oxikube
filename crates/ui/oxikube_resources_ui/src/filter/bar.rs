@@ -79,7 +79,8 @@ impl FilterBar {
     /// An empty bar.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("Filter: name, !not, -l labels, -f fuzzy")
+            InputState::new(window, cx)
+                .placeholder("Filter: name, !not, -l labels, -f fuzzy, -s status")
         });
         let subscription = cx.subscribe_in(&input, window, Self::on_input_event);
         Self {

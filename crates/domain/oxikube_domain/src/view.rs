@@ -48,6 +48,7 @@ use crate::json::{Array, JsonRef};
 use crate::resource::Resource;
 use jiff::Timestamp;
 
+mod bucket;
 mod config;
 mod configmap;
 mod crd;
@@ -68,6 +69,7 @@ pub mod storage;
 mod workload;
 mod workload_detail;
 
+pub use bucket::{Bucket, bucket_of, kind_buckets};
 pub use config::{
     AdmissionBindingSummary, AdmissionPolicySummary, CaBundle, HpaMetric, HpaMetricKind, HpaState,
     HpaSummary, LeaseSummary, LimitRangeSummary, LimitRow, LimitSection, ParamRef, PdbSummary,

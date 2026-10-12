@@ -251,9 +251,9 @@ fn condition_levels_follow_what_each_type_means() {
 
 #[test]
 fn other_kinds_are_refused_and_gaps_degrade() {
-    let ds = res("apps/v1", "DaemonSet", json!({}), json!({}));
+    let job = res("batch/v1", "Job", json!({}), json!({}));
     assert!(matches!(
-        WorkloadDetail::from_resource(&ds),
+        WorkloadDetail::from_resource(&job),
         Err(ViewError::WrongKind { .. })
     ));
     // No template, no selector, no status at all: still a detail, an empty one.
@@ -261,4 +261,53 @@ fn other_kinds_are_refused_and_gaps_degrade() {
     let detail = WorkloadDetail::from_resource(&bare).unwrap();
     assert!(detail.containers.is_empty() && detail.selector.is_empty());
     assert!(detail.conditions.is_empty());
+}
+
+#[test]
+fn a_daemonset_detail_has_node_selector_and_update_strategy() {
+    let ds = res(
+        "apps/v1",
+        "DaemonSet",
+        json!({
+            "selector": {"matchLabels": {"app": "agent"}},
+            "updateStrategy": {"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "10%"}},
+            "template": {"spec": {
+                "nodeSelector": {"disk": "ssd", "kubernetes.io/os": "linux"},
+                "containers": [{"name": "agent", "image": "reg/agent:1"}]}}
+        }),
+        json!({}),
+    );
+    let detail = WorkloadDetail::from_resource(&ds).unwrap();
+    assert_eq!(detail.kind, WorkloadKind::DaemonSet);
+    let strategy = detail.strategy.expect("a DaemonSet has an update strategy");
+    assert_eq!(&*strategy.kind, "RollingUpdate");
+    assert_eq!(strategy.parameters, [("Max unavailable", "10%".to_owned())]);
+    let selector: Vec<_> = detail
+        .node_selector
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect();
+    assert_eq!(selector, ["disk=ssd", "kubernetes.io/os=linux"]);
+    assert_eq!(detail.selector.display(), "app=agent");
+
+    // The defaults of the API: rolling, one at a time; OnDelete has no parameters.
+    let bare = res("apps/v1", "DaemonSet", json!({}), json!({}));
+    let bare = WorkloadDetail::from_resource(&bare).unwrap();
+    assert_eq!(
+        bare.strategy.unwrap().parameters,
+        [("Max unavailable", "1".to_owned())]
+    );
+    assert!(bare.node_selector.is_empty());
+    let on_delete = res(
+        "apps/v1",
+        "DaemonSet",
+        json!({"updateStrategy": {"type": "OnDelete"}}),
+        json!({}),
+    );
+    let strategy = WorkloadDetail::from_resource(&on_delete)
+        .unwrap()
+        .strategy
+        .unwrap();
+    assert_eq!(&*strategy.kind, "OnDelete");
+    assert!(strategy.parameters.is_empty());
 }

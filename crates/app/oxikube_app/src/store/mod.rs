@@ -104,7 +104,10 @@ pub use budget::{Admission, FeedBudget, FeedRequest, MaxFeeds, UnlimitedBudget};
 pub use config::{
     DEFAULT_IDLE_GRACE, FeedInfo, StoreConfig, StoreOptions, StoreProbe, StoreRuntime,
 };
-pub use counts::{CORE_TARGETS, CoreTarget, CountState, CountTarget, CountsLease, KindCount};
+pub use counts::{
+    BucketCounts, CORE_TARGETS, CoreTarget, CountState, CountTarget, CountsLease, KindCount,
+    WorkloadCounters,
+};
 pub use delta::{FeedState, RowChange, RowOp, StoreDelta};
 pub use feed::{StorePorts, TableColumns};
 pub use filter::{

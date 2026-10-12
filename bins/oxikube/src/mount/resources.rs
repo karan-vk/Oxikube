@@ -63,6 +63,7 @@ pub fn install(
         sessions: deps.sessions.clone(),
         stores: deps.stores.clone(),
         dispatcher: deps.dispatcher.clone(),
+        warnings: deps.warnings.clone(),
     };
     let workspace = tab.read(cx).workspace().clone();
 

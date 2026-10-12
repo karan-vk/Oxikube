@@ -1,6 +1,7 @@
 //! Workloads: Pods (registered by `kinds::pods`, rank 10), Deployments, DaemonSets,
 //! StatefulSets, ReplicaSets, ReplicationControllers. Jobs and CronJobs have their own modules
-//! (`kinds::job`, `kinds::cronjob`, E12-S08), which register them, and so do Deployments,
+//! (`kinds::job`, `kinds::cronjob`, E12-S08), which register them, and so do DaemonSets
+//! (`kinds::daemonset`, E12-S07) and Deployments,
 //! StatefulSets, ReplicaSets and ReplicationControllers (`kinds::workloads`, E12-S04), which take
 //! their place in [`WORKLOADS`] through [`spec_at`].
 
@@ -31,6 +32,7 @@ const WORKLOADS: &[Builtin] = &[
 /// order does not depend on who registers what.
 const OWN_MODULE: &[&str] = &[
     "Deployment",
+    "DaemonSet",
     "StatefulSet",
     "ReplicaSet",
     "ReplicationController",
@@ -82,6 +84,7 @@ pub fn init(cx: &mut App) {
         );
     }
     crate::kinds::workloads::init(cx);
+    crate::kinds::daemonset::init(cx);
     crate::kinds::job::init(cx);
     crate::kinds::cronjob::init(cx);
 }
