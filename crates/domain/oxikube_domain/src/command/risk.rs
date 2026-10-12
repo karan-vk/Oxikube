@@ -46,6 +46,12 @@ impl Command {
             } => declared.max(delete_risk(&target.gvk, *propagation)),
             // Scaling up or down is low; scaling to zero stops every pod of the workload.
             Command::WorkloadScale { replicas: 0, .. } => declared.max(Risk::Medium),
+            // A grace period of 0 skips the kubelet's shutdown: a force delete, whichever command
+            // spells it (E12-S03).
+            Command::PodDelete {
+                grace_period_seconds: Some(0),
+                ..
+            } => declared.max(Risk::High),
             _ => declared,
         })
     }
@@ -189,6 +195,26 @@ mod tests {
             Some(Risk::Medium),
             "the stub advertises the worst case"
         );
+    }
+
+    #[test]
+    fn a_pod_delete_is_medium_until_its_grace_period_is_zero() {
+        let cluster = ClusterId::new("~/.kube/config", &ContextName::new("kind"));
+        let target = ResourceRef::namespaced(cluster, gvk("", "Pod"), "default", "web-0");
+        let delete = |grace_period_seconds| Command::PodDelete {
+            target: target.clone(),
+            grace_period_seconds,
+        };
+        assert_eq!(delete(None).effective_risk(), Some(Risk::Medium));
+        assert_eq!(delete(Some(30)).effective_risk(), Some(Risk::Medium));
+        // The same delete spelled with grace 0 cannot dodge the typed name.
+        assert_eq!(delete(Some(0)).effective_risk(), Some(Risk::High));
+        let evict = Command::PodEvict {
+            target: target.clone(),
+        };
+        assert_eq!(evict.effective_risk(), Some(Risk::Medium));
+        let force = Command::PodForceDelete { target };
+        assert_eq!(force.effective_risk(), Some(Risk::High));
     }
 
     #[test]

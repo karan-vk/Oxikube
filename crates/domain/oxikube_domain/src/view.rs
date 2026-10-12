@@ -99,8 +99,11 @@ pub use node_detail::{CapacityRow, NodeDetail, NodeImage};
 pub use node_load::{Demand, PodPlacement};
 pub use node_taint::{NodeTaint, TaintEffect};
 pub use pod::{
-    ComputeResources, ContainerKind, ContainerPort, ContainerState, ContainerSummary, PodPhase,
-    PodSummary, Probes, QosClass, ResourceAmounts, TerminatedState,
+    AffinityLine, ComputeResources, ContainerDetail, ContainerKind, ContainerPort, ContainerState,
+    ContainerSummary, EnvFrom, EnvRow, EnvSource, EnvSources, EnvValue, EnvVar, MASK, Missing,
+    MountSummary, Origin, PodDetail, PodPhase, PodSummary, ProbeDetail, ProbeKind, Probes,
+    QosClass, ResourceAmounts, SecretValue, SourceData, SourceKind, SourceState, SourceValue,
+    TerminatedState, Toleration, VolumeSummary, node_of,
 };
 pub use service::{
     NoSelector, ServicePortSummary, ServiceStatus, ServiceSummary, ServiceType, TargetPort,

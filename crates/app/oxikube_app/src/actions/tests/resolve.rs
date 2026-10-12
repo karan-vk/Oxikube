@@ -20,6 +20,10 @@ fn pods() -> oxikube_domain::kinds::ResourceKind {
     kind("", "Pod", "pods", &ALL_VERBS)
 }
 
+fn deployments() -> oxikube_domain::kinds::ResourceKind {
+    kind("apps", "Deployment", "deployments", &ALL_VERBS)
+}
+
 fn crd() -> oxikube_domain::kinds::ResourceKind {
     kind("example.io", "Widget", "widgets", &ALL_VERBS)
 }
@@ -29,13 +33,19 @@ fn titles(actions: &[crate::actions::RowAction]) -> Vec<&'static str> {
 }
 
 #[test]
-fn delete_is_offered_for_a_pod_and_for_a_custom_resource() {
+fn delete_is_offered_for_a_deployment_and_for_a_custom_resource() {
     let h = Harness::new();
     let actions = RowActions::from_bus(&h.bus, &RowActionRegistry::core());
     let caps = Capabilities::MUTATE;
-    assert_eq!(titles(&actions.actions_for(&pods(), caps)), ["Delete"]);
+    assert_eq!(
+        titles(&actions.actions_for(&deployments(), caps)),
+        ["Delete"]
+    );
     assert_eq!(titles(&actions.actions_for(&crd(), caps)), ["Delete"]);
-    let delete = actions.actions_for(&pods(), caps)[0];
+    // A pod's delete is `pod::Delete`, which the pod kind registers (E12-S03): the core one
+    // skips pods, so a pod's menu has a single "Delete".
+    assert!(actions.actions_for(&pods(), caps).is_empty());
+    let delete = actions.actions_for(&deployments(), caps)[0];
     assert_eq!(delete.meta().id, CommandId::RESOURCE_DELETE);
     assert!(delete.meta().mutating);
 }
@@ -70,7 +80,11 @@ fn actions_come_from_the_bus_not_from_the_registry_alone() {
         ),
     );
     let actions = RowActions::from_bus(&bare, &RowActionRegistry::core());
-    assert!(actions.actions_for(&pods(), Capabilities::all()).is_empty());
+    assert!(
+        actions
+            .actions_for(&deployments(), Capabilities::all())
+            .is_empty()
+    );
 }
 
 #[test]
@@ -81,9 +95,12 @@ fn a_session_without_mutate_does_not_see_delete() {
         Capabilities::empty(),
         Capabilities::LOGS | Capabilities::EXEC,
     ] {
-        assert!(actions.actions_for(&pods(), caps).is_empty(), "{caps:?}");
+        assert!(
+            actions.actions_for(&deployments(), caps).is_empty(),
+            "{caps:?}"
+        );
         let ctx = ActionContext::new(caps);
-        assert!(actions.resolve(&pods(), &ctx, 1).is_empty());
+        assert!(actions.resolve(&deployments(), &ctx, 1).is_empty());
     }
 }
 
@@ -92,12 +109,12 @@ fn read_only_disables_delete_with_a_reason() {
     let h = Harness::new();
     let actions = RowActions::from_bus(&h.bus, &RowActionRegistry::core());
     let writable = ActionContext::new(Capabilities::MUTATE);
-    let resolved = actions.resolve(&pods(), &writable, 1);
+    let resolved = actions.resolve(&deployments(), &writable, 1);
     assert_eq!(resolved.len(), 1);
     assert!(resolved[0].state.is_enabled());
 
     let read_only = writable.read_only(true);
-    let resolved = actions.resolve(&pods(), &read_only, 1);
+    let resolved = actions.resolve(&deployments(), &read_only, 1);
     assert_eq!(resolved.len(), 1, "shown, not hidden");
     assert_eq!(
         resolved[0].state,
@@ -141,11 +158,16 @@ fn several_objects_keep_only_the_bulk_actions() {
     let one: Vec<_> = actions.resolve(&pods(), &ctx, 1);
     assert_eq!(
         one.iter().map(|r| r.action.label()).collect::<Vec<_>>(),
-        ["Delete Pod", "Delete"]
+        ["Delete Pod"]
     );
     let many: Vec<_> = actions.resolve(&pods(), &ctx, 5);
+    assert!(many.is_empty(), "this action is for one object at a time");
+    let deployment: Vec<_> = actions.resolve(&deployments(), &ctx, 1);
     assert_eq!(
-        many.iter().map(|r| r.action.label()).collect::<Vec<_>>(),
+        deployment
+            .iter()
+            .map(|r| r.action.label())
+            .collect::<Vec<_>>(),
         ["Delete"]
     );
     let custom: Vec<_> = actions.resolve(&crd(), &ctx, 1);
@@ -159,8 +181,8 @@ fn several_objects_keep_only_the_bulk_actions() {
 fn an_action_builds_the_command_for_an_object() {
     let h = Harness::new();
     let actions = RowActions::from_bus(&h.bus, &RowActionRegistry::core());
-    let delete = actions.actions_for(&pods(), Capabilities::MUTATE)[0];
-    let target = namespaced("a", "", "Pod", "web-0");
+    let delete = actions.actions_for(&deployments(), Capabilities::MUTATE)[0];
+    let target = namespaced("a", "apps", "Deployment", "web");
     assert_eq!(
         delete.command_for(&target),
         Command::ResourceDelete {

@@ -298,6 +298,19 @@
     }
   },
   {
+    // Pods (E12-S03), k9s: ctrl-k kills the pod (a force delete, grace period 0; its name is typed
+    // to confirm), z sanitizes the view (deletes its Completed and Failed pods, after a count),
+    // o opens the node the pod runs on, shift-j its owner (the ReplicaSet, Job...). On a Pod table
+    // shift-j therefore jumps instead of extending the selection; shift-down still extends it.
+    "context": "ResourceTable && !Editing && kind == Pod",
+    "bindings": {
+      "ctrl-k": "resource_table::KillSelected",
+      "z": "resource_table::SanitizeSelected",
+      "o": "resource_table::ShowNodeSelected",
+      "shift-j": "resource_table::JumpToOwnerSelected"
+    }
+  },
+  {
     // The table's filter field has the focus: escape clears the filter and returns to the rows
     // (enter returns without clearing; the field handles it).
     "context": "ResourceTable && Editing",

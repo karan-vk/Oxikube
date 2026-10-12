@@ -140,7 +140,10 @@ fn delete_on_a_table_runs_through_the_bus_the_guard_and_the_audit_log(cx: &mut T
     assert_eq!(audit.len(), 1, "{audit:?}");
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
     assert_eq!(audit[0].initiator, Initiator::Ui);
-    assert_eq!(&*audit[0].cmd, "resource::Delete");
+    assert_eq!(
+        &*audit[0].cmd, "pod::Delete",
+        "a pod's delete is its own command"
+    );
     assert_eq!(audit[0].target, target);
 }
 

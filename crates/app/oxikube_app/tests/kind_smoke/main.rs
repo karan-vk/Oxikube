@@ -34,6 +34,7 @@ mod logs_search;
 mod namespaces;
 mod node_shell;
 mod nodes;
+mod pods;
 mod scale;
 mod scoped_feeds;
 mod service_backends;

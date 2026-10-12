@@ -185,3 +185,61 @@ async fn evictions_use_the_unretried_client_when_one_is_set() {
     assert_eq!(unretried.hits(POD_EVICTION), 1);
     assert_eq!(shared.hits(POD_EVICTION), 0);
 }
+
+#[tokio::test]
+async fn a_lazy_unretried_client_is_built_on_the_first_eviction_and_kept() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use crate::resources::LazyClient;
+
+    let shared = server();
+    let unretried = server();
+    unretried.reply(POD_EVICTION, 429, pdb_refusal());
+    unretried.reply(POD_EVICTION, 429, pdb_refusal());
+    let builds = std::sync::Arc::new(AtomicUsize::new(0));
+    let client = unretried.client();
+    let counter = builds.clone();
+    let lazy = std::sync::Arc::new(LazyClient::new(move || {
+        counter.fetch_add(1, Ordering::SeqCst);
+        let client = client.clone();
+        Box::pin(async move { Ok(client) })
+    }));
+    let r = resources(&shared).with_lazy_unretried_client(lazy);
+    assert_eq!(
+        builds.load(Ordering::SeqCst),
+        0,
+        "nothing is built for a user who never evicts"
+    );
+    for _ in 0..2 {
+        let err = r
+            .evict("default", "p", &DeleteOptions::default())
+            .await
+            .unwrap_err();
+        assert!(eviction_blocked(&err).is_some(), "{err}");
+    }
+    assert_eq!(builds.load(Ordering::SeqCst), 1, "built once, then kept");
+    assert_eq!(unretried.hits(POD_EVICTION), 2);
+    assert_eq!(shared.hits(POD_EVICTION), 0);
+}
+
+#[tokio::test]
+async fn a_lazy_client_that_cannot_be_built_fails_the_eviction_with_its_error() {
+    use crate::resources::LazyClient;
+
+    let shared = server();
+    let lazy = std::sync::Arc::new(LazyClient::new(|| {
+        Box::pin(async {
+            Err(oxikube_domain::OxiError::auth(
+                "the credential plugin failed",
+                false,
+            ))
+        })
+    }));
+    let r = resources(&shared).with_lazy_unretried_client(lazy);
+    let err = r
+        .evict("default", "p", &DeleteOptions::default())
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::Auth);
+    assert_eq!(shared.hits(POD_EVICTION), 0, "nothing was sent");
+}

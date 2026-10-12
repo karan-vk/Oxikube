@@ -7,6 +7,7 @@
 //! | `crd` | the CRD navigation (`crd::OpenList`, `crd::OpenResources`: read the CRD, find the version to open, open its table) and the served versions each custom resource table offers its switcher (E07-S07) |
 //! | `detail` | opening the detail drawer for `resource::Open`, pinning it as a tab for `resource::PinDetail`, copying a label for `resource::CopyLabel` (E07-S05) |
 //! | `service` | `service::ShowPods` (E12-S13): read the Service, plan the jump to its pods, dispatch it |
+//! | `pod_nav` | `pod::JumpToOwner` and `pod::ShowNode` (E12-S03): read the pod off the UI thread, then open its owner or its node in the drawer |
 //! | `row_actions` | [`view_row_actions`]: "View YAML" and "Describe" in a row's menu and the palette (E11-S07) |
 //! | `sidebar` | [`sidebar_navigation`]: the cluster-tab hook from the sidebar's `Navigate` to [`ResourceViews::navigate`] |
 //!
@@ -23,6 +24,7 @@ mod commands;
 mod controller;
 mod crd;
 mod detail;
+mod pod_nav;
 mod row_actions;
 mod service;
 mod sidebar;

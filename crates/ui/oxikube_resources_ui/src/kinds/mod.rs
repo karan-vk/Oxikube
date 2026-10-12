@@ -102,6 +102,7 @@ pub fn row_actions() -> Vec<RowActionSpec> {
         .chain(scale_row_actions())
         .chain(network::network_row_actions())
         .chain(storage_row_actions())
+        .chain(pods::row_actions())
         .collect()
 }
 

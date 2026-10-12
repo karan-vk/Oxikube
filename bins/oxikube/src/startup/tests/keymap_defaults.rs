@@ -96,8 +96,31 @@ fn the_default_keymap_loads_clean_and_binds_the_verbs(cx: &mut TestAppContext) {
     ] {
         let on_service = cx.read(|cx| resolve(cx, keys, &services).unwrap());
         assert_eq!(on_service.action(), Some(action), "{keys} on a Service");
+        // (`o` on a Pod is the Pod's own verb, show node, E12-S03; never the Service's browser.)
         let on_pod = cx.read(|cx| resolve(cx, keys, &table).unwrap());
-        assert_eq!(on_pod.action(), None, "{keys} on a Pod");
+        let expected = (keys == "o").then_some("resource_table::ShowNodeSelected");
+        assert_eq!(on_pod.action(), expected, "{keys} on a Pod");
+    }
+
+    // A Pod's verbs (E12-S03) are bound in a Pod table and nowhere else.
+    let nodes = parse_stack(&[
+        "Workspace",
+        "ClusterTab connected",
+        "Workspace",
+        "Pane",
+        "ResourceTable kind=Node selection=one",
+    ])
+    .unwrap();
+    for (keys, action) in [
+        ("ctrl-k", "resource_table::KillSelected"),
+        ("z", "resource_table::SanitizeSelected"),
+        ("o", "resource_table::ShowNodeSelected"),
+        ("shift-j", "resource_table::JumpToOwnerSelected"),
+    ] {
+        let on_pod = cx.read(|cx| resolve(cx, keys, &table).unwrap());
+        assert_eq!(on_pod.action(), Some(action), "{keys} on a Pod");
+        let on_node = cx.read(|cx| resolve(cx, keys, &nodes).unwrap());
+        assert_ne!(on_node.action(), Some(action), "{keys} on a Node");
     }
 
     // The terminal keeps ctrl-d (EOF) in the real keymap, workspace chords included.

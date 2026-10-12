@@ -66,8 +66,8 @@ pub struct ResourceActions {
 }
 
 impl ResourceActions {
-    /// The core row actions (delete) and the CRD list's (E07-S07: open its custom resources,
-    /// show its details) over `bus`, acting as `who` (the local user's name, for the audit log).
+    /// The core row actions (delete), the pods' (E12-S03) and the CRD list's (E07-S07: open its custom
+    /// resources, show its details) over `bus`, acting as `who` (the local user's name, for the audit log).
     pub fn new(
         bus: &CommandBus,
         sessions: ClusterSessionManager,
@@ -78,6 +78,12 @@ impl ResourceActions {
             registry
                 .register(spec)
                 .expect("the core registry has no CRD action");
+        }
+        // A pod's delete is the pod kind's (`pod::Delete`, E12-S03), not the core one.
+        for spec in crate::kinds::pods::row_actions() {
+            registry
+                .register(spec)
+                .expect("the core registry has no pod action");
         }
         Self::with_registry(bus, sessions, who, &registry)
     }
@@ -192,9 +198,10 @@ impl ResourceActions {
     }
 }
 
-/// "Delete" for one object, "Delete 3 objects" for several.
+/// "Delete" for one object, "Delete 3 objects" for several (but "Sanitize" is "Sanitize").
 fn label(action: &RowAction, selected: usize) -> String {
-    if selected > 1 {
+    // A sweep acts on the table's view, whatever is selected.
+    if selected > 1 && action.meta().id != CommandId::POD_SANITIZE {
         format!("{} {selected} objects", action.label())
     } else {
         action.label().to_owned()

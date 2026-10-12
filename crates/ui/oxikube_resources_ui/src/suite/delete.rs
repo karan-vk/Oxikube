@@ -68,7 +68,7 @@ fn delete_goes_through_the_bus_the_guard_and_the_audit_and_the_row_leaves(cx: &m
     assert_eq!(audit.len(), 1, "one command, one record");
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
     assert_eq!(audit[0].initiator, Initiator::Ui);
-    assert_eq!(&*audit[0].cmd, "resource::Delete");
+    assert_eq!(&*audit[0].cmd, "pod::Delete");
 
     // The watch reports the deletion and the table drops the row.
     assert_eq!(s.names(), ["web-0", "web-1"]);
@@ -105,7 +105,7 @@ fn a_read_only_cluster_blocks_delete_before_anything_is_sent_and_lifting_it_unbl
     let entries = s.f.vcx.update(|_, cx| s.table.read(cx).action_entries(cx));
     let delete = entries
         .iter()
-        .find(|e| e.command() == oxikube_domain::command::CommandId::RESOURCE_DELETE)
+        .find(|e| e.command() == oxikube_domain::command::CommandId::POD_DELETE)
         .expect("Delete is offered");
     assert!(!delete.is_enabled());
     assert!(

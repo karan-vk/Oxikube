@@ -268,6 +268,15 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             target: target(),
             grace_period_seconds: None,
         },
+        "pod::Evict" => Command::PodEvict { target: target() },
+        "pod::ForceDelete" => Command::PodForceDelete { target: target() },
+        "pod::Sanitize" => Command::PodSanitize {
+            cluster,
+            namespace: Some("default".into()),
+            targets: vec![target()],
+        },
+        "pod::JumpToOwner" => Command::PodJumpToOwner { target: target() },
+        "pod::ShowNode" => Command::PodShowNode { target: target() },
         "pod::Debug" => Command::PodDebug {
             target: target(),
             image: "busybox".into(),

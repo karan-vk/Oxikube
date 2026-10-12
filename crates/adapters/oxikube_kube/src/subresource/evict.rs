@@ -69,6 +69,7 @@ impl KubeResources {
             .create_subresource("eviction", pod, &params, body)
             .map_err(|e| OxiError::validation(e.to_string()))?;
         self.unretried_client()
+            .await?
             .request::<Value>(request)
             .await
             .map(drop)

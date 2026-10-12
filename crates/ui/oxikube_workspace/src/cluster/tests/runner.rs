@@ -110,6 +110,90 @@ fn a_writable_cluster_asks_to_confirm_a_mutation_instead_of_denying_it(cx: &mut 
     );
 }
 
+fn force_delete_pod() -> Command {
+    Command::PodForceDelete {
+        target: ResourceRef::namespaced(id(PROD), Gvk::new("", "v1", "Pod"), "default", "web-0"),
+    }
+}
+
+#[gpui::test]
+fn a_force_delete_asks_for_the_pods_name_and_waits_for_it(cx: &mut TestAppContext) {
+    use crate::modal::DialogModal;
+
+    let mut f = fixture(cx);
+    run(&mut f, force_delete_pod());
+    let layer = f.vcx.update(|_, cx| f.ws.read(cx).modal_layer().clone());
+    let dialog = f
+        .vcx
+        .update(|_, cx| layer.read(cx).active_modal::<DialogModal>())
+        .expect("the guard's confirmation opens a dialog");
+    let (title, expected, can_confirm) = f.vcx.update(|_, cx| {
+        let dialog = dialog.read(cx);
+        (
+            dialog.title().to_string(),
+            dialog.expected_text().map(ToString::to_string),
+            dialog.can_confirm(cx),
+        )
+    });
+    assert_eq!(title, "Force delete the pod?");
+    assert_eq!(
+        expected.as_deref(),
+        Some("web-0"),
+        "the guard's expected name"
+    );
+    assert!(!can_confirm, "nothing typed yet");
+    assert!(bounds(&mut f.vcx, "dialog-type-input").is_some());
+    assert_eq!(*f.force_deletes.lock(), 0);
+
+    // Enter with nothing typed, and with the wrong name, does not delete.
+    f.vcx.simulate_keystrokes("enter");
+    f.vcx.run_until_parked();
+    assert_eq!(*f.force_deletes.lock(), 0);
+    assert!(modal_open(&mut f), "the dialog stays");
+    f.vcx.update(|window, cx| {
+        dialog.update(cx, |dialog, cx| dialog.type_text("web-1", window, cx));
+    });
+    f.vcx.update(|window, cx| {
+        dialog.update(cx, |dialog, cx| dialog.press_confirm(window, cx));
+    });
+    f.vcx.run_until_parked();
+    assert_eq!(
+        *f.force_deletes.lock(),
+        0,
+        "the wrong name confirms nothing"
+    );
+    assert!(f.vcx.update(|_, cx| !dialog.read(cx).can_confirm(cx)));
+
+    // The right name confirms, and the guard accepts the typed answer.
+    f.vcx.update(|window, cx| {
+        dialog.update(cx, |dialog, cx| dialog.type_text("web-0", window, cx));
+    });
+    assert!(f.vcx.update(|_, cx| dialog.read(cx).can_confirm(cx)));
+    f.vcx.update(|window, cx| {
+        dialog.update(cx, |dialog, cx| dialog.press_confirm(window, cx));
+    });
+    f.vcx.run_until_parked();
+    assert_eq!(*f.force_deletes.lock(), 1, "confirming dispatches it again");
+    assert!(!modal_open(&mut f));
+    assert!(
+        toasts(&mut f)
+            .iter()
+            .any(|(level, m)| *level == ToastLevel::Success && m == "Force deleted")
+    );
+}
+
+#[gpui::test]
+fn cancelling_a_force_delete_sends_nothing_and_is_audited(cx: &mut TestAppContext) {
+    let mut f = fixture(cx);
+    run(&mut f, force_delete_pod());
+    f.vcx.simulate_keystrokes("escape");
+    f.vcx.run_until_parked();
+    assert_eq!(*f.force_deletes.lock(), 0);
+    assert!(f.state.audit_log().iter().any(|r| r.outcome
+        == oxikube_domain::audit::AuditOutcome::Cancelled
+        && &*r.cmd == "pod::ForceDelete"));
+}
+
 fn node_shell() -> Command {
     Command::NodeShell {
         target: ResourceRef::cluster_scoped(id(PROD), Gvk::new("", "v1", "Node"), "worker-1"),

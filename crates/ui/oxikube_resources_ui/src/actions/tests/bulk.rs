@@ -152,14 +152,15 @@ fn the_palette_runs_delete_on_the_selection_through_the_one_dialog(cx: &mut Test
         .vcx
         .update(|window, cx| focused(window, cx))
         .expect("the focused table is a command surface");
-    assert!(snapshot.own_commands.contains(&CommandId::RESOURCE_DELETE));
+    // (A pod's delete is `pod::Delete`, E12-S03: the same dialog, the pod's own command.)
+    assert!(snapshot.own_commands.contains(&CommandId::POD_DELETE));
     assert_eq!(snapshot.target.targets.len(), 3);
 
     // What the palette's host does once it has closed: hand the command back to the table.
     let targets = snapshot.target.targets;
     let ran = f
         .vcx
-        .update(|window, cx| run_on_focused(CommandId::RESOURCE_DELETE, targets, window, cx));
+        .update(|window, cx| run_on_focused(CommandId::POD_DELETE, targets, window, cx));
     f.settle();
     assert!(ran, "the table took the command");
 

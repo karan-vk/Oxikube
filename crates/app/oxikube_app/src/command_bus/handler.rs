@@ -10,6 +10,7 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{OxiError, OxiResult};
 
 use super::context::CommandOutput;
+use crate::audit::AuditLog;
 use crate::guard::Mutation;
 
 /// The future a handler returns. Owned and `'static`, so the caller can spawn it.
@@ -50,6 +51,9 @@ pub struct HandlerContext {
     dry_run: bool,
     /// What the handler learned that the audit record should name (see [`Self::note_audit`]).
     audit_note: Arc<Mutex<Option<String>>>,
+    /// The guard's audit log, for a handler that acts on several objects and audits each one (see
+    /// [`Self::audit`]). `None` outside the mutating pipeline.
+    audit: Option<Arc<AuditLog>>,
 }
 
 impl HandlerContext {
@@ -66,7 +70,23 @@ impl HandlerContext {
             mutation,
             dry_run: false,
             audit_note: Arc::default(),
+            audit: None,
         }
+    }
+
+    /// Gives the handler the guard's audit log.
+    pub(crate) fn with_audit(mut self, audit: Arc<AuditLog>) -> Self {
+        self.audit = Some(audit);
+        self
+    }
+
+    /// The audit log, for a handler that acts on many objects under one command (a sweep of
+    /// Completed pods): the guard writes the record of the command itself, and the handler writes
+    /// one record per object with [`AuditLog::begin_described`], so a bulk action leaves a record
+    /// per object, as a person's single actions would. `Some` exactly for mutating commands that
+    /// passed the guard. Append only; whether a command may run is still the guard's.
+    pub fn audit(&self) -> Option<&AuditLog> {
+        self.audit.as_deref()
     }
 
     /// The slot [`note_audit`](Self::note_audit) writes to, for the guard to read once the

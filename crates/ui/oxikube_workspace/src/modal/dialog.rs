@@ -6,15 +6,16 @@
 //! dialog itself takes focus when it opens and Tab walks its two buttons.
 
 use gpui::{
-    App, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, InteractiveElement as _,
-    IntoElement, KeyBinding, NoAction, ParentElement as _, Render, SharedString, Styled as _,
-    Window, div, px,
+    App, AppContext as _, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
+    InteractiveElement as _, IntoElement, KeyBinding, NoAction, ParentElement as _, Render,
+    SharedString, Styled as _, Subscription, Window, div, px,
 };
 use oxikube_ui::{
     ActiveTokens as _,
     button::{Button, ButtonVariants as _},
     dialog::{Cancel, Confirm, DialogDescription, DialogFooter, DialogHeader, DialogTitle},
-    layout::v_flex,
+    input::{Input, InputEvent, InputState},
+    layout::{Disableable as _, v_flex},
     u,
 };
 
@@ -45,6 +46,13 @@ pub(super) fn register(cx: &mut App) {
 
 type Handler = Box<dyn Fn(&mut Window, &mut App)>;
 
+/// The "type the name to confirm" half of a dialog: the text to type and the field it goes in.
+struct TypedConfirm {
+    expected: SharedString,
+    input: Entity<InputState>,
+    _subscription: Subscription,
+}
+
 /// A title, an optional message and a confirm / cancel pair of buttons.
 pub struct DialogModal {
     title: SharedString,
@@ -54,6 +62,7 @@ pub struct DialogModal {
     destructive: bool,
     on_confirm: Option<Handler>,
     on_cancel: Option<Handler>,
+    typed: Option<TypedConfirm>,
     focus_handle: FocusHandle,
 }
 
@@ -68,8 +77,68 @@ impl DialogModal {
             destructive: false,
             on_confirm: None,
             on_cancel: None,
+            typed: None,
             focus_handle: cx.focus_handle(),
         }
+    }
+
+    /// Makes the user type `expected` before the dialog confirms (the guard's `TypeName` tier): the
+    /// confirm button stays disabled, and Enter does nothing, until the field holds exactly that
+    /// text. Needs the window the dialog opens in, for its text field.
+    pub fn require_typed(
+        mut self,
+        expected: impl Into<SharedString>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Type the name to confirm"));
+        let subscription =
+            cx.subscribe_in(&input, window, |this, _, event, window, cx| match event {
+                InputEvent::Change => cx.notify(),
+                InputEvent::PressEnter { .. } => this.confirm(window, cx),
+                InputEvent::Focus | InputEvent::Blur => {}
+            });
+        self.typed = Some(TypedConfirm {
+            expected: expected.into(),
+            input,
+            _subscription: subscription,
+        });
+        self
+    }
+
+    /// The text the user has to type, when the dialog asks for one.
+    pub fn expected_text(&self) -> Option<&SharedString> {
+        self.typed.as_ref().map(|typed| &typed.expected)
+    }
+
+    /// Puts the cursor in the confirmation field, when the dialog has one.
+    pub fn focus_typed(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(typed) = &self.typed {
+            typed.input.update(cx, |input, cx| input.focus(window, cx));
+        }
+    }
+
+    /// Types `text` into the confirmation field, as the user would.
+    pub fn type_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(typed) = &self.typed {
+            typed
+                .input
+                .update(cx, |input, cx| input.set_value(text.to_owned(), window, cx));
+        }
+    }
+
+    /// Whether the confirm button can be pressed: always, unless a name has to be typed first and
+    /// the field does not hold it yet.
+    pub fn can_confirm(&self, cx: &App) -> bool {
+        self.typed
+            .as_ref()
+            .is_none_or(|typed| typed.input.read(cx).value().trim() == typed.expected.as_ref())
+    }
+
+    /// Presses confirm (a click, Enter). Does nothing while the typed name is wrong.
+    pub fn press_confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.confirm(window, cx);
     }
 
     /// The dialog's title.
@@ -124,6 +193,9 @@ impl DialogModal {
     }
 
     fn confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.can_confirm(cx) {
+            return;
+        }
         if let Some(handler) = &self.on_confirm {
             handler(window, cx);
         }
@@ -162,7 +234,9 @@ impl Render for DialogModal {
         } else {
             confirm.primary()
         };
-        let confirm = confirm.on_click(cx.listener(|this, _, window, cx| this.confirm(window, cx)));
+        let confirm = confirm
+            .disabled(!self.can_confirm(cx))
+            .on_click(cx.listener(|this, _, window, cx| this.confirm(window, cx)));
         let cancel = Button::new("dialog-cancel")
             .label(self.cancel_label.clone())
             .on_click(cx.listener(|this, _, window, cx| this.cancel(window, cx)));
@@ -193,6 +267,20 @@ impl Render for DialogModal {
                             .map(|message| DialogDescription::new().child(message)),
                     ),
             )
+            .children(self.typed.as_ref().map(|typed| {
+                v_flex()
+                    .gap(u(tokens.spacing.sm))
+                    .child(
+                        div()
+                            .debug_selector(|| "dialog-type-prompt".to_owned())
+                            .child(format!("Type {} to confirm", typed.expected)),
+                    )
+                    .child(
+                        div()
+                            .debug_selector(|| "dialog-type-input".to_owned())
+                            .child(Input::new(&typed.input)),
+                    )
+            }))
             .child(
                 DialogFooter::new()
                     .child(

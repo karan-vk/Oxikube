@@ -40,7 +40,12 @@ actions!(
         TriggerSelected,
         ToggleSuspendSelected,
         UseNamespace,
-        ToggleFavouriteNamespace
+        ToggleFavouriteNamespace,
+        KillSelected,
+        SanitizeSelected,
+        ShowNodeSelected,
+        JumpToOwnerSelected,
+        ExtendNext
     ]
 );
 actions!(resource_detail, [Close]);
@@ -497,8 +502,16 @@ fn a_services_verbs_are_bound_on_service_tables_only(cx: &mut TestAppContext) {
         for kind in ["Pod", "Deployment", "Endpoints"] {
             let stack = table(kind, "");
             assert_eq!(runs(cx, "u", &strs(&stack)), None, "u on {kind}");
+        }
+        for kind in ["Deployment", "Endpoints"] {
+            let stack = table(kind, "");
             assert_eq!(runs(cx, "o", &strs(&stack)), None, "o on {kind}");
         }
+        // `o` is a Pod's own verb (E12-S03: show the node), never the Service's browser.
+        assert_eq!(
+            runs(cx, "o", &strs(&table("Pod", ""))),
+            Some("resource_table::ShowNodeSelected")
+        );
         // A Service table keeps the generic verbs.
         assert_eq!(
             runs(cx, "y", &strs(&services)),
@@ -508,6 +521,83 @@ fn a_services_verbs_are_bound_on_service_tables_only(cx: &mut TestAppContext) {
         let editing = table("Service", "Editing");
         assert_eq!(press(cx, "u", &strs(&editing)), Resolution::Unbound);
     }
+}
+
+#[gpui::test]
+fn pods_kill_sanitize_show_their_node_and_jump_to_their_owner(cx: &mut TestAppContext) {
+    // E12-S03: ctrl-k (force delete), z (sanitize), o (show node) and shift-j (jump to owner) are
+    // Pod verbs; on other tables the keys stay unbound or keep their meaning.
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        let pods = table("Pod", "");
+        let nodes = table("Node", "");
+        let jobs = table("Job", "");
+        assert_eq!(
+            runs(cx, "ctrl-k", &strs(&pods)),
+            Some("resource_table::KillSelected"),
+            "{platform:?}"
+        );
+        assert_eq!(
+            runs(cx, "z", &strs(&pods)),
+            Some("resource_table::SanitizeSelected")
+        );
+        assert_eq!(
+            runs(cx, "o", &strs(&pods)),
+            Some("resource_table::ShowNodeSelected")
+        );
+        assert_eq!(
+            runs(cx, "shift-j", &strs(&pods)),
+            Some("resource_table::JumpToOwnerSelected")
+        );
+        // The other Pod verbs keep their meaning: s is a shell, a an attach, l the logs.
+        assert_eq!(
+            runs(cx, "s", &strs(&pods)),
+            Some("resource_table::ShellSelected")
+        );
+        assert_eq!(
+            runs(cx, "a", &strs(&pods)),
+            Some("resource_table::AttachSelected")
+        );
+        assert_eq!(
+            runs(cx, "l", &strs(&pods)),
+            Some("resource_table::ViewLogs")
+        );
+        // Other kinds: no kill, sanitize or show node, and shift-j still extends the selection.
+        for other in [&nodes, &jobs] {
+            assert_eq!(press(cx, "ctrl-k", &strs(other)), Resolution::Unbound);
+            assert_eq!(press(cx, "z", &strs(other)), Resolution::Unbound);
+            assert_eq!(press(cx, "o", &strs(other)), Resolution::Unbound);
+            assert_eq!(
+                runs(cx, "shift-j", &strs(other)),
+                Some("resource_table::ExtendNext")
+            );
+        }
+        // While the filter field has the focus, the keys are text.
+        let typing = table("Pod", "Editing");
+        for key in ["ctrl-k", "z", "o"] {
+            assert_eq!(press(cx, key, &strs(&typing)), Resolution::Unbound, "{key}");
+        }
+    }
+}
+
+#[gpui::test]
+fn the_palette_finds_the_keys_of_the_pod_commands(cx: &mut TestAppContext) {
+    install(cx, MAC, "");
+    let keys = |cx: &mut TestAppContext, command| {
+        cx.read(|cx| {
+            bindings_for_command(cx, command)
+                .into_iter()
+                .map(|info| info.keystrokes_text())
+                .collect::<Vec<_>>()
+        })
+    };
+    assert_eq!(keys(cx, CommandId::POD_FORCE_DELETE), ["ctrl-k"]);
+    assert_eq!(keys(cx, CommandId::POD_SANITIZE), ["z"]);
+    assert_eq!(keys(cx, CommandId::POD_SHOW_NODE), ["o"]);
+    assert_eq!(keys(cx, CommandId::POD_JUMP_TO_OWNER), ["shift-j"]);
+    // Delete is bound once for every kind (`pod::Delete` and `resource::Delete` share the keys).
+    let delete = keys(cx, CommandId::POD_DELETE);
+    assert!(delete.iter().any(|k| k == "ctrl-d"), "{delete:?}");
 }
 
 #[gpui::test]

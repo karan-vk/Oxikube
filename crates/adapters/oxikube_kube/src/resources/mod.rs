@@ -50,6 +50,9 @@ mod reader;
 mod tests;
 mod typed;
 
+use std::sync::Arc;
+
+use futures::future::BoxFuture;
 use kube::Client;
 use kube::core::ApiResource;
 use oxikube_domain::ids::Gvk;
@@ -75,7 +78,38 @@ pub struct KubeResources {
     pub(crate) config: ResourcesConfig,
     /// Reflector feed settings (E04-S02, `crate::feed`).
     pub(crate) feeds: FeedSettings,
-    unretried: Option<Client>,
+    unretried: Option<Unretried>,
+}
+
+/// Where the client for requests whose 429 is an answer comes from.
+#[derive(Clone)]
+enum Unretried {
+    /// A client built without automatic retries.
+    Ready(Client),
+    /// A client built on first use (an exec credential plugin runs only then).
+    Lazy(Arc<LazyClient>),
+}
+
+/// Builds a client without automatic retries, once, the first time an eviction needs it.
+pub struct LazyClient {
+    cell: tokio::sync::OnceCell<Client>,
+    build: Box<dyn Fn() -> BoxFuture<'static, OxiResult<Client>> + Send + Sync>,
+}
+
+impl LazyClient {
+    /// A client built by `build` the first time it is asked for, and kept.
+    pub fn new(
+        build: impl Fn() -> BoxFuture<'static, OxiResult<Client>> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            cell: tokio::sync::OnceCell::new(),
+            build: Box::new(build),
+        }
+    }
+
+    async fn get(&self) -> OxiResult<Client> {
+        self.cell.get_or_try_init(|| (self.build)()).await.cloned()
+    }
 }
 
 impl KubeResources {
@@ -104,14 +138,32 @@ impl KubeResources {
     /// whether to wait; without this client `evict` still works but shares that delay.
     #[must_use]
     pub fn with_unretried_client(mut self, client: Client) -> Self {
-        self.unretried = Some(client);
+        self.unretried = Some(Unretried::Ready(client));
+        self
+    }
+
+    /// As [`with_unretried_client`](Self::with_unretried_client), with the client built the first
+    /// time an eviction needs it (the connector's way: a context whose credentials come from an
+    /// exec plugin runs it once more only for a user who evicts).
+    #[must_use]
+    pub fn with_lazy_unretried_client(mut self, client: Arc<LazyClient>) -> Self {
+        self.unretried = Some(Unretried::Lazy(client));
         self
     }
 
     /// The client for requests whose 429 is an answer, not an overload: the one from
-    /// [`with_unretried_client`](Self::with_unretried_client), else the shared client.
-    pub(crate) fn unretried_client(&self) -> &Client {
-        self.unretried.as_ref().unwrap_or(&self.client)
+    /// [`with_unretried_client`](Self::with_unretried_client) or
+    /// [`with_lazy_unretried_client`](Self::with_lazy_unretried_client), else the shared client.
+    ///
+    /// # Errors
+    ///
+    /// The error of building the lazy client (a credential plugin that failed).
+    pub(crate) async fn unretried_client(&self) -> OxiResult<Client> {
+        match &self.unretried {
+            Some(Unretried::Ready(client)) => Ok(client.clone()),
+            Some(Unretried::Lazy(lazy)) => lazy.get().await,
+            None => Ok(self.client.clone()),
+        }
     }
 
     /// The client every request goes through.

@@ -5,6 +5,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::ResourceRef;
 use serde_json::json;
 
+use super::pod_commands::{self, POD_COMMANDS};
 use super::service::WorkloadService;
 use crate::actions::object_label;
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
@@ -20,8 +21,9 @@ pub const WORKLOAD_COMMANDS: [CommandId; 5] = [
 ];
 
 /// Registers `cronjob::Trigger`, `cronjob::Suspend`, `cronjob::Resume`, `job::Suspend` and
-/// `job::Resume` on `registry`, and `workload::Scale` (E12-S04), which the binary installs under
-/// `oxikube_app::workloads`.
+/// `job::Resume`, `workload::Scale` (E12-S04), and the pod commands `pod::Evict`, `pod::Delete`,
+/// `pod::ForceDelete` and `pod::Sanitize` (E12-S03), on `registry` (the binary installs them under
+/// `oxikube_app::workloads`).
 ///
 /// A handler runs only after the guard let the command through: the read-only check, the
 /// confirmation and the audit precondition are the guard's. The trigger names the Job it made in
@@ -34,9 +36,35 @@ pub fn register_commands(
     registry: &mut CommandRegistry,
     sessions: ClusterSessionManager,
 ) -> Result<(), RegisterError> {
+    super::scale_command::register_scale(registry, WorkloadService::new(sessions.clone()))?;
+    register(
+        registry,
+        sessions,
+        WORKLOAD_COMMANDS.into_iter().chain(POD_COMMANDS),
+    )
+}
+
+/// Registers only the pod commands of [`register_commands`] (`pod::Evict`, `pod::Delete`,
+/// `pod::ForceDelete`, `pod::Sanitize`), for a bus that handles the CronJob and Job commands
+/// elsewhere (a test with stand-ins for them).
+///
+/// # Errors
+///
+/// A [`RegisterError`] when one of the commands is registered already.
+pub fn register_pod_commands(
+    registry: &mut CommandRegistry,
+    sessions: ClusterSessionManager,
+) -> Result<(), RegisterError> {
+    register(registry, sessions, POD_COMMANDS)
+}
+
+fn register(
+    registry: &mut CommandRegistry,
+    sessions: ClusterSessionManager,
+    ids: impl IntoIterator<Item = CommandId>,
+) -> Result<(), RegisterError> {
     let service = WorkloadService::new(sessions);
-    super::scale_command::register_scale(registry, service.clone())?;
-    for id in WORKLOAD_COMMANDS {
+    for id in ids {
         let meta = *command::lookup(id).ok_or(RegisterError::Undeclared(id))?;
         let service = service.clone();
         registry.register(meta, move |command: Command, cx: HandlerContext| {
@@ -52,6 +80,9 @@ async fn handle(
     command: Command,
     cx: &HandlerContext,
 ) -> Result<CommandOutput, OxiError> {
+    if POD_COMMANDS.contains(&command.id()) {
+        return pod_commands::handle(service, command, cx).await;
+    }
     let mutation = cx.require_mutation()?;
     match command {
         Command::CronJobTrigger { target } => {

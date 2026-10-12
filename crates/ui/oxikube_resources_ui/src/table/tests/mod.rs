@@ -15,6 +15,7 @@ mod view_default_columns;
 mod view_filter;
 mod view_filter_keys;
 mod view_filter_saved;
+mod view_pod_keys;
 mod view_rows;
 mod view_scope;
 mod view_secret;

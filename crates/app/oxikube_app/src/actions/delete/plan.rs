@@ -96,6 +96,24 @@ impl DeletePlan {
     }
 }
 
+/// The command that deletes `target`: `pod::Delete` for a pod that is deleted the ordinary way
+/// (background, the default), so a pod's delete is the same command, tool and audit record
+/// whichever way it was asked for (E12-S03); `resource::Delete` for every other object and for a
+/// pod when the user chose another propagation, which only that command carries.
+fn delete_command(target: &ResourceRef, propagation: Propagation) -> Command {
+    if target.gvk.is_pod() && propagation == Propagation::Background {
+        Command::PodDelete {
+            target: target.clone(),
+            grace_period_seconds: None,
+        }
+    } else {
+        Command::ResourceDelete {
+            target: target.clone(),
+            propagation,
+        }
+    }
+}
+
 /// Runs deletes through the `CommandBus`, for one object or a selection. See the
 /// [module docs](super::super).
 ///
@@ -177,10 +195,7 @@ impl DeleteFlow {
             .map(|target| {
                 let command = match &self.builder {
                     Some(builder) => builder(target, propagation),
-                    None => Command::ResourceDelete {
-                        target: target.clone(),
-                        propagation,
-                    },
+                    None => delete_command(target, propagation),
                 };
                 let meta = oxikube_domain::command::lookup(command.id())
                     .expect("every command is declared");

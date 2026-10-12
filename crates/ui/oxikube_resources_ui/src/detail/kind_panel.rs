@@ -159,6 +159,38 @@ impl DetailView {
         self.store.as_ref()
     }
 
+    /// Sends `command` through the window's dispatcher (the bus: the guard confirms, audits and
+    /// answers with a toast), as a button of a kind's panel does.
+    pub fn dispatch_command(&mut self, command: Command, cx: &mut Context<Self>) {
+        self.deps.dispatcher.dispatch(command, cx);
+    }
+
+    /// The workload service over this cluster's session, for the reads a kind's panel makes on
+    /// demand (a pod's owner chain, the ConfigMaps and Secrets of its environment).
+    pub fn workload_service(&self) -> oxikube_app::WorkloadService {
+        oxikube_app::WorkloadService::new(self.deps.sessions.clone())
+    }
+
+    /// What a panel's button for `command` does: `None` when the session may not run it at all
+    /// (no RBAC grant for what it needs), `Some(None)` when it can, `Some(Some(why))` when it is
+    /// blocked now (a read-only cluster blocks every mutation).
+    pub fn command_block(
+        &self,
+        command: oxikube_domain::command::CommandId,
+    ) -> Option<Option<String>> {
+        let session = self.deps.sessions.get(&self.target.cluster)?;
+        let meta = oxikube_domain::command::lookup(command)?;
+        if !session.capabilities().contains(meta.needs) {
+            return None;
+        }
+        Some(
+            oxikube_app::ActionContext::of(&session)
+                .state_of(meta)
+                .reason()
+                .map(|reason| reason.to_string()),
+        )
+    }
+
     /// The kind's own panel, when its spec has one and it was drawn.
     pub fn kind_panel(&self) -> Option<&AnyView> {
         self.kind_panel.view()

@@ -96,7 +96,43 @@ impl fmt::Display for ValidationDetails {
 
 impl StdError for ValidationDetails {}
 
+/// Detail of an eviction a PodDisruptionBudget refuses (HTTP 429 with the cause
+/// `DisruptionBudget`). The kube adapter attaches it to the retryable error of `evict`; callers
+/// read it with [`OxiError::eviction_blocked`] to say "blocked by disruption budget" instead of
+/// showing a raw status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvictionBlocked {
+    /// The budget's explanation from the server, redacted and bounded to one line (for example
+    /// `The disruption budget web needs 2 healthy pods and has 2 currently`).
+    pub reason: String,
+}
+
+impl EvictionBlocked {
+    /// The name of the budget the explanation names (`web` in `The disruption budget web needs 2
+    /// healthy pods and has 2 currently`), `None` when the server worded it differently.
+    pub fn budget_name(&self) -> Option<&str> {
+        let rest = self.reason.split("disruption budget ").nth(1)?;
+        let name = rest.split_whitespace().next()?;
+        let name = name.trim_matches(|c: char| !(c.is_alphanumeric() || matches!(c, '-' | '.')));
+        (!name.is_empty()).then_some(name)
+    }
+}
+
+impl fmt::Display for EvictionBlocked {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "blocked by a PodDisruptionBudget: {}", self.reason)
+    }
+}
+
+impl StdError for EvictionBlocked {}
+
 impl OxiError {
+    /// The [`EvictionBlocked`] marker of an eviction a PodDisruptionBudget refused, `None` for
+    /// every other error.
+    pub fn eviction_blocked(&self) -> Option<&EvictionBlocked> {
+        StdError::source(self)?.downcast_ref::<EvictionBlocked>()
+    }
+
     /// The [`ConflictDetails`] of a `Conflict` error that carries them.
     pub fn conflict_details(&self) -> Option<&ConflictDetails> {
         if self.kind() != ErrorKind::Conflict {
@@ -124,6 +160,21 @@ mod tests {
             manager: manager.map(str::to_owned),
             ..FieldCause::default()
         }
+    }
+
+    #[test]
+    fn an_eviction_marker_names_its_budget() {
+        let blocked = EvictionBlocked {
+            reason: "The disruption budget web needs 2 healthy pods and has 2 currently".into(),
+        };
+        assert_eq!(blocked.budget_name(), Some("web"));
+        let err = OxiError::network("blocked").with_source(blocked);
+        assert!(err.eviction_blocked().is_some());
+        assert!(OxiError::network("plain").eviction_blocked().is_none());
+        let other = EvictionBlocked {
+            reason: "too many requests".into(),
+        };
+        assert_eq!(other.budget_name(), None);
     }
 
     #[test]

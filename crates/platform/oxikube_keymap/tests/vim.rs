@@ -228,13 +228,13 @@ fn every_vim_binding_moves_inside_the_table_or_dispatches_a_command() {
             );
         }
     }
-    // Delete and copy-name are the existing guarded commands, not a new action.
-    // (A Namespace is deleted by its own guarded command, E12-S16: `dd` still opens the one
-    // delete dialog.)
+    // Delete and copy-name are the existing guarded commands, not a new action. Delete is
+    // `resource::Delete` and, on a Pod table, `pod::Delete` (E12-S03); a Namespace is deleted by
+    // its own guarded command (E12-S16): `dd` still opens the one delete dialog.
     for (action, commands) in [
         (
             "resource_table::DeleteSelected",
-            &["resource::Delete", "namespace::Delete"][..],
+            &["resource::Delete", "namespace::Delete", "pod::Delete"][..],
         ),
         ("resource_table::CopyName", &["resource::CopyName"][..]),
     ] {

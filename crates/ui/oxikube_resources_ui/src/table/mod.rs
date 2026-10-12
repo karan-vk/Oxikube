@@ -29,6 +29,7 @@
 //! | `verbs` | the k9s verbs (E11-S07): `y` YAML, `d` describe, `e` edit, `l` logs, `f` / `shift-f` port forwards, `ctrl-w` wide columns, each a view action standing for a command |
 //! | `batch` | the CronJob and Job keys (E12-S08): `t` trigger, `s` suspend or resume, view actions standing for `cronjob::*` and `job::*` commands |
 //! | `namespaces` | the Namespaces table's keys (E12-S16): `u` use, `p` pin, `0`-`9` All or the nth favourite, and the create dialog |
+//! | `pod_keys` | the pod keys (E12-S03): `ctrl-k` force delete, `z` sanitize, `o` show node, `shift-j` jump to owner, and the sweep of the table's view |
 //! | `row_feedback` | what a row key says when it cannot run (no such action for the kind, no permission, no row) and that Shell, Attach and Debug act on the cursor row of a multi-selection |
 //! | `runtime` | [`store_runtime`]: where the stores' feed tasks run |
 //!
@@ -58,6 +59,7 @@ mod filtering;
 mod interact;
 mod layout;
 mod namespaces;
+mod pod_keys;
 mod prefs;
 mod render;
 mod row_actions;

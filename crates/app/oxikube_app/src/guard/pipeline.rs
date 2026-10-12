@@ -98,7 +98,8 @@ impl MutationGuard {
             ctx.who.clone(),
             Some(cluster),
             Some(mutation),
-        );
+        )
+        .with_audit(self.audit.clone());
         let note = cx.audit_note_slot();
         let result = handler.handle(command, cx).await;
 
