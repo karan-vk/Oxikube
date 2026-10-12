@@ -34,15 +34,28 @@ fn tick(fx: &mut Fixture) {
     fx.vcx.run_until_parked();
 }
 
+/// What a badge shows: the totals and the health. The status buckets feed the Workloads overview
+/// (E12-S07) and the store's tests cover them.
+fn badge(state: CountState) -> CountState {
+    match state {
+        CountState::Counted(count) => CountState::Counted(KindCount {
+            buckets: Default::default(),
+            ..count
+        }),
+        other => other,
+    }
+}
+
 fn count(fx: &mut Fixture, group: &'static str, plural: &'static str) -> Option<CountState> {
     let panel = fx.panel.clone();
     fx.vcx
         .update(|_, cx| panel.read(cx).count_of(group, plural).cloned())
+        .map(badge)
 }
 
 fn entry_count(fx: &mut Fixture, id: &str) -> Option<CountState> {
     fx.rows().into_iter().find_map(|row| match row {
-        Row::Entry(e) if &*e.id == id => e.count,
+        Row::Entry(e) if &*e.id == id => e.count.map(badge),
         _ => None,
     })
 }
