@@ -60,8 +60,8 @@ pub mod metrics_provider;
 pub mod namespaces;
 pub mod network;
 pub mod nodes;
-pub mod rollout;
 pub mod overview;
+pub mod rollout;
 pub mod search;
 pub mod secrets;
 pub mod session;
@@ -125,10 +125,10 @@ pub use network::{
     OpenedServicePort, PodsPlan, ServiceBackends, ServicePortOpener, UrlSink, plan_show_pods,
     register_open_in_browser,
 };
+pub use overview::{FixedWarnings, NoRecentWarnings, RecentWarnings, WarningRow};
 pub use rollout::{
     RollbackOutcome, RollbackReport, RollbackResult, RollbackRunner, RolloutHistory, RolloutService,
 };
-pub use overview::{FixedWarnings, NoRecentWarnings, RecentWarnings, WarningRow};
 pub use search::aliases::{
     AliasConflict, AliasEntry, AliasFollow, AliasRegistry, AliasSource, AliasTable, ConflictKind,
     Resolution,
