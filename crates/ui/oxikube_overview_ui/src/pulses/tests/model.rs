@@ -11,6 +11,7 @@ fn counted(total: usize, rated: usize, healthy: usize) -> CountState {
         total,
         rated,
         healthy,
+        ..Default::default()
     })
 }
 

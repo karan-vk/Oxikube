@@ -166,8 +166,8 @@ pub use storage::{
 };
 pub use store::{
     BucketCounts, CORE_TARGETS, CoreTarget, CountState, CountTarget, CountsLease, FetchedCount,
-    KindCount, ResourceStore, ResourceStores, StoreDelta, StoreQuery, Subscription, WorkloadCounters,
-    fetch_count,
+    KindCount, ResourceStore, ResourceStores, StoreDelta, StoreQuery, Subscription,
+    WorkloadCounters, fetch_count,
 };
 pub use templates::{
     Prefill, SkippedTemplate, Template, TemplateCatalog, TemplateOrigin, TemplateService,
