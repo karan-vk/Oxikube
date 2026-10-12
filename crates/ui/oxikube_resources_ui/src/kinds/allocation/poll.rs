@@ -13,6 +13,10 @@ use oxikube_runtime::spawn_kube;
 /// more often would only repeat an answer; this is the same order as `kubectl top`'s freshness.
 pub const USAGE_INTERVAL: Duration = Duration::from_secs(15);
 
+/// How soon to ask again after an absence (no metrics-server yet, a failed call): a transient
+/// failure should not leave the panel saying "unavailable" for a full [`USAGE_INTERVAL`].
+const RETRY_INTERVAL: Duration = Duration::from_secs(5);
+
 /// How long to wait for the session before asking again (the panel opened before the connection
 /// was ready, or a reconnect is under way).
 const SESSION_WAIT: Duration = Duration::from_millis(250);
@@ -41,15 +45,18 @@ pub struct UsageTarget {
 ///
 /// `target` is asked before every call (the panel may follow another object, or the session may
 /// have reconnected) and may answer `None` while there is nothing to ask. `apply` receives each
-/// answer; it is only called when the answer differs from the last, so an unchanged reading never
-/// wakes the panel. The call itself runs on the Kubernetes runtime, never on the UI thread.
+/// answer; it is only called when the answer differs from the last (or is for another subject),
+/// so an unchanged reading never wakes the panel, and with `Pending` when the subject changes, so
+/// the old subject's reading is not shown for the new one. The call itself runs on the Kubernetes runtime, never on the UI thread.
 pub fn poll_usage<T: 'static>(
     cx: &mut Context<T>,
     target: impl Fn(&T, &App) -> Option<UsageTarget> + 'static,
     apply: impl Fn(&mut T, UsageState, &mut Context<T>) + 'static,
 ) -> Task<()> {
     cx.spawn(async move |this, cx| {
-        let mut last: Option<UsageState> = None;
+        // What the panel was last told, and for whom: an answer for another subject is news even
+        // when it reads the same.
+        let mut last: Option<(UsageSubject, UsageState)> = None;
         loop {
             let Ok(next) = this.read_with(cx, |this, cx| target(this, cx)) else {
                 break;
@@ -63,6 +70,18 @@ pub fn poll_usage<T: 'static>(
                 cx.background_executor().timer(SESSION_WAIT).await;
                 continue;
             };
+            if last.as_ref().is_some_and(|(seen, _)| *seen != subject) {
+                // The panel moved to another subject: drop the old subject's reading until the
+                // new one arrives.
+                last = None;
+                if this
+                    .update(cx, |this, cx| apply(this, UsageState::Pending, cx))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            let asked = subject.clone();
             let call = spawn_kube(&*cx, async move {
                 match subject {
                     UsageSubject::Node(name) => node_usage(&*port, &cluster, &name).await,
@@ -76,14 +95,17 @@ pub fn poll_usage<T: 'static>(
                     UsageState::Unavailable("metrics unavailable: the request failed".into())
                 }
             };
-            if last.as_ref() != Some(&state) {
-                last = Some(state.clone());
-                let alive = this.update(cx, |this, cx| apply(this, state, cx)).is_ok();
-                if !alive {
+            let wait = match state {
+                UsageState::Unavailable(_) => RETRY_INTERVAL,
+                _ => USAGE_INTERVAL,
+            };
+            if last.as_ref().map(|(_, seen)| seen) != Some(&state) {
+                last = Some((asked, state.clone()));
+                if this.update(cx, |this, cx| apply(this, state, cx)).is_err() {
                     break;
                 }
             }
-            cx.background_executor().timer(USAGE_INTERVAL).await;
+            cx.background_executor().timer(wait).await;
         }
     })
 }

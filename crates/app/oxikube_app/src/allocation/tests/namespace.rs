@@ -84,6 +84,11 @@ fn the_bar_follows_the_requests_cap() {
         bar.limits_mark, None,
         "limits have their own cap: a mark on the requests scale would mislead"
     );
+    assert_eq!(
+        v.row(&AllocationKind::Cpu).unwrap().limits_note(),
+        None,
+        "4 CPUs of limits under an 8 CPU cap"
+    );
     assert!((bar.usage.unwrap() - 0.225).abs() < 1e-6);
 }
 

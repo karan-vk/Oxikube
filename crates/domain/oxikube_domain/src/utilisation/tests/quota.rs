@@ -166,3 +166,36 @@ fn a_non_quota_is_a_wrong_kind() {
     let (none, skipped) = QuotaCaps::tightest([&p], &GpuVendors::default());
     assert!(none.is_empty() && skipped == 0);
 }
+
+#[test]
+fn overhead_does_not_make_a_pod_declare_a_request() {
+    let gpus = GpuVendors::default();
+    let p = pod(
+        "p",
+        "ns",
+        None,
+        "Running",
+        json!({"containers": [container("c", json!({}), json!({}))],
+               "overhead": {"cpu": "50m", "memory": "64Mi", "ephemeral-storage": "10Mi"}}),
+    );
+    let r = aggregate_pod_requests_limits(&p, &gpus).unwrap();
+    assert_eq!(
+        r.requests.cpu,
+        q("50m"),
+        "the overhead is booked on the node"
+    );
+    assert!(
+        !r.declared.cpu_requests && !r.declared.memory_requests && !r.declared.ephemeral_requests
+    );
+    let mut unset = UnsetPods::default();
+    unset.add(&r);
+    assert_eq!(
+        (
+            unset.cpu_requests,
+            unset.memory_requests,
+            unset.ephemeral_requests
+        ),
+        (1, 1, 1),
+        "the pod author set none"
+    );
+}

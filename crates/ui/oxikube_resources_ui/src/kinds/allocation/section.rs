@@ -190,7 +190,7 @@ fn notes(tokens: &Tokens, tones: &ToneColors, row: &AllocationRow, id: &str) -> 
         ),
         Usage::Value(_) | Usage::NotApplicable => {}
     }
-    if let Some(text) = row.overcommit_text() {
+    if let Some(text) = row.limits_note() {
         note(text, tokens.colors.text_muted, format!("{id}-overcommit"));
     }
     if let Some(text) = row.unset_text() {

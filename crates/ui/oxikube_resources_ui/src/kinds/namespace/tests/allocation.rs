@@ -272,3 +272,49 @@ fn a_forbidden_pod_feed_is_said_not_shown_as_an_empty_namespace(cx: &mut TestApp
     });
     assert!(d.shown("namespace-allocation-pending"));
 }
+
+#[gpui::test]
+fn a_pod_that_arrives_later_reaches_the_sums(cx: &mut TestAppContext) {
+    let mut d = Detail::new(cx, []);
+    d.f.vcx.update(|_, cx| crate::kinds::init(cx));
+    let resources = d.f.ports().resources;
+    let batch = |objects: Vec<Resource>| {
+        oxikube_ports::DeltaBatch::from_deltas(vec![oxikube_ports::Delta::Restarted(objects)])
+    };
+    // The detail's Namespace feed, then the panel's pods and quotas feeds: `a` is listed, `b`
+    // arrives a second later.
+    resources.script().watch.push_ok(
+        oxikube_testkit::Timeline::immediate([batch(vec![ns("shop", json!({}))])]).keep_open(),
+    );
+    resources.script().watch.push_ok(
+        oxikube_testkit::Timeline::immediate([batch(vec![shop_pod("a", ("250m", "64Mi"), None)])])
+            .ok_at(
+                Duration::from_secs(1),
+                oxikube_ports::DeltaBatch::from_deltas(vec![oxikube_ports::Delta::Applied(
+                    shop_pod("b", ("750m", "64Mi"), None),
+                )]),
+            )
+            .keep_open(),
+    );
+    resources
+        .script()
+        .watch
+        .push_ok(oxikube_testkit::Timeline::immediate([batch(Vec::new())]).keep_open());
+    let panel = open(&mut d);
+    let (requests, _, _) = text(&mut d, &panel, AllocationKind::Cpu).unwrap();
+    assert_eq!(requests, "250m");
+
+    resources.clock().advance(Duration::from_secs(1));
+    d.settle();
+    for _ in 0..4 {
+        d.f.vcx.executor().advance_clock(Duration::from_millis(300));
+        d.settle();
+    }
+    let (requests, _, _) = text(&mut d, &panel, AllocationKind::Cpu).unwrap();
+    assert_eq!(
+        requests, "1000m",
+        "250m + 750m: the second pod was summed in"
+    );
+    let (pods, _, _) = text(&mut d, &panel, AllocationKind::Pods).unwrap();
+    assert_eq!(pods, "2");
+}

@@ -33,10 +33,10 @@ pub struct MeasuredUsage {
     pub cpu: Result<Quantity, MissingReason>,
     /// Working-set memory in bytes, or why it could not be read.
     pub memory: Result<Quantity, MissingReason>,
-    /// For a namespace: pods that have a reading. Zero for a node.
+    /// For a namespace: pods with both readings. Zero for a node.
     pub pods_reporting: u32,
-    /// For a namespace: pods whose sample lacks a reading (counted out of the sums, never as
-    /// zero usage). Zero for a node.
+    /// For a namespace: pods whose sample lacks a reading of either resource. They are left out of
+    /// that resource's sum, never counted as zero usage. Zero for a node.
     pub pods_unreadable: u32,
 }
 
@@ -142,8 +142,8 @@ pub async fn namespace_usage(
 }
 
 fn sum_pods(samples: &[MetricsSample], namespace: &str) -> UsageState {
-    let (mut cpu, mut memory) = (0i128, 0i128);
-    let (mut cpu_why, mut memory_why) = (None, None);
+    let mut cpu = Tally::default();
+    let mut memory = Tally::default();
     let (mut reporting, mut unreadable) = (0u32, 0u32);
     for sample in samples {
         let MetricsSubject::Pod { pod } = &sample.subject else {
@@ -152,33 +152,54 @@ fn sum_pods(samples: &[MetricsSample], namespace: &str) -> UsageState {
         if pod.namespace.as_deref() != Some(namespace) {
             continue;
         }
-        match (cpu_of(sample), memory_of(sample)) {
-            (Ok(c), Ok(m)) => {
-                reporting += 1;
-                cpu = cpu.saturating_add(c.nanos());
-                memory = memory.saturating_add(m.nanos());
-            }
-            (c, m) => {
-                unreadable += 1;
-                cpu_why = cpu_why.or(c.err());
-                memory_why = memory_why.or(m.err());
-            }
+        let (c, m) = (cpu_of(sample), memory_of(sample));
+        if c.is_ok() && m.is_ok() {
+            reporting += 1;
+        } else {
+            unreadable += 1;
         }
+        cpu.add(c);
+        memory.add(m);
     }
-    // Every sample unreadable is a missing reading; some unreadable is a partial sum.
-    let all_unreadable = reporting == 0 && unreadable > 0;
-    let cpu = match (all_unreadable, cpu_why) {
-        (true, why) => Err(why.unwrap_or(MissingReason::Other)),
-        _ => Ok(Quantity::from_nanos(cpu)),
-    };
-    let memory = match (all_unreadable, memory_why) {
-        (true, why) => Err(why.unwrap_or(MissingReason::Other)),
-        _ => Ok(Quantity::from_nanos(memory).with_format(QuantityFormat::BinarySI)),
-    };
     UsageState::Ready(MeasuredUsage {
-        cpu,
-        memory,
+        cpu: cpu.finish(None),
+        memory: memory.finish(Some(QuantityFormat::BinarySI)),
         pods_reporting: reporting,
         pods_unreadable: unreadable,
     })
+}
+
+/// The sum of one resource over the pods that report it, and why the others do not. CPU and
+/// memory are tallied on their own: a pod missing one still counts for the other.
+#[derive(Default)]
+struct Tally {
+    nanos: i128,
+    reported: u32,
+    missing: Option<MissingReason>,
+}
+
+impl Tally {
+    fn add(&mut self, reading: Result<Quantity, MissingReason>) {
+        match reading {
+            Ok(value) => {
+                self.nanos = self.nanos.saturating_add(value.nanos());
+                self.reported += 1;
+            }
+            Err(reason) => {
+                self.missing.get_or_insert(reason);
+            }
+        }
+    }
+
+    /// The sum (printed in `format`, when given); or, when pods exist but none reports, the
+    /// reason.
+    fn finish(self, format: Option<QuantityFormat>) -> Result<Quantity, MissingReason> {
+        if self.reported == 0
+            && let Some(reason) = self.missing
+        {
+            return Err(reason);
+        }
+        let sum = Quantity::from_nanos(self.nanos);
+        Ok(format.map_or(sum, |format| sum.with_format(format)))
+    }
 }

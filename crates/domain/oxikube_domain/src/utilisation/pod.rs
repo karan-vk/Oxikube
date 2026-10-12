@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use super::quantities::{amounts_of, override_with};
+use super::unset::Declared;
 use super::{GpuVendors, ResourceAmounts};
 use crate::json::JsonRef;
 use crate::resource::Resource;
@@ -20,6 +21,10 @@ pub struct PodResources {
     /// Effective limits: what the pod may use at most. A resource without a limit on some
     /// container contributes nothing for that container, as in Kubernetes.
     pub limits: ResourceAmounts,
+    /// Which requests and limits the pod's own containers declare, before `spec.overhead` is
+    /// added (overhead is the runtime class's, not the pod author's): what the pods "that set
+    /// none" counts ([`UnsetPods`](super::UnsetPods)) are made from.
+    pub declared: Declared,
 }
 
 impl PodResources {
@@ -54,8 +59,9 @@ pub fn aggregate_pod_requests_limits(
 fn from_spec(spec: JsonRef<'_>, gpus: &GpuVendors) -> PodResources {
     let overhead = amounts_of(sub(spec, "overhead"), gpus);
     let mut requests = effective(spec, "requests", gpus);
-    requests += &overhead;
     let mut limits = effective(spec, "limits", gpus);
+    let declared = Declared::of(&requests, &limits);
+    requests += &overhead;
     // Overhead rides on a limit only where the pod has one (`PodRequestsAndLimits`).
     if !limits.cpu.is_zero() {
         limits.cpu += overhead.cpu;
@@ -66,7 +72,11 @@ fn from_spec(spec: JsonRef<'_>, gpus: &GpuVendors) -> PodResources {
     if !limits.ephemeral.is_zero() {
         limits.ephemeral += overhead.ephemeral;
     }
-    PodResources { requests, limits }
+    PodResources {
+        requests,
+        limits,
+        declared,
+    }
 }
 
 /// Containers, init containers and pod-level resources for one of `requests` / `limits`.

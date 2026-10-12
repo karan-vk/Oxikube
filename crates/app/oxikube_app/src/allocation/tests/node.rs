@@ -71,12 +71,12 @@ fn over_committed_limits_are_noted_not_an_error() {
         "requests fit: the scheduler saw to it"
     );
     assert_eq!(
-        cpu.overcommit_text().unwrap(),
+        cpu.limits_note().unwrap(),
         "limits are over-committed (125%); this is normal"
     );
     let mem = v.row(&AllocationKind::Memory).unwrap();
     assert!(!mem.limits_overcommitted());
-    assert_eq!(mem.overcommit_text(), None);
+    assert_eq!(mem.limits_note(), None);
 }
 
 #[test]

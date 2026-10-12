@@ -70,4 +70,4 @@ pub use node::NodeAllocatable;
 pub use percent::{AmountPercents, Utilisation, percent};
 pub use pod::{PodAllocation, PodResources, aggregate_pod_requests_limits};
 pub use quota::{QuotaCaps, ResourceCaps};
-pub use unset::UnsetPods;
+pub use unset::{Declared, UnsetPods};

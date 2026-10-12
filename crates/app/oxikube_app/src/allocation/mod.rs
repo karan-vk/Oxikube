@@ -30,8 +30,10 @@
 //!
 //! # Rules worth knowing
 //!
-//! * Limits above 100 % of allocatable are normal (over-commitment), so a row only *notes* it
-//!   ([`AllocationRow::limits_overcommitted`]); it is not an error.
+//! * Limits above 100 % of a node's allocatable are normal (over-commitment), so a row only
+//!   *notes* it ([`AllocationRow::limits_note`]); it is not an error. Limits above a namespace's
+//!   `limits.*` quota are not normal (the quota was lowered, or the pods predate it): the note says
+//!   so in other words.
 //! * A namespace without quotas shows its totals and no bar (there is nothing to fill against);
 //!   with quotas, each resource is measured against the tightest unscoped cap and scoped quotas
 //!   are listed as left out (a sum over the whole namespace cannot be compared with them).
@@ -54,6 +56,6 @@ mod view;
 mod tests;
 
 pub use kind::AllocationKind;
-pub use row::{AllocationRow, BarBasis, BarModel, UnsetCount, Usage};
+pub use row::{AllocationRow, BarBasis, BarModel, CapacityKind, UnsetCount, Usage};
 pub use usage::{MeasuredUsage, UsageState, namespace_usage, node_usage};
-pub use view::{AllocationView, CapacityKind};
+pub use view::AllocationView;

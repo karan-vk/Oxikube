@@ -15,12 +15,15 @@ use oxikube_ui::chart::Tone;
 
 use super::poll::{USAGE_INTERVAL, UsageSubject, UsageTarget, poll_usage};
 use super::section::tone_of;
+use oxikube_app::allocation::MeasuredUsage;
 use oxikube_app::allocation::{BarBasis, BarModel};
 
 struct Probe {
     port: Arc<FakeMetricsPort>,
     /// Whether a session exists to ask.
     ready: bool,
+    /// Whose usage to ask.
+    subject: UsageSubject,
     applied: Vec<UsageState>,
     _poll: Task<()>,
 }
@@ -47,6 +50,7 @@ fn start(cx: &mut TestAppContext, ready: bool) -> (Entity<Probe>, Arc<FakeMetric
     let probe = cx.new(|cx: &mut Context<Probe>| Probe {
         port: held,
         ready,
+        subject: UsageSubject::Node("n1".into()),
         applied: Vec::new(),
         _poll: poll_usage(
             cx,
@@ -54,7 +58,7 @@ fn start(cx: &mut TestAppContext, ready: bool) -> (Entity<Probe>, Arc<FakeMetric
                 probe.ready.then(|| UsageTarget {
                     port: probe.port.clone(),
                     cluster: cluster(),
-                    subject: UsageSubject::Node("n1".into()),
+                    subject: probe.subject.clone(),
                 })
             },
             |probe, state, _| probe.applied.push(state),
@@ -163,4 +167,54 @@ fn the_fill_turns_amber_and_red_with_how_full_it_is() {
         Tone::Critical,
         "at the capacity is red"
     );
+}
+
+#[gpui::test]
+fn an_absence_is_asked_again_sooner_than_a_reading(cx: &mut TestAppContext) {
+    let (_probe, port) = start(cx, true);
+    port.script()
+        .node_metrics
+        .push_ok(MetricsOutcome::Unavailable(MissingReason::ApiUnavailable));
+    port.script().node_metrics.push_ok(node_reading(1));
+    cx.run_until_parked();
+    assert_eq!(calls(&port), 1);
+    elapse(cx, Duration::from_secs(6));
+    assert_eq!(
+        calls(&port),
+        2,
+        "a transient failure is retried in seconds, not 15 s"
+    );
+}
+
+#[gpui::test]
+fn another_subject_does_not_inherit_the_old_reading(cx: &mut TestAppContext) {
+    let (probe, port) = start(cx, true);
+    port.script()
+        .node_metrics
+        .push_ok(node_reading(500_000_000));
+    // The namespace's answer reads exactly like the node's did.
+    port.script()
+        .pod_metrics
+        .push_ok(MetricsOutcome::Available(Vec::new()));
+    cx.run_until_parked();
+    probe.read_with(cx, |p, _| assert_eq!(p.applied.len(), 1));
+    probe.update(cx, |p, _| {
+        p.subject = UsageSubject::Namespace("shop".into())
+    });
+    elapse(cx, USAGE_INTERVAL);
+    probe.read_with(cx, |p, _| {
+        assert!(matches!(p.applied[0], UsageState::Ready(_)));
+        assert_eq!(
+            p.applied[1],
+            UsageState::Pending,
+            "the old reading is dropped at once"
+        );
+        assert!(matches!(
+            &p.applied[2],
+            UsageState::Ready(MeasuredUsage {
+                pods_reporting: 0,
+                ..
+            })
+        ));
+    });
 }

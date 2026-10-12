@@ -55,11 +55,19 @@ pub(crate) struct ObjectCache {
     /// a newer build replaces it. A finished build's guard stays until then: the build never
     /// drops its own guard.
     node_build: Option<TaskGuard>,
+    /// Counts every change of the objects (an object added, replaced or removed), so a reader can
+    /// tell "nothing moved since I looked" without walking or cloning anything.
+    revision: u64,
 }
 
 impl ObjectCache {
     pub fn len(&self) -> usize {
         self.objects.len()
+    }
+
+    /// How many changes the objects have seen (see the field).
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// The health tally of the objects whose namespace `scope` covers. O(1) for a cluster-wide
@@ -242,6 +250,7 @@ impl ObjectCache {
         self.tally.add(&object);
         self.node_index.note_upsert(&key, &object);
         self.objects.insert(key, object);
+        self.revision += 1;
         true
     }
 
@@ -250,6 +259,7 @@ impl ObjectCache {
         self.unindex(key, &old);
         self.tally.sub(&old);
         self.node_index.note_remove(key);
+        self.revision += 1;
         Some(old)
     }
 

@@ -1,6 +1,6 @@
-//! Reading the caches without subscribing (E12-S16): a count of one namespace's objects, the
-//! objects of one namespace (E13-S11) and the objects of a cluster-scoped kind, for the Namespaces table's pod counts and the delete dialog's
-//! warnings.
+//! Reading the caches without subscribing: the count of one namespace's objects (E12-S16), one
+//! namespace's objects and a revision that says whether they moved (E13-S11), and the objects of
+//! a cluster-scoped kind (E12-S16).
 //!
 //! Like [`ResourceStore::counts`], these only read: a kind nobody watches answers `None` and no
 //! feed is started. A read takes the store's entry map lock and one entry's lock for as long as
@@ -43,6 +43,24 @@ impl ResourceStore {
         // per visible row.
         counted(&FeedKey::new(gvk.clone(), FeedScope::Cluster)).or_else(|| {
             counted(&FeedKey::new(
+                gvk.clone(),
+                FeedScope::Namespace(namespace.into()),
+            ))
+        })
+    }
+
+    /// How many changes the feed that [`namespace_objects`](Self::namespace_objects) would read
+    /// has applied: unchanged means no object of any namespace of it was added, replaced or
+    /// removed since the last read, so a caller can skip cloning and comparing them. `None` under
+    /// the same conditions as `namespace_objects`.
+    pub fn namespace_revision(&self, gvk: &Gvk, namespace: &str) -> Option<u64> {
+        let read = |key: &FeedKey| {
+            self.inner()
+                .with_entry(key, |st| listed(st).then(|| st.cache.revision()))
+                .flatten()
+        };
+        read(&FeedKey::new(gvk.clone(), FeedScope::Cluster)).or_else(|| {
+            read(&FeedKey::new(
                 gvk.clone(),
                 FeedScope::Namespace(namespace.into()),
             ))

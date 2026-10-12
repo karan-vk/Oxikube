@@ -176,3 +176,34 @@ async fn a_namespace_with_no_samples_reads_zero_pods_reporting() {
     let usage = ready(namespace_usage(&port, &cluster(), "shop").await);
     assert_eq!((usage.pods_reporting, usage.pods_unreadable), (0, 0));
 }
+
+#[tokio::test]
+async fn cpu_and_memory_are_summed_on_their_own() {
+    // `b` has a CPU reading and no memory one; `c` the reverse.
+    let mut b = pod_sample("shop", "b", 100_000_000, 0);
+    b.memory = Reading::Missing(MissingReason::NotYetAvailable);
+    let mut c = pod_sample("shop", "c", 0, 64 << 20);
+    c.cpu = Reading::Missing(MissingReason::NotYetAvailable);
+    let port = FakeMetricsPort::new();
+    port.script()
+        .pod_metrics
+        .push_ok(MetricsOutcome::Available(vec![
+            pod_sample("shop", "a", 250_000_000, 100 << 20),
+            b,
+            c,
+        ]));
+    let usage = ready(namespace_usage(&port, &cluster(), "shop").await);
+    assert_eq!(usage.cpu, Ok(q("350m")), "a and b");
+    assert_eq!(usage.memory, Ok(q("164Mi")), "a and c");
+    assert_eq!((usage.pods_reporting, usage.pods_unreadable), (1, 2));
+
+    // Every pod has a CPU reading and none a memory one: CPU is shown, memory says why.
+    let mut only_cpu = pod_sample("shop", "d", 200_000_000, 0);
+    only_cpu.memory = Reading::Missing(MissingReason::NotYetAvailable);
+    port.script()
+        .pod_metrics
+        .push_ok(MetricsOutcome::Available(vec![only_cpu]));
+    let usage = ready(namespace_usage(&port, &cluster(), "shop").await);
+    assert_eq!(usage.cpu, Ok(q("200m")));
+    assert_eq!(usage.memory, Err(MissingReason::NotYetAvailable));
+}

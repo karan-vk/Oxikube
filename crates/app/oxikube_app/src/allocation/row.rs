@@ -7,6 +7,15 @@ use oxikube_domain::utilisation::percent;
 
 use super::AllocationKind;
 
+/// What the capacity of a row is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapacityKind {
+    /// A node's `status.allocatable`.
+    Allocatable,
+    /// The tightest `ResourceQuota` of a namespace.
+    Quota,
+}
+
 /// The live usage of one row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Usage {
@@ -65,6 +74,8 @@ pub struct BarModel {
 pub struct AllocationRow {
     /// What the row measures.
     pub kind: AllocationKind,
+    /// What [`capacity`](Self::capacity) is.
+    pub capacity_kind: CapacityKind,
     /// The cap on requests.
     pub capacity: Option<Quantity>,
     /// The cap on limits: allocatable for a node, the tightest `limits.*` quota for a namespace.
@@ -181,15 +192,23 @@ impl AllocationRow {
         }
     }
 
-    /// The note for limits past the capacity: informational, not a warning.
-    pub fn overcommit_text(&self) -> Option<String> {
+    /// The note for limits past their capacity. On a node that is over-commitment: normal, said
+    /// as such. Against a quota it is not normal, and the note says what it is.
+    pub fn limits_note(&self) -> Option<String> {
         if !self.limits_overcommitted() {
             return None;
         }
         let share = self
             .limits_percent()
             .map_or(String::new(), |p| format!(" ({})", whole(p)));
-        Some(format!("limits are over-committed{share}; this is normal"))
+        Some(match self.capacity_kind {
+            CapacityKind::Allocatable => {
+                format!("limits are over-committed{share}; this is normal")
+            }
+            CapacityKind::Quota => {
+                format!("limits are above the quota{share}: it was lowered or the pods predate it")
+            }
+        })
     }
 
     /// The bar of the row, or `None` when nothing caps the resource.
@@ -203,8 +222,10 @@ impl AllocationRow {
             Usage::Value(value) => Some(fraction(value, scale)),
             _ => None,
         };
-        let limits_mark = match (&self.limits, &self.limits_capacity) {
-            (Some(limits), Some(cap)) if basis == BarBasis::Requests && cap == scale => {
+        // Only a node's limits share the requests' capacity (allocatable). A quota caps limits
+        // on their own scale, so a tick on the requests' bar would mislead; the text carries it.
+        let limits_mark = match (&self.limits, self.capacity_kind) {
+            (Some(limits), CapacityKind::Allocatable) if basis == BarBasis::Requests => {
                 Some(fraction(limits, scale))
             }
             _ => None,

@@ -6,17 +6,8 @@ use oxikube_domain::Quantity;
 use oxikube_domain::utilisation::{QuotaCaps, ResourceAmounts, UnsetPods};
 
 use super::usage::UsageState;
-use super::{AllocationKind, AllocationRow, UnsetCount, Usage};
+use super::{AllocationKind, AllocationRow, CapacityKind, UnsetCount, Usage};
 use crate::{NamespaceAllocation, NodeAllocation};
-
-/// What the capacity of the rows is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CapacityKind {
-    /// A node's `status.allocatable`.
-    Allocatable,
-    /// The tightest `ResourceQuota` of a namespace.
-    Quota,
-}
 
 /// The allocation section of a node or a namespace.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +20,24 @@ pub struct AllocationView {
     pub pods: u32,
     /// Notes under the rows: how much of the usage is covered, quotas left out.
     pub notes: Vec<String>,
+}
+
+/// The two caps of a row: on requests, and on limits.
+#[derive(Clone, Copy, Default)]
+struct Caps {
+    requests: Option<Quantity>,
+    limits: Option<Quantity>,
+}
+
+impl Caps {
+    /// One capacity for both: a node's allocatable. Zero is "the node does not report it".
+    fn node(amount: Quantity) -> Self {
+        let cap = (!amount.is_zero()).then_some(amount);
+        Self {
+            requests: cap,
+            limits: cap,
+        }
+    }
 }
 
 impl AllocationView {
@@ -45,65 +54,38 @@ impl AllocationView {
             pods,
             unset,
         } = allocation;
-        let allocatable = &node.allocatable;
-        let pod_count = Quantity::from_value(i64::from(*pods));
+        let have = &node.allocatable;
+        let make = Maker(CapacityKind::Allocatable);
         let mut rows = vec![
-            AllocationRow {
-                capacity: some_if(!allocatable.cpu.is_zero(), allocatable.cpu),
-                limits_capacity: some_if(!allocatable.cpu.is_zero(), allocatable.cpu),
-                ..row(
-                    AllocationKind::Cpu,
-                    requests.cpu,
-                    limits.cpu,
-                    usage.cpu(),
-                    cpu_unset(unset),
-                )
-            },
-            AllocationRow {
-                capacity: some_if(!allocatable.memory.is_zero(), allocatable.memory),
-                limits_capacity: some_if(!allocatable.memory.is_zero(), allocatable.memory),
-                ..row(
-                    AllocationKind::Memory,
-                    requests.memory,
-                    limits.memory,
-                    usage.memory(),
-                    memory_unset(unset),
-                )
-            },
-            AllocationRow {
-                kind: AllocationKind::Pods,
-                capacity: node.max_pods.map(|n| Quantity::from_value(to_i64(n))),
-                limits_capacity: None,
-                requests: pod_count,
-                limits: None,
-                usage: Usage::NotApplicable,
-                unset: UnsetCount::default(),
-            },
+            make.row(
+                AllocationKind::Cpu,
+                (requests.cpu, limits.cpu),
+                Caps::node(have.cpu),
+                usage.cpu(),
+                cpu_unset(unset),
+            ),
+            make.row(
+                AllocationKind::Memory,
+                (requests.memory, limits.memory),
+                Caps::node(have.memory),
+                usage.memory(),
+                memory_unset(unset),
+            ),
+            make.pods(*pods, node.max_pods),
         ];
-        if !allocatable.ephemeral.is_zero()
-            || !requests.ephemeral.is_zero()
-            || !limits.ephemeral.is_zero()
+        if !have.ephemeral.is_zero() || !requests.ephemeral.is_zero() || !limits.ephemeral.is_zero()
         {
-            rows.push(AllocationRow {
-                capacity: some_if(!allocatable.ephemeral.is_zero(), allocatable.ephemeral),
-                limits_capacity: some_if(!allocatable.ephemeral.is_zero(), allocatable.ephemeral),
-                ..row(
-                    AllocationKind::EphemeralStorage,
-                    requests.ephemeral,
-                    limits.ephemeral,
-                    Usage::NotReported,
-                    ephemeral_unset(unset),
-                )
-            });
+            rows.push(make.row(
+                AllocationKind::EphemeralStorage,
+                (requests.ephemeral, limits.ephemeral),
+                Caps::node(have.ephemeral),
+                Usage::NotReported,
+                ephemeral_unset(unset),
+            ));
         }
-        for name in gpu_names(allocatable, requests, limits) {
-            let offered = allocatable.gpu_count(&name);
-            let cap = some_if(offered > 0, Quantity::from_value(to_i64(offered)));
-            rows.push(AllocationRow {
-                capacity: cap,
-                limits_capacity: cap,
-                ..gpu_row(&name, requests, limits)
-            });
+        for name in gpu_names([have, requests, limits]) {
+            let offered = Caps::node(count(have.gpu_count(&name)));
+            rows.push(make.gpu(&name, requests, limits, offered));
         }
         Self {
             capacity: CapacityKind::Allocatable,
@@ -132,75 +114,46 @@ impl AllocationView {
             unset,
             ..
         } = allocation;
+        let make = Maker(CapacityKind::Quota);
+        let quota =
+            |requests: Option<Quantity>, limits: Option<Quantity>| Caps { requests, limits };
         let mut rows = vec![
-            AllocationRow {
-                capacity: caps.requests.cpu,
-                limits_capacity: caps.limits.cpu,
-                ..row(
-                    AllocationKind::Cpu,
-                    requests.cpu,
-                    limits.cpu,
-                    namespace_usage_of(usage, *pods, true),
-                    cpu_unset(unset),
-                )
-            },
-            AllocationRow {
-                capacity: caps.requests.memory,
-                limits_capacity: caps.limits.memory,
-                ..row(
-                    AllocationKind::Memory,
-                    requests.memory,
-                    limits.memory,
-                    namespace_usage_of(usage, *pods, false),
-                    memory_unset(unset),
-                )
-            },
+            make.row(
+                AllocationKind::Cpu,
+                (requests.cpu, limits.cpu),
+                quota(caps.requests.cpu, caps.limits.cpu),
+                namespace_usage_of(usage, *pods, true),
+                cpu_unset(unset),
+            ),
+            make.row(
+                AllocationKind::Memory,
+                (requests.memory, limits.memory),
+                quota(caps.requests.memory, caps.limits.memory),
+                namespace_usage_of(usage, *pods, false),
+                memory_unset(unset),
+            ),
         ];
         let ephemeral_used = !requests.ephemeral.is_zero() || !limits.ephemeral.is_zero();
         if ephemeral_used || caps.requests.ephemeral.is_some() || caps.limits.ephemeral.is_some() {
-            rows.push(AllocationRow {
-                capacity: caps.requests.ephemeral,
-                limits_capacity: caps.limits.ephemeral,
-                ..row(
-                    AllocationKind::EphemeralStorage,
-                    requests.ephemeral,
-                    limits.ephemeral,
-                    Usage::NotReported,
-                    ephemeral_unset(unset),
-                )
-            });
+            rows.push(make.row(
+                AllocationKind::EphemeralStorage,
+                (requests.ephemeral, limits.ephemeral),
+                quota(caps.requests.ephemeral, caps.limits.ephemeral),
+                Usage::NotReported,
+                ephemeral_unset(unset),
+            ));
         }
         if caps.pods.is_some() || *pods > 0 {
-            rows.push(AllocationRow {
-                kind: AllocationKind::Pods,
-                capacity: caps.pods.map(|n| Quantity::from_value(to_i64(n))),
-                limits_capacity: None,
-                requests: Quantity::from_value(i64::from(*pods)),
-                limits: None,
-                usage: Usage::NotApplicable,
-                unset: UnsetCount::default(),
-            });
+            rows.push(make.pods(*pods, caps.pods));
         }
-        let mut names: Vec<Arc<str>> = requests
-            .gpu
-            .keys()
-            .chain(limits.gpu.keys())
-            .cloned()
-            .collect();
+        // A quota can only cap GPU requests.
+        let mut names = gpu_names([requests, limits]);
         names.extend(caps.requests.gpu.keys().cloned());
         names.sort();
         names.dedup();
         for name in names {
-            let cap = caps
-                .requests
-                .gpu
-                .get(&name)
-                .map(|n| Quantity::from_value(to_i64(*n)));
-            rows.push(AllocationRow {
-                capacity: cap,
-                limits_capacity: None,
-                ..gpu_row(&name, requests, limits)
-            });
+            let cap = caps.requests.gpu.get(&name).map(|n| count(*n));
+            rows.push(make.gpu(&name, requests, limits, quota(cap, None)));
         }
         let mut notes = Vec::new();
         if let UsageState::Ready(measured) = usage
@@ -209,24 +162,17 @@ impl AllocationView {
             notes.push(format!(
                 "usage leaves out {} {} with no reading yet",
                 measured.pods_unreadable,
-                if measured.pods_unreadable == 1 {
-                    "pod"
-                } else {
-                    "pods"
-                }
+                plural(measured.pods_unreadable, "pod", "pods"),
             ));
         }
         if scoped_quotas > 0 {
+            let (quota, caps, is) = if scoped_quotas == 1 {
+                ("quota", "caps", "is")
+            } else {
+                ("quotas", "cap", "are")
+            };
             notes.push(format!(
-                "{scoped_quotas} scoped {} cap{} only some pods and {} not drawn as {}",
-                if scoped_quotas == 1 {
-                    "quota"
-                } else {
-                    "quotas"
-                },
-                if scoped_quotas == 1 { "s" } else { "" },
-                if scoped_quotas == 1 { "is" } else { "are" },
-                "a bar",
+                "{scoped_quotas} scoped {quota} {caps} only some pods and {is} not drawn as a bar"
             ));
         }
         Self {
@@ -251,6 +197,66 @@ impl AllocationView {
     }
 }
 
+/// Builds the rows of one view, all with the same kind of capacity.
+struct Maker(CapacityKind);
+
+impl Maker {
+    /// A row of CPU, memory or ephemeral storage: `(requests, limits)` against `caps`.
+    fn row(
+        &self,
+        kind: AllocationKind,
+        (requests, limits): (Quantity, Quantity),
+        caps: Caps,
+        usage: Usage,
+        unset: UnsetCount,
+    ) -> AllocationRow {
+        AllocationRow {
+            kind,
+            capacity_kind: self.0,
+            capacity: caps.requests,
+            limits_capacity: caps.limits,
+            requests,
+            limits: Some(limits),
+            usage,
+            unset,
+        }
+    }
+
+    /// The pod count against `max` (a node's `status.allocatable.pods`, a quota's `pods`).
+    fn pods(&self, pods: u32, max: Option<u64>) -> AllocationRow {
+        AllocationRow {
+            kind: AllocationKind::Pods,
+            capacity_kind: self.0,
+            capacity: max.map(count),
+            limits_capacity: None,
+            requests: Quantity::from_value(i64::from(pods)),
+            limits: None,
+            usage: Usage::NotApplicable,
+            unset: UnsetCount::default(),
+        }
+    }
+
+    /// A GPU resource: a whole number, not measured by metrics-server.
+    fn gpu(
+        &self,
+        name: &Arc<str>,
+        requests: &ResourceAmounts,
+        limits: &ResourceAmounts,
+        caps: Caps,
+    ) -> AllocationRow {
+        self.row(
+            AllocationKind::Gpu(name.clone()),
+            (
+                count(requests.gpu_count(name)),
+                count(limits.gpu_count(name)),
+            ),
+            caps,
+            Usage::NotReported,
+            UnsetCount::default(),
+        )
+    }
+}
+
 /// The usage a namespace's CPU (`cpu`) or memory row shows. Pods with no sample at all
 /// (everything in the namespace pending) are not a zero reading.
 fn namespace_usage_of(usage: &UsageState, pods: u32, cpu: bool) -> Usage {
@@ -266,50 +272,23 @@ fn namespace_usage_of(usage: &UsageState, pods: u32, cpu: bool) -> Usage {
     if cpu { usage.cpu() } else { usage.memory() }
 }
 
-fn row(
-    kind: AllocationKind,
-    requests: Quantity,
-    limits: Quantity,
-    usage: Usage,
-    unset: UnsetCount,
-) -> AllocationRow {
-    AllocationRow {
-        kind,
-        capacity: None,
-        limits_capacity: None,
-        requests,
-        limits: Some(limits),
-        usage,
-        unset,
-    }
-}
-
-fn gpu_row(name: &Arc<str>, requests: &ResourceAmounts, limits: &ResourceAmounts) -> AllocationRow {
-    row(
-        AllocationKind::Gpu(name.clone()),
-        Quantity::from_value(to_i64(requests.gpu_count(name))),
-        Quantity::from_value(to_i64(limits.gpu_count(name))),
-        Usage::NotReported,
-        UnsetCount::default(),
-    )
-}
-
-/// GPU resource names the node offers or a pod asks for, sorted.
-fn gpu_names(
-    allocatable: &ResourceAmounts,
-    requests: &ResourceAmounts,
-    limits: &ResourceAmounts,
-) -> Vec<Arc<str>> {
-    let mut names: Vec<Arc<str>> = allocatable
-        .gpu
-        .keys()
-        .chain(requests.gpu.keys())
-        .chain(limits.gpu.keys())
-        .cloned()
+/// GPU resource names any of `amounts` mentions, sorted.
+fn gpu_names<'a>(amounts: impl IntoIterator<Item = &'a ResourceAmounts>) -> Vec<Arc<str>> {
+    let mut names: Vec<Arc<str>> = amounts
+        .into_iter()
+        .flat_map(|a| a.gpu.keys().cloned())
         .collect();
     names.sort();
     names.dedup();
     names
+}
+
+fn plural(n: u32, one: &'static str, many: &'static str) -> &'static str {
+    if n == 1 { one } else { many }
+}
+
+fn count(n: u64) -> Quantity {
+    Quantity::from_value(i64::try_from(n).unwrap_or(i64::MAX))
 }
 
 fn cpu_unset(unset: &UnsetPods) -> UnsetCount {
@@ -331,12 +310,4 @@ fn ephemeral_unset(unset: &UnsetPods) -> UnsetCount {
         requests: unset.ephemeral_requests,
         limits: unset.ephemeral_limits,
     }
-}
-
-fn some_if<T>(condition: bool, value: T) -> Option<T> {
-    condition.then_some(value)
-}
-
-fn to_i64(n: u64) -> i64 {
-    i64::try_from(n).unwrap_or(i64::MAX)
 }
