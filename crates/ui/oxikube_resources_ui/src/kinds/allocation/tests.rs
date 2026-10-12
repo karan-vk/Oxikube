@@ -24,6 +24,8 @@ struct Probe {
     ready: bool,
     /// Whose usage to ask.
     subject: UsageSubject,
+    /// In which cluster.
+    cluster: ClusterId,
     applied: Vec<UsageState>,
     _poll: Task<()>,
 }
@@ -51,13 +53,14 @@ fn start(cx: &mut TestAppContext, ready: bool) -> (Entity<Probe>, Arc<FakeMetric
         port: held,
         ready,
         subject: UsageSubject::Node("n1".into()),
+        cluster: cluster(),
         applied: Vec::new(),
         _poll: poll_usage(
             cx,
             |probe: &Probe, _| {
                 probe.ready.then(|| UsageTarget {
                     port: probe.port.clone(),
-                    cluster: cluster(),
+                    cluster: probe.cluster.clone(),
                     subject: probe.subject.clone(),
                 })
             },
@@ -216,5 +219,30 @@ fn another_subject_does_not_inherit_the_old_reading(cx: &mut TestAppContext) {
                 ..
             })
         ));
+    });
+}
+
+#[gpui::test]
+fn the_same_name_in_another_cluster_is_another_subject(cx: &mut TestAppContext) {
+    let (probe, port) = start(cx, true);
+    port.script()
+        .node_metrics
+        .push_ok(node_reading(500_000_000));
+    port.script()
+        .node_metrics
+        .push_ok(node_reading(500_000_000));
+    cx.run_until_parked();
+    probe.update(cx, |p, _| {
+        p.cluster = ClusterId::new("test", &ContextName::new("another"));
+    });
+    elapse(cx, USAGE_INTERVAL);
+    probe.read_with(cx, |p, _| {
+        assert_eq!(
+            p.applied.len(),
+            3,
+            "reading, reset, reading: {:?}",
+            p.applied
+        );
+        assert_eq!(p.applied[1], UsageState::Pending);
     });
 }

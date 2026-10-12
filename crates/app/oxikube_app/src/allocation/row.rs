@@ -152,12 +152,32 @@ impl AllocationRow {
         Some(self.short_text(self.limits.as_ref()?, self.limits_percent()))
     }
 
-    /// The reading with its share: `1200m (30%)`; `None` unless there is a reading.
+    /// The reading with its share: `1200m (30%)`; `None` unless there is a reading. Against a
+    /// quota the share says what it is a share of (`39% of the requests quota`): a quota does
+    /// not cap usage, so the cap that stands in for it is named.
     pub fn usage_short(&self) -> Option<String> {
         let Usage::Value(value) = &self.usage else {
             return None;
         };
-        Some(self.short_text(value, self.usage_percent()))
+        let amount = self.kind.format(value);
+        Some(match (self.usage_percent(), self.usage_basis()) {
+            (Some(p), Some(basis)) => format!("{amount} ({} of the {basis})", whole(p)),
+            (Some(p), None) => format!("{amount} ({})", whole(p)),
+            (None, _) => amount,
+        })
+    }
+
+    /// What a share of usage is a share of, when that is not obvious: a namespace's usage is
+    /// shown against its `requests.*` quota, else its `limits.*` quota.
+    fn usage_basis(&self) -> Option<&'static str> {
+        if self.capacity_kind != CapacityKind::Quota {
+            return None;
+        }
+        match (&self.capacity, &self.limits_capacity) {
+            (Some(_), _) => Some("requests quota"),
+            (None, Some(_)) => Some("limits quota"),
+            (None, None) => None,
+        }
     }
 
     /// The capacity as text (`3920m`), `None` when nothing caps the resource.
@@ -174,9 +194,10 @@ impl AllocationRow {
             Usage::Pending => "reading usage...".to_owned(),
             Usage::NotReported => "usage is not reported by metrics-server".to_owned(),
             Usage::Unavailable(reason) => reason.to_string(),
-            Usage::Value(value) => {
-                self.amount_text(value, self.usage_scale(), self.usage_percent())
-            }
+            Usage::Value(value) => match self.usage_basis() {
+                Some(_) => self.usage_short().unwrap_or_default(),
+                None => self.amount_text(value, self.usage_scale(), self.usage_percent()),
+            },
         })
     }
 

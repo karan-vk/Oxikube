@@ -61,14 +61,14 @@ pub struct UnsetPods {
 impl UnsetPods {
     /// Counts one pod.
     pub fn add(&mut self, pod: &PodResources) {
-        let unset = |declared: bool| u32::from(!declared);
+        let unset = |count: u32, declared: bool| count.saturating_add(u32::from(!declared));
         let d = &pod.declared;
         self.pods = self.pods.saturating_add(1);
-        self.cpu_requests += unset(d.cpu_requests);
-        self.cpu_limits += unset(d.cpu_limits);
-        self.memory_requests += unset(d.memory_requests);
-        self.memory_limits += unset(d.memory_limits);
-        self.ephemeral_requests += unset(d.ephemeral_requests);
-        self.ephemeral_limits += unset(d.ephemeral_limits);
+        self.cpu_requests = unset(self.cpu_requests, d.cpu_requests);
+        self.cpu_limits = unset(self.cpu_limits, d.cpu_limits);
+        self.memory_requests = unset(self.memory_requests, d.memory_requests);
+        self.memory_limits = unset(self.memory_limits, d.memory_limits);
+        self.ephemeral_requests = unset(self.ephemeral_requests, d.ephemeral_requests);
+        self.ephemeral_limits = unset(self.ephemeral_limits, d.ephemeral_limits);
     }
 }

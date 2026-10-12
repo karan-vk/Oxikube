@@ -101,19 +101,27 @@ async fn a_namespace_against_its_quota_matches_what_the_api_server_counts() {
 
     // The quota controller's own accounting is the oracle.
     let quotas = Api::<ResourceQuota>::namespaced(client.clone(), ns.name());
-    let used = loop {
-        let used = quotas
+    let read_used = || async {
+        quotas
             .get("compute")
             .await
             .expect("get the quota")
             .status
             .and_then(|status| status.used)
-            .unwrap_or_default();
-        if used.get("pods").is_some_and(|pods| pods.0 == "2") {
-            break used;
-        }
-        tokio::time::sleep(Duration::from_millis(200)).await;
+            .unwrap_or_default()
     };
+    crate::eventually(
+        "the quota controller to count both pods",
+        String::new,
+        || async {
+            read_used()
+                .await
+                .get("pods")
+                .is_some_and(|pods| pods.0 == "2")
+        },
+    )
+    .await;
+    let used = read_used().await;
 
     let reader = KubeResources::new(client.clone(), KubeDiscovery::new(client.clone()));
     let pods = list(&reader, &Gvk::new("", "v1", "Pod"), Some(ns.name())).await;

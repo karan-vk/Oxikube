@@ -192,8 +192,6 @@ impl AllocState {
         self.sums = None;
         self.view = None;
         self.compute = None;
-        // The old namespace's reading is not this one's.
-        self.usage = UsageState::Pending;
         true
     }
 

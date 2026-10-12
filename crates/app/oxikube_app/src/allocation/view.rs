@@ -80,7 +80,8 @@ impl AllocationView {
                 (requests.ephemeral, limits.ephemeral),
                 Caps::node(have.ephemeral),
                 Usage::NotReported,
-                ephemeral_unset(unset),
+                // Few pods set ephemeral storage, so "N pods set none" would only be noise.
+                UnsetCount::default(),
             ));
         }
         for name in gpu_names([have, requests, limits]) {
@@ -140,7 +141,8 @@ impl AllocationView {
                 (requests.ephemeral, limits.ephemeral),
                 quota(caps.requests.ephemeral, caps.limits.ephemeral),
                 Usage::NotReported,
-                ephemeral_unset(unset),
+                // Few pods set ephemeral storage, so "N pods set none" would only be noise.
+                UnsetCount::default(),
             ));
         }
         if caps.pods.is_some() || *pods > 0 {
@@ -302,12 +304,5 @@ fn memory_unset(unset: &UnsetPods) -> UnsetCount {
     UnsetCount {
         requests: unset.memory_requests,
         limits: unset.memory_limits,
-    }
-}
-
-fn ephemeral_unset(unset: &UnsetPods) -> UnsetCount {
-    UnsetCount {
-        requests: unset.ephemeral_requests,
-        limits: unset.ephemeral_limits,
     }
 }

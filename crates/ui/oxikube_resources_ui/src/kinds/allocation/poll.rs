@@ -45,7 +45,7 @@ pub struct UsageTarget {
 ///
 /// `target` is asked before every call (the panel may follow another object, or the session may
 /// have reconnected) and may answer `None` while there is nothing to ask. `apply` receives each
-/// answer; it is only called when the answer differs from the last (or is for another subject),
+/// answer; it is only called when the answer differs from the last (or is for another cluster or subject),
 /// so an unchanged reading never wakes the panel, and with `Pending` when the subject changes, so
 /// the old subject's reading is not shown for the new one. The call itself runs on the Kubernetes runtime, never on the UI thread.
 pub fn poll_usage<T: 'static>(
@@ -54,9 +54,9 @@ pub fn poll_usage<T: 'static>(
     apply: impl Fn(&mut T, UsageState, &mut Context<T>) + 'static,
 ) -> Task<()> {
     cx.spawn(async move |this, cx| {
-        // What the panel was last told, and for whom: an answer for another subject is news even
-        // when it reads the same.
-        let mut last: Option<(UsageSubject, UsageState)> = None;
+        // What the panel was last told, and for whom (cluster and subject): an answer for another
+        // one is news even when it reads the same.
+        let mut last: Option<((ClusterId, UsageSubject), UsageState)> = None;
         loop {
             let Ok(next) = this.read_with(cx, |this, cx| target(this, cx)) else {
                 break;
@@ -70,7 +70,8 @@ pub fn poll_usage<T: 'static>(
                 cx.background_executor().timer(SESSION_WAIT).await;
                 continue;
             };
-            if last.as_ref().is_some_and(|(seen, _)| *seen != subject) {
+            let who = (cluster.clone(), subject.clone());
+            if last.as_ref().is_some_and(|(seen, _)| *seen != who) {
                 // The panel moved to another subject: drop the old subject's reading until the
                 // new one arrives.
                 last = None;
@@ -81,7 +82,6 @@ pub fn poll_usage<T: 'static>(
                     break;
                 }
             }
-            let asked = subject.clone();
             let call = spawn_kube(&*cx, async move {
                 match subject {
                     UsageSubject::Node(name) => node_usage(&*port, &cluster, &name).await,
@@ -100,7 +100,7 @@ pub fn poll_usage<T: 'static>(
                 _ => USAGE_INTERVAL,
             };
             if last.as_ref().map(|(_, seen)| seen) != Some(&state) {
-                last = Some((asked, state.clone()));
+                last = Some((who, state.clone()));
                 if this.update(cx, |this, cx| apply(this, state, cx)).is_err() {
                     break;
                 }

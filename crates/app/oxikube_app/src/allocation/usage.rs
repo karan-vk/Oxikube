@@ -104,6 +104,10 @@ fn memory_of(sample: &MetricsSample) -> Result<Quantity, MissingReason> {
 }
 
 /// The usage of `node` from one `node_metrics` call. Runs off the UI thread (a network call).
+///
+/// The port answers for every node at once (`metrics.k8s.io` lists them in one request), so this
+/// asks for all of them and keeps one; the cluster-wide polling service (E13-S03) will share one
+/// poll between every view.
 pub async fn node_usage(port: &dyn MetricsPort, cluster: &ClusterId, node: &str) -> UsageState {
     match port.node_metrics(cluster).await {
         Err(error) => UsageState::failed(&error),

@@ -108,8 +108,9 @@ fn pods_without_requests_or_limits_are_counted_per_resource() {
     );
     let eph = v.row(&AllocationKind::EphemeralStorage).unwrap();
     assert_eq!(
-        eph.unset_text().unwrap(),
-        "4 pods set no request, 4 set no limit"
+        eph.unset_text(),
+        None,
+        "almost no pod sets ephemeral storage: a note would be noise"
     );
     assert_eq!(v.row(&AllocationKind::Pods).unwrap().unset_text(), None);
 }

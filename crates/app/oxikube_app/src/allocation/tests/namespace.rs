@@ -51,7 +51,10 @@ fn totals_are_measured_against_the_tightest_unscoped_quota() {
     // 500m + 250m + 1 + 100m = 1850m of 4 (46.25 %); limits 1 + 3 = 4 of 8 (50 %).
     assert_eq!(cpu.requests_text(), "1850m of 4000m (46%)");
     assert_eq!(cpu.limits_text().unwrap(), "4000m of 8000m (50%)");
-    assert_eq!(cpu.usage_text().unwrap(), "900m of 4000m (22%)");
+    assert_eq!(
+        cpu.usage_text().unwrap(),
+        "900m (22% of the requests quota)"
+    );
     let mem = v.row(&AllocationKind::Memory).unwrap();
     // 256Mi + 128Mi + 1Gi + 64Mi = 1472Mi of 8Gi (17.9 %); no memory limit cap.
     assert_eq!(mem.requests_text(), "1.4 GiB of 8 GiB (17%)");

@@ -161,7 +161,7 @@ fn the_aggregate_is_measured_against_the_quota(cx: &mut TestAppContext) {
     let (requests, limits, usage) = text(&mut d, &panel, AllocationKind::Cpu).unwrap();
     assert_eq!(requests, "1200m of 4000m (30%)");
     assert_eq!(limits.as_deref(), Some("1500m of 8000m (18%)"));
-    assert_eq!(usage.as_deref(), Some("800m of 4000m (20%)"));
+    assert_eq!(usage.as_deref(), Some("800m (20% of the requests quota)"));
     let (pods, _, _) = text(&mut d, &panel, AllocationKind::Pods).unwrap();
     assert_eq!(pods, "4 of 10 (40%)", "a, b, bare and waiting");
 
