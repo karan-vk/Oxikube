@@ -76,7 +76,7 @@ impl MetricsState {
 }
 
 /// The words for a [`MissingReason`].
-fn reason_text(reason: MissingReason) -> &'static str {
+pub(crate) fn reason_text(reason: MissingReason) -> &'static str {
     match reason {
         MissingReason::NotInstalled => "metrics-server is not installed (no metrics.k8s.io API)",
         MissingReason::ApiUnavailable => {

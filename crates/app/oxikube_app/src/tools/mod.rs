@@ -10,8 +10,10 @@
 //! | tools by name, listed and invoked after a schema check | [`ToolRegistry`], [`RegisterToolError`] (`registry`) |
 //! | the schema subset arguments are checked against | [`validate_args`] (`schema`) |
 //! | `k8s.get_logs`: a pod's or a selector's newest log lines, bounded and redacted | [`k8s::get_logs`] |
+//! | `k8s.top_pods`, `k8s.top_nodes`, `k8s.query_promql` (E13-S12): live usage and Prometheus history, bounded, with absence as a visible result | [`metrics`] |
 
 pub mod k8s;
+pub mod metrics;
 mod registry;
 mod schema;
 

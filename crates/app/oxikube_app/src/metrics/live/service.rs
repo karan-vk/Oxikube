@@ -88,7 +88,7 @@ pub(super) struct Inner {
 /// See the [module docs](super).
 #[derive(Clone)]
 pub struct MetricsService {
-    inner: Arc<Inner>,
+    pub(super) inner: Arc<Inner>,
 }
 
 impl std::fmt::Debug for MetricsService {
