@@ -15,7 +15,7 @@ use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
 
 use super::allocation::{AllocState, TICK, TICK_WAITING, quotas_block};
 use crate::detail::DetailView;
-use crate::kinds::allocation::{allocation_section, poll_usage};
+use crate::kinds::allocation::{allocation_section, muted, poll_usage};
 use crate::table::ToneColors;
 
 /// Builds the panel for one detail view (a [`DetailRenderer`](crate::kinds::DetailRenderer)
@@ -211,11 +211,7 @@ impl NamespacePanel {
     /// The allocation section: the aggregate against the quotas, then the quotas themselves.
     fn allocation(&self, tokens: &oxikube_ui::Tokens, tones: &ToneColors) -> gpui::AnyElement {
         let muted = |text: String, id: &'static str| {
-            div()
-                .debug_selector(move || id.to_owned())
-                .text_size(u(tokens.font.small))
-                .text_color(tokens.colors.text_muted)
-                .child(text)
+            muted(tokens, text).debug_selector(move || id.to_owned())
         };
         let heading = |text: &str, id: &'static str| {
             div()

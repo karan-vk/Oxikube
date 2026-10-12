@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use oxikube_app::allocate_namespaces;
+use oxikube_app::allocation::{AllocationView, UsageState};
 use oxikube_app::store::StoreObject;
-use oxikube_app::{NamespaceAllocation, allocation::AllocationView};
+use oxikube_app::{NamespaceAllocation, allocate_namespaces};
 use oxikube_domain::Resource;
 use oxikube_domain::utilisation::{GpuVendors, QuotaCaps, ResourceAmounts, UnsetPods};
 use oxikube_domain::view::{QuotaLine, QuotaSummary};
@@ -31,7 +31,7 @@ pub(in crate::kinds::namespace) struct Sums {
 
 impl Sums {
     /// The allocation section for these sums under `usage`.
-    pub fn view(&self, usage: &oxikube_app::allocation::UsageState) -> AllocationView {
+    pub fn view(&self, usage: &UsageState) -> AllocationView {
         AllocationView::for_namespace(&self.alloc, &self.caps, self.scoped, usage)
     }
 }

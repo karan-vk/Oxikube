@@ -16,8 +16,9 @@
 //! one revision read per feed (`ResourceStore::namespace_revision`): when neither moved nothing is
 //! cloned or compared. When one did, the objects are compared with the ones summed last (the very
 //! same `Arc`s, by address, the old ones kept alive so no address can be reused); only when a pod
-//! or quota changed is the sum redone on the background executor (about 1 us a pod: 2 ms for 2 000 pods, `cargo bench -p oxikube_app --bench utilisation`) and the
-//! result replaces the previous one, so a frame only draws ready-made rows.
+//! or quota changed is the sum redone on the background executor (about 1 us a pod: 2 ms for
+//! 2 000 pods, `cargo bench -p oxikube_app --bench utilisation`) and the result replaces the
+//! previous one, so a frame only draws ready-made rows.
 //!
 //! # When it is not available
 //!
@@ -35,7 +36,7 @@ use std::time::Duration;
 use gpui::{App, AppContext as _, Context};
 use oxikube_app::allocation::UsageState;
 use oxikube_app::store::StoreObject;
-use oxikube_domain::ids::{ClusterId, Gvk};
+use oxikube_domain::ids::Gvk;
 use oxikube_domain::utilisation::GpuVendors;
 use oxikube_settings::MetricsSettings;
 
@@ -144,12 +145,7 @@ impl NamespacePanel {
     pub(super) fn usage_target(&self, cx: &App) -> Option<UsageTarget> {
         let detail = self.detail.upgrade()?;
         let view = detail.read(cx);
-        let cluster: ClusterId = view.target().cluster.clone();
-        let port = view.deps().sessions.get(&cluster)?.metrics()?;
-        Some(UsageTarget {
-            port,
-            cluster,
-            subject: UsageSubject::Namespace(Arc::from(&*view.target().name)),
-        })
+        let namespace = Arc::from(&*view.target().name);
+        UsageTarget::of(view, UsageSubject::Namespace(namespace))
     }
 }

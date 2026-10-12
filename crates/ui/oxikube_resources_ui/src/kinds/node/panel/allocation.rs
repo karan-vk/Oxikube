@@ -35,15 +35,8 @@ impl NodePanel {
     /// What the usage poll asks, and of whom (`None` while the session has no metrics port yet).
     pub(super) fn usage_target(&self, cx: &App) -> Option<UsageTarget> {
         let detail = self.detail.upgrade()?;
-        let view = detail.read(cx);
-        let cluster = view.target().cluster.clone();
-        let port = view.deps().sessions.get(&cluster)?.metrics()?;
         let node = self.node.as_ref()?.summary.name.clone();
-        Some(UsageTarget {
-            port,
-            cluster,
-            subject: UsageSubject::Node(node),
-        })
+        UsageTarget::of(detail.read(cx), UsageSubject::Node(node))
     }
 
     /// A new answer from the metrics port.

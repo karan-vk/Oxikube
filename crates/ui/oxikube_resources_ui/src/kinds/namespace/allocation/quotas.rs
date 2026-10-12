@@ -10,6 +10,7 @@ use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
 use oxikube_ui::{Tokens, u};
 
 use super::sums::QuotaView;
+use crate::kinds::allocation::muted;
 
 /// The most lines a quota shows before the rest are summarised.
 const MAX_LINES: usize = 12;
@@ -24,12 +25,6 @@ pub(in crate::kinds::namespace) fn quotas_block(
     tokens: &Tokens,
     quotas: &[QuotaView],
 ) -> AnyElement {
-    let small = |text: String| {
-        div()
-            .text_size(u(tokens.font.small))
-            .text_color(tokens.colors.text_muted)
-            .child(text)
-    };
     v_flex()
         .debug_selector(|| "namespace-quotas".to_owned())
         .gap(u(tokens.spacing.md))
@@ -42,10 +37,9 @@ pub(in crate::kinds::namespace) fn quotas_block(
                     h_flex()
                         .gap(u(tokens.spacing.md))
                         .child(div().font_semibold().child(quota.name.to_string()))
-                        .children(
-                            (!quota.scopes.is_empty())
-                                .then(|| small(format!("scoped: {}", quota.scopes.join(", ")))),
-                        ),
+                        .children((!quota.scopes.is_empty()).then(|| {
+                            muted(tokens, format!("scoped: {}", quota.scopes.join(", ")))
+                        })),
                 )
                 .children(
                     quota
@@ -98,7 +92,7 @@ pub(in crate::kinds::namespace) fn quotas_block(
                                 )
                         }),
                 )
-                .children((hidden > 0).then(|| small(format!("and {hidden} more"))))
+                .children((hidden > 0).then(|| muted(tokens, format!("and {hidden} more"))))
         }))
         .into_any_element()
 }

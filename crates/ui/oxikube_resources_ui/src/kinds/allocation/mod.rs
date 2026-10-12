@@ -26,7 +26,7 @@ mod section;
 #[cfg(test)]
 pub(crate) use poll::USAGE_INTERVAL;
 pub(crate) use poll::{UsageSubject, UsageTarget, poll_usage};
-pub(crate) use section::allocation_section;
+pub(crate) use section::{allocation_section, muted};
 
 #[cfg(test)]
 mod tests;

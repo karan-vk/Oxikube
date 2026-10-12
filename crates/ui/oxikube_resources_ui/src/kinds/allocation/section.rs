@@ -40,7 +40,7 @@ pub(super) fn tone_of(bar: &BarModel) -> Tone {
     }
 }
 
-fn muted(tokens: &Tokens, text: impl Into<gpui::SharedString>) -> Div {
+pub(crate) fn muted(tokens: &Tokens, text: impl Into<gpui::SharedString>) -> Div {
     div()
         .text_size(u(tokens.font.small))
         .text_color(tokens.colors.text_muted)
@@ -179,7 +179,7 @@ fn notes(tokens: &Tokens, tones: &ToneColors, row: &AllocationRow, id: &str) -> 
             note(reason.to_string(), tones.warn, format!("{id}-usage-text"));
         }
         Usage::Pending => note(
-            "reading usage...".to_owned(),
+            row.usage_text().unwrap_or_default(),
             tokens.colors.text_muted,
             format!("{id}-usage-text"),
         ),

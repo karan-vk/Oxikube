@@ -9,6 +9,8 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_ports::MetricsPort;
 use oxikube_runtime::spawn_kube;
 
+use crate::detail::DetailView;
+
 /// How often an open panel asks for usage. metrics-server scrapes about once a minute, so asking
 /// more often would only repeat an answer; this is the same order as `kubectl top`'s freshness.
 pub const USAGE_INTERVAL: Duration = Duration::from_secs(15);
@@ -40,14 +42,29 @@ pub struct UsageTarget {
     pub subject: UsageSubject,
 }
 
+impl UsageTarget {
+    /// The target for `subject` in the cluster `view` shows; `None` while that cluster's session
+    /// has no metrics port yet.
+    pub fn of(view: &DetailView, subject: UsageSubject) -> Option<Self> {
+        let cluster = view.target().cluster.clone();
+        let port = view.deps().sessions.get(&cluster)?.metrics()?;
+        Some(Self {
+            port,
+            cluster,
+            subject,
+        })
+    }
+}
+
 /// Starts polling for the entity `cx` belongs to; keep the returned task for as long as the
 /// polling should run.
 ///
 /// `target` is asked before every call (the panel may follow another object, or the session may
 /// have reconnected) and may answer `None` while there is nothing to ask. `apply` receives each
-/// answer; it is only called when the answer differs from the last (or is for another cluster or subject),
-/// so an unchanged reading never wakes the panel, and with `Pending` when the subject changes, so
-/// the old subject's reading is not shown for the new one. The call itself runs on the Kubernetes runtime, never on the UI thread.
+/// answer; it is only called when the answer differs from the last (or is for another cluster or
+/// subject), so an unchanged reading never wakes the panel, and with `Pending` when the subject
+/// changes, so the old subject's reading is not shown for the new one. The call itself runs on
+/// the Kubernetes runtime, never on the UI thread.
 pub fn poll_usage<T: 'static>(
     cx: &mut Context<T>,
     target: impl Fn(&T, &App) -> Option<UsageTarget> + 'static,

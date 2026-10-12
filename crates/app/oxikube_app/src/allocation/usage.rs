@@ -79,7 +79,7 @@ fn unavailable_text(reason: MissingReason) -> Arc<str> {
 }
 
 /// A reason as words, to follow `metrics unavailable: `.
-pub fn reason_text(reason: MissingReason) -> &'static str {
+fn reason_text(reason: MissingReason) -> &'static str {
     match reason {
         MissingReason::NotInstalled => "metrics-server is not installed in this cluster",
         MissingReason::ApiUnavailable => {
