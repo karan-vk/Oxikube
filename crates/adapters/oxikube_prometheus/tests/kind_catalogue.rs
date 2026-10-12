@@ -287,11 +287,11 @@ async fn the_catalogue_runs_against_a_real_prometheus_in_kind() {
     let deadline = Instant::now() + Duration::from_secs(120);
     let burner = loop {
         let series = eventually(&client, &endpoint, &cpu.promql, "container cpu").await;
-        let burner = series
-            .iter()
-            .find(|s| s.labels["container"] == "burner")
-            .unwrap();
-        if burner.points[0].value > 0.05 {
+        // A scrape can carry one container before the other: absent is "not yet", not a failure.
+        let burner = series.iter().find(|s| s.labels["container"] == "burner");
+        if let Some(burner) = burner
+            && burner.points[0].value > 0.05
+        {
             break burner.points[0].value;
         }
         assert!(
