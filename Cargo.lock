@@ -5814,6 +5814,7 @@ dependencies = [
  "gpui-component",
  "gpui-pre",
  "gpui-pre-platform",
+ "http",
  "jiff",
  "kube",
  "objc2 0.6.4",

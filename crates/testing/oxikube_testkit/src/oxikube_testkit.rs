@@ -27,6 +27,9 @@
 //!   editor's perf tests and the `editor-5mb` scenario (E10-S11).
 //! - [`storage`]: `pvc("data").class("fast")`, `storage_class("fast").expandable(true)`, `pod_mounting(..)`
 //!   for the storage views and actions (E12-S15).
+//! - [`sections`]: the section matrix (E12-S20): every kind the cluster sidebar lists, with its
+//!   entry, its columns, its own row actions and a seed manifest a real API server accepts, for
+//!   the suites that check every kind at once (`sections::catalog()`, `KindCase::seed`).
 //! - [`script`]: the [`Script`] / [`CallLog`] / [`Timeline`] helpers the fakes share.
 //! - [`scripted_feed`]: [`ScriptedFeed`], objects added / modified / deleted at chosen ticks as the
 //!   `DeltaBatch`es a watch delivers (UI and store tests).
@@ -63,6 +66,7 @@ pub mod manifests;
 pub mod screenshot;
 pub mod script;
 pub mod scripted_feed;
+pub mod sections;
 pub mod storage;
 pub mod test_ports;
 

@@ -149,6 +149,9 @@ fn render(light: bool, metrics: MetricsOutcome, with_quota: bool) -> anyhow::Res
             dispatcher: Rc::new(Ignore),
             exec: None,
             scale: None,
+            set_image: None,
+            rollback: None,
+            drain: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;
