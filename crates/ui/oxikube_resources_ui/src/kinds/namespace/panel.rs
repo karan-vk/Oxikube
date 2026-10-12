@@ -284,6 +284,22 @@ impl NamespacePanel {
         self.alloc.note()
     }
 
+    /// The quota lines as drawn: per quota, its name and `(resource, used / hard (n%))` lines.
+    pub(crate) fn quota_lines(&self) -> Vec<(String, Vec<(String, String)>)> {
+        self.alloc
+            .quotas()
+            .iter()
+            .map(|quota| {
+                let lines = quota
+                    .lines
+                    .iter()
+                    .map(|l| (l.resource.to_string(), super::allocation::line_text(l)))
+                    .collect();
+                (quota.name.to_string(), lines)
+            })
+            .collect()
+    }
+
     /// Why the quotas are missing, if they are.
     pub(crate) fn quota_note(&self) -> Option<&str> {
         self.alloc.quota_note()

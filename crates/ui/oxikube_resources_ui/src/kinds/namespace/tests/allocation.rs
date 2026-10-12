@@ -182,12 +182,33 @@ fn the_aggregate_is_measured_against_the_quota(cx: &mut TestAppContext) {
     );
     assert_eq!(cpu.limits, Some(shop.limits.cpu));
 
-    // The quota as the server counts it: used against hard.
-    d.f.vcx.update(|_, cx| {
+    // The quota as the server counts it (`status.used` against `hard`), not as we summed it.
+    let (quotas, quota_note, allocation_note) = d.f.vcx.update(|_, cx| {
         let panel = panel.read(cx);
-        assert_eq!(panel.quota_note(), None);
-        assert_eq!(panel.allocation_note(), None);
+        (
+            panel.quota_lines(),
+            panel.quota_note().map(str::to_owned),
+            panel.allocation_note().map(str::to_owned),
+        )
     });
+    assert_eq!((quota_note, allocation_note), (None, None));
+    assert_eq!(quotas.len(), 1);
+    assert_eq!(quotas[0].0, "compute");
+    let line = |resource: &str| {
+        quotas[0]
+            .1
+            .iter()
+            .find(|(r, _)| r == resource)
+            .map(|(_, text)| text.as_str())
+    };
+    assert_eq!(line("requests.cpu"), Some("1500m / 4 (37%)"));
+    assert_eq!(line("pods"), Some("3 / 10 (30%)"));
+    assert_eq!(
+        line("limits.cpu"),
+        Some("- / 8"),
+        "not counted yet: no percent"
+    );
+    assert_eq!(quotas[0].1.len(), 4, "one line per hard resource");
 }
 
 #[gpui::test]
@@ -317,4 +338,76 @@ fn a_pod_that_arrives_later_reaches_the_sums(cx: &mut TestAppContext) {
     );
     let (pods, _, _) = text(&mut d, &panel, AllocationKind::Pods).unwrap();
     assert_eq!(pods, "2");
+}
+
+fn batch(objects: Vec<Resource>) -> oxikube_ports::DeltaBatch {
+    oxikube_ports::DeltaBatch::from_deltas(vec![oxikube_ports::Delta::Restarted(objects)])
+}
+
+#[gpui::test]
+fn a_forbidden_quota_feed_is_said_not_shown_as_no_quota(cx: &mut TestAppContext) {
+    let mut d = Detail::new(cx, [ns("shop", json!({}))]);
+    d.f.vcx.update(|_, cx| crate::kinds::init(cx));
+    let resources = d.f.ports().resources;
+    // The detail's Namespace feed, the pods, then the quotas refused.
+    resources.script().watch.push_ok(
+        oxikube_testkit::Timeline::immediate([batch(vec![ns("shop", json!({}))])]).keep_open(),
+    );
+    resources.script().watch.push_ok(
+        oxikube_testkit::Timeline::immediate([batch(vec![shop_pod("a", ("250m", "64Mi"), None)])])
+            .keep_open(),
+    );
+    resources
+        .script()
+        .watch
+        .push_err(OxiError::forbidden("resourcequotas is forbidden"));
+    let panel = open(&mut d);
+
+    let (requests, _, _) = text(&mut d, &panel, AllocationKind::Cpu).unwrap();
+    assert_eq!(requests, "250m", "the totals stay");
+    let (note, quotas) = d.f.vcx.update(|_, cx| {
+        let panel = panel.read(cx);
+        (panel.quota_note().map(str::to_owned), panel.quota_lines())
+    });
+    let note = note.expect("the refusal is said");
+    assert!(
+        note.contains("not allowed to list the ResourceQuotas"),
+        "{note}"
+    );
+    assert!(quotas.is_empty());
+    assert!(d.shown("namespace-quota-note"));
+    assert!(
+        !d.shown("namespace-allocation-versus"),
+        "a refusal is not \"no ResourceQuota in this namespace\""
+    );
+}
+
+#[gpui::test]
+fn pods_loaded_without_specs_are_not_totalled(cx: &mut TestAppContext) {
+    let mut d = Detail::new(cx, [ns("shop", json!({}))]);
+    d.f.vcx.update(|_, cx| crate::kinds::init(cx));
+    let resources = d.f.ports().resources;
+    // The watch budget reduced the pods' feed to metadata: no specs, so a sum would read low.
+    resources.script().watch.push_ok(
+        oxikube_testkit::Timeline::immediate([batch(vec![ns("shop", json!({}))])]).keep_open(),
+    );
+    resources.script().watch.push_ok(
+        oxikube_testkit::Timeline::immediate([batch(vec![
+            shop_pod("a", ("250m", "64Mi"), None).into_partial(),
+        ])])
+        .keep_open(),
+    );
+    resources
+        .script()
+        .watch
+        .push_ok(oxikube_testkit::Timeline::immediate([batch(Vec::new())]).keep_open());
+    let panel = open(&mut d);
+    d.f.vcx.update(|_, cx| {
+        let panel = panel.read(cx);
+        assert!(panel.allocation_view().is_none(), "no totals drawn");
+        let note = panel.allocation_note().expect("the reason is said");
+        assert!(note.contains("loaded without their specs"), "{note}");
+    });
+    assert!(d.shown("namespace-allocation-pending"));
+    assert!(!d.shown("namespace-allocation-cpu"));
 }

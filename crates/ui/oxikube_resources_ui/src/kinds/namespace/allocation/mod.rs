@@ -40,6 +40,8 @@ use oxikube_domain::ids::Gvk;
 use oxikube_domain::utilisation::GpuVendors;
 use oxikube_settings::MetricsSettings;
 
+#[cfg(test)]
+pub(super) use self::quotas::line_text;
 pub(super) use self::quotas::quotas_block;
 pub(super) use self::state::AllocState;
 use super::panel::NamespacePanel;

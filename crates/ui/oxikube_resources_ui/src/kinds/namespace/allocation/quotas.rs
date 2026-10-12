@@ -3,7 +3,7 @@
 use gpui::{
     AnyElement, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _, div, px,
 };
-use oxikube_domain::view::QuotaLevel;
+use oxikube_domain::view::{QuotaLevel, QuotaLine};
 use oxikube_ui::allocation_bar::AllocationBar;
 use oxikube_ui::chart::Tone;
 use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
@@ -18,6 +18,15 @@ const MAX_LINES: usize = 12;
 const NAME_WIDTH: f32 = 150.;
 /// The width of the `used / hard (n%)` column, before the UI zoom.
 const TEXT_WIDTH: f32 = 138.;
+
+/// The numbers of a quota line: `used / hard (37%)`, no percent when either side is missing.
+pub(in crate::kinds::namespace) fn line_text(line: &QuotaLine) -> String {
+    let percent = line
+        .percent()
+        .map(|p| format!(" ({p}%)"))
+        .unwrap_or_default();
+    format!("{}{percent}", line.text())
+}
 
 /// The "Quotas" block: a heading per quota and one line per resource it caps (name, a bar of
 /// `used` over `hard`, the numbers).
@@ -54,10 +63,6 @@ pub(in crate::kinds::namespace) fn quotas_block(
                                 QuotaLevel::Full => Tone::Critical,
                             };
                             let fill = line.ratio.map_or(0.0, |r| r.clamp(0.0, 1.0)) as f32;
-                            let percent = line
-                                .percent()
-                                .map(|p| format!(" ({p}%)"))
-                                .unwrap_or_default();
                             let id = format!("namespace-quota-{ix}-{line_ix}");
                             h_flex()
                                 .debug_selector({
@@ -88,7 +93,7 @@ pub(in crate::kinds::namespace) fn quotas_block(
                                         .truncate()
                                         .text_right()
                                         .text_color(tokens.colors.text_muted)
-                                        .child(format!("{}{percent}", line.text())),
+                                        .child(line_text(line)),
                                 )
                         }),
                 )
