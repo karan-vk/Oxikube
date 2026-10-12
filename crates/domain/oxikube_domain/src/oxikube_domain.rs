@@ -21,6 +21,7 @@
 //! | [`preset`] | [`ClusterPreset`]: the prod / staging / dev / none postures (colour, read-only) |
 //! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
 //! | [`secret`] | [`SecretText`](secret::SecretText), [`DecodedSecret`](secret::DecodedSecret): a Secret's values decoded in memory, edited as plaintext and encoded back (E12-S11) |
+//! | [`selection`] | [`SelectionSummary`](selection::SelectionSummary), [`LabelEdit`](selection::LabelEdit): the pure parts of the bulk actions on a selection (E12-S19) |
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
 //! | [`utilisation`] | pod / node / namespace requests, limits and `%CPU/R`-style percents ([`ResourceAmounts`](utilisation::ResourceAmounts), [`percent`](utilisation::percent), `metrics.gpu_vendors`) |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
@@ -74,6 +75,7 @@ pub mod rollout;
 pub mod safety;
 pub mod schema;
 pub mod secret;
+pub mod selection;
 pub mod session;
 pub mod utilisation;
 pub mod view;

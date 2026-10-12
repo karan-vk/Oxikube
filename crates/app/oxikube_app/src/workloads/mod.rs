@@ -11,6 +11,7 @@
 //!
 //! | File | Holds |
 //! |---|---|
+//! | `batch` | `run_each` and `new_batch_id`: the per-object batch runner `pod::Sanitize` and the bulk `selection::*` commands share (bounded concurrency, results in order) |
 //! | `service` | [`WorkloadService`]: `trigger_cronjob`, `suspend`, `resume` over the guard's [`Mutation`](crate::Mutation) |
 //! | `commands` | [`register_commands`]: the `cronjob::Trigger`, `cronjob::Suspend`, `cronjob::Resume`, `job::Suspend`, `job::Resume` and `workload::Scale` handlers |
 //! | `scale` | `WorkloadService::plan_scale` (reads the `scale` subresource and looks for an autoscaler) and `WorkloadService::scale` (runs inside the guarded command) |
@@ -65,6 +66,7 @@
 //! A ReplicaSet and a ReplicationController have a pod template but never roll existing pods, so
 //! they are refused ([`is_rollable`]).
 
+mod batch;
 mod commands;
 mod plan;
 mod pod_commands;
@@ -83,6 +85,7 @@ mod set_image_runner;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use batch::{CONCURRENCY, new_batch_id, run_each};
 pub use commands::{WORKLOAD_COMMANDS, register_commands, register_pod_commands};
 pub use plan::{MAX_REPLICAS, ScalePlan, ScaleResult, is_scalable, parse_replicas, replicas_word};
 pub use pod_commands::POD_COMMANDS;

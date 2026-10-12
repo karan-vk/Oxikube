@@ -62,6 +62,8 @@
 //! - `storage_claims_table_*`, `storage_claim_panel_*`, `storage_resize_dialog_*` (`storage`): the
 //!   claims table with its Pods (used by) column, a claim's detail panel with the Pods that mount
 //!   it, and the resize dialog refusing a shrink, in both themes (E12-S15).
+//! - `bulk_label_editor_*`, `bulk_delete_confirm_*`, `bulk_results_*` (`bulk`): the bulk dialog over a selection (E12-S19): the label editor with its preview and the selector warning, the delete
+//!   confirmation with counts by kind and namespace and the cluster name to type, and the per-row results of a batch with a failed and a skipped row.
 //!
 //! - `detail_used_by_dark`, `detail_used_by_light` (`used_by`): the Used by tab of a ConfigMap's detail:
 //!   the summary and the workloads that use it (a Deployment through its ReplicaSet, a StatefulSet, a
@@ -98,6 +100,8 @@ use oxikube_testkit::{
 };
 use oxikube_workspace::CommandDispatcher;
 
+#[path = "screenshot/bulk.rs"]
+mod bulk;
 #[path = "screenshot/config.rs"]
 mod config;
 #[path = "screenshot/crd.rs"]
@@ -319,6 +323,7 @@ fn main() -> ExitCode {
         namespace_allocation::run(),
         storage::run(),
         used_by::run(),
+        bulk::run(),
     ];
     let mut failed = false;
     for result in results {

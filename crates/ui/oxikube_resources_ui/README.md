@@ -45,6 +45,12 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   DaemonSets (`workload::Restart`, `workload::SetImage`): context menu, palette, `r` and `i` in the
   table for those kinds, the detail header's buttons, and the set-image dialog (a field per
   container, the old-to-new diff).
+- `bulk` (E12-S19): the bulk actions on the table's selection: `BulkDialog` (one confirmation sized to the
+  riskiest object, the typed cluster name for a type-the-name tier, a virtualised per-row results list with "Retry
+  failed"), the label editor (labels / annotations switch, key and value rows, a preview of one sample object, the
+  selector warning), `BulkFlow` and `bulk_row_actions` ("Edit labels"). Delete and restart become the bulk actions when
+  several rows are selected; `shift-l` edits labels. Commands `selection::Delete`, `selection::Restart`,
+  `selection::Label` (`oxikube_app::selection`).
 - `kinds::pods` (E12-S02): the Pod spec: `PodColumns` (Lens and k9s columns, IP / Node / QoS hidden,
   usage `–` until E13's metrics) and `ContainersPanel`, the containers drill-down at the top of a pod's detail.
 - `kinds::service`, `kinds::endpoints` (E12-S13): Services, Endpoints and EndpointSlices. The

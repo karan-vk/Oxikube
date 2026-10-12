@@ -9,10 +9,7 @@
 //! sweep it belonged to.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
-use futures::StreamExt as _;
-use futures::stream;
 use oxikube_domain::audit::AuditOutcome;
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
@@ -23,9 +20,6 @@ use oxikube_ports::{DeleteOptions, ListOptions, Preconditions, PropagationPolicy
 use super::service::WorkloadService;
 use crate::command_bus::HandlerContext;
 use crate::guard::Mutation;
-
-/// How many pods are deleted at once.
-const CONCURRENCY: usize = 6;
 
 /// How many pods of one sweep: a view never lists more than this, and neither does a sweep.
 pub const MAX_SWEEP: usize = 5_000;
@@ -111,15 +105,9 @@ impl Sweep {
     }
 }
 
-/// A new id for a batch: unique within the process and across restarts, short enough to read in
-/// an audit row.
+/// A new id for a sweep (`sweep-<time>-<n>`).
 pub(super) fn new_batch_id() -> String {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
-    let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    format!("sweep-{:x}-{n:x}", nanos & 0xffff_ffff_ffff)
+    super::batch::new_batch_id("sweep")
 }
 
 impl WorkloadService {
@@ -187,16 +175,14 @@ impl WorkloadService {
         pods: Vec<ResourceRef>,
         batch: &str,
     ) -> OxiResult<Sweep> {
-        let results: Vec<OxiResult<PodResult>> = stream::iter(pods)
-            .map(|pod| async move {
+        let results: Vec<OxiResult<PodResult>> =
+            super::batch::run_each(pods, super::batch::CONCURRENCY, |pod| async move {
                 let status = self.sweep_one(cx, mutation, &pod, batch).await?;
                 Ok(PodResult {
                     target: pod,
                     status,
                 })
             })
-            .buffered(CONCURRENCY)
-            .collect()
             .await;
         let pods = results.into_iter().collect::<OxiResult<Vec<_>>>()?;
         Ok(Sweep {

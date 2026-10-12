@@ -48,6 +48,7 @@ pub use delete::{
     CommandBuilder, DeleteError, DeleteFlow, DeletePlan, DeleteReport, ItemResult, ItemStatus,
     PlannedDelete, object_label, register_commands,
 };
+pub(crate) use delete::{Deleted, delete_object};
 pub use registry::{DuplicateAction, KindFilter, RowActionRegistry, RowActionSpec};
 pub use snapshot::{ResolvedAction, RowAction, RowActions};
 pub use state::{ActionContext, ActionState, DisabledReason};

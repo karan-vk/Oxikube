@@ -30,7 +30,11 @@ fn the_selection_is_none_one_many_or_mixed() {
     let mut node = pod("n");
     node.gvk = Gvk::new("", "v1", "Node");
     let mixed = target.selecting(vec![pod("a"), node]);
-    assert_eq!(selection_of(&mixed), Selection::mixed(2));
+    // A mixed selection names its kinds, so a bulk action that takes several kinds can check them.
+    assert_eq!(
+        selection_of(&mixed),
+        Selection::mixed_of(2, [Gvk::new("", "v1", "Pod"), Gvk::new("", "v1", "Node")])
+    );
 }
 
 #[gpui::test]

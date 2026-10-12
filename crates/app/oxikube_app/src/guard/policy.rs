@@ -68,6 +68,10 @@ pub fn is_posture_id(id: CommandId) -> bool {
 /// the active cluster from the dispatch context, if at all.
 pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
     match command {
+        // A bulk command acts on one cluster: the first object's (the handler refuses a mix).
+        Command::SelectionDelete { targets, .. }
+        | Command::SelectionRestart { targets }
+        | Command::SelectionLabel { targets, .. } => targets.first().map(|target| &target.cluster),
         Command::ClusterConnect { cluster }
         | Command::ClusterCancelConnect { cluster }
         | Command::ClusterCloseTab { cluster }
@@ -286,6 +290,9 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
     if let Some(summary) = super::workload_policy::summary(command, context) {
         return summary;
     }
+    if let Some(summary) = super::selection_policy::summary(command, context) {
+        return summary;
+    }
     if let Command::WorkloadScale { target, replicas } = command {
         return scale_summary(target, *replicas, context);
     }
@@ -405,6 +412,9 @@ fn effective_image(image: &str) -> &str {
 /// audit log like every field.
 pub fn audit_detail(command: &Command) -> Option<String> {
     if let Some(detail) = crate::apply::audit_detail(command) {
+        return Some(detail);
+    }
+    if let Some(detail) = super::selection_policy::detail(command) {
         return Some(detail);
     }
     match command {

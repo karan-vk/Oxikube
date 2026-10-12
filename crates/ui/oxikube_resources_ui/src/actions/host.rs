@@ -6,7 +6,7 @@ use oxikube_app::namespaces::NamespaceCreator;
 use oxikube_app::{
     ActionContext, ActionState, ClusterSessionManager, CommandBus, DebugRunner, DeleteFlow,
     ExecService, RollbackRunner, RolloutService, RowAction, RowActionRegistry, RowActions,
-    ScaleRunner, SetImageRunner, WorkloadService,
+    ScaleRunner, SelectionFlow, SetImageRunner, WorkloadService,
 };
 use oxikube_domain::Capabilities;
 use oxikube_domain::command::CommandId;
@@ -72,6 +72,8 @@ pub struct ResourceActions {
     rollback: RollbackRunner,
     /// The drain dialog's flow (E12-S10); `None` until the app gives one.
     drain: Option<oxikube_app::nodes::DrainFlow>,
+    /// Plans and runs the bulk commands for the bulk dialog (E12-S19).
+    selection: SelectionFlow,
 }
 
 impl ResourceActions {
@@ -116,6 +118,7 @@ impl ResourceActions {
             set_image: SetImageRunner::new(bus.clone(), who.clone()),
             rollback: RollbackRunner::new(bus.clone(), who.clone()),
             rollouts: Arc::new(RolloutService::new(sessions.clone())),
+            selection: SelectionFlow::new(bus.clone(), sessions.clone(), who.clone()),
             storage: StorageFlows::new(bus, &sessions, &who),
             namespace_creator: NamespaceCreator::new(bus.clone(), who),
             drain: None,
@@ -198,6 +201,15 @@ impl ResourceActions {
         workspace: gpui::WeakEntity<oxikube_workspace::Workspace>,
     ) -> crate::kinds::RollbackFlow {
         crate::kinds::RollbackFlow::new(self.rollouts.clone(), self.rollback.clone(), workspace)
+    }
+
+    /// The flow that opens the bulk dialog in `workspace` (E12-S19): delete, restart and edit
+    /// labels of the table's selection.
+    pub fn bulk_flow(
+        &self,
+        workspace: gpui::WeakEntity<oxikube_workspace::Workspace>,
+    ) -> crate::bulk::BulkFlow {
+        crate::bulk::BulkFlow::new(self.selection.clone(), workspace)
     }
 
     /// The delete flow.

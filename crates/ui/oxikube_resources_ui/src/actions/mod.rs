@@ -44,6 +44,7 @@ mod results;
 #[cfg(test)]
 pub(crate) mod tests;
 
+pub(crate) use dependents::owns_dependents;
 pub use dialog::{DeleteDialog, Stage};
 pub use host::{ActionEntry, ResourceActions};
 pub(crate) use menu::ActionSource;

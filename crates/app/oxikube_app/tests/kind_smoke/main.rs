@@ -43,6 +43,7 @@ mod rollback;
 mod rollout;
 mod scale;
 mod scoped_feeds;
+mod selection;
 mod service_backends;
 mod storage;
 mod two_clusters;

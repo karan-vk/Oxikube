@@ -13,6 +13,7 @@ mod plan;
 mod run;
 
 pub use handler::register_commands;
+pub(crate) use handler::{Deleted, delete_object};
 pub use label::object_label;
 pub use plan::{CommandBuilder, DeleteError, DeleteFlow, DeletePlan, PlannedDelete};
 pub use run::{DeleteReport, ItemResult, ItemStatus};

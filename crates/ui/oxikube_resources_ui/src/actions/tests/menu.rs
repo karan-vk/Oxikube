@@ -29,6 +29,7 @@ fn a_pod_and_another_kind_get_the_actions_the_registry_has_for_them(cx: &mut Tes
             "Show Node",
             "Logs",
             "Evict",
+            "Edit labels",
             "Delete",
             "Force Delete",
             "Sanitize"
@@ -38,7 +39,7 @@ fn a_pod_and_another_kind_get_the_actions_the_registry_has_for_them(cx: &mut Tes
     let nodes = f.open(nodes_kind());
     assert_eq!(
         labels(&mut f, &nodes),
-        ["Cordon", "Uncordon", "Drain…", "Delete"],
+        ["Cordon", "Uncordon", "Drain…", "Edit labels", "Delete"],
         "no pod-only action on a node; its own are cordon, uncordon (E12-S09) and drain (E12-S10)"
     );
 
@@ -81,8 +82,8 @@ fn the_context_menu_item_opens_the_delete_dialog(cx: &mut TestAppContext) {
     let table = f.open_pods();
     assert_eq!(f.names(&table), ["web-0", "web-1"]);
     right_click(&mut f, 1);
-    // Open, Copy Name, Select All, Jump to Owner, Show Node, Logs, Evict, Delete.
-    choose(&mut f, 7);
+    // Open, Copy Name, Select All, Jump to Owner, Show Node, Logs, Evict, Edit labels, Delete.
+    choose(&mut f, 8);
     let dialog = dialog(&mut f).expect("the delete dialog opened");
     let (items, tier) = f.vcx.update(|_, cx| {
         let d = dialog.read(cx);

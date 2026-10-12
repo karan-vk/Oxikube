@@ -269,6 +269,79 @@ fn selection_satisfies_each_requirement() {
 }
 
 #[test]
+fn the_bulk_actions_are_offered_by_what_is_selected() {
+    let bus = full_bus();
+    let table = session(ViewContext::Table);
+    let has = |ctx: &CommandContext, id: CommandId| ids(&bus.list(ctx)).contains(&id);
+    let kind = |name: &str| Gvk::new("apps", "v1", name);
+
+    // Delete and label take any kind, mixed or not; nothing selected offers neither.
+    let pods = table.clone().selecting(Selection::many(pod(), 3));
+    assert!(has(&pods, CommandId::SELECTION_DELETE));
+    assert!(has(&pods, CommandId::SELECTION_LABEL));
+    let mixed = table.clone().selecting(Selection::mixed(3));
+    assert!(has(&mixed, CommandId::SELECTION_DELETE));
+    assert!(has(&mixed, CommandId::SELECTION_LABEL));
+    assert!(!has(&table, CommandId::SELECTION_DELETE));
+    assert!(!has(&table, CommandId::SELECTION_LABEL));
+
+    // Restart only when every selected object is a Deployment, StatefulSet or DaemonSet.
+    for name in ["Deployment", "StatefulSet", "DaemonSet"] {
+        let ctx = table.clone().selecting(Selection::many(kind(name), 2));
+        assert!(has(&ctx, CommandId::SELECTION_RESTART), "{name}");
+    }
+    let rollable_mix = table.clone().selecting(Selection::mixed_of(
+        3,
+        [kind("Deployment"), kind("StatefulSet"), kind("DaemonSet")],
+    ));
+    assert!(has(&rollable_mix, CommandId::SELECTION_RESTART));
+    let with_a_replicaset = table.clone().selecting(Selection::mixed_of(
+        3,
+        [kind("Deployment"), kind("ReplicaSet")],
+    ));
+    assert!(
+        !has(&with_a_replicaset, CommandId::SELECTION_RESTART),
+        "one ReplicaSet in the selection hides restart"
+    );
+    assert!(!has(&pods, CommandId::SELECTION_RESTART));
+    assert!(
+        !has(&mixed, CommandId::SELECTION_RESTART),
+        "a mixed selection of unknown kinds cannot be vouched for"
+    );
+    assert!(!has(&table, CommandId::SELECTION_RESTART));
+    // A kind of another group named like a rollable one is not one.
+    let lookalike = table.selecting(Selection::many(
+        Gvk::new("example.io", "v1", "Deployment"),
+        2,
+    ));
+    assert!(!has(&lookalike, CommandId::SELECTION_RESTART));
+
+    // On a read-only session the palette hides all three; "show all" says why.
+    let read_only = session(ViewContext::Table)
+        .selecting(Selection::many(kind("Deployment"), 2))
+        .read_only(true);
+    for id in [
+        CommandId::SELECTION_DELETE,
+        CommandId::SELECTION_LABEL,
+        CommandId::SELECTION_RESTART,
+    ] {
+        assert!(!has(&read_only, id), "{id}");
+        let info = bus.get(id).expect("registered");
+        assert_eq!(info.check(&read_only), Err(Unavailable::ReadOnly), "{id}");
+    }
+    assert_eq!(
+        Unavailable::Selection(
+            command::lookup(CommandId::SELECTION_RESTART)
+                .unwrap()
+                .availability
+                .selection
+        )
+        .to_string(),
+        "Select only Deployment, StatefulSet, DaemonSet"
+    );
+}
+
+#[test]
 fn every_registered_command_is_in_all_with_a_tool_stub() {
     let bus = full_bus();
     assert_eq!(bus.all().len(), command::COMMANDS.len());

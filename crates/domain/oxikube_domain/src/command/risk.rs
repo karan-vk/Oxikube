@@ -44,6 +44,17 @@ impl Command {
                 target,
                 propagation,
             } => declared.max(delete_risk(&target.gvk, *propagation)),
+            // A batch is as risky as the riskiest object in it, whatever the others are: the
+            // guard asks once, at that tier (E12-S19). It never lowers a tier because the
+            // selection is large.
+            Command::SelectionDelete {
+                targets,
+                propagation,
+            } => targets
+                .iter()
+                .map(|target| declared.max(delete_risk(&target.gvk, *propagation)))
+                .max()
+                .unwrap_or(declared),
             // Scaling up or down is low; scaling to zero stops every pod of the workload.
             Command::WorkloadScale { replicas: 0, .. } => declared.max(Risk::Medium),
             // A grace period of 0 skips the kubelet's shutdown: a force delete, whichever command
@@ -71,14 +82,16 @@ impl CommandMeta {
             return Some(Risk::High);
         }
         let declared = self.risk?;
-        Some(if self.id == CommandId::RESOURCE_DELETE {
-            declared.max(Risk::Irreversible)
-        } else if self.id == CommandId::WORKLOAD_SCALE {
-            // The worst case is a scale to zero.
-            declared.max(Risk::Medium)
-        } else {
-            declared
-        })
+        Some(
+            if self.id == CommandId::RESOURCE_DELETE || self.id == CommandId::SELECTION_DELETE {
+                declared.max(Risk::Irreversible)
+            } else if self.id == CommandId::WORKLOAD_SCALE {
+                // The worst case is a scale to zero.
+                declared.max(Risk::Medium)
+            } else {
+                declared
+            },
+        )
     }
 }
 
@@ -164,6 +177,59 @@ mod tests {
             target: ResourceRef::cluster_scoped(cluster, gvk("", "Pod"), "x"),
         };
         assert_eq!(read.effective_risk(), None);
+    }
+
+    #[test]
+    fn a_selection_delete_is_as_risky_as_the_riskiest_object_in_it() {
+        let cluster = ClusterId::new("~/.kube/config", &ContextName::new("kind"));
+        let object = |kind: &str, name: &str| {
+            ResourceRef::namespaced(cluster.clone(), gvk("", kind), "default", name)
+        };
+        let delete = |targets: Vec<ResourceRef>, propagation| Command::SelectionDelete {
+            targets,
+            propagation,
+        };
+        let pods: Vec<ResourceRef> = (0..200).map(|i| object("Pod", &format!("p{i}"))).collect();
+        // A big selection of ordinary objects stays medium: size never raises or lowers a tier.
+        assert_eq!(
+            delete(pods.clone(), Propagation::Background).effective_risk(),
+            Some(Risk::Medium)
+        );
+        // One namespace among them is irreversible, and so is the whole batch.
+        let mut mixed = pods.clone();
+        mixed.push(ResourceRef::cluster_scoped(
+            cluster.clone(),
+            gvk("", "Namespace"),
+            "dev",
+        ));
+        assert_eq!(
+            delete(mixed, Propagation::Background).effective_risk(),
+            Some(Risk::Irreversible)
+        );
+        // A cascading delete of ordinary objects is high.
+        assert_eq!(
+            delete(pods, Propagation::Foreground).effective_risk(),
+            Some(Risk::High)
+        );
+        // The tool stub advertises the worst case, like `resource::Delete`.
+        let meta = super::super::lookup(CommandId::SELECTION_DELETE).unwrap();
+        assert_eq!(meta.tool_risk(), Some(Risk::Irreversible));
+    }
+
+    #[test]
+    fn restarts_and_label_edits_keep_their_declared_risk() {
+        let cluster = ClusterId::new("~/.kube/config", &ContextName::new("kind"));
+        let target = ResourceRef::namespaced(cluster, gvk("apps", "Deployment"), "default", "web");
+        let restart = Command::SelectionRestart {
+            targets: vec![target.clone()],
+        };
+        assert_eq!(restart.effective_risk(), Some(Risk::Low));
+        let label = Command::SelectionLabel {
+            targets: vec![target],
+            field: crate::selection::LabelField::Labels,
+            edits: vec![crate::selection::LabelEdit::set("a", "b")],
+        };
+        assert_eq!(label.effective_risk(), Some(Risk::Medium));
     }
 
     #[test]

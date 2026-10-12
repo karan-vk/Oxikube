@@ -8,7 +8,7 @@ use oxikube_domain::ids::Gvk;
 /// at it) behind or take them along: the workload controllers, and any kind a CustomResource
 /// Definition adds (an operator's resource may own anything). A Pod, a ConfigMap, a Secret and
 /// the other built-in kinds own nothing, so their delete has no propagation to choose.
-pub(super) fn owns_dependents(gvk: &Gvk) -> bool {
+pub(crate) fn owns_dependents(gvk: &Gvk) -> bool {
     let group: &str = &gvk.group;
     match (group, &*gvk.kind) {
         ("apps", "Deployment" | "ReplicaSet" | "StatefulSet" | "DaemonSet")

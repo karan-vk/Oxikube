@@ -181,10 +181,13 @@ fn the_menu_lists_trigger_suspend_and_resume_for_cronjobs_only(cx: &mut TestAppC
     };
     assert_eq!(
         labels(&mut f, &table),
-        ["Trigger", "Suspend", "Resume", "Delete"]
+        ["Trigger", "Suspend", "Resume", "Edit labels", "Delete"]
     );
     let jobs = f.open(job_kind());
-    assert_eq!(labels(&mut f, &jobs), ["Suspend", "Resume", "Delete"]);
+    assert_eq!(
+        labels(&mut f, &jobs),
+        ["Suspend", "Resume", "Edit labels", "Delete"]
+    );
 }
 
 #[gpui::test]

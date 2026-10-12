@@ -16,11 +16,13 @@ use oxikube_workspace::command_surface::CommandSurface;
 use oxikube_workspace::{Toast, Workspace};
 
 use super::actions::{
-    AttachSelected, CordonSelected, DebugSelected, DeleteSelected, DrainSelected, RestartSelected,
-    RollbackSelected, ScaleSelected, SetImageSelected, ShellSelected, UncordonSelected,
+    AttachSelected, CordonSelected, DebugSelected, DeleteSelected, DrainSelected, EditLabels,
+    RestartSelected, RollbackSelected, ScaleSelected, SetImageSelected, ShellSelected,
+    UncordonSelected,
 };
 use super::view::ResourceTable;
 use crate::actions::{ActionEntry, DeleteDialog, ResourceActions};
+use crate::bulk::BulkKind;
 use crate::exec::{ExecFlow, ExecKind};
 
 impl ResourceTable {
@@ -89,6 +91,15 @@ impl ResourceTable {
         } else {
             command
         };
+        // Several rows selected, or a `selection::*` command: one bulk dialog for all of them
+        // (E12-S19), gated by the rights and the read-only state of the single-object action.
+        if let Some(bulk) = BulkKind::of_action(command, targets.len(), &self.kind) {
+            if targets.is_empty() {
+                self.say_no_row(cx);
+                return false;
+            }
+            return self.run_bulk(&actions, bulk, targets, window, cx);
+        }
         // A sweep of the view needs no row (an empty selection is the usual case).
         let targets = if command == CommandId::POD_SANITIZE && targets.is_empty() {
             self.cursor_row(cx)
@@ -328,6 +339,17 @@ impl ResourceTable {
         self.run_action(CommandId::WORKLOAD_ROLLBACK, targets, window, cx);
     }
 
+    /// `shift-l`: the label editor for the selected rows, or the cursor row (`selection::Label`).
+    pub(super) fn on_edit_labels(
+        &mut self,
+        _: &EditLabels,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::SELECTION_LABEL, targets, window, cx);
+    }
+
     pub(super) fn on_attach(
         &mut self,
         _: &AttachSelected,
@@ -447,6 +469,16 @@ impl CommandSurface for ResourceTable {
         // palette hands either to this table (E12-S03).
         if own.contains(&CommandId::POD_DELETE) {
             own.push(CommandId::RESOURCE_DELETE);
+        }
+        // The bulk commands open the bulk dialog, which only this table can ask for (E12-S19). A
+        // bulk action is its single-object action's twin: it is offered where that one is
+        // enabled (a kind that can be deleted or restarted, a session allowed to).
+        for bulk in [BulkKind::Delete, BulkKind::Restart] {
+            if own.contains(&bulk.row_action(&self.kind))
+                && BulkKind::of_action(bulk.command(), 2, &self.kind).is_some()
+            {
+                own.push(bulk.command());
+            }
         }
         own
     }

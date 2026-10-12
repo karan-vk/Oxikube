@@ -13,6 +13,7 @@ use crate::colour::ClusterColour;
 use crate::ids::{ClusterId, Gvk, ResourceRef};
 use crate::log::{LevelChip, LogRange, LogSaveScope};
 use crate::preset::ClusterPreset;
+use crate::selection::{LabelEdit, LabelField};
 
 /// How the API server deletes dependents of an object.
 #[derive(
@@ -1153,6 +1154,36 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         to_revision: Option<i64>,
     },
+    /// Delete a selection of objects of any kinds, as one batch (E12-S19): one confirmation sized
+    /// to the riskiest object, then each object is deleted and audited on its own under a shared
+    /// batch id. The result lists every object (`data.rows`).
+    #[serde(rename = "selection::Delete")]
+    SelectionDelete {
+        /// The objects, all of one cluster.
+        targets: Vec<ResourceRef>,
+        /// How dependents are handled; the kubectl default (background) unless chosen.
+        #[serde(default)]
+        propagation: Propagation,
+    },
+    /// Rolling-restart a selection of Deployments, StatefulSets and DaemonSets, as one batch
+    /// (E12-S19). Anything else in the selection is refused up front.
+    #[serde(rename = "selection::Restart")]
+    SelectionRestart {
+        /// The workloads, all of one cluster.
+        targets: Vec<ResourceRef>,
+    },
+    /// Add, change or remove labels (or annotations) on a selection of objects of any kinds, as
+    /// one batch (E12-S19): the same merge patch for every object, each audited on its own.
+    #[serde(rename = "selection::Label")]
+    SelectionLabel {
+        /// The objects, all of one cluster.
+        targets: Vec<ResourceRef>,
+        /// Whether the edits are to labels or annotations.
+        #[serde(default)]
+        field: LabelField,
+        /// The keys to set or remove.
+        edits: Vec<LabelEdit>,
+    },
     /// Open the logs of every pod of a workload or Service merged by time, one colour per pod
     /// (stern-style). The pods are the ones the object's selector matches.
     #[serde(rename = "workload::ViewLogs")]
@@ -1440,6 +1471,9 @@ impl Command {
             Command::WorkloadSetImage { .. } => CommandId::WORKLOAD_SET_IMAGE,
             Command::WorkloadRollback { .. } => CommandId::WORKLOAD_ROLLBACK,
             Command::WorkloadViewLogs { .. } => CommandId::WORKLOAD_VIEW_LOGS,
+            Command::SelectionDelete { .. } => CommandId::SELECTION_DELETE,
+            Command::SelectionRestart { .. } => CommandId::SELECTION_RESTART,
+            Command::SelectionLabel { .. } => CommandId::SELECTION_LABEL,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
             Command::NodeShell { .. } => CommandId::NODE_SHELL,
             Command::NodeUncordon { .. } => CommandId::NODE_UNCORDON,
@@ -1473,6 +1507,16 @@ impl Command {
     /// [`CommandMeta::exec`]).
     pub fn is_exec(&self) -> bool {
         self.meta().exec
+    }
+
+    /// The objects a bulk command acts on (`selection::*`); empty for every other command.
+    pub fn targets(&self) -> &[ResourceRef] {
+        match self {
+            Command::SelectionDelete { targets, .. }
+            | Command::SelectionRestart { targets }
+            | Command::SelectionLabel { targets, .. } => targets,
+            _ => &[],
+        }
     }
 
     /// The resource this command targets, if it acts on a single selection.
@@ -1987,6 +2031,18 @@ mod tests {
             Command::WorkloadScale {
                 target: deployment(),
                 replicas: 3,
+            },
+            Command::SelectionDelete {
+                targets: vec![pod()],
+                propagation: Propagation::Background,
+            },
+            Command::SelectionRestart {
+                targets: vec![pod()],
+            },
+            Command::SelectionLabel {
+                targets: vec![pod()],
+                field: LabelField::Labels,
+                edits: vec![LabelEdit::set("app", "web"), LabelEdit::remove("old")],
             },
             Command::WorkloadRestart {
                 target: deployment(),
