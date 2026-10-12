@@ -57,6 +57,21 @@ fn the_four_kinds_offer_scale_and_a_panel_and_keep_their_sidebar_places(cx: &mut
                 kind.1
             );
         }
+        // The kinds that keep a revision history roll back (E12-S06); a ReplicationController has none.
+        for (kind, rolls_back) in [
+            (("apps", "Deployment"), true),
+            (("apps", "StatefulSet"), true),
+            (("apps", "ReplicaSet"), true),
+            (("", "ReplicationController"), false),
+        ] {
+            let gvk = Gvk::new(kind.0, "v1", kind.1);
+            assert_eq!(
+                KindSpecs::kind_for(cx, &gvk).offers(CommandId::WORKLOAD_ROLLBACK),
+                rolls_back,
+                "{}",
+                kind.1
+            );
+        }
         // A DaemonSet cannot be scaled: no action, no panel of this story.
         let daemonset = Gvk::new("apps", "v1", "DaemonSet");
         assert!(!KindSpecs::kind_for(cx, &daemonset).offers(CommandId::WORKLOAD_SCALE));

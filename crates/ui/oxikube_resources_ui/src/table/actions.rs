@@ -92,6 +92,10 @@ actions!(
         /// Set the images of the cursor row's workload through the set-image dialog
         /// (`workload::SetImage`; k9s's `i` on a Deployment, StatefulSet or DaemonSet).
         SetImageSelected,
+        /// Roll the cursor row's workload back through the rollback dialog (`workload::Rollback`;
+        /// k9s's `ctrl-l` on a Deployment, StatefulSet, DaemonSet or ReplicaSet: bound for those
+        /// kinds only).
+        RollbackSelected,
         /// Add a debug container to the cursor row's pod (`pod::Debug`, through the debug dialog;
         /// `shift-d`). A toast says why not for a kind that is not a pod, or on a read-only cluster.
         DebugSelected,

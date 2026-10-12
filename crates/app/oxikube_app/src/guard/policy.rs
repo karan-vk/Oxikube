@@ -161,6 +161,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::WorkloadScale { target, .. }
         | Command::WorkloadRestart { target }
         | Command::WorkloadSetImage { target, .. }
+        | Command::WorkloadRollback { target, .. }
         | Command::WorkloadViewLogs { target, .. }
         | Command::NodeCordon { target }
         | Command::NodeShell { target }
@@ -285,6 +286,13 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
     if let Command::WorkloadScale { target, replicas } = command {
         return scale_summary(target, *replicas, context);
     }
+    if let Command::WorkloadRollback {
+        target,
+        to_revision,
+    } = command
+    {
+        return rollback_summary(target, *to_revision, context);
+    }
     if let Command::PvcResize { target, size, from } = command {
         let object = match target.namespace() {
             Some(ns) => format!("{ns}/{}", target.name),
@@ -327,6 +335,28 @@ fn scale_summary(workload: &ResourceRef, replicas: u32, context: &str) -> String
         "Scale {} to {replicas} {}{zero} on {context}",
         object_label(workload),
         replicas_word(replicas)
+    )
+}
+
+/// The confirmation text of `workload::Rollback`: the workload, the revision, and that the pods
+/// are replaced by a rolling update.
+fn rollback_summary(workload: &ResourceRef, to_revision: Option<i64>, context: &str) -> String {
+    // A ReplicaSet has no history of its own: its Deployment goes back to its revision.
+    let (subject, default_revision) = if &*workload.gvk.kind == "ReplicaSet" {
+        (
+            format!("the Deployment that owns {}", object_label(workload)),
+            "this ReplicaSet's revision",
+        )
+    } else {
+        (object_label(workload), "the previous revision")
+    };
+    let to = to_revision.map_or_else(
+        || default_revision.to_owned(),
+        |revision| format!("revision {revision}"),
+    );
+    format!(
+        "Roll back {subject} to {to} on {context}: its pod template is replaced and its pods are \
+         replaced by a rolling update."
     )
 }
 
@@ -417,6 +447,13 @@ pub fn audit_detail(command: &Command) -> Option<String> {
             .map(|change| change.container.as_str())
             .collect();
         return Some(format!("containers={}", names.join(",")));
+    }
+    if let Command::WorkloadRollback { to_revision, .. } = command {
+        // The handler adds `from=` and `to=`.
+        return Some(match to_revision {
+            Some(revision) => format!("to_revision={revision}"),
+            None => "to_revision=previous".to_owned(),
+        });
     }
     let Command::PodDebug {
         image,

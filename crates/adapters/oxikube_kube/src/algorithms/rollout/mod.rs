@@ -7,7 +7,7 @@
 //!
 //! | Piece | Where |
 //! |---|---|
-//! | the Deployment's ReplicaSets, revision numbers, label selector | `revisions` |
+//! | the Deployment's ReplicaSets (listed here, read by [`oxikube_domain::rollout`]) | `revisions` |
 //! | [`rollout_history`]: revisions, change cause, images | `history` |
 //! | [`rollout_undo`]: choose the ReplicaSet, patch the template back | `undo` |
 //!

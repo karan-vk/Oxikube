@@ -16,8 +16,8 @@ use oxikube_workspace::command_surface::CommandSurface;
 use oxikube_workspace::{Toast, Workspace};
 
 use super::actions::{
-    AttachSelected, CordonSelected, DebugSelected, DeleteSelected, RestartSelected, ScaleSelected,
-    SetImageSelected, ShellSelected, UncordonSelected,
+    AttachSelected, CordonSelected, DebugSelected, DeleteSelected, RestartSelected,
+    RollbackSelected, ScaleSelected, SetImageSelected, ShellSelected, UncordonSelected,
 };
 use super::view::ResourceTable;
 use crate::actions::{ActionEntry, DeleteDialog, ResourceActions};
@@ -151,6 +151,16 @@ impl ResourceTable {
                     .clone()
                     .unwrap_or_else(gpui::WeakEntity::new_invalid);
                 actions.set_image_flow(workspace).begin(target, window, cx);
+            }
+        } else if command == CommandId::WORKLOAD_ROLLBACK {
+            // The dialog shows the history and asks for the revision; the command is sent when
+            // the user confirms it.
+            if let Some(target) = targets.into_iter().next() {
+                let workspace = self
+                    .workspace
+                    .clone()
+                    .unwrap_or_else(gpui::WeakEntity::new_invalid);
+                actions.rollback_flow(workspace).begin(target, window, cx);
             }
         } else if let Some(service) = actions
             .exec_service()
@@ -299,6 +309,18 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::WORKLOAD_SET_IMAGE, targets, window, cx);
+    }
+
+    /// `ctrl-l` on a workload: the rollback dialog for the cursor row (`workload::Rollback`;
+    /// k9s's rollback key).
+    pub(super) fn on_rollback(
+        &mut self,
+        _: &RollbackSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::WORKLOAD_ROLLBACK, targets, window, cx);
     }
 
     pub(super) fn on_attach(

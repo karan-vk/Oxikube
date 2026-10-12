@@ -7,6 +7,7 @@ mod columns;
 mod model;
 mod panel;
 mod registry;
+mod rollback;
 mod rollout;
 mod scale;
 

@@ -98,6 +98,7 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
             | CommandId::POD_SHOW_NODE
             | CommandId::WORKLOAD_RESTART
             | CommandId::WORKLOAD_SET_IMAGE
+            | CommandId::WORKLOAD_ROLLBACK
     )
 }
 
@@ -143,6 +144,9 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
         }
         CommandId::WORKLOAD_SET_IMAGE => {
             Some("Set image is available for Deployments, StatefulSets and DaemonSets")
+        }
+        CommandId::WORKLOAD_ROLLBACK => {
+            Some("Rollback is available for Deployments, StatefulSets, DaemonSets and ReplicaSets")
         }
         CommandId::RESOURCE_EDIT => Some("Editing is not available yet"),
         CommandId::NAMESPACE_SELECT | CommandId::NAMESPACE_USE_FAVOURITE => {

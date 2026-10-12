@@ -11,7 +11,7 @@ use super::{
     web_ref, web_replicaset,
 };
 use crate::detail::tests::fixture::Detail;
-use crate::kinds::{ScaleDialog, WorkloadPanel};
+use crate::kinds::{RollbackDialog, RollbackStage, ScaleDialog, WorkloadPanel};
 use crate::table::tests::fixture::cluster;
 
 fn objects() -> Vec<oxikube_domain::Resource> {
@@ -97,6 +97,7 @@ fn the_panel_shows_replicas_strategy_selector_and_the_pod_template(cx: &mut Test
         "workload-template",
         "workload-container-0",
         "workload-scale",
+        "workload-rollback",
     ] {
         assert!(d.shown(part), "{part} is drawn");
     }
@@ -243,7 +244,8 @@ fn the_palette_runs_scale_through_the_focused_detail(cx: &mut TestAppContext) {
         [
             oxikube_domain::command::CommandId::WORKLOAD_SCALE,
             oxikube_domain::command::CommandId::WORKLOAD_RESTART,
-            oxikube_domain::command::CommandId::WORKLOAD_SET_IMAGE
+            oxikube_domain::command::CommandId::WORKLOAD_SET_IMAGE,
+            oxikube_domain::command::CommandId::WORKLOAD_ROLLBACK
         ]
     );
     d.f.ports()
@@ -411,5 +413,75 @@ fn the_feeds_restart_when_the_selector_changes(cx: &mut TestAppContext) {
         d.f.ports().resources.live_watches(),
         before,
         "the old feeds were dropped, not leaked beside the new ones"
+    );
+}
+
+#[gpui::test]
+fn the_rollback_button_and_the_palette_open_the_history_dialog_and_read_only_blocks_both(
+    cx: &mut TestAppContext,
+) {
+    use oxikube_workspace::command_surface::CommandSurface as _;
+    let mut d = window(cx);
+    let (view, panel) = open_panel(&mut d, &web_ref());
+    let tabs = d.f.tabs.clone();
+    let open = |d: &mut Detail| {
+        d.f.vcx.update(|_, cx| {
+            let tab = tabs.read(cx).tab(&cluster()).cloned().unwrap();
+            let layer = tab.read(cx).workspace().read(cx).modal_layer().clone();
+            layer.read(cx).active_modal::<RollbackDialog>()
+        })
+    };
+    assert!(open(&mut d).is_none());
+    d.click("workload-rollback");
+    d.settle();
+    let dialog = open(&mut d).expect("the button opens the dialog");
+    let target = d.f.vcx.update(|_, cx| dialog.read(cx).target().clone());
+    assert_eq!(target, web_ref());
+    assert_eq!(
+        d.f.vcx.update(|_, cx| dialog.read(cx).stage()),
+        RollbackStage::Choosing
+    );
+    d.f.vcx.update(|window, cx| {
+        let tab = tabs.read(cx).tab(&cluster()).cloned().unwrap();
+        let ws = tab.read(cx).workspace().clone();
+        ws.update(cx, |ws, cx| ws.hide_modal(window, cx));
+    });
+    d.settle();
+    assert!(open(&mut d).is_none());
+
+    // The palette's own command for a focused detail runs the same flow.
+    let ran = d.f.vcx.update(|window, cx| {
+        view.update(cx, |v, cx| {
+            v.run_command(
+                oxikube_domain::command::CommandId::WORKLOAD_ROLLBACK,
+                vec![web_ref()],
+                window,
+                cx,
+            )
+        })
+    });
+    assert!(ran);
+    d.settle();
+    assert!(open(&mut d).is_some());
+
+    // Read-only: the button is disabled with the reason, and the palette does not offer it.
+    d.f.vcx.update(|window, cx| {
+        let tab = tabs.read(cx).tab(&cluster()).cloned().unwrap();
+        let ws = tab.read(cx).workspace().clone();
+        ws.update(cx, |ws, cx| ws.hide_modal(window, cx));
+    });
+    d.f.sessions.set_read_only(&cluster(), true).unwrap();
+    d.settle();
+    let state = d.f.vcx.update(|_, cx| panel.read(cx).rollback_state(cx));
+    assert!(
+        state
+            .expect("offered")
+            .expect("blocked")
+            .contains("read-only")
+    );
+    assert!(
+        d.f.vcx
+            .update(|_, cx| view.read(cx).own_commands(cx))
+            .is_empty()
     );
 }

@@ -137,7 +137,8 @@ pub fn start_views(
 /// pods (E09-S08), "View YAML" and "Describe" on every kind (E11-S07), "Edit" and "View YAML in
 /// Editor" on every kind (E10-S06), and the per-kind actions of `oxikube_resources_ui::kinds` (E12:
 /// "Trigger", "Suspend" and "Resume" on CronJobs and Jobs, E12-S08; "Scale" on Deployments,
-/// StatefulSets, ReplicaSets and ReplicationControllers, E12-S04; "Show Pods" and "Open in
+/// StatefulSets, ReplicaSets and ReplicationControllers, E12-S04; "Rollback" on Deployments,
+/// StatefulSets, DaemonSets and ReplicaSets, E12-S06; "Show Pods" and "Open in
 /// Browser" on Services, E12-S13; "Set as default" on IngressClasses, E12-S14; "Resize…" on
 /// claims and "Set as Default" on storage classes, E12-S15; "Use namespace", "Toggle favourite",
 /// "New namespace…" and "Delete" on Namespaces, E12-S16; "Cordon" and "Uncordon" on nodes, E12-S09; "Reveal Values" and "Edit Decoded" on Secrets,

@@ -21,8 +21,8 @@ pub const WORKLOAD_COMMANDS: [CommandId; 5] = [
 ];
 
 /// Registers `cronjob::Trigger`, `cronjob::Suspend`, `cronjob::Resume`, `job::Suspend` and
-/// `job::Resume`, `workload::Scale` (E12-S04), `workload::Restart` and `workload::SetImage`
-/// (E12-S05), and the pod commands `pod::Evict`, `pod::Delete`,
+/// `job::Resume`, `workload::Scale` (E12-S04), `workload::Rollback` (E12-S06), `workload::Restart`
+/// and `workload::SetImage` (E12-S05), and the pod commands `pod::Evict`, `pod::Delete`,
 /// `pod::ForceDelete` and `pod::Sanitize` (E12-S03), on `registry` (the binary installs them under
 /// `oxikube_app::workloads`).
 ///
@@ -39,6 +39,10 @@ pub fn register_commands(
 ) -> Result<(), RegisterError> {
     let service = WorkloadService::new(sessions.clone());
     super::scale_command::register_scale(registry, service.clone())?;
+    crate::rollout::register_rollback(
+        registry,
+        crate::rollout::RolloutService::new(sessions.clone()),
+    )?;
     super::rollout_commands::register_rollout(registry, service)?;
     register(
         registry,

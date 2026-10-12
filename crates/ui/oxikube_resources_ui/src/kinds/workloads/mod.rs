@@ -8,6 +8,7 @@
 //! | `panel` | [`WorkloadPanel`]: replicas, strategy, selector, pod template and the ReplicaSets and Pods the workload owns, each a link to the object's detail |
 //! | `scale` | `workload::Scale`: the row action, [`ScaleFlow`] and the [`ScaleDialog`] |
 //! | `rollout` | `workload::Restart` and `workload::SetImage` (E12-S05): the row actions, [`SetImageFlow`] and the [`SetImageDialog`] |
+//! | `rollback` | `workload::Rollback` (E12-S06): the row action, [`RollbackFlow`] and the [`RollbackDialog`] with the rollout history |
 //!
 //! # Columns
 //!
@@ -23,12 +24,13 @@
 //!
 //! The Workloads section of the cluster sidebar lists the four kinds; a row's detail drawer opens
 //! with the panel. Only these four kinds can be scaled (a DaemonSet cannot), so `workload::Scale`
-//! is their action alone.
+//! is their action; Deployments, StatefulSets and ReplicaSets also roll back (E12-S06).
 
 mod deployment;
 pub mod panel;
 mod replicaset;
 mod replication_controller;
+pub mod rollback;
 pub mod rollout;
 pub mod scale;
 mod statefulset;
@@ -42,6 +44,9 @@ use oxikube_domain::command::CommandId;
 use super::KindSpecs;
 
 pub use panel::WorkloadPanel;
+pub use rollback::{
+    ROLLBACK_ORDER, RollbackDialog, RollbackFlow, RollbackStage, can_rollback, rollback_row_actions,
+};
 pub use rollout::{
     ContainerField, RESTART_ORDER, SET_IMAGE_ORDER, SetImageDialog, SetImageFlow, SetImageStage,
     rollout_row_actions,
@@ -51,17 +56,28 @@ pub use scale::{SCALE_ORDER, ScaleDialog, ScaleFlow, ScaleStage, scale_row_actio
 /// What a ReplicaSet and a ReplicationController can do beyond the generic actions: scale.
 const ACTIONS: &[CommandId] = &[CommandId::WORKLOAD_SCALE];
 
-/// What a Deployment and a StatefulSet can do beyond the generic actions: scale, and the rollout
-/// verbs (E12-S05). A DaemonSet has the rollout verbs alone ([`ROLLOUT_ACTIONS`]).
+/// What a Deployment and a StatefulSet can do beyond the generic actions: scale, the rollout
+/// verbs (E12-S05) and roll back (E12-S06). A DaemonSet has the rollout verbs and rollback alone
+/// ([`ROLLOUT_ACTIONS`]).
 const ROLLING_ACTIONS: &[CommandId] = &[
     CommandId::WORKLOAD_SCALE,
     CommandId::WORKLOAD_RESTART,
     CommandId::WORKLOAD_SET_IMAGE,
+    CommandId::WORKLOAD_ROLLBACK,
 ];
 
-/// The rollout verbs, for the kinds whose pods a template change rolls (`oxikube_app::is_rollable`).
-pub(in crate::kinds) const ROLLOUT_ACTIONS: &[CommandId] =
-    &[CommandId::WORKLOAD_RESTART, CommandId::WORKLOAD_SET_IMAGE];
+/// The rollout verbs and rollback, for the kinds whose pods a template change rolls
+/// (`oxikube_app::is_rollable`) and that keep a revision history.
+pub(in crate::kinds) const ROLLOUT_ACTIONS: &[CommandId] = &[
+    CommandId::WORKLOAD_RESTART,
+    CommandId::WORKLOAD_SET_IMAGE,
+    CommandId::WORKLOAD_ROLLBACK,
+];
+
+/// What a ReplicaSet can do beyond the generic actions: scale, and roll its Deployment back to its
+/// revision (E12-S06). A ReplicationController has no history.
+const ACTIONS_WITH_HISTORY: &[CommandId] =
+    &[CommandId::WORKLOAD_SCALE, CommandId::WORKLOAD_ROLLBACK];
 
 /// Registers the four kinds.
 pub fn init(cx: &mut App) {

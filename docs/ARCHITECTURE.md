@@ -795,6 +795,22 @@ crate's `README.md` for its allowed dependencies. Highlights:
   validator also checks a `kind: List` item by item against each item's own `apiVersion` and `kind`. Bench:
   `cargo bench -p oxikube_editor --bench convert` (2k lines about 1 ms, 5 MB about 130 ms, all off the UI thread; the UI thread
   then replaces the text: about 8 ms for 2k lines, about 95 ms for the 5 MB result, a one-off per explicit conversion).
+- `oxikube_domain::rollout` + `oxikube_app::rollout` (E12-S06) — rollout history and `workload::Rollback` (tool
+  `k8s.workload_rollback`, risk `Medium`: one simple confirmation, a server dry run of the patch before the real one,
+  blocked read-only, audit `to_revision=` then `from=` / `to=`). The algorithm is pure and in the domain, shared with the
+  kube adapter's `rollout_undo` (E04-S07): a Deployment's history is the ReplicaSets it controls
+  (`deployment.kubernetes.io/revision`, `kubernetes.io/change-cause`), a StatefulSet's or DaemonSet's the
+  `ControllerRevision`s it owns (`revision`, `data`); `plan_deployment_rollback` builds kubectl's RFC 6902 patch (replace
+  `/spec/template` minus `pod-template-hash`, annotations laid over the Deployment's bookkeeping ones) and
+  `plan_controller_rollback` sends the ControllerRevision's `data` as a strategic merge patch; a paused Deployment is refused
+  with kubectl's sentence, a pruned revision is `Validation`, a target whose template already runs is
+  `PlanAction::AlreadyCurrent` (nothing sent). `RolloutService::history` lists the owned objects on demand through the
+  cluster's reader (no feed) and returns `Revision`s with their differences from the running template (the preview);
+  `RolloutService::rollback` runs inside the guarded handler; `RollbackRunner` dispatches it from the dialog as
+  `Initiator::Ui`. A ReplicaSet target resolves to its owning Deployment at that ReplicaSet's revision. In
+  `oxikube_resources_ui::kinds::workloads::rollback`: `RollbackFlow` / `RollbackDialog` (history table, preview, tier line),
+  reached by `ctrl-l` in a Deployment, StatefulSet, DaemonSet or ReplicaSet table, the context menu, the palette and the
+  workload panel's Rollback button.
 - `oxikube_app::workloads` (E12-S08) — `WorkloadService` and the `cronjob::Trigger`, `cronjob::Suspend`, `cronjob::Resume`,
   `job::Suspend` and `job::Resume` handlers (tools `k8s.cronjob_trigger`, `k8s.cronjob_suspend`, `k8s.cronjob_resume`,
   `k8s.job_suspend`, `k8s.job_resume`). All five are mutations at risk `Low` through the `MutationGuard`: blocked on a

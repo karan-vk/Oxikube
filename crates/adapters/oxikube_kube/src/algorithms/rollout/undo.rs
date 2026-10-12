@@ -1,24 +1,13 @@
-//! `rollout undo`: put the Deployment's pod template back to an earlier revision.
+//! `rollout undo`: put the Deployment's pod template back to an earlier revision. The choice of
+//! the ReplicaSet and the patch are the domain's ([`plan_deployment_rollback`]); this sends it.
 
-use oxikube_domain::json::JsonRef;
+use oxikube_domain::rollout::{PlanAction, plan_deployment_rollback, refuse_if_paused};
 use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::{Patch, ResourcePort, WriteOptions};
-use serde_json::{Map, Value, json};
 use tracing::debug;
 
-use super::revisions::{HASH_LABEL, REVISION_ANNOTATION, revision_of, revisions};
+use super::revisions::revisions;
 use crate::algorithms::api::deployment_gvk;
-
-/// Bookkeeping annotations: a ReplicaSet's are not copied back to the Deployment and the
-/// Deployment keeps its own (kubectl's `annotationsToSkip`).
-const SKIPPED_ANNOTATIONS: [&str; 6] = [
-    "kubectl.kubernetes.io/last-applied-configuration",
-    REVISION_ANNOTATION,
-    "deployment.kubernetes.io/revision-history",
-    "deployment.kubernetes.io/desired-replicas",
-    "deployment.kubernetes.io/max-replicas",
-    "deprecated.deployment.rollback.to",
-];
 
 /// The outcome of [`rollout_undo`].
 #[derive(Debug, Clone, PartialEq)]
@@ -58,114 +47,39 @@ pub async fn rollout_undo(
         return Err(OxiError::validation("a revision is a number from 1"));
     }
     let deployment = port.get(&deployment_gvk(), Some(namespace), name).await?;
-    if deployment.get_bool("/spec/paused") == Some(true) {
-        return Err(OxiError::conflict(format!(
-            "deployment {name} is paused: resume it before rolling back"
-        )));
-    }
-    let from_revision = revision_of(&deployment);
+    // Before the list: a paused Deployment costs one read, as it does for kubectl.
+    refuse_if_paused(&deployment)?;
     let history = revisions(port, &deployment).await?;
-    let (to_revision, target) = choose(&history, to_revision, name)?;
-
-    let template = restored_template(target)?;
-    if same_template(&template, deployment.get("/spec/template")) {
+    let plan = plan_deployment_rollback(&deployment, &history, to_revision)?;
+    let PlanAction::Patch { body, .. } = plan.action else {
         return Ok(RolloutUndo {
-            from_revision,
-            to_revision,
+            from_revision: plan.from_revision,
+            to_revision: plan.to_revision,
             unchanged: true,
             deployment: None,
         });
-    }
+    };
     debug!(
         op = "rollout_undo",
         namespace,
         name,
-        to_revision,
+        to_revision = plan.to_revision,
         dry_run = options.dry_run,
         "algorithm"
     );
-    let patch = Patch::json(json!([
-        {"op": "replace", "path": "/spec/template", "value": template},
-        {"op": "add", "path": "/metadata/annotations", "value": restored_annotations(&deployment, target)},
-    ]));
     let patched = port
-        .patch(&deployment_gvk(), Some(namespace), name, &patch, options)
+        .patch(
+            &deployment_gvk(),
+            Some(namespace),
+            name,
+            &Patch::json(body),
+            options,
+        )
         .await?;
     Ok(RolloutUndo {
-        from_revision,
-        to_revision,
+        from_revision: plan.from_revision,
+        to_revision: plan.to_revision,
         unchanged: false,
         deployment: Some(patched),
     })
-}
-
-/// The ReplicaSet to restore: the one at `wanted`, or the second newest.
-fn choose<'a>(
-    history: &'a [(i64, Resource)],
-    wanted: Option<i64>,
-    deployment: &str,
-) -> OxiResult<(i64, &'a Resource)> {
-    // `history` is sorted by revision, oldest first.
-    let found = match wanted {
-        Some(revision) => history.iter().find(|(r, _)| *r == revision),
-        None => history.len().checked_sub(2).and_then(|i| history.get(i)),
-    };
-    match (found, wanted) {
-        (Some((revision, rs)), _) => Ok((*revision, rs)),
-        (None, Some(revision)) => Err(OxiError::validation(format!(
-            "unable to find revision {revision} of deployment {deployment} in its history"
-        ))),
-        (None, None) => Err(OxiError::validation(format!(
-            "no rollout history found for deployment {deployment}"
-        ))),
-    }
-}
-
-/// The ReplicaSet's pod template without the hash label the controller added.
-fn restored_template(rs: &Resource) -> OxiResult<Value> {
-    let mut template = rs
-        .get("/spec/template")
-        .filter(|t| t.is_object())
-        .map(JsonRef::to_value)
-        .ok_or_else(|| {
-            OxiError::validation(format!("replicaset {} has no pod template", rs.name()))
-        })?;
-    remove_hash(&mut template);
-    Ok(template)
-}
-
-fn remove_hash(template: &mut Value) {
-    if let Some(labels) = template
-        .pointer_mut("/metadata/labels")
-        .and_then(Value::as_object_mut)
-    {
-        labels.shift_remove(HASH_LABEL);
-    }
-}
-
-/// Whether the Deployment already runs `restored` (both compared without the hash label).
-fn same_template(restored: &Value, current: Option<JsonRef<'_>>) -> bool {
-    current.is_some_and(|current| {
-        let mut current = current.to_value();
-        remove_hash(&mut current);
-        current == *restored
-    })
-}
-
-/// The Deployment's annotations after the undo, as kubectl computes them: the Deployment's own
-/// bookkeeping annotations (revision, last-applied configuration, ...) stay, and the
-/// ReplicaSet's other annotations are laid over them.
-fn restored_annotations(deployment: &Resource, rs: &Resource) -> Value {
-    let skipped = |key: &str| SKIPPED_ANNOTATIONS.contains(&key);
-    let own = deployment
-        .meta
-        .annotations
-        .iter()
-        .filter(|(key, _)| skipped(key));
-    let restored = rs.meta.annotations.iter().filter(|(key, _)| !skipped(key));
-    let merged: Map<String, Value> = own
-        .chain(restored)
-        .map(|(key, value)| (key.to_string(), Value::String(value.to_string())))
-        .collect();
-    Value::Object(merged)
 }

@@ -12,7 +12,7 @@ use oxikube_workspace::CommandDispatcher;
 
 use super::events::EventRow;
 use crate::exec::ExecFlow;
-use crate::kinds::{ScaleFlow, SetImageFlow};
+use crate::kinds::{RollbackFlow, ScaleFlow, SetImageFlow};
 use crate::table::ResourceTableDeps;
 
 /// What a [`DetailView`](crate::detail::DetailView) is built over. Cheap to clone.
@@ -36,6 +36,9 @@ pub struct DetailDeps {
     /// Opens the set-image dialog from a workload's header button (E12-S05). `None`: the header
     /// has no Restart or Set image buttons.
     pub set_image: Option<SetImageFlow>,
+    /// Opens the rollback dialog from a workload's panel (E12-S06). `None`: the panel has no
+    /// Rollback button.
+    pub rollback: Option<RollbackFlow>,
 }
 
 impl From<&ResourceTableDeps> for DetailDeps {
@@ -48,6 +51,7 @@ impl From<&ResourceTableDeps> for DetailDeps {
             exec: None,
             scale: None,
             set_image: None,
+            rollback: None,
         }
     }
 }

@@ -32,6 +32,10 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   one spec file each, with the shared detail `WorkloadPanel` (replicas, strategy, selector, pod
   template, owned ReplicaSets and Pods as links) and the Scale dialog (`workload::Scale`: context
   menu, palette, `s` on those kinds, the panel's button).
+  Rollout history and rollback (E12-S06): `kinds::workloads::rollback`, the Rollback dialog
+  (`workload::Rollback`: the revisions with change causes, what the chosen one changes, the
+  confirmation tier; context menu, palette, `ctrl-l` on Deployments, StatefulSets, DaemonSets and
+  ReplicaSets, the panel's button).
 - `kinds::workloads::rollout` (E12-S05): Restart and Set image for Deployments, StatefulSets and
   DaemonSets (`workload::Restart`, `workload::SetImage`): context menu, palette, `r` and `i` in the
   table for those kinds, the detail header's buttons, and the set-image dialog (a field per

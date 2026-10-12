@@ -6,7 +6,7 @@
 //! | `model` | [`PanelModel`]: the replica stats, strategy, selector and pod template as data, built once per object version |
 //! | `follow` | the owned subscriptions: started for the object and store, polled, their rows recomputed |
 //! | `owned` | the ReplicaSets and Pods the workload owns, found by `ownerReferences`, as capped rows |
-//! | `render` | drawing: the header with the Scale button, the stats, the spec lines, the template, the owned sections |
+//! | `render` | drawing: the header with the Scale and Rollback buttons, the stats, the spec lines, the template, the owned sections |
 //!
 //! # What it shows
 //!
@@ -173,6 +173,20 @@ impl WorkloadPanel {
             return;
         };
         detail.update(cx, |detail, cx| detail.open_scale(window, cx));
+    }
+
+    /// Why the Rollback button is not usable now, `None` when it is, outer `None` when the panel
+    /// has no rollback flow to offer (the detail decides: [`DetailView::rollback_state`]).
+    pub(super) fn rollback_state(&self, cx: &gpui::App) -> Option<Option<String>> {
+        self.detail.upgrade()?.read(cx).rollback_state()
+    }
+
+    /// Opens the rollback dialog for the workload. Does nothing when the button is disabled.
+    pub fn open_rollback(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        let Some(detail) = self.detail.upgrade() else {
+            return;
+        };
+        detail.update(cx, |detail, cx| detail.open_rollback(window, cx));
     }
 
     /// Opens an owned object's detail (`resource::Open`), like an owner link does.
