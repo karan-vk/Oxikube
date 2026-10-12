@@ -87,9 +87,12 @@ fn row_element(tokens: &Tokens, tones: &ToneColors, row: &ContainerRow) -> AnyEl
                 .iter()
                 .zip(cells)
                 .map(|(&(id, _, width, right), text)| {
-                    let colour = match id {
-                        "state" => tones.of(row.state_tone),
-                        "image" | "probes" | "ports" | "cpu" | "memory" => tokens.colors.text_muted,
+                    let colour = match (id, row.usage_tone(id)) {
+                        ("state", _) => tones.of(row.state_tone),
+                        (_, Some(tone)) => tones.of(tone),
+                        ("image" | "probes" | "ports" | "cpu" | "memory", _) => {
+                            tokens.colors.text_muted
+                        }
                         _ => tokens.colors.text,
                     };
                     let cell = cell(width, right)

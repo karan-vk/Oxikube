@@ -26,6 +26,7 @@ mod debug;
 mod delete;
 mod exec;
 mod filter_selector;
+mod live_metrics;
 mod logs;
 mod logs_agent;
 mod logs_aggregate;

@@ -38,6 +38,11 @@ impl Render for ResourceTable {
             d.cells.begin_frame(d.now, &d.provider);
             (d.rows.len(), d.selection.len(), d.table_state())
         });
+        let metrics_text = self.metrics.badge_text(&self.cluster, cx);
+        self.metrics.drew(metrics_text.clone());
+        let metrics_badge = metrics_text.map(|text| {
+            crate::metrics::metrics_badge(text, &self.cluster, &self.deps.dispatcher, cx)
+        });
         let tokens = cx.colors();
         let count: SharedString = if selected > 0 {
             format!("{selected} of {rows} selected").into()
@@ -75,6 +80,7 @@ impl Render for ResourceTable {
                     stale_badge(stale, state.can_retry(), &cx.entity().downgrade(), cx)
                 }))
                 .child(self.filter.clone())
+                .children(metrics_badge)
                 .children(self.basic_columns_note(cx))
                 .child(div().flex_1())
                 .children(self.version_switcher(cx))

@@ -53,8 +53,19 @@
   //                 count, summed per name. Your list replaces this one (an empty list turns GPU
   //                 accounting off); list a MIG profile or a vendor of your own by its exact
   //                 resource name. Edits apply at once.
+  //   poll_interval_secs  how often live CPU and memory are read from metrics-server while a
+  //                 Pods or Nodes table (or a pod's containers) is on screen; nothing is polled
+  //                 for a hidden tab. 5 to 600; after errors the interval doubles (up to two
+  //                 minutes), and a cluster without metrics-server is asked every five minutes.
+  //   thresholds    k9s' thresholds: the percent of a limit (pods, containers) or of a node's
+  //                 allocatable at which a usage cell turns amber (`warn`) and red (`critical`).
   "metrics": {
-    "gpu_vendors": ["nvidia.com/gpu", "amd.com/gpu", "gpu.intel.com/i915", "gpu.intel.com/xe"]
+    "gpu_vendors": ["nvidia.com/gpu", "amd.com/gpu", "gpu.intel.com/i915", "gpu.intel.com/xe"],
+    "poll_interval_secs": 15,
+    "thresholds": {
+      "cpu": { "warn": 70, "critical": 90 },
+      "memory": { "warn": 70, "critical": 90 }
+    }
   },
   // Session restore: reopen the clusters, tabs and namespaces of your last session at launch.
   // Off by default. Restoring starts after the window is drawn, so it never delays start-up, and a

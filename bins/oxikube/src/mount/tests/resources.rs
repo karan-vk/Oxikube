@@ -136,7 +136,7 @@ fn the_sidebar_shows_count_badges_from_the_store(cx: &mut TestAppContext) {
 }
 
 /// A listable kind as discovery serves it.
-fn kind(group: &str, version: &str, name: &str, plural: &str) -> ResourceKind {
+pub(super) fn kind(group: &str, version: &str, name: &str, plural: &str) -> ResourceKind {
     ResourceKind {
         gvk: Gvk::new(group, version, name),
         preferred: true,

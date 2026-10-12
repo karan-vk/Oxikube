@@ -25,6 +25,8 @@ oxikube_settings.workspace = true
 oxikube_theme.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
+# The metrics slot the kinds' per-cluster column factories share with the views (E13-S03).
+parking_lot.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

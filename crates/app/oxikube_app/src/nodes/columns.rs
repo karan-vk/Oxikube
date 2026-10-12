@@ -8,7 +8,8 @@
 //! * **Pods** reads the store's pods-by-node index ([`NodeLoadsLease`]), one hash lookup per
 //!   visible cell, and shows `–` until the Pod feed is live.
 //! * **CPU%** and **Mem%** are the metrics slots: usage over allocatable, from a
-//!   [`NodeUsageSource`] E13 registers. Without one they show `–`.
+//!   [`NodeUsageSource`] E13 registers (`oxikube_app::metrics::ClusterUsage`), toned by its
+//!   [`UsageThresholds`]. Without one they show `–`.
 //! * **Schedulable**, **Instance type** and **Zone** read `spec.unschedulable` and the
 //!   well-known labels.
 //!
@@ -26,6 +27,7 @@ use parking_lot::Mutex;
 
 use crate::columns::{
     Align, Cell, CellSort, Column, ColumnId, ColumnProvider, CoreColumns, SortKind, Tone,
+    UsageThresholds,
 };
 use crate::kinds::ColumnsContext;
 use crate::store::{NodeLoadsLease, ResourceStore, StoreObject};
@@ -77,6 +79,12 @@ pub trait NodeUsageSource: Send + Sync {
     /// by usage as stale as its last ranking.
     fn epoch(&self) -> u64 {
         0
+    }
+
+    /// When CPU% and Mem% turn amber or red (the `metrics.thresholds` setting). The default is
+    /// k9s': warn 70, critical 90.
+    fn thresholds(&self) -> UsageThresholds {
+        UsageThresholds::default()
     }
 }
 
@@ -219,7 +227,10 @@ impl NodeColumns {
     }
 
     fn usage_cell<'a>(&self, res: &Resource, cpu: bool) -> Cell<'a> {
-        let Some(usage) = self.usage.as_ref().and_then(|u| u.usage(&res.meta.name)) else {
+        let Some(source) = self.usage.as_ref() else {
+            return absent();
+        };
+        let Some(usage) = source.usage(&res.meta.name) else {
             return absent();
         };
         let status = res.json().get("status").and_then(|s| s.get("allocatable"));
@@ -236,15 +247,8 @@ impl NodeColumns {
             Quantity::from_value(usage.memory_bytes)
         };
         match used.percent_of(&allocatable) {
-            Some(percent) => Cell::float(format!("{}%", percent.round()), percent).with_tone(
-                if percent >= 90.0 {
-                    Tone::Error
-                } else if percent >= 75.0 {
-                    Tone::Warn
-                } else {
-                    Tone::Neutral
-                },
-            ),
+            Some(percent) => Cell::float(format!("{}%", percent.round()), percent)
+                .with_tone(source.thresholds().of(cpu).tone(percent)),
             None => absent(),
         }
     }

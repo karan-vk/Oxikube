@@ -13,6 +13,7 @@
 //! | [`filter`] | E07-S04 | [`FilterBar`](filter::FilterBar): the `/` filter of a table (`/text`, `/!text`, `/-l k=v`, `/-f fuzzy`), its parse error and `123 of 4,812` count, debounce, and the saved filter |
 //! | [`kinds`] | E12-S01 | the kind registry's UI half: [`kinds::KindSpec`] (the app's `KindMeta` plus a [`kinds::DetailRenderer`]), the [`kinds::KindSpecs`] global (`kind_for` never fails: unknown kinds get the generic spec), the built-in kinds by sidebar section (each section module's `init`), published to the cluster sidebar, where each cluster gates them by discovery and the visibility hook; the CRD kind's spec and definition panel ([`kinds::crd`], E12-S17); [`kinds::service`] and [`kinds::endpoints`] (E12-S13): Services, Endpoints and EndpointSlices with their detail panel, row actions and keys |
 //! | [`kinds::storage`] | E12-S15 | the Storage section: claims (Pods used by), volumes, classes (Default badge) and, where served, volume snapshots; their detail panels; "Resize…" (`pvc::Resize`) and "Set as Default" (`storageclass::SetDefault`) with their dialogs |
+//! | [`metrics`] | E13-S03 | live metrics in the views: [`metrics::set_service`] (the app's `MetricsService`), the per-cluster usage sources of the Pod and Node kinds, [`metrics::TableMetrics`] (a Pods or Nodes table watches while active) and the `metrics unavailable: <reason>` badge |
 //! | [`navigate`] | E07-S11 | opening a kind's list: the `resource::OpenList` handler and the registry of kind views ([`navigate::KindViews`]) |
 //! | [`overview_lite`] | E07-S11 | the Workloads overview (store-only counts and health tiles) |
 //! | [`table`] | E07-S03 | [`ResourceTable`](table::ResourceTable): the generic, virtualised table of one kind, with sorting, column layout per kind, multi-select, context menu and keyboard navigation |
@@ -32,6 +33,7 @@ pub mod detail;
 pub mod exec;
 pub mod filter;
 pub mod kinds;
+pub mod metrics;
 pub mod navigate;
 pub mod overview_lite;
 pub mod table;

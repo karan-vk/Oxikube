@@ -102,6 +102,9 @@ pub struct ResourceTable {
     /// saved over it).
     pub(super) prefs_loaded: bool,
     pub(super) active: bool,
+    /// Live metrics (E13-S03): a Pods or Nodes table watches its kind while active, and shows
+    /// `metrics unavailable: <reason>` in the toolbar.
+    pub(super) metrics: crate::metrics::TableMetrics,
     /// The cluster tab's workspace, which hosts the delete dialog and the toasts.
     pub(super) workspace: Option<gpui::WeakEntity<Workspace>>,
     /// The shell or attach being set up (the pod read, then the command or the picker); a newer
@@ -215,7 +218,9 @@ impl ResourceTable {
                 let alive = this.update(cx, |view, cx| {
                     if view.active {
                         view.follow_rank(cx);
-                        if view.ages_moved(cx) {
+                        // A poll's new usage reads as a moved cell, a new metrics state as a
+                        // moved badge: one redraw a second at most, never one per sample.
+                        if view.ages_moved(cx) || view.metrics.moved(&view.cluster, cx) {
                             cx.notify();
                         }
                     }
@@ -226,6 +231,7 @@ impl ResourceTable {
             }
         });
 
+        let metrics = crate::metrics::TableMetrics::for_kind(&kind.gvk);
         let mut this = Self {
             cluster,
             kind,
@@ -244,6 +250,7 @@ impl ResourceTable {
             writer: None,
             prefs_loaded: false,
             active: false,
+            metrics,
             workspace: None,
             exec_task: None,
             selected: 0,
@@ -308,6 +315,11 @@ impl ResourceTable {
     /// The filter bar (E07-S04): its text, error and count.
     pub fn filter(&self) -> &Entity<FilterBar> {
         &self.filter
+    }
+
+    /// The table's live metrics: what it watches and its badge.
+    pub fn metrics(&self) -> &crate::metrics::TableMetrics {
+        &self.metrics
     }
 
     /// The table handle (rows, layout and selection live in its delegate).
@@ -429,6 +441,7 @@ impl Item for ResourceTable {
 
     fn set_active(&mut self, active: bool, _: &mut Window, cx: &mut Context<Self>) {
         self.active = active;
+        self.metrics.set_active(active, &self.cluster, cx);
         cx.notify();
     }
 
@@ -437,6 +450,7 @@ impl Item for ResourceTable {
         self.feed_task = None;
         self.warning_task = None;
         self.subscription = None;
+        self.metrics.release();
     }
 }
 

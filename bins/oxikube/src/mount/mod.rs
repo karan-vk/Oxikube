@@ -80,6 +80,10 @@
 //!     connects), `cluster::ShowMetricsSettings` (the palette's "Cluster Metrics Settings", the
 //!     sidebar's Metrics entry) opens the cluster's metrics page in its tab, and
 //!     `cluster::RedetectMetrics` / `cluster::ToggleMetrics` are on the bus with their tool stubs.
+//! 16. live metrics (E13-S03, `crate::live_metrics`): the app's `MetricsService` reaches the
+//!     Pods and Nodes tables and a pod's containers (set before the resource views start), polls
+//!     metrics-server for the cluster tab this window shows (only while a table watches) and
+//!     follows the `metrics` setting.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -183,6 +187,8 @@ pub struct Wiring {
     _metrics_pages: Task<()>,
     /// Follows the sessions and the settings for the metrics provider service (E13-S05).
     _follow_metrics: crate::metrics_provider::MetricsFollow,
+    /// Live metrics (E13-S03): the service's pollers, its settings and this window's shown tab.
+    _live_metrics: crate::live_metrics::LiveMetricsFollow,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -318,6 +324,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         tracing::warn!("a command bus was set already: this window uses its own");
     }
 
+    // Live metrics (E13-S03), before any table opens: the Pods and Nodes columns read the
+    // service, and the shown cluster tab is what it polls.
+    let live_metrics = crate::live_metrics::start(&services.live_metrics, &tabs, cx);
     let resource_views = ResourceViews::start(
         ResourceViewsDeps {
             table: ResourceTableDeps {
@@ -514,6 +523,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _editor_views: editor_views,
         _metrics_pages: metrics_pages,
         _follow_metrics: follow_metrics,
+        _live_metrics: live_metrics,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

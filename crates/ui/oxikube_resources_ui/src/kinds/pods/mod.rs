@@ -1,7 +1,8 @@
 //! Pods (E12-S02): the first kind with a module of its own. Its [`KindSpec`] brings
 //!
-//! * the columns ([`PodColumns`], `oxikube_app`): Name, Namespace, Ready, Status (kubectl v1.36's
-//!   printer), Restarts with the last restart, CPU and Memory (E13's metrics, `–` without them),
+//! * the columns ([`PodColumns`], `oxikube_app`, built per cluster with that cluster's metrics
+//!   source, E13-S03): Name, Namespace, Ready, Status (kubectl v1.36's printer), Restarts with
+//!   the last restart, CPU and Memory (metrics-server's, `–` without them),
 //!   `%CPU/R`, `%CPU/L`, `%MEM/R`, `%MEM/L`, IP, Node, QoS, Service Account, Controlled By, Age;
 //!   IP, Node and QoS hidden by default as in Freelens. The column picker saves what the user
 //!   shows, per kind (`ColumnPrefs`);
@@ -26,7 +27,7 @@ use std::sync::Arc;
 
 use gpui::{App, Global};
 use oxikube_app::columns::MetricsSource;
-use oxikube_app::{KindMeta, PodColumns, Section};
+use oxikube_app::{ColumnProvider, KindMeta, PodColumns, Section};
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{Gvk, Scope};
 
@@ -35,6 +36,7 @@ pub use containers::ContainersPanel;
 pub use panel::PodPanel;
 
 use super::{DetailRenderer, KindSpec, KindSpecs};
+use crate::metrics::MetricsSlot;
 
 /// Pods' slot in the Workloads section: first (the other workloads start at 20).
 pub const RANK: u32 = 10;
@@ -55,19 +57,24 @@ const POD_ACTIONS: &[CommandId] = &[
     CommandId::POD_SANITIZE,
 ];
 
-/// The registered pod columns, so E13 can hand them its metrics source.
+/// The registered pod columns: one provider (one summary memo) for every cluster.
 struct PodKind {
     columns: Arc<PodColumns>,
 }
 
 impl Global for PodKind {}
 
-/// The Pod spec over `columns`.
-pub fn spec(columns: Arc<PodColumns>) -> KindSpec {
+/// The Pod spec over `columns`: each table gets them with its cluster's usage from `metrics`
+/// (the app's `MetricsService`, once the binary set it), else the shared fallback source.
+pub fn spec(columns: Arc<PodColumns>, metrics: MetricsSlot) -> KindSpec {
     let meta = KindMeta::new(Gvk::new("", "v1", "Pod"), "pods", "Pods", Scope::Namespaced)
         .in_section(Section::WORKLOADS, RANK)
         .with_actions(POD_ACTIONS.iter().copied())
-        .with_columns(columns);
+        .with_columns_per_cluster(move |context| {
+            let provider: Arc<dyn ColumnProvider> =
+                Arc::new(columns.in_cluster(metrics.pod_source(&context.cluster)));
+            provider
+        });
     KindSpec::new(meta).with_detail(DetailRenderer::panel(PodPanel::build))
 }
 
@@ -80,13 +87,15 @@ pub fn init(cx: &mut App) {
     cx.set_global(PodKind {
         columns: columns.clone(),
     });
-    if let Err(error) = KindSpecs::register(cx, spec(columns)) {
+    let metrics = crate::metrics::slot(cx);
+    if let Err(error) = KindSpecs::register(cx, spec(columns, metrics)) {
         tracing::error!(%error, "the Pod kind was not registered");
     }
 }
 
-/// Gives the pods table its CPU and memory source (E13), or takes it away with `None`. Without
-/// one the usage and `%` columns read `–`.
+/// Gives every pods table a fixed CPU and memory source, or takes it away with `None`: the
+/// fallback of a cluster the app's metrics service does not serve (tests, the gallery). With
+/// neither, the usage and `%` columns read `–`.
 pub fn set_metrics_source(cx: &App, source: Option<Arc<dyn MetricsSource>>) {
     if let Some(kind) = cx.try_global::<PodKind>() {
         kind.columns.set_metrics(source);

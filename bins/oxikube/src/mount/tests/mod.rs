@@ -19,6 +19,7 @@ mod introspection;
 mod jump;
 mod keyboard;
 mod keymap;
+mod live_metrics;
 mod logs;
 mod metrics;
 mod namespaces;

@@ -16,6 +16,8 @@
 //! `kubectl -o wide`), an alignment and a [`SortKind`]. A [`Cell`] has display text, a typed
 //! [`CellSort`] key (so sorting never reparses text) and a [`Tone`] (a meaning, never a colour).
 //! CPU and memory columns are hooks: [`Cell::Pending`] until E13 registers a [`MetricsSource`].
+//! [`UsageThresholds`] (E13-S03, k9s' `thresholds`) colour the utilisation percents against a
+//! ceiling: a pod's `/L` columns and a node's `CPU%` and `Mem%`.
 //!
 //! Everything here is pure, synchronous and allocation-light: no gpui, no kube, no I/O.
 
@@ -25,6 +27,7 @@ mod column;
 pub mod pods;
 mod provider;
 mod table;
+mod thresholds;
 
 #[cfg(test)]
 mod tests;
@@ -35,3 +38,4 @@ pub use column::{Align, Column, ColumnId, SortKind};
 pub use pods::PodColumns;
 pub use provider::ColumnProvider;
 pub use table::TableColumns;
+pub use thresholds::{DEFAULT_CRITICAL, DEFAULT_WARN, Threshold, UsageThresholds};

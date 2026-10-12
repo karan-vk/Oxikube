@@ -94,8 +94,8 @@ impl EndpointSink for PromqlSink {
 }
 
 /// A spawner onto the Tokio bridge (GPUI's background executor under the deterministic test
-/// runtime), the one the resource stores use.
-fn spawner(cx: &App) -> Arc<dyn Spawner> {
+/// runtime), the one the resource stores use. The live metrics pollers run on it too.
+pub(crate) fn spawner(cx: &App) -> Arc<dyn Spawner> {
     match oxikube_runtime::handle(cx) {
         Some(handle) => Arc::new(move |task| {
             handle.spawn(task);

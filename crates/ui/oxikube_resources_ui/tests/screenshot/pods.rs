@@ -1,9 +1,13 @@
 //! The Pod kind's own views (E12-S02), with the Pod spec registered as the app registers it:
 //!
 //! - `pods_columns_dark`: the pods table with the pod columns (Ready, Status, Restarts, CPU,
-//!   Memory, the four `%` columns, Service Account, Controlled By) and a fixed metrics source;
-//!   one pod without limits reads `–` in the `/L` columns. Age and Restarts are hidden through a
+//!   Memory, the four `%` columns, Service Account, Controlled By) over the app's metrics
+//!   service fed one poll (E13-S03): the API pod at 90 % of its memory limit (red, k9s'
+//!   critical), the payments pod at 75 % of its CPU limit (amber); pods without limits read `–`
+//!   in the `/L` columns, the pending and the succeeded ones have no sample. Age and Restarts are hidden through a
 //!   saved layout (they move with the clock).
+//! - `pods_metrics_unavailable_dark`: the same table on a cluster without metrics-server: the
+//!   `metrics unavailable: <reason>` badge in the toolbar and `–` in every usage cell.
 //! - `detail_pod_containers_dark`, `detail_pod_containers_light`: a pod's detail opening on its
 //!   containers sub-table: an init container, a sidecar, two regular containers (one
 //!   crash-looping) and a debug container, with image, state, restarts, probes, ports and
@@ -17,11 +21,14 @@ use std::sync::Arc;
 
 use gpui::{AppContext as _, px, size};
 use jiff::Timestamp;
-use oxikube_app::columns::{Cell, Metric, MetricsSource};
 use oxikube_app::store::ResourceStores;
-use oxikube_app::{ClusterSessionManager, CoreColumns};
+use oxikube_app::{ClusterSessionManager, CoreColumns, MetricsKind, MetricsService};
+use oxikube_domain::Resource;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
-use oxikube_domain::{Quantity, Resource};
+use oxikube_domain::metrics::{
+    ContainerUsage, MetricsSample, MetricsSubject, MissingReason, Reading,
+};
+use oxikube_ports::MetricsOutcome;
 use oxikube_ports::{ClockPort, ClusterContext, SourceId, StatePort as _};
 use oxikube_resources_ui::detail::{DetailDeps, DetailTab, DetailView, Mount};
 use oxikube_resources_ui::kinds;
@@ -38,28 +45,44 @@ use super::{Ignore, check, headless, pods_kind};
 
 const TABLE_WIDTH: f32 = 1440.0;
 const TABLE_HEIGHT: f32 = 240.0;
-const DETAIL_WIDTH: f32 = 900.0;
+/// Wide enough for every column of the containers sub-table (it scrolls sideways in a drawer).
+const DETAIL_WIDTH: f32 = 1640.0;
 const DETAIL_HEIGHT: f32 = 420.0;
 /// Tall enough for the action bar, the containers, the open sections and the Overview below.
 const PANEL_HEIGHT: f32 = 700.0;
+const PANEL_WIDTH: f32 = 900.0;
 
-/// CPU and memory for every pod, by name.
-struct Fixed;
+/// One poll of metrics-server, by pod name: `(millicores, MiB)`; the pending and the succeeded
+/// pods have no sample (metrics-server only reports running containers).
+fn table_reading(cluster: &ClusterId) -> MetricsOutcome {
+    let reading = |name: &str, millicores: u64, mib: u64| {
+        let pod = ResourceRef::namespaced(cluster.clone(), Gvk::new("", "v1", "Pod"), "shop", name);
+        MetricsSample::new(
+            MetricsSubject::Pod { pod },
+            Timestamp::UNIX_EPOCH,
+            None,
+            millicores * 1_000_000,
+            mib * 1024 * 1024,
+        )
+    };
+    MetricsOutcome::Available(vec![
+        reading("api-7c9d", 180, 230),
+        reading("payments-9e1c", 150, 40),
+        reading("web-6a4f", 45, 96),
+    ])
+}
 
-impl MetricsSource for Fixed {
-    fn cell(&self, pod: &Resource, metric: Metric, _: Timestamp) -> Option<Cell<'static>> {
-        let (cpu, memory) = match pod.meta.name.as_ref() {
-            "api-7c9d" => ("180m", "230Mi"),
-            "payments-9e1c" => ("12m", "40Mi"),
-            "seed-db-1a3e" => return None,
-            _ => ("45m", "96Mi"),
-        };
-        let text = match metric {
-            Metric::Cpu => cpu,
-            Metric::Memory => memory,
-        };
-        Some(Cell::quantity(text, Quantity::parse(text).ok()?))
-    }
+/// The app's metrics service over `sessions`, with `outcome` as the last pod poll of `cluster`.
+fn metrics(
+    sessions: &ClusterSessionManager,
+    cluster: &ClusterId,
+    outcome: MetricsOutcome,
+) -> MetricsService {
+    let service = MetricsService::new(sessions.clone(), Arc::new(FakeClockPort::default()));
+    service
+        .usage(cluster)
+        .apply(MetricsKind::Pods, Timestamp::UNIX_EPOCH, &Ok(outcome));
+    service
 }
 
 fn cluster() -> (ClusterId, ClusterContext) {
@@ -109,8 +132,14 @@ fn table_pods() -> Vec<Resource> {
     ]
 }
 
-fn render_table() -> anyhow::Result<RgbaImage> {
+fn render_table(available: bool) -> anyhow::Result<RgbaImage> {
     let (sessions, cluster) = connected(table_pods());
+    let outcome = if available {
+        table_reading(&cluster)
+    } else {
+        MetricsOutcome::Unavailable(MissingReason::NotInstalled)
+    };
+    let service = metrics(&sessions, &cluster, outcome);
     let state = Arc::new(FakeStatePort::new());
     let layout = ColumnPrefs {
         visible: [("age".to_owned(), false), ("restarts".to_owned(), false)].into(),
@@ -128,7 +157,7 @@ fn render_table() -> anyhow::Result<RgbaImage> {
         oxikube_runtime::init_deterministic(cx);
         cx.set_reduce_motion(true);
         kinds::pods::init(cx);
-        kinds::pods::set_metrics_source(cx, Some(Arc::new(Fixed)));
+        oxikube_resources_ui::metrics::set_service(cx, service);
         let clock: Arc<dyn ClockPort> = clock;
         let deps = ResourceTableDeps {
             sessions,
@@ -199,9 +228,34 @@ fn multi_container_pod() -> Resource {
     .expect("a pod")
 }
 
+/// `shop/api-0`'s containers: the sidecar, the API (90 % of its memory limit) and the worker.
+fn detail_reading(target: &ResourceRef) -> MetricsOutcome {
+    let container = |name: &str, millicores: u64, mib: u64| ContainerUsage {
+        name: name.into(),
+        cpu: Reading::Value(millicores * 1_000_000),
+        memory: Reading::Value(mib * 1024 * 1024),
+    };
+    let mut sample = MetricsSample::new(
+        MetricsSubject::Pod {
+            pod: target.clone(),
+        },
+        Timestamp::UNIX_EPOCH,
+        None,
+        203_000_000,
+        513 * 1024 * 1024,
+    );
+    sample.containers = vec![
+        container("proxy", 20, 40),
+        container("api", 180, 461),
+        container("worker", 3, 12),
+    ];
+    MetricsOutcome::Available(vec![sample])
+}
+
 fn render_detail(light: bool) -> anyhow::Result<RgbaImage> {
     let (sessions, cluster) = connected([multi_container_pod()]);
     let target = ResourceRef::namespaced(cluster, Gvk::new("", "v1", "Pod"), "shop", "api-0");
+    let service = metrics(&sessions, &target.cluster, detail_reading(&target));
     let clock = Arc::new(FakeClockPort::default());
     let mut cx = headless();
     let window = cx.open_window(size(px(DETAIL_WIDTH), px(DETAIL_HEIGHT)), |_, cx| {
@@ -215,6 +269,7 @@ fn render_detail(light: bool) -> anyhow::Result<RgbaImage> {
         oxikube_runtime::init_deterministic(cx);
         cx.set_reduce_motion(true);
         kinds::pods::init(cx);
+        oxikube_resources_ui::metrics::set_service(cx, service);
         let clock: Arc<dyn ClockPort> = clock;
         let deps = DetailDeps {
             sessions,
@@ -300,7 +355,7 @@ fn render_panel(light: bool) -> anyhow::Result<RgbaImage> {
     let target = ResourceRef::namespaced(cluster, Gvk::new("", "v1", "Pod"), "shop", "web-0");
     let clock = Arc::new(FakeClockPort::default());
     let mut cx = headless();
-    let window = cx.open_window(size(px(DETAIL_WIDTH), px(PANEL_HEIGHT)), |_, cx| {
+    let window = cx.open_window(size(px(PANEL_WIDTH), px(PANEL_HEIGHT)), |_, cx| {
         oxikube_ui::init(cx);
         let tokens = if light {
             oxikube_ui::Tokens::light()
@@ -361,7 +416,13 @@ fn render_panel(light: bool) -> anyhow::Result<RgbaImage> {
 pub(crate) fn run() -> anyhow::Result<()> {
     check(
         "pods_columns_dark",
-        render_table()?,
+        render_table(true)?,
+        TABLE_WIDTH,
+        TABLE_HEIGHT,
+    )?;
+    check(
+        "pods_metrics_unavailable_dark",
+        render_table(false)?,
         TABLE_WIDTH,
         TABLE_HEIGHT,
     )?;
@@ -380,13 +441,13 @@ pub(crate) fn run() -> anyhow::Result<()> {
     check(
         "detail_pod_panel_dark",
         render_panel(false)?,
-        DETAIL_WIDTH,
+        PANEL_WIDTH,
         PANEL_HEIGHT,
     )?;
     check(
         "detail_pod_panel_light",
         render_panel(true)?,
-        DETAIL_WIDTH,
+        PANEL_WIDTH,
         PANEL_HEIGHT,
     )
 }

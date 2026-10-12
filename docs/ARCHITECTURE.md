@@ -324,6 +324,21 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `clusters.<id>.metrics`); the binary pushes `MetricsSettings::gpu_table` into the aggregator's `GpuVendorsHandle` on every
   change (`bins/oxikube/src/metrics_settings.rs`), so an edit applies to the next computation. Oracle: the semantics of
   `kubectl-view-allocations` (CC0), reimplemented as a model in the tests; `cargo bench -p oxikube_app --bench utilisation`.
+- `oxikube_app::metrics::live` (E13-S03) — `MetricsService`: live CPU and memory from metrics-server. One poller per
+  cluster, alive only while a consumer holds a `MetricsInterest` for a `MetricsKind` (`Nodes`, `Pods`: a Pods or Nodes table
+  that is the active item of its pane, a pod's open detail), a window shows the cluster's tab (`MetricsVisibility`, moved by
+  the binary on `ClusterTabsEvent::ActiveChanged`) and the session is connected; the poller is a task on the binary's
+  `Spawner` held by an abort-on-drop guard, so the last consumer gone (or the tab hidden) aborts the call in flight. Only
+  watched kinds are polled (`PodMetrics` in the session's namespace selection). `Cadence` per kind: the interval (15 s
+  default, `metrics.poll_interval_secs`), doubling backoff after failures and 503s capped at 2 min, every 5 min while
+  `NotInstalled` / `Forbidden`, at most one interval after a resume. Each poll lands in the cluster's `ClusterUsage` as one
+  batch (latest reading and a 60-sample `SampleRing` per node and pod, each pod's containers; objects missing from the
+  answer are evicted) and moves its epoch once; `MetricsState` per kind (`Idle`, `Loading`, `Available`,
+  `Unavailable(reason)`, `Failed`) is the table's `metrics unavailable: <reason>` badge. `ClusterUsage` is the Pods table's
+  `MetricsSource` (through `PodColumns::in_cluster`, the shared memo kept) and the Nodes table's `NodeUsageSource`; the
+  `/L` and node `%` cells are toned by `UsageThresholds` (k9s' `thresholds`, `metrics.thresholds`, warn 70 / critical 90).
+  Tables pick up a poll in their once-a-second redraw check and re-rank a usage sort through `rank_epoch`.
+  `cargo bench -p oxikube_app --bench live_metrics`.
 - `oxikube_app::exec` (E09-S08) — `ExecService`: `open_shell(pod, container, &ShellOptions)` finds the shell with a quick
   non-interactive exec per entry of the chain (`terminal.exec_shells`, default `bash`, `sh`; exit 126/127 or `executable file
   not found` means missing, anything else stops the search), opens the first the container has over the session's `ExecPort`
@@ -1278,6 +1293,11 @@ weaken `cargo xtask lint-deps`.
   nothing runs on the Tokio runtime until a cluster connects; nothing is probed for a cluster whose settings turn metrics off) and passes every
   settings change to it. `mount::metrics` opens the page for `cluster::ShowMetricsSettings` and routes the sidebar's Metrics
   entry to the same command.
+- `live_metrics` (E13-S03): `ClusterServices::live_metrics` holds the `MetricsService`; each window's mount
+  (`live_metrics::start`) hands it to the views (`oxikube_resources_ui::metrics::set_service`, before the resource views
+  start), attaches the Tokio bridge for its pollers, follows the session updates on the foreground, pushes the `metrics`
+  setting (`poll_interval_secs`, `thresholds`, global and per cluster) on every change, and moves the window's
+  `MetricsVisibility` with the shown cluster tab.
 - `mount`: `mount_main_window` runs inside the main window's construction
   (`oxikube_workspace::window::open_main_window_mounted`): the cluster tabs with their setup
   (sidebar, connect views, namespace selector in the tab toolbar, `ClusterTab::set_toolbar`), the

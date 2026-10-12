@@ -84,6 +84,11 @@ harness = false
 name = "utilisation"
 harness = false
 
+# `cargo bench -p oxikube_app --bench live_metrics` (E13-S03): a 10k-pod metrics poll and a usage cell.
+[[bench]]
+name = "live_metrics"
+harness = false
+
 # `cargo bench -p oxikube_app --bench log_ingest` (E08-S01): lines through a LogService session.
 [[bench]]
 name = "log_ingest"

@@ -9,6 +9,7 @@ use oxikube_domain::ids::{Gvk, Scope};
 
 use super::panel::NodePanel;
 use crate::kinds::{DetailRenderer, KindSpec};
+use crate::metrics::MetricsSlot;
 
 /// A node's own actions: a shell on it (E09-S09), cordon and uncordon (E12-S09). Drain arrives
 /// with E12-S10.
@@ -18,11 +19,14 @@ const NODE_ACTIONS: [CommandId; 3] = [
     CommandId::NODE_UNCORDON,
 ];
 
-/// The Nodes spec: its sidebar slot, a column provider per cluster, the node panel and the actions.
-pub fn spec() -> KindSpec {
+/// The Nodes spec: its sidebar slot, a column provider per cluster (CPU% and Mem% from the
+/// cluster's samples in `metrics`, E13-S03), the node panel and the actions.
+pub fn spec(metrics: MetricsSlot) -> KindSpec {
     let meta = KindMeta::new(Gvk::new("", "v1", "Node"), "nodes", "Nodes", Scope::Cluster)
         .in_section(Section::NODES, 10)
-        .with_columns_per_cluster(|context| node_columns(context, None))
+        .with_columns_per_cluster(move |context| {
+            node_columns(context, metrics.node_source(&context.cluster))
+        })
         .with_actions(NODE_ACTIONS);
     KindSpec::new(meta).with_detail(DetailRenderer::panel(|detail, window, cx| {
         cx.new(|cx| NodePanel::new(detail, window, cx)).into()

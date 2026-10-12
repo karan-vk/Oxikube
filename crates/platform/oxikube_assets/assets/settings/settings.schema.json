@@ -704,6 +704,26 @@
             "array",
             "null"
           ]
+        },
+        "poll_interval_secs": {
+          "description": "Seconds between two polls of metrics-server while a table shows live usage (5 to 600;\ndefault 15). Polling stops while nothing shows it.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "thresholds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThresholdsContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When a usage percent turns amber (`warn`) or red (`critical`), as k9s' `thresholds`:\nthe percent of a pod's or container's limit, or of a node's allocatable."
         }
       },
       "type": "object"
@@ -1240,6 +1260,35 @@
       ],
       "description": "What one settings layer says about the theme."
     },
+    "ThresholdsContent": {
+      "additionalProperties": false,
+      "description": "What one layer says about `metrics.thresholds`.",
+      "properties": {
+        "cpu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UsageLevelContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "CPU usage over a pod's or container's CPU limit, or over a node's allocatable CPU."
+        },
+        "memory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UsageLevelContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Memory usage over its limit, or over a node's allocatable memory."
+        }
+      },
+      "type": "object"
+    },
     "TolerationContent": {
       "additionalProperties": false,
       "description": "One toleration of the node shell pod (a Kubernetes `Toleration`).",
@@ -1305,6 +1354,31 @@
           "type": "string"
         }
       ]
+    },
+    "UsageLevelContent": {
+      "additionalProperties": false,
+      "description": "What one layer says about a resource's levels.",
+      "properties": {
+        "critical": {
+          "description": "From this percent on, the cell is red.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "warn": {
+          "description": "From this percent of the limit (or of a node's allocatable) on, the cell is amber.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     },
     "WatchBudgetContent": {
       "additionalProperties": false,
