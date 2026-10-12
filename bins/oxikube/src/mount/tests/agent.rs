@@ -37,7 +37,11 @@ fn hooks(app: &mut App) -> AgentHooks {
 fn the_mount_registers_the_log_provider_and_the_get_logs_tool(cx: &mut TestAppContext) {
     let mut app = App::start(cx, TestPorts::seeded());
     let hooks = hooks(&mut app);
-    assert_eq!(hooks.contexts.prefixes(), ["logs"], "@logs is registered");
+    assert_eq!(
+        hooks.contexts.prefixes(),
+        ["logs", "metrics"],
+        "@logs and @metrics are registered"
+    );
     let defs = hooks.tools.defs();
     let def = defs
         .iter()
@@ -180,4 +184,118 @@ fn get_logs_and_at_logs_read_through_the_connected_cluster(cx: &mut TestAppConte
         let oxikube_testkit::LogCall::StreamLogs { options, .. } = call;
         assert!(!options.follow);
     }
+}
+
+#[gpui::test]
+fn the_mount_registers_the_metrics_tools_read_only(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    let hooks = hooks(&mut app);
+    let names: Vec<String> = hooks
+        .tools
+        .defs()
+        .iter()
+        .map(|d| d.name.to_string())
+        .collect();
+    for tool in ["k8s.top_pods", "k8s.top_nodes", "k8s.query_promql"] {
+        assert!(names.iter().any(|n| n == tool), "{tool} in {names:?}");
+        let def = hooks
+            .tools
+            .defs()
+            .into_iter()
+            .find(|d| d.name.as_str() == tool);
+        let def = def.expect("registered");
+        assert!(
+            !def.is_mutating() && def.read_only_hint(),
+            "{tool} is read-only"
+        );
+    }
+}
+
+#[gpui::test]
+fn the_metrics_tools_and_at_metrics_read_through_the_connected_cluster(cx: &mut TestAppContext) {
+    use jiff::Timestamp;
+    use oxikube_domain::ids::{Gvk, ResourceRef};
+    use oxikube_domain::metrics::{MetricsSample, MetricsSubject};
+    use oxikube_ports::MetricsOutcome;
+
+    let mut app = App::start(cx, TestPorts::seeded());
+    app.open_pods_table(); // connects the cluster
+    let cluster = TestPorts::cluster_id();
+    let ports = app.ports.connector.ports_for(&cluster);
+    let pod = |name: &str, millis: u64| {
+        MetricsSample::new(
+            MetricsSubject::Pod {
+                pod: ResourceRef::namespaced(
+                    cluster.clone(),
+                    Gvk::new("", "v1", "Pod"),
+                    "demo",
+                    name,
+                ),
+            },
+            Timestamp::from_second(1_791_115_200).unwrap(),
+            None,
+            millis * 1_000_000,
+            64 * 1024 * 1024,
+        )
+    };
+    // Scripted after the table's own first poll: the tools and the mention consume these.
+    for _ in 0..2 {
+        ports
+            .metrics
+            .script()
+            .pod_metrics
+            .push_ok(MetricsOutcome::Available(vec![
+                pod("web-running", 300),
+                pod("idle", 5),
+            ]));
+    }
+
+    let hooks = hooks(&mut app);
+    let tool_result = Arc::new(Mutex::new(None));
+    let mention_result = Arc::new(Mutex::new(None));
+    app.vcx.update(|_, cx| {
+        let (tools, out) = (hooks.tools.clone(), tool_result.clone());
+        cx.spawn(async move |_| {
+            let result = tools
+                .invoke("k8s.top_pods", json!({"limit": 1}), &ToolContext::agent())
+                .await;
+            *out.lock() = Some(result);
+        })
+        .detach();
+        let (contexts, out) = (hooks.contexts.clone(), mention_result.clone());
+        cx.spawn(async move |_| {
+            let result = contexts
+                .resolve_text("@metrics/pod/demo/web-running", &ContextScope::new())
+                .await;
+            *out.lock() = Some(result);
+        })
+        .detach();
+    });
+    for _ in 0..4 {
+        app.tick();
+    }
+
+    let output = tool_result
+        .lock()
+        .take()
+        .expect("the tool call finished")
+        .expect("a valid call");
+    assert!(!output.is_error, "{output:?}");
+    let data = output.structured.expect("structured");
+    assert_eq!(data["status"], "ok");
+    assert_eq!(data["pods"][0]["name"], "web-running");
+    assert_eq!(data["pods"][0]["cpu_millicores"], 300);
+    assert_eq!(data["returned"], 1);
+
+    let blocks = mention_result
+        .lock()
+        .take()
+        .expect("the mention resolved")
+        .expect("a valid mention");
+    assert!(
+        blocks[0].body.contains("# pod: demo/web-running"),
+        "{}",
+        blocks[0].body
+    );
+    assert!(blocks[0].body.contains("300m"), "{}", blocks[0].body);
 }

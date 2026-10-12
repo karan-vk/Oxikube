@@ -24,6 +24,7 @@ use oxikube_app::context::{LogContextProvider, PendingContext};
 use oxikube_app::logs::kubectl::Kubectl;
 use oxikube_app::logs::{LogConfig, LogService};
 use oxikube_app::tools::k8s::{GetLogsTool, GetSecretTool};
+use oxikube_app::tools::metrics::MetricsAgentDeps;
 use oxikube_logs_ui::{
     LogRequest, LogViewDeps, LogViews, LogViewsDeps, LogsSettings, follow_settings,
     log_row_actions, log_runtime,
@@ -70,11 +71,14 @@ pub fn install(state: &AppState, clock: Arc<dyn ClockPort>, cx: &mut App) -> Arc
 
 /// The agent hooks of the app (E08-S09): the ones already on `state`, else new ones that are set,
 /// with `@logs` in the context registry and `k8s.get_logs` and `k8s.get_secret` (E12-S11) in the
-/// tool registry, all reading through `sessions` (the logs on the `service`).
+/// tool registry, all reading through `sessions` (the logs on the `service`); and (E13-S12)
+/// `@metrics` with `k8s.top_pods`, `k8s.top_nodes` and `k8s.query_promql`, reading through
+/// `metrics`.
 pub fn install_agent_hooks(
     state: &AppState,
     sessions: ClusterSessionManager,
     service: Arc<LogService>,
+    metrics: &MetricsAgentDeps,
 ) -> AgentHooks {
     if let Some(hooks) = state.agent_hooks() {
         return hooks.clone();
@@ -93,6 +97,12 @@ pub fn install_agent_hooks(
     // until the agent epic can ask the user).
     if let Err(error) = GetSecretTool::register(&hooks.tools, clusters) {
         tracing::error!(%error, "the get_secret tool could not be registered");
+    }
+    // The metrics tools and `@metrics` (E13-S12): read-only, and an absent metrics stack is their
+    // answer, not their failure.
+    if let Err(error) = oxikube_app::tools::metrics::install(&hooks.tools, &hooks.contexts, metrics)
+    {
+        tracing::error!(%error, "the metrics tools could not be registered");
     }
     if !state.set_agent_hooks(hooks.clone()) {
         // Another window set them first: use those, so every window shares the queue.

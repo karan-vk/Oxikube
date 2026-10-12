@@ -6,6 +6,7 @@
 //! | [`MetricsService`] | one poller per watched cluster; [`watch`](MetricsService::watch) registers a consumer of a [`MetricsKind`], [`visibility`](MetricsService::visibility) follows the cluster tab a window shows, [`set_config`](MetricsService::set_config) the `metrics` setting |
 //! | [`ClusterUsage`] | one cluster's samples: the latest and the last [`RING_CAPACITY`] per node and pod ([`SampleRing`]), each pod's containers, the [`MetricsState`] per kind; the Pods table's `MetricsSource` and the Nodes table's `NodeUsageSource` |
 //! | [`MetricsState`] | `Idle`, `Loading`, `Available`, `Unavailable(reason)` or `Failed`: `metrics unavailable: <reason>` is shown, never a zero |
+//! | [`node_snapshot`](MetricsService::node_snapshot), [`pod_snapshot`](MetricsService::pod_snapshot) | one on-demand read for a caller that is not a table (the agent tools, `@metrics`); answered to the caller, never written to the cache |
 //! | [`Cadence`] | when a kind is polled next: the interval, backoff after failures, rarely while the API is absent |
 //! | [`ContainerUsageCells`] | a container row's CPU, MEM and `%` cells |
 //!
@@ -36,6 +37,7 @@ mod poller;
 mod reconcile;
 mod ring;
 mod service;
+mod snapshot;
 mod state;
 mod usage;
 
@@ -51,5 +53,7 @@ pub use containers::ContainerUsageCells;
 pub use handles::{MetricsInterest, MetricsVisibility};
 pub use ring::{RING_CAPACITY, SampleRing, UsagePoint};
 pub use service::MetricsService;
+pub(crate) use state::reason_text;
 pub use state::{MetricsKind, MetricsState};
 pub use usage::{ClusterUsage, cpu_text, memory_text, usage_cell};
+pub(crate) use usage::{percent_text, reading_text};

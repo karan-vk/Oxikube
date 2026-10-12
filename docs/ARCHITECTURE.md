@@ -444,6 +444,23 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `tail` over the cap and an unparsable `since` or `grep` are a failed call (`Err`), a missing pod or a denied
   `pods/log` is a tool error the model sees. The name is the acceptance's `get_logs` in the `k8s.` namespace
   `ToolName` requires (E26-S04's `k8s.logs` can alias it).
+  `tools::metrics` (E13-S12) adds `k8s.top_pods`, `k8s.top_nodes` and `k8s.query_promql` (the acceptance's names in the `k8s.`
+  namespace), read-only with no risk and offered to every session (absence is the tool's answer, not a reason to hide it).
+  `top_*` take `sort` (`cpu` or `memory`) and `limit` (1 to 50, default 10; `top_pods` also `namespace`) and make one on-demand
+  read through `MetricsService::{pod,node}_snapshot` (the same call a poll makes, answered to the caller and not written to the
+  polling cache, so they work while no table is polling); `top_nodes` adds the percent of `status.allocatable`.
+  `query_promql` takes raw `query` or the catalogue selector (`scope` + `metric` + `name`, `namespace`, `container`, extra
+  `labels` for a shared store), instant or over a `range` (1 m to 7 d, the E13-S06 step policy), through the app's
+  `PromqlPort` and `QueryCataloguePort`; it asks `MetricsProviderService` which stack the cluster has and refuses (as
+  `unavailable`) a cluster whose `prometheus` settings turn metrics off. No metrics-server, a denied `metrics.k8s.io`, no
+  Prometheus, a stuck backend (a deadline on the app clock) or an unreachable one is `status: "unavailable"` with
+  `metrics unavailable: <reason>`; a query Prometheus rejects is a tool error the model can fix; a malformed call is an `Err`.
+  Answers are bounded (20 series, 60 points per series and 400 across all, rounded to four significant digits, query text and
+  labels redacted). `context::metrics` is `@metrics/pod/<ns>/<name>` (also `@metrics/pod/<name>` with a default namespace): the
+  newest 20 of the ring buffer's samples, the pod's requests and limits with the latest usage as a percent of each, the
+  containers; a cluster nobody is watching has no ring, so it takes one reading and says it has no history; a pod that does not
+  exist or metrics that are unavailable are a block whose body says so. `tools::metrics::install` registers all four, and
+  `mount::logs::install_agent_hooks` calls it with `MetricsServices::agent_deps`.
   Module `churn` (E08-S07, reconnect and churn following): every followed stream (a session's, an aggregate's)
   reads through `Resumable`, which reopens a stream that broke while its pod runs after a backoff with deterministic
   jitter (`ReconnectPolicy::Backoff`: 500 ms doubling to 30 s; `logs.reconnect_retries`, default 5, failures in a row,
@@ -1369,7 +1386,7 @@ weaken `cargo xtask lint-deps`.
   settings) with the window's `LogViews` and the tables' row actions ("View Logs" on pods, E08-S02, and on
   workloads and Services, E08-S04), and the app's `AgentHooks` (E08-S09, `mount::logs::install_agent_hooks`, stored with
   `AppState::set_agent_hooks`): the `ContextRegistry` holding `@logs`, the `ToolRegistry` holding `k8s.get_logs`, and the
-  `PendingContext` queue the viewer's "Send to agent" fills until the agent panel (E27) attaches.
+  `PendingContext` queue the viewer's "Send to agent" fills until the agent panel (E27) attaches. Since E13-S12 the same hooks hold `@metrics` and `k8s.top_pods`, `k8s.top_nodes`, `k8s.query_promql`.
   The app's one `ExecService` (E09-S08, `mount::exec_service`, stored with `AppState::set_exec_service`) backs the pod
   actions and the terminal's `ClusterLauncher`; `mount::bus` registers `pod::Shell` / `Attach` / `Exec` and
   (E09-S10, with the same `ExecService`) `pod::Debug` under `oxikube_terminal`, and (E09-S09) `node::Shell`

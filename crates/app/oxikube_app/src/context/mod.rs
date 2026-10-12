@@ -1,6 +1,6 @@
 //! Agent context (E08-S09): the [`ContextRegistry`] that resolves `@`-mentions to
-//! [`ContextBlock`](oxikube_domain::agent::ContextBlock)s, the `@logs` provider, and the queue
-//! "Send to agent" fills until the agent panel (E27) exists.
+//! [`ContextBlock`](oxikube_domain::agent::ContextBlock)s, the `@logs` and `@metrics` (E13-S12)
+//! providers, and the queue "Send to agent" fills until the agent panel (E27) exists.
 //!
 //! Plain async Rust over the [`ContextProviderPort`](oxikube_ports::ContextProviderPort): no gpui,
 //! no kube, no `agent-client-protocol` (ADR 0008). The same providers serve the agent panel's
@@ -10,6 +10,7 @@
 //! |---|---|
 //! | providers by mention prefix; one resolution within a byte budget | [`ContextRegistry`] (`registry`) |
 //! | `@logs/<ns>/<pod>[/--since/10m]` and a viewer's selection as a block | [`LogContextProvider`], [`LogMention`], [`selection_context`] (`logs`) |
+//! | `@metrics/pod/<ns>/<name>`: a pod's recent CPU and memory, requests and limits as a block | [`MetricsContextProvider`], [`MetricsMention`] (`metrics`) |
 //! | context waiting for the agent panel, with its source | [`PendingContext`], [`QueuedContext`], [`ContextSource`], [`ContextConsumer`] (`pending`) |
 //!
 //! # Redaction and budgets
@@ -19,10 +20,12 @@
 //! says in a `# note:` line when lines were left out and how to get them.
 
 mod logs;
+mod metrics;
 mod pending;
 mod registry;
 
 pub use logs::{LOGS_PREFIX, LogContextProvider, LogMention, selection_context};
+pub use metrics::{METRICS_PREFIX, MetricsContextProvider, MetricsMention};
 pub use pending::{
     CollectingConsumer, ConsumerGuard, ContextConsumer, ContextSource, MAX_PENDING_ITEMS,
     PendingContext, QueuedContext, Sent,

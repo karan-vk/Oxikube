@@ -217,9 +217,19 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
     let log_service = logs::install(&state, ports.clusters.clock.clone(), cx);
-    // What hosted agents read: `@logs` and `k8s.get_logs` (E08-S09), and the queue "Send to agent"
-    // fills.
-    let agent = logs::install_agent_hooks(&state, services.sessions.clone(), log_service.clone());
+    // What hosted agents read: `@logs` and `k8s.get_logs` (E08-S09), `@metrics` and the metrics tools
+    // (E13-S12), and the queue "Send to agent" fills.
+    let metrics_agent = services.metrics.agent_deps(
+        &services.sessions,
+        &services.live_metrics,
+        ports.clusters.clock.clone(),
+    );
+    let agent = logs::install_agent_hooks(
+        &state,
+        services.sessions.clone(),
+        log_service.clone(),
+        &metrics_agent,
+    );
 
     // Shells, attaches and commands in pod containers (E09-S08): one service per app, so the
     // container chosen last in a pod is remembered across windows.

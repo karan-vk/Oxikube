@@ -27,9 +27,12 @@ use std::sync::Arc;
 use gpui::{App, Subscription, Task};
 use oxikube_app::metrics_provider::Resolved;
 use oxikube_app::store::Spawner;
-use oxikube_app::{ClusterSessionManager, EndpointSink, MetricsProviderService};
+use oxikube_app::tools::metrics::MetricsAgentDeps;
+use oxikube_app::{ClusterSessionManager, EndpointSink, MetricsProviderService, MetricsService};
 use oxikube_domain::ids::ClusterId;
-use oxikube_ports::{PromqlPort, ProviderDetectorPort, QueryCataloguePort, ServiceProxyPort};
+use oxikube_ports::{
+    ClockPort, PromqlPort, ProviderDetectorPort, QueryCataloguePort, ServiceProxyPort,
+};
 use oxikube_prometheus::{
     PrometheusPort, PromqlCatalogue, PromqlClient, ProviderDetector, ServiceProxies,
 };
@@ -49,6 +52,27 @@ pub struct MetricsServices {
     /// The PromQL of a `MetricRequest` for a detected stack (E13-S06): the graphs ask this, then
     /// run the query through [`promql`](Self::promql).
     pub catalogue: Arc<dyn QueryCataloguePort>,
+}
+
+impl MetricsServices {
+    /// What the agent's metrics tools and `@metrics` mention read through (E13-S12): the sessions,
+    /// the live usage service, this provider service, the PromQL port and the query catalogue,
+    /// with deadlines on `clock`.
+    pub fn agent_deps(
+        &self,
+        sessions: &ClusterSessionManager,
+        live: &MetricsService,
+        clock: Arc<dyn ClockPort>,
+    ) -> MetricsAgentDeps {
+        MetricsAgentDeps {
+            sessions: sessions.clone(),
+            live: live.clone(),
+            provider: self.provider.clone(),
+            promql: self.promql.clone(),
+            catalogue: self.catalogue.clone(),
+            clock,
+        }
+    }
 }
 
 /// The services over `ports`, following `sessions`. Constructs only.
