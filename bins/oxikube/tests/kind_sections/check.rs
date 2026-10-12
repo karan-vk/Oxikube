@@ -1,8 +1,8 @@
 //! The checks of one kind against the cluster, and the custom resources' printer columns.
 
 use oxikube::app_state::AppState;
-use oxikube_app::DispatchError;
 use oxikube_app::command_bus::{DispatchContext, Outcome};
+use oxikube_app::{DispatchError, SubjectKind};
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{Gvk, ResourceRef};
@@ -74,10 +74,21 @@ pub fn kind(app: &mut Launched, context: &str, namespace: &str, case: &KindCase,
         "{}'s row",
         case.kind
     );
+    // `resource::ViewMetrics` is offered by kind family (those with history graphs), not as a
+    // kind's own action.
+    let metrics = entries
+        .iter()
+        .any(|e| e.command() == CommandId::RESOURCE_VIEW_METRICS);
+    assert_eq!(
+        metrics,
+        SubjectKind::of(&case.gvk()).is_some(),
+        "{}'s View Metrics row action",
+        case.kind
+    );
     let own: Vec<CommandId> = entries
         .iter()
         .map(|e| e.command())
-        .filter(|id| !GENERIC.contains(id))
+        .filter(|id| !GENERIC.contains(id) && *id != CommandId::RESOURCE_VIEW_METRICS)
         .collect();
     assert_eq!(own, case.actions, "{}'s own row actions", case.kind);
 

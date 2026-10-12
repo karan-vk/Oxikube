@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use gpui::TestAppContext;
-use oxikube_app::{ColumnProvider, ColumnsContext, CoreColumns};
+use oxikube_app::{ColumnProvider, ColumnsContext, CoreColumns, SubjectKind};
 use oxikube_domain::Capabilities;
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::Gvk;
@@ -114,10 +114,24 @@ fn every_kinds_rows_offer_its_documented_actions_and_its_spec_declares_them(
         .collect();
     assert!(generic.contains(&CommandId::RESOURCE_DELETE), "{generic:?}");
     for case in catalog() {
-        let offered: Vec<_> = rows
-            .actions_for(&served(case), Capabilities::all())
+        let all = rows.actions_for(&served(case), Capabilities::all());
+        // `resource::ViewMetrics` is offered by kind family (those with history graphs), not by
+        // a kind's spec: present exactly where `SubjectKind` has graphs, and not one of its own.
+        let metrics = all
+            .iter()
+            .any(|a| a.meta().id == CommandId::RESOURCE_VIEW_METRICS);
+        assert_eq!(
+            metrics,
+            SubjectKind::of(&case.gvk()).is_some(),
+            "{}'s View Metrics row action",
+            case.kind
+        );
+        let offered: Vec<_> = all
             .into_iter()
-            .filter(|a| !generic.contains(&a.meta().id))
+            .filter(|a| {
+                let id = a.meta().id;
+                !generic.contains(&id) && id != CommandId::RESOURCE_VIEW_METRICS
+            })
             .collect();
         let ids: Vec<CommandId> = offered.iter().map(|a| a.meta().id).collect();
         assert_eq!(ids, case.actions, "{}'s own row actions", case.kind);
