@@ -73,7 +73,17 @@ pub fn install(
             }
             opened.set(true);
             if workspace.read(cx).items().next().is_none() {
-                ClusterOverview::open(&workspace, cluster.clone(), overview.clone(), window, cx);
+                // The cluster may connect while another tab is shown: its overview then waits,
+                // holding no feeds, until `follow_tabs` reports the tab shown.
+                let shown = tab.read(cx).is_active();
+                ClusterOverview::open(
+                    &workspace,
+                    cluster.clone(),
+                    overview.clone(),
+                    shown,
+                    window,
+                    cx,
+                );
             }
         }
     };
@@ -87,15 +97,18 @@ pub fn install(
         return;
     };
     let overview = overview.clone();
+    let tab = tab.downgrade();
     window
         .subscribe(&panel, cx, move |_, event: &SidebarEvent, window, cx| {
             let SidebarEvent::Navigate(target) = event;
             match target {
                 SidebarTarget::Page(page) if page.as_ref() == OVERVIEW_PAGE => {
+                    let shown = tab.upgrade().is_some_and(|tab| tab.read(cx).is_active());
                     ClusterOverview::open(
                         &workspace,
                         cluster.clone(),
                         overview.clone(),
+                        shown,
                         window,
                         cx,
                     );

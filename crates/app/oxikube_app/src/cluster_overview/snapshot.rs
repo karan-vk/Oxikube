@@ -95,6 +95,37 @@ pub struct OverviewSnapshot {
     pub usage: Option<UsageTotals>,
     /// The largest consumers of the last pod poll (empty without pod metrics).
     pub top: TopConsumers,
-    /// Moves with every publish.
+    /// Moves with every publish (a batch that changes nothing shown is not published).
     pub generation: u64,
+}
+
+impl OverviewSnapshot {
+    /// Whether `other` shows the same: every field but [`generation`](Self::generation).
+    pub fn same_numbers(&self, other: &Self) -> bool {
+        let Self {
+            pods_feed,
+            phases,
+            demand,
+            nodes_feed,
+            nodes,
+            capacity,
+            distribution,
+            node_metrics,
+            pod_metrics,
+            usage,
+            top,
+            generation: _,
+        } = self;
+        *pods_feed == other.pods_feed
+            && *phases == other.phases
+            && *demand == other.demand
+            && *nodes_feed == other.nodes_feed
+            && *nodes == other.nodes
+            && *capacity == other.capacity
+            && *distribution == other.distribution
+            && *node_metrics == other.node_metrics
+            && *pod_metrics == other.pod_metrics
+            && *usage == other.usage
+            && *top == other.top
+    }
 }

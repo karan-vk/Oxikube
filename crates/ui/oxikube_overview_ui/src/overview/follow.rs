@@ -13,6 +13,7 @@ use oxikube_domain::OxiError;
 use oxikube_runtime::{notify_coalesced, spawn_kube};
 
 use super::info::VersionState;
+use super::model::top_scope_note;
 use super::view::{ClusterOverview, Live, Shown, WARNINGS_SHOWN};
 
 /// The shortest time between two redraws for publishes: a churning cluster publishes often, the
@@ -32,9 +33,9 @@ impl ClusterOverview {
                 while let Some(item) = updates.next().await {
                     let alive = this.update(cx, |this, cx| match item {
                         Ok(update) if update.cluster == cluster => match update.change {
-                            SessionChange::StateChanged { .. } | SessionChange::Closed => {
-                                this.sync(cx)
-                            }
+                            SessionChange::StateChanged { .. }
+                            | SessionChange::NamespaceChanged(_)
+                            | SessionChange::Closed => this.sync(cx),
                             _ => {}
                         },
                         Ok(_) => {}
@@ -56,6 +57,7 @@ impl ClusterOverview {
         if let Some(session) = &session {
             self.context = session.context().to_string();
             self.server = session.server().map(str::to_owned);
+            self.top_scope = top_scope_note(session.namespace_selection());
         }
         let session = session.filter(ClusterSession::is_connected);
         if self.connected != session.is_some() {
@@ -128,20 +130,22 @@ impl ClusterOverview {
         self.history.start(self.deps.history.clone(), cx);
     }
 
-    /// Reads the latest snapshot; rebuilds what is drawn when it moved.
+    /// Reads the latest snapshot; rebuilds what is drawn (and redraws) only when its numbers
+    /// moved.
     pub(super) fn refresh(&mut self, cx: &mut Context<Self>) {
         let Some(live) = &self.live else {
             return;
         };
         let snapshot = live.feed.snapshot();
-        if !Arc::ptr_eq(&snapshot, &self.shown.snapshot) {
-            let shown = Shown::of(snapshot, self.deps.metrics.is_some());
-            if shown != self.shown {
-                self.shown = shown;
-                self.history.set_capacity(&self.shown.snapshot, cx);
-                notify_coalesced(cx);
-            }
+        // `generation` moves with every publish; only a change in what is shown redraws.
+        if Arc::ptr_eq(&snapshot, &self.shown.snapshot)
+            || snapshot.same_numbers(&self.shown.snapshot)
+        {
+            return;
         }
+        self.shown = Shown::of(snapshot, self.deps.metrics.is_some());
+        self.history.set_capacity(&self.shown.snapshot, cx);
+        notify_coalesced(cx);
     }
 
     fn read_warnings(&mut self, cx: &mut Context<Self>) {

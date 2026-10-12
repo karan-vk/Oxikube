@@ -70,6 +70,8 @@ pub struct ClusterSpec {
     pub pods: usize,
     /// Namespaces.
     pub namespaces: usize,
+    /// Nodes the running pods are spread over.
+    pub nodes: usize,
     /// Recycle 1 % of the pods every [`CHURN_EVERY`] once connected.
     pub churn: bool,
 }
@@ -81,7 +83,16 @@ impl ClusterSpec {
             context: context.to_owned(),
             pods,
             namespaces: 8,
+            nodes: fixed::NODES,
             churn: true,
+        }
+    }
+
+    /// The same over `nodes` nodes.
+    pub fn with_nodes(self, nodes: usize) -> Self {
+        Self {
+            nodes: nodes.max(1),
+            ..self
         }
     }
 
@@ -173,10 +184,11 @@ pub fn ports_with(
         let id = spec.cluster_id();
         let ports = inner.ports_for(&id);
         ports.discovery.set_kinds(fixed::kinds());
-        let objects = fixed::objects(spec.namespaces, now);
+        let objects = fixed::objects(spec.namespaces, spec.nodes, now);
         let fixed = Arc::new(FakeResourcePort::new().with_objects(objects));
         let events = fixed::big_config_map_events(BIG_CONFIG_MAP_EVENTS, now);
-        let hub = Hub::new(Population::new(spec.pods, spec.namespaces, now), events);
+        let population = Population::new(spec.pods, spec.namespaces, now).with_nodes(spec.nodes);
+        let hub = Hub::new(population, events);
         let resources = Arc::new(WorldResources::new(hub.clone(), fixed));
         clusters.insert(
             id.clone(),

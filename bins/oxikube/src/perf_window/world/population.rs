@@ -22,6 +22,8 @@ pub fn namespace_name(i: usize) -> String {
 #[derive(Debug)]
 pub struct Population {
     namespaces: usize,
+    /// Nodes the pods are placed on (`worker-0` ..).
+    nodes: usize,
     pods: Vec<Resource>,
     /// How many times each pod was recreated (its uid changes each time).
     generation: Vec<u32>,
@@ -38,6 +40,7 @@ impl Population {
             .unwrap_or(now);
         let mut population = Self {
             namespaces,
+            nodes: super::fixed::NODES,
             pods: Vec::with_capacity(count),
             generation: vec![0; count],
             version: 0,
@@ -48,6 +51,20 @@ impl Population {
             population.pods.push(pod);
         }
         population
+    }
+
+    /// The same pods placed round-robin over `nodes` nodes (the fixed objects' `worker-<n>`).
+    pub fn with_nodes(mut self, nodes: usize) -> Self {
+        let nodes = nodes.max(1);
+        if nodes == self.nodes {
+            return self;
+        }
+        self.nodes = nodes;
+        let created = self.created;
+        for i in 0..self.pods.len() {
+            self.pods[i] = self.build(i, Steady::of(i), created, false);
+        }
+        self
     }
 
     /// Every pod now, in `namespace` (all when `None`).
@@ -114,7 +131,7 @@ impl Population {
     }
 
     fn build(&mut self, i: usize, state: Steady, created: Timestamp, deleting: bool) -> Resource {
-        let node = format!("worker-{}", i % 6);
+        let node = format!("worker-{}", i % self.nodes);
         let mut builder = pod()
             .namespace(namespace_name(i % self.namespaces))
             .name(format!("load-{i:05}"))
@@ -269,6 +286,19 @@ mod tests {
             .map(|p| p.meta.resource_version.clone())
             .collect();
         assert_eq!(versions.len(), 100, "every version is distinct");
+    }
+
+    #[test]
+    fn pods_spread_over_the_nodes() {
+        let population = Population::new(3_000, 8, now()).with_nodes(100);
+        let nodes: std::collections::BTreeSet<_> = population
+            .pods(None)
+            .iter()
+            .filter_map(|p| p.to_value()["spec"]["nodeName"].as_str().map(str::to_owned))
+            .collect();
+        // Pods `3`, `29`, `53` and `79` modulo 100 are always the pending ones: on no node.
+        assert_eq!(nodes.len(), 96);
+        assert!(nodes.contains("worker-99"));
     }
 
     #[test]

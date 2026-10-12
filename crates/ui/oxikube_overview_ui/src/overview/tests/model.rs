@@ -7,12 +7,14 @@ use oxikube_app::cluster_overview::{
 };
 use oxikube_app::store::FeedState;
 use oxikube_domain::metrics::MissingReason;
+use oxikube_domain::session::NamespaceSelection;
 use oxikube_domain::{AllocationResource, ErrorKind};
 use oxikube_ui::tile::TileTone;
 
+use crate::overview::model::{NODES_PARTIAL, PODS_PARTIAL};
 use crate::overview::{
     VersionState, api_server_text, capacity_lines, health_tiles, info_rows, live_metrics_notice,
-    top_rows,
+    top_rows, top_scope_note,
 };
 use crate::test_support::live_snapshot;
 
@@ -118,6 +120,49 @@ fn without_usage_the_bars_say_nothing_about_it_and_never_zero() {
     let [cpu, ..] = capacity_lines(&s);
     assert_eq!(cpu.allocatable, None, "no nodes listed: no denominator");
     assert_eq!(cpu.requests_fill(), 0.0);
+}
+
+#[test]
+fn a_budget_degraded_feed_gives_no_requests_or_allocatable_never_a_zero() {
+    let mut s = live_snapshot();
+    s.pods_feed.partial = true;
+    let [cpu, memory, pods] = capacity_lines(&s);
+    for line in [cpu, memory, pods] {
+        assert_eq!(line.requests, None, "{:?}", line.resource);
+        assert_eq!(line.limits, None);
+        assert_eq!(line.requests_fill(), 0.0);
+        assert_eq!(line.missing, Some(PODS_PARTIAL));
+    }
+    let text = cpu.summary();
+    assert!(text.contains("requested –"), "{text}");
+    assert!(!text.contains("requested 0"), "{text}");
+    assert!(text.ends_with(&format!("({PODS_PARTIAL})")), "{text}");
+    assert!(pods.summary().contains("scheduled –"));
+
+    let mut s = live_snapshot();
+    s.nodes_feed.partial = true;
+    let [cpu, ..] = capacity_lines(&s);
+    assert_eq!(
+        cpu.allocatable, None,
+        "no allocatable from metadata-only nodes"
+    );
+    assert!(cpu.requests.is_some(), "the pods are still read");
+    assert_eq!(cpu.missing, Some(NODES_PARTIAL));
+    assert!(cpu.summary().contains("of –"), "{}", cpu.summary());
+}
+
+#[test]
+fn the_top_scope_note_names_a_narrowed_selection_only() {
+    assert_eq!(top_scope_note(&NamespaceSelection::All), None);
+    assert_eq!(
+        top_scope_note(&NamespaceSelection::single("default")).as_deref(),
+        Some("Only the selected namespace: default")
+    );
+    let many = NamespaceSelection::from_names(["a", "b", "c", "d", "e"]);
+    assert_eq!(
+        top_scope_note(&many).as_deref(),
+        Some("Only the selected namespaces: a, b, c and 2 more")
+    );
 }
 
 #[test]

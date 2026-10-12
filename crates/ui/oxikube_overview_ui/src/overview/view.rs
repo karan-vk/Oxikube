@@ -95,6 +95,8 @@ pub struct ClusterOverview {
     pub(crate) context: String,
     pub(crate) server: Option<String>,
     pub(crate) connected: bool,
+    /// What the top lists cover when it is only the tab's namespace selection.
+    pub(crate) top_scope: Option<String>,
     pub(crate) history: HistoryPanel,
     /// The item is the displayed tab of its pane.
     pub(crate) active: bool,
@@ -114,9 +116,22 @@ impl Focusable for ClusterOverview {
 }
 
 impl ClusterOverview {
-    /// The overview of `cluster`, following its session.
+    /// The overview of `cluster`, following its session, in the cluster tab the window shows.
     pub fn new(cluster: ClusterId, deps: OverviewDeps, cx: &mut Context<Self>) -> Self {
+        Self::with_tab_shown(cluster, deps, true, cx)
+    }
+
+    /// The overview of `cluster`, following its session, in a cluster tab the window shows
+    /// (`tab_shown`) or keeps hidden. A hidden tab's overview starts nothing until
+    /// [`set_tab_shown`](Self::set_tab_shown) says it is shown.
+    pub fn with_tab_shown(
+        cluster: ClusterId,
+        deps: OverviewDeps,
+        tab_shown: bool,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut this = Self::detached(cluster, deps, cx);
+        this.tab_shown = tab_shown;
         this.start(cx);
         this
     }
@@ -136,6 +151,7 @@ impl ClusterOverview {
             context: String::new(),
             server: None,
             connected: false,
+            top_scope: None,
             history,
             active: true,
             tab_shown: true,
@@ -145,11 +161,13 @@ impl ClusterOverview {
     }
 
     /// Shows the overview of `cluster` in `workspace`: the open one when there is one, else a new
-    /// tab.
+    /// tab. `tab_shown` says whether `workspace`'s cluster tab is the one the window shows: a new
+    /// overview in a hidden tab (a cluster that connected in the background) holds no feeds.
     pub fn open(
         workspace: &Entity<Workspace>,
         cluster: ClusterId,
         deps: OverviewDeps,
+        tab_shown: bool,
         window: &mut Window,
         cx: &mut App,
     ) {
@@ -158,7 +176,7 @@ impl ClusterOverview {
             workspace.update(cx, |ws, cx| ws.activate_item(item, true, window, cx));
             return;
         }
-        let overview = cx.new(|cx| ClusterOverview::new(cluster, deps, cx));
+        let overview = cx.new(|cx| ClusterOverview::with_tab_shown(cluster, deps, tab_shown, cx));
         let options = OpenOptions {
             focus: true,
             reuse_existing: true,
@@ -177,6 +195,12 @@ impl ClusterOverview {
     /// What the overview draws now.
     pub fn shown(&self) -> &Shown {
         &self.shown
+    }
+
+    /// What the top lists cover, when it is only the tab's namespace selection (they come from
+    /// metrics-server's answer for those namespaces): `None` for the whole cluster.
+    pub fn top_scope(&self) -> Option<&str> {
+        self.top_scope.as_deref()
     }
 
     /// The warnings the feed shows.

@@ -9,6 +9,7 @@ use oxikube_app::{FixedWarnings, MetricsKind, WarningRow};
 use oxikube_domain::OxiError;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_domain::session::NamespaceSelection;
 use oxikube_ports::{MetricsOutcome, ServerVersion};
 use oxikube_testkit::{node, pod};
 
@@ -164,4 +165,28 @@ fn a_forbidden_pod_feed_shows_no_access_not_zero(cx: &mut TestAppContext) {
             .as_deref()
             .is_some_and(|h| h.contains("forbidden"))
     );
+}
+
+#[gpui::test]
+fn top_consumers_say_when_they_cover_only_the_namespace_selection(cx: &mut TestAppContext) {
+    let mut f = Fixture::open(cx, Setup::default());
+    f.tick();
+    assert_eq!(f.read(|o| o.top_scope().map(str::to_owned)), None);
+    assert!(!f.drawn("overview-top-scope"), "all namespaces: no note");
+
+    f.sessions
+        .set_namespace_selection(&cluster(), NamespaceSelection::single("default"))
+        .expect("the session is open");
+    f.tick();
+    assert_eq!(
+        f.read(|o| o.top_scope().map(str::to_owned)).as_deref(),
+        Some("Only the selected namespace: default")
+    );
+    assert!(f.drawn("overview-top-scope"));
+
+    f.sessions
+        .set_namespace_selection(&cluster(), NamespaceSelection::All)
+        .expect("the session is open");
+    f.tick();
+    assert!(!f.drawn("overview-top-scope"));
 }

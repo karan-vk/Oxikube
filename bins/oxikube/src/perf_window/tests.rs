@@ -188,6 +188,12 @@ fn every_scenario_has_a_name_a_world_and_the_frame_budget() {
                 assert_eq!(world.clusters.len() + world.listed_only, 50, "50 contexts");
             }
             Scenario::TabsPanes => assert_eq!(world.clusters.len(), 3),
+            Scenario::Overview => {
+                assert_eq!(world.clusters.len(), 1);
+                assert_eq!(world.clusters[0].nodes, super::OVERVIEW_NODES);
+                assert_eq!(world.clusters[0].pods, super::OVERVIEW_PODS);
+                assert!(world.clusters[0].churn);
+            }
             Scenario::PodsTable
             | Scenario::TableFilter
             | Scenario::Namespaces

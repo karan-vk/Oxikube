@@ -21,6 +21,7 @@
 //! | `catalog` | 50 contexts, type a search |
 //! | `sidebar` | count badges under churn |
 //! | `nodes-table` | the Nodes table with its pods-by-node index on, under 10 000-pod churn |
+//! | `overview` | the cluster overview of a 100-node, 3 000-pod cluster under churn (E13-S09) |
 //! | `logs` | stream 5 000 lines/s; type a search; JSON mode |
 //! | `terminal` | a 50 MB `yes` flood; a full-screen redraw at 60 Hz; resize |
 //! | `idle` | two clusters connected, nothing moving: CPU |
@@ -71,6 +72,8 @@ pub enum Scenario {
     Sidebar,
     /// The Nodes table, whose Pods column keeps the pods-by-node index on, under pod churn.
     NodesTable,
+    /// The cluster overview of a 100-node, 3 000-pod cluster under churn.
+    Overview,
     /// Stream 5 000 log lines a second; search typing; JSON mode.
     Logs,
     /// `yes` flood, full-screen redraws, resize.
@@ -83,10 +86,14 @@ pub enum Scenario {
 pub const MAIN_CONTEXT: &str = "perf-a";
 /// Pods of the main synthetic cluster (the budget's 10 000).
 pub const PODS: usize = 10_000;
+/// Nodes of the `overview` scenario's cluster (E13-S09's fixture).
+pub const OVERVIEW_NODES: usize = 100;
+/// Pods of the `overview` scenario's cluster.
+pub const OVERVIEW_PODS: usize = 3_000;
 
 impl Scenario {
     /// Every scenario, in report order.
-    pub const ALL: [Scenario; 12] = [
+    pub const ALL: [Scenario; 13] = [
         Scenario::PodsTable,
         Scenario::TableFilter,
         Scenario::Namespaces,
@@ -96,6 +103,7 @@ impl Scenario {
         Scenario::Catalog,
         Scenario::Sidebar,
         Scenario::NodesTable,
+        Scenario::Overview,
         Scenario::Logs,
         Scenario::Terminal,
         Scenario::Idle,
@@ -113,6 +121,7 @@ impl Scenario {
             Scenario::Catalog => "catalog",
             Scenario::Sidebar => "sidebar",
             Scenario::NodesTable => "nodes-table",
+            Scenario::Overview => "overview",
             Scenario::Logs => "logs",
             Scenario::Terminal => "terminal",
             Scenario::Idle => "idle",
@@ -137,6 +146,12 @@ impl Scenario {
             | Scenario::NodesTable
             | Scenario::Logs => WorldSpec {
                 clusters: vec![main()],
+                listed_only: 0,
+            },
+            Scenario::Overview => WorldSpec {
+                clusters: vec![
+                    ClusterSpec::churning(MAIN_CONTEXT, OVERVIEW_PODS).with_nodes(OVERVIEW_NODES),
+                ],
                 listed_only: 0,
             },
             Scenario::TabsPanes => WorldSpec {

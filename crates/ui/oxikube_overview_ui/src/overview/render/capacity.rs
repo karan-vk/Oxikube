@@ -24,7 +24,7 @@ const FULL: f32 = 0.9;
 
 fn fill_colour(line: &CapacityLine, tokens: &Tokens) -> Hsla {
     let fill = line.requests_fill();
-    if line.allocatable.is_some_and(|a| line.requests > a) || fill >= FULL {
+    if line.overcommitted() || fill >= FULL {
         tokens.colors.error
     } else if fill >= BUSY {
         tokens.colors.warning

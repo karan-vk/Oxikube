@@ -83,10 +83,10 @@ fn metrics_server_only_draws_usage_and_top_lists_but_no_graphs(cx: &mut TestAppC
     let shown = f.read(|o| o.shown().clone());
     let [cpu, memory, pods] = shown.lines;
     assert_eq!(cpu.allocatable, Some(8_000));
-    assert_eq!(cpu.requests, 4_000);
+    assert_eq!(cpu.requests, Some(4_000));
     assert_eq!(cpu.usage, Some(3_000), "the nodes' usage, summed");
     assert_eq!(memory.usage, Some(8192 * 1024 * 1024));
-    assert_eq!(pods.requests, 3, "the pending pod is on no node");
+    assert_eq!(pods.requests, Some(3), "the pending pod is on no node");
     assert_eq!(shown.notice, None);
     let pods_cpu: Vec<_> = shown
         .top
@@ -223,7 +223,8 @@ fn metrics_unavailable_is_a_visible_reason_and_the_counts_stay(cx: &mut TestAppC
     );
     assert_eq!(shown.lines[0].usage, None, "no usage, never a zero");
     assert_eq!(
-        shown.lines[0].requests, 4_000,
+        shown.lines[0].requests,
+        Some(4_000),
         "the allocation does not need metrics"
     );
     assert!(shown.top.pods_cpu.is_empty());

@@ -84,6 +84,8 @@ pub(super) struct Setup {
     pub metrics: Option<Vec<(MetricsKind, MetricsOutcome)>>,
     pub history: Option<HistoryDeps>,
     pub warnings: Arc<dyn RecentWarnings>,
+    /// Whether the overview's cluster tab is the one the window shows when it opens.
+    pub tab_shown: bool,
 }
 
 impl Default for Setup {
@@ -94,6 +96,7 @@ impl Default for Setup {
             metrics: None,
             history: None,
             warnings: Arc::new(NoRecentWarnings),
+            tab_shown: true,
         }
     }
 }
@@ -157,6 +160,7 @@ impl Fixture {
             service
         });
         let recorder = Recorder::default();
+        let tab_shown = setup.tab_shown;
         let deps = OverviewDeps {
             sessions: sessions.clone(),
             stores,
@@ -172,7 +176,8 @@ impl Fixture {
             block_on(sessions.connect(&cluster())).expect("connect");
         }
         let overview = vcx.update(|window, cx| {
-            let overview = cx.new(|cx| ClusterOverview::new(cluster(), deps, cx));
+            let overview =
+                cx.new(|cx| ClusterOverview::with_tab_shown(cluster(), deps, tab_shown, cx));
             ws.update(cx, |ws, cx| ws.open_item(overview.clone(), window, cx));
             overview
         });

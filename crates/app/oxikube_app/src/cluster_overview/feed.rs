@@ -256,7 +256,42 @@ impl Driver {
         };
     }
 
+    /// Whether `current` already says what the tallies say now: a batch that moved nothing shown
+    /// (status heartbeats, `resourceVersion` bumps) is not published. Compared field by field, so
+    /// a quiet batch allocates nothing.
+    fn unchanged(&self, current: &OverviewSnapshot) -> bool {
+        let OverviewSnapshot {
+            pods_feed,
+            phases,
+            demand,
+            nodes_feed,
+            nodes,
+            capacity,
+            distribution,
+            node_metrics,
+            pod_metrics,
+            usage,
+            top,
+            generation: _,
+        } = current;
+        pods_feed == self.pods.status()
+            && *phases == self.pod_tally.phases()
+            && *demand == self.pod_tally.demand()
+            && nodes_feed == self.nodes.status()
+            && *nodes == self.node_tally.counts()
+            && *capacity == self.node_tally.capacity()
+            && *distribution == self.distribution
+            && *node_metrics == self.states[0]
+            && *pod_metrics == self.states[1]
+            && *usage == self.usage
+            && *top == self.top
+    }
+
     fn publish(&mut self) {
+        // The first publish always goes out: a restarted feed replaces the numbers a view kept.
+        if self.generation > 0 && self.unchanged(&self.shared.snapshot.lock()) {
+            return;
+        }
         self.generation += 1;
         let snapshot = OverviewSnapshot {
             pods_feed: self.pods.status().clone(),

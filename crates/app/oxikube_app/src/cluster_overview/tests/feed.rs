@@ -10,7 +10,7 @@ use serde_json::json;
 
 use super::{Harness, batch, cluster, timeline};
 use crate::cluster_overview::{
-    Distribution, OverviewFeed, OverviewInput, PodTally, StartedFeed, TOP_N,
+    Distribution, OverviewFeed, OverviewInput, OverviewSnapshot, PodTally, StartedFeed, TOP_N,
 };
 use crate::store::FeedState;
 
@@ -161,4 +161,65 @@ fn a_publish_wakes_the_reader_and_dropping_the_driver_releases_the_feeds() {
         0,
         "the feeds stop with the driver"
     );
+}
+
+#[test]
+fn a_batch_that_changes_no_number_is_not_published() {
+    let mut h = Harness::new();
+    let web = running("web-1", "n1");
+    let relabelled = pod()
+        .namespace("shop")
+        .name("web-1")
+        .running()
+        .node("n1")
+        .requests("500m", "256Mi")
+        .label("heartbeat", "2")
+        .resource_version("2")
+        .build();
+    h.resources.script().watch.push_ok(timeline(vec![
+        batch(vec![Delta::Restarted(vec![web])]),
+        batch(vec![Delta::Applied(relabelled)]),
+        batch(vec![Delta::Applied(
+            pod().namespace("shop").name("web-2").pending().build(),
+        )]),
+    ]));
+    h.resources.insert(node().name("n1").build());
+    let mut started = start(&h);
+    let feed = started.feed.clone();
+    h.spawn(started.driver);
+    h.settle();
+    while futures::FutureExt::now_or_never(started.changes.next()).is_some() {}
+    let before = feed.snapshot();
+    assert_eq!(before.phases.running, 1);
+
+    h.advance(1);
+    let after = feed.snapshot();
+    assert!(
+        std::sync::Arc::ptr_eq(&before, &after),
+        "a relabelled pod moves no number: no new snapshot"
+    );
+    assert!(
+        futures::FutureExt::now_or_never(started.changes.next()).is_none(),
+        "and no wake for the reader"
+    );
+
+    h.advance(1);
+    let moved = feed.snapshot();
+    assert_eq!(moved.phases.pending, 1);
+    assert_eq!(moved.generation, before.generation + 1);
+    assert!(futures::FutureExt::now_or_never(started.changes.next()).is_some());
+}
+
+#[test]
+fn same_numbers_ignores_the_generation_only() {
+    let a = OverviewSnapshot::default();
+    let b = OverviewSnapshot {
+        generation: 7,
+        ..OverviewSnapshot::default()
+    };
+    assert!(a.same_numbers(&b));
+    assert_ne!(a, b);
+    let mut c = b;
+    c.phases.running = 1;
+    assert!(!a.same_numbers(&c));
 }

@@ -15,8 +15,8 @@ use super::population::namespace_name;
 pub const BIG_CONFIG_MAP: &str = "big-config";
 /// Its size: 5 MB of data.
 pub const BIG_CONFIG_MAP_BYTES: usize = 5 * 1024 * 1024;
-/// Nodes.
-const NODES: usize = 6;
+/// Nodes of a synthetic cluster unless its spec says otherwise.
+pub const NODES: usize = 6;
 
 fn kind(group: &str, version: &str, name: &str, plural: &str, namespaced: bool) -> ResourceKind {
     ResourceKind {
@@ -50,14 +50,15 @@ pub fn kinds() -> Vec<ResourceKind> {
     ]
 }
 
-/// Every fixed object of a cluster with `namespaces` namespaces, created two days before `now`.
-pub fn objects(namespaces: usize, now: Timestamp) -> Vec<Resource> {
+/// Every fixed object of a cluster with `namespaces` namespaces and `nodes` nodes, created two days
+/// before `now`.
+pub fn objects(namespaces: usize, nodes: usize, now: Timestamp) -> Vec<Resource> {
     let created = now
         .checked_sub(jiff::SignedDuration::from_hours(49))
         .unwrap_or(now)
         .to_string();
     let mut out = Vec::new();
-    for n in 0..NODES {
+    for n in 0..nodes.max(1) {
         out.push(
             node()
                 .name(format!("worker-{n}"))
@@ -171,7 +172,7 @@ mod tests {
     #[test]
     fn a_cluster_has_its_namespaces_nodes_and_the_big_config_map() {
         let now: Timestamp = "2026-10-08T12:00:00Z".parse().unwrap();
-        let objects = objects(8, now);
+        let objects = objects(8, NODES, now);
         let count = |kind: &str| objects.iter().filter(|o| &*o.kind.kind == kind).count();
         assert_eq!(count("Namespace"), 8);
         assert_eq!(count("Node"), NODES);
@@ -187,5 +188,13 @@ mod tests {
             "{size}"
         );
         assert!(kinds().iter().any(|k| &*k.gvk.kind == "Event"));
+    }
+
+    #[test]
+    fn a_cluster_can_have_a_hundred_nodes() {
+        let now: Timestamp = "2026-10-08T12:00:00Z".parse().unwrap();
+        let objects = objects(8, 100, now);
+        let nodes = objects.iter().filter(|o| &*o.kind.kind == "Node").count();
+        assert_eq!(nodes, 100);
     }
 }

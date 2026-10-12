@@ -29,7 +29,8 @@ fn rows(table: &Entity<ResourceTable>, cx: &App) -> usize {
     table.read(cx).read_rows(cx, |d| d.rows().len())
 }
 
-fn feed_deltas() -> u64 {
+/// Watch events applied to the stores so far.
+pub(super) fn feed_deltas() -> u64 {
     oxikube_runtime::perf::global().map_or(0, |recorder| recorder.feed_deltas())
 }
 

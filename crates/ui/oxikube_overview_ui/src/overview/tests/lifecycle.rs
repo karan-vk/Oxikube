@@ -72,6 +72,31 @@ fn a_hidden_cluster_tab_releases_the_feeds(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn an_overview_opened_in_a_hidden_cluster_tab_holds_nothing_until_shown(cx: &mut TestAppContext) {
+    // A cluster that connects while another tab is shown gets its first screen in the background.
+    let mut f = Fixture::open(
+        cx,
+        Setup {
+            tab_shown: false,
+            ..seeded()
+        },
+    );
+    f.tick();
+    assert!(!f.read(|o| o.is_live()));
+    assert_eq!(
+        f.ports.resources.live_watches(),
+        0,
+        "no feeds for a tab nobody sees"
+    );
+    let overview = f.overview.clone();
+    f.vcx
+        .update(|_, cx| overview.update(cx, |o, cx| o.set_tab_shown(true, cx)));
+    f.tick();
+    assert!(f.read(|o| o.is_live()));
+    assert_eq!(f.ports.resources.live_watches(), 2);
+}
+
+#[gpui::test]
 fn closing_the_overview_releases_the_feeds(cx: &mut TestAppContext) {
     let mut f = Fixture::open(cx, seeded());
     f.tick();

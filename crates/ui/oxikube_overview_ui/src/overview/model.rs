@@ -1,12 +1,14 @@
-//! What the overview says, as plain data: the health tiles, the capacity lines, the top rows and
-//! the metrics notice, built from an [`OverviewSnapshot`]. Pure, so every state's wording is tested
+//! What the overview says, as plain data: the health tiles, the capacity lines (in `capacity`), the
+//! top rows and the metrics notice, built from an [`OverviewSnapshot`]. Pure, so every state's wording is tested
 //! without a window, and built once per publish, never per frame.
 
 use oxikube_app::MetricsState;
 use oxikube_app::cluster_overview::{FeedStatus, OverviewSnapshot, TopEntry};
 use oxikube_app::metrics::live::{cpu_text, memory_text};
-use oxikube_domain::AllocationResource;
+use oxikube_domain::session::NamespaceSelection;
 use oxikube_ui::tile::TileTone;
+
+pub use super::capacity::{CapacityLine, NODES_PARTIAL, PODS_PARTIAL, capacity_lines};
 
 /// One health tile.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,109 +151,6 @@ pub fn health_tiles(s: &OverviewSnapshot) -> Vec<HealthTile> {
     tiles
 }
 
-/// One capacity bar: what the nodes can allocate, what the pods on them request and are limited
-/// to, and what they use now.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CapacityLine {
-    /// CPU (millicores), memory (bytes) or pods.
-    pub resource: AllocationResource,
-    /// The nodes' allocatable sum; `None` before the nodes are listed.
-    pub allocatable: Option<i64>,
-    /// The pods' requests (for pods: how many occupy a node).
-    pub requests: i64,
-    /// The pods' limits; `None` for the pod count.
-    pub limits: Option<i64>,
-    /// Live usage from metrics-server; `None` without it (never a zero).
-    pub usage: Option<i64>,
-}
-
-fn fraction(amount: i64, total: Option<i64>) -> f32 {
-    match total.filter(|t| *t > 0) {
-        Some(total) => (amount.max(0) as f64 / total as f64).clamp(0.0, 1.0) as f32,
-        None => 0.0,
-    }
-}
-
-fn percent(amount: i64, total: Option<i64>) -> Option<u32> {
-    let total = total.filter(|t| *t > 0)?;
-    u32::try_from(i128::from(amount.max(0)) * 100 / i128::from(total)).ok()
-}
-
-impl CapacityLine {
-    /// Where the requests fill reaches, in `0..=1` of allocatable.
-    pub fn requests_fill(&self) -> f32 {
-        fraction(self.requests, self.allocatable)
-    }
-
-    /// Where the limits mark sits, in `0..=1` (clamped: the text says the real figure).
-    pub fn limits_fill(&self) -> Option<f32> {
-        self.limits.map(|l| fraction(l, self.allocatable))
-    }
-
-    /// Where the usage bar reaches, in `0..=1`.
-    pub fn usage_fill(&self) -> Option<f32> {
-        self.usage.map(|u| fraction(u, self.allocatable))
-    }
-
-    /// The requests as a percent of allocatable.
-    pub fn requests_percent(&self) -> Option<u32> {
-        percent(self.requests, self.allocatable)
-    }
-
-    /// `1.5 / 6 cores`-style summary: requests (and usage) against allocatable.
-    pub fn summary(&self) -> String {
-        let fmt = |n| self.resource.format(n);
-        let of = self.allocatable.map_or_else(|| "–".to_owned(), fmt);
-        let with_pct = |n, label: &str| match percent(n, self.allocatable) {
-            Some(p) => format!("{label} {} ({p}%)", fmt(n)),
-            None => format!("{label} {}", fmt(n)),
-        };
-        let mut parts = Vec::new();
-        if let Some(usage) = self.usage {
-            parts.push(with_pct(usage, "used"));
-        }
-        let requested = if self.resource == AllocationResource::Pods {
-            "scheduled"
-        } else {
-            "requested"
-        };
-        parts.push(with_pct(self.requests, requested));
-        if let Some(limits) = self.limits {
-            parts.push(with_pct(limits, "limits"));
-        }
-        format!("{} of {of}", parts.join(" · "))
-    }
-}
-
-/// The CPU, memory and pod lines.
-pub fn capacity_lines(s: &OverviewSnapshot) -> [CapacityLine; 3] {
-    let listed = s.nodes_feed.is_listed();
-    let alloc = |n: i64| listed.then_some(n);
-    [
-        CapacityLine {
-            resource: AllocationResource::Cpu,
-            allocatable: alloc(s.capacity.cpu_millis),
-            requests: s.demand.cpu_requests,
-            limits: Some(s.demand.cpu_limits),
-            usage: s.usage.map(|u| u.cpu_millis()),
-        },
-        CapacityLine {
-            resource: AllocationResource::Memory,
-            allocatable: alloc(s.capacity.memory_bytes),
-            requests: s.demand.memory_requests,
-            limits: Some(s.demand.memory_limits),
-            usage: s.usage.map(|u| u.memory()),
-        },
-        CapacityLine {
-            resource: AllocationResource::Pods,
-            allocatable: alloc(s.capacity.pods),
-            requests: i64::from(s.demand.pods),
-            limits: None,
-            usage: None,
-        },
-    ]
-}
-
 /// One row of a top list, as text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TopRow {
@@ -283,6 +182,34 @@ pub fn top_rows(entries: &[TopEntry], cpu: bool) -> Vec<TopRow> {
             ),
         })
         .collect()
+}
+
+/// Selected namespaces named in [`top_scope_note`] before the rest are counted.
+const SCOPE_NAMES: usize = 3;
+
+/// What the top lists cover when it is not the whole cluster: metrics-server is asked for the
+/// pods of the tab's namespace selection only, while the tiles and bars count every pod.
+pub fn top_scope_note(selection: &NamespaceSelection) -> Option<String> {
+    if selection.is_all() {
+        return None;
+    }
+    let names: Vec<&str> = selection.names().collect();
+    let shown = names
+        .iter()
+        .take(SCOPE_NAMES)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(", ");
+    let more = names.len().saturating_sub(SCOPE_NAMES);
+    let label = if names.len() == 1 {
+        "namespace"
+    } else {
+        "namespaces"
+    };
+    Some(match more {
+        0 => format!("Only the selected {label}: {shown}"),
+        more => format!("Only the selected {label}: {shown} and {more} more"),
+    })
 }
 
 /// `metrics unavailable: <reason>` for live usage, when metrics-server cannot answer; `None`

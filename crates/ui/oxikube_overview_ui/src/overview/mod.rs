@@ -9,7 +9,8 @@
 //! | `view` | [`ClusterOverview`], the workspace item; [`Shown`], what it draws, rebuilt per publish |
 //! | `deps` | [`OverviewDeps`], [`HistoryDeps`] |
 //! | `follow` | following the session; the live part started while shown and connected, stopped otherwise |
-//! | `model` | the pure view-model: [`HealthTile`], [`CapacityLine`], [`TopRow`], the notices |
+//! | `model` | the pure view-model: [`HealthTile`], [`TopRow`], the notices |
+//! | `capacity` | the capacity bars' view-model: [`CapacityLine`], `–` with the reason for a degraded feed |
 //! | `info` | the cluster-info card: [`VersionState`], [`InfoRows`], [`api_server_text`] (credentials cut out) |
 //! | `history` | [`HistoryPanel`]: the Prometheus graphs, queried while shown |
 //! | `render` | the frame and one file per card |
@@ -39,6 +40,7 @@
 //! metrics stay. Without a Prometheus endpoint the graphs card says why; without history metrics in
 //! the app at all, no graphs are drawn. A forbidden feed says "no access", never zero.
 
+mod capacity;
 mod deps;
 mod follow;
 mod history;
@@ -54,6 +56,7 @@ pub use deps::{HistoryDeps, OverviewDeps};
 pub use history::{HISTORY_REFRESH, HistoryPanel, HistoryState, Sparks};
 pub use info::{InfoRows, VersionState, api_server_text, info_rows};
 pub use model::{
-    CapacityLine, HealthTile, TopRow, capacity_lines, health_tiles, live_metrics_notice, top_rows,
+    CapacityLine, HealthTile, NODES_PARTIAL, PODS_PARTIAL, TopRow, capacity_lines, health_tiles,
+    live_metrics_notice, top_rows, top_scope_note,
 };
 pub use view::{ClusterOverview, OVERVIEW_ITEM_KEY, Shown, TopLists, WARNINGS_SHOWN};

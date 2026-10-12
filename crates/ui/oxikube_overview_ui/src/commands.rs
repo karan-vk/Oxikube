@@ -107,7 +107,8 @@ impl OverviewViews {
         else {
             return false;
         };
-        ClusterOverview::open(&workspace, cluster.clone(), deps.clone(), window, cx);
+        // The tab is brought forward next, so the new overview starts shown.
+        ClusterOverview::open(&workspace, cluster.clone(), deps.clone(), true, window, cx);
         tabs.update(cx, |tabs, cx| {
             tabs.activate(cluster, window, cx);
         });

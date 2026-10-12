@@ -6,6 +6,7 @@
 mod catalog;
 mod drawer;
 mod logs;
+mod overview;
 mod table;
 mod tabs;
 mod terminal;
@@ -69,6 +70,7 @@ pub async fn run(run: &WindowRun, driver: &mut Driver<'_>) -> Result<()> {
         Scenario::Theme => table::theme(driver).await,
         Scenario::Sidebar => table::sidebar(driver).await,
         Scenario::NodesTable => table::nodes_table(driver).await,
+        Scenario::Overview => overview::run(driver).await,
         Scenario::Idle => table::idle(driver).await,
         Scenario::DetailDrawer => drawer::run(driver).await,
         Scenario::TabsPanes => tabs::run(driver).await,

@@ -55,7 +55,12 @@ impl ClusterOverview {
             list
         });
         let columns: Vec<_> = columns.collect();
+        let scope = self
+            .top_scope
+            .clone()
+            .map(|note| muted(note, "overview-top-scope", cx));
         card("overview-top", "Top consumers", cx)
+            .children(scope)
             .child(
                 h_flex()
                     .flex_wrap()

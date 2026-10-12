@@ -6,6 +6,7 @@
 use futures::executor::block_on;
 use gpui::TestAppContext;
 use oxikube_app::command_bus::DispatchContext;
+use oxikube_catalog_ui::CatalogView;
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_overview_ui::ClusterOverview;
@@ -97,4 +98,37 @@ fn the_overview_reads_the_seeded_cluster_and_follows_its_feeds(cx: &mut TestAppC
     assert!(running > 0, "the seeded cluster's running pods are counted");
     let info = app.vcx.update(|_, cx| overview.read(cx).info());
     assert!(info.version.starts_with('v'), "{}", info.version);
+}
+
+#[gpui::test]
+fn a_cluster_that_connects_behind_another_tab_opens_its_overview_without_feeds(
+    cx: &mut TestAppContext,
+) {
+    let ports = TestPorts::seeded();
+    ports.connector.hold();
+    let mut app = App::start(cx, ports);
+    app.press("enter");
+    assert_eq!(app.cluster_tabs().len(), 1, "the tab opened, connecting");
+
+    // The user goes back to the catalog while the cluster connects.
+    let workspace = app.workspace();
+    let catalog = app.read(|ws, _| ws.items_of_type::<CatalogView>())[0].entity_id();
+    app.vcx.update(|window, cx| {
+        workspace.update(cx, |ws, cx| ws.activate_item(catalog, true, window, cx));
+    });
+    app.vcx.run_until_parked();
+    app.ports.connector.release();
+    app.tick();
+
+    let overview = overviews(&mut app).remove(0);
+    let live = app.vcx.update(|_, cx| overview.read(cx).is_live());
+    assert!(!live, "the hidden tab's first screen holds no feeds");
+
+    let tab = app.cluster_tabs()[0].entity_id();
+    app.vcx.update(|window, cx| {
+        workspace.update(cx, |ws, cx| ws.activate_item(tab, true, window, cx));
+    });
+    app.tick();
+    let live = app.vcx.update(|_, cx| overview.read(cx).is_live());
+    assert!(live, "shown, it follows its feeds");
 }
