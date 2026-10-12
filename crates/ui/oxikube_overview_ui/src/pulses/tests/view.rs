@@ -2,7 +2,6 @@
 //! and a page nobody looks at holding nothing.
 
 use gpui::TestAppContext;
-use oxikube_app::{CountState, KindCount};
 use oxikube_domain::OxiError;
 use oxikube_domain::session::NamespaceSelection;
 use oxikube_testkit::{daemonset, deployment, job, node, pod, resource, statefulset};
@@ -11,13 +10,12 @@ use serde_json::json;
 use super::{Fixture, cluster, no_grace};
 use crate::pulses::{HISTORY_INTERVAL, Level, PULSE_SAMPLES};
 
-fn counted(total: usize, rated: usize, healthy: usize) -> CountState {
-    CountState::Counted(KindCount {
-        total,
-        rated,
-        healthy,
-        ..Default::default()
-    })
+/// A kind's `(total, rated, healthy)` as the store counted it. The status buckets are the
+/// store's own business (E12-S07), so the assertions here compare the three the page reads.
+fn tally(fx: &mut Fixture, id: &str) -> Option<(usize, usize, usize)> {
+    fx.count_of(id)
+        .and_then(|s| s.count())
+        .map(|c| (c.total, c.rated, c.healthy))
 }
 
 /// A cluster with something of every kind of the page.
@@ -118,26 +116,22 @@ fn every_kind_of_the_story_is_counted_from_the_store(cx: &mut TestAppContext) {
     let mut fx = Fixture::open_seeded(cx, no_grace(), seed_everything);
     fx.tick();
 
-    assert_eq!(
-        fx.count_of("nodes"),
-        Some(counted(3, 3, 2)),
-        "n3 is not ready"
-    );
+    assert_eq!(tally(&mut fx, "nodes"), Some((3, 3, 2)), "n3 is not ready");
     assert_eq!(
         fx.count_of("namespaces")
             .and_then(|s| s.count())
             .map(|c| c.total),
         Some(2)
     );
-    assert_eq!(fx.count_of("pods"), Some(counted(3, 3, 2)));
-    assert_eq!(fx.count_of("deployments"), Some(counted(2, 2, 1)));
-    assert_eq!(fx.count_of("statefulsets"), Some(counted(1, 1, 1)));
+    assert_eq!(tally(&mut fx, "pods"), Some((3, 3, 2)));
+    assert_eq!(tally(&mut fx, "deployments"), Some((2, 2, 1)));
+    assert_eq!(tally(&mut fx, "statefulsets"), Some((1, 1, 1)));
     assert!(
         fx.count_of("daemonsets")
             .is_some_and(|s| s.count().is_some())
     );
-    assert_eq!(fx.count_of("jobs"), Some(counted(2, 2, 1)));
-    assert_eq!(fx.count_of("cronjobs"), Some(counted(1, 1, 0)), "suspended");
+    assert_eq!(tally(&mut fx, "jobs"), Some((2, 2, 1)));
+    assert_eq!(tally(&mut fx, "cronjobs"), Some((1, 1, 0)), "suspended");
     for (id, total) in [
         ("persistentvolumes", 1),
         ("persistentvolumeclaims", 1),
@@ -311,7 +305,7 @@ fn a_page_in_a_background_tab_holds_nothing(cx: &mut TestAppContext) {
         fx.read(|p| p.lease.is_some() && p.interest.is_some()),
         "shown again"
     );
-    assert_eq!(fx.count_of("pods"), Some(counted(3, 3, 2)));
+    assert_eq!(tally(&mut fx, "pods"), Some((3, 3, 2)));
 }
 
 #[gpui::test]
