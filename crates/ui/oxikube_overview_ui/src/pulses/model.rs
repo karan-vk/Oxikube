@@ -75,7 +75,7 @@ impl TileState {
     }
 
     /// The count to record in the history now: from the feed, else from the one-off count.
-    fn sampled_value(&self) -> Option<f64> {
+    pub(super) fn sampled_value(&self) -> Option<f64> {
         match (&self.count, &self.fallback) {
             (CountState::Counted(count), _) => Some(count.total as f64),
             (_, Fallback::Counted(count)) => Some(count.total as f64),

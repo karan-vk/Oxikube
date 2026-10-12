@@ -11,7 +11,7 @@ use super::face::{ClusterFigure, Fallback};
 use super::grid;
 use super::model::PulsesModel;
 use super::ring::PULSE_SAMPLES;
-use super::specs::TileSource;
+use super::specs::{CLUSTER_CPU, CLUSTER_MEMORY, TileSource};
 
 /// The seconds the preview's newest sample is at.
 pub const PREVIEW_NOW: f64 = 1_791_806_400.0;
@@ -72,10 +72,8 @@ pub fn preview_model() -> PulsesModel {
         let TileSource::Kind(_) = tile.spec.source else {
             continue;
         };
-        let latest = match (&tile.count, &tile.fallback) {
-            (CountState::Counted(count), _) => count.total as f64,
-            (_, Fallback::Counted(count)) => count.total as f64,
-            _ => continue,
+        let Some(latest) = tile.sampled_value() else {
+            continue;
         };
         let swing = (latest * 0.08).max(1.0);
         for i in 0..PULSE_SAMPLES {
@@ -90,9 +88,9 @@ pub fn preview_model() -> PulsesModel {
         }
     }
     for (id, used, allocatable, base) in [
-        ("cluster-cpu", 9_920_000_000_u128, 16_000_000_000_u128, 58.0),
+        (CLUSTER_CPU, 9_920_000_000_u128, 16_000_000_000_u128, 58.0),
         (
-            "cluster-memory",
+            CLUSTER_MEMORY,
             50 * 1024 * 1024 * 1024,
             64 * 1024 * 1024 * 1024,
             72.0,

@@ -180,20 +180,22 @@ fn fallback_face(fallback: &Fallback, loading: &str, hover: &str, dash_caption: 
             gauge: None,
             hover,
         },
-        Fallback::Failed(message) => TileFace {
-            value: "–".to_owned(),
-            caption: "Could not count · r to retry".to_owned(),
-            level: Level::Muted,
-            gauge: None,
-            hover: Some(message.clone()),
-        },
-        Fallback::None => TileFace {
-            value: "–".to_owned(),
-            caption: dash_caption.to_owned(),
-            level: Level::Muted,
-            gauge: None,
-            hover,
-        },
+        Fallback::Failed(message) => dash(
+            "Could not count · r to retry".to_owned(),
+            Some(message.clone()),
+        ),
+        Fallback::None => dash(dash_caption.to_owned(), hover),
+    }
+}
+
+/// A muted dash with `caption` under it: the tile has no number to show.
+fn dash(caption: String, hover: Option<String>) -> TileFace {
+    TileFace {
+        value: "–".to_owned(),
+        caption,
+        level: Level::Muted,
+        gauge: None,
+        hover,
     }
 }
 
@@ -237,13 +239,7 @@ pub fn cluster_face(
 ) -> TileFace {
     match figure {
         ClusterFigure::Waiting => plain("…", "Waiting for metrics", Level::Muted, None),
-        ClusterFigure::Unavailable(reason) => TileFace {
-            value: "–".to_owned(),
-            caption: reason.clone(),
-            level: Level::Muted,
-            gauge: None,
-            hover: Some(reason.clone()),
-        },
+        ClusterFigure::Unavailable(reason) => dash(reason.clone(), Some(reason.clone())),
         ClusterFigure::Reading {
             used,
             allocatable,
@@ -261,13 +257,7 @@ pub fn cluster_face(
                 amounts
             };
             let Some(percent) = *percent else {
-                return TileFace {
-                    value: "–".to_owned(),
-                    caption: "Nodes report no allocatable".to_owned(),
-                    level: Level::Muted,
-                    gauge: None,
-                    hover: None,
-                };
+                return dash("Nodes report no allocatable".to_owned(), None);
             };
             let level = match thresholds.of(resource == Resource::Cpu).tone(percent) {
                 Tone::Error => Level::Critical,

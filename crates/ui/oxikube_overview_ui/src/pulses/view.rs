@@ -25,6 +25,7 @@ use oxikube_workspace::{
 use super::actions::{
     Close, Open, Refresh, SelectDown, SelectFirst, SelectLast, SelectLeft, SelectRight, SelectUp,
 };
+use super::fallback::Recount;
 use super::grid;
 use super::model::{Move, PulsesModel};
 use super::specs::COLUMNS;
@@ -66,13 +67,8 @@ pub struct PulsesView {
     pub(super) age: u32,
     /// Seconds (clock) of the last history sample.
     pub(super) last_sample: Option<f64>,
-    /// Seconds (clock) each tile's one-off count was last asked for.
-    pub(super) fetched_at: Vec<Option<f64>>,
-    /// In-flight one-off counts, by tile. A finished task stays until replaced; nothing clears
-    /// it from inside (`fetching` says whether one is out).
-    pub(super) fetches: Vec<Option<Task<()>>>,
-    /// Whether a one-off count is out, by tile.
-    pub(super) fetching: Vec<bool>,
+    /// The one-off count of each tile, by tile.
+    pub(super) recounts: Vec<Recount>,
     /// The cluster gauges' computation, replaced by the next one (dropping it cancels it).
     pub(super) gauge_task: Option<Task<()>>,
     /// What the gauges were last computed from: the usage epoch and the node count.
@@ -106,9 +102,7 @@ impl PulsesView {
             active: true,
             age: 0,
             last_sample: None,
-            fetched_at: vec![None; tiles],
-            fetches: (0..tiles).map(|_| None).collect(),
-            fetching: vec![false; tiles],
+            recounts: (0..tiles).map(|_| Recount::default()).collect(),
             gauge_task: None,
             gauge_stamp: None,
             tasks: Vec::new(),
@@ -203,12 +197,7 @@ impl Item for PulsesView {
 
     fn on_close(&mut self, _: &mut Window, _: &mut Context<Self>) {
         // Release the feeds and the poll now rather than when the entity is dropped.
-        self.lease = None;
-        self.store = None;
-        self.interest = None;
-        self.gauge_task = None;
-        self.fetches.iter_mut().for_each(|f| *f = None);
-        self.fetching.fill(false);
+        self.release();
         self.tasks.clear();
     }
 }

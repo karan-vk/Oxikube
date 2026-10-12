@@ -11,6 +11,7 @@ use gpui::{Context, WeakEntity};
 use oxikube_app::{CountState, MetricsKind, SessionChange};
 use oxikube_runtime::notify_coalesced;
 
+use super::fallback::Recount;
 use super::view::PulsesView;
 use super::{HISTORY_INTERVAL, REFRESH_INTERVAL, SETTLE_TICKS};
 
@@ -101,9 +102,8 @@ impl PulsesView {
         }
         let selection = session.namespace_selection().clone();
         let targets = self.model.targets();
-        let same_store = self.lease.as_ref().is_some();
         match &mut self.lease {
-            Some(lease) if same_store && lease.targets() == targets.as_slice() => {
+            Some(lease) if lease.targets() == targets.as_slice() => {
                 lease.rescope(&selection);
             }
             _ => {
@@ -122,7 +122,7 @@ impl PulsesView {
     }
 
     /// Lets go of everything the page holds on the cluster.
-    fn release(&mut self) {
+    pub(super) fn release(&mut self) {
         self.store = None;
         self.release_feeds();
     }
@@ -132,8 +132,7 @@ impl PulsesView {
         self.interest = None;
         self.gauge_task = None;
         self.gauge_stamp = None;
-        self.fetches.iter_mut().for_each(|f| *f = None);
-        self.fetching.fill(false);
+        self.recounts.iter_mut().for_each(Recount::cancel);
     }
 
     /// The once-a-second work: read the counts, take a history sample when one is due, ask for

@@ -10,6 +10,12 @@ use oxikube_domain::ids::Gvk;
 /// Tiles per row. Fixed, so the arrow keys move by a known step whatever the window width.
 pub const COLUMNS: usize = 4;
 
+/// The id of the cluster CPU tile.
+pub(super) const CLUSTER_CPU: &str = "cluster-cpu";
+
+/// The id of the cluster memory tile.
+pub(super) const CLUSTER_MEMORY: &str = "cluster-memory";
+
 /// Which cluster-wide resource a gauge tile measures.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Resource {
@@ -79,13 +85,13 @@ pub fn tile_specs() -> Vec<TileSpec> {
     let nodes = Gvk::new("", "v1", "Node");
     let mut specs = vec![
         TileSpec {
-            id: "cluster-cpu",
+            id: CLUSTER_CPU,
             title: "Cluster CPU",
             source: TileSource::Cluster(Resource::Cpu),
             drill: nodes.clone(),
         },
         TileSpec {
-            id: "cluster-memory",
+            id: CLUSTER_MEMORY,
             title: "Cluster memory",
             source: TileSource::Cluster(Resource::Memory),
             drill: nodes,

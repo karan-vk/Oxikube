@@ -23,7 +23,8 @@ use super::gauge::Gauge;
 /// Design pixels of a tile's height.
 pub const TILE_HEIGHT: f32 = 140.0;
 
-type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+/// What a tile does when clicked.
+pub(super) type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
 
 /// A tile: title and status, value, caption, gauge and sparkline.
 #[derive(IntoElement)]
@@ -79,14 +80,21 @@ impl RenderOnce for PulseTile {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
-        let value_colour = match self.face.level {
+        let TileFace {
+            value,
+            caption,
+            level,
+            gauge,
+            hover,
+        } = self.face;
+        let value_colour = match level {
             Level::Neutral => colors.text,
             Level::Good => colors.success,
             Level::Warn => colors.warning,
             Level::Critical => colors.error,
             Level::Muted => colors.text_muted,
         };
-        let spark = match self.face.level {
+        let spark = match level {
             Level::Good => SeriesColor::Tone(Tone::Good),
             Level::Warn => SeriesColor::Tone(Tone::Warn),
             Level::Critical => SeriesColor::Tone(Tone::Critical),
@@ -94,13 +102,11 @@ impl RenderOnce for PulseTile {
             Level::Muted => SeriesColor::Tone(Tone::Muted),
         };
         let selector = format!("pulse-tile-{}", self.id);
-        let status = self.face.level.status();
-        let icon = self.face.level.icon();
-        let (gauge_fraction, gauge_text) = match &self.face.gauge {
-            Some(gauge) => (Some(gauge.fraction), gauge.text.clone()),
+        let (status, icon) = (level.status(), level.icon());
+        let (gauge_fraction, gauge_text) = match gauge {
+            Some(gauge) => (Some(gauge.fraction), gauge.text),
             None => (None, String::new()),
         };
-        let hover = self.face.hover.clone();
         let border = if self.selected {
             colors.border_focused
         } else {
@@ -150,7 +156,7 @@ impl RenderOnce for PulseTile {
                     .text_color(value_colour)
                     .font_semibold()
                     .truncate()
-                    .child(self.face.value),
+                    .child(value),
             )
             .child(
                 div()
@@ -158,12 +164,12 @@ impl RenderOnce for PulseTile {
                     .text_size(u(tokens.font.small))
                     .text_color(colors.text_muted)
                     .truncate()
-                    .child(self.face.caption),
+                    .child(caption),
             )
             .child(div().py(u(px(2.))).child(Gauge::new(
                 ElementId::from(("pulse-gauge", self.index)),
                 gauge_fraction,
-                self.face.level,
+                level,
                 SharedString::from(gauge_text),
             )))
             .child(

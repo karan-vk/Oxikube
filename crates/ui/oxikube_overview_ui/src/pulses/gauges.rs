@@ -8,19 +8,15 @@
 //! words (`metrics unavailable: <reason>`), never a zero.
 
 use gpui::Context;
-use oxikube_app::{ClusterUtilisation, MetricsKind, MetricsState, cluster_utilisation};
+use oxikube_app::{ClusterUtilisation, CountState, MetricsKind, MetricsState, cluster_utilisation};
 use oxikube_domain::Resource;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::utilisation::GpuVendors;
 use oxikube_runtime::notify_coalesced;
 
 use super::face::ClusterFigure;
+use super::specs::{CLUSTER_CPU, CLUSTER_MEMORY};
 use super::view::PulsesView;
-use oxikube_app::CountState;
-
-/// The tile ids of the two gauges.
-const CPU: &str = "cluster-cpu";
-const MEMORY: &str = "cluster-memory";
 
 impl PulsesView {
     /// Brings the gauges up to date with the metrics service: its state, its thresholds and, when
@@ -45,7 +41,7 @@ impl PulsesView {
             MetricsState::Idle | MetricsState::Loading => {
                 if !self
                     .model
-                    .tile(CPU)
+                    .tile(CLUSTER_CPU)
                     .is_some_and(|t| matches!(t.figure, ClusterFigure::Reading { .. }))
                 {
                     self.show_gauges(ClusterFigure::Waiting, cx);
@@ -106,7 +102,7 @@ impl PulsesView {
             return;
         };
         let mut changed = false;
-        for (id, use_) in [(CPU, &sums.cpu), (MEMORY, &sums.memory)] {
+        for (id, use_) in [(CLUSTER_CPU, &sums.cpu), (CLUSTER_MEMORY, &sums.memory)] {
             let history = use_
                 .history
                 .iter()
@@ -132,7 +128,7 @@ impl PulsesView {
     /// Both gauges show `figure` and no history.
     fn show_gauges(&mut self, figure: ClusterFigure, cx: &mut Context<Self>) {
         let mut changed = false;
-        for id in [CPU, MEMORY] {
+        for id in [CLUSTER_CPU, CLUSTER_MEMORY] {
             changed |= self.model.set_cluster(id, figure.clone(), Vec::new());
         }
         if changed {
