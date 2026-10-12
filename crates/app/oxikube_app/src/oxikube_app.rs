@@ -9,6 +9,7 @@
 //!
 //! | Module | Story | Holds |
 //! |---|---|---|
+//! | [`metrics_history`] | E13-S08 | [`MetricsHistoryService`]: the history graphs of a detail panel's Metrics tab: [`charts_for`] (the charts of each of the six kinds, as data), the range fetch through `PromqlPort` and the stack's query catalogue, reference lines, the remembered range |
 //! | [`catalog`] | E06-S03 | [`ClusterCatalog`]: the kubeconfig contexts with favourites and last-used, and [`ClusterCommands`], the handler of `cluster::Connect`, `cluster::Disconnect` and `cluster::ToggleFavourite` |
 //! | [`search`] | E11-S04, E11-S11 | [`search::fuzzy`]: [`FuzzyService`], the one fuzzy ranking engine; [`search::recents`]: [`StateRecents`] and [`JumpRecents`], persisted through `StatePort`; [`search::aliases`]: [`AliasTable`], the words the `:` jump bar understands (built-in k9s aliases, aliases derived from API discovery, the user's `aliases.json`, collisions listed, never silent), and [`AliasRegistry`], one table per cluster kept in step with the sessions' discovery |
 //! | [`session`] | E06-S01 | [`ClusterSessionManager`]: connect / disconnect / reconnect, the session state machine, capabilities, namespace selection, read-only flag, colour, and the [`SessionUpdates`] stream |
@@ -58,6 +59,7 @@ pub mod integrations;
 pub mod kinds;
 pub mod logs;
 pub mod metrics;
+pub mod metrics_history;
 pub mod metrics_provider;
 pub mod namespaces;
 pub mod network;
@@ -124,6 +126,10 @@ pub use metrics::{
     ClusterUsage, GpuVendorsHandle, LiveMetricsConfig, LiveMetricsConfigTable, MetricsInterest,
     MetricsKind, MetricsService, MetricsState, MetricsVisibility, NamespaceAllocation,
     NodeAllocation, UtilisationAggregator, allocate_namespaces, allocate_nodes,
+};
+pub use metrics_history::{
+    ChartData, ChartDef, HistoryAvailability, HistoryError, HistorySubject, MetricsHistoryService,
+    SubjectKind, charts_for,
 };
 pub use metrics_provider::{EndpointSink, MetricsProviderService, ProviderState, ProviderStatus};
 pub use network::{

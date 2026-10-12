@@ -278,6 +278,7 @@ impl DetailView {
         self.model = Some(model);
         self.resolve_owners(cx);
         self.refresh_yaml(cx);
+        self.metrics_object_changed(cx);
         cx.notify();
     }
 

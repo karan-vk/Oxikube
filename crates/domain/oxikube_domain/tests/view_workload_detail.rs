@@ -311,3 +311,35 @@ fn a_daemonset_detail_has_node_selector_and_update_strategy() {
     assert_eq!(&*strategy.kind, "OnDelete");
     assert!(strategy.parameters.is_empty());
 }
+
+#[test]
+fn pod_selector_covers_daemon_sets_and_refuses_other_kinds() {
+    use oxikube_domain::view::pod_selector;
+    let selector = json!({"matchLabels": {"k8s-app": "kube-proxy"}});
+    let ds = res(
+        "apps/v1",
+        "DaemonSet",
+        json!({"selector": selector}),
+        json!({}),
+    );
+    assert_eq!(pod_selector(&ds).unwrap().display(), "k8s-app=kube-proxy");
+    let dep = res(
+        "apps/v1",
+        "Deployment",
+        json!({"selector": selector}),
+        json!({}),
+    );
+    assert_eq!(pod_selector(&dep).unwrap().display(), "k8s-app=kube-proxy");
+    let rc = res(
+        "v1",
+        "ReplicationController",
+        json!({"selector": {"app": "old"}}),
+        json!({}),
+    );
+    assert_eq!(pod_selector(&rc).unwrap().display(), "app=old");
+    let job = res("batch/v1", "Job", json!({}), json!({}));
+    assert!(matches!(
+        pod_selector(&job),
+        Err(ViewError::WrongKind { .. })
+    ));
+}

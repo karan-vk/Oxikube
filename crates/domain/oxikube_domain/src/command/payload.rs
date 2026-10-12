@@ -662,6 +662,14 @@ pub enum Command {
         /// The resource to describe.
         target: ResourceRef,
     },
+    /// Open a resource's detail on its Metrics tab: the graphs of the last 15 minutes to 24 hours
+    /// from the cluster's Prometheus (E13-S08). Pods, nodes, workloads, namespaces, PVCs and
+    /// ingresses have it; without a Prometheus the command says why instead.
+    #[serde(rename = "resource::ViewMetrics")]
+    ResourceViewMetrics {
+        /// The resource to show graphs for.
+        target: ResourceRef,
+    },
     /// Open a resource's manifest in the editor (`e` in a resource table). The edit reaches the
     /// cluster only through `resource::Apply`.
     #[serde(rename = "resource::Edit")]
@@ -1369,6 +1377,7 @@ impl Command {
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
             Command::ResourceViewYamlInEditor { .. } => CommandId::RESOURCE_VIEW_YAML_IN_EDITOR,
             Command::ResourceViewDescribe { .. } => CommandId::RESOURCE_VIEW_DESCRIBE,
+            Command::ResourceViewMetrics { .. } => CommandId::RESOURCE_VIEW_METRICS,
             Command::ResourceCreate { .. } => CommandId::RESOURCE_CREATE,
             Command::ResourceEdit { .. } => CommandId::RESOURCE_EDIT,
             Command::SecretReveal { .. } => CommandId::SECRET_REVEAL,
@@ -1473,6 +1482,7 @@ impl Command {
             | Command::ResourceViewYaml { target }
             | Command::ResourceViewYamlInEditor { target }
             | Command::ResourceViewDescribe { target }
+            | Command::ResourceViewMetrics { target }
             | Command::ResourceEdit { target }
             | Command::SecretReveal { target, .. }
             | Command::SecretEditDecoded { target }
@@ -1835,6 +1845,7 @@ mod tests {
             Command::ResourceViewYaml { target: pod() },
             Command::ResourceViewYamlInEditor { target: pod() },
             Command::ResourceViewDescribe { target: pod() },
+            Command::ResourceViewMetrics { target: pod() },
             Command::ResourceEdit { target: pod() },
             Command::SecretReveal {
                 target: pod(),
@@ -2257,6 +2268,7 @@ mod tests {
                     | Command::ResourceViewYaml { .. }
                     | Command::ResourceViewYamlInEditor { .. }
                     | Command::ResourceViewDescribe { .. }
+                    | Command::ResourceViewMetrics { .. }
                     | Command::ResourceEdit { .. }
                     | Command::SecretReveal { .. }
                     | Command::SecretEditDecoded { .. }

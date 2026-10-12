@@ -8,7 +8,7 @@
 //! | `detail` | opening the detail drawer for `resource::Open`, pinning it as a tab for `resource::PinDetail`, copying a label for `resource::CopyLabel` (E07-S05) |
 //! | `service` | `service::ShowPods` (E12-S13): read the Service, plan the jump to its pods, dispatch it |
 //! | `pod_nav` | `pod::JumpToOwner` and `pod::ShowNode` (E12-S03): read the pod off the UI thread, then open its owner or its node in the drawer |
-//! | `row_actions` | [`view_row_actions`]: "View YAML" and "Describe" in a row's menu and the palette (E11-S07) |
+//! | `row_actions` | [`view_row_actions`]: "View YAML" and "Describe" in a row's menu and the palette (E11-S07), and "View Metrics" for the kinds with history graphs (E13-S08) |
 //! | `sidebar` | [`sidebar_navigation`]: the cluster-tab hook from the sidebar's `Navigate` to [`ResourceViews::navigate`] |
 //!
 //! A user reaches a table by clicking a kind in the cluster sidebar: the sidebar emits

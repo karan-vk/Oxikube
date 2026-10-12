@@ -127,6 +127,25 @@ impl Chart {
         self
     }
 
+    /// Replaces the reference lines of a chart already on screen (a pod's request and limit change
+    /// with each fetch). Does nothing when they are the same.
+    pub fn set_thresholds(&mut self, thresholds: Vec<Threshold>, cx: &mut Context<Self>) {
+        if self.spec.thresholds == thresholds {
+            return;
+        }
+        self.update(cx, |spec| spec.thresholds = thresholds);
+    }
+
+    /// The series on the chart, as last set.
+    pub fn series(&self) -> &[Series] {
+        &self.spec.series
+    }
+
+    /// The reference lines on the chart, as last set.
+    pub fn threshold_lines(&self) -> &[Threshold] {
+        &self.spec.thresholds
+    }
+
     /// The kind of chart.
     pub fn kind(&self) -> ChartKind {
         self.spec.kind
@@ -159,6 +178,21 @@ impl Chart {
             self.hovered = None;
             cx.notify();
         }
+    }
+
+    /// Replaces the accessible name (the builder [`Chart::label`] sets the first one), for a
+    /// chart kept across a change of what it shows (the range of a metrics chart).
+    pub fn set_label(&mut self, label: impl Into<SharedString>, cx: &mut Context<Self>) {
+        let label = label.into();
+        if self.label.as_ref() != Some(&label) {
+            self.label = Some(label);
+            cx.notify();
+        }
+    }
+
+    /// The accessible name set by [`Chart::label`] or [`Chart::set_label`].
+    pub fn label_text(&self) -> Option<&SharedString> {
+        self.label.as_ref()
     }
 
     /// Switches the series called `name` off, or on again. This is what a legend click does.

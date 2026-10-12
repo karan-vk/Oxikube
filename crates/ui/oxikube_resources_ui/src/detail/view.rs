@@ -76,6 +76,8 @@ pub struct DetailView {
     pub(super) kind_panel: KindPanel,
     /// A Secret's summary and what is revealed of it (E12-S11); empty for other kinds.
     pub(super) secret: super::reveal::SecretState,
+    /// The Metrics tab (E13-S08): history graphs from the cluster's Prometheus.
+    pub(super) metrics: super::metrics::MetricsTab,
     pub(super) store: Option<ResourceStore>,
     /// The store the Events feed is subscribed on.
     pub(super) events_store: Option<ResourceStore>,
@@ -154,6 +156,7 @@ impl DetailView {
             used_by: Default::default(),
             kind_panel,
             secret: Default::default(),
+            metrics: Default::default(),
             store: None,
             events_store: None,
             subscription: None,
@@ -171,6 +174,7 @@ impl DetailView {
             _tick: tick,
         };
         this.resubscribe(cx);
+        this.init_metrics(cx);
         // The command palette asks the focused detail what it acts on (E11-S03).
         oxikube_workspace::command_surface::register(&cx.entity(), &this.focus, cx);
         this
@@ -230,6 +234,7 @@ impl DetailView {
     pub fn set_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
         if self.shown != shown {
             self.shown = shown;
+            self.metrics_shown_changed(cx);
             cx.notify();
         }
     }
@@ -246,7 +251,7 @@ impl DetailView {
 
     /// Switches to `tab`. The Events feed starts the first time that tab is shown.
     pub fn set_tab(&mut self, tab: DetailTab, cx: &mut Context<Self>) {
-        if self.tab == tab {
+        if self.tab == tab || (tab == DetailTab::Metrics && !self.metrics_offered()) {
             return;
         }
         let left = std::mem::replace(&mut self.tab, tab);
@@ -256,12 +261,16 @@ impl DetailView {
         if left == DetailTab::UsedBy {
             self.used_by_tab_closed();
         }
+        if left == DetailTab::Metrics {
+            self.metrics_tab_closed();
+        }
         match tab {
             DetailTab::Events => self.start_events(cx),
             DetailTab::Yaml => self.refresh_yaml(cx),
             DetailTab::Describe => self.start_describe(cx),
             DetailTab::Schema => self.schema_tab_opened(),
             DetailTab::UsedBy => self.used_by_tab_opened(cx),
+            DetailTab::Metrics => self.metrics_tab_opened(cx),
             DetailTab::Overview => {}
         }
         // The find follows the tab: its text is another text.
@@ -372,6 +381,9 @@ impl DetailView {
         self.events.subscription = None;
         // The lease on the Pods subscription goes with the view.
         self.used_by_tab_closed();
+        self.metrics_tab_closed();
+        self.metrics.follower = None;
+        self.metrics.saving = None;
         // Decoded Secret values live as long as the tab does.
         self.clear_secret();
     }

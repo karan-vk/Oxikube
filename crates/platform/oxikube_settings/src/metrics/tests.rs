@@ -170,3 +170,40 @@ fn the_schema_describes_the_live_keys() {
         assert!(schema.contains(key), "{key}");
     }
 }
+
+#[test]
+fn the_refresh_cadence_defaults_clamps_and_can_be_set_per_cluster() {
+    let store = store("{}");
+    assert_eq!(
+        store.get::<MetricsSettings>(None).history_refresh_secs,
+        DEFAULT_HISTORY_REFRESH_SECS
+    );
+    // The file itself carries the number, not just the code fallback.
+    let defaults: serde_json::Value =
+        serde_json_lenient::from_str(oxikube_assets::default_settings()).unwrap();
+    assert_eq!(
+        defaults["metrics"]["history_refresh_secs"].as_u64(),
+        Some(u64::from(DEFAULT_HISTORY_REFRESH_SECS))
+    );
+
+    let low = super::MetricsSettings::from_content(MetricsSettingsContent {
+        history_refresh_secs: Some(1),
+        ..Default::default()
+    });
+    assert_eq!(low.history_refresh_secs, MIN_HISTORY_REFRESH_SECS);
+    let high = super::MetricsSettings::from_content(MetricsSettingsContent {
+        history_refresh_secs: Some(100_000),
+        ..Default::default()
+    });
+    assert_eq!(high.history_refresh_secs, MAX_HISTORY_REFRESH_SECS);
+
+    let id = "3f2a9c1b7d4e8a60";
+    let store = self::store(&format!(
+        r#"{{ "metrics": {{ "history_refresh_secs": 60 }},
+            "clusters": {{ "{id}": {{ "metrics": {{ "history_refresh_secs": 15 }} }} }} }}"#
+    ));
+    assert_eq!(store.get::<MetricsSettings>(None).history_refresh_secs, 60);
+    let cluster: ClusterId = id.parse().unwrap();
+    let located = store.get::<MetricsSettings>(Some(crate::SettingsLocation { cluster: &cluster }));
+    assert_eq!(located.history_refresh_secs, 15);
+}

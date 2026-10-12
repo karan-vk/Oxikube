@@ -24,6 +24,11 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   module's `init(cx)`; `KindSpecs::kind_for` falls back to the generic spec. The built-in kinds
   (`kinds::builtin`, one module per sidebar section) fill the cluster sidebar, where each cluster
   shows the kinds its discovery serves. A kind story adds `kinds/<kind>/` and registers its own spec.
+- `detail::metrics` (E13-S08): the Metrics tab of the detail drawer (history graphs from the cluster's
+  Prometheus; Pods, Nodes, workloads, Namespaces, PVCs, Ingresses). The tab is offered only while the cluster
+  has a Prometheus; the range (15m / 1h / 6h / 24h) is remembered; charts come from `oxikube_ui::chart`
+  and the queries from `oxikube_app::metrics_history`. `resource::ViewMetrics` opens it ("View Metrics" in a
+  row's menu and the palette; the keys `1` to `5` count it as the fifth tab).
 - `kinds::network` (E12-S14): Ingress, IngressClass, NetworkPolicy and the Gateway API kinds
   (GatewayClass, Gateway, HTTPRoute, GRPCRoute, TLSRoute, listed only where discovery serves them): one
   `NetworkPanel` for all of them (rules, listeners, parents, conditions with reasons, links to Services,

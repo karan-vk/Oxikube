@@ -3,8 +3,9 @@
 //! With the drawer focused (Enter on a table row moves the focus into it), `escape` closes it and
 //! returns to the table, `j` / `k` and the arrows step the table's selection to the next or
 //! previous object and show it, and `1` to `5` switch Overview, YAML, Describe, Events and (for a
-//! CustomResourceDefinition) Schema or (for a ServiceAccount, ConfigMap, Secret, claim or
-//! PriorityClass) Used by. The bindings are in the per-OS keymap files of
+//! CustomResourceDefinition) Schema, (for a ServiceAccount, ConfigMap, Secret, claim or
+//! PriorityClass) Used by, or (for a kind with history graphs and a Prometheus) Metrics. The
+//! bindings are in the per-OS keymap files of
 //! `oxikube_assets`, so users rebind them in `keymap.json`. On the YAML and Describe tabs `/` opens a
 //! find field (E11-S06), `n` / `N` step through its matches and `escape` in the field closes it; while
 //! the field has the focus the context says `Editing`, so the bare keys are text.
@@ -18,7 +19,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::state::Mount;
-use super::tabs::DetailTab;
 use super::view::DetailView;
 
 actions!(
@@ -51,7 +51,8 @@ actions!(
 );
 
 /// Shows the nth tab of the detail, counted from 1 (Overview, YAML, Describe, Events, and a
-/// CRD's Schema or a referenced kind's Used by). A number the object has no tab for does nothing.
+/// CRD's Schema, a referenced kind's Used by or the Metrics tab of a kind with history graphs).
+/// A number the object has no tab for does nothing.
 #[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Action)]
 #[action(namespace = resource_detail)]
 pub struct ShowTab {
@@ -151,7 +152,7 @@ impl DetailView {
     pub(super) fn on_show_tab(&mut self, action: &ShowTab, _: &mut Window, cx: &mut Context<Self>) {
         let tab = usize::from(action.index)
             .checked_sub(1)
-            .and_then(|i| DetailTab::for_kind(&self.target.gvk).get(i).copied());
+            .and_then(|i| self.tabs().get(i).copied());
         if let Some(tab) = tab {
             self.set_tab(tab, cx);
         }

@@ -13,7 +13,7 @@
 //! | `yaml` | the YAML tab (E07-S06): [`yaml_text`] (managedFields, Secret masking) as a pure function run off the UI thread, the read-only code view, the toolbar |
 //! | `describe` | the Describe tab (E07-S06): `DescribePort` read on the Tokio bridge, spinner, error with Retry, refresh |
 //! | `events` | [`EventRow`], [`events_about`]: the events of the object from the namespace's `Event` feed |
-//! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, a CRD's Schema, and the Used by tab of a ServiceAccount, ConfigMap, Secret, claim or PriorityClass |
+//! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, a CRD's Schema, the Used by tab of a ServiceAccount, ConfigMap, Secret, claim or PriorityClass, and the Metrics tab of kinds with history graphs |
 //! | `used_by` | the Used by tab (E12-S18): the workloads whose Pods name the object, from the shared reference index; a lease on the Pods feed held while the tab is up |
 //! | `state` | [`DetailDeps`], [`Mount`], [`DetailState`]: what the view is built over and how the object stands |
 //! | `keys` | the `Detail` key context and its actions (E07-U559): close, step the table, switch tab |
@@ -30,6 +30,7 @@
 //! | `render`, `overview`, `parts`, `events_tab` | drawing: header, tab strip, the virtualised Overview (its stateless rows in `parts`) and Events lists |
 //! | `schema_tab`, `schema_view` | the Schema tab of a CRD's detail (E07-S07): its `openAPIV3Schema` as a collapsible tree, the version chips and the way to the custom resources (state and commands, then drawing) |
 //! | `reveal` | revealing a Secret's values in memory (E12-S11): the summary a Secret's full read keeps, `secret::Reveal` (`x`), the hide-again timer, the decoded values the YAML tab shows |
+//! | `metrics` | the Metrics tab (E13-S08): history graphs from the cluster's Prometheus with a 15m / 1h / 6h / 24h range, a line per container or pod, request and limit lines, and no tab at all when there is no Prometheus |
 //! | `kind_panel` | the kind's own panel above the Overview, from its spec's [`DetailRenderer`](crate::kinds::DetailRenderer) (E12-S01), and [`DetailView::resource`], what the panel reads |
 //! | `drawer` | [`DetailDrawer`]: the `Panel` that hosts a detail and hands it to the workspace when pinned |
 //!
@@ -65,6 +66,7 @@ mod follow;
 mod full;
 mod keys;
 mod kind_panel;
+pub mod metrics;
 pub mod model;
 mod overview;
 mod parts;
@@ -92,6 +94,7 @@ pub use keys::{
     SelectPrevious, ShowTab,
 };
 pub use kind_panel::PanelHost;
+pub use metrics::{MetricsHistory, MetricsState};
 pub use model::DetailModel;
 pub use reveal::{REVEAL_TIMEOUT, RevealLoad};
 pub use state::{DetailDeps, DetailEvent, DetailState, Mount};
